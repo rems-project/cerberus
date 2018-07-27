@@ -200,3 +200,8 @@ let pp_file (core_file: ('a, 'b) generic_file) =
 
 let pp_ctype (ctype: Core_ctype.ctype0) =
   pp_to_string (Pp_core_ctype.pp_ctype ctype)
+
+let save_to_file file str =
+  let channel = open_out file in
+  output_string channel str;
+  close_out channel

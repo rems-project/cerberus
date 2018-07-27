@@ -1,5 +1,6 @@
 open Bmc_globals
 open Bmc_sorts
+open Bmc_types
 open Bmc_utils
 open Core
 open Printf
@@ -7,50 +8,19 @@ open Util
 open Z3
 open Z3.Arithmetic
 
-type aid = int
-type tid = int
-
-type z3_location = Expr.expr
-type z3_value    = Expr.expr
-type guard       = Expr.expr
-
-type memory_order = Cmm_csem.memory_order
-
-type action =
-  | Load  of aid * tid * memory_order * z3_location * z3_value
-  | Store of aid * tid * memory_order * z3_location * z3_value
-  | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value
-  | Fence of aid * tid * memory_order
-
 type bmc_action =
   | BmcAction of polarity * guard * action
 
-let aid_of_action (a: action) = match a with
-  | Load  (aid, _, _, _, _)
-  | Store (aid, _, _, _, _)
-  | RMW   (aid, _, _, _, _, _)
-  | Fence (aid, _, _) ->
-      aid
+type preexec = {
+  actions         : bmc_action list;
+  initial_actions : bmc_action list;
 
-let tid_of_action (a: action) = match a with
-  | Load  (_, tid, _, _, _)
-  | Store (_, tid, _, _, _)
-  | RMW   (_, tid, _, _, _, _)
-  | Fence (_, tid, _) ->
-      tid
+  sb              : (bmc_action * bmc_action) list;
+  asw             : (bmc_action * bmc_action) list;
+}
 
-let memorder_of_action (a: action) = match a with
-  | Load  (_,_,m,_,_)
-  | Store (_,_,m,_,_)
-  | RMW   (_,_,m,_,_,_)
-  | Fence (_,_,m) ->
-      m
-
-let addr_of_action (a: action) = match a with
-  | Load  (_, _, _, l, _)
-  | Store (_, _, _, l, _)
-  | RMW   (_, _, _, l, _, _) -> l
-  | Fence (_, _, _) -> assert false
+(* ========== BMC ACTIONS ============= *)
+let initial_tid = -1
 
 let has_addr (BmcAction(_, _, a): bmc_action) = match a with
   | Load _
@@ -65,17 +35,6 @@ let has_rval (BmcAction(_, _, a): bmc_action) = match a with
 let has_wval (BmcAction(_, _, a): bmc_action) = match a with
   | Store _ | RMW _ -> true
   | _ -> false
-
-
-let rval_of_action (a: action) = match a with
-  | Load (_, _, _, _, v)
-  | RMW (_, _, _, _, v, _) -> v
-  | _ -> assert false
-
-let wval_of_action (a: action) = match a with
-  | Store (_, _, _, _, v)
-  | RMW   (_, _, _, _, _, v) -> v
-  | _ -> assert false
 
 let get_action (BmcAction(_, _, action): bmc_action) =
   action
@@ -112,15 +71,7 @@ let bmc_action_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
 
 (* ===== PREEXECS ===== *)
 
-type action_rel = bmc_action * bmc_action
-
-type preexec = {
-  actions         : bmc_action list;
-  initial_actions : bmc_action list;
-
-  sb              : action_rel list;
-  asw             : action_rel list;
-}
+type bmcaction_rel = bmc_action * bmc_action
 
 let mk_initial_preexec : preexec =
   { actions         = []
@@ -129,7 +80,7 @@ let mk_initial_preexec : preexec =
   ; asw             = []
   }
 
-let find_rel ((a,b): action_rel) (xs: action_rel list) =
+let find_rel ((a,b): bmcaction_rel) (xs: bmcaction_rel list) =
   is_some (List.find_opt (
     fun (x,y) -> (aid_of_bmcaction a = aid_of_bmcaction x)
               && (aid_of_bmcaction b = aid_of_bmcaction y)) xs)
@@ -159,19 +110,19 @@ let combine_preexecs (preexecs: preexec list) =
     ; asw             = preexec.asw @ acc.asw
     }) mk_initial_preexec preexecs
 
-let compute_sb (xs: bmc_action list) (ys: bmc_action list) : action_rel list =
+let compute_sb (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp
 
 let compute_maximal (actions: bmc_action list)
-                    (rel: action_rel list)
+                    (rel: bmcaction_rel list)
                     : aid list =
   let candidates = List.map aid_of_bmcaction actions in
   let not_maximal = List.map (fun (a, _) -> aid_of_bmcaction a) rel in
   List.filter (fun x -> not (List.mem x not_maximal)) candidates
 
 let compute_minimal (actions: bmc_action list)
-                    (rel: action_rel list)
+                    (rel: bmcaction_rel list)
                     : aid list =
   let candidates = List.map aid_of_bmcaction actions in
   let not_minimal = List.map (fun (_, b) -> aid_of_bmcaction b) rel in
@@ -190,10 +141,10 @@ let compute_minimal (actions: bmc_action list)
  * *)
 let compute_asw (xs: bmc_action list)
                 (ys: bmc_action list)
-                (sb_xs: action_rel list)
-                (sb_ys: action_rel list)
+                (sb_xs: bmcaction_rel list)
+                (sb_ys: bmcaction_rel list)
                 (parent_tids: (tid, tid) Pmap.map)
-                : action_rel list =
+                : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   let (maximal, minimal) = (compute_maximal xs sb_xs,
                             compute_minimal ys sb_ys) in
@@ -209,9 +160,9 @@ let compute_asw (xs: bmc_action list)
     else false
     ) cp
 
-let filter_asw (asw: action_rel list)
-               (sb : action_rel list)
-               : action_rel list =
+let filter_asw (asw: bmcaction_rel list)
+               (sb : bmcaction_rel list)
+               : bmcaction_rel list =
   List.filter (fun (a,b) ->
     List.for_all (fun (x,y) ->
       (* a == x: (a,b) and (a,y) in asw => not sb (b,y) *)
@@ -256,11 +207,11 @@ let pp_bmcaction (BmcAction(pol, guard, action): bmc_action) =
           (*(Expr.to_string guard)*)   ""
           (pp_action action)
 
-let pp_actionrel ((a,b): action_rel) =
+let pp_actionrel ((a,b): bmcaction_rel) =
   sprintf "(%d,%d)" (aid_of_action (get_action a))
                     (aid_of_action (get_action b))
 
-let pp_actionrel_list (xs : action_rel list) =
+let pp_actionrel_list (xs : bmcaction_rel list) =
   String.concat "\n" (List.map pp_actionrel xs)
 
 let pp_preexec (preexec: preexec) =
@@ -365,6 +316,10 @@ module C11MemoryModel : MemoryModel = struct
   type execution = {
     z3_asserts     : Expr.expr;
     ret            : Expr.expr;
+
+    preexec        : preexec2;
+    witness        : witness;
+    exdd           : execution_derived_data
   }
 
   type z3_memory_model = {
@@ -377,9 +332,6 @@ module C11MemoryModel : MemoryModel = struct
     decls      : decls;
     fns        : fn_apps;
     assertions : Expr.expr list;
-
-
-
   }
 
   let add_assertions solver model = Solver.add solver model.assertions
@@ -537,7 +489,7 @@ module C11MemoryModel : MemoryModel = struct
     ; fr        = fr
     ; eco       = eco
     ; sw        = sw
-    ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2]) (* TODO *)
+    ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2])
     }
 
   let compute_executions (exec: preexec) : z3_memory_model =
@@ -798,53 +750,113 @@ module C11MemoryModel : MemoryModel = struct
                         (ret_value: Expr.expr)
                         : execution =
     let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
-    let all_events = Enumeration.get_consts mem.event_sort in
     let fns = mem.fns in
-
-    let events = List.filter (fun event ->
-      match Boolean.get_bool_value (interp (fns.getGuard event)) with
+    let proj_fst = (fun (p1,p2) -> (fst p1, fst p2))  in
+    let get_relation rel (p1,p2) =
+      match Boolean.get_bool_value (interp (rel (snd p1, snd p2))) with
       | L_TRUE -> true
-      | _      -> false) all_events in
+      | _ -> false
+    in
 
-    let prod_events = cartesian_product events events in
+    (* ==== Compute preexecution ==== *)
+    let action_events = List.fold_left (fun acc (aid, action) ->
+      let event = Pmap.find aid mem.event_map in
+      if tid_of_action action = initial_tid then acc
+      else if (Boolean.get_bool_value (interp (fns.getGuard event))
+               = L_TRUE) then
+        let new_action = match action with
+          | Load (aid,tid,memorder,loc,rval) ->
+              let loc = interp (fns.getAddr event) in
+              let rval = interp (fns.getRval event) in
+              Load(aid,tid,memorder,loc,rval)
+          | Store(aid,tid,memorder,loc,wval) ->
+              let loc = interp (fns.getAddr event) in
+              let wval = interp (fns.getWval event) in
+              Store(aid,tid,memorder,loc,wval)
+          | RMW  (aid,tid,memorder,loc,rval,wval) ->
+              let loc = interp (fns.getAddr event) in
+              let rval = interp (fns.getRval event) in
+              let wval = interp (fns.getWval event) in
+              RMW(aid,tid,memorder,loc,rval,wval)
+          | Fence _ ->
+              action
+        in (new_action, event) :: acc
+      else acc
+    ) [] (Pmap.bindings_list mem.action_map) in
 
-    let rf = List.filter (fun (e1,e2) ->
-      match Boolean.get_bool_value (interp (fns.rf (e1,e2))) with
+    let actions = List.map fst action_events in
+    let events = List.map snd action_events in
+    let prod = cartesian_product action_events action_events in
+
+    let threads = Pset.elements (
+        List.fold_left (fun acc (a, _) -> Pset.add (tid_of_action a) acc)
+                       (Pset.empty compare) action_events) in
+
+    let sb = List.filter (fun ((_,e1),(_,e2)) ->
+      match Boolean.get_bool_value (interp (fns.sb (e1,e2))) with
       | L_TRUE -> true
-      | _      -> false
-      ) prod_events in
+      | _ -> false) prod in
 
-    let mo = List.filter (fun (e1,e2) ->
-      match Boolean.get_bool_value (interp (fns.mo (e1,e2))) with
+    let asw = List.filter (fun ((_,e1),(_,e2)) ->
+      match Boolean.get_bool_value (interp (fns.asw (e1,e2))) with
       | L_TRUE -> true
-      | _      -> false
-    ) prod_events in
+      | _ -> false) prod in
+
+    let preexec : preexec2 =
+      { actions = actions
+      ; threads = threads
+      ; sb      = List.map proj_fst sb
+      ; asw     = List.map proj_fst asw
+      } in
+
+    (* ==== Compute witness ===== *)
+
+    let rf = List.filter (get_relation fns.rf) prod in
+    let mo = List.filter (get_relation fns.mo) prod in
+
+    let witness : witness =
+      { rf = List.map proj_fst rf
+      ; mo = List.map proj_fst mo
+      ; sc = [] (* TODO *)
+      } in
+
+    (* ==== Derived data ==== *)
+    let sw = List.filter (get_relation fns.sw) prod in
+
+    let execution_derived_data =
+      { derived_relations = [("sw", List.map proj_fst sw)]
+      ; undefined_behaviour = [] (* TODO *)
+      } in
 
     (* ===== Assert uniqueness of execution ===== *)
     let guard_asserts = List.map (fun event ->
          mk_eq (fns.getGuard event) (interp (fns.getGuard event))
       ) events in
-    let rf_asserts = List.map (fun (e1,e2) ->
+    let rf_asserts = List.map (fun ((_,e1),(_,e2)) ->
         mk_eq (fns.rf (e1,e2)) mk_true
       ) rf in
-    let mo_asserts = List.map (fun (e1,e2) ->
+    let mo_asserts = List.map (fun ((_,e1),(_,e2)) ->
         mk_eq (fns.mo (e1,e2)) mk_true
       ) mo in
-
+    (*
     print_endline "RF";
-    List.iter (fun (e1,e2) ->
+    List.iter (fun ((_,e1),(_,e2)) ->
       printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
 
     print_endline "MO";
-    List.iter (fun (e1,e2) ->
+    List.iter (fun ((_,e1),(_,e2)) ->
       printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
+    *)
 
-    print_endline "RET_VALUE";
     let ret = interp ret_value in
-    print_endline (Expr.to_string ret);
+    printf "RET_VALUE: %s\n" (Expr.to_string ret);
 
     { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; mo_asserts])
     ; ret = ret
+
+    ; preexec = preexec
+    ; witness = witness
+    ; exdd    = execution_derived_data
     }
 
   let extract_executions (solver   : Solver.solver)
@@ -866,6 +878,14 @@ module C11MemoryModel : MemoryModel = struct
     printf "Return values: %s\n"
            (String.concat ", " (List.map
               (fun e -> Expr.to_string e.ret) executions));
+    List.iteri (fun i exec ->
+      let dot_str = pp_dot () (ppmode_default_web,
+                        (exec.preexec, Some exec.witness,
+                         Some (exec.exdd))) in
+      let filename = Printf.sprintf "%s_%d.dot" "graph" i in
+      save_to_file filename dot_str;
+    ) executions;
+
     Solver.pop solver 1
 end
 

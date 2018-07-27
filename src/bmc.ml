@@ -2,6 +2,7 @@ open Bmc_conc
 open Bmc_globals
 open Bmc_sorts
 open Bmc_substitute
+open Bmc_types
 open Bmc_utils
 open Z3
 open Z3.Arithmetic
@@ -1082,11 +1083,10 @@ module Bmc_paction = struct
     preexec  : preexec;
   }
 
-  let mk_store (ptr: Expr.expr) (value: Expr.expr)
+  let mk_store (ptr: Expr.expr) (value: Expr.expr) (tid: tid)
                (memorder: memory_order) (guard: Expr.expr) (pol: polarity)
                : (Expr.expr * bmc_action) BmcM.eff =
     BmcM.get_fresh_aid >>= fun aid ->
-    BmcM.get_tid       >>= fun tid ->
     let const =
       mk_fresh_const ("store_" ^ (Expr.to_string ptr)) (Expr.get_sort value) in
     let binding = mk_eq const value in
@@ -1108,7 +1108,8 @@ module Bmc_paction = struct
       let ptr = PointerSort.mk_ptr addr_expr in
       let is_atomic =
         AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
-      mk_store ptr initial_value NA mk_true pol >>= fun (binding, action) ->
+      mk_store ptr initial_value initial_tid Cmm_csem.NA mk_true pol
+        >>= fun (binding, action) ->
       return ([binding; is_atomic], action)
     ) sortlist >>= fun retlist ->
 
@@ -1144,7 +1145,8 @@ module Bmc_paction = struct
                           (memorder: memory_order)
                           (pol     : polarity)
                           : ret BmcM.eff =
-    mk_store ptr value memorder (mk_not (PointerSort.is_null ptr)) pol
+    BmcM.get_tid >>= fun tid ->
+    mk_store ptr value tid memorder (mk_not (PointerSort.is_null ptr)) pol
       >>= fun (binding, bmcaction) ->
     return { assume    = [ binding ]
            ; vcs       = []
