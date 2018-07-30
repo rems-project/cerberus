@@ -306,11 +306,14 @@ module C11MemoryModel : MemoryModel = struct
     sw             : Expr.expr list;
     hb             : Expr.expr list;
 
+    sc_clk         : Expr.expr list;
+
     well_formed_rf : Expr.expr list;
     well_formed_mo : Expr.expr list;
 
     coherence      : Expr.expr list;
-    sc_clk         : Expr.expr list;
+    atomic1        : Expr.expr list;
+    atomic2        : Expr.expr list;
   }
 
   type execution = {
@@ -759,6 +762,22 @@ module C11MemoryModel : MemoryModel = struct
                      ])
     ) (cartesian_product all_events all_events) in
 
+    (* ==== atomicity ==== *)
+    (* irreflexive eco as atomic1 *)
+    let atomic1 = List.map (fun e ->
+        mk_not (mk_and [fns.getGuard e;fns.eco (e,e)])
+      ) all_events in
+    let atomic2 = List.map (fun (e1,e2) ->
+        mk_not (mk_and [fns.getGuard e1
+                       ;fns.getGuard e2
+                       ;fns.fr(e1,e2)
+                       ;fns.mo(e2,e1)
+                       ])
+      ) prod_events in
+
+    (* irreflexive (fr ; mo) as atomic2 *)
+
+
     { event_sort = event_sort
     ; event_type = event_type
 
@@ -791,6 +810,9 @@ module C11MemoryModel : MemoryModel = struct
                  @ well_formed_mo
 
                  @ coherence
+
+                 @ atomic1
+                 @ atomic2
     }
 
   let extract_execution (model    : Model.model)
