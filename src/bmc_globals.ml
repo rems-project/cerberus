@@ -16,7 +16,7 @@ let g_bv = false
 let g_bv_precision = 32
 
 let g_max_run_depth = 3    (* Maximum function call/run depth per call/run *)
-let g_sequentialise = true (* Sequentialise Core *)
+let g_sequentialise = false (* Sequentialise Core *)
 
 let g_concurrent_mode = true
 

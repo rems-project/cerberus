@@ -80,6 +80,7 @@ let pget_vcs    (pret: bmc_pret) = pret.vcs
 let eget_expr    (eret: bmc_ret) = eret.expr
 let eget_assume  (eret: bmc_ret) = eret.assume
 let eget_vcs     (eret: bmc_ret) = eret.vcs
+let eget_cont    (eret: bmc_ret) = eret.drop_cont
 let eget_ret     (eret: bmc_ret) = eret.ret_cond
 let eget_preexec (eret: bmc_ret) = eret.preexec
 
@@ -1486,8 +1487,25 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                ; preexec   = ret_call.preexec
                }
       end
-  | Eccall _
-  | Eunseq _
+  | Eccall _ -> assert false
+  | Eunseq elist ->
+      assert (not g_sequentialise);
+      assert (g_concurrent_mode);
+      BmcM.get_sym_table >>= fun old_sym_table ->
+      BmcM.mapM (fun expr ->
+        bmc_expr expr                       >>= fun res_expr ->
+        BmcM.update_sym_table old_sym_table >>= fun () ->
+        return res_expr
+      ) elist >>= fun res_elist ->
+
+      return { expr      = ctor_to_z3 Ctuple (List.map eget_expr res_elist) None
+             ; assume    = List.concat (List.map eget_assume res_elist)
+             ; vcs       = List.concat (List.map eget_vcs res_elist)
+             ; drop_cont = mk_or (List.map eget_cont res_elist)
+             ; mod_addr  = AddrSet.empty (* Sequential mode only *)
+             ; ret_cond  = mk_or (List.map eget_ret res_elist)
+             ; preexec   = combine_preexecs (List.map eget_preexec res_elist)
+             }
   | Eindet _ -> assert false
   | Ebound (n, e1) ->
       (* TODO: Ebound currently ignored
