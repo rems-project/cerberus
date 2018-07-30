@@ -28,13 +28,11 @@ let has_addr (BmcAction(_, _, a): bmc_action) = match a with
   | RMW _ -> true
   | _ -> false
 
-let has_rval (BmcAction(_, _, a): bmc_action) = match a with
-  | Load _ | RMW _ -> true
-  | _ -> false
+let has_rval (BmcAction(_, _, a): bmc_action) =
+  is_read a
 
-let has_wval (BmcAction(_, _, a): bmc_action) = match a with
-  | Store _ | RMW _ -> true
-  | _ -> false
+let has_wval (BmcAction(_, _, a): bmc_action) =
+  is_write a
 
 let get_action (BmcAction(_, _, action): bmc_action) =
   action
@@ -60,10 +58,6 @@ let is_pos_action (BmcAction(pol, _, _): bmc_action) = match pol with
 let is_rmw (a: bmc_action) = match get_action a with
   | RMW _ -> true
   | _ -> false
-
-let is_atomic (a: bmc_action) = match get_memorder a with
-  | NA -> false
-  | _  -> true
 
 
 let bmc_action_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
@@ -319,7 +313,9 @@ module C11MemoryModel : MemoryModel = struct
 
     preexec        : preexec2;
     witness        : witness;
-    exdd           : execution_derived_data
+    exdd           : execution_derived_data;
+
+    race_free      : bool;
   }
 
   type z3_memory_model = {
@@ -591,7 +587,8 @@ module C11MemoryModel : MemoryModel = struct
     (* let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rf* *)
     let rs_asserts =
       let writes = List.filter has_wval all_actions in
-      let atomic_writes = List.filter is_atomic writes in
+      let atomic_writes = List.filter (fun a -> is_atomic (get_action a))
+                                      writes in
       (*let rmws = List.filter is_rmw atomic_writes in*)
 
       let candidates = cartesian_product writes atomic_writes in
@@ -752,11 +749,11 @@ module C11MemoryModel : MemoryModel = struct
     let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
     let fns = mem.fns in
     let proj_fst = (fun (p1,p2) -> (fst p1, fst p2))  in
-    let get_relation rel (p1,p2) =
-      match Boolean.get_bool_value (interp (rel (snd p1, snd p2))) with
-      | L_TRUE -> true
-      | _ -> false
-    in
+    let get_bool (b: Expr.expr) = match Boolean.get_bool_value b with
+       | L_TRUE -> true
+       | L_FALSE -> false
+       | _ -> assert false in
+    let get_relation rel (p1,p2) = get_bool (interp (rel (snd p1, snd p2))) in
 
     (* ==== Compute preexecution ==== *)
     let action_events = List.fold_left (fun acc (aid, action) ->
@@ -792,15 +789,8 @@ module C11MemoryModel : MemoryModel = struct
         List.fold_left (fun acc (a, _) -> Pset.add (tid_of_action a) acc)
                        (Pset.empty compare) action_events) in
 
-    let sb = List.filter (fun ((_,e1),(_,e2)) ->
-      match Boolean.get_bool_value (interp (fns.sb (e1,e2))) with
-      | L_TRUE -> true
-      | _ -> false) prod in
-
-    let asw = List.filter (fun ((_,e1),(_,e2)) ->
-      match Boolean.get_bool_value (interp (fns.asw (e1,e2))) with
-      | L_TRUE -> true
-      | _ -> false) prod in
+    let sb = List.filter (get_relation fns.sb) prod in
+    let asw = List.filter (get_relation fns.asw) prod in
 
     let preexec : preexec2 =
       { actions = actions
@@ -823,9 +813,32 @@ module C11MemoryModel : MemoryModel = struct
     (* ==== Derived data ==== *)
     let sw = List.filter (get_relation fns.sw) prod in
 
+    let data_race = List.filter (fun ((a1,e1),(a2,e2)) ->
+      (aid_of_action a1 <> aid_of_action a2)               &&
+      (Expr.equal (addr_of_action a1) (addr_of_action a2)) &&
+      (is_write a1 || is_write a2)                         &&
+      (tid_of_action a1 <> tid_of_action a2)               &&
+      (not (is_atomic a1 && is_atomic a2))   &&
+      (not (get_relation fns.hb ((a1,e1),(a2,e2))
+            || get_relation fns.hb ((a2,e2),(a1,e1))))
+    ) prod in
+
+    let unseq_race = List.filter (fun ((a1,e1),(a2,e2)) ->
+      (aid_of_action a1 <> aid_of_action a2)                &&
+      (Expr.equal (addr_of_action a1) (addr_of_action a2))  &&
+      (is_write a1 || is_write a2)                          &&
+      (tid_of_action a1 = tid_of_action a2)                 &&
+      (tid_of_action a1 <> initial_tid)                     &&
+      (not (get_relation fns.sb ((a1,e1),(a2,e2))
+            || get_relation fns.sb ((a2,e2),(a1,e1))))
+    ) prod in
+
     let execution_derived_data =
       { derived_relations = [("sw", List.map proj_fst sw)]
-      ; undefined_behaviour = [] (* TODO *)
+      ; undefined_behaviour =
+            [("dr",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) data_race))
+            ;("ur",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) unseq_race))
+            ]
       } in
 
     (* ===== Assert uniqueness of execution ===== *)
@@ -857,12 +870,14 @@ module C11MemoryModel : MemoryModel = struct
     ; preexec = preexec
     ; witness = witness
     ; exdd    = execution_derived_data
+
+    ; race_free = (List.length data_race = 0) && (List.length unseq_race = 0)
     }
 
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
-                         : unit  =
+                         : unit =
     Solver.push solver;
     let rec aux ret =
       if Solver.check solver [] = SATISFIABLE then
@@ -874,7 +889,11 @@ module C11MemoryModel : MemoryModel = struct
         ret
     in
     let executions = aux [] in
+    let num_races =
+        (List.length (List.filter (fun e -> not e.race_free) executions)) in
     printf "# consistent executions: %d\n" (List.length executions);
+    printf "# executions with races: %d\n" num_races;
+
     printf "Return values: %s\n"
            (String.concat ", " (List.map
               (fun e -> Expr.to_string e.ret) executions));

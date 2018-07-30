@@ -127,6 +127,17 @@ let wval_of_action (a: action) = match a with
   | RMW   (_, _, _, _, _, v) -> v
   | _ -> assert false
 
+let is_write (a: action) = match a with
+  | Store _ | RMW _ -> true
+  | _ -> false
+
+let is_read (a: action) = match a with
+  | Load _ | RMW _ -> true
+  | _ -> false
+
+let is_atomic (a: action) = match memorder_of_action a with
+  | NA -> false
+  | _  -> true
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = Cmm_csem.(function
