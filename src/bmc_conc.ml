@@ -253,6 +253,8 @@ module C11MemoryModel : MemoryModel = struct
     rmw_dag : FuncDecl.func_decl;
     sw      : FuncDecl.func_decl;
     hb      : FuncDecl.func_decl;
+    sc_clk  : FuncDecl.func_decl;
+    sc      : FuncDecl.func_decl;
   }
 
   type fn_apps = {
@@ -282,6 +284,9 @@ module C11MemoryModel : MemoryModel = struct
     eco      : Expr.expr * Expr.expr -> Expr.expr;
     sw       : Expr.expr * Expr.expr -> Expr.expr;
     hb       : Expr.expr * Expr.expr -> Expr.expr;
+
+    sc_clk   : Expr.expr -> Expr.expr;
+    sc       : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   type assertions = {
@@ -305,6 +310,7 @@ module C11MemoryModel : MemoryModel = struct
     well_formed_mo : Expr.expr list;
 
     coherence      : Expr.expr list;
+    sc_clk         : Expr.expr list;
   }
 
   type execution = {
@@ -415,6 +421,9 @@ module C11MemoryModel : MemoryModel = struct
     ; rmw_dag = mk_decl "rmw_dag" [events;events] boolean_sort
     ; sw      = mk_decl "sw"      [events;events] boolean_sort
     ; hb      = mk_decl "hb"      [events;events] boolean_sort
+
+    ; sc_clk  = mk_decl "sc_clk"  [events]        (Integer.mk_sort g_ctx)
+    ; sc      = mk_decl "sc"      [events;events] boolean_sort
     }
 
   let mk_fn_apps (decls: decls) : fn_apps =
@@ -461,6 +470,11 @@ module C11MemoryModel : MemoryModel = struct
                           ]
                  ) in
     let sw     = (fun (e1,e2) -> apply decls.sw [e1;e2]) in
+    let sc_clk = (fun e -> apply decls.sc_clk [e]) in
+    let sc     = (fun (e1,e2) -> mk_and [mk_lt g_ctx (sc_clk e1) (sc_clk e2)
+                                        ;mk_eq (getMemord e1) sc_memord
+                                        ;mk_eq (getMemord e2) sc_memord
+                                        ]) in
 
     { getAid    = (fun e -> apply decls.aid [e])
     ; getGuard  = getGuard
@@ -486,6 +500,8 @@ module C11MemoryModel : MemoryModel = struct
     ; eco       = eco
     ; sw        = sw
     ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2])
+    ; sc_clk    = sc_clk
+    ; sc        = sc
     }
 
   let compute_executions (exec: preexec) : z3_memory_model =
@@ -675,6 +691,39 @@ module C11MemoryModel : MemoryModel = struct
                 (mk_eq (fns.sb (e0,e1)) (mk_or sb_eqs)) in
     *)
 
+    (* ==== SC assertions ==== *)
+    let sc_asserts =
+      let sc_actions =
+        List.filter (fun a -> get_memorder a = Seq_cst) all_actions in
+      let sc_events = List.map z3action sc_actions in
+      List.map (fun (e1,e2) ->
+        (*sb_neq_loc ; hb ; sb_neq_loc
+         *sb_neq_loc(e1,a1) and hb(a1,a2) and sb_neq_loc (a2,e2) *)
+        let comp1 = List.map (fun (a1,a2) ->
+          mk_and [fns.getGuard a1
+                 ;fns.getGuard a2
+                 ;mk_not (mk_eq (fns.getAddr e1) (fns.getAddr a1))
+                 ;mk_not (mk_eq (fns.getAddr a2) (fns.getAddr e2))
+                 ;fns.sb(e1,a1)
+                 ;fns.hb(a1,a2)
+                 ;fns.sb(a2,e2)
+                 ]
+          ) prod_events in
+
+        (*let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr*)
+        let scb = mk_or [fns.sb (e1,e2)
+                        ;mk_or comp1
+                        ;mk_and [fns.hb(e1,e2)
+                                ;mk_eq (fns.getAddr e1) (fns.getAddr e2)]
+                        ;fns.mo (e1,e2)
+                        ;fns.fr (e1,e2)
+                        ] in
+        mk_implies (mk_and [fns.getGuard e1
+                           ;fns.getGuard e2
+                           ;scb])
+                   (mk_lt g_ctx (fns.sc_clk e1) (fns.sc_clk e2))
+      ) (cartesian_product sc_events sc_events) in
+
     (* ==== Well formed assertions ==== *)
 
     (* ∀e. isRead(e) ∧ guard(e) => isWrite(rf(e)) ∧ same_addr ∧ same_val *)
@@ -735,6 +784,8 @@ module C11MemoryModel : MemoryModel = struct
                  @ rs_asserts
                  @ sw_asserts
                  @ hb_asserts
+
+                 @ sc_asserts
 
                  @ well_formed_rf
                  @ well_formed_mo
@@ -803,11 +854,12 @@ module C11MemoryModel : MemoryModel = struct
 
     let rf = List.filter (get_relation fns.rf) prod in
     let mo = List.filter (get_relation fns.mo) prod in
+    let sc = List.filter (get_relation fns.sc) prod in
 
     let witness : witness =
       { rf = List.map proj_fst rf
       ; mo = List.map proj_fst mo
-      ; sc = [] (* TODO *)
+      ; sc = List.map proj_fst sc
       } in
 
     (* ==== Derived data ==== *)
