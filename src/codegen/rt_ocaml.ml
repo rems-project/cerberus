@@ -58,8 +58,11 @@ let ivand   = ivctor M.bitwise_and_ival "ivand"
 let ivor    = ivctor M.bitwise_or_ival "ivor"
 let ivxor   = ivctor M.bitwise_xor_ival "ivxor"
 
-let fvfromint = float_of_int
-let ivfromfloat (_, x) = int_of_float x
+let fvfromint = M.fvfromint
+let ivfromfloat (cty, x) =
+  match cty with
+  | C.Basic0 (T.Integer it) -> M.ivfromfloat it x
+  | _ -> raise (Error "ivfromfloat")
 
 (* Ail types *)
 
@@ -102,6 +105,11 @@ let get_integer m =
   let terr _ _ = raise (Error "Type mismatch, expecting integer values.") in
   M.case_mem_value m unspecified terr (fun _ -> specified)
     terr terr (terr()) terr terr
+
+let get_float m =
+  let terr _ _ = raise (Error "Type mismatch, expecting integer values.") in
+  M.case_mem_value m unspecified terr terr (fun _ -> specified)
+    terr (terr()) terr terr
 
 let get_pointer m =
   let terr _ _ = raise (Error "Type mismatch, expecting pointer values.") in
@@ -148,19 +156,17 @@ let remt = M.op_ival Mem_common.IntRem_t
 let remf = M.op_ival Mem_common.IntRem_f
 let exp = M.op_ival Mem_common.IntExp
 
+let addf = M.op_fval Mem_common.FloatAdd
+let subf = M.op_fval Mem_common.FloatSub
+let mulf = M.op_fval Mem_common.FloatMul
+let divf = M.op_fval Mem_common.FloatDiv
+
 let eq n m = Option.get (M.eq_ival (Some M.initial_mem_state) n m)
 let lt n m = Option.get (M.lt_ival (Some M.initial_mem_state) n m)
 let gt n m = Option.get (M.lt_ival (Some M.initial_mem_state) m n)
 let le n m = Option.get (M.le_ival (Some M.initial_mem_state) n m)
 let ge n m = Option.get (M.le_ival (Some M.initial_mem_state) m n)
 
-let eq_ptrval p q = M.eq_ptrval p q
-let ne_ptrval p q = M.ne_ptrval p q
-let ge_ptrval p q = M.ge_ptrval p q
-let lt_ptrval p q = M.lt_ptrval p q
-let gt_ptrval p q = M.gt_ptrval p q
-let le_ptrval p q = M.le_ptrval p q
-let diff_ptrval p q = M.diff_ptrval p q
 let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
 let memcmp p q r = return $ M.memcmp p q r
 let memcpy p q r = return $ M.memcpy p q r
@@ -186,6 +192,9 @@ let load cty ret e =
 
 let load_integer ity =
   load (C.Basic0 (T.Integer ity)) get_integer
+
+let load_float fty =
+  load (C.Basic0 (T.Floating fty)) get_float
 
 let load_pointer q cty =
   load (C.Pointer0 (q, cty)) get_pointer
@@ -339,3 +348,18 @@ let run tags gls main =
     init_globals gls
     >>= fun _ -> main cont args
   end |> quit
+
+(* Conv loaded mem value *)
+
+let conv_int_mval it =
+  case_loaded_mval (M.integer_value_mval it)
+
+let conv_float_mval ft =
+  case_loaded_mval (M.floating_value_mval ft)
+
+let conv_ptr_mval cty =
+  case_loaded_mval (M.pointer_mval cty)
+
+let conv_struct_mval s =
+  case_loaded_mval (M.struct_mval s)
+
