@@ -1,0 +1,75 @@
+Checking Concurrent Data Structures Under the C/C++11 Memory Model
+Ou & Demsky
+
+-------
+
+(RCMC) Effective Stateless Model Checking for C/C++ Concurrency
+MICHALIS KOKOLOGIANNAKIS, ORI LAHAV, KONSTANTINOS SAGONAS, VIKTOR
+VAFEIADIS
+http://plv.mpi-sws.org/rcmc/
+
+- RC11
+- both an OCaml version and an LLVM-based thing (this is actual RCMC)
+
+-------
+
+(nighugg)
+https://github.com/nidhugg/nidhugg/blob/master/doc/manual.pdf
+
+Stateless Model Checking for TSO and PSO
+Parosh Abdulla, Stavros Aronis, Mohammed Faouzi Atig, Bengt Jonsson,
+Carl Leonardsson, Konstantinos Sagonas
+https://arxiv.org/abs/1501.02069
+
+Parosh Aziz Abdulla, Stavros Aronis, Mohamed Faouzi Atig, Bengt Jonsson, Carl Leonardsson, Konstantinos Sagonas:
+Stateless model checking for TSO and PSO. Acta Inf. 54(8): 789-818
+(2017)
+
+- SC, TSO, PSO, and (we guess) the herd-paper versions of POWER and ARM
+- uses clang to LLVM
+
+
+Stateless Model Checking for POWER
+Parosh Aziz Abdulla, Mohamed Faouzi Atig, Bengt Jonsson, Carl Leonardsson
+https://arxiv.org/abs/1605.02185
+
+
+-------
+
+SATCheck tool by Demsky and Lam [2015]
+
+-------
+
+herd
+
+------------------------------------------------------------
+
+- are the "real code" benchmarks from the RCMC paper in the Cerberus fragment?
+
+- how big are they (in threads and number of memory accesses) in
+  whatever scenario is being checked?
+
+
+
+choices:
+- continue to push on something generic in the memory model, doing (at
+   least) all the concurrency stuff in Z3.  But with enough analysis
+   to find all the obviously thread-local accesses etc. 
+
+- something inbetween, with full allocation nondeterminism but asking
+  Z3 only simple questions.  And RCMC or some other exploration
+  wrapped around that. 
+
+- glue on RCMC algorithm to Core semantics (and concrete memory object
+  model?)
+
+
+- go look at the linux kernel memory model
+  (https://paulmck.livejournal.com/49667.html), and do something
+  (either generic enough for this or special-cased to this) that can
+  check code wrt that.
+
+
+- go searching for good candidate examples - the real-code ones from
+  RCMC.  And from the new Demsky paper?  Treiber stack a decent
+  starting point in any case.

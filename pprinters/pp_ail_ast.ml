@@ -97,7 +97,7 @@ let rec pp_ctype_human qs ty =
     | Pointer (ref_qs, ref_ty) ->
         prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
     | Atomic atom_ty ->
-        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers ty
+        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers atom_ty
     | Struct tag_sym ->
         prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
     | Union tag_sym ->
