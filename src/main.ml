@@ -146,11 +146,14 @@ let c_frontend f =
     |> set_progress "AILTY" 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.except_fmap (Translation.translate !!cerb_conf.core_stdlib
-                         (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
+    |> Exception.except_fmap (fun (supply,ail) -> (Some ail,
+      Translation.translate !!cerb_conf.core_stdlib
+                            (match !!cerb_conf.core_impl_opt with 
+                                Some x -> x | None -> assert false) 
+                            (supply,ail)))
     |> set_progress "ELABO" 13
     |> pass_message "4. Translation to Core completed!"
-
+    
 (*
 (*
       |> Exception.except_fmap Core_simpl.simplify
@@ -167,14 +170,14 @@ let core_frontend f =
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
 (* TODO: probably can remove the commmented line, now this is done by the driver *)
 (*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
-        Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
+        Exception.except_return (None, (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   Some sym_main;
            Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
            Core.stdlib= snd !!cerb_conf.core_stdlib;
            Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
            Core.globs=  globs;
            Core.funs=   funs
-         })
+         }))
     
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
@@ -263,7 +266,7 @@ let pipeline filename args =
        core_frontend f
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
-  end >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
+  end >>= fun (ail_opt,((sym_supply : Symbol.sym UniqueId.supply), core_file)) ->
   
   begin
     if !!cerb_conf.typecheck_core then
@@ -301,7 +304,7 @@ let pipeline filename args =
    );
   (* TODO (sl715): invoke model checking routine *)
   if !!cerb_conf.bmc then
-    Bmc.bmc rewritten_core_file sym_supply;
+    Bmc.bmc rewritten_core_file sym_supply ail_opt;
   
   
   if !!cerb_conf.ocaml then
@@ -343,11 +346,11 @@ let gen_corestd stdlib impl =
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph
-             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc=
+             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc;
+  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn;
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
@@ -546,6 +549,11 @@ let bmc_conc =
   let doc = "Run bounded model checker in concurrent mode" in
   Arg.(value & flag & info["bmc_conc"] ~doc)
 
+let bmc_fn =
+  let doc = "Name of the function to model check" in
+  Arg.(value & opt string "main" & info["bmc_fn"] ~doc)
+
+
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus
@@ -553,7 +561,7 @@ let () =
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
-    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc
+    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn
     ) in
   
   (* the version is "sed-out" by the Makefile *)

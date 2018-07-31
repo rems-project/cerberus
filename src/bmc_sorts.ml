@@ -315,5 +315,3 @@ module CFunctionSort = struct
     let func_decl = List.nth constructors 0 in
     Expr.mk_app g_ctx func_decl [ id ]
 end
-
-

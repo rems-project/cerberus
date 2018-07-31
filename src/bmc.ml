@@ -94,6 +94,14 @@ let bmc_pret_to_ret (pret: bmc_pret) : bmc_ret =
   ; preexec   = mk_initial_preexec
   }
 
+let initial_gret = {assume = []; vcs = []; preexec = mk_initial_preexec}
+let merge_grets grets = List.fold_left (
+    fun acc gret ->
+      { assume  = gret.assume @ acc.assume
+      ; vcs     = gret.vcs    @ acc.vcs
+      ; preexec = combine_preexecs [gret.preexec; acc.preexec]
+      }) initial_gret grets
+
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
   | CaseSortBase of ctype * Sort.sort
@@ -110,16 +118,6 @@ let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
-
-(* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
-let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
-                        : Expr.expr =
-  if (Sort.equal (LoadedInteger.mk_sort) sort) then
-    LoadedInteger.mk_unspecified ctype
-  else if (Sort.equal (LoadedPointer.mk_sort) sort) then
-    LoadedPointer.mk_unspecified ctype
-  else
-    assert false
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
@@ -182,7 +180,7 @@ module ImplFunctions = struct
                    : (ctype, Expr.expr) Pmap.map =
     List.fold_left (fun acc ctype ->
       let ctype_expr = CtypeSort.mk_expr ctype in
-      let expr = Expr.mk_fresh_const g_ctx
+      let expr = mk_fresh_const
                     (sprintf "%s(%S)" name (Expr.to_string ctype_expr))
                     sort in
       Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) types
@@ -258,6 +256,41 @@ module ImplFunctions = struct
                     @ sizeof_asserts
                     @ is_unsigned_asserts
 end
+
+(* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
+let mk_specified_expr (sort: Sort.sort) (name: string): Expr.expr =
+  if (Sort.equal (LoadedInteger.mk_sort) sort) then
+    LoadedInteger.mk_specified (mk_fresh_const name integer_sort)
+  else if (Sort.equal (LoadedPointer.mk_sort) sort) then
+    LoadedPointer.mk_specified (mk_fresh_const name PointerSort.mk_sort)
+  else
+    assert false
+
+let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
+                        : Expr.expr =
+  if (Sort.equal (LoadedInteger.mk_sort) sort) then
+    LoadedInteger.mk_unspecified ctype
+  else if (Sort.equal (LoadedPointer.mk_sort) sort) then
+    LoadedPointer.mk_unspecified ctype
+  else
+    assert false
+
+let mk_initial_value (sort: Sort.sort) (name: string)
+                     (ctype: ctype) (specified: bool)
+                     : Expr.expr * (Expr.expr list) =
+  if specified then begin
+    let initial_value = mk_specified_expr sort name in
+    match ctype with
+    | Basic0 (Integer ity) ->
+        let arg = LoadedInteger.get_specified_value initial_value in
+        let ge_ivmin =
+          binop_to_z3 OpGe arg (Pmap.find ctype ImplFunctions.ivmin_map) in
+        let le_ivmax =
+          binop_to_z3 OpLe arg (Pmap.find ctype ImplFunctions.ivmax_map) in
+        (initial_value, [ge_ivmin; le_ivmax])
+    | _ -> assert false
+  end else
+    (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
 
 (* =========== PPRINTERS =========== *)
 let pp_bmc_ret (bmc_ret: bmc_ret) =
@@ -399,6 +432,22 @@ let value_to_z3 (value: value)
       | _ -> assert false
       end
 
+let rec ailctype_to_ctype (ty: AilTypes.ctype)
+                          : Core_ctype.ctype0 =
+  match ty with
+  | Void -> Void0
+  | Basic bty -> Basic0 bty
+  | Array (cty, n) -> Array0 (ailctype_to_ctype cty, n)
+  | Function (_, (q,ty1), args, variadic) ->
+      Function0 ((q, ailctype_to_ctype ty1),
+                 List.map (fun (q,ty1,_) -> (q, ailctype_to_ctype ty1)) args,
+                 variadic)
+  | Pointer (v1,v2) -> Pointer0 (v1,ailctype_to_ctype v2)
+  | Atomic cty -> Atomic0 (ailctype_to_ctype cty)
+  | Struct v -> Struct0 v
+  | Union v ->  Union0 v
+  | Builtin v -> Builtin0 v
+
 let rec ctype_to_bmcz3sort (ty  : ctype)
                            (file: unit typed_file)
                            : bmcz3sort =
@@ -506,6 +555,7 @@ module BmcM = struct
   let mapMi f ms = sequence (List.mapi f ms)
   let mapM2 f ms1 ms2  = sequence (List.map2 f ms1 ms2)
   let mapM_ f ms = sequence_ (List.map f ms)
+  let mapM2_ f ms1 ms2 = sequence_ (List.map2 f ms1 ms2)
 
   let get : bmc_state eff =
     Eff (fun st -> (st, st))
@@ -707,7 +757,7 @@ let return = BmcM.return
 
 (* =========== SYMBOL TABLE MAINTENANCE FUNCTIONS =========== *)
 let symbol_to_fresh_z3_const (sym: sym_ty) (sort: Sort.sort) : Expr.expr =
-  Expr.mk_fresh_const g_ctx (symbol_to_string sym) sort
+  mk_fresh_const (symbol_to_string sym) sort
 
 let add_sym_to_sym_table (sym: sym_ty) (ty: core_base_type)
                          : unit BmcM.eff =
@@ -715,8 +765,8 @@ let add_sym_to_sym_table (sym: sym_ty) (ty: core_base_type)
   let z3_sym  = symbol_to_fresh_z3_const sym z3_sort in
   BmcM.add_sym_to_sym_table sym z3_sym
 
-let initialise_param ((sym, ty) : sym_ty * core_base_type)
-                     : unit BmcM.eff =
+let initialise_simple_param ((sym, ty) : sym_ty * core_base_type)
+                            : unit BmcM.eff =
   assert (not (is_core_ptr_bty ty));
   dprintf "Initialising param: %s %s\n"
           (symbol_to_string sym)
@@ -874,13 +924,13 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
   | PEconstrained _
   | PEundef _ ->
       let sort = cbt_to_z3 bTy in
-      return { expr   = Expr.mk_fresh_const g_ctx "undef" sort
+      return { expr   = mk_fresh_const "undef" sort
              ; assume = []
              ; vcs    = [ mk_false ]
              }
   | PEerror _ ->
       let sort = cbt_to_z3 bTy in
-      return { expr   = Expr.mk_fresh_const g_ctx "error" sort
+      return { expr   = mk_fresh_const "error" sort
              ; assume = []
              ; vcs    = [ mk_false ]
              }
@@ -1009,8 +1059,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
             end
       in
       if depth >= !!bmc_conf.max_run_depth then
-        return { expr   = Expr.mk_fresh_const g_ctx
-                              "call_depth_exceeded" (cbt_to_z3 ty)
+        return { expr   = mk_fresh_const "call_depth_exceeded" (cbt_to_z3 ty)
                ; assume = []
                ; vcs    = [ mk_false ]
                }
@@ -1097,23 +1146,24 @@ module Bmc_paction = struct
   let do_concurrent_create (alloc_id: BmcM.alloc)
                            (sortlist: (ctype * Sort.sort) list)
                            (pol: polarity)
+                           (specified: bool)
                            : ret BmcM.eff  =
     let is_atomic = (function ctype -> match ctype with
                      | Core_ctype.Atomic0 _ -> mk_true
                      | _ -> mk_false) in
     BmcM.mapMi (fun i (ctype, sort) ->
-      let initial_value =
-        mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
       let addr = (alloc_id, i) in
       let addr_expr = AddressSort.mk_from_addr addr in
       let ptr = PointerSort.mk_ptr addr_expr in
       let is_atomic =
         AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
+      let (initial_value, assumptions) =
+        mk_initial_value sort (sprintf "init_%d,%d" alloc_id i)
+                         ctype specified in
       mk_store ptr initial_value initial_tid Cmm_csem.NA mk_true pol
         >>= fun (binding, action) ->
-      return ([binding; is_atomic], action)
+      return (binding::(is_atomic::assumptions), action)
     ) sortlist >>= fun retlist ->
-
     return { assume   = List.concat (List.map fst retlist)
            ; vcs      = []
            ; mod_addr = AddrSet.empty (* sequential only *)
@@ -1124,18 +1174,19 @@ module Bmc_paction = struct
 
   let do_sequential_create (alloc_id: BmcM.alloc)
                            (sortlist: (ctype * Sort.sort) list)
+                           (specified: bool)
                            : ret BmcM.eff =
     BmcM.mapMi (fun i (ctype, sort) ->
       let addr = (alloc_id, i) in
-      let initial_value =
-        mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) in
       let seq_var = mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
-      let init_unspec = mk_eq seq_var initial_value in
-      (* track in state that mem[addr] = seq_var *)
       BmcM.update_memory addr seq_var >>= fun () ->
-      return (addr, init_unspec)
+      let (initial_value, assumptions) =
+        mk_initial_value sort (sprintf "init_%d,%d" alloc_id i)
+                         ctype specified in
+      let binding = mk_eq seq_var initial_value in
+      return (addr, binding::assumptions)
     ) sortlist >>= fun retlist ->
-    return { assume    = List.map snd retlist
+    return { assume    = List.concat (List.map snd retlist)
            ; vcs       = []
            ; mod_addr  = AddrSet.of_list (List.map fst retlist)
            ; preexec   = mk_initial_preexec (* concurrent only *)
@@ -1238,8 +1289,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
 
       let to_run =
         if !!bmc_conf.concurrent_mode
-        then Bmc_paction.do_concurrent_create alloc_id flat_sortlist pol
-        else Bmc_paction.do_sequential_create alloc_id flat_sortlist in
+        then Bmc_paction.do_concurrent_create alloc_id flat_sortlist pol false
+        else Bmc_paction.do_sequential_create alloc_id flat_sortlist false in
       to_run >>= fun ret ->
       (* Assert alloc_size(alloc_id) = allocation_size *)
       let alloc_size_expr =
@@ -1738,13 +1789,7 @@ let bmc_globals globals : bmc_gret BmcM.eff =
              ; preexec = ret_expr.preexec
              }
     ) globals >>= fun ret_globals ->
-  return (List.fold_left (
-      fun acc gret ->
-        { assume  = gret.assume @ acc.assume
-        ; vcs     = gret.vcs    @ acc.vcs
-        ; preexec = combine_preexecs [gret.preexec; acc.preexec]
-        }
-      ) { assume = []; vcs = []; preexec = mk_initial_preexec} ret_globals)
+  return (merge_grets ret_globals)
 
 let initialise_solver (solver: Solver.solver) =
   print_endline "Initialising solver.";
@@ -1753,9 +1798,63 @@ let initialise_solver (solver: Solver.solver) =
   Params.add_bool params (mk_sym "macro_finder") g_macro_finder;
   Solver.set_parameters solver params
 
+let initialise_param ((sym, cbt) as param: (sym_ty * core_base_type))
+                     ((_,ctype,_): qualifiers * AilTypes.ctype * bool) =
+  if (not (is_core_ptr_bty cbt)) then
+    initialise_simple_param param >>= fun () ->
+      return {assume = []; vcs = []; preexec = mk_initial_preexec}
+  else begin
+    (* TODO: duplicates Create *)
+    BmcM.get_file >>= fun file ->
+    (* Core pointer: look up Ail type, create an initial value.
+     * Initialized to not be unspecified *)
+    let sortlist = ctype_to_bmcz3sort (ailctype_to_ctype ctype) file in
+    let flat_sortlist = flatten_bmcz3sort sortlist in
+    let allocation_size = bmcz3sort_size sortlist in
+    BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
+    let to_run =
+        if !!bmc_conf.concurrent_mode
+        then Bmc_paction.do_concurrent_create alloc_id flat_sortlist Pos true
+        else Bmc_paction.do_sequential_create alloc_id flat_sortlist true in
+    to_run >>= fun result ->
+
+    let alloc_size_expr =
+      mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+                               [int_to_z3 alloc_id])
+             (int_to_z3 allocation_size) in
+    add_sym_to_sym_table sym cbt >>= fun () ->
+    BmcM.lookup_sym sym >>= fun expr ->
+    let eq_expr =
+      mk_eq expr (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+
+    return { assume  = eq_expr::(alloc_size_expr::result.assume)
+           ; vcs     = result.vcs
+           ; preexec = result.preexec
+           }
+  end
+
+let initialise_params
+        (params: (sym_ty * core_base_type) list)
+        (function_to_check: sym_ty)
+        (ail_opt: GenTypes.genTypeCategory AilSyntax.ail_program option) =
+  match ail_opt with
+  | Some (_, sigma) ->
+      let (id, (_,decl)) = List.find (fun (id, decl) ->
+        sym_cmp id function_to_check = 0) sigma.declarations in
+      begin match decl with
+      | Decl_function (b, _, args, _, _, _) ->
+          assert (List.length args = List.length params);
+          BmcM.mapM2 initialise_param params args >>= fun retlist ->
+          return (merge_grets retlist)
+      | _ -> assert false
+      end
+  | None -> (assert (List.length params = 0);
+             BmcM.return initial_gret)
+
 let bmc_file (file              : unit typed_file)
              (sym_supply        : sym_supply_ty)
-             (function_to_check : sym_ty) =
+             (function_to_check : sym_ty)
+             (ail_opt: GenTypes.genTypeCategory AilSyntax.ail_program option) =
   (* Create an initial model checking state *)
   let initial_state : BmcM.bmc_state =
     BmcM.mk_initial_state file sym_supply in
@@ -1765,9 +1864,8 @@ let bmc_file (file              : unit typed_file)
     bmc_globals file.globs >>= fun gret ->
     match Pmap.lookup function_to_check file.funs with
     | Some (Proc (_, ty, params, e)) ->
-        (* TODO: handle args to procedure. May be of pointer type *)
-        assert (List.length params = 0);
-        let ret_const = mk_fresh_const "ret_main" (cbt_to_z3 ty) in
+        initialise_params params function_to_check ail_opt >>= fun pret ->
+        let ret_const = mk_fresh_const "ret_fn" (cbt_to_z3 ty) in
         BmcM.update_proc_expr e         >>= fun () ->
         BmcM.update_ret_const ret_const >>= fun () ->
         bmc_expr e                      >>= fun ret ->
@@ -1775,22 +1873,20 @@ let bmc_file (file              : unit typed_file)
         let new_ret_cond =
           mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
         let preexec =
-          let combined = combine_preexecs [gret.preexec; ret.preexec] in
+          let combined =
+            combine_preexecs [gret.preexec; pret.preexec; ret.preexec] in
           let sb = (compute_sb gret.preexec.actions ret.preexec.actions)
+                 @ (compute_sb pret.preexec.actions ret.preexec.actions)
                  @ combined.sb in
-          let asw = compute_asw gret.preexec.actions ret.preexec.actions
-                                gret.preexec.sb      ret.preexec.sb
-                                parent_tids
-                  @ combined.asw in
-          let filtered_asw = filter_asw asw sb in
+          let filtered_asw = filter_asw combined.asw sb in
           {combined with sb = sb; asw = filtered_asw} in
         return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
-                       ; assume   = gret.assume @ ret.assume
-                       ; vcs      = gret.vcs    @ ret.vcs
+                       ; assume   = gret.assume @ pret.assume @ ret.assume
+                       ; vcs      = gret.vcs    @ pret.vcs    @ ret.vcs
                        ; preexec  = preexec
                }
     | Some (Fun (ty, params, pe)) ->
-        BmcM.mapM_ initialise_param params >>= fun () ->
+        BmcM.mapM_ initialise_simple_param params >>= fun () ->
         bmc_pexpr pe >>= fun pret ->
         let ret = bmc_pret_to_ret pret in
         return {ret with assume  = gret.assume @ ret.assume
@@ -1826,7 +1922,8 @@ let bmc_file (file              : unit typed_file)
                    | Some expr -> expr
                    | None      -> result.expr in
 
-  (if !!bmc_conf.concurrent_mode then begin
+  (if !!bmc_conf.concurrent_mode && (List.length result.preexec.actions > 0)
+    then begin
     let model = BmcMem.compute_executions result.preexec in
     print_endline "==== PREEXECS ";
     print_endline (pp_preexec result.preexec);
@@ -1865,17 +1962,29 @@ let bmc_file (file              : unit typed_file)
       print_endline "STATUS: unsatisfiable :)"
   | SATISFIABLE ->
       begin
-      print_endline "STATUS: satisfiable"
-      (*;let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model)*)
+      print_endline "STATUS: satisfiable";
+      let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model)
       end
+
+let find_function (f_name: string)
+                  (fun_map: unit typed_fun_map)
+                  =
+  let is_f_name = (fun (sym, decl) ->
+      match sym with
+      | Sym.Symbol(i, Some s) -> String.equal s f_name
+      | _ -> false
+    ) in
+  match (List.find_opt is_f_name (Pmap.bindings_list fun_map)) with
+  | Some (sym, _) -> sym
+  | None -> failwith ("ERROR: fail does not have the function " ^ f_name)
 
 (* Main bmc function: typechecks and sequentialises file.
  e The symbol supply is used to ensure fresh symbols when renaming.
  *)
 let bmc (core_file  : unit file)
-        (sym_supply : sym_supply_ty) =
-
+        (sym_supply : sym_supply_ty)
+        (ail_opt    : GenTypes.genTypeCategory AilSyntax.ail_program option)=
   match Core_typing.typecheck_program core_file with
     | Result typed_core ->
         begin
@@ -1887,12 +1996,18 @@ let bmc (core_file  : unit file)
 
           pp_file core_to_check;
           bmc_debug_print 1 "START: model checking";
+
+          let fn_sym = find_function !!bmc_conf.fn_to_check
+                                     core_to_check.funs in
+          bmc_file core_to_check sym_supply fn_sym ail_opt
+          (*
           match core_to_check.main with
           | None ->
               (* Currently only check main function *)
               failwith "ERROR: fail does not have a main"
           | Some main_sym ->
               bmc_file core_to_check sym_supply main_sym
+              *)
         end
     | Exception msg ->
         printf "Typechecking error: %s\n" (Pp_errors.to_string msg)
