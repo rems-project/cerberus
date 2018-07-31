@@ -300,7 +300,8 @@ let pipeline filename args =
       print_endline "====================";
    );
   (* TODO (sl715): invoke model checking routine *)
-  Bmc.bmc rewritten_core_file sym_supply;
+  if !!cerb_conf.bmc then
+    Bmc.bmc rewritten_core_file sym_supply;
   
   
   if !!cerb_conf.ocaml then
@@ -341,10 +342,12 @@ let gen_corestd stdlib impl =
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
-             defacto default_impl action_graph =
+             defacto default_impl action_graph
+             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc=
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
+  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc;
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
@@ -369,7 +372,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
   let module Core_parser =
     Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
   set_cerb_conf cpp_cmd pps ppflags core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
+    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph bmc;
   
   Switches.set switches;
   
@@ -379,7 +382,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
 
   set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
+    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph bmc;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
@@ -522,13 +525,36 @@ let args =
   let doc = "List of arguments for the C program" in
   Arg.(value & opt (list string) [] & info ["args"] ~docv:"ARG1,..." ~doc)
 
+(* bmc flags *)
+let bmc =
+  let doc = "Run bounded model checker" in
+  Arg.(value & flag & info["bmc"] ~doc)
+
+let bmc_bvprec =
+  let doc = "Bitvector precision for the bounded model checker (for use when bmc_bv is set)" in
+  Arg.(value & opt int 32 & info["bmc_bvprec"] ~doc)
+
+let bmc_max_depth =
+  let doc = "Maximum depth of function calls and loops in the bounded model checker" in
+  Arg.(value & opt int 3 & info["bmc_max_depth"] ~doc)
+
+let bmc_seq =
+  let doc = "Replace all unseq() with left to right wseq in the bounded model checker" in
+  Arg.(value & opt bool true & info["bmc_seq"] ~doc)
+
+let bmc_conc =
+  let doc = "Run bounded model checker in concurrent mode" in
+  Arg.(value & flag & info["bmc_conc"] ~doc)
+
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ switches
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
-    $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
+    $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
+    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc
+    ) in
   
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
