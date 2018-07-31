@@ -159,12 +159,18 @@ let is_letter c =
   is_uppercase c || is_lowercase c
 
 let rename_ocaml_mod_name rfile =
-  (* Add 'n' if name starts with any symbol *)
-  (if is_letter (String.get rfile 0) then rfile else "n" ^ rfile)
-  (* - is not supported by Ocaml *)
-  |> Str.global_replace (Str.regexp "-") "_"
+  let ext = extension rfile in
+  let base = Filename.basename (Filename.chop_extension rfile) in
+  let rename_base b =
+    (* Add 'n' if name starts with any symbol *)
+    (if is_letter (String.get b 0) then b else "n" ^ b)
+    (* - and . are not supported by Ocaml *)
+    |> Str.global_replace (Str.regexp "-") "_"
+    |> Str.global_replace (Str.regexp "\.") "_"
+  in
+  let mfile = rename_base base ^ ext in
   (* Rename files if needed *)
-  |> fun mfile -> if not (mfile = rfile) then move rfile mfile; mfile
+  if not (mfile = rfile) then move rfile mfile; mfile
 
 let cbuild c b f basic corestd csmith cargs o rfiles =
   (* check _cbuild *)
