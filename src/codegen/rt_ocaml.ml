@@ -31,13 +31,47 @@ let batch =
 (* stdout if in batch mode *)
 let stdout = ref ""
 
-
 let position fname lnum bol cnum = {
   Lexing.pos_fname = fname;
   Lexing.pos_lnum = lnum;
   Lexing.pos_bol = bol;
   Lexing.pos_cnum = cnum;
 }
+
+let unknown = Location_ocaml.Loc_unknown
+let other s = Location_ocaml.Loc_other s
+let point fname lnum bol cnum =
+  Location_ocaml.Loc_point (position fname lnum bol cnum)
+let region fname lnum1 bol1 cnum1 lnum2 bol2 cnum2 =
+  Location_ocaml.Loc_region (position fname lnum1 bol1 cnum1,
+                             position fname lnum2 bol2 cnum2, None)
+
+let sym (n, s) = Symbol.Symbol (n, Some s)
+let cabsid pos id =
+  let mkloc x = x in
+  Cabs.CabsIdentifier (mkloc pos, id)
+
+(* Helper Types *)
+
+let char_t = C.Basic0 (T.Integer T.Char)
+let bool_t = C.Basic0 (T.Integer T.Bool)
+let schar_t = C.Basic0 (T.Integer (T.Signed T.Ichar))
+let uchar_t = C.Basic0 (T.Integer (T.Unsigned T.Ichar))
+let int_t = C.Basic0 (T.Integer (T.Signed T.Int_))
+let uint_t = C.Basic0 (T.Integer (T.Unsigned T.Int_))
+let short_t = C.Basic0 (T.Integer (T.Signed T.Short))
+let ushort_t = C.Basic0 (T.Integer (T.Unsigned T.Short))
+let long_t = C.Basic0 (T.Integer (T.Signed T.Long))
+let ulong_t = C.Basic0 (T.Integer (T.Unsigned T.Long))
+let longlong_t = C.Basic0 (T.Integer (T.Signed T.LongLong))
+let ulonglong_t = C.Basic0 (T.Integer (T.Unsigned T.LongLong))
+let size_t = C.Basic0 (T.Integer T.Size_t)
+let ptrdiff_t = C.Basic0 (T.Integer T.Ptrdiff_t)
+let float_t = C.Basic0 (T.Floating (T.RealFloating T.Float))
+let double_t = C.Basic0 (T.Floating (T.RealFloating T.Double))
+let longdouble_t = C.Basic0 (T.Floating (T.RealFloating T.LongDouble))
+
+
 
 (* Non deterministic choice *)
 

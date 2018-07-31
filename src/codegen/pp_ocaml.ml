@@ -119,8 +119,12 @@ let print_raw_symbol = function
   | Symbol.Symbol (i, None)     ->
     !^"Symbol.Symbol" ^^^ P.parens (print_int i ^^ P.comma ^^^ tnone)
   | Symbol.Symbol (i, Some str) ->
+    !^"RT.sym" ^^^ P.parens
+      (print_int i ^^ P.comma ^^^ P.dquotes !^str)
+      (*
     !^"Symbol.Symbol" ^^^ P.parens
       (print_int i ^^ P.comma ^^^ tsome ^^^ P.dquotes !^str)
+         *)
 
 let print_symbol_prefix = function
   | Symbol.PrefSource syms ->
@@ -136,29 +140,26 @@ let print_globs_prefix globs sym =
 (* Take out all '.' and add '_' as prefix *)
 let print_impl_name i =
   !^("_" ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
+
 let print_loc loc =
-  let print_lex pos =
-    !^"RT.position" ^^^ P.dquotes !^(pos.Lexing.pos_fname)
-    ^^^ !^(string_of_int pos.Lexing.pos_lnum)
-    ^^^ !^(string_of_int pos.Lexing.pos_bol)
-    ^^^ !^(string_of_int pos.Lexing.pos_cnum)
+  let print_fname pos = P.dquotes !^(pos.Lexing.pos_fname) in
+  let print_pos pos = !^(string_of_int pos.Lexing.pos_lnum)
+                      ^^^ !^(string_of_int pos.Lexing.pos_bol)
+                      ^^^ !^(string_of_int pos.Lexing.pos_cnum)
   in
   let open Location_ocaml in
   match loc with
   | Loc_unknown ->
-    !^"Location_ocaml.unknown"
+    !^"RT.unknown"
   | Loc_other str ->
-      !^ "Location_ocaml.other" ^^ P.parens (P.dquotes !^ (String.escaped str))
+      !^ "RT.other" ^^ P.dquotes !^ (String.escaped str)
   | Loc_point pos ->
-    !^"Location_ocaml.point" ^^^ P.parens (print_lex pos)
+    !^"RT.point" ^^^ print_fname pos ^^^ print_pos pos
   | Loc_region (pos1, pos2, opos3) ->
-    !^"Location_ocaml.Loc_region"
-      ^^^ P.parens (print_lex pos1)
-      ^^^ P.parens (print_lex pos2)
-      ^^^ P.parens (print_option print_lex opos3)
+    !^"RT.Loc_region" ^^^ print_fname pos1 ^^^ print_pos pos1 ^^^ print_pos pos2
 
 let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
-  !^"Cabs.CabsIdentifier" ^^^ P.parens(print_loc loc ^^ P.comma ^^^ P.dquotes !^str)
+  !^"RT.cabsid" ^^^ P.parens (print_loc loc) ^^^ P.dquotes !^str
 
 let print_name = function
   | Sym a  -> print_global_symbol a
@@ -249,7 +250,42 @@ let print_case pe pp pas =
 (* Core ctypes *)
 
 let rec print_ctype = function
-  | Void0 -> !^"C.Void0"
+  | Void0 ->
+    !^"C.Void0"
+  | Basic0 (Integer Char) ->
+    !^"RT.char_t"
+  | Basic0 (Integer Bool) ->
+    !^"RT.bool_t"
+  | Basic0 (Integer (Signed Ichar)) ->
+    !^"RT.schar_t"
+  | Basic0 (Integer (Unsigned Ichar)) ->
+    !^"RT.uchar_t"
+  | Basic0 (Integer (Signed Short)) ->
+    !^"RT.short_t"
+  | Basic0 (Integer (Unsigned Short)) ->
+    !^"RT.ushort_t"
+  | Basic0 (Integer (Signed Long)) ->
+    !^"RT.long_t"
+  | Basic0 (Integer (Unsigned Long)) ->
+    !^"RT.ulong_t"
+  | Basic0 (Integer (Signed LongLong)) ->
+    !^"RT.longlong_t"
+  | Basic0 (Integer (Unsigned LongLong)) ->
+    !^"RT.ulonglong_t"
+  | Basic0 (Integer (Signed Int_)) ->
+    !^"RT.int_t"
+  | Basic0 (Integer (Unsigned Int_)) ->
+    !^"RT.uint_t"
+  | Basic0 (Integer Size_t) ->
+    !^"RT.size_t"
+  | Basic0 (Integer Ptrdiff_t) ->
+    !^"RT.ptrdiff_t"
+  | Basic0 (Floating (RealFloating Float)) ->
+    !^"RT.float_t"
+  | Basic0 (Floating (RealFloating Double)) ->
+    !^"RT.double_t"
+  | Basic0 (Floating (RealFloating LongDouble)) ->
+    !^"RT.longdouble_t"
   | Basic0 abt ->
     !^"C.Basic0" ^^^ P.parens (print_ail_basic_type abt)
   | Array0 (cty, num) ->
@@ -264,10 +300,14 @@ let rec print_ctype = function
   | Pointer0 (q, cty) ->
     !^"C.Pointer0" ^^^ P.parens (print_ail_qualifier q ^^ P.comma
                                  ^^^ print_ctype cty)
-  | Atomic0 cty -> !^"C.Atomic0" ^^^ P.parens (print_ctype cty)
-  | Struct0 strct -> !^"C.Struct0" ^^^ P.parens (print_raw_symbol strct)
-  | Union0 union -> !^"C.Union0" ^^^ P.parens (print_raw_symbol union)
-  | Builtin0 str -> !^"C.Builtin0" ^^^ !^str
+  | Atomic0 cty ->
+    !^"C.Atomic0" ^^^ P.parens (print_ctype cty)
+  | Struct0 strct ->
+    !^"C.Struct0" ^^^ P.parens (print_raw_symbol strct)
+  | Union0 union ->
+    !^"C.Union0" ^^^ P.parens (print_raw_symbol union)
+  | Builtin0 str ->
+    !^"C.Builtin0" ^^^ !^str
 
 (* Memory types *)
 
@@ -650,7 +690,7 @@ let print_action globs act =
     ^^^ P.parens (print_pure_expr globs al)
     ^^^ P.parens (print_pure_expr globs n)
   | Kill (b, e) ->
-    !^"M.kill" ^^^ !^"Location_ocaml.unknown" ^^^ print_bool b ^^^ P.parens (print_pure_expr globs e)
+    !^"M.kill" ^^^ !^"RT.unknown" ^^^ print_bool b ^^^ P.parens (print_pure_expr globs e)
   | Store0 (ty, pe1, pe2, _) ->
     choose_store_type ty
     ^^^ P.parens (print_pure_expr globs pe1)
