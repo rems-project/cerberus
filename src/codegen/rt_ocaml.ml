@@ -98,6 +98,11 @@ let ivfromfloat (cty, x) =
   | C.Basic0 (T.Integer it) -> M.ivfromfloat it x
   | _ -> raise (Error "ivfromfloat")
 
+let intcast_ptrval cty itarget x =
+  match itarget with
+  | C.Basic0 (T.Integer it) -> M.intcast_ptrval cty it x
+  | _ -> raise (Error "intcast_ptrval")
+
 (* Ail types *)
 
 let ail_qualifier (c, r, v) =
@@ -171,7 +176,7 @@ let case_loaded_mval f = case_loaded f M.unspecified_mval
 
 let mk_int s = M.integer_ival (Nat_big_num.of_string s)
 let mk_float s = M.str_fval s
-let mk_array xs = M.array_mval (List.map (case_loaded_mval (M.integer_value_mval T.Char)) xs)
+let mk_array xs = (*M.array_mval*) (List.map (case_loaded_mval id) xs)
 
 let mk_pointer alloc_id addr =
   M.concrete_ptrval (Nat_big_num.of_string alloc_id)
@@ -258,15 +263,21 @@ let store_struct s =
 let store_union s cid =
   store (M.union_mval s cid) (C.Union0 s)
 
-let store_array_of conv cty size q =
+let store_array_of conv cty size =
   let array_mval e = M.array_mval (List.map (case_loaded_mval conv) e)
   in store array_mval (C.Array0 (cty, size))
 
 let store_array_of_int ity =
   store_array_of (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
 
+let store_array_of_float fty =
+  store_array_of (M.floating_value_mval fty) (C.Basic0 (T.Floating fty))
+
 let store_array_of_ptr q cty =
   store_array_of (M.pointer_mval cty) (C.Pointer0 (q, cty))
+
+let store_array_of_struct s =
+  store_array_of (M.struct_mval s) (C.Struct0 s)
 
 (* Printf wrap *)
 

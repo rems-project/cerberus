@@ -86,7 +86,6 @@ let print_match m xs =
 
 let print_bool b = if b then ttrue else tfalse
 
-
 let print_int n = !^(string_of_int n)
 
 let print_option pp = Option.case
@@ -121,10 +120,6 @@ let print_raw_symbol = function
   | Symbol.Symbol (i, Some str) ->
     !^"RT.sym" ^^^ P.parens
       (print_int i ^^ P.comma ^^^ P.dquotes !^str)
-      (*
-    !^"Symbol.Symbol" ^^^ P.parens
-      (print_int i ^^ P.comma ^^^ tsome ^^^ P.dquotes !^str)
-         *)
 
 let print_symbol_prefix = function
   | Symbol.PrefSource syms ->
@@ -375,7 +370,6 @@ let print_eff_function name pmrs ty body =
 
 (* Binary operations and precedences *)
 
-(* TODO: support floating point *)
 let print_binop bop pp (Pexpr (_, t1, pe1_) as pe1) (Pexpr (_, t2, pe2_) as pe2) =
   let app bop = !^bop ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2) in
   let unexpected ty () =
@@ -521,7 +515,7 @@ let print_ctor pp ctor pes =
      | _        -> raise (Unexpected "Ccons: more than 2 args")
     )
   | Ctuple       -> pp_args P.comma
-  | Carray       -> !^"RT.mk_array" ^^^ pp_array ()
+  | Carray       -> (*!^"RT.mk_array" ^^^*) pp_array ()
   | Civmax       -> !^"RT.ivmax" ^^^ pp_args P.space
   | Civmin       -> !^"RT.ivmin" ^^^ pp_args P.space
   | Civsizeof    -> !^"M.sizeof_ival" ^^^ pp_args P.space
@@ -567,7 +561,6 @@ let print_pure_expr globs pe =
         (* struct/union are serialised as tuples *)
       | PEstruct (s, tags) ->
         print_tags pp s tags
-        (*P.parens (print_raw_symbol s ^^^ *) (*print_list (print_tag pp) tags*)
       | PEmemberof (s, cid, pe) ->
         failwith "TODO: PEmemberof"
       | PEunion (s, cid, pe) ->
@@ -600,8 +593,8 @@ let print_memop globs memop pes =
    | Mem_common.PtrGt -> !^"M.gt_ptrval"
    | Mem_common.PtrLe -> !^"M.le_ptrval"
    | Mem_common.Ptrdiff -> !^"M.diff_ptrval"
-   | Mem_common.IntFromPtr -> !^"M.intcast_ptrval"
-   | Mem_common.PtrFromInt -> !^"M.ptrvast_ival"
+   | Mem_common.IntFromPtr -> !^"RT.intcast_ptrval"
+   | Mem_common.PtrFromInt -> !^"M.ptrcast_ival"
    | Mem_common.PtrValidForDeref -> !^"RT.valid_for_deref_ptrval"
    | Mem_common.Memcmp -> !^"RT.memcmp"
    | Mem_common.Memcpy -> !^"RT.memcpy"
@@ -611,11 +604,11 @@ let print_memop globs memop pes =
   ) ^^^ (P.separate_map P.space (P.parens % print_pure_expr globs)) pes
 
 let choose_load_type pe =
-  let get_type = function
+  let get_ctype = function
     | Pexpr (_, _, PEval (Vctype cty)) -> cty
     | _ -> failwith "fatal error: get_type"
   in
-  match get_type pe with
+  match get_ctype pe with
   | Void0 ->
     raise (Unexpected "cannot load a void type")
   | Basic0 (Integer ity) ->
@@ -644,30 +637,33 @@ let choose_load_type pe =
 let print_store_array_type = function
   | Basic0 (Integer ity) ->
     !^"RT.store_array_of_int" ^^^ P.parens (print_ail_integer_type ity)
+  | Basic0 (Floating fty) ->
+    !^"RT.store_array_of_float" ^^^ P.parens (print_ail_floating_type fty)
   | Pointer0 (q, cty) ->
     !^"RT.store_array_of_ptr" ^^^ P.parens (print_ail_qualifier q)
       ^^^ P.parens (print_ctype cty)
+  | Struct0 s ->
+    !^"RT.store_array_of_struct" ^^^ P.parens (print_raw_symbol s)
   | _ -> raise (Unsupported "store array not implemented")
 
-(* TODO!!! *)
 let choose_store_type pe =
-  match pe with
-  | (Pexpr (_, _, PEval cty)) ->
-    begin match cty with
-      | Vctype (Basic0 (Integer ity)) ->
-        !^"RT.store_integer" ^^^ P.parens (print_ail_integer_type ity)
-      | Vctype (Pointer0 (q, cty)) ->
-        !^"RT.store_pointer" ^^^ P.parens (print_ail_qualifier q)
-          ^^^ P.parens (print_ctype cty)
-      | Vctype (Struct0 s) ->
-        !^"RT.store_struct" ^^^ P.parens (print_raw_symbol s)
-      | Vctype (Union0 s) ->
-        !^"RT.store_union" ^^^ P.parens (print_raw_symbol s)
-      | Vctype (Array0 (cty, n)) ->
-        print_store_array_type cty
-          ^^^ P.parens (print_option print_num n)
-      | _ -> raise (Unsupported "store not implemented")
-    end
+  let get_ctype = function
+    | Pexpr (_, _, PEval (Vctype cty)) -> cty
+    | _ -> failwith "fatal error: get_type"
+  in
+  match get_ctype pe with
+  | Basic0 (Integer ity) ->
+    !^"RT.store_integer" ^^^ P.parens (print_ail_integer_type ity)
+  | Pointer0 (q, cty) ->
+    !^"RT.store_pointer" ^^^ P.parens (print_ail_qualifier q)
+      ^^^ P.parens (print_ctype cty)
+  | Struct0 s ->
+    !^"RT.store_struct" ^^^ P.parens (print_raw_symbol s)
+  | Union0 s ->
+    !^"RT.store_union" ^^^ P.parens (print_raw_symbol s)
+  | Array0 (cty, n) ->
+    print_store_array_type cty
+      ^^^ P.parens (print_option print_num n)
   | _ -> raise (Unsupported "store not implemented")
 
 let print_action globs act =
