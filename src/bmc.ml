@@ -576,7 +576,7 @@ module BmcM = struct
     return st.memory
 
   let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
-    if g_concurrent_mode then assert false
+    if !!bmc_conf.concurrent_mode then assert false
     else get >>= fun st ->
          put {st with memory = Pmap.add addr expr st.memory}
 
@@ -1008,7 +1008,7 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
             | _ -> assert false
             end
       in
-      if depth >= g_max_run_depth then
+      if depth >= !!bmc_conf.max_run_depth then
         return { expr   = Expr.mk_fresh_const g_ctx
                               "call_depth_exceeded" (cbt_to_z3 ty)
                ; assume = []
@@ -1237,7 +1237,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
 
       let to_run =
-        if g_concurrent_mode
+        if !!bmc_conf.concurrent_mode
         then Bmc_paction.do_concurrent_create alloc_id flat_sortlist pol
         else Bmc_paction.do_sequential_create alloc_id flat_sortlist in
       to_run >>= fun ret ->
@@ -1281,7 +1281,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       assert (List.length flat_sortlist = 1);
 
       let to_run =
-        if g_concurrent_mode
+        if !!bmc_conf.concurrent_mode
         then Bmc_paction.do_concurrent_store sym_expr res_wval.expr memorder pol
         else Bmc_paction.do_sequential_store sym_expr res_wval.expr in
       to_run >>= fun ret ->
@@ -1305,7 +1305,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
 
       let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
       let to_run =
-        if g_concurrent_mode
+        if !!bmc_conf.concurrent_mode
         then Bmc_paction.do_concurrent_load sym_expr ret_expr memorder pol
         else Bmc_paction.do_sequential_load sym_expr ret_expr in
       to_run >>= fun ret ->
@@ -1376,7 +1376,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                 ) caselist >>= fun res_caselist ->
       let reslist = List.map (fun (_, _, a) -> a) res_caselist in
       (* Update memory *)
-      (if g_concurrent_mode then
+      (if !!bmc_conf.concurrent_mode then
          let preexecs = List.map2 guard_preexec case_guards
                                   (List.map eget_preexec reslist) in
          return (AddrSet.empty, combine_preexecs preexecs)
@@ -1440,7 +1440,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         | Some (Proc(_, ty, params, e)) -> (ty, params, e)
         | _    -> assert false in
       BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
-      if depth >= g_max_run_depth then
+      if depth >= !!bmc_conf.max_run_depth then
         return { expr      = mk_fresh_const "call_depth_exceeded"
                                             (cbt_to_z3 fun_ty)
                ; assume    = []
@@ -1489,8 +1489,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       end
   | Eccall _ -> assert false
   | Eunseq elist ->
-      assert (not g_sequentialise);
-      assert (g_concurrent_mode);
+      assert (not !!bmc_conf.sequentialise);
+      assert (!!bmc_conf.concurrent_mode);
       BmcM.get_sym_table >>= fun old_sym_table ->
       BmcM.mapM (fun expr ->
         bmc_expr expr                       >>= fun res_expr ->
@@ -1530,7 +1530,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         fun i _ -> mk_fresh_const ("seq_" ^ (string_of_int i))
                                   boolean_sort) elist in
       (* memory *)
-      (if g_concurrent_mode then
+      (if !!bmc_conf.concurrent_mode then
         let preexecs = List.map2 guard_preexec
                                  choice_vars (List.map eget_preexec bmc_rets) in
         return (AddrSet.empty, combine_preexecs preexecs)
@@ -1569,7 +1569,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              }
   | Erun (_, label, pelist) ->
       BmcM.lookup_run_depth (Sym label) >>= fun depth ->
-      if depth >= g_max_run_depth then
+      if depth >= !!bmc_conf.max_run_depth then
         (* TODO: flag as special vc? *)
         return { expr      = UnitSort.mk_unit
                ; assume    = []
@@ -1589,6 +1589,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
         let sub_map = List.fold_right2 (fun sym pe map -> Pmap.add sym pe map)
                                        cont_syms pelist (Pmap.empty sym_cmp) in
         let cont_to_check = substitute_expr sub_map cont_expr in
+
         BmcM.increment_run_depth (Sym label) >>= fun () ->
         bmc_expr cont_to_check               >>= fun run_res ->
         BmcM.decrement_run_depth (Sym label) >>= fun () ->
@@ -1605,7 +1606,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                }
       end
   | Epar elist ->
-      assert (g_concurrent_mode);
+      assert (!!bmc_conf.concurrent_mode);
       assert (not g_single_threaded);
       BmcM.get_tid       >>= fun old_tid ->
       BmcM.get_sym_table >>= fun old_sym_table ->
@@ -1649,7 +1650,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       let (guard1, guard2) = (res_pe.expr, mk_not res_pe.expr) in
 
       (* memory *)
-      (if g_concurrent_mode then
+      (if !!bmc_conf.concurrent_mode then
          let preexecs = combine_preexecs
              [ guard_preexec guard1 res_e1.preexec
              ; guard_preexec guard2 res_e2.preexec ] in
@@ -1690,7 +1691,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
 
       let e2_guard = mk_not res1.drop_cont in
 
-      (if g_concurrent_mode then
+      (if !!bmc_conf.concurrent_mode then
          BmcM.get_parent_tids >>= fun parent_tids ->
          let (p1, p2) = (res1.preexec, guard_preexec e2_guard res2.preexec) in
          let preexec = combine_preexecs [p1;p2] in
@@ -1825,7 +1826,7 @@ let bmc_file (file              : unit typed_file)
                    | Some expr -> expr
                    | None      -> result.expr in
 
-  (if g_concurrent_mode then begin
+  (if !!bmc_conf.concurrent_mode then begin
     let model = BmcMem.compute_executions result.preexec in
     print_endline "==== PREEXECS ";
     print_endline (pp_preexec result.preexec);
@@ -1865,8 +1866,8 @@ let bmc_file (file              : unit typed_file)
   | SATISFIABLE ->
       begin
       print_endline "STATUS: satisfiable"
-      ;let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model)
+      (*;let model = Option.get (Solver.get_model g_solver) in
+      print_endline (Model.to_string model)*)
       end
 
 (* Main bmc function: typechecks and sequentialises file.
@@ -1879,7 +1880,7 @@ let bmc (core_file  : unit file)
     | Result typed_core ->
         begin
           let core_to_check =
-            if g_sequentialise then
+            if !!bmc_conf.sequentialise then
               Core_sequentialise.sequentialise_file typed_core
             else
               typed_core in

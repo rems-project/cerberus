@@ -49,6 +49,7 @@ type cerberus_conf = {
   defacto:        bool;
   default_impl:   bool;
   action_graph:   bool;
+  bmc:            bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -78,6 +79,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     error_verbosity ->
+    bool ->
     bool ->
     bool ->
     bool ->
