@@ -24,6 +24,8 @@ type bmc_conf = {
   max_run_depth   : int;
   sequentialise   : bool;
   concurrent_mode : bool;
+
+  fn_to_check     : string;
 }
 
 let (!!) z = !z()
@@ -31,21 +33,11 @@ let (!!) z = !z()
 let bmc_conf : (unit -> bmc_conf) ref =
   ref (fun () -> failwith "bmc_conf is undefined")
 
-let set bmc_bvprec bmc_max_depth bmc_seq bmc_conc =
+let set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn =
   bmc_conf := fun () ->
   { bv_precision    = bmc_bvprec;
     max_run_depth   = bmc_max_depth;
     sequentialise   = bmc_seq;
     concurrent_mode = bmc_conc;
+    fn_to_check     = bmc_fn;
   }
-
-(* true => use bit vector representation *)
-
-(*
-let g_bv_precision = 32
-
-let g_max_run_depth = 3    (* Maximum function call/run depth per call/run *)
-let g_sequentialise = false (* Sequentialise Core *)
-
-let g_concurrent_mode = false
-*)

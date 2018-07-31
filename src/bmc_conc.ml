@@ -972,11 +972,15 @@ module C11MemoryModel : MemoryModel = struct
            (String.concat ", " (List.map
               (fun e -> Expr.to_string e.ret) executions));
     List.iteri (fun i exec ->
-      let dot_str = pp_dot () (ppmode_default_web,
-                        (exec.preexec, Some exec.witness,
-                         Some (exec.exdd))) in
-      let filename = Printf.sprintf "%s_%d.dot" "graph" i in
-      save_to_file filename dot_str;
+      if (List.length exec.preexec.actions > 0) then
+        begin
+        let dot_str =
+          pp_dot () (ppmode_default_web,
+                          (exec.preexec, Some exec.witness,
+                           Some (exec.exdd))) in
+        let filename = sprintf "%s_%d.dot" "graph" i in
+        save_to_file filename dot_str
+        end
     ) executions;
 
     Solver.pop solver 1
