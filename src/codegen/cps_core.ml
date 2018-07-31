@@ -225,11 +225,18 @@ let cps_transform sym_supply globs_sym (core : unit typed_file) =
       (s, bty, bbs, bbody)
     ) core.globs
   in
+  (* Add struct/union members to global symbols *)
+  let globs_sym' =
+    try
+      let tags = Tags.tagDefs () in
+      globs_sym @ Pset.elements (Pmap.domain tags)
+    with _ -> globs_sym
+  in
   {
     main = core.main;
-    stdlib = Pmap.map (cps_transform_fun sym_supply globs_sym) core.stdlib;
+    stdlib = Pmap.map (cps_transform_fun sym_supply globs_sym') core.stdlib;
     impl = core.impl;
     globs = globs;
-    funs = Pmap.map (cps_transform_fun sym_supply globs_sym) core.funs;
+    funs = Pmap.map (cps_transform_fun sym_supply globs_sym') core.funs;
   }
 
