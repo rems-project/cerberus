@@ -32,6 +32,7 @@ open Util
  *
  *  - Concurrency
  *     - Convert lists -> sets/hashtables where appropriate
+ *     - Should asw be included in po?
  *)
 
 (* =========== TYPES =========== *)
@@ -127,7 +128,7 @@ module ImplFunctions = struct
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
 
   (* TODO: precision of Bool is currently 8... *)
-  let impl : Implementation.implementation0 = {
+  let impl : Implementation.implementation = {
     binary_mode = Two'sComplement;
     signed      = (function
                    | Char       -> Ocaml_implementation.Impl.char_is_signed
@@ -138,12 +139,12 @@ module ImplFunctions = struct
     precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
                    | None   -> assert false );
-    size_t0     = Unsigned Long;
-    ptrdiff_t1  = Signed Long
+    size_t     = Unsigned Long;
+    ptrdiff_t0  = Signed Long
   }
 
   (* ---- Helper functions ---- *)
-  let integer_range (impl: Implementation.implementation0)
+  let integer_range (impl: Implementation.implementation)
                     (ity : AilTypes.integerType) =
     let prec = impl.precision ity in
     if impl.signed ity then
@@ -1907,8 +1908,10 @@ let bmc_file (file              : unit typed_file)
         let preexec =
           let combined =
             combine_preexecs [gret.preexec; pret.preexec; ret.preexec] in
-          let sb = (compute_sb gret.preexec.actions ret.preexec.actions)
-                 @ (compute_sb pret.preexec.actions ret.preexec.actions)
+          let sb = (compute_sb_nofilter gret.preexec.actions
+                                        ret.preexec.actions)
+                 @ (compute_sb_nofilter pret.preexec.actions
+                                        ret.preexec.actions)
                  @ combined.sb in
           let filtered_asw = filter_asw combined.asw sb in
           {combined with sb = sb; asw = filtered_asw} in
