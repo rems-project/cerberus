@@ -258,14 +258,6 @@ module ImplFunctions = struct
 end
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
-let mk_specified_expr (sort: Sort.sort) (name: string): Expr.expr =
-  if (Sort.equal (LoadedInteger.mk_sort) sort) then
-    LoadedInteger.mk_specified (mk_fresh_const name integer_sort)
-  else if (Sort.equal (LoadedPointer.mk_sort) sort) then
-    LoadedPointer.mk_specified (mk_fresh_const name PointerSort.mk_sort)
-  else
-    assert false
-
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
                         : Expr.expr =
   if (Sort.equal (LoadedInteger.mk_sort) sort) then
@@ -275,20 +267,26 @@ let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
   else
     assert false
 
-let mk_initial_value (sort: Sort.sort) (name: string)
-                     (ctype: ctype) (specified: bool)
-                     : Expr.expr * (Expr.expr list) =
+let mk_initial_value (ctype: ctype) (name: string) =
+  match ctype with
+  | Void0 ->
+      (UnitSort.mk_unit, [])
+  | Basic0 (Integer ity) ->
+      let const = mk_fresh_const name integer_sort in
+      let ge_ivmin =
+          binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
+      let le_ivmax =
+          binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
+      (const, [ge_ivmin;le_ivmax])
+  | _ -> assert false
+
+let mk_initial_loaded_value (sort: Sort.sort) (name: string)
+                            (ctype: ctype) (specified: bool)
+                            : Expr.expr * (Expr.expr list) =
   if specified then begin
-    let initial_value = mk_specified_expr sort name in
-    match ctype with
-    | Basic0 (Integer ity) ->
-        let arg = LoadedInteger.get_specified_value initial_value in
-        let ge_ivmin =
-          binop_to_z3 OpGe arg (Pmap.find ctype ImplFunctions.ivmin_map) in
-        let le_ivmax =
-          binop_to_z3 OpLe arg (Pmap.find ctype ImplFunctions.ivmax_map) in
-        (initial_value, [ge_ivmin; le_ivmax])
-    | _ -> assert false
+    let (initial_value, assertions) = mk_initial_value ctype name in
+    assert (Sort.equal (LoadedInteger.mk_sort) sort);
+    (LoadedInteger.mk_specified initial_value, assertions)
   end else
     (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
 
@@ -494,6 +492,7 @@ module BmcM = struct
 
   type bmc_state = {
     file              : unit typed_file;
+    ail_opt           : GenTypes.genTypeCategory AilSyntax.ail_program option;
 
     sym_supply        : sym_supply_ty;
     sym_table         : sym_table;
@@ -568,6 +567,12 @@ module BmcM = struct
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
+
+  (* ail option *)
+  let get_ail_opt : 'a eff =
+    get >>= fun st ->
+    return st.ail_opt
+
   (* sym table *)
   let get_sym_table : sym_table eff =
     get >>= fun st ->
@@ -692,8 +697,10 @@ module BmcM = struct
   (* =========== STATE INIT =========== *)
   let mk_initial_state (file       : unit typed_file)
                        (sym_supply : sym_supply_ty)
+                       (ail_opt)
                        : bmc_state =
     { file             = file
+    ; ail_opt          = ail_opt
 
     ; sym_supply       = sym_supply
     ; sym_table        = Pmap.empty sym_cmp
@@ -1158,8 +1165,8 @@ module Bmc_paction = struct
       let is_atomic =
         AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
       let (initial_value, assumptions) =
-        mk_initial_value sort (sprintf "init_%d,%d" alloc_id i)
-                         ctype specified in
+        mk_initial_loaded_value sort (sprintf "init_%d,%d" alloc_id i)
+                                ctype specified in
       mk_store ptr initial_value initial_tid Cmm_csem.NA mk_true pol
         >>= fun (binding, action) ->
       return (binding::(is_atomic::assumptions), action)
@@ -1181,8 +1188,8 @@ module Bmc_paction = struct
       let seq_var = mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
       BmcM.update_memory addr seq_var >>= fun () ->
       let (initial_value, assumptions) =
-        mk_initial_value sort (sprintf "init_%d,%d" alloc_id i)
-                         ctype specified in
+        mk_initial_loaded_value sort (sprintf "init_%d,%d" alloc_id i)
+                                ctype specified in
       let binding = mk_eq seq_var initial_value in
       return (addr, binding::assumptions)
     ) sortlist >>= fun retlist ->
@@ -1486,57 +1493,82 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
       assert (Expr.get_num_args sym_expr = 1);
       let sym_id = z3num_to_int (List.hd (Expr.get_args sym_expr)) in
       let func_sym = Sym.Symbol(sym_id, None) in
-      let (fun_ty, fun_args, fun_expr) =
-        match Pmap.lookup func_sym file.funs with
-        | Some (Proc(_, ty, params, e)) -> (ty, params, e)
-        | _    -> assert false in
       BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
-      if depth >= !!bmc_conf.max_run_depth then
-        return { expr      = mk_fresh_const "call_depth_exceeded"
-                                            (cbt_to_z3 fun_ty)
-               ; assume    = []
-               ; vcs       = [ mk_false ]
-               ; drop_cont = mk_false
-               ; mod_addr  = AddrSet.empty
-               ; ret_cond  = mk_true
-               ; preexec   = mk_initial_preexec
-               }
-      else begin
-        BmcM.mapM bmc_pexpr arglist >>= fun arg_retlist ->
-        let sub_map = List.fold_right2
-          ( fun (sym, _) pe table -> Pmap.add sym pe table)
-          fun_args arglist (Pmap.empty sym_cmp) in
-        let expr_to_check = substitute_expr sub_map fun_expr in
-        let new_ret_const =
-          mk_fresh_const (sprintf "ret_%d" sym_id) (cbt_to_z3 fun_ty) in
-        BmcM.get_proc_expr                      >>= fun old_proc_expr ->
-        BmcM.get_ret_const                      >>= fun old_ret_const ->
-        BmcM.get_sym_table                      >>= fun old_sym_table ->
-        BmcM.update_proc_expr expr_to_check     >>= fun () ->
-        BmcM.update_ret_const new_ret_const     >>= fun () ->
-        BmcM.increment_run_depth (Sym func_sym) >>= fun () ->
-        bmc_expr expr_to_check                  >>= fun ret_call ->
-        BmcM.update_ret_const old_ret_const     >>= fun () ->
-        BmcM.update_proc_expr old_proc_expr     >>= fun () ->
-        BmcM.update_sym_table old_sym_table     >>= fun () ->
-        BmcM.decrement_run_depth (Sym func_sym) >>= fun () ->
+      begin match Pmap.lookup func_sym file.funs with
+      | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
+        if depth >= !!bmc_conf.max_run_depth then
+          return { expr      = mk_fresh_const "call_depth_exceeded"
+                                              (cbt_to_z3 fun_ty)
+                 ; assume    = []
+                 ; vcs       = [ mk_false ]
+                 ; drop_cont = mk_false
+                 ; mod_addr  = AddrSet.empty
+                 ; ret_cond  = mk_true
+                 ; preexec   = mk_initial_preexec
+                 }
+        else begin
+          BmcM.mapM bmc_pexpr arglist >>= fun arg_retlist ->
+          let sub_map = List.fold_right2
+            ( fun (sym, _) pe table -> Pmap.add sym pe table)
+            fun_args arglist (Pmap.empty sym_cmp) in
+          let expr_to_check = substitute_expr sub_map fun_expr in
+          let new_ret_const =
+            mk_fresh_const (sprintf "ret_%d" sym_id) (cbt_to_z3 fun_ty) in
+          BmcM.get_proc_expr                      >>= fun old_proc_expr ->
+          BmcM.get_ret_const                      >>= fun old_ret_const ->
+          BmcM.get_sym_table                      >>= fun old_sym_table ->
+          BmcM.update_proc_expr expr_to_check     >>= fun () ->
+          BmcM.update_ret_const new_ret_const     >>= fun () ->
+          BmcM.increment_run_depth (Sym func_sym) >>= fun () ->
+          bmc_expr expr_to_check                  >>= fun ret_call ->
+          BmcM.update_ret_const old_ret_const     >>= fun () ->
+          BmcM.update_proc_expr old_proc_expr     >>= fun () ->
+          BmcM.update_sym_table old_sym_table     >>= fun () ->
+          BmcM.decrement_run_depth (Sym func_sym) >>= fun () ->
 
-        let proc_ret_cond =
-          mk_and [mk_implies (mk_not ret_call.drop_cont)
-                             (mk_eq new_ret_const ret_call.expr)
-                 ; ret_call.ret_cond] in
+          let proc_ret_cond =
+            mk_and [mk_implies (mk_not ret_call.drop_cont)
+                               (mk_eq new_ret_const ret_call.expr)
+                   ; ret_call.ret_cond] in
 
-        return { expr      = new_ret_const
-               ; assume    = proc_ret_cond
-                             ::ret_call.assume
-                             @ (List.concat (List.map pget_assume arg_retlist))
-               ; vcs       = ret_call.vcs
-                             @ (List.concat (List.map pget_vcs arg_retlist))
-               ; drop_cont = mk_false
-               ; mod_addr  = ret_call.mod_addr
-               ; ret_cond  = mk_true
-               ; preexec   = ret_call.preexec
-               }
+          return { expr      = new_ret_const
+                 ; assume    = proc_ret_cond
+                               ::ret_call.assume
+                               @(List.concat (List.map pget_assume arg_retlist))
+                 ; vcs       = ret_call.vcs
+                               @(List.concat (List.map pget_vcs arg_retlist))
+                 ; drop_cont = mk_false
+                 ; mod_addr  = ret_call.mod_addr
+                 ; ret_cond  = mk_true
+                 ; preexec   = ret_call.preexec
+                 }
+        end
+      | Some (ProcDecl(_, ty, params)) ->
+          printf "TODO: ProcDecl %s treated as nondet, 'random' function\n"
+                 (symbol_to_string func_sym);
+          BmcM.get_ail_opt >>= fun ail_opt ->
+          assert (is_some ail_opt);
+          let (_, sigma) = Option.get ail_opt in
+          let (id, (_,decl)) = List.find (fun (id, decl) ->
+            sym_cmp id func_sym = 0) sigma.declarations in
+          let ctype = match decl with
+            | Decl_function (_,(_,ctype),_,_,_,_) -> ctype
+            | _ -> assert false in
+          let (nondet_const,assumptions) =
+             mk_initial_loaded_value
+                (cbt_to_z3 ty)
+                (sprintf "procDecl:%s" (symbol_to_string func_sym))
+                (ailctype_to_ctype ctype)
+                true in
+          return { expr      = nondet_const
+                 ; assume    = assumptions
+                 ; vcs       = []
+                 ; drop_cont = mk_false
+                 ; mod_addr  = AddrSet.empty
+                 ; ret_cond  = mk_true
+                 ; preexec   = mk_initial_preexec
+                 }
+      | _ -> assert false
       end
   | Eccall _ -> assert false
   | Eunseq elist ->
@@ -1835,14 +1867,14 @@ let initialise_param ((sym, cbt) as param: (sym_ty * core_base_type))
 
 let initialise_params
         (params: (sym_ty * core_base_type) list)
-        (function_to_check: sym_ty)
-        (ail_opt: GenTypes.genTypeCategory AilSyntax.ail_program option) =
+        (function_to_check: sym_ty) =
+  BmcM.get_ail_opt >>= fun ail_opt ->
   match ail_opt with
   | Some (_, sigma) ->
       let (id, (_,decl)) = List.find (fun (id, decl) ->
         sym_cmp id function_to_check = 0) sigma.declarations in
       begin match decl with
-      | Decl_function (b, _, args, _, _, _) ->
+      | Decl_function (_, _, args, _, _, _) ->
           assert (List.length args = List.length params);
           BmcM.mapM2 initialise_param params args >>= fun retlist ->
           return (merge_grets retlist)
@@ -1857,14 +1889,14 @@ let bmc_file (file              : unit typed_file)
              (ail_opt: GenTypes.genTypeCategory AilSyntax.ail_program option) =
   (* Create an initial model checking state *)
   let initial_state : BmcM.bmc_state =
-    BmcM.mk_initial_state file sym_supply in
+    BmcM.mk_initial_state file sym_supply ail_opt in
   initialise_solver g_solver;
 
   let to_run =
     bmc_globals file.globs >>= fun gret ->
     match Pmap.lookup function_to_check file.funs with
     | Some (Proc (_, ty, params, e)) ->
-        initialise_params params function_to_check ail_opt >>= fun pret ->
+        initialise_params params function_to_check >>= fun pret ->
         let ret_const = mk_fresh_const "ret_fn" (cbt_to_z3 ty) in
         BmcM.update_proc_expr e         >>= fun () ->
         BmcM.update_ret_const ret_const >>= fun () ->
@@ -1968,8 +2000,7 @@ let bmc_file (file              : unit typed_file)
       end
 
 let find_function (f_name: string)
-                  (fun_map: unit typed_fun_map)
-                  =
+                  (fun_map: unit typed_fun_map) =
   let is_f_name = (fun (sym, decl) ->
       match sym with
       | Sym.Symbol(i, Some s) -> String.equal s f_name
@@ -1977,10 +2008,10 @@ let find_function (f_name: string)
     ) in
   match (List.find_opt is_f_name (Pmap.bindings_list fun_map)) with
   | Some (sym, _) -> sym
-  | None -> failwith ("ERROR: fail does not have the function " ^ f_name)
+  | None -> failwith ("ERROR: file does not have the function " ^ f_name)
 
 (* Main bmc function: typechecks and sequentialises file.
- e The symbol supply is used to ensure fresh symbols when renaming.
+ * The symbol supply is used to ensure fresh symbols when renaming.
  *)
 let bmc (core_file  : unit file)
         (sym_supply : sym_supply_ty)
@@ -2000,14 +2031,6 @@ let bmc (core_file  : unit file)
           let fn_sym = find_function !!bmc_conf.fn_to_check
                                      core_to_check.funs in
           bmc_file core_to_check sym_supply fn_sym ail_opt
-          (*
-          match core_to_check.main with
-          | None ->
-              (* Currently only check main function *)
-              failwith "ERROR: fail does not have a main"
-          | Some main_sym ->
-              bmc_file core_to_check sym_supply main_sym
-              *)
         end
     | Exception msg ->
         printf "Typechecking error: %s\n" (Pp_errors.to_string msg)
