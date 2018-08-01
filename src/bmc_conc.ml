@@ -825,7 +825,7 @@ module C11MemoryModel : MemoryModel = struct
     let get_bool (b: Expr.expr) = match Boolean.get_bool_value b with
        | L_TRUE -> true
        | L_FALSE -> false
-       | _ -> assert false in
+       | _ -> false in
     let get_relation rel (p1,p2) = get_bool (interp (rel (snd p1, snd p2))) in
 
     (* ==== Compute preexecution ==== *)
