@@ -856,6 +856,11 @@ OLD(sigma_declaration)
         annotate_rvalue order_e   >>= fun (order_e',   order_gty)   ->
         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
                   GenRValueType GenVoid)
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol s (Just "atomic_thread_fence")))) [order_e] ->
+        (* TODO: do typechecking *)
+        annotate_rvalue order_e >>= fun (order_e', order_gty) ->
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol s (Just "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
+                  
 (*
          match (object_gty, desired_e; order_gty) with
            | () ->
