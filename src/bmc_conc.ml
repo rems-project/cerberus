@@ -104,6 +104,11 @@ let combine_preexecs (preexecs: preexec list) =
     ; asw             = preexec.asw @ acc.asw
     }) mk_initial_preexec preexecs
 
+let compute_sb_nofilter (xs: bmc_action list)
+                        (ys: bmc_action list)
+                        : bmcaction_rel list =
+  cartesian_product xs ys
+
 let compute_sb (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp
@@ -212,11 +217,9 @@ let pp_preexec (preexec: preexec) =
   sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>SB:\n%s\nASW:\n%s"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
-          "" ""
-          (*
+          (*"" ""*)
           (pp_actionrel_list preexec.sb)
           (pp_actionrel_list preexec.asw)
-          *)
 
 
 (* ===== memory model ===== *)
@@ -235,26 +238,27 @@ module C11MemoryModel : MemoryModel = struct
 
   type decls = {
     (* Accessors *)
-    aid     : FuncDecl.func_decl;
-    guard   : FuncDecl.func_decl;
-    etype   : FuncDecl.func_decl;
-    memord  : FuncDecl.func_decl;
-    addr    : FuncDecl.func_decl;
-    rval    : FuncDecl.func_decl;
-    wval    : FuncDecl.func_decl;
+    aid      : FuncDecl.func_decl;
+    guard    : FuncDecl.func_decl;
+    etype    : FuncDecl.func_decl;
+    memord   : FuncDecl.func_decl;
+    addr     : FuncDecl.func_decl;
+    rval     : FuncDecl.func_decl;
+    wval     : FuncDecl.func_decl;
 
-    sb      : FuncDecl.func_decl;
-    asw     : FuncDecl.func_decl;
-    mo_clk  : FuncDecl.func_decl;
+    sb       : FuncDecl.func_decl;
+    asw      : FuncDecl.func_decl;
+    mo_clk   : FuncDecl.func_decl;
 
-    rf_inv  : FuncDecl.func_decl;
+    rf_inv   : FuncDecl.func_decl;
 
-    rs      : FuncDecl.func_decl;
-    rmw_dag : FuncDecl.func_decl;
-    sw      : FuncDecl.func_decl;
-    hb      : FuncDecl.func_decl;
-    sc_clk  : FuncDecl.func_decl;
-    sc      : FuncDecl.func_decl;
+    rs       : FuncDecl.func_decl;
+    rmw_dag  : FuncDecl.func_decl;
+    sw       : FuncDecl.func_decl;
+    hb       : FuncDecl.func_decl;
+    sc_clk   : FuncDecl.func_decl;
+    sc       : FuncDecl.func_decl;
+    sbrf_clk : FuncDecl.func_decl;
   }
 
   type fn_apps = {
@@ -287,6 +291,7 @@ module C11MemoryModel : MemoryModel = struct
 
     sc_clk   : Expr.expr -> Expr.expr;
     sc       : Expr.expr * Expr.expr -> Expr.expr;
+    sbrf_clk : Expr.expr -> Expr.expr;
   }
 
   type assertions = {
@@ -310,10 +315,13 @@ module C11MemoryModel : MemoryModel = struct
 
     well_formed_rf : Expr.expr list;
     well_formed_mo : Expr.expr list;
+    mo_init        : Expr.expr list;
 
     coherence      : Expr.expr list;
     atomic1        : Expr.expr list;
     atomic2        : Expr.expr list;
+
+    sbrf_clk       : Expr.expr list;
   }
 
   type execution = {
@@ -406,27 +414,28 @@ module C11MemoryModel : MemoryModel = struct
     | Consume -> assert false
 
   let mk_decls (events: Sort.sort) : decls =
-    { aid     = mk_decl "aid"     [events]        (Integer.mk_sort g_ctx)
-    ; guard   = mk_decl "guard"   [events]        boolean_sort
-    ; etype   = mk_decl "etype"   [events]        mk_event_type
-    ; addr    = mk_decl "addr"    [events]        AddressSort.mk_sort
-    ; memord  = mk_decl "memord"  [events]        mk_memord_type
-    ; rval    = mk_decl "rval"    [events]        Loaded.mk_sort
-    ; wval    = mk_decl "wval"    [events]        Loaded.mk_sort
+    { aid      = mk_decl "aid"      [events]        (Integer.mk_sort g_ctx)
+    ; guard    = mk_decl "guard"    [events]        boolean_sort
+    ; etype    = mk_decl "etype"    [events]        mk_event_type
+    ; addr     = mk_decl "addr"     [events]        AddressSort.mk_sort
+    ; memord   = mk_decl "memord"   [events]        mk_memord_type
+    ; rval     = mk_decl "rval"     [events]        Loaded.mk_sort
+    ; wval     = mk_decl "wval"     [events]        Loaded.mk_sort
 
-    ; sb      = mk_decl "sb"      [events;events] boolean_sort
-    ; asw     = mk_decl "asw"     [events;events] boolean_sort
-    ; mo_clk  = mk_decl "mo_clk"  [events]        (Integer.mk_sort g_ctx)
+    ; sb       = mk_decl "sb"       [events;events] boolean_sort
+    ; asw      = mk_decl "asw"      [events;events] boolean_sort
+    ; mo_clk   = mk_decl "mo_clk"   [events]        (Integer.mk_sort g_ctx)
 
-    ; rf_inv  = mk_decl "rf_inv"  [events]        events
+    ; rf_inv   = mk_decl "rf_inv"   [events]        events
 
-    ; rs      = mk_decl "rs"      [events;events] boolean_sort
-    ; rmw_dag = mk_decl "rmw_dag" [events;events] boolean_sort
-    ; sw      = mk_decl "sw"      [events;events] boolean_sort
-    ; hb      = mk_decl "hb"      [events;events] boolean_sort
+    ; rs       = mk_decl "rs"       [events;events] boolean_sort
+    ; rmw_dag  = mk_decl "rmw_dag"  [events;events] boolean_sort
+    ; sw       = mk_decl "sw"       [events;events] boolean_sort
+    ; hb       = mk_decl "hb"       [events;events] boolean_sort
 
-    ; sc_clk  = mk_decl "sc_clk"  [events]        (Integer.mk_sort g_ctx)
-    ; sc      = mk_decl "sc"      [events;events] boolean_sort
+    ; sc_clk   = mk_decl "sc_clk"   [events]        (Integer.mk_sort g_ctx)
+    ; sc       = mk_decl "sc"       [events;events] boolean_sort
+    ; sbrf_clk = mk_decl "sbrf_clk" [events]        (Integer.mk_sort g_ctx)
     }
 
   let mk_fn_apps (decls: decls) : fn_apps =
@@ -454,7 +463,7 @@ module C11MemoryModel : MemoryModel = struct
     let rf_inv = (fun e -> apply decls.rf_inv [e]) in
     let rf     = (fun (e1,e2) -> mk_and [isRead e2
                                         ;mk_eq (rf_inv e2) e1
-                                        ;]) in
+                                        ]) in
 
     let rmw_dag = (fun (e1,e2) -> apply decls.rmw_dag [e1;e2]) in
     let rs      = (fun (e1,e2) -> apply decls.rs      [e1;e2]) in
@@ -478,6 +487,7 @@ module C11MemoryModel : MemoryModel = struct
                                         ;mk_eq (getMemord e1) sc_memord
                                         ;mk_eq (getMemord e2) sc_memord
                                         ]) in
+    let sbrf_clk = (fun e -> apply decls.sbrf_clk [e]) in
 
     { getAid    = (fun e -> apply decls.aid [e])
     ; getGuard  = getGuard
@@ -505,6 +515,7 @@ module C11MemoryModel : MemoryModel = struct
     ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2])
     ; sc_clk    = sc_clk
     ; sc        = sc
+    ; sbrf_clk  = sbrf_clk
     }
 
   let compute_executions (exec: preexec) : z3_memory_model =
@@ -567,8 +578,9 @@ module C11MemoryModel : MemoryModel = struct
 
     (* ==== Preexecution relations ==== *)
     let sb_asserts =
-      let sb_with_initial =
-        cartesian_product (exec.initial_actions) (exec.actions)
+      let sb_with_initial = cartesian_product
+          (exec.initial_actions)
+          (List.filter (fun a -> has_rval a || has_wval a) exec.actions)
         @ exec.sb in
       let not_sb =
         List.filter (fun p -> not (find_rel p sb_with_initial)) prod_actions in
@@ -682,19 +694,8 @@ module C11MemoryModel : MemoryModel = struct
                       ])
       ) prod_events in
 
-    (*
-    let sb_asserts =
-      let sb_with_initial =
-        cartesian_product (exec.initial_actions) (exec.actions)
-        @ exec.sb in
-      let sb_eqs = List.map (fun (a,b) ->
-        mk_and [mk_eq e0 (z3action a)
-               ;mk_eq e1 (z3action b)]) sb_with_initial in
-      mk_forall [event_sort; event_sort] [mk_sym "e0"; mk_sym "e1"]
-                (mk_eq (fns.sb (e0,e1)) (mk_or sb_eqs)) in
-    *)
-
     (* ==== SC assertions ==== *)
+    (* TODO: simplify relation *)
     let sc_asserts =
       let sc_actions =
         List.filter (fun a -> get_memorder a = Seq_cst) all_actions in
@@ -752,6 +753,11 @@ module C11MemoryModel : MemoryModel = struct
                   (mk_not (mk_eq (fns.mo_clk e1) (fns.mo_clk e2)))
       ) (cartesian_product writes writes) in
 
+    let mo_init =
+      List.map (fun e ->
+        mk_eq (fns.mo_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
+    exec.initial_actions in
+
     (* ==== coherence ==== *)
     (* irreflexive (hb ; eco?) as coh *)
     let coherence = List.map (fun (e1,e2) ->
@@ -776,6 +782,15 @@ module C11MemoryModel : MemoryModel = struct
       ) prod_events in
 
     (* irreflexive (fr ; mo) as atomic2 *)
+
+    (* sb_rf *)
+    let sbrf_clk = List.map (fun (e1,e2) ->
+      mk_implies (mk_and [fns.getGuard e1
+                         ;fns.getGuard e2
+                         ;mk_or[fns.sb (e1,e2); fns.rf(e1,e2)]
+                         ])
+                 (mk_lt g_ctx (fns.sbrf_clk e1) (fns.sbrf_clk e2))
+    ) prod_events in
 
 
     { event_sort = event_sort
@@ -807,12 +822,15 @@ module C11MemoryModel : MemoryModel = struct
                  @ sc_asserts
 
                  @ well_formed_rf
+                 @ mo_init
                  @ well_formed_mo
 
                  @ coherence
 
                  @ atomic1
                  @ atomic2
+
+                 @ sbrf_clk
     }
 
   let extract_execution (model    : Model.model)
