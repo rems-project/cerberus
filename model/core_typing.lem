@@ -1164,6 +1164,8 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         error "WIP infer_paction: RMW"
     | Fence mo ->
         E.return (BTy_unit, Fence mo)
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP infer_paction: CompareExchangeStrong"
   end >>= fun (bTy, act_') ->
   E.return (bTy, Action loc annot act_')
 
@@ -1237,6 +1239,23 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | Fence mo ->
       guard_match loc "fence()" bTy BTy_unit >>
       E.return (Fence mo)
+  | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+      guard_match loc "compareExchangeStrong()" bTy (BTy_loaded OTy_integer) >>
+      match pe1 with
+      | Pexpr [] () (PEval (Vctype ty)) ->
+        let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+        match core_object_type_of_ctype ty with
+          | Just lvalue_oTy ->
+              typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+              typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe3 >>= fun tpe3 ->
+              typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe4  >>= fun tpe4 ->
+              E.return (CompareExchangeStrong tpe1 tpe2 tpe3 tpe4 mo1 mo2)
+          | Nothing ->
+              E.fail loc (CoreTyping_TODO "CompareExchangeStrong, not oTy")
+        end
+      | _ ->
+          E.fail loc (CoreTyping_TODO "CompareExchangeStrong, non-trivial ctype")
+      end
   end
 
 
