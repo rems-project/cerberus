@@ -1,0 +1,42 @@
+open import Maybe
+import Loc
+
+type annot =
+  | Astd of string (* ISO C11 Standard Annotation *)
+  | Aloc of Loc.t (* C source location *)
+  | Auid of string (* Unique ID *)
+
+
+val     get_loc: list annot -> maybe Loc.t
+let rec get_loc annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc loc :: _) ->
+        Just loc
+    | (Astd _ :: annots') ->
+        get_loc annots'
+    | (Auid _ :: annots') ->
+        get_loc annots'
+  end
+
+val get_loc_: list annot -> Loc.t
+let get_loc_ annots =
+  match get_loc annots with
+    | Just loc -> loc
+    | Nothing -> Loc.unknown
+  end
+
+val     get_uid: list annot -> maybe string
+let rec get_uid annots =
+  match annots with
+    | [] ->
+        Nothing
+    | (Aloc _ :: annots') ->
+        get_uid annots'
+    | (Astd _ :: annots') ->
+        get_uid annots'
+    | (Auid uid :: _) ->
+        Just uid
+  end
+

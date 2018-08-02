@@ -7,9 +7,11 @@ type typing_error =
   | TError_integerConstant_too_large of integer (* AilSyntax.integerConstant *)
   | TError of string
   | TError_undef of Undefined.undefined_behaviour
+  | TError_internal of string
 
   | TError_main_return_type
   | TError_main_params of list (qualifiers * ctype * bool)
+  | TError_main_not_function
   
   | TError_indirection_not_pointer (* of genType *)
 

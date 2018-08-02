@@ -141,39 +141,39 @@ let inline type_of_constant = gen_typing_type_of_constant
 (* TODO: is only used once, could be inlined *)
 (* STD §6.5.16.1#1 *)
 val well_typed_assignment: sigma unit -> ctype -> genType -> bool -> E.errorM bool
-let well_typed_assignment s ty1 gty2 null2 =
+let well_typed_assignment s (Ctype _ ty1 as cty1) gty2 null2 =
   (* STD §6.5.16.1#1, bullet 1 *)
-  if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 then
+  if AAux.atomic_qualified_unqualified AAux.is_arithmetic cty1 && GAux.is_arithmetic gty2 then
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in
     E.return true
   
   (* STD §6.5.16.1#1, bullet 2 *)
-  else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty1 then
+  else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union cty1 then
     match (ty1, gty2) with
       | (Struct tag_sym1, GenStruct tag_sym2) ->
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromAil_ctype no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromAil_ctype no_qualifiers cty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           E.return (tag_sym1 = tag_sym2)
       
       | (Union tag_sym1, GenUnion tag_sym2) ->
           (* TODO: this is maybe too conservative *)
           let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
             "[well_typed_assignment] exiting with bullet 2 ==> " ^
-            Pp.stringFromAil_ctype no_qualifiers ty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
+            Pp.stringFromAil_ctype no_qualifiers cty1 ^ " -- " ^ Pp.stringFromAil_genType gty2) in
           E.return (tag_sym1 = tag_sym2)
       | _ ->
           error "not possible"
     end
   
-  else if AAux.atomic_qualified_unqualified AAux.is_pointer ty1 then
+  else if AAux.atomic_qualified_unqualified AAux.is_pointer cty1 then
     let () = Debug.print_debug 2 [] (fun () ->
       "TODO: check the use of AAux.lvalue_conversion"
     ) in
-    AAux.lvalue_conversion s ty1 >>= fun conv_ty1 ->
+    AAux.lvalue_conversion s cty1 >>= fun (Ctype _ conv_ty1 as conv_cty1) ->
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
-      "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype no_qualifiers conv_ty1  ^
+      "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype no_qualifiers conv_cty1  ^
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
     match (ty1, conv_ty1, gty2) with
       | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
@@ -220,7 +220,7 @@ let well_typed_assignment s ty1 gty2 null2 =
     end
   
   (* STD §6.5.16.1#1, bullet 6 *)
-  else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 && GAux.is_pointer gty2 then
+  else if AAux.atomic_qualified_unqualified AAux.is_Bool cty1 && GAux.is_pointer gty2 then
     let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
     E.return true
   
@@ -363,17 +363,17 @@ let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_
 val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
 let annotate_stringLiteral (pref_opt, strs) =
   let elem_ty = match pref_opt with
-                  | Nothing     -> Basic (Integer Char)                 (* STD §6.4.5#6 sentence 3 *)
-                  | Just Enc_u8 -> Basic (Integer Char)                 (* STD §6.4.5#6 sentence 4 *)
-                  | Just Enc_u  -> char16_t                             (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_U  -> char32_t                             (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_L  -> Basic (Integer (IBuiltin "wchar_t")) (* STD §6.4.5#6 sentence 5 *)
+                  | Nothing     -> AAux.mk_ctype_integer Char                 (* STD §6.4.5#6 sentence 3 *)
+                  | Just Enc_u8 -> AAux.mk_ctype_integer Char                 (* STD §6.4.5#6 sentence 4 *)
+                  | Just Enc_u  -> char16_t                                   (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_U  -> char32_t                                   (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_L  -> AAux.mk_ctype_integer (IBuiltin "wchar_t") (* STD §6.4.5#6 sentence 5 *)
                 end in
 
   (* TODO: check the type *)
   E.return
     ( AilEstr (pref_opt, strs)
-    , GenLValueType no_qualifiers (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1)))) false )
+    , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))) false )
 
 
 val     typecheck_constant: constant -> E.errorM genType
@@ -429,7 +429,7 @@ let rec typecheck_constant cst =
         E.return (GenTypes.inject_type ty)
     | ConstantNull ->
         (* TODO: check *)
-        E.return (GenPointer no_qualifiers Void)
+        E.return (GenPointer no_qualifiers (Ctype [] Void))
     | ConstantStruct tag_sym xs ->
         E.mapM (fun (memb_ident, cst) ->
           (* TODO: need to check that the members type match ... *)
@@ -591,7 +591,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         match GenTypes.genTypeCategoryOf a_e with
           | GenRValueType (GenFunction hasProto ty params isVariadic) ->
               (* e is a 'function designator' *)
-              let gty' = GenPointer no_qualifiers (Function hasProto ty params isVariadic) in
+              let gty' = GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic)) in
               E.return (AilEunary Address a_e, GenRValueType gty') 
           | GenRValueType _ ->
               E.fail (locOf e) (TError "§6.5.3.2#1, non function rvalue")
@@ -784,7 +784,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               (* NOTE: here sym is a 'function designator', hence it has function type. BUT
                  other part of the typechecker MUST perform the 'function_coercion' as described in
                  (§6.3.2.1#4). *)
-              E.return (AilEident sym, GenRValueType (inject_type (Function has_proto (ret_qs, ret_ty) params is_variadic)))
+              E.return (AilEident sym, GenRValueType (inject_type (Ctype [] (Function has_proto (ret_qs, ret_ty) params is_variadic))))
           | _ ->
               E.fail loc (TError_TODO 13)
         end
@@ -841,7 +841,7 @@ OLD(sigma_declaration)
         match (object_gty, order_gty) with
           | (GenPointer qs object_ty, GenBasic (GenInteger _ (* TODO: need to enforce enum *))) ->
 (*               if AAux.is_atomic object_ty then *)
-              E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ AAux.unatomic object_ty))
+              E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_load_explicit")) [object_e'; order_e'], GenRValueType (inject_type $ Ctype [] (AAux.unatomic object_ty)))
 (*
                else
                  error "WIP: typing of atomic_load_explicit 2"
@@ -880,14 +880,14 @@ OLD(sigma_declaration)
         (* STD §6.5.2.2#1 *)
         E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Function has_proto (ret_qs, ret_ty) params is_variadic)) ->
+          | (e', GenPointer qs (Ctype [] (Function has_proto (ret_qs, ret_ty) params is_variadic))) ->
               (* TODO: qualifiers *)
               let () = Debug.warn [] (fun () ->
                 "(unsure) the typing of AilEcall doesn't look at [ret_qs]"
               ) in
               (* NOTE: I don't see how the C syntax would allow one to have
                  a "pointer to function returning array" anyway... *)
-              if not (ret_ty = Void || (AAux.is_complete_object sigm ret_ty && not (AAux.is_array ret_ty))) then
+              if not (AAux.is_void ret_ty || (AAux.is_complete_object sigm ret_ty && not (AAux.is_array ret_ty))) then
                 E.fail loc (TError "§6.5.2.2#1")
               else if AAux.is_unqualified qs then
                 annotate_arguments has_proto is_variadic es params >>= fun es' ->
@@ -1015,7 +1015,7 @@ TODO
                 of the left operand [e] and the ones in the declaration of the
                  member type (see §6.5.2.3#3 and #8) *)
               match ty with
-                | Struct tag_sym ->
+                | Ctype _ (Struct tag_sym) ->
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
@@ -1028,7 +1028,7 @@ TODO
                       | _ ->
                           E.fail loc (TError "TODO[msg] AilEmemberof Struct, failed to kind a valid tag definition")
                     end
-                | Union tag_sym ->
+                | Ctype _ (Union tag_sym) ->
                     match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
@@ -1082,7 +1082,7 @@ TODO
          of the referenced type of left operand [e] and the ones in the
          declaration of the member type (see §6.5.2.3#4) *)
         annotate_rvalue e >>= function
-          | (e', GenPointer ref_qs (Struct tag_sym)) ->
+          | (e', GenPointer ref_qs (Ctype _ (Struct tag_sym))) ->
               match lookup_tag_definition sigm tag_sym with
                 | Just (StructDef membersDefs) ->
                     match List.lookup memb_ident membersDefs with
@@ -1095,7 +1095,7 @@ TODO
                 | _ ->
                     E.fail loc (TError "TODO: AilEmemberofptr Struct, failed to find a valid tag definition")
               end
-          | (e', GenPointer ref_qs (Union tag_sym)) ->
+          | (e', GenPointer ref_qs (Ctype _ (Union tag_sym))) ->
               match lookup_tag_definition sigm tag_sym with
                 | Just (UnionDef membersDefs) ->
                     match List.lookup memb_ident membersDefs with
@@ -1335,10 +1335,10 @@ TODO
           (* STD §6.5.3.4#6 *)
           E.return (AilEalignof qs ty, GenRValueType (GenBasic (GenInteger SizeT)))
     
-    | AilEcast qs Void e ->
-        wf_lvalue sigm qs Void >>
+    | AilEcast qs (Ctype _ Void as cty) e ->
+        wf_lvalue sigm qs cty >>
         annotate_rvalue e >>= fun (e', _) ->
-        E.return (AilEcast qs Void e', GenRValueType GenVoid)
+        E.return (AilEcast qs cty e', GenRValueType GenVoid)
     
       (* STD §6.5.4#2 *)
     | AilEcast qs ty e ->
@@ -1574,7 +1574,7 @@ and perform_decays sigm ctx a_expr =
            && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
           (* STD §6.3.2.1#2 *)
           (* performing the lvalue conversion *)
-          let rvalue_ty = AAux.unatomic ty in
+          let rvalue_ty = Ctype [] (AAux.unatomic ty) in
           if AAux.is_incomplete sigm ty then
             (* STD §6.3.2.1#2, sentence 3 *)
             E.fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
@@ -1611,7 +1611,7 @@ and perform_decays sigm ctx a_expr =
           E.return match gty with
             | GenFunction hasProto ty params isVariadic ->
                 AnnotatedExpression
-                  (GenRValueType (GenPointer no_qualifiers (Function hasProto ty params isVariadic)))
+                  (GenRValueType (GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic))))
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
             | GenArray elem_ty sz_opt ->
               match a_expr with
@@ -1621,7 +1621,7 @@ and perform_decays sigm ctx a_expr =
                     a_expr
                 | _ ->
                     if not (List.elem ctx [CTXarray_init] && is_literal) then
-                      let ty = Array elem_ty sz_opt in
+                      let ty = Ctype [] (Array elem_ty sz_opt) in
                       (* STD §6.3.2.1#3 *)
                       (* performing the array decay *)
                       AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
@@ -1677,7 +1677,7 @@ and annotate_arguments sigm gamm has_proto is_variadic args params =
   match (args, params) with
     | ([], []) ->
         E.return []
-    | ([], [(_, Void, _)]) ->
+    | ([], [(_, Ctype _ Void, _)]) ->
         (* TODO: document this case *)
         E.return []
     | (arg_e :: args', (_, param_ty1, isRegister) :: params') ->
@@ -1815,7 +1815,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
         E.return a_e
       
       (* STD §6.7.9#15 *)
-      else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin "wchar_t"; char16_t; char32_t] then
+      else if AAux.compatibleWithQualifiedUnqualifiedVersionOf ty [AAux.mk_ctype_builtin "wchar_t"; char16_t; char32_t] then
         error "WIP: annotate_definition_aux, compatibleWithQualifiedUnqualifiedVersionOf ty [Builtin \"wchar_t\"; char16_t; char32_t]"
       
           (* STD §6.7.9#16 *)
@@ -1834,20 +1834,20 @@ and annotate_definition_aux sigm gamm (ty, e) =
           let () = Debug.warn [Debug.DB_ail_typing]
             (fun () -> "(UNSURE) for the definition of arrays the compatilibity of types is checked for they unqualified versions and ignoring the elem_qs") in
         match (ty, GenTypes.genTypeCategoryOf a_e) with
-          | (Array elem_ty1 Nothing, GenRValueType (GenArray elem_ty2 (Just n))) ->
+          | (Ctype _ (Array elem_ty1 Nothing), GenRValueType (GenArray elem_ty2 (Just n))) ->
               if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n)) *)
               else
                 error ("TODO(annotate_definition_aux, 1): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
-         | (Array elem_ty1 (Just n1), GenRValueType (GenArray elem_ty2 (Just n2))) ->
+         | (Ctype _ (Array elem_ty1 (Just n1)), GenRValueType (GenArray elem_ty2 (Just n2))) ->
               if AAux.are_compatible (no_qualifiers, elem_ty1) (no_qualifiers, elem_ty2) && n1 = n2 then
                 E.return a_e (* (e', GenArray elem_ty1 (Just n1)) *)
               else
                 error ("TODO(annotate_definition_aux, 2): error message: array object definition, types didn't match ==> " ^
                        Pp.stringFromAil_ctype no_qualifiers elem_ty1 ^ " <-> " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty2)
 
-         | (Array elem_ty1 (Just n1), GenLValueType qs2 (Array elem_ty2 (Just n2)) _) ->
+         | (Ctype _ (Array elem_ty1 (Just n1)), GenLValueType qs2 (Ctype _ (Array elem_ty2 (Just n2))) _) ->
              (* TODO: isRegister? *)
              (* TODO: what if n1 < n2? *)
              (* TODO: check std *)
@@ -1958,7 +1958,7 @@ let rec annotate_statement_ sigm gamm ty stmt =
     | AilScontinue ->
         E.return AilScontinue
     | AilSreturnVoid ->
-        if ty = Void then
+        if AAux.is_void ty then
           E.return AilSreturnVoid
         else
           E.fail Loc.unknown (TError_TODO 64)
@@ -2085,7 +2085,7 @@ let annotate_sigma sigm =
         E.return decl
     | (_, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Function hasProto ret_ty params isVariadic) >>
+        wf_type sigm (Ctype [] (Function hasProto ret_ty params isVariadic)) >>
         E.return decl
     end
   ) sigm.declarations >>
@@ -2203,7 +2203,7 @@ let annotate_program (startup_opt, sigm) =
         E.return (startup_opt, sigm')
     | Just startup ->
         match Context.lookup identifierEqual sigm.declarations startup with
-          | Just (_, Decl_function hasProto (ret_qs, ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+          | Just (_, Decl_function hasProto (ret_qs, Ctype ret_annots ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
               
               (* §5.1.2.2.1 *)
               (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
@@ -2211,12 +2211,12 @@ let annotate_program (startup_opt, sigm) =
                 | [] ->
                     (* TODO: not sure if really allowed by the std, clearly used a lot *)
                     E.return ()
-                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Void, _)] ->
+                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Ctype _ Void, _)] ->
                     E.return ()
-                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Basic (Integer (Signed Int_)), _);
+                | [(<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Ctype _ (Basic (Integer (Signed Int_))), _);
                    (<| const= false; restrict= false; volatile= false(*; atomic= false*) |>,
-                    Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |>
-                      (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |> (Basic (Integer Char))), _)] ->
+                    Ctype _ (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |>
+                      (Ctype _ (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |> (Ctype _ (Basic (Integer Char)))))), _)] ->
                     E.return ()
                 | _ ->
                     E.fail Loc.unknown (TError_main_params params)
@@ -2228,12 +2228,10 @@ let annotate_program (startup_opt, sigm) =
                 annotate_sigma sigm >>= fun sigm' ->
                 E.return (startup_opt, sigm')
               else
-                E.fail Loc.unknown TError_main_return_type
-          | _ ->
-              let () = Debug.print_debug 1 [] (fun () ->
-                "STARTUP ==> " ^ show startup
-              ) in
-              (* TODO: this is not realy a type error, but more an csem internal one. *)
-              E.fail Loc.unknown (TError_TODO 67)
+                E.fail (Annot.get_loc_ ret_annots) TError_main_return_type
+          | Just (loc, _) ->
+              E.fail loc TError_main_not_function
+          | Nothing ->
+              E.fail Loc.unknown (TError_internal ("Startup function " ^ show startup ^ " not found in AIL declarations."))
         end
   end

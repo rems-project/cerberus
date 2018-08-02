@@ -23,7 +23,7 @@ declare hol   target_rep function stringFromQualifiers = `pp_ail$pp_qualifiers`
 
 
 val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
-let wf_lvalue_aux qs ty =
+let wf_lvalue_aux qs (Ctype _ ty as cty) =
   match ty with
     | Pointer _ ref_ty ->
         guard (TError "§6.7.3#2, pointer case") (
@@ -33,12 +33,12 @@ let wf_lvalue_aux qs ty =
 (*
         guard (TError "§6.7.3#2, non pointer case") (
 *)
-        guard (TError $"§6.7.3#2, non pointer case" ^ stringFromQualifiers qs ^ " <|> " ^ stringFromCtype ty) (
+        guard (TError $"§6.7.3#2, non pointer case" ^ stringFromQualifiers qs ^ " <|> " ^ stringFromCtype cty) (
 
           not (qs.restrict)
         ) >>
         guard (TError_undef Undefined.UB066_qualified_function_specification) (
-          is_function ty --> is_unqualified qs
+          is_function cty --> is_unqualified qs
         )
   end
 
@@ -47,7 +47,7 @@ let rec wf_parameters_aux sigm wf_type params =
   match params with
     | [] ->
         return ()
-    | [(qs, Void, _)] ->
+    | [(qs, Ctype _ Void, _)] ->
         (* TODO: not sure if the STD actually requires this. *)
         (* see comment in Cabs_to_ail.desugar_direct_declarator, DDecl_function *)
         guard (TError "a lone 'void' parameter must be unqualified") (is_unqualified qs) >>
@@ -68,7 +68,7 @@ let rec wf_parameters_aux sigm wf_type params =
 
 (* TODO: check *)
 val     wf_type: forall 'a. sigma 'a -> ctype -> errorM unit
-let rec wf_type sigm ty =
+let rec wf_type sigm (Ctype _ ty) =
   let wf_type ty = wf_type sigm ty in
   let wf_parameters = wf_parameters_aux sigm wf_type in
   match ty with

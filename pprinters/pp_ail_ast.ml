@@ -67,7 +67,7 @@ let pp_qualifiers qs =
 
 
 
-let rec pp_ctype_human qs ty =
+let rec pp_ctype_human qs (Ctype (_, ty)) =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
@@ -480,7 +480,7 @@ let dtree_of_declaration (i, (_, decl)) =
                (pp_cond is_inline !^"inline"
                (pp_cond is_noreturn !^"_Noreturn"
                (pp_ctype_human empty_qs
-                  (Function (has_proto, (qs, cty), params, is_var)))))
+                  (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
              )
            end)
 

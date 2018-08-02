@@ -217,6 +217,8 @@ let std_ref = function
   | Desugar_cause Desugar_NonvoidReturn ->
     "§6.8.6.4#1, 2nd sentence"
 
+  | AIL_TYPING TError_main_not_function ->
+      "§5.1.2.2.1"
   | AIL_TYPING TError_main_return_type ->
       "§5.1.2.2.1#1, 2nd sentence"
   | AIL_TYPING TError_indirection_not_pointer ->
@@ -301,6 +303,8 @@ let short_message = function
       "the * operator expects a pointer operand"
   | AIL_TYPING TError_main_return_type ->
       "return type of 'main' should be 'int'"
+  | AIL_TYPING TError_main_not_function ->
+      "variable named 'main' with external linkage has undefined behavior"
 
   | AIL_TYPING (TError_main_params qs_tys) ->
       "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype AilTypes.no_qualifiers ty) qs_tys) ^ ")"
