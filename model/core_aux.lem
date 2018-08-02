@@ -1,4 +1,4 @@
-open import Pervasives Utils Show Core Core_ctype
+open import Pervasives Utils Show Core Core_ctype Annot
 import AilSyntax AilTypes
 import Product Exception Mem Mem_aux
 
@@ -193,7 +193,7 @@ let rec memValueFromValue ty cval =
 
 (* Project an AilTypes.ctype into a Core.ctype *)
 val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
-let rec proj_ctype ty =
+let rec proj_ctype (AilTypes.Ctype _ ty) =
   match ty with
     | AilTypes.Void ->
         Core_ctype.Void
@@ -563,7 +563,7 @@ end
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
-  match ty with
+  AilTypes.Ctype [] (match ty with
     | Core_ctype.Void ->
         AilTypes.Void
     | Core_ctype.Basic bty ->
@@ -589,7 +589,7 @@ let rec unproj_ctype ty =
         AilTypes.Union tag
     | Core_ctype.Builtin str ->
         AilTypes.Builtin str
-  end
+  end)
 
 
 (*
@@ -2012,32 +2012,6 @@ let add_loc loc (Expr annot expr_) =
 val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
   Expr (Astd str :: annot) expr_
-
-val     get_loc: list annot -> maybe Loc.t
-let rec get_loc annots =
-  match annots with
-    | [] ->
-        Nothing
-    | (Aloc loc :: _) ->
-        Just loc
-    | (Astd _ :: annots') ->
-        get_loc annots'
-    | (Auid _ :: annots') ->
-        get_loc annots'
-  end
-
-val     get_uid: list annot -> maybe string
-let rec get_uid annots =
-  match annots with
-    | [] ->
-        Nothing
-    | (Aloc _ :: annots') ->
-        get_uid annots'
-    | (Astd _ :: annots') ->
-        get_uid annots'
-    | (Auid uid :: _) ->
-        Just uid
-  end
 
 val     set_uid_pe: string -> nat -> pexpr -> pexpr
 let rec set_uid_pe uid n (Pexpr annots bty pe_) =

@@ -188,7 +188,8 @@ end
 
 
 val inject_type: ctype -> genType
-let inject_type = function
+let inject_type (Ctype _ ty) =
+match ty with
   | Void -> GenVoid
   | Basic bty ->
       GenBasic (inject_basicType bty)

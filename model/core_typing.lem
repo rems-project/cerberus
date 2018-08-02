@@ -1335,7 +1335,7 @@ let rec collect_labels env (Expr _ expr_) =
 
 (* val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit) *)
 and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
-  let loc = match Core_aux.get_loc annot with
+  let loc = match Annot.get_loc annot with
     | Just loc' ->
         loc'
     | Nothing ->

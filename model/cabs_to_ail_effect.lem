@@ -495,7 +495,7 @@ let initial_state n core_eval_stuff = <|
   static_assertions=           [];
   
   used_identifier= [];
-  current_return_type= ATypes.Void; (* TODO: this is morally wrong *)
+  current_return_type= ATypes.Ctype [] ATypes.Void; (* TODO: this is morally wrong *)
   
   core_eval_stuff= core_eval_stuff;
 |>
@@ -1116,7 +1116,7 @@ let get_anonymous_struct_or_union ty =
      struct/union an anonymous (regardless of the absence of tag). So we do
      the same for now, but need to check further the STD... *)
   match (* AilTypesAux.unatomic *) ty with
-    | ATypes.Struct tag_sym ->
+    | ATypes.Ctype _ (ATypes.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
           | Just (Struct_definition isAnonymous membrs) ->
               return begin
@@ -1125,7 +1125,7 @@ let get_anonymous_struct_or_union ty =
           | _ ->
               error "Cabs_to_ail_effect.is_anonymous_struct_or_union, Struct -- Union_definition"
         end
-    | ATypes.Union tag_sym ->
+    | ATypes.Ctype _ (ATypes.Union tag_sym) ->
         resolve_tag_definition tag_sym >>= function
           | Just (Union_definition isAnonymous membrs) ->
               return begin
@@ -1385,7 +1385,7 @@ let register_function_declaration loc sym is_proto decl =
   (* DEBUG *)
   let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
     let params' = Maybe.maybe [] id params_opt in
-    let fun_ty = ATypes.Function is_proto (ret_qs, ret_ty) params' isVariadic in
+    let fun_ty = ATypes.Ctype [Annot.Aloc loc] (ATypes.Function is_proto (ret_qs, ret_ty) params' isVariadic) in
     Pp.stringFromAil_ctype ATypes.no_qualifiers fun_ty ^
     (if Maybe.isNothing params_opt then " NO_PARAMS" else "")
   in

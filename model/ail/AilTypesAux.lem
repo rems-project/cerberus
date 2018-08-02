@@ -1,4 +1,4 @@
-open import Pervasives Common Utils AilSyntax AilTypes ErrorMonad TypingError
+open import Pervasives Common Utils AilSyntax AilTypes ErrorMonad TypingError Annot
 import Implementation_
 import Loc Debug
 
@@ -6,8 +6,9 @@ import Implementation
 
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
-let unatomic = function
-  | Atomic ty ->
+let unatomic (Ctype _ ty) =
+match ty with
+  | Atomic (Ctype _ ty) ->
       ty
   | ty ->
       ty
@@ -140,7 +141,7 @@ end
 
 val is_atomic: ctype -> bool
 let is_atomic = function
-  | Atomic _ ->
+  | Ctype _ (Atomic _) ->
       (* STD §6.2.5#20, bullet 6 *)
       true
 (*
@@ -154,7 +155,7 @@ end
 (* TODO: I don't like that, in particular if pred = is_atomic this doesn't work... *)
 val atomic_qualified_unqualified: (ctype -> bool) -> ctype -> bool
 let atomic_qualified_unqualified pred = function
-  | Atomic ty ->
+  | Ctype _ (Atomic ty) ->
       pred ty
   | ty ->
       pred ty
@@ -304,7 +305,7 @@ let is_object ty =
       true
   | Builtin "va_list" ->
       true
-  | ty ->
+  | _ ->
       not (is_function ty)
 end
 
@@ -326,7 +327,7 @@ let is_aggregate ty =
 (* STD §6.2.5#20 *)
 (* NOTE: dead code *)
 val is_derived: ctype -> bool
-let is_derived ty =
+let is_derived (Ctype _ ty) =
   match ty with
   | Array _ _ -> true
   | Struct _ -> true
@@ -809,8 +810,8 @@ let integer_promotion impl = function
 
 val promotion: Implementation.implementation -> ctype -> maybe ctype
 let promotion impl = function
-  | Basic (Integer ity) ->
-      Just (Basic (Integer (integer_promotion impl ity)))
+  | Ctype annots (Basic (Integer ity)) ->
+      Just (Ctype annots (Basic (Integer (integer_promotion impl ity))))
   | _ ->
       Nothing
 end
@@ -909,8 +910,8 @@ let usual_arithmetic_floating impl ty1 ty2 = ty1
 
 (* STD §6.2.5#12 *)
 val corresponding_real_type: ctype -> maybe realFloatingType
-let corresponding_real_type ty =
-  if is_floating ty then
+let corresponding_real_type (Ctype _ ty as cty) =
+  if is_floating cty then
     match ty with
     | Basic (Floating (RealFloating rfty)) ->
         Just rfty
@@ -939,7 +940,7 @@ let modifiable sigm qs ty =
   not (is_incomplete sigm ty)
 
 val is_real: ctype -> bool
-let is_real ty =
+let is_real (Ctype _ ty) =
   match ty with
     | Basic (Integer _) ->
         true
@@ -955,7 +956,7 @@ let is_real ty =
 
 (* (§6.2.7) Compatible type *)
 val            are_compatible: (qualifiers * ctype) -> (qualifiers * ctype) -> bool
-let rec ~{coq} are_compatible (qs1, ty1) (qs2, ty2) =
+let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
   (* qualifiers need to be equal (see §6.7.3#10) *)
   qs1 = qs2 && match (ty1, ty2) with
     | (Void, Void) ->
@@ -1050,7 +1051,7 @@ let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
   end
 
 val            is_composite: ctype -> ctype -> ctype -> bool
-let rec ~{coq} is_composite ty1 ty2 ty3 =
+let rec ~{coq} is_composite (Ctype _ ty1) (Ctype _ ty2) (Ctype _ ty3) =
   let is_composite_params = is_composite_params_aux is_composite in
   (* TODO: check the qualifiers *)
   match (ty1, ty2, ty3) with
@@ -1097,18 +1098,18 @@ end
    are simpler than what the desugaring can see (functions have parameters). So
    this function SHOULD NOT be used by the desugaring *)
 val            make_composite: ctype -> ctype -> maybe ctype
-let rec ~{coq} make_composite ty1 ty2 =
+let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
   let make_composite_params params1 params2 = make_composite_params_aux make_composite (params1, params2) in
   
   (* a composite type can only be made from two compatible types *)
-  if not (are_compatible (no_qualifiers, ty1) (no_qualifiers, ty2)) then
+  if not (are_compatible (no_qualifiers, cty1) (no_qualifiers, cty2)) then
     Nothing
   else match (ty1, ty2) with
     | (Void, Void) ->
-        Just Void
+        Just (Ctype (a1++a2) Void)
     | (Basic bty1, Basic bty2) ->
         (* thanks to the compatibility test we know bty1 = bty2  *)
-        Just (Basic bty1)
+        Just (Ctype (a1++a2) (Basic bty1))
     | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
         (* STD §6.2.7#3, first bullet *)
         (* TODO(vla): more would be needed if we want to support VLAs *)
@@ -1123,7 +1124,7 @@ let rec ~{coq} make_composite ty1 ty2 =
           | (Nothing, Nothing) ->
               Nothing
         end in
-          Maybe.map (fun ty -> Array ty n_opt) (make_composite elem_ty1 elem_ty2)
+          Maybe.map (fun ty -> Ctype (a1++a2) (Array ty n_opt)) (make_composite elem_ty1 elem_ty2)
     | (Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1, Function hasProto2 (ret_qs2, ret_ty2) params2 isVariadic2) ->
         (* TODO: return qualifiers? *)
         (* TODO: like the preceding comment said, there is quite a bit of
@@ -1133,13 +1134,13 @@ let rec ~{coq} make_composite ty1 ty2 =
         else match (make_composite ret_ty1 ret_ty2, make_composite_params params1 params2) with
           | (Just ret_ty, Just params) ->
               (* TODO: check the prototype thing *)
-              Just (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params isVariadic1)
+              Just (Ctype (a1++a2) (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params isVariadic1))
           | _ ->
               Nothing
         end
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
-        Maybe.map (Pointer ref_qs1) (make_composite ref_ty1 ref_ty2)
+        Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
     | _ ->
         (* TODO: this might be problematic for Builtins *)
         Nothing
@@ -1152,7 +1153,8 @@ let ~{coq} make_composite_params params1 params2 =
 
 (* following (§6.3.2.1)#3 *)
 val array_coercion: ctype -> ctype
-let array_coercion = function
+let array_coercion (Ctype loc ty) =
+Ctype loc $ match ty with
   | Array elem_ty _ ->
       Pointer no_qualifiers elem_ty
   | ty ->
@@ -1161,9 +1163,10 @@ end
 
 (* following (§6.3.2.1)#4 *)
 val function_coercion: ctype -> ctype
-let function_coercion = function
+let function_coercion (Ctype loc ty) =
+Ctype loc $ match ty with
   | Function hasProto ret_qs_ty params isVariadic ->
-      Pointer no_qualifiers (Function hasProto ret_qs_ty params isVariadic)
+      Pointer no_qualifiers (Ctype [] (Function hasProto ret_qs_ty params isVariadic))
   | ty ->
       ty
 end
@@ -1202,14 +1205,14 @@ let rvalue_coercion ty =
 
 val is_pointer_to_complete_object: forall 'a. sigma 'a -> ctype -> bool
 let is_pointer_to_complete_object S = function
-  | Pointer _ ty ->
+  | Ctype _ (Pointer _ ty) ->
       is_complete S ty
   | _ ->
       false
   end
 
 val        are_pointers_to_compatible_complete_objects: forall 'a. sigma 'a -> ctype -> ctype -> bool
-let ~{coq} are_pointers_to_compatible_complete_objects sigm ty1 ty2 =
+let ~{coq} are_pointers_to_compatible_complete_objects sigm (Ctype _ ty1) (Ctype _ ty2) =
   match (ty1, ty2) with
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
            is_complete sigm ref_ty1 && is_complete sigm ref_ty2
@@ -1219,7 +1222,7 @@ let ~{coq} are_pointers_to_compatible_complete_objects sigm ty1 ty2 =
   end  
 
 val        are_pointers_to_compatible_objects: ctype -> ctype -> bool
-let ~{coq} are_pointers_to_compatible_objects ty1 ty2 =
+let ~{coq} are_pointers_to_compatible_objects (Ctype _ ty1) (Ctype _ ty2) =
   match (ty1, ty2) with
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
            is_object ref_ty1 && is_object ref_ty2
@@ -1229,7 +1232,8 @@ let ~{coq} are_pointers_to_compatible_objects ty1 ty2 =
   end  
 
 val is_pointer_to_object: ctype -> bool
-let is_pointer_to_object = function
+let is_pointer_to_object (Ctype _ ty) =
+match ty with
   | Pointer _ ref_ty ->
       is_object ref_ty
   | _ ->
@@ -1237,15 +1241,17 @@ let is_pointer_to_object = function
 end
 
 val is_pointer_to_void: ctype -> bool
-let is_pointer_to_void = function
-  | Pointer _ Void ->
+let is_pointer_to_void (Ctype _ ty) =
+match ty with
+  | Pointer _ (Ctype _ Void) ->
       true
   | _ ->
       false
 end
 
 val is_pointer_to_function: ctype -> bool
-let is_pointer_to_function = function
+let is_pointer_to_function (Ctype _ ty) =
+match ty with
   | Pointer _ ref_ty ->
       is_function ref_ty
   | _ ->
@@ -1254,7 +1260,7 @@ end
 
 
 val        pointers_to_compatible_types: ctype -> ctype -> bool
-let ~{coq} pointers_to_compatible_types ty1 ty2 =
+let ~{coq} pointers_to_compatible_types (Ctype _ ty1) (Ctype _ ty2) =
   match (ty1, ty2) with
   | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
       are_compatible (ref_qs1, ref_ty1) (ref_qs1, ref_ty2)
@@ -1265,7 +1271,8 @@ let ~{coq} pointers_to_compatible_types ty1 ty2 =
 
 (* STD §6.2.5#4, sentence 1 *)
 val is_standard_signed_integer_type: ctype -> bool
-let is_standard_signed_integer_type = function
+let is_standard_signed_integer_type (Ctype _ ty) =
+match ty with
 (*
   | Basic (Integer (Signed Ichar)) ->
       true
@@ -1298,7 +1305,8 @@ let is_signed_integer_type ty =
 
 (* STD §6.2.5#6, sentences 1-2 *)
 val is_standard_unsigned_integer_type: ctype -> bool
-let is_standard_unsigned_integer_type = function
+let is_standard_unsigned_integer_type (Ctype _ ty) =
+match ty with
 (*
   | Basic (Integer Bool) ->
       true
@@ -1327,7 +1335,8 @@ let is_extended_unsigned_integer_type _ =
 
 
 val is_unsigned_integer_type: ctype -> bool
-let is_unsigned_integer_type = function
+let is_unsigned_integer_type (Ctype _ ty) =
+match ty with
   | Basic (Integer ity) ->
       is_unsigned_ity ity
   | _ ->
@@ -1368,42 +1377,43 @@ let is_complete_object S ty =
 
 (* Adjustment for function parameter types *)
 val adjust: qualifiers -> ctype -> (qualifiers * ctype)
-let adjust qs = function
+let adjust qs (Ctype a ty) =
+match ty with
   | Array elem_ty _ ->
       (* STD §6.7.6.3#7 *)
       (* TODO: now that I removed qualifiers from Array, this function doesn't
          doesn't do the right thing. Cabs_to_ail should not use it anymore
          (at least not for Array) *)
-      (no_qualifiers, Pointer qs elem_ty)
+      (no_qualifiers, Ctype a (Pointer qs elem_ty))
  | Function hasProto ret_qs_ty params isVariadic ->
       (* STD §6.7.6.3#8 *)
      let () = Debug.warn [] (fun () ->
        "(unsure) AilTypesAux.Function, qualifiers"
      ) in
-     (no_qualifiers, Pointer qs (Function hasProto ret_qs_ty params isVariadic))
+     (no_qualifiers, Ctype a (Pointer qs (Ctype [] (Function hasProto ret_qs_ty params isVariadic))))
  | ty ->
-     (qs, ty)
+     (qs, Ctype a ty)
 end
 
 
 
 (* STD §6.3.2.1#2 *)
 val lvalue_conversion: forall 'a. sigma 'a -> ctype -> errorM ctype
-let lvalue_conversion S ty =
-  if is_array ty then
-    fail Loc.unknown (TError "trying to do a lvalue conversion on an array type")
+let lvalue_conversion S (Ctype annots ty as cty) =
+  if is_array cty then
+    fail (get_loc_ annots) (TError "trying to do a lvalue conversion on an array type")
   
-  else if is_incomplete S ty && not (is_array ty) then
-    fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
+  else if is_incomplete S cty && not (is_array cty) then
+    fail (get_loc_ annots) (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
   
   (* STD §6.3.2.1#2, sentence 2 *)
   else match ty with
-    | Atomic ty' ->
-        return ty'
+    | Atomic cty' ->
+        return cty'
     | _ ->
         (* NOTE: since the qualifiers of ty are not passed to this function, we
            have already "unqualified" the type *)
-        return ty
+        return cty
   end
 
 val compatibleWithQualifiedUnqualifiedVersionOf: ctype -> list ctype -> bool
@@ -1430,7 +1440,7 @@ end
 
 (* TODO: this is such a bad name ... *)
 val     has_pointer_at_leafs: ctype -> bool
-let rec has_pointer_at_leafs ty =
+let rec has_pointer_at_leafs (Ctype _ ty) =
   match ty with
     | Void ->
         false
@@ -1452,3 +1462,12 @@ let rec has_pointer_at_leafs ty =
         (* TODO *)
         false
   end
+
+let mk_ctype_integer ity =
+  Ctype [] (Basic (Integer ity))
+
+let mk_ctype_builtin str =
+  Ctype [] (Builtin str)
+
+let mk_ctype_atomic cty =
+  Ctype [] (Atomic cty)

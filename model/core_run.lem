@@ -1,5 +1,5 @@
 
-open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra
+open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot
 import Set_extra (* Set_helpers *)
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
@@ -882,8 +882,8 @@ val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Sym
 let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
-  let maybe_uid = Caux.get_uid arena_annots in
-  let maybe_loc = Caux.get_loc arena_annots in
+  let maybe_uid = Annot.get_uid arena_annots in
+  let maybe_loc = Annot.get_loc arena_annots in
   let th_st = match maybe_loc with
     | Nothing ->
         <| th_st with current_uid= maybe_uid |>

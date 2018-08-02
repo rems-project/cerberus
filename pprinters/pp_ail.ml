@@ -219,7 +219,7 @@ let pp_basicType = function
   | Floating rft ->
       pp_floatingType rft
 
-let pp_ctype_aux pp_ident_opt qs ty =
+let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
   let precOf = function
     | Void
     | Basic _
@@ -235,7 +235,7 @@ let pp_ctype_aux pp_ident_opt qs ty =
     | Pointer _ ->
         3
   in
-  let rec aux p qs ty : P.document -> P.document =
+  let rec aux p qs (Ctype (_, ty)) : P.document -> P.document =
     let p' = precOf ty in
     let aux = aux p' in
     let wrap z = if p' > 0 && p' > p then z else P.parens z in
@@ -270,7 +270,7 @@ let pp_ctype_aux pp_ident_opt qs ty =
     match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in*)
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  (aux 1 qs ty) pp_spaced_ident
+  (aux 1 qs cty) pp_spaced_ident
 (*
 let rec pp_ctype_aux pp_ident_opt qs ty =
   let pp_ident =
@@ -336,7 +336,7 @@ let pp_ctype_declaration pp_ident qs ty =
   pp_ctype_aux (Some pp_ident) qs ty
 
 
-let rec pp_ctype_human qs ty =
+let rec pp_ctype_human qs (Ctype (_, ty)) =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
@@ -730,7 +730,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           pp_ansi_format [Red] (
             !^ "// declare" ^^^ pp_id sym ^^^
             (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-            !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, (ret_qs, ret_ty), params, is_variadic))
+            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function (has_proto, (ret_qs, ret_ty), params, is_variadic)))
           ) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (

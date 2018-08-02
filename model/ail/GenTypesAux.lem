@@ -155,7 +155,7 @@ let array_coercion = function
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
   | GenFunction hasProto ty params isVariadic ->
-      GenPointer no_qualifiers (Function hasProto ty params isVariadic)
+      GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic))
   | gty ->
       gty
   end
@@ -215,7 +215,7 @@ end
 
 val is_pointer_to_void: genType -> bool
 let is_pointer_to_void = function
-  | GenPointer _ Void ->
+  | GenPointer _ (Ctype _ Void) ->
       true
   | _ ->
       false
@@ -337,26 +337,28 @@ let interpret_genBasicType impl = function
 end
 
 val interpret_genType: Implementation.implementation -> genType -> errorM ctype
-let interpret_genType impl = function
-  | GenVoid ->
-      return Void
-  | GenBasic gbty ->
-      interpret_genBasicType impl gbty >>= fun bty ->
-      return (Basic bty)
-  | GenArray ty n ->
-      return (Array ty n)
-  | GenFunction has_proto ty params is_variadic ->
-      return (Function has_proto ty params is_variadic)
-  | GenPointer qs ty ->
-      return (Pointer qs ty)
-  | GenStruct tag ->
-      return (Struct tag)
-  | GenUnion tag ->
-      return (Union tag)
-  | GenBuiltin str ->
-      return (Builtin str)
-  | GenAtomic ty ->
-      return (Atomic ty)
+let interpret_genType impl gty =
+  let ret ty = return (Ctype [] ty) in
+  match gty with
+    | GenVoid ->
+        ret Void
+    | GenBasic gbty ->
+        interpret_genBasicType impl gbty >>= fun bty ->
+        ret (Basic bty)
+    | GenArray ty n ->
+        ret (Array ty n)
+    | GenFunction has_proto ty params is_variadic ->
+        ret (Function has_proto ty params is_variadic)
+    | GenPointer qs ty ->
+        ret (Pointer qs ty)
+    | GenStruct tag ->
+        ret (Struct tag)
+    | GenUnion tag ->
+        ret (Union tag)
+    | GenBuiltin str ->
+        ret (Builtin str)
+    | GenAtomic ty ->
+        ret (Atomic ty)
   end
 
 val interpret_genTypeCategory: Implementation.implementation -> genTypeCategory -> errorM typeCategory
