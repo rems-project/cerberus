@@ -393,42 +393,43 @@ and pp_storage_class_specifier = function
   | SC_register ->
       pp_ctor "SC_register"
 
-and dtree_of_cabs_type_specifier = function
-  | TSpec_void ->
-      Dleaf (pp_ctor "TSpec_void")
-  | TSpec_char ->
-      Dleaf (pp_ctor "TSpec_char")
-  | TSpec_short ->
-      Dleaf (pp_ctor "TSpec_short")
-  | TSpec_int ->
-      Dleaf (pp_ctor "TSpec_int")
-  | TSpec_long ->
-      Dleaf (pp_ctor "TSpec_long")
-  | TSpec_float ->
-      Dleaf (pp_ctor "TSpec_float")
-  | TSpec_double ->
-      Dleaf (pp_ctor "TSpec_double")
-  | TSpec_signed ->
-      Dleaf (pp_ctor "TSpec_signed")
-  | TSpec_unsigned ->
-      Dleaf (pp_ctor "TSpec_unsigned")
-  | TSpec_Bool ->
-      Dleaf (pp_ctor "TSpec__Bool")
-  | TSpec_Complex ->
-      Dleaf (pp_ctor "TSpec__Complex")
-  | TSpec_Atomic tyname ->
-      Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
-  | TSpec_struct (id_opt, s_decls_opt) ->
-      Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-               node_of_list_option dtree_of_struct_declaration s_decls_opt)
-  | TSpec_union (id_opt, s_decls_opt) ->
-      Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-               node_of_list_option dtree_of_struct_declaration s_decls_opt)
-  | TSpec_enum (id_opt, enums_opt) ->
-      Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-             node_of_list_option dtree_of_enumerator enums_opt)
-  | TSpec_name id ->
-      Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
+and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
+  match tspec with
+    | TSpec_void ->
+        Dleaf (pp_ctor "TSpec_void")
+    | TSpec_char ->
+        Dleaf (pp_ctor "TSpec_char")
+    | TSpec_short ->
+        Dleaf (pp_ctor "TSpec_short")
+    | TSpec_int ->
+        Dleaf (pp_ctor "TSpec_int")
+    | TSpec_long ->
+        Dleaf (pp_ctor "TSpec_long")
+    | TSpec_float ->
+        Dleaf (pp_ctor "TSpec_float")
+    | TSpec_double ->
+        Dleaf (pp_ctor "TSpec_double")
+    | TSpec_signed ->
+        Dleaf (pp_ctor "TSpec_signed")
+    | TSpec_unsigned ->
+        Dleaf (pp_ctor "TSpec_unsigned")
+    | TSpec_Bool ->
+        Dleaf (pp_ctor "TSpec__Bool")
+    | TSpec_Complex ->
+        Dleaf (pp_ctor "TSpec__Complex")
+    | TSpec_Atomic tyname ->
+        Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
+    | TSpec_struct (id_opt, s_decls_opt) ->
+        Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
+    | TSpec_union (id_opt, s_decls_opt) ->
+        Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
+    | TSpec_enum (id_opt, enums_opt) ->
+        Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+               node_of_list_option dtree_of_enumerator enums_opt)
+    | TSpec_name id ->
+        Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (specs, qs, s_decls) ->

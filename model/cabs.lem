@@ -210,7 +210,7 @@ and storage_class_specifier =
 
 
 (* §6.7.2 Type specifiers, Syntax *)
-and cabs_type_specifier =
+and cabs_type_specifier_ =
   | TSpec_void
   | TSpec_char
   | TSpec_short
@@ -228,6 +228,8 @@ and cabs_type_specifier =
   | TSpec_enum   of maybe cabs_identifier * maybe (list (cabs_identifier * maybe
                                                            cabs_expression))
   | TSpec_name   of cabs_identifier
+and cabs_type_specifier =
+  | TSpec of Loc.t * cabs_type_specifier_
 
 (* §6.7.2.1 Structure and union specifiers, Syntax *)
 and struct_declaration =
