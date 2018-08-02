@@ -1183,51 +1183,50 @@ let translate_cabs_string_literal (pref_opt, str) =
    (maybe Nothing (Just -| translate_cabs_encoding_prefix) pref_opt, str)
 
 
-val project_base_type_specifier: cabs_type_specifier -> maybe cabs_base_type_specifier
-let project_base_type_specifier = function
-  | TSpec_void ->
-      Just BTSpec_void
-  | TSpec_char ->
-      Just BTSpec_char
-  | TSpec_short ->
-      Just BTSpec_short
-  | TSpec_int ->
-      Just BTSpec_int
-  | TSpec_long ->
-      Just BTSpec_long
-  | TSpec_float ->
-      Just BTSpec_float
-  | TSpec_double ->
-      Just BTSpec_double
-  | TSpec_signed ->
-      Just BTSpec_signed
-  | TSpec_unsigned ->
-      Just BTSpec_unsigned
-  | TSpec_Bool ->
-      Just BTSpec_Bool
-  | TSpec_Complex ->
-      Just BTSpec_Complex
-  | _ ->
-      Nothing
- end
+val project_base_type_specifier: cabs_type_specifier -> maybe (cabs_base_type_specifier * Loc.t)
+let project_base_type_specifier (TSpec loc tspec) =
+  match tspec with
+    | TSpec_void ->
+        Just (BTSpec_void, loc)
+    | TSpec_char ->
+        Just (BTSpec_char, loc)
+    | TSpec_short ->
+        Just (BTSpec_short, loc)
+    | TSpec_int ->
+        Just (BTSpec_int, loc)
+    | TSpec_long ->
+        Just (BTSpec_long, loc)
+    | TSpec_float ->
+        Just (BTSpec_float, loc)
+    | TSpec_double ->
+        Just (BTSpec_double, loc)
+    | TSpec_signed ->
+        Just (BTSpec_signed, loc)
+    | TSpec_unsigned ->
+        Just (BTSpec_unsigned, loc)
+    | TSpec_Bool ->
+        Just (BTSpec_Bool, loc)
+    | TSpec_Complex ->
+        Just (BTSpec_Complex, loc)
+    | _ ->
+        Nothing
+   end
 
 
-val     project_base_type_specifiers: list cabs_type_specifier -> maybe (list cabs_base_type_specifier)
-let rec project_base_type_specifiers_aux acc = function
+val     project_base_type_specifiers: list cabs_type_specifier -> maybe (list cabs_base_type_specifier * list Loc.t)
+let rec project_base_type_specifiers_aux (acc_bts, acc_locs) = function
   | [] ->
-      Just (List.reverse acc)
+      Just (List.reverse acc_bts, acc_locs)
   | spec :: specs' ->
       match project_base_type_specifier spec with
-        | Just z ->
-            project_base_type_specifiers_aux (z::acc) specs'
+        | Just (z, loc) ->
+            project_base_type_specifiers_aux (z::acc_bts, loc::acc_locs) specs'
         | Nothing ->
             Nothing
       end
   end
-
-
 let project_base_type_specifiers =
-  project_base_type_specifiers_aux []
+  project_base_type_specifiers_aux ([], [])
 
 
 
@@ -1258,89 +1257,90 @@ List.all (function
 
 
 
-val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.desugM (maybe ATypes.basicType)
-let desugar_basic_type_specifiers specs =
+val desugar_basic_type_specifiers: list Loc.t -> Multiset.t cabs_base_type_specifier -> E.desugM (maybe (Loc.t * ATypes.basicType))
+let desugar_basic_type_specifiers locs specs =
+  let loc = Loc.bbox_location locs in
 STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
   if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
     (* STD §6.7.2#2, item 17 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   else if specs = Multiset.from_list [BTSpec_double; BTSpec_Complex] then
     (* STD §6.7.2#2, item 18 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   else if specs = Multiset.from_list [BTSpec_long; BTSpec_double; BTSpec_Complex] then
     (* STD §6.7.2#2, item 19 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   
   else
     E.return $
       if specs = Multiset.from_list [BTSpec_char] then
         (* STD §6.7.2#2, item 2 *)
-        Just (ATypes.Integer ATypes.Char)
+        Just (loc, ATypes.Integer ATypes.Char)
       else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
         (* STD §6.7.2#2, item 3 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Ichar))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Ichar))
       else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
         (* STD §6.7.2#2, item 4 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Ichar))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Ichar))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_short];
                 Multiset.from_list [BTSpec_signed; BTSpec_short];
                 Multiset.from_list [BTSpec_short; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 5 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Short))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 6 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Short))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_int];
                 Multiset.from_list [BTSpec_signed];
                 Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
         (* STD §6.7.2#2, item 7 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Int_))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
         (* STD §6.7.2#2, item 8 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Int_))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
         (* STD §6.7.2#2, item 9 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Long))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 10 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Long))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 11 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.LongLong))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.LongLong))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 12 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.LongLong))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.LongLong))
       else if specs = Multiset.from_list [BTSpec_float] then
         (* STD §6.7.2#2, item 13 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.Float))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.Float))
       else if specs = Multiset.from_list [BTSpec_double] then
         (* STD §6.7.2#2, item 14 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.Double))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.Double))
       else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
         (* STD §6.7.2#2, item 15 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.LongDouble))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.LongDouble))
       else if specs = Multiset.from_list [BTSpec_Bool] then
         (* STD §6.7.2#2, item 16 *)
-        Just (ATypes.Integer (ATypes.Bool))
+        Just (loc, ATypes.Integer (ATypes.Bool))
       else
         Nothing
 
@@ -1440,13 +1440,13 @@ type struct_or_union =
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
   match project_base_type_specifiers specs with
-    | Just z ->
-        desugar_basic_type_specifiers (Multiset.from_list z)
+    | Just (z, locs) ->
+        desugar_basic_type_specifiers locs (Multiset.from_list z)
     | Nothing ->
         E.return Nothing
   end >>= function
-    | Just bty ->
-        E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Basic bty))
+    | Just (loc, bty) ->
+        E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic bty))
     | Nothing ->
         let desugar_new_struct_or_union struct_or_union tag_ident_opt sdecls =
           let (kind_ctor, def_ctor, type_ctor) =
@@ -1504,17 +1504,17 @@ let rec desugar_type_specifiers specs =
               STD_ "§6.7.2#2, sentence 1"
                 E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
           
-          | [TSpec_void] ->
+          | [TSpec loc TSpec_void] ->
               STD_ "§6.7.2#2, sentence 2 (`void' case)"
                 E.return (ATypes.no_qualifiers, ATypes.Ctype [] ATypes.Void)
           
-          | [TSpec_struct Nothing Nothing] ->
+          | [TSpec loc (TSpec_struct Nothing Nothing)] ->
               error "TODO: TSpec_struct Nothing, Nothing"
           
-          | [TSpec_union Nothing Nothing] ->
+          | [TSpec loc (TSpec_union Nothing Nothing)] ->
               error "TODO: TSpec_union Nothing, Nothing"
           
-          | [TSpec_enum (Just tag_ident) Nothing] ->
+          | [TSpec loc (TSpec_enum (Just tag_ident) Nothing)] ->
               (* STD §6.7.2.3#9, enum *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Nothing ->
@@ -1533,7 +1533,7 @@ let rec desugar_type_specifiers specs =
                     end
               end
           
-          | [TSpec_struct (Just tag_ident) Nothing] ->
+          | [TSpec loc (TSpec_struct (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
                  specifier occuring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
@@ -1549,7 +1549,7 @@ let rec desugar_type_specifiers specs =
                     E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
               end
           
-          | [TSpec_union (Just tag_ident) Nothing] ->
+          | [TSpec loc (TSpec_union (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
                  specifier occuring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
@@ -1565,13 +1565,13 @@ let rec desugar_type_specifiers specs =
                     E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
               end
           
-          | [TSpec_struct tag_ident_opt (Just sdecls)] ->
+          | [TSpec loc (TSpec_struct tag_ident_opt (Just sdecls))] ->
               desugar_new_struct_or_union STRUCT tag_ident_opt sdecls
           
-          | [TSpec_union tag_ident_opt (Just sdecls)] ->
+          | [TSpec loc (TSpec_union tag_ident_opt (Just sdecls))] ->
               desugar_new_struct_or_union UNION tag_ident_opt sdecls
           
-          | [TSpec_Atomic tyname] ->
+          | [TSpec loc (TSpec_Atomic tyname)] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
               (* STD §6.7.2.4#3 *)
               (* TODO: shouldn't this be done by the Ail typing? *)
@@ -1584,11 +1584,11 @@ let rec desugar_type_specifiers specs =
                 (* TODO: qualifiers *)
                 E.return (qs, ATypes.Ctype [] (ATypes.Atomic ty))
           
-          | [TSpec_enum Nothing Nothing] ->
+          | [TSpec loc (TSpec_enum Nothing Nothing)] ->
               (* the C parsing should have failed *)
               E.fail Loc.unknown Errors.Desugar_impossible
           
-          | [TSpec_enum tag_ident_opt (Just enums)] ->
+          | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
               let loc = match tag_ident_opt with
                 | Just ident -> Loc.locOf ident
@@ -1606,21 +1606,21 @@ let rec desugar_type_specifiers specs =
               E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))))
           
           (* *)
-          | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
+          | [TSpec loc (TSpec_name ((CabsIdentifier cid_loc str) as ident))] ->
               E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
                     E.return (ATypes.no_qualifiers, ty)
                 | Nothing ->
                     (* TODO: check the namespace *)
-                    E.resolve_ordinary_identifier loc ident >>= function
+                    E.resolve_ordinary_identifier cid_loc ident >>= function
                       | Just (_, E.OReg_typedef sym) ->
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
                       | Just _ ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not King_typedef")
+                          E.fail cid_loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not King_typedef")
                       | Nothing ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not resolved")
+                          E.fail cid_loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not resolved")
                     end
               end
           
@@ -4106,7 +4106,7 @@ let desugar_and_register_external_declaration edecl =
     (* struct-or-union identifier ; *)
     | EDecl_decl (Declaration_base <|
         storage_classes= [];
-        type_specifiers= [TSpec_struct (Just ident) Nothing];
+        type_specifiers= [TSpec _ (TSpec_struct (Just ident) Nothing)];
         type_qualifiers= [];
         function_specifiers= [];
         alignment_specifiers= [];

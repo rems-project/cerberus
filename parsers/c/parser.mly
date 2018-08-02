@@ -293,7 +293,7 @@ var_name:
    resolved using it. *)
 typedef_name_spec:
 | i= typedef_name
-  { TSpec_name (CabsIdentifier (Loc_point $startpos, i)) }
+  { TSpec (Loc_region ($startpos, $endpos, None), TSpec_name (CabsIdentifier (Loc_point $startpos, i))) }
 
 general_identifier:
 | i= typedef_name
@@ -695,29 +695,29 @@ storage_class_specifier:
 (* §6.7.2 Type specifiers *)
 type_specifier_nonunique:
 | CHAR
-    { TSpec_char }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_char) }
 | SHORT
-    { TSpec_short }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_short) }
 | INT
-    { TSpec_int }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_int) }
 | LONG
-    { TSpec_long }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_long) }
 | FLOAT
-    { TSpec_float }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_float) }
 | DOUBLE
-    { TSpec_double }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_double) }
 | SIGNED
-    { TSpec_signed }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_signed) }
 | UNSIGNED
-    { TSpec_unsigned }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_unsigned) }
 | COMPLEX
-    { TSpec_Complex }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_Complex) }
 
 type_specifier_unique:
 | VOID
-    { TSpec_void }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_void) }
 | BOOL
-    { TSpec_Bool }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_Bool) }
 | spec= atomic_type_specifier
     { spec }
 | spec= struct_or_union_specifier
@@ -738,9 +738,9 @@ struct_or_union_specifier:
 
 struct_or_union:
 | STRUCT
-    { fun x y -> TSpec_struct (x, y) }
+    { fun x y -> TSpec (Loc_region ($startpos, $endpos, None), TSpec_struct (x, y)) }
 | UNION
-    { fun x y -> TSpec_union (x, y) }
+    { fun x y -> TSpec (Loc_region ($startpos, $endpos, None), TSpec_union (x, y)) }
 
 struct_declaration_list: (* NOTE: the list is in reverse *)
 | sdecl= struct_declaration
@@ -778,9 +778,9 @@ struct_declarator:
 (* §6.7.2.2 Enumeration specifiers *)
 enum_specifier:
 | ENUM iopt= general_identifier? LBRACE enums= enumerator_list COMMA? RBRACE
-    { TSpec_enum (iopt, Some (List.rev enums)) }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_enum (iopt, Some (List.rev enums))) }
 | ENUM i= general_identifier
-    { TSpec_enum (Some i, None)  }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_enum (Some i, None)) }
 
 enumerator_list: (* NOTE: the list is in reverse *)
 | enum= enumerator
@@ -798,7 +798,7 @@ enumerator:
 (* §6.7.2.4 Atomic type specifiers *)
 atomic_type_specifier:
 | ATOMIC LPAREN ty= type_name RPAREN
-    { TSpec_Atomic ty }
+    { TSpec (Loc_region ($startpos, $endpos, None), TSpec_Atomic ty) }
 
 
 (* §6.7.3 Type qualifiers *)
