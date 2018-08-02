@@ -470,6 +470,9 @@ let pload loc ty x mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Load ty x mo))))
 let prmw loc ty x n1 n2 mo1 mo2 =
   Expr [] (Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2))))
+let pcompare_exchange_strong loc ty x n1 n2 mo1 mo2 =
+  Expr [] (Eaction (Paction Pos (
+        Action loc default (CompareExchangeStrong ty x n1 n2 mo1 mo2))))
 
 
 
@@ -966,6 +969,9 @@ and subst_sym_action_ sym cval = function
         (subst_sym_pexpr sym cval pe3) (subst_sym_pexpr sym cval pe4) mo1 mo2
   | Fence mo ->
       Fence mo
+  | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+      CompareExchangeStrong (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+        (subst_sym_pexpr sym cval pe3) (subst_sym_pexpr sym cval pe4) mo1 mo2
 end
 and subst_sym_action sym cval (Action loc bs act_) =
   Action loc bs (subst_sym_action_ sym cval act_)
@@ -1206,9 +1212,9 @@ and unsafe_subst_sym_action_ a pe' = function
         (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
   | Fence mo ->
       Fence mo
-(*
   | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
       CompareExchangeStrong (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
+(*
   | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeWeak (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
 *)

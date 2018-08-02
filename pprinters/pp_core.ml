@@ -654,6 +654,12 @@ and pp_action act =
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
     | Fence0 mo ->
         pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
+    | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_strong" ^^
+        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+
 (*
     | Ptr (ptr_act, es) ->
        pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)

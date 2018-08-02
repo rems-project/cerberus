@@ -1946,12 +1946,64 @@ end
          E.return $
            C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.Fence mo))))
 
+    | A.AilEcall
+          (A.AnnotatedExpression _ _ _
+              (A.AilEbuiltin "atomic_compare_exchange_strong_explicit"))
+          [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
+      let mo_success = translate_memory_order order_success_e in
+      let mo_failure = translate_memory_order order_failure_e in
+      let (ty1,ty2) = match (ctype_of object_e, ctype_of expected_e) with
+        | (Aty.Pointer _ ty1, Aty.Pointer _ ty2) -> (ty1,ty2)
+        | _ ->
+          illTypedAil loc "AilEcall atomic_compare_exchange_strong_explicit"
+      end in
+      let oTy = force_core_object_type_of_ctype
+                    (Caux.proj_ctype (ctype_of desired_e)) in
+
+      self object_e   >>= fun core_object_e ->
+      self expected_e >>= fun core_expected_e ->
+      self desired_e  >>= fun core_desired_e ->
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer)
+                 >>= fun (_, loaded_object_sym_pat, loaded_object_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
+                 >>= fun (_, object_sym_pat, object_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer)
+                 >>= fun (_, loaded_expected_sym_pat, loaded_expected_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
+                 >>= fun (_, expected_sym_pat, expected_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_loaded oTy)
+                 >>= fun (_, desired_sym_pat, desired_sym_pe) ->
+
+      E.return begin
+        Caux.mk_sseq_e
+          (Caux.mk_tuple_pat [loaded_object_sym_pat
+                             ;loaded_expected_sym_pat
+                             ;desired_sym_pat])
+          (Caux.mk_unseq_e [core_object_e
+                           ;core_expected_e
+                           ;core_desired_e])
+          (Caux.mk_case_e (Caux.mk_tuple_pe [loaded_object_sym_pe
+                                            ;loaded_expected_sym_pe])
+              [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
+                                   ;Caux.mk_specified_pat expected_sym_pat],
+                 Caux.pcompare_exchange_strong
+                    loc (Caux.mk_ail_ctype_pe (AilTypesAux.unatomic ty1))
+                    object_sym_pe expected_sym_pe desired_sym_pe
+                    mo_success mo_failure
+                )
+              ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer
+                                                ;C.BTy_loaded C.OTy_pointer]),
+                 Caux.mk_pure_e
+                   (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)
+                )
+              ]
+          )
+      end
 
 
 
 
 
-      
 (*
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
          let mo_success = translate_memory_order order_success_e in

@@ -652,6 +652,13 @@ and symbolify_action_ = function
      Eff.return (RMW0 (pe1, pe2, pe3, pe4, mo1, mo2))
  | Fence0 mo ->
      Eff.return (Fence0 mo)
+ | CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     symbolify_pexpr _pe4 >>= fun pe4 ->
+     Eff.return (CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2))
+
 
 and symbolify_paction = function
  | Paction (p, Action (loc, (), _act_)) ->
