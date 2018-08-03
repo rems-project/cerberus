@@ -76,6 +76,12 @@ let rec substitute_action (map: substitute_map)
     | RMW0 _
     | Fence0 _ ->
         assert false
+    | CompareExchangeStrong(pe1,pe2,pe3,pe4,mo1,mo2) ->
+        CompareExchangeStrong(substitute_pexpr map pe1,
+                              substitute_pexpr map pe2,
+                              substitute_pexpr map pe3,
+                              substitute_pexpr map pe4,
+                              mo1,mo2)
   in
   Action(loc, a, ret)
 

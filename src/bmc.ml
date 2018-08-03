@@ -1252,7 +1252,7 @@ module Bmc_paction = struct
     let action = BmcAction(pol, mk_not (PointerSort.is_null ptr),
                            Load(aid, tid, memorder, ptr, new_const)) in
     return { assume   = []
-           ; vcs      = []
+           ; vcs      = [mk_not (PointerSort.is_null ptr)]
            ; mod_addr = AddrSet.empty (* sequential only *)
            ; preexec  = add_action action mk_initial_preexec
            }
@@ -1319,7 +1319,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | Alloc0 _ ->
       assert false
   | Kill (_, pe) ->
-      (* TODO: kill currently ignored *)
+      bmc_debug_print 7 "TODO: kill ignored";
       bmc_pexpr pe >>= fun res_pe ->
       return { expr      = UnitSort.mk_unit
              ; assume    = res_pe.assume
@@ -1380,6 +1380,95 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | RMW0 _
   | Fence0 _ ->
       assert false
+  | CompareExchangeStrong(Pexpr(_, _, PEval (Vctype ty)),
+                          Pexpr(_,_, PEsym obj),
+                          Pexpr(_,_, PEsym expected),
+                          desired, mo_success, mo_failure) ->
+    assert (!!bmc_conf.concurrent_mode);
+    (* _bool compare_exchange_strong(object, expected, desire, success, failure):
+     * if *object == *expected
+     *   *object = desire
+     * else
+     *   *expected = *object
+     *
+     * r_expected = load(expected, NA)
+     * def rval = fresh z3 constant
+     * rval = r_expected => RMW(object, desire, success)
+     * rval <> r_expected => rval = load(object, failure); store(expected,rval)
+     *
+     * For sequential mode: this is just read, object, read expected, do
+     * assignments. Not implemented.
+     *)
+    BmcM.get_file            >>= fun file ->
+    BmcM.lookup_sym obj      >>= fun obj_sym ->
+    BmcM.lookup_sym expected >>= fun expected_sym ->
+    bmc_pexpr desired        >>= fun ret_desired ->
+    let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+    assert (List.length flat_sortlist = 1);
+    let (_, sort) = List.hd flat_sortlist in
+
+    let rval_expected =
+      mk_fresh_const ("load_" ^ (symbol_to_string expected)) sort in
+    let rval_object =
+      mk_fresh_const ("load_" ^ (symbol_to_string obj)) sort in
+    Bmc_paction.do_concurrent_load expected_sym rval_expected NA Pos
+                                        >>= fun ret_read_expected ->
+    let success_guard = mk_eq rval_expected rval_object in
+    (* If fail: do a load of object and then a store *)
+    let fail_guard = mk_not success_guard in
+    Bmc_paction.do_concurrent_load obj_sym rval_object mo_failure Pos
+                                        >>= fun fail_load ->
+    Bmc_paction.do_concurrent_store expected_sym rval_object NA Pos
+                                        >>= fun fail_store ->
+    (* If succeed, do a rmw *)
+    BmcM.get_fresh_aid >>= fun rmw_aid ->
+    BmcM.get_tid       >>= fun tid ->
+    let rmw =
+      BmcAction(Pos, success_guard,
+                RMW(rmw_aid, tid, mo_success,
+                    obj_sym, rval_object, ret_desired.expr)) in
+
+    let preexec =
+      begin
+      let (p_fail_load, p_fail_store, p_read_expected) =
+        (guard_preexec fail_guard fail_load.preexec,
+         guard_preexec fail_guard fail_store.preexec,
+         ret_read_expected.preexec) in
+      (* SB the load and store for failed compare_exchange *)
+      let failed_preexec = combine_preexecs_and_sb p_fail_load p_fail_store in
+      (* SB the read_expected and (load,store) for failed compare exchange *)
+      let combined_fail =
+        combine_preexecs_and_sb p_read_expected failed_preexec in
+
+      assert (List.length combined_fail.initial_actions = 0);
+      assert (List.length combined_fail.asw = 0);
+
+      { actions         = rmw :: combined_fail.actions
+      ; initial_actions = combined_fail.initial_actions (*Should be empty *)
+      ; sb              = (compute_sb p_read_expected.actions [rmw])
+                          @ combined_fail.sb
+      ; asw             = combined_fail.asw (* Should be empty *)
+      }
+      end in
+
+    return { expr      = mk_ite success_guard
+                            (LoadedInteger.mk_specified (int_to_z3 1))
+                            (LoadedInteger.mk_specified (int_to_z3 0))
+           ; assume    = ret_desired.assume
+                         @ ret_read_expected.assume
+                         @ fail_load.assume
+                         @ fail_store.assume
+           ; vcs       = ret_desired.vcs           (* TODO: check not null? *)
+                         @ ret_read_expected.vcs
+                         @ (List.map (mk_implies fail_guard) fail_load.vcs)
+                         @ (List.map (mk_implies fail_guard) fail_store.vcs)
+           ; drop_cont = mk_false
+           ; mod_addr  = AddrSet.empty (* sequential only *)
+           ; ret_cond  = mk_true
+           ; preexec    = preexec
+           }
+  | _ -> assert false
+
 
 let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  : bmc_ret BmcM.eff =
@@ -1545,8 +1634,9 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  }
         end
       | Some (ProcDecl(_, ty, params)) ->
-          printf "TODO: ProcDecl %s treated as nondet, 'random' function\n"
-                 (symbol_to_string func_sym);
+          bmc_debug_print 2
+            (sprintf "TODO: ProcDecl %s treated as nondet, 'random' function\n"
+                     (symbol_to_string func_sym));
           BmcM.get_ail_opt >>= fun ail_opt ->
           assert (is_some ail_opt);
           let (_, sigma) = Option.get ail_opt in
@@ -1825,7 +1915,7 @@ let bmc_globals globals : bmc_gret BmcM.eff =
   return (merge_grets ret_globals)
 
 let initialise_solver (solver: Solver.solver) =
-  print_endline "Initialising solver.";
+  bmc_debug_print 1 "Initialising solver.";
   Solver.add solver ImplFunctions.all_asserts;
   let params = Params.mk_params g_ctx in
   Params.add_bool params (mk_sym "macro_finder") g_macro_finder;
@@ -1905,6 +1995,8 @@ let bmc_file (file              : unit typed_file)
         BmcM.get_parent_tids            >>= fun parent_tids ->
         let new_ret_cond =
           mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
+        bmc_debug_print 3
+          "TODO: compute SB of globals and proc arguments properly";
         let preexec =
           let combined =
             combine_preexecs [gret.preexec; pret.preexec; ret.preexec] in
@@ -1938,7 +2030,7 @@ let bmc_file (file              : unit typed_file)
   (* TODO: assert and track based on annotation *)
   (* TODO: multiple expressions or one expression? *)
 
-  print_endline "==== DONE BMC_EXPR ROUTINE ";
+  bmc_debug_print 1 "==== DONE BMC_EXPR ROUTINE ";
   (* Assumptions *)
   Solver.add g_solver (List.map (fun e -> Expr.simplify e None) result.assume);
   (*
@@ -1960,20 +2052,26 @@ let bmc_file (file              : unit typed_file)
   (if !!bmc_conf.concurrent_mode && (List.length result.preexec.actions > 0)
     then begin
     let model = BmcMem.compute_executions result.preexec in
-    print_endline "==== PREEXECS ";
-    print_endline (pp_preexec result.preexec);
+    bmc_debug_print 2 "==== PREEXECS ";
+    bmc_debug_print 2 (pp_preexec result.preexec);
     BmcMem.add_assertions g_solver model;
     (* Do an initial check *)
-    print_endline "START FIRST CHECK";
+    bmc_debug_print 1 "START FIRST CHECK";
+    begin match Solver.check g_solver [] with
+      | SATISFIABLE -> ()
+      | UNSATISFIABLE -> print_endline (Solver.to_string g_solver); assert false
+      | _ -> assert false
+    end;
     if Solver.check g_solver [] <> SATISFIABLE then assert false;
-    print_endline "DONE FIRST CHECK";
+    bmc_debug_print 1 "DONE FIRST CHECK";
     BmcMem.extract_executions g_solver model final_expr
   end else
     match Solver.check g_solver [] with
     | SATISFIABLE ->
         let model = Option.get (Solver.get_model g_solver) in
         let return_value = Option.get (Model.eval model final_expr false) in
-        printf "==== RETURN VALUE: %s\n" (Expr.to_string return_value)
+        bmc_debug_print 1 (sprintf "==== RETURN VALUE: %s\n"
+                                   (Expr.to_string return_value))
     | _ -> assert false)
   ;
 
@@ -1988,7 +2086,7 @@ let bmc_file (file              : unit typed_file)
   print_endline (Solver.to_string g_solver);
   *)
 
-  print_endline "==== CHECKING";
+  bmc_debug_print 1 "==== CHECKING";
   match Solver.check g_solver [] with
   | UNKNOWN ->
       printf "STATUS: unknown. Reason: %s\n"
@@ -1999,7 +2097,7 @@ let bmc_file (file              : unit typed_file)
       begin
       print_endline "STATUS: satisfiable";
       let model = Option.get (Solver.get_model g_solver) in
-      print_endline (Model.to_string model)
+      bmc_debug_print 1 (Model.to_string model)
       end
 
 let find_function (f_name: string)

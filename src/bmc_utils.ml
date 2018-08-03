@@ -177,7 +177,7 @@ let debug_print level str =
 let dprintf = Printf.printf
 
 let bmc_debug_print level str =
-  if g_bmc_debug >= level then
+  if !!bmc_conf.debug_lvl >= level then
     print_endline str
 
 (* ========== Pretty printing ========== *)
