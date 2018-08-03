@@ -216,10 +216,10 @@ type ppmode = {
 }
 
 let ppmode_default_web = {
-  fontsize    = 10;
+  fontsize    = 8;
   fontname    = "Helvetica";
   node_height = 0.2;
-  node_width  = 0.9;
+  node_width  = 1.1;
   filled      = false;
   xscale      = 1.5;
   yscale      = 0.7;
@@ -363,7 +363,11 @@ and pp_action' m rl () = function a -> match a with
         if m.texmode then format_of_string "\\\\WA{%a}{%a}{%a}{%a}" else format_of_string "%a:W%a %a=%a" in
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  pp_loc l  pp_value v
   | RMW (aid,tid,mo,l,v1,v2) ->
-      assert false
+      let fmt =
+        if m.texmode then format_of_string "\\\\RMWA{%a}{%a}{%a}{%a}{%a}" else
+          format_of_string "%a:RMW%a %a=%a/%a" in
+     sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3
+     m) mo  pp_loc l  pp_value v1 pp_value v2
   (*| Blocked_rmw (aid,tid,l) ->
       assert false *)
   | Fence (aid,tid,mo) ->

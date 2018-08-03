@@ -37,6 +37,9 @@ let has_wval (BmcAction(_, _, a): bmc_action) =
 let get_action (BmcAction(_, _, action): bmc_action) =
   action
 
+let is_atomic_bmcaction (bmcaction: bmc_action) =
+  is_atomic (get_action bmcaction)
+
 let get_memorder (BmcAction (_, _, action): bmc_action) =
   memorder_of_action action
 
@@ -112,6 +115,11 @@ let compute_sb_nofilter (xs: bmc_action list)
 let compute_sb (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp
+
+let combine_preexecs_and_sb (p1: preexec) (p2: preexec) =
+  let combined = combine_preexecs [p1;p2] in
+  let extra_sb = compute_sb p1.actions p2.actions in
+  {combined with sb = extra_sb @ combined.sb}
 
 let compute_maximal (actions: bmc_action list)
                     (rel: bmcaction_rel list)
@@ -194,10 +202,14 @@ let pp_action (a: action) =
       sprintf "Load(%d,%d,%s,%s,%s)"
               aid tid (string_of_memory_order memorder)
               (Expr.to_string loc) (Expr.to_string rval)
-  | Store(aid, tid, memorder,loc,wval) ->
+  | Store(aid,tid,memorder,loc,wval) ->
       sprintf "Store(%d,%d,%s,%s,%s)"
               aid tid (string_of_memory_order memorder)
               (Expr.to_string loc) (Expr.to_string wval)
+  | RMW(aid,tid,memorder,loc,rval,wval) ->
+      sprintf "RMW(%d,%d,%s,%s,%s,%s)"
+              aid tid (string_of_memory_order memorder)
+              (Expr.to_string loc) (Expr.to_string wval) (Expr.to_string rval)
   | _ -> assert false
 
 let pp_bmcaction (BmcAction(pol, guard, action): bmc_action) =
@@ -217,9 +229,9 @@ let pp_preexec (preexec: preexec) =
   sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>SB:\n%s\nASW:\n%s"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
-          (*"" ""*)
-          (pp_actionrel_list preexec.sb)
-          (pp_actionrel_list preexec.asw)
+          "" ""
+          (*(pp_actionrel_list preexec.sb)
+            (pp_actionrel_list preexec.asw)*)
 
 
 (* ===== memory model ===== *)
@@ -253,7 +265,7 @@ module C11MemoryModel : MemoryModel = struct
     rf_inv   : FuncDecl.func_decl;
 
     rs       : FuncDecl.func_decl;
-    rmw_dag  : FuncDecl.func_decl;
+    rf_star  : FuncDecl.func_decl;
     sw       : FuncDecl.func_decl;
     hb       : FuncDecl.func_decl;
     sc_clk   : FuncDecl.func_decl;
@@ -281,7 +293,7 @@ module C11MemoryModel : MemoryModel = struct
     rf_inv   : Expr.expr -> Expr.expr;
     rf       : Expr.expr * Expr.expr -> Expr.expr;
 
-    rmw_dag  : Expr.expr * Expr.expr -> Expr.expr;
+    rf_star  : Expr.expr * Expr.expr -> Expr.expr;
     rs       : Expr.expr * Expr.expr -> Expr.expr;
 
     fr       : Expr.expr * Expr.expr -> Expr.expr;
@@ -306,7 +318,7 @@ module C11MemoryModel : MemoryModel = struct
     sb             : Expr.expr list;
     asw            : Expr.expr list;
 
-    rmw_dag        : Expr.expr list;
+    rf_star        : Expr.expr list;
     rs             : Expr.expr list;
     sw             : Expr.expr list;
     hb             : Expr.expr list;
@@ -429,7 +441,7 @@ module C11MemoryModel : MemoryModel = struct
     ; rf_inv   = mk_decl "rf_inv"   [events]        events
 
     ; rs       = mk_decl "rs"       [events;events] boolean_sort
-    ; rmw_dag  = mk_decl "rmw_dag"  [events;events] boolean_sort
+    ; rf_star  = mk_decl "rf_star"  [events;events] boolean_sort
     ; sw       = mk_decl "sw"       [events;events] boolean_sort
     ; hb       = mk_decl "hb"       [events;events] boolean_sort
 
@@ -465,7 +477,7 @@ module C11MemoryModel : MemoryModel = struct
                                         ;mk_eq (rf_inv e2) e1
                                         ]) in
 
-    let rmw_dag = (fun (e1,e2) -> apply decls.rmw_dag [e1;e2]) in
+    let rf_star = (fun (e1,e2) -> apply decls.rf_star [e1;e2]) in
     let rs      = (fun (e1,e2) -> apply decls.rs      [e1;e2]) in
     (* let fr = (rf^-1 ; mo) \ id *)
     let fr     = (fun (e1,e2) -> mk_and [isRead e1
@@ -506,7 +518,7 @@ module C11MemoryModel : MemoryModel = struct
     ; mo        = mo
     ; rf_inv    = rf_inv
     ; rf        = rf
-    ; rmw_dag   = rmw_dag
+    ; rf_star   = rf_star
     ; rs        = rs
 
     ; fr        = fr
@@ -521,6 +533,9 @@ module C11MemoryModel : MemoryModel = struct
   let compute_executions (exec: preexec) : z3_memory_model =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
+    let writes = List.filter has_wval all_actions in
+    let reads = List.filter has_rval all_actions in
+    let atomic_writes = List.filter is_atomic_bmcaction writes in
 
     let event_sort = mk_event_sort all_actions in
     let event_type = mk_event_type in
@@ -598,69 +613,52 @@ module C11MemoryModel : MemoryModel = struct
       @ (List.map (fun (a,b) ->
         mk_eq (fns.asw (z3action a, z3action b)) mk_false) not_asw) in
 
-    (* [RMW];rf^t;[RMW] *)
-    let rmw_dag_asserts =
-      let rmws = List.map z3action (List.filter is_rmw all_actions) in
-      let candidates = cartesian_product rmws rmws in
-
-      let not_rel = List.filter
-        (fun p -> not (find_erel p candidates)) prod_events in
+    (*[W & ~NA] ; rf* *)
+    let rf_star_asserts =
+      let rmws = (List.map z3action (List.filter is_rmw reads)) in
+      let candidates = cartesian_product (List.map z3action atomic_writes)
+                                         (List.map z3action reads) in
+      let not_rel =
+        List.filter (fun p -> not (find_erel p candidates)) prod_events in
       List.map (fun (a,b) ->
         let inductive_def = (fun c ->
-          mk_and [fns.getGuard c; fns.rf (a,c); fns.rmw_dag(c,b)]) in
-        mk_and [fns.getGuard a
-               ;fns.getGuard b
-               ;mk_or [fns.rf (a,b); mk_or (List.map inductive_def rmws)]
-               ]
+          mk_and [fns.getGuard c; fns.rf (a,c); fns.rf_star(c,b)]) in
+        mk_eq (fns.rf_star(a,b))
+              (mk_and [fns.getGuard a
+                      ;fns.getGuard b
+                      ;mk_or [mk_eq a b
+                             ;fns.rf(a,b)
+                             ;mk_or (List.map inductive_def rmws)]])
       ) candidates
-      @ List.map (fun (a,b) -> mk_eq (fns.rmw_dag (a,b)) mk_false) not_rel in
+      @ List.map (fun (a,b) -> mk_eq (fns.rf_star (a,b)) mk_false) not_rel in
 
     (* let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rf* *)
     let rs_asserts =
-      let writes = List.filter has_wval all_actions in
-      let atomic_writes = List.filter (fun a -> is_atomic (get_action a))
-                                      writes in
-      (*let rmws = List.filter is_rmw atomic_writes in*)
-
-      let candidates = cartesian_product writes atomic_writes in
+      let atomic_writes =
+        List.map z3action (List.filter is_atomic_bmcaction writes) in
+      let candidates = cartesian_product (List.map z3action writes)
+                                         (List.map z3action reads) in
       let not_rel =
-        List.filter (fun p -> not (find_rel p candidates)) prod_actions in
-      (*[W] ; (sb & loc)? ; [W & ~NA] ;*)
-      let sb_write (x,y) =
-        let (ex,ey) = (z3action x, z3action y) in
-        let same_thread = mk_bool (tid_of_bmcaction x = tid_of_bmcaction y) in
-        mk_and [fns.getGuard ex; fns.getGuard ey
-               ;mk_or [mk_eq ex ey
-                      ;mk_and [same_thread
-                              ;fns.sb (ex,ey)
-                              ;mk_eq (fns.getAddr ex) (fns.getAddr ey)
-                              ]
-                      ]
-               ] in
+        List.filter (fun p -> not (find_erel p candidates)) prod_events in
       List.map (fun (a,b) ->
-        let def =
-          match is_rmw b with
-          | true ->
-              let exists_def = (fun c -> mk_and
-                [sb_write (a,c); fns.rmw_dag (z3action c, z3action b)]) in
-              mk_or [sb_write (a,b)
-                    ;mk_or (List.map exists_def atomic_writes)]
-          | false -> sb_write (a,b)
-        in
-        mk_eq (fns.rs (z3action a, z3action b)) def
+        let exists_sb =
+          (fun c -> mk_and [fns.getGuard c
+                           ;fns.sb (a,c)
+                           ;fns.rf_star(c,b)
+                           ;mk_eq (fns.getAddr a) (fns.getAddr c)]) in
+        mk_eq (fns.rs (a,b))
+              (mk_and [fns.getGuard a
+                      ;fns.getGuard b
+                      ;mk_or (fns.rf_star(a,b)
+                             ::(List.map exists_sb atomic_writes))
+                      ])
       ) candidates
-      @ List.map (fun (a,b) -> mk_eq (fns.rs (z3action a, z3action b)) mk_false)
+      @ List.map (fun (a,b) -> mk_eq (fns.rs (a,b)) mk_false)
                  not_rel in
 
     let sw_asserts =
-      let atomic_writes =
-        List.filter (fun a -> match get_memorder a with
-                              | Release | Acq_rel | Seq_cst -> has_wval a
-                              | _ -> false) all_actions in
-      let atomic_reads =
-        List.filter (fun a -> match get_memorder a with
-                              | Acquire | Acq_rel | Seq_cst -> has_rval a
-                              | _ -> false) all_actions in
+      let atomic_writes = List.filter is_atomic_bmcaction writes in
+      let atomic_reads = List.filter is_atomic_bmcaction reads in
       let candidates = cartesian_product atomic_writes atomic_reads in
       let not_rel =
         List.filter (fun p -> not (find_rel p candidates)) prod_actions in
@@ -742,7 +740,6 @@ module C11MemoryModel : MemoryModel = struct
     ) (List.filter has_rval all_actions) in
 
     let well_formed_mo =
-      let writes = List.filter has_wval all_actions in
       List.map (fun (w1,w2) ->
         let (e1,e2) = (z3action w1, z3action w2) in
         mk_implies (mk_and [fns.getGuard e1
@@ -814,7 +811,7 @@ module C11MemoryModel : MemoryModel = struct
 
                  @ sb_asserts
                  @ asw_asserts
-                 @ rmw_dag_asserts
+                 @ rf_star_asserts
                  @ rs_asserts
                  @ sw_asserts
                  @ hb_asserts
@@ -954,7 +951,7 @@ module C11MemoryModel : MemoryModel = struct
     *)
 
     let ret = interp ret_value in
-    printf "RET_VALUE: %s\n" (Expr.to_string ret);
+    bmc_debug_print 1 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));
 
     { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; mo_asserts])
     ; ret = ret

@@ -346,11 +346,11 @@ let gen_corestd stdlib impl =
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph
-             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn =
+             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn;
+  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug;
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
@@ -553,6 +553,9 @@ let bmc_fn =
   let doc = "Name of the function to model check" in
   Arg.(value & opt string "main" & info["bmc_fn"] ~doc)
 
+let bmc_debug =
+  let doc = "Debug level for the bounded model checker" in
+  Arg.(value & opt int 5 & info["bmc_debug"] ~doc)
 
 (* entry point *)
 let () =
@@ -561,7 +564,7 @@ let () =
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
-    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn
+    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $ bmc_debug
     ) in
   
   (* the version is "sed-out" by the Makefile *)
