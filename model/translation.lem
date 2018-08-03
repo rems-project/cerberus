@@ -1973,7 +1973,7 @@ end
                  >>= fun (_, expected_sym_pat, expected_sym_pe) ->
       E.wrapped_fresh_symbol (C.BTy_loaded oTy)
                  >>= fun (_, desired_sym_pat, desired_sym_pe) ->
-
+      (* TODO: conversion? *)
       E.return begin
         Caux.mk_sseq_e
           (Caux.mk_tuple_pat [loaded_object_sym_pat

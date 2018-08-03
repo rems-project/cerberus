@@ -19,7 +19,7 @@ proc main () : eff integer :=
   let strong y : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
   let strong _ : unit    = store(!(_Atomic(signed int)), x, Specified(0)) in
   let strong _ : unit    = store(!(signed int), y, Specified(1)) in
-  let strong _success : loaded integer = compare_exchange_strong(!(signed int), x, y, 2, seq_cst, seq_cst) in
+  let strong _success : loaded integer = compare_exchange_strong(!(signed int), x, y, Specified(2), seq_cst, seq_cst) in
   let strong _a : loaded integer       = load(!(_Atomic(signed int)), x) in
   let strong _b : loaded integer       = load(!(signed int), y) in
   case (_success, _a, _b) of

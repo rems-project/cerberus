@@ -961,7 +961,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL FREE RMW FENCE
+%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL FREE RMW FENCE COMPARE_EXCHANGE_STRONG
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1476,6 +1476,8 @@ action:
     { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN
     { Fence0 mo }
+| COMPARE_EXCHANGE_STRONG LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
+    { CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 ;
 
 paction:
