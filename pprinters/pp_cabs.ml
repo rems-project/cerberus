@@ -510,9 +510,9 @@ and dtree_of_array_declarator_size = function
       Dleaf (pp_decl_ctor "ADeclSize_asterisk")
 
 and dtree_of_pointer_declarator = function
-  | PDecl (qs, None) ->
+  | PDecl (_, qs, None) ->
       Dleaf (pp_decl_ctor "PDecl" ^^^ P.brackets (comma_list pp_cabs_type_qualifier qs))
-  | PDecl (qs, Some ptr_decltor) ->
+  | PDecl (_, qs, Some ptr_decltor) ->
       Dnode ( pp_decl_ctor "PDecl" ^^^ P.brackets (comma_list pp_cabs_type_qualifier qs)
             , [dtree_of_pointer_declarator ptr_decltor] )
 

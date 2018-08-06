@@ -10,7 +10,8 @@ type typing_error =
   | TError_internal of string
 
   | TError_main_return_type
-  | TError_main_params of list (qualifiers * ctype * bool)
+  | TError_main_param1
+  | TError_main_param2
   | TError_main_not_function
   
   | TError_indirection_not_pointer (* of genType *)

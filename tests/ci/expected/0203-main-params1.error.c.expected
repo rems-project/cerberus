@@ -1,0 +1,3 @@
+ci/0203-main-params1.error.c:1:11: error: invalid parameter type for 'main': first parameter must be of type 'int'. (§5.1.2.2.1)
+int main (short argc, char ** argv) { return 0; }
+    ^     ~~~~~ 

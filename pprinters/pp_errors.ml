@@ -217,16 +217,19 @@ let std_ref = function
   | Desugar_cause Desugar_NonvoidReturn ->
     "§6.8.6.4#1, 2nd sentence"
 
-  | AIL_TYPING TError_main_not_function ->
-      "§5.1.2.2.1"
   | AIL_TYPING TError_main_return_type ->
       "§5.1.2.2.1#1, 2nd sentence"
+  | AIL_TYPING TError_main_not_function
+  | AIL_TYPING TError_main_param1
+  | AIL_TYPING TError_main_param2 ->
+      "§5.1.2.2.1"
   | AIL_TYPING TError_indirection_not_pointer ->
       "§6.5.3.2#2"
   | AIL_TYPING (TError_TODO n) ->
       "Ail typing error (TODO " ^ string_of_int n ^ ")"
   | AIL_TYPING (TError std) ->
       std
+
   | Desugar_cause (Desugar_ConstraintViolation str) ->
       str
   | Core_run_cause _  ->
@@ -305,9 +308,10 @@ let short_message = function
       "return type of 'main' should be 'int'"
   | AIL_TYPING TError_main_not_function ->
       "variable named 'main' with external linkage has undefined behavior"
-
-  | AIL_TYPING (TError_main_params qs_tys) ->
-      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype AilTypes.no_qualifiers ty) qs_tys) ^ ")"
+  | AIL_TYPING TError_main_param1 ->
+      "invalid parameter type for 'main': first parameter must be of type 'int'"
+  | AIL_TYPING TError_main_param2 ->
+      "invalid parameter type for 'main': second parameter must be of type 'char **'"
 
   | CSEM_NOT_SUPPORTED msg ->
       "Csem doesn't yet support `" ^ msg ^"'"

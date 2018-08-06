@@ -2204,7 +2204,6 @@ let annotate_program (startup_opt, sigm) =
     | Just startup ->
         match Context.lookup identifierEqual sigm.declarations startup with
           | Just (loc, Decl_function hasProto (ret_qs, Ctype ret_annots ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
-              
               (* §5.1.2.2.1 *)
               (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
               match params with
@@ -2218,11 +2217,13 @@ let annotate_program (startup_opt, sigm) =
                     Ctype _ (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |>
                       (Ctype _ (Pointer <| const= false; restrict= false; volatile= false(*; atomic= false*) |> (Ctype _ (Basic (Integer Char)))))), _)] ->
                     E.return ()
-                | _ ->
-                    E.fail Loc.unknown (TError_main_params params)
+                    (* TODO: can the parameters be qualified with const or volatile? *)
+                | ((<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Ctype _ (Basic (Integer (Signed Int_))), _)::
+                  (_, Ctype annots _, _)::_) ->
+                    E.fail (Loc.with_cursor_from (Annot.get_loc_ annots) loc) TError_main_param2
+                | ((_, Ctype annots _, _)::_) ->
+                    E.fail (Loc.with_cursor_from (Annot.get_loc_ annots) loc) TError_main_param1
               end >>
-              
-              
               (* TODO: check arguments *)
               if ret_qs = no_qualifiers && ret_ty = Basic (Integer (Signed Int_)) then
                 annotate_sigma sigm >>= fun sigm' ->
