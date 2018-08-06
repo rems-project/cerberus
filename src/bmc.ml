@@ -33,6 +33,7 @@ open Util
  *  - Concurrency
  *     - Convert lists -> sets/hashtables where appropriate
  *     - Should asw be included in po?
+ *  - Separate analyses into smaller standalone analyses
  *)
 
 (* =========== TYPES =========== *)
@@ -1377,12 +1378,24 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; preexec   = ret.preexec
              }
   | Load0 _
-  | RMW0 _
-  | Fence0 _ ->
+  | RMW0 _ ->
       assert false
-  | CompareExchangeStrong(Pexpr(_, _, PEval (Vctype ty)),
-                          Pexpr(_,_, PEsym obj),
-                          Pexpr(_,_, PEsym expected),
+  | Fence0 memorder ->
+      assert (!!bmc_conf.concurrent_mode);
+      BmcM.get_fresh_aid >>= fun aid ->
+      BmcM.get_tid       >>= fun tid ->
+      let new_action = BmcAction(pol, mk_true, Fence(aid,tid,memorder)) in
+      return { expr      = UnitSort.mk_unit
+             ; assume    = []
+             ; vcs       = []
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty
+             ; ret_cond  = mk_true
+             ; preexec   = add_action new_action mk_initial_preexec
+             }
+  | CompareExchangeStrong(Pexpr(_, _,PEval (Vctype ty)),
+                          Pexpr(_,_,PEsym obj),
+                          Pexpr(_,_,PEsym expected),
                           desired, mo_success, mo_failure) ->
     assert (!!bmc_conf.concurrent_mode);
     (* _bool compare_exchange_strong(object, expected, desire, success, failure):
@@ -1416,15 +1429,15 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
     let success_guard = mk_eq rval_expected rval_object in
     (* If fail: do a load of object and then a store *)
     let fail_guard = mk_not success_guard in
-    Bmc_paction.do_concurrent_load obj_sym rval_object mo_failure Pos
+    Bmc_paction.do_concurrent_load obj_sym rval_object mo_failure pol
                                         >>= fun fail_load ->
-    Bmc_paction.do_concurrent_store expected_sym rval_object NA Pos
+    Bmc_paction.do_concurrent_store expected_sym rval_object NA pol
                                         >>= fun fail_store ->
     (* If succeed, do a rmw *)
     BmcM.get_fresh_aid >>= fun rmw_aid ->
     BmcM.get_tid       >>= fun tid ->
     let rmw =
-      BmcAction(Pos, success_guard,
+      BmcAction(pol, success_guard,
                 RMW(rmw_aid, tid, mo_success,
                     obj_sym, rval_object, ret_desired.expr)) in
 
