@@ -79,5 +79,7 @@ citests=(
 # 0114-const_return.error.c
   0115-hex_char_const.c
   0116-enum_constants.c
+  0201-main-return-type.error.c
+  0203-main-not-function.error.c
 )
 

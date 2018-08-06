@@ -1,0 +1,3 @@
+ci/0201-main-return-type.error.c:1:1: error: return type of 'main' should be 'int'. (§5.1.2.2.1#1, 2nd sentence)
+float main(void) { return 1.; }
+~~~~~ ^
