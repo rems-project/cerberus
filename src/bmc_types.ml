@@ -139,6 +139,11 @@ let is_atomic (a: action) = match memorder_of_action a with
   | NA -> false
   | _  -> true
 
+let is_fence (a: action) = match a with
+  | Fence _ -> true
+  | _       -> false
+
+
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = Cmm_csem.(function
   | NA -> "na"
@@ -371,7 +376,9 @@ and pp_action' m rl () = function a -> match a with
   (*| Blocked_rmw (aid,tid,l) ->
       assert false *)
   | Fence (aid,tid,mo) ->
-      assert false
+      let fmt =
+        if m.texmode then format_of_string "\\\\FA{%a}{%a}" else format_of_string "%a:F%a" in
+     sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo
 
 and pp_column_head rl () = function
   | CH_tid tid -> sprintf "%a" (pp_thread_id' rl) tid
