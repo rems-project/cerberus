@@ -277,7 +277,7 @@ and array_declarator_size =
   | ADeclSize_asterisk
 
 and pointer_declarator =
-  | PDecl of list cabs_type_qualifier * maybe pointer_declarator
+  | PDecl of Loc.t * list cabs_type_qualifier * maybe pointer_declarator
 
 and parameter_type_list =
   | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)

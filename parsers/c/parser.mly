@@ -876,7 +876,7 @@ identifier_list:
 
 pointer:
 | STAR tquals= type_qualifier_list? ptr_decltor= pointer?
-    { PDecl (option [] List.rev tquals, ptr_decltor) }
+    { PDecl (Loc_region ($startpos, $endpos, None), option [] List.rev tquals, ptr_decltor) }
 
 type_qualifier_list: (* NOTE: the list is in reverse *)
 | tqual= type_qualifier

@@ -1506,7 +1506,7 @@ let rec desugar_type_specifiers specs =
           
           | [TSpec loc TSpec_void] ->
               STD_ "§6.7.2#2, sentence 2 (`void' case)"
-                E.return (ATypes.no_qualifiers, ATypes.Ctype [] ATypes.Void)
+                E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] ATypes.Void)
           
           | [TSpec loc (TSpec_struct Nothing Nothing)] ->
               error "TODO: TSpec_struct Nothing, Nothing"
@@ -1541,7 +1541,7 @@ let rec desugar_type_specifiers specs =
                     (* STD §6.7.2.3#9 *)
                     E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
                 | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
@@ -1557,7 +1557,7 @@ let rec desugar_type_specifiers specs =
                     (* STD §6.7.2.3#9 *)
                     E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
                 | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
@@ -1579,14 +1579,14 @@ let rec desugar_type_specifiers specs =
                  || AilTypesAux.is_function ty
                  || AilTypesAux.is_atomic ty
                  || not (AilTypesAux.is_unqualified qs) then
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.4#3")
+                E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.4#3")
               else
                 (* TODO: qualifiers *)
                 E.return (qs, ATypes.Ctype [] (ATypes.Atomic ty))
           
           | [TSpec loc (TSpec_enum Nothing Nothing)] ->
               (* the C parsing should have failed *)
-              E.fail Loc.unknown Errors.Desugar_impossible
+              E.fail loc Errors.Desugar_impossible
           
           | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
@@ -1769,13 +1769,14 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
 
 
 (* TYPE: pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)) *)
-and desugar_pointer_declarator (PDecl tquals ptr_decltor_opt)  =
+and desugar_pointer_declarator (PDecl ptr_loc tquals ptr_decltor_opt)  =
   (* if ptr_decltor_opt = Nothing, these qualifiers are of the current pointer
      type we are building; otherwise, they are of the referenced type of the
      inner [ptr_decltor] *)
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
-  let mk_pointer_ctype ref_qs ref_ty =
-    (if isAtomic then AilTypesAux.mk_ctype_atomic else id) (ATypes.Ctype [] (ATypes.Pointer ref_qs ref_ty)) in
+  let mk_pointer_ctype ref_qs (ATypes.Ctype annots _ as ref_ty) =
+    let loc = Loc.bbox_location [Annot.get_loc_ annots; ptr_loc] in
+    (if isAtomic then AilTypesAux.mk_ctype_atomic else id) (ATypes.Ctype [Annot.Aloc loc] (ATypes.Pointer ref_qs ref_ty)) in
   (* STD  §6.7.6.1#1 *)
   match ptr_decltor_opt with
     (* in this case [tquals_qs] are the qualifiers of the referenced type of
