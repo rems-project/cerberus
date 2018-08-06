@@ -77,8 +77,12 @@ create_testsuite "parsing"
 for file in "${citests[@]}"
 do
   ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
-  if [ -f ci/expected/$1.expected ]; then
-    cmp --silent tmp/result ci/expected/$file.expected
+  if [ -f ./ci/expected/$file.expected ]; then
+    if [[ $file == *.error.c ]]; then 
+      cmp --silent tmp/stderr ci/expected/$file.expected
+    else
+      cmp --silent tmp/result ci/expected/$file.expected
+    fi
   fi
   report $file $?
 done

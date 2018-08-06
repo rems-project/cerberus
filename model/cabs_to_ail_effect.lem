@@ -235,8 +235,8 @@ type state = <|
                                                                 the boolean is the isRegister flag *)
     * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
    );
-  external_object_declarations: map A.identifier  ((* isTentative *)bool * ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
-  internal_object_declarations: map A.identifier  (ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
+  external_object_declarations: map A.identifier  ((* isTentative *)bool * Loc.t * ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
+  internal_object_declarations: map A.identifier  (Loc.t * ATypes.storageDuration * (* isRegister *) bool * ATypes.qualifiers * ATypes.ctype);
   
   function_definitions: map A.identifier (Loc.t * list A.identifier * A.statement unit);
   global_object_definitions: map A.identifier global_definition;
@@ -381,15 +381,15 @@ let collect_with_scope scope m =
             match kind with
               | Kind_ordinary (OK_object false) ->
                   match Map.lookup sym st.external_object_declarations with
-                    | Just (isTentative, dur, isRegister, qs, ty) ->
+                    | Just (isTentative, _, dur, isRegister, qs, ty) ->
                         (sym, ((dur, isRegister), qs, ty)) :: acc
                     | Nothing ->
                         match Map.lookup sym st.internal_object_declarations with
-                          | Just (ATypes.Static, _, _, _) ->
+                          | Just (_, ATypes.Static, _, _, _) ->
                               acc
-                          | Just (ATypes.Thread, _, _, _) ->
+                          | Just (_, ATypes.Thread, _, _, _) ->
                               acc
-                          | Just (dur, isRegister, qs, ty) ->
+                          | Just (loc, dur, isRegister, qs, ty) ->
                               (sym, ((dur, isRegister), qs, ty)) :: acc
                           | Nothing ->
                               (* TODO: check *)
@@ -442,11 +442,11 @@ let bindings_of_idents_map idents_map =
               match kind with
                 | Kind_ordinary (OK_object _) ->
                     match Map.lookup sym st.external_object_declarations with
-                      | Just (isTentative, dur, isRegister, qs, ty) ->
+                      | Just (isTentative, loc, dur, isRegister, qs, ty) ->
                           (sym, ((dur, isRegister), qs, ty)) :: acc
                       | Nothing ->
                           match Map.lookup sym st.internal_object_declarations with
-                            | Just (dur, isRegister, qs, ty) ->
+                            | Just (loc, dur, isRegister, qs, ty) ->
                                 (sym, ((dur, isRegister), qs, ty)) :: acc
                             | Nothing ->
                                 (* TODO: check *)
@@ -1258,14 +1258,14 @@ let resolve_declarations =
 *)
 
 
-val fetch_object_declaration: A.identifier -> desugM (bool * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
+val fetch_object_declaration: A.identifier -> desugM (bool * Loc.t * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
     let map_union = Map.(union) in
     map_union
       st.external_object_declarations
-      (Map.map (fun (dur, isRegister, qs, ty) -> (false, dur, isRegister, qs, ty)) st.internal_object_declarations)
+      (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   match Map.lookup sym decls with
     | Just decl ->
@@ -1338,9 +1338,9 @@ let register_global_object_definition sym gdef =
      (i.e. declared inside functions) or thread local objects *)
   guard begin
     fetch_object_declaration sym >>= function
-      | (_, ATypes.Static, _, _, _) ->
+      | (_, _, ATypes.Static, _, _, _) ->
           return true
-      | (_, ATypes.Thread, _, _, _) ->
+      | (_, _, ATypes.Thread, _, _, _) ->
           return true
       | _ ->
           return false
@@ -1469,8 +1469,8 @@ AilTypesAux.make_composite
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: Loc.t -> A.identifier -> (bool * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_external_object_declaration loc sym ((_, new_dur, _, new_qs, new_ty) as new_decl) =
+val register_external_object_declaration: A.identifier -> (bool * Loc.t * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
@@ -1480,7 +1480,7 @@ let register_external_object_declaration loc sym ((_, new_dur, _, new_qs, new_ty
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
-    | Just (_, prev_dur, _, prev_qs, prev_ty) ->
+    | Just (_, _, prev_dur, _, prev_qs, prev_ty) ->
         if not (prev_dur = ATypes.Thread --> new_dur = ATypes.Thread) then
           fail loc (Errors.Desugar_ConstraintViolation "§6.7.1#3, sentence 2")
         
@@ -1534,20 +1534,20 @@ let update_external_object_type sym ty =
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
-      | Just (isTentative, dur, is_register, qs, _) ->
+      | Just (isTentative, loc, dur, is_register, qs, _) ->
           <| st with external_object_declarations=
-            Map.insert sym (isTentative, dur, is_register, qs, ty) st.external_object_declarations
+            Map.insert sym (isTentative, loc, dur, is_register, qs, ty) st.external_object_declarations
           |>
     end
   )
 
 (* TODO: factorize *)
 val register_internal_object_declaration:
-  Loc.t -> A.identifier -> (ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
-let register_internal_object_declaration loc sym decl =
+  A.identifier -> (Loc.t * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype) -> desugM unit
+let register_internal_object_declaration sym ((loc, _, _, _, _) as decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, _, new_qs, new_ty) = decl in
+      let (_, _, _, new_qs, new_ty) = decl in
       "attempting to register internal object declaration of `" ^ show sym ^
       "' with qs, ty= " ^ Pp.stringFromAil_ctype new_qs new_ty)
   ) >>
@@ -1579,9 +1579,9 @@ let update_internal_object_type sym ty =
     match Map.lookup sym st.internal_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_internal_object_type] called on an unregistered symbol"
-      | Just (dur, is_register, qs, _) ->
+      | Just (loc, dur, is_register, qs, _) ->
           <| st with internal_object_declarations=
-            Map.insert sym (dur, is_register, qs, ty) st.internal_object_declarations
+            Map.insert sym (loc, dur, is_register, qs, ty) st.internal_object_declarations
           |>
     end
   )
@@ -1734,20 +1734,19 @@ let extract_program startup_str =
           ) st.function_declarations
         end
         begin
-          Map.map (fun (_, dur, isRegister, qs, ty) ->
-            (* TODO: correct location *)
-            (Loc.unknown, A.Decl_object (dur, isRegister) qs ty)
+          Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
+            (loc, A.Decl_object (dur, isRegister) qs ty)
           ) st.external_object_declarations
         end
       end
       begin
         (* Adding internals object with static or thread storage duration *)
-        Map_extra.fold (fun ident (dur, isRegister, qs, ty) acc ->
+        Map_extra.fold (fun ident (loc, dur, isRegister, qs, ty) acc ->
           match dur with
             | ATypes.Static ->
-                Map.insert ident (Loc.unknown, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
             | ATypes.Thread ->
-                Map.insert ident (Loc.unknown, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
             | _ ->
                 acc
           end
@@ -1838,7 +1837,7 @@ let get_gamma_sofar =
     (* TODO: this is putting too much in gamma (i.e. things which are not in the
        current scope). But since we are dealing with fresh symbols, this
        shouldn't be observable? *)
-    List.map (fun (sym, (dur, b, qs, ty)) ->
+    List.map (fun (sym, (_, dur, b, qs, ty)) ->
       (sym, ((dur, b), qs, ty))
     ) (Map_extra.toList st.internal_object_declarations)
   )
@@ -1865,9 +1864,8 @@ let get_sigma_sofar =
           ) st.function_declarations
         end
         begin
-          Map.map (fun (_, dur, isRegister, qs, ty) ->
-            (* TODO: do location properly *)
-            (Loc.unknown, A.Decl_object ((dur, isRegister)) qs ty)
+          Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
+            (loc, A.Decl_object ((dur, isRegister)) qs ty)
           ) st.external_object_declarations
         end
     ) in

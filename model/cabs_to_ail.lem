@@ -796,7 +796,7 @@ val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEident sym ->
-        E.fetch_object_declaration sym >>= fun (_, dur, _, _, _) ->
+        E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, _) ->
         match dur with
           | ATypes.Static ->
               E.return true
@@ -844,7 +844,7 @@ let is_address_constant a_expr =
   
   else match a_expr with
     | AnnotatedExpression () _ _ (AilEident sym) ->
-        E.fetch_object_declaration sym >>= fun (_, dur, _, _, ty) ->
+        E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, ty) ->
         match dur with
           | ATypes.Static ->
               E.return (AilTypesAux.is_array ty)
@@ -1986,7 +1986,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                   E.register_ordinary_identifier ident (E.OK_object true) scs >>= fun (link, sym) ->
                   (* TODO: check this registration *)
                   let dur = determinate_storage_duration link scs in
-                  E.register_internal_object_declaration (Loc.locOf ident) sym (dur, isRegister, qs, ty) >>
+                  E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, qs, ty) >>
                   E.return (Just ident, ( qs
                                       , if isAtomic then ATypes.Ctype [] (ATypes.Atomic ty) else ty
                                       , isRegister ))
@@ -2092,7 +2092,7 @@ STD_ "§6.5.1#2" $
                 match kind with
                   | E.OK_object _ ->
                       E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>
-                      E.fetch_object_declaration sym >>= fun (isTentative, _, _, sym_qs, sym_ty) ->
+                      E.fetch_object_declaration sym >>= fun (isTentative, _, _, _, sym_qs, sym_ty) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
                         AilEident sym
@@ -3575,11 +3575,11 @@ let desugar_declaration_base specifs idecltors =
                   let dur = determinate_storage_duration link specifs.storage_classes in
                   match link with
                     | Linkage_external ->
-                        E.register_external_object_declaration ident_loc sym
-                          (false(*TODO:check*), dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                        E.register_external_object_declaration sym
+                          (false(*TODO:check*), ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
                     | _ ->
-                        E.register_internal_object_declaration ident_loc sym
-                          (dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                        E.register_internal_object_declaration sym
+                          (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
                   end >>
                   mk_desug_init () >>= function
                     | Just (ty', d_e) ->
@@ -3802,18 +3802,18 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                     "ty' is new"
                                   ) in
                                   (* TODO: tentative *)
-                                  E.register_internal_object_declaration ident_loc sym
-                                    (dur, List.elem SC_register specifs.storage_classes, qs, ty')
+                                  E.register_internal_object_declaration sym
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty')
                                 else
-                                  E.register_internal_object_declaration ident_loc sym
-                                    (dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                                  E.register_internal_object_declaration sym
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty)
                                 end >>= fun () ->
                                 E.return ( (sym, d_e) :: acc1
                                          , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
-                                E.register_internal_object_declaration ident_loc sym
-                                  (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
+                                E.register_internal_object_declaration sym
+                                  (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
                                 E.return ( acc1
                                          , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                           end
@@ -4147,8 +4147,8 @@ let desugar_and_register_external_declaration edecl =
                     )
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
-                    E.register_external_object_declaration ident_loc sym
-                      (isTentative, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                    E.register_external_object_declaration sym
+                      (isTentative, ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->
