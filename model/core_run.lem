@@ -29,7 +29,7 @@ include Core_run_aux
 
 
 val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
-               Exception.exceptM (Core.expr core_run_annotation) core_run_error
+               Exception.exceptM (Core.expr core_run_annotation) core_run_cause
 let call_proc file psym cvals =
   let bTy_params_body_opt =
     match Map.lookup psym file.stdlib with
@@ -130,7 +130,7 @@ type core_run_state = <|
 
 
 (* Monad of the core evaluator (State + Exception + Undefined) *)
-type core_runM 'a = SEU.stExceptUndefM 'a core_run_state core_run_error
+type core_runM 'a = SEU.stExceptUndefM 'a core_run_state core_run_cause
 
 
 

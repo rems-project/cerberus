@@ -14,7 +14,6 @@ type kind =
   | Warning
   | Note
 
-
 let string_of_kind = function
   | Error ->
       ansi_format [Bold; Red] "error:"
@@ -22,7 +21,6 @@ let string_of_kind = function
       ansi_format [Bold; Magenta] "warning:"
   | Note ->
       ansi_format [Bold; Black] "note:"
-
 
 let get_line n ic =
   seek_in ic 0;
@@ -32,12 +30,10 @@ let get_line n ic =
            aux (n-1) in
   aux n
 
-
 let string_of_pos pos =
   ansi_format [Bold] (
     Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
   )
-
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
 
@@ -76,7 +72,19 @@ let string_at_line fname lnum cpos =
       (* TODO *)
       None
 
-let desugar_cause_to_string = function
+let string_of_cparser_cause = function
+  | Cparser_invalid_symbol ->
+      "invalid symbol"
+  | Cparser_invalid_line_number n ->
+      "invalid line directive:" ^ n
+  | Cparser_unexpected_eof ->
+      "unexpected end of file"
+  | Cparser_non_standard_string_concatenation ->
+      "unsupported non-standard concatenation of string literals"
+  | Cparser_unexpected_token str ->
+      "unexpected token '"^ str ^ "'"
+
+let string_of_desugar_cause = function
   | Desugar_ConstraintViolation msg ->
       "violation of constraint " ^ msg
   | Desugar_UndeclaredIdentifier str ->
@@ -106,7 +114,7 @@ let desugar_cause_to_string = function
       "member '" ^ str ^ "' is not defined for type '" ^
       String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
   | Desugar_NonvoidReturn ->
-      "found a void return in a non-void function"
+      "non-void function should return a value"
   | Desugar_Redefinition sym ->
       "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
   | Desugar_NeverSupported str ->
@@ -126,9 +134,29 @@ let desugar_cause_to_string = function
         ubs
       )
 
+let string_of_ail_typing_error = function
+  | TError_indirection_not_pointer ->
+      "the * operator expects a pointer operand"
+  | TError_main_return_type ->
+      "return type of 'main' should be 'int'"
+  | TError_main_not_function ->
+      "variable named 'main' with external linkage has undefined behavior"
+  | TError_main_param1 ->
+      "invalid parameter type for 'main': first parameter must be of type 'int'"
+  | TError_main_param2 ->
+      "invalid parameter type for 'main': second parameter must be of type 'char **'"
+  | TError std ->
+      "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
+  | TError_undef ub ->
+      "[Ail typing] found undefined behaviour: " ^
+      Undefined.pretty_string_of_undefined_behaviour ub
+  | TError_lvalue_coercion ty ->
+      "[Ail typing error]\n failed lvalue coercion of type \"" ^
+      Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
+  | _ ->
+      "[Ail typing error]"
 
-(* TODO: improve *)
-let core_typing_cause_to_string = function
+let string_of_core_typing_cause = function
   | Undefined_startup sym ->
       "Undefined_startup " ^ Pp_symbol.to_string sym
   | MismatchObject (expected_oTy, found_oTy) ->
@@ -165,7 +193,131 @@ let core_typing_cause_to_string = function
   | TooGeneral ->
       "TooGeneral"
 
+let string_of_core_run_cause = function
+  | Illformed_program str ->
+      "ill-formed program: `" ^ str ^ "'"
+  | Found_empty_stack str ->
+      "found an empty stack: `" ^ str ^ "'"
+  | Reached_end_of_proc ->
+      "reached the end of a procedure"
+  | Unknown_impl ->
+      "unknown implementation constant"
+  | Unresolved_symbol sym ->
+      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
 
+let short_message = function
+  | CPARSER ccause ->
+      string_of_cparser_cause ccause
+  | DESUGAR dcause ->
+      string_of_desugar_cause dcause
+  | AIL_TYPING terr ->
+      string_of_ail_typing_error terr
+  | CORE_TYPING tcause ->
+      string_of_core_typing_cause tcause
+  | CORE_RUN cause ->
+      string_of_core_run_cause cause
+  | UNSUPPORTED str ->
+      "unsupported " ^ str
+  | PARSER str ->
+      "TODO(msg) PARSER ==> " ^ str
+  | OTHER str ->
+      "TODO(msg) OTHER ==> " ^ str
+
+let std_ref = function
+  (* Desugar phase *)
+  | DESUGAR (Desugar_UndeclaredIdentifier _) ->
+      Some "§6.5.1#2"
+  | DESUGAR Desugar_NonvoidReturn ->
+      Some "§6.8.6.4#1, 2nd sentence"
+  (* Ail typing phase *)
+  | AIL_TYPING TError_main_return_type ->
+      Some "§5.1.2.2.1#1, 2nd sentence"
+  | AIL_TYPING TError_main_param1
+  | AIL_TYPING TError_main_param2 ->
+      Some "§5.1.2.2.1#1"
+  | AIL_TYPING TError_indirection_not_pointer ->
+      Some "§6.5.3.2#2"
+  (* Unknown reference *)
+  | _ -> None
+
+let get_quote ref =
+  let key =
+    String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
+  in
+  match !!cerb_conf.n1507 with
+  | Some (`Assoc xs) ->
+    begin match List.assoc_opt key xs with
+      | Some (`String b) -> "\n" ^ b
+      | _ -> "(ISO C11 quote not found)"
+    end
+  | _ -> failwith "Missing N1507 json file..."
+
+let make_message loc err k =
+  let head = match loc with
+    | Loc_unknown ->
+        "unknown location "
+    | Loc_other str ->
+        "other location (" ^ str ^ ") "
+    | Loc_point pos ->
+        string_of_pos pos
+    | Loc_region (start_p, _, _) ->
+        string_of_pos start_p
+  in
+  let kind = string_of_kind k in
+  let msg = ansi_format [Bold] (short_message err) in
+  let pos = match loc with
+    | Loc_point pos ->
+        let cpos = pos.pos_cnum - pos.pos_bol in
+        (match string_at_line pos.pos_fname pos.pos_lnum cpos with
+          | Some (cpos'_opt, l) ->
+              let cpos = match cpos'_opt with
+                | Some cpos' -> cpos'
+                | None       -> cpos in
+              l ^ "\n" ^
+              ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+          | None ->
+              "")
+    | Loc_region (start_p, end_p, cursor_p_opt) ->
+        let cpos1 = start_p.pos_cnum - start_p.pos_bol in
+        (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
+          | Some (_, l) ->
+              let cpos2 =
+                if start_p.pos_lnum = end_p.pos_lnum then
+                  end_p.pos_cnum - end_p.pos_bol
+                else
+                  String.length l in
+              let cursor = match cursor_p_opt with
+                | Some cursor_p ->
+                    cursor_p.pos_cnum - cursor_p.pos_bol 
+                | None ->
+                    cpos1 in
+              l ^ "\n" ^
+              ansi_format [Bold; Green] (
+                String.init ((max cursor cpos2) + 1)
+                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
+              )
+          | None ->
+              "")
+    | _ -> ""
+  in
+  let ref = match std_ref err with
+    | Some r -> r
+    | None -> "unknown ISO C reference"
+  in
+  match !!cerb_conf.error_verbosity with
+  | Basic ->
+      Printf.sprintf "%s %s %s\n%s" head kind msg pos
+  | RefStd ->
+      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg ref pos
+  | QuoteStd ->
+      Printf.sprintf "%s %s %s\n%s\n%s: %s" head kind msg pos
+        (ansi_format [Bold] ref) (get_quote ref)
+
+let to_string (loc, err) =
+  make_message loc err Error
+
+
+(*
 let std_ref = function
   | Desugar_cause (Desugar_UndeclaredIdentifier _) ->
       "§6.5.1#2"
@@ -228,155 +380,5 @@ let std_ref = function
       "TODO: parsing error ==> " ^ str
   | _ ->
       "TODO: pp_errors std_ref"
+   *)
 
-
-let string_of_core_run_error = function
-  | Illformed_program str ->
-      "ill-formed program: `" ^ str ^ "'"
-  | Found_empty_stack str ->
-      "found an empty stack: `" ^ str ^ "'"
-  | Reached_end_of_proc ->
-      "reached the end of a procedure"
-  | Unknown_impl ->
-      "unknown implementation constant"
-  | Unresolved_symbol sym ->
-      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
-
-
-let short_message = function
-  | Cparser_cause (Cparser_undeclaredIdentifier str) ->
-      "undeclared identifier '"^ str ^ "'"
-  | Cparser_cause (Cparser_unexpectedToken str) ->
-      "unexpected token '"^ str ^ "'"
-
-  | Desugar_cause (Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str))) ->
-      "redeclaration of '" ^ str ^ "'"
-  
-  | Desugar_cause Desugar_NonvoidReturn ->
-(*      "non-void function 'main' should return a value" *)
-      "non-void function should return a value" 
-
-  | Desugar_cause dcause ->
-      "[desug] " ^ desugar_cause_to_string dcause
-  | AIL_TYPING TError_indirection_not_pointer ->
-      "the * operator expects a pointer operand"
-  | AIL_TYPING TError_main_return_type ->
-      "return type of 'main' should be 'int'"
-  | AIL_TYPING TError_main_not_function ->
-      "variable named 'main' with external linkage has undefined behavior"
-  | AIL_TYPING TError_main_param1 ->
-      "invalid parameter type for 'main': first parameter must be of type 'int'"
-  | AIL_TYPING TError_main_param2 ->
-      "invalid parameter type for 'main': second parameter must be of type 'char **'"
-
-  | CSEM_NOT_SUPPORTED msg ->
-      "Csem doesn't yet support `" ^ msg ^"'"
-  
-  | CSEM_HIP msg ->
-      "HIP, this doesn't work yet: `" ^ msg ^ "'"
-  
-      (* Cabs0_to_ail *)
-      | CONSTRAINT_6_6__3 ->
-          "Violation of constraint 6.6#3 [Constant expressions] `Constant \
-           expressions shall not contain assignment, increment, decrement, \
-           function-call, or comma operators, except when they are contained \
-           within a subexpression that is not evaluated.'\n"
-
-    | AIL_TYPING (TError std) ->
-        "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
-
-    | AIL_TYPING (TError_undef ub) ->
-        "[Ail typing] found undefined behaviour: " ^
-        Undefined.pretty_string_of_undefined_behaviour ub
-
-    | AIL_TYPING (TError_lvalue_coercion ty) ->
-        "[Ail typing error]\n failed lvalue coercion of type \"" ^
-        Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
-
-    | Core_typing_cause cause ->
-        core_typing_cause_to_string cause
-
-    | CORE_UNDEF _ ->
-        "TODO(msg) CORE_UNDEF"
-    | PARSER str ->
-        "TODO(msg) PARSER ==> " ^ str
-    | OTHER str ->
-        "TODO(msg) OTHER ==> " ^ str
-    | Core_run_cause err ->
-        "TODO(msg) Core_run_cause ==> " ^ string_of_core_run_error err
-    | _ ->
-        "TODO ERROR MESSAGE"
-
-let get_quote ref =
-  let key =
-    String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
-  in
-  match !!cerb_conf.n1507 with
-  | Some (`Assoc xs) ->
-    begin match List.assoc_opt key xs with
-      | Some (`String b) -> "\n" ^ b
-      | _ -> "(ISO C11 quote not found)"
-    end
-  | _ -> failwith "Missing N1507 json file..."
-
-let make_message loc err k =
-  let head = match loc with
-    | Loc_unknown ->
-        "unknown location "
-    | Loc_other str ->
-        "other location (" ^ str ^ ") "
-    | Loc_point pos ->
-        string_of_pos pos
-    | Loc_region (start_p, _, _) ->
-        string_of_pos start_p
-  in
-  let kind = string_of_kind k in
-  let msg  = ansi_format [Bold] (short_message err) in
-  let pos = match loc with
-    | Loc_point pos ->
-        let cpos = pos.pos_cnum - pos.pos_bol in
-        (match string_at_line pos.pos_fname pos.pos_lnum cpos with
-          | Some (cpos'_opt, l) ->
-              let cpos = match cpos'_opt with
-                | Some cpos' -> cpos'
-                | None       -> cpos in
-              l ^ "\n" ^
-              ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
-          | None ->
-              "")
-    | Loc_region (start_p, end_p, cursor_p_opt) ->
-        let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-        (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
-          | Some (_, l) ->
-              let cpos2 =
-                if start_p.pos_lnum = end_p.pos_lnum then
-                  end_p.pos_cnum - end_p.pos_bol
-                else
-                  String.length l in
-              let cursor = match cursor_p_opt with
-                | Some cursor_p ->
-                    cursor_p.pos_cnum - cursor_p.pos_bol 
-                | None ->
-                    cpos1 in
-              l ^ "\n" ^
-              ansi_format [Bold; Green] (
-                String.init ((max cursor cpos2) + 1)
-                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-              )
-          | None ->
-              "")
-    | _ -> ""
-  in
-  let ref  = std_ref err in
-  match !!cerb_conf.error_verbosity with
-  | Basic ->
-      Printf.sprintf "%s %s %s\n%s" head kind msg pos
-  | RefStd ->
-      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg ref pos
-  | QuoteStd ->
-      Printf.sprintf "%s %s %s\n%s\n%s: %s" head kind msg pos
-        (ansi_format [Bold] ref) (get_quote ref)
-
-
-let to_string (loc, err) =
-  make_message loc err Error

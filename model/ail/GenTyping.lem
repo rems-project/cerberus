@@ -540,7 +540,7 @@ type annotation_context =
   | CTXmemberof
     (* left operand of AilEassign or AilEcompoundAssign *)
   | CTXassign
-  (* array initialiser (used by AilEstr) *)
+    (* array initialiser (used by AilEstr) *)
   | CTXarray_init
     (* otherwise *)
   | CTXother

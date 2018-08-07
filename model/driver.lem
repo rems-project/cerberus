@@ -48,7 +48,7 @@ declare ocaml target_rep function stringFromCore_core_state = `String_core_run.s
 
 
 type driver_error =
-  | DErr_core_run of core_run_error
+  | DErr_core_run of core_run_cause
   | DErr_memory of Mem_common.mem_error
   | DErr_concurrency of string
   | DErr_other of string
@@ -148,7 +148,7 @@ let rec print_eval_conv_aux dr_st pe =
   | Exception.Result (Undefined.Error loc err) ->
       ND.return (Right (Undefined.Error loc err))
   | Exception.Exception err ->
-      ND.return (Left (Loc.other "Driver.print_eval_conv_aux", Errors.Core_run_cause err))
+      ND.return (Left (Loc.other "Driver.print_eval_conv_aux", Errors.CORE_RUN err))
 end
 
 val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
