@@ -76,51 +76,6 @@ let string_at_line fname lnum cpos =
       (* TODO *)
       None
 
-
-let make_message loc k str =
-  begin
-    fun z -> match loc with
-      | Loc_unknown ->
-          "unknown location " ^ z
-      | Loc_other str ->
-          "other location (" ^ str ^ ") " ^ z
-      | Loc_point pos ->
-          Printf.sprintf "%s %s\n" (string_of_pos pos) z ^
-          let cpos = pos.pos_cnum - pos.pos_bol in
-          (match string_at_line pos.pos_fname pos.pos_lnum cpos with
-            | Some (cpos'_opt, l) ->
-                let cpos = match cpos'_opt with
-                  | Some cpos' -> cpos'
-                  | None       -> cpos in
-                l ^ "\n" ^
-                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
-            | None ->
-                "")
-      | Loc_region (start_p, end_p, cursor_p_opt) ->
-          let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-          Printf.sprintf "%s %s\n" (string_of_pos start_p) z ^
-          (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
-            | Some (_, l) ->
-                let cpos2 =
-                  if start_p.pos_lnum = end_p.pos_lnum then
-                    end_p.pos_cnum - end_p.pos_bol
-                  else
-                    String.length l in
-                let cursor = match cursor_p_opt with
-                  | Some cursor_p ->
-                      cursor_p.pos_cnum - cursor_p.pos_bol 
-                  | None ->
-                      cpos1 in
-                l ^ "\n" ^
-                ansi_format [Bold; Green] (
-                  String.init ((max cursor cpos2) + 1)
-                    (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                )
-            | None ->
-                "")
-  end (string_of_kind k ^ " " ^ ansi_format [Bold] str)
-
-
 let desugar_cause_to_string = function
   | Desugar_ConstraintViolation msg ->
       "violation of constraint " ^ msg
@@ -219,10 +174,11 @@ let std_ref = function
 
   | AIL_TYPING TError_main_return_type ->
       "§5.1.2.2.1#1, 2nd sentence"
-  | AIL_TYPING TError_main_not_function
+  | AIL_TYPING TError_main_not_function ->
+      "blah"
   | AIL_TYPING TError_main_param1
   | AIL_TYPING TError_main_param2 ->
-      "§5.1.2.2.1"
+      "§5.1.2.2.1#1"
   | AIL_TYPING TError_indirection_not_pointer ->
       "§6.5.3.2#2"
   | AIL_TYPING (TError_TODO n) ->
@@ -351,15 +307,76 @@ let short_message = function
     | _ ->
         "TODO ERROR MESSAGE"
 
+let get_quote ref =
+  let key =
+    String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
+  in
+  match !!cerb_conf.n1507 with
+  | Some (`Assoc xs) ->
+    begin match List.assoc_opt key xs with
+      | Some (`String b) -> "\n" ^ b
+      | _ -> "(ISO C11 quote not found)"
+    end
+  | _ -> failwith "Missing N1507 json file..."
+
+let make_message loc err k =
+  let head = match loc with
+    | Loc_unknown ->
+        "unknown location "
+    | Loc_other str ->
+        "other location (" ^ str ^ ") "
+    | Loc_point pos ->
+        string_of_pos pos
+    | Loc_region (start_p, _, _) ->
+        string_of_pos start_p
+  in
+  let kind = string_of_kind k in
+  let msg  = ansi_format [Bold] (short_message err) in
+  let pos = match loc with
+    | Loc_point pos ->
+        let cpos = pos.pos_cnum - pos.pos_bol in
+        (match string_at_line pos.pos_fname pos.pos_lnum cpos with
+          | Some (cpos'_opt, l) ->
+              let cpos = match cpos'_opt with
+                | Some cpos' -> cpos'
+                | None       -> cpos in
+              l ^ "\n" ^
+              ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
+          | None ->
+              "")
+    | Loc_region (start_p, end_p, cursor_p_opt) ->
+        let cpos1 = start_p.pos_cnum - start_p.pos_bol in
+        (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
+          | Some (_, l) ->
+              let cpos2 =
+                if start_p.pos_lnum = end_p.pos_lnum then
+                  end_p.pos_cnum - end_p.pos_bol
+                else
+                  String.length l in
+              let cursor = match cursor_p_opt with
+                | Some cursor_p ->
+                    cursor_p.pos_cnum - cursor_p.pos_bol 
+                | None ->
+                    cpos1 in
+              l ^ "\n" ^
+              ansi_format [Bold; Green] (
+                String.init ((max cursor cpos2) + 1)
+                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
+              )
+          | None ->
+              "")
+    | _ -> ""
+  in
+  let ref  = std_ref err in
+  match !!cerb_conf.error_verbosity with
+  | Basic ->
+      Printf.sprintf "%s %s %s\n%s" head kind msg pos
+  | RefStd ->
+      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg ref pos
+  | QuoteStd ->
+      Printf.sprintf "%s %s %s\n%s\n%s: %s" head kind msg pos
+        (ansi_format [Bold] ref) (get_quote ref)
+
 
 let to_string (loc, err) =
-  make_message loc Error
-  begin
-    match !!cerb_conf.error_verbosity with
-      | Basic ->
-          short_message err
-      | RefStd ->
-          short_message err ^ ". (" ^ std_ref err ^ ")"
-      | QuoteStd ->
-          failwith "TODO: Pp_errors.to_string QuoteStd"
-  end
+  make_message loc err Error
