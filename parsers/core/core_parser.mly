@@ -504,6 +504,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEis_unsigned _pe ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr ([], (), PEis_unsigned pe))
+    | PEbmc_assume _pe ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ([], (), PEbmc_assume pe))
+
 
 
 let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =

@@ -79,7 +79,8 @@ let rec precedence = function
   | PEis_scalar _
   | PEis_integer _
   | PEis_signed _
-  | PEis_unsigned _ -> None
+  | PEis_unsigned _
+  | PEbmc_assume _ -> None
 
 let rec precedence_expr = function
   | Epure _
@@ -491,6 +492,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
+        | PEbmc_assume pe ->
+            pp_keyword "__bmc_assume" ^^^ P.parens (pp pe)
 (*        | PEstd (_, pe) ->
             !^ "{-PEstd-}" ^^^ pp pe *)
     end

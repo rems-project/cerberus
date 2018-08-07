@@ -876,6 +876,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (subst_sym_pexpr sym cval pe)
 end
 
 
@@ -1121,6 +1123,9 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEis_signed (unsafe_subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (unsafe_subst_sym_pexpr sym pe' pe)
+
 end
 
 
@@ -2077,6 +2082,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEis_integer pe -> PEis_integer (self 1 pe)
   | PEis_signed pe -> PEis_signed (self 1 pe)
   | PEis_unsigned pe -> PEis_unsigned (self 1 pe)
+  | PEbmc_assume pe -> PEbmc_assume (self 1 pe)
   end
 
 val     set_uid_e: forall 'a. string -> nat -> expr 'a -> expr 'a

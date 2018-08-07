@@ -375,6 +375,9 @@ let dtree_of_expression pp_annot expr =
       | AilEva_arg (e, ty) ->
           Dnode ( pp_stmt_ctor "AilEva_arg" ^^^ P.squotes (pp_ctype empty_qs ty)
                 , (*add_std_annot*) [self e] )
+      | AilEbmc_assume e ->
+          Dnode ( pp_stmt_ctor "AilEbmc_assume"
+                , (*add_std_annot*) [self e] )
       | AilEprint_type e ->
           Dnode ( pp_stmt_ctor "AilEprint_type", (*add_std_annot*) [self e])
       | AilErvalue e ->
