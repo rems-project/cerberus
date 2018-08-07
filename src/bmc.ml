@@ -136,6 +136,7 @@ module ImplFunctions = struct
                    | Bool       -> false
                    | Signed _   -> true
                    | Unsigned _ -> false
+                   | Size_t     -> false
                    | _          -> assert false);
     precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
@@ -169,7 +170,7 @@ module ImplFunctions = struct
 
   let ity_list = signed_ibt_list
                @ unsigned_ibt_list
-               @ [Char; Bool]
+               @ [Char; Bool; Size_t]
 
   let ity_to_ctype (ity: AilTypes.integerType) : ctype =
     Core_ctype.Basic0 (Integer ity)
@@ -291,6 +292,11 @@ let mk_initial_loaded_value (sort: Sort.sort) (name: string)
     (LoadedInteger.mk_specified initial_value, assertions)
   end else
     (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
+
+let is_integer_type (ctype: ctype) =
+  match ctype with
+  | Basic0 (Integer _) -> true
+  | _ -> false
 
 (* =========== PPRINTERS =========== *)
 let pp_bmc_ret (bmc_ret: bmc_ret) =
@@ -464,10 +470,11 @@ let rec ctype_to_bmcz3sort (ty  : ctype)
   | Function0 _ -> assert false
   | Pointer0 _ ->
       CaseSortBase (ty, LoadedPointer.mk_sort)
-  | Atomic0 (Basic0 ty2) ->
+  | Atomic0 (Basic0 _ as _ty) (* fall through *)
+  | Atomic0 (Pointer0 _ as _ty) ->
       begin
-      match ctype_to_bmcz3sort (Basic0 ty2) file with
-      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 (Basic0 ty2), sort)
+      match ctype_to_bmcz3sort _ty file with
+      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 _ty, sort)
       | _ -> assert false
       end
   | Atomic0 _ ->
@@ -494,6 +501,7 @@ module BmcM = struct
 
   type bmc_state = {
     file              : unit typed_file;
+    function_map      : unit typed_fun_map;
     ail_opt           : GenTypes.genTypeCategory AilSyntax.ail_program option;
 
     sym_supply        : sym_supply_ty;
@@ -569,6 +577,10 @@ module BmcM = struct
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
+
+  let get_function_map : (unit typed_fun_map) eff =
+    get >>= fun st ->
+    return st.function_map
 
   (* ail option *)
   let get_ail_opt : 'a eff =
@@ -702,6 +714,9 @@ module BmcM = struct
                        (ail_opt)
                        : bmc_state =
     { file             = file
+    ; function_map     = Pmap.fold
+                           (fun acc name decl -> Pmap.add acc name decl)
+                           file.stdlib file.funs
     ; ail_opt          = ail_opt
 
     ; sym_supply       = sym_supply
@@ -944,16 +959,19 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
              ; vcs    = [ mk_false ]
              }
   | PEctor(Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      assert (is_integer_type ctype);
       return { expr   = Pmap.find ctype ImplFunctions.ivmin_map
              ; assume = []
              ; vcs    = []
              }
   | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      assert (is_integer_type ctype);
       return { expr   = Pmap.find ctype ImplFunctions.ivmax_map
              ; assume = []
              ; vcs    = []
              }
   | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+      assert (is_integer_type ctype);
       return { expr   = Pmap.find ctype ImplFunctions.sizeof_map
              ; assume = []
              ; vcs    = []
@@ -1291,15 +1309,14 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
       (* TODO: non-basic types? *)
       BmcM.get_file >>= fun file ->
-      let sortlist = ctype_to_bmcz3sort ctype file in
-      let flat_sortlist = flatten_bmcz3sort sortlist in
-      let allocation_size = bmcz3sort_size sortlist in
+      let sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
+      let allocation_size = List.length sortlist in
       BmcM.get_new_alloc_and_update_supply >>= fun alloc_id ->
 
       let to_run =
         if !!bmc_conf.concurrent_mode
-        then Bmc_paction.do_concurrent_create alloc_id flat_sortlist pol false
-        else Bmc_paction.do_sequential_create alloc_id flat_sortlist false in
+        then Bmc_paction.do_concurrent_create alloc_id sortlist pol false
+        else Bmc_paction.do_sequential_create alloc_id sortlist false in
       to_run >>= fun ret ->
       (* Assert alloc_size(alloc_id) = allocation_size *)
       let alloc_size_expr =
@@ -1316,8 +1333,10 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; preexec   = ret.preexec
              }
   | Create _ -> assert false
-  | CreateReadOnly _
+  | CreateReadOnly _ -> assert false
   | Alloc0 _ ->
+
+      bmc_debug_print 3 "TODO: abstract memory model and Alloc0";
       assert false
   | Kill (_, pe) ->
       bmc_debug_print 7 "TODO: kill ignored";
@@ -1478,7 +1497,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
            ; drop_cont = mk_false
            ; mod_addr  = AddrSet.empty (* sequential only *)
            ; ret_cond  = mk_true
-           ; preexec    = preexec
+           ; preexec   = preexec
            }
   | _ -> assert false
 
@@ -1591,13 +1610,13 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
     (* fall through *)
   | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
                         PEsym sym), arglist) ->
-      BmcM.lookup_sym sym >>= fun sym_expr ->
-      BmcM.get_file       >>= fun file ->
+      BmcM.lookup_sym sym   >>= fun sym_expr ->
+      BmcM.get_function_map >>= fun function_map ->
       assert (Expr.get_num_args sym_expr = 1);
       let sym_id = z3num_to_int (List.hd (Expr.get_args sym_expr)) in
       let func_sym = Sym.Symbol(sym_id, None) in
       BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
-      begin match Pmap.lookup func_sym file.funs with
+      begin match Pmap.lookup func_sym function_map with
       | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
         if depth >= !!bmc_conf.max_run_depth then
           return { expr      = mk_fresh_const "call_depth_exceeded"
@@ -1647,6 +1666,8 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  }
         end
       | Some (ProcDecl(_, ty, params)) ->
+          assert false
+          (*
           bmc_debug_print 2
             (sprintf "TODO: ProcDecl %s treated as nondet, 'random' function\n"
                      (symbol_to_string func_sym));
@@ -1672,6 +1693,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  ; ret_cond  = mk_true
                  ; preexec   = mk_initial_preexec
                  }
+          *)
       | _ -> assert false
       end
   | Eccall _ -> assert false
@@ -2077,7 +2099,10 @@ let bmc_file (file              : unit typed_file)
     end;
     if Solver.check g_solver [] <> SATISFIABLE then assert false;
     bmc_debug_print 1 "DONE FIRST CHECK";
-    BmcMem.extract_executions g_solver model final_expr
+    if !!bmc_conf.find_all_execs then
+      BmcMem.extract_executions g_solver model final_expr
+    else
+      ()
   end else
     match Solver.check g_solver [] with
     | SATISFIABLE ->

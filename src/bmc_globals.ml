@@ -25,6 +25,7 @@ type bmc_conf = {
   concurrent_mode : bool;
 
   fn_to_check     : string;
+  find_all_execs  : bool;
 
   debug_lvl       : int;
 }
@@ -34,12 +35,13 @@ let (!!) z = !z()
 let bmc_conf : (unit -> bmc_conf) ref =
   ref (fun () -> failwith "bmc_conf is undefined")
 
-let set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug =
+let set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug bmc_all_execs =
   bmc_conf := fun () ->
   { bv_precision    = bmc_bvprec;
     max_run_depth   = bmc_max_depth;
     sequentialise   = bmc_seq;
     concurrent_mode = bmc_conc;
     fn_to_check     = bmc_fn;
+    find_all_execs  = bmc_all_execs;
     debug_lvl       = bmc_debug;
   }

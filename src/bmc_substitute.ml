@@ -27,7 +27,8 @@ let rec substitute_pexpr (map: substitute_map)
     | PEarray_shift (pe_ptr, ty, pe_index) ->
         PEarray_shift(substitute_pexpr map pe_ptr, ty,
                       substitute_pexpr map pe_index)
-    | PEmember_shift _ -> assert false
+    | PEmember_shift (pe_ptr, sym, member) ->
+        PEmember_shift(substitute_pexpr map pe_ptr, sym, member)
     | PEmemberof _ -> assert false
     | PEnot pe ->
         PEnot(substitute_pexpr map pe)
@@ -59,9 +60,9 @@ let rec substitute_action (map: substitute_map)
   let ret = match action_ with
     | Create (pe1, pe2, sym) ->
         Create(substitute_pexpr map pe1, substitute_pexpr map pe2, sym)
-    | CreateReadOnly _
-    | Alloc0 _ ->
-        assert false
+    | CreateReadOnly _ -> assert false
+    | Alloc0 (pe1,pe2,sym) ->
+        Alloc0(substitute_pexpr map pe1, substitute_pexpr map pe2, sym)
     | Kill (b, pe) ->
         Kill (b, substitute_pexpr map pe)
     | Store0 (pe1, pe2, pe3, memorder) ->
@@ -73,9 +74,14 @@ let rec substitute_action (map: substitute_map)
         Load0 (substitute_pexpr map pe1,
                substitute_pexpr map pe2,
                memorder)
-    | RMW0 _
-    | Fence0 _ ->
-        assert false
+    | RMW0 (pe1,pe2,pe3,pe4,mo1,mo2) ->
+        RMW0 (substitute_pexpr map pe1,
+              substitute_pexpr map pe2,
+              substitute_pexpr map pe3,
+              substitute_pexpr map pe4,
+              mo1, mo2)
+    | Fence0 mo ->
+        Fence0 mo
     | CompareExchangeStrong(pe1,pe2,pe3,pe4,mo1,mo2) ->
         CompareExchangeStrong(substitute_pexpr map pe1,
                               substitute_pexpr map pe2,
