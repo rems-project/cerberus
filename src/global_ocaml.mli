@@ -49,6 +49,7 @@ type cerberus_conf = {
   defacto:        bool;
   default_impl:   bool;
   action_graph:   bool;
+  n1507:          Yojson.Basic.json option;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)

@@ -376,7 +376,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
 
   set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
     exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
+    (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   (* Params_ocaml.setCoreStdlib core_stdlib; *)
   
 (*
