@@ -223,22 +223,39 @@ let short_message = function
   | OTHER str ->
       "TODO(msg) OTHER ==> " ^ str
 
-let std_ref = function
-  (* Desugar phase *)
-  | DESUGAR (Desugar_UndeclaredIdentifier _) ->
-      Some "§6.5.1#2"
-  | DESUGAR Desugar_NonvoidReturn ->
-      Some "§6.8.6.4#1, 2nd sentence"
-  (* Ail typing phase *)
-  | AIL_TYPING TError_main_return_type ->
-      Some "§5.1.2.2.1#1, 2nd sentence"
-  | AIL_TYPING TError_main_param1
-  | AIL_TYPING TError_main_param2 ->
-      Some "§5.1.2.2.1#1"
-  | AIL_TYPING TError_indirection_not_pointer ->
-      Some "§6.5.3.2#2"
-  (* Unknown reference *)
-  | _ -> None
+type std_ref =
+  | StdRef of string
+  | UnknownRef
+  | NoRef
+
+let get_desugar_ref = function
+  | Desugar_UndeclaredIdentifier _ ->
+      StdRef "§6.5.1#2"
+  | Desugar_NonvoidReturn ->
+      StdRef "§6.8.6.4#1, 2nd sentence"
+  | _ ->
+      UnknownRef
+
+let get_ail_typing_ref = function
+  | TError_main_return_type ->
+      StdRef "§5.1.2.2.1#1, 2nd sentence"
+  | TError_main_param1
+  | TError_main_param2 ->
+      StdRef "§5.1.2.2.1#1"
+  | TError_indirection_not_pointer ->
+      StdRef "§6.5.3.2#2"
+  | _ ->
+      UnknownRef
+
+let get_std_ref = function
+  | CPARSER _ ->
+      NoRef
+  | DESUGAR dcause ->
+      get_desugar_ref dcause
+  | AIL_TYPING tcause ->
+      get_ail_typing_ref tcause
+  | _ ->
+      NoRef
 
 let get_quote ref =
   let key =
@@ -300,16 +317,16 @@ let make_message loc err k =
               "")
     | _ -> ""
   in
-  let ref = match std_ref err with
-    | Some r -> r
-    | None -> "unknown ISO C reference"
-  in
-  match !!cerb_conf.error_verbosity with
-  | Basic ->
+  match !!cerb_conf.error_verbosity, get_std_ref err with
+  | Basic, _
+  | _, NoRef ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos
-  | RefStd ->
+  | RefStd, StdRef ref ->
       Printf.sprintf "%s %s %s (%s)\n%s" head kind msg ref pos
-  | QuoteStd ->
+  | RefStd, UnknownRef
+  | QuoteStd, UnknownRef ->
+      Printf.sprintf "%s %s %s (unknown ISO C reference)\n%s" head kind msg pos
+  | QuoteStd, StdRef ref ->
       Printf.sprintf "%s %s %s\n%s\n%s: %s" head kind msg pos
         (ansi_format [Bold] ref) (get_quote ref)
 
