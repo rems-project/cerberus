@@ -1,8 +1,6 @@
 open import Utils Cabs AilSyntax Core
 import Loc TypingError Undefined
 
-
-
 type desugar_cause =
   | Desugar_ConstraintViolation of string
   | Desugar_OtherViolation of string
@@ -27,8 +25,6 @@ type desugar_cause =
   | Desugar_constantExpression_notInteger of string (* the std location for this particular instance *)
   | Desugar_constantExpression_UB of list Undefined.undefined_behaviour
 
-
-
 type core_typing_cause =
     (* Found no definition of the startup fun/proc *)
   | Undefined_startup of Symbol.sym
@@ -45,33 +41,31 @@ type core_typing_cause =
   | CoreTyping_TODO of string
   | TooGeneral
 
-
-type core_run_error =
+type core_run_cause =
   | Illformed_program of string (* typing or name-scope error *)
   | Found_empty_stack of string (* TODO debug *)
   | Reached_end_of_proc
   | Unknown_impl
   | Unresolved_symbol of Symbol.sym (* found an unresolved symbolic name in core_eval *)
 
-
-
 type cparser_cause =
-  | Cparser_undeclaredIdentifier of string
-  | Cparser_unexpectedToken of string
-
-
+  | Cparser_invalid_symbol
+  | Cparser_invalid_line_number of string
+  | Cparser_unexpected_eof
+  | Cparser_unexpected_token of string
+  | Cparser_non_standard_string_concatenation
 
 type cause =
-  | Cparser_cause of cparser_cause
+  | CPARSER of cparser_cause
+  | DESUGAR of desugar_cause
+  | AIL_TYPING of TypingError.typing_error
+  | CORE_TYPING of core_typing_cause
+  | CORE_RUN of core_run_cause
+  | UNSUPPORTED of string
+  | PARSER of string
+  | OTHER of string
 
-  | CSEM_NOT_SUPPORTED of string
-  | CSEM_HIP of string (* this is for features we plan to support,
-			  but that does not work yet *)
-  
-  
-  | Desugar_cause of desugar_cause
-  | Core_run_cause of core_run_error
-  | Core_typing_cause of core_typing_cause
+type error = Loc.t * cause
 
   (* Constraint violation *)
 
@@ -228,15 +222,11 @@ type cause =
 §6.9.1#6  2 sentence
 
 
-*)
-
 
 
   | CONSTRAINT_6_6__3
   
   
-  | AIL_TYPING of TypingError.typing_error
-(*
   | AIL_TYPECHECK_CALL_RETURN
   | AIL_TYPECHECK_CALL_ARGUMENTS_ASSIGNABLE
   | AIL_TYPECHECK_CALL_NUMBER_OF_ARGUMENTS
@@ -309,13 +299,10 @@ type cause =
   | AIL_TYPECHECK_SWITCH_INTEGER
   | AIL_TYPECHECK_LVALUE_UNDEFINED
   | AIL_TYPECHECK_UNSUPPORTED of string
- *)
   
   | CASE_OUTSIDE_SWITCH
   | DEFAULT_OUTSIDE_SWITCH
-  | UNSUPPORTED of string
   
-(*
   | CORE_TYPECHECK_INCORRECT_EXPECTED of core_type * core_type * string
   | CORE_TYPECHECK_IF_BRANCHES
   
@@ -331,14 +318,10 @@ type cause =
   | CORE_TYPECHECK_UNDECLARED_SYMBOL of sym
   
   | CORE_TYPECHECK of string
-*)
   
   | CORE_UNDEF of list Undefined.undefined_behaviour
   
-  | PARSER of string
-  | OTHER of string
-
-type error = Loc.t * cause
+*)
 
 
 

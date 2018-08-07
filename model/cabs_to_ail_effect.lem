@@ -271,7 +271,7 @@ let inline bind = State_exception.bind
 
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
-let inline fail loc dcause = State_exception.fail (loc, Errors.Desugar_cause dcause)
+let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
 
 
 

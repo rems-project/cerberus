@@ -26,7 +26,7 @@ type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 let string_of_driver_error = function
   | Driver.DErr_core_run err ->
-      Pp_errors.string_of_core_run_error err
+      Pp_errors.string_of_core_run_cause err
   | Driver.DErr_memory err ->
       Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err
   | Driver.DErr_concurrency str ->

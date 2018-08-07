@@ -1718,7 +1718,7 @@ let reset_continuation = function
       Stack_cons lconts [] sk
 end
 
-val pop_stack: forall 'a. stack 'a -> Exception.exceptM ((labeled_continuations 'a * continuation 'a) * stack 'a) core_run_error
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM ((labeled_continuations 'a * continuation 'a) * stack 'a) core_run_cause
 let pop_stack = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_stack")
@@ -1726,7 +1726,7 @@ let pop_stack = function
       Exception.return ((lconts, cont), sk)
 end
 
-val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_error
+val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
 let pop_continuation_element = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_continuation_element")
@@ -1737,7 +1737,7 @@ let pop_continuation_element = function
 end
 
 
-val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
 let push_continuation_element cont_elem = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "push_continuation_element")
@@ -1747,7 +1747,7 @@ end
 
 
 
-val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
 let append_to_current_continuation cont_elem = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)

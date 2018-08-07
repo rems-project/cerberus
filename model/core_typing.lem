@@ -597,7 +597,7 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
     | PEnot pe ->
         Pexpr annot InferredType_boolean <$> (PEnot <$> typecheck_pexpr loc tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
-        E.trysM (loc, Core_typing_cause (CoreTyping_TODO "PEop"))
+        E.trysM (loc, CORE_TYPING (CoreTyping_TODO "PEop"))
         (fun (bTy, bTy1, bTy2) ->
           Pexpr annot (toInferred bTy) <$> (PEop bop <$> typecheck_pexpr loc tagDefs env bTy1 pe1
                                                <*> typecheck_pexpr loc tagDefs env bTy2 pe2)
@@ -936,7 +936,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
         (PEnot <$> typecheck_pexpr loc tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
         (* TODO: this is going to give horrible error messages ... *)
-        E.trysM (loc, Core_typing_cause (CoreTyping_TODO "PEop"))
+        E.trysM (loc, CORE_TYPING (CoreTyping_TODO "PEop"))
         (fun (bTy', bTy1, bTy2) ->
           guard_match loc ("operator ==>" ^ Pp.stringFromCore_pexpr (Pexpr [] () pexpr_)) bTy bTy' >>
           (PEop bop <$> typecheck_pexpr loc tagDefs env bTy1 pe1
