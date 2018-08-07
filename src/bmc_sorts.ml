@@ -61,6 +61,7 @@ module IntegerTypeSort = struct
         [mk_sym "_signed_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
     ; mk_constructor_s g_ctx "unsigned_ity" (mk_sym "is_unsigned_ity")
         [mk_sym "_unsigned_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
+    ; mk_ctor "size_t_ity"
     ]
 
   let mk_expr (ity: AilTypes.integerType) =
@@ -74,6 +75,8 @@ module IntegerTypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 2) [IntegerBaseTypeSort.mk_expr ibty]
     | Unsigned ibty ->
         Expr.mk_app g_ctx (List.nth fdecls 3) [IntegerBaseTypeSort.mk_expr ibty]
+    | Size_t ->
+        Expr.mk_app g_ctx (List.nth fdecls 4) []
     | _ -> assert false
 end
 

@@ -346,11 +346,13 @@ let gen_corestd stdlib impl =
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph
-             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug =
+             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
+             bmc_all_execs =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug;
+  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
+  bmc_all_execs;
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
@@ -557,6 +559,11 @@ let bmc_debug =
   let doc = "Debug level for the bounded model checker" in
   Arg.(value & opt int 5 & info["bmc_debug"] ~doc)
 
+let bmc_all_execs =
+  let doc = "Find all executions when model checking. Concurreny model only" in
+  Arg.(value & opt bool true & info["bmc_all_execs"] ~doc)
+
+
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus
@@ -565,6 +572,7 @@ let () =
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
     $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $ bmc_debug
+    $ bmc_all_execs
     ) in
   
   (* the version is "sed-out" by the Makefile *)

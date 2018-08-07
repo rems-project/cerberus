@@ -175,7 +175,21 @@ let pp_value () expr =
   assert (Expr.get_num_args expr = 1);
   let arg = List.hd (Expr.get_args expr) in
   if (Sort.equal (Expr.get_sort arg) (LoadedInteger.mk_sort)) then
-    Expr.to_string (List.hd (Expr.get_args arg))
+    begin
+      if (Boolean.is_true
+        (Expr.simplify (LoadedInteger.is_unspecified arg) None)) then
+        "?"
+      else
+      Expr.to_string (List.hd (Expr.get_args arg))
+    end
+  else if (Sort.equal (Expr.get_sort arg) (LoadedPointer.mk_sort)) then
+    begin
+      if (Boolean.is_true
+        (Expr.simplify (LoadedPointer.is_unspecified arg) None)) then
+        "?"
+      else
+      Expr.to_string (List.hd (Expr.get_args arg))
+    end
   else
     Expr.to_string arg
 

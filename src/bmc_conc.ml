@@ -278,8 +278,13 @@ module C11MemoryModel : MemoryModel = struct
     rf_dag   : FuncDecl.func_decl;
     sw       : FuncDecl.func_decl;
     hb       : FuncDecl.func_decl;
+
     sc_clk   : FuncDecl.func_decl;
     sc       : FuncDecl.func_decl;
+    psc_base : FuncDecl.func_decl;
+    psc_f    : FuncDecl.func_decl;
+
+
     sbrf_clk : FuncDecl.func_decl;
   }
 
@@ -314,6 +319,9 @@ module C11MemoryModel : MemoryModel = struct
 
     sc_clk   : Expr.expr -> Expr.expr;
     sc       : Expr.expr * Expr.expr -> Expr.expr;
+    psc_base : Expr.expr * Expr.expr -> Expr.expr;
+    psc_f    : Expr.expr * Expr.expr -> Expr.expr;
+
     sbrf_clk : Expr.expr -> Expr.expr;
   }
 
@@ -452,12 +460,15 @@ module C11MemoryModel : MemoryModel = struct
     ; rf_inv   = mk_decl "rf_inv"   [events]        events
 
     ; rs       = mk_decl "rs"       [events;events] boolean_sort
-    ; rf_dag   = mk_decl "rf_dag"  [events;events] boolean_sort
+    ; rf_dag   = mk_decl "rf_dag"   [events;events] boolean_sort
     ; sw       = mk_decl "sw"       [events;events] boolean_sort
     ; hb       = mk_decl "hb"       [events;events] boolean_sort
 
     ; sc_clk   = mk_decl "sc_clk"   [events]        (Integer.mk_sort g_ctx)
     ; sc       = mk_decl "sc"       [events;events] boolean_sort
+    ; psc_base = mk_decl "psc_base" [events;events] boolean_sort
+    ; psc_f    = mk_decl "psc_f"    [events;events] boolean_sort
+
     ; sbrf_clk = mk_decl "sbrf_clk" [events]        (Integer.mk_sort g_ctx)
     }
 
@@ -515,6 +526,9 @@ module C11MemoryModel : MemoryModel = struct
                                         ;mk_eq (getMemord e1) sc_memord
                                         ;mk_eq (getMemord e2) sc_memord
                                         ]) in
+    let psc_base = (fun (e1,e2) -> apply decls.psc_base [e1;e2]) in
+    let psc_f    = (fun (e1,e2) -> apply decls.psc_f [e1;e2]) in
+
     let sbrf_clk = (fun e -> apply decls.sbrf_clk [e]) in
 
     { getAid    = (fun e -> apply decls.aid [e])
@@ -544,16 +558,21 @@ module C11MemoryModel : MemoryModel = struct
     ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2])
     ; sc_clk    = sc_clk
     ; sc        = sc
+    ; psc_base  = psc_base
+    ; psc_f     = psc_f
     ; sbrf_clk  = sbrf_clk
     }
 
   let compute_executions (exec: preexec) : z3_memory_model =
     let all_actions = exec.initial_actions @ exec.actions in
+    bmc_debug_print 5 (sprintf "# actions: %d" (List.length all_actions));
     let prod_actions = cartesian_product all_actions all_actions in
     let writes = List.filter has_wval all_actions in
     let reads = List.filter has_rval all_actions in
     let atomic_writes = List.filter is_atomic_bmcaction writes in
     let fences = List.filter is_fence_action all_actions in
+    let is_sc a = get_memorder a = Seq_cst in
+    let sc_actions = List.filter is_sc all_actions in
 
     let event_sort = mk_event_sort all_actions in
     let event_type = mk_event_type in
@@ -747,36 +766,90 @@ module C11MemoryModel : MemoryModel = struct
 
     (* ==== SC assertions ==== *)
     (* TODO: simplify relation *)
-    let sc_asserts =
-      let sc_actions =
-        List.filter (fun a -> get_memorder a = Seq_cst) all_actions in
-      let sc_events = List.map z3action sc_actions in
-      List.map (fun (e1,e2) ->
-        (*sb_neq_loc ; hb ; sb_neq_loc
-         *sb_neq_loc(e1,a1) and hb(a1,a2) and sb_neq_loc (a2,e2) *)
-        let comp1 = List.map (fun (a1,a2) ->
-          mk_and [fns.getGuard a1
-                 ;fns.getGuard a2
-                 ;mk_not (fns.same_loc (e1,a1))
-                 ;mk_not (fns.same_loc (a2,e2))
-                 ;fns.sb(e1,a1)
-                 ;fns.hb(a1,a2)
-                 ;fns.sb(a2,e2)
-                 ]
-          ) prod_events in
-        (*let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr*)
-        let scb = mk_or [fns.sb (e1,e2)
-                        ;mk_or comp1
+    let psc_base_asserts =
+      (*
+      let rel_cmp (x1,x2) (y1,y2) =
+        if Expr.equal x1 y1 then
+          Expr.compare x2 y2
+        else Expr.compare x1 y1 in
+      *)
+      (* sb_neq_loc;hb *)
+      let comp1 e1 e2 = mk_or (List.map (fun (x,y) ->
+        mk_and [fns.getGuard x; fns.getGuard y
+               ;fns.hb(e1,x);fns.sb(x,y);fns.sb(y,e2)
+               ;mk_not (fns.same_loc(x,e1))
+               ;mk_not (fns.same_loc (y,e2))
+               ]) prod_events) in
+      (*
+      let scb_map = List.fold_left (fun acc (e1,e2) ->
+        Pmap.add (e1,e2)
+                 (mk_or [fns.sb (e1,e2)
+                        ;comp1 e1 e2
                         ;mk_and [fns.hb(e1,e2)
                                 ;fns.same_loc (e1,e2)]
                         ;fns.mo (e1,e2)
                         ;fns.fr (e1,e2)
-                        ] in
-        mk_implies (mk_and [fns.getGuard e1
-                           ;fns.getGuard e2
-                           ;scb])
-                   (mk_lt g_ctx (fns.sc_clk e1) (fns.sc_clk e2))
-      ) (cartesian_product sc_events sc_events) in
+                        ]) acc
+      ) (Pmap.empty rel_cmp) prod_events in
+    *)
+      let scb (e1,e2) =
+            (mk_or [fns.sb (e1,e2)
+                        ;comp1 e1 e2
+                        ;mk_and [fns.hb(e1,e2)
+                                ;fns.same_loc (e1,e2)]
+                        ;fns.mo (e1,e2)
+                        ;fns.fr (e1,e2)
+                        ]) in
+        (*Pmap.find (e1,e2) scb_map in*)
+
+      List.map (fun (a1,a2) ->
+        (*let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr*)
+        let (e1,e2) = (z3action a1, z3action a2) in
+        let singular_fences =
+          mk_or (List.map (fun x ->
+            let fhb_scb e_tl =
+              if is_fence_action a1 then mk_and [fns.hb(e1,x); scb(x,e_tl)]
+              else mk_false in
+            let scb_hbf e_hd =
+              if is_fence_action a2 then mk_and [scb(e_hd,x); fns.hb(x,e2)]
+              else mk_false in
+            mk_and [fns.getGuard x
+                   ;mk_or [fhb_scb e2;scb_hbf e1]
+                   ]) all_events) in
+        let double_fences =
+          if is_fence_action a1 && is_fence_action a2 then
+            mk_or (List.map (fun (x,y) ->
+              mk_and [fns.getGuard x; fns.getGuard y
+                     ;fns.hb(e1,x);scb(x,y);fns.hb(y,e2)]
+            ) (cartesian_product all_events all_events))
+          else mk_false in
+        mk_implies
+          (mk_and [fns.getGuard e1;fns.getGuard e2
+                  ;mk_or[scb (e1,e2)
+                        ;singular_fences
+                        ;double_fences
+                        ]
+                  ])
+          (mk_lt g_ctx (fns.sc_clk e1) (fns.sc_clk e2))
+      ) (cartesian_product sc_actions sc_actions) in
+
+    let psc_f_asserts =
+      let sc_fences = List.map z3action (List.filter is_sc fences) in
+      let candidates = cartesian_product sc_fences sc_fences in
+      List.map (fun (f1,f2) ->
+        let hb_eco_hb = mk_or (List.map (fun (e1,e2) ->
+          mk_and [fns.getGuard e1
+                 ;fns.getGuard e2
+                 ;fns.hb(f1,e1); fns.eco(e1,e2); fns.hb(e2,f2)]
+          ) prod_events) in
+        mk_implies
+          (mk_and [fns.getGuard f1; fns.getGuard f2
+                  ;mk_or [fns.hb(f1,f2)
+                         ;hb_eco_hb
+                         ]
+                  ])
+          (mk_lt g_ctx (fns.sc_clk f1) (fns.sc_clk f2))
+      ) candidates in
 
     (* ==== Well formed assertions ==== *)
 
@@ -868,7 +941,8 @@ module C11MemoryModel : MemoryModel = struct
                  @ sw_asserts
                  @ hb_asserts
 
-                 @ sc_asserts
+                 @ psc_base_asserts
+                 @ psc_f_asserts
 
                  @ well_formed_rf
                  @ mo_init
@@ -964,6 +1038,11 @@ module C11MemoryModel : MemoryModel = struct
       (not (get_relation fns.hb ((a1,e1),(a2,e2))
             || get_relation fns.hb ((a2,e2),(a1,e1))))
     ) prod in
+
+    print_endline "dr";
+    List.iter (fun ((_,e1),(_,e2)) ->
+      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) data_race;
+
 
     let unseq_race = List.filter (fun ((a1,e1),(a2,e2)) ->
       (aid_of_action a1 <> aid_of_action a2)                &&
