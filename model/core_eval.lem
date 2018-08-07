@@ -193,6 +193,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         wrap PEis_signed pe
     | PEis_unsigned pe ->
         wrap PEis_unsigned pe
+    | PEbmc_assume pe ->
+        wrap PEbmc_assume pe
   end
 
 
@@ -843,6 +845,8 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Nothing ->
               EU.return $ PEis_scalar pe'
         end
+    | PEbmc_assume pe ->
+      EU.fail $ Illformed_program "PEbmc_assume: __bmc_assume is for model checking only"
   end
   end
 

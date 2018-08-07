@@ -354,6 +354,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEis_signed (convert_pexpr pe)
  | PEis_unsigned pe ->
      PEis_unsigned (convert_pexpr pe)
+ | PEbmc_assume pe ->
+     PEbmc_assume (convert_pexpr pe)
   end
 
 val     convert_expr: forall 'bty 'a. Core.generic_expr 'a 'bty Symbol.sym -> Core.expr core_run_annotation

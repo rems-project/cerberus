@@ -604,6 +604,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return false
     | AilEprint_type e ->
         is_integer_constant_expression e
+    | AilEbmc_assume _ ->
+        E.return false
     | AilErvalue _ ->
         (* NOTE: this only exists after the Ail typing *)
         E.fail loc Errors.Desugar_impossible
@@ -2230,6 +2232,8 @@ STD_ "§6.5.3.1#3" $
         E.return (AilEva_arg d_e ty)
     | CabsEprint_type e ->
         AilEprint_type <$> desugar_expression e
+    | CabsEbmc_assume e ->
+        AilEbmc_assume <$> desugar_expression e
   end
 
 and desugar_generic_association gas =

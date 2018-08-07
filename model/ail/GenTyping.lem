@@ -1453,7 +1453,12 @@ TODO
     | AilEprint_type e ->
         annotate_expression ctx e >>= fun a_e ->
         E.return (AilEprint_type a_e, genTypeCategoryOf a_e)
-    
+    | AilEbmc_assume e ->
+        annotate_rvalue e >>= fun (e', gty) ->
+        if is_scalar gty then
+          E.return (AilEbmc_assume e', GenRValueType GenVoid)
+        else
+          E.fail loc (TError "§7.2.1.1#1")
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit
            any AilErvalue *)

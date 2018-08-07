@@ -84,6 +84,9 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 
 %token VA_START VA_ARG PRINT_TYPE
 
+(* BMC syntax *)
+%token BMC_ASSUME
+
 %token EOF
 
 %nonassoc THEN
@@ -401,6 +404,9 @@ postfix_expression:
 | PRINT_TYPE LPAREN expr= expression RPAREN
    { CabsExpression (Loc_region ($startpos, $endpos, None),
         CabsEprint_type expr) }
+| BMC_ASSUME LPAREN expr= assignment_expression RPAREN
+    { CabsExpression (Loc_region ($startpos, $endpos, None),
+                      CabsEbmc_assume expr) }
 
 argument_expression_list: (* NOTE: the list is in reverse *)
 | expr= assignment_expression

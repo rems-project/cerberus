@@ -67,6 +67,8 @@ let keywords: (string * Tokens.token) list = [
     "__cerbvar_va_arg", VA_ARG;
 
     "__cerb_printtype", PRINT_TYPE;
+
+    "__BMC_ASSUME", BMC_ASSUME;
   ]
 
 let lexicon: (string, token) Hashtbl.t = Hashtbl.create 0

@@ -254,6 +254,7 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEis_integer of (generic_pexpr 'bty 'sym)
  | PEis_signed of (generic_pexpr 'bty 'sym)
  | PEis_unsigned of (generic_pexpr 'bty 'sym)
+ | PEbmc_assume of (generic_pexpr 'bty 'sym)
 
 and generic_pexpr 'bty 'sym = 
  | Pexpr of list annot * 'bty * (pexpr_ 'bty 'sym)

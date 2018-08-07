@@ -768,6 +768,10 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
         Pexpr annot InferredType_boolean <$> (PEis_signed <$> typecheck_pexpr loc tagDefs env BTy_ctype pe)
     | PEis_unsigned pe ->
         Pexpr annot InferredType_boolean <$> (PEis_unsigned <$> typecheck_pexpr loc tagDefs env BTy_ctype pe)
+    | PEbmc_assume pe ->
+        Pexpr annot InferredType_unit <$> (PEbmc_assume <$> typecheck_pexpr loc
+tagDefs env BTy_boolean pe)
+
   end
 
 
@@ -1093,6 +1097,9 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
     | PEis_unsigned pe ->
         guard_match loc "is_unsigned()" bTy BTy_boolean >>
         (PEis_unsigned <$> typecheck_pexpr loc tagDefs env BTy_ctype pe)
+    | PEbmc_assume pe ->
+        guard_match loc "bmc_assume()" bTy BTy_unit >>
+        (PEbmc_assume <$> typecheck_pexpr loc tagDefs env BTy_boolean pe)
   end
 
 

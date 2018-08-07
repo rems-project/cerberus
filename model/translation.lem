@@ -2621,6 +2621,43 @@ a
             "PRINT_TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype qs ty
           ) in
           self e
+      | A.AilEbmc_assume e ->
+          let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat    , e_sym_pe    ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat  , obj_sym_pe  ) ->
+          E.wrapped_fresh_symbol C.BTy_boolean      >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+          self e         >>= fun core_e  ->
+          E.return $
+            Caux.mk_sseq_e e_sym_pat core_e (
+if AilTypesAux.is_arithmetic (ctype_of e) then
+              let zero_pe =
+                if AilTypesAux.is_integer (ctype_of e) then
+                  Caux.mk_integer_pe 0
+                else
+                  Caux.mk_floating_value_pe Mem.zero_fval in
+              Caux.mk_pure_e (
+                Caux.mk_case_pe e_sym_pe
+                  [ (Caux.mk_specified_pat obj_sym_pat,
+                     (C.Pexpr [] () (C.PEbmc_assume (Caux.mk_not_pe
+                          (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)))))
+                  ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                     Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe) ]
+              )
+else (* is_pointer *)
+              Caux.mk_case_e e_sym_pe
+                [ (Caux.mk_specified_pat obj_sym_pat,
+                   Caux.mk_wseq_e memop_sym_pat
+                     (C.Expr [] (C.Ememop Mem_common.PtrEq [obj_sym_pe; Caux.mk_nullptr_pe Cty.Void]))
+                     begin
+                       Caux.mk_pure_e begin
+                         (C.Pexpr [] () (C.PEbmc_assume (memop_sym_pe)))
+                       end
+                     end)
+                ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                   Caux.mk_pure_e (Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe)) ]
+            )
+
+
       
       | A.AilErvalue e ->
           (* TODO: check + I don't like have a wseq here *)
