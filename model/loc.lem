@@ -10,6 +10,8 @@ val other: string -> t
 declare ocaml target_rep function other = `Location_ocaml.other`
 declare hol target_rep function other = `()`
 
+val first: list t -> t
+declare ocaml target_rep function first = `Location_ocaml.first`
 
 val with_cursor_from: t -> t -> t
 declare ocaml target_rep function with_cursor_from = `Location_ocaml.with_cursor_from`

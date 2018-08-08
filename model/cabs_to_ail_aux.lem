@@ -39,6 +39,29 @@ instance (SetType linkage)
   let setElemCompare = defaultCompare
 end
 
+val cabs_identifier_of_declaration: declarator -> cabs_identifier
+val cabs_identifier_of_direct_declaration: direct_declarator -> cabs_identifier
+let rec cabs_identifier_of_declaration decl =
+  match decl with
+    | Declarator _ ddecl -> cabs_identifier_of_direct_declaration ddecl
+  end
+and cabs_identifier_of_direct_declaration ddecl =
+  match ddecl with
+    | DDecl_identifier cid -> cid
+    | DDecl_declarator decl -> cabs_identifier_of_declaration decl
+    | DDecl_array ddecl _ -> cabs_identifier_of_direct_declaration ddecl
+    | DDecl_function ddecl _ -> cabs_identifier_of_direct_declaration ddecl
+  end
+
+val cabs_identifier_of_external_declaration: external_declaration -> list cabs_identifier
+let cabs_identifier_of_external_declaration = function
+  | EDecl_func (FunDef _ _ decl _) ->
+      [cabs_identifier_of_declaration decl]
+  | EDecl_decl (Declaration_base _ idecls) ->
+      List.map (fun (InitDecl _ decl _) -> cabs_identifier_of_declaration decl) idecls
+  | EDecl_decl (Declaration_static_assert _) ->
+      []
+end
 
 
 val specifiers_of_external_declaration: external_declaration -> maybe specifiers

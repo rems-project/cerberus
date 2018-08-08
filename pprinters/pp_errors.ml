@@ -84,8 +84,14 @@ let string_of_cparser_cause = function
   | Cparser_unexpected_token str ->
       "unexpected token '"^ str ^ "'"
 
+let string_of_constraint_violation = function
+  | IllegalStorageClassFileScoped ->
+      "illegal storage class"
+
 let string_of_desugar_cause = function
-  | Desugar_ConstraintViolation msg ->
+  | Desugar_ConstraintViolation e ->
+      (ansi_format [Bold] "contraint violation: ") ^ string_of_constraint_violation e
+  | Desugar_OldConstraintViolation msg ->
       "violation of constraint " ^ msg
   | Desugar_UndeclaredIdentifier str ->
       "use of undeclared identifier '" ^ str ^ "'"
@@ -228,7 +234,14 @@ type std_ref =
   | UnknownRef
   | NoRef
 
+
+let get_constraint_violation_ref = function
+  | IllegalStorageClassFileScoped ->
+      StdRef "§6.9#2"
+
 let get_desugar_ref = function
+  | Desugar_ConstraintViolation e ->
+      get_constraint_violation_ref e
   | Desugar_UndeclaredIdentifier _ ->
       StdRef "§6.5.1#2"
   | Desugar_NonvoidReturn ->
