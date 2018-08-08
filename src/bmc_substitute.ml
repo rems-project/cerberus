@@ -52,6 +52,9 @@ let rec substitute_pexpr (map: substitute_map)
         PEis_signed (substitute_pexpr map pe)
     | PEis_unsigned pe ->
         PEis_unsigned (substitute_pexpr map pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (substitute_pexpr map pe)
+
   in
     Pexpr(annot, ty, ret)
 

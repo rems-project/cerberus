@@ -972,8 +972,8 @@ module C11MemoryModel : MemoryModel = struct
     (* ==== Compute preexecution ==== *)
     let action_events = List.fold_left (fun acc (aid, action) ->
       let event = Pmap.find aid mem.event_map in
-      if tid_of_action action = initial_tid then acc
-      else if (Boolean.get_bool_value (interp (fns.getGuard event))
+      (*if tid_of_action action = initial_tid then acc*)
+      if (Boolean.get_bool_value (interp (fns.getGuard event))
                = L_TRUE) then
         let new_action = match action with
           | Load (aid,tid,memorder,loc,rval) ->
@@ -995,22 +995,27 @@ module C11MemoryModel : MemoryModel = struct
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
 
+    let not_initial action = (tid_of_action action <> initial_tid) in
+    let remove_initial rel =
+      List.filter (fun (x,y) -> not_initial x && not_initial y) rel in
+
     let actions = List.map fst action_events in
+    let noninitial_actions = List.filter not_initial actions in
     let events = List.map snd action_events in
     let prod = cartesian_product action_events action_events in
 
     let threads = Pset.elements (
-        List.fold_left (fun acc (a, _) -> Pset.add (tid_of_action a) acc)
-                       (Pset.empty compare) action_events) in
+        List.fold_left (fun acc a -> Pset.add (tid_of_action a) acc)
+                       (Pset.empty compare) noninitial_actions) in
 
     let sb = List.filter (get_relation fns.sb) prod in
     let asw = List.filter (get_relation fns.asw) prod in
 
     let preexec : preexec2 =
-      { actions = actions
+      { actions = noninitial_actions
       ; threads = threads
-      ; sb      = List.map proj_fst sb
-      ; asw     = List.map proj_fst asw
+      ; sb      = remove_initial (List.map proj_fst sb)
+      ; asw     = remove_initial (List.map proj_fst asw)
       } in
 
     (* ==== Compute witness ===== *)
@@ -1020,9 +1025,9 @@ module C11MemoryModel : MemoryModel = struct
     let sc = List.filter (get_relation fns.sc) prod in
 
     let witness : witness =
-      { rf = List.map proj_fst rf
-      ; mo = List.map proj_fst mo
-      ; sc = List.map proj_fst sc
+      { rf = remove_initial (List.map proj_fst rf)
+      ; mo = remove_initial (List.map proj_fst mo)
+      ; sc = remove_initial (List.map proj_fst sc)
       } in
 
     (* ==== Derived data ==== *)
@@ -1039,10 +1044,11 @@ module C11MemoryModel : MemoryModel = struct
             || get_relation fns.hb ((a2,e2),(a1,e1))))
     ) prod in
 
-    print_endline "dr";
-    List.iter (fun ((_,e1),(_,e2)) ->
-      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) data_race;
-
+    if not (List.length data_race = 0) then
+      bmc_debug_print 2
+        (String.concat "\n" (List.map (fun ((_,e1),(_,e2)) ->
+          sprintf "%s->%s" (Expr.to_string e1) (Expr.to_string e2))
+          data_race));
 
     let unseq_race = List.filter (fun ((a1,e1),(a2,e2)) ->
       (aid_of_action a1 <> aid_of_action a2)                &&
@@ -1074,15 +1080,6 @@ module C11MemoryModel : MemoryModel = struct
     let mo_asserts = List.map (fun ((_,e1),(_,e2)) ->
         mk_eq (fns.mo (e1,e2)) mk_true
       ) mo in
-    (*
-    print_endline "RF";
-    List.iter (fun ((_,e1),(_,e2)) ->
-      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
-
-    print_endline "MO";
-    List.iter (fun ((_,e1),(_,e2)) ->
-      printf "%s->%s\n" (Expr.to_string e1) (Expr.to_string e2)) rf;
-    *)
 
     let ret = interp ret_value in
     bmc_debug_print 1 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));

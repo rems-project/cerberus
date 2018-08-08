@@ -31,7 +31,7 @@ let mk_fresh_const = Expr.mk_fresh_const g_ctx
 let mk_fresh_func_decl = FuncDecl.mk_fresh_func_decl g_ctx
 
 let integer_sort = if g_bv
-                   then BitVector.mk_sort g_ctx !!bmc_conf.bv_precision
+                   then BitVector.mk_sort g_ctx g_bv_precision
                    else Integer.mk_sort g_ctx
 let boolean_sort = Boolean.mk_sort g_ctx
 
@@ -55,7 +55,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
     | OpExp   ->
         if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
-          let one = BitVector.mk_numeral g_ctx "1" !!bmc_conf.bv_precision in
+          let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
           BitVector.mk_shl g_ctx one arg2
       else
         assert false
@@ -89,7 +89,7 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
 (* =========== Z3 HELPER FUNCTIONS =========== *)
 let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
   if g_bv then
-    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) !!bmc_conf.bv_precision
+    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
   else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
 
 let int_to_z3 (i: int) : Expr.expr =
