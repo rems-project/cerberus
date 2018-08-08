@@ -115,11 +115,6 @@ let combine_preexecs (preexecs: preexec list) =
     ; asw             = preexec.asw @ acc.asw
     }) mk_initial_preexec preexecs
 
-let compute_sb_nofilter (xs: bmc_action list)
-                        (ys: bmc_action list)
-                        : bmcaction_rel list =
-  cartesian_product xs ys
-
 let compute_sb (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp

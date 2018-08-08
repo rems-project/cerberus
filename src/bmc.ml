@@ -2055,17 +2055,18 @@ let bmc_file (file              : unit typed_file)
         BmcM.get_parent_tids            >>= fun parent_tids ->
         let new_ret_cond =
           mk_implies (mk_not ret.drop_cont) (mk_eq ret_const ret.expr) in
-        bmc_debug_print 3
-          "TODO: compute SB of globals and proc arguments properly";
         let preexec =
           let combined =
             combine_preexecs [gret.preexec; pret.preexec; ret.preexec] in
-          let sb = (compute_sb_nofilter gret.preexec.actions
-                                        ret.preexec.actions)
-                 @ (compute_sb_nofilter pret.preexec.actions
-                                        ret.preexec.actions)
+          let sb = (compute_sb gret.preexec.actions ret.preexec.actions)
+                 @ (compute_sb pret.preexec.actions ret.preexec.actions)
                  @ combined.sb in
-          let filtered_asw = filter_asw combined.asw sb in
+          let asw = compute_asw (gret.preexec.actions @ pret.preexec.actions)
+                                (ret.preexec.actions)
+                                (gret.preexec.sb @ pret.preexec.sb)
+                                (ret.preexec.sb)
+                                (parent_tids) in
+          let filtered_asw = filter_asw (asw @ combined.asw) sb in
           {combined with sb = sb; asw = filtered_asw} in
         return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
                        ; asserts  = gret.asserts @ pret.asserts @ ret.asserts
