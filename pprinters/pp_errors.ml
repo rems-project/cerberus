@@ -85,6 +85,11 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | IllegalMultipleStorageClasses
+  | IllegalMultipleStorageClassesThreadLocal ->
+      "multiple incompatible storage class specifiers"
+  | ThreadLocalFunctionDeclaration ->
+      "_Thread_local in function declaration"
   | LabelStatementOutsideSwitch ->
       "label statement outside switch"
   | StaticAssertFailed msg ->
@@ -245,6 +250,12 @@ type std_ref =
 
 
 let get_constraint_violation_ref = function
+  | IllegalMultipleStorageClasses ->
+      StdRef "§6.7.1#2"
+  | IllegalMultipleStorageClassesThreadLocal ->
+      StdRef "§6.7.1#3, 1st sentence"
+  | ThreadLocalFunctionDeclaration ->
+      StdRef "§6.7.1#4"
   | StaticAssertFailed _ ->
       StdRef "§6.7.10#2"
   | LabelStatementOutsideSwitch ->

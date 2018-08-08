@@ -950,7 +950,7 @@ val desugar_generic_association:
   cabs_generic_association -> E.desugM (generic_association unit)
 
 val check_storage_class_specifiers:
-  declaration_context -> list storage_class_specifier -> E.desugM unit
+  Loc.t -> declaration_context -> list storage_class_specifier -> E.desugM unit
 
 val desugar_enumerator:
   enumerator -> E.desugM (cabs_identifier * maybe (Loc.t * integer))
@@ -2260,29 +2260,29 @@ and desugar_generic_association gas =
 
 
 (* TODO: rename this function *)
-and check_storage_class_specifiers decl_ctxt scs =
+and check_storage_class_specifiers loc decl_ctxt scs =
   E.get_scope >>= fun scope ->
   if    List.length scs > 1
      && not (   List.all (fun z -> z = SC_Thread_local || z = SC_static) scs
              || List.all (fun z -> z = SC_Thread_local || z = SC_extern) scs) then
 STD_ "§6.7.1#2" $
-    E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.1#2")
+    E.constraint_violation loc Errors.IllegalMultipleStorageClasses
   
   else if not (decl_ctxt = Object_decl_context && E.is_block_scope scope &&
                List.elem SC_Thread_local scs -->
                  (List.elem SC_static scs || List.elem SC_extern scs)
               ) then
 STD_ "§6.7.1#3, sentence 1" $
-         E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.1#3, 1st sentence")
+    E.constraint_violation loc Errors.IllegalMultipleStorageClassesThreadLocal
   
   else if decl_ctxt = Function_decl_context && List.elem SC_Thread_local scs then
 STD_ "§6.7.1#4" $
-    E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.1#4")
+    E.constraint_violation loc Errors.ThreadLocalFunctionDeclaration
   
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
 STD_ "§6.7.1#7" $
-    E.fail Loc.unknown
+    E.fail loc
       (Errors.Desugar_UndefinedBehaviour Undefined.UB060_block_scope_function_with_storage_class)
   else
 STD_ "§6.7.1#8" $
@@ -2395,7 +2395,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
               (Function_decl_context, E.OK_function)
             else
               (Object_decl_context, E.OK_object false) in
-          check_storage_class_specifiers ctx scs >>= fun () ->
+          check_storage_class_specifiers loc ctx scs >>= fun () ->
           E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
           E.return (Just (Loc.locOf ident, link, sym, is_tentative, (qs, ty), mk_desug_init))
     
@@ -2430,7 +2430,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
                 (Function_decl_context, E.OK_function)
               else
                 (Object_decl_context, E.OK_object false) in
-            check_storage_class_specifiers ctx scs >>= fun () ->
+            check_storage_class_specifiers loc ctx scs >>= fun () ->
             E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
             E.return (Just (Loc.locOf ident, link, sym, false, (qs, ty), mk_desug_init))
   end
@@ -3524,7 +3524,7 @@ let desugar_declaration_base specifs idecltors =
   ) in
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
           (* for each [init_declarator] *)
-          E.foldlM (fun acc init ->
+          E.foldlM (fun acc (InitDecl loc _ _ as init) ->
             (* NOTE: the wf of the storage classes is checked later (see the
                pattern match on [ty]) *)
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
@@ -3534,7 +3534,7 @@ let desugar_declaration_base specifs idecltors =
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
-              error "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
+              E.internal_error Loc.unknown "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)
@@ -3543,7 +3543,7 @@ let desugar_declaration_base specifs idecltors =
               
             else match ty with
               | ATypes.Function _ return_qs_ty params is_variadic ->
-                  check_storage_class_specifiers Function_decl_context specifs.storage_classes >>= fun () ->
+                  check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration (Loc.locOf ident) sym true (
@@ -3555,7 +3555,7 @@ let desugar_declaration_base specifs idecltors =
                   ) >>
                   E.return acc
               | _ ->
-                  check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
+                  check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                   let ident_loc = Loc.locOf ident in
@@ -3772,8 +3772,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
-            E.mapM (fun init ->
-              check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
+            E.mapM (fun (InitDecl loc _ _ as init) ->
+              check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
               desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             (* for each [init_declarator] *)
