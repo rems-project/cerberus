@@ -85,10 +85,15 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
-  | IllegalStorageClassFileScoped ->
-      "illegal storage class"
   | StaticAssertFailed msg ->
       "static assert expression failed: " ^ msg
+  | WrongTypeFunctionIdentifier ->
+      "function identifier must have a function type"
+  | IllegalStorageClassFileScoped
+  | FunctionDefinitionIllegalStorageClass ->
+      "illegal storage class"
+  | ExternalRedefinition sym ->
+      "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
@@ -101,12 +106,6 @@ let string_of_desugar_cause = function
       "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
-  | Desugar_ExternalObjectRedefinition sym ->
-      "redefinition of an external object: " ^
-      Pp_utils.to_plain_string (Pp_ail.pp_id sym)
-  | Desugar_FunctionRedefinition sym ->
-       "(TODO msg) redefinition of '" ^
-      (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
   | Desugar_BlockScoped_Thread_local_alone ->
       "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
        ``In the declaration of an object with block scope, if the declaration \
@@ -237,10 +236,16 @@ type std_ref =
 
 
 let get_constraint_violation_ref = function
-  | IllegalStorageClassFileScoped ->
-      StdRef "§6.9#2"
   | StaticAssertFailed _ ->
       StdRef "§6.7.10#2"
+  | IllegalStorageClassFileScoped ->
+      StdRef "§6.9#2"
+  | ExternalRedefinition _ ->
+      StdRef "§6.9#3"
+  | WrongTypeFunctionIdentifier ->
+      StdRef "§6.9.1#2"
+  | FunctionDefinitionIllegalStorageClass ->
+      StdRef "§6.9.1#4"
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->

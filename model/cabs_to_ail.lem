@@ -4022,7 +4022,7 @@ let rec register_labels (CabsStatement _ stmt_) =
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
 let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
-    E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.9.1#4")
+    E.constraint_violation fundef_loc Errors.FunctionDefinitionIllegalStorageClass
   else
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
@@ -4031,7 +4031,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
       desugar_declarator IsFunDef decltor
     end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
     
-    (* NOTE: as per §6.9.1#2, we perform a dummy instanciation of the type
+    (* NOTE: as per §6.9.1#2, we perform a dummy instantiation of the type
        **specified by the declarator portion of the function definition**, which
        here means `ddecltor' without `specifs' *)
     match mk_qs_ctype ATypes.no_qualifiers (ATypes.Ctype [] ATypes.Void) with
@@ -4039,10 +4039,11 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
           E.return ()
       | _ ->
           (* STD §6.9.1#2 *)
-          E.fail fundef_loc (Errors.Desugar_OldConstraintViolation "§6.9.1#2")
+          let (CabsIdentifier loc _) = cabs_identifier_of_direct_declaration ddecltor in
+          E.constraint_violation loc Errors.WrongTypeFunctionIdentifier
     end >>
     
-    E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (_, fun_sym) ->
+    E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (loc_fun_sym, fun_sym) ->
     
     E.under_scope E.Scope_function begin
       register_labels stmt >>
@@ -4069,7 +4070,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               ) in
               
               E.function_is_defined fun_sym >>= function
-                | true  -> E.fail Loc.unknown (Errors.Desugar_FunctionRedefinition fun_sym)
+                | true  -> E.constraint_violation (Loc.locOf fun_ident) (Errors.ExternalRedefinition fun_sym)
                 | false -> E.return ()
               end >>
               
@@ -4086,7 +4087,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
             (* This should not be possible due to the earlier check *)
-            error "Cabs_to_ail.desugar_and_register_function_definition, internal error"
+            E.internal_error (Loc.locOf fun_ident) "Cabs_to_ail.desugar_and_register_function_definition"
         end
       end >>= fun (loc, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->

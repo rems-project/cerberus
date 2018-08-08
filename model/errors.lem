@@ -2,19 +2,21 @@ open import Utils Cabs AilSyntax Core
 import Loc TypingError Undefined
 
 type constraint_violation =
-  | IllegalStorageClassFileScoped (* STD §6.9#2 *)
-  | StaticAssertFailed of string (* STD §6.7.10#2 *)
+  | IllegalStorageClassFileScoped (* §6.9#2 *)
+  | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
+  | FunctionDefinitionIllegalStorageClass (* §6.9.1#4 *)
+  | StaticAssertFailed of string (* §6.7.10#2 *)
+  | ExternalRedefinition of identifier (* §6.9#3 *)
 
 type desugar_cause =
-  (* TODO: remove this old constraint violation *)
   | Desugar_ConstraintViolation of constraint_violation
+  | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour
+  | Desugar_Internal of string
+  (* TODO: remove this old constraint violation *)
   | Desugar_OldConstraintViolation of string
   | Desugar_OtherViolation of string
-  | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour (* TODO: maybe only allow the relevant subset of ubs *)
   | Desugar_UndeclaredIdentifier of string
 (* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_ExternalObjectRedefinition of identifier (* STD §6.9#3, first sentence *)
-  | Desugar_FunctionRedefinition of identifier
   | Desugar_BlockScoped_Thread_local_alone
 (*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)
 (*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
