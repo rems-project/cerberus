@@ -3643,7 +3643,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
   AnnotatedStatement loc <$>
     match stmt_ with
       | CabsSlabel ident s ->
-	  AilSlabel <$> E.resolve_label ident
+          AilSlabel <$> E.resolve_label ident
                     <*> self s
       
       | CabsScase e s ->
@@ -3653,13 +3653,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                           E.return (IConstant n Decimal Nothing))
                      <*> self s
           else
-            E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.1#2")
+            E.constraint_violation loc Errors.LabelStatementOutsideSwitch
       
       | CabsSdefault s ->
           if ctx.switch_depth > 0 then
             AilSdefault <$> self s
           else
-            E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.1#2")
+            E.constraint_violation loc Errors.LabelStatementOutsideSwitch
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
@@ -3781,7 +3781,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
               match opt with
                 | Nothing ->
                     (* Case of a typedef *)
-                    E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.5#3")
+                    E.constraint_violation loc Errors.IllegalStorageClassIterationStatement
                 
                 | Just (ident_loc, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
                     if is_tentative then
@@ -3792,11 +3792,11 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                  specifs.storage_classes = [SC_auto] ||
                                  specifs.storage_classes = [SC_register]) then
                       (* NOTE: amusingly, as it is written, the STD doesn't allow the absence of storage-class ... *)
-                      E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.5#3")
+                      E.constraint_violation loc Errors.IllegalStorageClassIterationStatement
                     
                     else match ty with
                       | ATypes.Ctype _ (ATypes.Function _ _ _ _) ->
-                          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.5#3")
+                          E.constraint_violation loc Errors.IllegalStorageClassIterationStatement
                       | _ ->
                           mk_desug_init () >>= function
                             | Just (ty', d_e) ->
@@ -3934,7 +3934,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
       | CabsScontinue ->
           match ctx.cont_ident_opt with
             | Nothing ->
-                E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.6.2#1")
+                E.constraint_violation loc Errors.ContinueOutsideLoop
             | Just cont_ident ->
                 self (CabsStatement loc (CabsSgoto cont_ident)) >>= fun (AnnotatedStatement _ stmt_) ->
                 E.return stmt_
@@ -3947,7 +3947,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             | Just _ ->
                 E.return AilSbreak
             | Nothing ->
-                E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.6.3#1")
+                E.constraint_violation loc Errors.BreakOutsideSwtichOrLoop
           end
       
       | CabsSreturn Nothing ->
@@ -3955,13 +3955,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             | ATypes.Ctype _ ATypes.Void ->
                 E.return AilSreturnVoid
             | _ ->
-                E.fail loc Errors.Desugar_NonvoidReturn
+                E.constraint_violation loc Errors.VoidReturnNonVoidFunction
           end
       
       | CabsSreturn (Just e) ->
           E.get_current_return_type >>= function
             | ATypes.Ctype _ ATypes.Void ->
-                E.fail loc (Errors.Desugar_OldConstraintViolation "§6.8.6.4#1, 1st sentence")
+                E.constraint_violation loc Errors.NonVoidReturnVoidFunction
             | _ ->
                 AilSreturn <$> desugar_expression e
           end
@@ -4022,7 +4022,7 @@ let rec register_labels (CabsStatement _ stmt_) =
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
 let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
-    E.constraint_violation fundef_loc Errors.FunctionDefinitionIllegalStorageClass
+    E.constraint_violation fundef_loc Errors.IllegalStorageClassFunctionDefinition
   else
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)

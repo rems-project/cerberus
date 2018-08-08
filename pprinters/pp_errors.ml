@@ -85,12 +85,23 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | LabelStatementOutsideSwitch ->
+      "label statement outside switch"
   | StaticAssertFailed msg ->
       "static assert expression failed: " ^ msg
   | WrongTypeFunctionIdentifier ->
       "function identifier must have a function type"
+  | ContinueOutsideLoop ->
+      "continue statement outside a loop"
+  | BreakOutsideSwtichOrLoop ->
+      "break statement outside a switch or a lopp"
+  | NonVoidReturnVoidFunction ->
+      "void function should not return a value"
+  | VoidReturnNonVoidFunction ->
+      "non-void function should return a value"
+  | IllegalStorageClassIterationStatement
   | IllegalStorageClassFileScoped
-  | FunctionDefinitionIllegalStorageClass ->
+  | IllegalStorageClassFunctionDefinition ->
       "illegal storage class"
   | ExternalRedefinition sym ->
       "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
@@ -119,8 +130,6 @@ let string_of_desugar_cause = function
   | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
       "member '" ^ str ^ "' is not defined for type '" ^
       String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
-  | Desugar_NonvoidReturn ->
-      "non-void function should return a value"
   | Desugar_Redefinition sym ->
       "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
   | Desugar_NeverSupported str ->
@@ -238,13 +247,25 @@ type std_ref =
 let get_constraint_violation_ref = function
   | StaticAssertFailed _ ->
       StdRef "§6.7.10#2"
+  | LabelStatementOutsideSwitch ->
+      StdRef "§6.8.1#2"
+  | IllegalStorageClassIterationStatement ->
+      StdRef "§6.8.5#3"
+  | ContinueOutsideLoop ->
+      StdRef "§6.8.6.2#1"
+  | BreakOutsideSwtichOrLoop ->
+      StdRef "§6.8.6.3#1"
+  | NonVoidReturnVoidFunction ->
+      StdRef "§6.8.6.4#1, 1st sentence"
+  | VoidReturnNonVoidFunction ->
+      StdRef "§6.8.6.4#1, 2nd sentence"
   | IllegalStorageClassFileScoped ->
       StdRef "§6.9#2"
   | ExternalRedefinition _ ->
       StdRef "§6.9#3"
   | WrongTypeFunctionIdentifier ->
       StdRef "§6.9.1#2"
-  | FunctionDefinitionIllegalStorageClass ->
+  | IllegalStorageClassFunctionDefinition ->
       StdRef "§6.9.1#4"
 
 let get_desugar_ref = function
@@ -256,8 +277,6 @@ let get_desugar_ref = function
         | None -> UnknownRef)
   | Desugar_UndeclaredIdentifier _ ->
       StdRef "§6.5.1#2"
-  | Desugar_NonvoidReturn ->
-      StdRef "§6.8.6.4#1, 2nd sentence"
   | _ ->
       UnknownRef
 
