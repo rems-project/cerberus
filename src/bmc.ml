@@ -34,6 +34,7 @@ open Util
  *     - Convert lists -> sets/hashtables where appropriate
  *     - Should asw be included in po?
  *  - Separate analyses into smaller standalone analyses
+ *  - nicer way to fail early: exceptions
  *)
 
 (* =========== TYPES =========== *)
@@ -1368,6 +1369,12 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         then Bmc_paction.do_concurrent_store sym_expr res_wval.expr memorder pol
         else Bmc_paction.do_sequential_store sym_expr res_wval.expr in
       to_run >>= fun ret ->
+      (* Check valid memory orders *)
+      if (memorder = Acquire || memorder = Acq_rel) then
+        (bmc_debug_print 1
+          "ERROR: memory order of atomic_store must not be Acquire or Acq_rel";
+         assert false)
+      ;
       return { expr      = UnitSort.mk_unit
              ; asserts   = ret.asserts @ res_wval.asserts
              ; drop_cont = mk_false
@@ -1391,6 +1398,12 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         then Bmc_paction.do_concurrent_load sym_expr ret_expr memorder pol
         else Bmc_paction.do_sequential_load sym_expr ret_expr in
       to_run >>= fun ret ->
+      (* Check valid memory orders *)
+      if (memorder = Release || memorder = Acq_rel) then
+        (bmc_debug_print 1
+          "ERROR: memory order of atomic_load must not be Release or Acq_rel";
+         assert false)
+      ;
       return { expr      = ret_expr
              ; asserts   = ret.asserts
              ; drop_cont = mk_false
@@ -1402,6 +1415,9 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | RMW0 _ ->
       assert false
   | Fence0 memorder ->
+    if not !!bmc_conf.concurrent_mode then
+      bmc_debug_print 1
+        "ERROR: Fence only supported with --bmc_conc";
       assert (!!bmc_conf.concurrent_mode);
       BmcM.get_fresh_aid >>= fun aid ->
       BmcM.get_tid       >>= fun tid ->
@@ -1417,6 +1433,9 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
                           Pexpr(_,_,PEsym obj),
                           Pexpr(_,_,PEsym expected),
                           desired, mo_success, mo_failure) ->
+    if not !!bmc_conf.concurrent_mode then
+      bmc_debug_print 1
+        "ERROR: CompareExchangeStrong only supported with --bmc_conc";
     assert (!!bmc_conf.concurrent_mode);
     (* _bool compare_exchange_strong(object, expected, desire, success, failure):
      * if *object == *expected
@@ -1431,6 +1450,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
      *
      * For sequential mode: this is just read, object, read expected, do
      * assignments. Not implemented.
+     *
      *)
     BmcM.get_file            >>= fun file ->
     BmcM.lookup_sym obj      >>= fun obj_sym ->
@@ -1483,6 +1503,24 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       ; asw             = combined_fail.asw (* Should be empty *)
       }
       end in
+
+    (* Check valid memory orders:
+     * mo_failure must not be RELEASE or ACQ_REL
+     * mo_failure must be no stronger than mo_success
+     *)
+    if mo_failure = Release || mo_failure = Acq_rel then
+      (bmc_debug_print 1
+        "ERROR: `failure' memory order of CompareExchangeStrong` must not be
+         release or acq_rel";
+      assert false)
+    else if ((mo_failure = Seq_cst && mo_success <> Seq_cst)
+             ||(mo_failure = Acquire && mo_success = Relaxed)) then
+      (bmc_debug_print 1
+        "ERROR: 'failure' memory order of CompareExchangeStrong' must not be
+         stronger than the success argument";
+      assert false
+      )
+    ;
 
     return { expr      = mk_ite success_guard
                             (LoadedInteger.mk_specified (int_to_z3 1))

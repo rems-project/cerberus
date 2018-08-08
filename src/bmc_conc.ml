@@ -197,7 +197,7 @@ let string_of_memory_order = function
   | Cmm_csem.Relaxed -> "relaxed"
   | Cmm_csem.Release -> "release"
   | Cmm_csem.Acquire -> "acquire"
-  | Cmm_csem.Consume -> "consume"
+  | Cmm_csem.Consume -> assert false
   | Cmm_csem.Acq_rel -> "acq_rel"
 
 let string_of_polarity = function
