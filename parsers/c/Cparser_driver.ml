@@ -8,7 +8,7 @@ let parse input =
       let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
       Exception.fail (loc, Errors.CPARSER err)
     | Parser.Error ->
-      let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
+      let loc = Location_ocaml.Loc_region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf, None) in
       Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token (Lexing.lexeme lexbuf)))
     | Failure msg ->
       prerr_endline "CPARSER_DRIVER (Failure)";

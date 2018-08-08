@@ -1,8 +1,13 @@
 open import Utils Cabs AilSyntax Core
 import Loc TypingError Undefined
 
+type constraint_violation =
+  | IllegalStorageClassFileScoped (* STD §6.9#2 *)
+
 type desugar_cause =
-  | Desugar_ConstraintViolation of string
+  (* TODO: remove this old constraint violation *)
+  | Desugar_ConstraintViolation of constraint_violation
+  | Desugar_OldConstraintViolation of string
   | Desugar_OtherViolation of string
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour (* TODO: maybe only allow the relevant subset of ubs *)
   | Desugar_UndeclaredIdentifier of string
