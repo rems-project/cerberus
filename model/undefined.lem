@@ -291,7 +291,7 @@ type undefined_behaviour =
   | UB088_reached_end_of_function
   (* An identifier for an object with internal linkage and an incomplete type is declared with a
      tentative definition (6.9.2). *)
-  | UB089
+  | UB089_tentative_definition_internal_linkage
   (* The token defined is generated during the expansion of a #if or #elif preprocessing directive,
      or the use of the defined unary operator does not match one of the two specified forms prior to
      macro replacement (6.10.1). *)
@@ -703,6 +703,10 @@ let std_of_undefined_behaviour = function
 
   | UB086_incomplete_adjusted_parameter ->
       Just "§6.9.1#7, sentence 4"
+  | UB089_tentative_definition_internal_linkage ->
+      Just "§6.9.2#3"
+  | UB204_illtyped_Static_assert ->
+      Just "§6.7.10#3"
 
   | _ ->
       (* TODO *)
@@ -713,6 +717,10 @@ val ub_short_string: undefined_behaviour -> string
 let ub_short_string = function
   | UB059_incomplete_no_linkage_identifier ->
       "identifier with no linkage and incomplete type"
+  | UB089_tentative_definition_internal_linkage ->
+      "tentative definition with internal linkage and incomplete type"
+  | UB204_illtyped_Static_assert ->
+      "static assert expression is not an integral constant expression"
   | _ ->
       "(UB missing short message)"
 end
@@ -819,7 +827,7 @@ let ub_str_bimap =
     ; (UB086_incomplete_adjusted_parameter, "UB086_incomplete_adjusted_parameter")
     ; (UB087, "UB087")
     ; (UB088_reached_end_of_function, "UB088_reached_end_of_function")
-    ; (UB089, "UB089")
+    ; (UB089_tentative_definition_internal_linkage, "UB089_tentative_definition_internal_linkage")
     ; (UB090, "UB090")
     ; (UB091, "UB091")
     ; (UB092, "UB092")
