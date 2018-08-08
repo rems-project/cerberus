@@ -1493,18 +1493,18 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
          guard_preexec fail_guard fail_store.preexec,
          ret_read_expected.preexec) in
       (* SB the load and store for failed compare_exchange *)
-      let failed_preexec = combine_preexecs_and_sb p_fail_load p_fail_store in
+      let failed_preexec = combine_preexecs_and_po p_fail_load p_fail_store in
       (* SB the read_expected and (load,store) for failed compare exchange *)
       let combined_fail =
-        combine_preexecs_and_sb p_read_expected failed_preexec in
+        combine_preexecs_and_po p_read_expected failed_preexec in
 
       assert (List.length combined_fail.initial_actions = 0);
       assert (List.length combined_fail.asw = 0);
 
       { actions         = rmw :: combined_fail.actions
       ; initial_actions = combined_fail.initial_actions (*Should be empty *)
-      ; sb              = (compute_sb p_read_expected.actions [rmw])
-                          @ combined_fail.sb
+      ; po              = (compute_po p_read_expected.actions [rmw])
+                          @ combined_fail.po
       ; asw             = combined_fail.asw (* Should be empty *)
       }
       end in
@@ -1943,10 +1943,10 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
            | Ewseq _ -> List.filter is_pos_action p1.actions
            | Esseq _ -> p1.actions
            | _       -> assert false in
-         let sb = (compute_sb to_sequence p2.actions) @ preexec.sb in
-         let asw = (compute_asw p1.actions p2.actions p1.sb p2.sb parent_tids)
+         let po = (compute_po to_sequence p2.actions) @ preexec.po in
+         let asw = (compute_asw p1.actions p2.actions p1.po p2.po parent_tids)
                   @ preexec.asw in
-         return (AddrSet.empty, {preexec with sb = sb; asw = asw})
+         return (AddrSet.empty, {preexec with po = po; asw = asw})
        else return (AddrSet.union res1.mod_addr res2.mod_addr,
                     mk_initial_preexec)
       ) >>= fun (mod_addr, preexec) ->
@@ -2066,16 +2066,16 @@ let bmc_file (file              : unit typed_file)
         let preexec =
           let combined =
             combine_preexecs [gret.preexec; pret.preexec; ret.preexec] in
-          let sb = (compute_sb gret.preexec.actions ret.preexec.actions)
-                 @ (compute_sb pret.preexec.actions ret.preexec.actions)
-                 @ combined.sb in
+          let po = (compute_po gret.preexec.actions ret.preexec.actions)
+                 @ (compute_po pret.preexec.actions ret.preexec.actions)
+                 @ combined.po in
           let asw = compute_asw (gret.preexec.actions @ pret.preexec.actions)
                                 (ret.preexec.actions)
-                                (gret.preexec.sb @ pret.preexec.sb)
-                                (ret.preexec.sb)
+                                (gret.preexec.po @ pret.preexec.po)
+                                (ret.preexec.po)
                                 (parent_tids) in
-          let filtered_asw = filter_asw (asw @ combined.asw) sb in
-          {combined with sb = sb; asw = filtered_asw} in
+          let filtered_asw = filter_asw (asw @ combined.asw) po in
+          {combined with po = po; asw = filtered_asw} in
         return {ret with ret_cond = mk_and [new_ret_cond; ret.ret_cond]
                        ; asserts  = gret.asserts @ pret.asserts @ ret.asserts
                        ; preexec  = preexec

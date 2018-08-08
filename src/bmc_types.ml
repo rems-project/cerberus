@@ -144,6 +144,129 @@ let is_fence (a: action) = match a with
   | _       -> false
 
 
+(* ======== CAT SPECIFICATION ============ *)
+module CatFile = struct
+  type base_set =
+    | BaseSet_Universal (* all events *)
+    | BaseSet_R         (* read events *)
+    | BaseSet_W         (* write events *)
+    | BaseSet_M         (* reads and writes *)
+    | BaseSet_A         (* atomic events *)
+    | BaseSet_I         (* initial events *)
+
+  type base_relation =
+    | BaseRel_id
+    | BaseRel_asw
+    | BaseRel_po
+    | BaseRel_dep_addr
+    | BaseRel_dep_data
+    | BaseRel_dep_ctrl
+
+  type base_identifier =
+    | BaseId_rf
+    | BaseId_rf_inv
+    | BaseId_co
+
+  type id =
+    | Id of string
+    | BaseId of base_identifier
+    | BaseRel of base_relation
+
+  type set =
+    | Set_base of base_set
+    | Set_union of set list
+    | Set_intersection of set * set
+    | Set_difference of set * set
+
+  type expr =
+    | Eid of id
+    | Ebase of base_relation
+    | Etransitive_closure of expr
+    | Ereflexive_transitive_closure of expr
+    | Ereflexive_closure of expr
+    | Einverse of expr
+    | Eunion of expr list (* expr * expr *)
+    | Esequence of expr * expr
+    | Edifference of expr * expr
+    | Eintersection of expr * expr
+    | Eset of set (*identity relation on set *)
+    | Ecartesian_product of set * set
+
+  type assertion =
+    | Irreflexive of expr
+    | Acyclic of expr
+
+  let mk_prod (x: set) (y: set) =
+    Ecartesian_product(x,y)
+
+  let mk_set_I =
+    Set_base BaseSet_I
+
+  let mk_set_M =
+    Set_base BaseSet_M
+
+  let mk_set_diff (x: set) (y:set) =
+    Set_difference (x,y)
+
+  let mk_po = Ebase BaseRel_po
+
+  let mk_identity = Ebase BaseRel_id
+
+  let mk_rf = Eid (BaseId BaseId_rf)
+  let mk_rf_inv = Eid (BaseId BaseId_rf_inv)
+  let mk_co = Eid (BaseId BaseId_co)
+  let mk_id (s: string) =
+    Eid (Id s)
+
+  let mk_sequence (e1:expr) (e2:expr) =
+    Esequence (e1,e2)
+
+  let mk_plus (e: expr) =
+    Etransitive_closure e
+
+  let mk_diff (e1: expr) (e2:expr) =
+    Edifference (e1,e2)
+
+  let mk_union (es: expr list) =
+    Eunion es
+end
+
+module type CatModel = sig
+  val identifers : string list
+  val bindings   : (string * CatFile.expr) list
+  val assertions : (string option * CatFile.assertion) list
+
+end
+
+module RC11Model = struct
+  open CatFile
+  let identifiers =
+    [ "sb"
+    (*; "rs"
+    ; "sw"*)
+    ; "hb"
+    ; "mo"
+    ; "fr"
+    ; "eco"
+    (*; "psc_base"*)
+    ]
+
+  let bindings =
+    [ ("sb", Eunion [mk_po; mk_prod mk_set_I (mk_set_diff mk_set_M mk_set_I)])
+    ; ("hb", mk_plus (mk_id "sb"))
+    ; ("mo", mk_co)
+    ; ("fr", mk_diff (mk_sequence mk_rf_inv (mk_id "mo")) mk_identity)
+    ; ("eco", Eunion [mk_rf; mk_id "mo"; mk_id "fr"
+                     ;mk_sequence (mk_id "mo") mk_rf
+                     ;mk_sequence (mk_id "fr") mk_rf])
+    ]
+
+  let assertions =
+    [ (Some "coh", Irreflexive (mk_sequence (mk_id "mo") (mk_id "eco")))
+    ; (Some "sb|rf", Acyclic (mk_union [mk_id "sb"; mk_rf]))
+    ]
+end
+
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = Cmm_csem.(function
   | NA -> "na"
