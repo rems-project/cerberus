@@ -717,6 +717,8 @@ val ub_short_string: undefined_behaviour -> string
 let ub_short_string = function
   | UB059_incomplete_no_linkage_identifier ->
       "identifier with no linkage and incomplete type"
+  | UB060_block_scope_function_with_storage_class ->
+      "block scoped function identifier with illegal storage class"
   | UB089_tentative_definition_internal_linkage ->
       "tentative definition with internal linkage and incomplete type"
   | UB204_illtyped_Static_assert ->
