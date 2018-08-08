@@ -246,7 +246,7 @@ let ppmode_default_web = {
   nodesep     = 0.75;   (* for dot and for self-loops in neato *)
   penwidth    = 1.0;
   legend      = None; (*Some "filename";*)
-  layout      = LO_neato_par_init;
+  layout      = LO_neato_par;
   texmode     = false;
   thread_ids  = false
 }
