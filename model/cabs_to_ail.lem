@@ -3619,7 +3619,7 @@ let desugar_declaration_base specifs idecltors =
                           E.return (cty, acc)
                   end >>= fun (ty', ret) ->
                   if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                    E.fail (*TODO*)(Loc.locOf ident) (Errors.Desugar_OldConstraintViolation "§6.7#7 (desugar_declaration_base)")
+                    E.undef (Loc.locOf ident) Undefined.UB059_incomplete_no_linkage_identifier
                   else
                     E.return ret
             end

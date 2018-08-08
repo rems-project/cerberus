@@ -277,6 +277,10 @@ val contraint_violation: forall 'a. Loc.t -> Errors.constraint_violation -> desu
 let inline constraint_violation loc e =
   State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation e))
 
+val undef: forall 'a. Loc.t -> Undefined.undefined_behaviour -> desugM 'a
+let inline undef loc ub =
+  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
+
 val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
 val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
 let inline mapM = State_exception.mapM
