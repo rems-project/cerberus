@@ -346,12 +346,12 @@ let gen_corestd stdlib impl =
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph
-             bmc bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
+             bmc bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
              bmc_all_execs =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  Bmc_globals.set bmc_bvprec bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
+  Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
   bmc_all_execs;
   
   (* Looking for and parsing the core standard library *)
@@ -535,10 +535,6 @@ let bmc =
   let doc = "Run bounded model checker" in
   Arg.(value & flag & info["bmc"] ~doc)
 
-let bmc_bvprec =
-  let doc = "Bitvector precision for the bounded model checker (for use when bmc_bv is set)" in
-  Arg.(value & opt int 32 & info["bmc_bvprec"] ~doc)
-
 let bmc_max_depth =
   let doc = "Maximum depth of function calls and loops in the bounded model checker" in
   Arg.(value & opt int 3 & info["bmc_max_depth"] ~doc)
@@ -571,7 +567,7 @@ let () =
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
-    $ bmc $ bmc_bvprec $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $ bmc_debug
+    $ bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $ bmc_debug
     $ bmc_all_execs
     ) in
   
