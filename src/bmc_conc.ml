@@ -1040,7 +1040,7 @@ module C11MemoryModel : MemoryModel = struct
     ) prod in
 
     if not (List.length data_race = 0) then
-      bmc_debug_print 2
+      bmc_debug_print 4
         (String.concat "\n" (List.map (fun ((_,e1),(_,e2)) ->
           sprintf "%s->%s" (Expr.to_string e1) (Expr.to_string e2))
           data_race));
@@ -1077,7 +1077,7 @@ module C11MemoryModel : MemoryModel = struct
       ) mo in
 
     let ret = interp ret_value in
-    bmc_debug_print 1 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));
+    bmc_debug_print 4 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));
 
     { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; mo_asserts])
     ; ret = ret
