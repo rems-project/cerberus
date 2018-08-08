@@ -347,12 +347,12 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
              sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
-             bmc_all_execs =
+             bmc_all_execs bmc_output_model =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
-  bmc_all_execs;
+                  bmc_all_execs bmc_output_model;
   
   (* Looking for and parsing the core standard library *)
   let core_stdlib = load_stdlib () in
@@ -559,6 +559,9 @@ let bmc_all_execs =
   let doc = "Find all executions when model checking. Concurreny model only" in
   Arg.(value & opt bool true & info["bmc_all_execs"] ~doc)
 
+let bmc_output_model =
+  let doc = "Output model if UB is detected when model checking." in
+  Arg.(value & opt bool false & info["bmc_output_model"] ~doc)
 
 (* entry point *)
 let () =
@@ -568,7 +571,7 @@ let () =
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph
     $ bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $ bmc_debug
-    $ bmc_all_execs
+    $ bmc_all_execs $ bmc_output_model
     ) in
   
   (* the version is "sed-out" by the Makefile *)

@@ -1341,7 +1341,6 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | Create _ -> assert false
   | CreateReadOnly _ -> assert false
   | Alloc0 _ ->
-
       bmc_debug_print 3 "TODO: abstract memory model and Alloc0";
       assert false
   | Kill (_, pe) ->
@@ -1369,14 +1368,17 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         then Bmc_paction.do_concurrent_store sym_expr res_wval.expr memorder pol
         else Bmc_paction.do_sequential_store sym_expr res_wval.expr in
       to_run >>= fun ret ->
-      (* Check valid memory orders *)
+
+      let valid_memorder =
+        mk_bool (not (memorder = Acquire || memorder = Acq_rel)) in
+      (* Debug output *)
       if (memorder = Acquire || memorder = Acq_rel) then
-        (bmc_debug_print 1
-          "ERROR: memory order of atomic_store must not be Acquire or Acq_rel";
-         assert false)
+        bmc_debug_print 3
+          "memory order of atomic_store must not be Acquire or Acq_rel"
       ;
       return { expr      = UnitSort.mk_unit
-             ; asserts   = ret.asserts @ res_wval.asserts
+             ; asserts   = (mk_vc valid_memorder)
+                           ::ret.asserts @ res_wval.asserts
              ; drop_cont = mk_false
              ; mod_addr  = ret.mod_addr
              ; ret_cond  = mk_true
@@ -1399,13 +1401,16 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
         else Bmc_paction.do_sequential_load sym_expr ret_expr in
       to_run >>= fun ret ->
       (* Check valid memory orders *)
+
+      let valid_memorder =
+        mk_bool (not (memorder = Release || memorder = Acq_rel)) in
+
       if (memorder = Release || memorder = Acq_rel) then
-        (bmc_debug_print 1
-          "ERROR: memory order of atomic_load must not be Release or Acq_rel";
-         assert false)
+        bmc_debug_print 3
+          "memory order of atomic_load must not be Release or Acq_rel"
       ;
       return { expr      = ret_expr
-             ; asserts   = ret.asserts
+             ; asserts   = (mk_vc valid_memorder)::ret.asserts
              ; drop_cont = mk_false
              ; mod_addr  = ret.mod_addr
              ; ret_cond  = mk_true
@@ -1508,24 +1513,28 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
      * mo_failure must not be RELEASE or ACQ_REL
      * mo_failure must be no stronger than mo_success
      *)
-    if mo_failure = Release || mo_failure = Acq_rel then
-      (bmc_debug_print 1
-        "ERROR: `failure' memory order of CompareExchangeStrong` must not be
-         release or acq_rel";
-      assert false)
-    else if ((mo_failure = Seq_cst && mo_success <> Seq_cst)
-             ||(mo_failure = Acquire && mo_success = Relaxed)) then
-      (bmc_debug_print 1
-        "ERROR: 'failure' memory order of CompareExchangeStrong' must not be
-         stronger than the success argument";
-      assert false
-      )
+    let invalid_mo_failure =
+      (mo_failure = Release || mo_failure = Acq_rel) in
+    let mo_failure_stronger =
+      (mo_failure = Seq_cst && mo_success <> Seq_cst) ||
+      (mo_failure = Acquire && mo_success = Relaxed) in
+    let valid_memorder =
+      mk_bool (not (invalid_mo_failure || mo_failure_stronger)) in
+    if invalid_mo_failure then
+       bmc_debug_print 3
+        "`failure' memory order of CompareExchangeStrong` must not be
+         release or acq_rel"
+    else if mo_failure_stronger then
+      bmc_debug_print 3
+        "'failure' memory order of CompareExchangeStrong' must not be
+         stronger than the success argument"
     ;
 
     return { expr      = mk_ite success_guard
                             (LoadedInteger.mk_specified (int_to_z3 1))
                             (LoadedInteger.mk_specified (int_to_z3 0))
-           ; asserts   = ret_desired.asserts
+           ; asserts   = (mk_vc valid_memorder)::
+                         ret_desired.asserts
                          @ ret_read_expected.asserts
                          @ (List.map (guard_assert fail_guard) fail_load.asserts)
                          @ (List.map (guard_assert fail_guard)
@@ -2007,9 +2016,8 @@ let initialise_param ((sym, cbt) as param: (sym_ty * core_base_type))
              (int_to_z3 allocation_size) in
     add_sym_to_sym_table sym cbt >>= fun () ->
     BmcM.lookup_sym sym >>= fun expr ->
-    let eq_expr =
-      mk_eq expr (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
-
+    let eq_expr = mk_eq expr
+        (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
     return { asserts = (mk_let eq_expr)
                       ::((mk_let alloc_size_expr) :: result.asserts)
            ; preexec = result.preexec
@@ -2115,8 +2123,8 @@ let bmc_file (file              : unit typed_file)
   (if !!bmc_conf.concurrent_mode && (List.length result.preexec.actions > 0)
     then begin
     let model = BmcMem.compute_executions result.preexec in
-    bmc_debug_print 2 "==== PREEXECS ";
-    bmc_debug_print 2 (pp_preexec result.preexec);
+    bmc_debug_print 4 "==== PREEXECS ";
+    bmc_debug_print 4 (pp_preexec result.preexec);
     BmcMem.add_assertions g_solver model;
     (* Do an initial check *)
     bmc_debug_print 1 "START FIRST CHECK";
@@ -2172,8 +2180,9 @@ let bmc_file (file              : unit typed_file)
   | SATISFIABLE ->
       begin
       print_endline "STATUS: satisfiable";
-      let model = Option.get (Solver.get_model g_solver) in
-      bmc_debug_print 1 (Model.to_string model)
+      if !!bmc_conf.output_model then
+        let model = Option.get (Solver.get_model g_solver) in
+        print_endline (Model.to_string model)
       end
 
 let find_function (f_name: string)
@@ -2201,8 +2210,9 @@ let bmc (core_file  : unit file)
               Core_sequentialise.sequentialise_file typed_core
             else
               typed_core in
+          if !!bmc_conf.debug_lvl >= 2 then
+            pp_file core_to_check;
 
-          pp_file core_to_check;
           bmc_debug_print 1 "START: model checking";
 
           let fn_sym = find_function !!bmc_conf.fn_to_check
