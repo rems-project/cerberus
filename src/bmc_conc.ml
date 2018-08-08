@@ -15,7 +15,7 @@ type preexec = {
   actions         : bmc_action list;
   initial_actions : bmc_action list;
 
-  sb              : (bmc_action * bmc_action) list;
+  po              : (bmc_action * bmc_action) list;
   asw             : (bmc_action * bmc_action) list;
 }
 
@@ -76,7 +76,7 @@ type bmcaction_rel = bmc_action * bmc_action
 let mk_initial_preexec : preexec =
   { actions         = []
   ; initial_actions = []
-  ; sb              = []
+  ; po              = []
   ; asw             = []
   }
 
@@ -111,18 +111,18 @@ let combine_preexecs (preexecs: preexec list) =
   List.fold_left (fun acc preexec ->
     { actions         = preexec.actions @ acc.actions
     ; initial_actions = preexec.initial_actions @ acc.initial_actions
-    ; sb              = preexec.sb @ acc.sb
+    ; po              = preexec.po @ acc.po
     ; asw             = preexec.asw @ acc.asw
     }) mk_initial_preexec preexecs
 
-let compute_sb (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
+let compute_po (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp
 
-let combine_preexecs_and_sb (p1: preexec) (p2: preexec) =
+let combine_preexecs_and_po (p1: preexec) (p2: preexec) =
   let combined = combine_preexecs [p1;p2] in
-  let extra_sb = compute_sb p1.actions p2.actions in
-  {combined with sb = extra_sb @ combined.sb}
+  let extra_po = compute_po p1.actions p2.actions in
+  {combined with po = extra_po @ combined.po}
 
 let compute_maximal (actions: bmc_action list)
                     (rel: bmcaction_rel list)
@@ -142,22 +142,22 @@ let compute_minimal (actions: bmc_action list)
  * (x,y) in result => (tid x, tid y) or (tid y, tid x) in parent_tids.
  *
  * Also only add the maximal actions of xs and minimal actions of ys
- * based on the sb relations.
+ * based on the po relations.
  *
  * The result overapproximates the relation:
- * e.g. (a,x) and (b,x) may both be in the result even if (a,b) in sb.
+ * e.g. (a,x) and (b,x) may both be in the result even if (a,b) in po.
  *
  * filter_asw should be called on the result.
  * *)
 let compute_asw (xs: bmc_action list)
                 (ys: bmc_action list)
-                (sb_xs: bmcaction_rel list)
-                (sb_ys: bmcaction_rel list)
+                (po_xs: bmcaction_rel list)
+                (po_ys: bmcaction_rel list)
                 (parent_tids: (tid, tid) Pmap.map)
                 : bmcaction_rel list =
   let cp = cartesian_product xs ys in
-  let (maximal, minimal) = (compute_maximal xs sb_xs,
-                            compute_minimal ys sb_ys) in
+  let (maximal, minimal) = (compute_maximal xs po_xs,
+                            compute_minimal ys po_ys) in
   List.filter (fun (x,y) ->
     let (tid_x, tid_y) = (tid_of_bmcaction x, tid_of_bmcaction y) in
     let (aid_x, aid_y) = (aid_of_bmcaction x, aid_of_bmcaction y) in
@@ -171,16 +171,16 @@ let compute_asw (xs: bmc_action list)
     ) cp
 
 let filter_asw (asw: bmcaction_rel list)
-               (sb : bmcaction_rel list)
+               (po : bmcaction_rel list)
                : bmcaction_rel list =
   List.filter (fun (a,b) ->
     List.for_all (fun (x,y) ->
-      (* a == x: (a,b) and (a,y) in asw => not sb (b,y) *)
+      (* a == x: (a,b) and (a,y) in asw => not po (b,y) *)
       let fst_test = (aid_of_bmcaction a = aid_of_bmcaction x)
-                  && (find_rel (b,y) sb) in
-      (* b == y: (a, b) and (x,b) in asw => not sb (a,x) *)
+                  && (find_rel (b,y) po) in
+      (* b == y: (a, b) and (x,b) in asw => not po (a,x) *)
       let snd_test = (aid_of_bmcaction b = aid_of_bmcaction y)
-                  && (find_rel (a,x) sb) in
+                  && (find_rel (a,x) po) in
       (not fst_test) && (not snd_test)
     ) asw
   ) asw
@@ -231,17 +231,15 @@ let pp_actionrel_list (xs : bmcaction_rel list) =
   String.concat "\n" (List.map pp_actionrel xs)
 
 let pp_preexec (preexec: preexec) =
-  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>SB:\n%s\nASW:\n%s"
+  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
           "" ""
-          (*(pp_actionrel_list preexec.sb)
+          (*(pp_actionrel_list preexec.po)
             (pp_actionrel_list preexec.asw)*)
 
 
 (* ===== memory model ===== *)
-
-
 module type MemoryModel = sig
   type z3_memory_model
   val add_assertions : Solver.solver -> z3_memory_model -> unit
@@ -250,7 +248,203 @@ module type MemoryModel = sig
   val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> unit
 end
 
+module MemoryModelCommon = struct
+  let mk_event_sort (actions: bmc_action list) =
+    Enumeration.mk_sort g_ctx
+      (mk_sym "Event")
+      (List.map (fun a -> mk_sym (sprintf "#E_%d" (aid_of_bmcaction a)))
+                actions)
+
+  (* EVENT TYPES *)
+  let mk_event_type =
+    Enumeration.mk_sort g_ctx (mk_sym "EventType")
+                        [ mk_sym "Load"
+                        ; mk_sym "Store"
+                        ; mk_sym "RMW"
+                        ; mk_sym "Fence"
+                        ]
+  let load_etype  = List.nth (Enumeration.get_consts mk_event_type) 0
+  let store_etype = List.nth (Enumeration.get_consts mk_event_type) 1
+  let rmw_etype   = List.nth (Enumeration.get_consts mk_event_type) 2
+  let fence_etype = List.nth (Enumeration.get_consts mk_event_type) 3
+
+  let action_to_event_type (BmcAction(_,_,a): bmc_action) : Expr.expr =
+    match a with
+    | Load  _ -> load_etype
+    | Store _ -> store_etype
+    | RMW   _ -> rmw_etype
+    | Fence _ -> fence_etype
+
+  (* MEMORY ORDER TYPE *)
+  let mk_memord_type =
+    Enumeration.mk_sort g_ctx (mk_sym "MemordType")
+                        [ mk_sym "NA"
+                        ; mk_sym "Seq_cst"
+                        ; mk_sym "Relaxed"
+                        ; mk_sym "Release"
+                        ; mk_sym "Acquire"
+                        ; mk_sym "Acq_rel"
+                        ]
+
+  let na_memord      = List.nth (Enumeration.get_consts mk_memord_type) 0
+  let sc_memord      = List.nth (Enumeration.get_consts mk_memord_type) 1
+  let rlx_memord     = List.nth (Enumeration.get_consts mk_memord_type) 2
+  let rel_memord     = List.nth (Enumeration.get_consts mk_memord_type) 3
+  let acq_memord     = List.nth (Enumeration.get_consts mk_memord_type) 4
+  let acq_rel_memord = List.nth (Enumeration.get_consts mk_memord_type) 5
+
+  let action_to_memord (BmcAction(_,_,a): bmc_action) : Expr.expr =
+    match memorder_of_action a with
+    | NA      -> na_memord
+    | Seq_cst -> sc_memord
+    | Relaxed -> rlx_memord
+    | Release -> rel_memord
+    | Acquire -> acq_memord
+    | Acq_rel -> acq_rel_memord
+    | Consume -> assert false
+
+  (* BUILT IN DECLARATIONS *)
+  type builtin_decls = {
+    aid      : FuncDecl.func_decl;
+    guard    : FuncDecl.func_decl;
+    etype    : FuncDecl.func_decl;
+    memord   : FuncDecl.func_decl;
+    addr     : FuncDecl.func_decl;
+    rval     : FuncDecl.func_decl;
+    wval     : FuncDecl.func_decl;
+  }
+
+  let apply = FuncDecl.apply
+  let mk_decl = mk_fresh_func_decl
+
+  let mk_decls (events: Sort.sort) : builtin_decls =
+    { aid      = mk_decl "aid"     [events]  (Integer.mk_sort g_ctx)
+    ; guard    = mk_decl "guard"   [events]  boolean_sort
+    ; etype    = mk_decl "etype"   [events]  mk_event_type
+    ; addr     = mk_decl "addr"    [events]  AddressSort.mk_sort
+    ; memord   = mk_decl "memord"  [events]  mk_memord_type
+    ; rval     = mk_decl "rval"    [events]  Loaded.mk_sort
+    ; wval     = mk_decl "wval"    [events]  Loaded.mk_sort
+    }
+
+  type builtin_fnapps = {
+    getAid    : Expr.expr -> Expr.expr;
+    getGuard  : Expr.expr -> Expr.expr;
+    getEtype  : Expr.expr -> Expr.expr;
+    getAddr   : Expr.expr -> Expr.expr;
+    getMemord : Expr.expr -> Expr.expr;
+    getRval   : Expr.expr -> Expr.expr;
+    getWval   : Expr.expr -> Expr.expr;
+
+    isRead    : Expr.expr -> Expr.expr;
+    isWrite   : Expr.expr -> Expr.expr;
+    same_loc  : Expr.expr * Expr.expr -> Expr.expr;
+  }
+
+  let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
+    let getAid    = (fun e -> apply decls.aid    [e]) in
+    let getGuard  = (fun e -> apply decls.guard  [e]) in
+    let getEtype  = (fun e -> apply decls.etype  [e]) in
+    let getAddr   = (fun e -> apply decls.addr   [e]) in
+    let getMemord = (fun e -> apply decls.memord [e]) in
+    let getRval   = (fun e -> apply decls.rval   [e]) in
+    let getWval   = (fun e -> apply decls.wval   [e]) in
+    let isRead    = (fun e -> mk_or [mk_eq (getEtype e) load_etype
+                                    ;mk_eq (getEtype e) rmw_etype]) in
+    let isWrite   = (fun e -> mk_or [mk_eq (getEtype e) store_etype
+                                    ;mk_eq (getEtype e) rmw_etype]) in
+    let same_loc  = (fun (e1,e2) -> mk_and [mk_or [isRead e1; isWrite e1]
+                                           ;mk_or [isRead e2; isWrite e2]
+                                           ;mk_eq (getAddr e1) (getAddr e2)
+                                           ]
+                    ) in
+    { getAid    = getAid
+    ; getGuard  = getGuard
+    ; getEtype  = getEtype
+    ; getAddr   = getAddr
+    ; getMemord = getMemord
+    ; getRval   = getRval
+    ; getWval   = getWval
+
+    ; isRead    = isRead
+    ; isWrite   = isWrite
+    ; same_loc  = same_loc
+    }
+
+  type ret =
+    { event_sort : Sort.sort
+    ; event_map  : (aid, Expr.expr) Pmap.map
+    ; decls      : builtin_decls
+    ; fns        : builtin_fnapps
+    ; assertions : Expr.expr list
+    }
+
+  let initialise (exec: preexec) =
+    let all_actions = exec.initial_actions @ exec.actions in
+    bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
+    let event_sort = mk_event_sort all_actions in
+    let all_events = Enumeration.get_consts event_sort in
+    (* Map from aid to corresponding Z3 event *)
+    let event_map = List.fold_left2 (fun acc action z3expr ->
+      Pmap.add (aid_of_bmcaction action) z3expr acc)
+      (Pmap.empty Pervasives.compare) all_actions all_events in
+    let z3action (action: bmc_action) : Expr.expr =
+      Pmap.find (aid_of_bmcaction action) event_map in
+    let decls = mk_decls event_sort in
+    let fns = mk_fn_apps decls in
+
+    let aid_asserts = List.map (fun action ->
+      mk_eq (fns.getAid (z3action action))
+            (Integer.mk_numeral_i g_ctx (aid_of_bmcaction action))
+      ) all_actions in
+
+    let guard_asserts = List.map (fun action ->
+      mk_eq (fns.getGuard (z3action action))
+            (Expr.simplify (guard_of_bmcaction action) None)
+      ) all_actions in
+
+    let type_asserts = List.map (fun action ->
+      mk_eq (fns.getEtype (z3action action)) (action_to_event_type action)
+      ) all_actions in
+
+    let addr_asserts = List.map (fun action ->
+      mk_eq (fns.getAddr (z3action action)) (addr_of_bmcaction action)
+    ) (List.filter has_addr all_actions) in
+
+    let memord_asserts = List.map (fun action ->
+      mk_eq (fns.getMemord (z3action action)) (action_to_memord action)
+    ) all_actions in
+
+    let rval_asserts = List.map (fun action ->
+      mk_eq (fns.getRval (z3action action))
+            (Loaded.mk_expr (Expr.simplify (rval_of_action (get_action action))
+                                           None))
+      ) (List.filter has_rval all_actions) in
+
+    let wval_asserts = List.map (fun action ->
+      mk_eq (fns.getWval (z3action action))
+            (Loaded.mk_expr (Expr.simplify (wval_of_action (get_action action))
+                                           None))
+    ) (List.filter has_wval all_actions) in
+
+    { event_sort = event_sort
+    ; event_map  = event_map
+    ; decls      = decls
+    ; fns        = fns
+    ; assertions =   aid_asserts
+                   @ guard_asserts
+                   @ type_asserts
+                   @ addr_asserts
+                   @ memord_asserts
+                   @ rval_asserts
+                   @ wval_asserts
+    }
+end
+
+
 module C11MemoryModel : MemoryModel = struct
+  open MemoryModelCommon
+
   type func_decl_ty = string * Sort.sort list * Sort.sort
 
   type decls = {
@@ -286,7 +480,7 @@ module C11MemoryModel : MemoryModel = struct
   type fn_apps = {
     getAid    : Expr.expr -> Expr.expr;
     getGuard  : Expr.expr -> Expr.expr;
-    getEType  : Expr.expr -> Expr.expr;
+    getEtype  : Expr.expr -> Expr.expr;
     getAddr   : Expr.expr -> Expr.expr;
     getMemord : Expr.expr -> Expr.expr;
     getRval   : Expr.expr -> Expr.expr;
@@ -376,77 +570,21 @@ module C11MemoryModel : MemoryModel = struct
   let add_assertions solver model = Solver.add solver model.assertions
 
   (* ==== Helper aliases ==== *)
-  let mk_decl = mk_fresh_func_decl
-  let apply = FuncDecl.apply
 
   let mk_forall arglist symlist expr : Expr.expr =
     Quantifier.expr_of_quantifier (Quantifier.mk_forall g_ctx
       arglist symlist expr None [] [] None None)
 
   (* ==== Type definitions ==== *)
-  let mk_event_sort (actions: bmc_action list) =
-    Enumeration.mk_sort g_ctx
-      (mk_sym "Event")
-      (List.map (fun a -> mk_sym (sprintf "#E_%d" (aid_of_bmcaction a)))
-                actions)
-
-  let mk_event_type =
-    Enumeration.mk_sort g_ctx (mk_sym "EventType")
-                        [ mk_sym "Load"
-                        ; mk_sym "Store"
-                        ; mk_sym "RMW"
-                        ; mk_sym "Fence"
-                        ; mk_sym "Lock"
-                        ; mk_sym "Unlock"
-                        ]
-
-  let load_etype  = List.nth (Enumeration.get_consts mk_event_type) 0
-  let store_etype = List.nth (Enumeration.get_consts mk_event_type) 1
-  let rmw_etype   = List.nth (Enumeration.get_consts mk_event_type) 2
-  let fence_etype = List.nth (Enumeration.get_consts mk_event_type) 3
-
-  let action_to_event_type (BmcAction(_,_,a): bmc_action) : Expr.expr =
-    match a with
-    | Load  _ -> load_etype
-    | Store _ -> store_etype
-    | RMW   _ -> rmw_etype
-    | Fence _ -> fence_etype
-
-  let mk_memord_type =
-    Enumeration.mk_sort g_ctx (mk_sym "MemordType")
-                        [ mk_sym "NA"
-                        ; mk_sym "Seq_cst"
-                        ; mk_sym "Relaxed"
-                        ; mk_sym "Release"
-                        ; mk_sym "Acquire"
-                        ; mk_sym "Acq_rel"
-                        ]
-
-  let na_memord      = List.nth (Enumeration.get_consts mk_memord_type) 0
-  let sc_memord      = List.nth (Enumeration.get_consts mk_memord_type) 1
-  let rlx_memord     = List.nth (Enumeration.get_consts mk_memord_type) 2
-  let rel_memord     = List.nth (Enumeration.get_consts mk_memord_type) 3
-  let acq_memord     = List.nth (Enumeration.get_consts mk_memord_type) 4
-  let acq_rel_memord = List.nth (Enumeration.get_consts mk_memord_type) 5
-
-  let action_to_memord (BmcAction(_,_,a): bmc_action) : Expr.expr =
-    match memorder_of_action a with
-    | NA      -> na_memord
-    | Seq_cst -> sc_memord
-    | Relaxed -> rlx_memord
-    | Release -> rel_memord
-    | Acquire -> acq_memord
-    | Acq_rel -> acq_rel_memord
-    | Consume -> assert false
-
-  let mk_decls (events: Sort.sort) : decls =
-    { aid      = mk_decl "aid"      [events]        (Integer.mk_sort g_ctx)
-    ; guard    = mk_decl "guard"    [events]        boolean_sort
-    ; etype    = mk_decl "etype"    [events]        mk_event_type
-    ; addr     = mk_decl "addr"     [events]        AddressSort.mk_sort
-    ; memord   = mk_decl "memord"   [events]        mk_memord_type
-    ; rval     = mk_decl "rval"     [events]        Loaded.mk_sort
-    ; wval     = mk_decl "wval"     [events]        Loaded.mk_sort
+  let mk_decls (events: Sort.sort)
+               (builtin: MemoryModelCommon.builtin_decls) : decls =
+    { aid      = builtin.aid
+    ; guard    = builtin.guard
+    ; etype    = builtin.etype
+    ; addr     = builtin.addr
+    ; memord   = builtin.memord
+    ; rval     = builtin.rval
+    ; wval     = builtin.wval
 
     ; sb       = mk_decl "sb"       [events;events] boolean_sort
     ; asw      = mk_decl "asw"      [events;events] boolean_sort
@@ -467,23 +605,17 @@ module C11MemoryModel : MemoryModel = struct
     ; sbrf_clk = mk_decl "sbrf_clk" [events]        (Integer.mk_sort g_ctx)
     }
 
-  let mk_fn_apps (decls: decls) : fn_apps =
-    let getGuard  = (fun e -> apply decls.guard  [e]) in
-    let getEtype  = (fun e -> apply decls.etype  [e]) in
-    let getAddr   = (fun e -> apply decls.addr   [e]) in
-    let getMemord = (fun e -> apply decls.memord [e]) in
-    let getRval   = (fun e -> apply decls.rval   [e]) in
-    let getWval   = (fun e -> apply decls.wval   [e]) in
-
-    let isRead   = (fun e -> mk_or [mk_eq (getEtype e) load_etype
-                                   ;mk_eq (getEtype e) rmw_etype]) in
-    let isWrite  = (fun e -> mk_or [mk_eq (getEtype e) store_etype
-                                   ;mk_eq (getEtype e) rmw_etype]) in
-    let same_loc = (fun (e1,e2) -> mk_and [mk_or [isRead e1; isWrite e1]
-                                          ;mk_or [isRead e2; isWrite e2]
-                                          ;mk_eq (getAddr e1) (getAddr e2)
-                                          ]
-                   ) in
+  let mk_fn_apps (decls: decls)
+                 (builtin: MemoryModelCommon.builtin_fnapps) : fn_apps =
+    let getGuard  = builtin.getGuard in
+    let getEtype  = builtin.getEtype in
+    let getAddr   = builtin.getAddr in
+    let getMemord = builtin.getMemord in
+    let getRval   = builtin.getRval in
+    let getWval   = builtin.getWval in
+    let isRead    = builtin.isRead in
+    let isWrite   = builtin.isWrite in
+    let same_loc  = builtin.same_loc in
 
     let sb     = (fun (e1,e2) -> apply decls.sb  [e1;e2]) in
     let asw    = (fun (e1,e2) -> apply decls.asw [e1;e2]) in
@@ -526,9 +658,9 @@ module C11MemoryModel : MemoryModel = struct
 
     let sbrf_clk = (fun e -> apply decls.sbrf_clk [e]) in
 
-    { getAid    = (fun e -> apply decls.aid [e])
+    { getAid    = builtin.getAid
     ; getGuard  = getGuard
-    ; getEType  = getEtype
+    ; getEtype  = getEtype
     ; getAddr   = getAddr
     ; getMemord = getMemord
     ; getRval   = getRval
@@ -560,7 +692,6 @@ module C11MemoryModel : MemoryModel = struct
 
   let compute_executions (exec: preexec) : z3_memory_model =
     let all_actions = exec.initial_actions @ exec.actions in
-    bmc_debug_print 5 (sprintf "# actions: %d" (List.length all_actions));
     let prod_actions = cartesian_product all_actions all_actions in
     let writes = List.filter has_wval all_actions in
     let reads = List.filter has_rval all_actions in
@@ -569,23 +700,23 @@ module C11MemoryModel : MemoryModel = struct
     let is_sc a = get_memorder a = Seq_cst in
     let sc_actions = List.filter is_sc all_actions in
 
-    let event_sort = mk_event_sort all_actions in
+    let initialised = MemoryModelCommon.initialise exec in
+    let event_sort = initialised.event_sort in
     let event_type = mk_event_type in
-
     let all_events = Enumeration.get_consts event_sort in
     let prod_events = cartesian_product all_events all_events in
 
     (* Map from aid to corresponding Z3 event *)
-    let event_map = List.fold_left2 (fun acc action z3expr ->
-      Pmap.add (aid_of_bmcaction action) z3expr acc)
-      (Pmap.empty Pervasives.compare) all_actions all_events in
-
-    let z3action (action: bmc_action) : Expr.expr =
+    let event_map = initialised.event_map in
+    let z3action (action: bmc_action) =
       Pmap.find (aid_of_bmcaction action) event_map in
-    let decls :decls = mk_decls event_sort in
-    let fns : fn_apps = mk_fn_apps decls in
+
+    let decls: decls = mk_decls event_sort (initialised.decls) in
+    let fns: fn_apps = mk_fn_apps decls (initialised.fns) in
 
     (* ==== Define accessors ==== *)
+    let accessor_assertions = initialised.assertions in
+    (*
     let aid_asserts = List.map (fun action ->
       mk_eq (fns.getAid (z3action action))
             (Integer.mk_numeral_i g_ctx (aid_of_bmcaction action))
@@ -597,7 +728,7 @@ module C11MemoryModel : MemoryModel = struct
       ) all_actions in
 
     let type_asserts = List.map (fun action ->
-      mk_eq (fns.getEType (z3action action))
+      mk_eq (fns.getEtype (z3action action))
             (action_to_event_type action)
       ) all_actions in
 
@@ -622,13 +753,14 @@ module C11MemoryModel : MemoryModel = struct
             (Loaded.mk_expr (Expr.simplify (wval_of_action (get_action action))
                                            None))
     ) (List.filter has_wval all_actions) in
+  *)
 
     (* ==== Preexecution relations ==== *)
     let sb_asserts =
       let sb_with_initial = cartesian_product
           (exec.initial_actions)
           (List.filter (fun a -> has_rval a || has_wval a) exec.actions)
-        @ exec.sb in
+        @ exec.po in
       let not_sb =
         List.filter (fun p -> not (find_rel p sb_with_initial)) prod_actions in
       (List.map (fun (a,b) -> (mk_eq (fns.sb (z3action a, z3action b)) mk_true))
@@ -709,14 +841,14 @@ module C11MemoryModel : MemoryModel = struct
           | Some l -> Pmap.add a (z3action b :: l) acc
           | None   -> Pmap.add a [z3action b] acc
         else acc
-      ) (Pmap.empty bmcaction_cmp) exec.sb in
+      ) (Pmap.empty bmcaction_cmp) exec.po in
       let r_sb_f = List.fold_left (fun acc (a,b) ->
         if has_rval a && is_atomic_bmcaction a && is_fence_action b then
           match Pmap.lookup b acc with
           | Some l -> Pmap.add b (z3action a :: l) acc
           | None   -> Pmap.add b [z3action a] acc
         else acc
-      ) (Pmap.empty bmcaction_cmp) exec.sb in
+      ) (Pmap.empty bmcaction_cmp) exec.po in
       List.map (fun (a,b) ->
         let (ea,eb) = (z3action a, z3action b) in
         let f_sb_a = match Pmap.lookup a f_sb_w with
@@ -921,13 +1053,14 @@ module C11MemoryModel : MemoryModel = struct
     ; decls      = decls
     ; fns        = fns
 
-    ; assertions = aid_asserts
+    ; assertions = accessor_assertions
+                  (*aid_asserts
                  @ guard_asserts
                  @ type_asserts
                  @ addr_asserts
                  @ memord_asserts
                  @ rval_asserts
-                 @ wval_asserts
+                 @ wval_asserts*)
 
                  @ sb_asserts
                  @ asw_asserts
@@ -1125,6 +1258,27 @@ module C11MemoryModel : MemoryModel = struct
     ) executions;
 
     Solver.pop solver 1
+end
+
+module GenericModel (M: CatModel) : MemoryModel = struct
+  type z3_memory_model =
+    { event_sort : Sort.sort
+    ; event_type : Sort.sort
+
+    ; event_map  : (aid, Expr.expr) Pmap.map
+    ; action_map : (aid, action) Pmap.map
+
+    ; assertions : Expr.expr list
+    (* TODO *)
+    }
+
+  let add_assertions =
+    assert false
+
+  let compute_executions (preexec: preexec) =
+    assert false
+
+  let extract_executions = assert false
 end
 
 module BmcMem = C11MemoryModel
