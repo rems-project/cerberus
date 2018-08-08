@@ -3,6 +3,7 @@ import Loc TypingError Undefined
 
 type constraint_violation =
   | IllegalStorageClassFileScoped (* STD §6.9#2 *)
+  | StaticAssertFailed of string (* STD §6.7.10#2 *)
 
 type desugar_cause =
   (* TODO: remove this old constraint violation *)

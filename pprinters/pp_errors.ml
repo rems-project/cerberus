@@ -87,6 +87,8 @@ let string_of_cparser_cause = function
 let string_of_constraint_violation = function
   | IllegalStorageClassFileScoped ->
       "illegal storage class"
+  | StaticAssertFailed msg ->
+      "static assert expression failed: " ^ msg
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
@@ -237,6 +239,8 @@ type std_ref =
 let get_constraint_violation_ref = function
   | IllegalStorageClassFileScoped ->
       StdRef "§6.9#2"
+  | StaticAssertFailed _ ->
+      StdRef "§6.7.10#2"
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->

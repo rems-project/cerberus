@@ -586,6 +586,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return false
     | AilEoffsetof _ _ ->
         E.fail loc (Errors.Desugar_NotyetSupported "offsetof() in `integer constant expressions'")
+    | AilEstr _ ->
+        E.return false
 (*
     | AilEgeneric of expression 'a * list (generic_association 'a)
     | AilEarray of bool * ctype * list (maybe (expression 'a))
@@ -1181,6 +1183,10 @@ end
 val translate_cabs_string_literal: cabs_string_literal -> stringLiteral
 let translate_cabs_string_literal (pref_opt, str) =
    (maybe Nothing (Just -| translate_cabs_encoding_prefix) pref_opt, str)
+
+val string_of_string_literal: cabs_string_literal -> string
+let string_of_string_literal (_, ss) =
+  String.concat "" ss
 
 
 val project_base_type_specifier: cabs_type_specifier -> maybe (cabs_base_type_specifier * Loc.t)
@@ -3495,15 +3501,15 @@ end
 
 and desugar_and_register_static_assert_declaration sa_decl =
   match sa_decl with
-   | Static_assert e lit ->
+   | Static_assert (CabsExpression loc _ as e) lit ->
        desugar_expression e >>= fun d_e ->
        is_integer_constant_expression d_e >>= function
          | false ->
-             E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB204_illtyped_Static_assert)
+             E.undef loc Undefined.UB204_illtyped_Static_assert
          | true ->
-             evaluate_integer_constant_expression Loc.unknown Nothing d_e >>= fun n ->
+             evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
              if n = 0 then
-               E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.10#3 Static_assert(The constant expression shall compare unequal to 0.)")
+               E.constraint_violation loc (Errors.StaticAssertFailed (string_of_string_literal lit))
              else
                E.return ()
          end
@@ -4192,7 +4198,7 @@ let desugar_and_register_external_declaration edecl =
                           end >>
                           (* NOTE: it is the type after the initialisation which must be complete *)
                           if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
+                            E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
 (* KKK:
                             E.global_object_is_defined sym >>= function
@@ -4215,9 +4221,9 @@ let desugar_and_register_external_declaration edecl =
                       | Nothing ->
                           if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
                             (* TODO: this is wrong (see tentative definition in the STD) *)
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.9.2#3")
+                            E.undef ident_loc Undefined.UB089_tentative_definition_internal_linkage
                           else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
+                            E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
                             if dur = ATypes.Static || dur = ATypes.Thread then
                               E.get_tag_definitions >>= fun tagDefs ->
