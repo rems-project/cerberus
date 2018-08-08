@@ -2,11 +2,17 @@ open import Utils Cabs AilSyntax Core
 import Loc TypingError Undefined
 
 type constraint_violation =
-  | IllegalStorageClassFileScoped (* §6.9#2 *)
-  | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
-  | FunctionDefinitionIllegalStorageClass (* §6.9.1#4 *)
   | StaticAssertFailed of string (* §6.7.10#2 *)
+  | LabelStatementOutsideSwitch (* §6.8.1#2 *)
+  | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
+  | ContinueOutsideLoop (* §6.8.6.2#1 *)
+  | BreakOutsideSwtichOrLoop (* §6.8.6.3#1 *)
+  | NonVoidReturnVoidFunction (* §6.8.6.4#1, 1st sentence *)
+  | VoidReturnNonVoidFunction (* §6.8.6.4#1, 2nd sentence *)
+  | IllegalStorageClassFileScoped (* §6.9#2 *)
   | ExternalRedefinition of identifier (* §6.9#3 *)
+  | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
+  | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
 
 type desugar_cause =
   | Desugar_ConstraintViolation of constraint_violation
@@ -24,7 +30,6 @@ type desugar_cause =
 (*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultipleDeclaration of cabs_identifier
   | Desugar_InvalidMember of cabs_identifier * AilTypes.ctype
-  | Desugar_NonvoidReturn (* §6.8.6.4#1, 2nd sentence *)
   | Desugar_Redefinition of identifier
   | Desugar_NeverSupported of string
   | Desugar_NotyetSupported of string
