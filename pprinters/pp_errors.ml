@@ -98,8 +98,7 @@ let string_of_desugar_cause = function
   | Desugar_OtherViolation msg ->
       "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
-      "undefined behaviour: " ^
-      Undefined.pretty_string_of_undefined_behaviour ub
+      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | Desugar_ExternalObjectRedefinition sym ->
       "redefinition of an external object: " ^
       Pp_utils.to_plain_string (Pp_ail.pp_id sym)
@@ -242,6 +241,10 @@ let get_constraint_violation_ref = function
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
       get_constraint_violation_ref e
+  | Desugar_UndefinedBehaviour ub ->
+      (match Undefined.std_of_undefined_behaviour ub with
+        | Some ref -> StdRef ref
+        | None -> UnknownRef)
   | Desugar_UndeclaredIdentifier _ ->
       StdRef "§6.5.1#2"
   | Desugar_NonvoidReturn ->
