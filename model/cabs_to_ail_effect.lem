@@ -281,10 +281,6 @@ val undef: forall 'a. Loc.t -> Undefined.undefined_behaviour -> desugM 'a
 let inline undef loc ub =
   State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
 
-val internal_error: forall 'a. Loc.t -> string -> desugM 'a
-let inline internal_error loc err =
-  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_Internal err))
-
 val mapM: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM (list 'b)
 val mapM_: forall 'a 'b. ('a -> desugM 'b) -> list 'a -> desugM unit
 let inline mapM = State_exception.mapM

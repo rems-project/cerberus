@@ -3122,7 +3122,7 @@ let () = error "DONE" in
       , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
   
   else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
-    E.internal_error loc "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
+    error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
     let () = Debug.print_debug 1 [] (fun () ->
@@ -3536,7 +3536,7 @@ let desugar_declaration_base specifs idecltors =
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
-              E.internal_error loc "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
+              error "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)
@@ -4088,7 +4088,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
             (* This should not be possible due to the earlier check *)
-            E.internal_error (Loc.locOf fun_ident) "Cabs_to_ail.desugar_and_register_function_definition"
+            error "Cabs_to_ail.desugar_and_register_function_definition"
         end
       end >>= fun (loc, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->
