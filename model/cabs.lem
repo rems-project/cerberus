@@ -396,18 +396,18 @@ instance (Located cabs_statement)
 end
 
 (* NOTE: It returns the location of the identifier *)
+let rec loc_of_direct_declarator ddecl =
+  match ddecl with
+    | DDecl_identifier id ->
+        locOf id
+    | DDecl_declarator (Declarator _ ddecl) ->
+        loc_of_direct_declarator ddecl
+    | DDecl_array ddecl _ ->
+        loc_of_direct_declarator ddecl
+    | DDecl_function ddecl _ ->
+        loc_of_direct_declarator ddecl
+  end
 instance (Located direct_declarator)
-  let rec loc_of_direct_declarator ddecl =
-    match ddecl with
-      | DDecl_identifier id ->
-          locOf id
-      | DDecl_declarator (Declarator _ ddecl) ->
-          loc_of_direct_declarator ddecl
-      | DDecl_array ddecl _ ->
-          loc_of_direct_declarator ddecl
-      | DDecl_function ddecl _ ->
-          loc_of_direct_declarator ddecl
-    end
   let locOf = loc_of_direct_declarator
 end
 

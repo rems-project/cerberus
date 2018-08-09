@@ -90,6 +90,8 @@ let string_of_constraint_violation = function
       "multiple incompatible storage class specifiers"
   | ThreadLocalFunctionDeclaration ->
       "_Thread_local in function declaration"
+  | WrongTypeEnumConstant ->
+      "expression is not an integer constant expression"
   | LabelStatementOutsideSwitch ->
       "label statement outside switch"
   | StaticAssertFailed msg ->
@@ -104,6 +106,8 @@ let string_of_constraint_violation = function
       "void function should not return a value"
   | VoidReturnNonVoidFunction ->
       "non-void function should return a value"
+  | IllegalStorageClassStaticOrThreadInitializer ->
+      "initializer element is not a compile-time constant"
   | IllegalStorageClassIterationStatement
   | IllegalStorageClassFileScoped
   | IllegalStorageClassFunctionDefinition ->
@@ -113,7 +117,7 @@ let string_of_constraint_violation = function
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
-      (ansi_format [Bold] "contraint violation: ") ^ string_of_constraint_violation e
+      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation e
   | Desugar_OldConstraintViolation msg ->
       "violation of constraint " ^ msg
   | Desugar_UndeclaredIdentifier str ->
@@ -256,6 +260,10 @@ let get_constraint_violation_ref = function
       StdRef "§6.7.1#3, 1st sentence"
   | ThreadLocalFunctionDeclaration ->
       StdRef "§6.7.1#4"
+  | WrongTypeEnumConstant ->
+      StdRef "§6.7.2.2#2"
+  | IllegalStorageClassStaticOrThreadInitializer ->
+      StdRef "§6.7.9#4"
   | StaticAssertFailed _ ->
       StdRef "§6.7.10#2"
   | LabelStatementOutsideSwitch ->
@@ -286,6 +294,8 @@ let get_desugar_ref = function
       (match Undefined.std_of_undefined_behaviour ub with
         | Some ref -> StdRef ref
         | None -> UnknownRef)
+  | Desugar_NotyetSupported _ ->
+      NoRef
   | Desugar_UndeclaredIdentifier _ ->
       StdRef "§6.5.1#2"
   | _ ->
