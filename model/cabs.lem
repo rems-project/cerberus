@@ -395,6 +395,45 @@ instance (Located cabs_statement)
     loc
 end
 
+(* NOTE: It returns the location of the identifier *)
+instance (Located direct_declarator)
+  let rec loc_of_direct_declarator ddecl =
+    match ddecl with
+      | DDecl_identifier id ->
+          locOf id
+      | DDecl_declarator (Declarator _ ddecl) ->
+          loc_of_direct_declarator ddecl
+      | DDecl_array ddecl _ ->
+          loc_of_direct_declarator ddecl
+      | DDecl_function ddecl _ ->
+          loc_of_direct_declarator ddecl
+    end
+  let locOf = loc_of_direct_declarator
+end
+
+(* NOTE: It returns the location of the identifier *)
+instance (Located declarator)
+  let locOf decl =
+    let (Declarator _ ddecl) = decl in
+    locOf ddecl
+end
+
+(* NOTE: It returns the location of the identifier *)
+instance (Located external_declaration)
+  let locOf edecl =
+    match edecl with
+      | EDecl_func (FunDef _ _ decl _) ->
+          locOf decl
+      | EDecl_decl (Declaration_base _ idecls) ->
+          (* NOTE: Return just the first InitDecl location *)
+          match idecls with
+            | [] -> Loc.unknown
+            | (InitDecl _ decl _)::_ -> locOf decl
+          end
+      | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
+          locOf e
+    end
+end
 
 instance (Eq storage_class_specifier)
   let (=)  = unsafe_structural_equality
