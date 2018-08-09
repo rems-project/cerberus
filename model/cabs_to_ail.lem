@@ -4039,8 +4039,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
           E.return ()
       | _ ->
           (* STD §6.9.1#2 *)
-          let (CabsIdentifier loc _) = cabs_identifier_of_direct_declaration ddecltor in
-          E.constraint_violation loc Errors.WrongTypeFunctionIdentifier
+          E.constraint_violation (Loc.locOf ddecltor) Errors.WrongTypeFunctionIdentifier
     end >>
     
     E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (loc_fun_sym, fun_sym) ->
@@ -4105,10 +4104,7 @@ let desugar_and_register_external_declaration edecl =
   
   (* STD §6.9#2 *)
   if List.any (fun z -> z = SC_auto || z = SC_register) storage_classes then
-    let loc = cabs_identifier_of_external_declaration edecl
-              >|> List.map (fun (CabsIdentifier loc _) -> loc)
-              >|> Loc.first in
-    E.constraint_violation loc Errors.IllegalStorageClassFileScoped
+    E.constraint_violation (Loc.locOf edecl) Errors.IllegalStorageClassFileScoped
   
   else match edecl with
     | EDecl_func fdef ->
