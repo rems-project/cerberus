@@ -90,6 +90,14 @@ let string_of_constraint_violation = function
       "multiple incompatible storage class specifiers"
   | ThreadLocalFunctionDeclaration ->
       "_Thread_local in function declaration"
+  | FieldIncompleteType (qs, ty) ->
+      "field has incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | FieldFunction (Cabs.CabsIdentifier (_, f)) ->
+      "field '" ^ f ^ "' declared as a function"
+  | NoTypeSpecifierInDeclaration ->
+      "at least one type specifier should be given in the declaration"
+  | IllegalTypeSpecifierInDeclaration ->
+      "illegal combination of type specifiers"
   | WrongTypeEnumConstant ->
       "expression is not an integer constant expression"
   | LabelStatementOutsideSwitch ->
@@ -98,6 +106,14 @@ let string_of_constraint_violation = function
       "static assert expression failed: " ^ msg
   | WrongTypeFunctionIdentifier ->
       "function identifier must have a function type"
+  | EnumTagIncomplete ->
+      "incomplete enum type"
+  | AtomicTypeConstraint ->
+      "invalid use of _Atomic"
+  | TagRedefinition sym ->
+      "redefinition of '" ^ Pp_symbol.to_string_pretty sym ^ "'"
+  | TagRedeclaration sym ->
+      "use of '" ^ Pp_symbol.to_string_pretty sym ^ "' with tag type that does not match previous declaration"
   | ContinueOutsideLoop ->
       "continue statement outside a loop"
   | BreakOutsideSwtichOrLoop ->
@@ -106,6 +122,12 @@ let string_of_constraint_violation = function
       "void function should not return a value"
   | VoidReturnNonVoidFunction ->
       "non-void function should return a value"
+  | ArrayDeclarationNegativeSize ->
+      "array declared with a negative or zero size"
+  | ArrayDeclarationQsAndStaticOnlyOutmost ->
+      "type qualifiers or 'static' used in array declarator can only used in the outmost type derivation"
+  | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
+      "type qualifiers or 'static' used in array declarator outside of function prototype"
   | IllegalStorageClassStaticOrThreadInitializer ->
       "initializer element is not a compile-time constant"
   | IllegalStorageClassIterationStatement
@@ -113,24 +135,27 @@ let string_of_constraint_violation = function
   | IllegalStorageClassFunctionDefinition ->
       "illegal storage class"
   | ExternalRedefinition sym ->
-      "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
+      "redefinition of '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
+
+let string_of_misc_violation = function
+  | EnumSimpleDeclarationConstruction ->
+      "such construction is not allowed for enumerators"
+  | UndeclaredIdentifier str ->
+      "use of undeclared identifier '" ^ str ^ "'"
+  | ArrayDeclarationStarIllegalScope ->
+      "star modifier used outside of function prototype"
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
       (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation e
+  | Desugar_MiscViolation e ->
+      string_of_misc_violation e
   | Desugar_OldConstraintViolation msg ->
       "violation of constraint " ^ msg
-  | Desugar_UndeclaredIdentifier str ->
-      "use of undeclared identifier '" ^ str ^ "'"
   | Desugar_OtherViolation msg ->
       "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
-  | Desugar_BlockScoped_Thread_local_alone ->
-      "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
-       ``In the declaration of an object with block scope, if the declaration \
-       specifiers include _Thread_local, they shall also include either static \
-       or extern. [...].. ``\n"
   | Desugar_NotConstantExpression ->
       "found a non-contant expression in place of a constant one.\n"
   | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
@@ -139,11 +164,9 @@ let string_of_desugar_cause = function
   | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
       "member '" ^ str ^ "' is not defined for type '" ^
       String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
-  | Desugar_Redefinition sym ->
-      "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
   | Desugar_NeverSupported str ->
       "feature that will never supported: " ^ str
-  | Desugar_NotyetSupported str ->
+  | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
   | Desugar_TODOCTOR str ->
       "Desugar_TODOCOTR[" ^ str ^ "]"
@@ -260,8 +283,28 @@ let get_constraint_violation_ref = function
       StdRef "§6.7.1#3, 1st sentence"
   | ThreadLocalFunctionDeclaration ->
       StdRef "§6.7.1#4"
+  | NoTypeSpecifierInDeclaration ->
+      StdRef "§6.7.2#2, 1st sentence"
+  | IllegalTypeSpecifierInDeclaration ->
+      StdRef "§6.7.2#2"
+  | FieldIncompleteType _
+  | FieldFunction _ ->
+      StdRef "§6.7.2.1#3"
   | WrongTypeEnumConstant ->
       StdRef "§6.7.2.2#2"
+  | TagRedefinition _ ->
+      StdRef "§6.7.2.3#1"
+  | TagRedeclaration _ ->
+      StdRef "§6.7.2.3#2"
+  | EnumTagIncomplete ->
+      StdRef "§6.7.2.3#3"
+  | AtomicTypeConstraint ->
+      StdRef "§6.7.2.4#3"
+  | ArrayDeclarationNegativeSize ->
+      StdRef "§6.7.6.2#1, 3rd sentence"
+  | ArrayDeclarationQsAndStaticOnlyOutmost
+  | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
+      StdRef "§6.7.6.2#1, 5th sentence"
   | IllegalStorageClassStaticOrThreadInitializer ->
       StdRef "§6.7.9#4"
   | StaticAssertFailed _ ->
@@ -287,6 +330,15 @@ let get_constraint_violation_ref = function
   | IllegalStorageClassFunctionDefinition ->
       StdRef "§6.9.1#4"
 
+let get_misc_violation_ref = function
+  (* TODO: check if footnote is being printed *)
+  | EnumSimpleDeclarationConstruction -> 
+      StdRef "§6.7.2.3#7, FOOTNOTE 131"
+  | UndeclaredIdentifier _ ->
+      StdRef "§6.5.1#2"
+  | ArrayDeclarationStarIllegalScope ->
+      StdRef "§6.7.6.2#4, 2nd sentence"
+
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
       get_constraint_violation_ref e
@@ -294,10 +346,10 @@ let get_desugar_ref = function
       (match Undefined.std_of_undefined_behaviour ub with
         | Some ref -> StdRef ref
         | None -> UnknownRef)
-  | Desugar_NotyetSupported _ ->
+  | Desugar_NotYetSupported _ ->
       NoRef
-  | Desugar_UndeclaredIdentifier _ ->
-      StdRef "§6.5.1#2"
+  | Desugar_MiscViolation e ->
+      get_misc_violation_ref e
   | _ ->
       UnknownRef
 

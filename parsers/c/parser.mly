@@ -848,14 +848,14 @@ direct_declarator:
         option [] List.rev tquals_opt, false,
         map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
 | ddecltor= direct_declarator LBRACK STATIC tquals_opt= type_qualifier_list? expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt,
+    { LF.array_decl (ADecl (Loc_region ($startpos, $endpos, None), option [] List.rev tquals_opt,
         true, Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals= type_qualifier_list STATIC
   expr= assignment_expression RBRACK
-    { LF.array_decl (ADecl (Loc_unknown, List.rev tquals, true,
+    { LF.array_decl (ADecl (Loc_region ($startpos, $endpos, None), List.rev tquals, true,
         Some (ADeclSize_expression expr))) ddecltor }
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list? STAR RBRACK
-    { LF.array_decl (ADecl (Loc_unknown, option [] List.rev tquals_opt, false,
+    { LF.array_decl (ADecl (Loc_region ($startpos, $endpos, None), option [] List.rev tquals_opt, false,
         Some ADeclSize_asterisk)) ddecltor }
 | ddecltor= direct_declarator LPAREN
   ptys_ctxt= scoped(parameter_type_list) RPAREN

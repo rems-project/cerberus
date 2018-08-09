@@ -581,11 +581,11 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
               E.return false
         end
     | AilEcast _ _ _ ->
-        E.fail loc (Errors.Desugar_NotyetSupported "cast operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "cast operator in `integer constant expressions'")
     | AilEassert _ ->
         E.return false
     | AilEoffsetof _ _ ->
-        E.fail loc (Errors.Desugar_NotyetSupported "offsetof() in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "offsetof() in `integer constant expressions'")
     | AilEstr _ ->
         E.return false
 (*
@@ -695,7 +695,7 @@ except when they are contained within a subexpression that is not evaluated.115)
     
     | AilEcond _ _ _ ->
         (* TODO: location *)
-        E.fail loc (Errors.Desugar_NotyetSupported "conditional operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "conditional operator in `integer constant expressions'")
     
     
     | AilEmemberof _ _ ->
@@ -1424,18 +1424,16 @@ let arrayFromStringLiteral size_opt (pref_opt, strs) =
 
 (* STD §6.7.2.1#3, except for the flexible array part *)
 let check_members membrDefs =
-  E.mapM_ (fun (ident, (_, ty)) ->
-    E.is_incomplete ty >>= function
-      | true ->
-          E.fail (Loc.locOf ident)
-            (Errors.Desugar_OldConstraintViolation "§6.7.2.1#3, incomplete")
-      | false ->
-          if AilTypesAux.is_function ty then
-            E.fail (Loc.locOf ident)
-              (Errors.Desugar_OldConstraintViolation "§6.7.2.1#3, function")
-          else
+  E.mapM_ (fun (ident, (qs, ty)) ->
+    if AilTypesAux.is_function ty then
+      E.constraint_violation (Loc.locOf ident) (Errors.FieldFunction ident)
+    else
+      E.is_incomplete ty >>= function
+        | true ->
+            E.constraint_violation (Loc.locOf ident) (Errors.FieldIncompleteType qs ty)
+        | false ->
             E.return ()
-    end
+      end
   ) membrDefs
 
 type struct_or_union =
@@ -1479,20 +1477,18 @@ let rec desugar_type_specifiers specs =
                   (* STD §6.7.2.1#8, sentence 3 *)
                   E.fail Loc.unknown
                     (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
-              | Just ((last_ident, (_, lastMemb_ty)), membDefs) ->
+              | Just ((last_ident, (lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
                   if AilTypesAux.is_function lastMemb_ty then
-                    E.fail (Loc.locOf last_ident)
-                      (Errors.Desugar_OldConstraintViolation "§6.7.2.1#3, function")
+                      E.constraint_violation (Loc.locOf last_ident) (Errors.FieldFunction last_ident)
                   else
                     E.is_incomplete lastMemb_ty >>= function
                       | true ->
                           if AilTypesAux.is_array_unknown_size lastMemb_ty then
                             E.return ()
                           else
-                            E.fail (Loc.locOf last_ident)
-                              (Errors.Desugar_OldConstraintViolation "§6.7.2.1#3, incomplete")
+                            E.constraint_violation (Loc.locOf last_ident) (Errors.FieldIncompleteType lastMemb_qs lastMemb_ty)
                       | false ->
                           E.return ()
                     end
@@ -1508,69 +1504,70 @@ let rec desugar_type_specifiers specs =
             (def_ctor (isNothing tag_ident_opt) all_membDefs) >>
           E.return (ATypes.no_qualifiers, type_ctor tag_sym) in
         match specs with
+            (* NOTE: The parser does not generate a declaration without a type specifier *)
           | [] ->
               STD_ "§6.7.2#2, sentence 1"
-                E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.2#2, 1st sentence")
+                E.constraint_violation Loc.unknown Errors.NoTypeSpecifierInDeclaration
           
           | [TSpec loc TSpec_void] ->
               STD_ "§6.7.2#2, sentence 2 (`void' case)"
                 E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] ATypes.Void)
           
-          | [TSpec loc (TSpec_struct Nothing Nothing)] ->
-              error "TODO: TSpec_struct Nothing, Nothing"
+            (* NOTE: The parser does not generate such enum *)
+          | [TSpec loc (TSpec_enum Nothing Nothing)] ->
+              error "TSpec_enum Nothing, Nothing"
           
+            (* NOTE: The parser does not generate such struct *)
+          | [TSpec loc (TSpec_struct Nothing Nothing)] ->
+              error "TSpec_struct Nothing, Nothing"
+          
+            (* NOTE: The parser does not generate such union *)
           | [TSpec loc (TSpec_union Nothing Nothing)] ->
-              error "TODO: TSpec_union Nothing, Nothing"
+              error "TSpec_union Nothing, Nothing"
           
           | [TSpec loc (TSpec_enum (Just tag_ident) Nothing)] ->
-              (* STD §6.7.2.3#9, enum *)
+              (* NOTE: 'desugar_type_specifiers' must NOT be called on a
+                 specifier occurring in the form described by §6.7.2.3#7 (FOOTNOTE 131) *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-                | Nothing ->
-                    (* TODO: find if there is a better quote *)
-                    E.fail (Loc.locOf tag_ident)
-                      (Errors.Desugar_OtherViolation "footnote 131")
                 | Just (_, (tag_sym, _)) ->
-                    E.resolve_tag_definition tag_sym >>= function
-                      | Nothing ->
-                          (* STD §6.7.2.3#3 *)
-                          E.fail (Loc.locOf tag_ident)
-                            (Errors.Desugar_OldConstraintViolation "§6.7.2.3#3")
-                      | Just _ ->
-                          E.return ( ATypes.no_qualifiers
-                                   , ATypes.Ctype [] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))) )
-                    end
+                    STD_ "§6.7.2.3#9"
+                    E.return ( ATypes.no_qualifiers
+                             , ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))) )
+                | Nothing ->
+                    E.constraint_violation loc Errors.EnumTagIncomplete
               end
           
           | [TSpec loc (TSpec_struct (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
-                 specifier occuring in the form described by §6.7.2.3#7 *)
+                 specifier occurring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-                    (* STD §6.7.2.3#9 *)
-                    E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
-                | Just _ ->
-                    E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.2.3#2")
+                    STD_ "§6.7.2.3#9"
+                      E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
+                | Just (_, (tag_sym, _)) ->
+                    E.constraint_violation loc (Errors.TagRedeclaration tag_sym)
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
                     E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
-                    E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
+                    E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Struct tag_sym))
               end
           
           | [TSpec loc (TSpec_union (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
-                 specifier occuring in the form described by §6.7.2.3#7 *)
+                 specifier occurring in the form described by §6.7.2.3#7 *)
+              E.print_debugM 0 (fun () -> "IT DOES CALL IT") >>
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
-                    (* STD §6.7.2.3#9 *)
-                    E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
-                | Just _ ->
-                    E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.2.3#2")
+                    STD_ "§6.7.2.3#9"
+                      E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
+                | Just (_, (tag_sym, _)) ->
+                    E.constraint_violation loc (Errors.TagRedeclaration tag_sym)
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
                     E.register_tag E.Kind_union (Just tag_ident) >>= fun tag_sym ->
-                    E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
+                    E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Union tag_sym))
               end
           
           | [TSpec loc (TSpec_struct tag_ident_opt (Just sdecls))] ->
@@ -1587,31 +1584,17 @@ let rec desugar_type_specifiers specs =
                  || AilTypesAux.is_function ty
                  || AilTypesAux.is_atomic ty
                  || not (AilTypesAux.is_unqualified qs) then
-                E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.2.4#3")
+                E.constraint_violation loc Errors.AtomicTypeConstraint
               else
                 (* TODO: qualifiers *)
-                E.return (qs, ATypes.Ctype [] (ATypes.Atomic ty))
-          
-          | [TSpec loc (TSpec_enum Nothing Nothing)] ->
-              (* the C parsing should have failed *)
-              E.fail loc Errors.Desugar_impossible
+                E.return (qs, ATypes.Ctype [Annot.Aloc loc] (ATypes.Atomic ty))
           
           | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
-              let loc = match tag_ident_opt with
-                | Just ident -> Loc.locOf ident
-                | Nothing    -> Loc.other "TODO_anonymous_enum"
-              end in
               register_enumerators loc tag_sym enums >>= fun ns_rev ->
-              let loc = match tag_ident_opt with
-                | Nothing ->
-                    Loc.unknown
-                | Just tag_ident ->
-                    Loc.locOf tag_ident
-              end in
               (* NOTE: this function doesn't care about the order of the integers *)
               E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
-              E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))))
+              E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))))
           
           (* *)
           | [TSpec loc (TSpec_name ((CabsIdentifier cid_loc str) as ident))] ->
@@ -1626,14 +1609,15 @@ let rec desugar_type_specifiers specs =
                           E.resolve_typedef sym >>= fun (qs, ty) ->
                           E.return (qs, ty)
                       | Just _ ->
-                          E.fail cid_loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not King_typedef")
+                          E.fail cid_loc (Errors.Desugar_NotYetSupported "TODO: Tspec_name, not King_typedef")
                       | Nothing ->
-                          E.fail cid_loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not resolved")
+                          E.fail cid_loc (Errors.Desugar_NotYetSupported "TODO: Tspec_name, not resolved")
                     end
               end
           
           | _ ->
-              E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.2#2, 2nd sentence")
+              let loc = Loc.bbox_location (List.map Loc.locOf specs) in
+              E.constraint_violation loc Errors.IllegalTypeSpecifierInDeclaration
         end
 end
 
@@ -1704,8 +1688,7 @@ and desugar_array_declarator under_array (ADecl loc tquals is_static a_decltor_s
      | E.Scope_prototype ->
          if under_array = IsUnderArray && (tquals <> [] || is_static) then
 STD_ "§6.7.6.2#1, sentence 5, not outermost" $
-           E.fail Loc.unknown
-             (Errors.Desugar_OldConstraintViolation "§6.7.6.2#1, 5th sentence, not outermost")
+           E.constraint_violation loc Errors.ArrayDeclarationQsAndStaticOnlyOutmost
          else
            (* TODO: check, but after rereading the STD I think adjustment should only
               happen when the whole type of a parameter is "array of". But NOT for the
@@ -1730,8 +1713,7 @@ STD_ "§6.7.6.2#1, sentence 5, not outermost" $
      | _ ->
          if tquals <> [] || is_static then
 STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
-           E.fail Loc.unknown
-             (Errors.Desugar_OldConstraintViolation "§6.7.6.2#1, 5th sentence, not function parameter")
+           E.constraint_violation loc Errors.ArrayDeclarationQsAndStaticOutsideFunctionProto
          else
            (* not dealing with a parameter, so no adjustement needed *)
            E.return (fun qs ty -> (qs, ty))
@@ -1739,7 +1721,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
   
   (* TODO: is_static not yet supported *)
   if is_static then
-    E.fail loc (Errors.Desugar_NotyetSupported "array parameter with the static keyword")
+    E.fail loc (Errors.Desugar_NotYetSupported "array parameter with the static keyword")
   
   else match a_decltor_size_opt with
     | Just (ADeclSize_expression e) ->
@@ -1749,30 +1731,30 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
         desugar_expression e >>= fun d_e ->
         is_integer_constant_expression d_e >>= function
           | false ->
-              E.fail loc (Errors.Desugar_NotyetSupported "variable length array type 2")
+              E.fail loc (Errors.Desugar_NotYetSupported "variable length array type 2")
           | true ->
              (* STD §6.7.6.2#1, sentence 2 *)
              (* NOTE: the preceding STD clause is performed by a typecheck done by
                 [WipFrontend.evalIntegerConstantExpression] *)
              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               if n <= 0 then
-                E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.6.2#1, sentence 3")
+                E.constraint_violation loc Errors.ArrayDeclarationNegativeSize
               else
-                E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [] (ATypes.Array ty (Just n))))
+                E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [Annot.Aloc loc] (ATypes.Array ty (Just n))))
         end
     
     | Just ADeclSize_asterisk ->
         E.get_scope >>= function
           | E.Scope_prototype ->
               (* STD §6.7.6.2#4, sentence 2 *)
-              E.fail loc (Errors.Desugar_NotyetSupported "variable length array type")
+              E.fail loc (Errors.Desugar_NotYetSupported "variable length array type")
           | _ ->
-              E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.6.2#4, sentence 2")
+              E.fail loc (Errors.Desugar_MiscViolation Errors.ArrayDeclarationStarIllegalScope)
         end
     
     | Nothing ->
         (* here the array declarator: has no size expression *)
-        E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [] (ATypes.Array ty Nothing)))
+        E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [Annot.Aloc loc] (ATypes.Array ty Nothing)))
   end
 
 
@@ -2114,10 +2096,8 @@ STD_ "§6.5.1#2" $
                 | Just (d_e, _) ->
                     E.return d_e
                 | Nothing ->
-                    E.fail (Loc.locOf ident)
-                      (* TODO: std §6.5.1#2 *)
-                      (* TODO: check the quote *)
-                      (Errors.Desugar_UndeclaredIdentifier (show ident))
+                    E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation
+                      (Errors.UndeclaredIdentifier (show ident)))
               end
         end
     
@@ -2474,7 +2454,7 @@ and desugar_struct_declarator struct_decltor =
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
     | SDecl_bitfield declor_opt (CabsExpression loc _) ->
-        E.fail loc (Errors.Desugar_NotyetSupported "SDecl_bitfield")
+        E.fail loc (Errors.Desugar_NotYetSupported "SDecl_bitfield")
   end
 
 and desugar_enumerator (ident, e_opt) =
@@ -3139,7 +3119,7 @@ let () = error "DONE" in
       | _ ->
           (* STD §6.7.9#11, sentence 1 *)
           (* TODO: that's an undefined behaviour *)
-          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#11, sentence 1")
+          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#11, sentence 1")
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
     E.return (current_ty, d_e)
@@ -3212,19 +3192,19 @@ let () = error "DONE" in
          first §6.7.9#14 is not a constraint, second the text allows something instead of forbidding something *)
 (*
                   if not (AilTypesAux.is_array_of_character current_ty) then
-                    E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#14")
+                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
 *)
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
               | (AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) as d_e) ->
 (*
                   if not (AilTypesAux.is_array_of_character current_ty) then
-                    E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#14")
+                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                   else
 *)
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
               | (AnnotatedExpression () _ _ (AilEstr (Just _, str)) as d_e) ->
-                  E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
+                  E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
               | d_e ->
                   E.return (current_ty, d_e)
             end
@@ -3240,23 +3220,23 @@ let () = error "DONE" in
                   match d_e with
                     | AnnotatedExpression () _ _ (AilEstr (Nothing, str)) ->
                         if not (AilTypesAux.is_array_of_character current_ty) then
-                          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#14")
+                          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                         else
                           E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
                     | AnnotatedExpression () _ _ (AilEstr (Just Enc_u8, str)) ->
                         if not (AilTypesAux.is_array_of_character current_ty) then
-                          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#14")
+                          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
                         else
                           E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
                     | AnnotatedExpression () _ _ (AilEstr (Just _, str)) ->
-                        E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
+                        E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
                     | _ ->
                         E.return (current_ty, d_e)
                   end
               | false ->
                   (* NOTE: we don't to check whether d_e is a string literal because the 
                      predicate would have been true. *)
-                  E.fail (Loc.locOf e) (Errors.Desugar_OldConstraintViolation "§6.7.9#4")
+                  E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
             end
       end
   
@@ -3268,7 +3248,7 @@ let () = error "DONE" in
            | _                              -> false
          end) desigs_opt_inits && not (AilTypesAux.is_array current_ty) then
         (* STD §6.7.9#6 *)
-        E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#6")
+        E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#6")
       else
       E.get_tag_definitions >>= fun tagDefs ->
       (* TODO: atomic *)
@@ -3294,7 +3274,7 @@ let () = error "DONE" in
             E.foldlM (fun (i, acc) (desigs_opt, init) ->
               match desigs_opt with
                 | Just (Desig_member _ :: _) ->
-                    E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.9#7")
+                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.9#7")
                 | Just [Desig_array desig_e] ->
                     desugar_expression desig_e               >>= fun d_desig_e ->
                     is_integer_constant_expression d_desig_e >>= function
@@ -3306,7 +3286,7 @@ let () = error "DONE" in
                              expected current index *)
                           match compare j i with
                             | LT ->
-                                E.fail (Loc.locOf desig_e) (Errors.Desugar_OldConstraintViolation "TODO: find the STD text")
+                                E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "TODO: find the STD text")
                             | EQ ->
                                 E.return (i+1, Just d_init :: acc)
                             | GT ->
@@ -3314,7 +3294,7 @@ let () = error "DONE" in
                                 E.return (j+1, Just d_init :: (Utils.replicate_list (Just implicit) (natFromInteger $ j-i)) ++ acc)
                           end
                       | false ->
-                          E.fail (Loc.locOf desig_e) (Errors.Desugar_OldConstraintViolation "§6.7.9#6")
+                          E.fail (Loc.locOf desig_e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
                     end
                 | Nothing ->
                     wip_desugar_initializer_ loc dur elem_ty init >>= fun (elem_ty', d_init) ->
@@ -3322,7 +3302,7 @@ let () = error "DONE" in
                     E.return (i+1, Just d_init :: acc)
                 | _ ->
                     (* Multi-array designator *)
-                    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
+                    E.fail Loc.unknown (Errors.Desugar_NotYetSupported "sucks to be you")
               end
             ) (0, []) desigs_opt_inits >>= fun (_, xs_rev) ->
             
@@ -3419,7 +3399,7 @@ let () = error "DONE" in
                   
                   else
                     (* TODO: crazy stuff we don't deal with yet *)
-                    E.fail loc (Errors.Desugar_NotyetSupported "crazy struct initializers")
+                    E.fail loc (Errors.Desugar_NotYetSupported "crazy struct initializers")
 
               | _ ->
                   E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
@@ -3479,7 +3459,7 @@ let () = error "DONE" in
 (*
         | ATypes.Array elem_ty Nothing ->
             let _ = desigs_opt_inits in
-            E.fail loc (Errors.Desugar_NotyetSupported "not allowing array with no size for now")
+            E.fail loc (Errors.Desugar_NotYetSupported "not allowing array with no size for now")
 *)
 
         (* NOTE: should be a scalar type *)
@@ -4120,10 +4100,29 @@ let desugar_and_register_external_declaration edecl =
         function_specifiers= [];
         alignment_specifiers= [];
       |> []) ->
-        (* TODO: check *)
-        (* STD §6.7.2.3#7 *)
+        STD_ "§6.7.2.3#7"
         E.void (E.register_tag E.Kind_struct (Just ident))
-(*        error "TODO: §6.7.2.3#7" *)
+    
+    (* struct-or-union identifier ; *)
+    | EDecl_decl (Declaration_base <|
+        storage_classes= [];
+        type_specifiers= [TSpec _ (TSpec_union (Just ident) Nothing)];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      |> []) ->
+        STD_ "§6.7.2.3#7"
+        E.void (E.register_tag E.Kind_union (Just ident))
+    
+    (* enum identifier ; *)
+    | EDecl_decl (Declaration_base <|
+        storage_classes= [];
+        type_specifiers= [TSpec _ (TSpec_enum (Just ident) Nothing)];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      |> []) ->
+        E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation Errors.EnumSimpleDeclarationConstruction)
     
     (* TODO: check *)
     | EDecl_decl (Declaration_base specifs idecltors) ->
@@ -4205,7 +4204,7 @@ let desugar_and_register_external_declaration edecl =
                                   match link with
                                     | Linkage_internal ->
                                         (* STD §6.9#3, sentence 1 *)
-                                        E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.9#3, sentence 1")
+                                        E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9#3, sentence 1")
                                     | Linkage_external ->
                                         (* STD §6.9#5, sentence 2 *)
                                         E.fail ident_loc (Errors.Desugar_UndefinedBehaviour Undefined.UB084)

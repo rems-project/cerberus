@@ -1,4 +1,4 @@
-open import Pervasives Annot
+open import Pervasives Annot Loc
 import Symbol Cabs
 
 
@@ -95,6 +95,11 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
 and ctype =
   Ctype of list annot * ctype_
 
+instance (Located ctype)
+  let locOf cty =
+    let (Ctype annots _) = cty in
+    Annot.get_loc_ annots
+end
 
 (* STD §6.2.4#1 *)
 type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =

@@ -395,6 +395,12 @@ instance (Located cabs_statement)
     loc
 end
 
+instance (Located cabs_type_specifier)
+  let locOf tspec =
+    let (TSpec loc _) = tspec in
+    loc
+end
+
 (* NOTE: It returns the location of the identifier *)
 let rec loc_of_direct_declarator ddecl =
   match ddecl with
