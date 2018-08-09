@@ -16,10 +16,6 @@ let other str =
 let point pos =
   Loc_point pos
 
-let first = function
-  | loc::_ -> loc
-  | [] -> Loc_unknown
-
 (* [with_cursor_from loc1 loc2] makes a new (region location) with the region from loc1 and the cursor (if any) from loc2 *)
 let with_cursor_from loc1 loc2 =
   let cursor_opt = match loc2 with

@@ -625,6 +625,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
     | AilEconst (ConstantInteger _) ->
         (* NOTE: this includes enumeration constants *)
         E.return true
+    | AilEconst (ConstantFloating _) ->
+        E.return false
     | AilEconst (ConstantCharacter _) ->
         E.return true
     | AilEsizeof _ ty ->
@@ -2485,8 +2487,7 @@ and desugar_enumerator (ident, e_opt) =
         (* STD §6.7.2.2#2 *)
         is_integer_constant_expression d_e >>= function
           | false ->
-              (* TODO: the integer must also be representable as an int *)
-              E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.2.2#2")
+              E.constraint_violation loc Errors.WrongTypeEnumConstant
           | true ->
               (* TODO: the type provided to the evaluator should be the integer type
                  compatible with the enum? *)
@@ -3036,14 +3037,14 @@ let () = error "DONE" in
           (* STD §6.7.9#11, sentence 1 *)
           (* NOTE: the STD says "shall" and this is not a 'Constraints' section,
              so this is undefined behaviour... *)
-          E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB081_scalar_initializer_not_single_expression)
+          E.undef loc Undefined.UB081_scalar_initializer_not_single_expression
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
     (* STD §6.7.9#4 *)
     if dur = ATypes.Static || dur = ATypes.Thread then
       is_initializer_constant_expression d_e >>= function
         | false ->
-            E.fail (Loc.locOf d_e) (Errors.Desugar_OldConstraintViolation "§6.7.9#4")
+            E.constraint_violation (Loc.locOf d_e) Errors.IllegalStorageClassStaticOrThreadInitializer
         | true ->
             if AilTypesAux.is_integer current_ty then
 (* TODO: bring back the evaluation if possible. But the following code is wrong
@@ -3069,6 +3070,7 @@ let () = error "DONE" in
       | Init_list [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
           E.return lit
       | _ ->
+          (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)
           E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB083)
     end >>= fun (pref_opt, char_strs) ->
     
@@ -3120,7 +3122,7 @@ let () = error "DONE" in
       , AnnotatedExpression () [] loc (AilEarray true elem_ty conved_chars_array))
   
   else if (*TODO: An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t *) false then
-    error "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
+    E.internal_error loc "TODO: wip_desugar_initializer_, An array with element type compatible with a qualified or unqualified version of wchar_t, char16_t, or char32_t"
 
   else
     let () = Debug.print_debug 1 [] (fun () ->
@@ -3534,7 +3536,7 @@ let desugar_declaration_base specifs idecltors =
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
-              E.internal_error Loc.unknown "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
+              E.internal_error loc "Cabs_to_ail.desugar_declaration_base found a positive is_tentative"
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)

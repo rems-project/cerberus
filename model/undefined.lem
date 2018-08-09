@@ -700,7 +700,8 @@ let std_of_undefined_behaviour = function
 
   | UB060_block_scope_function_with_storage_class ->
       Just "§6.7.1#7"
-
+  | UB081_scalar_initializer_not_single_expression ->
+      Just "§6.7.9#11, 1st sentence"
   | UB086_incomplete_adjusted_parameter ->
       Just "§6.9.1#7, sentence 4"
   | UB089_tentative_definition_internal_linkage ->
@@ -721,6 +722,8 @@ let ub_short_string = function
       "block scoped function identifier with illegal storage class"
   | UB089_tentative_definition_internal_linkage ->
       "tentative definition with internal linkage and incomplete type"
+  | UB081_scalar_initializer_not_single_expression ->
+      "the initializer for a scalar shall be a single expression"
   | UB204_illtyped_Static_assert ->
       "static assert expression is not an integral constant expression"
   | _ ->
