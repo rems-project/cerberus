@@ -22,7 +22,6 @@ type constraint_violation =
 type desugar_cause =
   | Desugar_ConstraintViolation of constraint_violation
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour
-  | Desugar_Internal of string
   | Desugar_NotyetSupported of string
   (* TODO: remove this old constraint violation *)
   | Desugar_OldConstraintViolation of string
