@@ -1053,7 +1053,7 @@ let register_tag kind tag_ident_opt =
           if Kind_tag kind = prev_kind then
             return sym
           else
-            fail (Loc.locOf tag_ident) (Errors.Desugar_OldConstraintViolation "§6.7.2.3#2")
+            constraint_violation (Loc.locOf tag_ident) (Errors.TagRedeclaration sym)
       | false ->
           do_fresh ()
     end
@@ -1067,7 +1067,7 @@ let register_tag_definition loc tag_sym tag_decl =
     Map.member tag_sym st.tag_definitions
   ) >>= function
     | true ->
-        fail loc (Errors.Desugar_OldConstraintViolation "§6.7.2.3#1")
+        constraint_violation loc (Errors.TagRedefinition tag_sym)
     | false ->
         return ()
   end >>
@@ -1078,8 +1078,8 @@ let register_tag_definition loc tag_sym tag_decl =
         if Implementation_.register_enum tag_sym ns_rev then
           return ()
         else
-          (* this should have been caught as redefinition just earlier *)
-          fail loc Errors.Desugar_impossible
+          (* NOTE: this should have been caught as redefinition just earlier *)
+          error "cabs_to_ail_effect: register_tag_definition"
     | _ ->
         return ()
   end >>

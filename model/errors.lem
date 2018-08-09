@@ -5,7 +5,18 @@ type constraint_violation =
   | IllegalMultipleStorageClasses (* §6.7.1#2 *)
   | IllegalMultipleStorageClassesThreadLocal (* §6.7.1#3 *)
   | ThreadLocalFunctionDeclaration (* §6.7.1#4 *)
+  | FieldIncompleteType of AilTypes.qualifiers * AilTypes.ctype (* §6.7.2#2 *)
+  | NoTypeSpecifierInDeclaration (* §6.7.2#2 *)
+  | IllegalTypeSpecifierInDeclaration (* §6.7.2#2 *)
+  | FieldFunction of Cabs.cabs_identifier (* §6.7.2.1#3 *)
   | WrongTypeEnumConstant (* §6.7.2.2#2 *)
+  | TagRedefinition of Symbol.sym (* §6.7.2.3#1 *)
+  | TagRedeclaration of Symbol.sym (* §6.7.2.3#2 *)
+  | EnumTagIncomplete (* §6.7.2.3#3 *)
+  | AtomicTypeConstraint (* §6.7.2.4#3 *)
+  | ArrayDeclarationNegativeSize (* §6.7.6.2#1, 3rd sentence *)
+  | ArrayDeclarationQsAndStaticOnlyOutmost (* §6.7.6.2#1, 5th sentence *)
+  | ArrayDeclarationQsAndStaticOutsideFunctionProto (* §6.7.6.2#1, 5th sentence *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
   | StaticAssertFailed of string (* §6.7.10#2 *)
   | LabelStatementOutsideSwitch (* §6.8.1#2 *)
@@ -19,24 +30,24 @@ type constraint_violation =
   | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
 
+type misc_violation =
+  | EnumSimpleDeclarationConstruction (* FOOTNOTE.131 *)
+  | UndeclaredIdentifier of string (*§6.5.1#2 *)
+  | ArrayDeclarationStarIllegalScope (* §6.7.6.2#4, sentence 2 *)
+
 type desugar_cause =
   | Desugar_ConstraintViolation of constraint_violation
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour
-  | Desugar_NotyetSupported of string
+  | Desugar_MiscViolation of misc_violation
+  | Desugar_NotYetSupported of string
+  | Desugar_NeverSupported of string
   (* TODO: remove this old constraint violation *)
   | Desugar_OldConstraintViolation of string
   | Desugar_OtherViolation of string
-  | Desugar_UndeclaredIdentifier of string
-(* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_BlockScoped_Thread_local_alone
-(*  | Desugar_THREAD_LOCAL_FUNCTION *)               (* Desugar_ConstraintViolation "§6.7.1#4" *)
-(*  | Desugar_BLOCK_FUNCTION_STORAGE *)              (* Desugar_ConstraintViolation "§6.7.1#7" *)
+  (* TODO: move these to Desugar_ConstraintViolation *)
   | Desugar_NotConstantExpression
-(*  | Desugar_CASE_NOT_INTEGER_CONSTANT_EXRESSION *) 
   | Desugar_MultipleDeclaration of cabs_identifier
   | Desugar_InvalidMember of cabs_identifier * AilTypes.ctype
-  | Desugar_Redefinition of identifier
-  | Desugar_NeverSupported of string
   | Desugar_TODOCTOR of string
   | Desugar_impossible
   | Desugar_constantExpression_notInteger of string (* the std location for this particular instance *)
