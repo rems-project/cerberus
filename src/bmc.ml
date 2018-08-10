@@ -1407,7 +1407,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
 
       if (memorder = Release || memorder = Acq_rel) then
         bmc_debug_print 3
-          "memory order of atomic_load must not be Release or Acq_rel"
+            "memory order of atomic_load must not be Release or Acq_rel"
       ;
       return { expr      = ret_expr
              ; asserts   = (mk_vc valid_memorder)::ret.asserts

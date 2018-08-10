@@ -147,7 +147,7 @@ let is_fence (a: action) = match a with
 (* ======== CAT SPECIFICATION ============ *)
 module CatFile = struct
   type base_set =
-    | BaseSet_Universal (* all events *)
+    | BaseSet_U         (* all events *)
     | BaseSet_R         (* read events *)
     | BaseSet_W         (* write events *)
     | BaseSet_M         (* reads and writes *)
@@ -158,9 +158,11 @@ module CatFile = struct
     | BaseRel_id
     | BaseRel_asw
     | BaseRel_po
+    (*
     | BaseRel_dep_addr
     | BaseRel_dep_data
     | BaseRel_dep_ctrl
+    *)
 
   type base_identifier =
     | BaseId_rf
@@ -168,42 +170,45 @@ module CatFile = struct
     | BaseId_co
 
   type id =
-    | Id of string
+    | Id of string (* TODO: only relations allowed currently *)
     | BaseId of base_identifier
-    | BaseRel of base_relation
 
   type set =
     | Set_base of base_set
-    | Set_union of set list
+    | Set_union of set * set
     | Set_intersection of set * set
     | Set_difference of set * set
 
-  type expr =
+  type simple_expr =
     | Eid of id
     | Ebase of base_relation
-    | Etransitive_closure of expr
-    | Ereflexive_transitive_closure of expr
-    | Ereflexive_closure of expr
-    | Einverse of expr
-    | Eunion of expr list (* expr * expr *)
-    | Esequence of expr * expr
-    | Edifference of expr * expr
-    | Eintersection of expr * expr
+    | Einverse of simple_expr
+    | Eunion of simple_expr list (* expr * expr *)
+    | Eintersection of simple_expr list
+    | Esequence of simple_expr * simple_expr (* domain analysis *)
+    | Edifference of simple_expr * simple_expr
     | Eset of set (*identity relation on set *)
-    | Ecartesian_product of set * set
+    | Eprod of set * set (* cartesian product *)
+    | Ereflexive_closure of simple_expr
 
-  type assertion =
-    | Irreflexive of expr
-    | Acyclic of expr
+  type expr =
+    | Esimple of simple_expr
+    | Eplus of simple_expr (* transitive closure *)
+    | Estar of simple_expr (* reflexive, transitive closure *)
 
-  let mk_prod (x: set) (y: set) =
-    Ecartesian_product(x,y)
+  type constraint_expr =
+    | Irreflexive of simple_expr
+    | Acyclic of simple_expr
 
-  let mk_set_I =
-    Set_base BaseSet_I
+  let mk_set_U = Set_base BaseSet_U
 
-  let mk_set_M =
-    Set_base BaseSet_M
+  let mk_set_I = Set_base BaseSet_I
+
+  let mk_set_M = Set_base BaseSet_M
+
+  let mk_set_R = Set_base BaseSet_R
+
+  let mk_set_W = Set_base BaseSet_W
 
   let mk_set_diff (x: set) (y:set) =
     Set_difference (x,y)
@@ -211,36 +216,42 @@ module CatFile = struct
   let mk_po = Ebase BaseRel_po
 
   let mk_identity = Ebase BaseRel_id
+  let mk_prod (x: set) (y: set) =
+    Eprod(x,y)
 
-  let mk_rf = Eid (BaseId BaseId_rf)
-  let mk_rf_inv = Eid (BaseId BaseId_rf_inv)
-  let mk_co = Eid (BaseId BaseId_co)
+  let mk_rf = (Eid (BaseId BaseId_rf))
+  let mk_rf_inv = (Eid (BaseId BaseId_rf_inv))
+  let mk_co = (Eid (BaseId BaseId_co))
   let mk_id (s: string) =
     Eid (Id s)
 
-  let mk_sequence (e1:expr) (e2:expr) =
+  let mk_sequence (e1:simple_expr) (e2:simple_expr) =
     Esequence (e1,e2)
 
-  let mk_plus (e: expr) =
-    Etransitive_closure e
+  let mk_plus (e: simple_expr) =
+    Eplus e
 
-  let mk_diff (e1: expr) (e2:expr) =
+  let mk_diff (e1: simple_expr) (e2:simple_expr) =
     Edifference (e1,e2)
 
-  let mk_union (es: expr list) =
+  let mk_union (es: simple_expr list) =
     Eunion es
+
+  let mk_simple (es: simple_expr) =
+    Esimple es
 end
 
 module type CatModel = sig
-  val identifers : string list
-  val bindings   : (string * CatFile.expr) list
-  val assertions : (string option * CatFile.assertion) list
-
+  (*val identifiers : string list*)
+  val bindings   : (string
+                    * (CatFile.set * CatFile.set)
+                    * CatFile.expr) list
+  val constraints : (string option * CatFile.constraint_expr) list
 end
 
-module RC11Model = struct
+module RC11Model : CatModel = struct
   open CatFile
-  let identifiers =
+  (*let identifiers =
     [ "sb"
     (*; "rs"
     ; "sw"*)
@@ -250,20 +261,28 @@ module RC11Model = struct
     ; "eco"
     (*; "psc_base"*)
     ]
-
+  *)
+  (* TODO: fresh identifiers? duplications *)
   let bindings =
-    [ ("sb", Eunion [mk_po; mk_prod mk_set_I (mk_set_diff mk_set_M mk_set_I)])
-    ; ("hb", mk_plus (mk_id "sb"))
-    ; ("mo", mk_co)
-    ; ("fr", mk_diff (mk_sequence mk_rf_inv (mk_id "mo")) mk_identity)
-    ; ("eco", Eunion [mk_rf; mk_id "mo"; mk_id "fr"
-                     ;mk_sequence (mk_id "mo") mk_rf
-                     ;mk_sequence (mk_id "fr") mk_rf])
+    [ ("sb", (mk_set_U, mk_set_U),
+             mk_simple (mk_union
+              [mk_po;mk_prod mk_set_I (mk_set_diff mk_set_M mk_set_I)]))
+    ; ("hb", (mk_set_U, mk_set_U),
+             mk_plus (mk_id "sb"))
+    ; ("mo", (mk_set_W, mk_set_W),
+             mk_simple mk_co)
+    ; ("fr", (mk_set_R, mk_set_W),
+             mk_simple
+               (mk_diff (mk_sequence mk_rf_inv (mk_id "mo")) mk_identity))
+    ; ("eco", (mk_set_U, mk_set_U),
+              mk_simple (mk_union [mk_rf; mk_id "mo"; mk_id "fr"
+                                  ;mk_sequence (mk_id "mo") mk_rf
+                                  ;mk_sequence (mk_id "fr") mk_rf]))
     ]
 
-  let assertions =
-    [ (Some "coh", Irreflexive (mk_sequence (mk_id "mo") (mk_id "eco")))
-    ; (Some "sb|rf", Acyclic (mk_union [mk_id "sb"; mk_rf]))
+  let constraints =
+    [ (Some "coh", Irreflexive ((mk_sequence (mk_id "hb") (mk_id "eco"))))
+    ; (Some "sb|rf", Acyclic ((mk_union [mk_id "sb"; mk_rf])))
     ]
 end
 
@@ -289,7 +308,6 @@ let pp_loc () loc =
   match Expr.get_args loc with
   | [a1;a2] -> sprintf "(%s,%s)" (Expr.to_string a1) (Expr.to_string a2)
   | _ -> Expr.to_string loc
-
 
 let pp_thread_id () tid =
   pp_tid tid

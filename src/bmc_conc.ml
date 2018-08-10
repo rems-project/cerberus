@@ -52,6 +52,9 @@ let aid_of_bmcaction (bmcaction: bmc_action) =
 let addr_of_bmcaction (bmcaction: bmc_action) =
   PointerSort.get_addr (addr_of_action (get_action bmcaction))
 
+let is_initial_bmcaction (bmcaction: bmc_action) =
+  tid_of_bmcaction bmcaction = initial_tid
+
 let guard_of_bmcaction (BmcAction(_, g, _) : bmc_action) = g
 
 let is_pos_action (BmcAction(pol, _, _): bmc_action) = match pol with
@@ -312,6 +315,12 @@ module MemoryModelCommon = struct
     addr     : FuncDecl.func_decl;
     rval     : FuncDecl.func_decl;
     wval     : FuncDecl.func_decl;
+
+    rf_inv   : FuncDecl.func_decl;
+
+    co_clk   : FuncDecl.func_decl;
+
+    po       : FuncDecl.func_decl;
   }
 
   let apply = FuncDecl.apply
@@ -325,6 +334,12 @@ module MemoryModelCommon = struct
     ; memord   = mk_decl "memord"  [events]  mk_memord_type
     ; rval     = mk_decl "rval"    [events]  Loaded.mk_sort
     ; wval     = mk_decl "wval"    [events]  Loaded.mk_sort
+
+    ; rf_inv   = mk_decl "rf_inv"  [events]  events
+
+    ; co_clk   = mk_decl "co_clk"  [events]  (Integer.mk_sort g_ctx)
+
+    ; po       = mk_decl "po"      [events;events] boolean_sort
     }
 
   type builtin_fnapps = {
@@ -339,6 +354,14 @@ module MemoryModelCommon = struct
     isRead    : Expr.expr -> Expr.expr;
     isWrite   : Expr.expr -> Expr.expr;
     same_loc  : Expr.expr * Expr.expr -> Expr.expr;
+
+    rf_inv    : Expr.expr -> Expr.expr;
+    rf        : Expr.expr * Expr.expr -> Expr.expr;
+
+    co_clk    : Expr.expr -> Expr.expr;
+    co        : Expr.expr * Expr.expr -> Expr.expr;
+
+    po        : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -358,6 +381,14 @@ module MemoryModelCommon = struct
                                            ;mk_eq (getAddr e1) (getAddr e2)
                                            ]
                     ) in
+
+    let rf_inv = (fun e -> apply decls.rf_inv [e]) in
+    let rf     = (fun (e1,e2) -> mk_and [isRead e2
+                                        ;mk_eq (rf_inv e2) e1
+                                        ]) in
+
+    let co_clk = (fun e -> apply decls.co_clk [e]) in
+
     { getAid    = getAid
     ; getGuard  = getGuard
     ; getEtype  = getEtype
@@ -369,6 +400,18 @@ module MemoryModelCommon = struct
     ; isRead    = isRead
     ; isWrite   = isWrite
     ; same_loc  = same_loc
+
+    ; rf        = rf
+    ; rf_inv    = rf_inv
+
+    ; co_clk    = co_clk
+    ; co        = (fun (e1,e2) -> mk_and [mk_lt g_ctx (co_clk e1) (co_clk e2)
+                                         ;isWrite e1
+                                         ;isWrite e2
+                                         ;same_loc (e1,e2)
+                                         ])
+
+    ; po        = (fun (e1,e2) -> apply decls.po [e1;e2])
     }
 
   type ret =
@@ -377,10 +420,23 @@ module MemoryModelCommon = struct
     ; decls      : builtin_decls
     ; fns        : builtin_fnapps
     ; assertions : Expr.expr list
+
+    ; po_assert       : Expr.expr list
+    ; well_formed_rf  : Expr.expr list
+    ; well_formed_co  : Expr.expr list
+    ; co_init         : Expr.expr list
     }
+
+  let gen_all_assertions (ret: ret) =
+      ret.po_assert
+    @ ret.well_formed_rf
+    @ ret.well_formed_co
+    @ ret.co_init
+    @ ret.assertions
 
   let initialise (exec: preexec) =
     let all_actions = exec.initial_actions @ exec.actions in
+    let prod_actions = cartesian_product all_actions all_actions in
     bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
     let event_sort = mk_event_sort all_actions in
     let all_events = Enumeration.get_consts event_sort in
@@ -392,6 +448,9 @@ module MemoryModelCommon = struct
       Pmap.find (aid_of_bmcaction action) event_map in
     let decls = mk_decls event_sort in
     let fns = mk_fn_apps decls in
+
+    let writes = List.filter has_wval all_actions in
+    let reads = List.filter has_rval all_actions in
 
     let aid_asserts = List.map (fun action ->
       mk_eq (fns.getAid (z3action action))
@@ -419,18 +478,53 @@ module MemoryModelCommon = struct
       mk_eq (fns.getRval (z3action action))
             (Loaded.mk_expr (Expr.simplify (rval_of_action (get_action action))
                                            None))
-      ) (List.filter has_rval all_actions) in
+      ) reads in
 
     let wval_asserts = List.map (fun action ->
       mk_eq (fns.getWval (z3action action))
             (Loaded.mk_expr (Expr.simplify (wval_of_action (get_action action))
                                            None))
-    ) (List.filter has_wval all_actions) in
+    ) writes in
+
+    (* ==== Well formed assertions ==== *)
+    let well_formed_rf = List.map (fun action ->
+      let e = z3action action in
+      mk_implies (fns.getGuard e)
+                 (mk_and [fns.isWrite (fns.rf_inv e)
+                         ;fns.same_loc (e, fns.rf_inv e)
+                         ;mk_eq (fns.getRval e) (fns.getWval (fns.rf_inv e))
+                         ;fns.getGuard (fns.rf_inv e)
+                         ])
+      ) reads in
+
+    let well_formed_co =
+      List.map (fun (w1,w2) ->
+        let (e1,e2) = (z3action w1, z3action w2) in
+        mk_implies (mk_and [fns.getGuard e1
+                           ;fns.getGuard e2
+                           ;mk_not (mk_eq e1 e2)
+                           ;fns.same_loc(e1,e2)
+                           ])
+                  (mk_not (mk_eq (fns.co_clk e1) (fns.co_clk e2)))
+      ) (cartesian_product writes writes) in
+
+    let co_init =
+      List.map (fun e ->
+        mk_eq (fns.co_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
+      exec.initial_actions in
+
+    (* ==== po assert ==== *)
+    let po_asserts =
+      let mk_po = (fun (a,b) -> fns.po (z3action a, z3action b)) in
+      let not_po = not_related exec.po prod_actions find_rel in
+        (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_true) exec.po)
+      @ (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_false) not_po) in
 
     { event_sort = event_sort
     ; event_map  = event_map
     ; decls      = decls
     ; fns        = fns
+
     ; assertions =   aid_asserts
                    @ guard_asserts
                    @ type_asserts
@@ -438,6 +532,11 @@ module MemoryModelCommon = struct
                    @ memord_asserts
                    @ rval_asserts
                    @ wval_asserts
+
+    ; po_assert      = po_asserts
+    ; well_formed_rf = well_formed_rf
+    ; well_formed_co = well_formed_co
+    ; co_init        = co_init
     }
 end
 
@@ -457,11 +556,10 @@ module C11MemoryModel : MemoryModel = struct
     rval     : FuncDecl.func_decl;
     wval     : FuncDecl.func_decl;
 
+    rf_inv   : FuncDecl.func_decl;
+
     sb       : FuncDecl.func_decl;
     asw      : FuncDecl.func_decl;
-    mo_clk   : FuncDecl.func_decl;
-
-    rf_inv   : FuncDecl.func_decl;
 
     rs       : FuncDecl.func_decl;
     rf_dag   : FuncDecl.func_decl;
@@ -490,13 +588,14 @@ module C11MemoryModel : MemoryModel = struct
     isWrite   : Expr.expr -> Expr.expr;
     same_loc  : Expr.expr * Expr.expr -> Expr.expr;
 
+    rf_inv   : Expr.expr -> Expr.expr;
+    rf       : Expr.expr * Expr.expr -> Expr.expr;
+
     sb        : Expr.expr * Expr.expr -> Expr.expr;
     asw       : Expr.expr * Expr.expr -> Expr.expr;
 
-    mo_clk   : Expr.expr -> Expr.expr;
+    co_clk   : Expr.expr -> Expr.expr;
     mo       : Expr.expr * Expr.expr -> Expr.expr;
-    rf_inv   : Expr.expr -> Expr.expr;
-    rf       : Expr.expr * Expr.expr -> Expr.expr;
 
     rf_dag   : Expr.expr * Expr.expr -> Expr.expr;
     rs       : Expr.expr * Expr.expr -> Expr.expr;
@@ -586,11 +685,10 @@ module C11MemoryModel : MemoryModel = struct
     ; rval     = builtin.rval
     ; wval     = builtin.wval
 
+    ; rf_inv   = builtin.rf_inv
+
     ; sb       = mk_decl "sb"       [events;events] boolean_sort
     ; asw      = mk_decl "asw"      [events;events] boolean_sort
-    ; mo_clk   = mk_decl "mo_clk"   [events]        (Integer.mk_sort g_ctx)
-
-    ; rf_inv   = mk_decl "rf_inv"   [events]        events
 
     ; rs       = mk_decl "rs"       [events;events] boolean_sort
     ; rf_dag   = mk_decl "rf_dag"   [events;events] boolean_sort
@@ -617,18 +715,17 @@ module C11MemoryModel : MemoryModel = struct
     let isWrite   = builtin.isWrite in
     let same_loc  = builtin.same_loc in
 
+    let rf_inv = builtin.rf_inv in
+    let rf     = builtin.rf in
+
     let sb     = (fun (e1,e2) -> apply decls.sb  [e1;e2]) in
     let asw    = (fun (e1,e2) -> apply decls.asw [e1;e2]) in
 
-    let mo_clk = (fun e -> apply decls.mo_clk [e]) in
-    let mo     = (fun (e1,e2) -> mk_and [mk_lt g_ctx (mo_clk e1) (mo_clk e2)
+    let co_clk = builtin.co_clk in
+    let mo     = (fun (e1,e2) -> mk_and [mk_lt g_ctx (co_clk e1) (co_clk e2)
                                         ;isWrite e1
                                         ;isWrite e2
                                         ;same_loc (e1,e2)
-                                        ]) in
-    let rf_inv = (fun e -> apply decls.rf_inv [e]) in
-    let rf     = (fun (e1,e2) -> mk_and [isRead e2
-                                        ;mk_eq (rf_inv e2) e1
                                         ]) in
 
     let rf_dag  = (fun (e1,e2) -> apply decls.rf_dag  [e1;e2]) in
@@ -672,7 +769,7 @@ module C11MemoryModel : MemoryModel = struct
 
     ; sb        = sb
     ; asw       = asw
-    ; mo_clk    = mo_clk
+    ; co_clk    = co_clk
     ; mo        = mo
     ; rf_inv    = rf_inv
     ; rf        = rf
@@ -981,6 +1078,7 @@ module C11MemoryModel : MemoryModel = struct
     (* ==== Well formed assertions ==== *)
 
     (* ∀e. isRead(e) ∧ guard(e) => isWrite(rf(e)) ∧ same_addr ∧ same_val *)
+    (*
     let well_formed_rf = List.map (fun action ->
       let e = z3action action in
       mk_implies (fns.getGuard e)
@@ -990,8 +1088,12 @@ module C11MemoryModel : MemoryModel = struct
                          ;fns.getGuard (fns.rf_inv e)
                          ])
     ) (List.filter has_rval all_actions) in
+    *)
+    let well_formed_rf = initialised.well_formed_rf in
 
-    let well_formed_mo =
+    let well_formed_mo = initialised.well_formed_co in
+
+    (*
       List.map (fun (w1,w2) ->
         let (e1,e2) = (z3action w1, z3action w2) in
         mk_implies (mk_and [fns.getGuard e1
@@ -1001,11 +1103,12 @@ module C11MemoryModel : MemoryModel = struct
                            ])
                   (mk_not (mk_eq (fns.mo_clk e1) (fns.mo_clk e2)))
       ) (cartesian_product writes writes) in
+    *)
 
-    let mo_init =
-      List.map (fun e ->
+    let mo_init = initialised.co_init in
+      (*List.map (fun e ->
         mk_eq (fns.mo_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
-    exec.initial_actions in
+    exec.initial_actions in *)
 
     (* ==== coherence ==== *)
     (* irreflexive (hb ; eco?) as coh *)
@@ -1261,24 +1364,219 @@ module C11MemoryModel : MemoryModel = struct
 end
 
 module GenericModel (M: CatModel) : MemoryModel = struct
+  open MemoryModelCommon
+  type decl_map = (CatFile.id, FuncDecl.func_decl) Pmap.map
+  type fn_map = (CatFile.id, (Expr.expr * Expr.expr) -> Expr.expr) Pmap.map
+
   type z3_memory_model =
-    { event_sort : Sort.sort
-    ; event_type : Sort.sort
+    { event_sort   : Sort.sort
+    ; actions      : bmc_action list
+    ; events       : Expr.expr list
+    ; prod_actions : (bmc_action * bmc_action) list
 
-    ; event_map  : (aid, Expr.expr) Pmap.map
-    ; action_map : (aid, action) Pmap.map
+    ; event_map    : (aid, Expr.expr) Pmap.map
 
-    ; assertions : Expr.expr list
+    ; z3action     : bmc_action -> Expr.expr
+
+    ; builtin_fns   : MemoryModelCommon.builtin_fnapps
+    ; builtin_decls : MemoryModelCommon.builtin_decls
+    ; fns           : fn_map
+    ; decls         : decl_map
+    ; assertions    : (Expr.expr list) option
     (* TODO *)
     }
 
-  let add_assertions =
-    assert false
+  let add_assertions solver model =
+    match model.assertions with
+    | Some assertions -> Solver.add solver assertions
+    | None            -> assert false
 
-  let compute_executions (preexec: preexec) =
-    assert false
+  let baseset_to_filter (set: CatFile.base_set) (a: bmc_action) =
+    match set with
+    | BaseSet_U -> true
+    | BaseSet_R -> has_rval a
+    | BaseSet_W -> has_wval a
+    | BaseSet_M -> has_rval a || has_wval a
+    | BaseSet_A -> is_atomic_bmcaction a
+    | BaseSet_I -> is_initial_bmcaction a
 
-  let extract_executions = assert false
+  (* TODO: rename all this... *)
+  let rec set_to_filter (set: CatFile.set) (a: bmc_action) =
+    match set with
+    | Set_base base -> baseset_to_filter base a
+    | Set_union (s1,s2) ->
+        (set_to_filter s1 a) || (set_to_filter s2 a)
+    | Set_intersection (s1,s2) ->
+        (set_to_filter s1 a) && (set_to_filter s2 a)
+    | Set_difference (s1,s2) ->
+        (set_to_filter s1 a) && (not (set_to_filter s2 a))
+
+  let id_to_z3 (model: z3_memory_model)
+               (id: CatFile.id)
+               ((a,b) : bmc_action * bmc_action)
+               : Expr.expr =
+    let (ea,eb) = (model.z3action a, model.z3action b) in
+    match id with
+    | Id s ->
+        begin
+        match Pmap.lookup id model.fns with
+        | Some fn -> fn (ea, eb)
+        | None -> assert false
+        end
+    | BaseId baseid ->
+        begin
+        match baseid with
+        | BaseId_rf     -> model.builtin_fns.rf (ea,eb)
+        | BaseId_rf_inv -> model.builtin_fns.rf (eb,ea)
+        | BaseId_co     -> model.builtin_fns.co (ea,eb)
+        end
+
+  (* === Expr -> boolean *)
+  let rec simple_expr_to_z3 (model: z3_memory_model)
+                            (expr: CatFile.simple_expr)
+                            ((a,b): bmc_action * bmc_action)
+                            : Expr.expr =
+    let z3action = model.z3action in
+    let (ea,eb) = (z3action a, z3action b) in
+    match expr with
+    | Eid id -> id_to_z3 model id (a,b)
+    | Ebase base ->
+        begin
+        match base with
+        | BaseRel_id  -> mk_eq ea eb
+        | BaseRel_asw -> assert false
+        | BaseRel_po  -> model.builtin_fns.po (ea,eb)
+        end
+    | Einverse expr ->
+        simple_expr_to_z3 model expr (b,a)
+    | Eunion elist ->
+        mk_or (List.map (fun e -> simple_expr_to_z3 model e (a,b)) elist)
+    | Eintersection elist ->
+        mk_and (List.map (fun e -> simple_expr_to_z3 model e (a,b)) elist)
+    | Esequence (e1,e2) ->
+        mk_or (List.map (fun x ->
+                mk_and [model.builtin_fns.getGuard (z3action x)
+                       ;simple_expr_to_z3 model e1 (a,x)
+                       ;simple_expr_to_z3 model e2 (x,b)
+                       ]
+              ) model.actions)
+    | Edifference (e1,e2) ->
+        mk_and [ simple_expr_to_z3 model e1 (a,b)
+               ; mk_not (simple_expr_to_z3 model e2 (a,b))]
+    | Eset set ->
+        mk_bool ((aid_of_bmcaction a = aid_of_bmcaction b)
+                 && (set_to_filter set a))
+    | Eprod (set1,set2) ->
+        mk_bool ((set_to_filter set1 a) && (set_to_filter set2 b))
+    | Ereflexive_closure expr ->
+        mk_or [simple_expr_to_z3 model expr (a,b); mk_eq ea eb]
+
+  let expr_to_z3 (model: z3_memory_model)
+                 (id: CatFile.id)
+                 (expr: CatFile.expr)
+                 ((a,b) : bmc_action * bmc_action) =
+    let z3action = model.z3action in
+    let (ea,eb) = (z3action a, z3action b) in
+    let getGuard = model.builtin_fns.getGuard in
+    let condition = begin match expr with
+    | Esimple e ->
+        simple_expr_to_z3 model e (a,b)
+    | Eplus e ->
+        mk_or [simple_expr_to_z3 model e (a,b)
+              ;simple_expr_to_z3 model (Esequence(e, Eid id)) (a,b)]
+    | Estar e ->
+        mk_or [simple_expr_to_z3 model e (a,b)
+              ;mk_eq ea eb
+              ;simple_expr_to_z3 model (Esequence(e, Eid id)) (a,b)]
+    end in
+    mk_and [condition
+           ;getGuard ea
+           ;getGuard eb]
+
+  (* TODO: clarify type of binding *)
+  let mk_assertion (s, (hd,tl), expr) (model: z3_memory_model) =
+    let id = CatFile.Id s in
+    let fn = match Pmap.lookup id model.fns with
+             | Some f -> f | None -> assert false in
+    let candidates =
+      let candidate_heads = List.filter (set_to_filter hd) model.actions in
+      let candidate_tails = List.filter (set_to_filter tl) model.actions in
+      cartesian_product candidate_heads candidate_tails in
+    let z3action = model.z3action in
+    let not_rel = not_related candidates model.prod_actions find_rel in
+      List.map (fun (a,b) -> mk_eq (fn (z3action a,z3action b))
+                             (expr_to_z3 model id expr (a,b)))
+               candidates
+    @ List.map (fun (a,b) -> mk_eq (fn (z3action a,z3action b)) mk_false)
+               not_rel
+
+  let mk_constraint ((s_opt, constr): string option * CatFile.constraint_expr)
+                    (model: z3_memory_model)
+                    : Expr.expr list =
+    let getGuard = model.builtin_fns.getGuard in
+    let z3action = model.z3action in
+    let event_sort = model.event_sort in
+    match constr with
+    | Irreflexive expr ->
+        List.map (fun a ->
+          mk_not (mk_and [getGuard (z3action a)
+                         ;simple_expr_to_z3 model expr (a,a)
+                         ])
+        ) model.actions
+    | Acyclic expr ->
+        let clk_name =
+          match s_opt with | Some s -> s | None -> "acyclic_clk" in
+        let clk_decl = mk_decl clk_name [event_sort] (Integer.mk_sort g_ctx) in
+        let clk_fn event = Expr.mk_app g_ctx clk_decl [event] in
+        List.map (fun (a,b) ->
+          let (ea,eb) = (z3action a, z3action b) in
+          mk_implies (mk_and [getGuard ea
+                             ;getGuard eb
+                             ;simple_expr_to_z3 model expr (a,b)
+                             ])
+                     (mk_lt g_ctx (clk_fn ea) (clk_fn eb))
+        ) model.prod_actions
+
+  let mk_decls_and_fnapps (events: Sort.sort) =
+    List.fold_left (fun (decls, fnapps) id ->
+      let decl = (mk_decl id [events;events] boolean_sort) in
+      let fnapp = (fun (e1,e2) -> apply decl [e1;e2]) in
+      (Pmap.add (CatFile.Id id) decl decls,
+       Pmap.add (CatFile.Id id) fnapp fnapps)
+    ) (Pmap.empty compare, Pmap.empty compare)
+      (List.map (fun (s,_,_) -> s) M.bindings)
+
+  let compute_executions (exec: preexec) =
+    let common        = initialise exec in
+    let (decls,fns)   = mk_decls_and_fnapps common.event_sort in
+    let actions = exec.initial_actions @ exec.actions in
+    let event_map = common.event_map in
+    let model : z3_memory_model =
+      { event_sort    = common.event_sort
+      ; events        = Enumeration.get_consts common.event_sort
+      ; actions       = actions
+      ; prod_actions  = cartesian_product actions actions
+      ; event_map     = event_map
+      ; z3action      = (fun a -> Pmap.find (aid_of_bmcaction a) event_map)
+      ; builtin_decls = common.decls
+      ; builtin_fns   = common.fns
+      ; decls         = decls
+      ; fns           = fns
+      ; assertions    = None
+      } in
+    let assertions =
+      gen_all_assertions common
+      @ List.concat (List.map
+          (fun constr -> mk_constraint constr model) M.constraints)
+      @ List.concat (List.map
+          (fun binding -> mk_assertion binding model) M.bindings)
+    in
+    (*List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
+    {model with assertions = Some assertions}
+
+  let extract_executions solver model ret =
+    assert false
 end
 
-module BmcMem = C11MemoryModel
+(*module BmcMem = C11MemoryModel*)
+module BmcMem = GenericModel(RC11Model)
