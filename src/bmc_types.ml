@@ -214,6 +214,7 @@ module CatFile = struct
     Set_difference (x,y)
 
   let mk_po = Ebase BaseRel_po
+  let mk_asw = Ebase BaseRel_asw
 
   let mk_identity = Ebase BaseRel_id
   let mk_prod (x: set) (y: set) =
@@ -247,6 +248,8 @@ module type CatModel = sig
                     * (CatFile.set * CatFile.set)
                     * CatFile.expr) list
   val constraints : (string option * CatFile.constraint_expr) list
+
+  val to_output : string list (* TODO: should be id? *)
 end
 
 module RC11Model : CatModel = struct
@@ -267,8 +270,10 @@ module RC11Model : CatModel = struct
     [ ("sb", (mk_set_U, mk_set_U),
              mk_simple (mk_union
               [mk_po;mk_prod mk_set_I (mk_set_diff mk_set_M mk_set_I)]))
+    ; ("sw", (mk_set_U, mk_set_U),
+             mk_simple mk_asw)
     ; ("hb", (mk_set_U, mk_set_U),
-             mk_plus (mk_id "sb"))
+             mk_plus (mk_union [mk_id "sb"; mk_id "sw"])) (* TODO: sw, asw *)
     ; ("mo", (mk_set_W, mk_set_W),
              mk_simple mk_co)
     ; ("fr", (mk_set_R, mk_set_W),
@@ -284,6 +289,8 @@ module RC11Model : CatModel = struct
     [ (Some "coh", Irreflexive ((mk_sequence (mk_id "hb") (mk_id "eco"))))
     ; (Some "sb|rf", Acyclic ((mk_union [mk_id "sb"; mk_rf])))
     ]
+
+  let to_output = ["sw"]
 end
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)

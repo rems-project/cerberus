@@ -321,6 +321,7 @@ module MemoryModelCommon = struct
     co_clk   : FuncDecl.func_decl;
 
     po       : FuncDecl.func_decl;
+    asw      : FuncDecl.func_decl;
   }
 
   let apply = FuncDecl.apply
@@ -340,6 +341,7 @@ module MemoryModelCommon = struct
     ; co_clk   = mk_decl "co_clk"  [events]  (Integer.mk_sort g_ctx)
 
     ; po       = mk_decl "po"      [events;events] boolean_sort
+    ; asw      = mk_decl "asw"     [events;events] boolean_sort
     }
 
   type builtin_fnapps = {
@@ -362,6 +364,7 @@ module MemoryModelCommon = struct
     co        : Expr.expr * Expr.expr -> Expr.expr;
 
     po        : Expr.expr * Expr.expr -> Expr.expr;
+    asw       : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -412,6 +415,7 @@ module MemoryModelCommon = struct
                                          ])
 
     ; po        = (fun (e1,e2) -> apply decls.po [e1;e2])
+    ; asw       = (fun (e1,e2) -> apply decls.asw [e1;e2])
     }
 
   type ret =
@@ -422,6 +426,7 @@ module MemoryModelCommon = struct
     ; assertions : Expr.expr list
 
     ; po_assert       : Expr.expr list
+    ; asw_assert      : Expr.expr list
     ; well_formed_rf  : Expr.expr list
     ; well_formed_co  : Expr.expr list
     ; co_init         : Expr.expr list
@@ -429,6 +434,7 @@ module MemoryModelCommon = struct
 
   let gen_all_assertions (ret: ret) =
       ret.po_assert
+    @ ret.asw_assert
     @ ret.well_formed_rf
     @ ret.well_formed_co
     @ ret.co_init
@@ -520,6 +526,15 @@ module MemoryModelCommon = struct
         (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_true) exec.po)
       @ (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_false) not_po) in
 
+    (* ==== asw assert ==== *)
+    (* TODO: code duplication *)
+    let asw_asserts =
+      let mk_asw = (fun (a,b) -> fns.asw (z3action a, z3action b)) in
+      let not_asw = not_related exec.asw prod_actions find_rel in
+        (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_true) exec.asw)
+      @ (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_false) not_asw) in
+
+
     { event_sort = event_sort
     ; event_map  = event_map
     ; decls      = decls
@@ -534,10 +549,62 @@ module MemoryModelCommon = struct
                    @ wval_asserts
 
     ; po_assert      = po_asserts
+    ; asw_assert     = asw_asserts
     ; well_formed_rf = well_formed_rf
     ; well_formed_co = well_formed_co
     ; co_init        = co_init
     }
+
+  type execution = {
+    z3_asserts     : Expr.expr;
+    ret            : Expr.expr;
+
+    preexec        : preexec2;
+    witness        : witness;
+    exdd           : execution_derived_data;
+
+    race_free      : bool;
+  }
+
+  let extract_executions
+      (solver: Solver.solver)
+      (mem: 'a)
+      (extract_execution: Model.model -> 'a -> Expr.expr -> execution )
+      (ret_value: Expr.expr)
+      : unit =
+
+    Solver.push solver;
+    let rec aux ret =
+      if Solver.check solver [] = SATISFIABLE then
+        let model = Option.get (Solver.get_model solver) in
+        let execution = extract_execution model mem ret_value in
+        Solver.add solver [mk_not execution.z3_asserts];
+        aux (execution :: ret)
+      else
+        ret
+    in
+    let executions = aux [] in
+    let num_races =
+        (List.length (List.filter (fun e -> not e.race_free) executions)) in
+    printf "# consistent executions: %d\n" (List.length executions);
+    printf "# executions with races: %d\n" num_races;
+
+    printf "Return values: %s\n"
+           (String.concat ", " (List.map
+              (fun e -> Expr.to_string e.ret) executions));
+    List.iteri (fun i exec ->
+      if (List.length exec.preexec.actions > 0) then
+        begin
+        let dot_str =
+          pp_dot () (ppmode_default_web,
+                          (exec.preexec, Some exec.witness,
+                           Some (exec.exdd))) in
+        let filename = sprintf "%s_%d.dot" "graph" i in
+        save_to_file filename dot_str
+        end
+    ) executions;
+
+    Solver.pop solver 1
 end
 
 
@@ -643,6 +710,7 @@ module C11MemoryModel : MemoryModel = struct
     sbrf_clk       : Expr.expr list;
   }
 
+  (*
   type execution = {
     z3_asserts     : Expr.expr;
     ret            : Expr.expr;
@@ -653,6 +721,7 @@ module C11MemoryModel : MemoryModel = struct
 
     race_free      : bool;
   }
+*)
 
   type z3_memory_model = {
     event_sort : Sort.sort; (* Enum of memory actions *)
@@ -1329,6 +1398,9 @@ module C11MemoryModel : MemoryModel = struct
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
                          : unit =
+    MemoryModelCommon.extract_executions
+      solver mem extract_execution ret_value
+      (*
     Solver.push solver;
     let rec aux ret =
       if Solver.check solver [] = SATISFIABLE then
@@ -1361,6 +1433,7 @@ module C11MemoryModel : MemoryModel = struct
     ) executions;
 
     Solver.pop solver 1
+    *)
 end
 
 module GenericModel (M: CatModel) : MemoryModel = struct
@@ -1375,6 +1448,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; prod_actions : (bmc_action * bmc_action) list
 
     ; event_map    : (aid, Expr.expr) Pmap.map
+    ; action_map   : (aid, action) Pmap.map
 
     ; z3action     : bmc_action -> Expr.expr
 
@@ -1390,6 +1464,11 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     match model.assertions with
     | Some assertions -> Solver.add solver assertions
     | None            -> assert false
+
+  let lookup_id (id: CatFile.id) (fns: fn_map) =
+    match Pmap.lookup id fns with
+    | Some fn -> fn
+    | None -> assert false
 
   let baseset_to_filter (set: CatFile.base_set) (a: bmc_action) =
     match set with
@@ -1418,11 +1497,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let (ea,eb) = (model.z3action a, model.z3action b) in
     match id with
     | Id s ->
-        begin
-        match Pmap.lookup id model.fns with
-        | Some fn -> fn (ea, eb)
-        | None -> assert false
-        end
+        (lookup_id id model.fns) (ea,eb)
     | BaseId baseid ->
         begin
         match baseid with
@@ -1444,7 +1519,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         begin
         match base with
         | BaseRel_id  -> mk_eq ea eb
-        | BaseRel_asw -> assert false
+        | BaseRel_asw -> model.builtin_fns.asw (ea,eb)
         | BaseRel_po  -> model.builtin_fns.po (ea,eb)
         end
     | Einverse expr ->
@@ -1496,8 +1571,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
   (* TODO: clarify type of binding *)
   let mk_assertion (s, (hd,tl), expr) (model: z3_memory_model) =
     let id = CatFile.Id s in
-    let fn = match Pmap.lookup id model.fns with
-             | Some f -> f | None -> assert false in
+    let fn = lookup_id id model.fns in
     let candidates =
       let candidate_heads = List.filter (set_to_filter hd) model.actions in
       let candidate_tails = List.filter (set_to_filter tl) model.actions in
@@ -1551,12 +1625,19 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let (decls,fns)   = mk_decls_and_fnapps common.event_sort in
     let actions = exec.initial_actions @ exec.actions in
     let event_map = common.event_map in
+    let action_map =
+      List.fold_left (fun acc a ->
+        Pmap.add (aid_of_bmcaction a) (get_action a) acc)
+        (Pmap.empty Pervasives.compare) actions in
+
     let model : z3_memory_model =
       { event_sort    = common.event_sort
       ; events        = Enumeration.get_consts common.event_sort
       ; actions       = actions
       ; prod_actions  = cartesian_product actions actions
       ; event_map     = event_map
+      ; action_map    = action_map
+
       ; z3action      = (fun a -> Pmap.find (aid_of_bmcaction a) event_map)
       ; builtin_decls = common.decls
       ; builtin_fns   = common.fns
@@ -1574,8 +1655,122 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     (*List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
     {model with assertions = Some assertions}
 
-  let extract_executions solver model ret =
-    assert false
+
+  (* TODO: code duplication here with C11MemoryModel *)
+  let extract_execution (model: Model.model)
+                        (mem: z3_memory_model)
+                        (ret_value: Expr.expr) =
+    let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
+    let fns = mem.builtin_fns in
+    let proj_fst = (fun (p1,p2) -> (fst p1, fst p2))  in
+    let get_bool (b: Expr.expr) = match Boolean.get_bool_value b with
+       | L_TRUE -> true
+       | L_FALSE -> false
+       | _ -> false in
+    let get_relation rel (p1,p2) = get_bool (interp (rel (snd p1, snd p2))) in
+    let action_events = List.fold_left (fun acc (aid, action) ->
+      let event = Pmap.find aid mem.event_map in
+      (*if tid_of_action action = initial_tid then acc*)
+      if (Boolean.get_bool_value (interp (fns.getGuard event))
+               = L_TRUE) then
+        let new_action = match action with
+          | Load (aid,tid,memorder,loc,rval) ->
+              let loc = interp (fns.getAddr event) in
+              let rval = interp (fns.getRval event) in
+              Load(aid,tid,memorder,loc,rval)
+          | Store(aid,tid,memorder,loc,wval) ->
+              let loc = interp (fns.getAddr event) in
+              let wval = interp (fns.getWval event) in
+              Store(aid,tid,memorder,loc,wval)
+          | RMW (aid,tid,memorder,loc,rval,wval) ->
+              let loc = interp (fns.getAddr event) in
+              let rval = interp (fns.getRval event) in
+              let wval = interp (fns.getWval event) in
+              RMW(aid,tid,memorder,loc,rval,wval)
+          | Fence _ ->
+              action
+        in (new_action, event) :: acc
+      else acc
+    ) [] (Pmap.bindings_list mem.action_map) in
+    let not_initial action = (tid_of_action action <> initial_tid) in
+    let remove_initial rel =
+      List.filter (fun (x,y) -> not_initial x && not_initial y) rel in
+
+    let actions = List.map fst action_events in
+    let noninitial_actions = List.filter not_initial actions in
+    let events = List.map snd action_events in
+    let prod = cartesian_product action_events action_events in
+    let threads = Pset.elements (
+        List.fold_left (fun acc a -> Pset.add (tid_of_action a) acc)
+                       (Pset.empty compare) noninitial_actions) in
+    let po = List.filter (get_relation fns.po) prod in
+    let asw = List.filter (get_relation fns.asw) prod in
+
+    let preexec : preexec2 =
+      { actions = noninitial_actions
+      ; threads = threads
+      ; sb      = remove_initial (List.map proj_fst po)
+      ; asw     = remove_initial (List.map proj_fst asw)
+      } in
+
+    let rf = List.filter (get_relation fns.rf) prod in
+    let co = List.filter (get_relation fns.co) prod in
+    (*let sc = List.filter (get_relation fns.sc) prod in*)
+
+    let witness : witness =
+      { rf = remove_initial (List.map proj_fst rf)
+      ; mo = remove_initial (List.map proj_fst co)
+      ; sc = []
+      } in
+
+    let derived_relations =
+      List.map (fun s ->
+        let fn = lookup_id (CatFile.Id s) mem.fns in
+        let rel = List.filter (get_relation fn) prod in
+        (s, List.map proj_fst rel)
+      ) M.to_output in
+
+    (*let sw = List.filter (get_relation fns.sw) prod in *)
+    let execution_derived_data =
+      { derived_relations =  derived_relations
+      ; undefined_behaviour = []
+            (*[("dr",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) data_race))
+            ;("ur",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) unseq_race))
+            ]*)
+      } in
+    let guard_asserts = List.map (fun event ->
+         mk_eq (fns.getGuard event) (interp (fns.getGuard event))
+      ) events in
+    let rf_asserts = List.map (fun ((_,e1),(_,e2)) ->
+        mk_eq (fns.rf (e1,e2)) mk_true
+      ) rf in
+    let co_asserts = List.map (fun ((_,e1),(_,e2)) ->
+        mk_eq (fns.co (e1,e2)) mk_true
+      ) co in
+
+    let ret = interp ret_value in
+    bmc_debug_print 4 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));
+
+    { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; co_asserts])
+    ; ret = ret
+
+    ; preexec = preexec
+    ; witness = witness
+    ; exdd    = execution_derived_data
+
+    ; race_free = true (* TODO *)
+    (*race_free = (List.length data_race = 0) && (List.length unseq_race =
+      0)*)
+    }
+
+
+  (* TODO: fix api *)
+  let extract_executions (solver   : Solver.solver)
+                         (mem      : z3_memory_model)
+                         (ret_value: Expr.expr)
+                         : unit =
+    MemoryModelCommon.extract_executions
+      solver mem extract_execution ret_value
 end
 
 (*module BmcMem = C11MemoryModel*)
