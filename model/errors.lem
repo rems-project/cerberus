@@ -8,6 +8,7 @@ type constraint_violation =
   | FieldIncompleteType of AilTypes.qualifiers * AilTypes.ctype (* §6.7.2#2 *)
   | NoTypeSpecifierInDeclaration (* §6.7.2#2 *)
   | IllegalTypeSpecifierInDeclaration (* §6.7.2#2 *)
+  | StructDeclarationLacksDeclaratorList (* §6.7.2.1#2 *)
   | FieldFunction of Cabs.cabs_identifier (* §6.7.2.1#3 *)
   | WrongTypeEnumConstant (* §6.7.2.2#2 *)
   | TagRedefinition of Symbol.sym (* §6.7.2.3#1 *)
@@ -17,7 +18,12 @@ type constraint_violation =
   | ArrayDeclarationNegativeSize (* §6.7.6.2#1, 3rd sentence *)
   | ArrayDeclarationQsAndStaticOnlyOutmost (* §6.7.6.2#1, 5th sentence *)
   | ArrayDeclarationQsAndStaticOutsideFunctionProto (* §6.7.6.2#1, 5th sentence *)
+  | IllegalStorageClassFunctionDeclarator (* §6.7.6.3#2 *)
+  | VariableSizedObjectInitialization (* §6.7.9#3 *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
+  | IllegalLinkageAndInitialization (* §6.7.9#5 *)
+  | IllegalTypeArrayDesignator (* §6.7.9#6, 1st sentence *)
+  | IllegalSizeArrayDesignator (* §6.7.9#6, 2nd sentence *)
   | StaticAssertFailed of string (* §6.7.10#2 *)
   | LabelStatementOutsideSwitch (* §6.8.1#2 *)
   | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
@@ -29,11 +35,16 @@ type constraint_violation =
   | ExternalRedefinition of identifier (* §6.9#3 *)
   | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
+  | IllegalIdentifierTypeVoidInFunctionDefinition (* §6.9.1#5, 1st sentence *)
+  | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
 
 type misc_violation =
   | EnumSimpleDeclarationConstruction (* FOOTNOTE.131 *)
   | UndeclaredIdentifier of string (*§6.5.1#2 *)
   | ArrayDeclarationStarIllegalScope (* §6.7.6.2#4, sentence 2 *)
+  | ArrayCharStringLiteral (* §6.7.9#14 *)
+  | UniqueVoidParameterInFunctionDeclaration (* unknown quote *)
+  | TypedefInitializer (* unknown quote *)
 
 type desugar_cause =
   | Desugar_ConstraintViolation of constraint_violation
@@ -45,7 +56,6 @@ type desugar_cause =
   | Desugar_OldConstraintViolation of string
   | Desugar_OtherViolation of string
   (* TODO: move these to Desugar_ConstraintViolation *)
-  | Desugar_NotConstantExpression
   | Desugar_MultipleDeclaration of cabs_identifier
   | Desugar_InvalidMember of cabs_identifier * AilTypes.ctype
   | Desugar_TODOCTOR of string

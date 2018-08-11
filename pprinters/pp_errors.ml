@@ -98,6 +98,8 @@ let string_of_constraint_violation = function
       "at least one type specifier should be given in the declaration"
   | IllegalTypeSpecifierInDeclaration ->
       "illegal combination of type specifiers"
+  | StructDeclarationLacksDeclaratorList ->
+      "non-anonymous struct/union must contain a declarator list"
   | WrongTypeEnumConstant ->
       "expression is not an integer constant expression"
   | LabelStatementOutsideSwitch ->
@@ -128,12 +130,26 @@ let string_of_constraint_violation = function
       "type qualifiers or 'static' used in array declarator can only used in the outmost type derivation"
   | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
       "type qualifiers or 'static' used in array declarator outside of function prototype"
+  | IllegalStorageClassFunctionDeclarator ->
+      "invalid storage class specifier in function declarator"
+  | VariableSizedObjectInitialization ->
+      "variable-sized object may not be initialized"
   | IllegalStorageClassStaticOrThreadInitializer ->
       "initializer element is not a compile-time constant"
+  | IllegalLinkageAndInitialization ->
+      "identifier linkage forbids to have an initializer"
+  | IllegalTypeArrayDesignator ->
+      "expression is not an integer constant expression"
+  | IllegalSizeArrayDesignator ->
+      "array designator value is negative"
   | IllegalStorageClassIterationStatement
   | IllegalStorageClassFileScoped
   | IllegalStorageClassFunctionDefinition ->
       "illegal storage class"
+  | IllegalIdentifierTypeVoidInFunctionDefinition ->
+      "argument may not have 'void' type"
+  | UniqueVoidParameterInFunctionDefinition ->
+      "'void' must be the first and only parameter if specified"
   | ExternalRedefinition sym ->
       "redefinition of '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
 
@@ -144,6 +160,12 @@ let string_of_misc_violation = function
       "use of undeclared identifier '" ^ str ^ "'"
   | ArrayDeclarationStarIllegalScope ->
       "star modifier used outside of function prototype"
+  | ArrayCharStringLiteral ->
+      "string literals must be of type array of characters"
+  | UniqueVoidParameterInFunctionDeclaration ->
+      "'void' must be the first and only parameter if specified"
+  | TypedefInitializer ->
+      "illegal initializer in type definition"
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
@@ -156,8 +178,6 @@ let string_of_desugar_cause = function
       "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
-  | Desugar_NotConstantExpression ->
-      "found a non-contant expression in place of a constant one.\n"
   | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
       "violation of constraint (§6.7#3): multiple declaration of `" ^
       str ^ "'."
@@ -287,6 +307,8 @@ let get_constraint_violation_ref = function
       StdRef "§6.7.2#2, 1st sentence"
   | IllegalTypeSpecifierInDeclaration ->
       StdRef "§6.7.2#2"
+  | StructDeclarationLacksDeclaratorList ->
+      StdRef "§6.7.2.1#2"
   | FieldIncompleteType _
   | FieldFunction _ ->
       StdRef "§6.7.2.1#3"
@@ -305,8 +327,18 @@ let get_constraint_violation_ref = function
   | ArrayDeclarationQsAndStaticOnlyOutmost
   | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
       StdRef "§6.7.6.2#1, 5th sentence"
+  | IllegalStorageClassFunctionDeclarator ->
+      StdRef "§6.7.6.3#2"
+  | VariableSizedObjectInitialization ->
+      StdRef "§6.7.9#3"
   | IllegalStorageClassStaticOrThreadInitializer ->
       StdRef "§6.7.9#4"
+  | IllegalLinkageAndInitialization ->
+      StdRef "§6.7.9#5"
+  | IllegalTypeArrayDesignator ->
+      StdRef "§6.7.9#6, 1st sentence"
+  | IllegalSizeArrayDesignator ->
+      StdRef "§6.7.9#6, 2nd sentence"
   | StaticAssertFailed _ ->
       StdRef "§6.7.10#2"
   | LabelStatementOutsideSwitch ->
@@ -329,6 +361,10 @@ let get_constraint_violation_ref = function
       StdRef "§6.9.1#2"
   | IllegalStorageClassFunctionDefinition ->
       StdRef "§6.9.1#4"
+  | IllegalIdentifierTypeVoidInFunctionDefinition ->
+      StdRef "§6.9.1#5, 1st sentence"
+  | UniqueVoidParameterInFunctionDefinition ->
+      StdRef "§6.9.1#5"
 
 let get_misc_violation_ref = function
   (* TODO: check if footnote is being printed *)
@@ -338,6 +374,11 @@ let get_misc_violation_ref = function
       StdRef "§6.5.1#2"
   | ArrayDeclarationStarIllegalScope ->
       StdRef "§6.7.6.2#4, 2nd sentence"
+  | ArrayCharStringLiteral ->
+      StdRef "§6.7.9#14"
+  | UniqueVoidParameterInFunctionDeclaration
+  | TypedefInitializer ->
+      UnknownRef
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
