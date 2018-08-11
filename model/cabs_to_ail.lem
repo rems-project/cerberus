@@ -612,13 +612,13 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         is_integer_constant_expression e
     | AilErvalue _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail loc Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilErvalue _)"
     | AilEarray_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail Loc.unknown Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilEarray_decay _)"
     | AilEfunction_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail Loc.unknown Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilEfunction_decay _)"
 
 
 
@@ -1475,8 +1475,7 @@ let rec desugar_type_specifiers specs =
               | Nothing ->
                   (* xs was an empty list *)
                   (* STD §6.7.2.1#8, sentence 3 *)
-                  E.fail Loc.unknown
-                    (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
+                  E.undef Loc.unknown Undefined.UB061_no_named_members
               | Just ((last_ident, (lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
@@ -1824,14 +1823,14 @@ and desugar_direct_abstract_declarator under_array = function
       E.under_scope E.Scope_prototype
         (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params, isVariadic) ->
       match params with
-        | [(Nothing, (qs, ATypes.Ctype _ ATypes.Void, _))] ->
+        | [(Nothing, (qs, ATypes.Ctype annots ATypes.Void, _))] ->
             if not (AilTypesAux.is_unqualified qs) then
-              let () = Debug.warn [Debug.DB_desugaring] (fun () -> 
+              let () = Debug.warn [Debug.DB_desugaring] (fun () ->
                 "(UNSURE) forbidding the 'void' parameter to have qualifiers") in
               (* NOTE: I can't find if the STD actually requires this, but
                  allowing qualifiers would be meaningless and compilers (at
                  least clang and gcc) do the same *)
-              E.fail Loc.unknown (Errors.Desugar_OtherViolation "'void' as parameter must not be qualified")
+              E.undef (Annot.get_loc_ annots) Undefined.UB078_modified_void_parameter
             else
               (* STD §6.7.6.3#10 *)
               E.return []
@@ -1909,13 +1908,13 @@ and desugar_parameter_type_list fundef (Params param_decls isVariadic) =
   end >>= fun params ->
   
   match params with
-    | [(Nothing, (qs, ATypes.Ctype _ ATypes.Void, isRegister))] ->
+    | [(Nothing, (qs, ATypes.Ctype annots ATypes.Void, isRegister))] ->
         (* NOTE: the (illegal) case where there is a identifier is dealt with
            inside 'desugar_parameter_declaration' *)
         if not (AilTypesAux.is_unqualified qs) || isRegister then
           (* NOTE: this is undefined according to annex J.2, though
              I don't undestand why when reading the text (at §6.7.6.3) *)
-          E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB078_modified_void_parameter)
+          E.undef (Annot.get_loc_ annots) Undefined.UB078_modified_void_parameter
         else
           (* STD §6.7.6.3#10 *)
           E.return ([], isVariadic)
@@ -1928,7 +1927,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
   match param_decl with
     | PDeclaration_decl specifs decltor ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.6.3#2")
+          E.constraint_violation (Loc.locOf decltor) Errors.IllegalStorageClassFunctionDeclarator
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
@@ -1941,13 +1940,12 @@ and desugar_parameter_declaration is_first fundef param_decl =
           if AilTypesAux.is_void _ty then
             match fundef with
               | IsFunDef ->
-                  E.fail Loc.unknown
-                    (Errors.Desugar_OldConstraintViolation "§6.9.1#5, sentence 1")
+                  E.constraint_violation (Loc.locOf decltor) Errors.IllegalIdentifierTypeVoidInFunctionDefinition
               | NotFunDef ->
                   (* STD §6.7#7 *)
                   (* NOTE: this paragraph applies here because identifiers declared to
                      be a function parameter have no linkage *)
-                  E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB059_incomplete_no_linkage_identifier)
+                  E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
             end
           else
             let (qs, ty) = AilTypesAux.adjust _qs _ty in
@@ -1960,8 +1958,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                            make this a constraint violation, but then there is
                            also §6.7#7 that should apply here (making it UB
                            afterall) ... *)
-                        E.fail Loc.unknown
-                          (Errors.Desugar_UndefinedBehaviour Undefined.UB086_incomplete_adjusted_parameter)
+                        E.undef (Loc.locOf decltor) Undefined.UB086_incomplete_adjusted_parameter
                     | NotFunDef ->
                         (* NOTE: §6.7.6.3#12, explicitly says non-fundef can have
                            incomplete (adjusted) parameter types, but I assume they
@@ -1969,7 +1966,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                         (* STD §6.7#7 *)
                         (* NOTE: this paragraph applies here because identifiers declared to
                            be a function parameter have no linkage *)
-                        E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB059_incomplete_no_linkage_identifier)
+                        E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
                   end
               | false ->
                   let isRegister = List.elem SC_register specifs.storage_classes in
@@ -1984,7 +1981,9 @@ and desugar_parameter_declaration is_first fundef param_decl =
             end
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.6.3#2")
+          (* TODO: Should position of storage classes be tracked? *)
+          let loc = Loc.bbox_location (List.map Loc.locOf specifs.type_specifiers) in
+          E.constraint_violation loc Errors.IllegalStorageClassFunctionDeclarator
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
@@ -2001,15 +2000,13 @@ and desugar_parameter_declaration is_first fundef param_decl =
           match fundef with
             | IsFunDef ->
                 if not (is_first && AilTypesAux.is_void ty) then
-                  E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.9.1#5")
+                  E.constraint_violation (Loc.locOf ty) Errors.UniqueVoidParameterInFunctionDefinition
                 else
                   E.return ret
             | NotFunDef ->
                 if not is_first && AilTypesAux.is_void ty then
                   (* TODO: check this *)
-                  E.fail Loc.unknown
-                    (Errors.Desugar_OtherViolation "found a void parameter (in a non-fundef). \
-                       This is probably forbidden, but can't find the STD saying so")
+                  E.fail (Loc.locOf ty) (Errors.Desugar_MiscViolation Errors.UniqueVoidParameterInFunctionDeclaration)
                 else
                   (* NOTE: base on §6.7.6.3#12, this allows incomplete types *)
                   E.return ret
@@ -2068,13 +2065,13 @@ STD_ "§6.5.1#2" $
           | Just (_, E.OReg_enum_constant sym) ->
               E.resolve_enum_constant sym
           | Just (_, E.OReg_typedef _) ->
-              E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+              E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
           | Just (scope, E.OReg_other sym kind _) ->
               (* I love the fact that it is a footnote that says that undeclared
                  identifiers are syntax errors ... *)
               E.scope_is_visible scope >>= fun is_visible ->
               if not is_visible || not (E.is_object_kind kind || kind = E.OK_function) then
-                E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+                E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
               else
                 E.add_used_identifier sym >>
                 (* TODO(check): this is to let the Ail typechecker know about
@@ -2096,8 +2093,7 @@ STD_ "§6.5.1#2" $
                 | Just (d_e, _) ->
                     E.return d_e
                 | Nothing ->
-                    E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation
-                      (Errors.UndeclaredIdentifier (show ident)))
+                    E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
               end
         end
     
@@ -2214,7 +2210,8 @@ STD_ "§6.5.3.1#3" $
           | AnnotatedExpression _ _ _ (AilEident sym) ->
               E.return (AilEva_start d_e sym)
           | _ ->
-              E.fail Loc.unknown (Errors.Desugar_TODOCTOR "the second operand of va_start() was not paramN")
+              (* TODO: is this a fatal error? *)
+              error "the second operand of va_start() was not paramN"
         end
     | CabsEva_arg e tyname ->
         (* TODO: do something with the qualifiers? *)
@@ -2264,8 +2261,7 @@ STD_ "§6.7.1#4" $
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
 STD_ "§6.7.1#7" $
-    E.fail loc
-      (Errors.Desugar_UndefinedBehaviour Undefined.UB060_block_scope_function_with_storage_class)
+    E.undef loc Undefined.UB060_block_scope_function_with_storage_class
   else
 STD_ "§6.7.1#8" $
     (* TODO *)
@@ -2316,11 +2312,11 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         (* STD §6.7.9#3 *)
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#3")
+          E.constraint_violation loc Errors.VariableSizedObjectInitialization
         
         (* STD §6.7.9#5 *)
         else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-          E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#5")
+          E.constraint_violation (Loc.locOf decltor) Errors.IllegalLinkageAndInitialization
         
         else
 (*
@@ -2383,7 +2379,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
     
     | InitDecl loc decltor (Just init) ->
         if scs = [SC_typedef] then
-          E.fail loc (Errors.Desugar_OtherViolation "TODO(find std): typedef can't have a initializer")
+          E.fail loc (Errors.Desugar_MiscViolation Errors.TypedefInitializer)
         else
           desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
           let (qs, _ty) = mk_qs_ctype base_qs base_ty in
@@ -2395,10 +2391,10 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
           (* STD §6.7.9#3 *)
           if not (   AilTypesAux.is_array_unknown_size ty
                   || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-            E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#3")
+            E.constraint_violation loc Errors.VariableSizedObjectInitialization
           (* STD §6.7.9#5 *)
           else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-            E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#5")
+            E.constraint_violation (Loc.locOf decltor) Errors.IllegalLinkageAndInitialization
           else
             (* postponing the desugaring of the initialiser since the identifier
                (which gets register after the current function) need to be in scope *)
@@ -2431,7 +2427,7 @@ and desugar_struct_declaration struct_decl =
                 E.return membrs
             | Nothing ->
                 (* STD §6.7.2.1#2 *)
-                E.fail Loc.unknown (Errors.Desugar_OldConstraintViolation "§6.7.2.1#2")
+                E.constraint_violation (Loc.locOf base_ty) Errors.StructDeclarationLacksDeclaratorList
           end
         else
           E.mapM (fun sdecltor ->
@@ -2654,11 +2650,11 @@ and pathFromDesigs_aux acc = function
       desugar_expression e               >>= fun d_e ->
       is_integer_constant_expression d_e >>= function
         | false ->
-            E.fail (Loc.locOf e) (Errors.Desugar_OldConstraintViolation "§6.7.9#6")
+            E.constraint_violation (Loc.locOf e) Errors.IllegalTypeArrayDesignator
         | true ->
             evaluate_integer_constant_expression (Loc.locOf e) Nothing d_e >>= fun n ->
             if n < 0 then
-              error "TODO: pathFromDesigs_aux, n < 0"
+              E.constraint_violation (Loc.locOf e) Errors.IllegalSizeArrayDesignator
             else
               pathFromDesigs_aux (Elem_array n :: acc) xs
       end
@@ -2772,7 +2768,7 @@ and foo_aux
               let do_string_literal loc lit =
                 if not (AilTypesAux.is_array_of_character outer_ty) then
                   (* TODO: this is wrong *)
-                  E.fail loc (Errors.Desugar_OldConstraintViolation "§6.7.9#14")
+                  E.fail loc (Errors.Desugar_MiscViolation Errors.ArrayCharStringLiteral)
                 else
                   let size = match AilTypesAux.unatomic outer_ty with
                     | ATypes.Array _ (Just n) ->
@@ -3051,7 +3047,7 @@ let () = error "DONE" in
           E.return lit
       | _ ->
           (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)
-          E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB083)
+          E.undef loc Undefined.UB083
     end >>= fun (pref_opt, char_strs) ->
     
     let (elem_ty, mk_ty, current_size_opt) = match current_ty with
@@ -3884,7 +3880,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                ; AnnotatedStatement loc (AilSwhile d_e2 d_s_body) ]
                 end
             | (Just (FC_decl (Declaration_base _ _)), _) ->
-                E.fail loc Errors.Desugar_impossible
+                error "desugar_statement_aux: Just (FC_decl (Declaration_base __)), _)"
             | (Just (FC_decl (Declaration_static_assert sa_decl)), e3_opt) ->
                 (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
                 (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)

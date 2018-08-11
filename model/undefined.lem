@@ -692,14 +692,16 @@ let std_of_undefined_behaviour = function
       Just "§6.2.6.1#5, sentence 3"
   | UB015_incompatible_redeclaration ->
       Just "§6.2.7#2"
-
   | UB050_pointers_substraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
   | UB059_incomplete_no_linkage_identifier ->
       Just "§6.7#7"
-
   | UB060_block_scope_function_with_storage_class ->
       Just "§6.7.1#7"
+  | UB061_no_named_members ->
+      Just "§6.7.2.1#8, 3rd sentence"
+  | UB078_modified_void_parameter ->
+      Nothing (* TODO *)
   | UB081_scalar_initializer_not_single_expression ->
       Just "§6.7.9#11, 1st sentence"
   | UB086_incomplete_adjusted_parameter ->
@@ -720,6 +722,12 @@ let ub_short_string = function
       "identifier with no linkage and incomplete type"
   | UB060_block_scope_function_with_storage_class ->
       "block scoped function identifier with illegal storage class"
+  | UB061_no_named_members ->
+      "a structure or union is defined without any named members"
+  | UB078_modified_void_parameter ->
+      "a storage-class specifier or type qualifier modifies the keyword void as a function parameter type list"
+  | UB086_incomplete_adjusted_parameter ->
+      "an adjusted parameter type in a function definition is not a complete object type"
   | UB089_tentative_definition_internal_linkage ->
       "tentative definition with internal linkage and incomplete type"
   | UB081_scalar_initializer_not_single_expression ->
