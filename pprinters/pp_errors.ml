@@ -85,9 +85,19 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | IntegerConstantOutRange ->
+      "integer constant not in the range of the representable values for its type"
+  | NoLinkageMultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
+      "multiple declaration of '" ^ str ^ "'"
+  | TypedefRedefinition ->
+      "typedef redefinition with different types"
+  | TypedefRedefinitionVariablyModifiedType ->
+      "typedef redefinition of a variably modified type"
   | IllegalMultipleStorageClasses
   | IllegalMultipleStorageClassesThreadLocal ->
       "multiple incompatible storage class specifiers"
+  | ThreadLocalShouldAppearInEveryDeclaration ->
+      "non-thread-local declaration follows a thread-local declaration"
   | ThreadLocalFunctionDeclaration ->
       "_Thread_local in function declaration"
   | FieldIncompleteType (qs, ty) ->
@@ -104,6 +114,8 @@ let string_of_constraint_violation = function
       "expression is not an integer constant expression"
   | LabelStatementOutsideSwitch ->
       "label statement outside switch"
+  | LabelRedefinition (Cabs.CabsIdentifier (_, str)) ->
+      "redefinition of '" ^ str ^ "'"
   | StaticAssertFailed msg ->
       "static assert expression failed: " ^ msg
   | WrongTypeFunctionIdentifier ->
@@ -116,6 +128,8 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ Pp_symbol.to_string_pretty sym ^ "'"
   | TagRedeclaration sym ->
       "use of '" ^ Pp_symbol.to_string_pretty sym ^ "' with tag type that does not match previous declaration"
+  | UndeclaredLabel (Cabs.CabsIdentifier (_, str)) ->
+      "use of undeclared label '" ^ str ^ "'"
   | ContinueOutsideLoop ->
       "continue statement outside a loop"
   | BreakOutsideSwtichOrLoop ->
@@ -154,6 +168,8 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
 
 let string_of_misc_violation = function
+  | MultipleEnumDeclaration (Cabs.CabsIdentifier (_, str)) ->
+      "redefinition of '" ^ str ^ "'"
   | EnumSimpleDeclarationConstruction ->
       "such construction is not allowed for enumerators"
   | UndeclaredIdentifier str ->
@@ -172,34 +188,14 @@ let string_of_desugar_cause = function
       (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation e
   | Desugar_MiscViolation e ->
       string_of_misc_violation e
-  | Desugar_OldConstraintViolation msg ->
-      "violation of constraint " ^ msg
-  | Desugar_OtherViolation msg ->
-      "other violation: " ^ msg
   | Desugar_UndefinedBehaviour ub ->
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
-  | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
-      "violation of constraint (§6.7#3): multiple declaration of `" ^
-      str ^ "'."
-  | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
-      "member '" ^ str ^ "' is not defined for type '" ^
-      String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
   | Desugar_NeverSupported str ->
       "feature that will never supported: " ^ str
   | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
-  | Desugar_TODOCTOR str ->
-      "Desugar_TODOCOTR[" ^ str ^ "]"
-  | Desugar_impossible ->
-      "impossible error"
-  | Desugar_constantExpression_notInteger str ->
-      "TODO(msg) Desugar_constantExpression_notInteger: " ^ str
-  | Desugar_constantExpression_UB ubs ->
-      "TODO(msg) Desugar_constantExpression_UB: " ^
-      Pp_utils.to_plain_string (
-        comma_list (fun z -> !^ (Undefined.pretty_string_of_undefined_behaviour z))
-        ubs
-      )
+  | Desugar_TODO msg ->
+      "TODO: " ^ msg
 
 let string_of_ail_typing_error = function
   | TError_indirection_not_pointer ->
@@ -297,10 +293,20 @@ type std_ref =
 
 
 let get_constraint_violation_ref = function
+  | IntegerConstantOutRange ->
+      StdRef "§6.6#4"
+  | NoLinkageMultipleDeclaration _ ->
+      StdRef "§6.7#3"
+  | TypedefRedefinition ->
+      StdRef "§6.7#3, 1st bullet"
+  | TypedefRedefinitionVariablyModifiedType ->
+      StdRef "§6.7#3, 1st bullet, 2nd sentence"
   | IllegalMultipleStorageClasses ->
       StdRef "§6.7.1#2"
   | IllegalMultipleStorageClassesThreadLocal ->
       StdRef "§6.7.1#3, 1st sentence"
+  | ThreadLocalShouldAppearInEveryDeclaration ->
+      StdRef "§6.7.1#3, 2nd sentence"
   | ThreadLocalFunctionDeclaration ->
       StdRef "§6.7.1#4"
   | NoTypeSpecifierInDeclaration ->
@@ -343,10 +349,14 @@ let get_constraint_violation_ref = function
       StdRef "§6.7.10#2"
   | LabelStatementOutsideSwitch ->
       StdRef "§6.8.1#2"
+  | LabelRedefinition _ ->
+      StdRef "§6.8.1#3"
   | IllegalStorageClassIterationStatement ->
       StdRef "§6.8.5#3"
   | ContinueOutsideLoop ->
       StdRef "§6.8.6.2#1"
+  | UndeclaredLabel _ -> 
+      StdRef "§6.8.6.1#1, sentence 1"
   | BreakOutsideSwtichOrLoop ->
       StdRef "§6.8.6.3#1"
   | NonVoidReturnVoidFunction ->
@@ -368,6 +378,8 @@ let get_constraint_violation_ref = function
 
 let get_misc_violation_ref = function
   (* TODO: check if footnote is being printed *)
+  | MultipleEnumDeclaration _ ->
+      StdRef "§6.7.2.2#3, FOOTNOTE.127"
   | EnumSimpleDeclarationConstruction -> 
       StdRef "§6.7.2.3#7, FOOTNOTE 131"
   | UndeclaredIdentifier _ ->
@@ -490,70 +502,3 @@ let make_message loc err k =
 
 let to_string (loc, err) =
   make_message loc err Error
-
-
-(*
-let std_ref = function
-  | Desugar_cause (Desugar_UndeclaredIdentifier _) ->
-      "§6.5.1#2"
-  | Desugar_cause Desugar_NonvoidReturn ->
-    "§6.8.6.4#1, 2nd sentence"
-
-  | AIL_TYPING TError_main_return_type ->
-      "§5.1.2.2.1#1, 2nd sentence"
-  | AIL_TYPING TError_main_not_function ->
-      "blah"
-  | AIL_TYPING TError_main_param1
-  | AIL_TYPING TError_main_param2 ->
-      "§5.1.2.2.1#1"
-  | AIL_TYPING TError_indirection_not_pointer ->
-      "§6.5.3.2#2"
-  | AIL_TYPING (TError_TODO n) ->
-      "Ail typing error (TODO " ^ string_of_int n ^ ")"
-  | AIL_TYPING (TError std) ->
-      std
-
-  | Desugar_cause (Desugar_ConstraintViolation str) ->
-      str
-  | Core_run_cause _  ->
-      "TODO: core_run_cause"
-  | Core_typing_cause cause ->
-      "Core typing error: " ^ 
-      begin match cause with
-        | Undefined_startup sym ->
-            "undefined startup fun/proc '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
-        | MismatchObject (oTy1, oTy2) ->
-            "mismatching object types, expecting: " ^ String_core.string_of_core_object_type oTy1 ^
-            "found: " ^ String_core.string_of_core_object_type oTy2
-        | Mismatch (str, bTy1, bTy2) ->
-            "mismatching base types (in " ^ str ^ "), expecting: " ^ String_core.string_of_core_base_type bTy1 ^
-            " -- found: " ^ String_core.string_of_core_base_type bTy2
-        | MismatchIf (bTy1, bTy2) ->
-            "mismatching types in a if-expression, then branch: " ^ String_core.string_of_core_base_type bTy1 ^
-            " -- else branch: " ^ String_core.string_of_core_base_type bTy2
-        | MismatchIfCfunction ((ret_bTy1, bTys1), (ret_bTy2, bTys2)) ->
-            "mismatching signatures in a Cfunction if-expression, then branch: " ^
-            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1)) ^
-            " -- else branch: " ^
-            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1))
-        | EmptyArray ->
-            "found an empty array"
-        | CtorWrongNumber _ (*of nat (* expected *) * nat (* found *)*) ->
-            "TODO(msg) CtorWrongNumber"
-        | HeterogenousArray _ (* of core_object_type (* expected *) * core_object_type (* found *) *) ->
-            "TODO(msg) HeterogenousArray"
-        | HeterogenousList _ (* of core_base_type (* expected *) * core_base_type (* found *) *) ->
-            "TODO(msg) HeterogenousList"
-        | InvalidMember _ (* of Symbol.sym * Cabs.cabs_identifier *) ->
-            "TODO(msg) InvalidMember"
-        | CoreTyping_TODO str ->
-            "TODO(msg) " ^ str
-        | TooGeneral ->
-            "too general"
-      end
-  | PARSER str ->
-      "TODO: parsing error ==> " ^ str
-  | _ ->
-      "TODO: pp_errors std_ref"
-   *)
-
