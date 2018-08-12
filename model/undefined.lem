@@ -694,6 +694,8 @@ let std_of_undefined_behaviour = function
       Just "§6.2.7#2"
   | UB050_pointers_substraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
+  | UB055_invalid_integer_constant_expression ->
+      Just "§6.6#6"
   | UB059_incomplete_no_linkage_identifier ->
       Just "§6.7#7"
   | UB060_block_scope_function_with_storage_class ->
@@ -718,6 +720,12 @@ end
 
 val ub_short_string: undefined_behaviour -> string
 let ub_short_string = function
+  | UB008_multiple_linkage ->
+      "identifier has both internal and external linkage in the same translation unit"
+  | UB015_incompatible_redeclaration ->
+      "two declarations of the same object or function specify types that are not compatible"
+  | UB055_invalid_integer_constant_expression ->
+      "invalid integer constant expression"
   | UB059_incomplete_no_linkage_identifier ->
       "identifier with no linkage and incomplete type"
   | UB060_block_scope_function_with_storage_class ->

@@ -141,10 +141,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         match execs with
           | [(ND.Active dres, _, _ )] ->
               Eff.return dres.Driver.dres_core_value
-          | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->
-              Eff.fail (ub_loc, Errors.DESUGAR (Errors.Desugar_constantExpression_UB ubs))
+          | [(ND.Killed (ND.Undef ub_loc [ub]), _, _)] ->
+              Eff.fail (ub_loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
           | [(ND.Killed (ND.Error loc "§6.6#4 failed"), _, _)] ->
-              Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_OldConstraintViolation "§6.6#4"))
+              Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation Errors.IntegerConstantOutRange))
           | _ ->
               error "TODO error: the driver found less/more than one active execution"
         end
@@ -152,13 +152,14 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
 
 
 val evalIntegerConstantExpression:
-  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
+  Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
   UniqueId.supply Symbol.sym -> maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt expr =
+let evalIntegerConstantExpression loc core_env sigm symbol_suppl ty_opt expr =
   let typing_guard gtc =
-    let do_fail = Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_constantExpression_notInteger std_str)) in
-    match gtc with
+    let do_fail =
+      Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
+    in match gtc with
       | GenTypes.GenLValueType _ _ _ ->
           do_fail
       | GenTypes.GenRValueType gTy ->
@@ -182,7 +183,7 @@ let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt 
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
-        Eff.fail (loc, Errors.DESUGAR Errors.Desugar_impossible)
+        error (Loc.stringFromLocation loc ^ ", wipFrontend.evalIntegerConstantExpression")
   end
 
 

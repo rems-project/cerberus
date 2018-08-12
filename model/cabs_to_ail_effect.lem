@@ -583,7 +583,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
         return ()
     | _ ->
         (* internal_register_indentifier was improperly called *)
-        fail (Loc.locOf ident) (Errors.Desugar_impossible)
+        error (Loc.stringFromLocation (Loc.locOf ident) ^ "cabs_to_ail_effect.internal_register_identifier")
   end >>
   let do_fresh () =
     (* generates a fresh symbol *)
@@ -699,9 +699,9 @@ let register_typedef ident (qs, ty) =
     | Just (qs', ty') ->
         (* STD §6.7#3, first bullet *)
         if AilTypesAux.variably_modified ty then
-          fail loc (Errors.Desugar_OldConstraintViolation "§6.7#3, first bullet, variably modified")
+          constraint_violation loc Errors.TypedefRedefinitionVariablyModifiedType
         else if qs <> qs' || ty <> ty' then
-          fail loc (Errors.Desugar_OldConstraintViolation "§6.7#3, first bullet")
+          constraint_violation loc Errors.TypedefRedefinition
         else
           return ()
     | Nothing ->
@@ -899,7 +899,7 @@ STD_ "§6.2.2#4" $
       | Just (_, Internal _ _ (Just _)) ->
           return Linkage_external
       | Just _ ->
-          fail Loc.unknown (Errors.Desugar_TODOCTOR "determinate_linkage ==> resolved an previous registration with Nothing as linkage")
+          error "determinate_linkage ==> resolved an previous registration with Nothing as linkage"
       | Nothing ->
           return Linkage_external
     end
@@ -972,7 +972,7 @@ let register_ordinary_identifier ident kind storage_classes =
   match kind with
     | OK_enum_constant ->
         (* internal_register_indentifier was improperly called *)
-        fail (Loc.locOf ident) (Errors.Desugar_impossible)
+        error (Loc.stringFromLocation (Loc.locOf ident) ^ "cabs_to_ail_effect.register_ordinary_identifier")
     | _ ->
         return ()
   end >>
@@ -985,7 +985,7 @@ let register_ordinary_identifier ident kind storage_classes =
             | Just Linkage_none ->
                 do_fresh ()
             | Just Linkage_internal ->
-                fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+                undef (Loc.locOf ident) Undefined.UB008_multiple_linkage
             | Just Linkage_external ->
                 State_exception.update (fun st ->
                   <| st with registered_identifiers= 
@@ -1000,7 +1000,7 @@ let register_ordinary_identifier ident kind storage_classes =
       | Linkage_none ->
           current_scope_is scope >>= function
             | true ->
-                fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+                constraint_violation (Loc.locOf ident) (Errors.NoLinkageMultipleDeclaration ident)
             | false ->
                 do_fresh ()
           end
@@ -1009,7 +1009,7 @@ let register_ordinary_identifier ident kind storage_classes =
             error "TODO: Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'"
           else if Just link <> prev_link_opt then
             (* STD §6.2.2#7 *)
-            fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+            undef (Loc.locOf ident) Undefined.UB008_multiple_linkage
           else
             return sym
     end
@@ -1315,13 +1315,13 @@ let register_global_object_definition2 loc sym link gdef =
               match link with
                 | Linkage_internal ->
                     (* STD §6.9#3, sentence 1 *)
-                    fail loc (Errors.Desugar_OldConstraintViolation "§6.9#3, sentence 1")
+                    constraint_violation loc (Errors.ExternalRedefinition sym)
                 | Linkage_external ->
                     (* STD §6.9#5, sentence 2 *)
                     let () = Debug.print_debug 0 [] (fun () ->
                       "register_global_object_definition2"
                     ) in
-                    fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB084)
+                    undef loc Undefined.UB084
                 | Linkage_none ->
                     error "[Cabs_to_ail_effect.register_global_object_definition] - internal ERROR 2"
               end
@@ -1458,9 +1458,7 @@ AilTypesAux.make_composite
 *)
 
         if decl <> prev_decl then
-          (* TODO: msg and location *)
-          fail loc (Errors.Desugar_OtherViolation ("redeclaration of a function with a different type: " ^
-                                                   show sym ^ ", old decl= " ^ string_of_decl prev_decl ^ " --- vs --- " ^ string_of_decl decl))
+          undef loc Undefined.UB015_incompatible_redeclaration
         else
           let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
           return ()
@@ -1488,7 +1486,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
   ) >>= function
     | Just (_, _, prev_dur, _, prev_qs, prev_ty) ->
         if not (prev_dur = ATypes.Thread --> new_dur = ATypes.Thread) then
-          fail loc (Errors.Desugar_OldConstraintViolation "§6.7.1#3, sentence 2")
+          constraint_violation loc Errors.ThreadLocalShouldAppearInEveryDeclaration
         
         (* TODO: what about the storage duration and isRegister?? *)
         else if not (AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)) then
@@ -1502,8 +1500,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
           (* TODO: there is also §6.7#4 which requires (nearly) the same an failure is a
              constraint violation, not UB. Which own should we report ???? *)
           (* STD §6.2.7#2 *)
-          fail loc
-            (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
+          undef loc Undefined.UB015_incompatible_redeclaration
         else
           let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () -> "found a valid redeclaration of `" ^ show sym ^ "'") in
           (* TODO: check that is ok to use AilTypesAux.make_composite for object types (see comment in AilTypesAux) *)
@@ -1564,8 +1561,7 @@ let register_internal_object_declaration sym ((loc, _, _, _, _) as decl) =
     | Just decl' ->
         if decl <> decl' then
           (* STD §6.2.7#2 *)
-          fail loc
-            (Errors.Desugar_UndefinedBehaviour Undefined.UB015_incompatible_redeclaration)
+          undef loc Undefined.UB015_incompatible_redeclaration
         else
           return ()
     | Nothing ->
@@ -1604,7 +1600,7 @@ let register_static_assertion e strCst =
 val register_label: cabs_identifier -> desugM unit
 let register_label ident =
   void $ internal_register_identifier (fun _ _ ->
-    fail (Loc.locOf ident) (Errors.Desugar_OldConstraintViolation "§6.8.1#3")
+    constraint_violation (Loc.locOf ident) (Errors.LabelRedefinition ident)
   ) ident Namespace_label Kind_label Nothing
 
 
@@ -1615,7 +1611,7 @@ let resolve_label ident =
     | Just (_, Internal sym _ _) ->
         return sym
     | _ (*Nothing*) ->
-        fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.8.6.1#1, sentence 1")
+        constraint_violation (Loc.locOf ident) (Errors.UndeclaredLabel ident)
   end
 
 
@@ -1661,7 +1657,7 @@ let register_enum_constant ident expr =
     current_scope_is scope >>= function
       | true ->
           (* STD footnote 127 *)
-          fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+          fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.MultipleEnumDeclaration ident))
       | false ->
           (* a previous registration from a different scope gets shadowed *)
           do_fresh ()
@@ -1680,7 +1676,7 @@ let resolve_enum_constant sym =
     | Just e ->
         return e
     | Nothing ->
-        fail Loc.unknown Errors.Desugar_impossible
+        error "cabs_to_ail_effect.resolve_enum_constant"
   end
 
 
@@ -1781,7 +1777,7 @@ let extract_program startup_str =
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
             (* STD §6.9#3, sentence 2 *)
-            fail (Loc.locOf ident) (Errors.Desugar_OldConstraintViolation "§6.9#3, sentence 2")
+            constraint_violation (Loc.locOf ident) (Errors.ExternalRedefinition sym)
           else
             return ()
       | Just Linkage_external ->
@@ -1795,7 +1791,7 @@ let extract_program startup_str =
             let () = Debug.print_debug 0 [] (fun () ->
               "extract_program"
             ) in
-            fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB084)
+            undef (Loc.locOf ident) Undefined.UB084
           else
             return ()
       | _ ->

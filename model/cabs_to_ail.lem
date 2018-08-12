@@ -1073,7 +1073,7 @@ let rec evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun  (core_env, sym_suppl) ->
   E.get_sigma_sofar >>= fun sigm ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sigm sym_suppl ty_opt expr)
+      (WipFrontend.evalIntegerConstantExpression loc core_env sigm sym_suppl ty_opt expr)
 
 
 
@@ -1555,7 +1555,6 @@ let rec desugar_type_specifiers specs =
           | [TSpec loc (TSpec_union (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
                  specifier occurring in the form described by §6.7.2.3#7 *)
-              E.print_debugM 0 (fun () -> "IT DOES CALL IT") >>
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
                     STD_ "§6.7.2.3#9"
@@ -3398,7 +3397,7 @@ let () = error "DONE" in
                     E.fail loc (Errors.Desugar_NotYetSupported "crazy struct initializers")
 
               | _ ->
-                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
+                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Struct init thing")
             end
 
         | ATypes.Union tag ->
@@ -3429,7 +3428,7 @@ let () = error "DONE" in
                               (* we ignore the qualifiers, initialisers don't care about them *)
                               E.return ty
                           | Nothing ->
-                              E.fail loc (Errors.Desugar_InvalidMember memb_ident current_ty)
+                              E.constraint_violation loc (Errors.InvalidMember memb_ident current_ty)
                         end >>= fun memb_ty ->
                         wip_desugar_initializer_ loc dur memb_ty init' >>= fun (membr_ty', d_e) ->
                         (* TODO: use membr_ty' *)
@@ -3449,7 +3448,7 @@ let () = error "DONE" in
                       ("UNION INIT ==> " ^ stringFromList (stringFromPair show Pp.stringFromAil_ctype) ident_tys)in
                   E.fail loc (Errors.Desugar_OtherViolation "TODO union init") *)
               | _ ->
-                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Union init thing")
+                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Union init thing")
             end
 
 (*
