@@ -13,9 +13,10 @@ Then using opam, install:
 * cmdliner  (tested with 1.0.2)
 * menhir    (tested with 20171212)
 * pprint    (tested with 20171003)
+* angstrom  (tested with 4.06.0)
 
 ```bash
-$ opam install ocamlfind cmdliner menhir pprint zarith
+$ opam install ocamlfind cmdliner menhir pprint zarith angstrom
 ```
 
 ### LEM

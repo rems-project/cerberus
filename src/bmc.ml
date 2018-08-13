@@ -35,6 +35,7 @@ open Util
  *     - Should asw be included in po?
  *  - Separate analyses into smaller standalone analyses
  *  - nicer way to fail early: exceptions
+ *  - race/undefined for generic memory model
  *)
 
 (* =========== TYPES =========== *)
@@ -2212,7 +2213,6 @@ let bmc (core_file  : unit file)
               typed_core in
           if !!bmc_conf.debug_lvl >= 2 then
             pp_file core_to_check;
-
           bmc_debug_print 1 "START: model checking";
 
           let fn_sym = find_function !!bmc_conf.fn_to_check

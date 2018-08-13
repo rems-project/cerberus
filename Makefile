@@ -124,13 +124,13 @@ playground:
 
 
 ocaml_native:
-	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+	@if ! (ocamlfind query cmdliner pprint zarith angstrom >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,angstrom,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 
