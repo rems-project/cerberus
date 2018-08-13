@@ -1,0 +1,33 @@
+// RC11 .cat file without fences or undefined behaviour
+
+let sb = po | I * (M | I | I) | rf
+let rfstar = rf*
+let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rfstar
+
+//let sw = [REL | ACQ_REL | SC] ; ([F] ; sb)? ; rs ; rf ; [R & ~NA] ; (sb ; [F])? ; [ACQ | ACQ_REL | SC]
+
+let sw = ([REL | ACQ_REL | SC] ; rs ; rf ; [R & ~NA & (ACQ | ACQ_REL | SC)]) | asw
+let hb = (sb | sw)+
+
+irreflexive (hb ; eco) as coh
+
+let mo = co
+
+let fr = (rf^-1 ; mo) \ id
+let eco = rf | mo | fr | mo ; rf | fr ; rf
+irreflexive (hb ; eco) as coh
+
+irreflexive eco as atomic1
+irreflexive (fr ; mo) as atomic2
+
+// comment
+//let fhb = [F & SC] ; hb?
+//let hbf = hb? ; [F & SC]
+let sb_neq_loc = sb \ loc
+let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr
+//let psc_base =  ([SC] | fhb) ; scb ; ([SC] | hbf)
+//let psc_f =  [F & SC] ; (hb | hb; eco; hb) ; [F & SC]
+//let psc =  psc_base | psc_f
+let psc = scb
+
+output sw

@@ -1,3 +1,4 @@
+open Bmc_cat
 open Bmc_globals
 open Bmc_sorts
 open Bmc_types
@@ -1468,7 +1469,9 @@ module GenericModel (M: CatModel) : MemoryModel = struct
   let lookup_id (id: CatFile.id) (fns: fn_map) =
     match Pmap.lookup id fns with
     | Some fn -> fn
-    | None -> assert false
+    | None ->
+        failwith (sprintf "Unknown id in memory model: %s"
+                          (CatFile.pprint_id id))
 
   let baseset_to_filter (set: CatFile.base_set) (a: bmc_action) =
     match set with
@@ -1478,6 +1481,14 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_M -> has_rval a || has_wval a
     | BaseSet_A -> is_atomic_bmcaction a
     | BaseSet_I -> is_initial_bmcaction a
+    | BaseSet_F -> is_fence_action a
+    | BaseSet_NA  -> get_memorder a = NA
+    | BaseSet_RLX -> get_memorder a = Relaxed
+    | BaseSet_REL -> get_memorder a = Release
+    | BaseSet_ACQ -> get_memorder a = Acquire
+    | BaseSet_ACQ_REL -> get_memorder a = Acq_rel
+    | BaseSet_SC      -> get_memorder a = Seq_cst
+
 
   (* TODO: rename all this... *)
   let rec set_to_filter (set: CatFile.set) (a: bmc_action) =
@@ -1489,6 +1500,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         (set_to_filter s1 a) && (set_to_filter s2 a)
     | Set_difference (s1,s2) ->
         (set_to_filter s1 a) && (not (set_to_filter s2 a))
+    | Set_not s ->
+        not (set_to_filter s a)
 
   let id_to_z3 (model: z3_memory_model)
                (id: CatFile.id)
@@ -1504,6 +1517,11 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_rf     -> model.builtin_fns.rf (ea,eb)
         | BaseId_rf_inv -> model.builtin_fns.rf (eb,ea)
         | BaseId_co     -> model.builtin_fns.co (ea,eb)
+        | BaseId_id     -> mk_eq ea eb
+        | BaseId_asw    -> model.builtin_fns.asw (ea,eb)
+        | BaseId_po     -> model.builtin_fns.po (ea,eb)
+        | BaseId_loc    -> model.builtin_fns.same_loc (ea,eb)
+
         end
 
   (* === Expr -> boolean *)
@@ -1515,19 +1533,14 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let (ea,eb) = (z3action a, z3action b) in
     match expr with
     | Eid id -> id_to_z3 model id (a,b)
-    | Ebase base ->
-        begin
-        match base with
-        | BaseRel_id  -> mk_eq ea eb
-        | BaseRel_asw -> model.builtin_fns.asw (ea,eb)
-        | BaseRel_po  -> model.builtin_fns.po (ea,eb)
-        end
     | Einverse expr ->
         simple_expr_to_z3 model expr (b,a)
-    | Eunion elist ->
-        mk_or (List.map (fun e -> simple_expr_to_z3 model e (a,b)) elist)
-    | Eintersection elist ->
-        mk_and (List.map (fun e -> simple_expr_to_z3 model e (a,b)) elist)
+    | Eunion (e1,e2) ->
+        mk_or [simple_expr_to_z3 model e1 (a,b)
+              ;simple_expr_to_z3 model e2 (a,b)]
+    | Eintersection (e1,e2) ->
+        mk_and [simple_expr_to_z3 model e1 (a,b)
+               ;simple_expr_to_z3 model e2 (a,b)]
     | Esequence (e1,e2) ->
         mk_or (List.map (fun x ->
                 mk_and [model.builtin_fns.getGuard (z3action x)
@@ -1543,7 +1556,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                  && (set_to_filter set a))
     | Eprod (set1,set2) ->
         mk_bool ((set_to_filter set1 a) && (set_to_filter set2 b))
-    | Ereflexive_closure expr ->
+    | Eoptional expr ->
         mk_or [simple_expr_to_z3 model expr (a,b); mk_eq ea eb]
 
   let expr_to_z3 (model: z3_memory_model)
@@ -1763,7 +1776,6 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       0)*)
     }
 
-
   (* TODO: fix api *)
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
@@ -1774,4 +1786,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
 end
 
 (*module BmcMem = C11MemoryModel*)
-module BmcMem = GenericModel(RC11Model)
+(*module BmcMem = GenericModel(Partial_RC11Model)*)
+
+(* TODO: figure out syntax *)
+let cat_model =
+  CatParser.load_file g_model_file
+
+module BmcMem = GenericModel (val cat_model)

@@ -205,3 +205,24 @@ let save_to_file file str =
   let channel = open_out file in
   output_string channel str;
   close_out channel
+
+let explode s =
+  let rec exp i l =
+    if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+let implode chars =
+  let buf = Buffer.create 16 in
+  List.iter (Buffer.add_char buf) chars;
+  Buffer.contents buf
+
+let read_file filename =
+  let lines = ref [] in
+  let chan = open_in filename in
+  try
+    while true; do
+      lines := input_line chan :: !lines
+    done; !lines
+  with End_of_file ->
+    close_in chan;
+    List.rev !lines ;;
