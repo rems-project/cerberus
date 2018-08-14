@@ -273,9 +273,9 @@ let inline bind = State_exception.bind
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
 let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
 
-val contraint_violation: forall 'a. Loc.t -> Errors.constraint_violation -> desugM 'a
-let inline constraint_violation loc e =
-  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation e))
+val contraint_violation: forall 'a. Loc.t -> Constraint.violation -> desugM 'a
+let inline constraint_violation loc v =
+  State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation v))
 
 val undef: forall 'a. Loc.t -> Undefined.undefined_behaviour -> desugM 'a
 let inline undef loc ub =
@@ -699,9 +699,9 @@ let register_typedef ident (qs, ty) =
     | Just (qs', ty') ->
         (* STD §6.7#3, first bullet *)
         if AilTypesAux.variably_modified ty then
-          constraint_violation loc Errors.TypedefRedefinitionVariablyModifiedType
+          constraint_violation loc Constraint.TypedefRedefinitionVariablyModifiedType
         else if qs <> qs' || ty <> ty' then
-          constraint_violation loc Errors.TypedefRedefinition
+          constraint_violation loc Constraint.TypedefRedefinition
         else
           return ()
     | Nothing ->
@@ -782,7 +782,7 @@ let register_identifier_ ident namespace kind link_opt =
                   (* TODO: check *)
                   current_scope_is scope >>= function
                     | true ->
-                        fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+                        fail (Loc.locOf ident) (Constraint.Desugar_MultipleDeclaration ident)
                     | false ->
                         do_fresh
                   end
@@ -792,7 +792,7 @@ let register_identifier_ ident namespace kind link_opt =
                 else
                   if link_opt <> link_opt' then
                     (* STD §6.2.2#7 *)
-                    fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+                    fail (Loc.locOf ident) (Constraint.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
                   else
                     return sym
         end
@@ -1000,7 +1000,7 @@ let register_ordinary_identifier ident kind storage_classes =
       | Linkage_none ->
           current_scope_is scope >>= function
             | true ->
-                constraint_violation (Loc.locOf ident) (Errors.NoLinkageMultipleDeclaration ident)
+                constraint_violation (Loc.locOf ident) (Constraint.NoLinkageMultipleDeclaration ident)
             | false ->
                 do_fresh ()
           end
@@ -1017,14 +1017,14 @@ let register_ordinary_identifier ident kind storage_classes =
     if link = Linkage_external then
       (* STD §6.2.2#7 *)
       if link_opt' = Just Linkage_internal then
-        fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+        fail (Loc.locOf ident) (Constraint.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
       else
         return sym
     (* TODO: need to check that the kind/link match up *)
     else if link = Linkage_none then
       current_scope_is scope >>= function
         | true ->
-            fail (Loc.locOf ident) (Errors.Desugar_MultipleDeclaration ident)
+            fail (Loc.locOf ident) (Constraint.Desugar_MultipleDeclaration ident)
         | false ->
             do_fresh
       end
@@ -1032,7 +1032,7 @@ let register_ordinary_identifier ident kind storage_classes =
       error "TODO: Cabs_to_ail_effect.register_ordinary_identifier, kind <> kind'"
     else if Just link <> link_opt' then
       (* STD §6.2.2#7 *)
-      fail (Loc.locOf ident) (Errors.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
+      fail (Loc.locOf ident) (Constraint.Desugar_UndefinedBehaviour Undefined.UB008_multiple_linkage)
     else
       return sym
 *)
@@ -1053,7 +1053,7 @@ let register_tag kind tag_ident_opt =
           if Kind_tag kind = prev_kind then
             return sym
           else
-            constraint_violation (Loc.locOf tag_ident) (Errors.TagRedeclaration sym)
+            constraint_violation (Loc.locOf tag_ident) (Constraint.TagRedeclaration sym)
       | false ->
           do_fresh ()
     end
@@ -1067,7 +1067,7 @@ let register_tag_definition loc tag_sym tag_decl =
     Map.member tag_sym st.tag_definitions
   ) >>= function
     | true ->
-        constraint_violation loc (Errors.TagRedefinition tag_sym)
+        constraint_violation loc (Constraint.TagRedefinition tag_sym)
     | false ->
         return ()
   end >>
@@ -1101,7 +1101,7 @@ let resolve_tag_definition tag_sym =
         (* TODO: I think this can only happen when seeing a tentative struct/union
            with a member (or recursive...) whose type is the struct/union itself.
            If this is indeed the case, we should give a better error message *)
-        fail Loc.unknown (Errors.Desugar_OtherViolation ("unregistered tag: " ^ show tag_sym ^
+        fail Loc.unknown (Constraint.Desugar_OtherViolation ("unregistered tag: " ^ show tag_sym ^
           " (this may be from a violation of (§6.7.2.1#3, 1st sentence)"))
   end
 *)
@@ -1203,7 +1203,7 @@ let resolve_identifier name =
   bind (State_exception.read (fun st -> Scope_table.lookup name st.registered_identifiers))
     function
       | Just x  -> return x
-      | Nothing -> fail (Errors.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
+      | Nothing -> fail (Constraint.CABS_TO_AIL_UNDECLARED_IDENTIFIER name)
     end
 *)
 
@@ -1315,7 +1315,7 @@ let register_global_object_definition2 loc sym link gdef =
               match link with
                 | Linkage_internal ->
                     (* STD §6.9#3, sentence 1 *)
-                    constraint_violation loc (Errors.ExternalRedefinition sym)
+                    constraint_violation loc (Constraint.ExternalRedefinition sym)
                 | Linkage_external ->
                     (* STD §6.9#5, sentence 2 *)
                     let () = Debug.print_debug 0 [] (fun () ->
@@ -1486,7 +1486,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
   ) >>= function
     | Just (_, _, prev_dur, _, prev_qs, prev_ty) ->
         if not (prev_dur = ATypes.Thread --> new_dur = ATypes.Thread) then
-          constraint_violation loc Errors.ThreadLocalShouldAppearInEveryDeclaration
+          constraint_violation loc Constraint.ThreadLocalShouldAppearInEveryDeclaration
         
         (* TODO: what about the storage duration and isRegister?? *)
         else if not (AilTypesAux.are_compatible (new_qs, new_ty) (prev_qs, prev_ty)) then
@@ -1600,7 +1600,7 @@ let register_static_assertion e strCst =
 val register_label: cabs_identifier -> desugM unit
 let register_label ident =
   void $ internal_register_identifier (fun _ _ ->
-    constraint_violation (Loc.locOf ident) (Errors.LabelRedefinition ident)
+    constraint_violation (Loc.locOf ident) (Constraint.LabelRedefinition ident)
   ) ident Namespace_label Kind_label Nothing
 
 
@@ -1611,7 +1611,7 @@ let resolve_label ident =
     | Just (_, Internal sym _ _) ->
         return sym
     | _ (*Nothing*) ->
-        constraint_violation (Loc.locOf ident) (Errors.UndeclaredLabel ident)
+        constraint_violation (Loc.locOf ident) (Constraint.UndeclaredLabel ident)
   end
 
 
@@ -1777,7 +1777,7 @@ let extract_program startup_str =
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
             (* STD §6.9#3, sentence 2 *)
-            constraint_violation (Loc.locOf ident) (Errors.ExternalRedefinition sym)
+            constraint_violation (Loc.locOf ident) (Constraint.ExternalRedefinition sym)
           else
             return ()
       | Just Linkage_external ->

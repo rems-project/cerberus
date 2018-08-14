@@ -4,8 +4,8 @@ open import ErrorMonad TypingError
 import Implementation
 
 (* following the table from (§6.4.4.1#5) *)
-val type_of_constant: Implementation.implementation -> integerConstant -> errorM integerType
-let type_of_constant impl = function
+val type_of_constant: Loc.t -> Implementation.implementation -> integerConstant -> errorM integerType
+let type_of_constant loc impl = function
   | IConstant n Decimal Nothing ->
       if in_integer_range impl n (Signed Int_) then
         return (Signed Int_)
@@ -14,8 +14,7 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
-  
+        misc loc (UntypableIntegerConstant n)
   (* Octal or Hexadecimal *)
   | IConstant n _ Nothing ->
       if in_integer_range impl n (Signed Int_) then
@@ -31,7 +30,7 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
     (* Octal, Decimal or Hexadecimal *)
   | IConstant n _ (Just U) ->
       if in_integer_range impl n (Unsigned Int_) then
@@ -41,14 +40,14 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   | IConstant n Decimal (Just L) ->
       if in_integer_range impl n (Signed Long) then
         return (Signed Long)
       else if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   (* Octal or Hexadecimal *)
   | IConstant n _ (Just L) ->
       if in_integer_range impl n (Signed Long) then
@@ -60,7 +59,7 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   (* Octal, Decimal or Hexadecimal *)
   | IConstant n _ (Just UL) ->
       if in_integer_range impl n (Unsigned Long) then
@@ -68,12 +67,12 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   | IConstant n Decimal (Just LL) ->
       if in_integer_range impl n (Signed LongLong) then
         return (Signed LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   (* Octal or Hexadecimal *)
   | IConstant n _ (Just LL) ->
       if in_integer_range impl n (Signed LongLong) then
@@ -81,13 +80,13 @@ let type_of_constant impl = function
       else if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   (* Octal, Decimal or Hexadecimal *)
   | IConstant n _ (Just ULL) ->
       if in_integer_range impl n (Unsigned LongLong) then
         return (Unsigned LongLong)
       else
-        fail Loc.unknown (TError_integerConstant_too_large n)
+        misc loc (UntypableIntegerConstant n)
   | IConstantMax ity ->
       return ity
   | IConstantMin ity ->
@@ -95,10 +94,10 @@ let type_of_constant impl = function
 end
 
 
-val well_formed_bindings: forall 'a. sigma 'a -> bindings -> errorM unit
-let well_formed_bindings sigm bindings =
+val well_formed_bindings: forall 'a. Loc.t -> sigma 'a -> bindings -> errorM unit
+let well_formed_bindings loc sigm bindings =
   (* TODO: this is unreadable *)
   mapM_ (comb (uncurry (wf_lvalue sigm)) (fun (_, (_, qs, ty)) -> (qs, ty))) bindings >>
-  guard (TError "found non disjoint bindings") (
+  guard loc (TError "found non disjoint bindings") (
     disjoint_bindings identifierEqual bindings
   )

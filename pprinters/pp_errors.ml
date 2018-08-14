@@ -2,6 +2,7 @@ open Lexing
 
 open Errors
 open TypingError
+open Constraint
 
 open Global_ocaml
 open Location_ocaml
@@ -85,6 +86,8 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | IndirectionNotPointer ->
+      "the * operator expects a pointer operand"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
   | NoLinkageMultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
@@ -100,10 +103,12 @@ let string_of_constraint_violation = function
       "non-thread-local declaration follows a thread-local declaration"
   | ThreadLocalFunctionDeclaration ->
       "_Thread_local in function declaration"
-  | FieldIncompleteType (qs, ty) ->
-      "field has incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
-  | FieldFunction (Cabs.CabsIdentifier (_, f)) ->
-      "field '" ^ f ^ "' declared as a function"
+  | StructMemberIncompleteType (qs, ty) ->
+      "member has incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | StructMemberFunctionType (Cabs.CabsIdentifier (_, f)) ->
+      "member '" ^ f ^ "' declared as a function"
+  | StructMemberFlexibleArray ->
+      "struct has a flexible array member"
   | NoTypeSpecifierInDeclaration ->
       "at least one type specifier should be given in the declaration"
   | IllegalTypeSpecifierInDeclaration ->
@@ -116,6 +121,11 @@ let string_of_constraint_violation = function
       "label statement outside switch"
   | LabelRedefinition (Cabs.CabsIdentifier (_, str)) ->
       "redefinition of '" ^ str ^ "'"
+  | SwitchStatementControllingExpressionNotInteger ->
+      "statement requires expression of integer type"
+  | IfStatementControllingExpressionNotScalar
+  | IterationStatementControllingExpressionNotScalar ->
+      "statement requires expression of scalar type"
   | StaticAssertFailed msg ->
       "static assert expression failed: " ^ msg
   | WrongTypeFunctionIdentifier ->
@@ -124,6 +134,10 @@ let string_of_constraint_violation = function
       "incomplete enum type"
   | AtomicTypeConstraint ->
       "invalid use of _Atomic"
+  | RestrictQualifiedPointedTypeConstraint ty ->
+      "pointer to type '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "' may not be restrict qualified"
+  | RestrictQualifiedTypeConstraint ->
+      "restrict requires a pointer"
   | TagRedefinition sym ->
       "redefinition of '" ^ Pp_symbol.to_string_pretty sym ^ "'"
   | TagRedeclaration sym ->
@@ -133,19 +147,27 @@ let string_of_constraint_violation = function
   | ContinueOutsideLoop ->
       "continue statement outside a loop"
   | BreakOutsideSwtichOrLoop ->
-      "break statement outside a switch or a lopp"
+      "break statement outside a switch or a loop"
   | NonVoidReturnVoidFunction ->
       "void function should not return a value"
   | VoidReturnNonVoidFunction ->
       "non-void function should return a value"
   | ArrayDeclarationNegativeSize ->
       "array declared with a negative or zero size"
+  | ArrayDeclarationIncompleteType ->
+      "array has incomplete type"
+  | ArrayDeclarationFunctionType ->
+      "element of the array has function type"
   | ArrayDeclarationQsAndStaticOnlyOutmost ->
       "type qualifiers or 'static' used in array declarator can only used in the outmost type derivation"
   | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
       "type qualifiers or 'static' used in array declarator outside of function prototype"
+  | IllegalReturnTypeFunctionDeclarator ->
+      "function cannot return a function type or an array type"
   | IllegalStorageClassFunctionDeclarator ->
       "invalid storage class specifier in function declarator"
+  | IncompleteParameterTypeFunctionDeclarator ->
+      "incomplete type"
   | VariableSizedObjectInitialization ->
       "variable-sized object may not be initialized"
   | IllegalStorageClassStaticOrThreadInitializer ->
@@ -197,25 +219,22 @@ let string_of_desugar_cause = function
   | Desugar_TODO msg ->
       "TODO: " ^ msg
 
+let string_of_ail_typing_misc_error = function
+  | UntypableIntegerConstant i ->
+      "integer constant cannot be represented by any type"
+  | ParameterTypeNotAdjusted ->
+      "internal: the parameter type was not adjusted"
+
 let string_of_ail_typing_error = function
-  | TError_indirection_not_pointer ->
-      "the * operator expects a pointer operand"
-  | TError_main_return_type ->
-      "return type of 'main' should be 'int'"
-  | TError_main_not_function ->
-      "variable named 'main' with external linkage has undefined behavior"
-  | TError_main_param1 ->
-      "invalid parameter type for 'main': first parameter must be of type 'int'"
-  | TError_main_param2 ->
-      "invalid parameter type for 'main': second parameter must be of type 'char **'"
+  | TError_ConstraintViolation tcv ->
+      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation tcv
+  | TError_UndefinedBehaviour ub ->
+      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
+  | TError_MiscError tme ->
+      string_of_ail_typing_misc_error tme
+  (* TODO *)
   | TError std ->
-      "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
-  | TError_undef ub ->
-      "[Ail typing] found undefined behaviour: " ^
-      Undefined.pretty_string_of_undefined_behaviour ub
-  | TError_lvalue_coercion ty ->
-      "[Ail typing error]\n failed lvalue coercion of type \"" ^
-      Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
+      "[Ail typing] (" ^ std ^ ")\n  \"" ^ std ^ "\""
   | _ ->
       "[Ail typing error]"
 
@@ -291,90 +310,9 @@ type std_ref =
   | UnknownRef
   | NoRef
 
-
-let get_constraint_violation_ref = function
-  | IntegerConstantOutRange ->
-      StdRef "§6.6#4"
-  | NoLinkageMultipleDeclaration _ ->
-      StdRef "§6.7#3"
-  | TypedefRedefinition ->
-      StdRef "§6.7#3, 1st bullet"
-  | TypedefRedefinitionVariablyModifiedType ->
-      StdRef "§6.7#3, 1st bullet, 2nd sentence"
-  | IllegalMultipleStorageClasses ->
-      StdRef "§6.7.1#2"
-  | IllegalMultipleStorageClassesThreadLocal ->
-      StdRef "§6.7.1#3, 1st sentence"
-  | ThreadLocalShouldAppearInEveryDeclaration ->
-      StdRef "§6.7.1#3, 2nd sentence"
-  | ThreadLocalFunctionDeclaration ->
-      StdRef "§6.7.1#4"
-  | NoTypeSpecifierInDeclaration ->
-      StdRef "§6.7.2#2, 1st sentence"
-  | IllegalTypeSpecifierInDeclaration ->
-      StdRef "§6.7.2#2"
-  | StructDeclarationLacksDeclaratorList ->
-      StdRef "§6.7.2.1#2"
-  | FieldIncompleteType _
-  | FieldFunction _ ->
-      StdRef "§6.7.2.1#3"
-  | WrongTypeEnumConstant ->
-      StdRef "§6.7.2.2#2"
-  | TagRedefinition _ ->
-      StdRef "§6.7.2.3#1"
-  | TagRedeclaration _ ->
-      StdRef "§6.7.2.3#2"
-  | EnumTagIncomplete ->
-      StdRef "§6.7.2.3#3"
-  | AtomicTypeConstraint ->
-      StdRef "§6.7.2.4#3"
-  | ArrayDeclarationNegativeSize ->
-      StdRef "§6.7.6.2#1, 3rd sentence"
-  | ArrayDeclarationQsAndStaticOnlyOutmost
-  | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
-      StdRef "§6.7.6.2#1, 5th sentence"
-  | IllegalStorageClassFunctionDeclarator ->
-      StdRef "§6.7.6.3#2"
-  | VariableSizedObjectInitialization ->
-      StdRef "§6.7.9#3"
-  | IllegalStorageClassStaticOrThreadInitializer ->
-      StdRef "§6.7.9#4"
-  | IllegalLinkageAndInitialization ->
-      StdRef "§6.7.9#5"
-  | IllegalTypeArrayDesignator ->
-      StdRef "§6.7.9#6, 1st sentence"
-  | IllegalSizeArrayDesignator ->
-      StdRef "§6.7.9#6, 2nd sentence"
-  | StaticAssertFailed _ ->
-      StdRef "§6.7.10#2"
-  | LabelStatementOutsideSwitch ->
-      StdRef "§6.8.1#2"
-  | LabelRedefinition _ ->
-      StdRef "§6.8.1#3"
-  | IllegalStorageClassIterationStatement ->
-      StdRef "§6.8.5#3"
-  | ContinueOutsideLoop ->
-      StdRef "§6.8.6.2#1"
-  | UndeclaredLabel _ -> 
-      StdRef "§6.8.6.1#1, sentence 1"
-  | BreakOutsideSwtichOrLoop ->
-      StdRef "§6.8.6.3#1"
-  | NonVoidReturnVoidFunction ->
-      StdRef "§6.8.6.4#1, 1st sentence"
-  | VoidReturnNonVoidFunction ->
-      StdRef "§6.8.6.4#1, 2nd sentence"
-  | IllegalStorageClassFileScoped ->
-      StdRef "§6.9#2"
-  | ExternalRedefinition _ ->
-      StdRef "§6.9#3"
-  | WrongTypeFunctionIdentifier ->
-      StdRef "§6.9.1#2"
-  | IllegalStorageClassFunctionDefinition ->
-      StdRef "§6.9.1#4"
-  | IllegalIdentifierTypeVoidInFunctionDefinition ->
-      StdRef "§6.9.1#5, 1st sentence"
-  | UniqueVoidParameterInFunctionDefinition ->
-      StdRef "§6.9.1#5"
+let std_ref_of_option = function
+  | Some ref -> StdRef ref
+  | None -> UnknownRef
 
 let get_misc_violation_ref = function
   (* TODO: check if footnote is being printed *)
@@ -394,26 +332,13 @@ let get_misc_violation_ref = function
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
-      get_constraint_violation_ref e
+      StdRef (Constraint.std_of_violation e)
   | Desugar_UndefinedBehaviour ub ->
-      (match Undefined.std_of_undefined_behaviour ub with
-        | Some ref -> StdRef ref
-        | None -> UnknownRef)
+      std_ref_of_option @@ Undefined.std_of_undefined_behaviour ub
   | Desugar_NotYetSupported _ ->
       NoRef
   | Desugar_MiscViolation e ->
       get_misc_violation_ref e
-  | _ ->
-      UnknownRef
-
-let get_ail_typing_ref = function
-  | TError_main_return_type ->
-      StdRef "§5.1.2.2.1#1, 2nd sentence"
-  | TError_main_param1
-  | TError_main_param2 ->
-      StdRef "§5.1.2.2.1#1"
-  | TError_indirection_not_pointer ->
-      StdRef "§6.5.3.2#2"
   | _ ->
       UnknownRef
 
@@ -423,7 +348,7 @@ let get_std_ref = function
   | DESUGAR dcause ->
       get_desugar_ref dcause
   | AIL_TYPING tcause ->
-      get_ail_typing_ref tcause
+      std_ref_of_option @@ std_of_ail_typing_error tcause
   | _ ->
       NoRef
 

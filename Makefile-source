@@ -19,7 +19,8 @@ SOURCE_prelude=\
 
 SOURCE_cabs=\
   cabs.lem \
-  undefined.lem
+  undefined.lem \
+  constraint.lem
 
 
 SOURCE_ail=\

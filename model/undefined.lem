@@ -21,7 +21,10 @@ type undefined_behaviour =
   | UB003
   (* A program in a hosted environment does not define a function named main using one of the
      specified forms (5.1.2.2.1). *)
-  | UB004
+  | UB004a_incorrect_main_return_type
+  | UB004b_incorrect_main_argument1
+  | UB004c_incorrect_main_argument2
+  | UB004d_main_not_function
   (* The execution of a program contains a data race (5.1.2.4). *)
   | UB005_data_race
   (* A character not in the basic source character set is encountered in a source file, except in an
@@ -678,6 +681,14 @@ type undefined_behaviour =
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
+  | UB004a_incorrect_main_return_type ->
+      Just "§5.1.2.2.1#1"
+  | UB004b_incorrect_main_argument1 ->
+      Just "§5.1.2.2.1#1"
+  | UB004c_incorrect_main_argument2 ->
+      Just "§5.1.2.2.1#1"
+  | UB004d_main_not_function ->
+      Just "§5.1.2.2.1#1"
   | UB005_data_race ->
       Just "§5.1.2.4#25, sentence 2"
   | UB008_multiple_linkage ->
@@ -692,6 +703,8 @@ let std_of_undefined_behaviour = function
       Just "§6.2.6.1#5, sentence 3"
   | UB015_incompatible_redeclaration ->
       Just "§6.2.7#2"
+  | UB020_nonarray_incomplete_lvalue_conversion ->
+      Just "§6.3.2.1#2, sentence 3"
   | UB050_pointers_substraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
   | UB055_invalid_integer_constant_expression ->
@@ -701,9 +714,11 @@ let std_of_undefined_behaviour = function
   | UB060_block_scope_function_with_storage_class ->
       Just "§6.7.1#7"
   | UB061_no_named_members ->
-      Just "§6.7.2.1#8, 3rd sentence"
+      Just "§6.7.2.1#8, sentence 3"
+  | UB066_qualified_function_specification ->
+      Just "§6.7.3#9, sentence 2"
   | UB078_modified_void_parameter ->
-      Nothing (* TODO *)
+      Just "§6.7.6.3#10"
   | UB081_scalar_initializer_not_single_expression ->
       Just "§6.7.9#11, 1st sentence"
   | UB086_incomplete_adjusted_parameter ->
@@ -718,35 +733,6 @@ let std_of_undefined_behaviour = function
       Nothing
 end
 
-val ub_short_string: undefined_behaviour -> string
-let ub_short_string = function
-  | UB008_multiple_linkage ->
-      "identifier has both internal and external linkage in the same translation unit"
-  | UB015_incompatible_redeclaration ->
-      "two declarations of the same object or function specify types that are not compatible"
-  | UB055_invalid_integer_constant_expression ->
-      "invalid integer constant expression"
-  | UB059_incomplete_no_linkage_identifier ->
-      "identifier with no linkage and incomplete type"
-  | UB060_block_scope_function_with_storage_class ->
-      "block scoped function identifier with illegal storage class"
-  | UB061_no_named_members ->
-      "a structure or union is defined without any named members"
-  | UB078_modified_void_parameter ->
-      "a storage-class specifier or type qualifier modifies the keyword void as a function parameter type list"
-  | UB086_incomplete_adjusted_parameter ->
-      "an adjusted parameter type in a function definition is not a complete object type"
-  | UB089_tentative_definition_internal_linkage ->
-      "tentative definition with internal linkage and incomplete type"
-  | UB081_scalar_initializer_not_single_expression ->
-      "the initializer for a scalar shall be a single expression"
-  | UB204_illtyped_Static_assert ->
-      "static assert expression is not an integral constant expression"
-  | _ ->
-      "(UB missing short message)"
-end
-
-
 
 val ub_str_bimap: Bimap.bimap undefined_behaviour string
 let ub_str_bimap =
@@ -756,7 +742,10 @@ let ub_str_bimap =
     ; (UB001, "UB001")
     ; (UB002, "UB002")
     ; (UB003, "UB003")
-    ; (UB004, "UB004")
+    ; (UB004a_incorrect_main_return_type, "UB004a_incorrect_main_return_type")
+    ; (UB004b_incorrect_main_argument1, "UB004b_incorrect_main_argument1")
+    ; (UB004c_incorrect_main_argument2, "UB004c_incorrect_main_argument2")
+    ; (UB004d_main_not_function, "UB004d_main_not_function")
     ; (UB005_data_race, "UB005_data_race")
     ; (UB006, "UB006")
     ; (UB007, "UB007")
@@ -968,7 +957,6 @@ let ub_str_bimap =
     ; (UB203, "UB203") ]
 
 
-
 val stringFromUndefined_behaviour: undefined_behaviour -> string
 let stringFromUndefined_behaviour = function
   | DUMMY str ->
@@ -990,6 +978,49 @@ end
 instance (Show undefined_behaviour)
   let show = stringFromUndefined_behaviour
 end
+
+
+val ub_short_string: undefined_behaviour -> string
+let ub_short_string = function
+  | UB004a_incorrect_main_return_type ->
+      "return type of 'main' should be 'int'"
+  | UB004b_incorrect_main_argument1 ->
+      "invalid parameter type for 'main': first parameter must be of type 'int'"
+  | UB004c_incorrect_main_argument2 ->
+      "invalid parameter type for 'main': second parameter must be of type 'char **'"
+  | UB004d_main_not_function ->
+      "variable named 'main' with external linkage has undefined behaviour"
+  | UB008_multiple_linkage ->
+      "identifier has both internal and external linkage in the same translation unit"
+  | UB020_nonarray_incomplete_lvalue_conversion ->
+      "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
+  | UB015_incompatible_redeclaration ->
+      "two declarations of the same object or function specify types that are not compatible"
+  | UB055_invalid_integer_constant_expression ->
+      "invalid integer constant expression"
+  | UB059_incomplete_no_linkage_identifier ->
+      "identifier with no linkage and incomplete type"
+  | UB060_block_scope_function_with_storage_class ->
+      "block scoped function identifier with illegal storage class"
+  | UB061_no_named_members ->
+      "a structure or union is defined without any named members"
+  | UB066_qualified_function_specification ->
+      "the specification of a function type should include any type qualifiers"
+  | UB078_modified_void_parameter ->
+      "a storage-class specifier or type qualifier modifies the keyword void as a function parameter type list"
+  | UB086_incomplete_adjusted_parameter ->
+      "an adjusted parameter type in a function definition is not a complete object type"
+  | UB089_tentative_definition_internal_linkage ->
+      "tentative definition with internal linkage and incomplete type"
+  | UB081_scalar_initializer_not_single_expression ->
+      "the initializer for a scalar shall be a single expression"
+  | UB204_illtyped_Static_assert ->
+      "static assert expression is not an integral constant expression"
+  | ub ->
+      "(UB missing short message): " ^ show ub
+end
+
+
 
 (* TODO(V): I don't think we should use this function anymore! The N1507 json automatically gives us all that! *)
 val pretty_string_of_undefined_behaviour: undefined_behaviour -> string

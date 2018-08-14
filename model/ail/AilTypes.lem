@@ -95,6 +95,9 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
 and ctype =
   Ctype of list annot * ctype_
 
+val proj_ctype_: ctype -> ctype_
+let proj_ctype_ (Ctype _ cty) = cty
+
 instance (Located ctype)
   let locOf cty =
     let (Ctype annots _) = cty in

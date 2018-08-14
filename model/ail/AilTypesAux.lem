@@ -1184,7 +1184,7 @@ let lvalue_coercion S ty =
   else if is_array ty then
     return (array_coercion ty)
   else
-    fail Loc.unknown (TError_lvalue_coercion ty)
+    undef (Loc.locOf ty) Undefined.UB020_nonarray_incomplete_lvalue_conversion
 
 (* following (§6.3.2.1)#3 and #4 *)
 val rvalue_coercion: ctype -> ctype
@@ -1399,16 +1399,16 @@ end
 
 (* STD §6.3.2.1#2 *)
 val lvalue_conversion: forall 'a. sigma 'a -> ctype -> errorM ctype
-let lvalue_conversion S (Ctype annots ty as cty) =
+let lvalue_conversion S cty =
   if is_array cty then
-    fail (get_loc_ annots) (TError "trying to do a lvalue conversion on an array type")
+    fail (Loc.locOf cty) (TError "trying to do a lvalue conversion on an array type")
   
   else if is_incomplete S cty && not (is_array cty) then
-    fail (get_loc_ annots) (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
+    undef (Loc.locOf cty) Undefined.UB020_nonarray_incomplete_lvalue_conversion
   
   (* STD §6.3.2.1#2, sentence 2 *)
-  else match ty with
-    | Atomic cty' ->
+  else match cty with
+    | Ctype _ (Atomic cty') ->
         return cty'
     | _ ->
         (* NOTE: since the qualifiers of ty are not passed to this function, we
