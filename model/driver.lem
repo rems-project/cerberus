@@ -1017,7 +1017,7 @@ let initial_driver_state sym_supply file =
     symbol_supply=     sym_supply;
     core_file=         file;
     core_state=        Core_run.initial_core_state;
-    core_run_state=    Core_run.initial_core_run_state;
+    core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
 
@@ -1066,9 +1066,7 @@ let driver_globals with_concurrency sym_supply file =
   spawn_thread Nothing <|
     (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
     Core_run.arena=  Core.Expr [] Core.Eskip;
-    Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
-    Core_run.labels= Map.empty;
-    Core_run.labels2= Map.empty;
+    Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
     Core_run.current_loc= Loc.unknown;
     Core_run.current_uid= Nothing;
     Core_run.exec_loc= Core_run.ELoc_globals;
@@ -1089,9 +1087,7 @@ let driver_globals with_concurrency sym_supply file =
         List.foldl (fun acc (sym, pe) ->
           if glob_sym <> sym then Core_aux.unsafe_subst_sym_expr sym pe acc else acc
         ) expr to_subst;
-      Core_run.stack= Core_aux.push_empty_continuation Core_aux.empty_stack;
-      Core_run.labels= Map.empty;
-      Core_run.labels2= Map.empty;
+      Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
       Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
       Core_run.current_uid= Nothing;
       Core_run.exec_loc= Core_run.ELoc_globals;
@@ -1290,9 +1286,7 @@ TODO: this should be removable, since we already set it in Translation
         end >>= fun expr ->
         update_thread_state tid0 <|
           Core_run.arena=  expr;
-          Core_run.stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
-          Core_run.labels= Map.empty;
-          Core_run.labels2= Map.empty;
+          Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
           Core_run.current_loc= Loc.other "Driver.drive";
           Core_run.current_uid= Nothing;
           Core_run.exec_loc= Core_run.ELoc_normal [main_sym];

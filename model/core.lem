@@ -383,7 +383,8 @@ type labeled_continuations 'a = map sym (list sym * expr 'a)
 
 type stack 'a =
   | Stack_empty
-  | Stack_cons of labeled_continuations 'a * continuation 'a * stack 'a
+    (* the symbol is that of the procedure being executed *)
+  | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
  
  
  
