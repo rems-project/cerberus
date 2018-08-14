@@ -34,6 +34,14 @@ module CatFile = struct
     | BaseId_asw
     | BaseId_po
     | BaseId_loc
+    | BaseId_int (* internal: same thread *)
+    | BaseId_ext (* external: same thread *)
+    | BaseId_rfi
+    | BaseId_rfe
+    | BaseId_po_loc
+    (*| BaseId_dep_addr
+    | BaseId_dep_data
+    | BaseId_dep_ctrl*)
 
   type id =
     | Id of string (* TODO: only relations allowed currently *)
@@ -95,6 +103,14 @@ module CatFile = struct
   let mk_asw = Eid (BaseId BaseId_asw)
   let mk_loc = Eid (BaseId BaseId_loc)
   let mk_identity = Eid (BaseId BaseId_id)
+  let mk_internal = Eid (BaseId BaseId_int)
+  let mk_external = Eid (BaseId BaseId_ext)
+  let mk_rfi = Eid (BaseId BaseId_rfi)
+  let mk_rfe = Eid (BaseId BaseId_rfe)
+  let mk_po_loc = Eid (BaseId BaseId_po_loc)
+  (*let mk_dep_addr = Eid (BaseId BaseId_dep_addr)
+  let mk_dep_ctrl = Eid (BaseId BaseId_dep_ctrl)
+  let mk_dep_data = Eid (BaseId BaseId_dep_data)*)
 
   let mk_prod (x: set) (y: set) =
     Eprod(x,y)
@@ -148,11 +164,18 @@ module CatFile = struct
     | BaseId_asw -> "asw"
     | BaseId_po  -> "po"
     | BaseId_loc -> "loc"
+    | BaseId_int -> "int"
+    | BaseId_ext -> "ext"
+    | BaseId_rfi -> "rfi"
+    | BaseId_rfe -> "rfe"
+    | BaseId_po_loc -> "po-loc"
+    (*| BaseId_dep_addr -> "addr"
+    | BaseId_dep_ctrl -> "ctrl"
+    | BaseId_dep_data -> "data"*)
 
   let pprint_id = function
     | Id s -> "|" ^ s ^ "|"
-    | BaseId id ->
-        pprint_base_id id
+    | BaseId id -> pprint_base_id id
 
   let pprint_base_set = function
     | BaseSet_U       -> "U"
@@ -296,8 +319,9 @@ module CatParser = struct
   let is_space =
     function | ' ' | '\t' -> true | _ -> false
 
+  (* TODO: rename *)
   let is_lower =
-    function | 'a' .. 'z' |'0'..'9' | '_' -> true | _ -> false
+    function | 'a' .. 'z' |'0'..'9' | '_' | '-' -> true | _ -> false
 
   let spaces = take_while is_space
   let lowers = take_while1 is_lower
@@ -317,6 +341,14 @@ module CatParser = struct
       else if s = "rf"     then mk_rf
       else if s = "rf_inv" then mk_rf_inv
       else if s = "co"     then mk_co
+      else if s = "int"    then mk_internal
+      else if s = "ext"    then mk_external
+      else if s = "rfi"    then mk_rfi
+      else if s = "rfe"    then mk_rfe
+      else if s = "po-loc" then mk_po_loc
+      (*else if s = "addr"   then mk_dep_addr
+      else if s = "ctrl"   then mk_dep_ctrl
+      else if s = "data"   then mk_dep_data *)
       else mk_id s
     in return ret
 

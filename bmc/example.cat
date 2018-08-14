@@ -1,6 +1,6 @@
 // RC11 .cat file without fences or undefined behaviour
 
-let sb = po | I * (M | I | I) | rf
+let sb = po | I * (M \ I)
 let rfstar = rf*
 let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rfstar
 
