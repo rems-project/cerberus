@@ -115,9 +115,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           let ((tid, core_st), run_st) = State.run (
             Core_run.spawn_thread Nothing <|
               Core_run.arena=  Core_run_aux.convert_expr core_expr;
-              Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
-              Core_run.labels= Map.empty;
-              Core_run.labels2= Map.empty;
+              Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
               Core_run.current_loc= loc;
               Core_run.current_uid= Nothing;
               Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)
