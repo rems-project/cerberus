@@ -257,6 +257,14 @@ let rec translate_constant cst =
   end
 
 
+
+type expr_ctx =
+  | ECTX_glob of Symbol.sym * Symbol.sym
+  | ECTX_other
+
+
+
+
 val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
 let rec translate_function_designator stdlib (A.AnnotatedExpression _ _ (* TODO: loc *) _ expr as a_expr) =
   let (Aty.Ctype _ cty) = ctype_of a_expr in
@@ -660,8 +668,8 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
 
 
 
-and translate_expression stdlib (tagDefs : Core.core_tag_definitions) a_expr : E.elabM (C.expr unit) =
-  let self = translate_expression stdlib tagDefs in
+and translate_expression ctx stdlib (tagDefs : Core.core_tag_definitions) a_expr : E.elabM (C.expr unit) =
+  let self = translate_expression ctx stdlib tagDefs in
   let is_lvalue = match GenTypes.genTypeCategoryOf a_expr with
     | GenTypes.GenLValueType _ _ _ ->
         true
@@ -926,7 +934,8 @@ else
                 C.Expr [Annot.Astd "§6.5.2.4#2, sentence 4"] (
                   C.Easeq ((load_sym, C.BTy_loaded oTy))
                     (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
-                    (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
+                    (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
+                       core_ty_e
                        lvalue_sym_pe
                        (Caux.mk_case_pe load_sym_pe
                           [ ( Caux.mk_specified_pat obj_sym_pat
@@ -990,7 +999,8 @@ end
                 C.Expr [] (
                   C.Easeq ((load_sym, C.BTy_loaded oTy))
                     (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
-                    (C.Paction C.Neg (C.Action loc default (C.Store core_ty_e
+                    (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
+                       core_ty_e
                        lvalue_sym_pe
                        (C.Pexpr [] () begin
                           C.PEcase load_sym_pe
@@ -1207,16 +1217,17 @@ else
             )
       
       | A.AilEident id ->
-(*
-          if AilTypesAux.is_pointer_to_function result_ty then
-            (* TODO: remove, this is now never possible  (see function_decay) *)
-            translate_function_designator stdlib a_expr
-          else
-*)
-            let id_sym_pe =
-              Caux.mk_sym_pe id in
-            E.return $
-              C.Expr [] (C.Epure id_sym_pe)
+          let id_sym_pe = match ctx with
+            | ECTX_other ->
+                  Caux.mk_sym_pe id
+            | ECTX_glob glob_sym sym' ->
+                if id = glob_sym then
+                  Caux.mk_sym_pe sym'
+                else
+                  Caux.mk_sym_pe id
+          end in
+          E.return (C.Expr [] (C.Epure id_sym_pe))
+
         (* NOTE: this is not enough *)
 (*
             E.return $
@@ -1812,7 +1823,7 @@ end
                 (C.Expr [Annot.Astd "§6.5.16#3, sentence 5"] (C.Eunseq [core_e1; core_e2])) (
                 Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
                    (C.Expr [Annot.Astd "§6.5.16.1#2, store"] (
-                     C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store core_ty_pe1 object_pe stored_pe Cmm.NA)))
+                     C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) core_ty_pe1 object_pe stored_pe Cmm.NA)))
                    ))
                    (Caux.mk_pure_e stored_pe)
               )
@@ -2934,7 +2945,7 @@ val translate_stmt:
 
 
 let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
-  let translate_expression = translate_expression stdlib tagDefs in
+  let translate_expression = translate_expression ECTX_other stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
       translate_stmt2 stdlib tagDefs f <| env with case_labs=   case_labs;
                                                    default_lab= default_lab |>
@@ -2972,7 +2983,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     
     | A.AilSblock [(sym, (dur_opt, qs, ty))] ss ->
         let c_ty = Caux.mk_ail_ctype_pe ty in
-        E.with_block_objects [(sym, ty)] $
+        E.with_block_objects [(sym, (qs, ty))] $
           E.mapM self ss >>= fun core_ss ->
         E.return $
           Caux.mk_sseq_e (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer))
@@ -2983,10 +2994,10 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           )
     
     | A.AilSblock binds ss ->
-        let decls = [ (sym, ty) | forall ((sym, (dur, qs, ty)) MEM binds ) | true ] in
+        let decls = [ (sym, (qs, ty)) | forall ((sym, (dur, qs, ty)) MEM binds ) | true ] in
         (* the symbolic names and create actions for the local variables *)
         let (pats, core_creates) : list C.pattern * list (C.expr unit) =
-          mapUnzip (fun (sym, ty) ->
+          mapUnzip (fun (sym, (qs, ty)) ->
             let c_ty = Caux.mk_ail_ctype_pe ty in
             (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer), Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym]))
           ) decls in
@@ -3243,23 +3254,27 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     | A.AilSdeclaration sym_es ->
         (* This pass translate the declarations *)
         E.mapM (fun (ptr_sym, e) ->
-          E.resolve_object_type ptr_sym >>= fun ty ->
+          E.resolve_object_type ptr_sym >>= fun (qs, ty) ->
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
           E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
             | Aty.Pointer _ ref_ty ->
+                let mk_store =
+                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
                 if Aaux.is_null_pointer_constant e then
                   E.return (
-                    Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
+                    mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
                       (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ref_ty))) Cmm.NA
                   )
                   else
                     translate_expression e >>= fun core_e ->
                     E.return (
                       Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
-                        (Caux.pstore loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_sym_pe Cmm.NA)
+                        (mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym) e_sym_pe Cmm.NA)
                     )
             | ty ->
+                let mk_store =
+                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
                 (* we are not dealing with a pointer initialisation *)
 (*
                 E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
@@ -3269,7 +3284,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                 translate_expression e >>= fun core_e ->
                 E.return (
                   Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
-                    (Caux.pstore loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym)
+                    (mk_store loc (Caux.mk_ail_ctype_pe cty) (Caux.mk_sym_pe ptr_sym)
                       (if AilTypesAux.is_arithmetic cty then conv_loaded_arith stdlib (ctype_of e) cty e_sym_pe else e_sym_pe) Cmm.NA)
                 )
           end
@@ -3350,7 +3365,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype ty)))
                     )
                   else
-                    translate_expression stdlib core_tagDefs expr >>= fun core ->
+                    translate_expression (ECTX_glob sym sym_global) stdlib core_tagDefs expr >>= fun core ->
                     E.return (
                       C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of expr))),
                       core

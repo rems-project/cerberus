@@ -465,7 +465,9 @@ let palloc loc al e pref =
 let pkill loc is_dynamic x =
   Expr [] (Eaction (Paction Pos (Action loc default (Kill is_dynamic x))))
 let pstore loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (Store ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc default (Store false ty x n mo))))
+let pstore_lock loc ty x n mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (Store true ty x n mo))))
 let pload loc ty x mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Load ty x mo))))
 let prmw loc ty x n1 n2 mo1 mo2 =
@@ -956,8 +958,8 @@ and subst_sym_action_ sym cval = function
       Alloc (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
   | Kill b pe ->
       Kill b (subst_sym_pexpr sym cval pe)
-  | Store pe1 pe2 pe3 mo ->
-      Store (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+  | Store b pe1 pe2 pe3 mo ->
+      Store b (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
         (subst_sym_pexpr sym cval pe3) mo
   | Load pe1 pe2 mo ->
       Load (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) mo
@@ -1196,8 +1198,8 @@ and unsafe_subst_sym_action_ a pe' = function
       Alloc (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
   | Kill b pe ->
       Kill b (unsafe_subst_sym_pexpr a pe' pe)
-  | Store pe1 pe2 pe3 mo ->
-      Store (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
+  | Store b pe1 pe2 pe3 mo ->
+      Store b (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
         (unsafe_subst_sym_pexpr a pe' pe3) mo
   | Load pe1 pe2 mo ->
       Load (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) mo

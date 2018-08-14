@@ -111,6 +111,7 @@ type token =
   | FREE
   | KILL
   | STORE
+  | STORE_LOCK
   | LOAD
   | RMW
   | FENCE

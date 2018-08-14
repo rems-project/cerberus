@@ -417,8 +417,8 @@ and convert_action_ act_ =
         Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
     | Kill b pe ->
         Kill b (convert_pexpr pe)
-    | Store pe1 pe2 pe3 mo ->
-        Store (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
+    | Store b pe1 pe2 pe3 mo ->
+        Store b (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
     | Load pe1 pe2 mo ->
         Load (convert_pexpr pe1) (convert_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->

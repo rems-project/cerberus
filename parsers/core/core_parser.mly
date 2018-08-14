@@ -635,11 +635,11 @@ and symbolify_action_ = function
  | Kill (b, _pe) -> 
      symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Kill (b, pe))
- | Store0 (_pe1, _pe2, _pe3, mo) ->
+ | Store0 (b, _pe1, _pe2, _pe3, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
-     Eff.return (Store0 (pe1, pe2, pe3, mo))
+     Eff.return (Store0 (b, pe1, pe2, pe3, mo))
  | Load0 (_pe1, _pe2, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -954,7 +954,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE LOAD KILL FREE RMW FENCE
+%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1458,11 +1458,15 @@ action:
 | KILL _pe= delimited(LPAREN, pexpr, RPAREN)
     { Kill (false, _pe) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
-    { Store0 (_pe1, _pe2, _pe3, Cmm.NA) }
+    { Store0 (false, _pe1, _pe2, _pe3, Cmm.NA) }
+| STORE_LOCK LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
+    { Store0 (true, _pe1, _pe2, _pe3, Cmm.NA) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
     { Load0 (_pe1, _pe2, Cmm.NA) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA mo= memory_order RPAREN
-    { Store0 (_pe1, _pe2, _pe3, mo) }
+    { Store0 (false, _pe1, _pe2, _pe3, mo) }
+| STORE_LOCK LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA mo= memory_order RPAREN
+    { Store0 (true, _pe1, _pe2, _pe3, mo) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
     { Load0 (_pe1, _pe2, mo) }
 | RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
