@@ -28,10 +28,14 @@ import Core_run_aux
 include Core_run_aux
 
 
-val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
-               Exception.exceptM (Core.expr core_run_annotation) core_run_cause
+(* fetching the body and symbol environment for a gien Core procedure *)
+val call_proc:
+  Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
+  Exception.exceptM (map Symbol.sym Core.value * Core.expr core_run_annotation) core_run_cause
 let call_proc file psym cvals =
   let bTy_params_body_opt =
+    (* NOTE: the order of lookups implies that user procedure cannot hide the
+       ones from stdlib, do we really want that? *)
     match Map.lookup psym file.stdlib with
       | Just (Proc _ bTy params body) ->
           Just (bTy, params, body)
@@ -46,12 +50,20 @@ let call_proc file psym cvals =
   match bTy_params_body_opt with
     | Just (bTy, params, body) ->
         if List.length params <> List.length cvals then
-          error $ "[Core_run.call_proc] wrong number of args applied to `" ^ show psym  ^ "' |args|=" ^
-          show (List.length cvals) ^ "expecting: " ^ show (List.length params)
+          Exception.fail (Illformed_program begin
+            "calling procedure `" ^ show psym ^
+            "' with the wrong number of args: |args|=" ^
+            show (List.length cvals) ^ "expecting: " ^
+            show (List.length params)
+          end)
         else
-          Exception.return (Utils.foldl2 (fun acc (sym, _) cval -> subst_sym_expr sym cval acc) body params cvals)
+          let env = Utils.foldl2 (fun acc (sym, _) cval ->
+            Map.insert sym cval acc
+          ) Map.empty params cvals in
+          Exception.return (env, body)
     | Nothing ->
-        Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
+        Exception.fail
+          (Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
 
 
@@ -122,6 +134,8 @@ type core_run_state = <|
   (* DEBUG *)
   step_counter: nat;
 
+  (* Scoped environment for the Core symbols *)
+  env: list (map Symbol.sym value);
   (* Pre-calculated map of labeled continuations (aka. save()).
      the map is over procedure symbols (NOTE: read-only) *)
   labeled: map Symbol.sym (labeled_continuations core_run_annotation);
@@ -322,35 +336,45 @@ module E = struct
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc env (Just mem_st) file false) pes)
+    )
   let core_run_step_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.step_eval_pexpr 0 loc env (Just mem_st) file false pe)
+    )
   let inline step_eval_pexpr = core_run_step_eval_pexpr
   
   let core_run_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
     ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.eval_pexpr_aux_broken loc env (Just mem_st) file pe)
+    )
   let inline eval_pexpr = core_run_eval_pexpr
   
   let eval_pexpr2 loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.eval_pexpr_aux2 loc env (Just mem_st) file pe)
+    )
   
   let wrapped_eval_pexpr2 loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
     (* TODO: it would be better to just call eval_pexpr2, but
        Lem generates buggy OCaml ... *)
-    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)) function
-      | Left pe' ->
-          SEU.return pe'
-      | Right cval ->
-          SEU.return (Core_aux.mk_value_pe cval)
-    end
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc env (Just mem_st) file pe)) function
+        | Left pe' ->
+            SEU.return pe'
+        | Right cval ->
+            SEU.return (Core_aux.mk_value_pe cval)
+      end
+    )
   
   let fresh_action_id =
     SEU.runS fresh_action_id'
@@ -973,7 +997,8 @@ BEFORE EVAL_PEXPR2
                         arena= Expr arena_annots (Elet pat pe1' e2)
                       |>
                   | Right cval ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
         end
@@ -1046,7 +1071,10 @@ BEFORE EVAL_PEXPR2
                             SEU.runEU (
                               Exception.bind (call_proc file psym cvals)
                                 EU.return
-                            ) >>= fun expr ->
+                            ) >>= fun (proc_env, expr) ->
+                            SEU.update (fun st ->
+                              <| st with env= proc_env :: st.env |>
+                            ) >>
                             (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                             let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                             E.return <| th_st with
@@ -1094,7 +1122,10 @@ BEFORE EVAL_PEXPR2
                       SEU.runEU (
                         Exception.bind (call_proc file psym cvals)
                           EU.return
-                      ) >>= fun expr ->
+                      ) >>= fun (proc_env, expr) ->
+                      SEU.update (fun st ->
+                        <| st with env= proc_env :: st.env |>
+                      ) >>
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                       let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                       E.return <| th_st with
@@ -1283,7 +1314,8 @@ BEFORE EVAL_PEXPR2
                   | Left pe1' ->
                       E.return <| th_st with arena= Expr arena_annots (Ewseq pat (Expr e1_annots (Epure pe1')) e2) |>
                   | Right cval1 ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval1 st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
           | _ ->
@@ -1324,7 +1356,8 @@ BEFORE EVAL_PEXPR2
                   | Left pe1' ->
                       E.return <| th_st with arena= Expr arena_annots (Esseq pat (Expr e1_annots (Epure pe1')) e2) |>
                   | Right cval1 ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval1 st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
           | _ ->
@@ -1414,6 +1447,14 @@ BEFORE EVAL_PEXPR2
                 | Stack_cons _ [] (Stack_cons parent_proc_opt cont sk') ->
                     (* reached the end of the execution of a procedure. *)
                     Step_tau "end of procedure" (
+                      SEU.update (fun st ->
+                        match st.env with
+                          | [] ->
+                              error "end of proc, found an empty Core_run env"
+                          | _ :: env' ->
+                              <| st with env= env' |>
+                        end
+                      ) >>
                       E.return <| th_st with
                         arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
                         stack= Stack_cons parent_proc_opt [] sk';
@@ -1519,5 +1560,6 @@ let initial_core_run_state xs = <|
   
   step_counter= 0;
   
+  env=     [Map.empty];
   labeled= xs;
 |>

@@ -2201,3 +2201,87 @@ in
   xs
 *)
 
+
+val     update_env: pattern -> value -> list (map Symbol.sym value) -> list (map Symbol.sym value)
+let rec update_env_aux pat cval env =
+  (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
+  match (pat, cval) with
+    | (CaseBase (Nothing, _), _) ->
+        (* e[_ \ v] = e *)
+        env
+    | (CaseBase (Just sym, _), _) ->
+        (* e[sym \ v] *)
+        Map.insert sym cval env
+    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+        (* empty list (value) *)
+        env
+    | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->
+        (* populated list (value) *)
+        update_env_aux pat1 cval1 $
+          update_env_aux pat2 (Vlist bTy_elem cvals) env
+    | (CaseCtor Ctuple pats', Vtuple cvals) ->
+        List.foldr (fun (pat', cval') acc ->
+          update_env_aux pat' cval' acc
+        ) env (List.zip pats' cvals)
+    | (CaseCtor Cloaded [pat'], Vloaded (LVspecified oval)) ->
+        update_env_aux pat' (Vobject oval) env
+    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+        update_env_aux pat' (Vctype ty) env
+    | (CaseCtor ctor pats, _) ->
+        let str_ctor = match ctor with
+          | Cnil _ ->
+              "nil"
+          | Ccons ->
+              "cons"
+          | Ctuple ->
+              "tuple"
+          | Carray ->
+              "array"
+          | Civmax ->
+              "ivmax"
+          | Civmin ->
+              "ivmin"
+          | Civsizeof ->
+              "ivsizeof"
+          | Civalignof ->
+              "ivalignof"
+          | CivCOMPL ->
+              "ivCOMPL"
+          | CivAND ->
+              "ivAND"
+          | CivOR ->
+              "ivOR"
+          | CivXOR ->
+              "ivXOR"
+          | Cspecified ->
+              "specified"
+          | Cunspecified ->
+              "unspecified"
+          | Cfvfromint ->
+              "fvfromint"
+          | Civfromfloat ->
+              "ivfromfloat"
+        end in
+        error ("WIP: Core_aux.update_env_aux ==> ctor= " ^ str_ctor ^ ", |pats|= "
+               ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)
+  end
+
+let update_env pat cval = function
+  | [] ->
+      error "Core_aux.update_env: found empty env"
+  | env::xs ->
+      update_env_aux pat cval  env :: xs
+end
+
+
+let rec lookup_env sym = function
+  | [] ->
+      Nothing
+  | env :: xs ->
+      match Map.lookup sym env with
+        | Nothing ->
+            lookup_env sym xs
+        | Just ret ->
+            Just ret
+      end
+end
