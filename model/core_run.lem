@@ -380,7 +380,7 @@ type action_request =
                    (Mem.mem_value -> thread_state)
   
   | StoreRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                    Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                    Cmm.aid * thread_id * Cmm.memory_order * ctype * (* is_locking *)bool * Mem.pointer_value * Mem.mem_value *
                     thread_state
   | RMWRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
                   Cmm.aid * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
@@ -632,18 +632,18 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
         error "Store PEconstrained 2"
 *)
 
-    | Store pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store is_locking pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
         Step_constrained "Store" (
           List.map (fun (cs, pe3) ->
             ( cs
             , E.return <| th_st with
                 arena= Expr arena_annots (Eaction (Paction p (Action loc annots
-                         (Store pe1 pe2 pe3 mo)
+                         (Store is_locking pe1 pe2 pe3 mo)
                        )));
             |> )
           ) xs3
         )
-    | Store pe1 pe2 pe3 mo ->
+    | Store is_locking pe1 pe2 pe3 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval) ->
               match cval with
@@ -672,7 +672,7 @@ KKK
                           E.fresh_symbol    >>= fun val_sym   ->
                           E.return (
                             StoreRequest loc sb_before dd_before asw_before
-                              store_aid current_tid mo ty ptr_val mem_val
+                              store_aid current_tid mo ty is_locking ptr_val mem_val
                               <| th_st with
                                 arena= Expr arena_annots Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
                                 stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
@@ -691,21 +691,21 @@ KKK
               Step_eval "first operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo))))
+                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1' pe2 pe3 mo))))
                 |>
               )
           | (_, Nothing, _) ->
               Step_eval "second operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo))))
+                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1 pe2' pe3 mo))))
                 |>
               )
           | (_, _, Nothing) ->
               Step_eval "third operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe3 >>= fun pe3' ->
                 E.return <| th_st with
-                  arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo))))
+                  arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1 pe2 pe3' mo))))
                 |>
               )
         end

@@ -644,8 +644,8 @@ and pp_action act =
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill (b, e) ->
         pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_pexpr e)
-    | Store0 (ty, e1, e2, mo) ->
-       pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
+    | Store0 (is_locking, ty, e1, e2, mo) ->
+       pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | RMW0 (ty, e1, e2, e3, mo1, mo2) ->

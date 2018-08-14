@@ -960,7 +960,7 @@ let printf eval_conv frmt args =
 val     store_chars_in_array: Mem.pointer_value -> list char -> Mem.memM unit
 let rec store_chars_in_array ptrval = function
   | [] ->
-      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char ptrval
+      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char false ptrval
                   (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0))) begin fun _ ->
         Mem.return ()
       end
@@ -969,7 +969,7 @@ let rec store_chars_in_array ptrval = function
         Mem.integer_value_mval AilTypes.Char
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
-      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char ptrval c_mval) begin fun _ ->
+      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char false ptrval c_mval) begin fun _ ->
         let ptrval' = Mem.array_shift_ptrval ptrval Cty.char (Mem.integer_ival 1) in
         store_chars_in_array ptrval' cs
       end

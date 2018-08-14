@@ -687,8 +687,9 @@ let print_action globs act =
     ^^^ P.parens (print_pure_expr globs n)
   | Kill (b, e) ->
     !^"M.kill" ^^^ !^"RT.unknown" ^^^ print_bool b ^^^ P.parens (print_pure_expr globs e)
-  | Store0 (ty, pe1, pe2, _) ->
+  | Store0 (b, ty, pe1, pe2, _) ->
     choose_store_type ty
+    ^^^ print_bool b
     ^^^ P.parens (print_pure_expr globs pe1)
     ^^^ P.parens (print_pure_expr globs pe2)
   | Load0 (ty, e, _) ->

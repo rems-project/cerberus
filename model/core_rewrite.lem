@@ -823,8 +823,8 @@ and remove_conv_int_action_ act_ =
         Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
     | Kill b pe ->
         Kill b (remove_conv_int_pexpr pe)
-    | Store pe1 pe2 pe3 mo ->
-        Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
+    | Store b pe1 pe2 pe3 mo ->
+        Store b (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->
         Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->

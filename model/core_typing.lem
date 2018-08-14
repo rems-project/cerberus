@@ -1131,7 +1131,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
     | Kill b pe ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
         E.return (BTy_unit, Kill b tpe)
-    | Store pe1 pe2 pe3 mo ->
+    | Store b pe1 pe2 pe3 mo ->
         match pe1 with
           | Pexpr [] () (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
@@ -1139,7 +1139,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
                 | Just lvalue_oTy ->
                     typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
                     typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
-                    E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
+                    E.return (BTy_unit, Store b tpe1 tpe2 tpe3 mo)
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO "Store, not oTy")
               end
@@ -1201,7 +1201,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       guard_match loc "kill()" bTy BTy_unit >>
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
       E.return (Kill b tpe)
-  | Store pe1 pe2 pe3 mo ->
+  | Store b pe1 pe2 pe3 mo ->
       guard_match loc "store()" bTy BTy_unit >>
       match pe1 with
         | Pexpr [] () (PEval (Vctype ty)) ->
@@ -1210,7 +1210,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
               | Just lvalue_oTy ->
                   typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
                   typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
-                  E.return (Store tpe1 tpe2 tpe3 mo)
+                  E.return (Store b tpe1 tpe2 tpe3 mo)
               | Nothing ->
                   E.fail loc (CoreTyping_TODO "Store, not oTy")
             end
