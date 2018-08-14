@@ -310,6 +310,7 @@ module MemoryModelCommon = struct
   (* BUILT IN DECLARATIONS *)
   type builtin_decls = {
     aid      : FuncDecl.func_decl;
+    tid      : FuncDecl.func_decl;
     guard    : FuncDecl.func_decl;
     etype    : FuncDecl.func_decl;
     memord   : FuncDecl.func_decl;
@@ -330,6 +331,7 @@ module MemoryModelCommon = struct
 
   let mk_decls (events: Sort.sort) : builtin_decls =
     { aid      = mk_decl "aid"     [events]  (Integer.mk_sort g_ctx)
+    ; tid      = mk_decl "tid"     [events]  (Integer.mk_sort g_ctx)
     ; guard    = mk_decl "guard"   [events]  boolean_sort
     ; etype    = mk_decl "etype"   [events]  mk_event_type
     ; addr     = mk_decl "addr"    [events]  AddressSort.mk_sort
@@ -347,6 +349,7 @@ module MemoryModelCommon = struct
 
   type builtin_fnapps = {
     getAid    : Expr.expr -> Expr.expr;
+    getTid    : Expr.expr -> Expr.expr;
     getGuard  : Expr.expr -> Expr.expr;
     getEtype  : Expr.expr -> Expr.expr;
     getAddr   : Expr.expr -> Expr.expr;
@@ -358,18 +361,26 @@ module MemoryModelCommon = struct
     isWrite   : Expr.expr -> Expr.expr;
     same_loc  : Expr.expr * Expr.expr -> Expr.expr;
 
+    internal  : Expr.expr * Expr.expr -> Expr.expr;
+    ext       : Expr.expr * Expr.expr -> Expr.expr;
+
     rf_inv    : Expr.expr -> Expr.expr;
     rf        : Expr.expr * Expr.expr -> Expr.expr;
+
+    rfi       : Expr.expr * Expr.expr -> Expr.expr;
+    rfe       : Expr.expr * Expr.expr -> Expr.expr;
 
     co_clk    : Expr.expr -> Expr.expr;
     co        : Expr.expr * Expr.expr -> Expr.expr;
 
     po        : Expr.expr * Expr.expr -> Expr.expr;
+    po_loc    : Expr.expr * Expr.expr -> Expr.expr;
     asw       : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
     let getAid    = (fun e -> apply decls.aid    [e]) in
+    let getTid    = (fun e -> apply decls.tid    [e]) in
     let getGuard  = (fun e -> apply decls.guard  [e]) in
     let getEtype  = (fun e -> apply decls.etype  [e]) in
     let getAddr   = (fun e -> apply decls.addr   [e]) in
@@ -386,14 +397,26 @@ module MemoryModelCommon = struct
                                            ]
                     ) in
 
+    let internal  = (fun (e1,e2) -> mk_eq (getTid e1) (getTid e2)) in
+    let ext       = (fun (e1,e2) -> mk_not (mk_eq (getTid e1) (getTid e2))) in
+
     let rf_inv = (fun e -> apply decls.rf_inv [e]) in
     let rf     = (fun (e1,e2) -> mk_and [isRead e2
                                         ;mk_eq (rf_inv e2) e1
                                         ]) in
+    let rfi    = (fun (e1,e2) -> mk_and [rf (e1,e2)
+                                        ;internal (e1,e2)]) in
+    let rfe    = (fun (e1,e2) -> mk_and [rf (e1,e2)
+                                        ;ext (e1,e2)]) in
 
     let co_clk = (fun e -> apply decls.co_clk [e]) in
 
+    let po     = (fun (e1,e2) -> apply decls.po [e1;e2]) in
+    let po_loc = (fun (e1,e2) -> mk_and [po (e1,e2)
+                                        ;same_loc (e1,e2)]) in
+
     { getAid    = getAid
+    ; getTid    = getTid
     ; getGuard  = getGuard
     ; getEtype  = getEtype
     ; getAddr   = getAddr
@@ -405,8 +428,13 @@ module MemoryModelCommon = struct
     ; isWrite   = isWrite
     ; same_loc  = same_loc
 
+    ; internal  = internal
+    ; ext       = ext
+
     ; rf        = rf
     ; rf_inv    = rf_inv
+    ; rfi       = rfi
+    ; rfe       = rfe
 
     ; co_clk    = co_clk
     ; co        = (fun (e1,e2) -> mk_and [mk_lt g_ctx (co_clk e1) (co_clk e2)
@@ -415,7 +443,8 @@ module MemoryModelCommon = struct
                                          ;same_loc (e1,e2)
                                          ])
 
-    ; po        = (fun (e1,e2) -> apply decls.po [e1;e2])
+    ; po        = po
+    ; po_loc    = po_loc
     ; asw       = (fun (e1,e2) -> apply decls.asw [e1;e2])
     }
 
@@ -462,6 +491,11 @@ module MemoryModelCommon = struct
     let aid_asserts = List.map (fun action ->
       mk_eq (fns.getAid (z3action action))
             (Integer.mk_numeral_i g_ctx (aid_of_bmcaction action))
+      ) all_actions in
+
+    let tid_asserts = List.map (fun action ->
+      mk_eq (fns.getTid (z3action action))
+            (Integer.mk_numeral_i g_ctx (tid_of_bmcaction action))
       ) all_actions in
 
     let guard_asserts = List.map (fun action ->
@@ -542,6 +576,7 @@ module MemoryModelCommon = struct
     ; fns        = fns
 
     ; assertions =   aid_asserts
+                   @ tid_asserts
                    @ guard_asserts
                    @ type_asserts
                    @ addr_asserts
@@ -1521,7 +1556,16 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_asw    -> model.builtin_fns.asw (ea,eb)
         | BaseId_po     -> model.builtin_fns.po (ea,eb)
         | BaseId_loc    -> model.builtin_fns.same_loc (ea,eb)
-
+        | BaseId_int    -> model.builtin_fns.internal (ea,eb)
+        | BaseId_ext    -> model.builtin_fns.ext (ea,eb)
+        | BaseId_rfi    -> model.builtin_fns.rfi (ea,eb)
+        | BaseId_rfe    -> model.builtin_fns.rfe (ea,eb)
+        | BaseId_po_loc -> model.builtin_fns.po_loc (ea,eb)
+        (*
+        | BaseId_addr   -> model.builtin_fns.po (ea,eb)
+        | BaseId_ctrl   -> model.builtin_fns.po (ea,eb)
+        | BaseId_data   -> model.builtin_fns.po (ea,eb)
+        *)
         end
 
   (* === Expr -> boolean *)
@@ -1740,7 +1784,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       List.map (fun s ->
         let fn = lookup_id (CatFile.Id s) mem.fns in
         let rel = List.filter (get_relation fn) prod in
-        (s, List.map proj_fst rel)
+        (s, remove_initial (List.map proj_fst rel))
       ) M.to_output in
 
     (*let sw = List.filter (get_relation fns.sw) prod in *)
