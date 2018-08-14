@@ -1,31 +1,38 @@
-open import Pervasives AilTypes (*GenTypes*)
-import Undefined
+open import Pervasives AilTypes
+import Constraint Undefined
+
+type typing_misc_error =
+  | UntypableIntegerConstant of integer (* §6.4.4.1#6, sentence 5 *)
+  | ParameterTypeNotAdjusted (* internal *)
 
 type typing_error =
-  | TError_lvalue_coercion of ctype
-  | TError_TODO of nat
-  | TError_integerConstant_too_large of integer (* AilSyntax.integerConstant *)
-  | TError of string
-  | TError_undef of Undefined.undefined_behaviour
-  | TError_internal of string
+  | TError_ConstraintViolation of Constraint.violation
+  | TError_UndefinedBehaviour of Undefined.undefined_behaviour
+  | TError_MiscError of typing_misc_error
+  | TError_TODO of nat (* TODO: change this to string later *)
+  | TError of string (* TODO: remove this *)
 
-  | TError_main_return_type
-  | TError_main_param1
-  | TError_main_param2
-  | TError_main_not_function
-  
-  | TError_indirection_not_pointer (* of genType *)
+val std_of_typing_misc_error: typing_misc_error -> maybe string
+let std_of_typing_misc_error = function
+  | UntypableIntegerConstant _ ->
+      Just "§6.4.4.1#6, sentence 5"
+  | ParameterTypeNotAdjusted ->
+      Nothing
+end
 
-
-let stdquote = function
-  | TError_main_return_type ->
-      Just "§5.1.2.2.1#1, 2nd sentence"
-  | TError_indirection_not_pointer (* _ *) ->
-      (* Constraint violation *)
-      Just "§6.5.3.2#2"
+val std_of_ail_typing_error: typing_error -> maybe string
+let std_of_ail_typing_error = function
+  | TError_ConstraintViolation v ->
+      Just (Constraint.std_of_violation v)
+  | TError_UndefinedBehaviour ub ->
+      Undefined.std_of_undefined_behaviour ub
+  | TError_MiscError e ->
+      std_of_typing_misc_error e
   | _ ->
       Nothing
 end
+
+
 
   (* Constraint violation *)
 

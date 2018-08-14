@@ -1,49 +1,5 @@
 open import Utils Cabs AilSyntax Core
-import Loc TypingError Undefined
-
-type constraint_violation =
-  | IntegerConstantOutRange (* §6.6#4 *)
-  | NoLinkageMultipleDeclaration of cabs_identifier (* §6.7#3 *)
-  | TypedefRedefinition (* §6.7#3, 1st bullet *)
-  | TypedefRedefinitionVariablyModifiedType (* §6.7#3, 1st bullet, 2nd sentence *)
-  | IllegalMultipleStorageClasses (* §6.7.1#2 *)
-  | IllegalMultipleStorageClassesThreadLocal (* §6.7.1#3, 1st sentence *)
-  | ThreadLocalShouldAppearInEveryDeclaration (* §6.7.1#3, 2nd sentence *)
-  | ThreadLocalFunctionDeclaration (* §6.7.1#4 *)
-  | FieldIncompleteType of AilTypes.qualifiers * AilTypes.ctype (* §6.7.2#2 *)
-  | NoTypeSpecifierInDeclaration (* §6.7.2#2 *)
-  | IllegalTypeSpecifierInDeclaration (* §6.7.2#2 *)
-  | StructDeclarationLacksDeclaratorList (* §6.7.2.1#2 *)
-  | FieldFunction of cabs_identifier (* §6.7.2.1#3 *)
-  | WrongTypeEnumConstant (* §6.7.2.2#2 *)
-  | TagRedefinition of Symbol.sym (* §6.7.2.3#1 *)
-  | TagRedeclaration of Symbol.sym (* §6.7.2.3#2 *)
-  | EnumTagIncomplete (* §6.7.2.3#3 *)
-  | AtomicTypeConstraint (* §6.7.2.4#3 *)
-  | ArrayDeclarationNegativeSize (* §6.7.6.2#1, 3rd sentence *)
-  | ArrayDeclarationQsAndStaticOnlyOutmost (* §6.7.6.2#1, 5th sentence *)
-  | ArrayDeclarationQsAndStaticOutsideFunctionProto (* §6.7.6.2#1, 5th sentence *)
-  | IllegalStorageClassFunctionDeclarator (* §6.7.6.3#2 *)
-  | VariableSizedObjectInitialization (* §6.7.9#3 *)
-  | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
-  | IllegalLinkageAndInitialization (* §6.7.9#5 *)
-  | IllegalTypeArrayDesignator (* §6.7.9#6, 1st sentence *)
-  | IllegalSizeArrayDesignator (* §6.7.9#6, 2nd sentence *)
-  | StaticAssertFailed of string (* §6.7.10#2 *)
-  | LabelStatementOutsideSwitch (* §6.8.1#2 *)
-  | LabelRedefinition of cabs_identifier (* §6.8.1#3 *)
-  | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
-  | UndeclaredLabel of cabs_identifier (* §6.8.6.1#1, sentence 1 *)
-  | ContinueOutsideLoop (* §6.8.6.2#1 *)
-  | BreakOutsideSwtichOrLoop (* §6.8.6.3#1 *)
-  | NonVoidReturnVoidFunction (* §6.8.6.4#1, 1st sentence *)
-  | VoidReturnNonVoidFunction (* §6.8.6.4#1, 2nd sentence *)
-  | IllegalStorageClassFileScoped (* §6.9#2 *)
-  | ExternalRedefinition of identifier (* §6.9#3 *)
-  | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
-  | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
-  | IllegalIdentifierTypeVoidInFunctionDefinition (* §6.9.1#5, 1st sentence *)
-  | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
+import Loc TypingError Undefined Constraint
 
 type misc_violation =
   | UndeclaredIdentifier of string (*§6.5.1#2 *)
@@ -55,7 +11,7 @@ type misc_violation =
   | TypedefInitializer (* TODO: unknown quote *)
 
 type desugar_cause =
-  | Desugar_ConstraintViolation of constraint_violation
+  | Desugar_ConstraintViolation of Constraint.violation
   | Desugar_UndefinedBehaviour of Undefined.undefined_behaviour
   | Desugar_MiscViolation of misc_violation
   | Desugar_NotYetSupported of string

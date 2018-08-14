@@ -144,7 +144,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           | [(ND.Killed (ND.Undef ub_loc [ub]), _, _)] ->
               Eff.fail (ub_loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
           | [(ND.Killed (ND.Error loc "§6.6#4 failed"), _, _)] ->
-              Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation Errors.IntegerConstantOutRange))
+              Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation Constraint.IntegerConstantOutRange))
           | _ ->
               error "TODO error: the driver found less/more than one active execution"
         end

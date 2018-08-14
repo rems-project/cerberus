@@ -2,7 +2,7 @@ open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf Typing
 open import GenTypes GenTypesAux
 open import Std Loc
 
-import Undefined
+import Constraint Undefined
 import Builtins Debug Pp
 
 import Global
@@ -620,7 +620,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 E.return (AilEunary Indirection e', GenRValueType (inject_type ref_ty))
           | _ ->
               (* STD §6.5.3.2#2 *)
-              E.fail loc (TError_indirection_not_pointer (*TODO: gty *))
+              E.constraint_violation loc Constraint.IndirectionNotPointer
         end
 (* TODO: were was this code coming from, it seems completely wrong???
         match gty with
@@ -1577,7 +1577,7 @@ and perform_decays sigm ctx a_expr =
           let rvalue_ty = Ctype [] (AAux.unatomic ty) in
           if AAux.is_incomplete sigm ty then
             (* STD §6.3.2.1#2, sentence 3 *)
-            E.fail Loc.unknown (TError_undef Undefined.UB020_nonarray_incomplete_lvalue_conversion)
+            E.undef (Loc.locOf ty) Undefined.UB020_nonarray_incomplete_lvalue_conversion
           else
             E.return (
               AnnotatedExpression (GenRValueType (inject_type rvalue_ty))
@@ -1589,7 +1589,7 @@ and perform_decays sigm ctx a_expr =
           (* STD §6.3.2.1#3 *)
           (* performing the array decay *)
           if isRegister then
-            E.fail Loc.unknown (TError_undef Undefined.UB022_register_array_decay)
+            E.undef Loc.unknown Undefined.UB022_register_array_decay
           else
             (* TODO: qualifiers?? *)
             let () = begin
@@ -1886,10 +1886,8 @@ let annotate_definition sigm gamm (sym, e) =
     | Just (_, sym_qs, sym_ty) ->
         annotate_definition_aux sigm gamm (sym_ty, e) >>= fun a_e ->
         E.return (sym, a_e)
-    
     | Nothing ->
-        E.fail Loc.unknown (TError_TODO 58) (* TODO: I think this error shouldn't be possible
-                                  coming from Cabs_to_ail *)
+        error "annotate_definition: definition must have a declaration"
   end
 
 
@@ -1905,8 +1903,8 @@ let rec annotate_definitions sigm gamm = function
 end
 
 
-val     annotate_statement_: sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
-let rec annotate_statement_ sigm gamm ty stmt =
+val     annotate_statement_: Loc.t -> sigma unit -> gamma -> ctype -> statement_ unit -> E.errorM (statement_ genTypeCategory)
+let rec annotate_statement_ loc sigm gamm ty stmt =
   let annotate_expression = annotate_expression sigm gamm CTXother   in
   let annotate_rvalue     = annotate_rvalue sigm gamm       in
   let annotate_block bindings =
@@ -1921,38 +1919,37 @@ let rec annotate_statement_ sigm gamm ty stmt =
         annotate_expression e >>= fun e' ->
         E.return (AilSexpr e')
     | AilSblock bindings ss ->
-        AilTyping.well_formed_bindings sigm bindings >>
-        E.guard (TError "sigma_fresh bindings failed in a AilSblock") (
-          sigma_fresh_bindings bindings sigm
-        ) >>
-        annotate_block bindings ss >>= fun ss' ->
-        E.return (AilSblock bindings ss')
+        AilTyping.well_formed_bindings loc sigm bindings >>
+        if sigma_fresh_bindings bindings sigm then
+          annotate_block bindings ss >>= fun ss' ->
+          E.return (AilSblock bindings ss')
+        else
+          error "annotate_statement: sigma_fresh bindings failed in a AilSblock"
     | AilSif e s1 s2 ->
         annotate_rvalue e >>= fun (e', gty) ->
-        (* STD §6.8.4.1#1 *)
         E.add "§6.8.4.1#1" >>
         if is_scalar gty then
           annotate_statement s1 >>= fun s1' ->
           annotate_statement s2 >>= fun s2' ->
           E.return (AilSif e' s1' s2')
         else
-          E.fail Loc.unknown (TError_TODO 60)
+          E.constraint_violation (Loc.locOf e) Constraint.IfStatementControllingExpressionNotScalar
     | AilSwhile e s ->
         annotate_rvalue e >>= fun (e', gty) ->
-        (* STD §6.8.5#2 *)
+        E.add "§6.8.5#2" >>
         if is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSwhile e' s')
         else
-          E.fail Loc.unknown (TError_TODO 62)
+          E.constraint_violation (Loc.locOf e) Constraint.IterationStatementControllingExpressionNotScalar
     | AilSdo s e ->
         annotate_rvalue e >>= fun (e', gty) ->
-        (* STD §6.8.5#2 *)
+        E.add "§6.8.5#2" >>
         if is_scalar gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSdo s' e')
         else
-          E.fail Loc.unknown (TError_TODO 63)
+          E.constraint_violation (Loc.locOf e) Constraint.IterationStatementControllingExpressionNotScalar
     | AilSbreak ->
         E.return AilSbreak
     | AilScontinue ->
@@ -1961,18 +1958,18 @@ let rec annotate_statement_ sigm gamm ty stmt =
         if AAux.is_void ty then
           E.return AilSreturnVoid
         else
-          E.fail Loc.unknown (TError_TODO 64)
+          E.constraint_violation loc Constraint.NonVoidReturnVoidFunction
     | AilSreturn e ->
         annotate_assignee sigm gamm ty e >>= fun e' ->
         E.return (AilSreturn e')
     | AilSswitch e s ->
         annotate_rvalue e >>= fun (e', gty) ->
-        (* STD §6.8.4.2#1 *)
+        E.add "§6.8.4.2#1" >>
         if is_integer gty then
           annotate_statement s >>= fun s' ->
           E.return (AilSswitch e' s')
         else
-          E.fail Loc.unknown (TError_TODO 61)
+          E.constraint_violation (Loc.locOf e) Constraint.SwitchStatementControllingExpressionNotInteger
     | AilScase ic s ->
         annotate_statement s >>= fun s' ->
         E.return (AilScase ic s')
@@ -1993,7 +1990,7 @@ let rec annotate_statement_ sigm gamm ty stmt =
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc stmt) =
-  annotate_statement_ sigm gamm ty stmt >>= fun stmt' ->
+  annotate_statement_ loc sigm gamm ty stmt >>= fun stmt' ->
   E.return (AnnotatedStatement loc stmt')
 
 
@@ -2001,79 +1998,6 @@ val annotate_block:
       sigma unit -> gamma -> ctype -> list (statement unit) -> E.errorM (list (statement genTypeCategory))
 let annotate_block sigm gamm ty stmts =
   E.mapM (annotate_statement sigm gamm ty) stmts
-
-
-
-
-
-(*
-let annotate_function_declaration a s p =
-  let ty_return   = p.fun_return_ty   in
-  let bs          = p.fun_bindings    in
-  let is_variadic = p.fun_is_variadic in
-  let s_opt       = p.fun_body        in
-  if sigma_fresh_bindings bs s &&
-     (* AilTyping.well_formed_bindings bs && *)
-     wf_type (Function ty_return (parameters_of_bindings bs) is_variadic)
-  then
-    match s_opt with
-      | Just s ->  annotate_statement a s (Context.add_bindings bs Context.empty) ty_return s >>= fun s' ->
-                   (* TODO: using the "with" construct of lem doesn't typecheck like we need here, is this
-                            a necessary restriction of the type system ? *)
-                   E.return <| fun_return_ty=   ty_return;
-                               fun_bindings=    bs;
-                               fun_is_variadic= is_variadic;
-                               fun_is_inline=   p.fun_is_inline;
-                               fun_is_Noreturn= p.fun_is_Noreturn;
-                               fun_body=        Just s' |>
-      | Nothing -> E.return <| fun_return_ty=   ty_return;
-                               fun_bindings=    bs;
-                               fun_is_variadic= is_variadic;
-                               fun_is_inline=   p.fun_is_inline;
-                               fun_is_Noreturn= p.fun_is_Noreturn;
-                               fun_body=        Nothing |>
-    end
-  else
-    E.fail Loc.unknown (TError_TODO 65)
-*)
-
-
-(*
-(* TODO: check with J *)
-let annotate_global a s (qs, ty, e_opt) =
-  if wf_type ty then
-    match e_opt with
-      | Just e  -> annotate_assignee a s Context.empty ty e >>= fun e ->
-                   E.return (qs, ty, Just e)
-      | Nothing -> E.return (qs, ty, Nothing)
-    end
-  else
-    E.fail Loc.unknown (TError_TODO 66)
-*)
-
-
-(*
-let annotate_sigma a s =
-  sigma_mapP (function
-    | SDecl_fun id fdecl ->
-        annotate_function_declaration a s fdecl >>= fun fdecl' ->
-        E.return (SDecl_fun id fdecl')
-    | SDecl_global id glob ->
-        annotate_global a s glob >>= fun glob'->
-        E.return (SDecl_global id glob')
-    | SDecl_static_assert _ _ ->
-        error "TODO_"
-(*
-TODO
-        annotate_assignee a s Context.empty ty e >>= fun e' ->
-        annotate_stringConstant sc               >>= fun sc' ->
-        E.return (SDecl_static_assert e' sc')
-*)
-  end) s
-*)
-
-
-
 
 val annotate_sigma: sigma unit -> E.errorM (sigma genTypeCategory)
 let annotate_sigma sigm =
@@ -2093,11 +2017,11 @@ let annotate_sigma sigm =
   (* Typechecking of external objects that have a definition *)
   Context.mapP identifierEqual (fun ident e ->
     match Context.lookup identifierEqual sigm.declarations ident with
-      | Just (_, Decl_object _ _ (* qs *) ty) ->
+      | Just (loc, Decl_object _ _ (* qs *) ty) ->
           (* TODO: qualifiers?; storage duration? *)
           annotate_definition_aux sigm Context.empty (ty, e)
       | _ ->
-          E.fail Loc.unknown (TError_TODO 1000)
+          error "annotate_sigma: object definition must have a declaration"
     end
   ) sigm.object_definitions >>= fun object_defs' ->
   
@@ -2117,46 +2041,41 @@ let annotate_sigma sigm =
             annotate_statement sigm (Context.add_bindings bindings Context.empty) ret_ty s >>= fun s' ->
               E.return (loc, param_idents, s')
           else
-            E.fail loc (TError_TODO 1001)
+            error "annotate_sigma: parameter identifiers are not fresh"
       | _ ->
-          E.fail loc (TError_TODO 1002)
+          error "annotate_sigma: function definition must have a declaration"
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   
-(*
-TODO: static asserts
-  E.mapM (fun (e, strConst) ->
-  ) 
-*)
-  E.mapM (function
+  E.mapM (fun tag ->
+    let check_member sigm (ident, (qs, ty)) =
+      E.add "§6.7.2.1#3" >>
+      if AilTypesAux.has_flexible_array_member sigm ty then
+        E.constraint_violation (Loc.locOf ident) Constraint.StructMemberFlexibleArray
+      else if AilTypesAux.is_function ty then
+        E.constraint_violation (Loc.locOf ident) (Constraint.StructMemberFunctionType ident)
+      else if AilTypesAux.is_incomplete sigm ty then
+        E.constraint_violation (Loc.locOf ident) (Constraint.StructMemberIncompleteType qs ty)
+      else
+        E.return ()
+    in match tag with
     | (_, StructDef xs) ->
         (* STD §6.7.2.1#3 *)
         match List.dest_init xs with
           | Nothing ->
               (* NOTE: this should be dead code because of the C syntax *)
               error "GenTyping.annotate_sigma, StructDef, empty sdecls_opt"
-          | Just ([], (_, (_, ty))) ->
-              if AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty then
-                E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
-              else if AilTypesAux.has_flexible_array_member sigm ty then
-                E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
-              else
-                E.return ()
-          | Just (xs', (_, (_, last_ty))) ->
-              E.mapM_ (fun (_, (_, ty)) ->
-                if AilTypesAux.has_flexible_array_member sigm ty then
-                  E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
-                else if AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty then
-                  E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
-                else
-                  E.return ()
-              ) xs' >>
-              if AilTypesAux.has_flexible_array_member sigm last_ty then
-                E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
+          | Just ([], memb) ->
+              check_member sigm memb
+          | Just (xs', (last_ident, (last_qs, last_ty))) ->
+              E.mapM_ (check_member sigm) xs' >>
               (* This allows flexible array members *)
-              else if    (AilTypesAux.is_incomplete sigm last_ty && not (AilTypesAux.is_array_unknown_size last_ty))
-                      || AilTypesAux.is_function last_ty then
-                E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
+              if AilTypesAux.has_flexible_array_member sigm last_ty then
+                E.constraint_violation (Loc.locOf last_ident) Constraint.StructMemberFlexibleArray
+              else if AilTypesAux.is_function last_ty then
+                E.constraint_violation (Loc.locOf last_ident) (Constraint.StructMemberFunctionType last_ident)
+              else if AilTypesAux.is_incomplete sigm last_ty && not (AilTypesAux.is_array_unknown_size last_ty) then
+                E.constraint_violation (Loc.locOf last_ident) (Constraint.StructMemberIncompleteType last_qs last_ty)
               else
                 E.return ()
         end >>
@@ -2165,17 +2084,7 @@ TODO: static asserts
           wf_lvalue sigm qs ty
         ) xs
     | (_, UnionDef xs) ->
-        (* STD §6.7.2.1#3 *)
-        let pred (_, (_, ty)) =
-          AilTypesAux.is_incomplete sigm ty || AilTypesAux.is_function ty in
-        if List.any pred xs then
-          E.fail Loc.unknown (TError "§6.7.2.1#3, 1st sentence")
-        
-        else if List.any (fun (_, (_, ty)) -> AilTypesAux.has_flexible_array_member sigm ty) xs then
-          E.fail Loc.unknown (TError "§6.7.2.1#3, 2nd sentence")
-        else
-          E.return ()
-        >>
+        E.mapM (check_member sigm) xs >>
         E.mapM_ (fun (_, (qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
@@ -2192,8 +2101,6 @@ TODO: static asserts
   |>
 
 
-
-
 (* NOTE: this is the only thing this module exports *)
 val annotate_program: ail_program unit -> E.errorM (ail_program genTypeCategory)
 let annotate_program (startup_opt, sigm) =
@@ -2203,8 +2110,8 @@ let annotate_program (startup_opt, sigm) =
         E.return (startup_opt, sigm')
     | Just startup ->
         match Context.lookup identifierEqual sigm.declarations startup with
-          | Just (loc, Decl_function hasProto (ret_qs, Ctype ret_annots ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
-              (* §5.1.2.2.1 *)
+          | Just (loc, Decl_function hasProto (ret_qs, ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+              (* STD §5.1.2.2.1 *)
               (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
               match params with
                 | [] ->
@@ -2219,20 +2126,20 @@ let annotate_program (startup_opt, sigm) =
                     E.return ()
                     (* TODO: can the parameters be qualified with const or volatile? *)
                 | ((<| const= false; restrict= false; volatile= false(*; atomic= false*) |>, Ctype _ (Basic (Integer (Signed Int_))), _)::
-                  (_, Ctype annots _, _)::_) ->
-                    E.fail (Loc.with_cursor_from (Annot.get_loc_ annots) loc) TError_main_param2
-                | ((_, Ctype annots _, _)::_) ->
-                    E.fail (Loc.with_cursor_from (Annot.get_loc_ annots) loc) TError_main_param1
+                  (_, aty2, _)::_) ->
+                    E.undef (Loc.with_cursor_from (Loc.locOf aty2) loc) Undefined.UB004c_incorrect_main_argument2
+                | ((_, aty1, _)::_) ->
+                    E.undef (Loc.with_cursor_from (Loc.locOf aty1) loc) Undefined.UB004b_incorrect_main_argument1
               end >>
               (* TODO: check arguments *)
-              if ret_qs = no_qualifiers && ret_ty = Basic (Integer (Signed Int_)) then
+              if ret_qs = no_qualifiers && proj_ctype_ ret_ty = Basic (Integer (Signed Int_)) then
                 annotate_sigma sigm >>= fun sigm' ->
                 E.return (startup_opt, sigm')
               else
-                E.fail (Loc.with_cursor_from (Annot.get_loc_ ret_annots) loc) TError_main_return_type
+                E.undef (Loc.with_cursor_from (Loc.locOf ret_ty) loc) Undefined.UB004a_incorrect_main_return_type
           | Just (loc, _) ->
-              E.fail loc TError_main_not_function
+              E.undef loc Undefined.UB004d_main_not_function
           | Nothing ->
-              E.fail Loc.unknown (TError_internal ("Startup function " ^ show startup ^ " not found in AIL declarations."))
+              error ("Startup function " ^ show startup ^ " not found in AIL declarations.")
         end
   end

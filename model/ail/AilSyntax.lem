@@ -187,6 +187,11 @@ type statement_ 'a [name="s*"] =
 and statement 'a [name="s*"] =
   | AnnotatedStatement of Loc.t * statement_ 'a
 
+instance forall 'a. (Located (statement 'a))
+  let locOf stmt =
+    let (AnnotatedStatement loc _) = stmt in
+    loc
+end
 
 type declaration =
   | Decl_object   of (storageDuration * bool) * qualifiers * ctype

@@ -200,16 +200,16 @@ let exp_type_of a_expr =
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (AilTypes.LValueType _ ty _) -> ty
     | Right (AilTypes.RValueType   ty) -> ty
+    | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
+        error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
+      (* TODO: is this possible ? *)
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
         error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
                             (Pp.stringFromAil_expression a_expr)
-    | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
-        error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
-                            show n
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
@@ -217,16 +217,16 @@ let ctype_of a_expr =
 val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let qualified_ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory tmp_implementation
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (AilTypes.LValueType qs ty _) -> (qs, ty)
     | Right (AilTypes.RValueType   ty) -> (AilTypes.no_qualifiers, ty)
+    | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
+        error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
+      (* TODO: is this possible ? *)
     | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
         error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
                             (Pp.stringFromAil_expression a_expr)
-    | Left ((* TODO: loc *) _, TypingError.TError_integerConstant_too_large n) ->
-        error $ "TYPING ERROR in translation_aux: `found an untypable integer constant'\n==> " ^
-                            show n
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
