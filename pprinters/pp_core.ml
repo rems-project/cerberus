@@ -210,7 +210,18 @@ let pp_memory_order = function
   | Cmm_csem.Acquire -> pp_keyword "acquire"
   | Cmm_csem.Consume -> pp_keyword "consume"
   | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
-  
+
+let pp_linux_memory_order = function
+  | Linux.Once      -> pp_keyword "once"
+  | Linux.Acquire0  -> pp_keyword "acquire"
+  | Linux.Release0  -> pp_keyword "release"
+  | Linux.Rmb       -> pp_keyword "rmb"
+  | Linux.Wmb       -> pp_keyword "wmb"
+  | Linux.Mb        -> pp_keyword "mb"
+  | Linux.RbDep     -> pp_keyword "rb-dep"
+  | Linux.RcuLock   -> pp_keyword "rcu-lock"
+  | Linux.RcuUnlock -> pp_keyword "rcu-unlock"
+  | Linux.SyncRcu   -> pp_keyword "sync-rcu"
 
 let pp_mem_addr (pref, addr) =
 (*
@@ -662,6 +673,8 @@ and pp_action act =
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | LinuxFence mo ->
+        pp_keyword "LinuxFence" ^^ P.parens (pp_linux_memory_order mo)
 
 (*
     | Ptr (ptr_act, es) ->

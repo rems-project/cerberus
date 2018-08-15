@@ -4,6 +4,7 @@ open import Pervasives
 open import Core_ctype Cthread
 import Symbol Implementation_ Undefined Loc Cmm_csem
 import Mem Mem_common
+import Linux
 
 
 (* NOTE(for OTy_cfunction):
@@ -270,6 +271,7 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | RMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
  | Fence of Cmm_csem.memory_order
  | CompareExchangeStrong of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | LinuxFence of Linux.memory_order
 
 
 

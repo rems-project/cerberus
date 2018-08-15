@@ -662,6 +662,9 @@ and symbolify_action_ = function
      symbolify_pexpr _pe3 >>= fun pe3 ->
      symbolify_pexpr _pe4 >>= fun pe4 ->
      Eff.return (CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2))
+ | LinuxFence mo ->
+     Eff.return (LinuxFence mo)
+
 
 
 and symbolify_paction = function

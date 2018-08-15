@@ -836,6 +836,8 @@ and remove_conv_int_action_ act_ =
         Fence mo
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeStrong (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
+    | LinuxFence mo ->
+        LinuxFence mo
   end
 
 and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)

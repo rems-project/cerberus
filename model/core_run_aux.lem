@@ -429,6 +429,8 @@ and convert_action_ act_ =
         Fence mo
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeStrong (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) (convert_pexpr pe4) mo1 mo2
+    | LinuxFence mo ->
+        LinuxFence mo
   end
 
 and convert_action act =
