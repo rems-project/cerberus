@@ -272,6 +272,8 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | Fence of Cmm_csem.memory_order
  | CompareExchangeStrong of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
  | LinuxFence of Linux.memory_order
+ | LinuxLoad of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+ | LinuxStore of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
 
 
 

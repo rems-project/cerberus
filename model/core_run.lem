@@ -872,8 +872,12 @@ KKK
     (* TODO: CompareExchangeStrong *)
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         error "WIP: CompareExchangeStrong"
-    | LinuxFence _ ->
+    | LinuxFence mo ->
         error "WIP: LinuxFence"
+    | LinuxStore pe1 pe2 pe3 mo ->
+        error "WIP: LinuxStore"
+    | LinuxLoad pe1 pe2 mo ->
+        error "WIP: LinuxLoad"
 (*
   | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
                     action_id * thread_id * Cmm.memory_order * ctype *

@@ -223,6 +223,8 @@ let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
 
 
 
+
+
 val     translate_constant: A.constant -> C.pexpr
 let rec translate_constant cst =
   match cst with
@@ -2007,6 +2009,53 @@ end
      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ (Just "smb_rmb")))) [] ->
          E.return $
            C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.LinuxFence Linux.Rmb))))
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_read_once")) [lobject_e] ->
+         (* TODO: remove code duplication *)
+         let ref_ty = match ctype_of lobject_e with
+           | Aty.Pointer _ ref_ty ->
+               ref_ty
+           | (*BISECT-IGNORE*) _ ->
+               illTypedAil loc "AilEcall linux_read_once"
+         end in
+         self lobject_e  >>= fun lobject_core_e  ->
+         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe) ->
+         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe) ->
+         E.return begin
+           Caux.mk_sseq_e loaded_sym_pat lobject_core_e
+             begin
+               Caux.mk_case_e loaded_sym_pe
+                 [ (Caux.mk_specified_pat object_sym_pat,
+                    Caux.plinux_load loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe Linux.Once)
+                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+             end
+         end
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_write_once")) [lobject_e; desired_e] ->
+         let ref_ty = match ctype_of lobject_e with
+           | Aty.Pointer _ ref_ty ->
+               ref_ty
+           | (*BISECT-IGNORE*) _ ->
+               illTypedAil loc "AilEcall linux_write_once"
+         end in
+         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of desired_e)) in
+         self lobject_e >>= fun lobject_core_e  ->
+         self desired_e >>= fun desired_core_e ->
+         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
+         E.return begin
+           Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+             begin
+               Caux.mk_unseq_e [lobject_core_e; desired_core_e]
+             end
+             begin
+               Caux.mk_case_e loaded_sym_pe
+                 [ (Caux.mk_specified_pat object_sym_pat,
+                    Caux.plinux_store loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe Linux.Once)
+                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+             end
+         end
 
 
 
