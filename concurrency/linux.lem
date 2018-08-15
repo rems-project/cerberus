@@ -1,0 +1,11 @@
+type memory_order =
+  | Once
+  | Acquire
+  | Release
+  | Rmb
+  | Wmb
+  | Mb
+  | RbDep
+  | RcuLock
+  | RcuUnlock
+  | SyncRcu

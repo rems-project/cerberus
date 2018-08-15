@@ -1173,6 +1173,8 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         E.return (BTy_unit, Fence mo)
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         error "WIP infer_paction: CompareExchangeStrong"
+    | LinuxFence mo ->
+        E.return (BTy_unit, LinuxFence mo)
   end >>= fun (bTy, act_') ->
   E.return (bTy, Action loc annot act_')
 
@@ -1263,6 +1265,10 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       | _ ->
           E.fail loc (CoreTyping_TODO "CompareExchangeStrong, non-trivial ctype")
       end
+  | LinuxFence mo ->
+      guard_match loc "linuxFence()" bTy BTy_unit >>
+      E.return (LinuxFence mo)
+
   end
 
 

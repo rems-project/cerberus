@@ -14,6 +14,8 @@ import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import GenTypes
 import Core Core_aux Undefined
 
+import Linux
+
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
 module Aty  = AilTypes
@@ -1999,6 +2001,13 @@ end
               ]
           )
       end
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ (Just "smb_wmb")))) [] ->
+         E.return $
+           C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.LinuxFence Linux.Wmb))))
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ (Just "smb_rmb")))) [] ->
+         E.return $
+           C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.LinuxFence Linux.Rmb))))
+
 
 
 

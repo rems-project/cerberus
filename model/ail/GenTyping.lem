@@ -880,7 +880,15 @@ OLD(sigma_declaration)
         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_compare_exchange_strong_explicit"))
                     [object_e'; expected_e'; desired_e'; order_success_e'; order_failure_e'],
                    GenRValueType (GenBasic (GenInteger (Concrete (AilTypes.Bool)))))
-    
+
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol s (Just "smb_wmb")))) [] ->
+        (* TODO: do typechecking *)
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol s (Just "smb_wmb")))) [], GenRValueType GenVoid)
+
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol s (Just "smb_rmb")))) [] ->
+        (* TODO: do typechecking *)
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol s (Just "smb_rmb")))) [], GenRValueType GenVoid)
+ 
     | AilEcall e es ->
         (* STD §6.5.2.2#1 *)
         E.add "§6.5.2.2#1" >>
