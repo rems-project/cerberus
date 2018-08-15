@@ -1,11 +1,9 @@
-
 open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot
-import Set_extra (* Set_helpers *)
+import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax AilTypes AilTypesAux
-import Dlist
 
 open import Implementation_ Decode
 
@@ -67,100 +65,7 @@ let call_proc file psym cvals =
   end
 
 
-(* DEBUG *)
-type exec_location =
-  | ELoc_globals
-  | ELoc_normal of list Symbol.sym
 
-let push_exec_loc sym = function
-  | ELoc_globals ->
-      ELoc_normal [sym]
-  | ELoc_normal syms ->
-      ELoc_normal (sym :: syms)
-end
-
-type thread_state = <|
-  arena:  expr core_run_annotation;
-  stack:  stack core_run_annotation;
-  
-  current_loc: Loc.t; (* DEBUG *)
-  current_uid: maybe string;
-  exec_loc: exec_location; (* DEBUG *)
-|>
-
-
-(* TODO: more *)
-type io_state = <|
-  stdout: Dlist.dlist string;
-  stderr: Dlist.dlist string;
-|>
-
-type core_state = <|
-  thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
-  io:            io_state;
-(*  handlers:      Map.map handler_event (list name); *)
-|>
-
-
-
-let string_of_thread_state th_st =
-  "Arena= " ^ Pp.stringFromCore_expr th_st.arena ^ "\nStack= " ^ Pp.stringFromCore_stack th_st.stack ^ "\n"
-(*
-  List.foldr (fun (n, arena) acc ->
-    "Arena[" ^ show n ^ "]= " ^ Pp.stringFromCore_expr arena
-  ) ("Stack= " ^ "TODO" ^ "\n") (numerote th_st.arenas)
-*)
-
-let string_of_core_state core_st =
-  List.foldr (fun (tid, (parent_tid_opt, th_st)) acc ->
-    "Thread " ^ show tid ^ (maybe "" (fun z -> "(spawn of thread " ^ show z ^ ")") parent_tid_opt) ^ "\n" ^
-    string_of_thread_state th_st ^
-    "-----------------------------\n\n" ^ acc
-  ) "" core_st.thread_states
-
-
-instance (Show core_state)
-  let show = string_of_core_state
-end
-
-
-
-
-type core_run_state = <|
-  tid_supply:    UniqueId.supply thread_id;
-  symbol_supply: UniqueId.supply Symbol.sym;
-  aid_supply:    UniqueId.supply Cmm.aid;
-  
-  (* DEBUG *)
-  step_counter: nat;
-
-  (* Scoped environment for the Core symbols *)
-  env: list (map Symbol.sym value);
-  (* Pre-calculated map of labeled continuations (aka. save()).
-     the map is over procedure symbols (NOTE: read-only) *)
-  labeled: map Symbol.sym (labeled_continuations core_run_annotation);
-|>
-
-
-
-
-(* Monad of the core evaluator (State + Exception + Undefined) *)
-type core_runM 'a = SEU.stExceptUndefM 'a core_run_state core_run_cause
-
-
-
-
-val increment_step_counter: core_runM unit
-let increment_step_counter =
-  SEU.runS (
-    State.update (fun run_st ->
-      <| run_st with step_counter= run_st.step_counter + 1 |>
-    )
-  )
-
-val register_handler: core_state -> core_state
-let register_handler st =
-  error "WIP: register_handler"
 
 val update_thread_state: thread_id -> thread_state -> core_state -> core_state
 let update_thread_state tid th_st st =
@@ -216,106 +121,6 @@ let fresh_action_id' =
 (* Now using the State monad infix operators *)
 let inline (>>=) = State.bind
 let inline (>>) m f = State.bind m (fun _ -> f)
-
-(*
-val     hoist_negatives: forall 'a. expr 'a -> State.stateM (expr 'a) (list (expr 'a) * core_run_state)
-let rec hoist_negatives expr =
-  let add_neg neg_e =
-    State.modify (fun (negs, run_st) ->
-      ((), (neg_e :: negs, run_st))
-    ) in
-(*
-  let flush_negs = 
-    State.modify (fun (negs, run_st) ->
-      (negs, ([], run_st))
-    ) in
-*)
-  match expr with
-    | Epure _ ->
-        State.return expr
-    | Ememop _ _ ->
-        State.return expr
-    | Eaction pact ->
-        if is_negative_action pact then
-          add_neg expr >> State.return (Epure (Pexpr [] () (PEval Vunit)))
-        else
-          State.return expr
-    | Ecase pe pat_es ->
-        error "TODO Core_run.hoist_negatives, Ecase"
-    | Elet sym pe1 e2 ->
-        hoist_negatives e2 >>= fun e2' ->
-        State.return (Elet sym pe1 e2')
-    | Eif pe1 e2 e3 ->
-        hoist_negatives e2 >>= fun e2' ->
-        hoist_negatives e3 >>= fun e3' ->
-        State.return (Eif pe1 e2' e3')
-    | Eskip ->
-        State.return expr
-    | Eccall _ _ _ ->
-        State.return expr
-    | Eproc _ _ _ ->
-        State.return expr
-    | Eunseq es ->
-        State.mapM hoist_negatives es >>= fun es' ->
-        State.return (Eunseq es')
-    | Ewseq _as e1 e2 ->
-        hoist_negatives e1 >>= fun e1'  ->
-        hoist_negatives e2 >>= fun e2'  ->
-        State.return (Ewseq _as e1' e2')
-    | Esseq _as e1 e2 ->
-        error "Core_run.hoist_negatives: found an Esseq"
-(*
-        hoist_negatives e1 >>= fun e1'  ->
-        flush_negs         >>= fun negs ->
-        hoist_negatives e2 >>= fun e2'  ->
-        let nothings = Utils.replicate_list Nothing (List.length negs) in
-        match negs with
-          | [] ->
-              State.return (Esseq _as e1' e2')
-          | _ ->
-              State.return (
-                Esseq (nothings ++ _as) (Eunseq (negs ++ [e1'])) e2'
-              )
-        end
-*)
-    | Easeq sym_opt act1 pact2 ->
-        error "Core_run.hoist_negatives found an Easeq"
-    | Eindet i e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Eindet i e')
-    | Ebound i e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Ebound i e')
-    | End es ->
-        State.mapM hoist_negatives es >>= fun es' ->
-        State.return (End es')
-    | Esave (sym, bTy) sym_bTy_pes e ->
-        error "TODO Core_run.hoist_negatives Esave"
-    | Erun _ sym pes ->
-        error "TODO Core_run.hoist_negatives Erun"
-(*
-    | Esave ksym sym_tys e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Esave ksym sym_tys e')
-    | Erun _ _ _ ->
-      State.return expr
-*)
-    | Epar _ ->
-        (* TODO: check *)
-        State.return expr
-    | Ewait _ ->
-        State.return expr
-    | Eloc loc e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Eloc loc e')
-    | Estd s e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Estd s e')
-  end
-*)
-
-
-
 
 
 
@@ -1515,51 +1320,3 @@ BEFORE EVAL_PEXPR2
           E.return <| th_st with arena= e |>
         )
   end
-
-
-val initial_io_state: io_state
-let initial_io_state = <|
-  stdout= Dlist.nil;
-  stderr= Dlist.nil;
-|>
-
-val initial_core_state: core_state
-let initial_core_state = <|
-  thread_states= [];
-  io= initial_io_state;
-(*  handlers= Map.empty;*)
-|>
-
-
-(*
-val init: Core.file core_run_annotation -> core_runM core_state
-let init file =
-  match Map.lookup file.main file.funs with
-    | Nothing ->
-        SEU.fail (Illformed_program "couldn't find the startup function")
-    | Just (_, _, expr) ->
-        SEU.return expr
-  end >>= fun expr ->
-  
-  SEU.runS (spawn_thread Nothing <|
-    arena= expr;
-    stack= push_empty_continuation empty_stack;
-    labels= Map.empty
-  |> initial_core_state) >>= fun (_, st') ->
-  
-  SEU.return st'
-*)
-
-
-
-val initial_core_run_state: map Symbol.sym (labeled_continuations core_run_annotation) -> core_run_state
-let initial_core_run_state xs = <|
-  tid_supply=    UniqueId.new_supply;
-  symbol_supply= UniqueId.new_supply;
-  aid_supply=    UniqueId.new_supply;
-  
-  step_counter= 0;
-  
-  env=     [Map.empty];
-  labeled= xs;
-|>

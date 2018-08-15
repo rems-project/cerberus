@@ -1846,8 +1846,84 @@ end
 
 
       | A.AilEcompoundAssign e1 aop e2 ->
-          error "TODO TEMPORARY ==> compound assign are not supported by the elaboration and should be desugared by Cabs_to_ail"
+          let () = Debug.print_debug 0 [] (fun () ->
+            "HACK!!!! => AilEcompoundAssign is WIP and only doing +="
+          ) in
+          (* TODO: check sequencing with respect to indet function calls *)
+          self e1 >>= fun core_e1 ->
+          self e2 >>= fun core_e2 ->
+          let lvalue_ty = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
+          let lvalue_oTy = force_core_object_type_of_ctype (Caux.proj_ctype lvalue_ty) in
+          
+          let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
+          let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
+          
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, l1_sym_pat   , l1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (_, v1_sym_pat   , v1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun (_, v2_sym_pat   , v2_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, z1_sym_pat   , z1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (_, z2_sym_pat   , z2_sym_pe  ) ->
 
+          let lvalue_ty_pe = Caux.mk_ail_ctype_pe lvalue_ty in
+          
+          E.wrapped_fresh_symbol (C.BTy_object lvalue_oTy)    >>= fun (_, obj1_sym_pat   , obj1_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun (_, obj2_sym_pat   , obj2_sym_pe  ) ->
+          let stored_pe =
+            Caux.mk_case_pe (Caux.mk_tuple_pe [v1_sym_pe; v2_sym_pe])
+              [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat]
+                , Caux.mk_specified_pe (Caux.mk_op_pe C.OpAdd obj1_sym_pe obj2_sym_pe) ) ] in
+          
+          E.return begin
+            Caux.mk_wseq_e (Caux.mk_tuple_pat [Caux.mk_tuple_pat [l1_sym_pat; v1_sym_pat]; v2_sym_pat]) begin
+              Caux.mk_unseq_e
+                [ Caux.mk_wseq_e z1_sym_pat core_e1 begin
+                    Caux.mk_wseq_e z2_sym_pat (Caux.pload loc lvalue_ty_pe z1_sym_pe Cmm.NA)
+                      (Caux.mk_pure_e (Caux.mk_tuple_pe [z1_sym_pe; z2_sym_pe]))
+                  end
+                ; core_e2 ]
+            end
+            begin
+              C.Expr []
+                (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) lvalue_ty_pe l1_sym_pe stored_pe Cmm.NA))))
+            end
+          end
+
+
+
+(*
+          E.return begin
+            Caux.mk_wseq_e (Caux.mk_tuple_pat ) begin
+              Caux.mk_unseq_e
+                [ Caux.mk_wseq_e e1_sym_pat core_e1 begin
+                    Caux.mk_wseq_e load_sym_pat (Caux.pload loc lvalue_ty_pe e1_sym_pe Cmm.NA) begin
+                      Caux.mk_pure_e (Caux.mk_tuple_pe [e1_sym_pe; load_sym_pe])
+                    end
+                  end
+                ; core_e2 ]
+            end
+            match aop with
+              | A.Mul ->
+                  (* translate_mul_operator *)
+              | A.Div | A.Mod ->
+                  (* translate_div_mod_operator *)
+              | A.Add ->
+                  
+              | A.Sub ->
+                  
+              | Shl ->
+                  
+              | Shr ->
+                  
+              | Band | Bxor | Bor ->
+                  translate_bitwise_operator
+            end
+
+
+              C.Expr []
+                (C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store lvalue_ty_pe object_pe stored_pe Cmm.NA))))
+            end
+          end
+          *)
 (*
 (*      
       (*
@@ -3048,20 +3124,22 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     | A.AilSwhile e s ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
         E.fresh_named_symbol "while" >>= fun sym_loop     ->
-        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (test_sym, test_sym_pat, test_sym_pe) ->
-        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (case_sym, case_sym_pat, case_sym_pe) ->
-        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                             ->
-        self s                                              >>= fun core_s                                ->
-        E.get_visible_objects                               >>= fun visible_syms                          ->
+        E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_loop_sym_pat, do_loop_sym_pe) ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, test_sym_pat, test_sym_pe)       ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe)       ->
+        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                            ->
+        self s                                              >>= fun core_s                               ->
+        E.get_visible_objects                               >>= fun visible_syms                         ->
         (* TODO: the types of the annotations in Esave are dummy, but this is not observable for now *)
         let core_s_loop =
           Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s
             (Caux.mk_run_e (*default*) sym_loop [ Caux.mk_sym_pe sym | forall (sym MEM visible_syms) | true ]) in
-        E.return $
+       E.return $
           Caux.mk_save_e (sym_loop, C.BTy_unit)
              (List.map (fun sym ->
                (sym, (C.BTy_object C.OTy_pointer, Caux.mk_sym_pe sym))
              ) visible_syms) (
+(*
             Caux.mk_sseq_e test_sym_pat core_test (
               Caux.mk_case_e test_sym_pe
                 [ (Caux.mk_specified_pat case_sym_pat,
@@ -3072,6 +3150,22 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                    Caux.mk_nd_e [core_s_loop; Caux.mk_skip_e]) ]
                )
             )
+*)
+            Caux.mk_sseq_e test_sym_pat core_test begin
+              Caux.mk_sseq_e do_loop_sym_pat begin
+                Caux.mk_case_e test_sym_pe
+                  [ (Caux.mk_specified_pat case_sym_pat,
+                     Caux.mk_pure_e begin
+                       Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
+                         (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
+                     end)
+                    (* non-deterministic branching if the test expression had unspecified value *)
+                  ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                     Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)]) ]
+              end
+              (Caux.mk_if_e do_loop_sym_pe core_s_loop Caux.mk_skip_e)
+            end
+          )
     
     | A.AilSdo s e ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in

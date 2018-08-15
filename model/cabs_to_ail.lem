@@ -2188,10 +2188,9 @@ STD_ "§6.5.3.1#3" $
               AilEassign <$> desugar_expression e1
                          <*> desugar_expression e2
           | Just aop ->
-              (* TODO: temporary hack, while the elab doesn't support compound assigns *)
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
-              E.return $ AilEassign d_e1 (AnnotatedExpression () [] loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
+              E.return (AilEcompoundAssign d_e1 aop d_e2)
         end 
     | CabsEcomma e1 e2 ->
         AilEbinary <$> desugar_expression e1

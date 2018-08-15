@@ -946,7 +946,6 @@ type driver_result = <|
   dres_blocked: bool;
   dres_concurrency_state: Cmm_op.symState;
   dres_driver_steps: nat;
-  dres_core_run_steps: nat;
   dres_core_value: Core.value;
   dres_stdout: string;
 |>
@@ -972,7 +971,6 @@ let finalize debug_str dr_st =
           dres_blocked= dr_st.blocked;
           dres_concurrency_state= dr_st.concurrency_state;
           dres_driver_steps= dr_st.dr_step_counter;
-          dres_core_run_steps= dr_st.core_run_state.Core_run.step_counter;
           dres_core_value= cval;
           dres_stdout= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stdout);
         |>
