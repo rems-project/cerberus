@@ -888,7 +888,21 @@ OLD(sigma_declaration)
     | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol s (Just "smb_rmb")))) [] ->
         (* TODO: do typechecking *)
         E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol s (Just "smb_rmb")))) [], GenRValueType GenVoid)
- 
+
+     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_read_once")) [object_e] ->
+        annotate_rvalue object_e >>= fun (object_e', object_gty) ->
+        match (object_gty) with
+          | (GenPointer qs object_ty) ->
+              E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_read_once")) [object_e'], GenRValueType (inject_type $ AAux.unatomic object_ty))
+          | _ ->
+              error "WIP: typing of linux_read_once"
+        end
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_write_once")) [object_e; desired_e] ->
+        annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
+        annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_write_once")) [object_e'; desired_e'],
+                  GenRValueType GenVoid)
+
     | AilEcall e es ->
         (* STD §6.5.2.2#1 *)
         E.add "§6.5.2.2#1" >>

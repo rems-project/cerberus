@@ -664,6 +664,16 @@ and symbolify_action_ = function
      Eff.return (CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2))
  | LinuxFence mo ->
      Eff.return (LinuxFence mo)
+ | LinuxStore (_pe1, _pe2, _pe3, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     Eff.return (LinuxStore (pe1, pe2, pe3, mo))
+ | LinuxLoad (_pe1, _pe2, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     Eff.return (LinuxLoad (pe1, pe2, mo))
+
 
 
 

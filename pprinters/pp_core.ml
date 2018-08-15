@@ -674,7 +674,17 @@ and pp_action act =
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
     | LinuxFence mo ->
-        pp_keyword "LinuxFence" ^^ P.parens (pp_linux_memory_order mo)
+        pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
+    | LinuxStore (ty, e1, e2, mo) ->
+        pp_keyword "linux_store" ^^
+        P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+    | LinuxLoad (ty, e, mo) ->
+        pp_keyword "linux_load" ^^
+        P.parens (comma_list pp_pexpr [ty;e] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+
+
 
 (*
     | Ptr (ptr_act, es) ->
