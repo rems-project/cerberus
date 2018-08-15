@@ -287,77 +287,53 @@ let combine_qualifiers_right gty1 gty2 =
         gty2
   end
 
-
 val well_typed_conditional:
     (Loc.t * Loc.t * Loc.t * Loc.t) ->
     genType -> genType -> genType -> bool -> bool -> E.errorM genTypeCategory
 let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_null2 is_null3 =
-  let () = Debug.warn [] (fun () -> "TODO: need to clean GenTyping.well_typed_conditional (see the WIP comment)") in
-  
-(* STD §6.5.15#2 *)
   if is_scalar gty1 then
-    (* STD §6.5.15#3, bullet 1 *)
+    E.add "§6.5.15#2" >>
     if is_arithmetic gty2 && is_arithmetic gty3 then
-      (* STD §6.5.15#5, sentence 1 *)
+      E.add "§6.5.15#3, bullet 1" >>
+      E.add "§6.5.15#5, sentence 1" >>
       E.return (GenRValueType (usual_arithmetic gty2 gty3))
     
-    (* STD §6.5.15#3, bullet 2 *)
     else if GAux.is_struct_or_union gty2 && gty2 = gty3 then
-      (* STD §6.5.15#5, sentence 2 *)
+      E.add "§6.5.15#3, bullet 2" >>
+      E.add "§6.5.15#5, sentence 2" >>
       E.return (GenRValueType gty2)
     
-    (* STD §6.5.15#3, bullet 3 *)
     else if GAux.void gty2 && GAux.void gty3 then
-      (* STD §6.5.15#5, sentence 3 *)
+      E.add "§6.5.15#3, bullet 3" >>
+      E.add "§6.5.15#5, sentence 3" >>
       E.return (GenRValueType GenVoid)
-    
-(* WIP
-    else match (gty2, gty3) with
-      | (GenPointer ref_qs2 ref_ty2, GenPointer ref_qs3 ref_ty3) ->
-          (*  *)
-          let result_qs = AAux.combine_qualifiers ref_qs ref_qs2 in
-      
-
-
-
-    (* STD §6.5.15#3, bullet 5 *)
-    else if GAux.is_pointer gty2 && is_null3 then
-      (* STD §6.5.15#6, sentence 1 *)
-      (* STD §6.5.15#6, sentence 3 *)
-      E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
-    else if is_null2 && GAux.is_pointer gty3 then
-      (* STD §6.5.15#6, sentence 1 *)
-      (* STD §6.5.15#6, sentence 3 *)
-      E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
-    else 
-
-
-    (* STD §6.5.15#3, bullet 4 *)
-    (* STD §6.5.15#3, bullet 6 *)
-
-    else 
-
-    end
-*)
     
     else match composite_pointer gty2 gty3 with
       | Just gty ->
+          E.add "§6.5.15#3, bullet 4" >>
+            E.add "§6.5.15#6" >>
           E.return (GenRValueType gty)
       | Nothing ->
-          if void gty2 && void gty3 then
-            E.return (GenRValueType GenVoid)
-          else if is_pointer gty2 && is_null3 then
+          if is_pointer gty2 && is_null3 then
+            E.add "§6.5.15#3, bullet 5" >>
+            E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
           else if is_pointer gty3 && is_null2 then
+            E.add "§6.5.15#3, bullet 5" >>
+            E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
           else if is_pointer_to_object gty2 && is_pointer_to_void gty3 then
+            E.add "§6.5.15#3, bullet 6" >>
+            E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_right gty2 gty3))
           else if is_pointer_to_object gty3 && is_pointer_to_void gty2 then
+            E.add "§6.5.15#3, bullet 6" >>
+            E.add "§6.5.15#6" >>
             E.return (GenRValueType (combine_qualifiers_left gty2 gty3))
-          else E.fail Loc.unknown (TError_TODO 9)
+          else E.constraint_violation loc_cond Constraint.ConditionalOperatorInvalidOperandTypes
     end
   else
-    E.fail (Loc.with_cursor_from loc_e1 loc_cond) (TError "§6.5.15#2")
+    E.constraint_violation (Loc.with_cursor_from loc_e1 loc_cond) Constraint.ConditionalOperatorFirstOperandType
 
 
 val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
