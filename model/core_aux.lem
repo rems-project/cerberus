@@ -1761,12 +1761,12 @@ end
 val unsafe_subst_sym_fun_map: forall 'a. Symbol.sym -> pexpr -> fun_map 'a -> fun_map 'a
 let unsafe_subst_sym_fun_map sym pe' funs =
   Map.map (function
-    | Fun ty params pe ->
-        Fun ty params (unsafe_subst_sym_pexpr sym pe' pe)
-    | ProcDecl loc ty params ->
-        ProcDecl loc ty params
-    | Proc loc ty params e ->
-        Proc loc ty params (unsafe_subst_sym_expr sym pe' e)
+    | Fun bTy params pe ->
+        Fun bTy params (unsafe_subst_sym_pexpr sym pe' pe)
+    | ProcDecl loc bTy params ->
+        ProcDecl loc bTy params
+    | Proc loc bTy params e ->
+        Proc loc bTy params (unsafe_subst_sym_expr sym pe' e)
   end) funs
 
 
@@ -2067,12 +2067,11 @@ let rec set_uid_e uid n (Expr annots e_) =
 val string_of_symbol: Symbol.sym -> string
 declare ocaml target_rep function string_of_symbol = `Pp_symbol.to_string_pretty`
 
-let set_uid_fun fname cfun =
-  match cfun with
+let set_uid_fun fname = function
   | Fun bty args pe -> Fun bty args pe
   | ProcDecl loc ret_bty args_bty -> ProcDecl loc ret_bty args_bty
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
-  end
+end
 
 let set_uid file =
  <|
