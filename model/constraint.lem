@@ -1,7 +1,14 @@
-import Symbol Cabs AilTypes
+import Symbol Cabs AilTypes GenTypes
 
 type violation =
   (* 6.5 Expressions *)
+  (* 6.5.2.2 Function calls *)
+  | FunctionCallIncompleteReturnType of AilTypes.ctype (* §6.5.2.2#1 *)
+  | FunctionCallArrayReturnType of AilTypes.ctype (* §6.5.2.2#1 *)
+  | FunctionCallIncorrectType (* §6.5.2.2#1 *)
+  (* 6.5.2.3 Structure and union members *)
+  | MemberofReferenceBaseType  (* §6.5.2.3#1 *)
+  | MemberofNoMember of Cabs.cabs_identifier * GenTypes.genType (* §6.5.2.3#1 *)
   (* 6.5.2.5 Compound literals *)
   | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
   (* 6.5.3.1 Prefix increment and decrement operators *)
@@ -93,8 +100,22 @@ type violation =
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
   | IllegalIdentifierTypeVoidInFunctionDefinition (* §6.9.1#5, sentence 1 *)
   | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
+  (* 7 Library *)
+  (* 7.2 Diagnostics <assert.h> *)
+  (* 7.2.1.1 The assert macro *)
+  | AssertMacroExpressionScalarType (* §7.2.1.1#2 *)
 
 let std_of_violation = function
+  | FunctionCallIncompleteReturnType _ -> 
+      "§6.5.2.2#1"
+  | FunctionCallArrayReturnType _ ->
+      "§6.5.2.2#1"
+  | FunctionCallIncorrectType ->
+      "§6.5.2.2#1"
+  | MemberofReferenceBaseType ->
+      "§6.5.2.3#1"
+  | MemberofNoMember _ _ ->
+      "§6.5.2.3#1"
   | InvalidTypeCompoundLiteral ->
       "§6.5.2.5#1"
   | ExpressionNotLvalue ->
@@ -224,5 +245,7 @@ let std_of_violation = function
   | IllegalIdentifierTypeVoidInFunctionDefinition ->
       "§6.9.1#5, sentence 1"
   | UniqueVoidParameterInFunctionDefinition ->
-      "§6.9.1#5"
+      "§6.9.1#5, sentence 2"
+  | AssertMacroExpressionScalarType ->
+      "§7.2.1.1#2"
 end

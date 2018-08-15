@@ -410,3 +410,10 @@ end
 val is_incomplete: forall 'a. sigma 'a -> genType -> bool
 let is_incomplete sigm gty =
   not (is_complete sigm gty)
+
+val annotations: forall 'a. expression 'a -> (list string * 'a)
+let annotations (AnnotatedExpression gtc annots _ _) = (annots, gtc)
+
+val genTypeCategoryOf: expression genTypeCategory -> genTypeCategory
+let genTypeCategoryOf (AnnotatedExpression gtc _ _ _) =
+  gtc

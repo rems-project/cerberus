@@ -73,6 +73,11 @@ let string_at_line fname lnum cpos =
       (* TODO *)
       None
 
+let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
+let string_of_ctype ty = String_ail.string_of_ctype AilTypes.no_qualifiers ty
+let string_of_sym = Pp_symbol.to_string_pretty
+let string_of_gentype = String_ail.string_of_genType
+
 let string_of_cparser_cause = function
   | Cparser_invalid_symbol ->
       "invalid symbol"
@@ -86,6 +91,16 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | FunctionCallIncompleteReturnType ty ->
+      "calling function with incomplete return type '" ^ string_of_ctype ty ^ "'"
+  | FunctionCallArrayReturnType ty ->
+      "calling function returning an array type '" ^ string_of_ctype ty ^ "'"
+  | FunctionCallIncorrectType ->
+      "called object type is not a function or function pointer"
+  | MemberofReferenceBaseType ->
+      "member reference base type is not a structure or union"
+  | MemberofNoMember (memb, gty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
   | InvalidTypeCompoundLiteral ->
       "compound literal has invalid type"
   | ExpressionNotLvalue ->
@@ -105,17 +120,17 @@ let string_of_constraint_violation = function
   | ConditionalOperatorFirstOperandType ->
       "first operand of a conditional operator is not a scalar type"
   | ConditionalOperatorInvalidOperandTypes ->
-      "incompatible operand types"
+      "incompatible conditional operand types"
   | AssignmentIncompatibleType ty ->
-      "assigning to '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "' from incompatible type"
+      "assigning to '" ^ string_of_ctype ty ^ "' from incompatible type"
   | AssignmentIncompatiblePointerType ->
       "assigning to incompatible pointer types"
   | AssignmentDiscardsQualifiers ->
       "assignment discards qualifiers"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
-  | NoLinkageMultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
-      "multiple declaration of '" ^ str ^ "'"
+  | NoLinkageMultipleDeclaration x ->
+      "multiple declaration of '" ^ string_of_cid x ^ "'"
   | TypedefRedefinition ->
       "typedef redefinition with different types"
   | TypedefRedefinitionVariablyModifiedType ->
@@ -129,8 +144,8 @@ let string_of_constraint_violation = function
       "_Thread_local in function declaration"
   | StructMemberIncompleteType (qs, ty) ->
       "member has incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
-  | StructMemberFunctionType (Cabs.CabsIdentifier (_, f)) ->
-      "member '" ^ f ^ "' declared as a function"
+  | StructMemberFunctionType f ->
+      "member '" ^ string_of_cid f ^ "' declared as a function"
   | StructMemberFlexibleArray ->
       "struct has a flexible array member"
   | NoTypeSpecifierInDeclaration ->
@@ -143,8 +158,8 @@ let string_of_constraint_violation = function
       "expression is not an integer constant expression"
   | LabelStatementOutsideSwitch ->
       "label statement outside switch"
-  | LabelRedefinition (Cabs.CabsIdentifier (_, str)) ->
-      "redefinition of '" ^ str ^ "'"
+  | LabelRedefinition l ->
+      "redefinition of '" ^ string_of_cid l ^ "'"
   | SwitchStatementControllingExpressionNotInteger ->
       "statement requires expression of integer type"
   | IfStatementControllingExpressionNotScalar
@@ -159,15 +174,15 @@ let string_of_constraint_violation = function
   | AtomicTypeConstraint ->
       "invalid use of _Atomic"
   | RestrictQualifiedPointedTypeConstraint ty ->
-      "pointer to type '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "' may not be restrict qualified"
+      "pointer to type '" ^ string_of_ctype ty ^ "' may not be restrict qualified"
   | RestrictQualifiedTypeConstraint ->
       "restrict requires a pointer"
   | TagRedefinition sym ->
-      "redefinition of '" ^ Pp_symbol.to_string_pretty sym ^ "'"
+      "redefinition of '" ^ string_of_sym sym ^ "'"
   | TagRedeclaration sym ->
-      "use of '" ^ Pp_symbol.to_string_pretty sym ^ "' with tag type that does not match previous declaration"
-  | UndeclaredLabel (Cabs.CabsIdentifier (_, str)) ->
-      "use of undeclared label '" ^ str ^ "'"
+      "use of '" ^ string_of_sym sym ^ "' with tag type that does not match previous declaration"
+  | UndeclaredLabel l ->
+      "use of undeclared label '" ^ string_of_cid l ^ "'"
   | ContinueOutsideLoop ->
       "continue statement outside a loop"
   | BreakOutsideSwtichOrLoop ->
@@ -211,11 +226,13 @@ let string_of_constraint_violation = function
   | UniqueVoidParameterInFunctionDefinition ->
       "'void' must be the first and only parameter if specified"
   | ExternalRedefinition sym ->
-      "redefinition of '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
+      "redefinition of '" ^ string_of_sym sym ^ "'"
+  | AssertMacroExpressionScalarType ->
+      "assert expression should have scalar type"
 
 let string_of_misc_violation = function
-  | MultipleEnumDeclaration (Cabs.CabsIdentifier (_, str)) ->
-      "redefinition of '" ^ str ^ "'"
+  | MultipleEnumDeclaration x ->
+      "redefinition of '" ^ string_of_cid x ^ "'"
   | EnumSimpleDeclarationConstruction ->
       "such construction is not allowed for enumerators"
   | UndeclaredIdentifier str ->
