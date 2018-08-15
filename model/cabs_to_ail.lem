@@ -2311,7 +2311,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         (* STD §6.7.9#3 *)
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-          E.constraint_violation loc VariableSizedObjectInitialization
+          E.constraint_violation loc IllegalInitializer
         
         (* STD §6.7.9#5 *)
         else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
@@ -2390,7 +2390,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
           (* STD §6.7.9#3 *)
           if not (   AilTypesAux.is_array_unknown_size ty
                   || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-            E.constraint_violation loc VariableSizedObjectInitialization
+            E.constraint_violation loc IllegalInitializer
           (* STD §6.7.9#5 *)
           else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
             E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
