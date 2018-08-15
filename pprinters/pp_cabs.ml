@@ -4,6 +4,8 @@ open Pp_prelude
 open Pp_ast
 open Colour
 
+open Location_ocaml
+
 module P = PPrint
 
 let precedence = function
@@ -75,45 +77,6 @@ let pp_colour_label (CabsIdentifier (_, str)) =
 
 let pp_decl_ctor k =
   !^ (ansi_format [Bold; Green] k)
-
-
-let pp_location = function
-  | Location_ocaml.Loc_unknown ->
-      P.angles (!^ "unknown location")
-  | Location_ocaml.Loc_other str ->
-      P.angles (!^ ("other location: " ^ str))
-  | Location_ocaml.Loc_point pos ->
-      Lexing.(
-        let line = string_of_int pos.pos_lnum in
-        let col  = string_of_int (1+pos.pos_cnum - pos.pos_bol) in
-        P.angles !^ (ansi_format [Yellow] ("line:" ^ line ^ ":" ^ col))
-      )
-  | Location_ocaml.Loc_region (start_p, end_p, cursor_p_opt) ->
-      Lexing. (
-        let start_line = string_of_int start_p.pos_lnum in
-        let start_col  = string_of_int (1+start_p.pos_cnum - start_p.pos_bol) in
-        let end_line   = string_of_int end_p.pos_lnum in
-        let end_col    = string_of_int (1+end_p.pos_cnum - end_p.pos_bol) in
-        P.angles (
-          if start_p.pos_lnum = end_p.pos_lnum then
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
-            ^^ P.comma ^^^
-            !^ (ansi_format [Yellow] ("col:" ^ end_col))
-          else
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
-            ^^ P.comma ^^^
-            !^ (ansi_format [Yellow] ("line:" ^ end_line ^ ":" ^ end_col))
-        ) ^^ P.optional (fun p ->
-               let line = string_of_int p.pos_lnum in
-               let col  = string_of_int (1+p.pos_cnum - p.pos_bol) in
-               P.space ^^
-               !^ (ansi_format [Yellow] (
-               if start_p.pos_lnum = end_p.pos_lnum then
-                 "col:" ^ col
-               else
-                 "line:" ^ line ^ ":" ^ col))
-             ) cursor_p_opt
-      )
 
 let map_option f = function
   | Some x -> Some (f x)

@@ -38,14 +38,6 @@ let position fname lnum bol cnum = {
   Lexing.pos_cnum = cnum;
 }
 
-let unknown = Location_ocaml.Loc_unknown
-let other s = Location_ocaml.Loc_other s
-let point fname lnum bol cnum =
-  Location_ocaml.Loc_point (position fname lnum bol cnum)
-let region fname lnum1 bol1 cnum1 lnum2 bol2 cnum2 =
-  Location_ocaml.Loc_region (position fname lnum1 bol1 cnum1,
-                             position fname lnum2 bol2 cnum2, None)
-
 let sym (n, s) = Symbol.Symbol (n, Some s)
 let cabsid pos id =
   let mkloc x = x in
