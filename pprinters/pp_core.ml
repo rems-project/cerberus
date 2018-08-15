@@ -498,23 +498,6 @@ let pp_pexpr pe =
   in pp None pe
 
 
-(* NOTE: here to avoid circular dependencies to Pp_errors
-  TODO: move to somewhere else *)
-open Lexing
-open Location_ocaml
-let location_to_string loc =
-  let string_of_pos pos =
-    Printf.sprintf "%d:%d" pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
-  match loc with
-    | Loc_unknown ->
-        "unknown location"
-    | Loc_other str ->
-        "other location: " ^ str
-    | Loc_point pos ->
-        string_of_pos pos ^ ":"
-    | Loc_region (pos1, pos2, _) ->
-        string_of_pos pos1 ^ "-" ^ string_of_pos pos2 ^ ":"
-
 let rec pp_expr expr =
   let rec pp is_semi prec (Expr (annot, e)) =
     let prec' = precedence_expr e in
@@ -644,8 +627,8 @@ and pp_action act =
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill (b, e) ->
         pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_pexpr e)
-    | Store0 (ty, e1, e2, mo) ->
-       pp_keyword "store" ^^ pp_args [ty; e1; e2] mo
+    | Store0 (is_locking, ty, e1, e2, mo) ->
+       pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
@@ -713,12 +696,12 @@ let pp_fun_map funs =
     if show_include || Location_ocaml.from_main_file loc then d else P.empty
   in
   Pmap.fold (fun sym decl acc ->
-    acc ^^
+    acc ^^ P.hardline ^^
     match decl with
       | Fun  (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline
       | ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
@@ -726,7 +709,7 @@ let pp_fun_map funs =
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline
     ) funs P.empty
 
 
