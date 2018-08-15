@@ -34,7 +34,7 @@ struct
     with B.Error ->
       let token = Lexing.lexeme lexbuf in
 (*      let spos  = Lexing.lexeme_start_p lexbuf in *)
-      let loc = Location_ocaml.Loc_region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf, None) in
+      let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
       Exception.throw (loc, Errors.PARSER ("Unexpected token: " ^ token ^ "."))
 
   let parse input = L.lexbuf parse_exn (L.make input)

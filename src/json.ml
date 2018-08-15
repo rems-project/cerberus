@@ -28,14 +28,3 @@ let of_opt_string s = of_option of_string s
 
 let of_list f xs = `List (List.map f xs)
 
-let of_location l =
-  let open Location_ocaml in
-  let open Lexing in
-  let of_pos p =
-    `Assoc [("line", `Int (p.pos_lnum-1));
-            ("ch", `Int (p.pos_cnum-p.pos_bol))]
-  in match l with
-  | Loc_unknown   -> `Null
-  | Loc_other str -> `Null (* `String str *)
-  | Loc_point p   -> of_pos p
-  | Loc_region (p1, p2, _) -> `Assoc [("begin", of_pos p1); ("end", of_pos p2)]

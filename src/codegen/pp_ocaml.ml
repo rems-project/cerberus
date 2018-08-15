@@ -136,25 +136,8 @@ let print_globs_prefix globs sym =
 let print_impl_name i =
   !^("_" ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
 
-let print_loc loc =
-  let print_fname pos = P.dquotes !^(pos.Lexing.pos_fname) in
-  let print_pos pos = !^(string_of_int pos.Lexing.pos_lnum)
-                      ^^^ !^(string_of_int pos.Lexing.pos_bol)
-                      ^^^ !^(string_of_int pos.Lexing.pos_cnum)
-  in
-  let open Location_ocaml in
-  match loc with
-  | Loc_unknown ->
-    !^"RT.unknown"
-  | Loc_other str ->
-      !^ "RT.other" ^^ P.dquotes !^ (String.escaped str)
-  | Loc_point pos ->
-    !^"RT.point" ^^^ print_fname pos ^^^ print_pos pos
-  | Loc_region (pos1, pos2, opos3) ->
-    !^"RT.Loc_region" ^^^ print_fname pos1 ^^^ print_pos pos1 ^^^ print_pos pos2
-
 let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
-  !^"RT.cabsid" ^^^ P.parens (print_loc loc) ^^^ P.dquotes !^str
+  !^"RT.cabsid" ^^^ P.parens (Location_ocaml.print_location loc) ^^^ P.dquotes !^str
 
 let print_name = function
   | Sym a  -> print_global_symbol a

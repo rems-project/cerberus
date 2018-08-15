@@ -4004,7 +4004,8 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
 
-    E.with_scope2 E.Scope_prototype (*TODO: make it a block*) begin
+    E.fresh_block_scope >>= fun funblock_scope ->
+    E.with_scope2 funblock_scope begin
       desugar_declarator IsFunDef decltor
     end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
     
@@ -4024,7 +4025,6 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
     E.under_scope E.Scope_function begin
       register_labels stmt >>
       
-      E.fresh_block_scope >>= fun funblock_scope ->
       E.under_scope funblock_scope begin
           (* TODO: this is a horrible hack, DO BETTER *)
           E.hack_inject_idents_map idents_map >>

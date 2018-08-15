@@ -194,7 +194,7 @@ let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
         | [] ->
             failwith "Core_parser.register_sym: found open scope"
         | scope::scopes ->
-            Pmap.add _sym (sym, Loc_region (start_p, end_p, None)) scope :: scopes
+            Pmap.add _sym (sym, Location_ocaml.region (start_p, end_p) None) scope :: scopes
   } >>= fun () ->
   Eff.return sym
 
@@ -220,7 +220,7 @@ let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
 
 
 let register_label ((_, (start_p, end_p)) as _sym) : unit Eff.t =
-  let loc = Loc_region (start_p, end_p, None) in
+  let loc = Location_ocaml.region (start_p, end_p) None in
   Eff.get >>= fun st ->
   let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
   M.sym_counter := !M.sym_counter + 1;
@@ -1375,74 +1375,74 @@ pexpr:
 expr:
 | e_= delimited(LPAREN, expr, RPAREN)
     { let Expr (annot, expr_) = e_ in
-      Expr (Aloc (Loc_region ($startpos, $endpos, None)) :: annot, expr_) }
+      Expr (Aloc (Location_ocaml.region ($startpos, $endpos) None) :: annot, expr_) }
 | PURE pe_= delimited(LPAREN, pexpr, RPAREN)
-    { Expr ([Aloc (Loc_region ($startpos, $endpos, None))], Epure pe_) }
+    { Expr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
-    { Expr ([Aloc (Loc_region ($startpos, $endpos, None))], Ememop (memop, pes)) }
+    { Expr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], Ememop (memop, pes)) }
 | SKIP
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Elet (_pat, _pe1, _e2) ) }
 | IF _pe1= pexpr THEN _e2= expr ELSE _e3= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eif (_pe1, _e2, _e3) ) }
 | CASE _pe= pexpr OF _pat_es= list(pattern_pair(expr)) END
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Ecase (_pe, _pat_es) ) }
 | PCALL LPAREN _nm= name RPAREN
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eproc ((), _nm, []) ) }
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eproc ((), _nm, _pes) ) }
 | CCALL LPAREN _pe= pexpr RPAREN
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eccall ((), _pe, []) ) }
 | CCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eccall ((), _pe, _pes) ) }
 | _pact= paction
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eaction _pact ) }
 | UNSEQ _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eunseq _es ) }
 | LET WEAK _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Ewseq (_pat, _e1, _e2) ) }
 | _e1= expr SEMICOLON _e2= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Esseq (CaseBase (None, BTy_unit), _e1, _e2) ) }
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Esseq (_pat, _e1, _e2) ) }
 | LET ATOM _sym_bTy= pair(SYM, core_base_type) EQ _act1= action IN _pact2= paction
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Easeq (_sym_bTy, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eindet (Nat_big_num.to_int n, _e) ) }
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Ebound (Nat_big_num.to_int n, _e) ) }
 | SAVE _sym= SYM COLON bTy= core_base_type
        _xs= delimited(LPAREN,
               separated_list(COMMA,
                 separated_pair(SYM, COLON, separated_pair(core_base_type, COLON_EQ, pexpr))),
             RPAREN) IN _e= expr
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Esave ((_sym, bTy), _xs, _e) ) }
 | RUN _sym= SYM _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Erun ((), _sym, _pes) ) }
 | ND _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , End _es ) }
 | PAR _es= delimited(LPAREN, separated_list(COMMA, expr), RPAREN)
-    { Expr ( [Aloc (Loc_region ($startpos, $endpos, None))]
+    { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Epar _es ) }
 ;
 
