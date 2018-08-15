@@ -2,7 +2,25 @@ import Symbol Cabs AilTypes
 
 type violation =
   (* 6.5 Expressions *)
+  (* 6.5.2.5 Compound literals *)
+  | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
+  (* 6.5.3.1 Prefix increment and decrement operators *)
+  | ExpressionNotLvalue (* §6.5.3.1#1 *)
+  | InvalidArgumentTypeUnaryIncrement (* §6.5.3.1#1 *)
+  | InvalidArgumentTypeUnaryDecrement (* §6.5.3.1#1 *)
+  (* 6.5.3.2 Address and indirection operators *)
+  | UnaryAddressNotRvalue (* §6.5.3.2#1 *)
+  | UnaryAddressRegisterLvalue (* §6.5.3.2#1 *)
   | IndirectionNotPointer (* §6.5.3.2#2 *)
+  (* 6.5.3.3 Unary arithmetic operators *)
+  | InvalidArgumentTypeUnaryExpression (* §6.5.3.3#1 *)
+  (* 6.5.15 Conditional operator *)
+  | ConditionalOperatorFirstOperandType (* §6.5.15#2 *)
+  | ConditionalOperatorInvalidOperandTypes (* §6.5.15#3 *)
+  (* 6.5.16.1 Simple assignment *)
+  | AssignmentIncompatibleType of AilTypes.ctype (* §6.5.16.1#1 *)
+  | AssignmentIncompatiblePointerType (* §6.5.16.1#1, bullet 3 and 4 *)
+  | AssignmentDiscardsQualifiers (* §6.5.16.1#1, bullet 3 and 4 *)
   (* 6.6 Constant expressions *)
   | IntegerConstantOutRange (* §6.6#4 *)
   (* 6.7 Declarations *)
@@ -43,7 +61,7 @@ type violation =
   | IllegalStorageClassFunctionDeclarator (* §6.7.6.3#2 *)
   | IncompleteParameterTypeFunctionDeclarator (* §6.7.6.3#4 *)
   (* 6.7.9 Initialization *)
-  | VariableSizedObjectInitialization (* §6.7.9#3 *)
+  | IllegalInitializer (* §6.7.9#3 *)
   | IllegalStorageClassStaticOrThreadInitializer (* §6.7.9#4 *)
   | IllegalLinkageAndInitialization (* §6.7.9#5 *)
   | IllegalTypeArrayDesignator (* §6.7.9#6, sentence 1 *)
@@ -77,8 +95,32 @@ type violation =
   | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
 
 let std_of_violation = function
+  | InvalidTypeCompoundLiteral ->
+      "§6.5.2.5#1"
+  | ExpressionNotLvalue ->
+      "§6.5.3.1#1"
+  | InvalidArgumentTypeUnaryIncrement ->
+      "§6.5.3.1#1"
+  | InvalidArgumentTypeUnaryDecrement ->
+      "§6.5.3.1#1"
+  | UnaryAddressNotRvalue ->
+      "§6.5.3.2#1"
+  | UnaryAddressRegisterLvalue ->
+      "§6.5.3.2#1"
+  | InvalidArgumentTypeUnaryExpression ->
+      "§6.5.3.3#1"
   | IndirectionNotPointer ->
       "§6.5.3.2#2"
+  | ConditionalOperatorFirstOperandType ->
+      "§6.5.15#2"
+  | ConditionalOperatorInvalidOperandTypes ->
+      "§6.5.15#3"
+  | AssignmentIncompatibleType _ ->
+      "§6.5.16.1#1"
+  | AssignmentIncompatiblePointerType ->
+      "§6.5.16.1#1, bullet 3 and 4"
+  | AssignmentDiscardsQualifiers ->
+      "§6.5.16.1#1, bullet 3 and 4"
   | IntegerConstantOutRange ->
       "§6.6#4"
   | NoLinkageMultipleDeclaration _ ->
@@ -137,7 +179,7 @@ let std_of_violation = function
       "§6.7.6.3#2"
   | IncompleteParameterTypeFunctionDeclarator ->
       "§6.7.6.3#4"
-  | VariableSizedObjectInitialization ->
+  | IllegalInitializer ->
       "§6.7.9#3"
   | IllegalStorageClassStaticOrThreadInitializer ->
       "§6.7.9#4"

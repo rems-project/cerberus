@@ -37,8 +37,32 @@ let string_of_cparser_cause = function
       "unexpected token '"^ str ^ "'"
 
 let string_of_constraint_violation = function
+  | InvalidTypeCompoundLiteral ->
+      "compound literal has invalid type"
+  | ExpressionNotLvalue ->
+      "expression is not assignable"
+  | InvalidArgumentTypeUnaryIncrement ->
+      "invalid argument type to the increment operator"
+  | InvalidArgumentTypeUnaryDecrement ->
+      "invalid argument type to the increment operator"
+  | UnaryAddressNotRvalue ->
+      "cannot take address of an rvalue"
+  | UnaryAddressRegisterLvalue ->
+      "address of lvalue declared with register storage-class specifier"
   | IndirectionNotPointer ->
       "the * operator expects a pointer operand"
+  | InvalidArgumentTypeUnaryExpression ->
+      "invalid argument type to unary expression"
+  | ConditionalOperatorFirstOperandType ->
+      "first operand of a conditional operator is not a scalar type"
+  | ConditionalOperatorInvalidOperandTypes ->
+      "incompatible operand types"
+  | AssignmentIncompatibleType ty ->
+      "assigning to '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "' from incompatible type"
+  | AssignmentIncompatiblePointerType ->
+      "assigning to incompatible pointer types"
+  | AssignmentDiscardsQualifiers ->
+      "assignment discards qualifiers"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
   | NoLinkageMultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
@@ -119,8 +143,8 @@ let string_of_constraint_violation = function
       "invalid storage class specifier in function declarator"
   | IncompleteParameterTypeFunctionDeclarator ->
       "incomplete type"
-  | VariableSizedObjectInitialization ->
-      "variable-sized object may not be initialized"
+  | IllegalInitializer ->
+      "illegal initializer"
   | IllegalStorageClassStaticOrThreadInitializer ->
       "initializer element is not a compile-time constant"
   | IllegalLinkageAndInitialization ->
