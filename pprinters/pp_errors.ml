@@ -102,6 +102,10 @@ let string_of_constraint_violation = function
       "the * operator expects a pointer operand"
   | InvalidArgumentTypeUnaryExpression ->
       "invalid argument type to unary expression"
+  | ConditionalOperatorFirstOperandType ->
+      "first operand of a conditional operator is not a scalar type"
+  | ConditionalOperatorInvalidOperandTypes ->
+      "incompatible operand types"
   | AssignmentIncompatibleType ty ->
       "assigning to '" ^ String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "' from incompatible type"
   | AssignmentIncompatiblePointerType ->
