@@ -40,25 +40,8 @@ let print_debug level doms msg =
     prerr_endline Colour.(ansi_format [Red] ("(debug " ^ string_of_int level ^ "): " ^ msg ()))
 
 
-
-let location_to_string loc =
-  Location_ocaml.(
-    match loc with
-      | Loc_unknown ->
-          "unknown location"
-      | Loc_other str ->
-          "other location:'" ^ str ^ "'"
-      | Loc_point pos ->
-          Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
-      | Loc_region (pos1, pos2, _) ->
-          Printf.sprintf "%s:%d:%d - %d:%d"
-            pos1.pos_fname pos1.pos_lnum (1+pos1.pos_cnum-pos1.pos_bol)
-                           pos2.pos_lnum (1+pos2.pos_cnum-pos2.pos_bol)
-  )
-
-
 let print_debug_located level doms loc msg =
-  print_debug level doms (fun () -> "(" ^ location_to_string loc ^ ") - " ^ msg ())
+  print_debug level doms (fun () -> "(" ^ Location_ocaml.location_to_string loc ^ ") - " ^ msg ())
 
 let warn doms msg =
   if !debug_level > 0 then

@@ -1,11 +1,9 @@
-
 open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot
-import Set_extra (* Set_helpers *)
+import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax AilTypes AilTypesAux
-import Dlist
 
 open import Implementation_ Decode
 
@@ -28,10 +26,14 @@ import Core_run_aux
 include Core_run_aux
 
 
-val call_proc: Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
-               Exception.exceptM (Core.expr core_run_annotation) core_run_cause
+(* fetching the body and symbol environment for a gien Core procedure *)
+val call_proc:
+  Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
+  Exception.exceptM (map Symbol.sym Core.value * Core.expr core_run_annotation) core_run_cause
 let call_proc file psym cvals =
   let bTy_params_body_opt =
+    (* NOTE: the order of lookups implies that user procedure cannot hide the
+       ones from stdlib, do we really want that? *)
     match Map.lookup psym file.stdlib with
       | Just (Proc _ bTy params body) ->
           Just (bTy, params, body)
@@ -46,106 +48,24 @@ let call_proc file psym cvals =
   match bTy_params_body_opt with
     | Just (bTy, params, body) ->
         if List.length params <> List.length cvals then
-          error $ "[Core_run.call_proc] wrong number of args applied to `" ^ show psym  ^ "' |args|=" ^
-          show (List.length cvals) ^ "expecting: " ^ show (List.length params)
+          Exception.fail (Illformed_program begin
+            "calling procedure `" ^ show psym ^
+            "' with the wrong number of args: |args|=" ^
+            show (List.length cvals) ^ "expecting: " ^
+            show (List.length params)
+          end)
         else
-          Exception.return (Utils.foldl2 (fun acc (sym, _) cval -> subst_sym_expr sym cval acc) body params cvals)
+          let env = Utils.foldl2 (fun acc (sym, _) cval ->
+            Map.insert sym cval acc
+          ) Map.empty params cvals in
+          Exception.return (env, body)
     | Nothing ->
-        Exception.fail (Illformed_program ("calling an unknown procedure: " ^ show psym))
+        Exception.fail
+          (Illformed_program ("calling an unknown procedure: " ^ show psym))
   end
 
 
-(* DEBUG *)
-type exec_location =
-  | ELoc_globals
-  | ELoc_normal of list Symbol.sym
 
-let push_exec_loc sym = function
-  | ELoc_globals ->
-      ELoc_normal [sym]
-  | ELoc_normal syms ->
-      ELoc_normal (sym :: syms)
-end
-
-type thread_state = <|
-  arena:  expr core_run_annotation;
-  stack:  stack core_run_annotation;
-  labels: map ksym (list (sym * ctype) * expr core_run_annotation);
-  
-  labels2: map sym (list sym * expr core_run_annotation);
-  
-  current_loc: Loc.t; (* DEBUG *)
-  current_uid: maybe string;
-  exec_loc: exec_location; (* DEBUG *)
-|>
-
-
-(* TODO: more *)
-type io_state = <|
-  stdout: Dlist.dlist string;
-  stderr: Dlist.dlist string;
-|>
-
-type core_state = <|
-  thread_states: list (thread_id * (maybe thread_id * thread_state)); (* the associated tid is that of the parent thread *)
-  io:            io_state;
-(*  handlers:      Map.map handler_event (list name); *)
-|>
-
-
-
-let string_of_thread_state th_st =
-  "Arena= " ^ Pp.stringFromCore_expr th_st.arena ^ "\nStack= " ^ Pp.stringFromCore_stack th_st.stack ^ "\n"
-(*
-  List.foldr (fun (n, arena) acc ->
-    "Arena[" ^ show n ^ "]= " ^ Pp.stringFromCore_expr arena
-  ) ("Stack= " ^ "TODO" ^ "\n") (numerote th_st.arenas)
-*)
-
-let string_of_core_state core_st =
-  List.foldr (fun (tid, (parent_tid_opt, th_st)) acc ->
-    "Thread " ^ show tid ^ (maybe "" (fun z -> "(spawn of thread " ^ show z ^ ")") parent_tid_opt) ^ "\n" ^
-    string_of_thread_state th_st ^
-    "-----------------------------\n\n" ^ acc
-  ) "" core_st.thread_states
-
-
-instance (Show core_state)
-  let show = string_of_core_state
-end
-
-
-
-
-type core_run_state = <|
-  tid_supply:    UniqueId.supply thread_id;
-  symbol_supply: UniqueId.supply Symbol.sym;
-  aid_supply:    UniqueId.supply Cmm.aid;
-  
-  (* DEBUG *)
-  step_counter: nat;
-|>
-
-
-
-
-(* Monad of the core evaluator (State + Exception + Undefined) *)
-type core_runM 'a = SEU.stExceptUndefM 'a core_run_state core_run_cause
-
-
-
-
-val increment_step_counter: core_runM unit
-let increment_step_counter =
-  SEU.runS (
-    State.update (fun run_st ->
-      <| run_st with step_counter= run_st.step_counter + 1 |>
-    )
-  )
-
-val register_handler: core_state -> core_state
-let register_handler st =
-  error "WIP: register_handler"
 
 val update_thread_state: thread_id -> thread_state -> core_state -> core_state
 let update_thread_state tid th_st st =
@@ -202,106 +122,6 @@ let fresh_action_id' =
 let inline (>>=) = State.bind
 let inline (>>) m f = State.bind m (fun _ -> f)
 
-(*
-val     hoist_negatives: forall 'a. expr 'a -> State.stateM (expr 'a) (list (expr 'a) * core_run_state)
-let rec hoist_negatives expr =
-  let add_neg neg_e =
-    State.modify (fun (negs, run_st) ->
-      ((), (neg_e :: negs, run_st))
-    ) in
-(*
-  let flush_negs = 
-    State.modify (fun (negs, run_st) ->
-      (negs, ([], run_st))
-    ) in
-*)
-  match expr with
-    | Epure _ ->
-        State.return expr
-    | Ememop _ _ ->
-        State.return expr
-    | Eaction pact ->
-        if is_negative_action pact then
-          add_neg expr >> State.return (Epure (Pexpr [] () (PEval Vunit)))
-        else
-          State.return expr
-    | Ecase pe pat_es ->
-        error "TODO Core_run.hoist_negatives, Ecase"
-    | Elet sym pe1 e2 ->
-        hoist_negatives e2 >>= fun e2' ->
-        State.return (Elet sym pe1 e2')
-    | Eif pe1 e2 e3 ->
-        hoist_negatives e2 >>= fun e2' ->
-        hoist_negatives e3 >>= fun e3' ->
-        State.return (Eif pe1 e2' e3')
-    | Eskip ->
-        State.return expr
-    | Eccall _ _ _ ->
-        State.return expr
-    | Eproc _ _ _ ->
-        State.return expr
-    | Eunseq es ->
-        State.mapM hoist_negatives es >>= fun es' ->
-        State.return (Eunseq es')
-    | Ewseq _as e1 e2 ->
-        hoist_negatives e1 >>= fun e1'  ->
-        hoist_negatives e2 >>= fun e2'  ->
-        State.return (Ewseq _as e1' e2')
-    | Esseq _as e1 e2 ->
-        error "Core_run.hoist_negatives: found an Esseq"
-(*
-        hoist_negatives e1 >>= fun e1'  ->
-        flush_negs         >>= fun negs ->
-        hoist_negatives e2 >>= fun e2'  ->
-        let nothings = Utils.replicate_list Nothing (List.length negs) in
-        match negs with
-          | [] ->
-              State.return (Esseq _as e1' e2')
-          | _ ->
-              State.return (
-                Esseq (nothings ++ _as) (Eunseq (negs ++ [e1'])) e2'
-              )
-        end
-*)
-    | Easeq sym_opt act1 pact2 ->
-        error "Core_run.hoist_negatives found an Easeq"
-    | Eindet i e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Eindet i e')
-    | Ebound i e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Ebound i e')
-    | End es ->
-        State.mapM hoist_negatives es >>= fun es' ->
-        State.return (End es')
-    | Esave (sym, bTy) sym_bTy_pes e ->
-        error "TODO Core_run.hoist_negatives Esave"
-    | Erun _ sym pes ->
-        error "TODO Core_run.hoist_negatives Erun"
-(*
-    | Esave ksym sym_tys e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Esave ksym sym_tys e')
-    | Erun _ _ _ ->
-      State.return expr
-*)
-    | Epar _ ->
-        (* TODO: check *)
-        State.return expr
-    | Ewait _ ->
-        State.return expr
-    | Eloc loc e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Eloc loc e')
-    | Estd s e ->
-        hoist_negatives e >>= fun e' ->
-        State.return (Estd s e')
-  end
-*)
-
-
-
-
 
 
 
@@ -321,35 +141,45 @@ module E = struct
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false) pes)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 loc env (Just mem_st) file false) pes)
+    )
   let core_run_step_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
-    SEU.runEU (Core_eval.step_eval_pexpr 0 loc (Just mem_st) file false pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.step_eval_pexpr 0 loc env (Just mem_st) file false pe)
+    )
   let inline step_eval_pexpr = core_run_step_eval_pexpr
   
   let core_run_eval_pexpr loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () ->
       "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
     ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux_broken loc (Just mem_st) file pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.eval_pexpr_aux_broken loc env (Just mem_st) file pe)
+    )
   let inline eval_pexpr = core_run_eval_pexpr
   
   let eval_pexpr2 loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.runEU (Core_eval.eval_pexpr_aux2 loc env (Just mem_st) file pe)
+    )
   
   let wrapped_eval_pexpr2 loc mem_st file pe =
     let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
     (* TODO: it would be better to just call eval_pexpr2, but
        Lem generates buggy OCaml ... *)
-    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc (Just mem_st) file pe)) function
-      | Left pe' ->
-          SEU.return pe'
-      | Right cval ->
-          SEU.return (Core_aux.mk_value_pe cval)
-    end
+    SEU.bind (SEU.read (fun st -> st.env)) (fun env ->
+      SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 loc env (Just mem_st) file pe)) function
+        | Left pe' ->
+            SEU.return pe'
+        | Right cval ->
+            SEU.return (Core_aux.mk_value_pe cval)
+      end
+    )
   
   let fresh_action_id =
     SEU.runS fresh_action_id'
@@ -380,7 +210,7 @@ type action_request =
                    (Mem.mem_value -> thread_state)
   
   | StoreRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                    Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Mem.mem_value *
+                    Cmm.aid * thread_id * Cmm.memory_order * ctype * (* is_locking *)bool * Mem.pointer_value * Mem.mem_value *
                     thread_state
   | RMWRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
                   Cmm.aid * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
@@ -632,18 +462,18 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
         error "Store PEconstrained 2"
 *)
 
-    | Store pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store is_locking pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
         Step_constrained "Store" (
           List.map (fun (cs, pe3) ->
             ( cs
             , E.return <| th_st with
                 arena= Expr arena_annots (Eaction (Paction p (Action loc annots
-                         (Store pe1 pe2 pe3 mo)
+                         (Store is_locking pe1 pe2 pe3 mo)
                        )));
             |> )
           ) xs3
         )
-    | Store pe1 pe2 pe3 mo ->
+    | Store is_locking pe1 pe2 pe3 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2, valueFromPexpr pe3) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval) ->
               match cval with
@@ -672,7 +502,7 @@ KKK
                           E.fresh_symbol    >>= fun val_sym   ->
                           E.return (
                             StoreRequest loc sb_before dd_before asw_before
-                              store_aid current_tid mo ty ptr_val mem_val
+                              store_aid current_tid mo ty is_locking ptr_val mem_val
                               <| th_st with
                                 arena= Expr arena_annots Eskip (* Epure (PEval (objectValueFromMemValue mem_val)) *);
                                 stack= add_to_sb_stack {(p, (current_tid, store_aid))} (* TODO: remove for sequential !!! *) th_st.stack;
@@ -691,21 +521,21 @@ KKK
               Step_eval "first operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe1 >>= fun pe1' ->
                 E.return <| th_st with arena=
-                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1' pe2 pe3 mo))))
+                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1' pe2 pe3 mo))))
                 |>
               )
           | (_, Nothing, _) ->
               Step_eval "second operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe2 >>= fun pe2' ->
                 E.return <| th_st with arena=
-                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1 pe2' pe3 mo))))
+                  Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1 pe2' pe3 mo))))
                 |>
               )
           | (_, _, Nothing) ->
               Step_eval "third operand of a Store" (
                 E.wrapped_eval_pexpr2 loc mem_st file pe3 >>= fun pe3' ->
                 E.return <| th_st with
-                  arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Store pe1 pe2 pe3' mo))))
+                  arena= Expr arena_annots (Eaction (Paction p (Action loc annots (Store is_locking pe1 pe2 pe3' mo))))
                 |>
               )
         end
@@ -894,13 +724,13 @@ let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_op
     | (Eskip, Stack_empty) ->
         error "reached empty stack with an Eskip"
     
-    | (Eskip, Stack_cons lconts cont sk') ->
+    | (Eskip, Stack_cons current_proc_opt cont sk') ->
 (* -----------------------------------------
    <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
         one $ Step_tau "Eskip" (
           E.return <| th_st with
             arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
-            stack= Stack_cons lconts [] sk'
+            stack= Stack_cons current_proc_opt [] sk'
           |>
         )
     
@@ -972,7 +802,8 @@ BEFORE EVAL_PEXPR2
                         arena= Expr arena_annots (Elet pat pe1' e2)
                       |>
                   | Right cval ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
         end
@@ -1002,11 +833,7 @@ BEFORE EVAL_PEXPR2
                   Map.map (fun (sym_tys, e) ->
                     (sym_tys, apply_continuation cont e)
                   ) (collect_labeled_continuations e3) in
-                E.return <| th_st with
-                  arena= e2;
-                  stack= update_labeled_continuations (Map.(union) labeled_conts) th_st.stack;
-                  labels2= Map.(union) labeled_conts th_st.labels2
-                |>
+                E.return <| th_st with arena= e2 |>
               )
           | PEval Vfalse ->
               Step_tau "Eif (else)" (
@@ -1014,11 +841,7 @@ BEFORE EVAL_PEXPR2
                   Map.map (fun (sym_tys, e) ->
                     (sym_tys, apply_continuation cont e)
                   ) (collect_labeled_continuations e2) in
-                E.return <| th_st with
-                  arena= e3;
-                  stack= update_labeled_continuations (Map.(union) labeled_conts) th_st.stack;
-                  labels2= Map.(union) labeled_conts th_st.labels2
-                |>
+                E.return <| th_st with arena= e3 |>
               )
           | PEval _ ->
               Step_error "the first operand of an Eif didn't evaluated to a boolean"
@@ -1053,12 +876,15 @@ BEFORE EVAL_PEXPR2
                             SEU.runEU (
                               Exception.bind (call_proc file psym cvals)
                                 EU.return
-                            ) >>= fun expr ->
+                            ) >>= fun (proc_env, expr) ->
+                            SEU.update (fun st ->
+                              <| st with env= proc_env :: st.env |>
+                            ) >>
                             (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                             let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                             E.return <| th_st with
                               arena= a_expr;
-                              stack= push_empty_continuation sk;
+                              stack= push_empty_continuation (Just psym) sk;
                               exec_loc= push_exec_loc psym th_st.exec_loc
                             |>
                           )
@@ -1101,12 +927,15 @@ BEFORE EVAL_PEXPR2
                       SEU.runEU (
                         Exception.bind (call_proc file psym cvals)
                           EU.return
-                      ) >>= fun expr ->
+                      ) >>= fun (proc_env, expr) ->
+                      SEU.update (fun st ->
+                        <| st with env= proc_env :: st.env |>
+                      ) >>
                       (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
                       let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
                       E.return <| th_st with
                         arena= a_expr;
-                        stack= push_empty_continuation sk;
+                        stack= push_empty_continuation (Just psym) sk;
                         exec_loc= push_exec_loc psym th_st.exec_loc
                       |>
                     )
@@ -1231,7 +1060,7 @@ BEFORE EVAL_PEXPR2
     | (Eunseq _, Stack_empty) ->
         error "reached empty stack with an Eunseq"
     
-    | (Eunseq es, Stack_cons lconts cont sk) ->
+    | (Eunseq es, Stack_cons current_proc_opt cont sk) ->
         match to_pures es with
           | Just pes ->
               one $ Step_tau "Eunseq pure" (
@@ -1253,7 +1082,7 @@ BEFORE EVAL_PEXPR2
                   let xs = 
                     List.map (fun (es1, ej, es2) ->
                       Step_tau "Eunseq" (
-                        E.return <| th_st with arena= ej; stack= Stack_cons lconts (Kunseq es1 es2 :: cont) sk |>
+                        E.return <| th_st with arena= ej; stack= Stack_cons current_proc_opt (Kunseq es1 es2 :: cont) sk |>
                       )
                     ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
                   if List.length xs = 0 then
@@ -1267,7 +1096,7 @@ BEFORE EVAL_PEXPR2
     | (Ewseq _ _ _, Stack_empty) ->
         error "reached empty stack with an Ewseq"
     
-    | (Ewseq pat e1 e2, Stack_cons lconts cont sk) ->
+    | (Ewseq pat e1 e2, Stack_cons current_proc_opt cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
           | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
@@ -1276,7 +1105,7 @@ BEFORE EVAL_PEXPR2
                   ( cs
                   , E.return <| th_st with
                       arena= Expr e1_annots (Epure pe1);
-                      stack= Stack_cons lconts (Kwseq pat e2 :: cont) sk
+                      stack= Stack_cons current_proc_opt (Kwseq pat e2 :: cont) sk
                     |> )
                 ) xs1
               )
@@ -1290,7 +1119,8 @@ BEFORE EVAL_PEXPR2
                   | Left pe1' ->
                       E.return <| th_st with arena= Expr arena_annots (Ewseq pat (Expr e1_annots (Epure pe1')) e2) |>
                   | Right cval1 ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval1 st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
           | _ ->
@@ -1298,7 +1128,7 @@ BEFORE EVAL_PEXPR2
               Step_tau "Ewseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons lconts (Kwseq pat e2 :: cont) sk
+                  stack= Stack_cons current_proc_opt (Kwseq pat e2 :: cont) sk
                 |>
               )
         end
@@ -1306,7 +1136,7 @@ BEFORE EVAL_PEXPR2
     | (Esseq _ _ _, Stack_empty) ->
         error "reached empty stack with an Esseq"
     
-    | (Esseq pat e1 e2, Stack_cons lconts cont sk) ->
+    | (Esseq pat e1 e2, Stack_cons current_proc_opt cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
           | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
@@ -1315,7 +1145,7 @@ BEFORE EVAL_PEXPR2
                   ( cs
                   , E.return <| th_st with
                       arena= Expr e1_annots (Epure pe1);
-                      stack= Stack_cons lconts (Ksseq pat e2 :: cont) sk
+                      stack= Stack_cons current_proc_opt (Ksseq pat e2 :: cont) sk
                   |> )
                 ) xs1
               )
@@ -1331,7 +1161,8 @@ BEFORE EVAL_PEXPR2
                   | Left pe1' ->
                       E.return <| th_st with arena= Expr arena_annots (Esseq pat (Expr e1_annots (Epure pe1')) e2) |>
                   | Right cval1 ->
-                      E.return <| th_st with arena= subst_pattern_val pat cval1 e2 |>
+                      SEU.update (fun st -> <| st with env= update_env pat cval1 st.env |>) >>
+                      E.return <| th_st with arena= e2 |>
                 end
               )
           | _ ->
@@ -1339,7 +1170,7 @@ BEFORE EVAL_PEXPR2
               Step_tau "Esseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons lconts (Ksseq pat e2 :: cont) sk
+                  stack= Stack_cons current_proc_opt (Ksseq pat e2 :: cont) sk
                 |>
               )
         end
@@ -1347,77 +1178,37 @@ BEFORE EVAL_PEXPR2
     | (Esave _ _ _, Stack_empty) ->
         error "reached empty stack with an Esave"
     
-    | (Esave (sym, _) sym_bTy_pes e, Stack_cons _ cont _) ->
-(*
-        let sym_bTy_cvals_opt =
-          List.foldl (fun acc_opt (sym, (bTy, pe)) ->
-            match (acc_opt, pe) with
-              | (Nothing, _) ->
-                  Nothing
-              | (Just acc, Pexpr [] () (PEval cval) ->
-                  Just ((sym, (bTy, cval)) :: acc)
-              | _ ->
-                  Nothing
-            end
-          ) (Just []) (List.reverse sym_bTy_pes) in
-*)
+    | (Esave (sym, _) sym_bTy_pes e, _) ->
         one $ Step_eval "Esave" (
           SEU.foldM (fun acc (sym, (bTy, pe)) ->
-(*
-            E.eval_pexpr2 th_st.current_loc mem_st file pe >>= function
-              | Left pe' ->
-                  
-              | Right cval ->
-                  
-            end
-*)
-            let () = Debug.print_debug 4 [] (fun () -> "XXX 22") in
             E.eval_pexpr th_st.current_loc mem_st file pe >>= fun cval ->
-            let () = Debug.print_debug 4 [] (fun () ->
-              "XX 22 => " ^ Pp.stringFromCore_value cval
-            ) in
             E.return (subst_sym_expr sym cval acc)
           ) e sym_bTy_pes >>= fun e' ->
-          E.return <| th_st with
-            arena= e';
-            stack= update_labeled_continuations
-                     (Map.insert sym (List.map fst sym_bTy_pes, apply_continuation cont e)) th_st.stack;
-            labels2= Map.insert sym (List.map fst sym_bTy_pes, apply_continuation cont e) th_st.labels2 |>
+          E.return <| th_st with arena= e' |>
         )
     
     | (Erun _ _ _, Stack_empty) ->
         error "reached empty stack with an Erun"
     
-    | (Erun annots sym pes, Stack_cons lconts cont sk) ->
-        one $ Step_tau "Erun" (
-          match Map.lookup sym lconts (* YYY Map.lookup sym th_st.labels2 *) with
-            | Just z ->
-                (* either the execution already saw the associated Esave; *)
-                SEU.return (z, lconts)
+    | (Erun _ _ _, Stack_cons Nothing _ _) ->
+        error "found a Erun outside of a procedure"
+    
+    | (Erun annots sym pes, Stack_cons (Just current_proc) cont sk) ->
+        one $ Step_tau "Erun" begin
+          SEU.read (fun st -> Maybe.bind (Map.lookup current_proc st.labeled) (Map.lookup sym)) >>= function
             | Nothing ->
-                (* or we need to find it in the current continuation. *)
-                match find_labeled_continuation2 sym (apply_continuation cont th_st.arena) with
-                  | Nothing ->
-                      SEU.fail (Illformed_program ("unknown ksym when running an Erun" ^ show sym))
-                  | Just (cont, lconts') ->
-                      SEU.return (cont, Map.(union) lconts lconts')
-                end
-          end >>= fun (((syms, cont_expr) as cont), lconts') ->
-          
-          let cont_expr' = List.foldl (fun acc (sym, pe) ->
-            unsafe_subst_sym_expr sym pe acc
-          ) cont_expr (List.zip syms pes) in
-          
-          let cont_expr' =
-            add_to_asw annots.asw_before $ (* TODO: remove for sequential !!! *)
-              add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) cont_expr' in (* TODO: remove for sequential !!! *)
-          E.return <| th_st with
-            arena= cont_expr';
-(*            stack= update_labeled_continuations (Map.insert sym cont) (reset_continuation sk); *)
-            stack= set_labeled_continuations lconts' (push_empty_continuation sk);
-            labels2= Map.insert sym cont th_st.labels2
-          |>
-        )
+                error ("Erun couldn't resolve label: `" ^ show sym ^
+                       "' for procedure `" ^ show current_proc ^ "'")
+            | Just (syms, cont_expr) ->
+                let cont_expr' = List.foldl (fun acc (sym, pe) ->
+                  unsafe_subst_sym_expr sym pe acc
+                ) cont_expr (List.zip syms pes) in
+                E.return <| th_st with
+                  arena= cont_expr';
+                  stack= push_empty_continuation (Just current_proc) sk;
+                |>
+          end
+        end
     
     | (Epure (Pexpr [] () (PEconstrained xs)), _) ->
         one $ Step_constrained "Epure" (
@@ -1458,21 +1249,27 @@ BEFORE EVAL_PEXPR2
                           (* this was the startup thread *)
                           Step_done cval
                     end
-                | Stack_cons _ [] (Stack_cons lconts cont sk') ->
+                | Stack_cons _ [] (Stack_cons parent_proc_opt cont sk') ->
                     (* reached the end of the execution of a procedure. *)
                     Step_tau "end of procedure" (
+                      SEU.update (fun st ->
+                        match st.env with
+                          | [] ->
+                              error "end of proc, found an empty Core_run env"
+                          | _ :: env' ->
+                              <| st with env= env' |>
+                        end
+                      ) >>
                       E.return <| th_st with
                         arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
-                        stack= Stack_cons lconts [] sk';
-                        labels= Map.empty; (* TODO: this is too violent, but doing no reset is unsound *)
-                        labels2= Map.empty (* TODO: this is too violent, but doing no reset is unsound *)
+                        stack= Stack_cons parent_proc_opt [] sk';
                       |>
                     )
-                | Stack_cons lconts cont sk' ->
+                | Stack_cons current_proc_opt cont sk' ->
                     Step_tau "Epure" (
                       E.return <| th_st with
                         arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
-                        stack= Stack_cons lconts [] sk';
+                        stack= Stack_cons current_proc_opt [] sk';
                       |>
                     )
               end
@@ -1499,9 +1296,7 @@ BEFORE EVAL_PEXPR2
         one $ Step_spawn_threads (fun e -> <| th_st with arena= e |>) (
           List.map (fun e -> <|
             arena= e;
-            stack= push_empty_continuation empty_stack;
-            labels= Map.empty;
-            labels2= Map.empty;
+            stack= push_empty_continuation Nothing empty_stack;
             current_loc= th_st.current_loc;
             current_uid= th_st.current_uid; (* TODO: probably wrong *)
             exec_loc= ELoc_normal [];
@@ -1525,48 +1320,3 @@ BEFORE EVAL_PEXPR2
           E.return <| th_st with arena= e |>
         )
   end
-
-
-val initial_io_state: io_state
-let initial_io_state = <|
-  stdout= Dlist.nil;
-  stderr= Dlist.nil;
-|>
-
-val initial_core_state: core_state
-let initial_core_state = <|
-  thread_states= [];
-  io= initial_io_state;
-(*  handlers= Map.empty;*)
-|>
-
-
-(*
-val init: Core.file core_run_annotation -> core_runM core_state
-let init file =
-  match Map.lookup file.main file.funs with
-    | Nothing ->
-        SEU.fail (Illformed_program "couldn't find the startup function")
-    | Just (_, _, expr) ->
-        SEU.return expr
-  end >>= fun expr ->
-  
-  SEU.runS (spawn_thread Nothing <|
-    arena= expr;
-    stack= push_empty_continuation empty_stack;
-    labels= Map.empty
-  |> initial_core_state) >>= fun (_, st') ->
-  
-  SEU.return st'
-*)
-
-
-
-val initial_core_run_state: core_run_state
-let initial_core_run_state = <|
-  tid_supply=    UniqueId.new_supply;
-  symbol_supply= UniqueId.new_supply;
-  aid_supply=    UniqueId.new_supply;
-  
-  step_counter= 0;
-|>

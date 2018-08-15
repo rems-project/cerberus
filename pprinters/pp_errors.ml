@@ -23,55 +23,6 @@ let string_of_kind = function
   | Note ->
       ansi_format [Bold; Black] "note:"
 
-let get_line n ic =
-  seek_in ic 0;
-  let rec aux = function
-    | 1 -> input_line ic
-    | n -> let _ = input_line ic in
-           aux (n-1) in
-  aux n
-
-let string_of_pos pos =
-  ansi_format [Bold] (
-    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
-  )
-
-external terminal_size: unit -> (int * int) option = "terminal_size"
-
-let string_at_line fname lnum cpos =
-  try
-    if Sys.file_exists fname then
-      let ic = open_in fname in
-      let l =
-        let l_ = get_line lnum ic in
-        match terminal_size () with
-          | None ->
-              (None, l_)
-          | Some (_, term_col) ->
-              if cpos >= term_col then begin
-                (* The cursor position is beyond the width of the terminal *)
-                let mid = term_col / 2 in
-                let start  = max 0 (cpos - mid) in
-                let n = String.length l_ - start in
-                ( Some (cpos - start + 5)
-                , if n + 5 <= term_col then
-                    "  ..." ^ String.sub l_ start n
-                  else
-                  "  ..." ^ String.sub l_ start (term_col - 5 - 3) ^ "..." )
-              end else if String.length l_ > term_col then
-                (* The cursor is within the terminal width, but the line needs
-                   to be truncated *)
-                (None, String.sub l_ 0 (term_col - 3) ^ "...")
-              else
-                (None, l_) in
-      close_in ic;
-      Some l
-    else
-      None
-  with
-    End_of_file ->
-      (* TODO *)
-      None
 
 let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
 let string_of_ctype ty = String_ail.string_of_ctype AilTypes.no_qualifiers ty
@@ -406,53 +357,9 @@ let get_quote ref =
   | _ -> failwith "Missing N1507 json file..."
 
 let make_message loc err k =
-  let head = match loc with
-    | Loc_unknown ->
-        "unknown location "
-    | Loc_other str ->
-        "other location (" ^ str ^ ") "
-    | Loc_point pos ->
-        string_of_pos pos
-    | Loc_region (start_p, _, _) ->
-        string_of_pos start_p
-  in
+  let (head, pos) = Location_ocaml.head_pos_of_location loc in
   let kind = string_of_kind k in
   let msg = ansi_format [Bold] (short_message err) in
-  let pos = match loc with
-    | Loc_point pos ->
-        let cpos = pos.pos_cnum - pos.pos_bol in
-        (match string_at_line pos.pos_fname pos.pos_lnum cpos with
-          | Some (cpos'_opt, l) ->
-              let cpos = match cpos'_opt with
-                | Some cpos' -> cpos'
-                | None       -> cpos in
-              l ^ "\n" ^
-              ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
-          | None ->
-              "")
-    | Loc_region (start_p, end_p, cursor_p_opt) ->
-        let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-        (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
-          | Some (_, l) ->
-              let cpos2 =
-                if start_p.pos_lnum = end_p.pos_lnum then
-                  end_p.pos_cnum - end_p.pos_bol
-                else
-                  String.length l in
-              let cursor = match cursor_p_opt with
-                | Some cursor_p ->
-                    cursor_p.pos_cnum - cursor_p.pos_bol 
-                | None ->
-                    cpos1 in
-              l ^ "\n" ^
-              ansi_format [Bold; Green] (
-                String.init ((max cursor cpos2) + 1)
-                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-              )
-          | None ->
-              "")
-    | _ -> ""
-  in
   match !!cerb_conf.error_verbosity, get_std_ref err with
   | Basic, _
   | _, NoRef ->

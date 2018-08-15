@@ -2535,8 +2535,9 @@ let impl_load_OLD ty (PV _ ptrval_ sh as ptrval) : impl_memM (impl_footprint * i
 
 
 
-val impl_store: Loc.t -> ctype -> impl_pointer_value -> impl_mem_value -> impl_memM impl_footprint
-let impl_store loc lvalue_ty ptrval mval =
+val impl_store: Loc.t -> ctype -> bool -> impl_pointer_value -> impl_mem_value -> impl_memM impl_footprint
+let impl_store loc lvalue_ty is_locking ptrval mval =
+  (* TODO: is_locking *)
   print_debugM 5 (fun () ->
     "STORE [" ^ stringFromCtype lvalue_ty ^ "]: with pointer value: " ^
     stringFromPointer_value ptrval ^ " and value: " ^ stringFromMem_value mval

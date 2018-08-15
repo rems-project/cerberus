@@ -131,7 +131,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 
 val     print_eval_conv_aux: driver_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st pe =
-  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") (Just dr_st.layout_state) dr_st.core_file pe with
+  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_run_state.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined (Left (Core.Pexpr [] () (Core.PEconstrained xs)))) ->
@@ -173,7 +173,7 @@ let rec stepConcurrency n =
           ND.log ("ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act)) >> (* DEBUG *)
           ND.print_debug 4 [Debug.DB_driver; Debug.DB_concurrency]
             (fun () -> "ConcurrencyTau with aid: " ^ show (Cmm.aid_of performed_act) ^ "\n") >> (* DEBUG *)
-          ND.put <| dr_st with concurrency_state= concur_st' |>
+          ND.update (fun dr_st -> <| dr_st with concurrency_state= concur_st' |>)
       
       (* TODO: the variables names seems completely messed up here *)
       | Cmm_op.ReadsFrom (new_concrete_mval: Mem.mem_value) (previous_symbolic_mval: Mem.mem_value) performed_act concur_st' ->
@@ -233,7 +233,7 @@ let liftCore_run m =
   ND.get >>= fun dr_st ->
   match SEU.run m dr_st.core_run_state with
     | Exception.Result (res, run_st') ->
-        ND.put <| dr_st with core_run_state= run_st' |> >>
+        ND.update (fun dr_st -> <| dr_st with core_run_state= run_st' |>) >>
         match res with
           | U.Defined z ->
               ND.return z
@@ -320,7 +320,7 @@ let rec drive_core_thread tid =
         , ND.return () )
     | Core_run.Step_tau debug_str step_m ->
         ( "Step_tau(" ^ debug_str ^ ")"
-        , let () = Debug.print_debug 4 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+        , let () = Debug.print_debug 4 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
           let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
           let pre_th_st = (* DEBUG *)
             snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
@@ -336,10 +336,10 @@ let rec drive_core_thread tid =
              step (typically ordering related stuff) *)
           liftCore_run step_m >>= fun th_st' ->
           let () = Boot.end_timing () in (* DEBUG, PROFILING *)
-          ND.put <| dr_st with
+          ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1
-          |> >>
+          |>) >>
           drive_core_thread tid )
     | Core_run.Step_eval debug_str step_m ->
         ( "Step_eval(" ^ debug_str ^ ")"
@@ -368,10 +368,10 @@ let rec drive_core_thread tid =
             Set.filter (fun act ->
               not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
             ) actions_of_current_thread in
-          ND.put <| dr_st with
+          ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1;
-          |> >>
+          |>) >>
           drive_core_thread parent_tid )
     
     | Core_run.Step_blocked ->
@@ -389,12 +389,12 @@ let rec drive_core_thread tid =
                 (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
             ) ([], dr_st.core_state) th_sts
           ) dr_st.core_run_state in
-          ND.put <| dr_st with
+          ND.update (fun dr_st -> <| dr_st with
             core_run_state= run_st';
             core_state= Core_run.update_thread_state tid
                           (mk_th_st (Core.Expr [] (Core.Eunseq $ List.reverse (List.map (fun z -> Core.Expr [] (Core.Ewait z)) th_tids))))
                           core_st';
-          |> >>
+          |>) >>
           ND.mapM_ drive_core_thread th_tids >>
           drive_core_thread tid )
     
@@ -566,7 +566,7 @@ let action_request_concurrency = function
         update_core_state (Core_run.update_thread_state tid (mk_th_st' ptrval) dr_st.core_state) dr_st
       )
   
-  | Core_run.StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
+  | Core_run.StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty is_locking ptr_val mem_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "CONCUR REQUEST STORE") in (* DEBUG *)
       let preEx_step = <|
           Cmm_op.newAction=    Cmm.Store aid tid mo ptr_val mem_val;
@@ -685,11 +685,11 @@ let action_request_sequential = function
         update_core_state (Core_run.update_thread_state tid (mk_th_st' mval) dr_st.core_state) dr_st
       )
   
-  | Core_run.StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val mem_val th_st' ->
+  | Core_run.StoreRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty is_locking ptr_val mem_val th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST STORE") in (* DEBUG *)
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
-      liftMem (Mem.store loc lvalue_ty ptr_val mem_val) >>= fun fp ->
+      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp ->
       ND.update (fun dr_st ->
         update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
       )
@@ -887,16 +887,16 @@ let rec driver with_concurrency =
 
 
 
-val     hack: Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
-let rec hack mem_st core_file concur_sym_map pexpr =
+val     hack: list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
+let rec hack env mem_st core_file concur_sym_map pexpr =
   let () = Debug.print_debug 1 [] (fun () -> "XX 25") in
-  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") (Just mem_st) core_file false pexpr with
+  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") env (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
               cval
           | Nothing ->
-              hack mem_st core_file concur_sym_map pexpr'
+              hack env mem_st core_file concur_sym_map pexpr'
         end
     | _ ->
         error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
@@ -946,7 +946,6 @@ type driver_result = <|
   dres_blocked: bool;
   dres_concurrency_state: Cmm_op.symState;
   dres_driver_steps: nat;
-  dres_core_run_steps: nat;
   dres_core_value: Core.value;
   dres_stdout: string;
 |>
@@ -956,7 +955,7 @@ val finalize: string -> driver_state -> driver_result (* (string * (bool * Cmm_o
 let finalize debug_str dr_st =
   match dr_st.core_state.Core_run.thread_states with
     | [(tid, (_, th_st))] ->
-        let cval = hack dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
+        let cval = hack dr_st.core_run_state.Core_run.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.Core_run.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
@@ -972,7 +971,6 @@ let finalize debug_str dr_st =
           dres_blocked= dr_st.blocked;
           dres_concurrency_state= dr_st.concurrency_state;
           dres_driver_steps= dr_st.dr_step_counter;
-          dres_core_run_steps= dr_st.core_run_state.Core_run.step_counter;
           dres_core_value= cval;
           dres_stdout= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stdout);
         |>
@@ -1017,7 +1015,7 @@ let initial_driver_state sym_supply file =
     symbol_supply=     sym_supply;
     core_file=         file;
     core_state=        Core_run.initial_core_state;
-    core_run_state=    Core_run.initial_core_run_state;
+    core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
 
@@ -1040,10 +1038,10 @@ let driver_spawn_thread parent_tid_opt th_st =
   let ((tid, core_st'), run_st') = State.run (
     Core_run.spawn_thread parent_tid_opt th_st dr_st.core_state
   ) dr_st.core_run_state in
-  ND.put <| dr_st with
+  ND.update (fun dr_st -> <| dr_st with
     core_state= core_st';
     core_run_state= run_st';
-  |> >>
+  |>) >>
   ND.return tid
 let inline spawn_thread = driver_spawn_thread
 
@@ -1066,9 +1064,7 @@ let driver_globals with_concurrency sym_supply file =
   spawn_thread Nothing <|
     (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
     Core_run.arena=  Core.Expr [] Core.Eskip;
-    Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
-    Core_run.labels= Map.empty;
-    Core_run.labels2= Map.empty;
+    Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
     Core_run.current_loc= Loc.unknown;
     Core_run.current_uid= Nothing;
     Core_run.exec_loc= Core_run.ELoc_globals;
@@ -1077,7 +1073,8 @@ let driver_globals with_concurrency sym_supply file =
   ND.read (fun dr_st ->
     dr_st.core_file.Core.globs
   ) >>= fun globs ->
-  ND.foldlM (fun to_subst (glob_sym, glob_bTy, expr) ->
+  
+  ND.mapM_ (fun (glob_sym, glob_bTy, expr) ->
     let () = Debug.print_debug 6 [Debug.DB_driver] (fun () ->      (* DEBUG *)
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
     ) in                                                           (* DEBUG *)
@@ -1085,13 +1082,9 @@ let driver_globals with_concurrency sym_supply file =
     update_thread_state tid0 <|
       (* the previously evaluated globals are substituted in the body of the
          global we are about to evaluate *)
-      Core_run.arena=
-        List.foldl (fun acc (sym, pe) ->
-          if glob_sym <> sym then Core_aux.unsafe_subst_sym_expr sym pe acc else acc
-        ) expr to_subst;
-      Core_run.stack= Core_aux.push_empty_continuation Core_aux.empty_stack;
-      Core_run.labels= Map.empty;
-      Core_run.labels2= Map.empty;
+      Core_run.arena= expr;
+      Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
+(*      Core_run.labels= Map.empty; *)
       Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
       Core_run.current_uid= Nothing;
       Core_run.exec_loc= Core_run.ELoc_globals;
@@ -1105,19 +1098,24 @@ let driver_globals with_concurrency sym_supply file =
           (* TODO: technically the arena should always be a value at this point *)
           match Core_aux.to_pure th_st.Core_run.arena with
             | Just pe ->
-                ND.update (fun dr_st ->
-                  <| dr_st with core_file=
-                    <| dr_st.core_file with Core.funs= Core_aux.unsafe_subst_sym_fun_map glob_sym pe dr_st.core_file.Core.funs; |>
-                  |>
-                ) >>
-                ND.return ((glob_sym, pe) :: to_subst)
+                match Core_aux.valueFromPexpr pe with
+                  | Nothing ->
+                      error "WIP: driver_globals"
+                  | Just cval ->
+                      ND.update (fun dr_st ->
+                        <| dr_st with
+                          core_run_state=
+                            <| dr_st.core_run_state with Core_run.env= Core_aux.update_env (Core.CaseBase (Just (glob_sym), glob_bTy)) cval dr_st.core_run_state.Core_run.env |>
+                        |>
+                     )
+                end
             | Nothing ->
                 error "TODO(msg): Driver.driver_globals, the end of the evaluation of a glob didn't produce a value"
           end
       | _ ->
           error "ERROR (in Driver, global init didn't evaluate to value)"
     end
-  ) [] globs >>= fun _ ->
+  ) globs >>
   ND.return tid0
 
 
@@ -1236,7 +1234,7 @@ TODO: this should be removable, since we already set it in Translation
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argc_sym])
                             (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int Nothing) (fun ptr_val ->
-                  Mem.bind (Mem.store (Loc.other "argc init") Core_ctype.signed_int ptr_val argc_mem_val) (fun _ ->
+                  Mem.bind (Mem.store (Loc.other "argc init") Core_ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
@@ -1246,7 +1244,7 @@ TODO: this should be removable, since we already set it in Translation
               ND.foldlM (fun ptr_vals (arg_mem_val, arg_ty) ->
                 liftMem (
                   Mem.bind (Mem.allocate_static tid0 (Symbol.PrefOther "argv refs") (Mem.alignof_ival arg_ty) arg_ty Nothing) (fun ptr_val ->
-                    Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty ptr_val arg_mem_val) (fun _ ->
+                    Mem.bind (Mem.store (Loc.other "argv refs init") arg_ty false ptr_val arg_mem_val) (fun _ ->
                       Mem.return (ptr_val :: ptr_vals)
                     )
                   )
@@ -1264,14 +1262,14 @@ TODO: this should be removable, since we already set it in Translation
               liftMem (
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym(*TODO: change the sym?*)])
                             (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing) (fun array_ptr_val ->
-                Mem.bind (Mem.store (Loc.other "argv array init") argv_array_ty array_ptr_val argv_array_mem_val) (fun _ ->
+                Mem.bind (Mem.store (Loc.other "argv array init") argv_array_ty false array_ptr_val argv_array_mem_val) (fun _ ->
                 
                 (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
                    so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
                 let argv_ty = Core_ctype.Pointer AilTypes.no_qualifiers (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) in
                 Mem.bind (Mem.allocate_static tid0 (Symbol.PrefSource [main_sym; argv_sym])
                             (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun argv_ptr_val ->
-                Mem.bind (Mem.store (Loc.other "argv init") argv_ty argv_ptr_val
+                Mem.bind (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val
                             (Mem.pointer_mval (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) array_ptr_val)) ( fun _ ->
 
                 Mem.return argv_ptr_val
@@ -1290,9 +1288,7 @@ TODO: this should be removable, since we already set it in Translation
         end >>= fun expr ->
         update_thread_state tid0 <|
           Core_run.arena=  expr;
-          Core_run.stack= Core_aux.push_empty_continuation Core_aux.empty_stack; (* TODO: this is probably unecessary *)
-          Core_run.labels= Map.empty;
-          Core_run.labels2= Map.empty;
+          Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
           Core_run.current_loc= Loc.other "Driver.drive";
           Core_run.current_uid= Nothing;
           Core_run.exec_loc= Core_run.ELoc_normal [main_sym];

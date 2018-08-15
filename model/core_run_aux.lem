@@ -1,36 +1,106 @@
-open import Pervasives
-open import Utils Show Core
+open import Pervasives Utils Show Core
+import Global Dlist Pp State_exception_undefined
 
-import Global
-
-open import Errors
-import Pp Cthread Cmm_csem
+open import Errors Core
+import Cthread Cmm_csem
 
 import {hol} `pp_coreTheory`
 
 
-instance (Show core_run_cause)
-  let show = function
-    | Illformed_program str ->
-        "Illformed_program[" ^ str ^ "]"
-    | Found_empty_stack str ->
-        "Found_empty_stack[" ^ str ^ "]"
-    | Reached_end_of_proc ->
-        "Reached_end_of_proc"
-    | Unknown_impl ->
-        "Unknown_impl"
-    | Unresolved_symbol sym ->
-        "Unresolved_symbol[" ^ show sym ^ "]"
-  end
-end
+(* DEBUG *)
+(* These inform in the thread what Core global or (stack of) procedure(s) is
+   being executed *)
+type exec_location =
+  | ELoc_globals
+  | ELoc_normal of list Symbol.sym
 
 
-
+(* C11 concurrency partial version of the pre-execution relations. These are
+   incrementaly added as annotations to the Core program as it is evaluated *)
 type core_run_annotation = <|
   sb_before:  set (Cthread.thread_id * Cmm_csem.aid);
   dd_before:  set Cmm_csem.aid;
   asw_before: set Cmm_csem.aid;
 |>
+
+(* The state of a Core thread is a pair of the expressions being executed and
+   a stack of continuation. Each element of the stack corresponds a Core
+   procedure call  *)
+type thread_state = <|
+  arena:  expr core_run_annotation;
+  stack:  stack core_run_annotation;
+  
+  (* NON-SEMANTIC stuff *)
+  exec_loc: exec_location;
+  current_loc: Loc.t;
+  current_uid: maybe string;
+|>
+
+
+type io_state = <|
+  stdout: Dlist.dlist string;
+  stderr: Dlist.dlist string;
+|>
+
+type core_state = <|
+  (* the [maybe thread_id] is that of the parent thread if any *)
+  thread_states: list (Cthread.thread_id *
+                       (maybe Cthread.thread_id * thread_state));
+  io: io_state;
+|>
+
+
+(* State of Core evaluator *)
+type core_run_state = <|
+  tid_supply:    UniqueId.supply Cthread.thread_id;
+  symbol_supply: UniqueId.supply Symbol.sym;
+  aid_supply:    UniqueId.supply Cmm_csem.aid;
+  
+  (* Scoped environment for the Core symbols *)
+  env: list (map Symbol.sym value);
+  (* Pre-calculated map of labeled continuations (aka. save()).
+     the map is over procedure symbols (NOTE: read-only) *)
+  labeled: map Symbol.sym (labeled_continuations core_run_annotation);
+|>
+
+(* Monad of the core evaluator (State + Exception + Undefined) *)
+type core_runM 'a =
+  State_exception_undefined.stExceptUndefM 'a core_run_state core_run_cause
+
+
+let push_exec_loc sym = function
+  | ELoc_globals ->
+      ELoc_normal [sym]
+  | ELoc_normal syms ->
+      ELoc_normal (sym :: syms)
+end
+
+
+
+
+val initial_io_state: io_state
+val initial_core_state: core_state
+val initial_core_run_state: map Symbol.sym (labeled_continuations core_run_annotation) -> core_run_state
+
+let initial_io_state = <|
+  stdout= Dlist.nil;
+  stderr= Dlist.nil;
+|>
+
+let initial_core_state = <|
+  thread_states= [];
+  io= initial_io_state;
+|>
+
+let initial_core_run_state xs = <|
+  tid_supply=    UniqueId.new_supply;
+  symbol_supply= UniqueId.new_supply;
+  aid_supply=    UniqueId.new_supply;
+  
+  env=     [Map.empty];
+  labeled= xs;
+|>
+
 
 let empty_annotation = <|
   sb_before  = {};
@@ -41,8 +111,6 @@ let empty_annotation = <|
 instance (Default core_run_annotation)
   let default = empty_annotation
 end
-
-
 
 
 val has_sbBefore_on_thread: Cthread.thread_id -> core_run_annotation -> bool
@@ -142,9 +210,9 @@ let rec add_to_sb_stack p_aids sk =
     match sk with
       | Stack_empty ->
           Stack_empty
-      | Stack_cons lconts cont sk ->
+      | Stack_cons proc_opt cont sk ->
           let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_sb_stack ==> is not touching lconts") in
-          Stack_cons lconts (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
+          Stack_cons proc_opt (add_to_sb_continuation p_aids cont) (add_to_sb_stack p_aids sk)
    end
   else
     sk
@@ -226,9 +294,8 @@ let rec add_to_asw_stack aids sk =
     match sk with
       | Stack_empty ->
           Stack_empty
-      | Stack_cons lconts cont sk ->
-          let () = Debug.warn [] (fun () -> "(UNSURE) Core_run_aux.add_to_asw_stack ==> is not touching lconts") in
-          Stack_cons lconts (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
+      | Stack_cons proc_opt cont sk ->
+          Stack_cons proc_opt (add_to_asw_continuation aids cont) (add_to_asw_stack aids sk)
     end
   else
     sk
@@ -417,8 +484,8 @@ and convert_action_ act_ =
         Alloc (convert_pexpr pe1) (convert_pexpr pe2) pref
     | Kill b pe ->
         Kill b (convert_pexpr pe)
-    | Store pe1 pe2 pe3 mo ->
-        Store (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
+    | Store b pe1 pe2 pe3 mo ->
+        Store b (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
     | Load pe1 pe2 mo ->
         Load (convert_pexpr pe1) (convert_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->

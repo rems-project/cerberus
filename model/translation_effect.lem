@@ -12,7 +12,7 @@ include State
 type elab_state = <|
   symbol_supply:   UniqueId.supply Symbol.sym; (* counter for Core's symbolic names (all of them) *)
   
-  visible_objects_types: map Symbol.sym AilTypes.ctype;
+  visible_objects_types: map Symbol.sym (AilTypes.qualifiers * AilTypes.ctype);
   visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
                                               annotate Esave/Erun ctors) *)
   
@@ -65,10 +65,10 @@ let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
 
 
 (* register C objects from block scope. *)
-val push_block_objects: list (Symbol.sym * AilTypes.ctype) -> elabM unit
+val push_block_objects: list (Symbol.sym * (AilTypes.qualifiers * AilTypes.ctype)) -> elabM unit
 let push_block_objects binds = fun st ->
   ((), <| st with
-    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
     visible_objects= (List.map fst binds) :: st.visible_objects
   |>)
 
@@ -83,10 +83,10 @@ let pop_block_objects = fun st ->
       end |>)
 
 
-val with_block_objects: forall 'a. list (Symbol.sym * AilTypes.ctype) -> elabM 'a -> elabM 'a
+val with_block_objects: forall 'a. list (Symbol.sym * (AilTypes.qualifiers * AilTypes.ctype)) -> elabM 'a -> elabM 'a
 let with_block_objects binds ma = fun st ->
   let st' = <| st with
-    visible_objects_types= List.foldl (fun acc (sym, ty) -> Map.insert sym ty acc) st.visible_objects_types binds;
+    visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
     visible_objects= (List.map fst binds) :: st.visible_objects
   |> in
   let (a, st'') = ma st' in
@@ -123,11 +123,11 @@ let get_string_literals = fun st ->
   (st.string_literals, st)
 
 
-val resolve_object_type: Symbol.sym -> elabM AilTypes.ctype
+val resolve_object_type: Symbol.sym -> elabM (AilTypes.qualifiers * AilTypes.ctype)
 let resolve_object_type sym = fun st ->
   match Map.lookup sym st.visible_objects_types with
-    | Just ty ->
-        (ty, st)
+    | Just qs_ty ->
+        (qs_ty, st)
     | Nothing ->
         let sym_str = match sym with
           | Symbol.Symbol n Nothing ->
