@@ -5,7 +5,6 @@ import Symbol Cabs
 (** Types *************************************************************************************** *)
 type identifier = Symbol.sym
 
-
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
  | Short
