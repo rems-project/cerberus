@@ -1199,7 +1199,8 @@ module Bmc_paction = struct
       let (initial_value, assumptions) =
         mk_initial_loaded_value sort (sprintf "init_%d,%d" alloc_id i)
                                 ctype specified in
-      mk_store ptr initial_value initial_tid Cmm_csem.NA mk_true pol
+      mk_store ptr initial_value initial_tid
+               (C_mem_order Cmm_csem.NA) mk_true pol
         >>= fun (binding, action) ->
       return (binding::(is_atomic::assumptions), action)
     ) sortlist >>= fun retlist ->
@@ -1308,6 +1309,16 @@ module Bmc_paction = struct
            ; mod_addr = AddrSet.empty
            ; preexec  = mk_initial_preexec (* concurrent only *)
            }
+
+  let mk_fence memorder =
+    BmcM.get_fresh_aid >>= fun aid ->
+    BmcM.get_tid       >>= fun tid ->
+    return (Fence(aid,tid, memorder))
+
+  let mk_rmw memorder ptr rval desired =
+    BmcM.get_fresh_aid >>= fun aid ->
+    BmcM.get_tid       >>= fun tid ->
+    return (RMW(aid, tid, memorder, ptr, rval, desired))
 end
 
 let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
@@ -1366,7 +1377,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
 
       let to_run =
         if !!bmc_conf.concurrent_mode
-        then Bmc_paction.do_concurrent_store sym_expr res_wval.expr memorder pol
+        then Bmc_paction.do_concurrent_store
+                    sym_expr res_wval.expr (C_mem_order memorder) pol
         else Bmc_paction.do_sequential_store sym_expr res_wval.expr in
       to_run >>= fun ret ->
 
@@ -1398,7 +1410,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
       let to_run =
         if !!bmc_conf.concurrent_mode
-        then Bmc_paction.do_concurrent_load sym_expr ret_expr memorder pol
+        then Bmc_paction.do_concurrent_load
+              sym_expr ret_expr (C_mem_order memorder) pol
         else Bmc_paction.do_sequential_load sym_expr ret_expr in
       to_run >>= fun ret ->
       (* Check valid memory orders *)
@@ -1420,14 +1433,21 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
   | Load0 _
   | RMW0 _ ->
       assert false
-  | Fence0 memorder ->
-    if not !!bmc_conf.concurrent_mode then
+  | LinuxFence _ (* fall through *)
+  | Fence0 _ ->
+      let memorder = (* TODO: do properly *)
+        (match action_ with
+         | LinuxFence mo ->
+             assert (g_memory_mode = MemoryMode_Linux);
+             Linux_mem_order mo
+         | Fence0 mo -> C_mem_order mo
+         | _ -> assert false) in
+      if not !!bmc_conf.concurrent_mode then
       bmc_debug_print 1
         "ERROR: Fence only supported with --bmc_conc";
       assert (!!bmc_conf.concurrent_mode);
-      BmcM.get_fresh_aid >>= fun aid ->
-      BmcM.get_tid       >>= fun tid ->
-      let new_action = BmcAction(pol, mk_true, Fence(aid,tid,memorder)) in
+      Bmc_paction.mk_fence memorder >>= fun fence ->
+      let new_action = BmcAction(pol, mk_true, fence) in
       return { expr      = UnitSort.mk_unit
              ; asserts   = []
              ; drop_cont = mk_false
@@ -1470,22 +1490,24 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       mk_fresh_const ("load_" ^ (symbol_to_string expected)) sort in
     let rval_object =
       mk_fresh_const ("load_" ^ (symbol_to_string obj)) sort in
-    Bmc_paction.do_concurrent_load expected_sym rval_expected NA Pos
+    Bmc_paction.do_concurrent_load
+          expected_sym rval_expected (C_mem_order NA) Pos
                                         >>= fun ret_read_expected ->
     let success_guard = mk_eq rval_expected rval_object in
     (* If fail: do a load of object and then a store *)
     let fail_guard = mk_not success_guard in
-    Bmc_paction.do_concurrent_load obj_sym rval_object mo_failure pol
+    Bmc_paction.do_concurrent_load
+          obj_sym rval_object (C_mem_order mo_failure) pol
                                         >>= fun fail_load ->
-    Bmc_paction.do_concurrent_store expected_sym rval_object NA pol
+    Bmc_paction.do_concurrent_store
+          expected_sym rval_object (C_mem_order NA) pol
                                         >>= fun fail_store ->
     (* If succeed, do a rmw *)
+    Bmc_paction.mk_rmw (C_mem_order mo_success)
+                       obj_sym rval_object ret_desired.expr >>= fun rmw ->
     BmcM.get_fresh_aid >>= fun rmw_aid ->
     BmcM.get_tid       >>= fun tid ->
-    let rmw =
-      BmcAction(pol, success_guard,
-                RMW(rmw_aid, tid, mo_success,
-                    obj_sym, rval_object, ret_desired.expr)) in
+    let rmw_action = BmcAction(pol, success_guard, rmw) in
 
     let preexec =
       begin
@@ -1502,9 +1524,9 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       assert (List.length combined_fail.initial_actions = 0);
       assert (List.length combined_fail.asw = 0);
 
-      { actions         = rmw :: combined_fail.actions
+      { actions         = rmw_action :: combined_fail.actions
       ; initial_actions = combined_fail.initial_actions (*Should be empty *)
-      ; po              = (compute_po p_read_expected.actions [rmw])
+      ; po              = (compute_po p_read_expected.actions [rmw_action])
                           @ combined_fail.po
       ; asw             = combined_fail.asw (* Should be empty *)
       }
@@ -1545,6 +1567,52 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
            ; ret_cond  = mk_true
            ; preexec   = preexec
            }
+  | LinuxStore (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
+                wval, memorder) ->
+      assert (g_memory_mode = MemoryMode_Linux);
+      assert (!!bmc_conf.concurrent_mode);
+      (* TODO: code duplication *)
+      BmcM.get_file               >>= fun file ->
+      BmcM.lookup_sym sym         >>= fun sym_expr ->
+      bmc_pexpr wval              >>= fun res_wval ->
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+      assert (List.length flat_sortlist = 1);
+      Bmc_paction.do_concurrent_store
+                  sym_expr res_wval.expr (Linux_mem_order memorder) pol
+          >>= fun ret ->
+      return { expr      = UnitSort.mk_unit
+             ; asserts   = ret.asserts @ res_wval.asserts
+             ; drop_cont = mk_false
+             ; mod_addr  = ret.mod_addr
+             ; ret_cond  = mk_true
+             ; preexec   = ret.preexec
+             }
+  | LinuxStore _ -> assert false
+  | LinuxLoad (Pexpr(_, _, PEval (Vctype ty)),
+               Pexpr(_,_, PEsym sym), memorder) ->
+      assert (g_memory_mode = MemoryMode_Linux);
+      assert (!!bmc_conf.concurrent_mode);
+      (* TODO: code duplication *)
+      BmcM.lookup_sym sym         >>= fun sym_expr ->
+      BmcM.get_file               >>= fun file ->
+      assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+      let (_, sort) = List.hd flat_sortlist in
+      assert (List.length flat_sortlist = 1);
+
+      let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+      Bmc_paction.do_concurrent_load
+                  sym_expr ret_expr (Linux_mem_order memorder) pol
+            >>= fun ret ->
+      (* Check valid memory orders *)
+      return { expr      = ret_expr
+             ; asserts   = ret.asserts
+             ; drop_cont = mk_false
+             ; mod_addr  = ret.mod_addr
+             ; ret_cond  = mk_true
+             ; preexec   = ret.preexec
+             }
+  | LinuxLoad _ -> assert false
   | _ -> assert false
 
 
@@ -2153,8 +2221,7 @@ let bmc_file (file              : unit typed_file)
                                    (Expr.to_string return_value))
     | UNSATISFIABLE ->
         if new_state.assume_exists then
-          print_endline
-            "Assumptions can not hold.\nHalting model checking\n";
+          print_endline "Assumptions can not hold.\nHalting model checking\n";
         (* TODO: fail in a nicer way *)
         assert false
     | _ -> assert false)

@@ -91,6 +91,17 @@ let rec substitute_action (map: substitute_map)
                               substitute_pexpr map pe3,
                               substitute_pexpr map pe4,
                               mo1,mo2)
+    | LinuxFence mo ->
+        LinuxFence mo
+    | LinuxStore (pe1, pe2, pe3, memorder) ->
+        LinuxStore(substitute_pexpr map pe1,
+                   substitute_pexpr map pe2,
+                   substitute_pexpr map pe3,
+                   memorder)
+    | LinuxLoad (pe1, pe2, memorder) ->
+        LinuxLoad (substitute_pexpr map pe1,
+                   substitute_pexpr map pe2,
+                   memorder)
   in
   Action(loc, a, ret)
 

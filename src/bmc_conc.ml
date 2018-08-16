@@ -191,13 +191,29 @@ let filter_asw (asw: bmcaction_rel list)
 
 (* ===== PPRINTERS ===== *)
 let string_of_memory_order = function
-  | Cmm_csem.NA      -> "NA"
-  | Cmm_csem.Seq_cst -> "seq_cst"
-  | Cmm_csem.Relaxed -> "relaxed"
-  | Cmm_csem.Release -> "release"
-  | Cmm_csem.Acquire -> "acquire"
-  | Cmm_csem.Consume -> assert false
-  | Cmm_csem.Acq_rel -> "acq_rel"
+  | C_mem_order mo ->
+      (match mo with
+       | Cmm_csem.NA      -> "NA"
+       | Cmm_csem.Seq_cst -> "seq_cst"
+       | Cmm_csem.Relaxed -> "relaxed"
+       | Cmm_csem.Release -> "release"
+       | Cmm_csem.Acquire -> "acquire"
+       | Cmm_csem.Consume -> assert false
+       | Cmm_csem.Acq_rel -> "acq_rel"
+      )
+  | Linux_mem_order mo ->
+      (match mo with
+       | Linux.Once      -> "once"
+       | Linux.Acquire0  -> "linux_acquire"
+       | Linux.Release0  -> "linux_release"
+       | Linux.Rmb       -> "rmb"
+       | Linux.Wmb       -> "wmb"
+       | Linux.Mb        -> "mb"
+       | Linux.RbDep     -> "rbdep"
+       | Linux.RcuLock   -> "rculock"
+       | Linux.RcuUnlock -> "rcuunlock"
+       | Linux.SyncRcu   -> "syncrcu" )
+
 
 let string_of_polarity = function
   | Pos -> "+"
@@ -288,6 +304,16 @@ module MemoryModelCommon = struct
                         ; mk_sym "Release"
                         ; mk_sym "Acquire"
                         ; mk_sym "Acq_rel"
+                        ; mk_sym "Linux_once"
+                        ; mk_sym "Linux_acquire"
+                        ; mk_sym "Linux_release"
+                        ; mk_sym "Linux_rmb"
+                        ; mk_sym "Linux_wmb"
+                        ; mk_sym "Linux_mb"
+                        ; mk_sym "Linux_rbdep"
+                        ; mk_sym "Linux_rculock"
+                        ; mk_sym "Linux_rcuunlock"
+                        ; mk_sym "Linux_syncrcu"
                         ]
 
   let na_memord      = List.nth (Enumeration.get_consts mk_memord_type) 0
@@ -297,15 +323,33 @@ module MemoryModelCommon = struct
   let acq_memord     = List.nth (Enumeration.get_consts mk_memord_type) 4
   let acq_rel_memord = List.nth (Enumeration.get_consts mk_memord_type) 5
 
+  let linux_once_memord = List.nth (Enumeration.get_consts mk_memord_type) 6
+  let linux_acquire_memord = List.nth (Enumeration.get_consts mk_memord_type) 7
+  let linux_release_memord = List.nth (Enumeration.get_consts mk_memord_type) 8
+  let linux_rmb_memord = List.nth (Enumeration.get_consts mk_memord_type) 9
+  let linux_wmb_memord = List.nth (Enumeration.get_consts mk_memord_type) 10
+
   let action_to_memord (BmcAction(_,_,a): bmc_action) : Expr.expr =
     match memorder_of_action a with
-    | NA      -> na_memord
-    | Seq_cst -> sc_memord
-    | Relaxed -> rlx_memord
-    | Release -> rel_memord
-    | Acquire -> acq_memord
-    | Acq_rel -> acq_rel_memord
-    | Consume -> assert false
+    | C_mem_order mo ->
+      begin match mo with
+      | NA      -> na_memord
+      | Seq_cst -> sc_memord
+      | Relaxed -> rlx_memord
+      | Release -> rel_memord
+      | Acquire -> acq_memord
+      | Acq_rel -> acq_rel_memord
+      | Consume -> assert false
+      end
+    | Linux_mem_order mo ->
+        Linux.(begin match mo with
+        | Once     -> linux_once_memord
+        | Acquire0 -> linux_acquire_memord
+        | Release0 -> linux_release_memord
+        | Rmb      -> linux_rmb_memord
+        | Wmb      -> linux_wmb_memord
+        | _        -> assert false
+        end)
 
   (* BUILT IN DECLARATIONS *)
   type builtin_decls = {
@@ -552,7 +596,11 @@ module MemoryModelCommon = struct
     let co_init =
       List.map (fun e ->
         mk_eq (fns.co_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
-      exec.initial_actions in
+      exec.initial_actions
+      @ List.map (fun e ->
+          mk_gt g_ctx (fns.co_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
+        exec.actions
+    in
 
     (* ==== po assert ==== *)
     let po_asserts =
@@ -899,7 +947,7 @@ module C11MemoryModel : MemoryModel = struct
     let reads = List.filter has_rval all_actions in
     let atomic_writes = List.filter is_atomic_bmcaction writes in
     let fences = List.filter is_fence_action all_actions in
-    let is_sc a = get_memorder a = Seq_cst in
+    let is_sc a = get_memorder a = (C_mem_order Seq_cst) in
     let sc_actions = List.filter is_sc all_actions in
 
     let initialised = MemoryModelCommon.initialise exec in
@@ -1028,12 +1076,16 @@ module C11MemoryModel : MemoryModel = struct
       let candidate_heads =
         let sync_write_order = (fun action ->
           let mo = get_memorder action in
-          (mo = Release || mo = Acq_rel || mo = Seq_cst)) in
+          (mo = C_mem_order Release ||
+           mo = C_mem_order Acq_rel ||
+           mo = C_mem_order Seq_cst)) in
         List.filter sync_write_order (fences @ writes) in
       let candidate_tails =
         let sync_read_order = (fun action ->
           let mo = get_memorder action in
-          (mo = Acquire || mo = Acq_rel || mo = Seq_cst)) in
+          (mo = C_mem_order Acquire ||
+           mo = C_mem_order Acq_rel ||
+           mo = C_mem_order Seq_cst)) in
         List.filter sync_read_order (fences @ reads) in
       let candidates = cartesian_product candidate_heads candidate_tails in
       let not_rel = not_related candidates prod_actions find_rel in
@@ -1517,12 +1569,16 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_A -> is_atomic_bmcaction a
     | BaseSet_I -> is_initial_bmcaction a
     | BaseSet_F -> is_fence_action a
-    | BaseSet_NA  -> get_memorder a = NA
-    | BaseSet_RLX -> get_memorder a = Relaxed
-    | BaseSet_REL -> get_memorder a = Release
-    | BaseSet_ACQ -> get_memorder a = Acquire
-    | BaseSet_ACQ_REL -> get_memorder a = Acq_rel
-    | BaseSet_SC      -> get_memorder a = Seq_cst
+    | BaseSet_NA  -> get_memorder a = C_mem_order NA
+    | BaseSet_RLX -> get_memorder a = C_mem_order Relaxed
+    | BaseSet_REL -> get_memorder a = C_mem_order Release
+    | BaseSet_ACQ -> get_memorder a = C_mem_order Acquire
+    | BaseSet_ACQ_REL -> get_memorder a = C_mem_order Acq_rel
+    | BaseSet_SC      -> get_memorder a = C_mem_order Seq_cst
+    | BaseSet_Rmb      -> get_memorder a = Linux_mem_order Rmb
+    | BaseSet_Wmb      -> get_memorder a = Linux_mem_order Wmb
+    | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order Acquire0
+    | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order Release0
 
 
   (* TODO: rename all this... *)
@@ -1728,8 +1784,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let action_events = List.fold_left (fun acc (aid, action) ->
       let event = Pmap.find aid mem.event_map in
       (*if tid_of_action action = initial_tid then acc*)
-      if (Boolean.get_bool_value (interp (fns.getGuard event))
-               = L_TRUE) then
+      if (Boolean.get_bool_value (interp (fns.getGuard event)) = L_TRUE) then
         let new_action = match action with
           | Load (aid,tid,memorder,loc,rval) ->
               let loc = interp (fns.getAddr event) in

@@ -50,7 +50,9 @@ type z3_location = Expr.expr
 type z3_value    = Expr.expr
 type guard       = Expr.expr
 
-type memory_order = Cmm_csem.memory_order
+type memory_order =
+  | C_mem_order of Cmm_csem.memory_order
+  | Linux_mem_order of Linux.memory_order0
 
 type action =
   | Load  of aid * tid * memory_order * z3_location * z3_value
@@ -136,7 +138,7 @@ let is_read (a: action) = match a with
   | _ -> false
 
 let is_atomic (a: action) = match memorder_of_action a with
-  | NA -> false
+  | C_mem_order NA -> false
   | _  -> true
 
 let is_fence (a: action) = match a with
@@ -144,14 +146,29 @@ let is_fence (a: action) = match a with
   | _       -> false
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
-let pp_memory_order = Cmm_csem.(function
-  | NA -> "na"
-  | Seq_cst -> "sc"
-  | Relaxed -> "rlx"
-  | Release -> "rel"
-  | Acquire -> "acq"
-  | Consume -> "con"
-  | Acq_rel -> "a/r")
+let pp_memory_order = function
+  | C_mem_order mo ->
+      Cmm_csem.(function
+      | NA -> "na"
+      | Seq_cst -> "sc"
+      | Relaxed -> "rlx"
+      | Release -> "rel"
+      | Acquire -> "acq"
+      | Consume -> "con"
+      | Acq_rel -> "a/r") mo
+  | Linux_mem_order mo ->
+      Linux.(function
+      | Once      -> "once"
+      | Acquire0  -> "acq"
+      | Release0  -> "rel"
+      | Rmb       -> "rmb"
+      | Wmb       -> "wmb"
+      | Mb        -> "mb"
+      | RbDep     -> "rbdep"
+      | RcuLock   -> "rculock"
+      | RcuUnlock -> "rcuunlock"
+      | SyncRcu -> assert false) mo
+
 
 let pp_memory_order_enum2 = fun () -> pp_memory_order
 
@@ -163,7 +180,7 @@ let pp_tid = string_of_int
 let pp_aid = string_of_int
 let pp_loc () loc =
   match Expr.get_args loc with
-  | [a1;a2] -> sprintf "(%s,%s)" (Expr.to_string a1) (Expr.to_string a2)
+  | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
   | _ -> Expr.to_string loc
 
 let pp_thread_id () tid =
