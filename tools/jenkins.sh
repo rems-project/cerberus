@@ -2,9 +2,10 @@
 
 export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
 export DEPPATH=$CERB_PATH/dependencies
+export LEMPATH=$DEPPATH/lem
 export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
-export PATH=$BINPATH:$PATH
+export PATH=$LEMPATH:$BINPATH:$PATH
 
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
