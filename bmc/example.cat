@@ -9,8 +9,6 @@ let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rfstar
 let sw = ([REL | ACQ_REL | SC] ; rs ; rf ; [R & ~NA & (ACQ | ACQ_REL | SC)]) | asw
 let hb = (sb | sw)+
 
-irreflexive (hb ; eco) as coh
-
 let mo = co
 
 let fr = (rf^-1 ; mo) \ id

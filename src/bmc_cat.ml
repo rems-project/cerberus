@@ -19,6 +19,10 @@ module CatFile = struct
     | BaseSet_ACQ
     | BaseSet_ACQ_REL
     | BaseSet_SC
+    | BaseSet_Wmb
+    | BaseSet_Rmb
+    | BaseSet_LinuxAcquire
+    | BaseSet_LinuxRelease
 
     (*
     | BaseRel_dep_addr
@@ -87,6 +91,10 @@ module CatFile = struct
   let mk_set_ACQ = Set_base BaseSet_ACQ
   let mk_set_ACQ_REL = Set_base BaseSet_ACQ_REL
   let mk_set_SC = Set_base BaseSet_SC
+  let mk_set_Wmb = Set_base BaseSet_Wmb
+  let mk_set_Rmb = Set_base BaseSet_Rmb
+  let mk_set_LinuxAcquire = Set_base BaseSet_LinuxAcquire
+  let mk_set_LinuxRelease = Set_base BaseSet_LinuxRelease
 
   let mk_set_union (x: set) (y: set) =
     Set_union (x,y)
@@ -191,6 +199,10 @@ module CatFile = struct
     | BaseSet_ACQ     -> "ACQ"
     | BaseSet_ACQ_REL -> "ACQ_REL"
     | BaseSet_SC      -> "SC"
+    | BaseSet_Rmb     -> "Rmb"
+    | BaseSet_Wmb     -> "Wmb"
+    | BaseSet_LinuxAcquire -> "LinuxAcquire"
+    | BaseSet_LinuxRelease -> "LinuxRelease"
 
   let rec pprint_set = function
     | Set_base base_set ->
@@ -353,19 +365,23 @@ module CatParser = struct
     in return ret
 
   let base_set : 'a Angstrom.t =
-    choice[token (string "NA")      *>  return mk_set_NA
-          ;token (string "REL")     *>  return mk_set_REL
-          ;token (string "RLX")     *>  return mk_set_RLX
-          ;token (string "ACQ_REL") *>  return mk_set_ACQ_REL
-          ;token (string "ACQ")     *>  return mk_set_ACQ
-          ;token (string "SC")      *>  return mk_set_SC
-          ;token (string "U")       *>  return mk_set_U
-          ;token (string "R")       *>  return mk_set_R
-          ;token (string "W")       *>  return mk_set_W
-          ;token (string "M")       *>  return mk_set_M
-          ;token (string "A")       *>  return mk_set_A
-          ;token (string "I")       *>  return mk_set_I
-          ;token (string "F")       *>  return mk_set_F
+    choice[token (string "NA")      *> return mk_set_NA
+          ;token (string "REL")     *> return mk_set_REL
+          ;token (string "RLX")     *> return mk_set_RLX
+          ;token (string "ACQ_REL") *> return mk_set_ACQ_REL
+          ;token (string "ACQ")     *> return mk_set_ACQ
+          ;token (string "LinuxAcquire") *> return mk_set_LinuxAcquire
+          ;token (string "LinuxRelease") *> return mk_set_LinuxRelease
+          ;token (string "Wmb")     *> return mk_set_Wmb
+          ;token (string "Rmb")     *> return mk_set_Rmb
+          ;token (string "SC")      *> return mk_set_SC
+          ;token (string "U")       *> return mk_set_U
+          ;token (string "R")       *> return mk_set_R
+          ;token (string "W")       *> return mk_set_W
+          ;token (string "M")       *> return mk_set_M
+          ;token (string "A")       *> return mk_set_A
+          ;token (string "I")       *> return mk_set_I
+          ;token (string "F")       *> return mk_set_F
           ]
 
   let chainl1 e op =
@@ -459,7 +475,7 @@ module CatParser = struct
     return (Constraint (s_opt, Irreflexive e))
 
   let output =
-    token (string "output") *>
+    token (string "show") *>
     token lowers >>= fun s ->
     return (Output s)
 

@@ -19,6 +19,12 @@ let g_bv_precision = 33
 
 let g_model_file = "bmc/example.cat"
 
+type memory_mode =
+  | MemoryMode_C
+  | MemoryMode_Linux
+
+let g_memory_mode = MemoryMode_Linux
+
 type bmc_conf = {
   max_run_depth   : int;
   sequentialise   : bool;
