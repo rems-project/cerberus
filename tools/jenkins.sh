@@ -6,6 +6,7 @@ export LEMPATH=$DEPPATH/lem
 export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
 export PATH=$LEMPATH:$BINPATH:$PATH
+export LEMLIB=$LEMPATH/library
 
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
@@ -13,12 +14,7 @@ if ! hash opam 2> /dev/null; then
   wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s $BINPATH 4.06.0
   eval `opam config env`
   opam init
-  opam install ocamlfind
-  opam install cmdliner
-  opam install menhir
-  opam install pprint
-  opam install zarith
-  opam install yojson
+  opam install ocamlfind cmdliner menhir pprint zarith yojson
   opam install z3
 fi
 
@@ -33,3 +29,7 @@ if ! hash lem 2> /dev/null; then
   make install
   cd $CERB_PATH
 fi
+
+. $OPAMROOT/opam-init/init.sh > /dev/null 2> /dev/null || true
+
+
