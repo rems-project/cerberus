@@ -56,28 +56,28 @@ let string_of_constraint_violation = function
       "compound literal has invalid type"
   | ExpressionNotLvalue ->
       "expression is not assignable"
-  | InvalidArgumentTypeUnaryIncrement ->
-      "invalid argument type to the increment operator"
-  | InvalidArgumentTypeUnaryDecrement ->
-      "invalid argument type to the increment operator"
-  | UnaryAddressNotRvalue ->
-      "cannot take address of an rvalue"
+  | InvalidArgumentTypeUnaryIncrement ty ->
+      "cannot increment value of type '" ^ string_of_ctype ty ^ "'"
+  | InvalidArgumentTypeUnaryDecrement ty ->
+      "cannot decrement value of type '" ^ string_of_ctype ty ^ "'"
+  | UnaryAddressNotRvalue gty ->
+      "cannot take address of an rvalue of type '" ^ string_of_gentype gty ^ "'"
   | UnaryAddressRegisterLvalue ->
       "address of lvalue declared with register storage-class specifier"
   | IndirectionNotPointer ->
       "the * operator expects a pointer operand"
-  | InvalidArgumentTypeUnaryExpression ->
-      "invalid argument type to unary expression"
-  | ConditionalOperatorFirstOperandType ->
-      "first operand of a conditional operator is not a scalar type"
-  | ConditionalOperatorInvalidOperandTypes ->
-      "incompatible conditional operand types"
-  | AssignmentIncompatibleType ty ->
-      "assigning to '" ^ string_of_ctype ty ^ "' from incompatible type"
-  | AssignmentIncompatiblePointerType ->
-      "assigning to incompatible pointer types"
-  | AssignmentDiscardsQualifiers ->
-      "assignment discards qualifiers"
+  | InvalidArgumentTypeUnaryExpression gty ->
+      "invalid argument type '" ^ string_of_gentype gty ^ "' to unary expression"
+  | ConditionalOperatorControlType gty ->
+      "'" ^ string_of_gentype gty ^ "' is not a scalar type"
+  | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
+      "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
+  | AssignmentIncompatibleType (ty1, gty2)  ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from incompatible type '" ^ string_of_gentype gty2 ^ "'"
+  | AssignmentIncompatiblePointerType (ty1, gty2) ->
+      "incompatible pointer types assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "'"
+  | AssignmentDiscardsQualifiers (ty1, gty2) ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
   | NoLinkageMultipleDeclaration x ->
@@ -324,7 +324,7 @@ let get_misc_violation_ref = function
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
-      StdRef (Constraint.std_of_violation e)
+      StdRef (List.hd (Constraint.std_of_violation e))
   | Desugar_UndefinedBehaviour ub ->
       std_ref_of_option @@ Undefined.std_of_undefined_behaviour ub
   | Desugar_NotYetSupported _ ->
@@ -340,7 +340,7 @@ let get_std_ref = function
   | DESUGAR dcause ->
       get_desugar_ref dcause
   | AIL_TYPING tcause ->
-      std_ref_of_option @@ std_of_ail_typing_error tcause
+      StdRef (List.hd (std_of_ail_typing_error tcause))
   | _ ->
       NoRef
 

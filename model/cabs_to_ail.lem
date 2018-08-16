@@ -479,7 +479,7 @@ let rec constructValue_aux tagDefs path elems (ATypes.Ctype _ ty as cty) =
           List.map (fun i ->
             Just (constructValue_aux tagDefs (path ++ [Elem_array i]) elems elem_ty)
           ) (Utils.mkListN n) in
-        AnnotatedExpression () [] Loc.unknown begin
+        AnnotatedExpression () [] (Loc.locOf cty) begin
           AilEarray false(*TODO*) elem_ty es
         end
     | ATypes.Struct tag_sym ->
