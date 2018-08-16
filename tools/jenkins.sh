@@ -33,5 +33,3 @@ if ! hash lem 2> /dev/null; then
   make install
   cd $CERB_PATH
 fi
-
-. /local/jenkins/home/workspace/rems/cerberus/dependencies/.opam/opam-init/init.sh > /dev/null 2> /dev/null || true
