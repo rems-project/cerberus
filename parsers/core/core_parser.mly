@@ -673,6 +673,12 @@ and symbolify_action_ = function
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      Eff.return (LinuxLoad (pe1, pe2, mo))
+ | LinuxRMW (_pe1, _pe2, _pe3, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     Eff.return (LinuxRMW (pe1, pe2, pe3, mo))
+
 
 
 
