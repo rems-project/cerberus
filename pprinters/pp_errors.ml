@@ -72,11 +72,11 @@ let string_of_constraint_violation = function
       "'" ^ string_of_gentype gty ^ "' is not a scalar type"
   | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
       "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
-  | AssignmentIncompatibleType (ty1, gty2)  ->
+  | SimpleAssignmentViolation (IncompatibleType, ty1, gty2)  ->
       "assigning to '" ^ string_of_ctype ty1 ^ "' from incompatible type '" ^ string_of_gentype gty2 ^ "'"
-  | AssignmentIncompatiblePointerType (ty1, gty2) ->
+  | SimpleAssignmentViolation (IncompatiblePointerType, ty1, gty2) ->
       "incompatible pointer types assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "'"
-  | AssignmentDiscardsQualifiers (ty1, gty2) ->
+  | SimpleAssignmentViolation (DiscardsQualifiers, ty1, gty2) ->
       "assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
@@ -168,6 +168,12 @@ let string_of_constraint_violation = function
       "expression is not an integer constant expression"
   | IllegalSizeArrayDesignator ->
       "array designator value is negative"
+  | InitializationAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of incompatible type '" ^ string_of_gentype gty2 ^ "'"
+  | InitializationAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "'"
+  | InitializationAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
   | IllegalStorageClassIterationStatement
   | IllegalStorageClassFileScoped
   | IllegalStorageClassFunctionDefinition ->
@@ -298,33 +304,33 @@ let short_message = function
       "TODO(msg) OTHER ==> " ^ str
 
 type std_ref =
-  | StdRef of string
+  | StdRef of string list
   | UnknownRef
   | NoRef
 
 let std_ref_of_option = function
-  | Some ref -> StdRef ref
+  | Some ref -> StdRef [ref]
   | None -> UnknownRef
 
 let get_misc_violation_ref = function
   (* TODO: check if footnote is being printed *)
   | MultipleEnumDeclaration _ ->
-      StdRef "§6.7.2.2#3, FOOTNOTE.127"
-  | EnumSimpleDeclarationConstruction -> 
-      StdRef "§6.7.2.3#7, FOOTNOTE 131"
+      StdRef ["§6.7.2.2#3"; "FOOTNOTE.127"]
+  | EnumSimpleDeclarationConstruction ->
+      StdRef ["§6.7.2.3#7"; "FOOTNOTE.131"]
   | UndeclaredIdentifier _ ->
-      StdRef "§6.5.1#2"
+      StdRef ["§6.5.1#2"]
   | ArrayDeclarationStarIllegalScope ->
-      StdRef "§6.7.6.2#4, 2nd sentence"
+      StdRef ["§6.7.6.2#4, 2nd sentence"]
   | ArrayCharStringLiteral ->
-      StdRef "§6.7.9#14"
+      StdRef ["§6.7.9#14"]
   | UniqueVoidParameterInFunctionDeclaration
   | TypedefInitializer ->
       UnknownRef
 
 let get_desugar_ref = function
   | Desugar_ConstraintViolation e ->
-      StdRef (List.hd (Constraint.std_of_violation e))
+      StdRef (Constraint.std_of_violation e)
   | Desugar_UndefinedBehaviour ub ->
       std_ref_of_option @@ Undefined.std_of_undefined_behaviour ub
   | Desugar_NotYetSupported _ ->
@@ -340,7 +346,7 @@ let get_std_ref = function
   | DESUGAR dcause ->
       get_desugar_ref dcause
   | AIL_TYPING tcause ->
-      StdRef (List.hd (std_of_ail_typing_error tcause))
+      StdRef (std_of_ail_typing_error tcause)
   | _ ->
       NoRef
 
@@ -360,18 +366,27 @@ let make_message loc err k =
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
   let kind = string_of_kind k in
   let msg = ansi_format [Bold] (short_message err) in
+  let rec string_of_refs = function
+    | [] -> "unknown ISO C reference"
+    | [ref] -> ref
+    | ref::refs -> ref ^ ", " ^ string_of_refs refs
+  in
+  let rec string_of_quotes = function
+    | [] -> failwith "make_message: no quote"
+    | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
+    | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
+  in
   match !!cerb_conf.error_verbosity, get_std_ref err with
   | Basic, _
   | _, NoRef ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos
-  | RefStd, StdRef ref ->
-      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg ref pos
+  | RefStd, StdRef refs ->
+      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg (string_of_refs refs) pos
   | RefStd, UnknownRef
   | QuoteStd, UnknownRef ->
       Printf.sprintf "%s %s %s (unknown ISO C reference)\n%s" head kind msg pos
-  | QuoteStd, StdRef ref ->
-      Printf.sprintf "%s %s %s\n%s\n%s: %s" head kind msg pos
-        (ansi_format [Bold] ref) (get_quote ref)
+  | QuoteStd, StdRef refs ->
+      Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
 
 let to_string (loc, err) =
   make_message loc err Error

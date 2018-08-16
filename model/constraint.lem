@@ -1,4 +1,9 @@
-open import Symbol Cabs AilTypes GenTypes
+open import Pervasives Symbol Cabs AilTypes GenTypes
+
+type simple_assignment_violation =
+  | IncompatibleType
+  | IncompatiblePointerType
+  | DiscardsQualifiers
 
 type violation =
   (* 6.5 Expressions *)
@@ -25,9 +30,7 @@ type violation =
   | ConditionalOperatorControlType of genType (* §6.5.15#2 *)
   | ConditionalOperatorInvalidOperandTypes of genType * genType (* §6.5.15#3 *)
   (* 6.5.16.1 Simple assignment *)
-  | AssignmentIncompatibleType of ctype * genType (* §6.5.16.1#1 *)
-  | AssignmentIncompatiblePointerType of ctype * genType (* §6.5.16.1#1, bullet 3 and 4 *)
-  | AssignmentDiscardsQualifiers of ctype * genType (* §6.5.16.1#1, bullet 3 and 4 *)
+  | SimpleAssignmentViolation of simple_assignment_violation * ctype * genType (* §6.5.16.1#1 *)
   (* 6.6 Constant expressions *)
   | IntegerConstantOutRange (* §6.6#4 *)
   (* 6.7 Declarations *)
@@ -73,6 +76,7 @@ type violation =
   | IllegalLinkageAndInitialization (* §6.7.9#5 *)
   | IllegalTypeArrayDesignator (* §6.7.9#6, sentence 1 *)
   | IllegalSizeArrayDesignator (* §6.7.9#6, sentence 2 *)
+  | InitializationAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.7.9#11, sentence 2 *)
   (* 6.7.10 Static assertions *)
   | StaticAssertFailed of string (* §6.7.10#2 *)
   (* 6.8 Statements and blocks *)
@@ -105,6 +109,15 @@ type violation =
   (* 7.2.1.1 The assert macro *)
   | AssertMacroExpressionScalarType (* §7.2.1.1#2 *)
 
+let std_of_assign_violation= function
+  | IncompatibleType ->
+      ["§6.5.16.1#1"; "FOOTNOTE.112"]
+  | IncompatiblePointerType ->
+      ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
+  | DiscardsQualifiers ->
+      ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
+end
+
 let std_of_violation = function
   | FunctionCallIncompleteReturnType _ -> 
       ["§6.5.2.2#1"]
@@ -136,20 +149,16 @@ let std_of_violation = function
       ["§6.5.15#2"]
   | ConditionalOperatorInvalidOperandTypes _ _ ->
       ["§6.5.15#3"]
-  | AssignmentIncompatibleType _ _ ->
-      ["§6.5.16.1#1"]
-  | AssignmentIncompatiblePointerType _ _ ->
-      ["§6.5.16.1#1, bullet 3 and 4"]
-  | AssignmentDiscardsQualifiers _ _ ->
-      ["§6.5.16.1#1, bullet 3 and 4"]
+  | SimpleAssignmentViolation viol _ _ ->
+      std_of_assign_violation viol
   | IntegerConstantOutRange ->
       ["§6.6#4"]
   | NoLinkageMultipleDeclaration _ ->
       ["§6.7#3"]
   | TypedefRedefinition ->
-      ["§6.7#3, 1st bullet"]
+      ["§6.7#3, bullet 1"]
   | TypedefRedefinitionVariablyModifiedType ->
-      ["§6.7#3, 1st bullet, sentence 2"]
+      ["§6.7#3, bullet 1, sentence 2"]
   | IllegalMultipleStorageClasses ->
       ["§6.7.1#2"]
   | IllegalMultipleStorageClassesThreadLocal ->
@@ -210,6 +219,8 @@ let std_of_violation = function
       ["§6.7.9#6, sentence 1"]
   | IllegalSizeArrayDesignator ->
       ["§6.7.9#6, sentence 2"]
+  | InitializationAsSimpleAssignment viol _ _ ->
+      "§6.7.9#11, sentence 2" :: std_of_assign_violation viol
   | StaticAssertFailed _ ->
       ["§6.7.10#2"]
   | LabelStatementOutsideSwitch ->
