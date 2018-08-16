@@ -789,7 +789,7 @@ let pp_program_aux pp_annot (startup, sigm) =
 
 let rec pp_genIntegerType = function
   | Concrete ity ->
-      pp_integerType_raw ity
+      pp_integerType ity
   | SizeT ->
       !^ "size_t"
   | PtrdiffT ->
@@ -813,18 +813,18 @@ let pp_genType = function
   | GenBasic gbty ->
       pp_genBasicType gbty
   | GenArray (ty, n_opt) ->
-      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human no_qualifiers ty
+      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype no_qualifiers ty
   | GenFunction (_, (qs, ty), params, is_variadic) ->
       (* TODO: maybe add parameters *)
-      !^ "function returning" ^^^ pp_ctype_human qs ty
+      !^ "function returning" ^^^ pp_ctype qs ty
   | GenPointer (ref_qs, ref_ty) ->
-      !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
+      pp_ctype no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
   | GenStruct tag_sym ->
       !^ "struct" ^^^ pp_id tag_sym
   | GenUnion tag_sym ->
       !^ "union" ^^^ pp_id tag_sym
   | GenAtomic ty ->
-      !^ "atomic" ^^ pp_ctype_human no_qualifiers ty
+      !^ "atomic" ^^ pp_ctype no_qualifiers ty
   | GenBuiltin str ->
       !^ str
 

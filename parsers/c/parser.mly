@@ -414,22 +414,22 @@ unary_expression:
 | expr= postfix_expression
     { expr }
 | PLUS_PLUS expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEpreincr expr) }
 | MINUS_MINUS expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEpredecr expr) }
 | op= unary_operator expr= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos(op)),
                       CabsEunary (op, expr)) }
 | SIZEOF expr= unary_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEsizeof_expr expr) }
 | SIZEOF LPAREN ty= type_name RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEsizeof_type ty) }
 | ALIGNOF LPAREN ty= type_name RPAREN
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEalignof ty) }
 
 unary_operator:

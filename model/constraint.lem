@@ -1,37 +1,37 @@
-import Symbol Cabs AilTypes GenTypes
+open import Symbol Cabs AilTypes GenTypes
 
 type violation =
   (* 6.5 Expressions *)
   (* 6.5.2.2 Function calls *)
-  | FunctionCallIncompleteReturnType of AilTypes.ctype (* §6.5.2.2#1 *)
-  | FunctionCallArrayReturnType of AilTypes.ctype (* §6.5.2.2#1 *)
+  | FunctionCallIncompleteReturnType of ctype (* §6.5.2.2#1 *)
+  | FunctionCallArrayReturnType of ctype (* §6.5.2.2#1 *)
   | FunctionCallIncorrectType (* §6.5.2.2#1 *)
   (* 6.5.2.3 Structure and union members *)
   | MemberofReferenceBaseType  (* §6.5.2.3#1 *)
-  | MemberofNoMember of Cabs.cabs_identifier * GenTypes.genType (* §6.5.2.3#1 *)
+  | MemberofNoMember of cabs_identifier * genType (* §6.5.2.3#1 *)
   (* 6.5.2.5 Compound literals *)
   | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
   (* 6.5.3.1 Prefix increment and decrement operators *)
   | ExpressionNotLvalue (* §6.5.3.1#1 *)
-  | InvalidArgumentTypeUnaryIncrement (* §6.5.3.1#1 *)
-  | InvalidArgumentTypeUnaryDecrement (* §6.5.3.1#1 *)
+  | InvalidArgumentTypeUnaryIncrement of ctype (* §6.5.3.1#1 *)
+  | InvalidArgumentTypeUnaryDecrement of ctype (* §6.5.3.1#1 *)
   (* 6.5.3.2 Address and indirection operators *)
-  | UnaryAddressNotRvalue (* §6.5.3.2#1 *)
+  | UnaryAddressNotRvalue of genType (* §6.5.3.2#1 *)
   | UnaryAddressRegisterLvalue (* §6.5.3.2#1 *)
   | IndirectionNotPointer (* §6.5.3.2#2 *)
   (* 6.5.3.3 Unary arithmetic operators *)
-  | InvalidArgumentTypeUnaryExpression (* §6.5.3.3#1 *)
+  | InvalidArgumentTypeUnaryExpression of genType (* §6.5.3.3#1 *)
   (* 6.5.15 Conditional operator *)
-  | ConditionalOperatorFirstOperandType (* §6.5.15#2 *)
-  | ConditionalOperatorInvalidOperandTypes (* §6.5.15#3 *)
+  | ConditionalOperatorControlType of genType (* §6.5.15#2 *)
+  | ConditionalOperatorInvalidOperandTypes of genType * genType (* §6.5.15#3 *)
   (* 6.5.16.1 Simple assignment *)
-  | AssignmentIncompatibleType of AilTypes.ctype (* §6.5.16.1#1 *)
-  | AssignmentIncompatiblePointerType (* §6.5.16.1#1, bullet 3 and 4 *)
-  | AssignmentDiscardsQualifiers (* §6.5.16.1#1, bullet 3 and 4 *)
+  | AssignmentIncompatibleType of ctype * genType (* §6.5.16.1#1 *)
+  | AssignmentIncompatiblePointerType of ctype * genType (* §6.5.16.1#1, bullet 3 and 4 *)
+  | AssignmentDiscardsQualifiers of ctype * genType (* §6.5.16.1#1, bullet 3 and 4 *)
   (* 6.6 Constant expressions *)
   | IntegerConstantOutRange (* §6.6#4 *)
   (* 6.7 Declarations *)
-  | NoLinkageMultipleDeclaration of Cabs.cabs_identifier (* §6.7#3 *)
+  | NoLinkageMultipleDeclaration of cabs_identifier (* §6.7#3 *)
   | TypedefRedefinition (* §6.7#3, 1st bullet *)
   | TypedefRedefinitionVariablyModifiedType (* §6.7#3, 1st bullet, sentence 2 *)
   (* 6.7.1 Storage-class specifiers *)
@@ -44,20 +44,20 @@ type violation =
   | IllegalTypeSpecifierInDeclaration (* §6.7.2#2 *)
   (* 6.7.2.1 Struct and union specifiers *)
   | StructDeclarationLacksDeclaratorList (* §6.7.2.1#2 *)
-  | StructMemberIncompleteType of AilTypes.qualifiers * AilTypes.ctype (* §6.7.2.1#3, sentence 1 *)
-  | StructMemberFunctionType of Cabs.cabs_identifier (* §6.7.2.1#3, sentence 1 *)
+  | StructMemberIncompleteType of qualifiers * ctype (* §6.7.2.1#3, sentence 1 *)
+  | StructMemberFunctionType of cabs_identifier (* §6.7.2.1#3, sentence 1 *)
   | StructMemberFlexibleArray (* §6.7.2.1#3, sentence 2 *)
   (* 6.7.2.1 Enum specifiers *)
   | WrongTypeEnumConstant (* §6.7.2.2#2 *)
   (* 6.7.2.3 Tags *)
-  | TagRedefinition of Symbol.sym (* §6.7.2.3#1 *)
-  | TagRedeclaration of Symbol.sym (* §6.7.2.3#2 *)
+  | TagRedefinition of sym (* §6.7.2.3#1 *)
+  | TagRedeclaration of sym (* §6.7.2.3#2 *)
   | EnumTagIncomplete (* §6.7.2.3#3 *)
   (* 6.7.2.4 Atomic type specifiers *)
   | AtomicTypeConstraint (* §6.7.2.4#3 *)
   (* Type qualifier *)
   | RestrictQualifiedTypeConstraint (* §6.7.3#2 *)
-  | RestrictQualifiedPointedTypeConstraint of AilTypes.ctype (* §6.7.3#2 *)
+  | RestrictQualifiedPointedTypeConstraint of ctype (* §6.7.3#2 *)
   (* 6.7.6 Declarators *)
   | ArrayDeclarationNegativeSize (* §6.7.6.2#1, sentence 3 *)
   | ArrayDeclarationIncompleteType (* §6.7.6.2#1, sentence 4 *)
@@ -78,7 +78,7 @@ type violation =
   (* 6.8 Statements and blocks *)
   (* 6.8.1 Labeled statements *)
   | LabelStatementOutsideSwitch (* §6.8.1#2 *)
-  | LabelRedefinition of Cabs.cabs_identifier (* §6.8.1#3 *)
+  | LabelRedefinition of cabs_identifier (* §6.8.1#3 *)
   (* 6.8.4.1 The if statement *)
   | IfStatementControllingExpressionNotScalar (* §6.8.4.1#1 *)
   (* 6.8.4.1 The if statement *)
@@ -87,14 +87,14 @@ type violation =
   | IterationStatementControllingExpressionNotScalar (* §6.8.5#2 *)
   | IllegalStorageClassIterationStatement(* §6.8.5#3 *)
   (* 6.8.5 Jump statements *)
-  | UndeclaredLabel of Cabs.cabs_identifier (* §6.8.6.1#1, sentence 1 *)
+  | UndeclaredLabel of cabs_identifier (* §6.8.6.1#1, sentence 1 *)
   | ContinueOutsideLoop (* §6.8.6.2#1 *)
   | BreakOutsideSwtichOrLoop (* §6.8.6.3#1 *)
   | NonVoidReturnVoidFunction (* §6.8.6.4#1, sentence 1 *)
   | VoidReturnNonVoidFunction (* §6.8.6.4#1, sentence 2 *)
   (* 6.9 External definitions *)
   | IllegalStorageClassFileScoped (* §6.9#2 *)
-  | ExternalRedefinition of Symbol.sym (* §6.9#3 *)
+  | ExternalRedefinition of sym (* §6.9#3 *)
   (* 6.9.1 Function definitions *)
   | WrongTypeFunctionIdentifier (*  §6.9.1#2 *)
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
@@ -107,145 +107,145 @@ type violation =
 
 let std_of_violation = function
   | FunctionCallIncompleteReturnType _ -> 
-      "§6.5.2.2#1"
+      ["§6.5.2.2#1"]
   | FunctionCallArrayReturnType _ ->
-      "§6.5.2.2#1"
+      ["§6.5.2.2#1"]
   | FunctionCallIncorrectType ->
-      "§6.5.2.2#1"
+      ["§6.5.2.2#1"]
   | MemberofReferenceBaseType ->
-      "§6.5.2.3#1"
+      ["§6.5.2.3#1"]
   | MemberofNoMember _ _ ->
-      "§6.5.2.3#1"
+      ["§6.5.2.3#1"]
   | InvalidTypeCompoundLiteral ->
-      "§6.5.2.5#1"
+      ["§6.5.2.5#1"]
   | ExpressionNotLvalue ->
-      "§6.5.3.1#1"
-  | InvalidArgumentTypeUnaryIncrement ->
-      "§6.5.3.1#1"
-  | InvalidArgumentTypeUnaryDecrement ->
-      "§6.5.3.1#1"
-  | UnaryAddressNotRvalue ->
-      "§6.5.3.2#1"
+      ["§6.5.3.1#1"]
+  | InvalidArgumentTypeUnaryIncrement _ ->
+      ["§6.5.3.1#1"]
+  | InvalidArgumentTypeUnaryDecrement _ ->
+      ["§6.5.3.1#1"]
+  | UnaryAddressNotRvalue _ ->
+      ["§6.5.3.2#1"]
   | UnaryAddressRegisterLvalue ->
-      "§6.5.3.2#1"
-  | InvalidArgumentTypeUnaryExpression ->
-      "§6.5.3.3#1"
+      ["§6.5.3.2#1"]
+  | InvalidArgumentTypeUnaryExpression _ ->
+      ["§6.5.3.3#1"]
   | IndirectionNotPointer ->
-      "§6.5.3.2#2"
-  | ConditionalOperatorFirstOperandType ->
-      "§6.5.15#2"
-  | ConditionalOperatorInvalidOperandTypes ->
-      "§6.5.15#3"
-  | AssignmentIncompatibleType _ ->
-      "§6.5.16.1#1"
-  | AssignmentIncompatiblePointerType ->
-      "§6.5.16.1#1, bullet 3 and 4"
-  | AssignmentDiscardsQualifiers ->
-      "§6.5.16.1#1, bullet 3 and 4"
+      ["§6.5.3.2#2"]
+  | ConditionalOperatorControlType _ ->
+      ["§6.5.15#2"]
+  | ConditionalOperatorInvalidOperandTypes _ _ ->
+      ["§6.5.15#3"]
+  | AssignmentIncompatibleType _ _ ->
+      ["§6.5.16.1#1"]
+  | AssignmentIncompatiblePointerType _ _ ->
+      ["§6.5.16.1#1, bullet 3 and 4"]
+  | AssignmentDiscardsQualifiers _ _ ->
+      ["§6.5.16.1#1, bullet 3 and 4"]
   | IntegerConstantOutRange ->
-      "§6.6#4"
+      ["§6.6#4"]
   | NoLinkageMultipleDeclaration _ ->
-      "§6.7#3"
+      ["§6.7#3"]
   | TypedefRedefinition ->
-      "§6.7#3, 1st bullet"
+      ["§6.7#3, 1st bullet"]
   | TypedefRedefinitionVariablyModifiedType ->
-      "§6.7#3, 1st bullet, sentence 2"
+      ["§6.7#3, 1st bullet, sentence 2"]
   | IllegalMultipleStorageClasses ->
-      "§6.7.1#2"
+      ["§6.7.1#2"]
   | IllegalMultipleStorageClassesThreadLocal ->
-      "§6.7.1#3, sentence 1"
+      ["§6.7.1#3, sentence 1"]
   | ThreadLocalShouldAppearInEveryDeclaration ->
-      "§6.7.1#3, sentence 2"
+      ["§6.7.1#3, sentence 2"]
   | ThreadLocalFunctionDeclaration ->
-      "§6.7.1#4"
+      ["§6.7.1#4"]
   | NoTypeSpecifierInDeclaration ->
-      "§6.7.2#2, sentence 2"
+      ["§6.7.2#2, sentence 2"]
   | IllegalTypeSpecifierInDeclaration ->
-      "§6.7.2#2"
+      ["§6.7.2#2"]
   | StructDeclarationLacksDeclaratorList ->
-      "§6.7.2.1#2"
+      ["§6.7.2.1#2"]
   | StructMemberIncompleteType _ _ ->
-      "§6.7.2.1#3, sentence 1"
+      ["§6.7.2.1#3, sentence 1"]
   | StructMemberFunctionType _ ->
-      "§6.7.2.1#3, sentence 1"
+      ["§6.7.2.1#3, sentence 1"]
   | StructMemberFlexibleArray ->
-      "§6.7.2.1#3, sentence 2"
+      ["§6.7.2.1#3, sentence 2"]
   | WrongTypeEnumConstant ->
-      "§6.7.2.2#2"
+      ["§6.7.2.2#2"]
   | TagRedefinition _ ->
-      "§6.7.2.3#1"
+      ["§6.7.2.3#1"]
   | TagRedeclaration _ ->
-      "§6.7.2.3#2"
+      ["§6.7.2.3#2"]
   | EnumTagIncomplete ->
-      "§6.7.2.3#3"
+      ["§6.7.2.3#3"]
   | AtomicTypeConstraint ->
-      "§6.7.2.4#3"
+      ["§6.7.2.4#3"]
   | RestrictQualifiedTypeConstraint ->
-      "§6.7.3#2"
+      ["§6.7.3#2"]
   | RestrictQualifiedPointedTypeConstraint _ ->
-      "§6.7.3#2"
+      ["§6.7.3#2"]
   | ArrayDeclarationNegativeSize ->
-      "§6.7.6.2#1, sentence 3"
+      ["§6.7.6.2#1, sentence 3"]
   | ArrayDeclarationIncompleteType ->
-      "§6.7.6.2#1, sentence 4"
+      ["§6.7.6.2#1, sentence 4"]
   | ArrayDeclarationFunctionType ->
-      "§6.7.6.2#1, sentence 4"
+      ["§6.7.6.2#1, sentence 4"]
   | ArrayDeclarationQsAndStaticOnlyOutmost ->
-      "§6.7.6.2#1, sentence 5"
+      ["§6.7.6.2#1, sentence 5"]
   | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
-      "§6.7.6.2#1, sentence 5"
+      ["§6.7.6.2#1, sentence 5"]
   | IllegalReturnTypeFunctionDeclarator ->
-      "§6.7.6.3#1"
+      ["§6.7.6.3#1"]
   | IllegalStorageClassFunctionDeclarator ->
-      "§6.7.6.3#2"
+      ["§6.7.6.3#2"]
   | IncompleteParameterTypeFunctionDeclarator ->
-      "§6.7.6.3#4"
+      ["§6.7.6.3#4"]
   | IllegalInitializer ->
-      "§6.7.9#3"
+      ["§6.7.9#3"]
   | IllegalStorageClassStaticOrThreadInitializer ->
-      "§6.7.9#4"
+      ["§6.7.9#4"]
   | IllegalLinkageAndInitialization ->
-      "§6.7.9#5"
+      ["§6.7.9#5"]
   | IllegalTypeArrayDesignator ->
-      "§6.7.9#6, sentence 1"
+      ["§6.7.9#6, sentence 1"]
   | IllegalSizeArrayDesignator ->
-      "§6.7.9#6, sentence 2"
+      ["§6.7.9#6, sentence 2"]
   | StaticAssertFailed _ ->
-      "§6.7.10#2"
+      ["§6.7.10#2"]
   | LabelStatementOutsideSwitch ->
-      "§6.8.1#2"
+      ["§6.8.1#2"]
   | LabelRedefinition _ ->
-      "§6.8.1#3"
+      ["§6.8.1#3"]
   | IfStatementControllingExpressionNotScalar ->
-      "§6.8.4.1#1"
+      ["§6.8.4.1#1"]
   | SwitchStatementControllingExpressionNotInteger ->
-      "§6.8.4.2#1"
+      ["§6.8.4.2#1"]
   | IterationStatementControllingExpressionNotScalar ->
-      "§6.8.5#2"
+      ["§6.8.5#2"]
   | IllegalStorageClassIterationStatement ->
-      "§6.8.5#3"
+      ["§6.8.5#3"]
   | ContinueOutsideLoop ->
-      "§6.8.6.2#1"
+      ["§6.8.6.2#1"]
   | UndeclaredLabel _ ->
-      "§6.8.6.1#1, sentence 1"
+      ["§6.8.6.1#1, sentence 1"]
   | BreakOutsideSwtichOrLoop ->
-      "§6.8.6.3#1"
+      ["§6.8.6.3#1"]
   | NonVoidReturnVoidFunction ->
-      "§6.8.6.4#1, sentence 1"
+      ["§6.8.6.4#1, sentence 1"]
   | VoidReturnNonVoidFunction ->
-      "§6.8.6.4#1, sentence 2"
+      ["§6.8.6.4#1, sentence 2"]
   | IllegalStorageClassFileScoped ->
-      "§6.9#2"
+      ["§6.9#2"]
   | ExternalRedefinition _ ->
-      "§6.9#3"
+      ["§6.9#3"]
   | WrongTypeFunctionIdentifier ->
-      "§6.9.1#2"
+      ["§6.9.1#2"]
   | IllegalStorageClassFunctionDefinition ->
-      "§6.9.1#4"
+      ["§6.9.1#4"]
   | IllegalIdentifierTypeVoidInFunctionDefinition ->
-      "§6.9.1#5, sentence 1"
+      ["§6.9.1#5, sentence 1"]
   | UniqueVoidParameterInFunctionDefinition ->
-      "§6.9.1#5, sentence 2"
+      ["§6.9.1#5, sentence 2"]
   | AssertMacroExpressionScalarType ->
-      "§7.2.1.1#2"
+      ["§7.2.1.1#2"]
 end

@@ -13,26 +13,27 @@ type typing_error =
   | TError_TODO of nat (* TODO: change this to string later *)
   | TError of string (* TODO: remove this *)
 
-val std_of_typing_misc_error: typing_misc_error -> maybe string
+val std_of_typing_misc_error: typing_misc_error -> list string
 let std_of_typing_misc_error = function
   | UntypableIntegerConstant _ ->
-      Just "§6.4.4.1#6, sentence 5"
+      ["§6.4.4.1#6, sentence 5"]
   | ParameterTypeNotAdjusted ->
-      Nothing
+      []
 end
 
 (* TODO: change return type to just string *)
-val std_of_ail_typing_error: typing_error -> maybe string
+val std_of_ail_typing_error: typing_error -> list string
 let std_of_ail_typing_error = function
   | TError_ConstraintViolation v ->
-      Just (Constraint.std_of_violation v)
+      Constraint.std_of_violation v
   | TError_UndefinedBehaviour ub ->
-      Undefined.std_of_undefined_behaviour ub
+      match (Undefined.std_of_undefined_behaviour ub) with
+      | Just std -> [std]
+      | None -> []
+      end
   | TError_MiscError e ->
       std_of_typing_misc_error e
-  | TError_NotYetSupported str ->
-      Just ("feature not yet supported: " ^ str)
   | _ ->
-      Nothing
+      []
 end
 
