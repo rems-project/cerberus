@@ -1,7 +1,7 @@
 #!/bin/bash
 
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 
 source tests.sh
 
