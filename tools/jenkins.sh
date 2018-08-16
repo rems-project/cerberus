@@ -6,8 +6,6 @@ export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
 export PATH=$BINPATH:$PATH
 
-. /local/jenkins/home/workspace/rems/cerberus/dependencies/.opam/opam-init/init.sh > /dev/null 2> /dev/null || true
-
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
   mkdir -p $BINPATH
@@ -35,4 +33,4 @@ if ! hash lem 2> /dev/null; then
   cd $CERB_PATH
 fi
 
-
+. /local/jenkins/home/workspace/rems/cerberus/dependencies/.opam/opam-init/init.sh > /dev/null 2> /dev/null || true
