@@ -3,13 +3,13 @@
 #export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
 
 export DEPPATH=$CERB_PATH/dependencies
-export OPAMROOT=$DEPPATH/opam
+export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
 export PATH=$BINPATH:$PATH
 
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
-  mkdir -p $BIN_PATH
+  mkdir -p $BINPATH
   wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s $BINPATH 4.06.0
   opam init
   opam install ocamlfind cmdliner menhir pprint zarith yojson z3
