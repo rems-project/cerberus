@@ -1,7 +1,6 @@
 #!/bin/sh
 
-#export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
-
+export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
 export DEPPATH=$CERB_PATH/dependencies
 export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
