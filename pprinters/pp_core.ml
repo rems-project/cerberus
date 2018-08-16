@@ -683,6 +683,11 @@ and pp_action act =
         pp_keyword "linux_load" ^^
         P.parens (comma_list pp_pexpr [ty;e] ^^ P.comma ^^^
                   pp_linux_memory_order mo)
+    | LinuxRMW (ty, e1, e2, mo) ->
+        pp_keyword "linux_rmw" ^^
+        P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+
 
 
 

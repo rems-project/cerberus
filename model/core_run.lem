@@ -878,6 +878,9 @@ KKK
         error "WIP: LinuxStore"
     | LinuxLoad pe1 pe2 mo ->
         error "WIP: LinuxLoad"
+    | LinuxRMW pe1 pe2 pe3 mo ->
+        error "WIP: LinuxRMW"
+
 (*
   | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
                     action_id * thread_id * Cmm.memory_order * ctype *

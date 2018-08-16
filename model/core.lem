@@ -274,6 +274,7 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | LinuxFence of Linux.memory_order
  | LinuxLoad of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
  | LinuxStore of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+ | LinuxRMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
 
 
 

@@ -477,6 +477,9 @@ let plinux_load loc ty x mo =
   Expr [] (Eaction (Paction Pos (Action loc default (LinuxLoad ty x mo))))
 let plinux_store loc ty x n mo =
   Expr [] (Eaction (Paction Pos (Action loc default (LinuxStore ty x n mo))))
+let plinux_rmw loc ty x n mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (LinuxRMW ty x n mo))))
+
 
 
 
@@ -985,6 +988,10 @@ and subst_sym_action_ sym cval = function
         (subst_sym_pexpr sym cval pe3) mo
   | LinuxLoad pe1 pe2 mo ->
       LinuxLoad (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) mo
+  | LinuxRMW pe1 pe2 pe3 mo ->
+      LinuxRMW (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+        (subst_sym_pexpr sym cval pe3) mo
+
 
 end
 and subst_sym_action sym cval (Action loc bs act_) =
@@ -1238,6 +1245,10 @@ and unsafe_subst_sym_action_ a pe' = function
         (unsafe_subst_sym_pexpr a pe' pe3) mo
   | LinuxLoad pe1 pe2 mo ->
       LinuxLoad (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) mo
+  | LinuxRMW pe1 pe2 pe3 mo ->
+      LinuxRMW (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
+        (unsafe_subst_sym_pexpr a pe' pe3) mo
+
 
 (*
   | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->

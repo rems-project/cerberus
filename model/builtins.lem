@@ -818,9 +818,10 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_atomic_fetch_key_explicit" -> Just (A.AilEbuiltin "atomic_fetch_key_explicit", Nothing)
 
 
-    | "__cerbvar_linux_read_once" -> Just (A.AilEbuiltin "linux_read_once", Nothing)
-    | "__cerbvar_linux_write_once" -> Just (A.AilEbuiltin "linux_write_once", Nothing)
-
+    | "__cerbvar_linux_fence" -> Just (A.AilEbuiltin "linux_fence", Nothing)
+    | "__cerbvar_linux_read"  -> Just (A.AilEbuiltin "linux_read", Nothing)
+    | "__cerbvar_linux_write" -> Just (A.AilEbuiltin "linux_write", Nothing)
+    | "__cerbvar_linux_rmw"   -> Just (A.AilEbuiltin "linux_rmw", Nothing)
 (*
     | "__cerbvar_INT_LEAST8_MIN" -> Just (A.AilEbuiltin "INT_LEAST8_MIN")
     | "__cerbvar_INT_LEAST16_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
@@ -903,6 +904,6 @@ let ctype_of_builtin_varname = function
       Just (ATypes.Pointer ATypes.no_qualifiers (ATypes.Builtin "FILE"))
   | "CHAR_BIT" ->
       Just (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))
-  | _ ->
+ | _ ->
       Nothing
 end
