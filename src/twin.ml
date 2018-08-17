@@ -731,7 +731,7 @@ let rec explode_bytes mval : (meta * char option) list =
            end
        end
 
-  let store loc ty (PV (prov, ptrval_)) mval =
+  let store loc ty is_locking (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
       "ENTERING STORE: ty=" ^
       String_core_ctype.string_of_ctype ty ^ "@" ^
@@ -768,7 +768,18 @@ let rec explode_bytes mval : (meta * char option) list =
         if alloc.is_readonly then
           fail (MerrWriteOnReadOnly loc)
         else
-          do_store addr
+          do_store addr >>= fun fp ->
+          if is_locking then
+            Eff.update (fun st ->
+              { st with allocations=
+                  IntMap.update alloc_id (function
+                    | Some alloc -> Some { alloc with is_readonly= true }
+                    | None       -> None
+                  ) st.allocations }
+            ) >>= fun () ->
+            return fp
+          else
+            return fp
       in
       match (prov, ptrval_) with
       | (_, PVnull _) ->
@@ -1179,7 +1190,7 @@ let rec explode_bytes mval : (meta * char option) list =
         load loc unsigned_char_ty
           (array_shift_ptrval ptrval2 unsigned_char_ty (i))
         >>= fun (_, mval) ->
-        store loc unsigned_char_ty
+        store loc unsigned_char_ty false
           (array_shift_ptrval ptrval1 unsigned_char_ty (i)) mval
         >>= fun _ ->
         aux (N.succ i)

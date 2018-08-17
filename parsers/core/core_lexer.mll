@@ -119,6 +119,7 @@ let keywords =
       ("free",   T.FREE  );
       ("kill",   T.KILL  );
       ("store",  T.STORE );
+      ("store_lock",  T.STORE_LOCK );
       ("load",   T.LOAD  );
       ("rmw",    T.RMW   );
       ("fence",  T.FENCE );

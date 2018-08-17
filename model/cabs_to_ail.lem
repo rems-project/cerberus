@@ -1,4 +1,4 @@
-open import Pervasives Utils Cabs AilSyntax Std
+open import Pervasives Utils Cabs AilSyntax Std Constraint
 import Utils
 
 open import Cabs_to_ail_aux
@@ -101,75 +101,76 @@ let stringFromInit_path xs =
 (*
 val     elemPathFromCtype_aux3: map identifier tag_definition -> (init_path * ATypes.ctype) -> ATypes.ctype -> list (init_path * (init_path * ATypes.ctype))
 *)
-let rec wip tagDefs acc path_prefix (outer_path, outer_ty) = function
-  | ATypes.Void ->
-      error "elemPathFromCtype_aux3, Void"
-  | ATypes.Function _ _ _ _ ->
-      error "elemPathFromCtype_aux3, Function"
-  | ATypes.Basic _ ->
-      (path_prefix, outer_path, outer_ty) :: acc
-  | ATypes.Pointer _ _ ->
-      (path_prefix, outer_path, outer_ty) :: acc
-  | ATypes.Array _ Nothing ->
-      error "elemPathFromCtype_aux3, Array Nothing"
-  | ATypes.Array elem_ty (Just n) ->
-      List.foldl (fun acc i ->
-        wip tagDefs acc (Elem_array i :: path_prefix) (Elem_array i :: path_prefix, elem_ty) elem_ty
-      ) (wip tagDefs acc (Elem_array 0 :: path_prefix) (outer_path, outer_ty) elem_ty)
-        (Utils.mkListFromTo 1 (n-1))
-  | ATypes.Atomic atom_ty ->
-      wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
-  | ATypes.Struct tag_sym ->
-      match Map.lookup tag_sym tagDefs with
-        | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
-            let () = if isAnonymous then
-              Debug.print_debug 1 [] (fun () ->
-                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
-              )
-            else () in
-            List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
-              wip tagDefs acc
-                (Elem_member memb_ident :: path_prefix)
-                (Elem_member memb_ident :: path_prefix, memb_ty)
-                memb_ty
-            ) (wip tagDefs acc
+let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (ATypes.Ctype _ cty) =
+  match cty with
+    | ATypes.Void ->
+        error "elemPathFromCtype_aux3, Void"
+    | ATypes.Function _ _ _ _ ->
+        error "elemPathFromCtype_aux3, Function"
+    | ATypes.Basic _ ->
+        (path_prefix, outer_path, outer_ty) :: acc
+    | ATypes.Pointer _ _ ->
+        (path_prefix, outer_path, outer_ty) :: acc
+    | ATypes.Array _ Nothing ->
+        error "elemPathFromCtype_aux3, Array Nothing"
+    | ATypes.Array elem_ty (Just n) ->
+        List.foldl (fun acc i ->
+          wip tagDefs acc (Elem_array i :: path_prefix) (Elem_array i :: path_prefix, elem_ty) elem_ty
+        ) (wip tagDefs acc (Elem_array 0 :: path_prefix) (outer_path, outer_ty) elem_ty)
+          (Utils.mkListFromTo 1 (n-1))
+    | ATypes.Atomic atom_ty ->
+        wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
+    | ATypes.Struct tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+              let () = if isAnonymous then
+                Debug.print_debug 1 [] (fun () ->
+                  "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
+                )
+              else () in
+              List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
+                wip tagDefs acc
+                  (Elem_member memb_ident :: path_prefix)
+                  (Elem_member memb_ident :: path_prefix, memb_ty)
+                  memb_ty
+              ) (wip tagDefs acc
+                   (Elem_member first_memb_ident :: path_prefix)
+                   (outer_path, outer_ty) 
+                   first_memb_ty)
+                xs
+          | _ ->
+              error "elemPathFromCtype_aux3, Struct"
+        end
+    | ATypes.Union tag_sym ->
+        (* TODO: check *)
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+              let () = if isAnonymous then
+                Debug.print_debug 1 [] (fun () ->
+                  "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
+                )
+              else () in
+              (wip tagDefs acc
                  (Elem_member first_memb_ident :: path_prefix)
                  (outer_path, outer_ty) 
                  first_memb_ty)
-              xs
-        | _ ->
-            error "elemPathFromCtype_aux3, Struct"
-      end
-  | ATypes.Union tag_sym ->
-      (* TODO: check *)
-      match Map.lookup tag_sym tagDefs with
-        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
-            let () = if isAnonymous then
-              Debug.print_debug 1 [] (fun () ->
-                "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
-              )
-            else () in
-            (wip tagDefs acc
-               (Elem_member first_memb_ident :: path_prefix)
-               (outer_path, outer_ty) 
-               first_memb_ty)
-        | _ ->
-            error "elemPathFromCtype_aux3, Union"
-      end
-  | ATypes.Builtin _ ->
-      (* TODO? *)
-      error "elemPathFromCtype_aux3, Builtin"
-end
+          | _ ->
+              error "elemPathFromCtype_aux3, Union"
+        end
+    | ATypes.Builtin _ ->
+        (* TODO? *)
+        error "elemPathFromCtype_aux3, Builtin"
+  end
 
 val elemPathFromCtype3: bool -> map identifier tag_definition -> ATypes.ctype -> list (init_path * init_path * ATypes.ctype)
-let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
+let elemPathFromCtype3 is_unknown_size tagDefs (ATypes.Ctype _ entity_ty as entity_cty) =
   match entity_ty with
     | ATypes.Array _ Nothing ->
         error "TODO: elemPathFromCtype3, array with unknown size"
     | _ ->
         let (outer_path, outer_ty) = match entity_ty with
           | ATypes.Array elem_ty _ ->
-              ([Elem_array 0], if is_unknown_size then entity_ty else elem_ty)
+              ([Elem_array 0], if is_unknown_size then entity_cty else elem_ty)
           | ATypes.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
                 | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
@@ -178,7 +179,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
                       )
                     else () in
-                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_cty else first_memb_ty)
                 | _ ->
                     error "elemPathFromCtype3, Struct"
               end
@@ -191,19 +192,19 @@ let elemPathFromCtype3 is_unknown_size tagDefs entity_ty =
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
                       )
                     else () in
-                    ([Elem_member first_memb_ident], if is_unknown_size then entity_ty else first_memb_ty)
+                    ([Elem_member first_memb_ident], if is_unknown_size then entity_cty else first_memb_ty)
                 | _ ->
                     error "elemPathFromCtype3, Union"
               end
           | _ ->
-              ([], entity_ty)
+              ([], entity_cty)
         end in
         let xs =
           wip tagDefs
             []              (* acc *)
             []              (* current path prefix *)
             (outer_path, outer_ty) (* current outer path and it's type *)
-            entity_ty in
+            entity_cty in
         List.map (fun (path, outer_path, ty) ->
           (List.reverse path, List.reverse outer_path, ty)
         ) (List.reverse xs)
@@ -304,30 +305,31 @@ let mk_elemsPathFromCtype tagDefs ty =
 
 
 
-let rec cardinalityOfCtype tagDefs = function
-  | ATypes.Array _ Nothing ->
-      error "cardinalityOfCtype: Array Nothing"
-  | ATypes.Array elem_ty (Just n) ->
-      n * cardinalityOfCtype tagDefs elem_ty
-  | ATypes.Struct tag_sym ->
-      match Map.lookup tag_sym tagDefs with
-        | Just (Struct_definition isAnonymous xs) ->
-            let () = if isAnonymous then
-              Debug.print_debug 1 [] (fun () ->
-                "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
-              )
-            else () in
-            List.foldl (fun acc (_, (_, memb_ty)) ->
-              cardinalityOfCtype tagDefs memb_ty + acc
-            ) 0 xs
-        |  _ ->
-            error "cardinalityOfCtype: Struct"
-      end
-  | ATypes.Atomic atom_ty ->
-      cardinalityOfCtype tagDefs atom_ty
-  | _ ->
-      1
-end
+let rec cardinalityOfCtype tagDefs (ATypes.Ctype _ ty) =
+  match ty with
+    | ATypes.Array _ Nothing ->
+        error "cardinalityOfCtype: Array Nothing"
+    | ATypes.Array elem_ty (Just n) ->
+        n * cardinalityOfCtype tagDefs elem_ty
+    | ATypes.Struct tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition isAnonymous xs) ->
+              let () = if isAnonymous then
+                Debug.print_debug 1 [] (fun () ->
+                  "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
+                )
+              else () in
+              List.foldl (fun acc (_, (_, memb_ty)) ->
+                cardinalityOfCtype tagDefs memb_ty + acc
+              ) 0 xs
+          |  _ ->
+              error "cardinalityOfCtype: Struct"
+        end
+    | ATypes.Atomic atom_ty ->
+        cardinalityOfCtype tagDefs atom_ty
+    | _ ->
+        1
+  end
 
 
 
@@ -344,10 +346,10 @@ end
 
 
 val     ctypeAtPath: map identifier tag_definition -> ATypes.ctype -> init_path -> ATypes.ctype
-let rec ctypeAtPath tagDefs ty path =
+let rec ctypeAtPath tagDefs (ATypes.Ctype _ ty as cty) path =
   match (ty, path) with
     | (_, []) ->
-        ty
+        cty
     | (ATypes.Array elem_ty (Just n1), Elem_array n2 :: path') ->
         if n1 <= n2 then
           error "ctypeAtPath: array type smaller than path needed"
@@ -368,23 +370,23 @@ let rec ctypeAtPath tagDefs ty path =
     (* TODO: union *)
     | _ ->
         error ("ctypeAtPath: wildcard ==> " ^
-               Pp.stringFromAil_ctype ATypes.no_qualifiers ty ^
+               Pp.stringFromAil_ctype ATypes.no_qualifiers cty ^
                " --- path: " ^ stringFromInit_path path)
   end
 
 
-let rec innerCtype tagDefs ty =
+let rec innerCtype tagDefs (ATypes.Ctype _ ty as cty) =
   match ty with
     | ATypes.Void ->
         error "innerCtype: Void"
     | ATypes.Basic _ ->
-        ty
+        cty
     | ATypes.Array elem_ty _ ->
         innerCtype tagDefs elem_ty
     | ATypes.Function _ _ _ _ ->
         error "innerCtype: Function"
     | ATypes.Pointer _ _ ->
-        ty
+        cty
     | ATypes.Atomic atom_ty ->
         (* TODO: check *)
         innerCtype tagDefs atom_ty
@@ -404,14 +406,14 @@ let rec innerCtype tagDefs ty =
               error "innerCtype: Union"
         end
     | ATypes.Builtin _ ->
-        ty
+        cty
   end
 
 
 
 
 val     outerValidPath: map identifier tag_definition -> ATypes.ctype -> list (init_element) -> init_path
-let rec outerValidPath_aux tagDefs ty path acc =
+let rec outerValidPath_aux tagDefs (ATypes.Ctype _ ty) path acc =
   match (ty, path) with
     | (_, []) ->
         List.reverse acc
@@ -465,63 +467,65 @@ E.desugM (list (init_path * expression unit) * list (init_path * init_path * ATy
 *)
 
 val constructValue: map identifier tag_definition -> list (init_path * expression unit) -> ATypes.ctype -> expression unit
-let rec constructValue_aux tagDefs path elems = function
-  | ATypes.Array elem_ty Nothing ->
-      let () = Debug.print_debug 0 [] (fun () ->
-        "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
-      ) in
-      error "constructValue_aux: Array Nothing"
-  | ATypes.Array elem_ty (Just n) ->
-      let es =
-        List.map (fun i ->
-          Just (constructValue_aux tagDefs (path ++ [Elem_array i]) elems elem_ty)
-        ) (Utils.mkListN n) in
-      AnnotatedExpression () [] Loc.unknown begin
-        AilEarray false(*TODO*) elem_ty es
-      end
-  | ATypes.Struct tag_sym ->
-      match Map.lookup tag_sym tagDefs with
-        | Just (Struct_definition isAnonymous xs) ->
-            let () = if isAnonymous then
-              Debug.print_debug 1 [] (fun () ->
-                "constructValue_aux: this may be WRONG ==> anonymous Struct"
-              )
-            else () in
-            let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
-              (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
-            ) xs in
-            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
-              AilEstruct tag_sym membrs
-            end
-        | _ ->
-            error "constructValue_aux, Struct"
-      end
-  | ATypes.Union tag_sym ->
-      match Map.lookup tag_sym tagDefs with
-        | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs')) ->
-            let () = if isAnonymous then
-              Debug.print_debug 1 [] (fun () ->
-                "constructValue_aux: this may be WRONG ==> anonymous Union"
-              )
-            else () in
-            (* TODO: this is only correct if the first member was the one initialised *)
-            AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
-              AilEunion tag_sym first_memb_ident
-                (Just (constructValue_aux tagDefs (path ++ [Elem_member first_memb_ident]) elems first_memb_ty))
-            end
-        | _ ->
-            error "constructValue_aux, Union"
-      end
-  | ATypes.Atomic atom_ty ->
-      error "TODO: Atomic"
-  | ty ->
-      match List.lookup path elems with
-        | Nothing ->
-            mk_zeroInit tagDefs ty
-        | Just e ->
-            e
-      end
-end
+let rec constructValue_aux tagDefs path elems (ATypes.Ctype _ ty as cty) =
+  match ty with
+    | ATypes.Array elem_ty Nothing ->
+        let () = Debug.print_debug 0 [] (fun () ->
+          "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
+        ) in
+        error "constructValue_aux: Array Nothing"
+    | ATypes.Array elem_ty (Just n) ->
+        let es =
+          List.map (fun i ->
+            Just (constructValue_aux tagDefs (path ++ [Elem_array i]) elems elem_ty)
+          ) (Utils.mkListN n) in
+        AnnotatedExpression () [] (Loc.locOf cty) begin
+          AilEarray false(*TODO*) elem_ty es
+        end
+    | ATypes.Struct tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Struct_definition isAnonymous xs) ->
+              let () = if isAnonymous then
+                Debug.print_debug 1 [] (fun () ->
+                  "constructValue_aux: this may be WRONG ==> anonymous Struct"
+                )
+              else () in
+              let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
+                (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
+              ) xs in
+              AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
+                AilEstruct tag_sym membrs
+              end
+          | _ ->
+              error "constructValue_aux, Struct"
+        end
+    | ATypes.Union tag_sym ->
+        match Map.lookup tag_sym tagDefs with
+          | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs')) ->
+              let () = if isAnonymous then
+                Debug.print_debug 1 [] (fun () ->
+                  "constructValue_aux: this may be WRONG ==> anonymous Union"
+                )
+              else () in
+              (* TODO: this is only correct if the first member was the one initialised *)
+              AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
+                AilEunion tag_sym first_memb_ident
+                  (Just (constructValue_aux tagDefs (path ++ [Elem_member first_memb_ident]) elems first_memb_ty))
+              end
+          | _ ->
+              error "constructValue_aux, Union"
+        end
+    | ATypes.Atomic atom_ty ->
+        error "TODO: Atomic"
+    | ty ->
+        match List.lookup path elems with
+          | Nothing ->
+              mk_zeroInit tagDefs cty
+          | Just e ->
+              e
+        end
+  end
+
 let constructValue tagDefs elems ty =
   constructValue_aux tagDefs [] elems ty
 
@@ -577,11 +581,13 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
               E.return false
         end
     | AilEcast _ _ _ ->
-        E.fail loc (Errors.Desugar_NotyetSupported "cast operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "cast operator in `integer constant expressions'")
     | AilEassert _ ->
         E.return false
     | AilEoffsetof _ _ ->
-        E.fail loc (Errors.Desugar_NotyetSupported "offsetof() in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "offsetof() in `integer constant expressions'")
+    | AilEstr _ ->
+        E.return false
 (*
     | AilEgeneric of expression 'a * list (generic_association 'a)
     | AilEarray of bool * ctype * list (maybe (expression 'a))
@@ -608,19 +614,21 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
         E.return false
     | AilErvalue _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail loc Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilErvalue _)"
     | AilEarray_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail Loc.unknown Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilEarray_decay _)"
     | AilEfunction_decay _ ->
         (* NOTE: this only exists after the Ail typing *)
-        E.fail Loc.unknown Errors.Desugar_impossible
+        error "cabs_to_ail.is_integer_constant_expression (AilEfunction_decay _)"
 
 
 
     | AilEconst (ConstantInteger _) ->
         (* NOTE: this includes enumeration constants *)
         E.return true
+    | AilEconst (ConstantFloating _) ->
+        E.return false
     | AilEconst (ConstantCharacter _) ->
         E.return true
     | AilEsizeof _ ty ->
@@ -689,7 +697,7 @@ except when they are contained within a subexpression that is not evaluated.115)
     
     | AilEcond _ _ _ ->
         (* TODO: location *)
-        E.fail loc (Errors.Desugar_NotyetSupported "conditional operator in `integer constant expressions'")
+        E.fail loc (Errors.Desugar_NotYetSupported "conditional operator in `integer constant expressions'")
     
     
     | AilEmemberof _ _ ->
@@ -794,7 +802,7 @@ val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEident sym ->
-        E.fetch_object_declaration sym >>= fun (_, dur, _, _, _) ->
+        E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, _) ->
         match dur with
           | ATypes.Static ->
               E.return true
@@ -842,7 +850,7 @@ let is_address_constant a_expr =
   
   else match a_expr with
     | AnnotatedExpression () _ _ (AilEident sym) ->
-        E.fetch_object_declaration sym >>= fun (_, dur, _, _, ty) ->
+        E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, ty) ->
         match dur with
           | ATypes.Static ->
               E.return (AilTypesAux.is_array ty)
@@ -946,7 +954,7 @@ val desugar_generic_association:
   cabs_generic_association -> E.desugM (generic_association unit)
 
 val check_storage_class_specifiers:
-  declaration_context -> list storage_class_specifier -> E.desugM unit
+  Loc.t -> declaration_context -> list storage_class_specifier -> E.desugM unit
 
 val desugar_enumerator:
   enumerator -> E.desugM (cabs_identifier * maybe (Loc.t * integer))
@@ -1067,7 +1075,7 @@ let rec evaluate_integer_constant_expression loc ty_opt expr =
   E.get_core_eval_stuff >>= fun  (core_env, sym_suppl) ->
   E.get_sigma_sofar >>= fun sigm ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc "TODO:std location" core_env sigm sym_suppl ty_opt expr)
+      (WipFrontend.evalIntegerConstantExpression loc core_env sigm sym_suppl ty_opt expr)
 
 
 
@@ -1180,52 +1188,55 @@ val translate_cabs_string_literal: cabs_string_literal -> stringLiteral
 let translate_cabs_string_literal (pref_opt, str) =
    (maybe Nothing (Just -| translate_cabs_encoding_prefix) pref_opt, str)
 
-
-val project_base_type_specifier: cabs_type_specifier -> maybe cabs_base_type_specifier
-let project_base_type_specifier = function
-  | TSpec_void ->
-      Just BTSpec_void
-  | TSpec_char ->
-      Just BTSpec_char
-  | TSpec_short ->
-      Just BTSpec_short
-  | TSpec_int ->
-      Just BTSpec_int
-  | TSpec_long ->
-      Just BTSpec_long
-  | TSpec_float ->
-      Just BTSpec_float
-  | TSpec_double ->
-      Just BTSpec_double
-  | TSpec_signed ->
-      Just BTSpec_signed
-  | TSpec_unsigned ->
-      Just BTSpec_unsigned
-  | TSpec_Bool ->
-      Just BTSpec_Bool
-  | TSpec_Complex ->
-      Just BTSpec_Complex
-  | _ ->
-      Nothing
- end
+val string_of_string_literal: cabs_string_literal -> string
+let string_of_string_literal (_, ss) =
+  String.concat "" ss
 
 
-val     project_base_type_specifiers: list cabs_type_specifier -> maybe (list cabs_base_type_specifier)
-let rec project_base_type_specifiers_aux acc = function
+val project_base_type_specifier: cabs_type_specifier -> maybe (cabs_base_type_specifier * Loc.t)
+let project_base_type_specifier (TSpec loc tspec) =
+  match tspec with
+    | TSpec_void ->
+        Just (BTSpec_void, loc)
+    | TSpec_char ->
+        Just (BTSpec_char, loc)
+    | TSpec_short ->
+        Just (BTSpec_short, loc)
+    | TSpec_int ->
+        Just (BTSpec_int, loc)
+    | TSpec_long ->
+        Just (BTSpec_long, loc)
+    | TSpec_float ->
+        Just (BTSpec_float, loc)
+    | TSpec_double ->
+        Just (BTSpec_double, loc)
+    | TSpec_signed ->
+        Just (BTSpec_signed, loc)
+    | TSpec_unsigned ->
+        Just (BTSpec_unsigned, loc)
+    | TSpec_Bool ->
+        Just (BTSpec_Bool, loc)
+    | TSpec_Complex ->
+        Just (BTSpec_Complex, loc)
+    | _ ->
+        Nothing
+   end
+
+
+val     project_base_type_specifiers: list cabs_type_specifier -> maybe (list cabs_base_type_specifier * list Loc.t)
+let rec project_base_type_specifiers_aux (acc_bts, acc_locs) = function
   | [] ->
-      Just (List.reverse acc)
+      Just (List.reverse acc_bts, acc_locs)
   | spec :: specs' ->
       match project_base_type_specifier spec with
-        | Just z ->
-            project_base_type_specifiers_aux (z::acc) specs'
+        | Just (z, loc) ->
+            project_base_type_specifiers_aux (z::acc_bts, loc::acc_locs) specs'
         | Nothing ->
             Nothing
       end
   end
-
-
 let project_base_type_specifiers =
-  project_base_type_specifiers_aux []
+  project_base_type_specifiers_aux ([], [])
 
 
 
@@ -1256,89 +1267,90 @@ List.all (function
 
 
 
-val desugar_basic_type_specifiers: Multiset.t cabs_base_type_specifier -> E.desugM (maybe ATypes.basicType)
-let desugar_basic_type_specifiers specs =
+val desugar_basic_type_specifiers: list Loc.t -> Multiset.t cabs_base_type_specifier -> E.desugM (maybe (Loc.t * ATypes.basicType))
+let desugar_basic_type_specifiers locs specs =
+  let loc = Loc.bbox_location locs in
 STD_ "§6.7.2#2, sentence 2 (non `void' case)" $
   if specs = Multiset.from_list [BTSpec_float; BTSpec_Complex] then
     (* STD §6.7.2#2, item 17 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   else if specs = Multiset.from_list [BTSpec_double; BTSpec_Complex] then
     (* STD §6.7.2#2, item 18 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   else if specs = Multiset.from_list [BTSpec_long; BTSpec_double; BTSpec_Complex] then
     (* STD §6.7.2#2, item 19 *)
-    E.fail Loc.unknown (Errors.Desugar_NeverSupported "_Complex types")
+    E.fail loc (Errors.Desugar_NeverSupported "_Complex types")
   
   else
     E.return $
       if specs = Multiset.from_list [BTSpec_char] then
         (* STD §6.7.2#2, item 2 *)
-        Just (ATypes.Integer ATypes.Char)
+        Just (loc, ATypes.Integer ATypes.Char)
       else if specs = Multiset.from_list [BTSpec_signed; BTSpec_char] then
         (* STD §6.7.2#2, item 3 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Ichar))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Ichar))
       else if specs = Multiset.from_list [BTSpec_unsigned; BTSpec_char] then
         (* STD §6.7.2#2, item 4 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Ichar))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Ichar))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_short];
                 Multiset.from_list [BTSpec_signed; BTSpec_short];
                 Multiset.from_list [BTSpec_short; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 5 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Short))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_short; BTSpec_int] ] then
         (* STD §6.7.2#2, item 6 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Short))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Short))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_int];
                 Multiset.from_list [BTSpec_signed];
                 Multiset.from_list [BTSpec_signed; BTSpec_int] ] then
         (* STD §6.7.2#2, item 7 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Int_))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_int] ] then
         (* STD §6.7.2#2, item 8 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Int_))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Int_))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_int] ]then
         (* STD §6.7.2#2, item 9 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.Long))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 10 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.Long))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.Long))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_long; BTSpec_long; BTSpec_int];
                 Multiset.from_list [BTSpec_signed; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 11 *)
-        Just (ATypes.Integer (ATypes.Signed ATypes.LongLong))
+        Just (loc, ATypes.Integer (ATypes.Signed ATypes.LongLong))
       else if List.any (fun z -> specs = z) [
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long];
                 Multiset.from_list [BTSpec_unsigned; BTSpec_long; BTSpec_long; BTSpec_int] ] then
         (* STD §6.7.2#2, item 12 *)
-        Just (ATypes.Integer (ATypes.Unsigned ATypes.LongLong))
+        Just (loc, ATypes.Integer (ATypes.Unsigned ATypes.LongLong))
       else if specs = Multiset.from_list [BTSpec_float] then
         (* STD §6.7.2#2, item 13 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.Float))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.Float))
       else if specs = Multiset.from_list [BTSpec_double] then
         (* STD §6.7.2#2, item 14 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.Double))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.Double))
       else if specs = Multiset.from_list [BTSpec_long; BTSpec_double] then
         (* STD §6.7.2#2, item 15 *)
-        Just (ATypes.Floating (ATypes.RealFloating ATypes.LongDouble))
+        Just (loc, ATypes.Floating (ATypes.RealFloating ATypes.LongDouble))
       else if specs = Multiset.from_list [BTSpec_Bool] then
         (* STD §6.7.2#2, item 16 *)
-        Just (ATypes.Integer (ATypes.Bool))
+        Just (loc, ATypes.Integer (ATypes.Bool))
       else
         Nothing
 
@@ -1414,18 +1426,16 @@ let arrayFromStringLiteral size_opt (pref_opt, strs) =
 
 (* STD §6.7.2.1#3, except for the flexible array part *)
 let check_members membrDefs =
-  E.mapM_ (fun (ident, (_, ty)) ->
-    E.is_incomplete ty >>= function
-      | true ->
-          E.fail (Loc.locOf ident)
-            (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
-      | false ->
-          if AilTypesAux.is_function ty then
-            E.fail (Loc.locOf ident)
-              (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, function")
-          else
+  E.mapM_ (fun (ident, (qs, ty)) ->
+    if AilTypesAux.is_function ty then
+      E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
+    else
+      E.is_incomplete ty >>= function
+        | true ->
+            E.constraint_violation (Loc.locOf ident) (StructMemberIncompleteType qs ty)
+        | false ->
             E.return ()
-    end
+      end
   ) membrDefs
 
 type struct_or_union =
@@ -1438,21 +1448,21 @@ type struct_or_union =
 val     desugar_type_specifiers: list cabs_type_specifier -> E.desugM (ATypes.qualifiers * ATypes.ctype)
 let rec desugar_type_specifiers specs =
   match project_base_type_specifiers specs with
-    | Just z ->
-        desugar_basic_type_specifiers (Multiset.from_list z)
+    | Just (z, locs) ->
+        desugar_basic_type_specifiers locs (Multiset.from_list z)
     | Nothing ->
         E.return Nothing
   end >>= function
-    | Just bty ->
-        E.return (ATypes.no_qualifiers, ATypes.Basic bty)
+    | Just (loc, bty) ->
+        E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic bty))
     | Nothing ->
         let desugar_new_struct_or_union struct_or_union tag_ident_opt sdecls =
           let (kind_ctor, def_ctor, type_ctor) =
             match struct_or_union with
               | STRUCT ->
-                  (E.Kind_struct, Struct_definition, ATypes.Struct)
+                  (E.Kind_struct, Struct_definition, fun sym -> ATypes.Ctype [] (ATypes.Struct sym))
               | UNION ->
-                  (E.Kind_union, Union_definition, ATypes.Union)
+                  (E.Kind_union, Union_definition, fun sym -> ATypes.Ctype [] (ATypes.Union sym))
             end in
           (* STD §6.7.2.1#8, sentence 1 *)
           (* NOTE: the std say that because we have a 'Just sdecls', a new
@@ -1467,22 +1477,19 @@ let rec desugar_type_specifiers specs =
               | Nothing ->
                   (* xs was an empty list *)
                   (* STD §6.7.2.1#8, sentence 3 *)
-                  E.fail Loc.unknown
-                    (Errors.Desugar_UndefinedBehaviour Undefined.UB061_no_named_members)
-              | Just ((last_ident, (_, lastMemb_ty)), membDefs) ->
+                  E.undef Loc.unknown Undefined.UB061_no_named_members
+              | Just ((last_ident, (lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
                   if AilTypesAux.is_function lastMemb_ty then
-                    E.fail (Loc.locOf last_ident)
-                      (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, function")
+                      E.constraint_violation (Loc.locOf last_ident) (StructMemberFunctionType last_ident)
                   else
                     E.is_incomplete lastMemb_ty >>= function
                       | true ->
                           if AilTypesAux.is_array_unknown_size lastMemb_ty then
                             E.return ()
                           else
-                            E.fail (Loc.locOf last_ident)
-                              (Errors.Desugar_ConstraintViolation "§6.7.2.1#3, incomplete")
+                            E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType lastMemb_qs lastMemb_ty)
                       | false ->
                           E.return ()
                     end
@@ -1498,78 +1505,78 @@ let rec desugar_type_specifiers specs =
             (def_ctor (isNothing tag_ident_opt) all_membDefs) >>
           E.return (ATypes.no_qualifiers, type_ctor tag_sym) in
         match specs with
+            (* NOTE: The parser does not generate a declaration without a type specifier *)
           | [] ->
               STD_ "§6.7.2#2, sentence 1"
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 1st sentence")
+                E.constraint_violation Loc.unknown NoTypeSpecifierInDeclaration
           
-          | [TSpec_void] ->
+          | [TSpec loc TSpec_void] ->
               STD_ "§6.7.2#2, sentence 2 (`void' case)"
-                E.return (ATypes.no_qualifiers, ATypes.Void)
+                E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] ATypes.Void)
           
-          | [TSpec_struct Nothing Nothing] ->
-              error "TODO: TSpec_struct Nothing, Nothing"
+            (* NOTE: The parser does not generate such enum *)
+          | [TSpec loc (TSpec_enum Nothing Nothing)] ->
+              error "TSpec_enum Nothing, Nothing"
           
-          | [TSpec_union Nothing Nothing] ->
-              error "TODO: TSpec_union Nothing, Nothing"
+            (* NOTE: The parser does not generate such struct *)
+          | [TSpec loc (TSpec_struct Nothing Nothing)] ->
+              error "TSpec_struct Nothing, Nothing"
           
-          | [TSpec_enum (Just tag_ident) Nothing] ->
-              (* STD §6.7.2.3#9, enum *)
+            (* NOTE: The parser does not generate such union *)
+          | [TSpec loc (TSpec_union Nothing Nothing)] ->
+              error "TSpec_union Nothing, Nothing"
+          
+          | [TSpec loc (TSpec_enum (Just tag_ident) Nothing)] ->
+              (* NOTE: 'desugar_type_specifiers' must NOT be called on a
+                 specifier occurring in the form described by §6.7.2.3#7 (FOOTNOTE 131) *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-                | Nothing ->
-                    (* TODO: find if there is a better quote *)
-                    E.fail (Loc.locOf tag_ident)
-                      (Errors.Desugar_OtherViolation "footnote 131")
                 | Just (_, (tag_sym, _)) ->
-                    E.resolve_tag_definition tag_sym >>= function
-                      | Nothing ->
-                          (* STD §6.7.2.3#3 *)
-                          E.fail (Loc.locOf tag_ident)
-                            (Errors.Desugar_ConstraintViolation "§6.7.2.3#3")
-                      | Just _ ->
-                          E.return ( ATypes.no_qualifiers
-                                   , ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)) )
-                    end
+                    STD_ "§6.7.2.3#9"
+                    E.return ( ATypes.no_qualifiers
+                             , ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))) )
+                | Nothing ->
+                    E.constraint_violation loc EnumTagIncomplete
               end
           
-          | [TSpec_struct (Just tag_ident) Nothing] ->
+          | [TSpec loc (TSpec_struct (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
-                 specifier occuring in the form described by §6.7.2.3#7 *)
+                 specifier occurring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-                    (* STD §6.7.2.3#9 *)
-                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
-                | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                    STD_ "§6.7.2.3#9"
+                      E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Struct tag_sym))
+                | Just (_, (tag_sym, _)) ->
+                    E.constraint_violation loc (TagRedeclaration tag_sym)
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
                     E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
-                    E.return (ATypes.no_qualifiers, ATypes.Struct tag_sym)
+                    E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Struct tag_sym))
               end
           
-          | [TSpec_union (Just tag_ident) Nothing] ->
+          | [TSpec loc (TSpec_union (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
-                 specifier occuring in the form described by §6.7.2.3#7 *)
+                 specifier occurring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
                 | Just (_, (tag_sym, E.Kind_tag E.Kind_union)) ->
-                    (* STD §6.7.2.3#9 *)
-                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
-                | Just _ ->
-                    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.3#2")
+                    STD_ "§6.7.2.3#9"
+                      E.return (ATypes.no_qualifiers, ATypes.Ctype [] (ATypes.Union tag_sym))
+                | Just (_, (tag_sym, _)) ->
+                    E.constraint_violation loc (TagRedeclaration tag_sym)
                 | Nothing ->
                     (* STD §6.7.2.3#8 *)
                     (* TODO: check, but this seems right *)
                     E.register_tag E.Kind_union (Just tag_ident) >>= fun tag_sym ->
-                    E.return (ATypes.no_qualifiers, ATypes.Union tag_sym)
+                    E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Union tag_sym))
               end
           
-          | [TSpec_struct tag_ident_opt (Just sdecls)] ->
+          | [TSpec loc (TSpec_struct tag_ident_opt (Just sdecls))] ->
               desugar_new_struct_or_union STRUCT tag_ident_opt sdecls
           
-          | [TSpec_union tag_ident_opt (Just sdecls)] ->
+          | [TSpec loc (TSpec_union tag_ident_opt (Just sdecls))] ->
               desugar_new_struct_or_union UNION tag_ident_opt sdecls
           
-          | [TSpec_Atomic tyname] ->
+          | [TSpec loc (TSpec_Atomic tyname)] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
               (* STD §6.7.2.4#3 *)
               (* TODO: shouldn't this be done by the Ail typing? *)
@@ -1577,53 +1584,40 @@ let rec desugar_type_specifiers specs =
                  || AilTypesAux.is_function ty
                  || AilTypesAux.is_atomic ty
                  || not (AilTypesAux.is_unqualified qs) then
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.4#3")
+                E.constraint_violation loc AtomicTypeConstraint
               else
                 (* TODO: qualifiers *)
-                E.return (qs, ATypes.Atomic ty)
+                E.return (qs, ATypes.Ctype [Annot.Aloc loc] (ATypes.Atomic ty))
           
-          | [TSpec_enum Nothing Nothing] ->
-              (* the C parsing should have failed *)
-              E.fail Loc.unknown Errors.Desugar_impossible
-          
-          | [TSpec_enum tag_ident_opt (Just enums)] ->
+          | [TSpec loc (TSpec_enum tag_ident_opt (Just enums))] ->
               E.register_tag E.Kind_enum tag_ident_opt >>= fun tag_sym ->
-              let loc = match tag_ident_opt with
-                | Just ident -> Loc.locOf ident
-                | Nothing    -> Loc.other "TODO_anonymous_enum"
-              end in
               register_enumerators loc tag_sym enums >>= fun ns_rev ->
-              let loc = match tag_ident_opt with
-                | Nothing ->
-                    Loc.unknown
-                | Just tag_ident ->
-                    Loc.locOf tag_ident
-              end in
               (* NOTE: this function doesn't care about the order of the integers *)
               E.register_tag_definition loc tag_sym (Enum_definition ns_rev) >>
-              E.return (ATypes.no_qualifiers, ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym)))
+              E.return (ATypes.no_qualifiers, ATypes.Ctype [Annot.Aloc loc] (ATypes.Basic (ATypes.Integer (ATypes.Enum tag_sym))))
           
           (* *)
-          | [TSpec_name ((CabsIdentifier loc str) as ident)] ->
+          | [TSpec loc (TSpec_name ((CabsIdentifier cid_loc str) as ident))] ->
               E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
                     E.return (ATypes.no_qualifiers, ty)
                 | Nothing ->
                     (* TODO: check the namespace *)
-                    E.resolve_ordinary_identifier loc ident >>= function
+                    E.resolve_ordinary_identifier cid_loc ident >>= function
                       | Just (_, E.OReg_typedef sym) ->
-                          E.resolve_typedef sym >>= fun (qs, ty) ->
-                          E.return (qs, ty)
+                          E.resolve_typedef sym >>= fun (qs, ATypes.Ctype _ ty) ->
+                          E.return (qs, ATypes.Ctype [Annot.Aloc cid_loc] ty)
                       | Just _ ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not King_typedef")
+                          E.fail cid_loc (Errors.Desugar_NotYetSupported "TODO: Tspec_name, not King_typedef")
                       | Nothing ->
-                          E.fail loc (Errors.Desugar_NotyetSupported "TODO: Tspec_name, not resolved")
+                          E.fail cid_loc (Errors.Desugar_NotYetSupported "TODO: Tspec_name, not resolved")
                     end
               end
           
           | _ ->
-              E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2#2, 2nd sentence")
+              let loc = Loc.bbox_location (List.map Loc.locOf specs) in
+              E.constraint_violation loc IllegalTypeSpecifierInDeclaration
         end
 end
 
@@ -1640,7 +1634,7 @@ and register_enumerators tag_loc tag_sym enums =
           loc_n
     end in
     let d_e =
-      AilEannot (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_))) (
+      AilEannot (ATypes.Ctype [] (ATypes.Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)))) (
         AnnotatedExpression () ["§6.7.2.2#3"] loc (
           AilEconst (ConstantInteger (IConstant n Decimal Nothing))
         )
@@ -1694,8 +1688,7 @@ and desugar_array_declarator under_array (ADecl loc tquals is_static a_decltor_s
      | E.Scope_prototype ->
          if under_array = IsUnderArray && (tquals <> [] || is_static) then
 STD_ "§6.7.6.2#1, sentence 5, not outermost" $
-           E.fail Loc.unknown
-             (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence, not outermost")
+           E.constraint_violation loc ArrayDeclarationQsAndStaticOnlyOutmost
          else
            (* TODO: check, but after rereading the STD I think adjustment should only
               happen when the whole type of a parameter is "array of". But NOT for the
@@ -1714,14 +1707,13 @@ STD_ "§6.7.6.2#1, sentence 5, not outermost" $
 *)
            E.return (fun qs ty ->
              ( AilTypesAux.combine_qualifiers qs tquals_qs
-             , (if isAtomic then ATypes.Atomic else id) ty )
+             , (if isAtomic then AilTypesAux.mk_ctype_atomic else id) ty )
            )
 
      | _ ->
          if tquals <> [] || is_static then
 STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
-           E.fail Loc.unknown
-             (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, 5th sentence, not function parameter")
+           E.constraint_violation loc ArrayDeclarationQsAndStaticOutsideFunctionProto
          else
            (* not dealing with a parameter, so no adjustement needed *)
            E.return (fun qs ty -> (qs, ty))
@@ -1729,7 +1721,7 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
   
   (* TODO: is_static not yet supported *)
   if is_static then
-    E.fail loc (Errors.Desugar_NotyetSupported "array parameter with the static keyword")
+    E.fail loc (Errors.Desugar_NotYetSupported "array parameter with the static keyword")
   
   else match a_decltor_size_opt with
     | Just (ADeclSize_expression e) ->
@@ -1739,41 +1731,42 @@ STD_ "§6.7.6.2#1, sentence 5, not function parameter" $
         desugar_expression e >>= fun d_e ->
         is_integer_constant_expression d_e >>= function
           | false ->
-              E.fail loc (Errors.Desugar_NotyetSupported "variable length array type 2")
+              E.fail loc (Errors.Desugar_NotYetSupported "variable length array type 2")
           | true ->
              (* STD §6.7.6.2#1, sentence 2 *)
              (* NOTE: the preceding STD clause is performed by a typecheck done by
                 [WipFrontend.evalIntegerConstantExpression] *)
              evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
               if n <= 0 then
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#1, sentence 3")
+                E.constraint_violation loc ArrayDeclarationNegativeSize
               else
-                E.return (fun qs ty -> perform_adjust qs (ATypes.Array ty (Just n)))
+                E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [Annot.Aloc loc] (ATypes.Array ty (Just n))))
         end
     
     | Just ADeclSize_asterisk ->
         E.get_scope >>= function
           | E.Scope_prototype ->
               (* STD §6.7.6.2#4, sentence 2 *)
-              E.fail loc (Errors.Desugar_NotyetSupported "variable length array type")
+              E.fail loc (Errors.Desugar_NotYetSupported "variable length array type")
           | _ ->
-              E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.6.2#4, sentence 2")
+              E.fail loc (Errors.Desugar_MiscViolation Errors.ArrayDeclarationStarIllegalScope)
         end
     
     | Nothing ->
         (* here the array declarator: has no size expression *)
-        E.return (fun qs ty -> perform_adjust qs (ATypes.Array ty Nothing))
+        E.return (fun qs ty -> perform_adjust qs (ATypes.Ctype [Annot.Aloc loc] (ATypes.Array ty Nothing)))
   end
 
 
 (* TYPE: pointer_declarator -> E.desugM (ATypes.qualifiers -> ATypes.ctype -> (ATypes.qualifiers * ATypes.ctype)) *)
-and desugar_pointer_declarator (PDecl tquals ptr_decltor_opt)  =
+and desugar_pointer_declarator (PDecl ptr_loc tquals ptr_decltor_opt)  =
   (* if ptr_decltor_opt = Nothing, these qualifiers are of the current pointer
      type we are building; otherwise, they are of the referenced type of the
      inner [ptr_decltor] *)
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
-  let mk_pointer_ctype ref_qs ref_ty =
-    (if isAtomic then ATypes.Atomic else id) (ATypes.Pointer ref_qs ref_ty) in
+  let mk_pointer_ctype ref_qs (ATypes.Ctype annots _ as ref_ty) =
+    let loc = Loc.bbox_location [Annot.get_loc_ annots; ptr_loc] in
+    (if isAtomic then AilTypesAux.mk_ctype_atomic else id) (ATypes.Ctype [Annot.Aloc loc] (ATypes.Pointer ref_qs ref_ty)) in
   (* STD  §6.7.6.1#1 *)
   match ptr_decltor_opt with
     (* in this case [tquals_qs] are the qualifiers of the referenced type of
@@ -1831,14 +1824,14 @@ and desugar_direct_abstract_declarator under_array = function
       E.under_scope E.Scope_prototype
         (desugar_parameter_type_list NotFunDef param_tys) >>= fun (params, isVariadic) ->
       match params with
-        | [(Nothing, (qs, ATypes.Void, _))] ->
+        | [(Nothing, (qs, ATypes.Ctype annots ATypes.Void, _))] ->
             if not (AilTypesAux.is_unqualified qs) then
-              let () = Debug.warn [Debug.DB_desugaring] (fun () -> 
+              let () = Debug.warn [Debug.DB_desugaring] (fun () ->
                 "(UNSURE) forbidding the 'void' parameter to have qualifiers") in
               (* NOTE: I can't find if the STD actually requires this, but
                  allowing qualifiers would be meaningless and compilers (at
                  least clang and gcc) do the same *)
-              E.fail Loc.unknown (Errors.Desugar_OtherViolation "'void' as parameter must not be qualified")
+              E.undef (Annot.get_loc_ annots) Undefined.UB078_modified_void_parameter
             else
               (* STD §6.7.6.3#10 *)
               E.return []
@@ -1855,7 +1848,7 @@ and desugar_direct_abstract_declarator under_array = function
       E.return (
         fun base_qs base_ty ->
           mk_qs_ctype ATypes.no_qualifiers
-            (ATypes.Function false (base_qs, base_ty) params isVariadic)
+            (ATypes.Ctype [] (ATypes.Function false (base_qs, base_ty) params isVariadic))
       )
 end
 
@@ -1900,7 +1893,7 @@ and desugar_direct_declarator fundef under_array = function
       E.return ( ident
                , fun base_qs base_ty ->
                    mk_qs_ctype ATypes.no_qualifiers
-                     (ATypes.Function false (base_qs, base_ty) params isVariadic) )
+                     (ATypes.Ctype [Annot.Aloc (Loc.locOf ddecltor)] (ATypes.Function false (base_qs, base_ty) params isVariadic)) )
 end
 
 
@@ -1916,13 +1909,13 @@ and desugar_parameter_type_list fundef (Params param_decls isVariadic) =
   end >>= fun params ->
   
   match params with
-    | [(Nothing, (qs, ATypes.Void, isRegister))] ->
+    | [(Nothing, (qs, ATypes.Ctype annots ATypes.Void, isRegister))] ->
         (* NOTE: the (illegal) case where there is a identifier is dealt with
            inside 'desugar_parameter_declaration' *)
         if not (AilTypesAux.is_unqualified qs) || isRegister then
           (* NOTE: this is undefined according to annex J.2, though
              I don't undestand why when reading the text (at §6.7.6.3) *)
-          E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB078_modified_void_parameter)
+          E.undef (Annot.get_loc_ annots) Undefined.UB078_modified_void_parameter
         else
           (* STD §6.7.6.3#10 *)
           E.return ([], isVariadic)
@@ -1935,7 +1928,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
   match param_decl with
     | PDeclaration_decl specifs decltor ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#2")
+          E.constraint_violation (Loc.locOf decltor) IllegalStorageClassFunctionDeclarator
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
@@ -1948,13 +1941,12 @@ and desugar_parameter_declaration is_first fundef param_decl =
           if AilTypesAux.is_void _ty then
             match fundef with
               | IsFunDef ->
-                  E.fail Loc.unknown
-                    (Errors.Desugar_ConstraintViolation "§6.9.1#5, sentence 1")
+                  E.constraint_violation (Loc.locOf decltor) IllegalIdentifierTypeVoidInFunctionDefinition
               | NotFunDef ->
                   (* STD §6.7#7 *)
                   (* NOTE: this paragraph applies here because identifiers declared to
                      be a function parameter have no linkage *)
-                  E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB059_incomplete_no_linkage_identifier)
+                  E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
             end
           else
             let (qs, ty) = AilTypesAux.adjust _qs _ty in
@@ -1967,8 +1959,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                            make this a constraint violation, but then there is
                            also §6.7#7 that should apply here (making it UB
                            afterall) ... *)
-                        E.fail Loc.unknown
-                          (Errors.Desugar_UndefinedBehaviour Undefined.UB086_incomplete_adjusted_parameter)
+                        E.undef (Loc.locOf decltor) Undefined.UB086_incomplete_adjusted_parameter
                     | NotFunDef ->
                         (* NOTE: §6.7.6.3#12, explicitly says non-fundef can have
                            incomplete (adjusted) parameter types, but I assume they
@@ -1976,7 +1967,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                         (* STD §6.7#7 *)
                         (* NOTE: this paragraph applies here because identifiers declared to
                            be a function parameter have no linkage *)
-                        E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB059_incomplete_no_linkage_identifier)
+                        E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
                   end
               | false ->
                   let isRegister = List.elem SC_register specifs.storage_classes in
@@ -1984,14 +1975,16 @@ and desugar_parameter_declaration is_first fundef param_decl =
                   E.register_ordinary_identifier ident (E.OK_object true) scs >>= fun (link, sym) ->
                   (* TODO: check this registration *)
                   let dur = determinate_storage_duration link scs in
-                  E.register_internal_object_declaration (Loc.locOf ident) sym (dur, isRegister, qs, ty) >>
+                  E.register_internal_object_declaration sym (Loc.locOf ident, dur, isRegister, qs, ty) >>
                   E.return (Just ident, ( qs
-                                      , if isAtomic then ATypes.Atomic ty else ty
+                                      , if isAtomic then ATypes.Ctype [] (ATypes.Atomic ty) else ty
                                       , isRegister ))
             end
     | PDeclaration_abs_decl specifs abs_decltor_opt ->
         if List.any (fun sc -> sc <> SC_register) specifs.storage_classes then
-          E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.6.3#2")
+          (* TODO: Should position of storage classes be tracked? *)
+          let loc = Loc.bbox_location (List.map Loc.locOf specifs.type_specifiers) in
+          E.constraint_violation loc IllegalStorageClassFunctionDeclarator
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
@@ -2003,20 +1996,18 @@ and desugar_parameter_declaration is_first fundef param_decl =
             mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
           let ret = (Nothing, ( qs
-                              , if isAtomic then ATypes.Atomic ty else ty
+                              , if isAtomic then ATypes.Ctype [] (ATypes.Atomic ty) else ty
                               , List.elem SC_register specifs.storage_classes )) in
           match fundef with
             | IsFunDef ->
                 if not (is_first && AilTypesAux.is_void ty) then
-                  E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#5")
+                  E.constraint_violation (Loc.locOf ty) UniqueVoidParameterInFunctionDefinition
                 else
                   E.return ret
             | NotFunDef ->
                 if not is_first && AilTypesAux.is_void ty then
                   (* TODO: check this *)
-                  E.fail Loc.unknown
-                    (Errors.Desugar_OtherViolation "found a void parameter (in a non-fundef). \
-                       This is probably forbidden, but can't find the STD saying so")
+                  E.fail (Loc.locOf ty) (Errors.Desugar_MiscViolation Errors.UniqueVoidParameterInFunctionDeclaration)
                 else
                   (* NOTE: base on §6.7.6.3#12, this allows incomplete types *)
                   E.return ret
@@ -2075,13 +2066,13 @@ STD_ "§6.5.1#2" $
           | Just (_, E.OReg_enum_constant sym) ->
               E.resolve_enum_constant sym
           | Just (_, E.OReg_typedef _) ->
-              E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+              E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
           | Just (scope, E.OReg_other sym kind _) ->
               (* I love the fact that it is a footnote that says that undeclared
                  identifiers are syntax errors ... *)
               E.scope_is_visible scope >>= fun is_visible ->
               if not is_visible || not (E.is_object_kind kind || kind = E.OK_function) then
-                E.fail (Loc.locOf ident) (Errors.Desugar_OtherViolation "§6.5.1#2")
+                E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
               else
                 E.add_used_identifier sym >>
                 (* TODO(check): this is to let the Ail typechecker know about
@@ -2090,7 +2081,7 @@ STD_ "§6.5.1#2" $
                 match kind with
                   | E.OK_object _ ->
                       E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>
-                      E.fetch_object_declaration sym >>= fun (isTentative, _, _, sym_qs, sym_ty) ->
+                      E.fetch_object_declaration sym >>= fun (isTentative, _, _, _, sym_qs, sym_ty) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
                         AilEident sym
@@ -2103,10 +2094,7 @@ STD_ "§6.5.1#2" $
                 | Just (d_e, _) ->
                     E.return d_e
                 | Nothing ->
-                    E.fail (Loc.locOf ident)
-                      (* TODO: std §6.5.1#2 *)
-                      (* TODO: check the quote *)
-                      (Errors.Desugar_UndeclaredIdentifier (show ident))
+                    E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))
               end
         end
     
@@ -2202,10 +2190,9 @@ STD_ "§6.5.3.1#3" $
               AilEassign <$> desugar_expression e1
                          <*> desugar_expression e2
           | Just aop ->
-              (* TODO: temporary hack, while the elab doesn't support compound assigns *)
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
-              E.return $ AilEassign d_e1 (AnnotatedExpression () [] loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
+              E.return (AilEcompoundAssign d_e1 aop d_e2)
         end 
     | CabsEcomma e1 e2 ->
         AilEbinary <$> desugar_expression e1
@@ -2223,7 +2210,8 @@ STD_ "§6.5.3.1#3" $
           | AnnotatedExpression _ _ _ (AilEident sym) ->
               E.return (AilEva_start d_e sym)
           | _ ->
-              E.fail Loc.unknown (Errors.Desugar_TODOCTOR "the second operand of va_start() was not paramN")
+              (* TODO: is this a fatal error? *)
+              error "the second operand of va_start() was not paramN"
         end
     | CabsEva_arg e tyname ->
         (* TODO: do something with the qualifiers? *)
@@ -2253,30 +2241,29 @@ and desugar_generic_association gas =
 
 
 (* TODO: rename this function *)
-and check_storage_class_specifiers decl_ctxt scs =
+and check_storage_class_specifiers loc decl_ctxt scs =
   E.get_scope >>= fun scope ->
   if    List.length scs > 1
      && not (   List.all (fun z -> z = SC_Thread_local || z = SC_static) scs
              || List.all (fun z -> z = SC_Thread_local || z = SC_extern) scs) then
 STD_ "§6.7.1#2" $
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#2")
+    E.constraint_violation loc IllegalMultipleStorageClasses
   
   else if not (decl_ctxt = Object_decl_context && E.is_block_scope scope &&
                List.elem SC_Thread_local scs -->
                  (List.elem SC_static scs || List.elem SC_extern scs)
               ) then
 STD_ "§6.7.1#3, sentence 1" $
-         E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#3, 1st sentence")
+    E.constraint_violation loc IllegalMultipleStorageClassesThreadLocal
   
   else if decl_ctxt = Function_decl_context && List.elem SC_Thread_local scs then
 STD_ "§6.7.1#4" $
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.1#4")
+    E.constraint_violation loc ThreadLocalFunctionDeclaration
   
   else if not (decl_ctxt = Function_decl_context && E.is_block_scope scope -->
                scs = [] || scs = [SC_extern]) then
 STD_ "§6.7.1#7" $
-    E.fail Loc.unknown
-      (Errors.Desugar_UndefinedBehaviour Undefined.UB060_block_scope_function_with_storage_class)
+    E.undef loc Undefined.UB060_block_scope_function_with_storage_class
   else
 STD_ "§6.7.1#8" $
     (* TODO *)
@@ -2327,11 +2314,11 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         (* STD §6.7.9#3 *)
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#3")
+          E.constraint_violation loc IllegalInitializer
         
         (* STD §6.7.9#5 *)
         else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-          E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#5")
+          E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
         
         else
 (*
@@ -2369,7 +2356,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
     | InitDecl loc decltor Nothing ->
         desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
         let (qs, _ty) = mk_qs_ctype base_qs base_ty in
-        let ty = if isAtomic then ATypes.Atomic _ty else _ty in
+        let ty = if isAtomic then ATypes.Ctype [] (ATypes.Atomic _ty) else _ty in
         let mk_desug_init =
           fun () -> E.return Nothing in
         (* STD §6.9.2#2, sentence 1 *)
@@ -2388,17 +2375,17 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
               (Function_decl_context, E.OK_function)
             else
               (Object_decl_context, E.OK_object false) in
-          check_storage_class_specifiers ctx scs >>= fun () ->
+          check_storage_class_specifiers loc ctx scs >>= fun () ->
           E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
           E.return (Just (Loc.locOf ident, link, sym, is_tentative, (qs, ty), mk_desug_init))
     
     | InitDecl loc decltor (Just init) ->
         if scs = [SC_typedef] then
-          E.fail loc (Errors.Desugar_OtherViolation "TODO(find std): typedef can't have a initializer")
+          E.fail loc (Errors.Desugar_MiscViolation Errors.TypedefInitializer)
         else
           desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
           let (qs, _ty) = mk_qs_ctype base_qs base_ty in
-          let ty = if isAtomic then ATypes.Atomic _ty else _ty in
+          let ty = if isAtomic then ATypes.Ctype [] (ATypes.Atomic _ty) else _ty in
           (* TODO: check that we really never have parameter objects here *)
           let kind = if AilTypesAux.is_function ty then E.OK_function else E.OK_object false in
           (* TODO: I don't like the fact that we are using this function directly here *)
@@ -2406,10 +2393,10 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
           (* STD §6.7.9#3 *)
           if not (   AilTypesAux.is_array_unknown_size ty
                   || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#3")
+            E.constraint_violation loc IllegalInitializer
           (* STD §6.7.9#5 *)
           else if E.is_block_scope scope && (link = Linkage_external || link = Linkage_internal) then
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#5")
+            E.constraint_violation (Loc.locOf decltor) IllegalLinkageAndInitialization
           else
             (* postponing the desugaring of the initialiser since the identifier
                (which gets register after the current function) need to be in scope *)
@@ -2423,7 +2410,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
                 (Function_decl_context, E.OK_function)
               else
                 (Object_decl_context, E.OK_object false) in
-            check_storage_class_specifiers ctx scs >>= fun () ->
+            check_storage_class_specifiers loc ctx scs >>= fun () ->
             E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
             E.return (Just (Loc.locOf ident, link, sym, false, (qs, ty), mk_desug_init))
   end
@@ -2442,7 +2429,7 @@ and desugar_struct_declaration struct_decl =
                 E.return membrs
             | Nothing ->
                 (* STD §6.7.2.1#2 *)
-                E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.2.1#2")
+                E.constraint_violation (Loc.locOf base_ty) StructDeclarationLacksDeclaratorList
           end
         else
           E.mapM (fun sdecltor ->
@@ -2452,7 +2439,7 @@ and desugar_struct_declaration struct_decl =
                member. *)
             let (qs, ty) =
               mk_qs_ctype (AilTypesAux.combine_qualifiers tquals_qs specs_qs) base_ty in
-            E.return (ident, (qs, if isAtomic then ATypes.Atomic ty else ty))
+            E.return (ident, (qs, if isAtomic then ATypes.Ctype [] (ATypes.Atomic ty) else ty))
           ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -2465,7 +2452,7 @@ and desugar_struct_declarator struct_decltor =
     | SDecl_simple decltor ->
         desugar_declarator NotFunDef decltor
     | SDecl_bitfield declor_opt (CabsExpression loc _) ->
-        E.fail loc (Errors.Desugar_NotyetSupported "SDecl_bitfield")
+        E.fail loc (Errors.Desugar_NotYetSupported "SDecl_bitfield")
   end
 
 and desugar_enumerator (ident, e_opt) =
@@ -2478,8 +2465,7 @@ and desugar_enumerator (ident, e_opt) =
         (* STD §6.7.2.2#2 *)
         is_integer_constant_expression d_e >>= function
           | false ->
-              (* TODO: the integer must also be representable as an int *)
-              E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.2.2#2")
+              E.constraint_violation loc WrongTypeEnumConstant
           | true ->
               (* TODO: the type provided to the evaluator should be the integer type
                  compatible with the enum? *)
@@ -2537,7 +2523,7 @@ and desugar_type_name (Type_name specs tquals abs_decltor_opt) =
   
   let (qs, ty) =
     mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
-  E.return (qs, if isAtomic then ATypes.Atomic ty else ty)
+  E.return (qs, if isAtomic then ATypes.Ctype [] (ATypes.Atomic ty) else ty)
 
 
 
@@ -2579,17 +2565,17 @@ OTHER
 
 
 (* STD §6.7.9#10, second sentence *)
-and static_thread_implicit_initializer tagDefs ty =
+and static_thread_implicit_initializer tagDefs (ATypes.Ctype _ ty as cty) =
   let () = Debug.print_debug 8 [Debug.DB_desugaring]
-      (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty) in
+      (fun () -> "ENTERING Cabs_to_ail.static_thread_implicit_initializer: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cty) in
   match ty with
     | ATypes.Pointer _ _ ->
         ConstantNull
     | ATypes.Basic _ ->
-        if AilTypesAux.is_arithmetic ty then
+        if AilTypesAux.is_arithmetic cty then
           ConstantInteger (IConstant 0 Octal Nothing)
         else
-          error ("type error 1: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty)
+          error ("type error 1: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cty)
     | ATypes.Array elem_ty n_opt ->
         match n_opt with
           | Just n ->
@@ -2627,7 +2613,7 @@ and static_thread_implicit_initializer tagDefs ty =
         end
 
     | _ ->
-        error ("type error 2: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty)
+        error ("type error 2: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers cty)
 (*  | Function ty qs_tys is_variadic ->
         
     | Atomic ty ->
@@ -2666,11 +2652,11 @@ and pathFromDesigs_aux acc = function
       desugar_expression e               >>= fun d_e ->
       is_integer_constant_expression d_e >>= function
         | false ->
-            E.fail (Loc.locOf e) (Errors.Desugar_ConstraintViolation "§6.7.9#6")
+            E.constraint_violation (Loc.locOf e) IllegalTypeArrayDesignator
         | true ->
             evaluate_integer_constant_expression (Loc.locOf e) Nothing d_e >>= fun n ->
             if n < 0 then
-              error "TODO: pathFromDesigs_aux, n < 0"
+              E.constraint_violation (Loc.locOf e) IllegalSizeArrayDesignator
             else
               pathFromDesigs_aux (Elem_array n :: acc) xs
       end
@@ -2784,7 +2770,7 @@ and foo_aux
               let do_string_literal loc lit =
                 if not (AilTypesAux.is_array_of_character outer_ty) then
                   (* TODO: this is wrong *)
-                  E.fail loc (Errors.Desugar_ConstraintViolation "§6.7.9#14")
+                  E.fail loc (Errors.Desugar_MiscViolation Errors.ArrayCharStringLiteral)
                 else
                   let size = match AilTypesAux.unatomic outer_ty with
                     | ATypes.Array _ (Just n) ->
@@ -2881,9 +2867,9 @@ and foo_aux
                           error "foo_aux, Init_list, inner_elems = []"
                       | (path, opath, ty) :: zs ->
                           let ty' = match ty with
-                            | ATypes.Array elem_ty _ ->
+                            | ATypes.Ctype _ (ATypes.Array elem_ty _) ->
                                 elem_ty
-                            | ATypes.Struct tag_sym ->
+                            | ATypes.Ctype _ (ATypes.Struct tag_sym) ->
                                 match Map.lookup tag_sym tagDefs with
                                   | Just (Struct_definition isAnonymous ((_, (_, first_memb_ty)) :: _)) ->
                                       let () = if isAnonymous then
@@ -2927,7 +2913,7 @@ and bar i elems acc xs =
 and foo entity_ty init_ : E.desugM (ATypes.ctype * list (init_path * expression unit)) =
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
-    | (ATypes.Array elem_ty Nothing, Init_list xs) ->
+    | (ATypes.Ctype annots (ATypes.Array elem_ty Nothing), Init_list xs) ->
         let elems = elemPathFromCtype3 true tagDefs elem_ty in
         let elems' =
           List.map (fun (path, opath, ty) ->
@@ -2938,13 +2924,13 @@ and foo entity_ty init_ : E.desugM (ATypes.ctype * list (init_path * expression 
           | Nothing ->
               error "foo: Array Nothing"
           | Just n ->
-              E.return (ATypes.Array elem_ty (Just (n+1)), ret)
+              E.return (ATypes.Ctype annots (ATypes.Array elem_ty (Just (n+1))), ret)
         end
-    | (ATypes.Array _ _, Init_list xs) ->
+    | (ATypes.Ctype _ (ATypes.Array _ _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
-    | (ATypes.Struct _, Init_list xs) ->
+    | (ATypes.Ctype _ (ATypes.Struct _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
@@ -3029,14 +3015,14 @@ let () = error "DONE" in
           (* STD §6.7.9#11, sentence 1 *)
           (* NOTE: the STD says "shall" and this is not a 'Constraints' section,
              so this is undefined behaviour... *)
-          E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB081_scalar_initializer_not_single_expression)
+          E.undef loc Undefined.UB081_scalar_initializer_not_single_expression
     end >>= fun e ->
     desugar_expression e >>= fun d_e ->
     (* STD §6.7.9#4 *)
     if dur = ATypes.Static || dur = ATypes.Thread then
       is_initializer_constant_expression d_e >>= function
         | false ->
-            E.fail (Loc.locOf d_e) (Errors.Desugar_ConstraintViolation "§6.7.9#4")
+            E.constraint_violation (Loc.locOf d_e) IllegalStorageClassStaticOrThreadInitializer
         | true ->
             if AilTypesAux.is_integer current_ty then
 (* TODO: bring back the evaluation if possible. But the following code is wrong
@@ -3062,14 +3048,15 @@ let () = error "DONE" in
       | Init_list [(Nothing, Init_expr (CabsExpression _ (CabsEstring lit)))] ->
           E.return lit
       | _ ->
-          E.fail loc (Errors.Desugar_UndefinedBehaviour Undefined.UB083)
+          (* TODO: KAYVAN CHECK: this is dead code, `_is_string_literal_init` will filter this out! *)
+          E.undef loc Undefined.UB083
     end >>= fun (pref_opt, char_strs) ->
     
     let (elem_ty, mk_ty, current_size_opt) = match current_ty with
-      | AilTypes.Atomic (AilTypes.Array elem_ty sz) ->
-          (elem_ty, fun z -> AilTypes.Atomic (AilTypes.Array elem_ty z), sz)
-      | AilTypes.Array elem_ty sz ->
-          (elem_ty, fun z -> AilTypes.Array elem_ty z, sz)
+      | ATypes.Ctype annots (ATypes.Atomic (ATypes.Ctype annots' (ATypes.Array elem_ty sz))) ->
+          (elem_ty, fun z -> ATypes.Ctype annots (ATypes.Atomic (ATypes.Ctype annots' (ATypes.Array elem_ty z))), sz)
+      | ATypes.Ctype annots (ATypes.Array elem_ty sz) ->
+          (elem_ty, fun z -> ATypes.Ctype annots (ATypes.Array elem_ty z), sz)
       | _ -> error "TODO(msg): assert false, array_of_character init, no size opt"
     end in
     
@@ -3215,7 +3202,7 @@ let () = error "DONE" in
 *)
                     E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
               | (AnnotatedExpression () _ _ (AilEstr (Just _, str)) as d_e) ->
-                  E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
+                  E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
               | d_e ->
                   E.return (current_ty, d_e)
             end
@@ -3240,7 +3227,7 @@ let () = error "DONE" in
                         else
                           E.return (update_literal_type (integerFromNat (List.length str + 1)), d_e)
                     | AnnotatedExpression () _ _ (AilEstr (Just _, str)) ->
-                        E.fail loc (Errors.Desugar_NotyetSupported "string litteral initialisation with encoding prefix")
+                        E.fail loc (Errors.Desugar_NotYetSupported "string litteral initialisation with encoding prefix")
                     | _ ->
                         E.return (current_ty, d_e)
                   end
@@ -3313,7 +3300,7 @@ let () = error "DONE" in
                     E.return (i+1, Just d_init :: acc)
                 | _ ->
                     (* Multi-array designator *)
-                    E.fail Loc.unknown (Errors.Desugar_NotyetSupported "sucks to be you")
+                    E.fail Loc.unknown (Errors.Desugar_NotYetSupported "sucks to be you")
               end
             ) (0, []) desigs_opt_inits >>= fun (_, xs_rev) ->
             
@@ -3410,10 +3397,10 @@ let () = error "DONE" in
                   
                   else
                     (* TODO: crazy stuff we don't deal with yet *)
-                    E.fail loc (Errors.Desugar_NotyetSupported "crazy struct initializers")
+                    E.fail loc (Errors.Desugar_NotYetSupported "crazy struct initializers")
 
               | _ ->
-                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Struct init thing")
+                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Struct init thing")
             end
 
         | ATypes.Union tag ->
@@ -3444,7 +3431,7 @@ let () = error "DONE" in
                               (* we ignore the qualifiers, initialisers don't care about them *)
                               E.return ty
                           | Nothing ->
-                              E.fail loc (Errors.Desugar_InvalidMember memb_ident current_ty)
+                              E.constraint_violation loc (InvalidMember memb_ident current_ty)
                         end >>= fun memb_ty ->
                         wip_desugar_initializer_ loc dur memb_ty init' >>= fun (membr_ty', d_e) ->
                         (* TODO: use membr_ty' *)
@@ -3464,13 +3451,13 @@ let () = error "DONE" in
                       ("UNION INIT ==> " ^ stringFromList (stringFromPair show Pp.stringFromAil_ctype) ident_tys)in
                   E.fail loc (Errors.Desugar_OtherViolation "TODO union init") *)
               | _ ->
-                  E.fail loc (Errors.Desugar_OtherViolation "[TODO msg], Union init thing")
+                  E.fail loc (Errors.Desugar_TODO "[TODO msg], Union init thing")
             end
 
 (*
         | ATypes.Array elem_ty Nothing ->
             let _ = desigs_opt_inits in
-            E.fail loc (Errors.Desugar_NotyetSupported "not allowing array with no size for now")
+            E.fail loc (Errors.Desugar_NotYetSupported "not allowing array with no size for now")
 *)
 
         (* NOTE: should be a scalar type *)
@@ -3494,15 +3481,15 @@ end
 
 and desugar_and_register_static_assert_declaration sa_decl =
   match sa_decl with
-   | Static_assert e lit ->
+   | Static_assert (CabsExpression loc _ as e) lit ->
        desugar_expression e >>= fun d_e ->
        is_integer_constant_expression d_e >>= function
          | false ->
-             E.fail Loc.unknown (Errors.Desugar_UndefinedBehaviour Undefined.UB204_illtyped_Static_assert)
+             E.undef loc Undefined.UB204_illtyped_Static_assert
          | true ->
-             evaluate_integer_constant_expression Loc.unknown Nothing d_e >>= fun n ->
+             evaluate_integer_constant_expression loc Nothing d_e >>= fun n ->
              if n = 0 then
-               E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7.10#3 Static_assert(The constant expression shall compare unequal to 0.)")
+               E.constraint_violation loc (StaticAssertFailed (string_of_string_literal lit))
              else
                E.return ()
          end
@@ -3517,13 +3504,13 @@ let desugar_declaration_base specifs idecltors =
   ) in
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
           (* for each [init_declarator] *)
-          E.foldlM (fun acc init ->
+          E.foldlM (fun acc (InitDecl loc _ _ as init) ->
             (* NOTE: the wf of the storage classes is checked later (see the
                pattern match on [ty]) *)
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
             desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
-            let ty = if isAtomic then ATypes.Atomic _ty else _ty in
+            let (ATypes.Ctype _ ty as cty) = if isAtomic then ATypes.Ctype [] (ATypes.Atomic _ty) else _ty in
             
             if is_tentative then
               (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
@@ -3531,12 +3518,12 @@ let desugar_declaration_base specifs idecltors =
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)
-              E.register_typedef ident (qs, ty) >>
+              E.register_typedef ident (qs, cty) >>
               E.return acc
               
             else match ty with
               | ATypes.Function _ return_qs_ty params is_variadic ->
-                  check_storage_class_specifiers Function_decl_context specifs.storage_classes >>= fun () ->
+                  check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration (Loc.locOf ident) sym true (
@@ -3548,7 +3535,7 @@ let desugar_declaration_base specifs idecltors =
                   ) >>
                   E.return acc
               | _ ->
-                  check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
+                  check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     (E.OK_object false) specifs.storage_classes >>= fun (link, sym) ->
                   let ident_loc = Loc.locOf ident in
@@ -3575,18 +3562,18 @@ let desugar_declaration_base specifs idecltors =
                   let dur = determinate_storage_duration link specifs.storage_classes in
                   match link with
                     | Linkage_external ->
-                        E.register_external_object_declaration ident_loc sym
-                          (false(*TODO:check*), dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                        E.register_external_object_declaration sym
+                          (false(*TODO:check*), ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
                     | _ ->
-                        E.register_internal_object_declaration ident_loc sym
-                          (dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                        E.register_internal_object_declaration sym
+                          (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
                   end >>
                   mk_desug_init () >>= function
                     | Just (ty', d_e) ->
                         let () = Debug.print_debug 1 [] (fun () ->
                           "Hello, ty' = " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers ty'
                         ) in
-                        begin if ty <> ty' then
+                        begin if cty <> ty' then
                           let () = Debug.print_debug 1 [] (fun () ->
                             "ty' is new"
                           ) in
@@ -3613,12 +3600,12 @@ let desugar_declaration_base specifs idecltors =
                           E.get_tag_definitions >>= fun tagDefs ->
                           (* TODO: not correct for thread? *)
 (*                          E.register_global_object_definition sym (*mk_zeroInit tagDefs ty*) >> *)
-                          E.return (ty, acc)
+                          E.return (cty, acc)
                         else
-                          E.return (ty, acc)
+                          E.return (cty, acc)
                   end >>= fun (ty', ret) ->
                   if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                    E.fail (*TODO*)(Loc.locOf ident) (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_declaration_base)")
+                    E.undef (Loc.locOf ident) Undefined.UB059_incomplete_no_linkage_identifier
                   else
                     E.return ret
             end
@@ -3636,7 +3623,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
   AnnotatedStatement loc <$>
     match stmt_ with
       | CabsSlabel ident s ->
-	  AilSlabel <$> E.resolve_label ident
+          AilSlabel <$> E.resolve_label ident
                     <*> self s
       
       | CabsScase e s ->
@@ -3646,13 +3633,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                           E.return (IConstant n Decimal Nothing))
                      <*> self s
           else
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
+            E.constraint_violation loc LabelStatementOutsideSwitch
       
       | CabsSdefault s ->
           if ctx.switch_depth > 0 then
             AilSdefault <$> self s
           else
-            E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.1#2")
+            E.constraint_violation loc LabelStatementOutsideSwitch
       
       | CabsSblock ss ->
           (* TODO: STD check + annot *)
@@ -3765,8 +3752,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
-            E.mapM (fun init ->
-              check_storage_class_specifiers Object_decl_context specifs.storage_classes >>= fun () ->
+            E.mapM (fun (InitDecl loc _ _ as init) ->
+              check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
               desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             (* for each [init_declarator] *)
@@ -3774,7 +3761,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
               match opt with
                 | Nothing ->
                     (* Case of a typedef *)
-                    E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
+                    E.constraint_violation loc IllegalStorageClassIterationStatement
                 
                 | Just (ident_loc, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
                     if is_tentative then
@@ -3785,11 +3772,11 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                  specifs.storage_classes = [SC_auto] ||
                                  specifs.storage_classes = [SC_register]) then
                       (* NOTE: amusingly, as it is written, the STD doesn't allow the absence of storage-class ... *)
-                      E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
+                      E.constraint_violation loc IllegalStorageClassIterationStatement
                     
                     else match ty with
-                      | ATypes.Function _ _ _ _ ->
-                          E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.5#3")
+                      | ATypes.Ctype _ (ATypes.Function _ _ _ _) ->
+                          E.constraint_violation loc IllegalStorageClassIterationStatement
                       | _ ->
                           mk_desug_init () >>= function
                             | Just (ty', d_e) ->
@@ -3802,18 +3789,18 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                     "ty' is new"
                                   ) in
                                   (* TODO: tentative *)
-                                  E.register_internal_object_declaration ident_loc sym
-                                    (dur, List.elem SC_register specifs.storage_classes, qs, ty')
+                                  E.register_internal_object_declaration sym
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty')
                                 else
-                                  E.register_internal_object_declaration ident_loc sym
-                                    (dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                                  E.register_internal_object_declaration sym
+                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty)
                                 end >>= fun () ->
                                 E.return ( (sym, d_e) :: acc1
                                          , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
-                                E.register_internal_object_declaration ident_loc sym
-                                  (dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
+                                E.register_internal_object_declaration sym
+                                  (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
                                 E.return ( acc1
                                          , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                           end
@@ -3895,7 +3882,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                ; AnnotatedStatement loc (AilSwhile d_e2 d_s_body) ]
                 end
             | (Just (FC_decl (Declaration_base _ _)), _) ->
-                E.fail loc Errors.Desugar_impossible
+                error "desugar_statement_aux: Just (FC_decl (Declaration_base __)), _)"
             | (Just (FC_decl (Declaration_static_assert sa_decl)), e3_opt) ->
                 (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
                 (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
@@ -3927,7 +3914,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
       | CabsScontinue ->
           match ctx.cont_ident_opt with
             | Nothing ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.2#1")
+                E.constraint_violation loc ContinueOutsideLoop
             | Just cont_ident ->
                 self (CabsStatement loc (CabsSgoto cont_ident)) >>= fun (AnnotatedStatement _ stmt_) ->
                 E.return stmt_
@@ -3940,21 +3927,21 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             | Just _ ->
                 E.return AilSbreak
             | Nothing ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.3#1")
+                E.constraint_violation loc BreakOutsideSwtichOrLoop
           end
       
       | CabsSreturn Nothing ->
           E.get_current_return_type >>= function
-            | ATypes.Void ->
+            | ATypes.Ctype _ ATypes.Void ->
                 E.return AilSreturnVoid
             | _ ->
-                E.fail loc Errors.Desugar_NonvoidReturn
+                E.constraint_violation loc VoidReturnNonVoidFunction
           end
       
       | CabsSreturn (Just e) ->
           E.get_current_return_type >>= function
-            | ATypes.Void ->
-                E.fail loc (Errors.Desugar_ConstraintViolation "§6.8.6.4#1, 1st sentence")
+            | ATypes.Ctype _ ATypes.Void ->
+                E.constraint_violation loc NonVoidReturnVoidFunction
             | _ ->
                 AilSreturn <$> desugar_expression e
           end
@@ -4015,32 +4002,32 @@ let rec register_labels (CabsStatement _ stmt_) =
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
 let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.1#4")
+    E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
   else
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
 
-    E.with_scope2 E.Scope_prototype (*TODO: make it a block*) begin
+    E.fresh_block_scope >>= fun funblock_scope ->
+    E.with_scope2 funblock_scope begin
       desugar_declarator IsFunDef decltor
     end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
     
-    (* NOTE: as per §6.9.1#2, we perform a dummy instanciation of the type
+    (* NOTE: as per §6.9.1#2, we perform a dummy instantiation of the type
        **specified by the declarator portion of the function definition**, which
        here means `ddecltor' without `specifs' *)
-    match mk_qs_ctype ATypes.no_qualifiers ATypes.Void with
-      | (_, ATypes.Function _ _ _ _) ->
+    match mk_qs_ctype ATypes.no_qualifiers (ATypes.Ctype [] ATypes.Void) with
+      | (_, ATypes.Ctype _ (ATypes.Function _ _ _ _)) ->
           E.return ()
       | _ ->
           (* STD §6.9.1#2 *)
-          E.fail fundef_loc (Errors.Desugar_ConstraintViolation "§6.9.1#2")
+          E.constraint_violation (Loc.locOf ddecltor) WrongTypeFunctionIdentifier
     end >>
     
-    E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (_, fun_sym) ->
+    E.register_ordinary_identifier fun_ident E.OK_function specifs.storage_classes >>= fun (loc_fun_sym, fun_sym) ->
     
     E.under_scope E.Scope_function begin
       register_labels stmt >>
       
-      E.fresh_block_scope >>= fun funblock_scope ->
       E.under_scope funblock_scope begin
           (* TODO: this is a horrible hack, DO BETTER *)
           E.hack_inject_idents_map idents_map >>
@@ -4049,12 +4036,12 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
 (*        desugar_declarator (IsFunDef specifs) decltor >>= fun (fun_ident, mk_qs_ctype) -> *)
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, specs_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-        let base_ty = if isAtomic then ATypes.Atomic specs_ty else specs_ty in
+        let base_ty = if isAtomic then ATypes.Ctype [] (ATypes.Atomic specs_ty) else specs_ty in
         let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs     in
         
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         match ty with
-          | ATypes.Function has_proto (return_qs, return_ty) params isVariadic ->
+          | ATypes.Ctype _ (ATypes.Function has_proto (return_qs, return_ty) params isVariadic) ->
               (* NOTE: the constraint in §6.9.1#3 is enforced later in the Ail
                  typechecker *)
               let () = Debug.print_debug 4 [] (fun () ->
@@ -4062,7 +4049,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               ) in
               
               E.function_is_defined fun_sym >>= function
-                | true  -> E.fail Loc.unknown (Errors.Desugar_FunctionRedefinition fun_sym)
+                | true  -> E.constraint_violation (Loc.locOf fun_ident) (ExternalRedefinition fun_sym)
                 | false -> E.return ()
               end >>
               
@@ -4079,7 +4066,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
             (* This should not be possible due to the earlier check *)
-            error "Cabs_to_ail.desugar_and_register_function_definition, internal error"
+            error "Cabs_to_ail.desugar_and_register_function_definition"
         end
       end >>= fun (loc, fun_sym, d_stmt) ->
       E.bindings_of_idents_map idents_map >>= fun bindings ->
@@ -4097,7 +4084,7 @@ let desugar_and_register_external_declaration edecl =
   
   (* STD §6.9#2 *)
   if List.any (fun z -> z = SC_auto || z = SC_register) storage_classes then
-    E.fail Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9#2")
+    E.constraint_violation (Loc.locOf edecl) IllegalStorageClassFileScoped
   
   else match edecl with
     | EDecl_func fdef ->
@@ -4106,15 +4093,34 @@ let desugar_and_register_external_declaration edecl =
     (* struct-or-union identifier ; *)
     | EDecl_decl (Declaration_base <|
         storage_classes= [];
-        type_specifiers= [TSpec_struct (Just ident) Nothing];
+        type_specifiers= [TSpec _ (TSpec_struct (Just ident) Nothing)];
         type_qualifiers= [];
         function_specifiers= [];
         alignment_specifiers= [];
       |> []) ->
-        (* TODO: check *)
-        (* STD §6.7.2.3#7 *)
+        STD_ "§6.7.2.3#7"
         E.void (E.register_tag E.Kind_struct (Just ident))
-(*        error "TODO: §6.7.2.3#7" *)
+    
+    (* struct-or-union identifier ; *)
+    | EDecl_decl (Declaration_base <|
+        storage_classes= [];
+        type_specifiers= [TSpec _ (TSpec_union (Just ident) Nothing)];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      |> []) ->
+        STD_ "§6.7.2.3#7"
+        E.void (E.register_tag E.Kind_union (Just ident))
+    
+    (* enum identifier ; *)
+    | EDecl_decl (Declaration_base <|
+        storage_classes= [];
+        type_specifiers= [TSpec _ (TSpec_enum (Just ident) Nothing)];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      |> []) ->
+        E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation Errors.EnumSimpleDeclarationConstruction)
     
     (* TODO: check *)
     | EDecl_decl (Declaration_base specifs idecltors) ->
@@ -4137,7 +4143,7 @@ let desugar_and_register_external_declaration edecl =
           | Just (ident_loc, link, sym, isTentative, (qs, ty), mk_desug_init) ->
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
-                | ATypes.Function _ return_ty params is_variadic ->
+                | ATypes.Ctype _ (ATypes.Function _ return_ty params is_variadic) ->
                     E.register_function_declaration ident_loc sym true (
                       return_ty,
                       Just params, (* TODO: KKKK !!!! *)
@@ -4147,8 +4153,8 @@ let desugar_and_register_external_declaration edecl =
                     )
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
-                    E.register_external_object_declaration ident_loc sym
-                      (isTentative, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                    E.register_external_object_declaration sym
+                      (isTentative, ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->
@@ -4188,7 +4194,7 @@ let desugar_and_register_external_declaration edecl =
                           end >>
                           (* NOTE: it is the type after the initialisation which must be complete *)
                           if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty' then
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), with init")
+                            E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
 (* KKK:
                             E.global_object_is_defined sym >>= function
@@ -4211,9 +4217,9 @@ let desugar_and_register_external_declaration edecl =
                       | Nothing ->
                           if link = Linkage_internal && AilTypesAux.is_incomplete fake_ail_sigma ty then
                             (* TODO: this is wrong (see tentative definition in the STD) *)
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.9.2#3")
+                            E.undef ident_loc Undefined.UB089_tentative_definition_internal_linkage
                           else if link = Linkage_none && AilTypesAux.is_incomplete fake_ail_sigma ty then
-                            E.fail (*TODO*)Loc.unknown (Errors.Desugar_ConstraintViolation "§6.7#7 (desugar_and_register_external_declaration), no init")
+                            E.undef ident_loc Undefined.UB059_incomplete_no_linkage_identifier
                           else
                             if dur = ATypes.Static || dur = ATypes.Thread then
                               E.get_tag_definitions >>= fun tagDefs ->

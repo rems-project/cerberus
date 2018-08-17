@@ -53,6 +53,15 @@ let inline (>>=) m f = bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = fmap
 
+val constraint_violation: forall 'a. Loc.t -> Constraint.violation -> errorM 'a
+let inline constraint_violation loc tcv = fail loc (TError_ConstraintViolation tcv)
+
+val undef: forall 'a. Loc.t -> Undefined.undefined_behaviour -> errorM 'a
+let inline undef loc ub = fail loc (TError_UndefinedBehaviour ub)
+
+val misc: forall 'a. Loc.t -> typing_misc_error -> errorM 'a
+let inline misc loc err = fail loc (TError_MiscError err)
+
 val tryM: forall 'a 'b. errorM 'a -> ('a -> errorM 'b) -> errorM 'b -> errorM 'b
 let tryM (ErrorM m) f errCase = ErrorM (fun ts ->
   match m ts with
@@ -97,12 +106,12 @@ let rec ailErr_foldM f a = function                                             
       f a x >>= fun fax -> ailErr_foldM f fax xs                                          (* GENERIC Monad *)
 end
 
-val guard: typing_error -> bool -> errorM unit
-let inline guard err = function
+val guard: Loc.t -> typing_error -> bool -> errorM unit
+let inline guard loc err = function
   | true ->
       return ()
   | false ->
-      fail Loc.unknown err
+      fail loc err
 end
 
 (* HACK: this is to prevent Lem's from renaming *)

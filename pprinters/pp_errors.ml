@@ -2,6 +2,7 @@ open Lexing
 
 open Errors
 open TypingError
+open Constraint
 
 open Global_ocaml
 open Location_ocaml
@@ -14,7 +15,6 @@ type kind =
   | Warning
   | Note
 
-
 let string_of_kind = function
   | Error ->
       ansi_format [Bold; Red] "error:"
@@ -24,156 +24,219 @@ let string_of_kind = function
       ansi_format [Bold; Black] "note:"
 
 
-let get_line n ic =
-  seek_in ic 0;
-  let rec aux = function
-    | 1 -> input_line ic
-    | n -> let _ = input_line ic in
-           aux (n-1) in
-  aux n
+let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
+let string_of_ctype ty = String_ail.string_of_ctype AilTypes.no_qualifiers ty
+let string_of_sym = Pp_symbol.to_string_pretty
+let string_of_gentype = String_ail.string_of_genType
 
+let string_of_cparser_cause = function
+  | Cparser_invalid_symbol ->
+      "invalid symbol"
+  | Cparser_invalid_line_number n ->
+      "invalid line directive:" ^ n
+  | Cparser_unexpected_eof ->
+      "unexpected end of file"
+  | Cparser_non_standard_string_concatenation ->
+      "unsupported non-standard concatenation of string literals"
+  | Cparser_unexpected_token str ->
+      "unexpected token '"^ str ^ "'"
 
-let string_of_pos pos =
-  ansi_format [Bold] (
-    Printf.sprintf "%s:%d:%d:" pos.pos_fname pos.pos_lnum (1 + pos.pos_cnum - pos.pos_bol)
-  )
+let string_of_constraint_violation = function
+  | FunctionCallIncompleteReturnType ty ->
+      "calling function with incomplete return type '" ^ string_of_ctype ty ^ "'"
+  | FunctionCallArrayReturnType ty ->
+      "calling function returning an array type '" ^ string_of_ctype ty ^ "'"
+  | FunctionCallIncorrectType ->
+      "called object type is not a function or function pointer"
+  | MemberofReferenceBaseType ->
+      "member reference base type is not a structure or union"
+  | MemberofNoMember (memb, gty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
+  | InvalidTypeCompoundLiteral ->
+      "compound literal has invalid type"
+  | ExpressionNotLvalue ->
+      "expression is not assignable"
+  | InvalidArgumentTypeUnaryIncrement ty ->
+      "cannot increment value of type '" ^ string_of_ctype ty ^ "'"
+  | InvalidArgumentTypeUnaryDecrement ty ->
+      "cannot decrement value of type '" ^ string_of_ctype ty ^ "'"
+  | UnaryAddressNotRvalue gty ->
+      "cannot take address of an rvalue of type '" ^ string_of_gentype gty ^ "'"
+  | UnaryAddressRegisterLvalue ->
+      "address of lvalue declared with register storage-class specifier"
+  | IndirectionNotPointer ->
+      "the * operator expects a pointer operand"
+  | InvalidArgumentTypeUnaryExpression gty ->
+      "invalid argument type '" ^ string_of_gentype gty ^ "' to unary expression"
+  | ConditionalOperatorControlType gty ->
+      "'" ^ string_of_gentype gty ^ "' is not a scalar type"
+  | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
+      "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
+  | SimpleAssignmentViolation (IncompatibleType, ty1, gty2)  ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from incompatible type '" ^ string_of_gentype gty2 ^ "'"
+  | SimpleAssignmentViolation (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "'"
+  | SimpleAssignmentViolation (DiscardsQualifiers, ty1, gty2) ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
+  | IntegerConstantOutRange ->
+      "integer constant not in the range of the representable values for its type"
+  | NoLinkageMultipleDeclaration x ->
+      "multiple declaration of '" ^ string_of_cid x ^ "'"
+  | TypedefRedefinition ->
+      "typedef redefinition with different types"
+  | TypedefRedefinitionVariablyModifiedType ->
+      "typedef redefinition of a variably modified type"
+  | IllegalMultipleStorageClasses
+  | IllegalMultipleStorageClassesThreadLocal ->
+      "multiple incompatible storage class specifiers"
+  | ThreadLocalShouldAppearInEveryDeclaration ->
+      "non-thread-local declaration follows a thread-local declaration"
+  | ThreadLocalFunctionDeclaration ->
+      "_Thread_local in function declaration"
+  | StructMemberIncompleteType (qs, ty) ->
+      "member has incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | StructMemberFunctionType f ->
+      "member '" ^ string_of_cid f ^ "' declared as a function"
+  | StructMemberFlexibleArray ->
+      "struct has a flexible array member"
+  | NoTypeSpecifierInDeclaration ->
+      "at least one type specifier should be given in the declaration"
+  | IllegalTypeSpecifierInDeclaration ->
+      "illegal combination of type specifiers"
+  | StructDeclarationLacksDeclaratorList ->
+      "non-anonymous struct/union must contain a declarator list"
+  | WrongTypeEnumConstant ->
+      "expression is not an integer constant expression"
+  | LabelStatementOutsideSwitch ->
+      "label statement outside switch"
+  | LabelRedefinition l ->
+      "redefinition of '" ^ string_of_cid l ^ "'"
+  | SwitchStatementControllingExpressionNotInteger ->
+      "statement requires expression of integer type"
+  | IfStatementControllingExpressionNotScalar
+  | IterationStatementControllingExpressionNotScalar ->
+      "statement requires expression of scalar type"
+  | StaticAssertFailed msg ->
+      "static assert expression failed: " ^ msg
+  | WrongTypeFunctionIdentifier ->
+      "function identifier must have a function type"
+  | EnumTagIncomplete ->
+      "incomplete enum type"
+  | AtomicTypeConstraint ->
+      "invalid use of _Atomic"
+  | RestrictQualifiedPointedTypeConstraint ty ->
+      "pointer to type '" ^ string_of_ctype ty ^ "' may not be restrict qualified"
+  | RestrictQualifiedTypeConstraint ->
+      "restrict requires a pointer"
+  | TagRedefinition sym ->
+      "redefinition of '" ^ string_of_sym sym ^ "'"
+  | TagRedeclaration sym ->
+      "use of '" ^ string_of_sym sym ^ "' with tag type that does not match previous declaration"
+  | UndeclaredLabel l ->
+      "use of undeclared label '" ^ string_of_cid l ^ "'"
+  | ContinueOutsideLoop ->
+      "continue statement outside a loop"
+  | BreakOutsideSwtichOrLoop ->
+      "break statement outside a switch or a loop"
+  | NonVoidReturnVoidFunction ->
+      "void function should not return a value"
+  | VoidReturnNonVoidFunction ->
+      "non-void function should return a value"
+  | ArrayDeclarationNegativeSize ->
+      "array declared with a negative or zero size"
+  | ArrayDeclarationIncompleteType ->
+      "array has incomplete type"
+  | ArrayDeclarationFunctionType ->
+      "element of the array has function type"
+  | ArrayDeclarationQsAndStaticOnlyOutmost ->
+      "type qualifiers or 'static' used in array declarator can only used in the outmost type derivation"
+  | ArrayDeclarationQsAndStaticOutsideFunctionProto ->
+      "type qualifiers or 'static' used in array declarator outside of function prototype"
+  | IllegalReturnTypeFunctionDeclarator ->
+      "function cannot return a function type or an array type"
+  | IllegalStorageClassFunctionDeclarator ->
+      "invalid storage class specifier in function declarator"
+  | IncompleteParameterTypeFunctionDeclarator ->
+      "incomplete type"
+  | IllegalInitializer ->
+      "illegal initializer"
+  | IllegalStorageClassStaticOrThreadInitializer ->
+      "initializer element is not a compile-time constant"
+  | IllegalLinkageAndInitialization ->
+      "identifier linkage forbids to have an initializer"
+  | IllegalTypeArrayDesignator ->
+      "expression is not an integer constant expression"
+  | IllegalSizeArrayDesignator ->
+      "array designator value is negative"
+  | InitializationAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of incompatible type '" ^ string_of_gentype gty2 ^ "'"
+  | InitializationAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "'"
+  | InitializationAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
+  | IllegalStorageClassIterationStatement
+  | IllegalStorageClassFileScoped
+  | IllegalStorageClassFunctionDefinition ->
+      "illegal storage class"
+  | IllegalIdentifierTypeVoidInFunctionDefinition ->
+      "argument may not have 'void' type"
+  | UniqueVoidParameterInFunctionDefinition ->
+      "'void' must be the first and only parameter if specified"
+  | ExternalRedefinition sym ->
+      "redefinition of '" ^ string_of_sym sym ^ "'"
+  | AssertMacroExpressionScalarType ->
+      "assert expression should have scalar type"
 
-
-external terminal_size: unit -> (int * int) option = "terminal_size"
-
-let string_at_line fname lnum cpos =
-  try
-    if Sys.file_exists fname then
-      let ic = open_in fname in
-      let l =
-        let l_ = get_line lnum ic in
-        match terminal_size () with
-          | None ->
-              (None, l_)
-          | Some (_, term_col) ->
-              if cpos >= term_col then begin
-                (* The cursor position is beyond the width of the terminal *)
-                let mid = term_col / 2 in
-                let start  = max 0 (cpos - mid) in
-                let n = String.length l_ - start in
-                ( Some (cpos - start + 5)
-                , if n + 5 <= term_col then
-                    "  ..." ^ String.sub l_ start n
-                  else
-                  "  ..." ^ String.sub l_ start (term_col - 5 - 3) ^ "..." )
-              end else if String.length l_ > term_col then
-                (* The cursor is within the terminal width, but the line needs
-                   to be truncated *)
-                (None, String.sub l_ 0 (term_col - 3) ^ "...")
-              else
-                (None, l_) in
-      close_in ic;
-      Some l
-    else
-      None
-  with
-    End_of_file ->
-      (* TODO *)
-      None
-
-
-let make_message loc k str =
-  begin
-    fun z -> match loc with
-      | Loc_unknown ->
-          "unknown location " ^ z
-      | Loc_other str ->
-          "other location (" ^ str ^ ") " ^ z
-      | Loc_point pos ->
-          Printf.sprintf "%s %s\n" (string_of_pos pos) z ^
-          let cpos = pos.pos_cnum - pos.pos_bol in
-          (match string_at_line pos.pos_fname pos.pos_lnum cpos with
-            | Some (cpos'_opt, l) ->
-                let cpos = match cpos'_opt with
-                  | Some cpos' -> cpos'
-                  | None       -> cpos in
-                l ^ "\n" ^
-                ansi_format [Bold; Green] (String.init (cpos + 1) (fun n -> if n < cpos then ' ' else '^'))
-            | None ->
-                "")
-      | Loc_region (start_p, end_p, cursor_p_opt) ->
-          let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-          Printf.sprintf "%s %s\n" (string_of_pos start_p) z ^
-          (match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
-            | Some (_, l) ->
-                let cpos2 =
-                  if start_p.pos_lnum = end_p.pos_lnum then
-                    end_p.pos_cnum - end_p.pos_bol
-                  else
-                    String.length l in
-                let cursor = match cursor_p_opt with
-                  | Some cursor_p ->
-                      cursor_p.pos_cnum - cursor_p.pos_bol 
-                  | None ->
-                      cpos1 in
-                l ^ "\n" ^
-                ansi_format [Bold; Green] (
-                  String.init ((max cursor cpos2) + 1)
-                    (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                )
-            | None ->
-                "")
-  end (string_of_kind k ^ " " ^ ansi_format [Bold] str)
-
-
-let desugar_cause_to_string = function
-  | Desugar_ConstraintViolation msg ->
-      "violation of constraint " ^ msg
-  | Desugar_UndeclaredIdentifier str ->
+let string_of_misc_violation = function
+  | MultipleEnumDeclaration x ->
+      "redefinition of '" ^ string_of_cid x ^ "'"
+  | EnumSimpleDeclarationConstruction ->
+      "such construction is not allowed for enumerators"
+  | UndeclaredIdentifier str ->
       "use of undeclared identifier '" ^ str ^ "'"
-  | Desugar_OtherViolation msg ->
-      "other violation: " ^ msg
+  | ArrayDeclarationStarIllegalScope ->
+      "star modifier used outside of function prototype"
+  | ArrayCharStringLiteral ->
+      "string literals must be of type array of characters"
+  | UniqueVoidParameterInFunctionDeclaration ->
+      "'void' must be the first and only parameter if specified"
+  | TypedefInitializer ->
+      "illegal initializer in type definition"
+
+let string_of_desugar_cause = function
+  | Desugar_ConstraintViolation e ->
+      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation e
+  | Desugar_MiscViolation e ->
+      string_of_misc_violation e
   | Desugar_UndefinedBehaviour ub ->
-      "undefined behaviour: " ^
-      Undefined.pretty_string_of_undefined_behaviour ub
-  | Desugar_ExternalObjectRedefinition sym ->
-      "redefinition of an external object: " ^
-      Pp_utils.to_plain_string (Pp_ail.pp_id sym)
-  | Desugar_FunctionRedefinition sym ->
-       "(TODO msg) redefinition of '" ^
-      (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ "'\n"
-  | Desugar_BlockScoped_Thread_local_alone ->
-      "Violation of constraint 6.7.1#3 Storage-class specifiers, Contraints: \
-       ``In the declaration of an object with block scope, if the declaration \
-       specifiers include _Thread_local, they shall also include either static \
-       or extern. [...].. ``\n"
-  | Desugar_NotConstantExpression ->
-      "found a non-contant expression in place of a constant one.\n"
-  | Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str)) ->
-      "violation of constraint (§6.7#3): multiple declaration of `" ^
-      str ^ "'."
-  | Desugar_InvalidMember ((Cabs.CabsIdentifier (_, str)), ty) ->
-      "member '" ^ str ^ "' is not defined for type '" ^
-      String_ail.string_of_ctype AilTypes.no_qualifiers ty ^ "'"
-  | Desugar_NonvoidReturn ->
-      "found a void return in a non-void function"
-  | Desugar_Redefinition sym ->
-      "redefinition of: " ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym)
+      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | Desugar_NeverSupported str ->
       "feature that will never supported: " ^ str
-  | Desugar_NotyetSupported str ->
+  | Desugar_NotYetSupported str ->
       "feature not yet supported: " ^ str
-  | Desugar_TODOCTOR str ->
-      "Desugar_TODOCOTR[" ^ str ^ "]"
-  | Desugar_impossible ->
-      "impossible error"
-  | Desugar_constantExpression_notInteger str ->
-      "TODO(msg) Desugar_constantExpression_notInteger: " ^ str
-  | Desugar_constantExpression_UB ubs ->
-      "TODO(msg) Desugar_constantExpression_UB: " ^
-      Pp_utils.to_plain_string (
-        comma_list (fun z -> !^ (Undefined.pretty_string_of_undefined_behaviour z))
-        ubs
-      )
+  | Desugar_TODO msg ->
+      "TODO: " ^ msg
 
+let string_of_ail_typing_misc_error = function
+  | UntypableIntegerConstant i ->
+      "integer constant cannot be represented by any type"
+  | ParameterTypeNotAdjusted ->
+      "internal: the parameter type was not adjusted"
 
-(* TODO: improve *)
-let core_typing_cause_to_string = function
+let string_of_ail_typing_error = function
+  | TError_ConstraintViolation tcv ->
+      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation tcv
+  | TError_UndefinedBehaviour ub ->
+      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
+  | TError_MiscError tme ->
+      string_of_ail_typing_misc_error tme
+  (* TODO *)
+  | TError std ->
+      "[Ail typing] (" ^ std ^ ")\n  \"" ^ std ^ "\""
+  | _ ->
+      "[Ail typing error]"
+
+let string_of_core_typing_cause = function
   | Undefined_startup sym ->
       "Undefined_startup " ^ Pp_symbol.to_string sym
   | MismatchObject (expected_oTy, found_oTy) ->
@@ -210,66 +273,7 @@ let core_typing_cause_to_string = function
   | TooGeneral ->
       "TooGeneral"
 
-
-let std_ref = function
-  | Desugar_cause (Desugar_UndeclaredIdentifier _) ->
-      "§6.5.1#2"
-  | Desugar_cause Desugar_NonvoidReturn ->
-    "§6.8.6.4#1, 2nd sentence"
-
-  | AIL_TYPING TError_main_return_type ->
-      "§5.1.2.2.1#1, 2nd sentence"
-  | AIL_TYPING TError_indirection_not_pointer ->
-      "§6.5.3.2#2"
-  | AIL_TYPING (TError_TODO n) ->
-      "Ail typing error (TODO " ^ string_of_int n ^ ")"
-  | AIL_TYPING (TError std) ->
-      std
-  | Desugar_cause (Desugar_ConstraintViolation str) ->
-      str
-  | Core_run_cause _  ->
-      "TODO: core_run_cause"
-  | Core_typing_cause cause ->
-      "Core typing error: " ^ 
-      begin match cause with
-        | Undefined_startup sym ->
-            "undefined startup fun/proc '" ^ Pp_utils.to_plain_string (Pp_ail.pp_id sym) ^ "'"
-        | MismatchObject (oTy1, oTy2) ->
-            "mismatching object types, expecting: " ^ String_core.string_of_core_object_type oTy1 ^
-            "found: " ^ String_core.string_of_core_object_type oTy2
-        | Mismatch (str, bTy1, bTy2) ->
-            "mismatching base types (in " ^ str ^ "), expecting: " ^ String_core.string_of_core_base_type bTy1 ^
-            " -- found: " ^ String_core.string_of_core_base_type bTy2
-        | MismatchIf (bTy1, bTy2) ->
-            "mismatching types in a if-expression, then branch: " ^ String_core.string_of_core_base_type bTy1 ^
-            " -- else branch: " ^ String_core.string_of_core_base_type bTy2
-        | MismatchIfCfunction ((ret_bTy1, bTys1), (ret_bTy2, bTys2)) ->
-            "mismatching signatures in a Cfunction if-expression, then branch: " ^
-            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1)) ^
-            " -- else branch: " ^
-            Pp_utils.to_plain_string (Pp_core.Basic.pp_core_base_type ret_bTy1 ^^ P.parens (comma_list Pp_core.Basic.pp_core_base_type bTys1))
-        | EmptyArray ->
-            "found an empty array"
-        | CtorWrongNumber _ (*of nat (* expected *) * nat (* found *)*) ->
-            "TODO(msg) CtorWrongNumber"
-        | HeterogenousArray _ (* of core_object_type (* expected *) * core_object_type (* found *) *) ->
-            "TODO(msg) HeterogenousArray"
-        | HeterogenousList _ (* of core_base_type (* expected *) * core_base_type (* found *) *) ->
-            "TODO(msg) HeterogenousList"
-        | InvalidMember _ (* of Symbol.sym * Cabs.cabs_identifier *) ->
-            "TODO(msg) InvalidMember"
-        | CoreTyping_TODO str ->
-            "TODO(msg) " ^ str
-        | TooGeneral ->
-            "too general"
-      end
-  | PARSER str ->
-      "TODO: parsing error ==> " ^ str
-  | _ ->
-      "TODO: pp_errors std_ref"
-
-
-let string_of_core_run_error = function
+let string_of_core_run_cause = function
   | Illformed_program str ->
       "ill-formed program: `" ^ str ^ "'"
   | Found_empty_stack str ->
@@ -281,77 +285,108 @@ let string_of_core_run_error = function
   | Unresolved_symbol sym ->
       "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
 
-
 let short_message = function
-  | Cparser_cause (Cparser_undeclaredIdentifier str) ->
-      "undeclared identifier '"^ str ^ "'"
-  | Cparser_cause (Cparser_unexpectedToken str) ->
-      "unexpected token '"^ str ^ "'"
+  | CPARSER ccause ->
+      string_of_cparser_cause ccause
+  | DESUGAR dcause ->
+      string_of_desugar_cause dcause
+  | AIL_TYPING terr ->
+      string_of_ail_typing_error terr
+  | CORE_TYPING tcause ->
+      string_of_core_typing_cause tcause
+  | CORE_RUN cause ->
+      string_of_core_run_cause cause
+  | UNSUPPORTED str ->
+      "unsupported " ^ str
+  | PARSER str ->
+      "TODO(msg) PARSER ==> " ^ str
+  | OTHER str ->
+      "TODO(msg) OTHER ==> " ^ str
 
-  | Desugar_cause (Desugar_MultipleDeclaration (Cabs.CabsIdentifier (_, str))) ->
-      "redeclaration of '" ^ str ^ "'"
-  
-  | Desugar_cause Desugar_NonvoidReturn ->
-(*      "non-void function 'main' should return a value" *)
-      "non-void function should return a value" 
+type std_ref =
+  | StdRef of string list
+  | UnknownRef
+  | NoRef
 
-  | Desugar_cause dcause ->
-      "[desug] " ^ desugar_cause_to_string dcause
-  | AIL_TYPING TError_indirection_not_pointer ->
-      "the * operator expects a pointer operand"
-  | AIL_TYPING TError_main_return_type ->
-      "return type of 'main' should be 'int'"
+let std_ref_of_option = function
+  | Some ref -> StdRef [ref]
+  | None -> UnknownRef
 
-  | AIL_TYPING (TError_main_params qs_tys) ->
-      "invalid parameter types for 'main': (" ^ String.concat ", " (List.map (fun (_, ty, _) -> String_ail.string_of_ctype AilTypes.no_qualifiers ty) qs_tys) ^ ")"
+let get_misc_violation_ref = function
+  (* TODO: check if footnote is being printed *)
+  | MultipleEnumDeclaration _ ->
+      StdRef ["§6.7.2.2#3"; "FOOTNOTE.127"]
+  | EnumSimpleDeclarationConstruction ->
+      StdRef ["§6.7.2.3#7"; "FOOTNOTE.131"]
+  | UndeclaredIdentifier _ ->
+      StdRef ["§6.5.1#2"]
+  | ArrayDeclarationStarIllegalScope ->
+      StdRef ["§6.7.6.2#4, 2nd sentence"]
+  | ArrayCharStringLiteral ->
+      StdRef ["§6.7.9#14"]
+  | UniqueVoidParameterInFunctionDeclaration
+  | TypedefInitializer ->
+      UnknownRef
 
-  | CSEM_NOT_SUPPORTED msg ->
-      "Csem doesn't yet support `" ^ msg ^"'"
-  
-  | CSEM_HIP msg ->
-      "HIP, this doesn't work yet: `" ^ msg ^ "'"
-  
-      (* Cabs0_to_ail *)
-      | CONSTRAINT_6_6__3 ->
-          "Violation of constraint 6.6#3 [Constant expressions] `Constant \
-           expressions shall not contain assignment, increment, decrement, \
-           function-call, or comma operators, except when they are contained \
-           within a subexpression that is not evaluated.'\n"
+let get_desugar_ref = function
+  | Desugar_ConstraintViolation e ->
+      StdRef (Constraint.std_of_violation e)
+  | Desugar_UndefinedBehaviour ub ->
+      std_ref_of_option @@ Undefined.std_of_undefined_behaviour ub
+  | Desugar_NotYetSupported _ ->
+      NoRef
+  | Desugar_MiscViolation e ->
+      get_misc_violation_ref e
+  | _ ->
+      UnknownRef
 
-    | AIL_TYPING (TError std) ->
-        "[Ail typing] (" ^ std ^ ")\n  \"" ^ Pp_std.quote std ^ "\""
+let get_std_ref = function
+  | CPARSER _ ->
+      NoRef
+  | DESUGAR dcause ->
+      get_desugar_ref dcause
+  | AIL_TYPING tcause ->
+      StdRef (std_of_ail_typing_error tcause)
+  | _ ->
+      NoRef
 
-    | AIL_TYPING (TError_undef ub) ->
-        "[Ail typing] found undefined behaviour: " ^
-        Undefined.pretty_string_of_undefined_behaviour ub
+let get_quote ref =
+  let key =
+    String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
+  in
+  match !!cerb_conf.n1507 with
+  | Some (`Assoc xs) ->
+    begin match List.assoc_opt key xs with
+      | Some (`String b) -> "\n" ^ b
+      | _ -> "(ISO C11 quote not found)"
+    end
+  | _ -> failwith "Missing N1507 json file..."
 
-    | AIL_TYPING (TError_lvalue_coercion ty) ->
-        "[Ail typing error]\n failed lvalue coercion of type \"" ^
-        Pp_utils.to_plain_string (Pp_ail.pp_ctype AilTypes.no_qualifiers ty) ^ "\""
-
-    | Core_typing_cause cause ->
-        core_typing_cause_to_string cause
-
-    | CORE_UNDEF _ ->
-        "TODO(msg) CORE_UNDEF"
-    | PARSER str ->
-        "TODO(msg) PARSER ==> " ^ str
-    | OTHER str ->
-        "TODO(msg) OTHER ==> " ^ str
-    | Core_run_cause err ->
-        "TODO(msg) Core_run_cause ==> " ^ string_of_core_run_error err
-    | _ ->
-        "TODO ERROR MESSAGE"
-
+let make_message loc err k =
+  let (head, pos) = Location_ocaml.head_pos_of_location loc in
+  let kind = string_of_kind k in
+  let msg = ansi_format [Bold] (short_message err) in
+  let rec string_of_refs = function
+    | [] -> "unknown ISO C reference"
+    | [ref] -> ref
+    | ref::refs -> ref ^ ", " ^ string_of_refs refs
+  in
+  let rec string_of_quotes = function
+    | [] -> failwith "make_message: no quote"
+    | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
+    | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
+  in
+  match !!cerb_conf.error_verbosity, get_std_ref err with
+  | Basic, _
+  | _, NoRef ->
+      Printf.sprintf "%s %s %s\n%s" head kind msg pos
+  | RefStd, StdRef refs ->
+      Printf.sprintf "%s %s %s (%s)\n%s" head kind msg (string_of_refs refs) pos
+  | RefStd, UnknownRef
+  | QuoteStd, UnknownRef ->
+      Printf.sprintf "%s %s %s (unknown ISO C reference)\n%s" head kind msg pos
+  | QuoteStd, StdRef refs ->
+      Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
 
 let to_string (loc, err) =
-  make_message loc Error
-  begin
-    match !!cerb_conf.error_verbosity with
-      | Basic ->
-          short_message err
-      | RefStd ->
-          short_message err ^ ". (" ^ std_ref err ^ ")"
-      | QuoteStd ->
-          failwith "TODO: Pp_errors.to_string QuoteStd"
-  end
+  make_message loc err Error

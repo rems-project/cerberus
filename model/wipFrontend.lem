@@ -71,9 +71,9 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           Translation_aux.ctype_of a_e
     end in
     let oTy = force_core_object_type_of_ctype (Core_aux.proj_ctype ty) in
-    TranslateEff.bind (translate_expression stdlib (Map.empty: C.core_tag_definitions) a_e) (fun core_e                       ->
-    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy))                (fun (_, e_sym_pat  , e_sym_pe  ) ->
-    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy))                (fun (_, obj_sym_pat, obj_sym_pe) ->
+    TranslateEff.bind (translate_expression ECTX_other stdlib (Map.empty: C.core_tag_definitions) a_e) (fun core_e                       ->
+    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy))                           (fun (_, e_sym_pat  , e_sym_pe  ) ->
+    TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy))                           (fun (_, obj_sym_pat, obj_sym_pe) ->
     TranslateEff.return begin
       Core_aux.mk_wseq_e e_sym_pat core_e begin
         Core_aux.mk_pure_e begin
@@ -115,9 +115,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           let ((tid, core_st), run_st) = State.run (
             Core_run.spawn_thread Nothing <|
               Core_run.arena=  Core_run_aux.convert_expr core_expr;
-              Core_run.stack=  Core_aux.push_empty_continuation Core_aux.empty_stack;
-              Core_run.labels= Map.empty;
-              Core_run.labels2= Map.empty;
+              Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
               Core_run.current_loc= loc;
               Core_run.current_uid= Nothing;
               Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)
@@ -141,10 +139,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         match execs with
           | [(ND.Active dres, _, _ )] ->
               Eff.return dres.Driver.dres_core_value
-          | [(ND.Killed (ND.Undef ub_loc ubs), _, _)] ->
-              Eff.fail (ub_loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_UB ubs))
+          | [(ND.Killed (ND.Undef ub_loc [ub]), _, _)] ->
+              Eff.fail (ub_loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour ub))
           | [(ND.Killed (ND.Error loc "§6.6#4 failed"), _, _)] ->
-              Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_ConstraintViolation "§6.6#4"))
+              Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation Constraint.IntegerConstantOutRange))
           | _ ->
               error "TODO error: the driver found less/more than one active execution"
         end
@@ -152,13 +150,14 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
 
 
 val evalIntegerConstantExpression:
-  Loc.t -> string -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
+  Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
   UniqueId.supply Symbol.sym -> maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt expr =
+let evalIntegerConstantExpression loc core_env sigm symbol_suppl ty_opt expr =
   let typing_guard gtc =
-    let do_fail = Eff.fail (loc, Errors.Desugar_cause (Errors.Desugar_constantExpression_notInteger std_str)) in
-    match gtc with
+    let do_fail =
+      Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
+    in match gtc with
       | GenTypes.GenLValueType _ _ _ ->
           do_fail
       | GenTypes.GenRValueType gTy ->
@@ -182,7 +181,7 @@ let evalIntegerConstantExpression loc std_str core_env sigm symbol_suppl ty_opt 
           "cval: " ^ Pp.stringFromCore_value cval
         ) in
         (* given that typing guard has passed the evaluator must evaluate to an integer value *)
-        Eff.fail (loc, Errors.Desugar_cause Errors.Desugar_impossible)
+        error (Loc.stringFromLocation loc ^ ", wipFrontend.evalIntegerConstantExpression")
   end
 
 

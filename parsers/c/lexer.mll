@@ -3,6 +3,8 @@
 open Lexing
 open Tokens
 
+exception Error of Errors.cparser_cause
+
 let mk_loc lexbuf =
   (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
 
@@ -251,23 +253,16 @@ and hash = parse
         let n =
           try int_of_string n
           with Failure _ ->
-            Parser_errors.fatal_error "%s:%d Error:@ invalid line number"
-              lexbuf.lex_curr_p.pos_fname lexbuf.lex_curr_p.pos_lnum
+            raise (Error (Errors.Cparser_invalid_line_number n))
         in
         offset_location lexbuf file n
       )}
   | ("pragma" [^ '\n']* '\n')
       { }
   | [^ '\n']* eof
-      { Parser_errors.fatal_error "%s:%d Error:@ unexpected end of file"
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum
-      }
+      { raise (Error Errors.Cparser_unexpected_eof) }
   | _
-      { Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum
-      }
+      { raise (Error Errors.Cparser_invalid_symbol) }
 
 
 (* Entry point *)
@@ -405,17 +400,11 @@ and initial = parse
   | eof
       { EOF }
   | _
-      { Parser_errors.fatal_error "%s:%d Error:@ invalid symbol"
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_fname
-          lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum
-      }
+      { raise (Error Errors.Cparser_invalid_symbol) }
 
 (* ========================================================================== *)
 
 {
-
-  (* TODO: get rid of that *)
-  exception NonStandard_string_concatenation
 
   let merge_encoding_prefixes pref1_opt pref2_opt =
     match (pref1_opt, pref2_opt) with
@@ -428,7 +417,7 @@ and initial = parse
   type lexer_state =
     | LSRegular
     | LSIdentifier of string
-      (* next token, its starting and end position after a STRING_LITERAL *)
+      (* next token, its starting and ending position after a STRING_LITERAL *)
     | LSStringLiteral of (token * (Lexing.position * Lexing.position))
 
   let lexer_state = ref LSRegular
@@ -441,7 +430,7 @@ and initial = parse
           | Some pref_opt ->
               concat_strings (pref_opt, strs_acc @ strs) lexbuf.lex_curr_p
           | None          ->
-              raise NonStandard_string_concatenation
+              raise (Error Errors.Cparser_non_standard_string_concatenation)
           end
       | tok -> (lit, tok, lex_curr_p)
     in

@@ -24,7 +24,7 @@ let rec is_null_pointer_constant expr =
         true
     | AilEconst (ConstantInteger (IConstant n _ _)) ->
         n = 0
-    | AilEcast cast_qs (Pointer referenced_qs Void) e ->
+    | AilEcast cast_qs (Ctype _ (Pointer referenced_qs (Ctype _ Void))) e ->
         is_null_pointer_constant e && is_unqualified cast_qs && is_unqualified referenced_qs
     | _ ->
         false

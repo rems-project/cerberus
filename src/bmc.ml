@@ -452,7 +452,7 @@ let value_to_z3 (value: value)
       | _ -> assert false
       end
 
-let rec ailctype_to_ctype (ty: AilTypes.ctype)
+let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
                           : Core_ctype.ctype0 =
   match ty with
   | Void -> Void0
@@ -1365,7 +1365,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; ret_cond  = mk_true
              ; preexec   = mk_initial_preexec
              }
-  | Store0 (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
+  | Store0 (is_locking, Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
             wval, memorder) ->
       (* TODO: do alias analysis *)
       (* TODO: check alignment *)

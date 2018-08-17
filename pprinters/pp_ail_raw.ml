@@ -85,30 +85,31 @@ let pp_qualifiers_raw qs =
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
 
-let rec pp_ctype_raw = function
-  | Void ->
-      pp_ctor "Void"
-  | Basic bty ->
-      pp_ctor "Basic" ^^ P.brackets (pp_basicType_raw bty)
-  | Array (ty, None) ->
-      pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "None")
-  | Array (ty, Some n) ->
-      pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "Some" ^^ P.brackets (pp_integer n))
-  | Function (has_proto, ty, params, is_variadic) ->
-      pp_ctor "Function" ^^ P.brackets (
-        !^ (if has_proto then "true" else "false") ^^ P.comma ^^^
-        comma_list (fun (qs, ty, isRegister) -> 
-          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^
-                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
-        ) params ^^ P.comma ^^
-                                   !^ (if is_variadic then "true" else "false"))
-  | Pointer (ref_qs, ref_ty) ->
-      pp_ctor "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
-  | Atomic ty ->
-      pp_ctor "Atomic" ^^ P.brackets (pp_ctype_raw ty)
-  | Struct sym ->
-      pp_ctor "Struct" ^^^ pp_id sym
-  | Union sym ->
-      pp_ctor "Union" ^^^ pp_id sym
-  | Builtin str ->
-      pp_ctor "Builtin" ^^ P.brackets (!^ str)
+let rec pp_ctype_raw (AilTypes.Ctype (_,cty)) =
+  match cty with
+    | Void ->
+        pp_ctor "Void"
+    | Basic bty ->
+        pp_ctor "Basic" ^^ P.brackets (pp_basicType_raw bty)
+    | Array (ty, None) ->
+        pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "None")
+    | Array (ty, Some n) ->
+        pp_ctor "Array" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ pp_ctor "Some" ^^ P.brackets (pp_integer n))
+    | Function (has_proto, ty, params, is_variadic) ->
+        pp_ctor "Function" ^^ P.brackets (
+          !^ (if has_proto then "true" else "false") ^^ P.comma ^^^
+          comma_list (fun (qs, ty, isRegister) -> 
+            P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^
+                      P.comma ^^^ !^ (if isRegister then "true" else "false"))
+          ) params ^^ P.comma ^^
+                                     !^ (if is_variadic then "true" else "false"))
+    | Pointer (ref_qs, ref_ty) ->
+        pp_ctor "Pointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
+    | Atomic ty ->
+        pp_ctor "Atomic" ^^ P.brackets (pp_ctype_raw ty)
+    | Struct sym ->
+        pp_ctor "Struct" ^^^ pp_id sym
+    | Union sym ->
+        pp_ctor "Union" ^^^ pp_id sym
+    | Builtin str ->
+        pp_ctor "Builtin" ^^ P.brackets (!^ str)

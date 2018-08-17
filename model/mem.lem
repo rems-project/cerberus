@@ -66,7 +66,7 @@ val allocate_dynamic:
 
 val kill: Loc.t -> bool -> pointer_value -> memM unit
 val load: Loc.t -> Core_ctype.ctype -> pointer_value -> memM (footprint * mem_value)
-val store: Loc.t -> Core_ctype.ctype -> pointer_value -> mem_value -> memM footprint
+val store: Loc.t -> Core_ctype.ctype -> (* is_locking *)bool -> pointer_value -> mem_value -> memM footprint
 
 declare ocaml target_rep function allocate_static = `Ocaml_mem.allocate_static`
 declare ocaml target_rep function allocate_dynamic = `Ocaml_mem.allocate_dynamic`

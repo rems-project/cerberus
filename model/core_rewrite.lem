@@ -661,7 +661,7 @@ let in_minimal_range ty n =
         (0-2147483647) <= n && n <= 2147483647
     | Basic (ATypes.Integer (ATypes.Signed ATypes.LongLong)) ->
         let k = 2 ** 63 - 1 in
-        (0 - k) <= n && n <= k
+        (~ k) <= n && n <= k
     | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Ichar)) ->
         0 <= n && n <= 255
     | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Short)) ->
@@ -826,8 +826,8 @@ and remove_conv_int_action_ act_ =
         Alloc (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) pref
     | Kill b pe ->
         Kill b (remove_conv_int_pexpr pe)
-    | Store pe1 pe2 pe3 mo ->
-        Store (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
+    | Store b pe1 pe2 pe3 mo ->
+        Store b (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) mo
     | Load pe1 pe2 mo ->
         Load (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
@@ -1242,20 +1242,36 @@ let rec simpl_match_pattern pat pe =
         Just []
     | (CaseBase (Just sym, _), _) ->
         Just [(sym, pe)]
+    | (CaseCtor Cspecified [pat'], Pexpr _ _ (PEval (Vloaded (LVspecified cval)))) ->
+        simpl_match_pattern pat' (Caux.mk_value_pe (Vobject cval))
     | (CaseCtor Cspecified [pat'], Pexpr _ _ (PEctor Cspecified [pe'])) ->
         simpl_match_pattern pat' pe'
 (*
     | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
         match_pattern pat' (Vctype ty)
 *)
-    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes')) -> 
-        List.foldr (fun (pat', pe') acc ->
-          Maybe.bind acc (fun xs ->
-            Maybe.bind (simpl_match_pattern pat' pe') (fun x ->
-              Just (x++xs)
+    | (CaseCtor Ctuple pats', Pexpr _ _ (PEval (Vtuple cvals))) ->
+        if List.length pats' <> List.length cvals then
+          Nothing
+        else
+          List.foldr (fun (pat', cval) acc ->
+            Maybe.bind acc (fun xs ->
+              Maybe.bind (simpl_match_pattern pat' (Caux.mk_value_pe cval)) (fun x ->
+                Just (x++xs)
+              )
             )
-          )
-        ) (Just []) (List.zip pats' pes')
+          ) (Just []) (List.zip pats' cvals)
+    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes')) ->
+        if List.length pats' <> List.length pes' then
+          Nothing
+        else
+          List.foldr (fun (pat', pe') acc ->
+            Maybe.bind acc (fun xs ->
+              Maybe.bind (simpl_match_pattern pat' pe') (fun x ->
+                Just (x++xs)
+              )
+            )
+          ) (Just []) (List.zip pats' pes')
     | _ ->
         Nothing
   end

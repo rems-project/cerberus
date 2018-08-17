@@ -2,6 +2,7 @@ SOURCE_prelude=\
   utils.lem \
   global.lem \
   loc.lem \
+  annot.lem \
   bimap.lem \
   dlist.lem \
   debug.lem \
@@ -18,7 +19,8 @@ SOURCE_prelude=\
 
 SOURCE_cabs=\
   cabs.lem \
-  undefined.lem
+  undefined.lem \
+  constraint.lem
 
 
 SOURCE_ail=\
