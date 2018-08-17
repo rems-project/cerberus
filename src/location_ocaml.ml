@@ -100,7 +100,16 @@ let bbox_location xs =
 
 
 let with_regions_and_cursor locs loc_opt =
-  assert false
+  let cursor_opt = match loc_opt with
+    | Some (Loc_point z) -> Some z
+    | Some (Loc_region (_, _, z))
+    | Some (Loc_regions (_, z)) -> z
+    | _ -> None
+  in
+  let pos_of_region = function
+    | Loc_region (p1, p2, _) -> (p1, p2)
+    | _ -> failwith "with_regions_and_cursor: location must be a region"
+  in Loc_regions (List.map pos_of_region locs, cursor_opt)
 
 
 let location_to_string loc =
@@ -333,32 +342,19 @@ let head_pos_of_location = function
           | None ->
               "" )
   | Loc_regions (xs, cursor_p_opt) ->
-      ( (* NOTE: assuming invariant of Loc_regions that the regions are sorted *)
-        let pos = match cursor_p_opt with
-          | None ->
-              fst (List.hd xs)
-          | Some p ->
-              p in
-        string_of_pos pos
-      , List.fold_left (fun acc (start_p, end_p) ->
-          let cpos1 = start_p.pos_cnum - start_p.pos_bol in
-          match string_at_line start_p.pos_fname start_p.pos_lnum cpos1 with
-            | Some (_, l) ->
-                let cpos2 =
-                  if start_p.pos_lnum = end_p.pos_lnum then
-                    end_p.pos_cnum - end_p.pos_bol
-                  else
-                    String.length l in
-                let cursor = match cursor_p_opt with
-                  | Some cursor_p ->
-                      cursor_p.pos_cnum - cursor_p.pos_bol 
-                  | None ->
-                      cpos1 in
-                acc ^ l ^ "\n" ^
-                ansi_format [Bold; Green] (
-                String.init ((max cursor cpos2) + 1)
-                  (fun n -> if n = cursor then '^' else if n >= cpos1 && n < cpos2 then '~' else ' ')
-                )
-            | None ->
-                acc
-        ) "" xs )
+      let pos = match cursor_p_opt with
+        | None -> fst (List.hd xs)
+        | Some p -> p
+      in
+      ( string_of_pos pos
+      , let cursor_p = pos.pos_cnum - pos.pos_bol in
+        match string_at_line pos.pos_fname pos.pos_lnum cursor_p with
+        | Some (_, l) ->
+          let ps = List.map (fun (s, e) -> (s.pos_cnum - s.pos_bol, e.pos_cnum - e.pos_bol)) xs in
+          l ^ "\n" ^ ansi_format [Bold; Green]
+            (String.init (String.length l)
+               (fun n -> if n = cursor_p then '^'
+                         else if List.exists (fun (p1, p2) -> n >= p1 && n < p2) ps then '~'
+                         else ' ')
+            )
+        | None -> "" )
