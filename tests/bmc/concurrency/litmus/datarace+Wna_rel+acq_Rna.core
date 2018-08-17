@@ -1,0 +1,38 @@
+{- There is a datarace between the store and load to x. However, when
+the load of y reads the value 1, it synchronizes with the first thread
+and in those executions there is no datarace. The total set of
+outcomes is therefore 0 (defined), and data_race (undefined). -}
+
+{-
+fun main () : [integer] :=
+  x <- create(signed int);
+  y <- create(_Atomic(signed int));
+  store(signed int, x, 0);
+  store(signed int, y, 0);
+  (a, b) <- {{{
+       store(signed int, x, 1);
+       store(_Atomic(signed int), y, 1, release)
+  |||
+       load(_Atomic(signed int), y, acquire);
+       load(signed int, x)
+  }}};
+  kill(x);
+  kill(y);
+  ret b
+-}
+proc main () : eff loaded integer :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit = store(!(signed int), x, Specified(0)) in
+  let strong _ : unit = store(!(signed int), y, Specified(0)) in
+  let strong (_ : unit, b : loaded integer) = par(
+    let strong _ : unit = store(!(signed int), x, Specified(1)) in
+    store(!(_Atomic(signed int)), y, Specified(1), release)
+  ,
+    let strong _ : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+    load(!(signed int), x)
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(b)
+

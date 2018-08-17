@@ -1,0 +1,30 @@
+
+proc main () : eff loaded integer :=
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer  = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(0)) in
+  let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(0)) in
+  let strong (_ : unit, _ : unit , a3 : loaded integer) = par(
+    store(!(_Atomic(signed int)), x, Specified(1), release)
+  ,
+    let strong _a1 : loaded integer = load(!(_Atomic(signed int)), x, acquire) in
+    case _a1 of
+      | Specified(a1: integer) =>
+          if a1 = 1 then
+            store(!(_Atomic(signed int)), y, Specified(1), release)
+          else
+            skip
+    end
+  ,
+    let strong _a2 : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+    case _a2 of
+      | Specified(a2: integer) =>
+          if a2 = 1 then
+            load(!(_Atomic(signed int)), x, acquire)
+          else
+            pure(Specified(2))
+    end
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(a3)
