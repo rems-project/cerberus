@@ -1374,6 +1374,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       bmc_pexpr wval              >>= fun res_wval ->
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
       assert (List.length flat_sortlist = 1);
+      if g_memory_mode <> MemoryMode_C then
+        assert (memorder = NA);
 
       let to_run =
         if !!bmc_conf.concurrent_mode
@@ -1406,6 +1408,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
       let (_, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
+      if g_memory_mode <> MemoryMode_C then
+        assert (memorder = NA);
 
       let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
       let to_run =
@@ -1463,6 +1467,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       bmc_debug_print 1
         "ERROR: CompareExchangeStrong only supported with --bmc_conc";
     assert (!!bmc_conf.concurrent_mode);
+    assert (g_memory_mode = MemoryMode_C);
     (* _bool compare_exchange_strong(object, expected, desire, success, failure):
      * if *object == *expected
      *   *object = desire
@@ -1529,6 +1534,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       ; po              = (compute_po p_read_expected.actions [rmw_action])
                           @ combined_fail.po
       ; asw             = combined_fail.asw (* Should be empty *)
+      ; rmw             = []
       }
       end in
 
@@ -1597,8 +1603,8 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       BmcM.get_file               >>= fun file ->
       assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
       let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-      let (_, sort) = List.hd flat_sortlist in
       assert (List.length flat_sortlist = 1);
+      let (_, sort) = List.hd flat_sortlist in
 
       let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
       Bmc_paction.do_concurrent_load
@@ -1613,6 +1619,47 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; preexec   = ret.preexec
              }
   | LinuxLoad _ -> assert false
+  | LinuxRMW (Pexpr(_, _, PEval (Vctype ty)), Pexpr(_, _, PEsym sym),
+              wval, memorder) ->
+      assert false
+      (*
+      assert (g_memory_mode = MemoryMode_Linux);
+      assert (!!bmc_conf.concurrent_mode);
+      assert (memorder = Once || memorder = Acquire ||
+              memorder = Release || memorder = Mb);
+      BmcM.lookup_sym sym         >>= fun sym_expr ->
+      BmcM.get_file               >>= fun file ->
+      assert (Sort.equal (Expr.get_sort sym_expr) PointerSort.mk_sort);
+      let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+      assert (List.length flat_sortlist = 1);
+      let (_, sort) = List.hd flat_sortlist in
+      let ret_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+
+      let (r_order, w_order) =
+        match memorder with
+        | Once     -> (Once,     Once)
+        | Acquire0 -> (Acquire0, Once)
+        | Release0 -> (Once,     Release0)
+        | Mb       -> (Once,     Once)
+        | _ -> assert false (* Invalid memory order for RMW *)
+
+      bmc_pexpr wval >>= fun res_wval ->
+      Bmc_paction.do_concurrent_load
+                  sym_expr ret_expr (Linux_mem_order r_order) pol
+                  >>= fun read ->
+      Bmc_paction.do_concurrent_store
+                  sym_expr res_wval.expr (Linux_mem_order w_order) pol
+                  >>= fun store ->
+        let read_write =
+
+      return { expr      = ret_expr
+             ; asserts   = read.asserts @ store.asserts @ res_wval.asserts
+             ; drop_cont = mk_false
+             ; mod_addr  = AddrSet.empty (* sequential only *)
+             ; ret_cond  = mk_true
+             ; preexec   =
+             }
+      *)
   | _ -> assert false
 
 
