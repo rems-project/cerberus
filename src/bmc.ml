@@ -1662,7 +1662,6 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
       *)
   | _ -> assert false
 
-
 let rec bmc_expr (Expr(_, expr_): unit typed_expr)
                  : bmc_ret BmcM.eff =
   match expr_ with
@@ -1763,18 +1762,21 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              }
   | Eproc _ ->
       assert false
-  | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
-                        PEval(Vobject (OVcfunction (Sym sym)))), arglist)
-    (* fall through *)
-  | Eccall (_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
-                        PEsym sym), arglist) ->
-      BmcM.lookup_sym sym   >>= fun sym_expr ->
+  | Eccall(_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
+                    cfun), arglist) ->
+      begin
+      match cfun with
+      | PEval (Vobject (OVcfunction (Sym sym))) -> return sym
+      | PEsym sym ->
+          BmcM.lookup_sym sym >>= fun sym_expr ->
+          assert (Expr.get_num_args sym_expr = 1);
+          let sym_id = z3num_to_int (List.hd (Expr.get_args sym_expr)) in
+          return (Sym.Symbol(sym_id, None))
+      | _ -> assert false
+      end >>= fun fn_sym ->
+      BmcM.lookup_run_depth (Sym fn_sym) >>= fun depth ->
       BmcM.get_function_map >>= fun function_map ->
-      assert (Expr.get_num_args sym_expr = 1);
-      let sym_id = z3num_to_int (List.hd (Expr.get_args sym_expr)) in
-      let func_sym = Sym.Symbol(sym_id, None) in
-      BmcM.lookup_run_depth (Sym func_sym) >>= fun depth ->
-      begin match Pmap.lookup func_sym function_map with
+      begin match Pmap.lookup fn_sym function_map with
       | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
         if depth >= !!bmc_conf.max_run_depth then
           return { expr      = mk_fresh_const "call_depth_exceeded"
@@ -1792,18 +1794,19 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
             fun_args arglist (Pmap.empty sym_cmp) in
           let expr_to_check = substitute_expr sub_map fun_expr in
           let new_ret_const =
-            mk_fresh_const (sprintf "ret_%d" sym_id) (cbt_to_z3 fun_ty) in
+            mk_fresh_const (sprintf "ret_%s" (symbol_to_string fn_sym))
+                           (cbt_to_z3 fun_ty) in
           BmcM.get_proc_expr                      >>= fun old_proc_expr ->
           BmcM.get_ret_const                      >>= fun old_ret_const ->
           BmcM.get_sym_table                      >>= fun old_sym_table ->
           BmcM.update_proc_expr expr_to_check     >>= fun () ->
           BmcM.update_ret_const new_ret_const     >>= fun () ->
-          BmcM.increment_run_depth (Sym func_sym) >>= fun () ->
+          BmcM.increment_run_depth (Sym fn_sym) >>= fun () ->
           bmc_expr expr_to_check                  >>= fun ret_call ->
           BmcM.update_ret_const old_ret_const     >>= fun () ->
           BmcM.update_proc_expr old_proc_expr     >>= fun () ->
           BmcM.update_sym_table old_sym_table     >>= fun () ->
-          BmcM.decrement_run_depth (Sym func_sym) >>= fun () ->
+          BmcM.decrement_run_depth (Sym fn_sym) >>= fun () ->
 
           let proc_ret_cond =
             mk_and [mk_implies (mk_not ret_call.drop_cont)
