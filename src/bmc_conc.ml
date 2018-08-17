@@ -18,6 +18,7 @@ type preexec = {
 
   po              : (bmc_action * bmc_action) list;
   asw             : (bmc_action * bmc_action) list;
+  rmw             : (bmc_action * bmc_action) list;
 }
 
 (* ========== BMC ACTIONS ============= *)
@@ -82,6 +83,7 @@ let mk_initial_preexec : preexec =
   ; initial_actions = []
   ; po              = []
   ; asw             = []
+  ; rmw             = []
   }
 
 let find_rel ((a,b): bmcaction_rel) (xs: bmcaction_rel list) =
@@ -117,6 +119,7 @@ let combine_preexecs (preexecs: preexec list) =
     ; initial_actions = preexec.initial_actions @ acc.initial_actions
     ; po              = preexec.po @ acc.po
     ; asw             = preexec.asw @ acc.asw
+    ; rmw             = preexec.rmw @ acc.rmw
     }) mk_initial_preexec preexecs
 
 let compute_po (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
@@ -1884,11 +1887,12 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       solver mem extract_execution ret_value
 end
 
-(*module BmcMem = C11MemoryModel*)
+module BmcMem = C11MemoryModel
 (*module BmcMem = GenericModel(Partial_RC11Model)*)
 
 (* TODO: figure out syntax *)
+(*
 let cat_model =
   CatParser.load_file g_model_file
-
 module BmcMem = GenericModel (val cat_model)
+  *)

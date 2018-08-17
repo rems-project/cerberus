@@ -103,6 +103,11 @@ let rec substitute_action (map: substitute_map)
         LinuxLoad (substitute_pexpr map pe1,
                    substitute_pexpr map pe2,
                    memorder)
+    | LinuxRMW (pe1, pe2, pe3, memorder) ->
+        LinuxRMW (substitute_pexpr map pe1,
+                   substitute_pexpr map pe2,
+                   substitute_pexpr map pe3,
+                   memorder)
   in
   Action(loc, a, ret)
 
