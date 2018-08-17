@@ -38,7 +38,8 @@ value terminal_size(value unit)
   struct winsize wsz;
   if ( -1 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsz) )
     // returns: None
-    return Val_int(0);
+    CAMLreturn(Val_int(0));
+  
   // returns: Some (row,col)
   pair = caml_alloc_tuple(2);
   Field(pair, 0) = Val_int(wsz.ws_row);

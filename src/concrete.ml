@@ -966,7 +966,7 @@ module Concrete : Memory = struct
           end
   
   
-  let store loc ty (PV (prov, ptrval_)) mval =
+  let store loc ty is_locking (PV (prov, ptrval_)) mval =
     Debug_ocaml.print_debug 3 [] (fun () ->
       "ENTERING STORE: ty=" ^ String_core_ctype.string_of_ctype ty ^
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
@@ -1017,7 +1017,18 @@ module Concrete : Memory = struct
                   if alloc.is_readonly then
                     fail (MerrWriteOnReadOnly loc)
                   else
-                    do_store addr
+                    do_store addr >>= fun fp ->
+                    if is_locking then
+                      Eff.update (fun st ->
+                        { st with allocations=
+                            IntMap.update alloc_id (function
+                              | Some alloc -> Some { alloc with is_readonly= true }
+                              | None       -> None
+                            ) st.allocations }
+                      ) >>= fun () ->
+                      return fp
+                    else
+                      return fp
             end
 (*
   (* TODO: DEBUG: *)
@@ -1529,7 +1540,7 @@ let combine_prov prov1 prov2 =
     let rec aux i =
       if Nat_big_num.less i size_n then
         load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV (Prov_none, i))) >>= fun (_, mval) ->
-        store loc unsigned_char_ty (array_shift_ptrval ptrval1 unsigned_char_ty (IV (Prov_none, i))) mval >>= fun _ ->
+        store loc unsigned_char_ty false (array_shift_ptrval ptrval1 unsigned_char_ty (IV (Prov_none, i))) mval >>= fun _ ->
         aux (Nat_big_num.succ i)
       else
         return ptrval1 in

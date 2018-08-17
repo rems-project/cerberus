@@ -1,9 +1,9 @@
 #!/bin/bash
 
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query Z3`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query Z3`
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 
-source tests.sh
+. ./tests.sh
 
 mkdir -p tmp
 
@@ -77,8 +77,12 @@ create_testsuite "parsing"
 for file in "${citests[@]}"
 do
   ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
-  if [ -f ci/expected/$1.expected ]; then
-    cmp --silent tmp/result ci/expected/$file.expected
+  if [ -f ./ci/expected/$file.expected ]; then
+    if [[ $file == *.error.c ]]; then 
+      cmp --silent tmp/stderr ci/expected/$file.expected
+    else
+      cmp --silent tmp/result ci/expected/$file.expected
+    fi
   fi
   report $file $?
 done
@@ -98,15 +102,15 @@ echo "TCC FAILED: $fail"
 create_testsuite "tcc"
 
 # Running gcc torture
-for file in gcc-torture/breakdown/success/*.c
-do
-  # Disable -traditional-cpp
-  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec --batch > tmp/result 2> tmp/stderr
-  grep -E "Specified.0.|EXIT" tmp/result > /dev/null
-  report $file $?
-done
-echo "GCC-TORTURE PASSED: $pass"
-echo "GCC-TORTURE FAILED: $fail"
-create_testsuite "gcc-torture"
+#for file in gcc-torture/breakdown/success/*.c
+#do
+#  # Disable -traditional-cpp
+#  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec --batch > tmp/result 2> tmp/stderr
+#  grep -E "Specified.0.|EXIT" tmp/result > /dev/null
+#  report $file $?
+#done
+#echo "GCC-TORTURE PASSED: $pass"
+#echo "GCC-TORTURE FAILED: $fail"
+#create_testsuite "gcc-torture"
 
 echo "</testsuites>" >> $JOUTPUT_FILE

@@ -68,8 +68,9 @@ let rec substitute_action (map: substitute_map)
         Alloc0(substitute_pexpr map pe1, substitute_pexpr map pe2, sym)
     | Kill (b, pe) ->
         Kill (b, substitute_pexpr map pe)
-    | Store0 (pe1, pe2, pe3, memorder) ->
-        Store0(substitute_pexpr map pe1,
+    | Store0 (is_locking, pe1, pe2, pe3, memorder) ->
+        Store0(is_locking,
+               substitute_pexpr map pe1,
                substitute_pexpr map pe2,
                substitute_pexpr map pe3,
                memorder)

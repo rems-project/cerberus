@@ -226,7 +226,7 @@ let rec simplify_integer_value_base ival_ =
           match ity with
             | Char ->
                 if Implementation_.char_is_signed then
-                  Left (0 - (2 ** (8-1)))
+                  Left (~ (2 ** (8-1)))
                 else
                   Left 0
             | Bool ->
@@ -241,14 +241,14 @@ let rec simplify_integer_value_base ival_ =
                 (* this type is signed *)
                 match Implementation_.sizeof_ity ity with
                   | Just n ->
-                      Left (0 - (2 ** (8*n-1)))
+                      Left (~ (2 ** (8*n-1)))
                   | Nothing ->
                       Right ival_
                 end
             | Signed _ ->
                 match Implementation_.sizeof_ity ity with
                   | Just n ->
-                      Left (0 -  (2 ** (8*n-1)))
+                      Left (~ (2 ** (8*n-1)))
                   | Nothing ->
                       Right ival_
                 end

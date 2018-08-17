@@ -75,7 +75,7 @@ let fv_act (Paction(_, Action (_, _, act))) fvs =
   | Create (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
   | Alloc0 (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
   | Kill (_, pe) -> fv_pe pe fvs
-  | Store0 (pe1, pe2, pe3, _) ->
+  | Store0 (_, pe1, pe2, pe3, _) ->
     fv_pe pe1 fvs |> fv_pe pe2 |> fv_pe pe3
   | Load0 (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
   | RMW0 (pe1, pe2, pe3, pe4, _, _) ->

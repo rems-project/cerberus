@@ -22,7 +22,7 @@ module ND = Nondeterminism
 (* takes the symbolic names of a function, some pure expressions and produce
    the function body where the arguments have been substituted *)
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
-                   Exception.exceptM Core.pexpr core_run_error
+                   Exception.exceptM Core.pexpr core_run_cause
 let call_function file f_nm arg_cvals =
   let () = Debug.print_debug 4 [] (fun () ->
     "CALL_FUNCTION: " ^ Pp.stringFromCore_pexpr (Pexpr [] () (PEcall f_nm (List.map Caux.mk_value_pe arg_cvals)))
@@ -204,9 +204,9 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
 
 
 val step_eval_peop:
-  Loc.t -> maybe Mem.mem_state -> (Core.pexpr -> EU.t Core.pexpr core_run_error) ->
+  Loc.t -> maybe Mem.mem_state -> (Core.pexpr -> EU.t Core.pexpr core_run_cause) ->
   Core.binop -> Core.pexpr -> Core.pexpr  ->
-  EU.t (Core.pexpr_ unit Symbol.sym) core_run_error
+  EU.t (Core.pexpr_ unit Symbol.sym) core_run_cause
 
 let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
   self pe1 >>= fun pe1' ->
@@ -425,14 +425,16 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
    This is to ensure that the eval function will always terminate (which is
    important for the Coq backend).  To fully evaluate a pure expression,
    it is necessary to call eval repeatedly until is_value returns True. *)
-val     step_eval_pexpr: nat -> Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+val     step_eval_pexpr: nat -> Loc.t ->
+                         list (map Symbol.sym Core.value) ->
+                         maybe Mem.mem_state -> Core.file core_run_annotation ->
                          bool -> Core.pexpr  ->
-                         EU.t Core.pexpr core_run_error
-let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
+                         EU.t Core.pexpr core_run_cause
+let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
   match pexpr with Pexpr _ () pexpr_  ->
   let strip (Pexpr _ _ pe_) = pe_ in
   let self pe =
-    step_eval_pexpr (n+1) loc mem_st_opt file (*hasConstrained *)false pe in
+    step_eval_pexpr (n+1) loc env mem_st_opt file (*hasConstrained *)false pe in
   Pexpr [] () <$> match pexpr_ with
 
 (* NEW pull_constrained *)
@@ -456,7 +458,19 @@ let rec step_eval_pexpr n loc mem_st_opt file hasConstrained pexpr =
                  Pp.stringFromCore_pexpr pexpr)
 *)
     | PEsym sym ->
-        EU.fail $ Unresolved_symbol sym
+        match Core_aux.lookup_env sym env with
+          | Nothing ->
+(*
+              let () = Debug.print_debug 0 [] (fun () ->
+                List.foldl (fun acc (sym, cval) ->
+                  acc ^ show sym ^ " ==> " ^ Pp.stringFromCore_value cval ^ "\n"
+                ) "" (Map_extra.toList env)
+              ) in
+*)
+              EU.fail (Unresolved_symbol sym)
+          | Just cval ->
+              EU.return (PEval cval)
+        end
     | PEimpl iCst ->
         match Map.lookup iCst file.impl with
           | Just (Def _ pe) ->
@@ -853,10 +867,12 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
 
 
 
-val     eval_pexpr_aux2: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+val     eval_pexpr_aux2: Loc.t ->
+                         list (map Symbol.sym Core.value) ->
+                         maybe Mem.mem_state -> Core.file core_run_annotation ->
                          Core.pexpr ->
-                         EU.t (either Core.pexpr Core.value) core_run_error
-let rec eval_pexpr_aux2 loc mem_st_opt file pe =
+                         EU.t (either Core.pexpr Core.value) core_run_cause
+let rec eval_pexpr_aux2 loc env mem_st_opt file pe =
   let () = Debug.print_debug 4 [] (fun () ->
     "ENTERING Core_eval.eval_pexpr_aux2 ==> " ^ Pp.stringFromCore_pexpr pe
   ) in
@@ -871,12 +887,12 @@ with
     | ((Pexpr [] () (PEconstrained _)) as pulled_pe) ->
         EU.return (Left pulled_pe)
     | pulled_pe ->
-        step_eval_pexpr 0 loc mem_st_opt file false pulled_pe >>= fun pe' ->
+        step_eval_pexpr 0 loc env mem_st_opt file false pulled_pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
               EU.return (Right cval)
           | Nothing ->
-              eval_pexpr_aux2 loc mem_st_opt file pe'
+              eval_pexpr_aux2 loc env mem_st_opt file pe'
         end
   end
 
@@ -915,25 +931,25 @@ with
 
 
 
-val     eval_pexpr_aux_broken: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
-                        Core.pexpr ->
-                        EU.t Core.value core_run_error
-let rec eval_pexpr_aux_broken loc mem_st_opt file pe =
-  step_eval_pexpr 0 loc mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
+val eval_pexpr_aux_broken:
+  Loc.t -> list (map Symbol.sym Core.value) ->
+  maybe Mem.mem_state -> Core.file core_run_annotation ->
+  Core.pexpr ->
+  EU.t Core.value core_run_cause
+let rec eval_pexpr_aux_broken loc env mem_st_opt file pe =
+  step_eval_pexpr 0 loc env mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
     | Nothing ->
-        eval_pexpr_aux_broken loc mem_st_opt file pe'
+        eval_pexpr_aux_broken loc env mem_st_opt file pe'
   end
-val eval_pexpr: Loc.t -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+val eval_pexpr: Loc.t -> list (map Symbol.sym Core.value) -> maybe Mem.mem_state -> Core.file core_run_annotation ->
                 Core.pexpr -> either Errors.error (Undefined.t Core.value)
-let eval_pexpr loc mem_st_opt file pe =
-  match eval_pexpr_aux_broken loc mem_st_opt file pe with
+let eval_pexpr loc env mem_st_opt file pe =
+  match eval_pexpr_aux_broken loc env mem_st_opt file pe with
     | Exception.Result z ->
         Right z
     | Exception.Exception err ->
-        Left (loc, Errors.Core_run_cause err)
+        Left (loc, Errors.CORE_RUN err)
   end
-
-

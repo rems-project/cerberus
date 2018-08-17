@@ -22,7 +22,7 @@ let runM m = m
 
 val fail: forall 'a. Loc.t -> Errors.core_typing_cause -> eff 'a
 let core_typing_effect_fail loc cause =
-  Exception (loc, Errors.Core_typing_cause cause)
+  Exception (loc, Errors.CORE_TYPING cause)
 let inline fail = core_typing_effect_fail
 
 val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
@@ -30,7 +30,7 @@ let core_typing_effect_guard pred loc cause =
   if pred then
     return ()
   else
-    Exception (loc, Errors.Core_typing_cause cause)
+    Exception (loc, Errors.CORE_TYPING cause)
 let inline guard = core_typing_effect_guard
 (* BUG in Lem (see issue #197)
       fail loc cause

@@ -219,7 +219,7 @@ let pp_basicType = function
   | Floating rft ->
       pp_floatingType rft
 
-let pp_ctype_aux pp_ident_opt qs ty =
+let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
   let precOf = function
     | Void
     | Basic _
@@ -235,7 +235,7 @@ let pp_ctype_aux pp_ident_opt qs ty =
     | Pointer _ ->
         3
   in
-  let rec aux p qs ty : P.document -> P.document =
+  let rec aux p qs (Ctype (_, ty)) : P.document -> P.document =
     let p' = precOf ty in
     let aux = aux p' in
     let wrap z = if p' > 0 && p' > p then z else P.parens z in
@@ -270,7 +270,7 @@ let pp_ctype_aux pp_ident_opt qs ty =
     match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in*)
   let pp_spaced_ident =
     match pp_ident_opt with Some pp_ident -> P.space ^^ pp_ident | None -> P.empty in
-  (aux 1 qs ty) pp_spaced_ident
+  (aux 1 qs cty) pp_spaced_ident
 (*
 let rec pp_ctype_aux pp_ident_opt qs ty =
   let pp_ident =
@@ -336,7 +336,7 @@ let pp_ctype_declaration pp_ident qs ty =
   pp_ctype_aux (Some pp_ident) qs ty
 
 
-let rec pp_ctype_human qs ty =
+let rec pp_ctype_human qs (Ctype (_, ty)) =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
@@ -730,7 +730,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           pp_ansi_format [Red] (
             !^ "// declare" ^^^ pp_id sym ^^^
             (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-            !^ "as" ^^^ pp_ctype_human no_qualifiers (Function (has_proto, (ret_qs, ret_ty), params, is_variadic))
+            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function (has_proto, (ret_qs, ret_ty), params, is_variadic)))
           ) ^^ P.hardline ^^
           
           (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
@@ -787,63 +787,46 @@ let pp_program_aux pp_annot (startup, sigm) =
 
 
 
-let rec pp_genIntegerType_raw = function
- | Concrete ity ->
-     !^ "Concrete" ^^ P.brackets (pp_integerType_raw ity)
- | SizeT ->
-     !^ "SizeT"
- | PtrdiffT ->
-     !^ "PtrdiffT"
- | Unknown iCst ->
-     !^ "Unknown" ^^ P.brackets (pp_integerConstant iCst)
- | Promote gity ->
-     !^ "Promote" ^^ P.brackets (pp_genIntegerType_raw gity)
- | Usual (gity1, gity2) ->
-     !^ "Usual" ^^ P.brackets (pp_genIntegerType_raw gity1 ^^ P.comma ^^^ pp_genIntegerType_raw gity2)
+let rec pp_genIntegerType = function
+  | Concrete ity ->
+      pp_integerType ity
+  | SizeT ->
+      !^ "size_t"
+  | PtrdiffT ->
+      !^ "ptrdiff_t"
+  | Unknown iCst ->
+      !^ "unknown constant" ^^^ P.brackets (pp_integerConstant iCst)
+  | Promote gity ->
+      !^ "integer promotion of" ^^^ P.brackets (pp_genIntegerType gity)
+  | Usual (gity1, gity2) ->
+      !^ "usual arithmetic conversions with type" ^^^ P.brackets (pp_genIntegerType gity1 ^^^ !^"and" ^^^ pp_genIntegerType gity2)
 
-
-
-let pp_genBasicType_raw = function
- | GenInteger gity ->
-     pp_genIntegerType_raw gity
- | GenFloating fty ->
-     pp_floatingType fty
+let pp_genBasicType = function
+  | GenInteger gity ->
+      pp_genIntegerType gity
+  | GenFloating fty ->
+      pp_floatingType fty
 
 let pp_genType = function
- | GenVoid ->
-     !^ "void"
- | GenBasic gbty ->
-     pp_genBasicType_raw gbty
-  | GenArray (ty, None) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "None")
-  | GenArray (ty, Some n) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_raw ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (pp_integer n))
-
-     
- | GenFunction (has_proto, ty, params, is_variadic) ->
-      !^ "GenFunction" ^^ P.brackets (
-        comma_list (fun (qs, ty, isRegister) ->
-          P.parens (pp_qualifiers_raw qs ^^ P.comma ^^^ pp_ctype_raw ty ^^
-                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
-        ) params ^^ P.comma ^^ !^ (if is_variadic then "true" else "false")
-       )
-
- | GenPointer (ref_qs, ref_ty) ->
-     pp_ctype ref_qs ref_ty ^^ P.star
-(*
-      !^ "GenPointer" ^^ P.brackets (pp_qualifiers_raw ref_qs ^^ P.comma ^^^ pp_ctype_raw ref_ty)
-*)
-  | GenStruct sym ->
-      !^ "GenStruct" ^^ pp_id sym
-  | GenUnion sym ->
-      !^ "GenUnion" ^^ pp_id sym
+  | GenVoid ->
+      !^ "void"
+  | GenBasic gbty ->
+      pp_genBasicType gbty
+  | GenArray (ty, n_opt) ->
+      !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype no_qualifiers ty
+  | GenFunction (_, (qs, ty), params, is_variadic) ->
+      (* TODO: maybe add parameters *)
+      !^ "function returning" ^^^ pp_ctype qs ty
+  | GenPointer (ref_qs, ref_ty) ->
+      pp_ctype no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
+  | GenStruct tag_sym ->
+      !^ "struct" ^^^ pp_id tag_sym
+  | GenUnion tag_sym ->
+      !^ "union" ^^^ pp_id tag_sym
   | GenAtomic ty ->
-      !^ "GenAtomic" ^^ pp_ctype_raw ty
+      !^ "atomic" ^^ pp_ctype no_qualifiers ty
   | GenBuiltin str ->
-      !^ "GenBuiltin" ^^ P.brackets (!^ str)
-
-
-
+      !^ str
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->

@@ -1,4 +1,4 @@
-open import Pervasives Utils Show Core Core_ctype
+open import Pervasives Utils Show Core Core_ctype Annot
 import AilSyntax AilTypes
 import Product Exception Mem Mem_aux
 
@@ -193,7 +193,7 @@ let rec memValueFromValue ty cval =
 
 (* Project an AilTypes.ctype into a Core.ctype *)
 val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
-let rec proj_ctype ty =
+let rec proj_ctype (AilTypes.Ctype _ ty) =
   match ty with
     | AilTypes.Void ->
         Core_ctype.Void
@@ -465,7 +465,9 @@ let palloc loc al e pref =
 let pkill loc is_dynamic x =
   Expr [] (Eaction (Paction Pos (Action loc default (Kill is_dynamic x))))
 let pstore loc ty x n mo =
-  Expr [] (Eaction (Paction Pos (Action loc default (Store ty x n mo))))
+  Expr [] (Eaction (Paction Pos (Action loc default (Store false ty x n mo))))
+let pstore_lock loc ty x n mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (Store true ty x n mo))))
 let pload loc ty x mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Load ty x mo))))
 let prmw loc ty x n1 n2 mo1 mo2 =
@@ -573,7 +575,7 @@ end
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
-  match ty with
+  AilTypes.Ctype [] (match ty with
     | Core_ctype.Void ->
         AilTypes.Void
     | Core_ctype.Basic bty ->
@@ -599,7 +601,7 @@ let rec unproj_ctype ty =
         AilTypes.Union tag
     | Core_ctype.Builtin str ->
         AilTypes.Builtin str
-  end
+  end)
 
 
 (*
@@ -968,8 +970,8 @@ and subst_sym_action_ sym cval = function
       Alloc (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) pref
   | Kill b pe ->
       Kill b (subst_sym_pexpr sym cval pe)
-  | Store pe1 pe2 pe3 mo ->
-      Store (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+  | Store b pe1 pe2 pe3 mo ->
+      Store b (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
         (subst_sym_pexpr sym cval pe3) mo
   | Load pe1 pe2 mo ->
       Load (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) mo
@@ -1226,8 +1228,8 @@ and unsafe_subst_sym_action_ a pe' = function
       Alloc (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) pref
   | Kill b pe ->
       Kill b (unsafe_subst_sym_pexpr a pe' pe)
-  | Store pe1 pe2 pe3 mo ->
-      Store (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
+  | Store b pe1 pe2 pe3 mo ->
+      Store b (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
         (unsafe_subst_sym_pexpr a pe' pe3) mo
   | Load pe1 pe2 mo ->
       Load (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) mo
@@ -1526,9 +1528,8 @@ let subst_wait_continuation tid v cont =
 let rec subst_wait_stack tid v = function
   | Stack_empty ->
       Stack_empty
-  | Stack_cons lconts cont sk ->
-      Stack_cons
-        (Map.map (fun (sym, e) -> (sym, subst_wait tid v e)) lconts)
+  | Stack_cons sym_opt cont sk ->
+      Stack_cons sym_opt
         (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
 end
 
@@ -1747,85 +1748,67 @@ end
 
 
 
-val push_empty_continuation: forall 'a. stack 'a -> stack 'a
-let push_empty_continuation sk =
-  Stack_cons Map.empty [] sk
+val push_empty_continuation: forall 'a. maybe Symbol.sym -> stack 'a -> stack 'a
+let push_empty_continuation sym_opt sk =
+  Stack_cons sym_opt [] sk
 
 val reset_continuation: forall 'a. stack 'a -> stack 'a
 let reset_continuation = function
   | Stack_empty ->
       (* TODO: are should this fail, just to catch ill-uses? *)
       Stack_empty
-  | Stack_cons lconts cont sk ->
-      Stack_cons lconts [] sk
+  | Stack_cons sym_opt cont sk ->
+      Stack_cons sym_opt [] sk
 end
 
-val pop_stack: forall 'a. stack 'a -> Exception.exceptM ((labeled_continuations 'a * continuation 'a) * stack 'a) core_run_error
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_cause
 let pop_stack = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_stack")
-  | Stack_cons lconts cont sk ->
-      Exception.return ((lconts, cont), sk)
+  | Stack_cons _ cont sk ->
+      Exception.return (cont, sk)
 end
 
-val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_error
+val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
 let pop_continuation_element = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "pop_continuation_element")
   | Stack_cons _ [] _ ->
       Exception.fail Reached_end_of_proc
-  | Stack_cons lconts (cont_elem :: cont) sk ->
-      Exception.return (cont_elem, Stack_cons lconts cont sk)
+  | Stack_cons sym_opt (cont_elem :: cont) sk ->
+      Exception.return (cont_elem, Stack_cons sym_opt cont sk)
 end
 
 
-val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
 let push_continuation_element cont_elem = function
   | Stack_empty ->
       Exception.fail (Found_empty_stack "push_continuation_element")
-  | Stack_cons lconts cont sk ->
-      Exception.return (Stack_cons lconts (cont_elem :: cont) sk)
+  | Stack_cons sym_opt cont sk ->
+      Exception.return (Stack_cons sym_opt (cont_elem :: cont) sk)
 end
 
 
 
-val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_error
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
 let append_to_current_continuation cont_elem = function
   | Stack_empty ->
       (* A procedure need to currently be running to append *)
       Exception.fail (Found_empty_stack "append_to_current_continuation")
-  | Stack_cons lconts cont sk ->
-      Exception.return $ Stack_cons lconts (cont_elem :: cont) sk
-end
-
-val set_labeled_continuations: forall 'a. labeled_continuations 'a -> stack 'a -> stack 'a
-let set_labeled_continuations lconts = function
-  | Stack_empty ->
-      (* TODO: are should this fail, just to catch ill-uses? *)
-      Stack_empty
-  | Stack_cons _ cont sk ->
-      Stack_cons lconts cont sk
-end
-
-val update_labeled_continuations: forall 'a. (labeled_continuations 'a -> labeled_continuations 'a) -> stack 'a -> stack 'a
-let update_labeled_continuations f = function
-  | Stack_empty ->
-      (* TODO: are should this fail, just to catch ill-uses? *)
-      Stack_empty
-  | Stack_cons lconts cont sk ->
-      Stack_cons (f lconts) cont sk
+  | Stack_cons sym_opt cont sk ->
+      Exception.return $ Stack_cons sym_opt (cont_elem :: cont) sk
 end
 
 
 val unsafe_subst_sym_fun_map: forall 'a. Symbol.sym -> pexpr -> fun_map 'a -> fun_map 'a
 let unsafe_subst_sym_fun_map sym pe' funs =
   Map.map (function
-    | Fun ty params pe ->
-        Fun ty params (unsafe_subst_sym_pexpr sym pe' pe)
-    | ProcDecl loc ty params ->
-        ProcDecl loc ty params
-    | Proc loc ty params e ->
-        Proc loc ty params (unsafe_subst_sym_expr sym pe' e)
+    | Fun bTy params pe ->
+        Fun bTy params (unsafe_subst_sym_pexpr sym pe' pe)
+    | ProcDecl loc bTy params ->
+        ProcDecl loc bTy params
+    | Proc loc bTy params e ->
+        Proc loc bTy params (unsafe_subst_sym_expr sym pe' e)
   end) funs
 
 
@@ -2055,32 +2038,6 @@ val add_std: string -> expr unit -> expr unit
 let add_std str (Expr annot expr_) =
   Expr (Astd str :: annot) expr_
 
-val     get_loc: list annot -> maybe Loc.t
-let rec get_loc annots =
-  match annots with
-    | [] ->
-        Nothing
-    | (Aloc loc :: _) ->
-        Just loc
-    | (Astd _ :: annots') ->
-        get_loc annots'
-    | (Auid _ :: annots') ->
-        get_loc annots'
-  end
-
-val     get_uid: list annot -> maybe string
-let rec get_uid annots =
-  match annots with
-    | [] ->
-        Nothing
-    | (Aloc _ :: annots') ->
-        get_uid annots'
-    | (Astd _ :: annots') ->
-        get_uid annots'
-    | (Auid uid :: _) ->
-        Just uid
-  end
-
 val     set_uid_pe: string -> nat -> pexpr -> pexpr
 let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   let uid' = uid ^ show n in
@@ -2153,12 +2110,11 @@ let rec set_uid_e uid n (Expr annots e_) =
 val string_of_symbol: Symbol.sym -> string
 declare ocaml target_rep function string_of_symbol = `Pp_symbol.to_string_pretty`
 
-let set_uid_fun fname cfun =
-  match cfun with
+let set_uid_fun fname = function
   | Fun bty args pe -> Fun bty args pe
   | ProcDecl loc ret_bty args_bty -> ProcDecl loc ret_bty args_bty
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
-  end
+end
 
 let set_uid file =
  <|
@@ -2169,3 +2125,205 @@ let set_uid file =
   globs=   file.globs; (* TODO *)
   funs=    Map.mapi set_uid_fun file.funs;
  |>
+
+
+type collect_saves_state 'a = <|
+  tmp_acc:    Core.labeled_continuations 'a;
+  closed_acc: Core.labeled_continuations 'a;
+|>
+
+let empty_saves = <| tmp_acc= Map.empty; closed_acc= Map.empty |>
+
+let union_saves st1 st2 =
+  <| tmp_acc= Map.(union) st1.tmp_acc st2.tmp_acc;
+     closed_acc= Map.(union) st1.closed_acc st2.closed_acc |>
+
+(* NOTE: assumes the expression is well formed/typed *)
+val     collect_saves_aux: forall 'a. collect_saves_state 'a -> expr 'a -> collect_saves_state 'a
+let rec collect_saves_aux st (Expr annots expr_) =
+  match expr_ with
+    | Epure _ ->
+        st
+    | Ememop _ _ ->
+        st
+    | Eaction _ ->
+        st
+    | Ecase _ pat_es ->
+        List.foldl (fun acc (_, e) ->
+          collect_saves_aux acc e
+        ) st pat_es
+    | Elet _ _ e ->
+        collect_saves_aux st e
+    | Eif _ e1 e2 ->
+        collect_saves_aux (collect_saves_aux st e1) e2
+    | Eskip ->
+        st
+    | Eccall _ _ _ ->
+        st
+    | Eproc _ _ _ ->
+        st
+    | Eunseq es ->
+        List.foldl collect_saves_aux st es
+    | Ewseq pat e1 e2 ->
+        let st1 = collect_saves_aux empty_saves e1 in
+        let st2 = collect_saves_aux empty_saves e2 in
+        union_saves st begin
+          union_saves
+            <| st1 with
+              tmp_acc= Map.map (fun (syms, e) -> (syms, Expr annots (Ewseq pat e e2))) st1.tmp_acc
+            |>
+            st2
+        end
+    | Esseq pat e1 e2 ->
+        let st1 = collect_saves_aux empty_saves e1 in
+        let st2 = collect_saves_aux empty_saves e2 in
+        union_saves st begin
+          union_saves
+            <| st1 with
+              tmp_acc= Map.map (fun (syms, e) -> (syms, Expr annots (Esseq pat e e2))) st1.tmp_acc
+            |>
+            st2
+        end
+    | Easeq _ _ _ ->
+        st
+    | Eindet _ _ ->
+        (* typing forbids "saves" inside an "indet()" *)
+        st
+    | Ebound _ _ ->
+        (* typing forbids "saves" inside a "bound()" *)
+        st
+    | End _ ->
+        (* typing forbids "saves" inside a "nd()" *)
+        st
+    | Esave (sym, _) params e ->
+        collect_saves_aux
+          <| st with tmp_acc= Map.insert sym (List.map fst params, e) st.tmp_acc |>
+          e
+    | Erun _ _ _ ->
+        st
+    | Epar es ->
+        let acc = List.foldl collect_saves_aux
+          empty_saves es in
+        <| st with closed_acc=
+          Map.(union) (Map.(union) acc.tmp_acc acc.closed_acc)
+                      st.closed_acc |>
+    | Ewait _ ->
+        st
+  end
+
+val collect_saves: forall 'a. expr 'a -> labeled_continuations 'a
+let collect_saves expr =
+  let st = collect_saves_aux <| tmp_acc= Map.empty; closed_acc= Map.empty |> expr in
+  Map.(union) st.tmp_acc st.closed_acc
+
+
+import Map_extra
+
+val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (labeled_continuations 'a)
+let collect_labeled_continuations_NEW file =
+(*  let xs =  *)
+  Map_extra.fold (fun fun_sym decl acc ->
+    match decl with
+      | Fun _ _ _ ->
+          acc
+      | ProcDecl _ _ _ ->
+          acc
+      | Proc _ _ _ e ->
+          Map.insert fun_sym (collect_saves e) acc
+    end
+  ) (Map.(union) file.stdlib file.funs) Map.empty
+(*
+in
+  let _ = Map.mapi (fun sym labs ->
+    Debug.print_debug 0 [] (fun () ->
+      "PROC " ^ show sym ^ " ==>\n" ^
+      List.foldl (fun acc (sym, (_, e)) -> show sym ^ " ==> " ^ Pp.stringFromCore_expr e) "" (Map_extra.toList labs) 
+    )
+  ) xs in
+  xs
+*)
+
+
+val     update_env: pattern -> value -> list (map Symbol.sym value) -> list (map Symbol.sym value)
+let rec update_env_aux pat cval env =
+  (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
+  match (pat, cval) with
+    | (CaseBase (Nothing, _), _) ->
+        (* e[_ \ v] = e *)
+        env
+    | (CaseBase (Just sym, _), _) ->
+        (* e[sym \ v] *)
+        Map.insert sym cval env
+    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+        (* empty list (value) *)
+        env
+    | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->
+        (* populated list (value) *)
+        update_env_aux pat1 cval1 $
+          update_env_aux pat2 (Vlist bTy_elem cvals) env
+    | (CaseCtor Ctuple pats', Vtuple cvals) ->
+        List.foldr (fun (pat', cval') acc ->
+          update_env_aux pat' cval' acc
+        ) env (List.zip pats' cvals)
+    | (CaseCtor Cloaded [pat'], Vloaded (LVspecified oval)) ->
+        update_env_aux pat' (Vobject oval) env
+    | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
+        update_env_aux pat' (Vctype ty) env
+    | (CaseCtor ctor pats, _) ->
+        let str_ctor = match ctor with
+          | Cnil _ ->
+              "nil"
+          | Ccons ->
+              "cons"
+          | Ctuple ->
+              "tuple"
+          | Carray ->
+              "array"
+          | Civmax ->
+              "ivmax"
+          | Civmin ->
+              "ivmin"
+          | Civsizeof ->
+              "ivsizeof"
+          | Civalignof ->
+              "ivalignof"
+          | CivCOMPL ->
+              "ivCOMPL"
+          | CivAND ->
+              "ivAND"
+          | CivOR ->
+              "ivOR"
+          | CivXOR ->
+              "ivXOR"
+          | Cspecified ->
+              "specified"
+          | Cunspecified ->
+              "unspecified"
+          | Cfvfromint ->
+              "fvfromint"
+          | Civfromfloat ->
+              "ivfromfloat"
+        end in
+        error ("WIP: Core_aux.update_env_aux ==> ctor= " ^ str_ctor ^ ", |pats|= "
+               ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_value cval)
+  end
+
+let update_env pat cval = function
+  | [] ->
+      error "Core_aux.update_env: found empty env"
+  | env::xs ->
+      update_env_aux pat cval  env :: xs
+end
+
+
+let rec lookup_env sym = function
+  | [] ->
+      Nothing
+  | env :: xs ->
+      match Map.lookup sym env with
+        | Nothing ->
+            lookup_env sym xs
+        | Just ret ->
+            Just ret
+      end
+end

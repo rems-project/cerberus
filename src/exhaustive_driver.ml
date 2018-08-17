@@ -26,7 +26,7 @@ type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 let string_of_driver_error = function
   | Driver.DErr_core_run err ->
-      Pp_errors.string_of_core_run_error err
+      Pp_errors.string_of_core_run_cause err
   | Driver.DErr_memory err ->
       Mem_common.instance_Show_Show_Mem_common_mem_error_dict.Lem_pervasives.show_method err
   | Driver.DErr_concurrency str ->
@@ -141,7 +141,7 @@ else
             Debug_ocaml.print_debug 1 [] (fun () ->
 (*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)
               Printf.sprintf "BEGIN stdout\n%s\nEND stdout\n" dres.Driver.dres_stdout ^
-              Printf.sprintf "driver steps: %d, core steps: %d\n" dres.Driver.dres_driver_steps dres.Driver.dres_core_run_steps (* ^ 
+              Printf.sprintf "driver steps: %d\n" dres.Driver.dres_driver_steps (* ^ 
               Printf.sprintf "BEGIN LOG\n%s\nEND LOG" (String.concat "\n" (List.rev (List.map (fun z -> "LOG ==> " ^ z) (Dlist.toList st.ND.log)))) *)
 
 (* ^

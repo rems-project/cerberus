@@ -211,7 +211,7 @@ and storage_class_specifier =
 
 
 (* §6.7.2 Type specifiers, Syntax *)
-and cabs_type_specifier =
+and cabs_type_specifier_ =
   | TSpec_void
   | TSpec_char
   | TSpec_short
@@ -229,6 +229,8 @@ and cabs_type_specifier =
   | TSpec_enum   of maybe cabs_identifier * maybe (list (cabs_identifier * maybe
                                                            cabs_expression))
   | TSpec_name   of cabs_identifier
+and cabs_type_specifier =
+  | TSpec of Loc.t * cabs_type_specifier_
 
 (* §6.7.2.1 Structure and union specifiers, Syntax *)
 and struct_declaration =
@@ -276,7 +278,7 @@ and array_declarator_size =
   | ADeclSize_asterisk
 
 and pointer_declarator =
-  | PDecl of list cabs_type_qualifier * maybe pointer_declarator
+  | PDecl of Loc.t * list cabs_type_qualifier * maybe pointer_declarator
 
 and parameter_type_list =
   | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
@@ -394,6 +396,51 @@ instance (Located cabs_statement)
     loc
 end
 
+instance (Located cabs_type_specifier)
+  let locOf tspec =
+    let (TSpec loc _) = tspec in
+    loc
+end
+
+(* NOTE: It returns the location of the identifier *)
+let rec loc_of_direct_declarator ddecl =
+  match ddecl with
+    | DDecl_identifier id ->
+        locOf id
+    | DDecl_declarator (Declarator _ ddecl) ->
+        loc_of_direct_declarator ddecl
+    | DDecl_array ddecl _ ->
+        loc_of_direct_declarator ddecl
+    | DDecl_function ddecl _ ->
+        loc_of_direct_declarator ddecl
+  end
+instance (Located direct_declarator)
+  let locOf = loc_of_direct_declarator
+end
+
+(* NOTE: It returns the location of the identifier *)
+instance (Located declarator)
+  let locOf decl =
+    let (Declarator _ ddecl) = decl in
+    locOf ddecl
+end
+
+(* NOTE: It returns the location of the identifier *)
+instance (Located external_declaration)
+  let locOf edecl =
+    match edecl with
+      | EDecl_func (FunDef _ _ decl _) ->
+          locOf decl
+      | EDecl_decl (Declaration_base _ idecls) ->
+          (* NOTE: Return just the first InitDecl location *)
+          match idecls with
+            | [] -> Loc.unknown
+            | (InitDecl _ decl _)::_ -> locOf decl
+          end
+      | EDecl_decl (Declaration_static_assert (Static_assert e _)) ->
+          locOf e
+    end
+end
 
 instance (Eq storage_class_specifier)
   let (=)  = unsafe_structural_equality

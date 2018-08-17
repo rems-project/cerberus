@@ -94,14 +94,6 @@ val is_struct_or_union: genType -> bool
 let is_struct_or_union ty =
   is_struct ty || is_union ty
 
-
-
-
-
-
-
-
-
 (* == generic predicates on ctypes ============================================================== *)
 (* TODO: we be moved to Ctype.lem to be function working on all instanced of the class Ctype *)
 (* STD §6.2.5#18, sentence 1 *)
@@ -114,37 +106,7 @@ val is_scalar: genType -> bool
 let is_scalar gty =
   is_pointer gty || is_arithmetic gty
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 let is_real gt : bool = is_integer gt || is_floating gt
-
-
-
-
-
-
-
-
-
-
-
 
 (* following (§6.3.2.1)#3 *)
 let array_coercion = function
@@ -155,7 +117,7 @@ let array_coercion = function
 (* following (§6.3.2.1)#4 *)
 let function_coercion = function
   | GenFunction hasProto ty params isVariadic ->
-      GenPointer no_qualifiers (Function hasProto ty params isVariadic)
+      GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic))
   | gty ->
       gty
   end
@@ -168,10 +130,6 @@ let rvalue_coercion gty : genType =
     function_coercion gty
   else
     gty
-
-
-
-
 
 val is_pointer_to_complete_object: forall 'a. sigma 'a -> genType -> bool
 let is_pointer_to_complete_object sigm = function
@@ -215,7 +173,7 @@ end
 
 val is_pointer_to_void: genType -> bool
 let is_pointer_to_void = function
-  | GenPointer _ Void ->
+  | GenPointer _ (Ctype _ Void) ->
       true
   | _ ->
       false
@@ -308,7 +266,7 @@ let usual_arithmetic gty1 gty2 =
         end
   end
 
-let rec interpret_genIntegerType impl git : errorM integerType =
+let rec interpret_genIntegerType loc impl git : errorM integerType =
   match git with
   | Concrete ity ->
       return ity
@@ -317,52 +275,54 @@ let rec interpret_genIntegerType impl git : errorM integerType =
   | PtrdiffT ->
       return Ptrdiff_t
   | Unknown ic ->
-      AilTyping.type_of_constant impl ic
+      AilTyping.type_of_constant loc impl ic
   | Promote git ->
-      interpret_genIntegerType impl git >>= fun ity ->
+      interpret_genIntegerType loc impl git >>= fun ity ->
       return (AilTypesAux.integer_promotion impl ity)
   | Usual git1 git2 ->
-      interpret_genIntegerType impl git1 >>= fun ity1 ->
-      interpret_genIntegerType impl git2 >>= fun ity2 ->
+      interpret_genIntegerType loc impl git1 >>= fun ity1 ->
+      interpret_genIntegerType loc impl git2 >>= fun ity2 ->
       return (AilTypesAux.usual_arithmetic_integer impl ity1 ity2)
   end
 
-val interpret_genBasicType: Implementation.implementation -> genBasicType -> errorM basicType
-let interpret_genBasicType impl = function
+val interpret_genBasicType: Loc.t -> Implementation.implementation -> genBasicType -> errorM basicType
+let interpret_genBasicType loc impl = function
   | GenInteger gity ->
-      interpret_genIntegerType impl gity >>= fun ity ->
+      interpret_genIntegerType loc impl gity >>= fun ity ->
       return (Integer ity)
   | GenFloating fty ->
       return (Floating fty)
 end
 
-val interpret_genType: Implementation.implementation -> genType -> errorM ctype
-let interpret_genType impl = function
-  | GenVoid ->
-      return Void
-  | GenBasic gbty ->
-      interpret_genBasicType impl gbty >>= fun bty ->
-      return (Basic bty)
-  | GenArray ty n ->
-      return (Array ty n)
-  | GenFunction has_proto ty params is_variadic ->
-      return (Function has_proto ty params is_variadic)
-  | GenPointer qs ty ->
-      return (Pointer qs ty)
-  | GenStruct tag ->
-      return (Struct tag)
-  | GenUnion tag ->
-      return (Union tag)
-  | GenBuiltin str ->
-      return (Builtin str)
-  | GenAtomic ty ->
-      return (Atomic ty)
+val interpret_genType: Loc.t -> Implementation.implementation -> genType -> errorM ctype
+let interpret_genType loc impl gty =
+  let ret ty = return (Ctype [Annot.Aloc loc] ty) in
+  match gty with
+    | GenVoid ->
+        ret Void
+    | GenBasic gbty ->
+        interpret_genBasicType loc impl gbty >>= fun bty ->
+        ret (Basic bty)
+    | GenArray ty n ->
+        ret (Array ty n)
+    | GenFunction has_proto ty params is_variadic ->
+        ret (Function has_proto ty params is_variadic)
+    | GenPointer qs ty ->
+        ret (Pointer qs ty)
+    | GenStruct tag ->
+        ret (Struct tag)
+    | GenUnion tag ->
+        ret (Union tag)
+    | GenBuiltin str ->
+        ret (Builtin str)
+    | GenAtomic ty ->
+        ret (Atomic ty)
   end
 
-val interpret_genTypeCategory: Implementation.implementation -> genTypeCategory -> errorM typeCategory
-let interpret_genTypeCategory impl = function
+val interpret_genTypeCategory: Loc.t -> Implementation.implementation -> genTypeCategory -> errorM typeCategory
+let interpret_genTypeCategory loc impl = function
   | GenRValueType gty ->
-      RValueType <$> interpret_genType impl gty
+      RValueType <$> interpret_genType loc impl gty
   | GenLValueType qs ty isRegister ->
       return (LValueType qs ty isRegister)
 end
@@ -375,15 +335,6 @@ let signed_integerSuffix = function
   | UL  -> false
   | ULL -> false
 end
-
-(* TODO: this dead and incorrect code
-
-let signed_integerConstant (ic : integerConstant) : bool =
-  match snd ic with
-  | Nothing -> true
-  | Just s  -> signed_integerSuffix s
-  end
-*)
 
 val min_interpret_integerSuffix: integerSuffix -> integerBaseType
 let min_interpret_integerSuffix = function
@@ -401,26 +352,6 @@ let min_interpret_optionIntegerSuffix = function
   | Just suff ->
       min_interpret_integerSuffix suff
 end
-
-(*
-val min_interpret_integerConstant: integerConstant -> integerBaseType
-let min_interpret_integerConstant = function
-  | IConstant _ _ suff ->
-      min_interpret_optionIntegerSuffix suff
-  | IConstantMax ity ->
-      ity
-  | IConstantMin ity ->
-      ity
-end
-*)
-
-
-
-
-
-
-
-
 
 (* TODO: check (and sync with the AilTypesAux version *)
 val is_complete: forall 'a. sigma 'a -> genType -> bool
@@ -479,3 +410,10 @@ end
 val is_incomplete: forall 'a. sigma 'a -> genType -> bool
 let is_incomplete sigm gty =
   not (is_complete sigm gty)
+
+val annotations: forall 'a. expression 'a -> (list string * 'a)
+let annotations (AnnotatedExpression gtc annots _ _) = (annots, gtc)
+
+val genTypeCategoryOf: expression genTypeCategory -> genTypeCategory
+let genTypeCategoryOf (AnnotatedExpression gtc _ _ _) =
+  gtc

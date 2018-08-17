@@ -597,7 +597,7 @@ let rec infer_pexpr loc tagDefs env (Pexpr annot () pexpr_) =
     | PEnot pe ->
         Pexpr annot InferredType_boolean <$> (PEnot <$> typecheck_pexpr loc tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
-        E.trysM (loc, Core_typing_cause (CoreTyping_TODO "PEop"))
+        E.trysM (loc, CORE_TYPING (CoreTyping_TODO "PEop"))
         (fun (bTy, bTy1, bTy2) ->
           Pexpr annot (toInferred bTy) <$> (PEop bop <$> typecheck_pexpr loc tagDefs env bTy1 pe1
                                                <*> typecheck_pexpr loc tagDefs env bTy2 pe2)
@@ -940,7 +940,7 @@ and typecheck_pexpr loc tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr a
         (PEnot <$> typecheck_pexpr loc tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
         (* TODO: this is going to give horrible error messages ... *)
-        E.trysM (loc, Core_typing_cause (CoreTyping_TODO "PEop"))
+        E.trysM (loc, CORE_TYPING (CoreTyping_TODO "PEop"))
         (fun (bTy', bTy1, bTy2) ->
           guard_match loc ("operator ==>" ^ Pp.stringFromCore_pexpr (Pexpr [] () pexpr_)) bTy bTy' >>
           (PEop bop <$> typecheck_pexpr loc tagDefs env bTy1 pe1
@@ -1138,7 +1138,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
     | Kill b pe ->
         typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
         E.return (BTy_unit, Kill b tpe)
-    | Store pe1 pe2 pe3 mo ->
+    | Store b pe1 pe2 pe3 mo ->
         match pe1 with
           | Pexpr [] () (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
@@ -1146,7 +1146,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
                 | Just lvalue_oTy ->
                     typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
                     typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
-                    E.return (BTy_unit, Store tpe1 tpe2 tpe3 mo)
+                    E.return (BTy_unit, Store b tpe1 tpe2 tpe3 mo)
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO "Store, not oTy")
               end
@@ -1257,7 +1257,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       guard_match loc "kill()" bTy BTy_unit >>
       typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe >>= fun tpe ->
       E.return (Kill b tpe)
-  | Store pe1 pe2 pe3 mo ->
+  | Store b pe1 pe2 pe3 mo ->
       guard_match loc "store()" bTy BTy_unit >>
       match pe1 with
         | Pexpr [] () (PEval (Vctype ty)) ->
@@ -1266,7 +1266,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
               | Just lvalue_oTy ->
                   typecheck_export_pexpr loc tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
                   typecheck_export_pexpr loc tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
-                  E.return (Store tpe1 tpe2 tpe3 mo)
+                  E.return (Store b tpe1 tpe2 tpe3 mo)
               | Nothing ->
                   E.fail loc (CoreTyping_TODO "Store, not oTy")
             end
@@ -1460,7 +1460,7 @@ let rec collect_labels env (Expr _ expr_) =
 
 (* val     typecheck_expr: Loc.t -> typing_env -> core_base_type -> Core.expr unit -> E.eff (typed_expr unit) *)
 and typecheck_expr loc tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
-  let loc = match Core_aux.get_loc annot with
+  let loc = match Annot.get_loc annot with
     | Just loc' ->
         loc'
     | Nothing ->

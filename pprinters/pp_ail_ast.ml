@@ -14,48 +14,6 @@ open Lem_pervasives
 open Either
 
 
-let pp_loc =
-  let last_pos = ref Lexing.dummy_pos in
-  fun loc ->
-
-  let open Location_ocaml in
-  let string_of_pos p =
-    let open Lexing in
-    let ret =
-      if !last_pos.pos_fname <> p.pos_fname then
-        p.pos_fname ^ ":" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
-      else if !last_pos.pos_lnum <> p.pos_lnum then
-        "line:" ^ string_of_int p.pos_lnum ^ ":" ^ string_of_int (p.pos_cnum - p.pos_bol)
-      else
-        "col:" ^ string_of_int (p.pos_cnum - p.pos_bol) in
-    last_pos := p;
-    ret in
-  
-  match loc with
-    | Loc_unknown ->
-        P.angles !^ (ansi_format [Yellow] "unknown location")
-    | Loc_other str ->
-        P.angles !^ (ansi_format [Yellow] ("other location (" ^ str ^ ")"))
-    | Loc_point pos ->
-        let pos_str = string_of_pos pos in
-        P.angles !^ (ansi_format [Yellow] pos_str)
-    | Loc_region (start_p, end_p, cursor_p_opt) ->
-        let start_p_str = string_of_pos start_p in
-        let end_p_str   = string_of_pos start_p in
-        let cursor_p_str =
-          match cursor_p_opt with
-            | None -> ""
-            | Some cursor_p -> " " ^ string_of_pos cursor_p in
-
-        P.angles (
-          !^ (ansi_format [Yellow] start_p_str) ^^ P.comma ^^^
-          !^ (ansi_format [Yellow] end_p_str)
-        ) ^^
-        P.optional (fun _ -> !^ (ansi_format [Yellow] cursor_p_str)) cursor_p_opt
-
-
-
-
 let pp_symbol sym =
   !^ (ansi_format [Bold; Cyan] (Pp_symbol.to_string_pretty sym))
 
@@ -67,7 +25,7 @@ let pp_qualifiers qs =
 
 
 
-let rec pp_ctype_human qs ty =
+let rec pp_ctype_human qs (Ctype (_, ty)) =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
@@ -97,7 +55,7 @@ let rec pp_ctype_human qs ty =
     | Pointer (ref_qs, ref_ty) ->
         prefix_pp_qs ^^ !^ "pointer to" ^^^ pp_ctype_human ref_qs ref_ty
     | Atomic atom_ty ->
-        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers ty
+        prefix_pp_qs ^^ !^ "atomic" ^^^ pp_ctype_human no_qualifiers atom_ty
     | Struct tag_sym ->
         prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
     | Union tag_sym ->
@@ -280,9 +238,9 @@ let dtree_of_expression pp_annot expr =
     in
 *)
     let pp_stmt_ctor str =
-      pp_std_annot ^^^ pp_stmt_ctor str ^^^ pp_loc loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ pp_stmt_ctor str ^^^ Location_ocaml.pp_location loc ^^^ pp_annot annot in
     let pp_implicit_ctor str =
-      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ pp_loc loc ^^^ pp_annot annot in
+      pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Location_ocaml.pp_location loc ^^^ pp_annot annot in
     
     let pp_cabs_id = Pp_cabs.pp_cabs_identifier in
     let dtree_of_generic_association = function
@@ -456,7 +414,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
 let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
   let param_dtrees =
     [] in
-  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ pp_loc loc ^^^ Pp_ail.pp_id fun_sym
+  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ Location_ocaml.pp_location loc ^^^ Pp_ail.pp_id fun_sym
         , param_dtrees @ [dtree_of_statement pp_annot stmt] )
 
 let pp_storageDuration = function
@@ -483,7 +441,7 @@ let dtree_of_declaration (i, (_, decl)) =
                (pp_cond is_inline !^"inline"
                (pp_cond is_noreturn !^"_Noreturn"
                (pp_ctype_human empty_qs
-                  (Function (has_proto, (qs, cty), params, is_var)))))
+                  (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
              )
            end)
 

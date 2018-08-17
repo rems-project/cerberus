@@ -1,10 +1,9 @@
-open import Pervasives
+open import Pervasives Annot Loc
 import Symbol Cabs
 
 
 (** Types *************************************************************************************** *)
 type identifier = Symbol.sym
-
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -66,7 +65,7 @@ type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
 
 (* NOTE: we restrict qualifiers in the syntax to place that correspond to
          lvalues (to reflect STD §6.7.3#4) *)
-type ctype (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
+type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
  | Void
  | Basic of basicType
    (* INVARIANT if the element ctype is an array, the qualifiers must be empty *)
@@ -92,7 +91,17 @@ type ctype (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
  | Struct of identifier
  | Union of identifier
  | Builtin of string
+and ctype =
+  Ctype of list annot * ctype_
 
+val proj_ctype_: ctype -> ctype_
+let proj_ctype_ (Ctype _ cty) = cty
+
+instance (Located ctype)
+  let locOf cty =
+    let (Ctype annots _) = cty in
+    Annot.get_loc_ annots
+end
 
 (* STD §6.2.4#1 *)
 type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
@@ -243,7 +252,7 @@ instance (Eq qualifiers)
 end
 
 
-let rec ctypeEqual ty1 ty2 =
+let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
   let ord = function
     | Void ->
         (0 : nat)
@@ -476,13 +485,13 @@ let typeCategoryEqual tc1 tc2 : bool =
 val char16_t: ctype
 let char16_t =
   (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (Int_leastN_t 16)))
+  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t 16))))
 
 val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
-  Basic (Integer (Unsigned (Int_leastN_t 32)))
+  Ctype [] (Basic (Integer (Unsigned (Int_leastN_t 32))))
 
 val ptrdiff_t: ctype
 let ptrdiff_t =
-  Basic (Integer Ptrdiff_t)
+  Ctype [] (Basic (Integer Ptrdiff_t))

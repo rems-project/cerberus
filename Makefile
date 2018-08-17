@@ -138,7 +138,7 @@ ocaml_native:
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,angstrom,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 
@@ -150,7 +150,7 @@ twin:
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  sed -i '' 's/ref `MemConcrete/ref `MemTwin/' src/prelude.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,${Z3} -libs str main_.native; \
 	  sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml; \
 	  cp -L main_.native twin; \
 	fi
@@ -162,7 +162,7 @@ ocaml_profiling:
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,${Z3} -libs str main_.native; \
+	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,yojson,${Z3} -libs str main_.native; \
 	  cp -L main_.native cerberus-prof; \
 	fi
 
@@ -178,13 +178,13 @@ ocaml_profiling:
 
 instance: src/instance.ml
 	ocamlbuild src/cerberus_cstubs.o;
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.concrete 
 	sed -i '' 's/ref `MemConcrete/ref `MemSymbolic/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.symbolic
 	sed -i '' 's/ref `MemSymbolic/ref `MemTwin/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,${Z3},cmdliner -libs str,unix instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.twin
 	sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml
 
@@ -193,6 +193,9 @@ web: src/web.ml instance
 
 web.byte: src/web.ml instance
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
+
+transformN1570:
+	ocamlbuild -pkgs lambdasoup,yojson -lib str tools/transformN1570.native
 
 .PHONY: cbuild clink
 cbuild:

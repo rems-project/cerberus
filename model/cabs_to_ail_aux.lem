@@ -39,8 +39,6 @@ instance (SetType linkage)
   let setElemCompare = defaultCompare
 end
 
-
-
 val specifiers_of_external_declaration: external_declaration -> maybe specifiers
 let specifiers_of_external_declaration = function
   | EDecl_func (FunDef _ specifs _ _) ->
@@ -85,7 +83,7 @@ end
 
 
 val mk_zeroInit: map A.identifier tag_definition -> ATypes.ctype -> A.expression unit
-let rec mk_zeroInit_aux tagDefs ty =
+let rec mk_zeroInit_aux tagDefs (ATypes.Ctype _ ty) =
   match ty with
     | ATypes.Void ->
         error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Void"

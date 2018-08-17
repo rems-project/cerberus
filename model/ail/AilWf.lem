@@ -24,20 +24,16 @@ declare hol   target_rep function stringFromQualifiers = `pp_ail$pp_qualifiers`
 
 val wf_lvalue_aux: qualifiers -> ctype -> errorM unit
 let wf_lvalue_aux qs ty =
-  match ty with
+  match proj_ctype_ ty with
     | Pointer _ ref_ty ->
-        guard (TError "§6.7.3#2, pointer case") (
+        guard (Loc.locOf ref_ty) (TError_ConstraintViolation (Constraint.RestrictQualifiedPointedTypeConstraint ref_ty)) (
           not (is_object ref_ty) --> not (qs.restrict)
         )
     | _ ->
-(*
-        guard (TError "§6.7.3#2, non pointer case") (
-*)
-        guard (TError $"§6.7.3#2, non pointer case" ^ stringFromQualifiers qs ^ " <|> " ^ stringFromCtype ty) (
-
+        guard (Loc.locOf ty) (TError_ConstraintViolation Constraint.RestrictQualifiedTypeConstraint) (
           not (qs.restrict)
         ) >>
-        guard (TError_undef Undefined.UB066_qualified_function_specification) (
+        guard (Loc.locOf ty) (TError_UndefinedBehaviour Undefined.UB066_qualified_function_specification) (
           is_function ty --> is_unqualified qs
         )
   end
@@ -47,17 +43,16 @@ let rec wf_parameters_aux sigm wf_type params =
   match params with
     | [] ->
         return ()
-    | [(qs, Void, _)] ->
+    | [(qs, (Ctype _ Void as ty), _)] ->
         (* TODO: not sure if the STD actually requires this. *)
         (* see comment in Cabs_to_ail.desugar_direct_declarator, DDecl_function *)
-        guard (TError "a lone 'void' parameter must be unqualified") (is_unqualified qs) >>
-        return ()
+        guard (Loc.locOf ty) (TError_UndefinedBehaviour Undefined.UB078_modified_void_parameter) (is_unqualified qs)
     | (qs, ty, _) :: params' ->
-        guard (TError "a parameter type was not adjusted") (
+        guard (Loc.locOf ty) (TError_MiscError ParameterTypeNotAdjusted) (
           is_adjusted ty
         ) >>
         (* STD §6.7.6.3#4 *)
-        guard (TError "a parameter type was incomplete") (
+        guard (Loc.locOf ty) (TError_ConstraintViolation Constraint.IncompleteParameterTypeFunctionDeclarator) (
           not (is_incomplete sigm ty)
         ) >>
         wf_type ty >>
@@ -68,7 +63,7 @@ let rec wf_parameters_aux sigm wf_type params =
 
 (* TODO: check *)
 val     wf_type: forall 'a. sigma 'a -> ctype -> errorM unit
-let rec wf_type sigm ty =
+let rec wf_type sigm (Ctype _ ty) =
   let wf_type ty = wf_type sigm ty in
   let wf_parameters = wf_parameters_aux sigm wf_type in
   match ty with
@@ -77,12 +72,16 @@ let rec wf_type sigm ty =
   | Basic _ ->
       return ()
   | Array elem_ty _ ->
-      guard (TError "§6.7.6.2#1, sentence 4") (
-        is_complete sigm elem_ty && not (is_function elem_ty)
+      guard (Loc.locOf elem_ty) (TError_ConstraintViolation Constraint.ArrayDeclarationFunctionType) (
+        not (is_function elem_ty)
       ) >>
+      guard (Loc.locOf elem_ty) (TError_ConstraintViolation Constraint.ArrayDeclarationIncompleteType) (
+        is_complete sigm elem_ty
+      ) >>
+
       wf_type elem_ty
   | Function _ (ret_qs, ret_ty) params _ ->
-      guard (TError "§6.7.6.3#1") (
+      guard (Loc.locOf ret_ty) (TError_ConstraintViolation Constraint.IllegalReturnTypeFunctionDeclarator) (
         not (is_array ret_ty || is_function ret_ty)
       ) >>
       wf_type ret_ty >>
@@ -96,21 +95,12 @@ let rec wf_type sigm ty =
       wf_type ref_ty >>
       wf_lvalue_aux ref_qs ref_ty
   | Atomic ty' ->
-      guard (TError "§6.7.2.4#3") (
+      guard (Loc.locOf ty') (TError_ConstraintViolation Constraint.AtomicTypeConstraint) (
         (* NOTE: the check that ty' is not qualified has to be done during the
            desugaring (see Cabs_to_ail.desugar_type_specifiers). *)
         not (is_array ty' || is_function ty' || is_atomic ty')
       ) >>
       wf_type ty'
-      
-(*
-  | Struct _ xs ->
-      (* TODO: check *)
-      mapM_ (comb wf_type snd) xs
-  | Union _ xs ->
-      (* TODO: check *)
-      mapM_ (comb wf_type snd) xs
-*)
   (* TODO: maybe check that the tags are in Sigma *)
   | Struct _ ->
       return ()

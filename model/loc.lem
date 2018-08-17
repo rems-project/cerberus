@@ -1,3 +1,5 @@
+open import Pervasives
+
 type t
 declare ocaml target_rep type t = `Location_ocaml.t`
 declare hol target_rep type t = `unit`
@@ -10,9 +12,14 @@ val other: string -> t
 declare ocaml target_rep function other = `Location_ocaml.other`
 declare hol target_rep function other = `()`
 
+val with_regions_and_cursor: list t -> maybe t -> t
+declare ocaml target_rep function with_regions_and_cursor = `Location_ocaml.with_regions_and_cursor`
 
 val with_cursor_from: t -> t -> t
 declare ocaml target_rep function with_cursor_from = `Location_ocaml.with_cursor_from`
+
+val bbox_location: list t -> t
+declare ocaml target_rep function bbox_location = `Location_ocaml.bbox_location`
 
 class (Located 'a)
   val locOf: 'a -> t

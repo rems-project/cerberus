@@ -68,6 +68,7 @@ type cerberus_conf = {
   default_impl:       bool;
   action_graph:       bool;
   bmc:                bool;
+  n1507:              Yojson.Basic.json option;
 }
 
 let (!!) z = !z()
@@ -89,6 +90,18 @@ let isDefacto () =
 
 let show_action_graph () =
   !!cerb_conf.action_graph
+
+(* print an error fatal message and exit with a given code *)
+let error ?(code = 1) msg =
+  prerr_endline Colour.(ansi_format [Red] $ "ERROR: " ^ msg);
+  exit code
+
+let cerb_path =
+    try
+      Sys.getenv "CERB_PATH"
+    with Not_found ->
+      error "expecting the environment variable CERB_PATH set to point to the location cerberus."
+
 
 let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
@@ -118,13 +131,8 @@ let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode c
     default_impl=  default_impl;
     action_graph=  action_graph;
     bmc=           bmc;
+    n1507=         if error_verbosity = QuoteStd then Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json")) else None;
   }
-
-
-(* print an error fatal message and exit with a given code *)
-let error ?(code = 1) msg =
-  prerr_endline Colour.(ansi_format [Red] $ "ERROR: " ^ msg);
-  exit code
 
 
 (* TODO: hack *)

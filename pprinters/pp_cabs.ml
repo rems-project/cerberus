@@ -4,6 +4,8 @@ open Pp_prelude
 open Pp_ast
 open Colour
 
+open Location_ocaml
+
 module P = PPrint
 
 let precedence = function
@@ -75,45 +77,6 @@ let pp_colour_label (CabsIdentifier (_, str)) =
 
 let pp_decl_ctor k =
   !^ (ansi_format [Bold; Green] k)
-
-
-let pp_location = function
-  | Location_ocaml.Loc_unknown ->
-      P.angles (!^ "unknown location")
-  | Location_ocaml.Loc_other str ->
-      P.angles (!^ ("other location: " ^ str))
-  | Location_ocaml.Loc_point pos ->
-      Lexing.(
-        let line = string_of_int pos.pos_lnum in
-        let col  = string_of_int (1+pos.pos_cnum - pos.pos_bol) in
-        P.angles !^ (ansi_format [Yellow] ("line:" ^ line ^ ":" ^ col))
-      )
-  | Location_ocaml.Loc_region (start_p, end_p, cursor_p_opt) ->
-      Lexing. (
-        let start_line = string_of_int start_p.pos_lnum in
-        let start_col  = string_of_int (1+start_p.pos_cnum - start_p.pos_bol) in
-        let end_line   = string_of_int end_p.pos_lnum in
-        let end_col    = string_of_int (1+end_p.pos_cnum - end_p.pos_bol) in
-        P.angles (
-          if start_p.pos_lnum = end_p.pos_lnum then
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
-            ^^ P.comma ^^^
-            !^ (ansi_format [Yellow] ("col:" ^ end_col))
-          else
-            !^ (ansi_format [Yellow] ("line:" ^ start_line ^ ":" ^ start_col))
-            ^^ P.comma ^^^
-            !^ (ansi_format [Yellow] ("line:" ^ end_line ^ ":" ^ end_col))
-        ) ^^ P.optional (fun p ->
-               let line = string_of_int p.pos_lnum in
-               let col  = string_of_int (1+p.pos_cnum - p.pos_bol) in
-               P.space ^^
-               !^ (ansi_format [Yellow] (
-               if start_p.pos_lnum = end_p.pos_lnum then
-                 "col:" ^ col
-               else
-                 "line:" ^ line ^ ":" ^ col))
-             ) cursor_p_opt
-      )
 
 let map_option f = function
   | Some x -> Some (f x)
@@ -393,42 +356,43 @@ and pp_storage_class_specifier = function
   | SC_register ->
       pp_ctor "SC_register"
 
-and dtree_of_cabs_type_specifier = function
-  | TSpec_void ->
-      Dleaf (pp_ctor "TSpec_void")
-  | TSpec_char ->
-      Dleaf (pp_ctor "TSpec_char")
-  | TSpec_short ->
-      Dleaf (pp_ctor "TSpec_short")
-  | TSpec_int ->
-      Dleaf (pp_ctor "TSpec_int")
-  | TSpec_long ->
-      Dleaf (pp_ctor "TSpec_long")
-  | TSpec_float ->
-      Dleaf (pp_ctor "TSpec_float")
-  | TSpec_double ->
-      Dleaf (pp_ctor "TSpec_double")
-  | TSpec_signed ->
-      Dleaf (pp_ctor "TSpec_signed")
-  | TSpec_unsigned ->
-      Dleaf (pp_ctor "TSpec_unsigned")
-  | TSpec_Bool ->
-      Dleaf (pp_ctor "TSpec__Bool")
-  | TSpec_Complex ->
-      Dleaf (pp_ctor "TSpec__Complex")
-  | TSpec_Atomic tyname ->
-      Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
-  | TSpec_struct (id_opt, s_decls_opt) ->
-      Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-               node_of_list_option dtree_of_struct_declaration s_decls_opt)
-  | TSpec_union (id_opt, s_decls_opt) ->
-      Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-               node_of_list_option dtree_of_struct_declaration s_decls_opt)
-  | TSpec_enum (id_opt, enums_opt) ->
-      Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
-             node_of_list_option dtree_of_enumerator enums_opt)
-  | TSpec_name id ->
-      Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
+and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
+  match tspec with
+    | TSpec_void ->
+        Dleaf (pp_ctor "TSpec_void")
+    | TSpec_char ->
+        Dleaf (pp_ctor "TSpec_char")
+    | TSpec_short ->
+        Dleaf (pp_ctor "TSpec_short")
+    | TSpec_int ->
+        Dleaf (pp_ctor "TSpec_int")
+    | TSpec_long ->
+        Dleaf (pp_ctor "TSpec_long")
+    | TSpec_float ->
+        Dleaf (pp_ctor "TSpec_float")
+    | TSpec_double ->
+        Dleaf (pp_ctor "TSpec_double")
+    | TSpec_signed ->
+        Dleaf (pp_ctor "TSpec_signed")
+    | TSpec_unsigned ->
+        Dleaf (pp_ctor "TSpec_unsigned")
+    | TSpec_Bool ->
+        Dleaf (pp_ctor "TSpec__Bool")
+    | TSpec_Complex ->
+        Dleaf (pp_ctor "TSpec__Complex")
+    | TSpec_Atomic tyname ->
+        Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
+    | TSpec_struct (id_opt, s_decls_opt) ->
+        Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
+    | TSpec_union (id_opt, s_decls_opt) ->
+        Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
+    | TSpec_enum (id_opt, enums_opt) ->
+        Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+               node_of_list_option dtree_of_enumerator enums_opt)
+    | TSpec_name id ->
+        Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (specs, qs, s_decls) ->
@@ -509,9 +473,9 @@ and dtree_of_array_declarator_size = function
       Dleaf (pp_decl_ctor "ADeclSize_asterisk")
 
 and dtree_of_pointer_declarator = function
-  | PDecl (qs, None) ->
+  | PDecl (_, qs, None) ->
       Dleaf (pp_decl_ctor "PDecl" ^^^ P.brackets (comma_list pp_cabs_type_qualifier qs))
-  | PDecl (qs, Some ptr_decltor) ->
+  | PDecl (_, qs, Some ptr_decltor) ->
       Dnode ( pp_decl_ctor "PDecl" ^^^ P.brackets (comma_list pp_cabs_type_qualifier qs)
             , [dtree_of_pointer_declarator ptr_decltor] )
 
