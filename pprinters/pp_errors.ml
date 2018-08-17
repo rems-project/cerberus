@@ -48,13 +48,24 @@ let string_of_constraint_violation = function
       "calling function returning an array type '" ^ string_of_ctype ty ^ "'"
   | FunctionCallIncorrectType ->
       "called object type is not a function or function pointer"
-  | MemberofReferenceBaseType ->
-      "member reference base type is not a structure or union"
-  | MemberofNoMember (memb, gty) ->
+  | MemberofReferenceBaseTypeLvalue (qs, ty) ->
+      "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
+  | MemberofReferenceBaseTypeRvalue gty ->
+      "member reference base type '" ^ string_of_gentype gty ^ "' is not a structure or union"
+  | MemberofNoMemberLvalue (memb, qs, ty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | MemberofNoMemberRvalue (memb, gty) ->
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
+  | MemberofptrReferenceTypeNotPointer gty ->
+      "member reference type '" ^ string_of_gentype gty ^ "' is not a pointer" ^
+      (if GenTypesAux.is_struct_or_union0 gty then "; did you mean to use '.'?" else "")
+  | MemberofptrReferenceBaseType (qs, ty) ->
+      "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
+  | MemberofptrNoMember (memb, qs, ty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
   | InvalidTypeCompoundLiteral ->
       "compound literal has invalid type"
-  | ExpressionNotLvalue ->
+  | UnaryExpressionNotLvalue ->
       "expression is not assignable"
   | InvalidArgumentTypeUnaryIncrement ty ->
       "cannot increment value of type '" ^ string_of_ctype ty ^ "'"
@@ -68,10 +79,23 @@ let string_of_constraint_violation = function
       "the * operator expects a pointer operand"
   | InvalidArgumentTypeUnaryExpression gty ->
       "invalid argument type '" ^ string_of_gentype gty ^ "' to unary expression"
+  | MultiplicativeInvalidOperandsType (gty1, gty2)
+  | AdditiveOperandsArithmeticType (gty1, gty2)
+  | BitwiseShiftInvalidOperandsType (gty1, gty2)
+  | RelationalInvalidOperandsType (gty1, gty2)
+  | EqualityInvalidOperandsType (gty1, gty2)
+  | BitwiseAndInvalidOperandsType (gty1, gty2)
+  | BitwiseXorInvalidOperandsType (gty1, gty2)
+  | BitwiseOrInvalidOperandsType (gty1, gty2)
+  | AndInvalidOperandsType (gty1, gty2)
+  | OrInvalidOperandsType (gty1, gty2) ->
+      "invalid operands to binary expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
   | ConditionalOperatorControlType gty ->
       "'" ^ string_of_gentype gty ^ "' is not a scalar type"
   | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
       "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
+  | AssignmentModifiableLvalue ->
+      "expression is not assignable"
   | SimpleAssignmentViolation (IncompatibleType, ty1, gty2)  ->
       "assigning to '" ^ string_of_ctype ty1 ^ "' from incompatible type '" ^ string_of_gentype gty2 ^ "'"
   | SimpleAssignmentViolation (IncompatiblePointerType, ty1, gty2) ->
@@ -142,6 +166,12 @@ let string_of_constraint_violation = function
       "void function should not return a value"
   | VoidReturnNonVoidFunction ->
       "non-void function should return a value"
+  | ReturnAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "returning '" ^ string_of_gentype gty2 ^ "' from a function with incompatible result type '" ^ string_of_ctype ty1 ^ "'"
+  | ReturnAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "'"
+  | ReturnAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
   | ArrayDeclarationNegativeSize ->
       "array declared with a negative or zero size"
   | ArrayDeclarationIncompleteType ->
@@ -182,6 +212,12 @@ let string_of_constraint_violation = function
       "argument may not have 'void' type"
   | UniqueVoidParameterInFunctionDefinition ->
       "'void' must be the first and only parameter if specified"
+  | FunctionParameterAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "passing '" ^ string_of_gentype gty2 ^ "' to parameter of incompatible type '" ^ string_of_ctype ty1 ^ "'"
+  | FunctionParameterAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
+  | FunctionParameterAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
   | ExternalRedefinition sym ->
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
@@ -372,7 +408,7 @@ let make_message loc err k =
     | ref::refs -> ref ^ ", " ^ string_of_refs refs
   in
   let rec string_of_quotes = function
-    | [] -> failwith "make_message: no quote"
+    | [] -> "no C11 reference"
     | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
     | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in

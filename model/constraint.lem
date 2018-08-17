@@ -12,12 +12,17 @@ type violation =
   | FunctionCallArrayReturnType of ctype (* §6.5.2.2#1 *)
   | FunctionCallIncorrectType (* §6.5.2.2#1 *)
   (* 6.5.2.3 Structure and union members *)
-  | MemberofReferenceBaseType  (* §6.5.2.3#1 *)
-  | MemberofNoMember of cabs_identifier * genType (* §6.5.2.3#1 *)
+  | MemberofReferenceBaseTypeLvalue of qualifiers * ctype  (* §6.5.2.3#1 *)
+  | MemberofReferenceBaseTypeRvalue of genType  (* §6.5.2.3#1 *)
+  | MemberofNoMemberLvalue of cabs_identifier * qualifiers * ctype (* §6.5.2.3#1 *)
+  | MemberofNoMemberRvalue of cabs_identifier * genType (* §6.5.2.3#1 *)
+  | MemberofptrReferenceBaseType of qualifiers * ctype  (* §6.5.2.3#2 *)
+  | MemberofptrReferenceTypeNotPointer of genType  (* §6.5.2.3#2 *)
+  | MemberofptrNoMember of cabs_identifier * qualifiers * ctype (* §6.5.2.3#2 *)
   (* 6.5.2.5 Compound literals *)
   | InvalidTypeCompoundLiteral (* §6.5.2.5#1 *)
   (* 6.5.3.1 Prefix increment and decrement operators *)
-  | ExpressionNotLvalue (* §6.5.3.1#1 *)
+  | UnaryExpressionNotLvalue (* §6.5.3.1#1 *)
   | InvalidArgumentTypeUnaryIncrement of ctype (* §6.5.3.1#1 *)
   | InvalidArgumentTypeUnaryDecrement of ctype (* §6.5.3.1#1 *)
   (* 6.5.3.2 Address and indirection operators *)
@@ -26,9 +31,32 @@ type violation =
   | IndirectionNotPointer (* §6.5.3.2#2 *)
   (* 6.5.3.3 Unary arithmetic operators *)
   | InvalidArgumentTypeUnaryExpression of genType (* §6.5.3.3#1 *)
+  (* 6.5.5 Multiplicative operators *)
+  | MultiplicativeInvalidOperandsType of genType * genType (* §6.5.5#2, sentence 1 *)
+  | ModInvalidOperandsType of genType * genType (* §6.5.5#2, sentence 2 *)
+  (* 6.5.6 Additive operators *)
+  | AdditiveOperandsArithmeticType of genType * genType (* §6.5.6#2 *)
+  (* 6.5.7 Bitwise shift operators *)
+  | BitwiseShiftInvalidOperandsType of genType * genType (* §6.5.7#2 *)
+  (* 6.5.8 Relational operators *)
+  | RelationalInvalidOperandsType of genType * genType (* §6.5.8#2 *)
+  (* 6.5.9 Equality operators *)
+  | EqualityInvalidOperandsType of genType * genType (* §6.5.9#2 *)
+  (* 6.5.10 Bitwise AND operator *)
+  | BitwiseAndInvalidOperandsType of genType * genType (* §6.5.10#2 *)
+  (* 6.5.11 Bitwise exclusive OR operatos *)
+  | BitwiseXorInvalidOperandsType of genType * genType (* §6.5.11#2 *)
+  (* 6.5.12 Bitwise inclusive OR operator *)
+  | BitwiseOrInvalidOperandsType of genType * genType (* §6.5.12#2 *)
+  (* 6.5.13 Logical AND operator *)
+  | AndInvalidOperandsType of genType * genType (* §6.5.13#2 *)
+  (* 6.5.14 Logical OR operator *)
+  | OrInvalidOperandsType of genType * genType (* §6.5.14#2 *)
   (* 6.5.15 Conditional operator *)
   | ConditionalOperatorControlType of genType (* §6.5.15#2 *)
   | ConditionalOperatorInvalidOperandTypes of genType * genType (* §6.5.15#3 *)
+  (* 6.5.16 Assignment operators *)
+  | AssignmentModifiableLvalue
   (* 6.5.16.1 Simple assignment *)
   | SimpleAssignmentViolation of simple_assignment_violation * ctype * genType (* §6.5.16.1#1 *)
   (* 6.6 Constant expressions *)
@@ -94,8 +122,10 @@ type violation =
   | UndeclaredLabel of cabs_identifier (* §6.8.6.1#1, sentence 1 *)
   | ContinueOutsideLoop (* §6.8.6.2#1 *)
   | BreakOutsideSwtichOrLoop (* §6.8.6.3#1 *)
+  (* 6.8.5.4 The return statement  *)
   | NonVoidReturnVoidFunction (* §6.8.6.4#1, sentence 1 *)
   | VoidReturnNonVoidFunction (* §6.8.6.4#1, sentence 2 *)
+  | ReturnAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.8.6.4#3, sentence 2 *)
   (* 6.9 External definitions *)
   | IllegalStorageClassFileScoped (* §6.9#2 *)
   | ExternalRedefinition of sym (* §6.9#3 *)
@@ -104,10 +134,14 @@ type violation =
   | IllegalStorageClassFunctionDefinition (* §6.9.1#4 *)
   | IllegalIdentifierTypeVoidInFunctionDefinition (* §6.9.1#5, sentence 1 *)
   | UniqueVoidParameterInFunctionDefinition (* §6.9.1#5 *)
+  | FunctionParameterAsSimpleAssignment of simple_assignment_violation * ctype * genType (* §6.9.1#10 *)
   (* 7 Library *)
   (* 7.2 Diagnostics <assert.h> *)
   (* 7.2.1.1 The assert macro *)
   | AssertMacroExpressionScalarType (* §7.2.1.1#2 *)
+
+type assignment_violation =
+  simple_assignment_violation -> ctype -> genType -> violation
 
 let std_of_assign_violation= function
   | IncompatibleType ->
@@ -125,13 +159,23 @@ let std_of_violation = function
       ["§6.5.2.2#1"]
   | FunctionCallIncorrectType ->
       ["§6.5.2.2#1"]
-  | MemberofReferenceBaseType ->
+  | MemberofReferenceBaseTypeLvalue _ _ ->
       ["§6.5.2.3#1"]
-  | MemberofNoMember _ _ ->
+  | MemberofReferenceBaseTypeRvalue _ ->
       ["§6.5.2.3#1"]
+  | MemberofNoMemberLvalue _ _ _ ->
+      ["§6.5.2.3#1"]
+  | MemberofNoMemberRvalue _ _ ->
+      ["§6.5.2.3#1"]
+  | MemberofptrReferenceBaseType _ _ ->
+      ["§6.5.2.3#2"]
+  | MemberofptrReferenceTypeNotPointer _ ->
+      ["§6.5.2.3#2"]
+  | MemberofptrNoMember _ _ _ ->
+      ["§6.5.2.3#2"]
   | InvalidTypeCompoundLiteral ->
       ["§6.5.2.5#1"]
-  | ExpressionNotLvalue ->
+  | UnaryExpressionNotLvalue ->
       ["§6.5.3.1#1"]
   | InvalidArgumentTypeUnaryIncrement _ ->
       ["§6.5.3.1#1"]
@@ -145,10 +189,34 @@ let std_of_violation = function
       ["§6.5.3.3#1"]
   | IndirectionNotPointer ->
       ["§6.5.3.2#2"]
+  | MultiplicativeInvalidOperandsType _ _ -> 
+      ["§6.5.5#2, sentence 1"]
+  | ModInvalidOperandsType _ _ ->
+      ["§6.5.5#2, sentence 2"]
+  | AdditiveOperandsArithmeticType _ _ ->
+      ["§6.5.6#2"]
+  | BitwiseShiftInvalidOperandsType _ _ ->
+      ["§6.5.7#2"]
+  | RelationalInvalidOperandsType _ _ ->
+      ["§6.5.8#2"]
+  | EqualityInvalidOperandsType _ _ ->
+      ["§6.5.9#2"]
+  | BitwiseAndInvalidOperandsType _ _ ->
+      ["§6.5.10#2"]
+  | BitwiseXorInvalidOperandsType _ _ ->
+      ["§6.5.11#2"]
+  | BitwiseOrInvalidOperandsType _ _ ->
+      ["§6.5.12#2"]
+  | AndInvalidOperandsType _ _ ->
+      ["§6.5.13#2"]
+  | OrInvalidOperandsType _ _ ->
+      ["§6.5.14#2"]
   | ConditionalOperatorControlType _ ->
       ["§6.5.15#2"]
   | ConditionalOperatorInvalidOperandTypes _ _ ->
       ["§6.5.15#3"]
+  | AssignmentModifiableLvalue ->
+      ["§6.5.16#2"]
   | SimpleAssignmentViolation viol _ _ ->
       std_of_assign_violation viol
   | IntegerConstantOutRange ->
@@ -245,6 +313,8 @@ let std_of_violation = function
       ["§6.8.6.4#1, sentence 1"]
   | VoidReturnNonVoidFunction ->
       ["§6.8.6.4#1, sentence 2"]
+  | ReturnAsSimpleAssignment viol _ _ ->
+      ["§6.8.6.4#3, sentence 2"; "FOOTNOTE.160"] ++ std_of_assign_violation viol
   | IllegalStorageClassFileScoped ->
       ["§6.9#2"]
   | ExternalRedefinition _ ->
@@ -257,6 +327,8 @@ let std_of_violation = function
       ["§6.9.1#5, sentence 1"]
   | UniqueVoidParameterInFunctionDefinition ->
       ["§6.9.1#5, sentence 2"]
+  | FunctionParameterAsSimpleAssignment viol _ _ ->
+      "§6.9.1#10" :: std_of_assign_violation viol
   | AssertMacroExpressionScalarType ->
       ["§7.2.1.1#2"]
 end
