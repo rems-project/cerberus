@@ -1,0 +1,23 @@
+{- SB+rel_acq+rel_acq Store Buffering (or Dekker's), with
+   release-acquire pairs The reads can both see 0 in the same
+   execution.  An exhaustive execution of this program should
+   therefore return the values 0, 1, 2, 3.  -}
+
+proc main () : eff integer :=
+  let strong x : pointer  = create (Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit     = store (!(_Atomic(signed int)), x, Specified(0)) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit    = store(!(_Atomic(signed int)), y, Specified(0)) in
+  let strong (_a1 : loaded integer, _a2 : loaded integer) = par(
+    let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(1), release) in
+    load(!(_Atomic(signed int)), x, acquire)
+  ,
+   let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(1), release) in
+   load(!(_Atomic(signed int)), y, acquire)
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  case (_a1, _a2) of
+    | (Specified (a1: integer), Specified (a2: integer)) =>
+        pure (a1 + 2*a2)
+  end

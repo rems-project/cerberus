@@ -556,7 +556,7 @@ let bmc_debug =
   Arg.(value & opt int 5 & info["bmc_debug"] ~doc)
 
 let bmc_all_execs =
-  let doc = "Find all executions when model checking. Concurreny model only" in
+  let doc = "Find all executions when model checking. Concurrency model only" in
   Arg.(value & opt bool true & info["bmc_all_execs"] ~doc)
 
 let bmc_output_model =
