@@ -2321,7 +2321,7 @@ else (* is_pointer *)
               (C.LVspecified (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident))))))
       
       | A.AilEgeneric _ _ ->
-          error "WIP: Translation.translate_expression, AilEgeneric"
+          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": C11 generics not yet supported")
       
       | A.AilEarray _ _ e_opts ->
           let elem_ty = match result_ty with
@@ -2646,9 +2646,9 @@ a
       | A.AilEannot _ e ->
           self e
       | AilSyntax.AilEva_start e sym ->
-          error "WIP: Translation.translate_expr, AilEva_start"
+          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": va_start not yet supported")
       | AilSyntax.AilEva_arg e ty ->
-          error "WIP: Translation.translate_expr, AilEva_arg"
+          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": va_args not yet supported")
       
       | A.AilEprint_type e ->
           let (qs, ty) = qualified_ctype_of e in
