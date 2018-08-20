@@ -206,10 +206,6 @@ let ctype_of a_expr =
     | Right (AilTypes.RValueType   ty) -> ty
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
         error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
-      (* TODO: is this possible ? *)
-    | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
-        error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
-                            (Pp.stringFromAil_expression a_expr)
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 
@@ -223,10 +219,6 @@ let qualified_ctype_of a_expr =
     | Right (AilTypes.RValueType   ty) -> (AilTypes.no_qualifiers, ty)
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
         error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
-      (* TODO: is this possible ? *)
-    | Left ((* TODO: loc *) _, TypingError.TError_TODO n) ->
-        error $ "TYPING ERROR(translation_aux): " ^ show n ^ " at \n==> " ^
-                            (Pp.stringFromAil_expression a_expr)
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
   end
 

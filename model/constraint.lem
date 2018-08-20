@@ -5,12 +5,29 @@ type simple_assignment_violation =
   | IncompatiblePointerType
   | DiscardsQualifiers
 
+type arith_binop_violation =
+  (* 6.5.5 Multiplicative operators *)
+  | MultiplicativeInvalidOperandsType (* §6.5.5#2, sentence 1 *)
+  | ModInvalidOperandsType (* §6.5.5#2, sentence 2 *)
+  (* 6.5.6 Additive operators *)
+  | AdditiveOperandsArithmeticType (* §6.5.6#2 *)
+  (* 6.5.7 Bitwise shift operators *)
+  | BitwiseShiftInvalidOperandsType (* §6.5.7#2 *)
+  (* 6.5.10 Bitwise AND operator *)
+  | BitwiseAndInvalidOperandsType (* §6.5.10#2 *)
+  (* 6.5.11 Bitwise exclusive OR operator *)
+  | BitwiseXorInvalidOperandsType (* §6.5.11#2 *)
+  (* 6.5.12 Bitwise inclusive OR operator *)
+  | BitwiseOrInvalidOperandsType (* §6.5.12#2 *)
+
 type violation =
   (* 6.5 Expressions *)
   (* 6.5.2.2 Function calls *)
   | FunctionCallIncompleteReturnType of ctype (* §6.5.2.2#1 *)
   | FunctionCallArrayReturnType of ctype (* §6.5.2.2#1 *)
   | FunctionCallIncorrectType (* §6.5.2.2#1 *)
+  | FunctionCallTooManyArguments of nat (*expected*) * nat (*have*) (* §6.5.2.2#2, sentence 1 *)
+  | FunctionCallTooFewArguments of nat (*expected*) * nat (*have*) (* §6.5.2.2#2, sentence 1 *)
   (* 6.5.2.3 Structure and union members *)
   | MemberofReferenceBaseTypeLvalue of qualifiers * ctype  (* §6.5.2.3#1 *)
   | MemberofReferenceBaseTypeRvalue of genType  (* §6.5.2.3#1 *)
@@ -31,23 +48,19 @@ type violation =
   | IndirectionNotPointer (* §6.5.3.2#2 *)
   (* 6.5.3.3 Unary arithmetic operators *)
   | InvalidArgumentTypeUnaryExpression of genType (* §6.5.3.3#1 *)
-  (* 6.5.5 Multiplicative operators *)
-  | MultiplicativeInvalidOperandsType of genType * genType (* §6.5.5#2, sentence 1 *)
-  | ModInvalidOperandsType of genType * genType (* §6.5.5#2, sentence 2 *)
-  (* 6.5.6 Additive operators *)
-  | AdditiveOperandsArithmeticType of genType * genType (* §6.5.6#2 *)
-  (* 6.5.7 Bitwise shift operators *)
-  | BitwiseShiftInvalidOperandsType of genType * genType (* §6.5.7#2 *)
+  (* 6.5.3.4 The sizeof and _Alignof operators *)
+  | SizeofInvalidApplication of genType (* §6.5.3.4#1, sentence 1 *)
+  | AlignofInvalidApplication of qualifiers * ctype (* §6.5.3.4#1, sentence 2 *)
+  (* 6.5.4 Cast operators *)
+  | CastInvalidType of qualifiers * ctype (* §6.5.4#2 *)
+  | CastPointerToFloat (* §6.5.4#4, sentence 1 *)
+  | CastFloatToPointer (* §6.5.4#4, sentence 2 *)
+  (* 6.5.{5,6,7,10,11,12} Arithmetic binary operators *)
+  | ArithBinopOperandsType of arith_binop_violation * genType * genType
   (* 6.5.8 Relational operators *)
   | RelationalInvalidOperandsType of genType * genType (* §6.5.8#2 *)
   (* 6.5.9 Equality operators *)
   | EqualityInvalidOperandsType of genType * genType (* §6.5.9#2 *)
-  (* 6.5.10 Bitwise AND operator *)
-  | BitwiseAndInvalidOperandsType of genType * genType (* §6.5.10#2 *)
-  (* 6.5.11 Bitwise exclusive OR operatos *)
-  | BitwiseXorInvalidOperandsType of genType * genType (* §6.5.11#2 *)
-  (* 6.5.12 Bitwise inclusive OR operator *)
-  | BitwiseOrInvalidOperandsType of genType * genType (* §6.5.12#2 *)
   (* 6.5.13 Logical AND operator *)
   | AndInvalidOperandsType of genType * genType (* §6.5.13#2 *)
   (* 6.5.14 Logical OR operator *)
@@ -59,6 +72,9 @@ type violation =
   | AssignmentModifiableLvalue
   (* 6.5.16.1 Simple assignment *)
   | SimpleAssignmentViolation of simple_assignment_violation * ctype * genType (* §6.5.16.1#1 *)
+  (* 6.5.16.2 Compound assignment *)
+  | CompoundAssignmentAddSubOperandTypes of genType * genType (* §6.5.16.2#1 *)
+  | CompoundAssignmentOthersOperandTypes of arith_binop_violation * genType * genType (* §6.5.16.2#2 *)
   (* 6.6 Constant expressions *)
   | IntegerConstantOutRange (* §6.6#4 *)
   (* 6.7 Declarations *)
@@ -143,13 +159,30 @@ type violation =
 type assignment_violation =
   simple_assignment_violation -> ctype -> genType -> violation
 
-let std_of_assign_violation= function
+let std_of_assign_violation = function
   | IncompatibleType ->
       ["§6.5.16.1#1"; "FOOTNOTE.112"]
   | IncompatiblePointerType ->
       ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
   | DiscardsQualifiers ->
       ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
+end
+
+let std_of_arith_binop_violation = function
+  | MultiplicativeInvalidOperandsType ->
+      ["§6.5.5#2, sentence 1"]
+  | ModInvalidOperandsType ->
+      ["§6.5.5#2, sentence 2"]
+  | AdditiveOperandsArithmeticType ->
+      ["§6.5.6#2"]
+  | BitwiseShiftInvalidOperandsType ->
+      ["§6.5.7#2"]
+  | BitwiseAndInvalidOperandsType ->
+      ["§6.5.10#2"]
+  | BitwiseXorInvalidOperandsType ->
+      ["§6.5.11#2"]
+  | BitwiseOrInvalidOperandsType ->
+      ["§6.5.12#2"]
 end
 
 let std_of_violation = function
@@ -159,6 +192,10 @@ let std_of_violation = function
       ["§6.5.2.2#1"]
   | FunctionCallIncorrectType ->
       ["§6.5.2.2#1"]
+  | FunctionCallTooManyArguments _ _ ->
+      ["§6.5.2.2#2, sentence 1"]
+  | FunctionCallTooFewArguments _ _ ->
+      ["§6.5.2.2#2, sentence 1"]
   | MemberofReferenceBaseTypeLvalue _ _ ->
       ["§6.5.2.3#1"]
   | MemberofReferenceBaseTypeRvalue _ ->
@@ -187,26 +224,24 @@ let std_of_violation = function
       ["§6.5.3.2#1"]
   | InvalidArgumentTypeUnaryExpression _ ->
       ["§6.5.3.3#1"]
+  | SizeofInvalidApplication _ ->
+      ["§6.5.3.4#1, sentence 1"]
+  | AlignofInvalidApplication _ _ ->
+      ["§6.5.3.4#1, sentence 2"]
+  | CastInvalidType _ _ ->
+      ["§6.5.4#2"]
+  | CastPointerToFloat ->
+      ["§6.5.4#4, sentence 1"]
+  | CastFloatToPointer ->
+      ["§6.5.4#4, sentence 2"]
   | IndirectionNotPointer ->
       ["§6.5.3.2#2"]
-  | MultiplicativeInvalidOperandsType _ _ -> 
-      ["§6.5.5#2, sentence 1"]
-  | ModInvalidOperandsType _ _ ->
-      ["§6.5.5#2, sentence 2"]
-  | AdditiveOperandsArithmeticType _ _ ->
-      ["§6.5.6#2"]
-  | BitwiseShiftInvalidOperandsType _ _ ->
-      ["§6.5.7#2"]
+  | ArithBinopOperandsType viol _ _ ->
+      std_of_arith_binop_violation viol
   | RelationalInvalidOperandsType _ _ ->
       ["§6.5.8#2"]
   | EqualityInvalidOperandsType _ _ ->
       ["§6.5.9#2"]
-  | BitwiseAndInvalidOperandsType _ _ ->
-      ["§6.5.10#2"]
-  | BitwiseXorInvalidOperandsType _ _ ->
-      ["§6.5.11#2"]
-  | BitwiseOrInvalidOperandsType _ _ ->
-      ["§6.5.12#2"]
   | AndInvalidOperandsType _ _ ->
       ["§6.5.13#2"]
   | OrInvalidOperandsType _ _ ->
@@ -219,6 +254,10 @@ let std_of_violation = function
       ["§6.5.16#2"]
   | SimpleAssignmentViolation viol _ _ ->
       std_of_assign_violation viol
+  | CompoundAssignmentAddSubOperandTypes _ _ ->
+      ["§6.5.16.2#1"]
+  | CompoundAssignmentOthersOperandTypes viol _ _ ->
+      "§6.5.16.2#2" :: std_of_arith_binop_violation viol
   | IntegerConstantOutRange ->
       ["§6.6#4"]
   | NoLinkageMultipleDeclaration _ ->

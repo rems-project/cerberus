@@ -41,7 +41,7 @@ let with_cursor_from loc1 loc2 =
         z in
   match loc1 with
     | Loc_unknown ->
-        Loc_unknown
+        (match cursor_opt with Some loc -> Loc_point loc | _ -> Loc_unknown)
     | Loc_other str ->
         Loc_other str
     | Loc_point z ->
