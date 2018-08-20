@@ -48,6 +48,10 @@ let string_of_constraint_violation = function
       "calling function returning an array type '" ^ string_of_ctype ty ^ "'"
   | FunctionCallIncorrectType ->
       "called object type is not a function or function pointer"
+  | FunctionCallTooManyArguments (expected, have) ->
+      "too many arguments to function call, expected " ^ string_of_int expected ^ ", have " ^ string_of_int have
+  | FunctionCallTooFewArguments (expected, have) ->
+      "too few arguments to function call, expected " ^ string_of_int expected ^ ", have " ^ string_of_int have
   | MemberofReferenceBaseTypeLvalue (qs, ty) ->
       "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
   | MemberofReferenceBaseTypeRvalue gty ->
@@ -79,16 +83,29 @@ let string_of_constraint_violation = function
       "the * operator expects a pointer operand"
   | InvalidArgumentTypeUnaryExpression gty ->
       "invalid argument type '" ^ string_of_gentype gty ^ "' to unary expression"
-  | MultiplicativeInvalidOperandsType (gty1, gty2)
-  | AdditiveOperandsArithmeticType (gty1, gty2)
-  | BitwiseShiftInvalidOperandsType (gty1, gty2)
+  | SizeofInvalidApplication gty ->
+      let suffix =
+        if GenTypesAux.is_function0 gty then "a function type"
+        else "an incomplete type '" ^ string_of_gentype gty ^ "'"
+      in "invalid application of 'sizeof' to " ^ suffix
+  | AlignofInvalidApplication (qs, ty) ->
+      let suffix =
+        if AilTypesAux.is_function ty then "a function type"
+        else "an incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
+      in "invalid application of 'sizeof' to " ^ suffix
+  | CastInvalidType (qs, ty) ->
+      "used type '" ^ String_ail.string_of_ctype qs ty ^ "' where scalar type is required"
+  | CastPointerToFloat ->
+      "pointer cannot be cast to type 'float'"
+  | CastFloatToPointer ->
+      "operand of type 'float' cannot be cast to a pointer type"
+  | ArithBinopOperandsType (_, gty1, gty2)
   | RelationalInvalidOperandsType (gty1, gty2)
   | EqualityInvalidOperandsType (gty1, gty2)
-  | BitwiseAndInvalidOperandsType (gty1, gty2)
-  | BitwiseXorInvalidOperandsType (gty1, gty2)
-  | BitwiseOrInvalidOperandsType (gty1, gty2)
   | AndInvalidOperandsType (gty1, gty2)
-  | OrInvalidOperandsType (gty1, gty2) ->
+  | OrInvalidOperandsType (gty1, gty2)
+  | CompoundAssignmentAddSubOperandTypes (gty1, gty2)
+  | CompoundAssignmentOthersOperandTypes (_, gty1, gty2) ->
       "invalid operands to binary expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
   | ConditionalOperatorControlType gty ->
       "'" ^ string_of_gentype gty ^ "' is not a scalar type"
@@ -258,6 +275,10 @@ let string_of_ail_typing_misc_error = function
       "integer constant cannot be represented by any type"
   | ParameterTypeNotAdjusted ->
       "internal: the parameter type was not adjusted"
+  | VaStartArgumentType ->
+      "the first argument of 'va_start' must be of type 'va_list'"
+  | VaArgArgumentType ->
+      "the first argument of 'va_arg' must be of type 'va_list'"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
@@ -266,11 +287,8 @@ let string_of_ail_typing_error = function
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | TError_MiscError tme ->
       string_of_ail_typing_misc_error tme
-  (* TODO *)
-  | TError std ->
-      "[Ail typing] (" ^ std ^ ")\n  \"" ^ std ^ "\""
-  | _ ->
-      "[Ail typing error]"
+  | TError_NotYetSupported str ->
+      "feature not yet supported: " ^ str
 
 let string_of_core_typing_cause = function
   | Undefined_startup sym ->

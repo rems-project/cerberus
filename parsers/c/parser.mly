@@ -452,7 +452,7 @@ cast_expression:
 | expr= unary_expression
     { expr }
 | LPAREN ty= type_name RPAREN expr= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEcast (ty, expr)) }
 
 

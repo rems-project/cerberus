@@ -1401,7 +1401,7 @@ end
 val lvalue_conversion: forall 'a. sigma 'a -> ctype -> errorM ctype
 let lvalue_conversion S cty =
   if is_array cty then
-    fail (Loc.locOf cty) (TError "trying to do a lvalue conversion on an array type")
+    error "trying to do a lvalue conversion on an array type"
   
   else if is_incomplete S cty && not (is_array cty) then
     undef (Loc.locOf cty) Undefined.UB020_nonarray_incomplete_lvalue_conversion
