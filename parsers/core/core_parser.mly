@@ -7,6 +7,8 @@ open Location_ocaml
 
 open Core_parser_util
 
+open Errors
+
 open Core
 
 module Caux = Core_aux
@@ -71,22 +73,6 @@ let initial_symbolify_state = {
   ailnames= Pmap.empty Pervasives.compare;
 }
 
-type parsing_error =
-  | Unresolved_symbol of _sym
-  | Multiple_declaration of Location_ocaml.t * _sym
-  | CtorWrongApplication of int (*expected*) * int (* found *)
-  | WrongDeclInStd
-
-let string_of_parsing_error = function
-  | Unresolved_symbol _sym ->
-      "Unresolved_symbol[" ^ fst _sym ^ "]"
-  | Multiple_declaration (loc, _sym) ->
-      "Multiple_declaration[" ^ fst _sym ^ "]"
-  | CtorWrongApplication (expected, found) ->
-      "CtorWrongApplication[expected= " ^ string_of_int expected ^ ", found= " ^ string_of_int found ^ "]"
-  | WrongDeclInStd ->
-      "WrongDeclInStd"
-
 module Eff : sig
   type 'a t
   val return: 'a -> 'a t
@@ -96,13 +82,13 @@ module Eff : sig
   val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
   val mapM_: ('a -> 'b t) -> 'a list -> unit t
   val foldrM: ('a -> 'b -> 'b t) -> 'b -> 'a list -> 'b t
-  val fail: parsing_error -> 'a t
-  val runM: 'a t -> symbolify_state -> (parsing_error, 'a * symbolify_state) either
+  val fail: core_parser_cause -> 'a t
+  val runM: 'a t -> symbolify_state -> (core_parser_cause, 'a * symbolify_state) either
   val get: symbolify_state t
   val put: symbolify_state -> unit t
 end = struct
   open Either
-  type 'a t = symbolify_state -> (parsing_error, 'a * symbolify_state) either
+  type 'a t = symbolify_state -> (core_parser_cause, 'a * symbolify_state) either
   
   let return z =
     fun st -> Right (z, st)
@@ -239,7 +225,7 @@ let symbolify_name = function
        | Some (sym, _) ->
            Eff.return (Sym sym)
        | None ->
-           Eff.fail (Unresolved_symbol _sym))
+           Eff.fail (Core_parser_unresolved_symbol (fst _sym)))
  | Impl iCst ->
      Eff.return (Impl iCst)
 
@@ -294,7 +280,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | Some (sym, _) ->
               Eff.return (Caux.mk_sym_pe sym)
           | None ->
-              Eff.fail (Unresolved_symbol _sym)
+              Eff.fail (Core_parser_unresolved_symbol (fst _sym))
         )
     | PEimpl iCst ->
         Eff.return (Pexpr ([], (), PEimpl iCst))
@@ -327,7 +313,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | [] ->
               Eff.return (Pexpr ([], (), PEctor (Cnil (), [])))
           | _ ->
-              Eff.fail (CtorWrongApplication (0, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (0, List.length _pes))
         end
     | PEctor (Ccons, _pes) ->
         begin match _pes with
@@ -336,7 +322,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Pexpr ([], (), PEctor (Ccons, [pe1; pe2])))
           | _ ->
-              Eff.fail (CtorWrongApplication (2, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEctor (Ctuple, _pes) ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
@@ -350,7 +336,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civmax, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civmin, _pes) ->
         begin match _pes with
@@ -358,7 +344,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civmin, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civsizeof, _pes) ->
         begin match _pes with
@@ -366,7 +352,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civsizeof, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civalignof, _pes) ->
         begin match _pes with
@@ -374,7 +360,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civalignof, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (CivCOMPL, _pes) ->
         begin match _pes with
@@ -383,7 +369,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Core_aux.bitwise_complement_pe pe1 pe2)
           | _ ->
-              Eff.fail (CtorWrongApplication (2, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEctor (CivAND, _pes) ->
         begin match _pes with
@@ -393,7 +379,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivAND, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (CtorWrongApplication (3, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (CivOR, _pes) ->
         begin match _pes with
@@ -403,7 +389,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivOR, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (CtorWrongApplication (3, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (CivXOR, _pes) ->
         begin match _pes with
@@ -413,7 +399,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivXOR, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (CtorWrongApplication (3, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (Cspecified, _pes) ->
         begin match _pes with
@@ -421,7 +407,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Core_aux.mk_specified_pe pe)
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Cunspecified, _pes) ->
         begin match _pes with
@@ -429,7 +415,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Cunspecified, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Cfvfromint, _pes) ->
         begin match _pes with
@@ -437,7 +423,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Cfvfromint, [pe])))
           | _ ->
-              Eff.fail (CtorWrongApplication (1, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civfromfloat, _pes) ->
         begin match _pes with
@@ -446,7 +432,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Pexpr ([], (), PEctor (Civfromfloat, [pe1; pe2])))
           | _ ->
-              Eff.fail (CtorWrongApplication (2, List.length _pes))
+              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
@@ -589,7 +575,7 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
           therefore registered in a preliminary pass *)
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Unresolved_symbol _sym)
+             Eff.fail (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              under_scope begin
                Eff.mapM (fun (_sym, (bTy, _pe)) ->
@@ -607,7 +593,7 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
    | Erun ((), _sym, _pes) ->
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Unresolved_symbol _sym)
+             Eff.fail (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              Eff.mapM symbolify_pexpr _pes >>= fun pes ->
              Eff.return (Erun ((), sym, pes))
@@ -664,7 +650,7 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Esave ((_sym, _), _, _e) ->
         lookup_sym _sym >>= (function
           | Some (_, loc) ->
-                Eff.fail (Multiple_declaration (loc, _sym))
+                Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
           | None ->
               register_label _sym >>= fun () ->
               register_labels _e
@@ -722,7 +708,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Proc_decl (_sym, _, _) ->
           lookup_sym _sym >>= (function
             | Some (_, loc) ->
-                Eff.fail (Multiple_declaration (loc, _sym))
+                Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
             | None ->
                 register_sym _sym >>= fun sym ->
                 if fst _sym = "main" then
@@ -794,8 +780,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Some sym ->
           Eff.return (Right (sym, globs, fun_map))
       | None ->
-          failwith "TODO(msg) didn't find a main function/procedure"
-
+          Eff.fail Core_parser_undefined_startup
 
 let symbolify_std decls : (unit Core.fun_map) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
@@ -806,7 +791,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | Proc_decl (_sym, _, _) ->
         lookup_sym _sym >>= (function
           | Some (_, loc) ->
-              Eff.fail (Multiple_declaration (loc, _sym))
+              Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
           | None ->
               register_sym _sym >>= fun sym ->
               Eff.return ()
@@ -818,7 +803,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | Def_decl _ 
     | IFun_decl _
     | Glob_decl _ ->
-       Eff.fail WrongDeclInStd
+       Eff.fail Core_parser_wrong_decl_in_std
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
         lookup_sym _sym >>= (function
           | Some (decl_sym, _) ->
@@ -874,7 +859,7 @@ let mk_file decls =
     | ImplORFileMode ->
         (match Eff.runM (symbolify_impl_or_file decls) initial_symbolify_state with
           | Left err ->
-              failwith (string_of_parsing_error err)
+              raise (Core_parser_util.Core_error err)
           | Right (Left impl, _) ->
               Rimpl impl
           | Right (Right (main_sym, globs, fun_map), _) ->
@@ -882,7 +867,7 @@ let mk_file decls =
     | StdMode ->
         (match Eff.runM (symbolify_std decls) initial_symbolify_state with
           | Left err ->
-              failwith (string_of_parsing_error err)
+              raise (Core_parser_util.Core_error err)
           | Right (fun_map, st) ->
               Rstd (st.ailnames, fun_map))
 

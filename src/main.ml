@@ -140,9 +140,8 @@ let c_frontend filename =
 *)
 
 
-let core_frontend f =
-  let core_parse = Core_parser_driver.parse core_sym_counter !!cerb_conf.core_stdlib in
-  core_parse  f >>= function
+let core_frontend filename =
+  Core_parser_driver.parse core_sym_counter !!cerb_conf.core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
 (* TODO: probably can remove the commmented line, now this is done by the driver *)
 (*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
