@@ -339,6 +339,12 @@ let string_of_core_run_cause = function
   | Unresolved_symbol sym ->
       "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
 
+let string_of_core_parser_cause = function
+  | Core_parser_invalid_symbol ->
+      "invalid symbol"
+  | Core_parser_unexpected_token str ->
+      "unexpected token '"^ str ^ "'"
+
 let short_message = function
   | CPARSER ccause ->
       string_of_cparser_cause ccause
@@ -352,10 +358,8 @@ let short_message = function
       string_of_core_run_cause cause
   | UNSUPPORTED str ->
       "unsupported " ^ str
-  | PARSER str ->
-      "TODO(msg) PARSER ==> " ^ str
-  | OTHER str ->
-      "TODO(msg) OTHER ==> " ^ str
+  | CORE_PARSER ccause ->
+      string_of_core_parser_cause ccause
 
 type std_ref =
   | StdRef of string list
@@ -444,3 +448,7 @@ let make_message loc err k =
 
 let to_string (loc, err) =
   make_message loc err Error
+
+let fatal msg =
+  prerr_endline (ansi_format [Bold; Red] "error: " ^ ansi_format [Bold] msg);
+  exit 1

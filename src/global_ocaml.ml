@@ -51,7 +51,6 @@ type cerberus_conf = {
   ppflags:            pp_flag list;
   core_stdlib:        (string, Symbol.sym) Pmap.map * unit Core.fun_map;
   core_impl_opt:      Core.impl option;
-  core_parser:        Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:      Smt2.execution_mode option;
   ocaml:              bool;
   ocaml_corestd:      bool;
@@ -102,7 +101,7 @@ let cerb_path =
       error "expecting the environment variable CERB_PATH set to point to the location cerberus."
 
 
-let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode core_parser progress rewrite
+let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
                   typecheck_core defacto default_impl action_graph =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
@@ -112,7 +111,6 @@ let set_cerb_conf cpp_cmd pps ppflags core_stdlib core_impl_opt exec exec_mode c
     ppflags=       ppflags;
     core_stdlib=   core_stdlib;
     core_impl_opt= core_impl_opt;
-    core_parser=   core_parser;
     exec_mode_opt= if exec then Some exec_mode else None;
     ocaml=         ocaml;
     ocaml_corestd= ocaml_corestd;
