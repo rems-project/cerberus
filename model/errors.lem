@@ -47,18 +47,20 @@ type cparser_cause =
   | Cparser_unexpected_token of string
   | Cparser_non_standard_string_concatenation
 
+type core_parser_cause =
+  | Core_parser_invalid_symbol
+  | Core_parser_unexpected_token of string
+
 type cause =
   | CPARSER of cparser_cause
   | DESUGAR of desugar_cause
   | AIL_TYPING of TypingError.typing_error
+  | CORE_PARSER of core_parser_cause
   | CORE_TYPING of core_typing_cause
   | CORE_RUN of core_run_cause
   | UNSUPPORTED of string
-  | PARSER of string
-  | OTHER of string
 
 type error = Loc.t * cause
-
 
 instance (Show core_run_cause)
   let show = function
