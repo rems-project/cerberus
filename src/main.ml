@@ -74,7 +74,7 @@ let set_progress str n =
 
 
 (* == parse a C translation-unit and elaborate it into a Core program =========================== *)
-let c_frontend filename =
+let c_frontend (core_stdlib, core_impl) filename =
     let c_preprocessing filename =
       let temp_name = Filename.temp_file (Filename.basename filename) "" in
       Debug_ocaml.print_debug 5 [] (fun () -> "C prepocessor outputed in: `" ^ temp_name ^ "`");
@@ -97,8 +97,8 @@ let c_frontend filename =
           cerb_conf := (fun () -> { !!cerb_conf with exec_mode_opt= Some Random }) ; *)
           let ret = Cabs_to_ail.desugar !core_sym_counter
             begin
-              let (ailnames, stdlib_fun_map) = !!cerb_conf.core_stdlib in
-              (ailnames, stdlib_fun_map, match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false)
+              let (ailnames, stdlib_fun_map) = core_stdlib in
+              (ailnames, stdlib_fun_map, core_impl)
             end "main" z in
 (*        cerb_conf := (fun () -> { (!cerb_conf()) with exec_mode_opt= saved_exec_mode_opt }) ; *)
           ret)
@@ -126,8 +126,7 @@ let c_frontend filename =
     |> set_progress "AILTY" 12
     |> pass_message "3. Ail typechecking completed!"
     
-    |> Exception.except_fmap (Translation.translate !!cerb_conf.core_stdlib
-                         (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false))
+    |> Exception.except_fmap (Translation.translate core_stdlib core_impl)
     |> set_progress "ELABO" 13
     |> pass_message "4. Translation to Core completed!"
 
@@ -140,16 +139,16 @@ let c_frontend filename =
 *)
 
 
-let core_frontend filename =
-  Core_parser_driver.parse core_sym_counter !!cerb_conf.core_stdlib filename >>= function
+let core_frontend (core_stdlib, core_impl) filename =
+  Core_parser_driver.parse core_sym_counter core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
 (* TODO: probably can remove the commmented line, now this is done by the driver *)
 (*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
         Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   Some sym_main;
            Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
-           Core.stdlib= snd !!cerb_conf.core_stdlib;
-           Core.impl=   (match !!cerb_conf.core_impl_opt with Some x -> x | None -> assert false);
+           Core.stdlib= snd core_stdlib;
+           Core.impl=   core_impl;
            Core.globs=  globs;
            Core.funs=   funs
          })
@@ -219,7 +218,7 @@ let backend sym_supply core_file args =
 
 
 
-let pipeline filename args =
+let pipeline filename args core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
 
@@ -234,10 +233,10 @@ let pipeline filename args =
   begin
     if Filename.check_suffix filename ".c" then (
       Debug_ocaml.print_debug 2 [] (fun () -> "Using the C frontend");
-      c_frontend filename
+      c_frontend core_std filename
      ) else if Filename.check_suffix filename ".core" then (
        Debug_ocaml.print_debug 2 [] (fun () -> "Using the Core frontend");
-       core_frontend filename
+       core_frontend core_std filename
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
@@ -318,8 +317,10 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
+  Random.self_init ();
+  set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
+    (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   let prelude =
-    Random.self_init ();
     (* Looking for and parsing the core standard library *)
     load_stdlib () >>= fun core_stdlib ->
     Debug_ocaml.print_success "0.1. - Core standard library loaded.";
@@ -327,9 +328,6 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
     (* Looking for and parsing the implementation file *)
     load_impl core_stdlib impl_name >>= fun core_impl ->
     Debug_ocaml.print_success "0.2. - Implementation file loaded.";
-    set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
-      exec_mode progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-      (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
     return (core_stdlib, core_impl)
   in
   let runM = function
@@ -352,7 +350,7 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
       else
         Pp_errors.fatal "no input file"
     | Some file ->
-        prelude >> pipeline file args
+        prelude >>= pipeline file args
 
 
 (* CLI stuff *)

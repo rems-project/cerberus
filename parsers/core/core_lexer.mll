@@ -298,7 +298,7 @@ and main = parse
   | ','   { T.COMMA }
   | ':'   { T.COLON }
   | ":="  { T.COLON_EQ }
-  | '!'  { T.BANG }
+  | "'"   { T.SQUOTE }
   
   | "=>" { T.EQ_GT }
   

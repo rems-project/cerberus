@@ -915,7 +915,7 @@ let mk_file decls =
 
 (* Core sequencing operators *)
 %token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND PURE MEMOP PCALL CCALL
-%token BANG LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
+%token SQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
 
 
 (* SEMICOLON has higher priority than IN *)
@@ -1269,7 +1269,7 @@ typed_expr:
 
 
 core_ctype:
-| BANG ty= delimited(LPAREN, ctype, RPAREN)
+| ty= delimited(SQUOTE, ctype, SQUOTE)
     { ty }
 
 value:
