@@ -27,6 +27,8 @@ type result =
   | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
+exception Core_error of Errors.core_parser_cause
+
 type token =
   | SHORT
   | INT

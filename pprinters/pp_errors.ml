@@ -344,6 +344,16 @@ let string_of_core_parser_cause = function
       "invalid symbol"
   | Core_parser_unexpected_token str ->
       "unexpected token '"^ str ^ "'"
+  | Core_parser_unresolved_symbol str ->
+      "unresolved_symbol '" ^ str ^ "'"
+  | Core_parser_multiple_declaration (loc, str) ->
+      "multiple declaration of '" ^ str ^ "'"
+  | Core_parser_ctor_wrong_application (expected, found) ->
+      "wrong number of expression in application, expected " ^ string_of_int expected ^ ", found " ^ string_of_int found
+  | Core_parser_wrong_decl_in_std ->
+      "wrong declaration in std" (* TODO: ?? *)
+  | Core_parser_undefined_startup ->
+      "undefined startup function"
 
 let short_message = function
   | CPARSER ccause ->
