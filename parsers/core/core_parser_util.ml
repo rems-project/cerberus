@@ -16,12 +16,9 @@ let pp_pos (_, (start_p, end_p)) =
   else
     Printf.sprintf "%s:%d:%d - %d:%d" filename l1 c1 l2 c2
 
-
 type mode =
   | StdMode
   | ImplORFileMode
-
-
 
 (* Type of Core parser outputs *)
 type result =
@@ -29,7 +26,6 @@ type result =
   | Rfile of Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map
   | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
-
 
 type token =
   | SHORT
