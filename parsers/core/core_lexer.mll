@@ -1,5 +1,6 @@
 {
-open Pervasives_
+
+exception Error
 
 module T = Core_parser_util
 type token = T.token
@@ -310,11 +311,7 @@ and main = parse
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {T.EOF}
   | _
-    { raise_error ("Unexpected symbol \""
-                   ^ Lexing.lexeme lexbuf ^ "\" in "
-                   ^ Position.lines_to_string (Position.from_lexbuf lexbuf)
-                   ^ ".\n")
-    }
+    { raise Error }
 
 
 and comment = parse

@@ -1,4 +1,10 @@
 let parse input =
+  let read f input =
+    let channel = open_in input in
+    let result  = f channel in
+    let ()      = close_in channel in
+    result
+  in
   let parse_channel ic =
     let lexbuf = Lexing.from_channel ic in
     try
@@ -16,4 +22,4 @@ let parse input =
     | _ ->
       failwith "CPARSER_DRIVER"
   in
-  Input.read parse_channel input
+  read parse_channel input

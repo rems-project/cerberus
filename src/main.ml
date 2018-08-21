@@ -8,6 +8,10 @@ let mlm_dbg_oc =
 
 (* TODO: rewrite this file from scratch... *)
 
+let (>>=) = Exception.except_bind
+let (>>) m f = m >>= fun _ -> f
+let return = Exception.except_return
+
 
 (* == Environment variables ===================================================================== *)
 let cerb_path =
@@ -31,46 +35,23 @@ let load_stdlib () =
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
     Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `" ^ filepath ^ "'.");
-    (* An preliminary instance of the Core parser *)
-    let module Core_std_parser_base = struct
-      include Core_parser.Make (struct
-                                 let sym_counter = core_sym_counter
-                                 let mode = Core_parser_util.StdMode
-                                 let std = Pmap.empty Core_parser_util._sym_compare
-                               end)
-(*      type token = Core_parser_util.token *)
-      type result = Core_parser_util.result
-    end in
-    let module Core_std_parser =
-      Parser_util.Make (Core_std_parser_base) (Lexer_util.Make (Core_lexer)) in
-    (* TODO: yuck *)
-    match Core_std_parser.parse (Input.file filepath) with
-      | Exception.Result (Core_parser_util.Rstd (ailnames, std_funs)) -> (ailnames, std_funs)
-      | Exception.Result _ ->
-          error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
-      | Exception.Exception (loc, err) ->
-          begin match err with
-            | Errors.PARSER msg ->
-                error ("Core parsing error @ " ^ Location_ocaml.location_to_string loc  ^ ": " ^ msg)
-            | _ ->
-                assert false
-          end
-
+    Core_parser_driver.parse_stdlib core_sym_counter filepath >>= function
+    | Core_parser_util.Rstd (ailnames, std_funs) ->
+      return (ailnames, std_funs)
+    | _ ->
+      error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
 
 (* == load the implementation file ============================================================== *)
-let load_impl core_parse impl_name =
+let load_impl core_stdlib impl_name =
   let iname = Filename.concat corelib_path ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
     error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
-    (* TODO: yuck *)
-    match core_parse (Input.file iname) with
-      | Exception.Result (Core_parser_util.Rimpl impl_map) ->
-          impl_map
-      | Exception.Result (Core_parser_util.Rfile _ | Core_parser_util.Rstd _) ->
-          assert false
-      | Exception.Exception err ->
-          error ("[Core parsing error: impl-file]" ^ Pp_errors.to_string err)
+    match Core_parser_driver.parse core_sym_counter core_stdlib iname with
+    | Exception.Result (Core_parser_util.Rimpl impl_map) ->
+      return impl_map
+    | _ ->
+      error "while parsing the Core impl, the parser didn't recognise it as an impl ."
 
 let run_pp filename lang doc =
   let fout = List.mem FOut !!cerb_conf.ppflags in
@@ -93,16 +74,15 @@ let set_progress str n =
 
 
 (* == parse a C translation-unit and elaborate it into a Core program =========================== *)
-let c_frontend f =
-    let c_preprocessing (f: Input.t) =
-      let temp_name = Filename.temp_file (Filename.basename $ Input.name f) "" in
+let c_frontend filename =
+    let c_preprocessing filename =
+      let temp_name = Filename.temp_file (Filename.basename filename) "" in
       Debug_ocaml.print_debug 5 [] (fun () -> "C prepocessor outputed in: `" ^ temp_name ^ "`");
-      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ Input.name f ^ " 1> " ^ temp_name (*^ " 2> /dev/null"*)) <> 0 then
+      if Sys.command (!!cerb_conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ temp_name (*^ " 2> /dev/null"*)) <> 0 then
         error "the C preprocessor failed";
-      Input.file temp_name in
-    let filename  = Input.name f in
+      temp_name in
     
-       Exception.except_return (c_preprocessing f)
+       Exception.except_return (c_preprocessing filename)
     |> Exception.rbind Cparser_driver.parse
     |> set_progress "CPARS" 10
     |> pass_message "1. C Parsing completed!"
@@ -160,10 +140,9 @@ let c_frontend f =
 *)
 
 
-let (>>=) = Exception.except_bind
-
 let core_frontend f =
-  !!cerb_conf.core_parser f >>= function
+  let core_parse = Core_parser_driver.parse core_sym_counter !!cerb_conf.core_stdlib in
+  core_parse  f >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs) ->
 (* TODO: probably can remove the commmented line, now this is done by the driver *)
 (*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
@@ -253,14 +232,13 @@ let pipeline filename args =
     let handle_uid _ _ = ()
   end) in
   
-  let f = Input.file filename in
   begin
     if Filename.check_suffix filename ".c" then (
       Debug_ocaml.print_debug 2 [] (fun () -> "Using the C frontend");
-      c_frontend f
+      c_frontend filename
      ) else if Filename.check_suffix filename ".core" then (
        Debug_ocaml.print_debug 2 [] (fun () -> "Using the Core frontend");
-       core_frontend f
+       core_frontend filename
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
   end >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
@@ -315,14 +293,14 @@ let pipeline filename args =
     else
       Exception.except_return (backend sym_supply rewritten_core_file args)
 
-let gen_corestd stdlib impl =
+let gen_corestd (stdlib, impl) =
   let sym_supply = UniqueId.new_supply_from
       Symbol.instance_Enum_Enum_Symbol_sym_dict !core_sym_counter
   in
   Core_typing.typecheck_program {
     Core.main=   None;
     Core.tagDefs= Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
-    Core.stdlib= stdlib;
+    Core.stdlib= snd stdlib;
     Core.impl=   impl;
     Core.globs=  [];
     Core.funs=   Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
@@ -341,78 +319,42 @@ let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags f
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
-  Random.self_init ();
-  
-  (* Looking for and parsing the core standard library *)
-  let core_stdlib = load_stdlib () in
-  Debug_ocaml.print_success "0.1. - Core standard library loaded.";
-  
-  (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
-  let module Core_parser_base = struct
-    include Core_parser.Make (struct
-        let sym_counter = core_sym_counter
-        let mode = Core_parser_util.ImplORFileMode
-        let std = List.fold_left (fun acc (fsym, _) ->
-          match fsym with
-            | Symbol.Symbol (_, Some str) ->
-                let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
-                Pmap.add (str, (std_pos, std_pos)) fsym acc
-            | Symbol.Symbol (_, None) ->
-                 acc
-        ) (Pmap.empty Core_parser_util._sym_compare) $ Pmap.bindings_list (snd core_stdlib)
-      end)
-    type result = Core_parser_util.result
-  end in
-  let module Core_parser =
-    Parser_util.Make (Core_parser_base) (Lexer_util.Make (Core_lexer)) in
-  set_cerb_conf cpp_cmd pps ppflags core_stdlib None exec exec_mode Core_parser.parse progress rewrite
-    sequentialise concurrency preEx ocaml ocaml_corestd (* TODO *) RefStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
-  
-  Switches.set switches;
-  
-  (* Looking for and parsing the implementation file *)
-  let core_impl = load_impl Core_parser.parse impl_name in
-  Debug_ocaml.print_success "0.2. - Implementation file loaded.";
-
-  set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
-    exec_mode Core_parser.parse progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
-    (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
-  (* Params_ocaml.setCoreStdlib core_stdlib; *)
-  
-(*
-  if !!cerb_conf.concurrency_tests then
-    (* Running the concurrency regression tests *)
-    let tests = Tests.get_tests in
-    List.iter (run_test (fun z -> pipeline z args)) tests
-  else 
-*)
-  match file_opt with
+  let prelude =
+    Random.self_init ();
+    (* Looking for and parsing the core standard library *)
+    load_stdlib () >>= fun core_stdlib ->
+    Debug_ocaml.print_success "0.1. - Core standard library loaded.";
+    Switches.set switches;
+    (* Looking for and parsing the implementation file *)
+    load_impl core_stdlib impl_name >>= fun core_impl ->
+    Debug_ocaml.print_success "0.2. - Implementation file loaded.";
+    set_cerb_conf cpp_cmd pps ppflags ((*Pmap.union impl_fun_map*) core_stdlib) (Some core_impl) exec
+      exec_mode progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
+      (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
+    return (core_stdlib, core_impl)
+  in
+  let runM = function
+    | Exception.Exception err ->
+        prerr_endline (Pp_errors.to_string err);
+        if progress then
+          !progress_sofar
+        else
+          1
+    | Exception.Result n ->
+        if progress then
+          14
+        else
+          n
+  in
+  runM $ match file_opt with
     | None ->
-      if !!cerb_conf.ocaml_corestd then
-        match gen_corestd (snd core_stdlib) core_impl with
-          | Exception.Exception err ->
-              prerr_endline (Pp_errors.to_string err);
-                exit 1
-          | Exception.Result n -> n
-
-      else (
-        (* TODO: make this print the help *)
-        prerr_endline "No filename given";
-        exit 1
-      )
+      if ocaml_corestd then
+        prelude >>= gen_corestd
+      else
+        Pp_errors.fatal "no input file"
     | Some file ->
-        match pipeline file args with
-          | Exception.Exception err ->
-              prerr_endline (Pp_errors.to_string err);
-              if progress then
-                exit !progress_sofar
-              else
-                exit 1
-          | Exception.Result n ->
-              if progress then
-                14
-              else
-                n
+        prelude >> pipeline file args
+
 
 (* CLI stuff *)
 open Cmdliner
