@@ -139,7 +139,7 @@ type token =
   | UB of Undefined.undefined_behaviour
   | INT_CONST of Nat_big_num.num
   
-  | BANG
+  | SQUOTE
   
   | CASE
   | OF
