@@ -111,7 +111,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_node = function
     | Branch (id, lab, mem, loc) ->
       let json_of_loc (loc, uid) =
-        `Assoc [("c", Json.of_location loc);
+        `Assoc [("c", Location_ocaml.to_json loc);
                 ("core", Json.of_opt_string uid)]
       in
       `Assoc [("id", `Int id);

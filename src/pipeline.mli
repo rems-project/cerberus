@@ -13,8 +13,6 @@ type configuration = {
   rewrite_core: bool;
   sequentialise_core: bool;
   cpp_cmd: string;
-  core_stdlib: (string, Symbol.sym) Pmap.map * unit Core.fun_map;
-  core_impl: Core.impl;
 }
 
 type io_helpers = {
@@ -31,14 +29,16 @@ val cerb_path: string
 val run_pp: (string * string) option -> PPrint.document -> unit
 
 val load_core_stdlib:
-  unit -> (string, Symbol.sym) Pmap.map * unit Core.fun_map
+  unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val load_core_impl:
-  (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
-  string -> Core.impl
+  (string, Symbol.sym) Pmap.map * unit Core.fun_map -> string ->
+  (Core.impl, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val c_frontend:
-  (configuration * io_helpers) -> filename:string ->
+  (configuration * io_helpers) ->
+  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  filename:string ->
   ( Cabs.translation_unit option
   * (GenTypes.genTypeCategory AilSyntax.ail_program) option
   * Symbol.sym
@@ -46,7 +46,9 @@ val c_frontend:
   , Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val core_frontend:
-  (configuration * io_helpers) -> filename:string ->
+  (configuration * io_helpers) ->
+  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  filename:string ->
   ( Cabs.translation_unit option
   * (GenTypes.genTypeCategory AilSyntax.ail_program) option
   * Symbol.sym
