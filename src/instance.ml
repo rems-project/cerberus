@@ -1,6 +1,12 @@
 open Util
 open Instance_api
 
+type conf =
+  { pipeline: Pipeline.configuration;
+    io: Pipeline.io_helpers;
+    instance: Instance_api.conf;
+  }
+
 let dummy_io =
   let open Pipeline in
   let skip = fun _ -> Exception.except_return ()
@@ -14,8 +20,6 @@ let dummy_io =
   }
 
 let setup conf =
-  let core_stdlib = Pipeline.load_core_stdlib () in
-  let core_impl   = Pipeline.load_core_impl core_stdlib conf.core_impl in
   let pipeline_conf =
     { Pipeline.debug_level=        conf.cerb_debug_level;
       Pipeline.pprints=            [];
@@ -25,10 +29,12 @@ let setup conf =
       Pipeline.rewrite_core=       conf.rewrite_core;
       Pipeline.sequentialise_core= conf.sequentialise_core;
       Pipeline.cpp_cmd=            conf.cpp_cmd;
-      Pipeline.core_stdlib=        core_stdlib;
-      Pipeline.core_impl=          core_impl;
+
     }
-  in (pipeline_conf, dummy_io)
+  in { pipeline= pipeline_conf;
+       io= dummy_io;
+       instance= conf;
+      }
 
 (* It would be nice if Smt2 could use polymorphic variant *)
 let to_smt2_mode = function
@@ -38,29 +44,30 @@ let to_smt2_mode = function
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack conf mode =
   let open Global_ocaml in
-  cerb_conf := fun () -> {
-    cpp_cmd=            conf.Pipeline.cpp_cmd;
-    pps=                [];
-    ppflags=            [];
-    core_stdlib=        conf.Pipeline.core_stdlib;
-    core_impl_opt=      Some conf.Pipeline.core_impl;
-    core_parser=        (fun _ -> failwith "No core parser");
-    exec_mode_opt=      Some (to_smt2_mode mode);
-    ocaml=              false;
-    ocaml_corestd=      false;
-    progress=           false;
-    rewrite=            conf.Pipeline.rewrite_core;
-    sequentialise=      conf.Pipeline.sequentialise_core;
-    concurrency=        false;
-    preEx=              false;
-    error_verbosity=    Global_ocaml.Basic;
-    batch=              true;
-    experimental_unseq= false;
-    typecheck_core=     conf.Pipeline.typecheck_core;
-    defacto=            false;
-    default_impl=       false;
-    action_graph=       false;
-  }
+  let conf =
+    { cpp_cmd=            conf.Pipeline.cpp_cmd;
+      pps=                [];
+      ppflags=            [];
+      exec_mode_opt=      Some (to_smt2_mode mode);
+      ocaml=              false;
+      ocaml_corestd=      false;
+      progress=           false;
+      rewrite=            conf.Pipeline.rewrite_core;
+      sequentialise=      conf.Pipeline.sequentialise_core;
+      concurrency=        false;
+      preEx=              false;
+      error_verbosity=    Global_ocaml.QuoteStd;
+      batch=              true;
+      experimental_unseq= false;
+      typecheck_core=     conf.Pipeline.typecheck_core;
+      defacto=            false;
+      default_impl=       false;
+      action_graph=       false;
+      n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
+                            Some (Yojson.Basic.from_file (Pipeline.cerb_path ^ "/tools/n1570.json"))
+                          else None;
+    }
+  in cerb_conf := fun () -> conf
 
 let respond f = function
   | Exception.Result r -> f r
@@ -71,18 +78,19 @@ let respond f = function
 let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack (fst conf) Random;
+  hack conf.pipeline Random;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
-    Pipeline.c_frontend conf filename
+    Pipeline.load_core_stdlib () >>= fun core_stdlib ->
+    Pipeline.load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
+    Pipeline.c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
     >>= function
     | (Some cabs, Some ail, sym_suppl, core) ->
-      Pipeline.core_passes conf ~filename core
+      Pipeline.core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun (_, core') ->
       return (cabs, ail, sym_suppl, core')
     | _ ->
-      Exception.throw (Location_ocaml.unknown,
-                       Errors.OTHER "fatal failure core pass")
+      failwith "fatal failure core pass"
   with
   | e ->
     Debug.warn ("Exception raised during elaboration. " ^ Printexc.to_string e);
@@ -96,19 +104,11 @@ let string_of_doc d =
 
 let pp_core core =
   let locs = ref [] in
-  let point_of_pos pos = Lexing.(pos.pos_lnum-1, pos.pos_cnum-pos.pos_bol) in
-  let range_of_loc = function
-    | Location_ocaml.Loc_region (pos1, pos2, _) ->
-      Some (point_of_pos pos1, point_of_pos pos2)
-    | Location_ocaml.Loc_point pos ->
-      Some (point_of_pos pos, (0, 0))
-    | _ -> None
-  in
   let module PP = Pp_core.Make (struct
       let show_std = true
       let show_include = false
       let handle_location c_loc core_range =
-        match range_of_loc c_loc with
+        match Location_ocaml.to_cartesian c_loc with
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
@@ -141,7 +141,7 @@ let result_of_elaboration (cabs, ail, _, core) =
 let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack (fst conf) mode;
+  hack conf.pipeline mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
@@ -257,7 +257,7 @@ let step ~conf ~filename active_node =
   let (>>=)  = Exception.except_bind in
   match active_node with
   | None -> (* no active node *)
-    hack (fst conf) Random;
+    hack conf.pipeline Random;
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
@@ -270,7 +270,7 @@ let step ~conf ~filename active_node =
   | Some (last_id, marshalled_state, node, tags) ->
     let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode tags in
     Tags.set_tagDefs tagsMap;
-    hack (fst conf) Random;
+    hack conf.pipeline Random;
     last_node_id := last_id;
     decode marshalled_state
     |> multiple_steps ([], [], node)
