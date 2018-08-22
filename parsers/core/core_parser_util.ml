@@ -185,6 +185,10 @@ type token =
   | IVMIN
   | IVSIZEOF
   | IVALIGNOF
+  | IVCOMPL
+  | IVAND
+  | IVOR
+  | IVXOR
   | CCALL
   | PCALL
   | CFUNCTION_VALUE

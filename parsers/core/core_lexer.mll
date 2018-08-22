@@ -67,6 +67,10 @@ let keywords =
       ("Ivmin",       T.IVMIN          );
       ("Ivsizeof",    T.IVSIZEOF       );
       ("Ivalignof",   T.IVALIGNOF      );
+      ("IvCOMPL",     T.IVCOMPL        );
+      ("IvAND",       T.IVAND          );
+      ("IvOR",        T.IVOR           );
+      ("IvXOR",       T.IVXOR          );
       ("Unspecified", T.UNSPECIFIED    );
       ("Cfunction",   T.CFUNCTION_VALUE);
 (*
@@ -291,8 +295,8 @@ and main = parse
   | "| "  { T.PIPE }
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
-  | '['	  { T.LBRACKET }
-  | ']'	  { T.RBRACKET }
+  | '['   { T.LBRACKET }
+  | ']'   { T.RBRACKET }
   | "..." { T.DOTS }
   | ";"   { T.SEMICOLON }
   | ','   { T.COMMA }

@@ -15,19 +15,20 @@ let genparse sym_counter mode std filename =
   end) in
   let parse_channel ic =
     let lexbuf = Lexing.from_channel ic in
+    (* TODO: I don't know why Lexing is losing the filename information!! *)
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p  with pos_fname= filename };
     try
       Exception.except_return @@ Parser.start Core_lexer.main lexbuf
     with
-    (* TODO: I don't know why Parsing is losing the filename information!! *)
     | Core_lexer.Error ->
-      let loc = Location_ocaml.point @@ { (Lexing.lexeme_start_p lexbuf) with Lexing.pos_fname= filename } in
+      let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
       Exception.fail (loc, Errors.CORE_PARSER Errors.Core_parser_invalid_symbol)
     | Parser.Error ->
-      let loc = Location_ocaml.region ({ (Lexing.lexeme_start_p lexbuf) with Lexing.pos_fname= filename }, Lexing.lexeme_end_p lexbuf) None in
+      let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
       Exception.fail (loc, Errors.CORE_PARSER (Errors.Core_parser_unexpected_token (Lexing.lexeme lexbuf)))
     | Core_parser_util.Core_error err ->
       (* TODO: Location information is wrong! *)
-      let loc = Location_ocaml.region ({ (Lexing.lexeme_start_p lexbuf) with Lexing.pos_fname= filename }, Lexing.lexeme_end_p lexbuf) None in
+      let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
       Exception.fail (loc, Errors.CORE_PARSER err)
     | Failure msg ->
       prerr_endline "CORE_PARSER_DRIVER (Failure)";
