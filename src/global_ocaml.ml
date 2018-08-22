@@ -103,7 +103,7 @@ let set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite
                   sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
                   typecheck_core defacto default_impl action_graph =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
-  cerb_conf := fun () -> {
+  let conf = {
     cpp_cmd=       cpp_cmd;
     pps=           pps;
     ppflags=       ppflags;
@@ -123,7 +123,8 @@ let set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite
     default_impl=  default_impl;
     action_graph=  action_graph;
     n1507=         if error_verbosity = QuoteStd then Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json")) else None;
-  }
+  } in
+  cerb_conf := fun () -> conf
 
 
 (* TODO: hack *)
