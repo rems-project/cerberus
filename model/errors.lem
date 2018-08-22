@@ -51,7 +51,7 @@ type core_parser_cause =
   | Core_parser_invalid_symbol
   | Core_parser_unexpected_token of string
   | Core_parser_unresolved_symbol of string
-  | Core_parser_multiple_declaration of Loc.t * string
+  | Core_parser_multiple_declaration of string
   | Core_parser_ctor_wrong_application of int (*expected*) * int (* found *)
   | Core_parser_wrong_decl_in_std
   | Core_parser_undefined_startup
