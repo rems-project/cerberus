@@ -45,8 +45,6 @@ let rec hasAilname: attribute list -> string option = function
       Some str
 
 
-
-
 (* TODO: move to Caux *)
 let rec mk_list_pe = function
   | [] ->
@@ -82,13 +80,13 @@ module Eff : sig
   val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
   val mapM_: ('a -> 'b t) -> 'a list -> unit t
   val foldrM: ('a -> 'b -> 'b t) -> 'b -> 'a list -> 'b t
-  val fail: core_parser_cause -> 'a t
-  val runM: 'a t -> symbolify_state -> (core_parser_cause, 'a * symbolify_state) either
+  val fail: Location_ocaml.t -> core_parser_cause -> 'a t
+  val runM: 'a t -> symbolify_state -> (Location_ocaml.t * core_parser_cause, 'a * symbolify_state) either
   val get: symbolify_state t
   val put: symbolify_state -> unit t
 end = struct
   open Either
-  type 'a t = symbolify_state -> (core_parser_cause, 'a * symbolify_state) either
+  type 'a t = symbolify_state -> (Location_ocaml.t * core_parser_cause, 'a * symbolify_state) either
   
   let return z =
     fun st -> Right (z, st)
@@ -126,8 +124,8 @@ end = struct
     | [] -> return a
     | x::xs -> bind (foldrM f a xs) (f x)
   
-  let fail err =
-    fun _ -> Left err
+  let fail loc err =
+    fun _ -> Left (loc, err)
   
   let runM m st =
     m st
@@ -225,7 +223,7 @@ let symbolify_name = function
        | Some (sym, _) ->
            Eff.return (Sym sym)
        | None ->
-           Eff.fail (Core_parser_unresolved_symbol (fst _sym)))
+           Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym)))
  | Impl iCst ->
      Eff.return (Impl iCst)
 
@@ -236,7 +234,8 @@ let rec symbolify_ctype ty =
         | Some (sym, _) ->
             Eff.return sym
         | None ->
-            Eff.fail (Core_parser_unresolved_symbol str)
+            (* TODO: location *)
+            Eff.fail Location_ocaml.unknown (Core_parser_unresolved_symbol str)
       end
     | _ -> failwith "symbolify_ctype"
   in
@@ -313,6 +312,7 @@ let rec symbolify_pattern _pat : pattern Eff.t =
         Eff.return (CaseCtor (convert_ctor _ctor, pat))
 
 let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t =
+  let loc = Annot.get_loc_ annot in
   match _pexpr with
     | PEsym _sym ->
         Eff.get         >>= fun st ->
@@ -320,7 +320,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | Some (sym, _) ->
               Eff.return (Caux.mk_sym_pe sym)
           | None ->
-              Eff.fail (Core_parser_unresolved_symbol (fst _sym))
+              Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym))
         )
     | PEimpl iCst ->
         Eff.return (Pexpr ([], (), PEimpl iCst))
@@ -354,7 +354,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
           | [] ->
               Eff.return (Pexpr ([], (), PEctor (Cnil (), [])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (0, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
         end
     | PEctor (Ccons, _pes) ->
         begin match _pes with
@@ -363,7 +363,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Pexpr ([], (), PEctor (Ccons, [pe1; pe2])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEctor (Ctuple, _pes) ->
         Eff.mapM symbolify_pexpr _pes >>= fun pes ->
@@ -377,7 +377,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civmax, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civmin, _pes) ->
         begin match _pes with
@@ -385,7 +385,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civmin, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civsizeof, _pes) ->
         begin match _pes with
@@ -393,7 +393,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civsizeof, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civalignof, _pes) ->
         begin match _pes with
@@ -401,7 +401,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Civalignof, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (CivCOMPL, _pes) ->
         begin match _pes with
@@ -410,7 +410,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Core_aux.bitwise_complement_pe pe1 pe2)
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEctor (CivAND, _pes) ->
         begin match _pes with
@@ -420,7 +420,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivAND, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (CivOR, _pes) ->
         begin match _pes with
@@ -430,7 +430,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivOR, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (CivXOR, _pes) ->
         begin match _pes with
@@ -440,7 +440,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe3 >>= fun pe3 ->
               Eff.return (Pexpr ([], (), PEctor (CivXOR, [pe1; pe2; pe3])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (3, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (3, List.length _pes))
         end
     | PEctor (Cspecified, _pes) ->
         begin match _pes with
@@ -448,7 +448,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Core_aux.mk_specified_pe pe)
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Cunspecified, _pes) ->
         begin match _pes with
@@ -456,7 +456,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Cunspecified, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Cfvfromint, _pes) ->
         begin match _pes with
@@ -464,7 +464,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe >>= fun pe ->
               Eff.return (Pexpr ([], (), PEctor (Cfvfromint, [pe])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (1, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (1, List.length _pes))
         end
     | PEctor (Civfromfloat, _pes) ->
         begin match _pes with
@@ -473,7 +473,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
               symbolify_pexpr _pe2 >>= fun pe2 ->
               Eff.return (Pexpr ([], (), PEctor (Civfromfloat, [pe1; pe2])))
           | _ ->
-              Eff.fail (Core_parser_ctor_wrong_application (2, List.length _pes))
+              Eff.fail loc (Core_parser_ctor_wrong_application (2, List.length _pes))
         end
     | PEcase (_pe, _pat_pes) ->
         symbolify_pexpr _pe >>= fun pe ->
@@ -616,7 +616,7 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
           therefore registered in a preliminary pass *)
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Core_parser_unresolved_symbol (fst _sym))
+             Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              under_scope begin
                Eff.mapM (fun (_sym, (bTy, _pe)) ->
@@ -634,7 +634,7 @@ let rec symbolify_expr ((Expr (_, expr_)) : parsed_expr) : (unit expr) Eff.t  =
    | Erun ((), _sym, _pes) ->
        lookup_label _sym >>= begin function
          | None ->
-             Eff.fail (Core_parser_unresolved_symbol (fst _sym))
+             Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym))
          | Some (sym, _) ->
              Eff.mapM symbolify_pexpr _pes >>= fun pes ->
              Eff.return (Erun ((), sym, pes))
@@ -691,7 +691,7 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Esave ((_sym, _), _, _e) ->
         lookup_sym _sym >>= (function
           | Some (_, loc) ->
-                Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
+                Eff.fail loc (Core_parser_multiple_declaration (fst _sym))
           | None ->
               register_label _sym >>= fun () ->
               register_labels _e
@@ -749,7 +749,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Proc_decl (_sym, _, _) ->
           lookup_sym _sym >>= (function
             | Some (_, loc) ->
-                Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
+                Eff.fail loc (Core_parser_multiple_declaration (fst _sym))
             | None ->
                 register_sym _sym >>= fun sym ->
                 if fst _sym = "main" then
@@ -821,7 +821,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | Some sym ->
           Eff.return (Right (sym, globs, fun_map))
       | None ->
-          Eff.fail Core_parser_undefined_startup
+          Eff.fail Location_ocaml.unknown Core_parser_undefined_startup
 
 let symbolify_std decls : (unit Core.fun_map) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
@@ -832,7 +832,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | Proc_decl (_sym, _, _) ->
         lookup_sym _sym >>= (function
           | Some (_, loc) ->
-              Eff.fail (Core_parser_multiple_declaration (loc, fst _sym))
+              Eff.fail loc (Core_parser_multiple_declaration (fst _sym))
           | None ->
               register_sym _sym >>= fun sym ->
               Eff.return ()
@@ -841,10 +841,12 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
         Eff.return ()
   ) decls >>= fun () ->
   Eff.foldrM (fun decl fun_map_acc -> match decl with
-    | Def_decl _ 
-    | IFun_decl _
-    | Glob_decl _ ->
-       Eff.fail Core_parser_wrong_decl_in_std
+    | Def_decl (_, _, Pexpr (annots, _, _))
+    | IFun_decl (_, (_, _, Pexpr (annots, _, _))) ->
+      let loc = Annot.get_loc_ annots in
+       Eff.fail loc Core_parser_wrong_decl_in_std
+    | Glob_decl (_sym, _, _)  ->
+       Eff.fail (Location_ocaml.region (snd _sym) None) Core_parser_wrong_decl_in_std
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
         lookup_sym _sym >>= (function
           | Some (decl_sym, _) ->
@@ -1363,53 +1365,53 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([], (), PEundef (Location_ocaml.other "Core parser", ub)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEundef (Location_ocaml.other "Core parser", ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
-    { Pexpr ([], (), PEerror (str, _pe))  }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEerror (str, _pe))  }
 | _cval= value
-    { Pexpr ([], (), PEval _cval) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEval _cval) }
 | _sym= SYM
-    { Pexpr ([], (), PEsym _sym) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEsym _sym) }
 | iCst= IMPL
-    { Pexpr ([], (), PEimpl iCst) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEimpl iCst) }
 (* Syntactic sugar for tuples and lists *)
 | LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
-    { Pexpr ([], (), PEctor (Ctuple, _pe :: _pes)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Ctuple, _pe :: _pes)) }
 | _pe= list_pexpr
   { _pe }
 | ctor= ctor _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([], (), PEctor (ctor, _pes)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (ctor, _pes)) }
 | CASE _pe= pexpr OF _pat_pes= list(pattern_pair(pexpr)) END
-    { Pexpr ([], (), PEcase (_pe, _pat_pes)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEcase (_pe, _pat_pes)) }
 | ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= core_ctype COMMA _pe2= pexpr RPAREN
-    { Pexpr ([], (), PEarray_shift (_pe1, ty, _pe2)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEarray_shift (_pe1, ty, _pe2)) }
 (*
 | MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA RPAREN
 *)
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([], (), PEnot _pe) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEnot _pe) }
 | MINUS _pe= pexpr
-    { Pexpr ([], (), PEop (OpSub, Pexpr ([], (), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEop (OpSub, Pexpr ([], (), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
-    { Pexpr ([], (), PEop (bop, _pe1, _pe2)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEop (bop, _pe1, _pe2)) }
 (*
   | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
   | PEstruct of Symbol.t * list (Cabs.cabs_identifier * generic_pexpr 'ty 'sym)
 *)
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
-    { Pexpr ([], (), PEcall (nm, _pes)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
-    { Pexpr ([], (), PElet (_pat, _pe1, _pe2)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PElet (_pat, _pe1, _pe2)) }
 | IF _pe1= pexpr THEN _pe2= pexpr ELSE _pe3= pexpr
-    { Pexpr ([], (), PEif (_pe1, _pe2, _pe3)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEif (_pe1, _pe2, _pe3)) }
 | IS_SCALAR _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([], (), PEis_scalar _pe) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_scalar _pe) }
 | IS_INTEGER _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([], (), PEis_integer _pe) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_integer _pe) }
 | IS_SIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([], (), PEis_signed _pe) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
-    { Pexpr ([], (), PEis_unsigned _pe) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_unsigned _pe) }
 ;
 
 

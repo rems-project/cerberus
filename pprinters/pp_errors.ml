@@ -346,7 +346,7 @@ let string_of_core_parser_cause = function
       "unexpected token '"^ str ^ "'"
   | Core_parser_unresolved_symbol str ->
       "unresolved_symbol '" ^ str ^ "'"
-  | Core_parser_multiple_declaration (loc, str) ->
+  | Core_parser_multiple_declaration str ->
       "multiple declaration of '" ^ str ^ "'"
   | Core_parser_ctor_wrong_application (expected, found) ->
       "wrong number of expression in application, expected " ^ string_of_int expected ^ ", found " ^ string_of_int found

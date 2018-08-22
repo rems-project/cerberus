@@ -26,9 +26,7 @@ let genparse sym_counter mode std filename =
     | Parser.Error ->
       let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
       Exception.fail (loc, Errors.CORE_PARSER (Errors.Core_parser_unexpected_token (Lexing.lexeme lexbuf)))
-    | Core_parser_util.Core_error err ->
-      (* TODO: Location information is wrong! *)
-      let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
+    | Core_parser_util.Core_error (loc, err) ->
       Exception.fail (loc, Errors.CORE_PARSER err)
     | Failure msg ->
       prerr_endline "CORE_PARSER_DRIVER (Failure)";
