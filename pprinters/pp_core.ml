@@ -134,7 +134,7 @@ let rec pp_core_object_type = function
       !^ "floating"
   | OTy_pointer ->
       !^ "pointer"
-  | OTy_array bty ->
+  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
       !^ "array" ^^ P.parens (pp_core_object_type bty)
   | OTy_struct ident ->
       !^ "struct(TODO)"
@@ -173,7 +173,7 @@ let pp_binop = function
   | OpRem_t -> pp_keyword "rem_t"
   | OpRem_f -> pp_keyword "rem_f"
   | OpExp -> P.caret
-  | OpEq  -> P.equals ^^ P.equals
+  | OpEq  -> P.equals
   | OpLt  -> P.langle
   | OpLe  -> P.langle ^^ P.equals
   | OpGt  -> P.rangle
@@ -183,7 +183,7 @@ let pp_binop = function
 
 
 let pp_ctype ty =
-  P.dquotes (Pp_core_ctype.pp_ctype ty)
+  P.squotes (Pp_core_ctype.pp_ctype ty)
 
 
 
@@ -288,7 +288,7 @@ and pp_loaded_value = function
   | LVspecified oval ->
       pp_const "Specified" ^^ P.parens (pp_object_value oval)
   | LVunspecified ty ->
-      pp_const "Unspecified" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+      pp_const "Unspecified" ^^ P.parens (P.squotes (Pp_core_ctype.pp_ctype ty))
 
 
 let rec pp_value = function

@@ -229,6 +229,45 @@ let symbolify_name = function
  | Impl iCst ->
      Eff.return (Impl iCst)
 
+let rec symbolify_ctype ty =
+  let symbolify_symbol = function
+    | Symbol.Symbol (_, Some str) ->
+      begin lookup_sym (str, (Lexing.dummy_pos, Lexing.dummy_pos)) >>= function
+        | Some (sym, _) ->
+            Eff.return sym
+        | None ->
+            Eff.fail (Core_parser_unresolved_symbol str)
+      end
+    | _ -> failwith "symbolify_ctype"
+  in
+  let open Core_ctype in
+  match ty with
+  | Void0 ->
+      Eff.return Void0
+  | Basic0 bty ->
+      Eff.return (Basic0 bty)
+  | Array0 (ty, n) ->
+      symbolify_ctype ty >>= fun ty' ->
+      Eff.return (Array0 (ty', n))
+  | Atomic0 ty ->
+      symbolify_ctype ty >>= fun ty' ->
+      Eff.return (Atomic0 ty')
+  | Function0 ((ret_qs, ret_ty), params, isVariadic) ->
+      symbolify_ctype ret_ty >>= fun ret_ty' ->
+      Eff.mapM (fun (qs, ty) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty')) params >>= fun params' ->
+      Eff.return (Function0 ((ret_qs, ret_ty'), params', isVariadic))
+  | Pointer0 (qs, ty) ->
+      symbolify_ctype ty >>= fun ty' ->
+      Eff.return (Pointer0 (qs, ty'))
+  | Struct0 tag ->
+      symbolify_symbol tag >>= fun tag' ->
+      Eff.return (Struct0 tag')
+  | Union0 tag ->
+      symbolify_symbol tag >>= fun tag' ->
+      Eff.return (Union0 tag')
+  | Builtin0 str ->
+      Eff.return (Builtin0 str)
+
 let rec symbolify_value _cval =
   match _cval with
    | Vunit ->
@@ -238,7 +277,8 @@ let rec symbolify_value _cval =
    | Vfalse ->
        Eff.return Vfalse
    | Vctype ty ->
-       Eff.return (Vctype ty)
+       symbolify_ctype ty >>= fun ty' ->
+       Eff.return (Vctype ty')
    | _ ->
        assert false
 
@@ -298,7 +338,8 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEval Vfalse ->
         Eff.return (Pexpr ([], (), PEval Vfalse))
     | PEval (Vctype ty) ->
-        Eff.return (Pexpr ([], (), PEval (Vctype ty)))
+        symbolify_ctype ty >>= fun ty' ->
+        Eff.return (Pexpr ([], (), PEval (Vctype ty')))
     | PEval _cval ->
         failwith "WIP: Core parser -> PEval"
     | PEconstrained _ ->
@@ -887,7 +928,7 @@ let mk_file decls =
 %token INT8_T INT16_T INT32_T INT64_T UINT8_T UINT16_T UINT32_T UINT64_T
 %token INTPTR_T INTMAX_T UINTPTR_T UINTMAX_T
 %token SIZE_T PTRDIFF_T
-(* %token STRUCT UNION *) (* TODO *)
+%token STRUCT UNION
 
 (* C11 memory orders *)
 %token SEQ_CST RELAXED RELEASE ACQUIRE CONSUME ACQ_REL
@@ -952,6 +993,7 @@ let mk_file decls =
 
 (* integer values *)
 %token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
+%token IVCOMPL IVAND IVOR IVXOR
 %token ARRAY SPECIFIED UNSPECIFIED
 
 %token FVFROMINT IVFROMFLOAT
@@ -1113,6 +1155,12 @@ ctype:
         | None ->
             $syntaxerror
     }
+| STRUCT tag= SYM
+    (* NOTE: we only collect the string name here *)
+    { Core_ctype.Struct0 (Symbol.Symbol (-1, Some (fst tag))) }
+| UNION tag= SYM
+    (* NOTE: we only collect the string name here *)
+    { Core_ctype.Union0 (Symbol.Symbol (-1, Some (fst tag))) }
 ;
 (* END Ail types *)
 
@@ -1233,6 +1281,14 @@ ctor:
     { Cfvfromint }
 | IVFROMFLOAT
     { Civfromfloat }
+| IVCOMPL
+    { CivCOMPL }
+| IVAND
+    { CivAND }
+| IVOR
+    { CivOR }
+| IVXOR
+    { CivXOR }
 
 
 list_pattern:
