@@ -19,11 +19,15 @@ type desugar_cause =
   | Desugar_TODO of string (* TODO: get rid of this constructor eventually *)
 
 type core_typing_cause =
-  | Undefined_startup of Symbol.sym (* Found no definition of the startup fun/proc *)
-  | MismatchObject of core_object_type (* expected *) * core_object_type (* found *)
+  | UndefinedStartup of Symbol.sym (* Found no definition of the startup fun/proc *)
   | Mismatch of string (* syntax info *) * core_base_type (* expected *) * core_base_type (* found *)
+  | MismatchBinaryOperator of Core.binop
   | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
-  | MismatchIfCfunction of (core_base_type * list core_base_type) (* then *) * (core_base_type * list core_base_type) (* else *)
+  | UnresolvedSymbol of Symbol.sym
+  | FunctionOrProcedureSymbol of Symbol.sym
+  | TooGeneral
+
+
   | EmptyArray
   | CtorWrongNumber of nat (* expected *) * nat (* found *)
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
@@ -31,7 +35,6 @@ type core_typing_cause =
   | InvalidTag of Symbol.sym
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
   | CoreTyping_TODO of string
-  | TooGeneral
 
 type core_run_cause =
   | Illformed_program of string (* typing or name-scope error *)

@@ -234,11 +234,11 @@ let rec proj_ctype (AilTypes.Ctype _ ty) =
 
 val mk_empty_pat: core_base_type -> pattern
 let mk_empty_pat bTy =
-  CaseBase (Nothing, bTy)
+  Pattern [] (CaseBase (Nothing, bTy))
 
 val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
 let mk_sym_pat sym bTy =
-  CaseBase (Just sym, bTy)
+  Pattern [] (CaseBase (Just sym, bTy))
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
@@ -247,16 +247,16 @@ let mk_tuple_pat = function
   | [pat] ->
       pat
   | pats ->
-      CaseCtor Ctuple pats
+      Pattern [] (CaseCtor Ctuple pats)
 end
 
 val mk_specified_pat: pattern -> pattern
 let mk_specified_pat pat =
-  CaseCtor Cspecified [pat]
+  Pattern [] (CaseCtor Cspecified [pat])
 
 val mk_unspecified_pat: pattern -> pattern
 let mk_unspecified_pat pat =
-  CaseCtor Cunspecified [pat]
+  Pattern [] (CaseCtor Cunspecified [pat])
 
 
 (* Core pexpr builders  ***************************************************** *)
@@ -813,7 +813,7 @@ let inline to_integer = core_aux_to_integer
 
 (* check if a symbolic names is part of a pattern *)
 val in_pattern: Symbol.sym -> pattern -> bool
-let rec in_pattern sym pat =
+let rec in_pattern sym (Pattern _ pat) =
   match pat with
     | CaseBase (sym_opt, _) ->
         maybe false (fun sym' -> sym = sym') sym_opt
@@ -977,7 +977,7 @@ and subst_sym_paction sym cval (Paction p act) =
 
 
 val     subst_pattern_val: forall 'a. pattern -> value -> expr 'a -> expr 'a
-let rec subst_pattern_val pat cval expr =
+let rec subst_pattern_val (Pattern _ pat) cval expr =
   (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
   match (pat, cval) with
     | (CaseBase (Nothing, _), _) ->
@@ -1226,7 +1226,7 @@ and unsafe_subst_sym_paction a pe' (Paction p act) =
    pattern *)
 (* NOTE: this is usually unsound to use if pe' doesn't evaluate to a defined value or generates memory constraints *)
 val     unsafe_subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> expr 'a
-let rec unsafe_subst_pattern pat pe' expr =
+let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
   
   match (pat, pe') with
     | (CaseBase (Nothing, _), _) ->
@@ -1891,7 +1891,7 @@ let rec has_sseqs expr =
 
 
 val     match_pattern: pattern -> value -> maybe (list (sym * value))
-let rec match_pattern pat cval =
+let rec match_pattern (Pattern _ pat) cval =
   match (pat, cval) with
     | (CaseBase (Nothing, _), _) ->
         Just []
@@ -2202,7 +2202,7 @@ in
 
 
 val     update_env: pattern -> value -> list (map Symbol.sym value) -> list (map Symbol.sym value)
-let rec update_env_aux pat cval env =
+let rec update_env_aux (Pattern _ pat) cval env =
   (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
   match (pat, cval) with
     | (CaseBase (Nothing, _), _) ->

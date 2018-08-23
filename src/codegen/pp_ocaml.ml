@@ -186,7 +186,8 @@ let print_ail_basic_type = function
 
 (* Patterns *)
 
-let rec print_pattern = function
+let rec print_pattern (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, _) -> P.underscore
   | CaseBase (Some sym, _) -> print_symbol sym
   | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
@@ -200,7 +201,8 @@ and print_match_ctor arg = function
   | Cunspecified -> !^"RT.Unspecified" ^^ P.parens arg
   | _ -> raise (Unsupported "unsupported pattern")
 
-let rec print_simple_pattern base = function
+let rec print_simple_pattern base (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, _) -> base
   | CaseBase (Some sym, _) -> print_symbol sym
   | CaseCtor (_, pas) ->
@@ -217,7 +219,7 @@ let print_fun_pattern = print_simple_pattern P.underscore
 let print_case pe pp pas =
   let cmp (pat1, pe1) (pat2, pe2) =
     match pat1, pat2 with
-    | _, CaseBase (None, _) -> 1
+    | _, Pattern (_, CaseBase (None, _)) -> 1
     | _ -> 0
   in
   (* ensure that the pattern "_" is the first in the list,
@@ -741,8 +743,8 @@ let rec print_control globs = function
     ^^^ print_list (print_control globs) ces
 
 let print_seq = function
-  | Some (CaseBase (None, _))
-  | Some (CaseCtor (_, []))
+  | Some (Pattern (_, CaseBase (None, _)))
+  | Some (Pattern (_, CaseCtor (_, [])))
   | None -> tbind ^^^ tfun ^^^ P.underscore ^^^ tarrow ^^ P.break 1
   | Some p -> tbind ^^^ print_anon (print_pattern p) ^^ P.break 1
 

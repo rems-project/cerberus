@@ -290,22 +290,44 @@ let string_of_ail_typing_error = function
   | TError_NotYetSupported str ->
       "feature not yet supported: " ^ str
 
+let string_of_bty =
+  String_core.string_of_core_base_type
+
+let string_of_binop bop =
+  let open Core in
+  match bop with
+  | OpAdd -> "+"
+  | OpSub -> "-"
+  | OpMul -> "*"
+  | OpDiv -> "/"
+  | OpRem_t -> "rem_t"
+  | OpRem_f -> "rem_f"
+  | OpExp -> "^"
+  | OpEq -> "="
+  | OpGt -> ">"
+  | OpLt -> "<"
+  | OpGe -> ">="
+  | OpLe -> "<="
+  | OpAnd -> "/\\"
+  | OpOr -> "\\/"
+
 let string_of_core_typing_cause = function
-  | Undefined_startup sym ->
-      "Undefined_startup " ^ Pp_symbol.to_string sym
-  | MismatchObject (expected_oTy, found_oTy) ->
-      "MismatchObject(" ^
-      String_core.string_of_core_object_type expected_oTy ^ ", " ^
-      String_core.string_of_core_object_type found_oTy ^ ")"
-  | Mismatch (info_str, expected_bTy, found_bTy) ->
-      "Mismatch(" ^ info_str ^ ", " ^
-      String_core.string_of_core_base_type expected_bTy ^ ", " ^
-      String_core.string_of_core_base_type found_bTy ^ ")"
+  | UndefinedStartup sym ->
+      "undefined startup procedure '" ^ string_of_sym sym ^ "'"
+  | Mismatch (str, expected, found) ->
+    (if !Debug_ocaml.debug_level > 0 then "DEBUG(" ^ str ^ "):\n" else "") ^
+    "this expression has type '" ^ string_of_bty found ^
+    "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
+  | MismatchBinaryOperator bop ->
+      "incompatible operand types to binary operation '" ^ string_of_binop bop ^ "'"
+  | TooGeneral ->
+      "unable to infer the type of this expression (too general)"
   | MismatchIf (then_bTy, else_bTy) ->
-      "MismatchIf"
-  | MismatchIfCfunction (xs_then, xs_else) ->
-      (* of (core_base_type * list core_base_type) (* then *) * (core_base_type * list core_base_type) (* else *) *)
-      "MismatchIfCfunction(TODO)"
+      "type mismatch in conditional expression ('" ^ string_of_bty then_bTy ^ "' and '" ^ string_of_bty else_bTy ^ "')"
+  | UnresolvedSymbol sym ->
+      "unresolved symbol '" ^ string_of_sym sym ^ "'"
+  | FunctionOrProcedureSymbol sym ->
+      "unexpected function/procedure '" ^ string_of_sym sym ^ "'"
   | EmptyArray ->
       "EmptyArray"
   | CtorWrongNumber (expected_n, found_n) ->
@@ -324,8 +346,6 @@ let string_of_core_typing_cause = function
       "InvalidMember(" ^ Pp_symbol.to_string tag_sym ^ ", " ^ memb_str ^ ")"
   | CoreTyping_TODO str ->
       "CoreTyping_TODO(" ^ str ^ ")"
-  | TooGeneral ->
-      "TooGeneral"
 
 let string_of_core_run_cause = function
   | Illformed_program str ->
@@ -345,7 +365,7 @@ let string_of_core_parser_cause = function
   | Core_parser_unexpected_token str ->
       "unexpected token '"^ str ^ "'"
   | Core_parser_unresolved_symbol str ->
-      "unresolved_symbol '" ^ str ^ "'"
+      "unresolved symbol '" ^ str ^ "'"
   | Core_parser_multiple_declaration str ->
       "multiple declaration of '" ^ str ^ "'"
   | Core_parser_ctor_wrong_application (expected, found) ->
