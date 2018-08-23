@@ -34,13 +34,12 @@ let rec infer_pattern (Pattern annots pat) =
   | CaseBase (Just sym, bTy) ->
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), toInferred bTy, Pattern annots (CaseBase (Just sym, bTy)))
   | CaseCtor ctor pats ->
-      let fail_ctorArity n = E.fail loc (CtorWrongNumber n (List.length pats))in
       match (ctor, pats) with
         | (Cnil (), []) ->
             let infer = InferredType_list InferredUnknown in
-            E.return (empty_env, infer,Pattern annots (CaseCtor (Cnil infer) []))
+            E.return (empty_env, infer, Pattern annots (CaseCtor (Cnil infer) []))
         | (Cnil (), _) ->
-            fail_ctorArity 0
+            error "infer_pattern: Cnil: wrong number of arguments"
         | (Ccons, [pat1; pat2]) ->
             infer_pattern pat1 >>= fun (env1, infer1, tpat1) ->
             match toCoreBaseType infer1 with
@@ -48,10 +47,10 @@ let rec infer_pattern (Pattern annots pat) =
                   typecheck_pattern (BTy_list bTy) pat2 >>= fun (env2, tpat2) ->
                   E.return (env_union env1 env2, InferredType_list infer1, Pattern annots (CaseCtor Ccons [tpat1; tpat2]))
               | Nothing ->
-                  E.fail loc TooGeneral
+                  E.fail (locOf pat1) TooGeneral
             end
         | (Ccons, _) ->
-            fail_ctorArity 2
+            error "infer_pattern: Ccons: wrong number of arguments"
         | (Ctuple, _) ->
             unzip3 <$> E.mapM (infer_pattern) pats >>= fun (envs, infers, pats') ->
             E.return (env_unions envs,
@@ -63,22 +62,22 @@ let rec infer_pattern (Pattern annots pat) =
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civmax [tpat']))
         | (Civmax, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Civmax: wrong number of arguments"
         | (Civmin, [pat']) ->
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civmin [tpat']))
         | (Civmin, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Civmin: wrong number of arguments"
         | (Civsizeof, [pat']) ->
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civsizeof [tpat']))
         | (Civsizeof, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Civsizeof: wrong number of arguments"
         | (Civalignof, [pat']) ->
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, InferredType_object OTy_integer, Pattern annots (CaseCtor Civalignof [tpat']))
         | (Civalignof, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Civalignof: wrong number of arguments"
         | (CivCOMPL, [pat1; pat2]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
@@ -86,7 +85,7 @@ let rec infer_pattern (Pattern annots pat) =
                      , InferredType_object OTy_integer
                      , Pattern annots (CaseCtor CivCOMPL [tpat1; tpat2]))
         | (CivCOMPL, _) ->
-            fail_ctorArity 2
+            error "infer_pattern: CivCOMPL: wrong number of arguments"
         | (CivAND, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
@@ -95,7 +94,7 @@ let rec infer_pattern (Pattern annots pat) =
                      , InferredType_object OTy_integer
                      , Pattern annots (CaseCtor CivAND [tpat1; tpat2; tpat3]))
         | (CivAND, _) ->
-            fail_ctorArity 3
+            error "infer_pattern: CivAND: wrong number of arguments"
         | (CivOR, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
@@ -104,7 +103,7 @@ let rec infer_pattern (Pattern annots pat) =
                      , InferredType_object OTy_integer
                      , Pattern annots (CaseCtor CivOR [tpat1; tpat2; tpat3]))
         | (CivOR, _) ->
-            fail_ctorArity 3
+            error "infer_pattern: CivOR: wrong number of arguments"
         | (CivXOR, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env2, tpat2) ->
@@ -113,26 +112,26 @@ let rec infer_pattern (Pattern annots pat) =
                      , InferredType_object OTy_integer
                      , Pattern annots (CaseCtor CivXOR [tpat1; tpat2; tpat3]))
         | (CivXOR, _) ->
-            fail_ctorArity 3
+            error "infer_pattern: CivXOR: wrong number of arguments"
         | (Cspecified, [pat']) ->
             infer_pattern pat' >>= fun (env, infer', tpat') ->
             match infer' with
               | InferredType_object oTy ->
                   E.return (env, InferredType_loaded oTy, Pattern annots (CaseCtor Cspecified [tpat']))
               | _ ->
-                  E.fail loc (CoreTyping_TODO "Specified() expects an object type")
+                  E.fail (locOf pat') (MismatchFound "Cspecified" "object" (toCoreBaseType infer'))
             end
         | (Cspecified, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Cspecified: wrong number of arguments"
         | (Cunspecified, [_]) ->
             E.fail loc TooGeneral
         | (Cunspecified, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Cunspecified: wrong number of arguments"
         | (Cfvfromint, [pat]) ->
             typecheck_pattern (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
             E.return (env, InferredType_object OTy_floating, Pattern annots (CaseCtor Cfvfromint [tpat]))
         | (Cfvfromint, _) ->
-            fail_ctorArity 1
+            error "infer_pattern: Cfvfromint: wrong number of arguments"
         | (Civfromfloat, [pat1; pat2]) ->
             typecheck_pattern BTy_ctype                 pat1 >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
@@ -140,7 +139,7 @@ let rec infer_pattern (Pattern annots pat) =
                      , InferredType_object OTy_integer
                      , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2]))
         | (Civfromfloat, _) ->
-            fail_ctorArity 2
+            error "infer_pattern: Cfvfromfloat: wrong number of arguments"
       end
 end
 
@@ -160,18 +159,18 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
         | (Cnil (), BTy_list elem_bTy, []) ->
             E.return (empty_env, Pattern annots (CaseCtor (Cnil (toInferred elem_bTy)) []))
         | (Cnil (), _, []) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cnil, illtyped 1")
+            E.fail loc (MismatchExpected "Cnil" expected_bTy "list")
         | (Cnil (), _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cnil, illtyped 2")
+            error "typecheck_pattern: Cnil: wrong number of arguments"
 
         | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
             typecheck_pattern elem_bTy     pat1 >>= fun (env1, tpat1) ->
             typecheck_pattern expected_bTy pat2 >>= fun (env2, tpat2) ->
             E.return (env_union env1 env2, Pattern annots (CaseCtor Ccons [tpat1; tpat2]))
         | (Ccons, _, []) ->
-            E.fail loc (CoreTyping_TODO "typecheck Ccons, illtyped 1")
+            E.fail loc (MismatchExpected "Ccons" expected_bTy "list")
         | (Ccons, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Ccons, illtyped 2")
+            error "typecheck_pattern: Ccons: wrong number of arguments"
 
         | (Ctuple, BTy_tuple bTys, _) ->
             List.unzip <$> E.mapM (fun (bTy, pat) ->
@@ -179,109 +178,117 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
             ) (List.zip bTys pats) >>= fun (envs, tpats) ->
             E.return (env_unions envs, Pattern annots (CaseCtor Ctuple tpats))
         | (Ctuple, _, _) ->
-            E.fail loc (Mismatch "tuple pattern (TODO: the found type is dummy)" expected_bTy (BTy_tuple [BTy_unit]))
+            E.fail loc (MismatchExpected "Ctuple" expected_bTy "tuple")
+
         | (Carray, _, _) ->
+            (* TODO: *)
             error "Core_typing.Carray: WIP, Carray"
 
         | (Civmax, BTy_object OTy_integer, [pat']) ->
             typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Civmax [tpat']))
         | (Civmax, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civmax, illtyped 1")
+            E.fail loc (Mismatch "Civmax" expected_bTy (BTy_object OTy_integer))
         | (Civmax, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civmax, illtyped 2")
+            error "typecheck_pattern: Civmax: wrong number of arguments"
 
         | (Civmin, BTy_object OTy_integer, [pat']) ->
             typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Civmin [tpat']))
         | (Civmin, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civmin, illtyped 1")
+            E.fail loc (Mismatch "Civmin" expected_bTy (BTy_object OTy_integer))
         | (Civmin, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civmin, illtyped 2")
+            error "typecheck_pattern: Civmin: wrong number of arguments"
 
         | (Civsizeof, BTy_object OTy_integer, [pat']) ->
             typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Civsizeof [tpat']))
         | (Civsizeof, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civsizeof, illtyped 1")
+            E.fail loc (Mismatch "Civsizeof" expected_bTy (BTy_object OTy_integer))
         | (Civsizeof, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civsizeof, illtyped 2")
+            error "typecheck_pattern: Civsizeof: wrong number of arguments"
 
         | (Civalignof, BTy_object OTy_integer, [pat']) ->
             typecheck_pattern (BTy_ctype) pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Civalignof [tpat']))
         | (Civalignof, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civalignof, illtyped 1")
+            E.fail loc (Mismatch "Civalignof" expected_bTy (BTy_object OTy_integer))
         | (Civalignof, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civalignof, illtyped 2")
+            error "typecheck_pattern: Civalignof: wrong number of arguments"
+
         | (CivCOMPL, BTy_object OTy_integer, [pat1; pat2]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
             E.return (env, Pattern annots (CaseCtor CivCOMPL [tpat1; tpat2]))
         | (CivCOMPL, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivCOMPL, illtyped 1")
+            E.fail loc (Mismatch "CivCOMPL" expected_bTy (BTy_object OTy_integer))
         | (CivCOMPL, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivCOMPL, illtyped 2")
+            error "typecheck_pattern: CivCOMPL: wrong number of arguments"
+
         | (CivAND, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
             typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
             E.return (env, Pattern annots (CaseCtor CivAND [tpat1; tpat2; tpat3]))
         | (CivAND, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivAND, illtyped 1")
+            E.fail loc (Mismatch "CivAND" expected_bTy (BTy_object OTy_integer))
         | (CivAND, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivAND, illtyped 2")
+            error "typecheck_pattern: CivAND: wrong number of arguments"
+
         | (CivOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
             typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
             E.return (env, Pattern annots (CaseCtor CivOR [tpat1; tpat2; tpat3]))
         | (CivOR, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivOR, illtyped 1")
+            E.fail loc (Mismatch "CivOR" expected_bTy (BTy_object OTy_integer))
         | (CivOR, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivOR, illtyped 2")
+            error "typecheck_pattern: CivOR: wrong number of arguments"
+
         | (CivXOR, BTy_object OTy_integer, [pat1; pat2; pat3]) ->
             typecheck_pattern BTy_ctype pat1                >>= fun (env, tpat1) ->
             typecheck_pattern (BTy_object OTy_integer) pat2 >>= fun (env, tpat2) ->
             typecheck_pattern (BTy_object OTy_integer) pat3 >>= fun (env, tpat3) ->
             E.return (env, Pattern annots (CaseCtor CivXOR [tpat1; tpat2; tpat3]))
         | (CivXOR, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivXOR, illtyped 1")
+            E.fail loc (Mismatch "CivXOR" expected_bTy (BTy_object OTy_integer))
         | (CivXOR, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck CivXOR, illtyped 2")
-        
+            error "typecheck_pattern: CivXOR: wrong number of arguments"
+
         | (Cspecified, BTy_loaded oTy, [pat']) ->
             typecheck_pattern (BTy_object oTy) pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Cspecified [tpat']))
         | (Cspecified, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cspecified, illtyped 1")
+            E.fail loc (MismatchExpected "Civspecified" expected_bTy "loaded object")
         | (Cspecified, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cspecified, illtyped 2")
+            error "typecheck_pattern: Cspecified: wrong number of arguments"
 
         | (Cunspecified, BTy_loaded oTy, [pat']) ->
             (* TODO: dependent types here .... *)
             typecheck_pattern BTy_ctype pat' >>= fun (env, tpat') ->
             E.return (env, Pattern annots (CaseCtor Cunspecified [tpat']))
         | (Cunspecified, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cunspecified, illtyped 1")
+            E.fail loc (MismatchExpected "Civunspecified" expected_bTy "loaded object")
         | (Cunspecified, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cunspecified, illtyped 2")
+            error "typecheck_pattern: Cunspecified: wrong number of arguments"
+
         | (Cfvfromint, BTy_object OTy_floating, [pat]) ->
             typecheck_pattern (BTy_object OTy_integer) pat >>= fun (env, tpat) ->
             E.return (env, Pattern annots (CaseCtor Cfvfromint [tpat]))
         | (Cfvfromint, _, [_]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cfvfromint, illtyped 1")
+            E.fail loc (Mismatch "Civfromint" expected_bTy (BTy_object OTy_floating))
         | (Cfvfromint, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Cfvfromint, illtyped 2")
+            error "typecheck_pattern: Civfromint: wrong number of arguments"
+
         | (Civfromfloat, BTy_object OTy_integer, [pat1; pat2]) ->
             typecheck_pattern BTy_ctype                pat1  >>= fun (env1, tpat1) ->
             typecheck_pattern (BTy_object OTy_floating) pat2 >>= fun (env2, tpat2) ->
             E.return ( env_union env1 env2
                      , Pattern annots (CaseCtor Civfromfloat [tpat1; tpat2] ))
         | (Civfromfloat, _, [_; _]) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civfromfloat, illtyped 1")
+            E.fail loc (Mismatch "Civfromfloat" expected_bTy (BTy_object OTy_integer))
         | (Civfromfloat, _, _) ->
-            E.fail loc (CoreTyping_TODO "typecheck Civfromfloat, illtyped 2")
+            error "typecheck_pattern: Civfromfloat: wrong number of arguments"
       end
 end
 
@@ -439,7 +446,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
           | (Cnil (), []) ->
               E.return (Pexpr annot InferredUnknown (PEctor (Cnil InferredUnknown) []))
           | (Cnil _, _) ->
-              E.fail loc (CtorWrongNumber 0 (List.length pes))
+              error "infer_pexpr: Cnil: wrong number of arguments"
           | (Ccons, [pe1; pe2]) ->
               infer_pexpr tagDefs env pe1 >>= fun (Pexpr _ infer1 _ as pe1') ->
               match toCoreBaseType infer1 with
@@ -453,7 +460,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
                           typecheck_pexpr tagDefs env elem_bTy2 pe1 >>= fun pe1' ->
                             E.return (Pexpr annot infer2 (PEctor Ccons [pe1'; pe2']))
                       | Just _ ->
-                          E.fail loc (CoreTyping_TODO "the list constructor expects a list as it's second operand")
+                          E.fail (locOf pe2) (MismatchFound "Ccons" "list" (toCoreBaseType infer2))
                       | Nothing ->
                           (* TODO: can maybe be improved (see Core_typing_aux.unify) *)
                           E.fail loc TooGeneral
@@ -480,7 +487,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
               E.return (Pexpr infer2 (PEctor Ccons [pe1'; pe2']))
 *)
           | (Ccons, _) ->
-              E.fail loc (CtorWrongNumber 2 (List.length pes))
+              error "infer_pexpr: Ccons: wrong number of arguments"
           | (Ctuple, _) ->
             E.mapM (infer_pexpr tagDefs env) pes >>= fun pes' ->
             let (infers, pes') = List.unzip (
@@ -490,49 +497,49 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
               typecheck_pexpr tagDefs env BTy_ctype pe >>= fun pe' ->
               ret_ctor (InferredType_object OTy_integer) Civmax [pe']
           | (Civmax, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Civmax: wrong number of arguments"
           | (Civmin, [pe]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe >>= fun pe' ->
               ret_ctor (InferredType_object OTy_integer) Civmin [pe']
           | (Civmin, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Civmin: wrong number of arguments"
           | (Civsizeof, [pe]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe >>= fun pe' ->
               ret_ctor (InferredType_object OTy_integer) Civsizeof [pe']
           | (Civsizeof, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Civsizeof: wrong number of arguments"
           | (Civalignof, [pe]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe >>= fun pe' ->
               ret_ctor (InferredType_object OTy_integer) Civalignof [pe']
           | (Civalignof, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Civalignof: wrong number of arguments"
           | (CivCOMPL, [pe1; pe2]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe1                >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               ret_ctor (InferredType_object OTy_integer) CivCOMPL [pe1'; pe2']
           | (CivCOMPL, _) ->
-              E.fail loc (CtorWrongNumber 2 (List.length pes))
+              error "infer_pexpr: CivCOMPL: wrong number of arguments"
           | (CivAND, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe1                >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               ret_ctor (InferredType_object OTy_integer) CivAND [pe1'; pe2']
           | (CivAND, _) ->
-              E.fail loc (CtorWrongNumber 3 (List.length pes))
+              error "infer_pexpr: CivAND: wrong number of arguments"
           | (CivOR, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe1                >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               ret_ctor (InferredType_object OTy_integer) CivOR [pe1'; pe2']
           | (CivOR, _) ->
-              E.fail loc (CtorWrongNumber 3 (List.length pes))
+              error "infer_pexpr: CivOR: wrong number of arguments"
           | (CivXOR, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype pe1                >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               ret_ctor (InferredType_object OTy_integer) CivXOR [pe1'; pe2']
           | (CivXOR, _) ->
-              E.fail loc (CtorWrongNumber 3 (List.length pes))
+              error "infer_pexpr: CivXOR: wrong number of arguments"
           
           | (Cspecified, [pe]) ->
               infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
@@ -543,7 +550,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
                     E.fail loc TooGeneral
               end
           | (Cspecified, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Cspecified: wrong number of arguments"
           | (Cunspecified, [Pexpr _ () (PEval (Vctype ty))]) ->
               let pe' = Pexpr annot InferredType_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
@@ -555,7 +562,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
           | (Cunspecified, [pe]) ->
               error "Core_typing, Cunspecified non-trivial"
           | (Cunspecified, _) ->
-              E.fail loc (CtorWrongNumber 1 (List.length pes))
+              error "infer_pexpr: Cunspecified: wrong number of arguments"
           | _ ->
               error ("WIP: infer_pexpr, " ^ Pp.stringFromCore_pexpr (Pexpr annot () pexpr_))
         end
@@ -604,7 +611,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
     | PEnot pe ->
         Pexpr annot InferredType_boolean <$> (PEnot <$> typecheck_pexpr tagDefs env BTy_boolean pe)
     | PEop bop pe1 pe2 ->
-        E.trysM_ loc (CoreTyping_TODO "PEop")
+        E.trysM_ (with_regions_and_cursor [locOf pe1; locOf pe2] (Just loc)) (MismatchBinaryOperator bop)
         (fun (bTy, bTy1, bTy2) ->
           Pexpr annot (toInferred bTy) <$> (PEop bop <$> typecheck_pexpr tagDefs env bTy1 pe1
                                                      <*> typecheck_pexpr tagDefs env bTy2 pe2)
@@ -744,7 +751,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
                   E.return (Pexpr annot infer2 (PElet pat' pe1' pe2'))
                 | Nothing ->
                     (* we couldn't infer the types of neither the pattern not pe1 *)
-                    E.fail loc TooGeneral
+                    E.fail (locOf pat) TooGeneral
               end
         end
     | PEif pe1 pe2 pe3 ->
@@ -820,7 +827,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
           | (Cnil (), BTy_list elem_bTy, []) ->
               E.return (PEctor (Cnil (toInferred elem_bTy)) [])
           | (Cnil _, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Nil()")
+              E.fail loc (MismatchExpected "Cnil" bTy "list")
           | (Ccons, BTy_list elem_bTy, [pe]) ->
               ret_ctor Ccons <$> typecheck_pexpr tagDefs env elem_bTy pe
           | (Ccons, BTy_list elem_bTy, [pe1; pe2]) ->
@@ -828,83 +835,80 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               typecheck_pexpr tagDefs env bTy pe2      >>= fun pe2' ->
               E.return (PEctor Ccons [pe1'; pe2'])
           | (Ccons, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Cons()")
+              E.fail loc (MismatchExpected "Ccons" bTy "list")
           | (Ctuple, BTy_tuple bTys, _) ->
               E.mapM (fun (bTy, pe) -> typecheck_pexpr tagDefs env bTy pe)
                 (List.zip bTys pes) >>=
               (fun pes' -> E.return (PEctor Ctuple pes'))
           | (Ctuple, _, _) ->
-              E.fail loc (CoreTyping_TODO ("illtyped tuple ==> " ^ Pp.stringFromCore_core_base_type bTy))
+              E.fail loc (MismatchExpected "Ctuple" bTy "tuple")
           | (Carray, BTy_object (OTy_array oTy), pes) ->
               PEctor Carray <$> E.mapM (fun pe ->
                 typecheck_pexpr tagDefs env (BTy_loaded oTy) pe
               ) pes
           | (Carray, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Array()")
+              E.fail loc (MismatchExpected "Carray" bTy "array")
           | (Civmax, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmax <$> typecheck_pexpr tagDefs env (BTy_ctype) pe
           | (Civmax, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Civmax")
+              E.fail loc (Mismatch "Civmax" bTy (BTy_object OTy_integer))
           | (Civmin, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civmin <$> typecheck_pexpr tagDefs env (BTy_ctype) pe
           | (Civmin, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Civmin")
+              E.fail loc (Mismatch "Civmin" bTy (BTy_object OTy_integer))
           | (Civsizeof, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civsizeof <$> typecheck_pexpr tagDefs env (BTy_ctype) pe
           | (Civsizeof, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Civsizeof")
+              E.fail loc (Mismatch "Civsizeof" bTy (BTy_object OTy_integer))
           | (Civalignof, BTy_object OTy_integer, [pe]) ->
               ret_ctor Civalignof <$> typecheck_pexpr tagDefs env (BTy_ctype) pe
           | (Civalignof, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Civalignof")
+              E.fail loc (Mismatch "Civalignof" bTy (BTy_object OTy_integer))
           | (CivCOMPL, BTy_object OTy_integer, [pe1; pe2]) ->
               typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               E.return (PEctor CivCOMPL [pe1'; pe2'])
           | (CivCOMPL, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped CivCOMPL")
+              E.fail loc (Mismatch "CivCOMPL" bTy (BTy_object OTy_integer))
           | (CivAND, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               E.return (PEctor CivAND [pe1'; pe2'; pe3'])
           | (CivAND, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped CivAND")
+              E.fail loc (Mismatch "CivAND" bTy (BTy_object OTy_integer))
           | (CivOR, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               E.return (PEctor CivOR [pe1'; pe2'; pe3'])
           | (CivOR, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped CivOR")
+              E.fail loc (Mismatch "CivOR" bTy (BTy_object OTy_integer))
           | (CivXOR, BTy_object OTy_integer, [pe1; pe2; pe3]) ->
               typecheck_pexpr tagDefs env BTy_ctype                pe1 >>= fun pe1' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2 >>= fun pe2' ->
               typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe3 >>= fun pe3' ->
               E.return (PEctor CivXOR [pe1'; pe2'; pe3'])
           | (CivXOR, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped CivXOR")
+              E.fail loc (Mismatch "CivXOR" bTy (BTy_object OTy_integer))
           | (Cspecified, BTy_loaded oTy, [pe]) ->
               ret_ctor Cspecified <$> typecheck_pexpr tagDefs env (BTy_object oTy) pe
           | (Cspecified, _, _) ->
-              E.fail loc (CoreTyping_TODO ("illtyped Cspecified typecheck ==> " ^
-                                          Pp.stringFromCore_core_base_type bTy ^ " -- " ^
-                                          Pp.stringFromCore_pexpr (Pexpr [] () pexpr_)))
+              E.fail loc (MismatchExpected "Cspecified" bTy "loaded object")
           | (Cunspecified, BTy_loaded _, [pe]) ->
               ret_ctor Cunspecified <$> typecheck_pexpr tagDefs env BTy_ctype pe
           | (Cunspecified, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Cunspecified")
+              E.fail loc (MismatchExpected "Cunspecified" bTy "loaded object")
           | (Cfvfromint, BTy_object OTy_floating, [pe]) ->
-              ret_ctor Cfvfromint <$>
-                typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe
+              ret_ctor Cfvfromint <$> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe
           | (Cfvfromint, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Cfvfromint")
+              E.fail loc (Mismatch "Cfvfromint" bTy (BTy_object OTy_floating))
           | (Civfromfloat, BTy_object OTy_integer, [pe_ty; pe_fval]) ->
               typecheck_pexpr tagDefs env BTy_ctype                 pe_ty   >>= fun pe_ty'   ->
               typecheck_pexpr tagDefs env (BTy_object OTy_floating) pe_fval >>= fun pe_fval' ->
               E.return (PEctor Civfromfloat [pe_ty'; pe_fval'])
           | (Civfromfloat, _, _) ->
-              E.fail loc (CoreTyping_TODO "illtyped Civfromfloat")
+              E.fail loc (Mismatch "Civfromfloat" bTy (BTy_object OTy_integer))
         end
     | PEcase pe cases ->
         infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
@@ -1076,7 +1080,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                     typecheck_pexpr tagDefs (env_union env pat_env) bTy pe2 >>= fun pe2'            ->
                     E.return (PElet pat' pe1' pe2')
                 | Nothing ->
-                    E.fail loc TooGeneral
+                    E.fail (locOf pat) TooGeneral
               end
         end
     | PEif pe1 pe2 pe3 ->
@@ -1369,7 +1373,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         infer_pattern pat >>= fun (pat_env, pat_infer, _pat') ->
         match toCoreBaseType pat_infer with
           | Nothing ->
-              E.fail loc TooGeneral
+              E.fail (locOf pat) TooGeneral
           | Just pat_bTy ->
               typecheck_pexpr tagDefs env pat_bTy pe1 >>= export_pexpr       >>= fun pe1' ->
               export_pattern loc _pat'                                       >>= fun pat' ->
