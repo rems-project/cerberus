@@ -315,6 +315,12 @@ type generic_fun_map_decl 'bty 'a =
 
 type generic_fun_map 'bty 'a = map Symbol.sym (generic_fun_map_decl 'bty 'a)
 
+instance forall 'bty 'sym. (Located (generic_pattern 'bty 'sym))
+  let locOf pat =
+    let (Pattern annots _) = pat in
+    get_loc_ annots
+end
+
 instance forall 'bty 'sym. (Located (generic_pexpr 'bty 'sym))
   let locOf pe =
     let (Pexpr annots _ _) = pe in

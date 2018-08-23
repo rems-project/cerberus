@@ -315,23 +315,29 @@ let string_of_core_typing_cause = function
   | UndefinedStartup sym ->
       "undefined startup procedure '" ^ string_of_sym sym ^ "'"
   | Mismatch (str, expected, found) ->
-    (if !Debug_ocaml.debug_level > 0 then "DEBUG(" ^ str ^ "):\n" else "") ^
-    "this expression has type '" ^ string_of_bty found ^
-    "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      "this expression is of type '" ^ string_of_bty found ^
+      "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
   | MismatchBinaryOperator bop ->
       "incompatible operand types to binary operation '" ^ string_of_binop bop ^ "'"
   | TooGeneral ->
       "unable to infer the type of this expression (too general)"
   | MismatchIf (then_bTy, else_bTy) ->
       "type mismatch in conditional expression ('" ^ string_of_bty then_bTy ^ "' and '" ^ string_of_bty else_bTy ^ "')"
+  | MismatchExpected (str, expected, found) ->
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      "this expression is of type '" ^ found ^
+      "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
+  | MismatchFound (str, expected, m_found) ->
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
+      "an expression of type '" ^ expected ^ "' was expected"
   | UnresolvedSymbol sym ->
       "unresolved symbol '" ^ string_of_sym sym ^ "'"
   | FunctionOrProcedureSymbol sym ->
       "unexpected function/procedure '" ^ string_of_sym sym ^ "'"
   | EmptyArray ->
       "EmptyArray"
-  | CtorWrongNumber (expected_n, found_n) ->
-      "CtorWrongNumber(" ^ string_of_int expected_n ^ ", " ^ string_of_int found_n ^ ")"
   | HeterogenousArray (expected_oTy, found_oTy) ->
       "HeterogenousArray(" ^
       String_core.string_of_core_object_type expected_oTy ^ ", " ^

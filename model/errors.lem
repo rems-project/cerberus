@@ -23,18 +23,18 @@ type core_typing_cause =
   | Mismatch of string (* syntax info *) * core_base_type (* expected *) * core_base_type (* found *)
   | MismatchBinaryOperator of Core.binop
   | MismatchIf of core_base_type (* then *) * core_base_type (* else *)
+  | MismatchExpected of string (* syntax info *) * core_base_type (* expected *) * string (* found *)
+  | MismatchFound of string (* syntax info *) * string (* expected *) * maybe core_base_type (* found *)
   | UnresolvedSymbol of Symbol.sym
   | FunctionOrProcedureSymbol of Symbol.sym
   | TooGeneral
-
-
+  | CoreTyping_TODO of string (* TODO: get rid of this constructor eventually *)
+  (* NOTE: I cannot fire these errors *)
   | EmptyArray
-  | CtorWrongNumber of nat (* expected *) * nat (* found *)
   | HeterogenousArray of core_object_type (* expected *) * core_object_type (* found *)
   | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
   | InvalidTag of Symbol.sym
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
-  | CoreTyping_TODO of string
 
 type core_run_cause =
   | Illformed_program of string (* typing or name-scope error *)
