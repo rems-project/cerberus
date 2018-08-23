@@ -836,7 +836,7 @@ and translate_expression ctx stdlib (tagDefs : Core.core_tag_definitions) a_expr
                   C.Epure (
                     C.Pexpr [] () (
                       C.PEcase (Caux.mk_sym_pe e_sym)
-                        [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
+                        [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)]),
                            let expr =
                              Caux.mk_op_pe C.OpSub zero_pe (mk_conversion (Caux.mk_sym_pe obj_sym)) in
                            Caux.mk_specified_pe (
@@ -846,7 +846,7 @@ else if AilTypesAux.is_integer result_ty then
                              stdlib.mkcall_wrapI result_ty expr
 else
                              expr))
-                        ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype],
+                        ; (C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]),
                            (* TODO: check that result_ty = promoted (ctype_of e) *)
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
                     )
@@ -869,7 +869,7 @@ else
                   C.Epure (
                     C.Pexpr [] () (
                       C.PEcase (Caux.mk_sym_pe e_sym)
-                        [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)],
+                        [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat obj_sym (C.BTy_object oTy)]),
                            let promoted_e = Caux.mk_std_pe "§6.5.3.3#4, sentence 2" $ integer_promotion (ctype_of e) (Caux.mk_sym_pe obj_sym) in
                            (* NOTE: result_ty == promoted type of e *)
                            Caux.mk_specified_pe (if AilTypesAux.is_unsigned_integer_type result_ty then
@@ -877,7 +877,7 @@ else
                              Caux.mk_std_pe "§6.5.3.3#4, sentence 3" $ Caux.mk_op_pe C.OpSub (Caux.mk_ivmax_pe (Caux.mk_ail_ctype_pe result_ty)) promoted_e
                            else
                              Caux.bitwise_complement_pe (Caux.mk_ail_ctype_pe result_ty) promoted_e))
-                        ; (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype],
+                        ; (C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]),
                            (* TODO: check that result_ty = promoted (ctype_of e) *)
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)) ]
                     )
@@ -961,7 +961,7 @@ match AilTypesAux.unatomic ty with
       illTypedAil loc "AilEunary PostfixIncr"
 end
                             )
-                          ; ( C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
+                          ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
                             , Caux.mk_unspecified_pe (Caux.proj_ctype ty)(*TODO:check*) )
                           ] )
                        Cmm.NA)))
@@ -1024,7 +1024,7 @@ match AilTypesAux.unatomic ty with
       illTypedAil loc "AilEunary PostfixIncr"
 end
                              )
-                            ; ( C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
+                            ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
                               , Caux.mk_unspecified_pe (Caux.proj_ctype ty)(*TODO:check*) )
                             ]
                        end)
@@ -1064,7 +1064,7 @@ else
                               )
                             )
                         ) )
-                    ; ( C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
+                    ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
                       , C.Expr [] (C.Epure (Caux.mk_std_undef_pe loc "§6.5.3.3#4, sentence 4" Undefined.UB043_indirection_invalid_value(*TODO:check*))) )
                     ]
                 )
@@ -1109,9 +1109,9 @@ If an invalid value has been assigned to the pointer, the behavior of the unary 
                     C.Pexpr [] () (
                       C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                         [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
-                                             ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
+                                             ; C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ]) ],
                            Caux.mk_undef_exceptional_condition loc)
-                        ; (Caux.mk_tuple_pat [ C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
+                        ; (Caux.mk_tuple_pat [ C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
                                              ; Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer) ],
 (if AilTypesAux.is_unsigned_integer_type (ctype_of e1) then
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty)
@@ -1181,9 +1181,9 @@ else
                     C.Pexpr [] () (
                       C.PEcase (Caux.mk_tuple_pe [e1_sym_pe; e2_sym_pe])
                         [ (Caux.mk_tuple_pat [ Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer)
-                                             ; C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ] ],
+                                             ; C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype ]) ],
                            Caux.mk_undef_exceptional_condition loc)
-                        ; (Caux.mk_tuple_pat [ C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype]
+                        ; (Caux.mk_tuple_pat [ C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
                                              ; Caux.mk_empty_pat (C.BTy_loaded C.OTy_integer) ],
                            Caux.mk_unspecified_pe (Caux.proj_ctype result_ty))
                         ; (Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat obj1_sym (C.BTy_object C.OTy_integer))
@@ -2982,7 +2982,7 @@ let translation_mk_run_e loc sym visibles_before visibles_after pes =
   let mk_creates_e =
     Caux.mk_sseqs $
       List.map (fun (sym, ty) ->
-        (C.CaseBase (Just sym, C.BTy_object C.OTy_pointer),
+        (C.Pattern [] (C.CaseBase (Just sym, C.BTy_object C.OTy_pointer)),
          let core_ty = Caux.mk_ail_ctype_pe ty in
          Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [(*f; *)sym]))
       ) created_sym_tys in
@@ -3113,7 +3113,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           (* NOTE: here we fix the strictness of unspecified values *)
           Caux.mk_wseq_e (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
             Caux.mk_case_e (Caux.mk_sym_pe sym_e)
-              [ (C.CaseCtor C.Cspecified [Caux.mk_sym_pat sym_obj (C.BTy_object oTy)],
+              [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat sym_obj (C.BTy_object oTy)]),
                  Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_obj) (Caux.mk_integer_pe 1)))
                    core_s1 core_s2)
                 (* non-deterministic branching if the test expression had unspecified value *)

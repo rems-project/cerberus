@@ -353,7 +353,8 @@ let pp_ctor = function
       !^ "Civfromfloat"
 
 
-let rec pp_pattern = function
+let rec pp_pattern (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, bTy) ->
       P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
   | CaseBase (Some sym, bTy) ->
@@ -525,7 +526,7 @@ let rec pp_expr expr =
         if compare_precedence prec' prec then
           (* right associativity of ; *)
           match (is_semi, e) with
-            | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
+            | (true, Esseq (Pattern (_, CaseBase (None, BTy_unit)), _, _)) ->
                 P.parens
             | _ ->
                 fun z -> z
@@ -577,7 +578,7 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
+        | Esseq (Pattern (_, CaseBase (None, BTy_unit)), e1, e2) ->
             (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
         | Esseq (pat, e1, e2) ->
             P.group (

@@ -417,9 +417,9 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
 (* TODO: lem non termination bug *)
     | Core.Easeq (sym, bTy) act pact ->
         let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_indet, Easeq ==> assuming pact is a store()") in
-        Core.Expr annot (Core.Ewseq (Core.CaseBase (Just sym, bTy))
+        Core.Expr annot (Core.Ewseq (Core.Pattern [] (Core.CaseBase (Just sym, bTy)))
           (Core.Expr [] (Core.Eaction (Core.Paction Core.Pos act)))
-          (Core_aux.mk_wseq_e (Core.CaseBase (Nothing, Core.BTy_unit))
+          (Core_aux.mk_wseq_e (Core.Pattern [] (Core.CaseBase (Nothing, Core.BTy_unit)))
              (Core.Expr [] (Core.Eaction pact))
              (Core_aux.mk_pure_e (Core.Pexpr [] () (Core.PEsym sym)))
           ))

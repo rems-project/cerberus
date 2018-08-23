@@ -194,7 +194,7 @@ let cps_transform_expr sym_supply globs bvs core_expr =
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)
-  let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit) in
+  let ret_pat = Core.Pattern ([], Core.CaseBase (Some ret_sym, Core.BTy_unit)) in
   tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) core_expr
 
 

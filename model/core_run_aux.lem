@@ -366,8 +366,8 @@ let convert_ctor = function
 end
 
 val     convert_pattern: forall 'bty. Core.generic_pattern 'bty Symbol.sym -> Core.pattern
-let rec convert_pattern pat =
-  match pat with
+let rec convert_pattern (Pattern annots pat) =
+  Pattern annots $ match pat with
     | CaseBase (sym_opt, bTy) ->
         CaseBase (sym_opt, bTy)
     | CaseCtor ctor pats ->

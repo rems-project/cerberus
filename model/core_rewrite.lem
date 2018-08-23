@@ -599,7 +599,7 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
         expr
     | Eunseq es ->
         Expr annot (Eunseq (List.map flatten_seqs es))
-    | Ewseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+    | Ewseq (Pattern _ (CaseBase (Nothing, _))) (Expr _ Eskip) e2 ->
         (* TODO: could be generalised to any "always defined" Epure *)
         flatten_seqs e2
     | Ewseq pat e1 e2 ->
@@ -611,7 +611,7 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
           | (e1', e2') ->
               Expr annot (Ewseq pat e1' e2')
         end
-    | Esseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+    | Esseq (Pattern _ (CaseBase (Nothing, _))) (Expr _ Eskip) e2 ->
         (* TODO: could be generalised to any "always defined" Epure *)
         flatten_seqs e2
     | Esseq pat e1 e2 ->
@@ -880,7 +880,7 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
     | Eunseq es ->
         if List.all is_kill es then
           List.foldr (fun e acc ->
-            Esseq (CaseBase (Nothing, BTy_unit)) e (Expr [] acc)
+            Esseq (Pattern [] (CaseBase (Nothing, BTy_unit))) e (Expr [] acc)
           ) Eskip es
         else
           Eunseq (List.map sequentialise_creates_kills es)
@@ -1126,7 +1126,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
                   end) es' in
               Expr annot (Eunseq es'')
         end
-    | Ewseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+    | Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1142,7 +1142,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Ewseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Ewseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
     | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
@@ -1152,7 +1152,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
           | Nothing ->
               Expr annot (Ewseq pat e1' (pure_propagation2 e2))
        end
-    | Esseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+    | Esseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1168,7 +1168,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Esseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Esseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Esseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
     | Esseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
@@ -1213,7 +1213,7 @@ this could match for e1, but the current code assumes it doesn't and match e2 in
 
 
 *)
-let rec simpl_match_pattern pat pe =
+let rec simpl_match_pattern (Pattern _ pat) pe =
   if not (isAlwaysDefined pe) then
     Nothing
   else match (pat, pe) with

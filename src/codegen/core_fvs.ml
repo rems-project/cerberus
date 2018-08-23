@@ -25,7 +25,8 @@ let rec fvs_rm xs ys =
   | [] -> ys
   | (x::xs) -> fvs_rm xs (fv_rm x ys)
 
-let rec fv_pat fvs = function
+let rec fv_pat fvs (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, _) -> fvs
   | CaseBase (Some l, _) -> l::fvs
   | CaseCtor (_, pats) -> List.fold_left fv_pat fvs pats
