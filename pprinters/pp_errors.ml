@@ -293,6 +293,10 @@ let string_of_ail_typing_error = function
 let string_of_bty =
   String_core.string_of_core_base_type
 
+let string_of_name = function
+  | Core.Sym sym -> string_of_sym sym
+  | Core.Impl impl -> Implementation_.string_of_implementation_constant impl
+
 let string_of_binop bop =
   let open Core in
   match bop with
@@ -332,16 +336,16 @@ let string_of_core_typing_cause = function
       (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
       (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
       "an expression of type '" ^ expected ^ "' was expected"
-  | UnresolvedSymbol sym ->
-      "unresolved symbol '" ^ string_of_sym sym ^ "'"
+  | CFunctionExpected nm ->
+      "symbol '" ^ string_of_name nm ^ "' has incorrect type, a symbol of type 'cfunction' was expected"
+  | CFunctionParamsType ->
+      "core procedures used as C functions must only have pointer parameters (or list of pointers when variadic)"
+  | CFunctionReturnType ->
+      "core procedures used as C functions must return unit or an object value"
+  | UnresolvedSymbol nm ->
+      "unresolved symbol '" ^ string_of_name nm ^ "'"
   | FunctionOrProcedureSymbol sym ->
       "unexpected function/procedure '" ^ string_of_sym sym ^ "'"
-  | EmptyArray ->
-      "EmptyArray"
-  | HeterogenousArray (expected_oTy, found_oTy) ->
-      "HeterogenousArray(" ^
-      String_core.string_of_core_object_type expected_oTy ^ ", " ^
-      String_core.string_of_core_object_type found_oTy ^ ")"
   | HeterogenousList (expected_bTy, found_bTy) ->
       "HeterogenousList(" ^
       String_core.string_of_core_base_type expected_bTy ^ ", " ^

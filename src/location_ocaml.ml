@@ -107,9 +107,18 @@ let with_regions_and_cursor locs loc_opt =
     | _ -> None
   in
   let pos_of_region = function
-    | Loc_region (p1, p2, _) -> (p1, p2)
-    | _ -> failwith "with_regions_and_cursor: location must be a region"
-  in Loc_regions (List.map pos_of_region locs, cursor_opt)
+    | Loc_point p -> Some (p, p)
+    | Loc_region (p1, p2, _) -> Some (p1, p2)
+    | _ -> None
+  in
+  let rec the acc = function
+    | Some x::xs -> the (x::acc) xs
+    | [] -> Some acc
+    | None::_ -> None
+  in
+  match the [] (List.map pos_of_region locs) with
+  | Some regs -> Loc_regions (regs, cursor_opt)
+  | None -> Loc_unknown
 
 
 let to_cartesian loc =
