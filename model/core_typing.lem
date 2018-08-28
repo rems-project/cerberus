@@ -313,42 +313,41 @@ let rec typeof_object_value loc env oval =
                      | Just ret_oTy ->
                          E.return (Just ret_oTy)
                      | Nothing ->
-                         E.fail loc (CoreTyping_TODO "Core procedures used as C functions must return unit or an object value")
+                         E.fail loc CFunctionReturnType
                    end
              end >>= fun ret_oTy_opt ->
              
              match List.dest_init bTys with
                | Just (bTys', last_bTy) ->
-                   E.guard (List.all (fun z -> z = BTy_object OTy_pointer) bTys')
-                     loc (CoreTyping_TODO "Core procedures used as C functions must only have pointer \
-                                           parameters (expect for the last one that may be a list of \
-                                           (ctype, pointer), for variadic C functions) (1)") >>
+                   E.guard (List.all (fun z -> z = BTy_object OTy_pointer) bTys') loc CFunctionParamsType >>
                    match last_bTy with
                      | BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ->
                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys') true)
                      | BTy_object OTy_pointer ->
                            E.return (OTy_cfunction ret_oTy_opt (List.length bTys' + 1) false)
                      | bTy ->
-                         E.fail loc (CoreTyping_TODO ("Core procedures used as C functions must only have pointer \
-                                                       parameters (expect for the last one that may be a list of \
-                                                       (ctype, pointer), for variadic C functions) (2)" ^ Pp.stringFromCore_core_base_type bTy))
+                         E.fail loc CFunctionParamsType
                    end
                | Nothing ->
                    E.return (OTy_cfunction ret_oTy_opt 0 false)
              end
          | Just _ ->
-             E.fail loc (CoreTyping_TODO ("found a def in a cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+             E.fail loc (CFunctionExpected nm)
          | Nothing ->
-             E.fail loc (CoreTyping_TODO ("unresolved sym in cfunction value: " ^ Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+              (* NOTE: this should have been detected by the parser.
+               * We add it here just in case. *)
+              E.fail loc (UnresolvedSymbol nm)
        end
    | OVarray [] ->
-       E.fail loc EmptyArray
+       (* TODO(V): impossible to write an example *)
+       error "TODO: EmptyArray"
    | OVarray (lval'::lvals') ->
        typeof_loaded_value loc env lval' >>= fun oTy ->
        E.mapM (fun lval ->
          typeof_loaded_value loc env lval >>= fun oTy' ->
          if oTy <> oTy' then
-           E.fail loc (HeterogenousArray oTy oTy')
+           (* TODO(V): impossible to write an example *)
+           error "TODO HeterogenousArray oTy oTy'"
          else
            E.return ()
        ) lvals' >>
@@ -370,6 +369,7 @@ and typeof_loaded_value loc env (lval: loaded_value) : E.eff core_object_type =
     | LVspecified oval ->
         typeof_object_value loc env oval
     | LVunspecified ty ->
+       (* TODO(V): impossible to write an example *)
         error "TODO: typeof_loaded_value, LVunspecified"
   end
 
@@ -387,7 +387,8 @@ let rec typeof_value loc env cval =
           | Just oTy ->
               E.return (BTy_loaded oTy)
           | Nothing ->
-              E.fail loc (CoreTyping_TODO "typeof_value, Vunspecified not oTy")
+             (* TODO(V): impossible to write an example *)
+              error "TODO typeof_value, Vunspecified not oTy"
         end
     | Vunit ->
         E.return BTy_unit
@@ -424,7 +425,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
           | Nothing ->
               (* NOTE: this should have been detected by the parser.
                * We add it here just in case. *)
-              E.fail loc (UnresolvedSymbol sym)
+              E.fail loc (UnresolvedSymbol (Sym sym))
         end
     (* FIXME: match type for each impl constant??? *)
     | PEimpl impl ->
