@@ -1000,6 +1000,17 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
+                | Impl (StdFunction "exit") ->
+                    (* TODO: it should close all open resources *)
+                    match cvals with
+                      | [cval] -> Step_done cval
+                      | _ -> error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                | Impl (StdFunction "_Exit") ->
+                    match cvals with
+                      | [cval] -> Step_done cval
+                      | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
                 | Impl (StdFunction "printf") ->
                     match cvals with
                       | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;

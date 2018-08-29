@@ -378,8 +378,24 @@ let rec drive_core_thread tid =
         ("Step_blocked", ND.return ())
     | Core_run.Step_error debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
-    | Core_run.Step_done _ ->
-        ("Step_done", ND.return ())
+    (* NOTE: it clears the stack and add the value to the arena *)
+    | Core_run.Step_done cval ->
+        ( "Step_done"
+        , ND.update (fun dr_st ->
+            let core_st' = Core_run.update_thread_state tid
+              <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval cval)));
+                 Core_run_aux.stack= Core.Stack_empty;
+                (* Dymmy locations *)
+                 Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
+                 Core_run_aux.current_loc= Loc.unknown;
+                 Core_run_aux.current_uid= Nothing;
+              |> dr_st.core_state
+            in
+            <| dr_st with
+              core_state= core_st';
+              dr_step_counter= dr_st.dr_step_counter + 1;
+            |>))
+
     | Core_run.Step_spawn_threads mk_th_st th_sts ->
         ( "Step_spawn_threads"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_spawn_threads") >>
