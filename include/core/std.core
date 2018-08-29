@@ -268,6 +268,14 @@ proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} poi
         pure (undef(<<DUMMY(sprintf_proxy)>>)) -- TODO think about that
   end
 
+proc [ailname = "exit"] exit_proxy (x_ptr: pointer) : eff loaded integer :=
+  let strong x: loaded integer = load('signed int', x_ptr) in
+  pcall(<std_function_exit>, x)
+
+proc [ailname = "_Exit"] _Exit_proxy (x_ptr: pointer) : eff unit :=
+  let strong x: loaded integer = load('signed int', x_ptr) in
+  pcall(<std_function__Exit>, x)
+
 
 proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer :=
   let strong size_: loaded integer = load('size_t', size_ptr) in
@@ -294,9 +302,9 @@ proc [ailname = "realloc"] realloc_proxy (old_ptrptr: pointer, size_ptr: pointer
 -- TODO: this is a hack for GCC torture while signal are not implemented
 proc [ailname = "abort"] abort_proxy() : eff unit :=
   pure(error(<<<ABORT>>>, Unit))
-proc [ailname = "exit"] exit_proxy(p: pointer) : eff unit :=
+{- proc [ailname = "exit"] exit_proxy(p: pointer) : eff unit :=
   pure(error(<<<EXIT>>>, Unit))
-
+-}
 
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)
 fun wrapI(ty: ctype, n: integer) : integer :=

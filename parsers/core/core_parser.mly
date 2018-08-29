@@ -516,8 +516,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         symbolify_sym _tag_sym >>= fun tag_sym ->
         Eff.mapM (fun (cid, _pe) -> symbolify_pexpr _pe >>= fun pe -> Eff.return (cid, pe)) _ident_pes >>= fun ident_pes ->
         Eff.return (Pexpr (annot, (), PEstruct (tag_sym, ident_pes)))
-    | PEunion (tag_sym, member_ident, _pe) ->
-        failwith "WIP: PEunion"
+    | PEunion (_tag_sym, member_ident, _pe) ->
+        symbolify_sym _tag_sym >>= fun tag_sym ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr (annot, (), PEunion (tag_sym, member_ident, pe)))
     | PEmemberof (tag_sym, member_ident, _pe) ->
         failwith "WIP: PEmemberof"
     | PEcall (_nm, _pes) ->
@@ -1428,6 +1430,8 @@ pexpr:
 *)
 | LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEstruct (_sym, _mems)) }
+| LPAREN UNION _sym=SYM RPAREN LBRACE m=member RBRACE
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEunion (_sym, fst m, snd m)) }
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
