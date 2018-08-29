@@ -123,6 +123,8 @@ let pp_keyword w = !^ (ansi_format [Bold; Magenta] w)
 let pp_const   c = !^ (ansi_format [Magenta] c)
 let pp_control w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
+(* NOTE: Used to distinguish struct/unions globally *)
+let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string a))
 let pp_number  n = !^ (ansi_format [Yellow] n)
 let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
 
@@ -137,9 +139,9 @@ let rec pp_core_object_type = function
   | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
       !^ "array" ^^ P.parens (pp_core_object_type bty)
   | OTy_struct ident ->
-      !^ "struct(TODO)"
+      !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
   | OTy_union ident  ->
-      !^ "union(TODO)"
+      !^ "union" ^^^ !^(Pp_symbol.to_string ident)
   | OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
@@ -266,18 +268,16 @@ let rec pp_object_value = function
   | OVarray lvals ->
       pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
   | OVstruct (tag_sym, xs) ->
-      P.parens (pp_const "struct" ^^^ pp_symbol tag_sym) ^^
+      P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (ident, mval) -> 
-          P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^
-          P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        comma_list (fun (Cabs.CabsIdentifier (_, ident), mval) -> 
+          P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
         ) xs
       )
-  | OVunion (tag_sym, memb_ident, mval) ->
-      P.parens (pp_const "union" ^^^ pp_symbol tag_sym) ^^
+  | OVunion (tag_sym, Cabs.CabsIdentifier (_, ident), mval) ->
+      P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^
-        P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
       )
   | OVcfunction nm ->
       !^ "Cfunction" ^^ P.parens (pp_name nm)
@@ -445,9 +445,9 @@ let pp_pexpr pe =
             pp_keyword "array_shift" ^^ P.parens (
               pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
             )
-        | PEmember_shift (pe, tag_sym, memb_ident) ->
+        | PEmember_shift (pe, tag_sym, (Cabs.CabsIdentifier (_, memb_ident))) ->
             pp_keyword "member_shift" ^^ P.parens (
-              pp pe ^^ P.comma ^^^ pp_symbol tag_sym ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident
+              pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
             )
         | PEnot pe ->
             pp_keyword "not" ^^ P.parens (pp pe)
@@ -458,14 +458,16 @@ let pp_pexpr pe =
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
 *)
         | PEstruct (tag_sym, xs) ->
-            P.parens (pp_keyword "struct" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              comma_list (fun (ident, pe) ->
-                P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe
+            P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
+            P.braces (
+              comma_list (fun (Cabs.CabsIdentifier (_, ident), pe) -> 
+                P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
               ) xs
             )
-        | PEunion (tag_sym, member_ident, pe) ->
-            P.parens (pp_keyword "union" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_cabs.pp_cabs_identifier member_ident ^^ P.equals ^^^ pp pe
+        | PEunion (tag_sym, Cabs.CabsIdentifier (_, ident), pe) ->
+            P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
+            P.braces (
+              P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
             )
         | PEmemberof (tag_sym, memb_ident, pe) ->
             pp_keyword "memberof" ^^ P.parens (
@@ -668,23 +670,19 @@ let std = [
 let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
 
-
-
 let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
-  
-  P.separate_map (P.break 1 ^^ P.break 1) (fun (tag, tagDef) ->
-    let (str, xs) = begin match tagDef with
-      | Tags.StructDef z -> ("struct", z)
-      | Tags.UnionDef  z -> ("union", z)
-    end in
-    pp_keyword str ^^^ pp_symbol tag ^^^ P.braces (P.break 1 ^^
-      P.nest 2 (
-        P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> Pp_core_ctype.pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) xs
-      ) ^^ P.break 1
-    ) ^^ P.semi
-  ) tagDefs
-
+  let pp (sym, tagDef) =
+    let (ty, tags) = match tagDef with
+      | Tags.StructDef tags -> ("struct", tags)
+      | Tags.UnionDef tags -> ("union", tags)
+    in
+    let pp_tag (Cabs.CabsIdentifier (_, name), ty) =
+      !^name ^^ P.colon ^^^ pp_ctype ty
+    in
+    pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
+    ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
+  in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
 let pp_argument (sym, bTy) =
   pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
@@ -757,7 +755,8 @@ let pp_file file =
   end
   
   begin
-    mk_comment (pp_tagDefinitions (file.tagDefs)) ^^
+    !^ "-- Aggregates" ^^ P.break 1 ^^
+    pp_tagDefinitions file.tagDefs ^^
     P.break 1 ^^ P.break 1 ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
