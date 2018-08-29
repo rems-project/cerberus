@@ -8,10 +8,15 @@ type mode =
   | StdMode
   | ImplORFileMode
 
+type parsed_core_file =
+  Symbol.sym (* main symbol *) *
+  (Symbol.sym * Core.core_base_type * unit Core.expr) list (* globals *) *
+  unit Core.fun_map (* fun map *) *
+  (Symbol.sym, Tags.tag_definition) Pmap.map (* tagDefs *)
+
 (* Type of Core parser outputs *)
 type result =
-    (* main symbol, globals, fun_map *)
-  | Rfile of Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map
+  | Rfile of parsed_core_file
   | Rstd  of (string, Symbol.sym) Pmap.map (* Map of ailnames *) * unit Core.fun_map
   | Rimpl of Core.impl (* * unit Core.fun_map *)
 
@@ -155,6 +160,9 @@ type token =
   | RPAREN
   | LBRACKET
   | RBRACKET
+  | LBRACE
+  | RBRACE
+  | DOT
   | DOTS
   | SEMICOLON
   | COMMA
@@ -166,7 +174,7 @@ type token =
   | ND
   | WAIT (* TODO *)
   | ARRAY_SHIFT
-  | MEMBER_SHIFT (* TODO *)
+  | MEMBER_SHIFT
   
   (* integer values *)
   | IVMAX
@@ -180,6 +188,7 @@ type token =
   | CCALL
   | PCALL
   | CFUNCTION_VALUE
+  | ARRAYCTOR
 
   | COLON_COLON
   | BRACKETS

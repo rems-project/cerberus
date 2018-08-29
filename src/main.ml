@@ -141,12 +141,11 @@ let c_frontend (core_stdlib, core_impl) filename =
 
 let core_frontend (core_stdlib, core_impl) filename =
   Core_parser_driver.parse core_sym_counter core_stdlib filename >>= function
-    | Core_parser_util.Rfile (sym_main, globs, funs) ->
-(* TODO: probably can remove the commmented line, now this is done by the driver *)
-(*        Tags.set_tagDefs (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method)); *)
+    | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
+        Tags.set_tagDefs tagDefs;
         Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
            Core.main=   Some sym_main;
-           Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
+           Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
            Core.globs=  globs;

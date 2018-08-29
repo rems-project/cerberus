@@ -47,6 +47,7 @@ let keywords =
       ("integer",   T.INTEGER  );
       ("floating",  T.FLOATING );
       ("pointer",   T.POINTER  );
+      ("array",     T.ARRAY    );
       ("cfunction", T.CFUNCTION);
       
       (* for Core base types *)
@@ -71,15 +72,10 @@ let keywords =
       ("IvAND",       T.IVAND          );
       ("IvOR",        T.IVOR           );
       ("IvXOR",       T.IVXOR          );
+      ("Specified",   T.SPECIFIED      );
       ("Unspecified", T.UNSPECIFIED    );
       ("Cfunction",   T.CFUNCTION_VALUE);
-(*
-      ("Nil",         T.NIL            );
-      ("Cons",        T.CONS           );
-      ("Tuple",  T.TUPLE );
-*)
-      ("Array",       T.ARRAY          );
-      ("Specified",   T.SPECIFIED      );
+      ("Array",       T.ARRAYCTOR      );
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
@@ -297,7 +293,10 @@ and main = parse
   | ')'   { T.RPAREN }
   | '['   { T.LBRACKET }
   | ']'   { T.RBRACKET }
+  | '{'   { T.LBRACE }
+  | '}'   { T.RBRACE }
   | "..." { T.DOTS }
+  | "."   { T.DOT }
   | ";"   { T.SEMICOLON }
   | ','   { T.COMMA }
   | ':'   { T.COLON }

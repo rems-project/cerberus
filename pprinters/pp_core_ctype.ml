@@ -81,9 +81,9 @@ let rec pp_ctype = function
   | Atomic0 atom_ty ->
       !^ "_Atomic" ^^^ P.parens (pp_ctype atom_ty)
   | Struct0 sym ->
-      !^ "struct" ^^^ Pp_ail.pp_id sym
+      !^ "struct" ^^^ !^(Pp_symbol.to_string sym)
   | Union0 sym ->
-      !^ "union" ^^^ Pp_ail.pp_id sym
+      !^ "union" ^^^ !^(Pp_symbol.to_string sym)
   | Builtin0 str ->
       !^ str
 

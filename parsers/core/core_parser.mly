@@ -14,6 +14,7 @@ open Core
 module Caux = Core_aux
 module Cmm = Cmm_csem
 
+
 let sym_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
 
@@ -32,6 +33,7 @@ type declaration =
   | Glob_decl of _sym * Core.core_base_type * parsed_expr
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * attribute list * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
+  | Aggregate_decl of _sym * Tags.tag_definition
 (*
   | WithAttributes_decl of attribute list * declaration
 *)
@@ -226,6 +228,13 @@ let symbolify_name = function
            Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym)))
  | Impl iCst ->
      Eff.return (Impl iCst)
+
+let symbolify_sym _sym =
+  lookup_sym _sym >>= function
+    | Some (sym, _) ->
+        Eff.return sym
+    | None ->
+       Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym))
 
 let rec symbolify_ctype ty =
   let symbolify_symbol = function
@@ -489,16 +498,24 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         symbolify_pexpr _pe1 >>= fun pe1 ->
         symbolify_pexpr _pe2 >>= fun pe2 ->
         Eff.return (Pexpr (annot, (), PEarray_shift (pe1, ty, pe2)))
-    | PEmember_shift (_pe, tag_sym, member_ident) ->
-        failwith "WIP: PEmember_shift"
+    | PEmember_shift (_pe, _tag_sym, member_ident) ->
+        symbolify_pexpr _pe >>= fun pe ->
+        lookup_sym _tag_sym >>= (function
+          | Some (tag_sym, _) ->
+              Eff.return (Pexpr (annot, (), PEmember_shift (pe, tag_sym, member_ident)))
+          | None ->
+             Eff.fail (Location_ocaml.region (snd _tag_sym) None)
+               (Core_parser_unresolved_symbol (fst _tag_sym)))
     | PEnot _pe ->
         Caux.mk_not_pe <$> symbolify_pexpr _pe
     | PEop (bop, _pe1, _pe2) ->
         symbolify_pexpr _pe1 >>= fun pe1 ->
         symbolify_pexpr _pe2 >>= fun pe2 ->
         Eff.return (Pexpr (annot, (), PEop (bop, pe1, pe2)))
-    | PEstruct (tag_sym, ident_pes) ->
-        failwith "WIP: PEstruct"
+    | PEstruct (_tag_sym, _ident_pes) ->
+        symbolify_sym _tag_sym >>= fun tag_sym ->
+        Eff.mapM (fun (cid, _pe) -> symbolify_pexpr _pe >>= fun pe -> Eff.return (cid, pe)) _ident_pes >>= fun ident_pes ->
+        Eff.return (Pexpr (annot, (), PEstruct (tag_sym, ident_pes)))
     | PEunion (tag_sym, member_ident, _pe) ->
         failwith "WIP: PEunion"
     | PEmemberof (tag_sym, member_ident, _pe) ->
@@ -739,14 +756,15 @@ let with_labels _e m =
   Eff.return ret
 
 
-let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.core_base_type * unit Core.expr) list * unit Core.fun_map) either) Eff.t =
+let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t =
   (* Registering all the declaration symbol in first pass (and looking for the startup symbol) *)
   open_scope >>= fun () ->
   Eff.foldrM (fun decl acc ->
     match decl with
       | Glob_decl (_sym, _, _)
       | Fun_decl (_sym, _)
-      | Proc_decl (_sym, _, _) ->
+      | Proc_decl (_sym, _, _)
+      | Aggregate_decl (_sym, _) ->
           lookup_sym _sym >>= (function
             | Some (_, loc) ->
                 Eff.fail loc (Core_parser_multiple_declaration (fst _sym))
@@ -760,11 +778,11 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
       | _ ->
           Eff.return acc
   ) None decls >>= fun startup_sym_opt ->
-  Eff.foldrM (fun decl (impl_acc, globs_acc, fun_map_acc) ->
+  Eff.foldrM (fun decl (impl_acc, globs_acc, fun_map_acc, tagDefs_acc) ->
     match decl with
       | Def_decl (iCst, bTy, _pe) ->
           symbolify_pexpr _pe >>= fun pe ->
-          Eff.return (Pmap.add iCst (Def (bTy, pe)) impl_acc, globs_acc, fun_map_acc)
+          Eff.return (Pmap.add iCst (Def (bTy, pe)) impl_acc, globs_acc, fun_map_acc, tagDefs_acc)
       | IFun_decl (iCst, (bTy, _sym_bTys, _pe)) ->
           under_scope (
             Eff.foldrM (fun (_sym, bTy) acc ->
@@ -772,13 +790,13 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
               Eff.return ((sym, bTy) :: acc)
             ) [] _sym_bTys      >>= fun sym_bTys ->
             symbolify_pexpr _pe >>= fun pe ->
-            Eff.return (Pmap.add iCst (IFun (bTy, sym_bTys, pe)) impl_acc, globs_acc, fun_map_acc)
+            Eff.return (Pmap.add iCst (IFun (bTy, sym_bTys, pe)) impl_acc, globs_acc, fun_map_acc, tagDefs_acc)
           )
       | Glob_decl (_sym, bTy, _e) ->
           lookup_sym _sym >>= (function
             | Some (decl_sym, _) ->
                 symbolify_expr _e >>= fun e ->
-                Eff.return (impl_acc, (decl_sym, bTy, e) :: globs_acc, fun_map_acc)
+                Eff.return (impl_acc, (decl_sym, bTy, e) :: globs_acc, fun_map_acc, tagDefs_acc)
             | None ->
                 assert false
           )
@@ -792,7 +810,7 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
                 ) [] _sym_bTys      >>= fun sym_bTys ->
                 symbolify_pexpr _pe >>= fun pe ->
                 close_scope >>= fun _ ->
-                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc)
+                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (Fun (bTy, sym_bTys, pe)) fun_map_acc, tagDefs_acc)
             | None ->
                 assert false
           )
@@ -808,18 +826,24 @@ let symbolify_impl_or_file decls : ((Core.impl, Symbol.sym * (Symbol.sym * Core.
                   symbolify_expr _e >>= fun e        ->
                   close_scope >>= fun _ ->
                   Eff.return ( impl_acc, globs_acc
-                             , Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc )
+                             , Pmap.add decl_sym (Proc (decl_loc, bTy, sym_bTys, e)) fun_map_acc, tagDefs_acc)
             | None ->
                 assert false
           end
-  ) (Pmap.empty iCst_compare, [], Pmap.empty sym_compare) decls >>= fun (impl, globs, fun_map) ->
+      | Aggregate_decl (_sym, tags) ->
+          lookup_sym _sym >>= function
+          | Some (decl_sym, _) ->
+              Eff.return (impl_acc, globs_acc, fun_map_acc, Pmap.add decl_sym tags tagDefs_acc)
+          | None ->
+              assert false
+  ) (Pmap.empty iCst_compare, [], Pmap.empty sym_compare, Pmap.empty sym_compare) decls >>= fun (impl, globs, fun_map, tagDefs) ->
   if not (Pmap.is_empty impl) &&  globs = [] && Pmap.is_empty fun_map then
     Eff.return (Left impl)
   else
     (* TODO: check the absence of impl stuff *)
     match startup_sym_opt with
       | Some sym ->
-          Eff.return (Right (sym, globs, fun_map))
+          Eff.return (Right (sym, globs, fun_map, tagDefs))
       | None ->
           Eff.fail Location_ocaml.unknown Core_parser_undefined_startup
 
@@ -881,6 +905,8 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
           | None ->
               assert false
         )
+      | Aggregate_decl ((_, p), _tags) ->
+          Eff.fail (Location_ocaml.region p None) Core_parser_wrong_decl_in_std
   ) (Pmap.empty sym_compare) decls
 
 let symbolify_impl decls : impl Eff.t =
@@ -905,8 +931,8 @@ let mk_file decls =
               raise (Core_parser_util.Core_error err)
           | Right (Left impl, _) ->
               Rimpl impl
-          | Right (Right (main_sym, globs, fun_map), _) ->
-              Rfile (main_sym, globs, fun_map))
+          | Right (Right parsed_file, _) ->
+              Rfile parsed_file)
     | StdMode ->
         (match Eff.runM (symbolify_std decls) initial_symbolify_state with
           | Left err ->
@@ -943,7 +969,7 @@ let mk_file decls =
 
 (* Core constant keywords *)
 %token NULL TRUE FALSE UNIT_VALUE
-%token ARRAY_SHIFT (* MEMBER_SHIFT *) (* TODO *)
+%token ARRAY_SHIFT MEMBER_SHIFT
 %token UNDEF ERROR
 %token<string> CSTRING STRING
 %token SKIP IF THEN ELSE
@@ -958,7 +984,7 @@ let mk_file decls =
 
 (* Core sequencing operators *)
 %token LET WEAK STRONG ATOM UNSEQ IN END INDET BOUND PURE MEMOP PCALL CCALL
-%token SQUOTE LPAREN RPAREN LBRACKET RBRACKET COLON_EQ COLON SEMICOLON COMMA NEG
+%token SQUOTE LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE COLON_EQ COLON SEMICOLON DOT COMMA NEG
 
 
 (* SEMICOLON has higher priority than IN *)
@@ -994,7 +1020,7 @@ let mk_file decls =
 
 
 (* integer values *)
-%token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE
+%token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE ARRAYCTOR
 %token IVCOMPL IVAND IVOR IVXOR
 %token ARRAY SPECIFIED UNSPECIFIED
 
@@ -1190,12 +1216,12 @@ core_object_type:
 *)
 | ARRAY oTy= delimited(LPAREN, core_object_type, RPAREN)
     { OTy_array oTy }
-(*
+(* NOTE: this is a hack to use Symbol.sym instead of _sym!
+ * The symbol is checked later, but we lose the location *)
 | STRUCT tag= SYM
-    { OTy_struct tag }
+    { OTy_struct (Symbol.Symbol (0, Some (fst tag))) }
 | UNION tag= SYM
-    { OTy_union tag }
-*)
+    { OTy_union (Symbol.Symbol (0, Some (fst tag))) }
 ;
 
 core_base_type:
@@ -1248,10 +1274,10 @@ name:
     { Impl i }
 ;
 
-
-
-
-
+cabs_id:
+| n= SYM
+  { Cabs.CabsIdentifier (Location_ocaml.region (snd n) None, fst n) }
+;
 
 memory_order:
 | SEQ_CST { Cmm.Seq_cst }
@@ -1262,10 +1288,8 @@ memory_order:
 | ACQ_REL { Cmm.Acq_rel }
 ;
 
-
-
 ctor:
-| ARRAY
+| ARRAYCTOR
     { Carray }
 | IVMAX
     { Civmax }
@@ -1361,6 +1385,11 @@ list_pexpr:
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
     { mk_list_pe _pes }
 
+member:
+| DOT cid=cabs_id EQ _pe=pexpr
+    { (cid, _pe) }
+;
+
 pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
@@ -1385,9 +1414,8 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some($startpos($1))))], (), PEcase (_pe, _pat_pes)) }
 | ARRAY_SHIFT LPAREN _pe1= pexpr COMMA ty= core_ctype COMMA _pe2= pexpr RPAREN
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEarray_shift (_pe1, ty, _pe2)) }
-(*
-| MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA RPAREN
-*)
+| MEMBER_SHIFT LPAREN _pe1= pexpr COMMA _sym= SYM COMMA DOT cid= cabs_id RPAREN
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEmember_shift (_pe1, _sym, cid)) }
 | NOT _pe= delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)))], (), PEnot _pe) }
 | MINUS _pe= pexpr
@@ -1397,8 +1425,9 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos(bop)))], (), PEop (bop, _pe1, _pe2)) }
 (*
   | PEmemop of Mem.pure_memop * list (generic_pexpr 'ty 'sym)
-  | PEstruct of Symbol.t * list (Cabs.cabs_identifier * generic_pexpr 'ty 'sym)
 *)
+| LPAREN STRUCT _sym=SYM RPAREN _mems= delimited(LBRACE,separated_list (COMMA, member), RBRACE)
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEstruct (_sym, _mems)) }
 | nm= name _pes= delimited(LPAREN, separated_list(COMMA, pexpr), RPAREN)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEcall (nm, _pes)) }
 | LET _pat= pattern EQ _pe1= pexpr IN _pe2= pexpr
@@ -1531,6 +1560,23 @@ def_declaration:
     { Def_decl (dname, bTy, pe_) }
 ;
 
+def_field:
+| cid=cabs_id COLON ty=core_ctype
+  { (cid, ty) }
+;
+
+def_fields:
+| f=def_field               { [ f ] }
+| f=def_field fs=def_fields { f::fs }
+;
+
+def_aggregate_declaration:
+| DEF STRUCT name=SYM COLON_EQ fds=def_fields
+  { Aggregate_decl (name, StructDef fds) }
+| DEF UNION name=SYM COLON_EQ fds=def_fields
+  { Aggregate_decl (name, StructDef fds) }
+;
+
 ifun_declaration:
 | FUN fname= IMPL params= delimited(LPAREN, separated_list(COMMA, separated_pair(SYM, COLON, core_base_type)), RPAREN)
   COLON bTy= core_base_type
@@ -1564,6 +1610,7 @@ declaration:
 | decl= glob_declaration
 | decl= fun_declaration
 | decl= proc_declaration
+| decl= def_aggregate_declaration
     { decl }
 
 %%
