@@ -470,7 +470,7 @@ val constructValue: map identifier tag_definition -> list (init_path * expressio
 let rec constructValue_aux tagDefs path elems (ATypes.Ctype _ ty as cty) =
   match ty with
     | ATypes.Array elem_ty Nothing ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
         ) in
         error "constructValue_aux: Array Nothing"
@@ -2832,7 +2832,7 @@ and foo_aux
                                       )
                                     else () in
                                     let (elems1, elems2) = List.splitAt (List.length membrs) elems in
-                                    let () = Debug.print_debug 0 [] (fun () ->
+                                    let () = Debug.print_debug 1 [] (fun () ->
                                       stringFromList (fun (a,b,c) ->
                                         stringFromInit_path a ^ ", " ^ stringFromInit_path b
                                       ) elems1
@@ -2968,7 +2968,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
   
   let expr = constructValue tagDefs xs current_ty in
 
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "HELLO INITIALIZER_ ==> current_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_ty ^
 (*    "\n desigs ==> " ^ stringFromList stringFromInit_path (elemPathFromCtype_aux tagDefs current_ty) ^ *)
 
@@ -2982,7 +2982,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
                       " := " ^ Pp.stringFromAil_expression expr
                     ) xs
   ) in
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "EXPR: " ^ Pp.stringFromAil_expression expr
   ) in
 

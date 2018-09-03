@@ -172,6 +172,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         pull_helper self (PEstruct sym) xs
     | PEunion sym cid pe ->
         wrap (PEunion sym cid) pe
+    | PEcfunction pe ->
+        wrap PEcfunction pe
     | PEmemberof tag_sym memb_ident pe ->
         wrap (PEmemberof tag_sym memb_ident) pe
     | PEcall nm pes ->
@@ -458,14 +460,13 @@ let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
     | PEsym sym ->
         match Core_aux.lookup_env sym env with
           | Nothing ->
-(*
-              let () = Debug.print_debug 0 [] (fun () ->
-                List.foldl (fun acc (sym, cval) ->
-                  acc ^ show sym ^ " ==> " ^ Pp.stringFromCore_value cval ^ "\n"
-                ) "" (Map_extra.toList env)
-              ) in
-*)
-              EU.fail (Unresolved_symbol sym)
+              (* NOTE: check if it is a procedure pointer *)
+              match Map.lookup sym file.funs with
+                | Just (Proc _ _ _ _) ->
+                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval Core_ctype.Void))))
+                | _ ->
+                    EU.fail (Unresolved_symbol sym)
+              end
           | Just cval ->
               EU.return (PEval cval)
         end
@@ -710,6 +711,8 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
         end
+    | PEcfunction pe ->
+        EU.fail $ Illformed_program ("PEcfunction ==> TODO")
     | PEmemberof tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with

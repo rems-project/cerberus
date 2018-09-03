@@ -78,8 +78,9 @@ let rec core_type_of_expr_ctype ty =
 
 
 let force_core_object_type_of_ctype = function
-  | (*BISECT-IGNORE*) Cty.Pointer _ (Cty.Function (_, ret_ty) xs isVariadic) ->
-      error "Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype"
+(* TODO(V): I am not sure about this *)
+(*  | (*BISECT-IGNORE*) Cty.Pointer _ (Cty.Function (_, ret_ty) xs isVariadic) ->
+      error "Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype" *)
   | ty ->
       match Caux.core_object_type_of_ctype ty with
         | Just oTy ->
@@ -265,14 +266,30 @@ type expr_ctx =
 
 
 
-val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit)
-let rec translate_function_designator stdlib (A.AnnotatedExpression _ _ (* TODO: loc *) _ expr as a_expr) =
-  let (Aty.Ctype _ cty) = ctype_of a_expr in
+(* val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit) *)
+let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression _ _ (* TODO: loc *) _ expr as a_expr) =
+  let (Aty.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
+    (* | (Aty.Pointer _ (Aty.Ctype _ (Aty.Function has_proto _ params is_variadic)), A.AilErvalue e) -> *)
+    | (Aty.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
+         let nparams = List.length params in
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction (* TODO: *) Nothing nparams is_variadic)) *)
+            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
+         translate_expression ctx stdlib tagDefs e >>= fun core_e ->
+        (* TODO: check the std regarding prototype stuff *)
+        E.return $
+          C.Expr [] (
+          C.Esseq fun_sym_pat core_e (
+          Caux.mk_pure_e ( Caux.mk_sym_pe fun_sym
+          (*  Caux.mk_tuple_pe 
+              [ Caux.mk_cfunction_pe fun_sym  might use the pe? *)
+            (*  ; Caux.mk_integer_pe (integerFromNat nparams)
+              ; Caux.mk_boolean_pe is_variadic ]
+              )*)
+          )))
 (*
-    | (Aty.Pointer _ (Aty.Function has_proto _ params is_variadic), A.AilEident fid) ->
-*)
-    | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
+    | (Aty.Pointer _ (Aty.Ctype _ (Aty.Function has_proto _ params is_variadic)),
+          A.AilErvalue (A.AnnotatedExpression _ _ _ (A.AilEident fid))) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ (Just str) ->
               match Map.lookup str stdlib.ailnames with
@@ -293,9 +310,34 @@ let rec translate_function_designator stdlib (A.AnnotatedExpression _ _ (* TODO:
               ; Caux.mk_integer_pe (integerFromNat $ List.length params)
               ; Caux.mk_boolean_pe is_variadic ]
           )
+        *)
+    | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
+        let fid_pe = match fid with
+          | Symbol.Symbol _ (Just str) ->
+              match Map.lookup str stdlib.ailnames with
+                | Just sym ->
+                    Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval sym))))
+                    (* Caux.mk_cfunction_pe sym *)
+                | Nothing ->
+                    Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval fid))))
+                    (* Caux.mk_cfunction_pe fid *)
+              end
+          | _ ->
+              Caux.mk_value_pe (Core.Vloaded (C.LVspecified( (Core.OVpointer (Mem.fun_ptrval fid)))))
+              (* Caux.mk_cfunction_pe fid *)
+        end in
+
+        (* TODO: check the std regarding prototype stuff *)
+        E.return $
+          Caux.mk_pure_e (
+           (* Caux.mk_tuple_pe
+              [ *)fid_pe
+             (* ; Caux.mk_integer_pe (integerFromNat $ List.length params)
+              ; Caux.mk_boolean_pe is_variadic ]
+          *))
     | (*BISECT-IGNORE*) _ ->
         error ("[Translation.translate_function_designator] wildcard case ==> " ^
-               Pp.stringFromAil_expression a_expr)
+               Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromAil_ctype Aty.no_qualifiers ty)
   end
 
 
@@ -765,13 +807,13 @@ and translate_expression ctx stdlib (tagDefs : Core.core_tag_definitions) a_expr
                   )
 
             | _ ->
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "is_arithmetic ty1: " ^ (if AilTypesAux.is_arithmetic ty1 then "true" else "false")
                 ) in
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "is_arithmetic ty2: " ^ (if AilTypesAux.is_arithmetic ty2 then "true" else "false")
                 ) in
-                let () = Debug.print_debug 0 [] (fun () ->
+                let () = Debug.print_debug 1 [] (fun () ->
                   "ty1: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty1 ^
                   ", ty2: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty2 ^
                   ", e1: " ^ Pp.stringFromCore_pexpr e1 ^
@@ -896,7 +938,8 @@ else
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
-          if AilTypesAux.is_object result_ty then
+          if AilTypesAux.is_object (ctype_of e) (* TODO(V): the result type is always an object (it is a pointer) result_ty *) then
+            let _ = Debug.print_debug 1 [] (fun _ -> "aileunary adress, result type: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers result_ty) in
              E.fresh_symbol >>= fun sym    ->
              self e         >>= fun core_e ->
 (*             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in *)
@@ -909,7 +952,9 @@ else
                  )
                )
           else
-            translate_function_designator stdlib e
+            let _ = Debug.print_debug 1 [] (fun _ -> "call to function designator through aileunary adress") in
+            (* TODO: this is wrong, I only want the pointer here *)
+            translate_function_designator ctx stdlib tagDefs e
       
       (* TODO: promotion? + atomicity *)
       | A.AilEunary A.PostfixIncr e ->
@@ -1037,7 +1082,9 @@ end
           (* TODO: if e is a pointer to a function *)
 if AilTypesAux.is_pointer_to_function (ctype_of e) then
           (* STD 6.5.3.2#4 *)
-          error "WIP: Elaboration, A.Indirection, function designator"
+          (* maybe need the ailrvalue stuff *)
+          translate_function_designator ctx stdlib tagDefs e
+          (* error "WIP: Elaboration, A.Indirection, function designator" *)
 else
           E.fresh_symbol >>= fun e_sym    ->
           E.fresh_symbol >>= fun obj_sym  ->
@@ -1799,6 +1846,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
            )
   | Nothing ->
         (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
+        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers (ctype_of e2)) in
         self e2 >>= fun core_e2 ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e2_sym_pat, e2_sym_pe) ->
         E.return (
@@ -1846,7 +1894,7 @@ end
 
 
       | A.AilEcompoundAssign e1 aop e2 ->
-          let () = Debug.print_debug 0 [] (fun () ->
+          let () = Debug.print_debug 1 [] (fun () ->
             "HACK!!!! => AilEcompoundAssign is WIP and only doing +="
           ) in
           (* TODO: check sequencing with respect to indet function calls *)
@@ -2117,18 +2165,34 @@ TODO: #9
           end in
           (* TODO: could do a check that |bTys| = 0 ? *)
           self e >>= fun core_e ->
-          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic)) *)
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)
             >>= fun (nparams_sym, nparams_sym_pat, nparams_sym_pe) ->
           E.wrapped_fresh_symbol C.BTy_boolean
             >>= fun (is_variadic_sym, is_variadic_sym_pat, is_variadic_sym_pe) ->
+
+
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, arg_CHANGETHIS_sym_pat, arg_CHANGETHIS_sym_pe) ->
+
+
           
           E.return $
             (* TODO: indet + check that wseq is right *)
             Caux.mk_wseq_e
               (Caux.mk_tuple_pat [fun_sym_pat; nparams_sym_pat; is_variadic_sym_pat])
-              core_e
+ ( (* TODO(V): WIP: this will go away soon!! *)
+          C.Expr [] (
+          C.Esseq arg_CHANGETHIS_sym_pat core_e (
+          Caux.mk_pure_e (
+            Caux.mk_tuple_pe
+              [ arg_CHANGETHIS_sym_pe
+              ; Caux.mk_integer_pe (integerFromNat nparams)
+              ; Caux.mk_boolean_pe isVariadic ]
+              )
+          ))
+)
+              (* core_e *)
               begin
                 Caux.mk_if_e (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe 0))
                   (C.Expr [] (C.Eccall default fun_sym_pe []))
@@ -2150,7 +2214,7 @@ TODO: #9
           let numberOfArguments = List.length es in
           self e >>= fun core_e ->
           (* TODO: Shouldn't we check if the expression e has a prototype? As in 6.5.2#7? *)
-          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic)) *)
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (nparams_sym,    nparams_sym_pat,    nparams_sym_pe)    ->
           E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (isVariadic_sym, isVariadic_sym_pat, isVariadic_sym_pe) ->
@@ -2200,6 +2264,10 @@ TODO: #9
               )
             )
           ) (combine_params_args params es) >>= fun core_creates ->
+
+
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, arg_CHANGETHIS_sym_pat, arg_CHANGETHIS_sym_pe) ->
+
           (* STD (§6.5.2.2#10, sentence 1) says there is sequence "point after the
              evaluations of the function designator and the actual arguments but before
              the actual call." *)
@@ -2211,7 +2279,21 @@ TODO: #9
                    (Caux.mk_tuple_pat [ fun_sym_pat; nparams_sym_pat; isVariadic_sym_pat ]) ::
                    List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
                 end
-                  (C.Expr [Annot.Astd "§6.5.2.2#4, sentence 2"] (C.Eunseq (core_e :: core_creates)))
+                  (C.Expr [Annot.Astd "§6.5.2.2#4, sentence 2"] (C.Eunseq (
+ ( (* TODO(V): WIP: this will go away soon!! *)
+          C.Expr [] (
+          C.Esseq arg_CHANGETHIS_sym_pat core_e (
+          Caux.mk_pure_e (
+            Caux.mk_tuple_pe
+              [ arg_CHANGETHIS_sym_pe
+              ; Caux.mk_integer_pe (integerFromNat nparams)
+              ; Caux.mk_boolean_pe isVariadic ]
+              )
+          ))
+)
+                    (* NOTE: making a triplet here instead of in the function designator (TODO: check if this make sense) *)
+                      
+                      :: core_creates)))
           end
                 <$> begin
                   (* not (if isVariadic then nparams <= args else nparams = args) *)
@@ -2696,6 +2778,9 @@ a
                 error "TODO: AilEarray_decay, rvalue"
           end
       | A.AilEfunction_decay e ->
+          (* TODO(V): NOT SURE *)
+          (* self e *)
+          translate_function_designator ctx stdlib tagDefs e
 (*
           let (ret_oTy_opt, nparams, isVariadic) = match Caux.proj_ctype (ctype_of e) with
             | Cty.Function (_, ret_ty) qs_tys isVariadic ->
@@ -2718,7 +2803,7 @@ a
               end
           end
 *)
-          translate_function_designator stdlib e
+        (*  translate_function_designator stdlib e *)
     end
 
 

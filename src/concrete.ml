@@ -377,7 +377,8 @@ module Concrete : Memory = struct
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
-          !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
+          !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
+          (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
 (*
@@ -601,7 +602,13 @@ module Concrete : Memory = struct
           (begin match extract_unspec bs1' with
             | Some cs ->
                 let n = int64_of_bytes false cs in
-                MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                begin match ref_ty with
+                  | Function0 _ ->
+                    (* TODO: this is a quick solution, but maybe not a very good one: *)
+                    MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, None))))
+                  | _->
+                    MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                end
             | None ->
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
@@ -704,8 +711,13 @@ module Concrete : Memory = struct
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
-            | PVfunction _ ->
-                failwith "TODO: explode_bytes, PVfunction"
+            | PVfunction (Symbol.Symbol (n, _)) ->
+                (* TODO(V): *)
+                List.map (fun z -> (prov, z)) begin
+                  bytes_of_int64
+                      false
+                      ptr_size (N.of_int n)
+                end
             | PVconcrete addr ->
                 List.map (fun z -> (prov, z)) begin
                   bytes_of_int64
@@ -1047,9 +1059,10 @@ module Concrete : Memory = struct
   let concrete_ptrval i addr =
     PV (Prov_some i, PVconcrete addr)
 
-  let case_ptrval pv fnull fconc _ =
+  let case_ptrval pv fnull ffun fconc _ =
     match pv with
     | PV (_, PVnull ty) -> fnull ty
+    | PV (_, PVfunction f) -> ffun f
     | PV (Prov_none, PVconcrete addr) -> fconc None addr
     | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
     | _ -> failwith "case_ptrval"

@@ -383,9 +383,9 @@ let rec drive_core_thread tid =
         ( "Step_done"
         , ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
-              <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval cval)));
+              <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
                  Core_run_aux.stack= Core.Stack_empty;
-                (* Dymmy locations *)
+                (* Dummy locations *)
                  Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
                  Core_run_aux.current_loc= Loc.unknown;
                  Core_run_aux.current_uid= Nothing;
