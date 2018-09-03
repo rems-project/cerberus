@@ -562,13 +562,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           (* TODO: maybe this is too strict and we want to relax to only having
              the types compatibles? *)
           if inject_type elem_ty <> gty then
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "elem_ty: " ^ Pp.stringFromAil_ctype no_qualifiers elem_ty
             ) in
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "gty: " ^ Pp.stringFromAil_genType gty
             ) in
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "expr: " ^ Pp.stringFromAil_expression expr
             ) in
             E.fail loc (TError "illtyped element of an AilEarray")
@@ -723,7 +723,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Ctype [] (Function has_proto (ret_qs, ret_ty) params is_variadic))) ->
+          | (e', GenPointer qs (Ctype _ (Function has_proto (ret_qs, ret_ty) params is_variadic))) ->
               (* TODO: qualifiers *)
               let () = Debug.warn [] (fun () ->
                 "(unsure) the typing of AilEcall doesn't look at [ret_qs]"
@@ -739,7 +739,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
                 error "annotate_expression(AilEcall): function decay pointer should not be qualified"
-          | _ ->
+          | (_, gty) ->
               E.constraint_violation loc FunctionCallIncorrectType
         end
     
@@ -1033,7 +1033,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         if well_typed_equality gty1 gty2 (is_null_pointer_constant e1') (is_null_pointer_constant e2') then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         else
-          let () = Debug.print_debug 0 [] (fun () ->
+          let () = Debug.print_debug 1 [] (fun () ->
             "gty1: " ^ Pp.stringFromAil_genType gty1 ^
             " <--> gty2: " ^ Pp.stringFromAil_genType gty2 ^
             " , are_pointers_to_compatible_types: " ^
@@ -1591,7 +1591,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
                error ("WIP: annotate_definition_aux, is_array_of_character ty ==> " ^
                       Pp.stringFromAil_ctype no_qualifiers ty ^ " <===> " ^ Pp.stringFromAil_expression a_e)
              else
-               let () = Debug.print_debug 0 [] (fun () ->
+               let () = Debug.print_debug 1 [] (fun () ->
                  "ty: " ^ Pp.stringFromAil_ctype no_qualifiers ty ^ " <--> gty: " ^
                  match GenTypes.genTypeCategoryOf a_e with
                    | GenLValueType qs' ty' _ ->

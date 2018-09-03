@@ -695,20 +695,20 @@ let pp_fun_map funs =
     if show_include || Location_ocaml.from_main_file loc then d else P.empty
   in
   Pmap.fold (fun sym decl acc ->
-    acc ^^ P.hardline ^^
+    acc ^^
     match decl with
       | Fun  (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline ^^ P.hardline
       | ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
       | Proc (loc, bTy, params, e) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline ^^ P.hardline
     ) funs P.empty
 
 

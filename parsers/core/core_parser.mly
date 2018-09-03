@@ -338,8 +338,11 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEval (Vobject (OVpointer ptrval)) ->
         Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer ptrval))))
     | PEval (Vobject (OVcfunction _nm)) ->
-        symbolify_name _nm >>= fun nm ->
-        Eff.return (Pexpr (annot, (), PEval (Vobject (OVcfunction nm))))
+        (* TODO(V): CHANGING THE MEANING OF THIS KEYWORD *)
+        symbolify_name _nm >>= (function
+        | Sym sym ->
+          Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer (Ocaml_mem.fun_ptrval sym)))))
+        | _ -> failwith "PANIC")
     | PEval Vunit ->
         Eff.return (Pexpr (annot, (), PEval Vunit))
     | PEval Vtrue ->
@@ -520,6 +523,9 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         symbolify_sym _tag_sym >>= fun tag_sym ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr (annot, (), PEunion (tag_sym, member_ident, pe)))
+    | PEcfunction _pe ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr (annot, (), PEcfunction pe))
     | PEmemberof (tag_sym, member_ident, _pe) ->
         failwith "WIP: PEmemberof"
     | PEcall (_nm, _pes) ->

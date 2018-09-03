@@ -143,6 +143,9 @@ type state = <|
   
   (* the execution trace so far (stored in reversed) *)
   trace: trace;
+
+  (* signals handlers *)
+  signals: Map.map Mem.integer_value Mem.pointer_value
   
   (* IO (TODO: hackish for now) *)
   io: io_state;
@@ -415,6 +418,7 @@ let initial_state execution_mode file cont_map = <|
   tact_map=       Map.empty;
   trace=          [];
   io=             initial_io_state;
+  signals=        Map.empty;
 |>
 
 

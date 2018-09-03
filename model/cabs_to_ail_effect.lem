@@ -1318,7 +1318,7 @@ let register_global_object_definition2 loc sym link gdef =
                     constraint_violation loc (Constraint.ExternalRedefinition sym)
                 | Linkage_external ->
                     (* STD §6.9#5, sentence 2 *)
-                    let () = Debug.print_debug 0 [] (fun () ->
+                    let () = Debug.print_debug 1 [] (fun () ->
                       "register_global_object_definition2"
                     ) in
                     undef loc Undefined.UB084
@@ -1418,18 +1418,18 @@ let register_function_declaration loc sym is_proto decl =
         let prev_fun_ty = ATypes.Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
         let new_fun_ty  = ATypes.Function is_proto new_ret_qs_ty new_params new_is_variadic in
         
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "PREVIOUS qs,ty ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers prev_fun_ty
         ) in
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "NEW qs,ty ==> " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers new_fun_ty
         ) in
         
         let () = match AilTypesAux.make_composite prev_fun_ty new_fun_ty with
           | Just compo_ty ->
-              Debug.print_debug 0 [] (fun () -> "make_composite WORKED: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers compo_ty)
+              Debug.print_debug 1 [] (fun () -> "make_composite WORKED: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers compo_ty)
           | Nothing ->
-              Debug.print_debug 0 [] (fun () -> "make_composite FAILED")
+              Debug.print_debug 1 [] (fun () -> "make_composite FAILED")
         end in
 *)
 
@@ -1512,7 +1512,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
                     <| st with external_object_declarations= Map.insert sym new_decl st.external_object_declarations |>
                   )
               | Nothing ->
-                  let () = Debug.print_debug 0 [] (fun () ->
+                  let () = Debug.print_debug 1 [] (fun () ->
                     "prev_ty= " ^ Pp.stringFromAil_ctype prev_qs prev_ty ^ "\n" ^
                     "new_ty= " ^ Pp.stringFromAil_ctype new_qs new_ty
                   ) in
@@ -1788,7 +1788,7 @@ let extract_program startup_str =
              && List.lookup sym object_defs = Nothing
              && not (Map.member sym st.function_definitions) then
             (* STD §6.9#5, sentence 2 *)
-            let () = Debug.print_debug 0 [] (fun () ->
+            let () = Debug.print_debug 1 [] (fun () ->
               "extract_program"
             ) in
             undef (Loc.locOf ident) Undefined.UB084

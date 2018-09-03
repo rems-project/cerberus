@@ -867,11 +867,15 @@ BEFORE EVAL_PEXPR2
     
     | (Eccall annots pe pes, sk) ->
         one match valueFromPexpr pe with
-          | Just (Vobject (OVcfunction nm)) ->
+          (*| Just (Vobject (OVcfunction nm)) ->*)
+          (* TODO(V) TODO(VICTOR) *)
+          | Just (Vloaded (LVspecified (OVpointer pv))) ->
+            let err a = error ("HELP!!:" ^ a) in
+            let run psym =
               match valueFromPexprs pes with
                 | Just cvals ->
-                    match nm with
-                      | Sym psym ->
+                   (* match nm with
+                      | Sym psym -> *)
                           Step_tau "Eccall" (
                             SEU.runEU (
                               Exception.bind (call_proc file psym cvals)
@@ -888,9 +892,9 @@ BEFORE EVAL_PEXPR2
                               exec_loc= push_exec_loc psym th_st.exec_loc
                             |>
                           )
-                      | _ ->
-                          error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena)
-                    end
+                    (*  | _ ->
+                          error ("WIP: Eccall ==> " ^ Pp.stringFromCore_expr th_st.arena) *)
+                   (* end *)
                 | Nothing ->
                     Step_eval "Eccall" (
                       let () = Debug.print_debug 4 [] (fun () -> "XX 16") in
@@ -898,6 +902,7 @@ BEFORE EVAL_PEXPR2
                       E.return <| th_st with arena= Expr arena_annots (Eccall annots pe pes') |>
                     )
               end
+            in Mem.case_ptrval pv (fun _ -> err "NULL") run (fun _ _ -> err "CONCRETE") (fun _ -> err "UNSPEC")
           | Just cval ->
               Step_error ((Loc.stringFromLocation th_st.current_loc) ^ "the first argument of pcall() must evaluate to a cfunction, found: " ^
                 Pp.stringFromCore_value cval ^ "")
@@ -939,6 +944,25 @@ BEFORE EVAL_PEXPR2
                         exec_loc= push_exec_loc psym th_st.exec_loc
                       |>
                     )
+                (* 7.14 Signal handling <signal.h> *)
+                | Impl (StdFunction "signal") ->
+                    match cvals with
+                      | [Vobject (OVinteger signal); Vobject (OVpointer ptrval)] ->
+                          (* should we check whether the ptrval is a function pointer? *)
+                          error "WIP: signal"
+                      | _ ->
+                          error ("Core_run, signal giving arguments of wrong types ==> "
+                                  ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                | Impl (StdFunction "raise") ->
+                    match cvals with
+                      | [Vobject (OVinteger ival)] ->
+                          error "WIP: raise signal"
+                      | _ ->
+                          error ("Core_run, raise giving arguments of wrong types ==> "
+                                  ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                (* 7.21 Input/output <stdio.h> *)
                 | Impl (StdFunction "snprintf") ->
                     (* TODO: factorise with the printf code *)
                     match cvals with
@@ -1000,17 +1024,6 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "exit") ->
-                    (* TODO: it should close all open resources *)
-                    match cvals with
-                      | [cval] -> Step_done cval
-                      | _ -> error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-                    end
-                | Impl (StdFunction "_Exit") ->
-                    match cvals with
-                      | [cval] -> Step_done cval
-                      | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-                    end
                 | Impl (StdFunction "printf") ->
                     match cvals with
                       | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
@@ -1038,6 +1051,18 @@ BEFORE EVAL_PEXPR2
                            )
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                (* 7.22 General utilities <stdlib.h> *)
+                | Impl (StdFunction "exit") ->
+                    (* TODO: it should close all open resources *)
+                    match cvals with
+                      | [cval] -> Step_done cval
+                      | _ -> error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+                | Impl (StdFunction "_Exit") ->
+                    match cvals with
+                      | [cval] -> Step_done cval
+                      | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)

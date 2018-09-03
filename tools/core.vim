@@ -47,10 +47,10 @@ hi def link loaded      StorageClass
 hi def link lineComment Comment
 hi def link comment     Comment
 
-hi def link ctor        PreProc
+hi def link ctor        Identifier
 
-hi def link error       Special
+hi def link error       PreProc
 
-hi def link ident       Identifier
+"hi def link ident       Identifier
 
 let b:current_syntax = "core"

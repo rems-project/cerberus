@@ -83,7 +83,11 @@ declare ocaml target_rep function fun_ptrval = `Ocaml_mem.fun_ptrval`
 
 (*TODO: revise that, just a hack for codegen*)
 val concrete_ptrval: integer -> integer -> pointer_value
-val case_ptrval: forall 'a. pointer_value -> (Core_ctype.ctype -> 'a) -> (maybe integer -> integer -> 'a) -> (unit -> 'a) -> 'a
+val case_ptrval: forall 'a. pointer_value ->
+   (* null pointer *) (Core_ctype.ctype -> 'a) ->
+   (* function pointer *) (Symbol.sym -> 'a) ->
+   (* concrete pointer *) (maybe integer -> integer -> 'a) ->
+   (* unspecified value *) (unit -> 'a) -> 'a
 declare ocaml target_rep function concrete_ptrval = `Ocaml_mem.concrete_ptrval`
 declare ocaml target_rep function case_ptrval = `Ocaml_mem.case_ptrval`
 

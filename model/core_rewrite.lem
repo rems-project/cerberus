@@ -717,6 +717,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEstruct sym (List.map (fun (ident, pe) -> (ident, remove_conv_int_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
         PEunion sym ident (remove_conv_int_pexpr pe)
+    | PEcfunction pe ->
+        PEcfunction (remove_conv_int_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         PEmemberof tag_sym memb_ident (remove_conv_int_pexpr pe)
     | PEcall nm pes ->
@@ -1027,6 +1029,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         List.all (fun (_, pe) -> isAlwaysDefined pe) ident_pes
     | PEunion _ _ pe ->
         isAlwaysDefined pe
+    | PEcfunction pe ->
+        isAlwaysDefined pe
     | PEmemberof _ _ pe ->
         isAlwaysDefined pe
     | PEcall _ pes ->
@@ -1312,6 +1316,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEstruct sym (List.map (fun (ident, pe) -> (ident, simpl_case_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
         wrap $ PEunion sym ident (simpl_case_pexpr pe)
+    | PEcfunction pe ->
+        wrap $ PEcfunction (simpl_case_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         wrap $ PEmemberof tag_sym memb_ident (simpl_case_pexpr pe)
     | PEcall nm pes ->

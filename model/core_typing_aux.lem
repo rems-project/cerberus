@@ -235,6 +235,8 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
     | PEunion sym memb_ident pe ->
         PEunion sym memb_ident <$>
           export_pexpr pe
+    | PEcfunction pe ->
+        PEcfunction <$> export_pexpr pe
     | PEmemberof tag_sym memb_ident pe ->
         PEmemberof tag_sym memb_ident <$>
           export_pexpr pe

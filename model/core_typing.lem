@@ -701,6 +701,8 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
                     end
               end
         end
+    | PEcfunction pe ->
+        E.fail loc (CoreTyping_TODO "PEcfunction: core_typing TODO")
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Core_ctype.StructDef xs ->
@@ -1034,6 +1036,8 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                     end
               end
         end
+    | PEcfunction pe ->
+        E.fail loc (CoreTyping_TODO "PEcfunction: core_typing TODO")
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Core_ctype.StructDef xs ->
@@ -1392,9 +1396,12 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         infer_pexpr tagDefs env pe >>=
           export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
         match bTy with
-          | BTy_object (OTy_cfunction ret_oTy_opt nparams isVariadic) ->
+          (* | BTy_object (OTy_cfunction ret_oTy_opt nparams isVariadic) -> *)
+          (* TODO: check if this pointer is to a function? *)
+          | BTy_loaded OTy_pointer ->
+            
               begin
-                if isVariadic then
+              (*  if isVariadic then
                   match List.dest_init pes with
                     | Nothing ->
                         E.fail loc (CoreTyping_TODO "ccall to a variadic C procedure must at least have a list of pointers as last argument")
@@ -1406,12 +1413,13 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
                           (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
                         E.return (first_pes' ++ [last_pe'])
                   end
-                else
+                else *)
                   E.mapM (fun pe ->
                     typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
                   ) pes
               end >>= fun pes' ->
-              guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
+              (* guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >> *)
+            
               E.return (Eccall () pe' pes')
           | _ ->
               E.fail loc (CoreTyping_TODO "the first operand of ccall() should have a C function type")
@@ -1549,6 +1557,10 @@ let typecheck_program file =
             insert_tdecl (Impl iCst) (TDfun bTy (List.map snd sym_bTys)) acc
       end) file.impl
     (* TODO: do this is a principled way *)
+      (insert_tdecl (Impl (I.StdFunction "signal")) (TDproc (BTy_loaded OTy_pointer)
+        [ BTy_object OTy_integer; BTy_object OTy_pointer ])
+      (insert_tdecl (Impl (I.StdFunction "exit")) (TDproc BTy_unit [ BTy_loaded OTy_integer ])
+      (insert_tdecl (Impl (I.StdFunction "_Exit")) (TDproc BTy_unit [ BTy_loaded OTy_integer ])
       (insert_tdecl (Impl (I.StdFunction "snprintf")) (TDproc (BTy_loaded OTy_integer)
         [ BTy_object OTy_pointer
         ; BTy_object OTy_integer
@@ -1560,7 +1572,7 @@ let typecheck_program file =
         ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ])
       (insert_tdecl (Impl (I.StdFunction "printf")) (TDproc (BTy_loaded OTy_integer)
         [ BTy_list (BTy_object OTy_integer)
-        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ]) empty_env ))) in
+        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ]) empty_env )))))) in
     
     (* Then typechecks them *)
     E.mapMapM (fun _ decl ->

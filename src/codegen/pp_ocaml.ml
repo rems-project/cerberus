@@ -304,6 +304,7 @@ let print_float_value fv =
 let print_pointer_value pv =
   Ocaml_mem.case_ptrval pv
     (fun _ -> !^"RT.mk_null_void")
+    (fun _ -> failwith "ERROR")
     (fun opt_i addr -> !^"RT.mk_pointer"
                        ^^^ print_option (fun n -> P.dquotes (!^(Nat_big_num.to_string n))) opt_i
                        ^^^ P.dquotes (!^(Nat_big_num.to_string addr)))
