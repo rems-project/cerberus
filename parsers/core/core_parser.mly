@@ -595,10 +595,11 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
        )
    | Eskip ->
        Eff.return Eskip
-   | Eccall ((), _pe, _pes) ->
+   | Eccall ((), _pe_ty, _pe, _pes) ->
+       symbolify_pexpr _pe_ty        >>= fun pe_ty ->
        symbolify_pexpr _pe           >>= fun pe  ->
        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
-       Eff.return (Eccall ((), pe, pes))
+       Eff.return (Eccall ((), pe_ty, pe, pes))
    | Eproc ((), _nm, _pes) ->
        symbolify_name _nm            >>= fun nm  ->
        Eff.mapM symbolify_pexpr _pes >>= fun pes ->
@@ -1481,12 +1482,12 @@ expr:
 | PCALL LPAREN _nm= name COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eproc ((), _nm, _pes) ) }
-| CCALL LPAREN _pe= pexpr RPAREN
+| CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr RPAREN
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
-           , Eccall ((), _pe, []) ) }
-| CCALL LPAREN _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
+           , Eccall ((), _pe_ty, _pe, []) ) }
+| CCALL LPAREN  _pe_ty= pexpr COMMA _pe= pexpr COMMA _pes= separated_nonempty_list(COMMA, pexpr) RPAREN
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
-           , Eccall ((), _pe, _pes) ) }
+           , Eccall ((), _pe_ty, _pe, _pes) ) }
 | _pact= paction
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eaction _pact ) }

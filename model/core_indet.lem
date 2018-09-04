@@ -402,7 +402,7 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
         Core.Expr annot (Core.Elet sym pe1 (indet_hack e2))
     | Core.Eif pe1 e2 e3 ->
         Core.Expr annot (Core.Eif pe1 (indet_hack e2) (indet_hack e3))
-    | Core.Eccall _ _ _ ->
+    | Core.Eccall _ _ _ _ ->
         expr
     | Core.Eproc _ _ _ ->
         expr

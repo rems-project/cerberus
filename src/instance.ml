@@ -310,7 +310,8 @@ let instance debug_level =
     recover stdout; send result;
     Debug.print 7 "Instance has successfully finished."
   with e ->
-    Debug.error ("Exception raised in instance: " ^ Printexc.to_string e)
+    Debug.error ("Exception raised in instance: " ^ Printexc.to_string e);
+    send (Failure ("Exception raised in instance: " ^ Printexc.to_string e))
 
 (* Arguments *)
 

@@ -88,7 +88,7 @@ let rec fv_core (Expr (_, e_)) fvs =
   | Epure pe            -> fv_pe pe fvs
   | Ememop (memop, pes) -> List.fold_left (flip fv_pe) fvs pes
   | Eaction act         -> fv_act act fvs
-  | Eccall (_, nm, pes) -> List.fold_left (flip fv_pe) fvs (nm::pes)
+  | Eccall (_, _, nm, pes) -> List.fold_left (flip fv_pe) fvs (nm::pes)
   | Eproc  (_, nm, pes) -> List.fold_left (flip fv_pe) fvs pes
   | Eskip               -> fvs
   | Esave (_, ps, e) ->

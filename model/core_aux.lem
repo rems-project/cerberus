@@ -899,8 +899,8 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Ecase (subst_sym_pexpr sym cval pe) (List.map (fun (pat, e) ->
           (pat, if in_pattern sym pat then e else subst_sym_expr sym cval e)
         ) pat_es)
-    | Eccall annot pe pes ->
-        Eccall annot (subst_sym_pexpr sym cval pe)
+    | Eccall annot pe1 pe2 pes ->
+        Eccall annot (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
           (List.map (subst_sym_pexpr sym cval) pes)
     | Eproc annot nm pes ->
         Eproc annot nm (List.map (subst_sym_pexpr sym cval) pes)
@@ -1142,8 +1142,9 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Ecase (unsafe_subst_sym_pexpr sym pe' pe) (List.map (fun (pat, e) ->
           (pat, if in_pattern sym pat then e else unsafe_subst_sym_expr sym pe' e)
         ) pat_es)
-    | Eccall annot pe pes ->
-        Eccall annot (unsafe_subst_sym_pexpr sym pe' pe) (List.map (unsafe_subst_sym_pexpr sym pe') pes)
+    | Eccall annot pe1 pe2 pes ->
+        Eccall annot (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
+          (List.map (unsafe_subst_sym_pexpr sym pe') pes)
     | Eproc annot nm pes ->
         Eproc annot nm (List.map (unsafe_subst_sym_pexpr sym pe') pes)
     | Eaction pact ->
@@ -1332,7 +1333,7 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
           | _ ->
               Nothing
         end
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         Nothing
     | Eproc _ _ _ ->
         Nothing
@@ -1419,7 +1420,7 @@ let rec subst_wait tid v (Expr annot expr_) =
       Eif pe1 (subst_wait tid v e2) (subst_wait tid v e3)
   | Ecase pe pat_es ->
       Ecase pe (List.map (fun (pat, e) -> (pat, subst_wait tid v e)) pat_es)
-  | Eccall _ _ _ ->
+  | Eccall _ _ _ _ ->
       expr_
   | Eproc _ _ _ ->
       expr_
@@ -1531,7 +1532,7 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         end
     | Eskip ->
         Nothing
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         Nothing
     | Eproc _ _ _ ->
         Nothing
@@ -1610,7 +1611,7 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
         find_labeled_continuation2_aux acc' sym e3
     | Eskip ->
         acc
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         acc
     | Eproc _ _ _ ->
         acc
@@ -1791,7 +1792,7 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.empty (* TODO THIS IS WRONG!!!!! *)
     | Eproc _ _ _ ->
         Map.empty
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         Map.empty
     | Eaction _ ->
         Map.empty
@@ -2052,7 +2053,7 @@ let rec set_uid_e uid n (Expr annots e_) =
   | Elet pat pe e -> Elet pat (set_uid_pe uid' 0 pe) (self 1 e)
   | Eif pe e1 e2 -> Eif (set_uid_pe uid' 0 pe) (self 1 e1) (self 2 e2)
   | Eskip -> Eskip
-  | Eccall x pe args -> Eccall x (set_uid_pe uid' 0 pe) (pure_uids args)
+  | Eccall x pe1 pe2 args -> Eccall x (set_uid_pe uid' 0 pe1) (set_uid_pe uid' 0 pe2) (pure_uids args)
   | Eproc x name args -> Eproc x name (pure_uids args)
   | Eunseq es -> Eunseq (selfs es)
   | Ewseq pat e1 e2 -> Ewseq pat (self 1 e1) (self 2 e2)
@@ -2120,7 +2121,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
         collect_saves_aux (collect_saves_aux st e1) e2
     | Eskip ->
         st
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         st
     | Eproc _ _ _ ->
         st

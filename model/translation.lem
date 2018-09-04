@@ -2195,7 +2195,7 @@ TODO: #9
               (* core_e *)
               begin
                 Caux.mk_if_e (Caux.mk_op_pe C.OpEq nparams_sym_pe (Caux.mk_integer_pe 0))
-                  (C.Expr [] (C.Eccall default fun_sym_pe []))
+                  (C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe []))
                   (Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB039))
               end
       
@@ -2308,7 +2308,7 @@ TODO: #9
                     <$> begin
                       if numberOfArguments = 0 then
                         (* If there are no arguments, we don't need all the temporary object creation stuff *)
-                        E.return (C.Expr [] (C.Eccall default fun_sym_pe []))
+                        E.return (C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe []))
                       else
                         (* TODO: WIP *)
                         E.return (
@@ -2330,7 +2330,7 @@ TODO: #9
                                    xs ++ [Caux.mk_list_pe ys]
                                 else
                                    xs in
-                              C.Expr [] (C.Eccall default fun_sym_pe arg_ptr_syms_pes)
+                              C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe arg_ptr_syms_pes)
                             end
                             begin
                               let bTy =

@@ -175,16 +175,16 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
   Core_parser_driver.parse sym_counter core_stdlib filename >>= function
-    | Core_parser_util.Rfile (sym_main, globs, funs) ->
-        return (None, None, Symbol.Symbol (!sym_counter, None),
-                { Core.main=   Some sym_main;
-                  Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
-                  Core.stdlib= snd core_stdlib;
-                  Core.impl=   core_impl;
-                  Core.globs=  globs;
-                  Core.funs=   funs
-                })
-    (* TODO: add this to the general error handling mechanism *)
+    | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
+        Tags.set_tagDefs tagDefs;
+        return (Symbol.Symbol (!sym_counter, None), {
+           Core.main=   Some sym_main;
+           Core.tagDefs= tagDefs;
+           Core.stdlib= snd core_stdlib;
+           Core.impl=   core_impl;
+           Core.globs=  globs;
+           Core.funs=   funs
+         })
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
     | Core_parser_util.Rimpl _ ->

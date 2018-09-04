@@ -169,7 +169,7 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Eskip ->
         (* unchanged *)
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         (* unchanged *)
         expr
     | Eproc _ _ _ ->
@@ -252,7 +252,7 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
     | Eskip ->
         (* unchanged *)
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         (* unchanged *)
         expr
     | Eproc _ _ _ ->
@@ -472,7 +472,7 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         end
     | Eskip ->
         Left expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         Left expr
     | Eproc _ _ _ ->
         Left expr
@@ -593,7 +593,7 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
         Expr annot (Eif pe1 (flatten_seqs e2) (flatten_seqs e3))
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr
@@ -783,8 +783,8 @@ let rec remove_conv_int (Expr annot expr_) =
         Eif (remove_conv_int_pexpr pe1) (remove_conv_int e2) (remove_conv_int e3)
     | Eskip ->
         expr_
-    | Eccall () pe pes ->
-        Eccall () (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
+    | Eccall () ty pe pes ->
+        Eccall () (remove_conv_int_pexpr ty) (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
     | Eproc () nm pes ->
         Eproc () nm (List.map remove_conv_int_pexpr pes)
     | Eunseq es ->
@@ -875,7 +875,7 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
         Eif pe1 (sequentialise_creates_kills e2) (sequentialise_creates_kills e3)
     | Eskip ->
         expr_
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr_
     | Eproc _ _ _ ->
         expr_
@@ -1109,7 +1109,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         end
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr
@@ -1358,7 +1358,7 @@ let rec simpl_case (Expr annot expr_ as expr) =
         wrap $ Eif pe1 (simpl_case e2) (simpl_case e3)
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr
