@@ -865,7 +865,7 @@ BEFORE EVAL_PEXPR2
 *)
         end
     
-    | (Eccall annots pe pes, sk) ->
+    | (Eccall annots ty pe pes, sk) ->
         one match valueFromPexpr pe with
           (*| Just (Vobject (OVcfunction nm)) ->*)
           (* TODO(V) TODO(VICTOR) *)
@@ -899,7 +899,7 @@ BEFORE EVAL_PEXPR2
                     Step_eval "Eccall" (
                       let () = Debug.print_debug 4 [] (fun () -> "XX 16") in
                       E.step_eval_pexprs th_st.current_loc mem_st file pes >>= fun pes' ->
-                      E.return <| th_st with arena= Expr arena_annots (Eccall annots pe pes') |>
+                      E.return <| th_st with arena= Expr arena_annots (Eccall annots ty pe pes') |>
                     )
               end
             in Mem.case_ptrval pv (fun _ -> err "NULL") run (fun _ _ -> err "CONCRETE") (fun _ -> err "UNSPEC")
@@ -910,7 +910,7 @@ BEFORE EVAL_PEXPR2
               Step_eval "Eccall" (
                 let () = Debug.print_debug 4 [] (fun () -> "XX 17") in
                 E.step_eval_pexpr th_st.current_loc mem_st file pe >>= fun pe' ->
-                E.return <| th_st with arena= Expr arena_annots (Eccall annots pe' pes) |>
+                E.return <| th_st with arena= Expr arena_annots (Eccall annots ty pe' pes) |>
               )
         end
     

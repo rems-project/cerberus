@@ -565,8 +565,8 @@ let rec pp_expr expr =
             pp_keyword "skip"
         | Eproc (_, nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
-        | Eccall (_, pe, pes) ->
-            pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
+        | Eccall (_, pe_ty, pe, pes) ->
+            pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe_ty :: pe :: pes))
         | Eunseq [] ->
             !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
         | Eunseq [e] ->

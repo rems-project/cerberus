@@ -1306,7 +1306,7 @@ let rec collect_labels env (Expr _ expr_) =
         collect_labels env' e2
     | Eskip ->
         E.return env
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         E.return env
     | Eproc _ _ _ ->
         E.return env
@@ -1392,16 +1392,15 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
     | Eskip ->
         E.guard (expected_bTy = BTy_unit) loc (Mismatch "skip" expected_bTy BTy_unit) >>
         E.return Eskip
-    | Eccall () pe pes ->
-        infer_pexpr tagDefs env pe >>=
-          export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
-        match bTy with
+    | Eccall () pe_ty pe pes ->
+        infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
+        infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
+        match (pe_ty, bTy) with
           (* | BTy_object (OTy_cfunction ret_oTy_opt nparams isVariadic) -> *)
-          (* TODO: check if this pointer is to a function? *)
-          | BTy_loaded OTy_pointer ->
-            
+          | (Pexpr _ _ (PEval (Vctype (Cty.Pointer _ (Cty.Function (qs, ty) nparams isVariadic))))
+            , BTy_loaded OTy_pointer) ->
               begin
-              (*  if isVariadic then
+                if isVariadic then
                   match List.dest_init pes with
                     | Nothing ->
                         E.fail loc (CoreTyping_TODO "ccall to a variadic C procedure must at least have a list of pointers as last argument")
@@ -1413,15 +1412,15 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
                           (BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])) last_pe >>= fun last_pe' ->
                         E.return (first_pes' ++ [last_pe'])
                   end
-                else *)
+                else
                   E.mapM (fun pe ->
                     typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe
                   ) pes
               end >>= fun pes' ->
-              (* guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >> *)
-            
-              E.return (Eccall () pe' pes')
-          | _ ->
+              let ret_oTy_opt = Core_aux.core_object_type_of_ctype ty in
+              guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
+              E.return (Eccall () pe_ty' pe' pes')
+          | (_, _) ->
               E.fail loc (CoreTyping_TODO "the first operand of ccall() should have a C function type")
         end
     | Eproc () nm pes ->

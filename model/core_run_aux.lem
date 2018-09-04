@@ -153,8 +153,8 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Eskip ->
           (* no change *)
           expr_
-      | Eccall annots pe pes ->
-          Eccall <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> pe pes
+      | Eccall annots ty pe pes ->
+          Eccall <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> ty pe pes
       | Eproc annots nm pes ->
           Eproc <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> nm pes
       | Eunseq es ->
@@ -245,8 +245,8 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
       | Eskip ->
           (* no change *)
           expr_
-      | Eccall annots pe pes ->
-          Eccall <| annots with asw_before= aids union annots.asw_before |> pe pes
+      | Eccall annots ty pe pes ->
+          Eccall <| annots with asw_before= aids union annots.asw_before |> ty pe pes
       | Eproc annots nm pes ->
           Eproc <| annots with asw_before= aids union annots.asw_before |> nm pes
       | Eunseq es ->
@@ -440,8 +440,8 @@ let rec convert_expr (Expr annot expr_) =
         Eif (convert_pexpr pe1) (convert_expr e2) (convert_expr e3)
     | Ecase pe pat_es ->
         Ecase (convert_pexpr pe) (List.map (fun (pat, e) -> (convert_pattern pat, convert_expr e)) pat_es)
-    | Eccall _ pe pes ->
-        Eccall empty_annotation (convert_pexpr pe) (List.map convert_pexpr pes)
+    | Eccall _ ty pe pes ->
+        Eccall empty_annotation (convert_pexpr ty) (convert_pexpr pe) (List.map convert_pexpr pes)
     | Eproc _ nm pes ->
         Eproc empty_annotation nm (List.map convert_pexpr pes)
     | Eaction pact ->

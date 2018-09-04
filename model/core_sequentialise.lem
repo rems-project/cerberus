@@ -18,7 +18,7 @@ let rec sequentialise_expr (Expr annot expr_) =
         Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
     | Eskip ->
         expr_
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr_
     | Eproc _ _ _ ->
         expr_

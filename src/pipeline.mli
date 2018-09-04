@@ -45,6 +45,7 @@ val c_frontend:
   * unit Core.file
   , Location_ocaml.t * Errors.cause) Exception.exceptM
 
+(*
 val core_frontend:
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
@@ -54,6 +55,17 @@ val core_frontend:
   * Symbol.sym
   * unit Core.file
   , Location_ocaml.t * Errors.cause) Exception.exceptM
+    *)
+
+val core_frontend:
+  'a * io_helpers ->
+  ('b * (Symbol.sym, (unit, unit) Core.generic_fun_map_decl) Pmap.map) *
+  (Implementation_.implementation_constant, unit Core.generic_impl_decl)
+  Pmap.map ->
+  filename:string ->
+  (Symbol.sym * (unit, unit) Core.generic_file,
+   Location_ocaml.t * Errors.cause)
+  Exception.exceptM
 
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
