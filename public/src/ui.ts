@@ -70,7 +70,7 @@ export class CerberusUI {
       let reader = new FileReader()
       reader.onload = (e: ProgressEvent) => {
         if (e.target instanceof FileReader)
-          this.add(new View(file.name, e.target.result))
+          this.add(new View(file.name, e.target.result as string))
       }
       reader.readAsText(file)
     })

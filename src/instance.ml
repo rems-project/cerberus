@@ -304,14 +304,19 @@ let instance debug_level =
   let send result =
     Marshal.to_channel stdout result [Marshal.Closures];
   in
+  let stdout = redirect () in
   try
-    let stdout = redirect () in
     let result = do_action @@ Marshal.from_channel stdin in
     recover stdout; send result;
     Debug.print 7 "Instance has successfully finished."
-  with e ->
+  with
+  | Failure msg ->
+    Debug.error ("Exception raised in instance: " ^ msg);
+    recover stdout; send (Failure msg)
+  | e ->
     Debug.error ("Exception raised in instance: " ^ Printexc.to_string e);
-    send (Failure ("Exception raised in instance: " ^ Printexc.to_string e))
+    recover stdout;
+    send (Failure (Printexc.to_string e))
 
 (* Arguments *)
 

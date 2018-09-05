@@ -6,6 +6,7 @@ import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
 import UI from './ui'
+const Viz = require('./js/viz.js')
 
 namespace Tabs {
 
@@ -251,59 +252,39 @@ export class Interactive extends Tab {
 }
 
 class Memory extends Tab {
-  network: vis.Network
+  //network: vis.Network
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
 
-    let container = $('<div align="center" class="graph"></div>')
+    const container = $('<div align="center" class="graph"></div>')
+    const controls = $('<div class="controls"></div>')
+    const zoomIn = $('<input class="zoomPlus" type="button" value="Zoom In">')
+    const reset = $('<input class="reset" type="button" value="Reset">')
+    const range = $('<input class="zoom-range" type="range" step="0.05" min="0.3" max="6">')
+    const zoomOut = $('<input class="zoomMinus" type="button" value="Zoom Out">')
+    controls.append(zoomIn)
+    controls.append(zoomOut)
+    controls.append(range)
+    controls.append(reset)
+    this.dom.append(controls)
     this.dom.append(container)
 
-    // Setup Graph Network
-    let options: vis.Options = {
-      nodes: {
-        shape: 'box',
-        shapeProperties: {
-          borderRadius: 3,
-          borderDashes: false,
-          interpolation: false,
-          useImageSize: false,
-          useBorderWithImage: false
-        },
-        color: {
-          border: '#5f5f5f',
-          background: '#5f5f5f',
-          highlight: {
-            border: '#7f7f7f',
-            background: '#7f7f7f'
-          }
-        },
-        font: {
-          color: '#f1f1f1',
-          align: 'left',
-          multi: 'html'
-        }
-      },
-      edges: {
-        arrows: {to: true},
-        smooth: false
-      },
-      interaction: {
-        navigationButtons: true
-      },
-      physics: {
-        barnesHut: {
-          springLength: 200,
-          avoidOverlap: 1
-        },
-        //repulsion: {
-        //  nodeDistance: 120
-        //}
-      }
-    }
-    this.network = new vis.Network(container[0], new Graph(), options);
-    ee.on('updateMemory', this, (s:Common.State) => this.network.setData(s.mem))
+    ee.on('updateMemory', this, (s:Common.State) => {
+      container.empty()
+      container.append(Viz(s.mem, container[0]))
+      const svg = container.find('svg')
+      svg.addClass('panzoom')
+      // @ts-ignore
+      svg.panzoom({
+        $zoomIn: zoomIn,
+        $zoomOut: zoomOut,
+        $zoomRange: range,
+        $reset: reset
+      })
+    })
   }
+  
 }
 
 /*  with CodeMirror editor */
@@ -544,7 +525,7 @@ export class Execution extends ReadOnly {
       .map((s: string) => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
       .sort()
     let result = ""
-    let current = null
+    let current : string | undefined = undefined
     let cnt = 0
     for (let i = 0; i < values.length; i++) {
       if (values[i] != current) {

@@ -500,7 +500,7 @@ let rec zeros_aux tagDefs ty =
     | Core_ctype.Struct tag ->
         match Map.lookup tag tagDefs with
           | Just (Core_ctype.StructDef ident_tys) ->
-              Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, zeros_aux tagDefs ty)) ident_tys)
+              Mem.struct_mval tag (List.map (fun (ident, ty) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
           | _ ->
               error "Core_aux.zeros_aux, not StructDef"
         end

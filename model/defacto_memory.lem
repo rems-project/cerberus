@@ -420,7 +420,7 @@ let rec mkUnspec ty =
     | Struct tag_sym ->
         let xs = Core_ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
-          List.map (fun (ident, ty) -> (ident, mkUnspec ty)) xs
+          List.map (fun (ident, ty) -> (ident, ty, mkUnspec ty)) xs
         )
     | (Union tag_sym) ->
         let ((memb_ident, ty), _) = Core_ctype_aux.get_unionDef tag_sym in
@@ -760,7 +760,8 @@ let apply_shift_path_element lvalue_ty spe mval =
                stringFromCore_ctype (Core_ctype.Struct tag_sym_) ^
                "' was found."))
        else
-         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident xs))
+         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident
+          (List.map (fun (a,_,b) -> (a,b)) xs)))
    
    | (SPE_member tag_sym memb_ident, MVunion tag_sym_ memb_ident_ mval') ->
        if tag_sym <> tag_sym_ then
@@ -2214,9 +2215,9 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
           let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVstruct") in
           MVstruct tag_sym <$>
-            mapM (fun (ident, memb_mval) ->
+            mapM (fun (ident, memb_ty, memb_mval) ->
               easy_update_mem_value_aux write_ty sh' write_mval memb_mval >>= fun memb_mval ->
-              return (ident, memb_mval)
+              return (ident, memb_ty, memb_mval)
             ) xs
     
     | (MVunion tag_sym old_memb_ident old_memb_mval, SPE_member tag_sym_ new_memb_ident :: sh') ->
@@ -2242,9 +2243,9 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                   mapM (fun (ident, ty) ->
                     if ident = memb_ident then
                       easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty) >>= fun mval' ->
-                      return (ident, mval')
+                      return (ident, ty, mval')
                     else
-                      return (ident, mkUnspec ty)
+                      return (ident, ty, mkUnspec ty)
                   ) (Core_ctype_aux.get_structDef tag_sym)
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"

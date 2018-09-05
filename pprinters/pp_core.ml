@@ -270,7 +270,7 @@ let rec pp_object_value = function
   | OVstruct (tag_sym, xs) ->
       P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (Cabs.CabsIdentifier (_, ident), mval) -> 
+        comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) -> 
           P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
         ) xs
       )

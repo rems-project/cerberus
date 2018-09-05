@@ -266,7 +266,7 @@ module Concrete : Memory = struct
     | MVfloating of AilTypes.floatingType * floating_value
     | MVpointer of Core_ctype.ctype0 * pointer_value
     | MVarray of mem_value list
-    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * mem_value) list
+    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * Core_ctype.ctype0 * mem_value) list
     | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * mem_value
 
   
@@ -405,7 +405,7 @@ module Concrete : Memory = struct
         )
     | MVstruct (tag_sym, xs) ->
         parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
-          comma_list (fun (ident, mval) ->
+          comma_list (fun (ident, _, mval) ->
             dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ equals ^^^ pp_mem_value mval
           ) xs
         )
@@ -629,7 +629,7 @@ module Concrete : Memory = struct
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
-            ((memb_ident, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
+            ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
@@ -735,7 +735,7 @@ module Concrete : Memory = struct
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
           snd begin
             (* TODO: rewrite now that offsetsof returns the paddings *)
-            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, mval) ->
+            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, _, mval) ->
               let pad = off - last_off in
               ( off + sizeof ty
               , acc @
@@ -1629,6 +1629,7 @@ let combine_prov prov1 prov2 =
     let mk_union tag v =
       `Assoc [("kind", `String "union"); ("tag", tag); ("value", v)]
     in
+    let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
     match mval with
     | MVunspecified _ ->
       mk_scalar "unspecified"
@@ -1645,8 +1646,10 @@ let combine_prov prov1 prov2 =
     | MVarray mvals ->
       mk_array (List.map serialise_mem_value mvals)
     | MVstruct (tag_sym, xs) ->
-      mk_struct (List.map (fun (mem, mval) ->
-          `Assoc [("tag", serialise_cabs_id mem); ("value", serialise_mem_value mval)]) xs)
+      mk_struct (List.map (fun (mem, ty, mval) ->
+          `Assoc [("tag", serialise_cabs_id mem);
+                  ("type", serialise_ctype ty);
+                  ("value", serialise_mem_value mval)]) xs)
     | MVunion (tag_sym, membr_ident, mval) ->
       mk_union (serialise_cabs_id membr_ident) (serialise_mem_value mval)
 

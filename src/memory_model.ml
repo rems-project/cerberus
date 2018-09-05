@@ -160,7 +160,7 @@ module type Memory = sig
   val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
   val pointer_mval: Core_ctype.ctype0 -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
-  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * mem_value) list -> mem_value
+  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> mem_value
   val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
   
   (* Memory value destructor *)
@@ -172,7 +172,7 @@ module type Memory = sig
     (AilTypes.floatingType -> floating_value -> 'a) ->
     (Core_ctype.ctype0 -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->
-    (Symbol.sym -> (Cabs.cabs_identifier * mem_value) list -> 'a) ->
+    (Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> 'a) ->
     (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
     'a
   
