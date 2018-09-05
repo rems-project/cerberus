@@ -345,83 +345,100 @@ export default class View {
     this.layout.updateSize()
   }
 
+  mkDot(alloc, info: string): string {
+    type Dot = { kind: 'basic', id: string, label: string }
+             | { kind: 'cluster', id: string, label: string, fields: Dot[] }
+    const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
+    const edge = (d1: Dot, d2: Dot) => {
+      switch (d1.kind) {
+        case 'basic':
+          switch (d2.kind) {
+            case 'basic':
+              return 'n' + d1.id + '->n' + d2.id
+            case 'cluster':
+              return edge(d1, d2.fields[0]) + '[lhead=cluster' + d2.id + ']'
+          }
+          break
+        case 'cluster':
+          switch (d2.kind) {
+            case 'basic':
+              return edge(d1.fields[0], d2) + '[ltail=cluster' + d1.id + ']'
+            case 'cluster':
+              return edge(d1.fields[0], d2.fields[0]) + '[ltail=cluster' + d1.id + ',lhead=cluster' + d2.id + ']'
+          }
+          break
+      }
+    }
+    const iedges = (ds: Dot[]) => {
+      let es = ''
+      if (ds.length > 1)
+        for (let i = 0; i < ds.length - 1; i++)
+          es += edge(ds[i], ds[i+1]) + ';'
+      return es
+    }
+    const pp = (d: Dot) => {
+      switch(d.kind) {
+        case 'basic':
+          return 'n' + d.id + '[label="' + d.label + '", tooltip="' + info + '"];'
+        case 'cluster':
+          return 'subgraph cluster' + d.id + '{label="' + d.label
+                  + '";tooltip="' + info + '";rankdir="LR"; edge[style=invis];'
+                  + _.join(_.map(d.fields, d => pp(d)), '')
+                  + iedges(d.fields)
+                  + '}'
+      }
+    }
+    const dot = (id: string, tag: string, type: string, mval: Common.MemoryValue): Dot => {
+      switch(mval.kind) {
+        case 'scalar':
+          return { kind: 'basic', id: id
+                 , label: tag + ': ' + (type == '' ? '' : type + ' = ') + mval.value }
+        case 'pointer':
+          return { kind: 'basic', id: id
+                  , label: tag + ': ' + (type == '' ? '' : type + ' = ') + '<' + mval.provenance + '> '
+                           + toHex(parseInt(mval.value)) }
+        case 'struct':
+          return { kind: 'cluster',
+                   id: id,
+                   label: tag + ': ' + type,
+                   fields: _.map(mval.fields, f => dot (id + f.tag, f.tag, f.type, f.value))
+                 }
+        case 'array':
+          return { kind: 'cluster',
+                   id: id,
+                   label: tag + ': ' + type,
+                   fields: _.map(mval.value, (v, i) => dot (id + String(i), '['+String(i)+']', '', v))
+                 }
+        case 'union':
+          alert('Union unsupported.')
+          return { kind: 'basic', id: 'TODO', label: 'TODO' }
+      }
+    }
+    return pp(dot(alloc.id, '@'+alloc.id, alloc.type, alloc.value))
+  }
+
   // TODO: CHECK IF I REALLY NEED UNDEFINED
   setMemory(mem: Common.Memory | undefined) {
     if (mem === undefined) return
-    let g = 'digraph Memory { node [shape=box, width=2.5]; labeljust="l"; ranksep=0.1;'
+    let g = 'digraph Memory { node [shape=box, width=2.3, height=0.3]; labeljust="l"; ranksep=0.1;'
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const mk_node = (id:string, tag: string, type:string, mval: Common.MemoryValue, tooltip: string, isfield: boolean) => {
-      switch(mval.kind) {
-        case 'scalar':
-          return 'n'+id + (isfield ? tag : '') + '[label="' + (isfield ? tag : '@'+id) + ': ' + type
-                  + ' = ' + mval.value + '", tooltip="' + tooltip + '"];'
-        case 'pointer':
-          return 'n'+id+(isfield ? tag : '') + '[label="' + (isfield ? tag : '@'+id) + ': ' + type
-                  + ' = <' + mval.provenance + '> ' + toHex(parseInt(mval.value))
-                  + '", tooltip="' + tooltip + '"];'
-        case 'array':
-          let esa = ''
-          const getNodeNameA = (type, tag) => {
-            if (type .startsWith('struct')) { // TODO: this is a terrible hack! think of something better
-              return 'cluster'+id+tag
-            } else {
-              return 'n'+id+tag
-            }
-          }
-          if (mval.value.length > 1) {
-            for (let i = 0; i < mval.value.length - 1; i++) {
-              esa += getNodeNameA(mval.value[i].kind, i)+'->'+getNodeNameA(mval.value[i+1].kind, i+1)+';'
-            }
-          }
-          let vsa = ''
-          for (let i = 0; i < mval.value.length - 1; i++) {
-            let v = mval.value[i]
-            esa += mk_node(id, String(i), v.kind, v, tooltip, true)
-          }
-          return 'subgraph cluster'+id+(isfield ? tag : '') + '{ label="' + (isfield ? '' : '@') +tag+': '+type+'"; rankdir="LR";edge[style=invis];'
-                  + vsa + esa + '}'
-        case 'struct':
-          let es = ''
-          const getNodeName = (f) => {
-            if (f.type .startsWith('struct')) { // TODO: this is a terrible hack! think of something better
-              return 'cluster'+id+f.tag
-            } else {
-              return 'n'+id+f.tag
-            }
-          }
-          if (mval.fields.length > 1) {
-            for (let i = 0; i < mval.fields.length - 1; i++) {
-              es += getNodeName(mval.fields[i])+'->'+getNodeName(mval.fields[i+1])+';'
-            }
-          }
-          return 'subgraph cluster'+id+(isfield ? tag : '') + '{ label="' + (isfield ? '' : '@') +tag+': '+type+'"; rankdir="LR";edge[style=invis];'
-                  + _.join(_.map(mval.fields, f => mk_node(id, f.tag, f.type, f.value, tooltip, true)), '')
-                  + es + '}'
-        case 'union': // TODO: Get type from Cerberus
-          return 'n[label="TODO(UNION)"'
-        default:
-          return ""
-      }
-    }
     switch(mem.kind) {
       case 'concrete':
       case 'twin':
-        Object.keys(mem.allocations).map((k) => {
-          const alloc = mem.allocations[k]
+        g = _.reduce(mem.allocations, (acc, alloc) => {
           const base  = 'base address: ' + toHex(parseInt(alloc.base))
           const size  = 'size: ' + alloc.size
           const tooltip = base + '\n' + size
-          g += mk_node(alloc.id, alloc.id, alloc.type, alloc.value, tooltip, false)
-        })
+          return acc + this.mkDot(alloc, tooltip)
+        }, g)
         break;
       case 'symbolic':
         alert('Interactive mode not supported in symbolic execution.')
         break;
     }
-    g += '}'
     // Save in case another memory tab is open
+    this.state.mem = g + '}'
     console.log(g)
-    this.state.mem = g
     this.getMemory().setActive()
     this.emit('updateMemory')
   }

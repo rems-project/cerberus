@@ -261,7 +261,7 @@ class Memory extends Tab {
     const controls = $('<div class="controls"></div>')
     const zoomIn = $('<input class="zoomPlus" type="button" value="Zoom In">')
     const reset = $('<input class="reset" type="button" value="Reset">')
-    const range = $('<input class="zoom-range" type="range" step="0.05" min="0.3" max="6">')
+    const range = $('<input class="zoom-range" type="range" step="0.05" min="0.1" max="2">')
     const zoomOut = $('<input class="zoomMinus" type="button" value="Zoom Out">')
     controls.append(zoomIn)
     controls.append(zoomOut)
@@ -269,6 +269,10 @@ class Memory extends Tab {
     controls.append(reset)
     this.dom.append(controls)
     this.dom.append(container)
+
+    // Initial zoom and position
+    let scale0 = 1
+    let x0 = 0, y0 = 0
 
     ee.on('updateMemory', this, (s:Common.State) => {
       container.empty()
@@ -280,8 +284,26 @@ class Memory extends Tab {
         $zoomIn: zoomIn,
         $zoomOut: zoomOut,
         $zoomRange: range,
-        $reset: reset
+        $reset: reset,
+        increment: 0.1,
+        minScale: 0.1,
+        maxScale: 2
       })
+      svg.on('panzoomzoom', (elem, panzoom, scale) => {
+        scale0 = scale
+      })
+      svg.on('panzoompan', (elem, panzoom, x, y) => {
+        x0 = x
+        y0 = y
+      })
+      svg.on('panzoomreset', () => {
+        scale0 = 1
+        x0 = y0 = 0
+      })
+      // @ts-ignore
+      svg.panzoom('pan', x0, y0)
+      // @ts-ignore
+      svg.panzoom('zoom', scale0)
     })
   }
   
@@ -555,6 +577,7 @@ class Console extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Console', '', ee)
     ee.on('update', this, this.update)
+    ee.on('updateExecution', this, this.update) // in case of failures
   }
 
   update(s:Common.State) {
