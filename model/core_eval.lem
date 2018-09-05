@@ -684,7 +684,7 @@ let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
-                      (memb_ident, mval)
+                      (memb_ident, memb_ty, mval)
                   | Core_ctype.UnionDef _ ->
                       error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
                 end
@@ -719,7 +719,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just (Vobject (OVstruct tag_sym' xs)) ->
               if tag_sym <> tag_sym' then
                 EU.fail $ Illformed_program ("PEmemberof(struct) ==> mismatched tags: " ^ show tag_sym ^ " vs " ^ show tag_sym')
-              else match List.lookup memb_ident xs with
+              else match List.lookup memb_ident (List.map (fun (a,_,b) -> (a,b)) xs) with
                 | Nothing ->
                     EU.fail $ Illformed_program ("PEmemberof ==> invalid member: " ^ show memb_ident)
                 | Just mval ->

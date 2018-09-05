@@ -1,7 +1,7 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
 import _ from "lodash"
-import { Node, Edge, Graph } from "./graph"
+import { Node, /*Edge,*/ Graph } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
 import Common from './common'
@@ -168,7 +168,7 @@ export default class View {
       ast: { cabs: '', ail:  '', core: '' },
       locs: [],
       graph: new Graph(),
-      mem: new Graph(),
+      mem: '', //new Graph(),
       result: '',
       console: '',
       lastNodeId: 0,
@@ -348,68 +348,80 @@ export default class View {
   // TODO: CHECK IF I REALLY NEED UNDEFINED
   setMemory(mem: Common.Memory | undefined) {
     if (mem === undefined) return
-    const nodes: Node[] = []
-    const edges: Edge[] = []
+    let g = 'digraph Memory { node [shape=box, width=2.5]; labeljust="l"; ranksep=0.1;'
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const string_of_memvalue = (id: string, mval: Common.MemoryValue) : string => {
-      switch (mval.kind) {
+    const mk_node = (id:string, tag: string, type:string, mval: Common.MemoryValue, tooltip: string, isfield: boolean) => {
+      switch(mval.kind) {
         case 'scalar':
-        return mval.value;
+          return 'n'+id + (isfield ? tag : '') + '[label="' + (isfield ? tag : '@'+id) + ': ' + type
+                  + ' = ' + mval.value + '", tooltip="' + tooltip + '"];'
         case 'pointer':
-        let palloc = mem.allocations[mval.provenance]
-        if (palloc) {
-          if (parseInt(palloc.base) <= parseInt(mval.value) && parseInt(mval.value) < parseInt(palloc.base) + parseInt(palloc.size)) {
-            edges.push({from: id, to: mval.provenance, isTau: false});
-          } else {
-            //@ts-ignore
-            edges.push({from: id, to: mval.provenance, isTau: false, color: {color: 'red'}});
-          }
-        }
-        return '{\nprovenance: ' + mval.provenance + '\naddress: ' + toHex(parseInt(mval.value)) + '\n}'
+          return 'n'+id+(isfield ? tag : '') + '[label="' + (isfield ? tag : '@'+id) + ': ' + type
+                  + ' = <' + mval.provenance + '> ' + toHex(parseInt(mval.value))
+                  + '", tooltip="' + tooltip + '"];'
         case 'array':
-        return '[\n  ' +  _.join(_.reverse(_.map(mval.value, (v) => string_of_memvalue(id, v))), ',\n  ') + '\n]'
+          let esa = ''
+          const getNodeNameA = (type, tag) => {
+            if (type .startsWith('struct')) { // TODO: this is a terrible hack! think of something better
+              return 'cluster'+id+tag
+            } else {
+              return 'n'+id+tag
+            }
+          }
+          if (mval.value.length > 1) {
+            for (let i = 0; i < mval.value.length - 1; i++) {
+              esa += getNodeNameA(mval.value[i].kind, i)+'->'+getNodeNameA(mval.value[i+1].kind, i+1)+';'
+            }
+          }
+          let vsa = ''
+          for (let i = 0; i < mval.value.length - 1; i++) {
+            let v = mval.value[i]
+            esa += mk_node(id, String(i), v.kind, v, tooltip, true)
+          }
+          return 'subgraph cluster'+id+(isfield ? tag : '') + '{ label="' + (isfield ? '' : '@') +tag+': '+type+'"; rankdir="LR";edge[style=invis];'
+                  + vsa + esa + '}'
         case 'struct':
-        return '{\n  ' + _.join(_.map(mval.fields, f => f.tag + ': ' + string_of_memvalue(id, f.value)), ';\n  ') + ';\n}'
-        case 'union':
-        return '\ntag: ' + mval.tag + '\nvalue: ' + mval.value
+          let es = ''
+          const getNodeName = (f) => {
+            if (f.type .startsWith('struct')) { // TODO: this is a terrible hack! think of something better
+              return 'cluster'+id+f.tag
+            } else {
+              return 'n'+id+f.tag
+            }
+          }
+          if (mval.fields.length > 1) {
+            for (let i = 0; i < mval.fields.length - 1; i++) {
+              es += getNodeName(mval.fields[i])+'->'+getNodeName(mval.fields[i+1])+';'
+            }
+          }
+          return 'subgraph cluster'+id+(isfield ? tag : '') + '{ label="' + (isfield ? '' : '@') +tag+': '+type+'"; rankdir="LR";edge[style=invis];'
+                  + _.join(_.map(mval.fields, f => mk_node(id, f.tag, f.type, f.value, tooltip, true)), '')
+                  + es + '}'
+        case 'union': // TODO: Get type from Cerberus
+          return 'n[label="TODO(UNION)"'
+        default:
+          return ""
       }
     }
-    const createNode = (id: Common.ID, label: string) : Node => {
-      return {
-        id: id,
-        label: label,
-        state: undefined,
-        isVisible: true,
-        isTau: false,
-        loc: undefined,
-        mem: undefined
-    }}
     switch(mem.kind) {
       case 'concrete':
       case 'twin':
         Object.keys(mem.allocations).map((k) => {
           const alloc = mem.allocations[k]
-          const id = '<i>Alloc:</i> ' + alloc.id
-          const base  = '\n<i>Base address:</i> ' + toHex(parseInt(alloc.base))
-          const type  = '\n<i>Type:</i> ' + alloc.type
-          const value = '\n<i>Value:</i> ' + string_of_memvalue(alloc.id, alloc.value)
-          const size  = '\n<i>Size:</i> ' + alloc.size
-          const label = id + base + type + size + value
-          nodes.push(createNode(k, label))
+          const base  = 'base address: ' + toHex(parseInt(alloc.base))
+          const size  = 'size: ' + alloc.size
+          const tooltip = base + '\n' + size
+          g += mk_node(alloc.id, alloc.id, alloc.type, alloc.value, tooltip, false)
         })
-        break
+        break;
       case 'symbolic':
-        Object.keys(mem.allocations).map((k) => {
-          const alloc = mem.allocations[k]
-          const type  = '<i>Type:</i> ' + alloc.type
-          const value = '\n<i>Value:</i> ' + alloc.value
-          const label = type + value
-          nodes.push(createNode(k, label))
-        })
-        break
+        alert('Interactive mode not supported in symbolic execution.')
+        break;
     }
+    g += '}'
     // Save in case another memory tab is open
-    this.state.mem = new Graph(nodes, edges)
+    console.log(g)
+    this.state.mem = g
     this.getMemory().setActive()
     this.emit('updateMemory')
   }

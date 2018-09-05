@@ -178,7 +178,7 @@ type generic_object_value 'sym =  (* C object values *)
  | OVpointer of Mem.pointer_value (* pointer value *)
  | OVcfunction of (generic_name 'sym) (* C function pointer *)
  | OVarray of list (generic_loaded_value 'sym) (* C array value *)
- | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * Mem.mem_value) (* C struct value *)
+ | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * ctype * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.sym * Cabs.cabs_identifier * Mem.mem_value (* C union value *)
  
  (* WIP: byte access *)

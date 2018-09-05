@@ -79,7 +79,7 @@ namespace Common {
     value: [MemoryValue]
   } | {
     kind: 'struct'
-    fields: [ { tag: string, value: MemoryValue } ]
+    fields: [ { tag: string, type: string, value: MemoryValue } ]
   } | {
     kind: 'union',
     tag: string,
@@ -134,7 +134,7 @@ namespace Common {
     ast: IR
     locs: Locations[]
     graph: Graph
-    mem: Graph
+    mem: string // Graphviz
     result: string
     console: string
     lastNodeId: ID 
