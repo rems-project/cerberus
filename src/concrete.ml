@@ -324,6 +324,7 @@ module Concrete : Memory = struct
   
   (* INTERNAL: allocation *)
   type allocation = {
+    prefix: Symbol.prefix;
     base: address;
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
@@ -809,7 +810,7 @@ module Concrete : Memory = struct
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
+                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
             (* TODO: factorise this with do_store inside Concrete.store *)
@@ -819,7 +820,7 @@ module Concrete : Memory = struct
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
+                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
                   next_address= Nat_big_num.add addr size;
                   bytemap=
                     List.fold_left (fun acc (addr, b) ->
@@ -842,7 +843,7 @@ module Concrete : Memory = struct
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n;
             dynamic_addrs= addr :: st.dynamic_addrs })
     )
