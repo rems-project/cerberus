@@ -66,6 +66,7 @@ namespace Common {
     throw `Model ${m} does not exist.`
   }
 
+/*
   export type MemoryValue =
   {
     kind: 'scalar',
@@ -85,11 +86,31 @@ namespace Common {
     tag: string,
     value: MemoryValue
   }
+  */
 
+  export type MemoryValueRow = {
+    size: number,
+    ispadding: boolean,
+    path: string[],
+    value: string,
+    pointsto: number | null
+  }
+
+  export type MemoryAllocation = {
+    id: number,
+    base: number,
+    type: string,
+    size: number,
+    rows: MemoryValueRow[]
+  }
+
+  export type Memory = {[key:string]: MemoryAllocation}
+/*
   export type Memory =
     { 
       kind: 'concrete',
-      allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
+      table: {[key:string]: {id: string, base: string, type: string, size: number, rows: {size: number, pad: boolean, path: string[], value: string, pointsto: number | null}[]}}
+      //allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
     } | {
       kind: 'twin',
       allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
@@ -97,6 +118,7 @@ namespace Common {
       kind: 'symbolic',
       allocations: any
     }
+  */
 
   export interface InteractiveRequest {
     lastId: ID,

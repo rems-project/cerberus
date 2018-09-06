@@ -6,6 +6,8 @@ import Tabs from "./tabs"
 import Util from "./util"
 import Common from './common'
 import UI from './ui'
+import { max } from "moment";
+import { DH_UNABLE_TO_CHECK_GENERATOR } from "constants";
 
 export default class View {
   title: string
@@ -345,100 +347,63 @@ export default class View {
     this.layout.updateSize()
   }
 
-  mkDot(alloc, info: string): string {
-    type Dot = { kind: 'basic', id: string, label: string }
-             | { kind: 'cluster', id: string, label: string, fields: Dot[] }
-    const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    const edge = (d1: Dot, d2: Dot) => {
-      switch (d1.kind) {
-        case 'basic':
-          switch (d2.kind) {
-            case 'basic':
-              return 'n' + d1.id + '->n' + d2.id
-            case 'cluster':
-              return edge(d1, d2.fields[0]) + '[lhead=cluster' + d2.id + ']'
-          }
-          break
-        case 'cluster':
-          switch (d2.kind) {
-            case 'basic':
-              return edge(d1.fields[0], d2) + '[ltail=cluster' + d1.id + ']'
-            case 'cluster':
-              return edge(d1.fields[0], d2.fields[0]) + '[ltail=cluster' + d1.id + ',lhead=cluster' + d2.id + ']'
-          }
-          break
-      }
-    }
-    const iedges = (ds: Dot[]) => {
-      let es = ''
-      if (ds.length > 1)
-        for (let i = 0; i < ds.length - 1; i++)
-          es += edge(ds[i], ds[i+1]) + ';'
-      return es
-    }
-    const pp = (d: Dot) => {
-      switch(d.kind) {
-        case 'basic':
-          return 'n' + d.id + '[label="' + d.label + '", tooltip="' + info + '"];'
-        case 'cluster':
-          return 'subgraph cluster' + d.id + '{label="' + d.label
-                  + '";tooltip="' + info + '";rankdir="LR"; edge[style=invis];'
-                  + _.join(_.map(d.fields, d => pp(d)), '')
-                  + iedges(d.fields)
-                  + '}'
-      }
-    }
-    const dot = (id: string, tag: string, type: string, mval: Common.MemoryValue): Dot => {
-      switch(mval.kind) {
-        case 'scalar':
-          return { kind: 'basic', id: id
-                 , label: tag + ': ' + (type == '' ? '' : type + ' = ') + mval.value }
-        case 'pointer':
-          return { kind: 'basic', id: id
-                  , label: tag + ': ' + (type == '' ? '' : type + ' = ') + '<' + mval.provenance + '> '
-                           + toHex(parseInt(mval.value)) }
-        case 'struct':
-          return { kind: 'cluster',
-                   id: id,
-                   label: tag + ': ' + type,
-                   fields: _.map(mval.fields, f => dot (id + f.tag, f.tag, f.type, f.value))
-                 }
-        case 'array':
-          return { kind: 'cluster',
-                   id: id,
-                   label: tag + ': ' + type,
-                   fields: _.map(mval.value, (v, i) => dot (id + String(i), '['+String(i)+']', '', v))
-                 }
-        case 'union':
-          alert('Union unsupported.')
-          return { kind: 'basic', id: 'TODO', label: 'TODO' }
-      }
-    }
-    return pp(dot(alloc.id, '@'+alloc.id, alloc.type, alloc.value))
-  }
-
   // TODO: CHECK IF I REALLY NEED UNDEFINED
   setMemory(mem: Common.Memory | undefined) {
     if (mem === undefined) return
-    let g = 'digraph Memory { node [shape=box, width=2.3, height=0.3]; labeljust="l"; ranksep=0.1;'
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
-    switch(mem.kind) {
-      case 'concrete':
-      case 'twin':
-        g = _.reduce(mem.allocations, (acc, alloc) => {
-          const base  = 'base address: ' + toHex(parseInt(alloc.base))
-          const size  = 'size: ' + alloc.size
-          const tooltip = base + '\n' + size
-          return acc + this.mkDot(alloc, tooltip)
-        }, g)
-        break;
-      case 'symbolic':
-        alert('Interactive mode not supported in symbolic execution.')
-        break;
+    const createNode = (alloc: Common.MemoryAllocation) => {
+      const box = (n, ischar=false) =>
+        '<td width="7" height="'+(ischar?'20':'7')+'" fixedsize="true" port="'+String(n)
+        +'"><font point-size="1">&nbsp;</font></td>'
+      const maxcols = _.reduce(alloc.rows, (acc, row) => Math.max(acc, row.path.length), 0)+1
+      const title =
+        '<tr><td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>'
+          + '<td border="0" colspan="' + maxcols + '">@' + alloc.id + ': ' + alloc.type + '</td></tr>'
+      let index = 0
+      const body = _.reduce(alloc.rows, (acc, row) => {
+        const p = _.reduce(row.path, (acc, tag) => {
+          return acc + '<td rowspan="'+row.size+'">'+tag+'</td>'
+        },'')
+        const spath = _.reduce(row.path, (acc, tag) => acc + '_' + tag, '')
+        const v = '<td port="'+ spath + 'v" rowspan="'+row.size+'" colspan="'+String(maxcols-row.path.length)+'"'
+                +(row.ispadding?' bgcolor="grey"':'')+'>'+row.value+'</td>'
+        acc += '<tr>' + box(index, row.size == 1)+p+v+'</tr>'
+        index++
+        for (let j = 1; j < row.size; j++, index++)
+          acc += '<tr>' + box(index) + '</tr>'
+        return acc
+      }, '')
+      const lastrow = '<tr border="0"><td border="0" width="7" height="7" fixedsize="true" port="'+String(alloc.size)+'"><font point-size="1">&nbsp;</font></td></tr>'
+      return 'n'+alloc.id+'[label=<<table border="0" cellborder="1" cellspacing="0">'+title+body+lastrow+'</table>>];'
     }
-    // Save in case another memory tab is open
-    this.state.mem = g + '}'
-    console.log(g)
+    type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/}
+    const getPointersInAlloc = (alloc: Common.MemoryAllocation) => {
+      return _.reduce(alloc.rows, (acc: Pointer[], row) => {
+        if (row.pointsto !== null) {
+          const from = _.reduce(row.path, (acc, tag) => acc + '_' + tag, 'n'+alloc.id + ':')
+          const p: Pointer = {from: from, to: row.pointsto, addr: parseInt(row.value)}
+          return _.concat(acc, [p])
+        } else {
+          return acc
+        }
+      }, [])
+    }
+    const createEdges = (ps: Pointer[], mem: Common.Memory) => {
+      return _.reduce(ps, (acc, p) => {
+        const target = _.find(mem, (alloc => alloc.id == p.to))
+        if (target) {
+          const offset = p.addr - target.base
+          acc += p.from + "v->n" + target.id + ':' + offset + (offset >= target.size ? '[color="red"]': '') + ';'
+        }
+        return acc;
+      }, '')
+    }
+    const g = 'digraph Memory { node [shape=none, fontsize=12]; rankdir=LR;'
+    const ns = _.reduce(mem, (ns, alloc) => ns + createNode(alloc), '')
+    const ps: Pointer[] = _.reduce(mem, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
+    const es = createEdges(ps, mem)
+    this.state.mem = g + ns + es + '}' // Save in case another memory tab is open 
+    //console.log(this.state.mem)
     this.getMemory().setActive()
     this.emit('updateMemory')
   }
