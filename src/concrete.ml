@@ -1604,77 +1604,118 @@ let combine_prov prov1 prov2 =
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
 
-  (* JSON serialisation *)
+  (* JSON serialisation: Memory layout for dot *)
 
-  let serialise_cabs_id = function
-   | Cabs.CabsIdentifier (_, s) -> `String s
+  type row =
+    { size: int; (* number of square on the left size of the row *)
+      ispadding: bool;
+      path: string list; (* tag list *)
+      value: string;
+      pointsto: int option; (* provenance id in case of a pointer *)
+    }
 
-  let serialise_prov = function
-    | Prov_some n -> Json.of_bigint n
-    | Prov_none -> `Null
-    | Prov_device -> `String "Device"
+  type dot_node =
+    { id: int;
+      base: int;
+      typ: string;
+      size: int;
+      rows: row list;
+    }
 
-  let rec serialise_mem_value mval =
-    let mk_scalar s =
-      `Assoc [("kind", `String "scalar"); ("value", `String s)]
-    in
-    let mk_pointer p s =
-      `Assoc [("kind", `String "pointer"); ("provenance", serialise_prov p); ("value", `String s)]
-    in
-    let mk_array vs =
-      `Assoc [("kind", `String "array"); ("value", `List vs)] in
-    let mk_struct fs =
-      `Assoc [("kind", `String "struct"); ("fields", `List fs)]
-    in
-    let mk_union tag v =
-      `Assoc [("kind", `String "union"); ("tag", tag); ("value", v)]
-    in
-    let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
+  let rec mk_rows bs ty mval : row list =
+    let mk_scalar v p = [{ size = sizeof ty;
+                           ispadding = false;
+                           path = [];
+                           value = v;
+                           pointsto = p
+                         }] in
+    let mk_pad n v = { size = n;
+                       ispadding = true;
+                       path = [];
+                       value = v;
+                       pointsto = None;
+                     } in
+    let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified"
-    | MVinteger (_, IV(p, n)) ->
-      mk_scalar (N.to_string n) (*TODO: maybe track provenance *)
+      mk_scalar "unspecified" None
+    | MVinteger (_, IV(_, n)) ->
+      mk_scalar (N.to_string n) None
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f)
-    | MVpointer (_, PV(p, pv)) ->
+      mk_scalar (string_of_float f) None
+    | MVpointer (_, PV(prov, pv)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
-        | PVnull _ -> mk_scalar "NULL"
-        | PVconcrete n -> mk_pointer p (N.to_string n)
-        | PVfunction _ -> mk_scalar "POINTER TO FUNCTION"
+        | PVnull _ ->
+          mk_scalar "NULL" None
+        | PVconcrete n ->
+          mk_scalar (N.to_string n) p
+        | PVfunction sym ->
+          mk_scalar (Pp_symbol.to_string_pretty sym) None
       end
     | MVarray mvals ->
-      mk_array (List.map serialise_mem_value mvals)
-    | MVstruct (tag_sym, xs) ->
-      mk_struct (List.map (fun (mem, ty, mval) ->
-          `Assoc [("tag", serialise_cabs_id mem);
-                  ("type", serialise_ctype ty);
-                  ("value", serialise_mem_value mval)]) xs)
-    | MVunion (tag_sym, membr_ident, mval) ->
-      mk_union (serialise_cabs_id membr_ident) (serialise_mem_value mval)
+      begin match ty with
+        | Array0 (elem_ty, _) ->
+          let size = sizeof elem_ty in
+          let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
+              let row = List.map (add_path (string_of_int i)) @@ mk_rows acc_bs elem_ty mval in
+              (row::acc, i+1, L.drop size acc_bs)
+            end ([], 0, bs) mvals
+          in List.concat @@ (List.rev rev_rows)
+        | _ ->
+          failwith "mk_rows: array type is wrong"
+      end
+    | MVstruct (tag_sym, _) ->
+      (* NOTE: we recombine the bytes to get paddings *)
+      let (bs1, bs2) = L.split_at (sizeof ty) bs in
+          let (rev_rowss, _, bs') = List.fold_left begin
+          fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
+            let pad = memb_offset - previous_offset in
+            let acc_bs' = L.drop pad acc_bs in
+            let (mval, acc_bs'') = combine_bytes memb_ty acc_bs' in
+            let rows = mk_rows acc_bs' memb_ty mval in
+            let rows' = List.map (add_path memb) rows in
+            (* TODO: set padding value here *)
+            let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
+            (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
+        end ([], 0, bs1) (fst (offsetsof tag_sym))
+      in List.concat (List.rev rev_rowss)
+    | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
+      List.map (add_path memb) (mk_rows bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
-  let serialise_map f m =
-    let serialise_entry (k, v) = let e = N.to_string k in (e, f e v)
+  let mk_dot_node bytemap id alloc : dot_node =
+    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
+    let size = sizeof ty in
+    let bs = fetch_bytes bytemap alloc.base size in
+    let (mval, _) = combine_bytes ty bs in
+    { id = id;
+      base = N.to_int alloc.base;
+      typ = String_core_ctype.string_of_ctype ty;
+      size = size;
+      rows = mk_rows bs ty mval;
+    }
+
+  let serialise_map f m : Json.json =
+    let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_allocation bytemap id alloc =
-    let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
-    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
-    let bs = fetch_bytes bytemap alloc.base (sizeof ty) in
-    let (mval, _) = combine_bytes ty bs in
-    `Assoc [
-      ("id", `String id);
-      ("base", Json.of_bigint alloc.base);
-      ("type", Json.of_option serialise_ctype alloc.ty);
-      ("size", Json.of_bigint alloc.size);
-      ("value", serialise_mem_value mval);
-    ]
+  let serialise_row (r:row) : Json.json =
+    `Assoc [("size", `Int r.size);
+            ("ispadding", `Bool r.ispadding);
+            ("path", `List (List.map (fun s -> `String s) r.path));
+            ("value", `String r.value);
+            ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
+           ]
+  let serialise_dot_node (n:dot_node) : Json.json =
+    `Assoc [("id", `Int n.id);
+            ("base", `Int n.base);
+            ("type", `String n.typ);
+            ("size", `Int n.size);
+            ("rows", `List (List.map serialise_row n.rows));
+           ]
 
-  let serialise_mem_state st =
-    `Assoc [
-      ("kind",          `String "concrete");
-      ("allocations",   serialise_map (serialise_allocation st.bytemap) st.allocations)
-    ]
+  let serialise_mem_state (st: mem_state) : Json.json =
+    serialise_map (fun id alloc -> serialise_dot_node @@ mk_dot_node st.bytemap id alloc) st.allocations
 
 end
 
