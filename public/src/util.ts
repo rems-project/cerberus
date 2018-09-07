@@ -97,7 +97,8 @@ export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Comm
       return 'color' + state.locs[i].color;
     }
   }
-  throw new Error ('getColorByLoC: Location not found!')
+  return 'no-color'
+  //throw new Error ('getColorByLoC: Location not found!')
 }
 
 export function createStyle() {

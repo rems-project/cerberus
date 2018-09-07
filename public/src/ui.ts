@@ -3,6 +3,7 @@ import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
 import View from './view'
+import { defineMode } from 'codemirror';
 
 /** UI Settings */
 export interface Settings {
@@ -30,6 +31,15 @@ export class CerberusUI {
   defaultCompiler: Common.Compiler
   /** List of compilers */
   compilers?: Common.Compiler []
+
+  // TODO!
+  public demo(name) {
+    Util.get('demo/'+name, (data: string) => {
+      $('#demo').css('visibility', 'hidden')
+      this.add(new View(name, data))
+      this.refresh()
+    })
+  }
 
   constructor (settings: Settings) {
     this.views = []          
@@ -413,7 +423,6 @@ Util.get('defacto_tests.json', (data: any) => {
     div.append(questions)
   }
 })
-
 
 /** UI start up */
 

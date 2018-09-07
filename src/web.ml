@@ -298,7 +298,7 @@ let get ~docroot uri path =
 let post ~docroot ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
-    Debug.print 8 ("POST data " ^ content);
+    (* Debug.print 8 ("POST data " ^ content); *)
     match path with
     | "/cerberus" -> cerberus ~conf ~flow content
     | _ ->
@@ -313,10 +313,25 @@ let post ~docroot ~conf ~flow uri path content =
 
 (* Main *)
 
+(* FIXME: THIS IS TERRIBLE *)
+let contains s1 s2 =
+  try
+    let len = String.length s2 in
+    for i = 0 to String.length s1 - len do
+      if String.sub s1 i len = s2 then raise Exit
+    done;
+    false
+  with Exit -> true
+
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
+  let _ = match Cohttp__.Header.get req.headers "accept-encoding" with
+    | Some enc ->
+      if contains enc "gzip" then Debug.print 9 "accepts gzip"
+    | None -> ()
+  in
   match meth with
   | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
   | `GET  -> get ~docroot uri path
