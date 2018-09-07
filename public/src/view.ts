@@ -361,8 +361,9 @@ export default class View {
       const tooltip = "allocation: " + String(alloc.id)
       const title =
         '<tr><td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>'
-          + '<td border="0" colspan="' + maxcols + '">[' + toHex(alloc.base)
-          + '] <b>' + alloc.prefix + '</b>: <i>' + alloc.type + '</i></td></tr>'
+          + '<td border="0" colspan="' + maxcols + '"><b>'
+          + alloc.prefix + '</b>: <i>' + alloc.type + '</i>&nbsp;[' + toHex(alloc.base)
+          + ']</td></tr>'
       let index = 0
       const body = _.reduce(alloc.rows, (acc, row) => {
         const p = _.reduce(row.path, (acc, tag) => {
