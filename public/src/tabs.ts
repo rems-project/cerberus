@@ -69,6 +69,7 @@ export class Interactive extends Tab {
   //
   graph: Graph
   network: vis.Network
+  lastNode: Node | undefined // TODO: check if I can get rid of this
 
   constructor(ee: Common.EventEmitter) {
     super('Interactive', ee)
@@ -166,7 +167,7 @@ export class Interactive extends Tab {
     this.network = new vis.Network(container[0], this.graph, options)
     
     this.stepBtn.on('click', () => this.step(this.getSelectedNode()))
-    this.nextBtn.on('click', () => this.step(this.getSelectedNode()))
+    this.nextBtn.on('click', () => this.nextMemoryAction(this.getSelectedNode()))
     restartBtn.on('click', () => ee.emit('resetInteractive'))
 
     hideTauBtn.on('click', () => {
@@ -200,13 +201,49 @@ export class Interactive extends Tab {
     ee.on('highlight', this, this.highlight)
     ee.on('clearGraph', this, () => this.graph.clear())
     ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s.graph))
+    // @ts-ignore: HACK!! TODO
+    ee.on('semiUpdateGraph', this, (s: Common.State) => this.semiUpdateGraph(s.graph))
   }
 
-  step(active: Node | undefined) {
+  step(active: Node | undefined, updateGraph: boolean = true) {
     if (!active) return
     this.stepBtn.addClass('disable')
     this.nextBtn.addClass('disable')
     this.ee.emit('step', active)
+    if (updateGraph) // TODO: remove this hack!!
+      this.ee.emit('updateGraph')
+    else {
+      // @ts-ignore
+      this.ee.emit('semiUpdateGraph')
+    }
+  }
+
+  nextMemoryAction(node: Node | undefined) {
+    if (!node) return
+    this.step(node, false)
+    let next = this.lastNode
+    if (next == undefined || next.id == node.id|| next.group == 'branch') {
+      this.ee.emit('updateGraph')
+      return
+    }
+    if (next.label != 'CreateRequest' && next.label != 'StoreRequest' && next.label != 'KillRequest') { // hack
+      this.nextMemoryAction(next)
+    } else {
+      this.step(next)
+    }
+  }
+
+  semiUpdateGraph(graph: Graph) {
+    const nodeFilter = this.hideTau ? (n: Node) => n.isVisible && !n.isTau
+                                    : (n: Node) => n.isVisible
+    const edgeFilter = (e: Edge) => e.isTau == !this.hideTau
+    const nodes = graph.nodes.get().filter(nodeFilter)
+    const edges = graph.edges.get().filter(edgeFilter)
+    this.graph.update(nodes, edges)
+
+    const nodes2 = this.graph.nodes.get().filter(n => n.group == 'leaf')
+    const lastLeaf = nodes2[nodes2.length-1]
+    this.lastNode = lastLeaf
   }
 
   updateGraph(graph: Graph) {
@@ -239,6 +276,7 @@ export class Interactive extends Tab {
       if (lastLeaf.loc) this.ee.emit('markInteractive', lastLeaf.loc)
       this.ee.emit('setMemory', lastLeaf.mem)
     }
+    this.lastNode = lastLeaf
   }
 
   highlight() {

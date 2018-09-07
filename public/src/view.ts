@@ -283,7 +283,7 @@ export default class View {
     // Set visible all tau nodes descendent from active until first non-tau
     graph.setChildrenVisible(activeId)
     // Update any instance of interactive
-    this.emit('updateGraph')
+    // this.emit('updateGraph')
     // WARN: Assume tree node is decreasing order
     // This is a seed to the server
     this.state.lastNodeId = tree.nodes[0].id
@@ -297,7 +297,7 @@ export default class View {
       active.group = 'branch'
       this.state.graph.nodes.update(active)
       this.state.graph.setChildrenVisible(active.id)
-      this.emit('updateGraph')
+      //this.emit('updateGraph')
     }
   }
 
@@ -352,13 +352,17 @@ export default class View {
     if (mem === undefined) return
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
     const createNode = (alloc: Common.MemoryAllocation) => {
+      if (alloc.prefix == null) // HACK! TODO: check malloc case
+        return ''
       const box = (n, ischar=false) =>
         '<td width="7" height="'+(ischar?'20':'7')+'" fixedsize="true" port="'+String(n)
         +'"><font point-size="1">&nbsp;</font></td>'
       const maxcols = _.reduce(alloc.rows, (acc, row) => Math.max(acc, row.path.length), 0)+1
+      const tooltip = "allocation: " + String(alloc.id)
       const title =
         '<tr><td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>'
-          + '<td border="0" colspan="' + maxcols + '">@' + alloc.id + ': ' + alloc.type + '</td></tr>'
+          + '<td border="0" colspan="' + maxcols + '">[' + toHex(alloc.base)
+          + '] <b>' + alloc.prefix + '</b>: <i>' + alloc.type + '</i></td></tr>'
       let index = 0
       const body = _.reduce(alloc.rows, (acc, row) => {
         const p = _.reduce(row.path, (acc, tag) => {
@@ -366,7 +370,7 @@ export default class View {
         },'')
         const spath = _.reduce(row.path, (acc, tag) => acc + '_' + tag, '')
         const v = '<td port="'+ spath + 'v" rowspan="'+row.size+'" colspan="'+String(maxcols-row.path.length)+'"'
-                +(row.ispadding?' bgcolor="grey"':'')+'>'+row.value+'</td>'
+                +(row.ispadding?' bgcolor="grey"':'')+'>'+(row.pointsto === null ? row.value : toHex(parseInt(row.value)))+'</td>'
         acc += '<tr>' + box(index, row.size == 1)+p+v+'</tr>'
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -374,10 +378,11 @@ export default class View {
         return acc
       }, '')
       const lastrow = '<tr border="0"><td border="0" width="7" height="7" fixedsize="true" port="'+String(alloc.size)+'"><font point-size="1">&nbsp;</font></td></tr>'
-      return 'n'+alloc.id+'[label=<<table border="0" cellborder="1" cellspacing="0">'+title+body+lastrow+'</table>>];'
+      return 'n'+alloc.id+'[label=<<table border="0" cellborder="1" cellspacing="0" >'+title+body+lastrow+'</table>>, tooltip="'+tooltip+'"];'
     }
     type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/}
     const getPointersInAlloc = (alloc: Common.MemoryAllocation) => {
+      if (alloc.prefix === null) return []
       return _.reduce(alloc.rows, (acc: Pointer[], row) => {
         if (row.pointsto !== null) {
           const from = _.reduce(row.path, (acc, tag) => acc + '_' + tag, 'n'+alloc.id + ':')
@@ -390,11 +395,26 @@ export default class View {
     }
     const createEdges = (ps: Pointer[], mem: Common.Memory) => {
       return _.reduce(ps, (acc, p) => {
+        const target = _.find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        if (target) {
+          const offset = p.addr - target.base
+          acc += p.from + "v->n" + target.id + ':' + offset + (target.id != p.to ? '[color="red"]': '') + ';'
+        } else {
+          const toprov = _.find(mem, alloc => alloc.id == p.to)
+          if (toprov) {
+            const offset = p.addr - toprov.base
+            acc += p.from + "v->n" + toprov.id + ':' + offset + '[color="red"];'
+          } else {
+            // WHAT SHOULD I DO?
+          }
+        }
+        /*
         const target = _.find(mem, (alloc => alloc.id == p.to))
         if (target) {
           const offset = p.addr - target.base
           acc += p.from + "v->n" + target.id + ':' + offset + (offset >= target.size ? '[color="red"]': '') + ';'
         }
+        */
         return acc;
       }, '')
     }

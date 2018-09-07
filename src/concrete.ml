@@ -1618,6 +1618,7 @@ let combine_prov prov1 prov2 =
   type dot_node =
     { id: int;
       base: int;
+      prefix: string option;
       typ: string;
       size: int;
       rows: row list;
@@ -1688,9 +1689,15 @@ let combine_prov prov1 prov2 =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
     let size = sizeof ty in
     let bs = fetch_bytes bytemap alloc.base size in
+    let prefix = match alloc.prefix with
+      | Symbol.PrefSource []
+      | Symbol.PrefOther _ -> None
+      | Symbol.PrefSource xs -> Some (Pp_symbol.to_string_pretty @@ List.hd (List.rev xs))
+    in
     let (mval, _) = combine_bytes ty bs in
     { id = id;
       base = N.to_int alloc.base;
+      prefix = prefix;
       typ = String_core_ctype.string_of_ctype ty;
       size = size;
       rows = mk_rows bs ty mval;
@@ -1710,6 +1717,7 @@ let combine_prov prov1 prov2 =
   let serialise_dot_node (n:dot_node) : Json.json =
     `Assoc [("id", `Int n.id);
             ("base", `Int n.base);
+            ("prefix", match n.prefix with | Some x -> `String x | None -> `Null);
             ("type", `String n.typ);
             ("size", `Int n.size);
             ("rows", `List (List.map serialise_row n.rows));

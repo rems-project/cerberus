@@ -2,6 +2,7 @@ const merge = require('webpack-merge');
 const baseConfig = require('./base.config.js');
 const ExtractTextPlugin = require('extract-text-webpack-plugin')
 const extractCSS = new ExtractTextPlugin({ filename: 'style.bundle.css' })
+const CompressionPlugin = require("compression-webpack-plugin")
 
 module.exports = merge(baseConfig, {
   mode: 'production',
@@ -32,7 +33,8 @@ module.exports = merge(baseConfig, {
    ]
   },
   plugins: [
-    extractCSS
+    extractCSS,
+    new CompressionPlugin()
   ]
 });
 
