@@ -18,3 +18,5 @@ val to_cartesian: t -> ((int * int) * (int * int)) option
 val print_location: t -> PPrint.document
 val pp_location: t -> PPrint.document
 val head_pos_of_location: t -> (string * string)
+
+val get_filename: t -> string option

@@ -248,6 +248,18 @@ val core_action_step:
     list annot -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
     (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
+  let is_library =
+    match Loc.get_filename loc with
+      | Nothing ->
+          false
+      | Just str ->
+          let xs = String.toCharList str in
+          let n = List.length xs in
+          let ext = List.drop (n-2) xs in
+          ext = [#'.'; #'h']
+    end in
+  let tag_str str = if is_library then "IN LIBRARY: " ^ str else str in
+  
   let sb_before =
     (* filter out actions from other threads *)
     Set.map snd $ Set.filter (fun (tid, _) -> tid = current_tid) annots.sb_before in
@@ -278,7 +290,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                 | _ ->
                     match (valueFromPexpr pe1, valueFromPexpr pe2) with
                       | (Just (Vobject (OVinteger ival)), Just (Vctype ty)) ->
-                          Step_action_request "CreateRequest" (
+                          Step_action_request (tag_str "CreateRequest") (
                             E.fresh_action_id >>= fun create_aid ->
                             E.return (
                               CreateRequest loc sb_before dd_before asw_before
@@ -353,7 +365,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
                                   | (Vobject (OVinteger ival), Vctype ty) ->
                                 match memValueFromValue (Core_ctype.unatomic ty) cval3 with
                                   | Just mem_val ->
-                                      Step_action_request "CreateRequest" (
+                                      Step_action_request (tag_str "CreateRequest") (
                                         E.fresh_action_id >>= fun create_aid ->
                                         E.return (
                                           CreateRequest loc sb_before dd_before asw_before
@@ -390,7 +402,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
           | _ ->
               match (valueFromPexpr pe1, valueFromPexpr pe2) with
                 | (Just (Vobject (OVinteger ival1)), Just (Vobject (OVinteger ival2))) ->
-                    Step_action_request "AllocRequest" (
+                    Step_action_request (tag_str "AllocRequest") (
                       E.fresh_action_id >>= fun alloc_aid ->
                       E.return (
                         AllocRequest loc sb_before dd_before asw_before
@@ -425,7 +437,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
     | Kill is_dynamic pe ->
         match valueFromPexpr pe with
           | Just (Vobject (OVpointer ptr_val)) ->
-              Step_action_request "KillRequest" (
+              Step_action_request (tag_str "KillRequest") (
                 E.fresh_action_id >>= fun kill_aid ->
                 E.return (
                   KillRequest loc sb_before dd_before asw_before
@@ -497,7 +509,7 @@ KKK
                 | _ ->
                   match memValueFromValue (Core_ctype.unatomic ty) cval with
                     | Just mem_val ->
-                        Step_action_request "StoreRequest" (
+                        Step_action_request (tag_str "StoreRequest") (
                           E.fresh_action_id >>= fun store_aid ->
                           E.fresh_symbol    >>= fun val_sym   ->
                           E.return (
@@ -551,7 +563,7 @@ KKK
     | Load pe1 pe2 mo ->
         match (valueFromPexpr pe1, valueFromPexpr pe2) with
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val))) ->
-              Step_action_request "LoadRequest" (
+              Step_action_request (tag_str "LoadRequest") (
                 E.fresh_action_id >>= fun load_aid ->
                 E.fresh_symbol    >>= fun val_sym  ->
                 E.return (
@@ -587,7 +599,7 @@ KKK
           | (Just (Vctype ty), Just (Vobject (OVpointer ptr_val)), Just cval_expected, Just cval_desired) ->
               match (memValueFromValue ty cval_expected, memValueFromValue ty cval_desired) with
                 | (Just mval_expected, Just mval_desired) ->
-                    Step_action_request "RMWRequest" (
+                    Step_action_request (tag_str "RMWRequest") (
                       E.fresh_action_id >>= fun rmw_aid ->
                       E.return (
                         RMWRequest loc sb_before dd_before asw_before
@@ -688,7 +700,7 @@ KKK
         end
 *)
     | Fence mo ->
-        Step_action_request "FenceRequest" (
+        Step_action_request (tag_str "FenceRequest") (
           E.fresh_action_id >>= fun fence_aid ->
           E.return (
             FenceRequest loc sb_before dd_before asw_before
