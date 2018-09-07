@@ -374,3 +374,13 @@ let head_pos_of_location = function
                          else ' ')
             )
         | None -> "" )
+
+let get_filename = function
+  | Loc_unknown ->
+      None
+  | Loc_other _ ->
+      None
+  | Loc_point pos 
+  | Loc_region (pos, _, _)
+  | Loc_regions ((pos, _) :: _, _) ->
+      Some pos.pos_fname
