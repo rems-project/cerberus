@@ -1,6 +1,5 @@
 import $ from 'jquery'
 import _ from 'lodash'
-import vis from 'vis'
 import CodeMirror from 'codemirror'
 import { Node, Edge, Graph } from './graph';
 import Util from './util'
@@ -62,245 +61,145 @@ export class Preferences extends Tab {
 }
 
 export class Interactive extends Tab {
-  // UI
-  stepBtn: JQuery<HTMLElement>
-  nextBtn: JQuery<HTMLElement>
-  hideTau: boolean
-  //
-  graph: Graph
-  network: vis.Network
-  lastNode: Node | undefined // TODO: check if I can get rid of this
-
   constructor(ee: Common.EventEmitter) {
     super('Interactive', ee)
 
-    let toolbar = $('<div class="toolbar"></div>')
-    toolbar.attr('align', 'right')
+    const toolbar = $('<div class="toolbar adjust-height"></div>')
 
-    this.stepBtn = $('<div class="btn inline">Step</div>')
-    toolbar.append(this.stepBtn)
+    const stepBtn = $('<div class="btn inline">Step</div>')
+    const restartBtn = $('<div class="btn inline">Restart</div>')
 
-    this.nextBtn = $('<div class="btn inline">Next</div>')
-    toolbar.append(this.nextBtn)
+    const optionsBtn = $('<div class="btn dropdown"><span>Options</span></div>')
+    const dropdown_options = $('<div class="dropdown-content"></div>')
 
-    let restartBtn = $('<div class="btn inline">Restart</div>')
+    const hide_tauCBox = $('<input type="checkbox">')
+    const hide_tauBtn = $('<div class="btn">Suppress tau transitions</div>')
+    hide_tauBtn.prepend(hide_tauCBox)
+    const skip_tauCBox = $('<input type="checkbox">')
+    const skip_tauBtn = $('<div class="btn">Skip tau transitions</div>')
+    skip_tauBtn.prepend(skip_tauCBox)
+    const eager_memCBox = $('<input type="checkbox">')
+    const eager_memBtn = $('<div class="btn">Skip to the next memory action</div>')
+    eager_memBtn.prepend(eager_memCBox)
+
+    dropdown_options.attr('align', 'left')
+    dropdown_options.append(hide_tauBtn)
+    dropdown_options.append(skip_tauBtn)
+    dropdown_options.append(eager_memBtn)
+    optionsBtn.append(dropdown_options)
+
+    toolbar.append(optionsBtn)
     toolbar.append(restartBtn)
+    toolbar.append(stepBtn)
 
-    let hideTauBtn = $('<div class="btn inline">Show tau steps</button>')
-    toolbar.append(hideTauBtn)
-    this.hideTau = true
+    const controls = $('<div class="toolbar"></div>')
+    const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
+    const reset = $('<div class="btn inline" type="button">Reset</div>')
+    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
+    const zoomOut = $('<div class="btn inline" type="button">Zoom Out</div>')
+    controls.append(zoomIn)
+    controls.append(zoomOut)
+    controls.append(range)
+    controls.append(reset)
 
-    let container = $('<div align="center" class="graph"></div>')
-
+    const container = $('<div align="center" class="graph"></div>')
+    this.dom.append(controls)
     this.dom.append(toolbar)
     this.dom.append(container)
 
-    // Setup Graph Network
-    let options : vis.Options = {
-      nodes: {
-        shape: 'dot',
-        size: 10,
-        shapeProperties: {
-          borderRadius: 2,
-          borderDashes: false,
-          interpolation: false,
-          useImageSize: false,
-          useBorderWithImage: false
-        },
-        color: {
-          border: '#5f5f5f',
-          background: '#5f5f5f',
-          highlight: {
-            border: '#7f7f7f',
-            background: '#7f7f7f'
-          }
-        },
-        font: {
-          align: 'left'
-        },
-        fixed: true
-      },
-      edges: {
-        arrows: {to: true},
-        font: {
-          background: '#ffffff',
-          color: '#5f5f5f',
-        },
-      },
-      groups: {
-        leaf: {
-          color: {
-            background: '#044777',
-            border: '#044777',
-            highlight: {
-              border: '#7f7f7f',
-              background: '#033777'
-            }
-          }
-        },
-        branch: {
-          color: {
-            border: '#5f5f5f',
-            background: '#5f5f5f',
-            highlight: {
-              border: '#7f7f7f',
-              background: '#7f7f7f'
-            }
-          }
-        }
-      },
-      layout: {
-        hierarchical: {
-          enabled: true,
-          levelSeparation: 90,
-          nodeSpacing: 200
-        }
-      },
-      interaction: {
-        navigationButtons: true,
-        selectable: true,
-        selectConnectedEdges: false
-      }
+    const updateFlags = (state: Readonly<Common.State>) => {
+      hide_tauCBox.prop('checked', state.hide_tau)
+      skip_tauCBox.prop('checked', state.skip_tau)
+      eager_memCBox.prop('checked', state.eager_mem)
+    }
+    const toggle = (flag: string) => {
+      ee.once((state: Common.State) => {
+        state[flag] = !state[flag]
+        // if we don't skip tau we should show the transitions
+        state.hide_tau = state.skip_tau && state.hide_tau
+        updateFlags(state)
+        ee.emit('updateDOT')
+      })
     }
 
-    this.graph = new Graph()
-    this.network = new vis.Network(container[0], this.graph, options)
-    
-    this.stepBtn.on('click', () => this.step(this.getSelectedNode()))
-    this.nextBtn.on('click', () => this.nextMemoryAction(this.getSelectedNode()))
+    hide_tauBtn.on('click', () => toggle('hide_tau'))
+    skip_tauBtn.on('click', () => toggle('skip_tau'))
+    eager_memBtn.on('click', () => toggle('eager_mem'))
+    ee.once((state: Common.State) => updateFlags(state))
+
+    stepBtn.on('click', () => {
+      ee.once((state: Readonly<Common.State>) => {
+        const active = _.find(state.graph.nodes, n => n.selected)
+        if (active)
+          ee.emit('step', active.id)
+        else
+          alert('No selected node.')
+      })
+    })
     restartBtn.on('click', () => ee.emit('resetInteractive'))
 
-    hideTauBtn.on('click', () => {
-      this.hideTau = !this.hideTau
-      if (this.hideTau)
-        hideTauBtn.text('Show tau steps')
-      else
-        hideTauBtn.text('Hide tau steps')
-      this.graph.clear()
-      ee.once((s: Common.State) => this.updateGraph(s.graph))
-    })
-
-    this.network.on('click', (arg: any) => {
-      if (!arg || !arg.nodes) return
-      this.stepBtn.addClass('disable')
-      this.nextBtn.addClass('disable')
-      const nodes = arg.nodes as Common.ID []
-      if (nodes.length == 1) {
-        let active = this.graph.nodes.get(nodes[0])
-        if (active) {
-          if (active.group && active.group == 'leaf') {
-            ee.emit('step', active)
-          } else {
-            ee.emit('clear')
-            if (active.loc) ee.emit('markInteractive', active.loc)
-            ee.emit('setMemory', active.mem)
-          }
+    const updateGraph = (state: Readonly<Common.State>) => {
+      container.empty()
+      container.append(Viz(state.dotExecGraph))
+      const svg = container.find('svg')
+      svg.addClass('panzoom')
+      // @ts-ignore
+      svg.panzoom({
+        $zoomIn: zoomIn,
+        $zoomOut: zoomOut,
+        $zoomRange: range,
+        $reset: reset,
+        increment: 0.1,
+        minScale: 0.1,
+        maxScale: 2
+      })
+      // Check if needs to span down
+      const svgHeight = svg.height()
+      const containerHeight = container.height()
+      if (svgHeight && containerHeight) {
+        const delta = containerHeight / 2 - svgHeight
+        if (delta < 0) {
+          // @ts-ignore
+          svg.panzoom('pan', 0, delta, '{ relative: true }')
         }
       }
-    })
+      // Zoom using the mouse
+      container.off() // remove all previous events
+      container.on('mousewheel.focal', (e) => {
+        e.preventDefault()
+        // @ts-ignore
+        let delta = e.delta || e.originalEvent.wheelDelta
+        // @ts-ignore
+        let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
+        // @ts-ignore
+        svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
+      })
+    }
+
     ee.on('highlight', this, this.highlight)
-    ee.on('clearGraph', this, () => this.graph.clear())
-    ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s.graph))
-    // @ts-ignore: HACK!! TODO
-    ee.on('semiUpdateGraph', this, (s: Common.State) => this.semiUpdateGraph(s.graph))
+    ee.on('updateGraph', this, (s: Common.State) => updateGraph(s))
   }
-
-  step(active: Node | undefined, updateGraph: boolean = true) {
-    if (!active) return
-    this.stepBtn.addClass('disable')
-    this.nextBtn.addClass('disable')
-    this.ee.emit('step', active)
-    if (updateGraph) // TODO: remove this hack!!
-      this.ee.emit('updateGraph')
-    else {
-      // @ts-ignore
-      this.ee.emit('semiUpdateGraph')
-    }
-  }
-
-  nextMemoryAction(node: Node | undefined) {
-    if (!node) return
-    this.step(node, false)
-    let next = this.lastNode
-    if (next == undefined || next.id == node.id|| next.group == 'branch') {
-      this.ee.emit('updateGraph')
-      return
-    }
-    if (next.label != 'CreateRequest' && next.label != 'StoreRequest' && next.label != 'KillRequest') { // hack
-      this.nextMemoryAction(next)
-    } else {
-      this.step(next)
-    }
-  }
-
-  semiUpdateGraph(graph: Graph) {
-    const nodeFilter = this.hideTau ? (n: Node) => n.isVisible && !n.isTau
-                                    : (n: Node) => n.isVisible
-    const edgeFilter = (e: Edge) => e.isTau == !this.hideTau
-    const nodes = graph.nodes.get().filter(nodeFilter)
-    const edges = graph.edges.get().filter(edgeFilter)
-    this.graph.update(nodes, edges)
-
-    const nodes2 = this.graph.nodes.get().filter(n => n.group == 'leaf')
-    const lastLeaf = nodes2[nodes2.length-1]
-    this.lastNode = lastLeaf
-  }
-
-  updateGraph(graph: Graph) {
-    const nodeFilter = this.hideTau ? (n: Node) => n.isVisible && !n.isTau
-                                    : (n: Node) => n.isVisible
-    const edgeFilter = (e: Edge) => e.isTau == !this.hideTau
-    const nodes = graph.nodes.get().filter(nodeFilter)
-    const edges = graph.edges.get().filter(edgeFilter)
-    this.graph.update(nodes, edges)
-    this.selectLastLeaf()
-  }
-
-  getSelectedNode () {
-    const selection = this.network.getSelection()
-    if (selection.nodes && selection.nodes.length > 0)
-      return this.graph.nodes.get(selection.nodes[0])
-    return undefined
-  }
-
-  selectLastLeaf () {
-    const nodes = this.graph.nodes.get().filter(n => n.group == 'leaf')
-    const lastLeaf = nodes[nodes.length-1]
-    if (lastLeaf != null) {
-      this.stepBtn.removeClass('disable')
-      this.nextBtn.removeClass('disable')
-      this.network.focus(lastLeaf.id)
-      this.network.selectNodes([lastLeaf.id])
-      this.network.redraw()
-      this.ee.emit('clear')
-      if (lastLeaf.loc) this.ee.emit('markInteractive', lastLeaf.loc)
-      this.ee.emit('setMemory', lastLeaf.mem)
-    }
-    this.lastNode = lastLeaf
-  }
-
+  
   highlight() {
-    this.network.unselectAll()
+    //this.network.unselectAll()
   }
 
   refresh() {
-    this.network.redraw()
+    //this.network.redraw()
   }
 
 }
 
 class Memory extends Tab {
-  //network: vis.Network
-
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
 
     const container = $('<div align="center" class="graph"></div>')
-    const controls = $('<div class="controls"></div>')
-    const zoomIn = $('<input class="zoomPlus" type="button" value="Zoom In">')
-    const reset = $('<input class="reset" type="button" value="Reset">')
-    const range = $('<input class="zoom-range" type="range" step="0.05" min="0.1" max="2">')
-    const zoomOut = $('<input class="zoomMinus" type="button" value="Zoom Out">')
+    const controls = $('<div class="toolbar"></div>')
+    const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
+    const reset = $('<div class="btn inline" type="button">Reset</div>')
+    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
+    const zoomOut = $('<div class="btn inline" type="button">Zoom Out</div>')
     controls.append(zoomIn)
     controls.append(zoomOut)
     controls.append(range)
@@ -314,7 +213,7 @@ class Memory extends Tab {
 
     ee.on('updateMemory', this, (s:Common.State) => {
       container.empty()
-      container.append(Viz(s.mem, container[0]))
+      container.append(Viz(s.dotMem))
       const svg = container.find('svg')
       svg.addClass('panzoom')
       // @ts-ignore

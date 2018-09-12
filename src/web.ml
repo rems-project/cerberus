@@ -225,6 +225,20 @@ let respond_json json =
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   (Server.respond_string ~flush:true ~headers) `OK (Yojson.to_string json) ()
 
+let respond_gzipped filename =
+  let ext = Filename.extension filename in
+  let contentType =
+    if ext = ".js" then Some "application/javascript"
+    else if ext = ".css" then Some "text/css"
+    else None
+  in match contentType with
+  | Some contentType ->
+    let headers = Cohttp.Header.of_list [("content-type", contentType);
+                                         ("content-encoding", "gzip")] in
+    (Server.respond_file ~headers) (filename ^ ".gz") ()
+  | None ->
+    Server.respond_file filename ()
+
 (* Cerberus actions *)
 
 let log_request msg flow =
@@ -274,7 +288,7 @@ let cerberus ~conf ~flow content =
 
 (* GET and POST *)
 
-let get ~docroot uri path =
+let get ~docroot ?(gzipped=false) uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -282,7 +296,11 @@ let get ~docroot uri path =
   in
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
-    if is_regular filename then Server.respond_file filename ()
+    if is_regular filename then
+      if gzipped && Sys.file_exists (filename ^ ".gz") then
+        respond_gzipped filename
+      else
+        Server.respond_file filename ()
     else forbidden path
   in
   let try_with () =
@@ -327,16 +345,23 @@ let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
-  let _ = match Cohttp__.Header.get req.headers "accept-encoding" with
-    | Some enc ->
-      if contains enc "gzip" then Debug.print 9 "accepts gzip"
-    | None -> ()
-  in
-  match meth with
-  | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
-  | `GET  -> get ~docroot uri path
-  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path
-  | _     -> not_allowed meth path
+  let try_with () =
+    let gzipped = match Cohttp__.Header.get req.headers "accept-encoding" with
+      | Some enc -> contains enc "gzip"
+      | None -> false
+    in
+    if gzipped then Debug.print 9 "accepts gzip";
+    match meth with
+    | `HEAD -> get ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
+    | `GET  -> get ~docroot ~gzipped uri path
+    | `POST ->
+      Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path
+    | _     -> not_allowed meth path
+  in catch try_with begin fun e ->
+    Debug.error_exception "POST" e;
+    forbidden path
+  end
+
 
 let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try

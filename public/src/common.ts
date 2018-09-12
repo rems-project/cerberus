@@ -120,14 +120,19 @@ namespace Common {
     pp: IR
     ast: IR
     locs: Locations[]
-    graph: Graph
-    mem: string // Graphviz
     result: string
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
     ranges?: any
     dirty: boolean
+    // Interactive mode
+    hide_tau: boolean // Hide tau transition option
+    skip_tau: boolean // Skip tau transition
+    eager_mem: boolean
+    graph: Graph // Current execution graph
+    dotMem: string // DOT representation
+    dotExecGraph: string // DOT representation
   }
 
   export interface ResultTree {
@@ -145,25 +150,27 @@ namespace Common {
   export type Event =
     'update' |            // Update tab values
     'updateExecution' |   // Update execution result
-    'clearGraph'  |       // Clear step graph
-    'updateGraph' |       // Update step graph
-    'setMemory' |         // Set memory state
-    'updateMemory' |      // Update memory graph
-    'resetInteractive' |  // Reset interactive mode
-    'step' |              // Step interactive mode
     'mark' |              // Mark location
     'markError' |         // Mark error location
-    'markInteractive' |   // Mark when interactive mode
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
-    'dirty'               // Fired when file has changed
+    'dirty' |             // Fired when file has changed
+    // Interactive mode events
+    'step' |              // Step interactive mode
+    'updateGraph' |       // Update step graph display (calls VIZ)
+    'setMemory' |         // Set memory state
+    'updateMemory' |      // Update memory graph (calls VIZ)
+    'markInteractive' |   // Mark source locations when in interactive mode
+    'resetInteractive' |  // Reset interactive mode
+    'updateDOT'           // Update DOT execution graph (create DOT file)
+
 
   export interface EventEmitter {
     on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
     on (eventName: 'markError', self: any, f: (line: number) => void): void
     on (eventName: 'dirty', self: any, f: () => void): void
-    on (eventName: 'step', self: any, f: (active: Node) => void): void
+    on (eventName: 'step', self: any, f: (activeId: ID) => void): void
     on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
     on (eventName: 'markInteractive', self: any, f: ((l:any, s: Readonly<State>) => void)): void
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
@@ -171,7 +178,7 @@ namespace Common {
     once (f: ((s: Readonly<State>) => any)): any
     emit (eventName: 'clear'): void
     emit (eventName: 'mark'): void
-    emit (eventName: Event, ...args: any[]): void // TODO: take any any out!!
+    emit (eventName: Event, ...args: any[]): void
   }
 
   export interface Compiler {

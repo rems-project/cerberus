@@ -263,7 +263,8 @@ let step ~conf ~filename active_node =
     let ranges   = create_expr_range_list core' in
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
-    let initId   = new_id () in
+    last_node_id := 0;
+    let initId   = 0 in
     let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([nodeId], []))

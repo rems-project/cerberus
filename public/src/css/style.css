@@ -335,11 +335,18 @@ code {
   white-space: nowrap;
 }
 
+.adjust-height {
+  height: 26px;
+}
+
 .graph {
-  /* vis.js doesn't work with flex */
   height: calc(100% - 28px);
   width: 100%;
   margin: 0px auto;
+}
+
+.graph a {
+  cursor: pointer;
 }
 
 .flex {
@@ -359,6 +366,12 @@ code {
   white-space: nowrap;
   padding-right: 4px;
   overflow: initial;
+}
+
+.range {
+  border: 0;
+  vertical-align: middle;
+  width: calc(100% - 204px);
 }
 
 /* ast-dump style */

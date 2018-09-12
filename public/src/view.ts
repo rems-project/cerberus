@@ -1,13 +1,11 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
 import _ from "lodash"
-import { Node, /*Edge,*/ Graph } from "./graph"
+import { Node, Edge, Graph } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
 import Common from './common'
 import UI from './ui'
-import { max } from "moment";
-import { DH_UNABLE_TO_CHECK_GENERATOR } from "constants";
 
 export default class View {
   title: string
@@ -57,9 +55,10 @@ export default class View {
     $('#views').append(this.dom)
     this.initLayout(config)
 
-    this.on('step', this, this.step)
+    this.on('step', this, this.execGraphNodeClick)
     this.on('resetInteractive', this, this.resetInteractive)
     this.on('setMemory', this, this.setMemory)
+    this.on('updateDOT', this, this.updateDOT)
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -169,13 +168,17 @@ export default class View {
       pp: { cabs: '', ail:  '', core: '' },
       ast: { cabs: '', ail:  '', core: '' },
       locs: [],
-      graph: new Graph(),
-      mem: '', //new Graph(),
       result: '',
       console: '',
       lastNodeId: 0,
       tagDefs: undefined,
-      dirty: true
+      dirty: true,
+      graph: new Graph(),
+      hide_tau: true,
+      skip_tau: true,
+      eager_mem: true,
+      dotMem: '',
+      dotExecGraph: '',
     }
   }
 
@@ -208,11 +211,12 @@ export default class View {
     let init = steps.nodes[0]
     init.isVisible = true
     init.isTau = false
+    init.selected = true
+    init.can_step = true
     this.state.graph.clear()
-    this.state.graph.nodes.add(init)
-    this.state.lastNodeId = 1
-    // Update interactive tabs
-    this.emit('updateGraph')
+    this.state.graph.nodes.push(init)
+    this.state.lastNodeId = 0
+    this.updateDOT()
   }
 
   /** Restart interactive mode in all the tabs */
@@ -226,7 +230,73 @@ export default class View {
     }
   }
 
-  /** Update interactive state mode and raise event to update graphs */
+  /** Update DOT and raise an event to update interactive graph */
+  updateDOT() {
+    const graph = this.state.graph
+    const dotHead = 'digraph Memory { node [shape=box, fontsize=12];'
+    const nodes = this.state.hide_tau
+                ? _.filter(graph.nodes, n => !n.isTau && n.isVisible)
+                : _.filter(graph.nodes, n => n.isVisible)
+    const edges = _.filter(graph.edges, e => this.state.hide_tau ? !e.isTau : e.isTau)
+    const dotNodes = _.reduce(nodes, (acc, n) => 
+      acc + 'n' + n.id + '['
+      + 'href="javascript:UI.execGraphNodeClick('+n.id+')",'
+      + (n.selected ? 'color="blue", ' : '')
+      + (n.can_step ? 'fontcolor="blue", ' : '')
+      + 'label=<' + (n.can_step ? '<u>' + n.label + '</u>' : n.label) + '>'
+      + '];', '')
+    const dotEdges = _.reduce(edges, (acc, e) => {
+      if (graph.nodes[e.from].isVisible && graph.nodes[e.to].isVisible)
+        return acc + 'n' + e.from + '->n' + e.to + ';'
+      else return acc
+    }, '')
+    this.state.dotExecGraph = dotHead + dotNodes + dotEdges + '}'
+    // Update any instance of interactive
+    this.emit('updateGraph')
+  }
+
+  setChildrenVisible(nID, last = false) {
+    const graph = this.state.graph
+    let children
+    if (this.state.skip_tau) {
+      graph.tauChildrenTransClosure(nID).map(nID => graph.nodes[nID]).map(child => child.isVisible = true)
+      children = graph.nonTauChildren(nID).map(nID => graph.nodes[nID])
+      children.map(child => child.isVisible = true)
+    } else {
+      children = graph.tauChildren(nID).map(nID => graph.nodes[nID])
+      if (children.length > 0) {
+        children.map(child => child.isVisible = true)  
+      } else {
+        children = graph.children(nID).map (nID => graph.nodes[nID])
+        children.map(child => child.isVisible = true)  
+      }
+    }
+    if (!last && this.state.eager_mem && children.length > 0) {
+      const label = children[0].label
+      if (label == 'CreateRequest' || label == 'StoreRequest' || label == 'KillRequest')
+        children = this.setChildrenVisible(children[0].id, true)
+      else if (label != 'Non deterministic choice')
+        children = this.setChildrenVisible(children[0].id)
+    }
+    return children
+  }
+
+  /** Update interactive display state and raise event to update DOT */
+  executeInteractiveStep(activeId) {
+    const children = this.setChildrenVisible(activeId)
+    children.map(child => child.can_step = true)
+    this.state.graph.nodes.map(n => n.selected = false)
+    if (children.length > 0) {
+      children[0].selected = true
+      this.setMemory(children[0].mem)
+      this.emit('clear')
+      if (children[0].loc)
+        this.emit('markInteractive', children[0].loc)
+    }
+    this.updateDOT();
+  }
+
+  /** Update interactive state mode and raise event to update DOT */
   updateInteractive(activeId: Common.ID, tree: Common.ResultTree) {
     // Give a better label to the node (TODO)
     const nodeLabel = (str: string) => {
@@ -243,61 +313,71 @@ export default class View {
       return str
     }
     // Check node is a tau transition
-    const isTau = (n: Node) => _.includes(n.label, "tau") && !_.includes(n.label, "End")
-    const isTauById = (nId: Common.ID) => isTau(graph.nodes.get(nId))
+    const isTau = (n: Node) => n && _.includes(n.label, "tau") && !_.includes(n.label, "End")
+    const isTauById = (nId: Common.ID) => isTau(graph.nodes[nId])
     // Return immediate edge upward
-    const getIncommingEdge = (nId: Common.ID) => _.find(graph.edges.get(), n => n.to == nId)
+    const getIncommingEdge = (nId: Common.ID) => _.find(graph.edges, n => n.to == nId)
     // Search for a no tau parent
     const getNoTauParent: (_:Common.ID) => Common.ID | undefined = (nId: Common.ID) => {
       const e = getIncommingEdge(nId)
-      if (!e || !e.from)
+      if (e == undefined || e.from == undefined)
         throw new Error('Could not find incomming edge!')
       if (isTauById(e.from))
         return getNoTauParent(e.from)
       return e.from
     }
+    // This is a seed to the server
+    this.state.lastNodeId = tree.nodes[0].id
+    tree.nodes.reverse()
     const graph = this.state.graph
     // Update tree nodes labels
     tree.nodes.map((n) => n.label = nodeLabel(n.label))
     // Update current point to become branch
-    const active = graph.nodes.get(activeId)
-    active.group = 'branch'
+    const active = graph.nodes[activeId]
+    if (!active) {
+      alert('point active error')
+      return
+    }
+    active.can_step = false
     delete active.state
-    graph.nodes.update(active)
     // Add nodes
     tree.nodes.map((n) => {
       n.isTau = isTau(n)
       n.isVisible = false
-      graph.nodes.add(n)
+      graph.nodes.push(n)
     })
     // Edges are added twice (for tau transitions)
     tree.edges.map((e) => {
       e.isTau = true
-      graph.edges.add(e)
+      graph.edges.push(e)
     })
     tree.edges.map((e) => {
-      const n = graph.nodes.get(e.to)
-      if (!n.isTau)
-        graph.edges.add({from: getNoTauParent(e.to), to: e.to, isTau: false})
+      const n = _.find(graph.nodes, n => n.id == e.to)
+      if (n && !n.isTau) {
+        const from = getNoTauParent(e.to)
+        if (from != undefined)
+          graph.edges.push({from: from, to: e.to, isTau: false})
+      }
     })
-    // Set visible all tau nodes descendent from active until first non-tau
-    graph.setChildrenVisible(activeId)
-    // Update any instance of interactive
-    // this.emit('updateGraph')
-    // WARN: Assume tree node is decreasing order
-    // This is a seed to the server
-    this.state.lastNodeId = tree.nodes[0].id
+    // Set visible nodes descendent from active
+    this.executeInteractiveStep(activeId)
   }
 
   /** Execute a step (it might call the server to update interactive state) */
-  step(active: Node) {
-    if (this.state.graph.children(active.id).length == 0)
-      UI.step(active)
+  execGraphNodeClick(activeId: Common.ID) {
+    if (this.state.graph.children(activeId).length == 0)
+      UI.step(this.state.graph.nodes[activeId])
     else {
-      active.group = 'branch'
-      this.state.graph.nodes.update(active)
-      this.state.graph.setChildrenVisible(active.id)
-      //this.emit('updateGraph')
+      const active = this.state.graph.nodes[activeId]
+      if (active.can_step) {
+        active.can_step = false
+        this.executeInteractiveStep(activeId)
+      } else  {
+        this.setMemory(active.mem)
+        this.emit('clear')
+        if (active.loc)
+          this.emit('markInteractive', active.loc)
+      }
     }
   }
 
@@ -406,16 +486,10 @@ export default class View {
             const offset = p.addr - toprov.base
             acc += p.from + "v->n" + toprov.id + ':' + offset + '[color="red"];'
           } else {
-            // WHAT SHOULD I DO?
+            // TODO: WHAT SHOULD I DO?
+            // POINTER TO UNKNOWN MEMORY
           }
         }
-        /*
-        const target = _.find(mem, (alloc => alloc.id == p.to))
-        if (target) {
-          const offset = p.addr - target.base
-          acc += p.from + "v->n" + target.id + ':' + offset + (offset >= target.size ? '[color="red"]': '') + ';'
-        }
-        */
         return acc;
       }, '')
     }
@@ -423,8 +497,7 @@ export default class View {
     const ns = _.reduce(mem, (ns, alloc) => ns + createNode(alloc), '')
     const ps: Pointer[] = _.reduce(mem, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
-    this.state.mem = g + ns + es + '}' // Save in case another memory tab is open 
-    //console.log(this.state.mem)
+    this.state.dotMem = g + ns + es + '}' // Save in case another memory tab is open 
     this.getMemory().setActive()
     this.emit('updateMemory')
   }
@@ -437,7 +510,6 @@ export default class View {
     return this.state
   }
 
-  // TODO: this active id is ugly
   updateState(res: Common.ResultRequest) {
     switch (res.status) {
       case 'elaboration':
@@ -457,7 +529,7 @@ export default class View {
         this.startInteractive(res.steps)
         break;
       case 'stepping':
-        this.state.result = res.result // TODO: not sure about this
+        this.state.result = res.result
         this.state.console = ''
         this.updateInteractive(res.activeId, res.steps)
         break
