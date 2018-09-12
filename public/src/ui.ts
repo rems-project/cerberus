@@ -1,4 +1,5 @@
 import $ from 'jquery'
+import _ from 'lodash'
 import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
@@ -322,6 +323,10 @@ export class CerberusUI {
     } else {
       console.log('error: node '+active+' unknown')
     }
+  }
+
+  public execGraphNodeClick(i: Common.ID) {
+    this.getView().execGraphNodeClick(i)
   }
 
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
