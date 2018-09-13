@@ -196,6 +196,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         wrap PEis_signed pe
     | PEis_unsigned pe ->
         wrap PEis_unsigned pe
+    | PEare_compatible pe1 pe2 ->
+        wrap_bin PEare_compatible pe1 pe2
   end
 
 
@@ -713,15 +715,22 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.return (PEunion tag_sym memb_ident pe')
         end
     | PEcfunction pe ->
-        (* PEcfunction TODO! *)
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
-            (* TODO: call the memory model here? *)
-              EU.return (PEval (Vtuple [Vctype Core_ctype.Void;
-                                        Vlist BTy_ctype [];
-                                        Vfalse;
-                                        Vfalse ]))
+              let err _ = EU.fail $ Illformed_program ("PEcfunction ==> TODO") in
+              let funptr sym =
+                match Map.lookup sym file.funinfo with
+                  | Just (ret, params, is_variadic, has_proto) ->
+                      EU.return (PEval (Vtuple [Vctype ret;
+                                                Vlist BTy_ctype (List.map Vctype params);
+                                                if is_variadic then Vtrue else Vfalse;
+                                                if has_proto then Vtrue else Vfalse; ]))
+                  | _ ->
+                     (* TODO(V): this is not really an ill formed program *)
+                     EU.fail $ Illformed_program "pointer does not point to a function"
+                end in
+              Mem.case_ptrval pv (fun _ -> err ()) funptr (fun _ _-> err ()) err
           | _ ->
               EU.fail $ Illformed_program ("PEcfunction ==> TODO")
         end
@@ -871,6 +880,19 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.fail $ Illformed_program "PEis_unsigned: the operand should be a ctype"
           | Nothing ->
               EU.return $ PEis_scalar pe'
+        end
+    | PEare_compatible pe1 pe2 ->
+        self pe1 >>= fun pe1 ->
+        self pe2 >>= fun pe2 ->
+        match (Caux.valueFromPexpr pe1, Caux.valueFromPexpr pe2) with
+          | (Just (Vctype ty1), Just (Vctype ty2)) ->
+              let are_compatible =
+                AilTypesAux.are_compatible
+                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty1)
+                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty2) in
+              EU.return $ PEval (if are_compatible then Vtrue else Vfalse)
+          | (_, _) ->
+              EU.fail $ Illformed_program "PEare_compatible: the operands should be ctypes"
         end
   end
   end

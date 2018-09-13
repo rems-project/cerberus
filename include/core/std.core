@@ -92,11 +92,17 @@ proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
         pure(Unspecified('_Bool'))
   end
 
+fun params_length_aux (acc: integer, cs: [ctype]): integer :=
+  case cs of
+    | [] => acc
+    | _:ctype :: xs:[ctype] => params_length_aux (acc+1, xs)
+  end
 
+fun params_length (cs: [ctype]): integer :=
+  params_length_aux(0, cs)
 
 fun ctype_width (ty: ctype): integer :=
   Ivsizeof(ty) * <bits_in_byte>
-
 
 
 -- encode an element of Z into an element of N following the

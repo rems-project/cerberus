@@ -761,6 +761,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEis_signed (remove_conv_int_pexpr pe)
     | PEis_unsigned pe ->
         PEis_unsigned (remove_conv_int_pexpr pe)
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
   end
 
 let rec remove_conv_int (Expr annot expr_) =
@@ -1048,6 +1050,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe
     | PEis_unsigned pe ->
         isAlwaysDefined pe
+    | PEare_compatible pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
 end
 
 let rec pure_propagation2 (Expr annot expr_ as expr) =
@@ -1334,6 +1338,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEis_signed (simpl_case_pexpr pe)
     | PEis_unsigned pe ->
         wrap $ PEis_unsigned (simpl_case_pexpr pe)
+    | PEare_compatible pe1 pe2 ->
+        wrap $ PEare_compatible (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
   end
 
 let rec simpl_case (Expr annot expr_ as expr) =

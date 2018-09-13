@@ -786,6 +786,8 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
         Pexpr annot InferredType_boolean <$> (PEis_signed <$> typecheck_pexpr tagDefs env BTy_ctype pe)
     | PEis_unsigned pe ->
         Pexpr annot InferredType_boolean <$> (PEis_unsigned <$> typecheck_pexpr tagDefs env BTy_ctype pe)
+    | PEare_compatible pe1 pe2 ->
+        Pexpr annot InferredType_boolean <$> (PEare_compatible <$> typecheck_pexpr tagDefs env BTy_ctype pe1 <*> typecheck_pexpr tagDefs env BTy_ctype pe2)
   end
 
 
@@ -1106,6 +1108,9 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEis_unsigned pe ->
         guard_match loc "is_unsigned()" bTy BTy_boolean >>
         (PEis_unsigned <$> typecheck_pexpr tagDefs env BTy_ctype pe)
+    | PEare_compatible pe1 pe2 ->
+        guard_match loc "are_compatible()" bTy BTy_boolean >>
+        (PEare_compatible <$> typecheck_pexpr tagDefs env BTy_ctype pe1 <*> typecheck_pexpr tagDefs env BTy_ctype pe2)
   end
 
 
@@ -1631,7 +1636,7 @@ let typecheck_program file =
             Proc loc bTy sym_bTys <$> typecheck_expr file.tagDefs env' bTy e
       end) file.funs >>= fun funs' ->
     
-    E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= List.reverse rev_globs'; funs= funs' |>
+    E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= List.reverse rev_globs'; funs= funs'; funinfo= Map.empty; |>
   in
   match E.runM aux with
     | Exception.Result file' ->

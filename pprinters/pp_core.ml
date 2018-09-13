@@ -81,7 +81,8 @@ let rec precedence = function
   | PEis_scalar _
   | PEis_integer _
   | PEis_signed _
-  | PEis_unsigned _ -> None
+  | PEis_unsigned _
+  | PEare_compatible _ ->None
 
 let rec precedence_expr = function
   | Epure _
@@ -498,8 +499,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
-(*        | PEstd (_, pe) ->
-            !^ "{-PEstd-}" ^^^ pp pe *)
+        | PEare_compatible (pe1, pe2) ->
+            pp_keyword "are_compatible" ^^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
     end
   in pp None pe
 

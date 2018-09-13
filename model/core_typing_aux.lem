@@ -258,6 +258,8 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         PEis_signed <$> export_pexpr pe
     | PEis_unsigned pe ->
         PEis_unsigned <$> export_pexpr pe
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible <$> export_pexpr pe1 <*> export_pexpr pe2
   end
 
 
