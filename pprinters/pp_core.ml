@@ -77,6 +77,7 @@ let rec precedence = function
   | PEcall _
   | PElet _
   | PEif _
+  | PEcfunction _
   | PEis_scalar _
   | PEis_integer _
   | PEis_signed _
@@ -142,14 +143,14 @@ let rec pp_core_object_type = function
       !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
   | OTy_union ident  ->
       !^ "union" ^^^ !^(Pp_symbol.to_string ident)
-  | OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
+  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
             pp_core_object_type ret_oTy
         | None ->
             P.underscore in
       !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-
+*)
 let rec pp_core_base_type = function
   | BTy_object bty ->
       pp_core_object_type bty
@@ -279,8 +280,8 @@ let rec pp_object_value = function
       P.braces (
         P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
       )
-  | OVcfunction nm ->
-      !^ "Cfunction" ^^ P.parens (pp_name nm)
+  (*| OVcfunction nm ->
+      !^ "Cfunction" ^^ P.parens (pp_name nm) *)
   | OVcomposite _ ->
       !^ "TODO(OVcomposite)" 
 
@@ -475,6 +476,8 @@ let pp_pexpr pe =
               Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
               pp pe
             )
+        | PEcfunction pe ->
+            pp_keyword "cfunction" ^^ P.parens (pp pe)
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (pat, pe1, pe2) ->

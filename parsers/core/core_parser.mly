@@ -337,12 +337,14 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr (annot, (), PEval (Vobject (OVinteger ival))))
     | PEval (Vobject (OVpointer ptrval)) ->
         Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer ptrval))))
+          (*
     | PEval (Vobject (OVcfunction _nm)) ->
         (* TODO(V): CHANGING THE MEANING OF THIS KEYWORD *)
         symbolify_name _nm >>= (function
         | Sym sym ->
           Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer (Ocaml_mem.fun_ptrval sym)))))
         | _ -> failwith "PANIC")
+             *)
     | PEval Vunit ->
         Eff.return (Pexpr (annot, (), PEval Vunit))
     | PEval Vtrue ->
@@ -1209,6 +1211,7 @@ core_object_type:
     { OTy_floating }
 | POINTER
     { OTy_pointer }
+(*
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST RPAREN
     { OTy_cfunction (None, Nat_big_num.to_int nparams, false) }
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST COMMA DOTS RPAREN
@@ -1217,6 +1220,7 @@ core_object_type:
     { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, false) }
 | CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST COMMA DOTS RPAREN
     { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, true) }
+   *)
 (*
 | CFUNCTION LPAREN UNDERSCORE COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
     { OTy_cfunction (None, oTys) }
@@ -1374,8 +1378,10 @@ value:
     { Vobject (OVinteger (Ocaml_mem.integer_ival n)) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Ocaml_mem.null_ptrval ty)) }
+    (*
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
+       *)
 | UNIT_VALUE
     { Vunit }
 | TRUE

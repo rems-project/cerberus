@@ -54,7 +54,8 @@ let call_function file f_nm arg_cvals =
     | Fun _ params body_pe ->
         if List.length params <> List.length arg_cvals then
           error (
-            "CALL(" ^ Pp.stringFromCore_value (Vobject (OVcfunction f_nm)) ^
+            (*  TODO: clean *)
+            "CALL(" (*^ Pp.stringFromCore_value (Vobject (OVcfunction f_nm)) *)^
             ") |params|= " ^ show (List.length params) ^ " <> |args|= " ^ show (List.length arg_cvals)
           )
         else
@@ -712,7 +713,18 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.return (PEunion tag_sym memb_ident pe')
         end
     | PEcfunction pe ->
-        EU.fail $ Illformed_program ("PEcfunction ==> TODO")
+        (* PEcfunction TODO! *)
+        self pe >>= fun pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just (Vloaded (LVspecified (OVpointer pv))) ->
+            (* TODO: call the memory model here? *)
+              EU.return (PEval (Vtuple [Vctype Core_ctype.Void;
+                                        Vlist BTy_ctype [];
+                                        Vfalse;
+                                        Vfalse ]))
+          | _ ->
+              EU.fail $ Illformed_program ("PEcfunction ==> TODO")
+        end
     | PEmemberof tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
