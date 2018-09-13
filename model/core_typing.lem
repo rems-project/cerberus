@@ -302,6 +302,7 @@ let rec typeof_object_value loc env oval =
        E.return OTy_floating
    | OVpointer _ ->
        E.return OTy_pointer
+       (*
    | OVcfunction nm ->
        match Map.lookup nm env.decls with
          | Just (TDproc ret_bTy bTys) ->
@@ -338,6 +339,7 @@ let rec typeof_object_value loc env oval =
                * We add it here just in case. *)
               E.fail loc (UnresolvedSymbol nm)
        end
+       *)
    | OVarray [] ->
        (* TODO(V): impossible to write an example *)
        error "TODO: EmptyArray"
@@ -1432,11 +1434,12 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
               guard_match loc "proc" expected_bTy ret_bTy >>
               E.return (Eproc () nm pes')
           | Just _ ->
-              E.fail loc (CoreTyping_TODO ("in Eproc(), found a def in a cfunction value: " ^
-                                           Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+          (* TODO: clean *)
+              E.fail loc (CoreTyping_TODO ("in Eproc(), found a def in a cfunction value: " (*^
+                                           Pp.stringFromCore_value (Vobject (OVcfunction nm))*)))
           | Nothing ->
-              E.fail loc (CoreTyping_TODO ("in Eproc(), unresolved sym in cfunction value: " ^
-                                           Pp.stringFromCore_value (Vobject (OVcfunction nm))))
+              E.fail loc (CoreTyping_TODO ("in Eproc(), unresolved sym in cfunction value: " (*^
+                                           Pp.stringFromCore_value (Vobject (OVcfunction nm))*)))
         end
     | Eunseq []  ->
         E.fail loc (CoreTyping_TODO "UNSEQ must have at least two arguments (seen 0)")

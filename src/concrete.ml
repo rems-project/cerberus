@@ -378,7 +378,7 @@ module Concrete : Memory = struct
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
-          !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
+          (*!^ "Cfunction" ^^ P.parens ( *) !^ (Pp_symbol.to_string_pretty sym) (* ) *)
           (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)

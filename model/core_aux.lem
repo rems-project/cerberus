@@ -39,7 +39,8 @@ let rec core_object_type_of_ctype ty =
        end
    | Function (_, ret_ty) xs isVariadic ->
        (* TODO: not sure about this *)
-       Just (OTy_cfunction (core_object_type_of_ctype ret_ty) (List.length xs) isVariadic)
+       error "core_object_type_of_ctype: function"
+       (*Just (OTy_cfunction (core_object_type_of_ctype ret_ty) (List.length xs) isVariadic) *)
 (*
    | Pointer _ (Function (_, ret_ty) xs isVariadic) ->
        error "Called Core_aux.core_object_type_of_ctype on a Pointer to a Function type"
@@ -280,9 +281,12 @@ val mk_nullptr_pe: Core_ctype.ctype -> pexpr
 let mk_nullptr_pe ref_ty =
   Pexpr [] () (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
 
+(*
+TODO: clean
 val mk_cfunction_pe: Symbol.sym -> pexpr
 let mk_cfunction_pe fsym =
   Pexpr [] () (PEval (Vobject (OVcfunction (Sym fsym))))
+*)
 
 val mk_specified_pe: pexpr -> pexpr
 let mk_specified_pe pe =

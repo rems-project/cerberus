@@ -272,6 +272,7 @@ let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression 
   match (cty, expr) with
     (* | (Aty.Pointer _ (Aty.Ctype _ (Aty.Function has_proto _ params is_variadic)), A.AilErvalue e) -> *)
     | (Aty.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
+        let () = Debug.print_debug 0 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
          let nparams = List.length params in
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction (* TODO: *) Nothing nparams is_variadic)) *)
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
@@ -311,6 +312,7 @@ let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression 
               ; Caux.mk_boolean_pe is_variadic ]
           )
         *)
+(* IDEA: check if identifier is in the function declarations, send the OVcfunction value otherwise, send a pointer value *)
     | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ (Just str) ->
@@ -2165,20 +2167,45 @@ TODO: #9
           end in
           (* TODO: could do a check that |bTys| = 0 ? *)
           self e >>= fun core_e ->
+          (*
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic)) *)
             >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer)
             >>= fun (nparams_sym, nparams_sym_pat, nparams_sym_pe) ->
           E.wrapped_fresh_symbol C.BTy_boolean
             >>= fun (is_variadic_sym, is_variadic_sym_pat, is_variadic_sym_pe) ->
+          *)
+
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer)
+            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
+          E.wrapped_fresh_symbol C.BTy_ctype
+            >>= fun (ret_sym, ret_sym_pat, ret_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_list C.BTy_ctype)
+            >>= fun (params_sym, params_sym_pat, params_sym_pe) ->
+          E.wrapped_fresh_symbol C.BTy_boolean
+            >>= fun (is_variadic_sym, is_variadic_sym_pat, is_variadic_sym_pe) ->
+          E.wrapped_fresh_symbol C.BTy_boolean
+            >>= fun (has_proto_sym, has_proto_sym_pat, has_proto_sym_pe) ->
 
 
+(*
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, arg_CHANGETHIS_sym_pat, arg_CHANGETHIS_sym_pe) ->
+*)
 
+          E.return $
+            Caux.mk_sseq_e fun_sym_pat core_e
+            (Caux.mk_sseq_e
+              (Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; is_variadic_sym_pat; has_proto_sym_pat])
+              (Caux.mk_pure_e (C.Pexpr [] () (C.PEcfunction fun_sym_pe)))
+              (C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe []))
+            )
+(*
 
           
           E.return $
             (* TODO: indet + check that wseq is right *)
+            Caux.mk_sseq_e fun_sym_pat core_e
+
             Caux.mk_wseq_e
               (Caux.mk_tuple_pat [fun_sym_pat; nparams_sym_pat; is_variadic_sym_pat])
  ( (* TODO(V): WIP: this will go away soon!! *)
@@ -2198,6 +2225,7 @@ TODO: #9
                   (C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe []))
                   (Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB039))
               end
+*)
       
       | A.AilEcall e es ->
           (* STD §6.5.2.2 *)
