@@ -253,6 +253,7 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEis_integer of (generic_pexpr 'bty 'sym)
  | PEis_signed of (generic_pexpr 'bty 'sym)
  | PEis_unsigned of (generic_pexpr 'bty 'sym)
+ | PEare_compatible of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
 
 and generic_pexpr 'bty 'sym = 
  | Pexpr of list annot * 'bty * (pexpr_ 'bty 'sym)
@@ -347,6 +348,7 @@ type generic_file 'bty 'a = <|
   impl    : generic_impl 'bty;
   globs   : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);
   funs    : generic_fun_map 'bty 'a;
+  funinfo : map Symbol.sym (ctype * list ctype * bool * bool);
 |>
 
 

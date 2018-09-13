@@ -149,7 +149,8 @@ let core_frontend (core_stdlib, core_impl) filename =
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
            Core.globs=  globs;
-           Core.funs=   funs
+           Core.funs=   funs;
+           Core.funinfo= Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
          })
     
     | Core_parser_util.Rstd _ ->
@@ -301,6 +302,7 @@ let gen_corestd (stdlib, impl) =
     Core.impl=   impl;
     Core.globs=  [];
     Core.funs=   Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
+    Core.funinfo=Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
   }
   >>= fun typed_core ->
     let cps_core =

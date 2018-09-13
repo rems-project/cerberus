@@ -881,6 +881,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
 end
 
 
@@ -1125,6 +1127,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEis_signed (unsafe_subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
 end
 
 
@@ -1920,6 +1924,15 @@ let rec match_pattern (Pattern _ pat) cval =
             )
           )
         ) (Just []) (List.zip pats' cvals')
+    | (CaseCtor Cnil [], Vlist _ []) ->
+        let () = Debug.warn [] (fun () -> "Pattern matching nil without checking types!") in
+        Just []
+    | (CaseCtor Ccons [pat_x; pat_xs], Vlist ty (x::xs)) ->
+        Maybe.bind (match_pattern pat_x x) (fun x ->
+          Maybe.bind (match_pattern pat_xs (Vlist ty xs)) (fun xs ->
+            Just (x++xs)
+          )
+        )
     | _ ->
         Nothing
   end
@@ -1927,8 +1940,10 @@ let rec match_pattern (Pattern _ pat) cval =
 val     select_case: forall 'a. (Symbol.sym -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a
 let rec select_case subst_sym cval = function
   | [] ->
+      let () = Debug.print_debug 1 [] (fun () -> "NOTHING") in
       Nothing
   | (pat, pe) :: pat_pes' ->
+      let () = Debug.print_debug 1 [] (fun () -> "SELECT_CASE") in
       match match_pattern pat cval with
         | Nothing ->
             (* trying the next branch *)
@@ -2038,6 +2053,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEis_integer pe -> PEis_integer (self 1 pe)
   | PEis_signed pe -> PEis_signed (self 1 pe)
   | PEis_unsigned pe -> PEis_unsigned (self 1 pe)
+  | PEare_compatible pe1 pe2 -> PEare_compatible (self 1 pe1) (self 2 pe2)
   end
 
 val     set_uid_e: forall 'a. string -> nat -> expr 'a -> expr 'a
@@ -2091,6 +2107,7 @@ let set_uid file =
   impl=    file.impl;
   globs=   file.globs; (* TODO *)
   funs=    Map.mapi set_uid_fun file.funs;
+  funinfo= file.funinfo;
  |>
 
 

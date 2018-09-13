@@ -301,6 +301,7 @@ type translation_stdlib = <|
   mkcall_all_values_representable_in: Aty.ctype -> Aty.ctype -> C.pexpr;
   mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
   mkproc_loaded_pointer_to_Bool:      C.pexpr -> C.expr unit;
+  mkcall_params_length:               C.pexpr -> C.pexpr;
 |>
 
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
@@ -350,6 +351,8 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        mk_call "catch_exceptional_condition" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkproc_loaded_pointer_to_Bool= fun pe ->
        mk_proc "loaded_pointer_to_Bool" [pe]
+   ; mkcall_params_length= fun pe ->
+       mk_call "params_length" [pe]
    |>
 
 
