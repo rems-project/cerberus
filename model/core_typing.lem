@@ -704,7 +704,9 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
               end
         end
     | PEcfunction pe ->
-        E.fail loc (CoreTyping_TODO "PEcfunction: core_typing TODO")
+        typecheck_pexpr tagDefs env (BTy_loaded OTy_pointer) pe >>= fun pe' ->
+        E.return $ Pexpr annot (InferredType_tuple [InferredType_ctype; InferredType_list InferredType_ctype;
+                                         InferredType_boolean; InferredType_boolean]) (PEcfunction pe')
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Core_ctype.StructDef xs ->
@@ -1041,7 +1043,8 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               end
         end
     | PEcfunction pe ->
-        E.fail loc (CoreTyping_TODO "PEcfunction: core_typing TODO")
+        guard_match loc "cfunction()" bTy (BTy_tuple [BTy_ctype; BTy_list BTy_ctype; BTy_boolean; BTy_boolean]) >>
+        (PEcfunction <$> typecheck_pexpr tagDefs env (BTy_loaded OTy_pointer) pe)
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
           | Core_ctype.StructDef xs ->

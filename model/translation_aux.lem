@@ -302,6 +302,8 @@ type translation_stdlib = <|
   mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
   mkproc_loaded_pointer_to_Bool:      C.pexpr -> C.expr unit;
   mkcall_params_length:               C.pexpr -> C.pexpr;
+  mkcall_params_nth:                  C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_is_floating:                 C.pexpr -> C.pexpr;
 |>
 
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
@@ -325,7 +327,7 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
          mk_call "conv_loaded_int" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_fvfromint= fun ty pe ->
        if not (AilTypesAux.is_floating ty) then
-         error "mkcall_loaded_ivfromfloat called on a non floating type"
+         error "mkcall_loaded_fvfromint called on a non floating type"
        else
          mk_call "loaded_fvfromint" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_loaded_ivfromfloat= fun ty pe ->
@@ -353,6 +355,10 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        mk_proc "loaded_pointer_to_Bool" [pe]
    ; mkcall_params_length= fun pe ->
        mk_call "params_length" [pe]
+   ; mkcall_params_nth= fun pe1 pe2 ->
+       mk_call "params_nth" [pe1; pe2]
+   ; mkcall_is_floating= fun pe ->
+       mk_call "is_floating" [pe]
    |>
 
 
