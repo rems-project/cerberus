@@ -134,7 +134,7 @@ export default class View {
       (container.parent as ContentItem).content = tab
       container.getElement().append(tab.dom)
       container.setState(state)
-      tab.update(self.state)
+      tab.initial(self.state)
       tab.refresh()
       const unsafeTab: any = tab
       if (unsafeTab.highlight && UI.getSettings().colour)

@@ -31,6 +31,9 @@ export abstract class Tab {
 
   /** Update value (receives current state) */
   update(s: Readonly<Common.State>) {}
+
+  /** Update initial value (receives current state) */
+  initial(s: Readonly<Common.State>) { this.update(s) }
   
   /** Implemented by GoldenLayout when tab content is attached to it */
   setActive () {}
@@ -717,10 +720,19 @@ export class Core extends ReadOnly {
       }
     })
 
+    this.setValue('Waiting for core...')
+
     ee.on('update', this, this.update)
     ee.on('highlight', this, this.highlight)
     ee.on('mark', this, this.mark)
     ee.on('markInteractive', this, this.markInteractive)
+  }
+
+  initial(s: Readonly<Common.State>) {
+    if (s.pp.core == '')
+      this.setValue("-- Waiting for core...")
+    else
+      this.setValue(s.pp.core)
   }
 
   update(s: Common.State) {
