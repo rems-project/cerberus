@@ -405,6 +405,10 @@ val mk_value_pe: value -> pexpr
 let mk_value_pe cval =
   Pexpr [] () (PEval cval)
 
+val mk_cfunction_pe: pexpr -> pexpr
+let mk_cfunction_pe pe =
+  Pexpr [] () (PEcfunction pe)
+
 val mk_std_pe: string -> pexpr -> pexpr
 let mk_std_pe std (Pexpr annot bty pe_) =
   Pexpr ((Astd std)::annot) bty pe_
@@ -421,6 +425,11 @@ let mk_std_pair_pe std (pe1, pe2) =
 val mk_call_pe: name -> list pexpr -> pexpr
 let mk_call_pe nm pes =
   Pexpr [] () (PEcall nm pes)
+
+val mk_are_compatible: pexpr -> pexpr -> pexpr
+let mk_are_compatible pe1 pe2 =
+  Pexpr [] () (PEare_compatible pe1 pe2)
+
 
 
 
@@ -2011,6 +2020,11 @@ let mk_if_e pe e1 e2 =
 val mk_let_e: pattern -> pexpr -> expr unit -> expr unit
 let mk_let_e pat pe e =
   Expr [] (Elet pat pe e)
+
+val mk_ccall_e: pexpr -> pexpr -> list pexpr -> expr unit
+let mk_ccall_e cty pe pes =
+  Expr [] (Eccall default cty pe pes)
+
 
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =

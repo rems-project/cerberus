@@ -92,6 +92,9 @@ proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
         pure(Unspecified('_Bool'))
   end
 
+fun is_floating(ty: ctype): boolean :=
+  ty = 'float' \/ ty = 'double' \/ ty = 'long_double'
+
 fun params_length_aux (acc: integer, cs: [ctype]): integer :=
   case cs of
     | [] => acc
@@ -100,6 +103,19 @@ fun params_length_aux (acc: integer, cs: [ctype]): integer :=
 
 fun params_length (cs: [ctype]): integer :=
   params_length_aux(0, cs)
+
+fun params_nth (cs: [ctype], n: integer): ctype :=
+  case cs of
+    | [] =>
+      error(<<<params_nth>>>, (cs, n))
+    | x:ctype :: xs:[ctype] =>
+      if n = 0 then
+        x
+      else if n > 0 then
+        params_nth(xs, n-1)
+      else
+        error(<<<params_nth>>>, (cs, n))
+  end
 
 fun ctype_width (ty: ctype): integer :=
   Ivsizeof(ty) * <bits_in_byte>
