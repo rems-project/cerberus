@@ -12,9 +12,13 @@ module.exports = {
     filename: '[name].bundle.js',
     path: Path.resolve(__dirname, 'dist')
   },
+  /*
   externals: [
     'fs'
-  ],
+  ],*/
+  node: {
+    fs: "empty"
+  },
   resolve: {
     extensions: [".ts", ".js"]
   },

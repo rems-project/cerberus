@@ -6,23 +6,7 @@
   "scripts": {
     "start": "webpack --config dev.config.js -w",
     "build": "webpack --config dev.config.js",
-    "deploy": "webpack --config prod.config.js",
-    "test": "jest",
-    "report": "nyc report --reporter=html"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js"
-    ],
-    "transform": {
-      "^.+\\.(ts|tsx)$": "<rootDir>/preprocessor.js"
-    },
-    "testMatch": [
-      "**/tests/*.+(ts|tsx|js)"
-    ],
-    "testResultsProcessor": "jest-jenkins-reporter"
+    "deploy": "webpack --config prod.config.js"
   },
   "repository": {
     "type": "git",
@@ -33,38 +17,22 @@
   "author": "Victor Gomes",
   "license": "MIT",
   "devDependencies": {
-    "@types/codemirror": "0.0.56",
-    "@types/jest": "^22.2.3",
+    "@types/codemirror": "0.0.60",
     "@types/jquery": "^3.3.6",
     "@types/lodash": "^4.14.116",
-    "@types/vis": "^4.21.7",
     "compression-webpack-plugin": "^2.0.0",
-    "css-loader": "^0.28.11",
+    "css-loader": "^1.0.0",
     "extract-text-webpack-plugin": "^4.0.0-beta.0",
-    "jasmine-reporters": "^2.3.2",
-    "jest": "^22.4.4",
-    "jest-jenkins-reporter": "^1.0.2",
-    "nyc": "^11.9.0",
-    "puppeteer-to-istanbul": "^1.2.2",
-    "style-loader": "^0.20.3",
-    "ts-loader": "^4.5.0",
-    "typescript": "^2.9.2",
-    "viz": "0.0.1",
-    "webpack": "^4.17.2",
-    "webpack-bundle-analyser": "^1.4.0",
-    "webpack-bundle-analyzer": "^2.13.1",
-    "webpack-cli": "^2.1.5",
-    "webpack-merge": "^4.1.4"
+    "style-loader": "^0.23.0",
+    "ts-loader": "^5.1.1",
+    "typescript": "^3.0.3",
+    "webpack": "^4.19.0",
+    "webpack-cli": "^3.1.0"
   },
   "dependencies": {
-    "@types/puppeteer": "^1.6.3",
     "codemirror": "^5.40.0",
     "golden-layout": "^1.5.9",
-    "ignore-assets-webpack-plugin": "^2.0.1",
     "jquery": "^3.3.1",
-    "lodash": "^4.17.10",
-    "npm": "^5.10.0",
-    "puppeteer": "^1.8.0",
-    "vis": "^4.21.0"
+    "lodash": "^4.17.11"
   }
 }

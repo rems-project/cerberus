@@ -5,7 +5,7 @@ import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
 import UI from './ui'
-const Viz = require('./js/viz.js')
+import Viz from './js/viz.js'
 
 namespace Tabs {
 
