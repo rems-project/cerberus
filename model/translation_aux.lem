@@ -295,6 +295,9 @@ type translation_stdlib = <|
   mkcall_conv_loaded_int:             Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_loaded_fvfromint:            Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_loaded_ivfromfloat:          Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_conv_loaded_int_:            C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_loaded_fvfromint_:           C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_loaded_ivfromfloat_:         C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
   mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
   mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
@@ -304,6 +307,7 @@ type translation_stdlib = <|
   mkcall_params_length:               C.pexpr -> C.pexpr;
   mkcall_params_nth:                  C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_is_floating:                 C.pexpr -> C.pexpr;
+  mkproc_create_and_store:            C.pexpr -> C.pexpr -> C.expr unit;
 |>
 
 val mk_translation_stdlib: (map string Symbol.sym) * C.fun_map unit -> translation_stdlib
@@ -335,6 +339,12 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
          error "mkcall_loaded_ivfromfloat called on a non integer type"
        else
          mk_call "loaded_ivfromfloat" [Caux.mk_ail_ctype_pe ty; pe]
+   ; mkcall_conv_loaded_int_= fun pe1 pe2 ->
+       mk_call "conv_loaded_int" [pe1; pe2]
+   ; mkcall_loaded_fvfromint_= fun pe1 pe2 ->
+       mk_call "loaded_fvfromint" [pe1; pe2]
+   ; mkcall_loaded_ivfromfloat_= fun pe1 pe2 ->
+       mk_call "loaded_ivfromfloat" [pe1; pe2]
    ; mkcall_wrapI= fun ty pe ->
        mk_call "wrapI" [Caux.mk_ail_ctype_pe ty; pe]
    ; mkcall_ctype_width= fun ty ->
@@ -359,6 +369,8 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
        mk_call "params_nth" [pe1; pe2]
    ; mkcall_is_floating= fun pe ->
        mk_call "is_floating" [pe]
+   ; mkproc_create_and_store= fun pe1 pe2 ->
+       mk_proc "create_and_store" [pe1; pe2]
    |>
 
 

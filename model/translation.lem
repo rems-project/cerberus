@@ -2207,6 +2207,11 @@ TODO: #9
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
           E.replicateM n_args E.fresh_symbol >>= fun arg_ptr_syms ->
+          let arg_ptr_sym_pats = match arg_ptr_syms with
+            | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
+            | _ -> Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
+          end in
+          let arg_ptr_sym_pes = List.map Caux.mk_sym_pe arg_ptr_syms in
           (* elaborate each argument *)
           E.foldlM (fun (arg_sym_pats, core_arg_es, args_info) arg_e ->
             let arg_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of arg_e))) in
@@ -2225,28 +2230,37 @@ TODO: #9
                 (Caux.mk_if_e
                   (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_param_ty) param_ty_sym_pe))
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
-                  (Caux.mk_wseq_e arg_ptr_sym_pat
-                    (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_sym_pe) param_ty_sym_pe
-                                      (Symbol.PrefOther "translation, AilEcall temp"))
-                    (Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (
-                      (* TODO(V): check with Kayvan: I am assuming that is_floating and is_integer is the same for compatible types *)
-                      let conved_init =
-                        if AilTypesAux.is_integer expect_param_ty then
-                          conv_loaded_arith stdlib arg_ty expect_param_ty arg_sym_pe
-                        else if AilTypesAux.is_floating expect_param_ty then
-                          (* TODO(V): THIS IS WRONG! I SHOULD USE param_ty_sym_pe HERE INSTEAD of expect_param_ty *)
-                          conv_loaded_arith stdlib arg_ty expect_param_ty arg_sym_pe
-                        else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then (*TODO: probably not completely right*)
-                          Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype expect_param_ty))
+                  (let conv_value =
+                      (* NOTE: since expected type is compatible with the parameter type, if one is an integer or
+                        floating, the other one must also be an integer or floating (respectively) *)
+                      if AilTypesAux.is_integer expect_param_ty then
+                        if AilTypesAux.is_integer arg_ty then
+                          stdlib.mkcall_conv_loaded_int_ param_ty_sym_pe arg_sym_pe
                         else
-                          arg_sym_pe in
-                      Caux.pstore loc param_ty_sym_pe arg_ptr_sym_pe conved_init Cmm.NA
-                      )(Caux.mk_pure_e arg_ptr_sym_pe)
-                    )
-                  )
+                          stdlib.mkcall_loaded_ivfromfloat_ param_ty_sym_pe arg_sym_pe
+                      else if AilTypesAux.is_floating expect_param_ty then
+                        if AilTypesAux.is_integer arg_ty then
+                          stdlib.mkcall_loaded_fvfromint_ param_ty_sym_pe arg_sym_pe
+                        else
+                          arg_sym_pe
+                      else if AilTypesAux.is_pointer expect_param_ty && arg_is_null then (*TODO: probably not completely right*)
+                        Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype expect_param_ty))
+                      else
+                        arg_sym_pe in
+                    stdlib.mkproc_create_and_store param_ty_sym_pe conv_value)
                 )) :: rev_core_creates
               )
           ) (0,[]) (List.zip expect_params (List.reverse rev_args_info)) >>= fun (_, rev_core_creates) ->
+          (* function call result *)
+          let call_bTy = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (Caux.proj_ctype expect_ret_ty)) in
+          E.wrapped_fresh_symbol call_bTy >>= fun (call_ret_sym, call_ret_sym_pat, call_ret_sym_pe) ->
+          (* kill temporary objects *)
+          let killall_pat =
+            if List.length arg_ptr_syms < 2 then
+              Caux.mk_empty_pat C.BTy_unit
+            else
+              Caux.mk_empty_pat $ C.BTy_tuple (List.replicate (List.length arg_ptr_syms) C.BTy_unit)
+          in
           (* STD (§6.5.2.2#10, sentence 1) says there is sequence "point after the
            evaluations of the function designator and the actual arguments but before
            the actual call." *)
@@ -2264,7 +2278,32 @@ TODO: #9
                   :: (List.reverse rev_core_arg_es))
               )
 begin if expect_is_variadic then
-              error "VARIADIC WIP"
+              (* check number of parameters *)
+              (Caux.mk_if_e
+                (Caux.mk_not_pe (Caux.mk_op_pe C.OpLe (stdlib.mkcall_params_length params_sym_pe)
+                                                      (Caux.mk_integer_pe (integerFromNat n_args))))
+                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB039))
+                (* check if function types are compatible *)
+                (Caux.mk_if_e
+                  (Caux.mk_op_pe C.OpOr (Caux.mk_not_pe is_variadic_sym_pe)
+                                 (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
+                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
+                  (Caux.mk_sseq_e arg_ptr_sym_pats
+                    (* create temporary object *)
+                    (Caux.mk_unseq $ List.reverse rev_core_creates)
+                    (Caux.mk_sseq_e call_ret_sym_pat
+                      (* do the function call *)
+                      (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
+                      (Caux.mk_sseq_e killall_pat
+                        (* kill temporary objects *)
+                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (* return function call result *)
+                        (Caux.mk_pure_e call_ret_sym_pe)
+                      )
+                    )
+                  )
+                )
+              )
 else
               (* check number of parameters *)
               (Caux.mk_if_e
@@ -2276,179 +2315,29 @@ else
                   (Caux.mk_op_pe C.OpOr is_variadic_sym_pe
                                  (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
                   (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
-                  (Caux.mk_sseq_e
-                    (Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms)
-                    (Caux.mk_unseq_e (List.reverse rev_core_creates))
-                    (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe (List.map Caux.mk_sym_pe arg_ptr_syms))
+                  (Caux.mk_sseq_e arg_ptr_sym_pats
+                    (* create temporary object *)
+                    (Caux.mk_unseq $ List.reverse rev_core_creates)
+                    (Caux.mk_sseq_e call_ret_sym_pat
+                      (* do the function call *)
+                      (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe arg_ptr_sym_pes)
+                      (Caux.mk_sseq_e killall_pat
+                        (* kill temporary objects *)
+                        (Caux.mk_unseq (List.map (fun sym -> Caux.pkill loc false (Caux.mk_sym_pe sym)) arg_ptr_syms))
+                        (* return function call result *)
+                        (Caux.mk_pure_e call_ret_sym_pe)
+                      )
+                    )
                   )
                 )
               )
 end
             )
 
-(*
-
-              (* not (if isVariadic then nparams <= args else nparams = args) *)
-              (Caux.mk_if_e
-                (Caux.mk_let_pe nparams_sym_pat (stdlib.mkcall_params_length params_sym_pe)
-                  (Caux.mk_not_pe
-                    (Caux.mk_if_pe is_variadic_sym_pe
-                      (Caux.mk_op_pe C.OpLe nparams_sym_pe (Caux.mk_integer_pe (integerFromNat numberOfArguments)))
-                      (Caux.mk_std_pe "§6.5.2.2#2" (Caux.mk_op_pe C.OpEq nparams_sym_pe
-                                                   (Caux.mk_integer_pe (integerFromNat numberOfArguments))))
-                    )
-                  )
-                )
-                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB039))
-                (* doesn't not include a prototype *)
-                (Caux.mk_if_e (Caux.mk_not_pe has_proto_sym_pe)
-                  (Caux.mk_pure_e $ Caux.mk_error_pe "without prototype, how is it possible?" Caux.mk_unit_pe)
-                  (* includes a prototype *)
-                  (C.Expr [] (C.Eccall default (Caux.mk_ail_ctype_pe (ctype_of e)) call_sym_pe []))
-                )
-              )
-
-
-*)
-
-
 
 
 (*
-                Caux.mk_wseq_e arg_ptr_sym_pat
-                  (Caux.pcreate loc (Caux.mk_alignof_pe param_ctype_pe) param_ctype_pe (Symbol.PrefOther "translation, AilEcall temp")) (
-                  Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
-                    begin
-                      let conved_init =
-                        if AilTypesAux.is_integer param_ty || AilTypesAux.is_floating param_ty then
-                          conv_loaded_arith stdlib (ctype_of arg_e) param_ty arg_sym_pe
-                        else if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant arg_e then (* TODO: probably not completely right *)
-                          Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype param_ty))
-                        else
-                          arg_sym_pe in
-                      Caux.pstore loc param_ctype_pe arg_ptr_sym_pe conved_init Cmm.NA
-                    end
-                    (Caux.mk_pure_e arg_ptr_sym_pe)
-                    *)
 
-(*
-                (Caux.mk_tuple_pat $
-                   (Caux.mk_tuple_pat [ fun_sym_pat; nparams_sym_pat; isVariadic_sym_pat ]) ::
-                   List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
-                end
-                  (C.Expr [Annot.Astd "§6.5.2.2#4, sentence 2"] (C.Eunseq (
- ( (* TODO(V): WIP: this will go away soon!! *)
-          C.Expr [] (
-          C.Esseq arg_CHANGETHIS_sym_pat core_e (
-          Caux.mk_pure_e (
-            Caux.mk_tuple_pe
-              [ arg_CHANGETHIS_sym_pe
-              ; Caux.mk_integer_pe (integerFromNat nparams)
-              ; Caux.mk_boolean_pe isVariadic ]
-              )
-  *)
-  (*
-          (* STD §6.5.2.2 *)
-          let (ret_oTy_opt, params, nparams, isVariadic) = match ctype_of e with
-            | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Function _ (_, ret_ty) qs_tys isVariadic))) ->
-                (Caux.core_object_type_of_ctype (Caux.proj_ctype ret_ty),
-                 qs_tys,
-                 List.length qs_tys,
-                 isVariadic)
-            | (*BISECT-IGNORE*) _ ->
-                illTypedAil loc "AilEcall"
-          end in
-          
-          let numberOfArguments = List.length es in
-          self e >>= fun core_e ->
-
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
-          E.wrapped_fresh_symbol C.BTy_ctype >>= fun (ret_sym, ret_sym_pat, ret_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_list C.BTy_ctype) >>= fun (params_sym, params_sym_pat, params_sym_pe) ->
-          E.wrapped_fresh_symbol C.BTy_boolean >>= fun (is_variadic_sym, is_variadic_sym_pat, is_variadic_sym_pe) ->
-          E.wrapped_fresh_symbol C.BTy_boolean >>= fun (has_proto_sym, has_proto_sym_pat, has_proto_sym_pe) ->
-
-          (* TODO: Shouldn't we check if the expression e has a prototype? As in 6.5.2#7? *)
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic)) *)
-            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (nparams_sym,    nparams_sym_pat,    nparams_sym_pe)    ->
-          E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (isVariadic_sym, isVariadic_sym_pat, isVariadic_sym_pe) ->
-          
-          let call_bTy = maybe C.BTy_unit C.BTy_loaded ret_oTy_opt in
-          E.wrapped_fresh_symbol call_bTy >>= fun (call_sym, call_sym_pat, call_sym_pe) ->
-          
-          (* symbolic names for the arguments temporary objects *)
-          E.replicateM numberOfArguments E.fresh_symbol >>= fun arg_ptr_syms ->
-          
-          (* Core code of the evaluation of the argument, with creation and initialisation of the
-             associated temporary objects *)
-          (* NOTE: combine_params_args does the argument promotion for variadic functions *)
-          E.mapM (fun (param_ty, arg_e) ->
-            (* TODO: Does this function has a prototype? I assume it does, since we know the parameter type *)
-            let param_bTy =
-              C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype param_ty)) in
-            let arg_bTy =
-              C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of arg_e))) in
-            
-            let _ = Debug.print_debug 1 [] (fun () ->
-              "param_bTy: " ^ Pp.stringFromCore_core_base_type param_bTy ^ "\n" ^
-              "arg_bTy: " ^ Pp.stringFromCore_core_base_type arg_bTy
-            ) in
-            
-            let param_ctype_pe = Caux.mk_ail_ctype_pe param_ty in
-            self arg_e                                          >>= fun core_arg_e                           ->
-            E.wrapped_fresh_symbol arg_bTy                      >>= fun (_, arg_sym_pat, arg_sym_pe)         ->
-            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, arg_ptr_sym_pat, arg_ptr_sym_pe) ->
-            E.return (
-              Caux.mk_wseq_e arg_sym_pat core_arg_e (
-                Caux.mk_wseq_e arg_ptr_sym_pat
-                  (Caux.pcreate loc (Caux.mk_alignof_pe param_ctype_pe) param_ctype_pe (Symbol.PrefOther "translation, AilEcall temp")) (
-                  Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
-                    begin
-                      let conved_init =
-                        if AilTypesAux.is_integer param_ty || AilTypesAux.is_floating param_ty then
-                          conv_loaded_arith stdlib (ctype_of arg_e) param_ty arg_sym_pe
-                        else if AilTypesAux.is_pointer param_ty && Aaux.is_null_pointer_constant arg_e then (* TODO: probably not completely right *)
-                          Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype param_ty))
-                        else
-                          arg_sym_pe in
-                      Caux.pstore loc param_ctype_pe arg_ptr_sym_pe conved_init Cmm.NA
-                    end
-                    (Caux.mk_pure_e arg_ptr_sym_pe)
-                )
-              )
-            )
-          ) (combine_params_args params es) >>= fun core_creates ->
-
-
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, arg_CHANGETHIS_sym_pat, arg_CHANGETHIS_sym_pe) ->
-
-          (* STD (§6.5.2.2#10, sentence 1) says there is sequence "point after the
-             evaluations of the function designator and the actual arguments but before
-             the actual call." *)
-          begin
-            C.Expr [Annot.Astd "§6.5.2.2#10, sentence 1"] -|
-              C.Esseq
-                begin
-                 Caux.mk_tuple_pat $
-                   (Caux.mk_tuple_pat [ fun_sym_pat; nparams_sym_pat; isVariadic_sym_pat ]) ::
-                   List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
-                end
-                  (C.Expr [Annot.Astd "§6.5.2.2#4, sentence 2"] (C.Eunseq (
- ( (* TODO(V): WIP: this will go away soon!! *)
-          C.Expr [] (
-          C.Esseq arg_CHANGETHIS_sym_pat core_e (
-          Caux.mk_pure_e (
-            Caux.mk_tuple_pe
-              [ arg_CHANGETHIS_sym_pe
-              ; Caux.mk_integer_pe (integerFromNat nparams)
-              ; Caux.mk_boolean_pe isVariadic ]
-              )
-          ))
-)
-                    (* NOTE: making a triplet here instead of in the function designator (TODO: check if this make sense) *)
-                      
-                      :: core_creates)))
           end
                 <$> begin
                   (* not (if isVariadic then nparams <= args else nparams = args) *)

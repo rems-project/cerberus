@@ -60,7 +60,7 @@ let rec core_object_type_of_ctype ty =
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type
 let oTy_of_bTy = function
-  | BTy_unit ->
+ | BTy_unit ->
       Nothing
  | BTy_boolean ->
       Nothing
@@ -74,8 +74,9 @@ let oTy_of_bTy = function
      Just oTy
  | BTy_loaded oTy ->
      Just oTy
+ | BTy_storable ->
+     Nothing
 end
-
 
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
 let rec objectValueFromMemValue mem_val =

@@ -980,7 +980,7 @@ let mk_file decls =
 %token DEF GLOB FUN PROC
 
 (* Core types *)
-%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED
+%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED STORABLE
 
 (* Core constant keywords *)
 %token NULL TRUE FALSE UNIT_VALUE
@@ -1008,7 +1008,7 @@ let mk_file decls =
 
 
 
-%token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
+%token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR ARE_COMPATIBLE
 
 (* unary operators *)
 %token NOT
@@ -1256,6 +1256,8 @@ core_base_type:
     { BTy_object oTy }
 | LOADED oTy= core_object_type
     { BTy_loaded oTy }
+| STORABLE
+    { BTy_storable }
 ;
 
 core_type:
@@ -1463,6 +1465,8 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_unsigned _pe) }
+| ARE_COMPATIBLE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEare_compatible (_pe1, _pe2)) }
 ;
 
 

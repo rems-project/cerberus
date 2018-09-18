@@ -153,6 +153,7 @@ let rec pp_core_object_type = function
       !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
 *)
 let rec pp_core_base_type = function
+  | BTy_storable   -> !^ "storable"
   | BTy_object bty ->
       pp_core_object_type bty
   | BTy_loaded bty ->
