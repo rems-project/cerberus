@@ -201,6 +201,10 @@ fun wrapI(ty: ctype, n: integer) : integer :=
     else
       r - dlt
 
+proc create_and_store (ty: ctype, x: storable) : eff pointer :=
+  let weak p: pointer = create(Ivalignof(ty), ty) in
+  let weak _: unit = store(ty, p, x) in
+  pure(p)
 
 ------------------------------------------------------------------------------
 -- <signal.h>

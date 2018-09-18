@@ -1164,7 +1164,14 @@ let rec infer_action tagDefs env (Action loc annot act_) =
                     E.fail loc (CoreTyping_TODO "Store, not oTy")
               end
           | _ ->
-              E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
+              typecheck_export_pexpr tagDefs env BTy_ctype pe1 >>= fun tpe1 ->
+              typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+              infer_pexpr tagDefs env pe3 >>= fun (Pexpr _ pe3_infer _ as pe3') ->
+              if is_inferred_storable pe3_infer then
+                export_pexpr pe3' >>= fun tpe3 ->
+                E.return (BTy_unit, Store b tpe1 tpe2 tpe3 mo)
+              else
+                E.fail loc (CoreTyping_TODO "Store, not storable")
         end
     | Load pe1 pe2 mo ->
         match pe1 with
@@ -1235,7 +1242,14 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
                   E.fail loc (CoreTyping_TODO "Store, not oTy")
             end
         | _ ->
-            E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
+            typecheck_export_pexpr tagDefs env BTy_ctype pe1 >>= fun tpe1 ->
+            typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+            infer_pexpr tagDefs env pe3 >>= fun (Pexpr _ pe3_infer _ as pe3') ->
+            if is_inferred_storable pe3_infer then
+              export_pexpr pe3' >>= fun tpe3 ->
+              E.return (Store b tpe1 tpe2 tpe3 mo)
+            else
+              E.fail loc (CoreTyping_TODO "Store, not storable")
       end
   | Load pe1 pe2 mo ->
       match pe1 with
