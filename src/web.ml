@@ -372,6 +372,8 @@ let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
                  cpp_cmd; core_impl; cerb_debug_level; timeout;
                }
     in
+    (* NOTE: ad-hoc fix for server crash: https://github.com/mirage/ocaml-cohttp/issues/511 *)
+    Lwt.async_exception_hook := ignore;
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
     Server.make ~callback: (request ~docroot ~conf) ()
