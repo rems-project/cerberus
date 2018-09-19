@@ -214,7 +214,61 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
           (Some res, create_branch str_v st' step_state)
         end
       | (NDkilled r, st') ->
-        (Some "killed", create_branch "killed" st' step_state)
+        let reason = match r with
+          | Undef0 (loc, ubs) ->
+            "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+          | Error0 (_, str) ->
+            "Error: " ^ str ^ ""
+          | Other dr_err ->
+            let string_of_driver_error = function
+              | Driver.DErr_core_run err ->
+                Pp_errors.string_of_core_run_cause err
+              | Driver.DErr_memory err ->
+                let open Mem_common in
+                let string_of_access_error = function
+                  | NullPtr -> "null pointer"
+                  | FunctionPtr -> "function pointer"
+                  | DeadPtr -> "dead pointer"
+                  | OutOfBoundPtr -> "out of bound pointer"
+                  | NoProvPtr -> "invalid provenance"
+                in
+                let string_of_free_error = function
+                  | Free_static_allocation -> "static allocated region"
+                  | Free_dead_allocation -> "dead allocation"
+                  | Free_out_of_bound -> "out of bound"
+                in
+                begin match err with
+                  | MerrOutsideLifetime str ->
+                    "memory outside lifetime: " ^ str
+                  | MerrOther str ->
+                    "other memory error: " ^ str
+                  | MerrPtrdiff ->
+                    "invalid pointer diff"
+                  | MerrAccess (_, LoadAccess, err) ->
+                    "invalid memory load: " ^ string_of_access_error err
+                  | MerrAccess (_, StoreAccess, err) ->
+                    "invalid memory store: " ^ string_of_access_error err
+                  | MerrInternal str ->
+                    "internal error: " ^ str
+                  | MerrWriteOnReadOnly _ ->
+                    "writing read only memory"
+                  | MerrUndefinedFree (_, err) ->
+                    "freeing " ^ string_of_free_error err
+                  | MerrUndefinedRealloc ->
+                    "undefined behaviour in realloc"
+                  | MerrIntFromPtr ->
+                    "invalid cast integer from pointer"
+                  | MerrWIP str ->
+                    "wip: " ^ str
+            end
+          | Driver.DErr_concurrency str ->
+              "Concurrency error: " ^ str
+          | Driver.DErr_other str ->
+              str
+          in
+          "killed: " ^ string_of_driver_error dr_err
+        in
+        (Some reason, create_branch reason st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
           create_branch str st' step_state

@@ -221,6 +221,28 @@ export class CerberusUI {
       if (this.settings.auto_refresh) this.elab()
     }, 2000);
 
+    const serverStatus = $('#server-status')
+    let serverStatusFlag = true
+    // Check server status
+    window.setInterval(() => {
+      $.ajax({
+        url: 'index.html',
+        type: 'HEAD'
+      }).done(() => {
+        if (!serverStatusFlag) {
+          serverStatusFlag = true
+          serverStatus.text('ok')
+          serverStatus.css('color', 'white')
+        }
+      }).fail(() => {
+        if (serverStatusFlag) {
+          serverStatusFlag = false
+          serverStatus.text('down')
+          serverStatus.css('color', 'red')
+        }
+      })
+    }, 5000)
+
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {
       console.log('Failing when trying to download "std.json"')
