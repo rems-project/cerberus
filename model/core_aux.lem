@@ -1323,7 +1323,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
           | Civfromfloat ->
               "ivfromfloat"
         end in
-        error ("WIP: Core_aux.subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
+        error ("WIP: Core_aux.unsafe_subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')
   end
 
