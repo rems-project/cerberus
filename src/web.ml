@@ -288,6 +288,29 @@ let cerberus ~conf ~flow content =
 
 (* GET and POST *)
 
+let head ~docroot ?(gzipped=false) uri path =
+  let is_regular filename =
+    match Unix.((stat filename).st_kind) with
+    | Unix.S_REG -> true
+    | _ -> false
+  in
+  let check_local_file () =
+    let filename = Server.resolve_local_file ~docroot ~uri in
+    if is_regular filename && Sys.file_exists filename then
+        Server.respond `OK  `Empty ()
+    else forbidden path
+  in
+  let try_with () =
+    Debug.print 10 ("HEAD " ^ path);
+    match path with
+    | "/" -> Server.respond `OK `Empty ()
+    | _   -> check_local_file ()
+  in catch try_with begin fun e ->
+    Debug.error_exception "HEAD" e;
+    forbidden path
+  end
+
+
 let get ~docroot ?(gzipped=false) uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
@@ -339,7 +362,11 @@ let contains s1 s2 =
       if String.sub s1 i len = s2 then raise Exit
     done;
     false
-  with Exit -> true
+  with
+  | Exit -> true
+  | e ->
+    Debug.error_exception "contains" e;
+    false
 
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
@@ -350,9 +377,9 @@ let request ~docroot ~conf (flow, _) req body =
       | Some enc -> contains enc "gzip"
       | None -> false
     in
-    if gzipped then Debug.print 9 "accepts gzip";
+    if gzipped then Debug.print 10 "accepts gzip";
     match meth with
-    | `HEAD -> get ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
+    | `HEAD -> head ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
     | `GET  -> get ~docroot ~gzipped uri path
     | `POST ->
       Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path

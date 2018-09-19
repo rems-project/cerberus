@@ -371,7 +371,7 @@ code {
 .range {
   border: 0;
   vertical-align: middle;
-  width: calc(100% - 204px);
+  width: calc(100% - 224px);
 }
 
 /* ast-dump style */
