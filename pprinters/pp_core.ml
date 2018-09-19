@@ -738,6 +738,12 @@ let mk_comment doc =
     !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
   )
 
+let pp_funinfo finfos =
+  let mk_pair ty = (AilTypes.no_qualifiers, ty) in
+  Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
+    acc ^^ pp_symbol sym ^^ P.colon
+        ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
+        ^^ P.hardline) finfos P.empty
 
 let pp_file file =
   let pp_glob acc (sym, bTy, e) =
@@ -762,7 +768,9 @@ let pp_file file =
   begin
     !^ "-- Aggregates" ^^ P.break 1 ^^
     pp_tagDefinitions file.tagDefs ^^
-    P.break 1 ^^ P.break 1 ^^
+
+    !^ "-- C function types" ^^ P.break 1 ^^
+    pp_funinfo file.funinfo ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
     List.fold_left pp_glob P.empty file.globs ^^
