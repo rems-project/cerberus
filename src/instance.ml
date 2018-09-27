@@ -168,15 +168,34 @@ let decode s = Marshal.from_string s 0
 let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
-  let get_location st =
+  let string_of_env st =
+    let env = st.Driver.core_run_state.env in
+    let f e = Pmap.fold (fun (s:Symbol.sym) (v:Core.value) acc ->
+        Pp_symbol.to_string_pretty s ^ "= " ^ String_core.string_of_value v ^ "\n" ^ acc
+      ) e "" in
+    List.fold_left (fun acc e -> acc ^ f e) "" env
+  in
+  let get_state_details st =
     match st.Driver.core_state.Core_run.thread_states with
-    | (_, (_, ts))::_ -> Some (ts.Core_run.current_loc, ts.Core_run.current_uid)
-    | _ -> None
+    | (_, (_, ts))::_ ->
+      let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
+      let Core.Expr (arena_annots, _) = ts.arena in
+      let maybe_uid = Annot.get_uid arena_annots in
+      let maybe_loc = Annot.get_loc arena_annots in
+      begin match maybe_loc with
+        | Some loc ->
+          (loc, maybe_uid, string_of_env st ^ "\n" ^ arena)
+        | None ->
+          (ts.Core_run.current_loc, maybe_uid, string_of_env st ^ "\n" ^ arena)
+      end
+    | _ -> failwith "TODO" (* TODO *)
   in
   let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
     let nodeId  = new_id () in
+
     let mem     = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
-    let newNode = Branch (nodeId, lab, mem, get_location st) in
+    let (loc, uid, arena) = get_state_details st in
+    let newNode = Branch (nodeId, lab, mem, Some loc, uid, arena) in
     let ns' = newNode :: ns in
     let es' = Edge (previousNode, nodeId) :: es in
     (ns', es', nodeId)

@@ -289,6 +289,12 @@ export default class View {
     if (children.length > 0) {
       children[0].selected = true
       this.setMemory(children[0].mem)
+        const active = children[0]
+        if (active && active.loc && active.loc.arena) {
+          this.state.console = active.loc.arena
+          this.state.result = ''
+          this.emit('update') // TODO: CHANGE THIS! THIS IS FOR THE ARENA
+        }
       this.emit('clear')
       if (children[0].loc)
         this.emit('markInteractive', children[0].loc)
@@ -373,6 +379,11 @@ export default class View {
         active.can_step = false
         this.executeInteractiveStep(activeId)
       } else  {
+        if (active && active.loc && active.loc.arena) {
+          this.state.console = active.loc.arena
+          this.state.result = ''
+          this.emit('update') // TODO: CHANGE THIS! THIS IS FOR THE ARENA
+        }
         this.setMemory(active.mem)
         this.emit('clear')
         if (active.loc)

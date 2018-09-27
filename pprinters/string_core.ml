@@ -20,16 +20,16 @@ let string_of_params z =
 (* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)
 
 let mk_string_of_continuation_element = function
-  | Kunseq (es1, es2) ->
+  | Kunseq (_, es1, es2) ->
       fun z ->
         let str1 = List.fold_right (fun e acc -> string_of_expr e ^ " || " ^ acc) es1 "" in
         let str2 = List.fold_right (fun e acc -> acc ^ "|| " ^ string_of_expr e) es2 "" in
         "[ " ^ str1 ^ z ^ str2 ^ " ]"
-  | Kwseq (_as, e) ->
+  | Kwseq (_, _as, e) ->
       fun z ->
         let str = string_of_expr e in
         "let weak TODO = " ^ z ^ " in " ^ str
-  | Ksseq (_as, e) ->
+  | Ksseq (_, _as, e) ->
       fun z ->
         let str = string_of_expr e in
         "let strong TODO = " ^ z ^ " in " ^ str

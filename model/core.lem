@@ -394,9 +394,9 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
  
  (* runtime stuff *)
 type continuation_element 'a =
-  | Kunseq of list (expr 'a) * list (expr 'a)
-  | Kwseq  of pattern * expr 'a
-  | Ksseq  of pattern * expr 'a
+  | Kunseq of list annot * list (expr 'a) * list (expr 'a)
+  | Kwseq  of list annot * pattern * expr 'a
+  | Ksseq  of list annot * pattern * expr 'a
  (*  | Ktry   list (string * expr 'a) *)
 
 type continuation 'a = list (continuation_element 'a)

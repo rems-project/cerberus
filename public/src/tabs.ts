@@ -522,12 +522,12 @@ class Console extends ReadOnly {
 
   update(s:Common.State) {
     const vs = s.console.split(':')
-    if (vs.length > 2) {
+    /*if (vs.length > 2) { // TODO: should put this change in the server
       this.ee.emit('markError', parseInt(vs[1]))
       this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
-    } else {
+    } else {*/
       this.setValue(s.console)
-    }
+    //}
   }
 }
 
@@ -758,8 +758,8 @@ export class Core extends ReadOnly {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.core && state.ranges) {
       const range = state.ranges[loc.core]
-      if (loc.c && range)
-        this.editor.getDoc().markText(range.begin, range.end, { className: Util.getColorByLocC(state, loc.c) })
+      if (range)
+        this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? Util.getColorByLocC(state, loc.c) : 'color0'})
     }
   }
 
