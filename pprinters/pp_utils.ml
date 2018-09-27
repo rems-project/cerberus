@@ -5,6 +5,13 @@ let to_plain_string d =
   Buffer.clear buf;
   str
 
+let to_plain_pretty_string d =
+  let buf = Buffer.create 50 in
+  PPrint.ToBuffer.pretty 1.0 150 buf d;
+  let str = Buffer.contents buf in
+  Buffer.clear buf;
+  str
+
 let map_with_last f_all f_last xs =
   let rec aux acc = function
     | [] ->

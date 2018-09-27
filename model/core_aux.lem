@@ -1473,12 +1473,12 @@ end
 
 
 let subst_wait_continuation_element tid v = function
-  | Kunseq es1 es2 ->
-      Kunseq (List.map (subst_wait tid v) es1) (List.map (subst_wait tid v) es2)
-  | Kwseq syms_opt e2 ->
-      Kwseq syms_opt (subst_wait tid v e2)
-  | Ksseq syms_opt e2 ->
-      Ksseq syms_opt (subst_wait tid v e2)
+  | Kunseq annots es1 es2 ->
+      Kunseq annots (List.map (subst_wait tid v) es1) (List.map (subst_wait tid v) es2)
+  | Kwseq annots syms_opt e2 ->
+      Kwseq annots syms_opt (subst_wait tid v e2)
+  | Ksseq annots syms_opt e2 ->
+      Ksseq annots syms_opt (subst_wait tid v e2)
 (*
   | Ktry str_es ->
       Ktry (List.map (fun (str, e) -> (str, subst_wait tid v e)) str_es)
@@ -1680,14 +1680,14 @@ let find_labeled_continuation2 sym e =
 
 val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
 let apply_continuation cont expr =
-  let f _cont expr =
-    Expr [] match _cont with
-      | Kwseq pat e2 ->
-          Ewseq pat expr e2
-      | Ksseq pat e2 ->
-          Esseq pat expr e2
-      | Kunseq es1 es2 ->
-          Eunseq $ es1 ++ (expr :: es2)
+  let f _cont (Expr annot _ as expr) =
+    match _cont with
+      | Kwseq annots pat e2 ->
+          Expr annots (Ewseq pat expr e2)
+      | Ksseq annots pat e2 ->
+          Expr annots (Esseq pat expr e2)
+      | Kunseq annots es1 es2 ->
+          Expr annots (Eunseq $ es1 ++ (expr :: es2))
 (*
       | Ktry str_es ->
           Etry expr str_es

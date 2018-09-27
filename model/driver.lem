@@ -388,7 +388,6 @@ let rec drive_core_thread tid =
                 (* Dummy locations *)
                  Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
                  Core_run_aux.current_loc= Loc.unknown;
-                 Core_run_aux.current_uid= Nothing;
               |> dr_st.core_state
             in
             <| dr_st with
@@ -1082,7 +1081,6 @@ let driver_globals with_concurrency sym_supply file =
     Core_run.arena=  Core.Expr [] Core.Eskip;
     Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
     Core_run.current_loc= Loc.unknown;
-    Core_run.current_uid= Nothing;
     Core_run.exec_loc= Core_run.ELoc_globals;
   |> >>= fun tid0 ->
   
@@ -1102,7 +1100,6 @@ let driver_globals with_concurrency sym_supply file =
       Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
 (*      Core_run.labels= Map.empty; *)
       Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
-      Core_run.current_uid= Nothing;
       Core_run.exec_loc= Core_run.ELoc_globals;
     |> >>= fun () ->
     
@@ -1306,7 +1303,6 @@ TODO: this should be removable, since we already set it in Translation
           Core_run.arena=  expr;
           Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
           Core_run.current_loc= Loc.other "Driver.drive";
-          Core_run.current_uid= Nothing;
           Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
         |> >>
         driver with_concurrency >>

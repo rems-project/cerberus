@@ -52,8 +52,8 @@ let parse_incoming_json msg =
   let empty = { action=         `Nop;
                 source=         "";
                 model=          "Concrete";
-                rewrite=        true;
-                sequentialise=  true;
+                rewrite=        false; (* TODO: put this back to true *)
+                sequentialise=  false; (* TODO: '' *)
                 interactive=    None;
               }
   in
@@ -109,15 +109,16 @@ let parse_incoming_json msg =
 let json_of_exec_tree ((ns, es) : exec_tree) =
   let get_location _ = `Null in
   let json_of_node = function
-    | Branch (id, lab, mem, loc) ->
-      let json_of_loc (loc, uid) =
-        `Assoc [("c", Location_ocaml.to_json loc);
-                ("core", Json.of_opt_string uid)]
+    | Branch (id, lab, mem, loc, uid, arena) ->
+      let json_of_loc (loc, uid, arena) =
+        `Assoc [("c", Json.of_option Location_ocaml.to_json loc);
+                ("core", Json.of_opt_string uid);
+                ("arena", `String arena)]
       in
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", mem); (* TODO *)
-              ("loc", Json.of_option json_of_loc loc);
+              ("loc", json_of_loc (loc, uid, arena));
               ("group", `String "branch")]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);

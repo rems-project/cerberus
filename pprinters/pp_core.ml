@@ -770,14 +770,14 @@ let pp_file file =
 (* Runtime stuff *)
 let mk_pp_continuation_element cont_elem = fun z ->
   match cont_elem with
-    | Kunseq (es1, es2) ->
+    | Kunseq (_, es1, es2) ->
         pp_control "unseq" ^^ P.parens (
           comma_list pp_expr es1 ^^ P.comma ^^^ z ^^ P.comma ^^^ comma_list pp_expr es2
         )
-    | Kwseq (pat, e2) ->
+    | Kwseq (_, pat, e2) ->
         pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
         pp_control "in" ^^^ pp_expr e2
-    | Ksseq (pat, e2) ->
+    | Ksseq (_, pat, e2) ->
         pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
         pp_control "in" ^^^ pp_expr e2
 

@@ -259,6 +259,7 @@ let core_action_step arena_annots mem_st file current_tid (parent_tid_opt, th_st
           ext = [#'.'; #'h']
     end in
   let tag_str str = if is_library then "IN LIBRARY: " ^ str else str in
+
   
   let sb_before =
     (* filter out actions from other threads *)
@@ -732,13 +733,12 @@ val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Sym
 let core_thread_step2 mem_st file _(*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
-  let maybe_uid = Annot.get_uid arena_annots in
   let maybe_loc = Annot.get_loc arena_annots in
   let th_st = match maybe_loc with
     | Nothing ->
-        <| th_st with current_uid= maybe_uid |>
+        th_st
     | Just loc ->
-        <| th_st with current_loc= loc; current_uid= maybe_uid |>
+        <| th_st with current_loc= loc; |>
     end in
   match (expr_, th_st.stack) with
     | (Eskip, Stack_empty) ->
@@ -1138,7 +1138,7 @@ BEFORE EVAL_PEXPR2
                   let xs = 
                     List.map (fun (es1, ej, es2) ->
                       Step_tau "Eunseq" (
-                        E.return <| th_st with arena= ej; stack= Stack_cons current_proc_opt (Kunseq es1 es2 :: cont) sk |>
+                        E.return <| th_st with arena= ej; stack= Stack_cons current_proc_opt (Kunseq arena_annots es1 es2 :: cont) sk |>
                       )
                     ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
                   if List.length xs = 0 then
@@ -1161,7 +1161,7 @@ BEFORE EVAL_PEXPR2
                   ( cs
                   , E.return <| th_st with
                       arena= Expr e1_annots (Epure pe1);
-                      stack= Stack_cons current_proc_opt (Kwseq pat e2 :: cont) sk
+                      stack= Stack_cons current_proc_opt (Kwseq arena_annots pat e2 :: cont) sk
                     |> )
                 ) xs1
               )
@@ -1184,7 +1184,7 @@ BEFORE EVAL_PEXPR2
               Step_tau "Ewseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons current_proc_opt (Kwseq pat e2 :: cont) sk
+                  stack= Stack_cons current_proc_opt (Kwseq arena_annots pat e2 :: cont) sk
                 |>
               )
         end
@@ -1201,7 +1201,7 @@ BEFORE EVAL_PEXPR2
                   ( cs
                   , E.return <| th_st with
                       arena= Expr e1_annots (Epure pe1);
-                      stack= Stack_cons current_proc_opt (Ksseq pat e2 :: cont) sk
+                      stack= Stack_cons current_proc_opt (Ksseq arena_annots pat e2 :: cont) sk
                   |> )
                 ) xs1
               )
@@ -1226,7 +1226,7 @@ BEFORE EVAL_PEXPR2
               Step_tau "Esseq" (
                 E.return <| th_st with
                   arena= e1;
-                  stack= Stack_cons current_proc_opt (Ksseq pat e2 :: cont) sk
+                  stack= Stack_cons current_proc_opt (Ksseq arena_annots pat e2 :: cont) sk
                 |>
               )
         end
@@ -1354,7 +1354,6 @@ BEFORE EVAL_PEXPR2
             arena= e;
             stack= push_empty_continuation Nothing empty_stack;
             current_loc= th_st.current_loc;
-            current_uid= th_st.current_uid; (* TODO: probably wrong *)
             exec_loc= ELoc_normal [];
           |>) es
         )

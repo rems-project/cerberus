@@ -6,6 +6,7 @@ export interface Locations {
   c: Range
   core: Range
   color: number
+  arena: string // TODO: this shouldn't be here
 }
 
 export interface Node {
