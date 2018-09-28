@@ -49,6 +49,7 @@ type inferred =
   | InferredType_tuple of list inferred
   | InferredType_object of core_object_type
   | InferredType_loaded of core_object_type
+  | InferredType_storable
 
 val     equalInferred: inferred -> inferred -> bool
 let rec equalInferred infer1 infer2 =
@@ -97,6 +98,8 @@ let rec toInferred bTy =
         InferredType_object oTy
     | BTy_loaded oTy ->
         InferredType_loaded oTy
+    | BTy_storable ->
+        InferredType_storable
   end
 
 val     toCoreBaseType: inferred -> maybe core_base_type
@@ -126,6 +129,36 @@ let rec toCoreBaseType infer =
         Just (BTy_object oTy)
     | InferredType_loaded oTy ->
         Just (BTy_loaded oTy)
+    | InferredType_storable ->
+        Just BTy_storable
+  end
+
+val is_storable: core_base_type -> bool
+let is_storable = function
+  | BTy_unit ->
+      false
+  | BTy_boolean ->
+      false
+  | BTy_ctype ->
+      false
+  | BTy_list _ ->
+      false
+  | BTy_tuple _ ->
+      false
+  | BTy_object oTy ->
+      false (* should this be true? *)
+  | BTy_loaded oTy ->
+      true
+  | BTy_storable ->
+      true
+end
+
+
+val is_inferred_storable: inferred -> bool
+let is_inferred_storable ity =
+  match toCoreBaseType ity with
+    | Just bty -> is_storable bty
+    | Nothing -> false
   end
 
 
@@ -258,12 +291,15 @@ let rec export_pexpr (Pexpr annot infer pexpr_) =
         PEis_signed <$> export_pexpr pe
     | PEis_unsigned pe ->
         PEis_unsigned <$> export_pexpr pe
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible <$> export_pexpr pe1 <*> export_pexpr pe2
   end
 
 
+(* NOTE: not commutative any more *)
 val guard_match: Loc.t -> string -> core_base_type -> core_base_type -> E.eff unit
 let guard_match loc str bTy1 bTy2 =
-  E.guard (bTy1 = bTy2) loc (Mismatch str bTy1 bTy2)
+  E.guard (if bTy1 = BTy_storable then is_storable bTy2 else bTy1 = bTy2) loc (Mismatch str bTy1 bTy2)
 
 
 val unify: inferred -> inferred -> maybe (maybe inferred * maybe inferred)

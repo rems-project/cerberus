@@ -317,10 +317,10 @@ let rec print_core_object = function
   | OTy_integer    -> !^"M.integer_value"
   | OTy_floating   -> !^"M.floating_value"
   | OTy_pointer    -> !^"M.pointer_value"
-  | OTy_cfunction (ret_oTy, naparams, isVariadic) ->
+  (*| OTy_cfunction (ret_oTy, naparams, isVariadic) ->
      (* TODO: K wip *)
      !^"M.pointer_value" (* cfunction is a pointer value? *)
-                       (*TODO: I am not sure about these: *)
+                       (*TODO: I am not sure about these: *) *)
   | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
   | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
   | OTy_union sym  -> !^"union" ^^^ print_symbol sym
@@ -417,8 +417,8 @@ let lt_precedence p1 p2 =
 let rec print_object_value globs = function
   | OVstruct _
   | OVunion  _          -> failwith "TODO: NOT SURE IF THIS CAN HAPPEN!"
-  | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
-  | OVcfunction nm      -> print_name nm
+  (*| OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
+  | OVcfunction nm      -> print_name nm *)
   | OVinteger iv        -> print_integer_value iv
   | OVfloating fv       -> print_float_value fv
   | OVpointer pv        -> print_pointer_value pv

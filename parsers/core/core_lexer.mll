@@ -51,10 +51,11 @@ let keywords =
       ("cfunction", T.CFUNCTION);
       
       (* for Core base types *)
-      ("unit",    T.UNIT   );
-      ("boolean", T.BOOLEAN);
-      ("ctype",   T.CTYPE  );
-      ("loaded",  T.LOADED );
+      ("unit",     T.UNIT   );
+      ("boolean",  T.BOOLEAN);
+      ("ctype",    T.CTYPE  );
+      ("loaded",   T.LOADED );
+      ("storable", T.STORABLE);
       
       (* for Core types *)
       ("eff", T.EFF);
@@ -144,6 +145,7 @@ let keywords =
       ("is_integer",  T.IS_INTEGER );
       ("is_signed",   T.IS_SIGNED  );
       ("is_unsigned", T.IS_UNSIGNED);
+      ("are_compatible", T.ARE_COMPATIBLE);
       
       (* for Memory operations *)
       ("PtrEq",            T.MEMOP_OP Mem_common.PtrEq           );

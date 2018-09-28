@@ -92,11 +92,33 @@ proc loaded_pointer_to_Bool (_ptr: loaded pointer) : eff loaded integer :=
         pure(Unspecified('_Bool'))
   end
 
+fun is_floating(ty: ctype): boolean :=
+  ty = 'float' \/ ty = 'double' \/ ty = 'long_double'
 
+fun params_length_aux (acc: integer, cs: [ctype]): integer :=
+  case cs of
+    | [] => acc
+    | _:ctype :: xs:[ctype] => params_length_aux (acc+1, xs)
+  end
+
+fun params_length (cs: [ctype]): integer :=
+  params_length_aux(0, cs)
+
+fun params_nth (cs: [ctype], n: integer): ctype :=
+  case cs of
+    | [] =>
+      error(<<<params_nth>>>, (cs, n))
+    | x:ctype :: xs:[ctype] =>
+      if n = 0 then
+        x
+      else if n > 0 then
+        params_nth(xs, n-1)
+      else
+        error(<<<params_nth>>>, (cs, n))
+  end
 
 fun ctype_width (ty: ctype): integer :=
   Ivsizeof(ty) * <bits_in_byte>
-
 
 
 -- encode an element of Z into an element of N following the
@@ -179,6 +201,10 @@ fun wrapI(ty: ctype, n: integer) : integer :=
     else
       r - dlt
 
+proc create_and_store (ty: ctype, x: storable) : eff pointer :=
+  let weak p: pointer = create(Ivalignof(ty), ty) in
+  let weak _: unit = store(ty, p, x) in
+  pure(p)
 
 ------------------------------------------------------------------------------
 -- <signal.h>
@@ -238,6 +264,9 @@ proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} poi
 ------------------------------------------------------------------------------
 -- <stdlib.h>
 ------------------------------------------------------------------------------
+
+proc [ailname = "abort"] abort_proxy () : eff unit :=
+  pure (error(<<<ABORT>>>, False))
 
 proc [ailname = "exit"] exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in

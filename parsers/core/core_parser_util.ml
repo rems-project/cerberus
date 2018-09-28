@@ -122,6 +122,7 @@ type token =
   | IS_SIGNED
   | IS_UNSIGNED
   | IS_UNSPEC
+  | ARE_COMPATIBLE
   | UNSPECIFIED
   
   | STRING of string
@@ -194,6 +195,7 @@ type token =
   | BRACKETS
   | ARRAY
   | LOADED
+  | STORABLE
   | SPECIFIED
   
   | PURE

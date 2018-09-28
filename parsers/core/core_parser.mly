@@ -337,12 +337,14 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr (annot, (), PEval (Vobject (OVinteger ival))))
     | PEval (Vobject (OVpointer ptrval)) ->
         Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer ptrval))))
+          (*
     | PEval (Vobject (OVcfunction _nm)) ->
         (* TODO(V): CHANGING THE MEANING OF THIS KEYWORD *)
         symbolify_name _nm >>= (function
         | Sym sym ->
           Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer (Ocaml_mem.fun_ptrval sym)))))
         | _ -> failwith "PANIC")
+             *)
     | PEval Vunit ->
         Eff.return (Pexpr (annot, (), PEval Vunit))
     | PEval Vtrue ->
@@ -556,6 +558,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEis_unsigned _pe ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr (annot, (), PEis_unsigned pe))
+    | PEare_compatible (_pe1, _pe2) ->
+        symbolify_pexpr _pe1 >>= fun pe1 ->
+        symbolify_pexpr _pe2 >>= fun pe2 ->
+        Eff.return (Pexpr (annot, (), PEare_compatible (pe1, pe2)))
 
 
 let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t  =
@@ -974,7 +980,7 @@ let mk_file decls =
 %token DEF GLOB FUN PROC
 
 (* Core types *)
-%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED
+%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED STORABLE
 
 (* Core constant keywords *)
 %token NULL TRUE FALSE UNIT_VALUE
@@ -1002,7 +1008,7 @@ let mk_file decls =
 
 
 
-%token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR
+%token IS_INTEGER IS_SIGNED IS_UNSIGNED IS_SCALAR ARE_COMPATIBLE
 
 (* unary operators *)
 %token NOT
@@ -1209,6 +1215,7 @@ core_object_type:
     { OTy_floating }
 | POINTER
     { OTy_pointer }
+(*
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST RPAREN
     { OTy_cfunction (None, Nat_big_num.to_int nparams, false) }
 | CFUNCTION LPAREN UNDERSCORE COMMA nparams= INT_CONST COMMA DOTS RPAREN
@@ -1217,6 +1224,7 @@ core_object_type:
     { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, false) }
 | CFUNCTION LPAREN ret_oTy= core_object_type COMMA nparams= INT_CONST COMMA DOTS RPAREN
     { OTy_cfunction (Some ret_oTy, Nat_big_num.to_int nparams, true) }
+   *)
 (*
 | CFUNCTION LPAREN UNDERSCORE COMMA oTys= separated_list(COMMA, core_object_type) RPAREN
     { OTy_cfunction (None, oTys) }
@@ -1248,6 +1256,8 @@ core_base_type:
     { BTy_object oTy }
 | LOADED oTy= core_object_type
     { BTy_loaded oTy }
+| STORABLE
+    { BTy_storable }
 ;
 
 core_type:
@@ -1374,8 +1384,10 @@ value:
     { Vobject (OVinteger (Ocaml_mem.integer_ival n)) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Ocaml_mem.null_ptrval ty)) }
+    (*
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
+       *)
 | UNIT_VALUE
     { Vunit }
 | TRUE
@@ -1453,6 +1465,8 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_signed _pe) }
 | IS_UNSIGNED _pe= delimited(LPAREN, pexpr, RPAREN)
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEis_unsigned _pe) }
+| ARE_COMPATIBLE LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEare_compatible (_pe1, _pe2)) }
 ;
 
 
