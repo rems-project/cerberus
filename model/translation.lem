@@ -77,23 +77,13 @@ let rec core_type_of_expr_ctype ty =
 *)
 
 
-let force_core_object_type_of_ctype = function
-(* TODO(V): I am not sure about this *)
-(*  | (*BISECT-IGNORE*) Cty.Pointer _ (Cty.Function (_, ret_ty) xs isVariadic) ->
-      error "Translation.force_core_object_type_of_ctype MUST NOT be called on pointer to function ctype" *)
-  | ty ->
-      match Caux.core_object_type_of_ctype ty with
-        | Just oTy ->
-            oTy
-        | (*BISECT-IGNORE*) Nothing ->
-            error "Translation.force_core_object_type_of_ctype: Nothing"
-      end
-end
-
-
-
-
-
+let force_core_object_type_of_ctype ty =
+  match Caux.core_object_type_of_ctype ty with
+    | Just oTy ->
+        oTy
+    | (*BISECT-IGNORE*) Nothing ->
+        error "Translation.force_core_object_type_of_ctype: Nothing"
+  end
 
 val signedInt_gty: GenTypes.genType
 let signedInt_gty =
@@ -264,107 +254,32 @@ type expr_ctx =
   | ECTX_other
 
 
-
-
-(* val translate_function_designator: translation_stdlib -> A.expression GenTypes.genTypeCategory -> E.elabM (C.expr unit) *)
-let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression _ _ (* TODO: loc *) _ expr as a_expr) =
+let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression _ _ _ expr as a_expr) =
   let (Aty.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
-    (* | (Aty.Pointer _ (Aty.Ctype _ (Aty.Function has_proto _ params is_variadic)), A.AilErvalue e) -> *)
     | (Aty.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
-        let () = Debug.print_debug 0 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
-         let nparams = List.length params in
-          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) (* (C.BTy_object (C.OTy_cfunction (* TODO: *) Nothing nparams is_variadic)) *)
-            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
-         translate_expression ctx stdlib tagDefs e >>= fun core_e ->
-        (* TODO: check the std regarding prototype stuff *)
-        E.return $
-          C.Expr [] (
-          C.Esseq fun_sym_pat core_e (
-          Caux.mk_pure_e ( Caux.mk_sym_pe fun_sym
-          (*  Caux.mk_tuple_pe 
-              [ Caux.mk_cfunction_pe fun_sym  might use the pe? *)
-            (*  ; Caux.mk_integer_pe (integerFromNat nparams)
-              ; Caux.mk_boolean_pe is_variadic ]
-              )*)
-          )))
-(*
-    | (Aty.Pointer _ (Aty.Ctype _ (Aty.Function has_proto _ params is_variadic)),
-          A.AilErvalue (A.AnnotatedExpression _ _ _ (A.AilEident fid))) ->
-        let fid_pe = match fid with
-          | Symbol.Symbol _ (Just str) ->
-              match Map.lookup str stdlib.ailnames with
-                | Just sym ->
-                    Caux.mk_cfunction_pe sym
-                | Nothing ->
-                    Caux.mk_cfunction_pe fid
-              end
-          | _ ->
-              Caux.mk_cfunction_pe fid
-        end in
-
-        (* TODO: check the std regarding prototype stuff *)
-        E.return $
-          Caux.mk_pure_e (
-            Caux.mk_tuple_pe
-              [ fid_pe
-              ; Caux.mk_integer_pe (integerFromNat $ List.length params)
-              ; Caux.mk_boolean_pe is_variadic ]
-          )
-        *)
-(* IDEA: check if identifier is in the function declarations, send the OVcfunction value otherwise, send a pointer value *)
+        let () = Debug.print_debug 1 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
+        let nparams = List.length params in
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
+        translate_expression ctx stdlib tagDefs e >>= fun core_e ->
+        E.return $ Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym))
     | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ (Just str) ->
               match Map.lookup str stdlib.ailnames with
                 | Just sym ->
                     Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval sym))))
-                    (* Caux.mk_cfunction_pe sym *)
                 | Nothing ->
                     Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval fid))))
-                    (* Caux.mk_cfunction_pe fid *)
               end
           | _ ->
-              Caux.mk_value_pe (Core.Vloaded (C.LVspecified( (Core.OVpointer (Mem.fun_ptrval fid)))))
-              (* Caux.mk_cfunction_pe fid *)
+              Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval fid))))
         end in
-
-        (* TODO: check the std regarding prototype stuff *)
-        E.return $
-          Caux.mk_pure_e (
-           (* Caux.mk_tuple_pe
-              [ *)fid_pe
-             (* ; Caux.mk_integer_pe (integerFromNat $ List.length params)
-              ; Caux.mk_boolean_pe is_variadic ]
-          *))
+        E.return $ Caux.mk_pure_e fid_pe
     | (*BISECT-IGNORE*) _ ->
         error ("[Translation.translate_function_designator] wildcard case ==> " ^
                Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromAil_ctype Aty.no_qualifiers ty)
   end
-
-
-
-
-
-
-(*
-
-(*val prepare_cproc_call: Core.program -> AilSyntax.identifier -> list (Ail.Syntax  *)
-and prepare_cproc_call program fid es =
-  match fromJust "Translation.prepare_cproc_call" (Context.lookup (=) (snd program).A.declarations fid) with
-    | A.Decl_function has_proto return_ty params is_variadic is_inline is_Noreturn ->
-        if List.length es <> List.length params then
-          (* STD §6.5.2.2#6, sentence 3 *)
-          error "WIP: Translation.prepare_cproc_call ==> 'If the number of arguments does not equal the number of parameters, the behavior is undefined'"
-        else
-          error "WIP: Translation.prepare_cproc_call"
-    | _ ->
-        error "Translation.prepare_cproc_call, not a Decl_function"
-  end
-*)
-
-
-
 
 
 (* STD §6.5.5 Multiplicative operators *)
@@ -940,11 +855,10 @@ else
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
-          if AilTypesAux.is_object (ctype_of e) (* TODO(V): the result type is always an object (it is a pointer) result_ty *) then
+          if AilTypesAux.is_object (ctype_of e) then
             let _ = Debug.print_debug 1 [] (fun _ -> "aileunary adress, result type: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers result_ty) in
              E.fresh_symbol >>= fun sym    ->
              self e         >>= fun core_e ->
-(*             let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in *)
              E.return $
                C.Expr [Annot.Astd "§6.5.3.2#3, sentence 5"] (
                  C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) core_e (
@@ -955,7 +869,6 @@ else
                )
           else
             let _ = Debug.print_debug 1 [] (fun _ -> "call to function designator through aileunary adress") in
-            (* TODO: this is wrong, I only want the pointer here *)
             translate_function_designator ctx stdlib tagDefs e
       
       (* TODO: promotion? + atomicity *)
@@ -2180,14 +2093,14 @@ TODO: #9
                 (Caux.mk_if_e
                   (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe ret_ty) ret_sym_pe)
                   (Caux.mk_ccall_e (Caux.mk_ail_ctype_pe (ctype_of e)) fun_sym_pe [])
-                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB038))
+                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                 )
-                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB039))
+                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
               )
             )
       
       | A.AilEcall e es ->
-          (* TODO: This is ignoring has_proto *)
+          (* TODO: This is ignoring has_proto, §6.5.2.2#6 is not being considered! *)
           (* STD §6.5.2.2 *)
           let (expect_ret_ty, expect_params, expect_is_variadic) = match ctype_of e with
             | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Function _ (_, ret_ty) qs_tys is_variadic))) ->
@@ -2231,7 +2144,7 @@ TODO: #9
                 (Caux.mk_let_e param_ty_sym_pat (stdlib.mkcall_params_nth params_sym_pe (Caux.mk_integer_pe n))
                 (Caux.mk_if_e
                   (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_param_ty) param_ty_sym_pe))
-                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
+                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                   (let conv_value =
                       (* NOTE: since expected type is compatible with the parameter type, if one is an integer or
                         floating, the other one must also be an integer or floating (respectively) *)
@@ -2249,6 +2162,7 @@ TODO: #9
                         Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype expect_param_ty))
                       else
                         arg_sym_pe in
+                    Caux.add_std "§6.5.2.2#7, sentence 1" $
                     stdlib.mkproc_create_and_store param_ty_sym_pe conv_value)
                 )) :: rev_core_creates
               )
@@ -2264,7 +2178,9 @@ TODO: #9
               else (* TODO: should I add the case for pointers as well? *)
                 (arg_ty, arg_sym_pe)
             in E.return (Caux.mk_ail_ctype_pe arg_ty :: rev_arg_ty_pes
-                        , stdlib.mkproc_create_and_store (Caux.mk_ail_ctype_pe conv_ty) conv_value :: rev_variadic_core_creates)
+                        , (Caux.add_std "§6.5.2.2#7, sentences 2 and 3" $
+                            stdlib.mkproc_create_and_store (Caux.mk_ail_ctype_pe conv_ty) conv_value
+                          ) :: rev_variadic_core_creates)
           ) ([],[]) variadic_args_info >>= fun (rev_arg_ty_pes, rev_variadic_core_creates) ->
           (* function call result *)
           let call_bTy = maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (Caux.proj_ctype expect_ret_ty)) in
@@ -2287,7 +2203,8 @@ TODO: #9
                                                                      has_proto_sym_pat]])
                 :: (List.reverse rev_arg_sym_pats)
               )
-              (Caux.mk_unseq_e $
+              (Caux.add_std "§6.5.2.2#4, sentence 2" $
+                Caux.mk_unseq_e
                 (Caux.mk_sseq_e fun_sym_pat core_e
                   (Caux.mk_pure_e (Caux.mk_tuple_pe [fun_sym_pe; Caux.mk_cfunction_pe fun_sym_pe]))
                   :: (List.reverse rev_core_arg_es))
@@ -2297,12 +2214,12 @@ begin if expect_is_variadic then
               (Caux.mk_if_e
                 (Caux.mk_not_pe (Caux.mk_op_pe C.OpLe (stdlib.mkcall_params_length params_sym_pe)
                                                       (Caux.mk_integer_pe (integerFromNat n_args))))
-                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB039))
+                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
                 (* check if function types are compatible *)
                 (Caux.mk_if_e
                   (Caux.mk_op_pe C.OpOr (Caux.mk_not_pe is_variadic_sym_pe)
                                  (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
-                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
+                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                   (Caux.mk_sseq_e arg_ptr_sym_pats
                     (* create temporary object *)
                     (Caux.mk_unseq $ List.reverse rev_core_creates ++ List.reverse rev_variadic_core_creates)
@@ -2331,12 +2248,12 @@ else
               (Caux.mk_if_e
                 (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (stdlib.mkcall_params_length params_sym_pe)
                                                       (Caux.mk_integer_pe (integerFromNat n_args))))
-                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB039))
+                (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#6, sentence 3" Undefined.UB038_number_of_args))
                 (* check if function types are compatible *)
                 (Caux.mk_if_e
                   (Caux.mk_op_pe C.OpOr is_variadic_sym_pe
                                  (Caux.mk_not_pe (Caux.mk_are_compatible (Caux.mk_ail_ctype_pe expect_ret_ty) ret_sym_pe)))
-                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB040))
+                  (Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.5.2.2#9" Undefined.UB041_function_not_compatible))
                   (Caux.mk_sseq_e arg_ptr_sym_pats
                     (* create temporary object *)
                     (Caux.mk_unseq $ List.reverse rev_core_creates)
@@ -2786,32 +2703,7 @@ a
                 error "TODO: AilEarray_decay, rvalue"
           end
       | A.AilEfunction_decay e ->
-          (* TODO(V): NOT SURE *)
-          (* self e *)
           translate_function_designator ctx stdlib tagDefs e
-(*
-          let (ret_oTy_opt, nparams, isVariadic) = match Caux.proj_ctype (ctype_of e) with
-            | Cty.Function (_, ret_ty) qs_tys isVariadic ->
-                (Caux.core_object_type_of_ctype ret_ty,
-                 List.length qs_tys,
-                 isVariadic)
-            | _ ->
-                illTypedAil loc "AilEfunction_decay"
-          end in
-          translate_function_designator stdlib e >>= fun core_e ->
-          E.wrapped_fresh_symbol (C.BTy_object (C.OTy_cfunction ret_oTy_opt nparams isVariadic))
-            >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
-          E.return begin
-            Caux.mk_wseq_e (Caux.mk_tuple_pat [ fun_sym_pat
-                                              ; Caux.mk_empty_pat (C.BTy_object C.OTy_integer)
-                                              ; Caux.mk_empty_pat C.BTy_boolean ])
-              core_e
-              begin
-                Caux.mk_pure_e (Caux.mk_specified_pe fun_sym_pe)
-              end
-          end
-*)
-        (*  translate_function_designator stdlib e *)
     end
 
 
@@ -3506,8 +3398,7 @@ let translate_tag_definitions ctx =
         (sym, Cty.UnionDef (List.map (fun (ident, (_, ty)) -> (ident, Caux.proj_ctype ty)) tagDef))
   end) ctx
 
-(* TODO(V):
-val translate_program:
+(* val translate_program:
   translation_stdlib -> A.ail_program GenTypes.genTypeCategory ->
   E.elabM (C.core_tag_definitions * list (C.sym * C.core_base_type * C.expr unit) * C.fun_map unit)
   *)

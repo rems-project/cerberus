@@ -5,19 +5,10 @@ open import Core_ctype Cthread Annot Loc
 import Symbol Implementation_ Undefined Cmm_csem
 import Mem Mem_common
 
-
-(* NOTE(for OTy_cfunction):
-     the arguments are as follow, the return type (set to `Nothing' for void
-     functions; the number of parameters; a flag for whether the function is
-     variadic.
-     Regarding the return type, note that it is a core_object_type (instead of
-     a ctype), because in the elaborated Core we have forgotten about the
-     latter *)
 type core_object_type =  (* types for C objects *)
  | OTy_integer
  | OTy_floating
  | OTy_pointer
-(* | OTy_cfunction of maybe core_object_type * nat * bool *)
  | OTy_array of core_object_type
  | OTy_struct of Symbol.sym
  | OTy_union of Symbol.sym
@@ -30,19 +21,14 @@ let rec eq_core_object_type oTy1 oTy2 =
         1
     | OTy_pointer ->
         2
-(*    | OTy_cfunction _ _ _ ->
-        3 *)
     | OTy_array _ ->
-        4
+        3
     | OTy_struct _ ->
-        5
+        4
     | OTy_union _ ->
-        6
+        5
   end in
   match (oTy1, oTy2) with
- (*   | (OTy_cfunction ret_oTy_opt1 n1 b1, OTy_cfunction ret_oTy_opt2 n2 b2) ->
-           maybeEqualBy eq_core_object_type ret_oTy_opt1 ret_oTy_opt2
-        && n1 = n2 && b1 = b2 *)
     | (OTy_array oTy1, OTy_array oTy2) ->
         eq_core_object_type oTy1 oTy2
     | (OTy_struct sym1, OTy_struct sym2) ->
@@ -179,7 +165,6 @@ type generic_object_value 'sym =  (* C object values *)
  | OVinteger of Mem.integer_value (* integer value *)
  | OVfloating of Mem.floating_value (* floating-point value *)
  | OVpointer of Mem.pointer_value (* pointer value *)
-(* | OVcfunction of (generic_name 'sym) (* C function pointer *) *)
  | OVarray of list (generic_loaded_value 'sym) (* C array value *)
  | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * ctype * Mem.mem_value) (* C struct value *)
  | OVunion of Symbol.sym * Cabs.cabs_identifier * Mem.mem_value (* C union value *)

@@ -265,6 +265,9 @@ proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} poi
 -- <stdlib.h>
 ------------------------------------------------------------------------------
 
+proc [ailname = "abort"] abort_proxy () : eff unit :=
+  pure (error(<<<ABORT>>>, False))
+
 proc [ailname = "exit"] exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in
   pcall(<std_function_exit>, x)

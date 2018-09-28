@@ -718,21 +718,24 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
-              let err _ = EU.fail $ Illformed_program ("PEcfunction ==> TODO") in
-              let funptr sym =
-                match Map.lookup sym file.funinfo with
-                  | Just (ret, params, is_variadic, has_proto) ->
-                      EU.return (PEval (Vtuple [Vctype ret;
-                                                Vlist BTy_ctype (List.map Vctype params);
-                                                if is_variadic then Vtrue else Vfalse;
-                                                if has_proto then Vtrue else Vfalse; ]))
-                  | _ ->
-                     (* TODO(V): this is not really an ill formed program *)
-                     EU.fail $ Illformed_program "pointer does not point to a function"
-                end in
-              Mem.case_ptrval pv (fun _ -> err ()) funptr (fun _ _-> err ()) err
+              Mem.case_ptrval pv
+                (fun _ -> EU.fail $ Illformed_program "null function pointer")
+                (fun sym ->
+                  match Map.lookup sym file.funinfo with
+                    | Just (ret, params, is_variadic, has_proto) ->
+                        EU.return (PEval (Vtuple [Vctype ret;
+                                                  Vlist BTy_ctype (List.map Vctype params);
+                                                  if is_variadic then Vtrue else Vfalse;
+                                                  if has_proto then Vtrue else Vfalse; ]))
+                    | _ ->
+                       EU.fail $ Illformed_program ("'" ^ show sym ^ "' does not point to a function")
+                  end)
+                (fun _ addr-> EU.fail $ Illformed_program (show addr ^ " does not point to a function"))
+                (fun _ -> EU.fail $ Illformed_program "function pointer has an unspecified value")
+          | Just (Vloaded (LVunspecified _)) ->
+              EU.fail $ Illformed_program "function pointer has an unspecified value"
           | _ ->
-              EU.fail $ Illformed_program ("PEcfunction ==> TODO")
+            error "Core_eval.step_eval_pexpr, PEcfunction expects a pointer"
         end
     | PEmemberof tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
