@@ -1134,6 +1134,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
                   end) es' in
               Expr annot (Eunseq es'')
         end
+        (*
     | Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
@@ -1152,14 +1153,20 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | _ ->
              Expr annot (Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
+       *)
     | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+              match subst_pattern pat pe1 e2 with
+                | Just e -> pure_propagation2 e
+                | Nothing -> Expr annot (Ewseq pat e1' (pure_propagation2 e2))
+              end
+              (*pure_propagation2 (unsafe_subst_pattern pat pe1 e2)*)
           | Nothing ->
               Expr annot (Ewseq pat e1' (pure_propagation2 e2))
        end
+       (*
     | Esseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
@@ -1178,11 +1185,16 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | _ ->
              Expr annot (Esseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
+       *)
     | Esseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+              match subst_pattern pat pe1 e2 with
+                | Just e -> pure_propagation2 e
+                | Nothing -> Expr annot (Esseq pat e1' (pure_propagation2 e2))
+              end
+              (*pure_propagation2 (unsafe_subst_pattern pat pe1 e2)*)
           | Nothing ->
               Expr annot (Esseq pat e1' (pure_propagation2 e2))
        end

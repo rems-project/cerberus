@@ -122,7 +122,7 @@ type undefined_behaviour =
   | UB037_illtyped_load
   (* For a call to a function without a function prototype in scope, the number of arguments does
      not equal the number of parameters (6.5.2.2). *)
-  | UB038
+  | UB038_number_of_args
   (* For call to a function without a function prototype in scope where the function is defined with
      a function prototype, either the prototype ends with an ellipsis or the types of the arguments
      after promotion are not compatible with the types of the parameters (6.5.2.2). *)
@@ -134,7 +134,7 @@ type undefined_behaviour =
   | UB040
   (* A function is defined with a type that is not compatible with the type (of the expression)
      pointed to by the expression that denotes the called function (6.5.2.2). *)
-  | UB041
+  | UB041_function_not_compatible
   (* A member of an atomic structure or union is accessed (6.5.2.3). *)
   | UB042_access_atomic_structUnion_member
   (* The operand of the unary * operator has an invalid value (6.5.3.2). *)
@@ -705,6 +705,10 @@ let std_of_undefined_behaviour = function
       Just "§6.2.7#2"
   | UB020_nonarray_incomplete_lvalue_conversion ->
       Just "§6.3.2.1#2, sentence 3"
+  | UB038_number_of_args ->
+      Just "§6.5.2.2#6, sentence 3"
+  | UB041_function_not_compatible ->
+      Just "§6.5.2.2#9"
   | UB050_pointers_substraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
   | UB055_invalid_integer_constant_expression ->
@@ -779,10 +783,10 @@ let ub_str_bimap =
     ; (UB035_unsequenced_race, "UB035_unsequenced_race")
     ; (UB036_exceptional_condition, "UB036_exceptional_condition")
     ; (UB037_illtyped_load, "UB037_illtyped_load")
-    ; (UB038, "UB038")
+    ; (UB038_number_of_args, "UB038_number_of_args")
     ; (UB039, "UB039")
     ; (UB040, "UB040")
-    ; (UB041, "UB041")
+    ; (UB041_function_not_compatible, "UB041_function_not_compatible")
     ; (UB042_access_atomic_structUnion_member, "UB042_access_atomic_structUnion_member")
     ; (UB043_indirection_invalid_value, "UB043_indirection_invalid_value")
     ; (UB044, "UB044")
@@ -996,6 +1000,10 @@ let ub_short_string = function
       "a non-array lvalue with an incomplete type is used in a context that requires the value of the designated object"
   | UB015_incompatible_redeclaration ->
       "two declarations of the same object or function specify types that are not compatible"
+  | UB038_number_of_args ->
+      "the number of arguments does not equal the number of parameters"
+  | UB041_function_not_compatible ->
+      "incompatible function type"
   | UB055_invalid_integer_constant_expression ->
       "invalid integer constant expression"
   | UB059_incomplete_no_linkage_identifier ->
