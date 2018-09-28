@@ -77,10 +77,12 @@ let rec precedence = function
   | PEcall _
   | PElet _
   | PEif _
+  | PEcfunction _
   | PEis_scalar _
   | PEis_integer _
   | PEis_signed _
-  | PEis_unsigned _ -> None
+  | PEis_unsigned _
+  | PEare_compatible _ ->None
 
 let rec precedence_expr = function
   | Epure _
@@ -142,15 +144,16 @@ let rec pp_core_object_type = function
       !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
   | OTy_union ident  ->
       !^ "union" ^^^ !^(Pp_symbol.to_string ident)
-  | OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
+  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
             pp_core_object_type ret_oTy
         | None ->
             P.underscore in
       !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-
+*)
 let rec pp_core_base_type = function
+  | BTy_storable   -> !^ "storable"
   | BTy_object bty ->
       pp_core_object_type bty
   | BTy_loaded bty ->
@@ -279,8 +282,8 @@ let rec pp_object_value = function
       P.braces (
         P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
       )
-  | OVcfunction nm ->
-      !^ "Cfunction" ^^ P.parens (pp_name nm)
+  (*| OVcfunction nm ->
+      !^ "Cfunction" ^^ P.parens (pp_name nm) *)
   | OVcomposite _ ->
       !^ "TODO(OVcomposite)" 
 
@@ -475,6 +478,8 @@ let pp_pexpr pe =
               Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
               pp pe
             )
+        | PEcfunction pe ->
+            pp_keyword "cfunction" ^^ P.parens (pp pe)
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (pat, pe1, pe2) ->
@@ -495,8 +500,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
-(*        | PEstd (_, pe) ->
-            !^ "{-PEstd-}" ^^^ pp pe *)
+        | PEare_compatible (pe1, pe2) ->
+            pp_keyword "are_compatible" ^^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
     end
   in pp None pe
 
@@ -733,6 +738,12 @@ let mk_comment doc =
     !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
   )
 
+let pp_funinfo finfos =
+  let mk_pair ty = (AilTypes.no_qualifiers, ty) in
+  Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
+    acc ^^ pp_symbol sym ^^ P.colon
+        ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
+        ^^ P.hardline) finfos P.empty
 
 let pp_file file =
   let pp_glob acc (sym, bTy, e) =
@@ -757,7 +768,9 @@ let pp_file file =
   begin
     !^ "-- Aggregates" ^^ P.break 1 ^^
     pp_tagDefinitions file.tagDefs ^^
-    P.break 1 ^^ P.break 1 ^^
+
+    !^ "-- C function types" ^^ P.break 1 ^^
+    pp_funinfo file.funinfo ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
     List.fold_left pp_glob P.empty file.globs ^^

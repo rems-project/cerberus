@@ -39,11 +39,7 @@ let rec core_object_type_of_ctype ty =
        end
    | Function (_, ret_ty) xs isVariadic ->
        (* TODO: not sure about this *)
-       Just (OTy_cfunction (core_object_type_of_ctype ret_ty) (List.length xs) isVariadic)
-(*
-   | Pointer _ (Function (_, ret_ty) xs isVariadic) ->
-       error "Called Core_aux.core_object_type_of_ctype on a Pointer to a Function type"
-*)
+       error "core_object_type_of_ctype: function"
    | Pointer _ _ ->
        (* TODO: not sure about the case ref_ty is function type *)
        Just OTy_pointer
@@ -59,7 +55,7 @@ let rec core_object_type_of_ctype ty =
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type
 let oTy_of_bTy = function
-  | BTy_unit ->
+ | BTy_unit ->
       Nothing
  | BTy_boolean ->
       Nothing
@@ -73,8 +69,9 @@ let oTy_of_bTy = function
      Just oTy
  | BTy_loaded oTy ->
      Just oTy
+ | BTy_storable ->
+     Nothing
 end
-
 
 val     objectValueFromMemValue: Mem.mem_value -> core_object_type * object_value
 let rec objectValueFromMemValue mem_val =
@@ -137,7 +134,6 @@ let rec valueFromMemValue mem_val =
                               (OTy_array oTy, Vloaded (LVspecified (OVarray lvals))))
     (fun sym xs            -> (OTy_struct sym, Vloaded (LVspecified (OVstruct sym xs))))
     (fun sym ident mem_val -> (OTy_union sym, Vloaded (LVspecified (OVunion sym ident mem_val))))
-
 
 val     memValueFromValue: ctype -> value -> maybe Mem.mem_value
 let rec memValueFromValue ty cval =
@@ -280,10 +276,6 @@ val mk_nullptr_pe: Core_ctype.ctype -> pexpr
 let mk_nullptr_pe ref_ty =
   Pexpr [] () (PEval (Vobject (OVpointer (Mem.null_ptrval ref_ty))))
 
-val mk_cfunction_pe: Symbol.sym -> pexpr
-let mk_cfunction_pe fsym =
-  Pexpr [] () (PEval (Vobject (OVcfunction (Sym fsym))))
-
 val mk_specified_pe: pexpr -> pexpr
 let mk_specified_pe pe =
     Pexpr [] () (PEctor Cspecified [pe])
@@ -401,6 +393,10 @@ val mk_value_pe: value -> pexpr
 let mk_value_pe cval =
   Pexpr [] () (PEval cval)
 
+val mk_cfunction_pe: pexpr -> pexpr
+let mk_cfunction_pe pe =
+  Pexpr [] () (PEcfunction pe)
+
 val mk_std_pe: string -> pexpr -> pexpr
 let mk_std_pe std (Pexpr annot bty pe_) =
   Pexpr ((Astd std)::annot) bty pe_
@@ -417,6 +413,11 @@ let mk_std_pair_pe std (pe1, pe2) =
 val mk_call_pe: name -> list pexpr -> pexpr
 let mk_call_pe nm pes =
   Pexpr [] () (PEcall nm pes)
+
+val mk_are_compatible: pexpr -> pexpr -> pexpr
+let mk_are_compatible pe1 pe2 =
+  Pexpr [] () (PEare_compatible pe1 pe2)
+
 
 
 
@@ -877,6 +878,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
 end
 
 
@@ -1121,6 +1124,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEis_signed (unsafe_subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
 end
 
 
@@ -1305,13 +1310,75 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
           | Civfromfloat ->
               "ivfromfloat"
         end in
-        error ("WIP: Core_aux.subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
+        error ("WIP: Core_aux.unsafe_subst_pattern ==> ctor= " ^ str_ctor ^ ", |pats|= "
                ^ (show (List.length pats)) ^ " -- " ^ Pp.stringFromCore_pexpr pe')
   end
+
+val     subst_pattern: forall 'a. pattern -> pexpr -> expr 'a -> maybe (expr 'a)
+let rec subst_pattern (Pattern _ pat) pe' expr =
+  
+  match (pat, pe') with
+    | (CaseBase (Nothing, _), _) ->
+        Just expr
+    | (CaseBase (Just sym, _), _) ->
+        Just $ unsafe_subst_sym_expr sym pe' expr
+    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
+        (* empty list (value) *)
+        Just expr
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
+        (* empty list (pure expr) *)
+        Just expr
+    | (CaseCtor Ccons [pat1; pat2], Pexpr [] () (PEval (Vlist bTy_elem (cval::cvals)))) ->
+        (* populated list (value) *)
+        Just (subst_pattern_val pat1 cval $
+          subst_pattern_val pat2 (Vlist bTy_elem cvals) expr)
+    | (CaseCtor Ccons [pat1; pat2], Pexpr _ _ (PEctor Ccons [pe1; pe2])) ->
+        (* populated list (pure expr) *)
+        match subst_pattern pat2 pe2 expr with
+          | Just e -> subst_pattern pat1 pe1 e
+          | Nothing -> Nothing
+        end
+    | (CaseCtor Ctuple pats', Pexpr [] () (PEval (Vtuple cvals))) ->
+        Just $ List.foldr (fun (pat', cval) acc ->
+          subst_pattern_val pat' cval acc
+        ) expr (List.zip pats' cvals)
+    | (CaseCtor Ctuple pats', Pexpr _ _ (PEctor Ctuple pes)) ->
+        List.foldr (fun (pat', pe) acc ->
+          match acc with
+            | Just e -> subst_pattern pat' pe e
+            | Nothing -> Nothing
+          end
+        ) (Just expr) (List.zip pats' pes)
+    (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
+    
+    | (CaseCtor Cloaded [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
+        Just $ subst_pattern_val pat' (Vobject oval) expr
+    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
+        subst_pattern pat' pe'' expr
+    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEval (Vloaded (LVunspecified ty)))) ->
+        Just $ subst_pattern_val pat' (Vctype ty) expr
+    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEctor Cunspecified [pe''])) ->
+        subst_pattern pat' pe'' expr
+    | (CaseCtor ctor pats, _) ->
+        Nothing
+  end
+
 
 
 val     to_pure: forall 'a. expr 'a -> maybe pexpr
 let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
+  let to_pure_aux pat pe1 e2 =
+    match subst_pattern pat pe1 e2 with
+      | Just e -> to_pure e
+      | Nothing ->
+          match to_pure e2 with
+            | Nothing ->
+                Nothing
+            | Just pe2 ->
+                Just (Pexpr [] () (PElet pat pe1 pe2))
+          end
+    end
+  in
   match expr_ with
     | Epure pe ->
         Just pe
@@ -1349,14 +1416,14 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
     | Ewseq pat e1 e2 ->
         match to_pure e1 with
           | Just pe1 ->
-              to_pure (unsafe_subst_pattern pat pe1 e2)
+              to_pure_aux pat pe1 e2
           | Nothing ->
               Nothing
         end
     | Esseq pat e1 e2 ->
         match to_pure e1 with
           | Just pe1 ->
-              to_pure (unsafe_subst_pattern pat pe1 e2)
+              to_pure_aux pat pe1 e2
           | Nothing ->
               Nothing
         end
@@ -1916,6 +1983,15 @@ let rec match_pattern (Pattern _ pat) cval =
             )
           )
         ) (Just []) (List.zip pats' cvals')
+    | (CaseCtor Cnil [], Vlist _ []) ->
+        let () = Debug.warn [] (fun () -> "Pattern matching nil without checking types!") in
+        Just []
+    | (CaseCtor Ccons [pat_x; pat_xs], Vlist ty (x::xs)) ->
+        Maybe.bind (match_pattern pat_x x) (fun x ->
+          Maybe.bind (match_pattern pat_xs (Vlist ty xs)) (fun xs ->
+            Just (x++xs)
+          )
+        )
     | _ ->
         Nothing
   end
@@ -1923,8 +1999,10 @@ let rec match_pattern (Pattern _ pat) cval =
 val     select_case: forall 'a. (Symbol.sym -> value -> 'a -> 'a) -> value -> list (pattern * 'a) -> maybe 'a
 let rec select_case subst_sym cval = function
   | [] ->
+      let () = Debug.print_debug 1 [] (fun () -> "NOTHING") in
       Nothing
   | (pat, pe) :: pat_pes' ->
+      let () = Debug.print_debug 1 [] (fun () -> "SELECT_CASE") in
       match match_pattern pat cval with
         | Nothing ->
             (* trying the next branch *)
@@ -1993,6 +2071,11 @@ val mk_let_e: pattern -> pexpr -> expr unit -> expr unit
 let mk_let_e pat pe e =
   Expr [] (Elet pat pe e)
 
+val mk_ccall_e: pexpr -> pexpr -> list pexpr -> expr unit
+let mk_ccall_e cty pe pes =
+  Expr [] (Eccall default cty pe pes)
+
+
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =
   Expr (Aloc loc :: annot) expr_
@@ -2034,6 +2117,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEis_integer pe -> PEis_integer (self 1 pe)
   | PEis_signed pe -> PEis_signed (self 1 pe)
   | PEis_unsigned pe -> PEis_unsigned (self 1 pe)
+  | PEare_compatible pe1 pe2 -> PEare_compatible (self 1 pe1) (self 2 pe2)
   end
 
 val     set_uid_e: forall 'a. string -> nat -> expr 'a -> expr 'a
@@ -2087,6 +2171,7 @@ let set_uid file =
   impl=    file.impl;
   globs=   file.globs; (* TODO *)
   funs=    Map.mapi set_uid_fun file.funs;
+  funinfo= file.funinfo;
  |>
 
 

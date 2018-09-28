@@ -109,7 +109,8 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
              ; C.impl= impl
              ; C.globs= []
              ; C.funs= Map.empty
-             ; C.tagDefs= Map.empty |> in
+             ; C.tagDefs= Map.empty
+             ; C.funinfo= Map.empty |> in
           let init_dr_st = Driver.initial_driver_state translate_final_st.TranslateEff.symbol_supply dummy_core_file in
           (* spawning a thread with the Core expression we just generated as it's arena *)
           let ((tid, core_st), run_st) = State.run (

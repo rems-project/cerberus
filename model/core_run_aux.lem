@@ -422,6 +422,8 @@ let rec convert_pexpr (Pexpr annot _ pexpr_) =
      PEis_signed (convert_pexpr pe)
  | PEis_unsigned pe ->
      PEis_unsigned (convert_pexpr pe)
+ | PEare_compatible pe1 pe2 ->
+     PEare_compatible (convert_pexpr pe1) (convert_pexpr pe2)
   end
 
 val     convert_expr: forall 'bty 'a. Core.generic_expr 'a 'bty Symbol.sym -> Core.expr core_run_annotation
@@ -532,5 +534,6 @@ let convert_file file =
   impl=    Map.map convert_impl_decl file.impl;
   globs=   List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
   funs=    Map.map convert_fun_map_decl file.funs;
+  funinfo= file.funinfo;
  |>
 (* END silly *)

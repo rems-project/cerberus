@@ -60,6 +60,9 @@ type core_parser_cause =
   | Core_parser_wrong_decl_in_std
   | Core_parser_undefined_startup
 
+type driver_cause =
+  | Driver_UB of list Undefined.undefined_behaviour
+
 type cause =
   | CPARSER of cparser_cause
   | DESUGAR of desugar_cause
@@ -67,6 +70,7 @@ type cause =
   | CORE_PARSER of core_parser_cause
   | CORE_TYPING of core_typing_cause
   | CORE_RUN of core_run_cause
+  | DRIVER of driver_cause
   | UNSUPPORTED of string
 
 type error = Loc.t * cause

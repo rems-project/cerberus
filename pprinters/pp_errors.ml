@@ -385,6 +385,10 @@ let string_of_core_parser_cause = function
   | Core_parser_undefined_startup ->
       "undefined startup function"
 
+let string_of_driver_cause = function
+  | Driver_UB ubs ->
+      String.concat "\n" @@ List.map (fun ub -> (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
+
 let short_message = function
   | CPARSER ccause ->
       string_of_cparser_cause ccause
@@ -400,6 +404,8 @@ let short_message = function
       "unsupported " ^ str
   | CORE_PARSER ccause ->
       string_of_core_parser_cause ccause
+  | DRIVER dcause ->
+      string_of_driver_cause dcause
 
 type std_ref =
   | StdRef of string list
@@ -438,6 +444,14 @@ let get_desugar_ref = function
   | _ ->
       UnknownRef
 
+let get_driver_ref = function
+  | Driver_UB ubs ->
+    StdRef (List.concat
+              (List.map (fun ub ->
+                   match Undefined.std_of_undefined_behaviour ub with
+                   | Some x -> [x]
+                   | None -> []) ubs))
+
 let get_std_ref = function
   | CPARSER _ ->
       NoRef
@@ -445,6 +459,8 @@ let get_std_ref = function
       get_desugar_ref dcause
   | AIL_TYPING tcause ->
       StdRef (std_of_ail_typing_error tcause)
+  | DRIVER dcause ->
+      get_driver_ref dcause
   | _ ->
       NoRef
 
