@@ -190,7 +190,8 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
            Core.globs=  globs;
-           Core.funs=   funs
+           Core.funs=   funs;
+           Core.funinfo= Pmap.empty (fun _ _ -> 0); (* TODO: need to parse funinfo! *)
          })
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"

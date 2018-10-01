@@ -36,6 +36,8 @@ let pp_memop = function
       !^ "Memcpy"
   | Realloc ->
       !^ "Realloc"
+  | PtrArrayShift ->
+      !^ "PtrArrayShift"
 
 
 

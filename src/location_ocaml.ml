@@ -376,9 +376,9 @@ let head_pos_of_location = function
         | None -> "" )
 
 let get_filename = function
-  | Loc_unknown ->
-      None
-  | Loc_other _ ->
+  | Loc_unknown
+  | Loc_other _
+  | Loc_regions ([], _) ->
       None
   | Loc_point pos 
   | Loc_region (pos, _, _)

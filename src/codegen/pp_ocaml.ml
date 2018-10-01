@@ -333,6 +333,7 @@ let rec print_base_type = function
   | BTy_tuple bTys -> P.parens (P.separate_map P.star print_base_type bTys)
   | BTy_object obj -> print_core_object obj
   | BTy_loaded obj -> P.parens (print_core_object obj) ^^^ !^"RT.loaded"
+  | BTy_storable   -> assert false
 
 let print_core_type = function
   | TyBase   baseTy -> print_base_type baseTy
@@ -567,6 +568,8 @@ let print_pure_expr globs pe =
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
       | PEis_signed pe -> print_is_expr "is_signed" pp pe
       | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
+      | PEcfunction _
+      | PEare_compatible _ -> assert false
     end
   in pp None pe
 

@@ -1600,10 +1600,10 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
         (* TODO: check that it's ok to assume intptr_t to caracterise the
            size of pointers *)
         (* TODO: maybe we should have a flag *)
-        let intptr_t =
+        (*let intptr_t =
           Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intptr_t)) in
         let unsigned_long =
-          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in
+          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in *)
         
         (* TODO: unsure about this *)
         let unsigned_long_ity = AilTypes.Unsigned AilTypes.Long in
@@ -1650,7 +1650,7 @@ let rec impl_eq_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
 
 
 
-let impl_lt_ival mem_st_opt (IV prov1 ival_1 as ival1) (IV prov2 ival_2 as ival2) =
+let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
   let ival_1' = lifted_simplify_integer_value_base ival_1 in
   let ival_2' = lifted_simplify_integer_value_base ival_2 in
   match (ival_1', ival_2') with
@@ -2253,7 +2253,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
-            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) as spe_ty) byte_ival_] ->
+            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
                 return (MVdelayed [(sh, write_mval)] current_mval)
 (*
                 match write_mval with
@@ -2364,10 +2364,10 @@ let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
         end
     
     (* device memory *)
-    | (PV Prov_device _ _ as ptrval) ->
+    | (PV Prov_device _ _) ->
         do_device
 
-    | (PV Prov_wildcard _ _ as ptrval) ->
+    | (PV Prov_wildcard _ _) ->
         error "TODO perform_access: Prov_wildcard"
   end
 

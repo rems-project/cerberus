@@ -745,7 +745,7 @@ end
 (* TODO: this is super partial and hackish *)
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
 val     is_arithmetic_constant_expression: bool -> expression unit -> E.desugM bool
-let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr) as a_expr) =
+let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr)) =
   match expr with
     | AilEconst (ConstantInteger _) ->
         E.return true
@@ -1398,10 +1398,12 @@ val desugar_direct_abstract_declarator:
 
 
 
+(*
 val arrayFromStringLiteral: maybe int -> stringLiteral -> expression unit
 let arrayFromStringLiteral size_opt (pref_opt, strs) =
   let ns = List.map Decode.decode_character_constant strs in
   error "TODO"
+  *)
 
 
 

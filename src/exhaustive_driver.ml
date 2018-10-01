@@ -103,6 +103,7 @@ let drive sym_supply file args conf : execution_result =
         | (ND.Active _, _, _) ->
             assert false
         | (ND.Killed reason, z3_strs, st) ->
+          (*
             let reason_str = match reason with
               | ND.Undef0 (loc, ubs) ->
                   "undefined behaviour[" ^ Location_ocaml.location_to_string loc ^ "]: "
@@ -111,6 +112,7 @@ let drive sym_supply file args conf : execution_result =
                   "static error[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str
               | ND.Other str ->
                   string_of_driver_error str in
+             *)
             begin
 (*
       if reason_str = "reached unsatisfiable constraints" then

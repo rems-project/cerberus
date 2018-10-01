@@ -755,7 +755,10 @@ module Concrete : Memory = struct
   let dot_of_mem_state st =
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
-      let Some ty = alloc.ty in
+      let ty = match alloc.ty with
+        | Some ty -> ty
+        | None -> assert false
+      in
       let (mval, bs') = combine_bytes ty bs in
       mval
     in
@@ -1473,7 +1476,10 @@ let combine_prov prov1 prov2 =
       | Bool ->
           IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
       | _ ->
-          let Some nbytes = Impl.sizeof_ity ity in
+          let nbytes = match Impl.sizeof_ity ity with
+            | Some n -> n
+            | None -> assert false
+          in
           let nbits = 8 * nbytes in
           let is_signed = AilTypesAux.is_signed_ity ity in
           let (min, max) =
