@@ -849,18 +849,20 @@ BEFORE EVAL_PEXPR2
               )
           | PEval Vtrue ->
               Step_tau "Eif (then)" (
-                let labeled_conts =
+                (* TODO: should this labeled_conts be used somewhere? *)
+                (* let labeled_conts =
                   Map.map (fun (sym_tys, e) ->
                     (sym_tys, apply_continuation cont e)
-                  ) (collect_labeled_continuations e3) in
+                  ) (collect_labeled_continuations e3) in *)
                 E.return <| th_st with arena= e2 |>
               )
           | PEval Vfalse ->
               Step_tau "Eif (else)" (
-                let labeled_conts =
+                (* TODO: should this labeled_conts be used somewhere? *)
+                (* let labeled_conts =
                   Map.map (fun (sym_tys, e) ->
                     (sym_tys, apply_continuation cont e)
-                  ) (collect_labeled_continuations e2) in
+                  ) (collect_labeled_continuations e2) in *)
                 E.return <| th_st with arena= e3 |>
               )
           | PEval _ ->

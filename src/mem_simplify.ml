@@ -167,7 +167,10 @@ let rec simplify_integer_value_base ival_ =
           | Atomic0 atom_ty ->
               simplify_integer_value_base (IVsizeof atom_ty)
           | Struct0 tag_sym ->
-              let Tags.StructDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
+              let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
+                | Tags.StructDef membrs -> membrs
+                | _ -> assert false
+              in
               simplify_integer_value_base begin
                 List.fold_left (fun acc (ident, ty) ->
                   IVop (IntAdd, [lifted_self (IVsizeof ty); IVop (IntAdd, [IVpadding (tag_sym, ident);  acc])])
@@ -179,9 +182,18 @@ let rec simplify_integer_value_base ival_ =
                  members PLUS some padding to make it so that the address
                  just one past the union respect it's own alignment constraint
                  (i.e. we wan't to be able to have arrays of unions) *)
-              let Tags.UnionDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
-              let (size::sizes) =
-                List.map (fun (memb_ident, ty) ->
+              let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
+                | Tags.UnionDef membrs -> membrs
+                | _ -> assert false
+              in
+              let align =
+                match simplify_integer_value_base (IValignof (Union0 tag_sym)) with
+                  | Left n ->
+                      n
+                  | Right _ ->
+                      assert false
+              in
+              begin match List.map (fun (memb_ident, ty) ->
                   match simplify_integer_value_base (IVsizeof ty) with
                     | Left n ->
                         n
@@ -190,14 +202,12 @@ let rec simplify_integer_value_base ival_ =
                                    must have their sizeof constraint specified in\
                                    the implementation. Please specify _Alignof(" ^
                                   String_core_ctype.string_of_ctype ty)
-                ) membrs in
-              let align =
-                match simplify_integer_value_base (IValignof (Union0 tag_sym)) with
-                  | Left n ->
-                      n in
-              
-              let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
-              Left (add max_size (sub align (integerRem_f max_size align)))
+                ) membrs with
+              | [] -> assert false
+              | size::sizes ->
+                let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
+                Left (add max_size (sub align (integerRem_f max_size align)))
+              end
           | Builtin0 str ->
               failwith "TODO simplify_integer_value: IVsizeof Builtin"
         end
@@ -234,9 +244,11 @@ let rec simplify_integer_value_base ival_ =
               Right ival_
           | Union0 tag_sym ->
               (* NOTE: these two partial patterns are ok by typing of Ail *)
-              let Tags.UnionDef membrs = Pmap.find tag_sym (Tags.tagDefs ()) in
-              let (n::ns) =
-                List.map (fun (memb_ident, ty) ->
+              let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
+                | Tags.UnionDef membrs -> membrs
+                | _ -> assert false
+              in
+              begin match List.map (fun (memb_ident, ty) ->
                   match simplify_integer_value_base (IValignof ty) with
                     | Left n ->
                         n
@@ -245,10 +257,13 @@ let rec simplify_integer_value_base ival_ =
                                    must have their alignment constraint specified in\
                                    the implementation. Please specify _Alignof(" ^
                                   String_core_ctype.string_of_ctype ty)
-                ) membrs in
-              (* NOTE: the alignment constraint of a union type is the largest
-                 alignment constraint of any of its member *)
-              Left (List.fold_left (fun acc z -> max z acc) n ns)
+                ) membrs with
+                | [] -> assert false
+                | (n::ns) ->
+                  (* NOTE: the alignment constraint of a union type is the largest
+                     alignment constraint of any of its member *)
+                  Left (List.fold_left (fun acc z -> max z acc) n ns)
+              end
           | Builtin0 str ->
               failwith "TODO simplify_integer_value: IValignof Builtin"
         end

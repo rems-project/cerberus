@@ -52,7 +52,9 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
   | PEarray_shift (pe1, _, pe2) ->
     fv_pe pe1 fvs |> fv_pe pe2
   | PEmember_shift (pe1, l, _) -> l::(fv_pe pe1 fvs)
+  | PEmemberof (l, _, pe) -> l::(fv_pe pe fvs)
   | PEnot pe -> fv_pe pe fvs
+  | PEare_compatible (pe1, pe2)
   | PEop (_, pe1, pe2) ->
     fv_pe pe1 fvs |> fv_pe pe2
   | PEstruct (l,cs) -> l::(List.fold_left (flip fv_pe %% snd) fvs cs)
@@ -69,11 +71,13 @@ let rec fv_pe (Pexpr (_,_, e)) fvs =
   | PEis_scalar pe
   | PEis_integer pe
   | PEis_signed pe
+  | PEcfunction pe
   | PEis_unsigned pe -> fv_pe pe fvs
 
 let fv_act (Paction(_, Action (_, _, act))) fvs =
   match act with
   | Create (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
+  | CreateReadOnly (pe1, pe2, pe3, _) -> fv_pe pe1 fvs |> fv_pe pe2 |> fv_pe pe3
   | Alloc0 (pe1, pe2, _) -> fv_pe pe1 fvs |> fv_pe pe2
   | Kill (_, pe) -> fv_pe pe fvs
   | Store0 (_, pe1, pe2, pe3, _) ->

@@ -100,7 +100,7 @@ let pull_helper pull pe_cons (ps: list ('a * pexpr)) =
 end
 
 val     pull_constrained: nat -> pexpr -> pexpr
-let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
+let rec pull_constrained n (Pexpr _ () pexpr_) =
   let self pe = pull_constrained (n+1) pe in
   let wrap f pe =
     match self pe with

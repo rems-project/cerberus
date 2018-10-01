@@ -1342,7 +1342,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         ) (List.zip bTys pes) >>= fun pes' ->
         guard_match loc "memop()" expected_bTy ret_bTy >>
         E.return (Ememop memop pes')
-    | (Eaction (Paction p act) as e) ->
+    | (Eaction (Paction p act)) ->
         (Eaction -| Paction p)
           <$> typecheck_action tagDefs env expected_bTy act
     | Ecase pe cases ->
