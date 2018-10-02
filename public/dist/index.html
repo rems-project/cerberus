@@ -11,7 +11,7 @@
     <ul>
       <li class="border">
         <div class="btn dropdown">
-          <span>Cerberus (status: <span id="server-status">ok</span>)</span>
+          <span>Cerberus<span id="server-status" style="color: red;"></span></span>
           <div class="dropdown-content">
             <div id="about" class="btn">About Cerberus</div>
             <hr>
@@ -56,31 +56,34 @@
           <div class="dropdown-content">
             <div id="random" class="btn">Random (45s timeout)</div>
             <div id="exhaustive" class="btn">Exhaustive (45s timeout)</div>
-            <div id="interactive" class="btn">Interactive (experimental)</div>
+            <!--<div id="interactive" class="btn">Interactive (experimental)</div>-->
           </div>
         </div>
       </li>
       <li class="border"><div id="compile" class="btn">Compile (Godbolt)</div></li>
-      <!--
       <li>
         <div class="btn dropdown">
-          <span>Interactive</span>
+          <span>Interactive Options</span>
           <div class="dropdown-content">
-            <div id="concrete" class="btn">
-              <input id="cb_concrete" type="checkbox">Suppress tau transitions
+            <div id="supress-tau" class="btn">
+              <input id="cb-supress-tau" type="checkbox">Suppress tau transitions
             </div>
-            <div id="rewrite" class="btn">
-              <input id="cb_rewrite" type="checkbox">Skip tau transitions
+            <div id="skip-tau" class="btn">
+              <input id="cb-skip-tau" type="checkbox">Skip tau transitions
             </div>
-            <div id="sequentialise" class="btn">
-              <input id="cb_sequentialise" type="checkbox">Step to the next memory action
+            <div id="step-mem-action" class="btn">
+              <input id="cb-step-mem-action" type="checkbox">Step to the next memory action
             </div>
+            <hr>
+            <div id="open-memory" class="btn">Open memory tab</div>
+            <div id="open-arena" class="btn">Open runtime arena tab</div>
+            <div id="open-interactive" class="btn">Open execution graph tab</div>
           </div>
         </div>
       </li>
-      <li><div id="compile" class="btn">Step back</div></li>
-      <li><div id="compile" class="btn">Step forward<div></li>
-      <li class="border"><div id="compile" class="btn">Restart</div></li> -->
+      <li><div id="step-back" class="btn">Step back</div></li>
+      <li><div id="step-forward" class="btn">Step forward<div></li>
+      <li class="border"><div id="restart" class="btn">Restart</div></li>
       <li>
         <div class="btn dropdown">
           <span>Settings</span>

@@ -768,9 +768,12 @@ let pp_file file =
   begin
     !^ "-- Aggregates" ^^ P.break 1 ^^
     pp_tagDefinitions file.tagDefs ^^
-
-    !^ "-- C function types" ^^ P.break 1 ^^
-    pp_funinfo file.funinfo ^^
+    
+    if show_include then
+      !^ "-- C function types" ^^ P.break 1 ^^
+      pp_funinfo file.funinfo
+    else P.empty
+    ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
     List.fold_left pp_glob P.empty file.globs ^^

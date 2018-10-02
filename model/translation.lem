@@ -3460,7 +3460,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   (
                     ( sym
                     , C.BTy_object C.OTy_pointer
-                    , Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
+                    , Caux.add_loc (locOf core_e) $
+                      Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
                         Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
                          Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                            (* TODO: proper memory order *)

@@ -30,9 +30,14 @@ export interface Edge {
 export class Graph {
   nodes: Node[]
   edges: Edge[]
+
   constructor (nodes?: Node [], edges?: Edge []) {
     this.nodes = nodes ? nodes : [];
     this.edges = edges ? edges : [];
+  }
+
+  isEmpty() {
+    return this.nodes.length === 0
   }
 
   getParentByID(nID: ID): Node | undefined {

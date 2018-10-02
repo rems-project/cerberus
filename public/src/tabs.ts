@@ -64,37 +64,12 @@ export class Preferences extends Tab {
 }
 
 export class Interactive extends Tab {
+  panzoomOptions: any
+  container: JQuery<HTMLElement>
+
   constructor(ee: Common.EventEmitter) {
     super('Interactive', ee)
 
-    const toolbar = $('<div class="toolbar adjust-height"></div>')
-
-    const stepBtn = $('<div class="btn inline">Step</div>')
-    const restartBtn = $('<div class="btn inline">Restart</div>')
-
-    const optionsBtn = $('<div class="btn dropdown"><span>Options</span></div>')
-    const dropdown_options = $('<div class="dropdown-content"></div>')
-
-    const hide_tauCBox = $('<input type="checkbox">')
-    const hide_tauBtn = $('<div class="btn">Suppress tau transitions</div>')
-    hide_tauBtn.prepend(hide_tauCBox)
-    const skip_tauCBox = $('<input type="checkbox">')
-    const skip_tauBtn = $('<div class="btn">Skip tau transitions</div>')
-    skip_tauBtn.prepend(skip_tauCBox)
-    const eager_memCBox = $('<input type="checkbox">')
-    const eager_memBtn = $('<div class="btn">Skip to the next memory action</div>')
-    eager_memBtn.prepend(eager_memCBox)
-
-    dropdown_options.attr('align', 'left')
-    dropdown_options.append(hide_tauBtn)
-    dropdown_options.append(skip_tauBtn)
-    dropdown_options.append(eager_memBtn)
-    optionsBtn.append(dropdown_options)
-
-    toolbar.append(optionsBtn)
-    toolbar.append(restartBtn)
-    toolbar.append(stepBtn)
-
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
     const reset = $('<div class="btn inline" type="button">Reset</div>')
@@ -105,99 +80,69 @@ export class Interactive extends Tab {
     controls.append(range)
     controls.append(reset)
 
-    const container = $('<div align="center" class="graph"></div>')
+    this.container = $('<div align="center" class="graph"></div>')
     this.dom.append(controls)
-    this.dom.append(toolbar)
-    this.dom.append(container)
+    this.dom.append(this.container)
 
-    const updateFlags = (state: Readonly<Common.State>) => {
-      hide_tauCBox.prop('checked', state.hide_tau)
-      skip_tauCBox.prop('checked', state.skip_tau)
-      eager_memCBox.prop('checked', state.eager_mem)
-    }
-    const toggle = (flag: string) => {
-      ee.once((state: Common.State) => {
-        state[flag] = !state[flag]
-        // if we don't skip tau we should show the transitions
-        state.hide_tau = state.skip_tau && state.hide_tau
-        updateFlags(state)
-        ee.emit('updateDOT')
-      })
+    this.panzoomOptions = {
+      $zoomIn: zoomIn,
+      $zoomOut: zoomOut,
+      $zoomRange: range,
+      $reset: reset,
+      increment: 0.1,
+      minScale: 0.1,
+      maxScale: 2
     }
 
-    hide_tauBtn.on('click', () => toggle('hide_tau'))
-    skip_tauBtn.on('click', () => toggle('skip_tau'))
-    eager_memBtn.on('click', () => toggle('eager_mem'))
-    ee.once((state: Common.State) => updateFlags(state))
+    ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s))
+  }
 
-    stepBtn.on('click', () => {
-      ee.once((state: Readonly<Common.State>) => {
-        const active = _.find(state.graph.nodes, n => n.selected)
-        if (active)
-          ee.emit('step', active.id)
-        else
-          alert('No selected node.')
-      })
-    })
-    restartBtn.on('click', () => ee.emit('resetInteractive'))
-
-    const updateGraph = (state: Readonly<Common.State>) => {
-      container.empty()
-      container.append(Viz(state.dotExecGraph))
-      const svg = container.find('svg')
-      svg.addClass('panzoom')
-      // @ts-ignore
-      svg.panzoom({
-        $zoomIn: zoomIn,
-        $zoomOut: zoomOut,
-        $zoomRange: range,
-        $reset: reset,
-        increment: 0.1,
-        minScale: 0.1,
-        maxScale: 2
-      })
-      // Check if needs to span down
-      const svgHeight = svg.height()
-      const containerHeight = container.height()
-      if (svgHeight && containerHeight) {
-        const delta = containerHeight / 2 - svgHeight
-        if (delta < 0) {
-          // @ts-ignore
-          svg.panzoom('pan', 0, delta, '{ relative: true }')
-        }
+  private updateGraph (state: Readonly<Common.State>) {
+    this.container.empty()
+    this.container.append(Viz(state.dotExecGraph))
+    const svg = this.container.find('svg')
+    svg.addClass('panzoom')
+    // @ts-ignore
+    svg.panzoom(this.panzoomOptions)
+    // Check if needs to span down
+    const svgHeight = svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const delta = containerHeight / 2 - svgHeight
+      if (delta < 0) {
+        // @ts-ignore
+        svg.panzoom('pan', 0, delta, '{ relative: true }')
       }
-      // Zoom using the mouse
-      container.off() // remove all previous events
-      container.on('mousewheel.focal', (e) => {
-        e.preventDefault()
-        // @ts-ignore
-        let delta = e.delta || e.originalEvent.wheelDelta
-        // @ts-ignore
-        let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
-        // @ts-ignore
-        svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
-      })
+    }
+    // Zoom using the mouse
+    this.container.off() // remove all previous events
+    this.container.on('mousewheel.focal', (e) => {
+      e.preventDefault()
+      // @ts-ignore
+      let delta = e.delta || e.originalEvent.wheelDelta
+      // @ts-ignore
+      let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
+      // @ts-ignore
+      svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
+    })
     }
 
-    ee.on('highlight', this, this.highlight)
-    ee.on('updateGraph', this, (s: Common.State) => updateGraph(s))
+  initial(s: Readonly<Common.State>) {
+    // The timeout guarantees that the tab is attached to the DOM.
+    // The update is called in the next event loop cycle.
+    setTimeout (() => this.updateGraph(s), 0)
   }
-  
-  highlight() {
-    //this.network.unselectAll()
-  }
-
-  refresh() {
-    //this.network.redraw()
-  }
-
 }
 
 class Memory extends Tab {
+  panzoomOptions: any
+  svgPos: { x: number, y: number, scale: number}
+  container: JQuery<HTMLElement>
+
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
 
-    const container = $('<div align="center" class="graph"></div>')
+    this.container = $('<div align="center" class="graph"></div>')
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
     const reset = $('<div class="btn inline" type="button">Reset</div>')
@@ -208,44 +153,51 @@ class Memory extends Tab {
     controls.append(range)
     controls.append(reset)
     this.dom.append(controls)
-    this.dom.append(container)
+    this.dom.append(this.container)
 
-    // Initial zoom and position
-    let scale0 = 1
-    let x0 = 0, y0 = 0
+    this.panzoomOptions = {
+      $zoomIn: zoomIn,
+      $zoomOut: zoomOut,
+      $zoomRange: range,
+      $reset: reset,
+      increment: 0.1,
+      minScale: 0.1,
+      maxScale: 2
+    }
 
-    ee.on('updateMemory', this, (s:Common.State) => {
-      container.empty()
-      container.append(Viz(s.dotMem))
-      const svg = container.find('svg')
-      svg.addClass('panzoom')
-      // @ts-ignore
-      svg.panzoom({
-        $zoomIn: zoomIn,
-        $zoomOut: zoomOut,
-        $zoomRange: range,
-        $reset: reset,
-        increment: 0.1,
-        minScale: 0.1,
-        maxScale: 2
-      })
-      svg.on('panzoomzoom', (elem, panzoom, scale) => {
-        scale0 = scale
-      })
-      svg.on('panzoompan', (elem, panzoom, x, y) => {
-        x0 = x
-        y0 = y
-      })
-      svg.on('panzoomreset', () => {
-        scale0 = 1
-        x0 = y0 = 0
-      })
-      // @ts-ignore
-      svg.panzoom('pan', x0, y0)
-      // @ts-ignore
-      svg.panzoom('zoom', scale0)
+    this.svgPos = { x: 0, y: 0, scale: 1}
+
+    ee.on('updateMemory', this, s => this.updateMemory(s))
+   }
+
+   updateMemory (s:Common.State) {
+    this.container.empty()
+    this.container.append(Viz(s.dotMem))
+    const svg = this.container.find('svg')
+    svg.addClass('panzoom')
+    // @ts-ignore
+    svg.panzoom(this.panzoomOptions)
+    svg.on('panzoomzoom', (elem, panzoom, scale) => {
+      this.svgPos.scale = scale
     })
+    svg.on('panzoompan', (elem, panzoom, x, y) => {
+      this.svgPos.x = x
+      this.svgPos.y = y
+    })
+    svg.on('panzoomreset', () => {
+      this.svgPos = { x: 0, y: 0, scale: 1}
+    })
+    // @ts-ignore
+    svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
+    // @ts-ignore
+    svg.panzoom('zoom', this.svgPos.scale)
   }
+
+   initial(s: Readonly<Common.State>) {
+    // The timeout guarantees that the tab is attached to the DOM.
+    // The update is called in the next event loop cycle.
+    setTimeout (() => this.updateMemory(s), 0)
+  } 
   
 }
 
@@ -575,6 +527,7 @@ export class Source extends Editor {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.c) {
       this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
+      this.editor.scrollIntoView(loc.c.begin, 200)
     }
   }
 
@@ -758,8 +711,10 @@ export class Core extends ReadOnly {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.core && state.ranges) {
       const range = state.ranges[loc.core]
-      if (range)
+      if (range) {
         this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? Util.getColorByLocC(state, loc.c) : 'color0'})
+        this.editor.scrollIntoView(range.begin)
+      }
     }
   }
 
@@ -777,6 +732,28 @@ export class Core extends ReadOnly {
     })
   }
 }
+
+/*  Arena */
+export class Arena extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Arena', '', ee)
+
+    this.editor.setOption('mode', 'text/x-core')
+    this.editor.setOption('placeholder', '<Waiting for runtime information...>')
+
+    ee.on('updateArena', this, this.update)
+  }
+
+  initial(s: Readonly<Common.State>) {
+    this.setValue(s.arena)
+  }
+
+  update(s: Readonly<Common.State>) {
+    this.setValue(s.arena)
+  }
+}
+
+
 
 class Asm extends ReadOnly {
   private current: JQuery<HTMLElement>
@@ -936,7 +913,7 @@ class Asm extends ReadOnly {
 /* Concrete Tabs Factory */
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
-  Execution, Console, Asm,
+  Execution, Console, Arena, Asm,
   Interactive, Memory,
   Preferences, Implementation, Help
 }
