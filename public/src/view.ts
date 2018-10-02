@@ -55,10 +55,10 @@ export default class View {
     $('#views').append(this.dom)
     this.initLayout(config)
 
-    this.on('step', this, this.execGraphNodeClick)
-    this.on('resetInteractive', this, this.resetInteractive)
-    this.on('setMemory', this, this.setMemory)
-    this.on('updateDOT', this, this.updateDOT)
+    //this.on('step', this, this.execGraphNodeClick)
+    //this.on('resetInteractive', this, this.resetInteractive)
+    //this.on('setMemory', this, this.setMemory)
+    //this.on('updateDOT', this, this.updateDOT)
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -173,6 +173,8 @@ export default class View {
       lastNodeId: 0,
       tagDefs: undefined,
       dirty: true,
+      arena: '',
+      history: [],
       graph: new Graph(),
       hide_tau: true,
       skip_tau: true,
@@ -216,18 +218,26 @@ export default class View {
     this.state.graph.clear()
     this.state.graph.nodes.push(init)
     this.state.lastNodeId = 0
-    this.updateDOT()
+    this.execGraphNodeClick(0)
+    //this.updateDOT()
   }
 
   /** Restart interactive mode in all the tabs */
   resetInteractive() {
     this.state.graph.clear()
+    /*
     this.emit('clearGraph')
     if (this.findTab('Interactive')) {
       UI.request(Common.Step(), (data: Common.ResultRequest) => {
         this.updateState(data)
       })
     }
+    */
+  }
+
+  restartInteractive() {
+    this.resetInteractive()
+    UI.startInteractive() // TODO: check if I can change this!!
   }
 
   /** Update DOT and raise an event to update interactive graph */
@@ -291,14 +301,15 @@ export default class View {
       this.setMemory(children[0].mem)
         const active = children[0]
         if (active && active.loc && active.loc.arena) {
-          this.state.console = active.loc.arena
-          this.state.result = ''
-          this.emit('update') // TODO: CHANGE THIS! THIS IS FOR THE ARENA
+          this.state.result = '' // CHECK IF I NEED THIS (WAS HERE BEFORE?)
+          this.state.arena = active.loc.arena
+          this.emit('updateArena') // TODO: CHANGE THIS! THIS IS FOR THE ARENA
         }
       this.emit('clear')
       if (children[0].loc)
         this.emit('markInteractive', children[0].loc)
     }
+    this.state.history.push(activeId)
     this.updateDOT();
   }
 
@@ -369,6 +380,12 @@ export default class View {
     this.executeInteractiveStep(activeId)
   }
 
+  toggleInteractiveOptions(flag: string) {
+      this.state[flag] = !this.state[flag]
+      // if we don't skip tau we should show the transitions
+      this.state.hide_tau = this.state.skip_tau && this.state.hide_tau
+  }
+
   /** Execute a step (it might call the server to update interactive state) */
   execGraphNodeClick(activeId: Common.ID) {
     if (this.state.graph.children(activeId).length == 0)
@@ -397,6 +414,22 @@ export default class View {
     miniConfig.title = this.source.title
     miniConfig.source = this.source.getValue()
     return encodeURIComponent(JSON.stringify(miniConfig))
+  }
+
+  stepBack() {
+    // TODO!! Not that simple!
+  }
+
+  stepForward() {
+    if (this.state.graph.isEmpty()) {
+      UI.startInteractive()
+    } else {
+      const active = _.find(this.state.graph.nodes, n => n.selected)
+      if (active)
+        this.execGraphNodeClick(active.id)
+      else
+        alert('No selected node.')
+    }
   }
 
   // Return this first instance (or create a new one)

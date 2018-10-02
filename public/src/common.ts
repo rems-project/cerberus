@@ -1,4 +1,4 @@
-import { Node, Edge, Graph } from './graph'
+import { Node, Edge, Graph, ID } from './graph'
 
 namespace Common {
   export type Bytes = string | undefined
@@ -124,12 +124,14 @@ namespace Common {
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
-    ranges?: any
+    ranges?: any // !!!TODO!!!
     dirty: boolean
+    arena: string
     // Interactive mode
     hide_tau: boolean // Hide tau transition option
     skip_tau: boolean // Skip tau transition
     eager_mem: boolean
+    history: ID [] // History of execution (allows to go back)
     graph: Graph // Current execution graph
     dotMem: string // DOT representation
     dotExecGraph: string // DOT representation
@@ -156,13 +158,15 @@ namespace Common {
     'highlight' |         // Highlight the entire file
     'dirty' |             // Fired when file has changed
     // Interactive mode events
-    'step' |              // Step interactive mode
+    // TODO: maybe I can colapse all these interactive events in one!
+    //'step' |              // Step interactive mode
     'updateGraph' |       // Update step graph display (calls VIZ)
-    'setMemory' |         // Set memory state
+    //'setMemory' |         // Set memory state
+    'updateArena' |       // Update arena
     'updateMemory' |      // Update memory graph (calls VIZ)
-    'markInteractive' |   // Mark source locations when in interactive mode
-    'resetInteractive' |  // Reset interactive mode
-    'updateDOT'           // Update DOT execution graph (create DOT file)
+    'markInteractive'     // Mark source locations when in interactive mode
+    //'resetInteractive'    // Reset interactive mode
+    //'updateDOT'           // Update DOT execution graph (create DOT file)
 
 
   export interface EventEmitter {
@@ -170,8 +174,8 @@ namespace Common {
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
     on (eventName: 'markError', self: any, f: (line: number) => void): void
     on (eventName: 'dirty', self: any, f: () => void): void
-    on (eventName: 'step', self: any, f: (activeId: ID) => void): void
-    on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
+    //on (eventName: 'step', self: any, f: (activeId: ID) => void): void
+    //on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
     on (eventName: 'markInteractive', self: any, f: ((l:any, s: Readonly<State>) => void)): void
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
     off (self: any): void 

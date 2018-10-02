@@ -2163,13 +2163,16 @@ let set_uid_fun fname = function
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
 end
 
+let set_uid_globs (gname, bty, e) =
+  (gname, bty, set_uid_e (string_of_symbol gname) 1 e)
+
 let set_uid file =
  <|
   main=    file.main;
   tagDefs= file.tagDefs;
   stdlib=  file.stdlib;
   impl=    file.impl;
-  globs=   file.globs; (* TODO *)
+  globs=   List.map set_uid_globs file.globs;
   funs=    Map.mapi set_uid_fun file.funs;
   funinfo= file.funinfo;
  |>

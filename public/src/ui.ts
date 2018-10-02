@@ -115,7 +115,26 @@ export class CerberusUI {
     // Run (Execute)
     $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
-    $('#interactive').on('click', () => this.startInteractive())
+    //$('#interactive').on('click', () => this.startInteractive())
+
+    // Interactive
+    $('#step-back').on('click', () => this.getView().stepBack())
+    $('#step-forward').on('click', () => this.getView().stepForward())
+    $('#restart').on('click', () => this.getView().restartInteractive())
+
+    // Interactive Options
+    const toggleInteractiveOptions = (flag: string) => {
+      const view = this.getView()
+      view.toggleInteractiveOptions(flag)
+      view.updateDOT()
+      this.updateInteractiveCheckboxes(view)
+    }
+    $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
+    $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
+    $('#step-mem-action').on('click', () => toggleInteractiveOptions('eager_mem'))
+    $('#open-memory').on('click', () => this.getView().newTab('Memory'))
+    $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
+    $('#open-arena').on('click', () => this.getView().newTab('Arena'))
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
@@ -231,14 +250,12 @@ export class CerberusUI {
       }).done(() => {
         if (!serverStatusFlag) {
           serverStatusFlag = true
-          serverStatus.text('ok')
-          serverStatus.css('color', 'white')
+          serverStatus.text('')
         }
       }).fail(() => {
         if (serverStatusFlag) {
           serverStatusFlag = false
-          serverStatus.text('down')
-          serverStatus.css('color', 'red')
+          serverStatus.text('(SERVER DOWN)')
         }
       })
     }, 5000)
@@ -260,11 +277,19 @@ export class CerberusUI {
     })
   }
 
+  private updateInteractiveCheckboxes(view: Readonly<View>) {
+    const state = view.getState()
+    $('#cb-supress-tau').prop('checked', state.hide_tau)
+    $('#cb-skip-tau').prop('checked', state.skip_tau)
+    $('#cb-step-mem-action').prop('checked', state.eager_mem)
+  }
+
   private setCurrentView(view: View) {
     if (this.currentView)
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
+    this.updateInteractiveCheckboxes(view)
     view.show()
   }
 
@@ -291,17 +316,17 @@ export class CerberusUI {
     })
   }
 
-  private startInteractive() {
+  public startInteractive() {
     const view = this.getView()
-    const alreadyOpen = view.findTab('Interactive')
-    view.newTab('Interactive')
-    if (alreadyOpen) {
-      view.emit('updateGraph')
-    } else {
+    //const alreadyOpen = view.findTab('Interactive')
+    //view.newTab('Interactive')
+    //if (alreadyOpen) {
+    //  view.emit('updateGraph')
+    //} else {
       this.request(Common.Step(), (data: Common.ResultRequest) => {
         view.updateState(data)
       })
-    }
+    //}
   }
 
   private getView(): Readonly<View> {
@@ -460,9 +485,9 @@ type StartupMode =
 
 function getDefaultSettings(): Settings {
     return { rewrite: false,
-             sequentialise: true,
+             sequentialise: false,
              auto_refresh: true,
-             colour: true,
+             colour: false,
              colour_cursor: true,
              short_share: false,
              model: Common.Model.Concrete 

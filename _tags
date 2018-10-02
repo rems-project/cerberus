@@ -2,6 +2,8 @@
 true: use_menhir, bin_annot, color(always)
 true: -traverse
 
+true: thread
+
 "src": include
 "src/codegen": include
 "src/web": include
