@@ -181,7 +181,7 @@ instance: src/instance.ml
 	sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml
 
 web: src/web.ml instance
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
 
 web.byte: src/web.ml instance
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte

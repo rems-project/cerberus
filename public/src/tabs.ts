@@ -1,10 +1,11 @@
 import $ from 'jquery'
-import _ from 'lodash'
+import { includes } from 'lodash'
 import CodeMirror from 'codemirror'
-import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
-import UI from './ui'
+import { Point, Locations } from './location'
+import UI from './ui' 
+// @ts-ignore: Viz has type 'any'
 import Viz from './js/viz.js'
 
 namespace Tabs {
@@ -69,7 +70,6 @@ export class Interactive extends Tab {
 
   constructor(ee: Common.EventEmitter) {
     super('Interactive', ee)
-
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
     const reset = $('<div class="btn inline" type="button">Reset</div>')
@@ -79,11 +79,9 @@ export class Interactive extends Tab {
     controls.append(zoomOut)
     controls.append(range)
     controls.append(reset)
-
     this.container = $('<div align="center" class="graph"></div>')
     this.dom.append(controls)
     this.dom.append(this.container)
-
     this.panzoomOptions = {
       $zoomIn: zoomIn,
       $zoomOut: zoomOut,
@@ -93,8 +91,7 @@ export class Interactive extends Tab {
       minScale: 0.1,
       maxScale: 2
     }
-
-    ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s))
+    ee.on('updateInteractive', this, (s: Common.State) => this.updateGraph(s))
   }
 
   private updateGraph (state: Readonly<Common.State>) {
@@ -116,11 +113,9 @@ export class Interactive extends Tab {
     }
     // Zoom using the mouse
     this.container.off() // remove all previous events
-    this.container.on('mousewheel.focal', (e) => {
+    this.container.on('mousewheel.focal', (e: any) => {
       e.preventDefault()
-      // @ts-ignore
       let delta = e.delta || e.originalEvent.wheelDelta
-      // @ts-ignore
       let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
       // @ts-ignore
       svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
@@ -141,7 +136,6 @@ class Memory extends Tab {
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
-
     this.container = $('<div align="center" class="graph"></div>')
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
@@ -154,7 +148,6 @@ class Memory extends Tab {
     controls.append(reset)
     this.dom.append(controls)
     this.dom.append(this.container)
-
     this.panzoomOptions = {
       $zoomIn: zoomIn,
       $zoomOut: zoomOut,
@@ -164,9 +157,7 @@ class Memory extends Tab {
       minScale: 0.1,
       maxScale: 2
     }
-
     this.svgPos = { x: 0, y: 0, scale: 1}
-
     ee.on('updateMemory', this, s => this.updateMemory(s))
    }
 
@@ -281,7 +272,7 @@ export abstract class Editor extends Tab {
     })
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     // TO BE OVERWRITTEN
     return undefined
   }
@@ -473,7 +464,7 @@ class Console extends ReadOnly {
   }
 
   update(s:Common.State) {
-    const vs = s.console.split(':')
+    //const vs = s.console.split(':')
     /*if (vs.length > 2) { // TODO: should put this change in the server
       this.ee.emit('markError', parseInt(vs[1]))
       this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
@@ -502,7 +493,7 @@ export class Source extends Editor {
     ee.on('clear', this, this.clear)
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     return this.ee.once((s: Readonly<Common.State>) => {
       let locations = s.locs;
       for (let i = 0; i < locations.length; i++) {
@@ -517,7 +508,7 @@ export class Source extends Editor {
     })
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     let options: CodeMirror.TextMarkerOptions = {
       className: Util.getColor(loc.color)
     }
@@ -573,11 +564,11 @@ class Ail extends ReadOnly {
         const rx_word: string = "\" "
         let ch = stream.peek()
         let word = ""
-        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined
         }
-        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -640,11 +631,11 @@ export class Core extends ReadOnly {
         const rx_word = "\" "
         let ch = stream.peek()
         let word = ""
-        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined 
         }
-        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -692,7 +683,7 @@ export class Core extends ReadOnly {
     this.setValue(s.pp.core)
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     return this.ee.once((s: Common.State) => {
       let locations = s.locs
       for (let i = 0; i < locations.length; i ++) {
@@ -704,7 +695,7 @@ export class Core extends ReadOnly {
     })
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
@@ -741,7 +732,7 @@ export class Arena extends ReadOnly {
     this.editor.setOption('mode', 'text/x-core')
     this.editor.setOption('placeholder', '<Waiting for runtime information...>')
 
-    ee.on('updateArena', this, this.update)
+    ee.on('updateInteractive', this, this.update)
   }
 
   initial(s: Readonly<Common.State>) {
@@ -891,7 +882,7 @@ class Asm extends ReadOnly {
     })
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     for (let i = 0; i < this.locations.length; i++) {
       if (this.locations[i].begin <= from.line && this.locations[i].end >= to.line)
         return this.locations[i].source
@@ -899,7 +890,7 @@ class Asm extends ReadOnly {
     return null
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     let l = this.locations[loc.c.begin.line+1]
     if (l) this.colorLines (l.begin, l.end, l.color)
   }

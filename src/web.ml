@@ -110,15 +110,15 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let get_location _ = `Null in
   let json_of_node = function
     | Branch (id, lab, mem, loc, uid, arena) ->
-      let json_of_loc (loc, uid, arena) =
+      let json_of_loc (loc, uid) =
         `Assoc [("c", Json.of_option Location_ocaml.to_json loc);
-                ("core", Json.of_opt_string uid);
-                ("arena", `String arena)]
+                ("core", Json.of_opt_string uid) ]
       in
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("mem", mem); (* TODO *)
-              ("loc", json_of_loc (loc, uid, arena));
+              ("loc", json_of_loc (loc, uid));
+              ("arena", `String arena);
               ("group", `String "branch")]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
@@ -226,6 +226,12 @@ let respond_json json =
   let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
   (Server.respond_string ~flush:true ~headers) `OK (Yojson.to_string json) ()
 
+let respond_json_gzipped json =
+  let headers = Cohttp.Header.of_list [("content-type", "application/json");
+                                       ("content-encoding", "gzip")] in
+  (Server.respond_string ~flush:true ~headers) `OK (Ezgzip.compress (Yojson.to_string json)) ()
+
+
 let respond_gzipped filename =
   let ext = Filename.extension filename in
   let contentType =
@@ -260,7 +266,7 @@ let log_request msg flow =
   | _ -> ()
 
 
-let cerberus ~conf ~flow content =
+let cerberus ?(gzipped=false) ~conf ~flow content =
   let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
@@ -285,7 +291,7 @@ let cerberus ~conf ~flow content =
     | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >>= respond_json % json_of_result
+  do_action msg.action >>= (if gzipped then respond_json_gzipped else respond_json) % json_of_result
 
 (* GET and POST *)
 
@@ -337,12 +343,12 @@ let get ~docroot ?(gzipped=false) uri path =
     forbidden path
   end
 
-let post ~docroot ~conf ~flow uri path content =
+let post ~docroot ?(gzipped=false) ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     (* Debug.print 8 ("POST data " ^ content); *)
     match path with
-    | "/cerberus" -> cerberus ~conf ~flow content
+    | "/cerberus" -> cerberus ~gzipped ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -383,7 +389,7 @@ let request ~docroot ~conf (flow, _) req body =
     | `HEAD -> head ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
     | `GET  -> get ~docroot ~gzipped uri path
     | `POST ->
-      Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path
+      Cohttp_lwt__Body.to_string body >>= post ~docroot ~gzipped ~conf ~flow uri path
     | _     -> not_allowed meth path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;

@@ -1,10 +1,8 @@
 import $ from 'jquery'
-import _ from 'lodash'
 import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
 import View from './view'
-import { defineMode } from 'codemirror';
 
 /** UI Settings */
 export interface Settings {
@@ -34,7 +32,7 @@ export class CerberusUI {
   compilers?: Common.Compiler []
 
   // TODO!
-  public demo(name) {
+  public demo(name: string) {
     Util.get('demo/'+name, (data: string) => {
       $('#demo').css('visibility', 'hidden')
       this.add(new View(name, data))
@@ -115,7 +113,6 @@ export class CerberusUI {
     // Run (Execute)
     $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
-    //$('#interactive').on('click', () => this.startInteractive())
 
     // Interactive
     $('#step-back').on('click', () => this.getView().stepBack())
@@ -126,12 +123,20 @@ export class CerberusUI {
     const toggleInteractiveOptions = (flag: string) => {
       const view = this.getView()
       view.toggleInteractiveOptions(flag)
-      view.updateDOT()
-      this.updateInteractiveCheckboxes(view)
+      view.updateExecutionGraph()
+      this.updateInteractiveOptions(view)
+      view.emit('updateInteractive')
+    }
+    const setInteractiveMode = (mode: Common.InteractiveMode) => {
+      const view = this.getView()
+      view.setInteractiveMode(mode)
+      this.updateInteractiveOptions(view)
     }
     $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
-    $('#step-mem-action').on('click', () => toggleInteractiveOptions('eager_mem'))
+    $('#step-mem-action').on('click', () => setInteractiveMode(Common.InteractiveMode.Memory))
+    $('#step-C-line').on('click', () => setInteractiveMode(Common.InteractiveMode.CLine))
+    $('#step-Core-trans').on('click', () => setInteractiveMode(Common.InteractiveMode.Core))
     $('#open-memory').on('click', () => this.getView().newTab('Memory'))
     $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
     $('#open-arena').on('click', () => this.getView().newTab('Arena'))
@@ -277,11 +282,13 @@ export class CerberusUI {
     })
   }
 
-  private updateInteractiveCheckboxes(view: Readonly<View>) {
+  private updateInteractiveOptions(view: Readonly<View>) {
     const state = view.getState()
     $('#cb-supress-tau').prop('checked', state.hide_tau)
     $('#cb-skip-tau').prop('checked', state.skip_tau)
-    $('#cb-step-mem-action').prop('checked', state.eager_mem)
+    $('#r-step-mem-action').prop('checked', state.mode == Common.InteractiveMode.Memory)
+    $('#r-step-C-line').prop('checked', state.mode == Common.InteractiveMode.CLine)
+    $('#r-step-Core-trans').prop('checked', state.mode == Common.InteractiveMode.Core)
   }
 
   private setCurrentView(view: View) {
@@ -289,7 +296,7 @@ export class CerberusUI {
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
-    this.updateInteractiveCheckboxes(view)
+    this.updateInteractiveOptions(view)
     view.show()
   }
 
@@ -314,19 +321,6 @@ export class CerberusUI {
       view.updateState(res)
       view.emit('updateExecution')
     })
-  }
-
-  public startInteractive() {
-    const view = this.getView()
-    //const alreadyOpen = view.findTab('Interactive')
-    //view.newTab('Interactive')
-    //if (alreadyOpen) {
-    //  view.emit('updateGraph')
-    //} else {
-      this.request(Common.Step(), (data: Common.ResultRequest) => {
-        view.updateState(data)
-      })
-    //}
   }
 
   private getView(): Readonly<View> {
@@ -356,9 +350,9 @@ export class CerberusUI {
     this.refresh()
   }
 
-  public step(active: {id: Common.ID, state: Common.Bytes}): void {
+  public step(active: {id: Common.ID, state: Common.Bytes} | null): void {
+    const view = this.getView()
     if (active) {
-      let view = this.getView()
       this.request(Common.Step(), (data: Common.ResultRequest) => {
         view.updateState(data)
       }, {
@@ -368,7 +362,9 @@ export class CerberusUI {
         tagDefs: view.getState().tagDefs
       })
     } else {
-      console.log('error: node '+active+' unknown')
+      this.request(Common.Step(), (data: Common.ResultRequest) => {
+        view.updateState(data)
+      })
     }
   }
 

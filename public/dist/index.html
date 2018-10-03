@@ -56,7 +56,6 @@
           <div class="dropdown-content">
             <div id="random" class="btn">Random (45s timeout)</div>
             <div id="exhaustive" class="btn">Exhaustive (45s timeout)</div>
-            <!--<div id="interactive" class="btn">Interactive (experimental)</div>-->
           </div>
         </div>
       </li>
@@ -65,14 +64,21 @@
         <div class="btn dropdown">
           <span>Interactive Options</span>
           <div class="dropdown-content">
+            <div id="step-mem-action" class="btn">
+              <input id="r-step-mem-action" type="radio">Step to the next memory action
+            </div>
+            <div id="step-C-line" class="btn">
+              <input id="r-step-C-line" type="radio">Step to the next C line
+            </div>
+            <div id="step-Core-trans" class="btn">
+              <input id="r-step-Core-trans" type="radio">Step through Core transitions
+            </div>
+            <hr>
             <div id="supress-tau" class="btn">
               <input id="cb-supress-tau" type="checkbox">Suppress tau transitions
             </div>
             <div id="skip-tau" class="btn">
               <input id="cb-skip-tau" type="checkbox">Skip tau transitions
-            </div>
-            <div id="step-mem-action" class="btn">
-              <input id="cb-step-mem-action" type="checkbox">Step to the next memory action
             </div>
             <hr>
             <div id="open-memory" class="btn">Open memory tab</div>
@@ -204,8 +210,6 @@
     <div id="defacto_body" class="window_body">
     </div>
   </div>
-  <!-- <script src="vis.bundle.js"></script> -->
-  <!--<script src="codemirror.bundle.js"></script>-->
   <script src="main.bundle.js"></script>
 </body>
 </html>
