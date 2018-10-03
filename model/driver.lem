@@ -81,7 +81,7 @@ instance (Eq driver_state)
 end
 
 
-type driverM 'a = ND.ndM 'a driver_error Mem.mem_iv_constraint driver_state
+type driverM 'a = ND.ndM 'a string driver_error Mem.mem_iv_constraint driver_state
 
 
 val aid_to_string: Cmm.action -> string

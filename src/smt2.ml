@@ -6,7 +6,7 @@ type execution_mode =
   | Exhaustive
   | Random
 
-let runND exec_mode (type cs) cs_module (m: ('a, 'err, cs, 'st) ndM) (st0: 'st) =
+let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0: 'st) =
   Debug_ocaml.print_debug 1 [] (fun () ->
     "HELLO from Smt2.runND, exec mode= " ^ match exec_mode with
       | Exhaustive ->

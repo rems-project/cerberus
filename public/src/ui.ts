@@ -31,16 +31,11 @@ export class CerberusUI {
   /** List of compilers */
   compilers?: Common.Compiler []
 
-  // TODO!
   public demo(name: string) {
-    Util.get('demo/'+name, (data: string) => {
-      $('#demo').css('visibility', 'hidden')
-      this.add(new View(name, data))
-      this.refresh()
-    })
+    console.log(name)
   }
 
-  constructor (settings: Settings) {
+   constructor (settings: Settings) {
     this.views = []          
 
     this.dom = $('#views');
@@ -102,7 +97,7 @@ export class CerberusUI {
     })
 
     $('#demo .tests a').on('click', (e) => {
-      const name = e.target.textContent + '.c'
+      const name = e.target.textContent as string
       Util.get('demo/'+name, (data: string) => {
         $('#demo').css('visibility', 'hidden')
         this.add(new View(name, data))
@@ -260,7 +255,7 @@ export class CerberusUI {
       }).fail(() => {
         if (serverStatusFlag) {
           serverStatusFlag = false
-          serverStatus.text('(SERVER DOWN)')
+          serverStatus.text(' (SERVER DOWN)')
         }
       })
     }, 5000)

@@ -52,10 +52,16 @@ let parse_incoming_json msg =
   let empty = { action=         `Nop;
                 source=         "";
                 model=          "Concrete";
-                rewrite=        false; (* TODO: put this back to true *)
-                sequentialise=  false; (* TODO: '' *)
+                rewrite=        false;
+                sequentialise=  false;
                 interactive=    None;
               }
+  in
+  let empty_node_id = { last_id= 0;
+                        tagDefs= "";
+                        marshalled_state= "";
+                        active_id= 0;
+                      }
   in
   let parse_option f = function
     | `Null      -> None
@@ -77,13 +83,24 @@ let parse_incoming_json msg =
     | `Bool b -> b
     | _ -> failwith "expecting a bool"
   in
-  let parse_interactive = function
-    | `Assoc [("lastId",  `Int n);
-              ("state",   `String state);
-              ("active",  `Int i);
-              ("tagDefs", `String tagDefs);
-             ] -> (n, B64.decode state, i, B64.decode tagDefs)
-    | _ -> failwith "expecting state * integer"
+  let parse_int = function
+    | `Int i -> i
+    | _ -> failwith "expecting an integer"
+  in
+  let parse_interactive =
+    let parse_interactive_aux active_node (k, v) =
+      match k with
+      | "lastId" -> { active_node with last_id= parse_int v }
+      | "state"  -> { active_node with marshalled_state= B64.decode @@ parse_string v }
+      | "active" -> { active_node with active_id= parse_int v }
+      | "tagDefs"-> { active_node with tagDefs= B64.decode @@ parse_string v }
+      | _ ->
+        Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
+        active_node (* ignore unknown key *)
+    in
+    function
+    | `Assoc xs -> List.fold_left parse_interactive_aux empty_node_id xs
+    | _ -> failwith "wrong interactive message format"
   in
   let parse_assoc msg (k, v) =
     match k with
@@ -93,8 +110,8 @@ let parse_incoming_json msg =
     | "sequentialise" -> { msg with sequentialise= parse_bool v }
     | "model"   -> { msg with model= parse_string v }
     | "interactive" -> { msg with interactive=parse_option parse_interactive v }
-    | key ->
-      Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
+    | _ ->
+      Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
   in
   let rec parse msg = function
@@ -116,16 +133,14 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
       in
       `Assoc [("id", `Int id);
               ("label", `String lab);
-              ("mem", mem); (* TODO *)
+              ("mem", mem);
               ("loc", json_of_loc (loc, uid));
-              ("arena", `String arena);
-              ("group", `String "branch")]
+              ("arena", `String arena)]
     | Leaf (id, lab, st) ->
       `Assoc [("id", `Int id);
               ("label", `String lab);
               ("state", `String (B64.encode st));
-              ("loc", (get_location st)); (* TODO *)
-              ("group", `String "leaf")]
+              ("loc", (get_location st))]
   in
   let json_of_edge = function
     | Edge (p, c) -> `Assoc [("from", `Int p);
@@ -222,17 +237,16 @@ let not_allowed meth path =
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
 
-let respond_json json =
-  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
-  (Server.respond_string ~flush:true ~headers) `OK (Yojson.to_string json) ()
+let get_headers ?(gzipped=false) contentType =
+  Cohttp.Header.of_list @@
+  ("content-type", contentType) :: if gzipped then [("content-encoding", "gzip")] else []
 
-let respond_json_gzipped json =
-  let headers = Cohttp.Header.of_list [("content-type", "application/json");
-                                       ("content-encoding", "gzip")] in
-  (Server.respond_string ~flush:true ~headers) `OK (Ezgzip.compress (Yojson.to_string json)) ()
+let respond_json ?(gzipped=false) json =
+  let headers = get_headers ~gzipped "application/json" in
+  let data = (if gzipped then Ezgzip.compress ~level:9 else id) @@ Yojson.to_string json in
+  (Server.respond_string ~flush:true ~headers) `OK data ()
 
-
-let respond_gzipped filename =
+let respond_file ~gzipped filename =
   let ext = Filename.extension filename in
   let contentType =
     if ext = ".js" then Some "application/javascript"
@@ -240,9 +254,12 @@ let respond_gzipped filename =
     else None
   in match contentType with
   | Some contentType ->
-    let headers = Cohttp.Header.of_list [("content-type", contentType);
-                                         ("content-encoding", "gzip")] in
-    (Server.respond_file ~headers) (filename ^ ".gz") ()
+    if gzipped && Sys.file_exists (filename ^ ".gz") then
+      let headers = get_headers ~gzipped contentType in
+      (Server.respond_file ~headers) (filename ^ ".gz") ()
+    else
+      let headers = get_headers contentType in
+      (Server.respond_file ~headers) filename ()
   | None ->
     Server.respond_file filename ()
 
@@ -291,7 +308,7 @@ let cerberus ?(gzipped=false) ~conf ~flow content =
     | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >>= (if gzipped then respond_json_gzipped else respond_json) % json_of_result
+  do_action msg.action >>= (respond_json ~gzipped) % json_of_result
 
 (* GET and POST *)
 
@@ -327,10 +344,7 @@ let get ~docroot ?(gzipped=false) uri path =
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename then
-      if gzipped && Sys.file_exists (filename ^ ".gz") then
-        respond_gzipped filename
-      else
-        Server.respond_file filename ()
+      respond_file ~gzipped filename
     else forbidden path
   in
   let try_with () =
@@ -346,7 +360,6 @@ let get ~docroot ?(gzipped=false) uri path =
 let post ~docroot ?(gzipped=false) ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
-    (* Debug.print 8 ("POST data " ^ content); *)
     match path with
     | "/cerberus" -> cerberus ~gzipped ~conf ~flow content
     | _ ->
@@ -360,20 +373,6 @@ let post ~docroot ?(gzipped=false) ~conf ~flow uri path content =
   end
 
 (* Main *)
-
-(* FIXME: THIS IS TERRIBLE *)
-let contains s1 s2 =
-  try
-    let len = String.length s2 in
-    for i = 0 to String.length s1 - len do
-      if String.sub s1 i len = s2 then raise Exit
-    done;
-    false
-  with
-  | Exit -> true
-  | e ->
-    Debug.error_exception "contains" e;
-    false
 
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in

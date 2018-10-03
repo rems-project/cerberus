@@ -42,7 +42,7 @@ let ctype_equal ty1 ty2 =
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =
-    ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
 (*  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff *)
@@ -56,7 +56,7 @@ module Eff : sig
   val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list -> ('a, 'err, 'cs, 'st) eff
 end = struct
   type ('a, 'err, 'cs, 'st) eff =
-    ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
@@ -77,7 +77,7 @@ end = struct
   
   let msum str xs =
     Nondeterminism.(
-      msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict str xs
+      msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
     )
 end
 

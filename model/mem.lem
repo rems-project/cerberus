@@ -39,7 +39,7 @@ declare ocaml target_rep function initial_mem_state = `Ocaml_mem.initial_mem_sta
 
 
 type memM 'a =
-  Nondeterminism.ndM 'a Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
+  Nondeterminism.ndM 'a string Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
 
 val return: forall 'a. 'a -> memM 'a
 let inline return = Nondeterminism.return

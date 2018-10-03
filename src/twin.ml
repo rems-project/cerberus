@@ -41,7 +41,7 @@ let ctype_equal ty1 ty2 =
     (unqualify ty1) (unqualify ty2)
 
 module Eff : sig
-  type ('a, 'err, 'cs, 'st) eff = ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+  type ('a, 'err, 'cs, 'st) eff = ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff)
           -> ('b, 'err, 'cs, 'st) eff
@@ -55,13 +55,13 @@ module Eff : sig
   val fail: 'err -> ('a, 'err, 'cs, 'st) eff
   val mapM: ('a -> ('b, 'err, 'cs, 'st) eff) -> 'a list
          -> ('b list, 'err, 'cs, 'st) eff
-  val foldlM: ('a -> 'b -> ('a, 'err, 'cs, 'st) Nondeterminism.ndM) -> 'a
-         -> 'b list -> ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+  val foldlM: ('a -> 'b -> ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM) -> 'a
+         -> 'b list -> ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list
          -> ('a, 'err, 'cs, 'st) eff
 end = struct
   open Nondeterminism
-  type ('a, 'err, 'cs, 'st) eff = ('a, 'err, 'cs, 'st) ndM
+  type ('a, 'err, 'cs, 'st) eff = ('a, string, 'err, 'cs, 'st) ndM
   let return = nd_return
   let (>>=) = nd_bind
   let (>>) f g = f >>= (fun _ -> g)
@@ -77,7 +77,7 @@ end = struct
   let fail err = kill (Other err)
   let mapM _ _ = failwith "TODO: mapM"
   let foldlM = foldlM1
-  let msum str xs = msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict str xs
+  let msum str xs = msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
 end
 
 module IntMap = Map.Make(struct
