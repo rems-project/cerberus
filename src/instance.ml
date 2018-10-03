@@ -325,10 +325,10 @@ let create_expr_range_list core =
   ignore (string_of_doc @@ PP.pp_file core);
   Hashtbl.fold (fun k v acc -> (k, v)::acc) table []
 
-let step ~conf ~filename active_node =
+let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  match active_node with
+  match active_node_opt with
   | None -> (* no active node *)
     hack conf.pipeline Random;
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
@@ -341,19 +341,19 @@ let step ~conf ~filename active_node =
     let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([nodeId], []))
-  | Some (last_id, marshalled_state, node, tags) ->
-    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode tags in
+  | Some n ->
+    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
     hack conf.pipeline Random;
-    last_node_id := last_id;
-    decode marshalled_state
-    |> multiple_steps ([], [], node)
-    |> fun (res, (ns, es, _)) -> return @@ Step (res, node, (ns, es))
+    last_node_id := n.last_id;
+    decode n.marshalled_state
+    |> multiple_steps ([], [], n.active_id)
+    |> fun (res, (ns, es, _)) -> return @@ Step (res, n.active_id, (ns, es))
 
 let instance debug_level =
   Debug.level := debug_level;
   Debug.print 7 ("Using model: " ^ Prelude.string_of_mem_switch ());
-  let do_action = function
+  let do_action  : Instance_api.request -> Instance_api.result = function
     | `Elaborate (conf, filename) ->
       elaborate ~conf:(setup conf) ~filename
       |> respond result_of_elaboration
@@ -403,7 +403,7 @@ let debug_level =
 
 let () =
   let instance = Term.(pure instance $ debug_level) in
-  let doc  = "Cerberus instance with fixed memory model." in
+  let doc  = "Cerberus instance with a fixed memory model." in
   let info = Term.info "Cerberus instance" ~doc in
   match Term.eval (instance, info) with
   | `Error _ -> exit 1;

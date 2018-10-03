@@ -81,7 +81,7 @@ let impl_initial_mem_state = <|
 (* BEGIN effect ================================================================================= *)
 open import Nondeterminism
 type impl_memM 'a =
-  ndM 'a mem_error (mem_constraint impl_integer_value) impl_mem_state
+  ndM 'a string mem_error (mem_constraint impl_integer_value) impl_mem_state
 
 let impl_return = return
 let inline impl_bind = bind

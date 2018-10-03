@@ -20,9 +20,12 @@ type conf =
     tagDefs: string;          (* marshalled tag defs *)
   }
 
-(* last_id * state * node id * marshalled tagDefs
- * last_id is used to feed node id generation in the current instance *)
-type active_node = int * string * int * string
+type active_node =
+  { last_id: int; (* used to feed node id generation in the current instance *)
+    marshalled_state: string;
+    active_id: int;
+    tagDefs: string;
+  }
 
 type filename = string
 
@@ -30,7 +33,7 @@ type filename = string
 type request =
   [ `Elaborate of conf * filename
   | `Execute of conf * filename * exec_mode
-  | `Step of conf * filename * active_node ]
+  | `Step of conf * filename * active_node option ]
 
 type point = int * int
 type range = point * point

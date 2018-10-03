@@ -180,10 +180,10 @@ instance: src/instance.ml
 	cp -L instance.native cerb.twin
 	sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml
 
-web: src/web.ml instance
+web: src/web.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
 
-web.byte: src/web.ml instance
+web.byte: src/web.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
 
 transformN1570:

@@ -36,7 +36,7 @@ module type Memory = sig
   val initial_mem_state: mem_state
   
   type 'a memM =
-    ('a, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
+    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
   val return: 'a -> 'a memM
   val bind: 'a memM -> ('a -> 'b memM) -> 'b memM
   
