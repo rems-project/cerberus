@@ -1,7 +1,7 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
 import _ from "lodash"
-import { Node, Edge, Graph } from "./graph"
+import { Node, Edge, Graph, ID } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
 import Common from './common'
@@ -54,11 +54,6 @@ export default class View {
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
-
-    //this.on('step', this, this.execGraphNodeClick)
-    //this.on('resetInteractive', this, this.resetInteractive)
-    //this.on('setMemory', this, this.setMemory)
-    //this.on('updateDOT', this, this.updateDOT)
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -225,14 +220,6 @@ export default class View {
   /** Restart interactive mode in all the tabs */
   resetInteractive() {
     this.state.graph.clear()
-    /*
-    this.emit('clearGraph')
-    if (this.findTab('Interactive')) {
-      UI.request(Common.Step(), (data: Common.ResultRequest) => {
-        this.updateState(data)
-      })
-    }
-    */
   }
 
   restartInteractive() {
@@ -315,20 +302,6 @@ export default class View {
 
   /** Update interactive state mode and raise event to update DOT */
   updateInteractive(activeId: Common.ID, tree: Common.ResultTree) {
-    // Give a better label to the node (TODO)
-    const nodeLabel = (str: string) => {
-      if (str == 'Step_eval(first operand of a Create)')
-        return 'Eval first operand of create'
-      if (str == 'Step_eval(Esseq)')
-        return 'Eval strong sequencing'
-      if (str == 'Step_eval(Ewseq)')
-        return 'Eval weak sequencing'
-      if (str == 'Step_eval(Epure)')
-        return 'Eval pure expression'
-      if (str == 'Step_tau(End)')
-        return 'Non deterministic choice'
-      return str
-    }
     // Check node is a tau transition
     const isTau = (n: Node) => n && _.includes(n.label, "tau") && !_.includes(n.label, "End")
     const isTauById = (nId: Common.ID) => isTau(graph.nodes[nId])
@@ -347,8 +320,6 @@ export default class View {
     this.state.lastNodeId = tree.nodes[0].id
     tree.nodes.reverse()
     const graph = this.state.graph
-    // Update tree nodes labels
-    tree.nodes.map((n) => n.label = nodeLabel(n.label))
     // Update current point to become branch
     const active = graph.nodes[activeId]
     if (!active) {
@@ -417,7 +388,35 @@ export default class View {
   }
 
   stepBack() {
-    // TODO!! Not that simple!
+    const activeId = this.state.history.pop()
+    if (activeId == undefined) {
+      alert ('already in the beginning')
+      return
+    }
+    const setChildrenInvisible = (nID: ID) => {
+      this.state.graph.children(nID).map(nID => {
+        const n = this.state.graph.nodes[nID]
+        if (n.isVisible) {
+          n.isVisible = false
+          setChildrenInvisible(nID)
+        }
+      })
+    }
+    setChildrenInvisible(activeId)
+    const active = this.state.graph.nodes[activeId]
+    active.can_step = true
+    this.state.graph.nodes.map(n => n.selected = false)
+    active.selected = true
+    this.setMemory(active.mem)
+    if (active && active.loc && active.loc.arena) {
+      this.state.result = '' // CHECK IF I NEED THIS (WAS HERE BEFORE?)
+      this.state.arena = active.loc.arena
+      this.emit('updateArena') // TODO: CHANGE THIS! THIS IS FOR THE ARENA
+    }
+    this.emit('clear')
+    if (active.loc)
+      this.emit('markInteractive', active.loc)
+    this.updateDOT()
   }
 
   stepForward() {
