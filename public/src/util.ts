@@ -1,5 +1,6 @@
 import $ from "jquery"
 import Common from "./common"
+import { Range } from './location'
 
 namespace Util {
 
@@ -68,26 +69,11 @@ export function fadeOut(tooltip: HTMLElement) {
     setTimeout(function() { remove(tooltip); }, 1100);
   }
 
-// WARNING: Unused function
-// @ts-ignore
-function generateColor(style: HTMLElement) {
-  function basicColor (mix: number) {
-    return Math.floor((Math.floor(Math.random()*256)+mix)/2)
-  }
-  let r = basicColor(255)
-  let g = basicColor(255)
-  let b = basicColor(255)
-  let className = 'color'+r+g+b
-  style.innerHTML +=
-    '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
-  return className
-}
-
 export function getColor(i: number): string {
   return 'color' + (i % 100)
 }
 
-export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Common.Range>): string {
+export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Range>): string {
   for (let i = 0; i < state.locs.length; i ++) {
     const loc = state.locs[i].c
     if ((loc.begin.line < cur.begin.line
