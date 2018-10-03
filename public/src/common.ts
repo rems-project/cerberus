@@ -1,9 +1,9 @@
-import { Node, Edge, Graph, ID } from './graph'
+import { Node, Edge, Graph } from './graph'
+import { Range, Locations } from './location'
 
 namespace Common {
   export type Bytes = string | undefined
-
-  export type ID = string | number
+  export type ID = number
 
   export enum ExecutionMode {
     Random,
@@ -98,20 +98,10 @@ namespace Common {
     core: string
   }
 
-  export interface Point {
-    line: number
-    ch: number
-  }
-
-  export interface Range {
-    begin: Point
-    end: Point
-  }
-
-  export interface Locations {
-    c: Range
-    core: Range
-    color: number
+  export enum InteractiveMode {
+    CLine,  // Step to the next C line
+    Memory, // Step to the next memory transition
+    Core    // Step each Core transition
   }
 
   export interface State {
@@ -124,13 +114,14 @@ namespace Common {
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
-    ranges?: any // !!!TODO!!!
+    ranges?: Range[]
     dirty: boolean
     arena: string
     // Interactive mode
     hide_tau: boolean // Hide tau transition option
     skip_tau: boolean // Skip tau transition
-    eager_mem: boolean
+    mode: InteractiveMode
+    lastCline: number | undefined
     history: ID [] // History of execution (allows to go back)
     graph: Graph // Current execution graph
     dotMem: string // DOT representation
@@ -157,25 +148,15 @@ namespace Common {
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
     'dirty' |             // Fired when file has changed
-    // Interactive mode events
-    // TODO: maybe I can colapse all these interactive events in one!
-    //'step' |              // Step interactive mode
-    'updateGraph' |       // Update step graph display (calls VIZ)
-    //'setMemory' |         // Set memory state
-    'updateArena' |       // Update arena
+    'updateInteractive' | // Update interactive
     'updateMemory' |      // Update memory graph (calls VIZ)
     'markInteractive'     // Mark source locations when in interactive mode
-    //'resetInteractive'    // Reset interactive mode
-    //'updateDOT'           // Update DOT execution graph (create DOT file)
-
 
   export interface EventEmitter {
     on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
     on (eventName: 'markError', self: any, f: (line: number) => void): void
     on (eventName: 'dirty', self: any, f: () => void): void
-    //on (eventName: 'step', self: any, f: (activeId: ID) => void): void
-    //on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
     on (eventName: 'markInteractive', self: any, f: ((l:any, s: Readonly<State>) => void)): void
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
     off (self: any): void 

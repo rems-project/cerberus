@@ -1,22 +1,18 @@
 import { find, flatten, union } from 'lodash'
+import { Locations } from './location'
 
-export type ID = string | number
-
-export interface Locations {
-  c: Range
-  core: Range
-  color: number
-  arena: string // TODO: this shouldn't be here
-}
+export type Bytes = string | undefined
+export type ID = number
 
 export interface Node {
   id: ID
-  state: string | undefined
+  state: Bytes
   isVisible: boolean
   isTau: boolean
   loc: Locations | undefined
   mem: any
   label: string
+  arena: string
   selected: boolean
   can_step: boolean
 }
