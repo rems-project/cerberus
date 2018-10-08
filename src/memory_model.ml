@@ -13,7 +13,7 @@ module type Constraints = sig
   val string_of_solver: string list eff
   val check_sat: [ `SAT | `UNSAT ] eff
   
-  val with_constraints: string -> t -> 'a eff -> 'a eff
+  val with_constraints: 'b -> t -> 'a eff -> 'a eff
 end
 
 module type Memory = sig

@@ -91,7 +91,7 @@ export class Interactive extends Tab {
       minScale: 0.1,
       maxScale: 2
     }
-    ee.on('updateInteractive', this, (s: Common.State) => this.updateGraph(s))
+    ee.on('updateExecutionGraph', this, (s: Common.State) => this.updateGraph(s))
   }
 
   private updateGraph (state: Readonly<Common.State>) {
@@ -414,6 +414,7 @@ export class Implementation extends ReadOnly {
   }
 }
 
+/*
 export class Execution extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Execution', '', ee)
@@ -455,6 +456,7 @@ export class Execution extends ReadOnly {
     this.setValue(result)
   }
 }
+*/
 
 class Console extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
@@ -463,14 +465,50 @@ class Console extends ReadOnly {
     ee.on('updateExecution', this, this.update) // in case of failures
   }
 
+  /*
   update(s:Common.State) {
     //const vs = s.console.split(':')
-    /*if (vs.length > 2) { // TODO: should put this change in the server
+    if (vs.length > 2) { // TODO: should put this change in the server
       this.ee.emit('markError', parseInt(vs[1]))
       this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
-    } else {*/
+    } else {
       this.setValue(s.console)
     //}
+}*/
+
+  update (s: Common.State) : void {
+    if (s.result == '') {
+      this.setValue('')
+      return
+    }
+    // TODO: This should be done at the server!!
+    const values = s.result.split(/\nEND EXEC\[\d*\]\nBEGIN EXEC\[\d*\]\n/g)
+      .map((s: string) => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
+      .sort()
+    let result = ""
+    let current : string | undefined = undefined
+    let cnt = 0
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] != current) {
+        if (cnt > 0) {
+          result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+          result += current
+          result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+        }
+        current = values[i]
+        cnt = 1;
+      } else {
+        cnt++
+      }
+    }
+    if (cnt > 0) {
+      let i = values.length
+      result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      result += current
+      result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      cnt = 1;
+    } 
+    this.setValue(result)
   }
 }
 
@@ -732,7 +770,7 @@ export class Arena extends ReadOnly {
     this.editor.setOption('mode', 'text/x-core')
     this.editor.setOption('placeholder', '<Waiting for runtime information...>')
 
-    ee.on('updateInteractive', this, this.update)
+    ee.on('updateArena', this, this.update)
   }
 
   initial(s: Readonly<Common.State>) {
@@ -904,7 +942,7 @@ class Asm extends ReadOnly {
 /* Concrete Tabs Factory */
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
-  Execution, Console, Arena, Asm,
+  Console, Arena, Asm,
   Interactive, Memory,
   Preferences, Implementation, Help
 }

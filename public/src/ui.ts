@@ -110,8 +110,14 @@ export class CerberusUI {
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
 
     // Interactive
-    $('#step-back').on('click', () => this.getView().stepBack())
-    $('#step-forward').on('click', () => this.getView().stepForward())
+    $('#step-back').on('click', (e) => {
+      if (!$(e.target).hasClass('disabled'))
+        this.getView().stepBack()
+    })
+    $('#step-forward').on('click', (e) => {
+      if (!$(e.target).hasClass('disabled'))
+        this.getView().stepForward()
+    })
     $('#restart').on('click', () => this.getView().restartInteractive())
 
     // Interactive Options
@@ -311,8 +317,9 @@ export class CerberusUI {
   private exec (mode: Common.ExecutionMode) {
     this.request(Common.Execute(mode), (res: Common.ResultRequest) => {
       const view = this.getView()
-      const exec = view.getExec()
-      if (exec) exec.setActive()
+      //const exec = view.getExec()
+      const cons = view.getConsole()
+      if (cons) cons.setActive()
       view.updateState(res)
       view.emit('updateExecution')
     })
@@ -332,6 +339,21 @@ export class CerberusUI {
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
 
+    // Interactive stuff
+    view.on('updateArena', this, (s: Common.State) => {
+      const stepBack = $('#step-back')
+      if (s.history.length == 0 && !stepBack.hasClass('disabled') )
+        stepBack.addClass('disabled')
+      else
+        stepBack.removeClass('disabled')
+      const stepForward = $('#step-forward')
+      if ((s.graph.nodes.length == 0 || s.graph.getSelected() == undefined)
+        && !stepForward.hasClass('disabled'))
+        stepForward.addClass('disabled')
+      else
+        stepForward.removeClass('disabled')
+    })
+
     this.setCurrentView(view)
     view.getSource().refresh()
   }
@@ -347,7 +369,7 @@ export class CerberusUI {
 
   public step(active: {id: Common.ID, state: Common.Bytes} | null): void {
     const view = this.getView()
-    if (active) {
+    if (active != null) {
       this.request(Common.Step(), (data: Common.ResultRequest) => {
         view.updateState(data)
       }, {

@@ -148,7 +148,8 @@ namespace Common {
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
     'dirty' |             // Fired when file has changed
-    'updateInteractive' | // Update interactive
+    'updateArena' |       // Update arena
+    'updateExecutionGraph' | // Update execution graph
     'updateMemory' |      // Update memory graph (calls VIZ)
     'markInteractive'     // Mark source locations when in interactive mode
 

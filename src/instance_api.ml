@@ -38,10 +38,38 @@ type request =
 type point = int * int
 type range = point * point
 
+type step_info =
+  { step_kind: string; (* kind of step/transition *)
+    step_debug: string; (* debug string *)
+  }
+
 type node =
-  | Branch of int * string * Json.json * Location_ocaml.t option * string option * string
-      (* id * label * serialised memory * (c location * uid * arena) *)
-  | Leaf of int * string * string (* id * label * marshalled state *)
+  { node_id: int;
+    node_info: step_info; (* TODO: this might need to be in the edge *)
+    memory: Json.json;
+    c_loc: Location_ocaml.t;
+    core_uid: string option;
+    arena: string;
+    env: string; (* maybe an associate list ? *)
+    next_state: string option; (* marshalled state *)
+  }
+
+(*
+  | Branch of {
+      branch_id: int;
+      branch_info: step_info;
+      memory: Json.json;
+      c_loc: Location_ocaml.t;
+      uid: string option;
+      arena: string;
+      env: string; (* maybe an associate list ? *)
+    }
+  | Leaf of {
+      leaf_id: int;
+      leaf_info: step_info;
+      leaf_state: string;
+    }
+*)
 
 type edge =
   | Edge of int * int (* from -> to *)

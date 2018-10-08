@@ -64,8 +64,8 @@ body {
   cursor: pointer;
 }
 
-.btn.disable {
-  color: #aaaaaa;
+.btn.disabled {
+  color: #aaaaaa !important;
   cursor: auto;
 }
 
@@ -73,7 +73,7 @@ body {
   background-color: #7f7f7f;
 }
 
-.btn.disable:hover {
+.btn.disabled:hover {
   background-color: #5f5f5f;
 }
 
