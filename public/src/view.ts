@@ -1,6 +1,6 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
-import { filter, reduce, find, includes, concat } from "lodash"
+import { filter, reduce, find, concat } from "lodash"
 import { Node, Graph, ID } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
@@ -104,7 +104,7 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
-              component('Execution'),
+              //component('Execution'),
               component('Memory')
             ]}
           ]},
@@ -219,6 +219,7 @@ export default class View {
 
   /** Restart interactive mode in all the tabs */
   resetInteractive() {
+    this.state.history = []
     this.state.graph.clear()
   }
 
@@ -231,21 +232,30 @@ export default class View {
   /** Update execution graph DOT */
   updateExecutionGraph() {
     const graph = this.state.graph
-    const dotHead = 'digraph Memory { node [shape=box, fontsize=12];'
+    const dotHead = 'digraph Memory { node [shape=box, fontsize=12]; edge [fontsize=10];'
     const nodes = this.state.hide_tau
                 ? filter(graph.nodes, n => !n.isTau && n.isVisible)
                 : filter(graph.nodes, n => n.isVisible)
     const edges = filter(graph.edges, e => this.state.hide_tau ? !e.isTau : e.isTau)
+    const label = (n : Node) => {
+      if (n.arena) {
+        if (n.arena.length > 30)
+          return n.arena.substring(0,30) + '...'
+        return n.arena
+      }
+      return n.info.debug
+    }
     const dotNodes = reduce(nodes, (acc, n) => 
       acc + 'n' + n.id + '['
       + 'href="javascript:UI.execGraphNodeClick('+n.id+')",'
       + (n.selected ? 'color="blue", ' : '')
       + (n.can_step ? 'fontcolor="blue", ' : '')
-      + 'label=<' + (n.can_step ? '<u>' + n.label + '</u>' : n.label) + '>'
+      + (n.id == 0 ? 'style=invis, height=0, width=0, ' : '')
+      + 'label="' + label(n) + '"' // (n.can_step ? '<u>' + label(n) + '</u>' : label(n)) + '>'
       + '];', '')
     const dotEdges = reduce(edges, (acc, e) => {
       if (graph.nodes[e.from].isVisible && graph.nodes[e.to].isVisible)
-        return acc + 'n' + e.from + '->n' + e.to + ';'
+        return acc + 'n' + e.from + '->n' + e.to +'[label=" ' + graph.nodes[e.from].info.kind + '"];'
       else return acc
     }, '')
     this.state.dotExecGraph = dotHead + dotNodes + dotEdges + '}'
@@ -272,13 +282,17 @@ export default class View {
       const active = children[0]
       switch (this.state.mode) {
         case Common.InteractiveMode.Memory:
-          // TODO: this should be done in the server (I should receive a
-          // flag indicating if it is a memory request transition)
-          const label = active.label
-          if (label == 'CreateRequest' || label == 'StoreRequest' || label == 'KillRequest')
-            children = this.setChildrenVisible(active.id, true)
-          else if (label != 'Non deterministic choice')
-            children = this.setChildrenVisible(active.id)
+          switch (active.info.kind) {
+            case 'action request':
+              children = this.setChildrenVisible(active.id, true)
+              break
+            case 'done':
+              children = this.setChildrenVisible(active.id, true)
+              break
+            default:
+              children = this.setChildrenVisible(active.id)
+              break
+          }
           break
         case Common.InteractiveMode.Core:
           // Nothing to do
@@ -295,15 +309,22 @@ export default class View {
   /** Update interactive display state and raise event to update DOT */
   executeInteractiveStep(activeId: ID) {
     const active = this.state.graph.nodes[activeId]
-    this.state.lastCline = (active.loc ? active.loc.c.begin.line : undefined)
+    this.state.lastCline = (active.loc && active.loc.c ? active.loc.c.begin.line : undefined)
     const children = this.setChildrenVisible(activeId)
     children.map(child => child.can_step = true)
     this.state.graph.nodes.map(n => n.selected = false)
     if (children.length > 0) {
       const active = children[0]
-      active.selected = true
-      this.setMemory(active.mem)
-      this.state.arena = active.arena
+      if (children.length == 1 && this.state.graph.children(active.id).length == 0) {
+        // Last step done
+        this.getConsole().setActive()
+        this.state.result = active.info.kind
+        this.emit('updateExecution')
+      } else {
+        active.selected = true
+        this.setMemory(active.mem)
+      }
+      this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
       this.emit('clear')
       if (active.loc) this.emit('markInteractive', active.loc)
     }
@@ -314,7 +335,7 @@ export default class View {
   /** Update interactive state mode and raise event to update DOT */
   updateInteractive(activeId: Common.ID, tree: Common.ResultTree) {
     // Check node is a tau transition
-    const isTau = (n: Node) => n && includes(n.label, "tau") && !includes(n.label, "End")
+    const isTau = (n: Node) => n && n.info.kind == 'tau' // n && includes(n.node.step, "tau") && !includes(n.label, "End")
     const isTauById = (nId: Common.ID) => isTau(graph.nodes[nId])
     // Return immediate edge upward
     const getIncommingEdge = (nId: Common.ID) => find(graph.edges, n => n.to == nId)
@@ -383,14 +404,15 @@ export default class View {
       if (active.can_step) {
         active.can_step = false
         this.executeInteractiveStep(activeId)
+        this.emit('updateExecutionGraph')
       } else  {
-        this.state.arena = active.arena
+        this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
         this.setMemory(active.mem)
         this.emit('clear')
         if (active.loc) this.emit('markInteractive', active.loc)
       }
-      this.emit('updateInteractive')
     }
+    this.emit('updateArena')
   }
 
   getEncodedState() {
@@ -421,11 +443,12 @@ export default class View {
     this.state.graph.nodes.map(n => n.selected = false)
     active.selected = true
     this.setMemory(active.mem)
-    this.state.arena = active.arena
+    this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
     this.emit('clear')
     if (active.loc) this.emit('markInteractive', active.loc)
     this.updateExecutionGraph()
-    this.emit('updateInteractive')
+    this.emit('updateArena')
+    this.emit('updateExecutionGraph')
   }
 
   stepForward() {
@@ -454,9 +477,11 @@ export default class View {
     return this.source
   }
 
+  /*
   getExec() {
     return this.getTab('Execution')
   }
+  */
 
   getConsole() {
     return this.getTab('Console')

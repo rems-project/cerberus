@@ -165,9 +165,7 @@ let new_id () = incr last_node_id; !last_node_id
 let encode s = Marshal.to_string s [Marshal.Closures]
 let decode s = Marshal.from_string s 0
 
-let rec multiple_steps step_state (Nondeterminism.ND m, st) =
-  let module CS = (val Ocaml_mem.cs_module) in
-  let (>>=) = CS.bind in
+let get_state_details st =
   let string_of_env st =
     let env = st.Driver.core_run_state.env in
     let f e = Pmap.fold (fun (s:Symbol.sym) (v:Core.value) acc ->
@@ -175,42 +173,47 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
       ) e "" in
     List.fold_left (fun acc e -> acc ^ f e) "" env
   in
-  let get_state_details st =
-    match st.Driver.core_state.Core_run.thread_states with
-    | (_, (_, ts))::_ ->
-      let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
-      let Core.Expr (arena_annots, _) = ts.arena in
-      let maybe_uid = Annot.get_uid arena_annots in
-      let maybe_loc = Annot.get_loc arena_annots in
-      begin match maybe_loc with
-        | Some loc ->
-          (loc, maybe_uid, string_of_env st ^ "\n" ^ arena)
-        | None ->
-          (ts.Core_run.current_loc, maybe_uid, string_of_env st ^ "\n" ^ arena)
-      end
-    | _ -> failwith "TODO" (* TODO *)
-  in
-  let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
-    let nodeId  = new_id () in
+  match st.Driver.core_state.Core_run.thread_states with
+  | (_, (_, ts))::_ ->
+    let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
+    let Core.Expr (arena_annots, _) = ts.arena in
+    let maybe_uid = Annot.get_uid arena_annots in
+    let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
+    (loc, maybe_uid, arena, string_of_env st)
+  | _ ->
+    (Location_ocaml.unknown, None, "", "")
 
-    let mem     = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
-    let (loc, uid, arena) = get_state_details st in
-    let newNode = Branch (nodeId, lab, mem, Some loc, uid, arena) in
-    let ns' = newNode :: ns in
-    let es' = Edge (previousNode, nodeId) :: es in
-    (ns', es', nodeId)
+let create_node dr_info st next_state =
+  let mk_info info =
+    { step_kind = info.Driver.step_kind;
+      step_debug = Option.case id (fun _ -> "no debug string") info.Driver.debug_str;
+    }
+  in
+  let node_id = new_id () in
+  let node_info = mk_info dr_info in
+  let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+  let (c_loc, core_uid, arena, env) = get_state_details st in
+  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state }
+
+let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result, Driver.driver_info, Driver.driver_error, _, _) Nondeterminism.ndM), st) =
+  let module CS = (val Ocaml_mem.cs_module) in
+  let (>>=) = CS.bind in
+  let create_branch dr_info st (ns, es, previousNode) =
+    let n = create_node dr_info st None in
+    let ns' = n :: ns in
+    let es' = Edge (previousNode, n.node_id) :: es in
+    (ns', es', n.node_id)
   in
   let create_leafs st ms (ns, es, previousNode) =
-    let (is, ns') = List.fold_left (fun (is, ns) (l, m) ->
-        let i = new_id () in
-        let n = Leaf (i, l, encode (m, st)) in
-        (i::is, n::ns)
+    let (is, ns') = List.fold_left (fun (is, ns) (dr_info, m) ->
+        let n = create_node dr_info st (Some (encode (m, st))) in
+        (n.node_id::is, n::ns)
       ) ([], ns) ms in
     let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
     (ns', es', previousNode)
   in
   let check st f = function
-    | `UNSAT -> CS.return (Some "unsat", create_branch "unsat" st step_state)
+    | `UNSAT -> CS.return (Some "unsat", create_branch (Driver.mk_info "unsat") st step_state)
     | `SAT -> CS.return @@ f ()
   in
   let runCS st f = CS.runEff (CS.check_sat >>= check st f) in
@@ -219,9 +222,8 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   in
   try
     let open Nondeterminism in
-    let one_step = function
+    let one_step: (_, Driver.driver_info, _, _, _) Nondeterminism.nd_action * _ -> _ = function
       | (NDactive a, st') ->
-        Debug.print 0 "active";
         runCS st' begin fun () ->
           let str_v = String_core.string_of_value a.Driver.dres_core_value in
           let res =
@@ -230,7 +232,7 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
             ^ "\", blocked: \""
             ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
           in
-          (Some res, create_branch str_v st' step_state)
+          (Some res, create_branch (Driver.mk_info str_v) st' step_state)
         end
       | (NDkilled r, st') ->
         let reason = match r with
@@ -287,11 +289,11 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
           in
           "killed: " ^ string_of_driver_error dr_err
         in
-        (Some reason, create_branch reason st' step_state)
+        (Some reason, create_branch (Driver.mk_info reason) st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
           create_branch str st' step_state
-          |> create_leafs st' [("opt1", m1); ("opt2", m2)]
+          |> create_leafs st' [(Driver.mk_info "opt1", m1); (Driver.mk_info "opt2", m2)]
           |> fun res -> (None, res)
         end
       | (NDguard (str, cs, m), st') ->
@@ -302,10 +304,10 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
         |> fun s -> Debug.print 0 "finish guard"; s
       | (NDnd (str, ms), st') ->
         (None, create_leafs st' ms step_state)
-      | (NDstep ms, st') ->
+      | (NDstep (_, ms), st') ->
         (None, create_leafs st' ms step_state)
     in begin match m st with
-      | (NDstep [(lab, m')], st') ->
+      | (NDstep (_, [(lab, m')]), st') ->
         let step_state' = create_branch lab st' step_state in
         multiple_steps step_state' (m', st')
       | act -> one_step act
@@ -337,10 +339,13 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     last_node_id := 0;
-    let initId   = 0 in
-    let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
+    let node_info= { step_kind= "init"; step_debug = "init" } in
+    let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+    let (c_loc, core_uid, arena, env) = get_state_details st in
+    let next_state = Some (encode (m, st)) in
+    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state } in
     let tagDefs  = encode @@ Tags.tagDefs () in
-    return @@ Interactive (tagDefs, ranges, ([nodeId], []))
+    return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->
     let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;

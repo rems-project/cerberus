@@ -124,23 +124,26 @@ let parse_incoming_json msg =
 (* Outgoing messages *)
 
 let json_of_exec_tree ((ns, es) : exec_tree) =
-  let get_location _ = `Null in
-  let json_of_node = function
-    | Branch (id, lab, mem, loc, uid, arena) ->
-      let json_of_loc (loc, uid) =
-        `Assoc [("c", Json.of_option Location_ocaml.to_json loc);
-                ("core", Json.of_opt_string uid) ]
-      in
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("mem", mem);
-              ("loc", json_of_loc (loc, uid));
-              ("arena", `String arena)]
-    | Leaf (id, lab, st) ->
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("state", `String (B64.encode st));
-              ("loc", (get_location st))]
+  let json_of_info i =
+    `Assoc [("kind", `String i.step_kind);
+            ("debug", `String i.step_debug);]
+  in
+  let json_of_node n =
+    let json_of_loc (loc, uid) =
+      `Assoc [("c", Location_ocaml.to_json loc);
+              ("core", Json.of_opt_string uid) ]
+    in
+    `Assoc [("id", `Int n.node_id);
+            ("info", json_of_info n.node_info);
+            ("mem", n.memory);
+            ("loc", json_of_loc (n.c_loc, n.core_uid));
+            ("arena", `String n.arena);
+            ("env", `String n.env);
+            ("state",
+             match n.next_state with
+             | Some state -> `String (B64.encode state)
+             | None -> `Null);
+           ]
   in
   let json_of_edge = function
     | Edge (p, c) -> `Assoc [("from", `Int p);

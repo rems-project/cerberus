@@ -21,7 +21,7 @@ module Constraints = struct
     Quantifier.mk_forall ctx sorts syms expr None [] [] None None
   
   type solver_state = {
-      submitted: (string * t) list;
+      submitted: t list;
       ctx: context;
       slv: Solver.solver;
       
@@ -214,8 +214,8 @@ module Constraints = struct
 
   let string_of_solver =
     Eff (fun st ->
-      List.mapi (fun i (str, cs) ->
-        "\n[" ^ (string_of_int i) ^ "] -- '" ^ str ^ "'\n" ^ String_defacto_memory.string_of_iv_memory_constraint cs
+      List.mapi (fun i (cs) ->
+        "\n[" ^ (string_of_int i) ^ "] -- '" (*^ str*) ^ "'\n" ^ String_defacto_memory.string_of_iv_memory_constraint cs
       ) (List.rev st.submitted)
 
 (*
@@ -508,7 +508,7 @@ let mem_constraint_to_expr st (constr: mem_iv_constraint) =
         | None ->
             ()
       end;
-      let st' = { st with submitted= (debug_str, cs) :: st.submitted } in
+      let st' = { st with submitted= cs :: st.submitted } in
       let ret = m st' in
       Solver.pop st.slv 1;
       ret

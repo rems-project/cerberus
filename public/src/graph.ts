@@ -4,6 +4,16 @@ import { Locations } from './location'
 export type Bytes = string | undefined
 export type ID = number
 
+export type NodeKind =
+    'tau'
+  | 'action request'
+  | 'done'
+
+export interface NodeInfo {
+  kind: NodeKind // Next step kind
+  debug: string
+}
+
 export interface Node {
   id: ID
   state: Bytes
@@ -11,7 +21,8 @@ export interface Node {
   isTau: boolean
   loc: Locations | undefined
   mem: any
-  label: string
+  info: NodeInfo
+  env: string
   arena: string
   selected: boolean
   can_step: boolean
@@ -34,6 +45,10 @@ export class Graph {
 
   isEmpty() {
     return this.nodes.length === 0
+  }
+
+  getSelected() {
+    return find(this.nodes, n => n.selected)
   }
 
   getParentByID(nID: ID): Node | undefined {

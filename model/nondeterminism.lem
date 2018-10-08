@@ -41,7 +41,7 @@ type nd_action 'a 'info 'err 'cs 'st =
   | NDnd of 'info * list ('info * ndM 'a 'info 'err 'cs 'st)
   | NDguard of 'info * 'cs * ndM 'a 'info 'err 'cs 'st
   | NDbranch of 'info * 'cs * ndM 'a 'info 'err 'cs 'st * ndM 'a 'info 'err 'cs 'st
-  | NDstep of list ('info * ndM 'a 'info 'err 'cs 'st)
+  | NDstep of 'info * list ('info * ndM 'a 'info 'err 'cs 'st)
 
 and ndM 'a 'info 'err 'cs 'st =
   ND of ('st -> (nd_action 'a 'info 'err 'cs 'st * 'st))
@@ -69,8 +69,8 @@ let rec nd_bind (ND m_act) f =
           (NDguard debug_str cs (nd_bind m_act' f), st')
       | (NDbranch debug_str cs m_act1 m_act2, st') ->
           (NDbranch debug_str cs (nd_bind m_act1 f) (nd_bind m_act2 f), st')
-      | (NDstep str_ms, st') ->
-          (NDstep (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
+      | (NDstep info str_ms, st') ->
+          (NDstep info (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
     end
   )
 let inline bind = nd_bind
@@ -237,13 +237,14 @@ let addConstraints debug_str cs =
 
 
 
-val liftND: forall 'a 'info 'err1 'err2 'cs 'st1 'st2.
+val liftND: forall 'a 'info1 'info2 'err1 'err2 'cs 'st1 'st2.
   ('st2 -> 'st1) ->
   ('st2 -> 'st1 -> 'st2) ->
+  ('info1 -> 'info2) ->
   ('err1 -> 'err2) ->
-  ndM 'a 'info 'err1 'cs 'st1 -> ndM 'a 'info 'err2 'cs 'st2
+  ndM 'a 'info1 'err1 'cs 'st1 -> ndM 'a 'info2 'err2 'cs 'st2
 
-let rec liftAction get put liftErr = function
+let rec liftAction get put liftInfo liftErr = function
   | NDactive a ->
       NDactive a
   | NDkilled r ->
@@ -255,26 +256,26 @@ let rec liftAction get put liftErr = function
         | Other err ->
             Other (liftErr err)
       end
-  | NDnd debug_str str_ms ->
-      NDnd debug_str (List.map (fun (str, m_act) -> (str, liftND get put liftErr m_act)) str_ms)
-  | NDguard debug_str cs act ->
-      NDguard debug_str cs (liftND get put liftErr act)
-  | NDbranch debug_str cs m_act1 m_act2 ->
-      NDbranch debug_str cs (liftND get put liftErr m_act1) (liftND get put liftErr m_act2)
-  | NDstep str_ms ->
-      NDstep (List.map (fun (str, m) -> (str, liftND get put liftErr m)) str_ms)
+  | NDnd info str_ms ->
+      NDnd (liftInfo info) (List.map (fun (info, m_act) -> (liftInfo info, liftND get put liftInfo liftErr m_act)) str_ms)
+  | NDguard info cs act ->
+      NDguard (liftInfo info) cs (liftND get put liftInfo liftErr act)
+  | NDbranch info cs m_act1 m_act2 ->
+      NDbranch (liftInfo info) cs (liftND get put liftInfo liftErr m_act1) (liftND get put liftInfo liftErr m_act2)
+  | NDstep info info_ms ->
+      NDstep (liftInfo info) (List.map (fun (info, m) -> (liftInfo info, liftND get put liftInfo liftErr m)) info_ms)
 end
 
-and liftND get put liftErr (ND m) =
+and liftND get put liftInfo liftErr (ND m) =
   ND (fun st2 ->
     let (act, st1') = m (get st2) in
-    (liftAction get put liftErr act, put st2 st1')
+    (liftAction get put liftInfo liftErr act, put st2 st1')
   )
 
 
 
-let mk_step _ xs =
-  ND (fun st -> (NDstep xs, st))
+let mk_step info xs =
+  ND (fun st -> (NDstep info xs, st))
 
 
 
