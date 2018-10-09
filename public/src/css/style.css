@@ -62,6 +62,14 @@ body {
   padding: 5px 10px;
   text-decoration: none;
   cursor: pointer;
+  /* text selection */
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome and Opera */ 
 }
 
 .btn.disabled {
@@ -371,7 +379,7 @@ code {
 .range {
   border: 0;
   vertical-align: middle;
-  width: calc(100% - 224px);
+  width: calc(100% - 258px);
 }
 
 /* ast-dump style */

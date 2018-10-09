@@ -4,6 +4,7 @@ open Instance_api
 open Json
 open Util
 
+
 (* Misc *)
 
 let write_tmp_file content =
@@ -48,7 +49,7 @@ type incoming_msg =
     interactive: active_node option;
   }
 
-let parse_incoming_json msg =
+let parse_incoming_msg content =
   let empty = { action=         `Nop;
                 source=         "";
                 model=          "Concrete";
@@ -63,11 +64,6 @@ let parse_incoming_json msg =
                         active_id= 0;
                       }
   in
-  let parse_option f = function
-    | `Null      -> None
-    | `String "" -> None
-    | x          -> Some (f x)
-  in
   let action_from_string = function
     | "Elaborate"  -> `Elaborate
     | "Random"     -> `Random
@@ -75,51 +71,31 @@ let parse_incoming_json msg =
     | "Step"       -> `Step
     | s -> failwith ("unknown action " ^ s)
   in
-  let parse_string = function
-    | `String s -> s
-    | _ -> failwith "expecting a string"
-  in
   let parse_bool = function
-    | `Bool b -> b
-    | _ -> failwith "expecting a bool"
+    | "true" -> true
+    | "false" -> false
+    | s ->
+      Debug.warn ("Unknown boolean " ^ s); false
   in
-  let parse_int = function
-    | `Int i -> i
-    | _ -> failwith "expecting an integer"
-  in
-  let parse_interactive =
-    let parse_interactive_aux active_node (k, v) =
-      match k with
-      | "lastId" -> { active_node with last_id= parse_int v }
-      | "state"  -> { active_node with marshalled_state= B64.decode @@ parse_string v }
-      | "active" -> { active_node with active_id= parse_int v }
-      | "tagDefs"-> { active_node with tagDefs= B64.decode @@ parse_string v }
-      | _ ->
-        Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
-        active_node (* ignore unknown key *)
-    in
-    function
-    | `Assoc xs -> List.fold_left parse_interactive_aux empty_node_id xs
-    | _ -> failwith "wrong interactive message format"
-  in
-  let parse_assoc msg (k, v) =
-    match k with
-    | "action"  -> { msg with action= action_from_string (parse_string v) }
-    | "source"  -> { msg with source= parse_string v }
-    | "rewrite" -> { msg with rewrite= parse_bool v }
-    | "sequentialise" -> { msg with sequentialise= parse_bool v }
-    | "model"   -> { msg with model= parse_string v }
-    | "interactive" -> { msg with interactive=parse_option parse_interactive v }
-    | _ ->
+  let get = function Some m -> m | None -> empty_node_id in
+  let parse msg = function
+    | ("action", [act])      -> { msg with action= action_from_string act; }
+    | ("source", [src])      -> { msg with source= src; }
+    | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
+    | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
+    | ("model", [model])     -> { msg with model= model; }
+    | ("interactive[lastId]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with last_id = int_of_string v } }
+    | ("interactive[state]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with marshalled_state = B64.decode v } }
+    | ("interactive[active]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with active_id = int_of_string v } }
+    | ("interactive[tagDefs]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with tagDefs = B64.decode v } }
+    | (k, _) ->
       Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
-  in
-  let rec parse msg = function
-    | `Assoc xs -> List.fold_left parse_assoc msg xs
-    | `List xs -> List.fold_left parse msg xs
-    | _ -> failwith "wrong message format"
-  in
-  parse empty msg
+  in List.fold_left parse empty content
 
 (* Outgoing messages *)
 
@@ -285,9 +261,8 @@ let log_request msg flow =
     ; close_out oc
   | _ -> ()
 
-
 let cerberus ?(gzipped=false) ~conf ~flow content =
-  let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
+  let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
                               sequentialise_core = msg.sequentialise
@@ -391,7 +366,8 @@ let request ~docroot ~conf (flow, _) req body =
     | `HEAD -> head ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
     | `GET  -> get ~docroot ~gzipped uri path
     | `POST ->
-      Cohttp_lwt__Body.to_string body >>= post ~docroot ~gzipped ~conf ~flow uri path
+      Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
+      post ~docroot ~gzipped ~conf ~flow uri path
     | _     -> not_allowed meth path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;

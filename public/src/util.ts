@@ -90,6 +90,7 @@ export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Rang
 export function createStyle() {
   let style = document.createElement('style')
   style.type = 'text/css'
+  // @ts-ignore
   document.head.appendChild(style)
   return style
 }
