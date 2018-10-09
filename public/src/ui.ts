@@ -396,14 +396,16 @@ export class CerberusUI {
       url:  '/cerberus',
       type: 'POST',
       headers: {Accept: 'application/json; charset=utf-8'},
-      data: JSON.stringify ({
+      contentType: 'application/json; charset=utf-8',
+      data: {
         'action':  Common.string_of_action(action),
         'source':  view.getSource().getValue(),
         'rewrite': this.settings.rewrite,
         'sequentialise': this.settings.sequentialise,
         'model': Common.string_of_model(this.settings.model),
         'interactive': interactive
-      }),
+      },
+      dataType: 'json',
       success: (data, status, query) => {
         onSuccess(data);
         Util.Cursor.done()

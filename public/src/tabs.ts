@@ -64,20 +64,23 @@ export class Preferences extends Tab {
   }
 }
 
-export class Interactive extends Tab {
+class SvgGraph extends Tab {
   panzoomOptions: any
   container: JQuery<HTMLElement>
-
-  constructor(ee: Common.EventEmitter) {
-    super('Interactive', ee)
+  svg: JQuery<HTMLElement>
+  
+  constructor(name: string, ee: Common.EventEmitter) {
+    super (name, ee)
     const controls = $('<div class="toolbar"></div>')
-    const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
-    const reset = $('<div class="btn inline" type="button">Reset</div>')
+    const zoomIn = $('<div class="btn inline">Zoom In</div>')
+    const reset = $('<div class="btn inline">Reset</div>')
+    //const fit = $('<div class="btn inline">Fit</div>')
     const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
-    const zoomOut = $('<div class="btn inline" type="button">Zoom Out</div>')
+    const zoomOut = $('<div class="btn inline">Zoom Out</div>')
     controls.append(zoomIn)
     controls.append(zoomOut)
     controls.append(range)
+    //controls.append(fit)
     controls.append(reset)
     this.container = $('<div align="center" class="graph"></div>')
     this.dom.append(controls)
@@ -91,26 +94,16 @@ export class Interactive extends Tab {
       minScale: 0.1,
       maxScale: 2
     }
-    ee.on('updateExecutionGraph', this, (s: Common.State) => this.updateGraph(s))
+    this.svg = $('<span>No data...</span>')
   }
 
-  private updateGraph (state: Readonly<Common.State>) {
+  setSVG(data: string) {
     this.container.empty()
-    this.container.append(Viz(state.dotExecGraph))
-    const svg = this.container.find('svg')
-    svg.addClass('panzoom')
+    this.container.append(Viz(data))
+    this.svg = this.container.find('svg')
+    this.svg.addClass('panzoom')
     // @ts-ignore
-    svg.panzoom(this.panzoomOptions)
-    // Check if needs to span down
-    const svgHeight = svg.height()
-    const containerHeight = this.container.height()
-    if (svgHeight && containerHeight) {
-      const delta = containerHeight / 2 - svgHeight
-      if (delta < 0) {
-        // @ts-ignore
-        svg.panzoom('pan', 0, delta, '{ relative: true }')
-      }
-    }
+    this.svg.panzoom(this.panzoomOptions)
     // Zoom using the mouse
     this.container.off() // remove all previous events
     this.container.on('mousewheel.focal', (e: any) => {
@@ -118,9 +111,31 @@ export class Interactive extends Tab {
       let delta = e.delta || e.originalEvent.wheelDelta
       let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
       // @ts-ignore
-      svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
+      this.svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
     })
+  }
+}
+
+
+export class Interactive extends SvgGraph {
+  constructor(ee: Common.EventEmitter) {
+    super('Interactive', ee)
+    ee.on('updateExecutionGraph', this, (s: Common.State) => this.updateGraph(s))
+  }
+
+  private updateGraph (state: Readonly<Common.State>) {
+    this.setSVG(state.dotExecGraph)
+    // Check if needs to span down
+    const svgHeight = this.svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const delta = containerHeight / 2 - svgHeight
+      if (delta < 0) {
+        // @ts-ignore
+        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+      }
     }
+  }
 
   initial(s: Readonly<Common.State>) {
     // The timeout guarantees that the tab is attached to the DOM.
@@ -129,59 +144,57 @@ export class Interactive extends Tab {
   }
 }
 
-class Memory extends Tab {
-  panzoomOptions: any
+class Memory extends SvgGraph {
+  fit: boolean
   svgPos: { x: number, y: number, scale: number}
-  container: JQuery<HTMLElement>
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
-    this.container = $('<div align="center" class="graph"></div>')
-    const controls = $('<div class="toolbar"></div>')
-    const zoomIn = $('<div class="btn inline" type="button">Zoom In</div>')
-    const reset = $('<div class="btn inline" type="button">Reset</div>')
-    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
-    const zoomOut = $('<div class="btn inline" type="button">Zoom Out</div>')
-    controls.append(zoomIn)
-    controls.append(zoomOut)
-    controls.append(range)
-    controls.append(reset)
-    this.dom.append(controls)
-    this.dom.append(this.container)
-    this.panzoomOptions = {
-      $zoomIn: zoomIn,
-      $zoomOut: zoomOut,
-      $zoomRange: range,
-      $reset: reset,
-      increment: 0.1,
-      minScale: 0.1,
-      maxScale: 2
-    }
-    this.svgPos = { x: 0, y: 0, scale: 1}
     ee.on('updateMemory', this, s => this.updateMemory(s))
+    this.fit = true
+    this.svgPos = { x: 0, y: 0, scale: 1}
    }
 
    updateMemory (s:Common.State) {
-    this.container.empty()
-    this.container.append(Viz(s.dotMem))
-    const svg = this.container.find('svg')
-    svg.addClass('panzoom')
-    // @ts-ignore
-    svg.panzoom(this.panzoomOptions)
-    svg.on('panzoomzoom', (elem, panzoom, scale) => {
+    this.setSVG(s.dotMem)
+    this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
       this.svgPos.scale = scale
     })
-    svg.on('panzoompan', (elem, panzoom, x, y) => {
+    this.svg.on('panzoompan', (elem, panzoom, x, y) => {
       this.svgPos.x = x
       this.svgPos.y = y
     })
-    svg.on('panzoomreset', () => {
+    this.svg.on('panzoomreset', () => {
       this.svgPos = { x: 0, y: 0, scale: 1}
     })
-    // @ts-ignore
-    svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
-    // @ts-ignore
-    svg.panzoom('zoom', this.svgPos.scale)
+    if (this.fit) {
+      console.log('Fit:')
+      const svgHeight = this.svg.height()
+      const containerHeight = this.container.height()
+      console.log('SVG HEIGHT: ' + svgHeight)
+      console.log('CONTAINER HEIGHT: ' + containerHeight)
+      console.log('ZOOM: ' + this.svgPos.scale)
+      if (svgHeight && containerHeight) {
+        const zoom = containerHeight/svgHeight
+        console.log(zoom)
+        if (zoom < this.svgPos.scale) {
+          console.log('APPLYING ZOOM')
+          // @ts-ignore
+          this.svg.panzoom('zoom', zoom, {silent: true})
+          console.log('PANNING...')
+          // @ts-ignore
+          const delta = this.svg.offset().top - this.container.offset().top
+          console.log(delta)
+          // @ts-ignore
+          this.svg.panzoom('pan', 0, -delta, { relative: true })
+        }
+      }
+    } else {
+      // @ts-ignore
+      this.svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
+      // @ts-ignore
+      this.svg.panzoom('zoom', this.svgPos.scale)
+    }
   }
 
    initial(s: Readonly<Common.State>) {

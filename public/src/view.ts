@@ -246,16 +246,16 @@ export default class View {
       return n.info.debug
     }
     const dotNodes = reduce(nodes, (acc, n) => 
-      acc + 'n' + n.id + '['
-      + 'href="javascript:UI.execGraphNodeClick('+n.id+')",'
+      acc + `n${n.id}[href="javascript:UI.execGraphNodeClick(${n.id})",`
       + (n.selected ? 'color="blue", ' : '')
       + (n.can_step ? 'fontcolor="blue", ' : '')
       + (n.id == 0 ? 'style=invis, height=0, width=0, ' : '')
-      + 'label="' + label(n) + '"' // (n.can_step ? '<u>' + label(n) + '</u>' : label(n)) + '>'
-      + '];', '')
+      + `label="${label(n)}"];`, '')
     const dotEdges = reduce(edges, (acc, e) => {
-      if (graph.nodes[e.from].isVisible && graph.nodes[e.to].isVisible)
-        return acc + 'n' + e.from + '->n' + e.to +'[label=" ' + graph.nodes[e.from].info.kind + '"];'
+      if (graph.nodes[e.from].isVisible && graph.nodes[e.to].isVisible) {
+        const label = graph.nodes[e.from].info.kind
+        return acc + `n${e.from}->n${e.to}[label="${label}"];`
+      }
       else return acc
     }, '')
     this.state.dotExecGraph = dotHead + dotNodes + dotEdges + '}'
@@ -324,7 +324,7 @@ export default class View {
         active.selected = true
         this.setMemory(active.mem)
       }
-      this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
+      this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
       this.emit('clear')
       if (active.loc) this.emit('markInteractive', active.loc)
     }
@@ -406,7 +406,7 @@ export default class View {
         this.executeInteractiveStep(activeId)
         this.emit('updateExecutionGraph')
       } else  {
-        this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
+        this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
         this.setMemory(active.mem)
         this.emit('clear')
         if (active.loc) this.emit('markInteractive', active.loc)
@@ -443,7 +443,7 @@ export default class View {
     this.state.graph.nodes.map(n => n.selected = false)
     active.selected = true
     this.setMemory(active.mem)
-    this.state.arena = "-- Environment:\n" + active.env + "-- Arena:\n" + active.arena
+    this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
     this.emit('clear')
     if (active.loc) this.emit('markInteractive', active.loc)
     this.updateExecutionGraph()
@@ -511,38 +511,50 @@ export default class View {
       if (alloc.prefix == null) // HACK! TODO: check malloc case
         return ''
       const box = (n:number, ischar=false) =>
-        '<td width="7" height="'+(ischar?'20':'7')+'" fixedsize="true" port="'+String(n)
-        +'"><font point-size="1">&nbsp;</font></td>'
-      const maxcols = reduce(alloc.rows, (acc, row) => Math.max(acc, row.path.length), 0)+1
+        `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
+          <font point-size="1">&nbsp;</font>
+         </td>`
+      const maxcols = alloc.rows.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
       const tooltip = "allocation: " + String(alloc.id)
       const title =
-        '<tr><td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>'
-          + '<td border="0" colspan="' + maxcols + '"><b>'
-          + alloc.prefix + '</b>: <i>' + alloc.type + '</i>&nbsp;[' + toHex(alloc.base)
-          + ']</td></tr>'
+        `<tr>
+          <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
+          <td border="0" colspan="${maxcols}"><b>${alloc.prefix}</b>: <i>${alloc.type}</i>&nbsp;[${toHex(alloc.base)}]</td>
+         </tr>`
       let index = 0
-      const body = reduce(alloc.rows, (acc, row) => {
-        const p = reduce(row.path, (acc, tag) => {
-          return acc + '<td rowspan="'+row.size+'">'+tag+'</td>'
-        },'')
-        const spath = reduce(row.path, (acc, tag) => acc + '_' + tag, '')
-        const v = '<td port="'+ spath + 'v" rowspan="'+row.size+'" colspan="'+String(maxcols-row.path.length)+'"'
-                +(row.ispadding?' bgcolor="grey"':'')+'>'+(row.pointsto === null ? row.value : toHex(parseInt(row.value)))+'</td>'
-        acc += '<tr>' + box(index, row.size == 1)+p+v+'</tr>'
+      const body = alloc.rows.reduce((acc, row) => {
+        const head    = row.path.reduce((acc, tag) =>
+                          `${acc}<td rowspan="${row.size}">${tag}</td>`, '')
+        const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
+        const colspan = String(maxcols-row.path.length)
+        const color   = row.ispadding ? ' bgcolor="grey"' : ''
+        const value   = row.pointsto === null ? row.value : toHex(parseInt(row.value))
+        const body = `<td port="${spath}v" rowspan="${row.size}"
+                          colspan="${colspan}" ${color}>${value}</td>`
+        acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
-          acc += '<tr>' + box(index) + '</tr>'
+          acc += `<tr>${box(index)}</tr>`
         return acc
       }, '')
-      const lastrow = '<tr border="0"><td border="0" width="7" height="7" fixedsize="true" port="'+String(alloc.size)+'"><font point-size="1">&nbsp;</font></td></tr>'
-      return 'n'+alloc.id+'[label=<<table border="0" cellborder="1" cellspacing="0" >'+title+body+lastrow+'</table>>, tooltip="'+tooltip+'"];'
+      const lastrow =
+        `<tr border="0">
+          <td border="0" width="7" height="7" fixedsize="true"
+              port="${String(alloc.size)}">
+            <font point-size="1">&nbsp;</font>
+          </td>
+         </tr>`
+      return `n${alloc.id}[label=<
+        <table border="0" cellborder="1" cellspacing="0">
+          ${title}${body}${lastrow}
+         </table>>, tooltip="${tooltip}"];`
     }
     type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/}
     const getPointersInAlloc = (alloc: Common.MemoryAllocation) => {
       if (alloc.prefix === null) return []
-      return reduce(alloc.rows, (acc: Pointer[], row) => {
+      return alloc.rows.reduce((acc: Pointer[], row) => {
         if (row.pointsto !== null) {
-          const from = reduce(row.path, (acc, tag) => acc + '_' + tag, 'n'+alloc.id + ':')
+          const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
           const p: Pointer = {from: from, to: row.pointsto, addr: parseInt(row.value)}
           return concat(acc, [p])
         } else {
@@ -555,12 +567,13 @@ export default class View {
         const target = find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         if (target) {
           const offset = p.addr - target.base
-          acc += p.from + "v->n" + target.id + ':' + offset + (target.id != p.to ? '[color="red"]': '') + ';'
+          const color  = target.id != p.to ? '[color="red"]': ''
+          acc += `${p.from}v->n${target.id}:${offset}${color};`
         } else {
           const toprov = find(mem, alloc => alloc.id == p.to)
           if (toprov) {
             const offset = p.addr - toprov.base
-            acc += p.from + "v->n" + toprov.id + ':' + offset + '[color="red"];'
+            acc += `${p.from}v->n${toprov.id}:${offset}[color="red"];`
           } else {
             // TODO: WHAT SHOULD I DO?
             // POINTER TO UNKNOWN MEMORY
