@@ -395,7 +395,7 @@ export class CerberusUI {
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
-      headers: {Accept: 'application/json'},
+      headers: {Accept: 'application/json; charset=utf-8'},
       data: JSON.stringify ({
         'action':  Common.string_of_action(action),
         'source':  view.getSource().getValue(),
