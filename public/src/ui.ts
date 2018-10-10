@@ -405,15 +405,14 @@ export class CerberusUI {
         'model': Common.string_of_model(this.settings.model),
         'interactive': interactive
       },
-      dataType: 'json',
-      success: (data, status, query) => {
-        onSuccess(data);
-        Util.Cursor.done()
-      }
+      dataType: 'json'
+    }).done((data, status, query) => {
+      onSuccess(data);
     }).fail((e) => {
       console.log('Failed request!', e)
       // TODO: this looks wrong
       this.settings.auto_refresh = false
+    }).always(() => {
       Util.Cursor.done()
     })
   }

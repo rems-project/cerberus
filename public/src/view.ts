@@ -163,7 +163,7 @@ export default class View {
       pp: { cabs: '', ail:  '', core: '' },
       ast: { cabs: '', ail:  '', core: '' },
       locs: [],
-      result: '',
+      //result: '',
       console: '',
       lastNodeId: 0,
       tagDefs: undefined,
@@ -259,6 +259,7 @@ export default class View {
       else return acc
     }, '')
     this.state.dotExecGraph = dotHead + dotNodes + dotEdges + '}'
+    this.emit('updateExecutionGraph')
   }
 
   /** Set children visible (depends on the interactive mode) */
@@ -318,7 +319,7 @@ export default class View {
       if (children.length == 1 && this.state.graph.children(active.id).length == 0) {
         // Last step done
         this.getConsole().setActive()
-        this.state.result = active.info.kind
+        this.state.console = active.info.kind
         this.emit('updateExecution')
       } else {
         active.selected = true
@@ -327,6 +328,9 @@ export default class View {
       this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
       this.emit('clear')
       if (active.loc) this.emit('markInteractive', active.loc)
+    } else {
+      // HACKY:
+      this.state.graph.nodes.map(n => {if (n.state != null) n.selected = n.isVisible = true} )
     }
     this.state.history.push(activeId)
     this.updateExecutionGraph();
@@ -404,7 +408,6 @@ export default class View {
       if (active.can_step) {
         active.can_step = false
         this.executeInteractiveStep(activeId)
-        this.emit('updateExecutionGraph')
       } else  {
         this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
         this.setMemory(active.mem)
@@ -448,7 +451,6 @@ export default class View {
     if (active.loc) this.emit('markInteractive', active.loc)
     this.updateExecutionGraph()
     this.emit('updateArena')
-    this.emit('updateExecutionGraph')
   }
 
   stepForward() {
@@ -608,8 +610,7 @@ export default class View {
         this.state.console = ''
         break
       case 'execution':
-        this.state.result = res.result
-        this.state.console = ''
+        this.state.console = res.result
         break
       case 'interactive':
         this.state.tagDefs = res.tagDefs
@@ -618,7 +619,6 @@ export default class View {
         this.startInteractive(res.steps)
         break;
       case 'stepping':
-        this.state.result = res.result
         this.state.console = ''
         this.updateInteractive(res.activeId, res.steps)
         break

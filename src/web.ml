@@ -222,7 +222,10 @@ let get_headers ?(gzipped=false) contentType =
 
 let respond_json ?(gzipped=false) json =
   let headers = get_headers ~gzipped "application/json" in
-  let data = (if gzipped then Ezgzip.compress ~level:9 else id) @@ Yojson.to_string json in
+  let response_string = Yojson.to_string json in
+  Debug.print 10 "[ RESPONSE ]";
+  Debug.print 10 response_string;
+  let data = (if gzipped then Ezgzip.compress ~level:9 else id) response_string in
   (Server.respond_string ~flush:true ~headers) `OK data ()
 
 let respond_file ~gzipped filename =

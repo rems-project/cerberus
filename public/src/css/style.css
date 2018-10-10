@@ -72,6 +72,12 @@ body {
                                   supported by Chrome and Opera */ 
 }
 
+.btn.clicked {
+  box-shadow: inset 2px 10px 5px rgba(0,0,0,.3);
+  color: #d1d1d1;
+  border-radius: 5px;
+}
+
 .btn.disabled {
   color: #aaaaaa !important;
   cursor: auto;
@@ -112,7 +118,7 @@ body {
   position: absolute;
   z-index: 100;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  max-height: 250px;
+  /*max-height: 250px;*/
   overflow-y: scroll;
   /* hack */
   margin-left: -10px;
