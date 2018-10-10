@@ -17,6 +17,8 @@
             <hr>
             <div id="isoC" class="btn">C11 International Standard (N1570 draft)</div>
             <div id="implementation" class="btn">Cerberus implementation-defined choices</div>
+            <hr>
+            <div id="help" class="btn">Help</div>
           </div>
         </div>
       </li>
@@ -60,10 +62,32 @@
         </div>
       </li>
       <li class="border"><div id="compile" class="btn">Compile (Godbolt)</div></li>
+      <li><div id="step-back" class="btn disabled">Step back</div></li>
+      <li><div id="step-forward" class="btn">Step forward<div></li>
+      <li class="border"><div id="restart" class="btn">Restart</div></li>
       <li>
         <div class="btn dropdown">
-          <span>Interactive Options</span>
+          <span>Options</span>
           <div class="dropdown-content">
+            <div id="concrete" class="btn">
+              <input id="cb_concrete" type="checkbox">Use Concrete Model
+            </div>
+            <div id="rewrite" class="btn">
+              <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+            </div>
+            <div id="sequentialise" class="btn">
+              <input id="cb_sequentialise" type="checkbox">Sequentialise
+            </div>
+            <div id="auto_refresh" class="btn">
+              <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+            </div>
+            <div id="colour" class="btn">
+              <input id="cb_colour" type="checkbox">Colour All
+            </div>
+            <div id="colour_cursor" class="btn">
+              <input id="cb_colour_cursor" type="checkbox">Colour Cursor
+            </div>
+            <hr>
             <div id="step-mem-action" class="btn">
               <input id="r-step-mem-action" type="radio">Step to the next memory action
             </div>
@@ -87,9 +111,8 @@
           </div>
         </div>
       </li>
-      <li><div id="step-back" class="btn disabled">Step back</div></li>
-      <li><div id="step-forward" class="btn">Step forward<div></li>
-      <li class="border"><div id="restart" class="btn">Restart</div></li>
+
+      <!--
       <li>
         <div class="btn dropdown">
           <span>Settings</span>
@@ -115,6 +138,7 @@
           </div>
         </div>
       </li>
+        -->
       <li>
         <div class="btn dropdown">
           <span>Share</span>
@@ -129,7 +153,7 @@
             <span id="sharebtn"></span>
           </div>
         </div>
-      <li><div id="help" class="btn">Help</div></li>
+      <!--<li><div id="help" class="btn">Help</div></li>-->
       <li class="right"><div id="rems" class="btn">REMS</div></li>
     </ul>
   </div><!-- header -->

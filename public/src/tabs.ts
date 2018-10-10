@@ -73,14 +73,12 @@ class SvgGraph extends Tab {
     super (name, ee)
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="btn inline">Zoom In</div>')
-    const reset = $('<div class="btn inline">Reset</div>')
-    //const fit = $('<div class="btn inline">Fit</div>')
-    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
     const zoomOut = $('<div class="btn inline">Zoom Out</div>')
+    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
+    const reset = $('<div class="reset btn inline">Reset</div>')
     controls.append(zoomIn)
     controls.append(zoomOut)
     controls.append(range)
-    //controls.append(fit)
     controls.append(reset)
     this.container = $('<div align="center" class="graph"></div>')
     this.dom.append(controls)
@@ -145,20 +143,61 @@ export class Interactive extends SvgGraph {
 }
 
 class Memory extends SvgGraph {
-  fit: boolean
+  fit: JQuery<HTMLElement>
   svgPos: { x: number, y: number, scale: number}
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
+    this.fit = $('<div class="btn inline clicked">Fit</div>')
+    this.dom.find('.reset').before(this.fit)
+    this.fit.on('click', () => this.toggleFitMode())
     ee.on('updateMemory', this, s => this.updateMemory(s))
-    this.fit = true
     this.svgPos = { x: 0, y: 0, scale: 1}
+   }
+
+   inFitMode() {
+      return this.fit.hasClass('clicked')
+   }
+
+   toggleFitMode() {
+      if (this.inFitMode())
+        this.fit.removeClass('clicked')
+      else
+        this.fit.addClass('clicked')
+      // @ts-ignore
+      this.svg.panzoom('reset')
+      this.fitSVG()
+   }
+
+   disableFitMode() {
+      if (this.inFitMode())
+        this.toggleFitMode()
+   }
+
+   fitSVG() {
+    const svgHeight = this.svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const zoom = containerHeight/svgHeight
+      if (zoom < this.svgPos.scale) {
+        // @ts-ignore
+        this.svg.panzoom('zoom', zoom, {silent: true})
+        const svgOffset = this.svg.offset()
+        const containerOffset = this.container.offset()
+        if (svgOffset && containerOffset) {
+          const delta = svgOffset.top - containerOffset.top
+          // @ts-ignore
+          this.svg.panzoom('pan', 0, -delta, { relative: true })
+        }
+      }
+    }
    }
 
    updateMemory (s:Common.State) {
     this.setSVG(s.dotMem)
     this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
       this.svgPos.scale = scale
+      this.disableFitMode()
     })
     this.svg.on('panzoompan', (elem, panzoom, x, y) => {
       this.svgPos.x = x
@@ -167,28 +206,8 @@ class Memory extends SvgGraph {
     this.svg.on('panzoomreset', () => {
       this.svgPos = { x: 0, y: 0, scale: 1}
     })
-    if (this.fit) {
-      console.log('Fit:')
-      const svgHeight = this.svg.height()
-      const containerHeight = this.container.height()
-      console.log('SVG HEIGHT: ' + svgHeight)
-      console.log('CONTAINER HEIGHT: ' + containerHeight)
-      console.log('ZOOM: ' + this.svgPos.scale)
-      if (svgHeight && containerHeight) {
-        const zoom = containerHeight/svgHeight
-        console.log(zoom)
-        if (zoom < this.svgPos.scale) {
-          console.log('APPLYING ZOOM')
-          // @ts-ignore
-          this.svg.panzoom('zoom', zoom, {silent: true})
-          console.log('PANNING...')
-          // @ts-ignore
-          const delta = this.svg.offset().top - this.container.offset().top
-          console.log(delta)
-          // @ts-ignore
-          this.svg.panzoom('pan', 0, -delta, { relative: true })
-        }
-      }
+    if (this.inFitMode()) {
+      this.fitSVG()
     } else {
       // @ts-ignore
       this.svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
@@ -474,6 +493,7 @@ export class Execution extends ReadOnly {
 class Console extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Console', '', ee)
+    this.editor.setOption('lineWrapping', false)
     ee.on('update', this, this.update)
     ee.on('updateExecution', this, this.update) // in case of failures
   }
@@ -490,6 +510,7 @@ class Console extends ReadOnly {
 }*/
 
   update (s: Common.State) : void {
+    /*
     if (s.result == '') {
       this.setValue('')
       return
@@ -521,7 +542,8 @@ class Console extends ReadOnly {
       result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
       cnt = 1;
     } 
-    this.setValue(result)
+    */
+    this.setValue(s.console)
   }
 }
 
@@ -898,7 +920,7 @@ class Asm extends ReadOnly {
   }
 
   createDropdownContent() {
-    const dropdown = $('<div class="dropdown-content"></div>')
+    const dropdown = $('<div class="dropdown-content" style="max-height:250px;"></div>')
     const compilers = UI.compilers
     if (!compilers) return dropdown
     for (let i = 0; i < compilers.length; i++) {

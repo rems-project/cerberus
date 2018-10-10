@@ -110,7 +110,7 @@ namespace Common {
     pp: IR
     ast: IR
     locs: Locations[]
-    result: string
+    //result: string
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
