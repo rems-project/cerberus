@@ -709,6 +709,8 @@ let std_of_undefined_behaviour = function
       Just "§6.5.2.2#6, sentence 3"
   | UB041_function_not_compatible ->
       Just "§6.5.2.2#9"
+  | UB043_indirection_invalid_value ->
+      Just "§6.5.3.2#4, sentence 4"
   | UB050_pointers_substraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
   | UB055_invalid_integer_constant_expression ->
@@ -1004,6 +1006,8 @@ let ub_short_string = function
       "the number of arguments does not equal the number of parameters"
   | UB041_function_not_compatible ->
       "incompatible function type"
+  | UB043_indirection_invalid_value ->
+      "the operand of the unary '*' operator has an invalid value"
   | UB055_invalid_integer_constant_expression ->
       "invalid integer constant expression"
   | UB059_incomplete_no_linkage_identifier ->
