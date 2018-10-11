@@ -7,13 +7,13 @@ int main() {
   void *yp=malloc(sizeof(int)); // allocation Q
   *((int*)xp)=1;
   *((int*)yp)=2;
-  ptrdiff_t offset = 8; 
+  ptrdiff_t offset = 32; 
     // (unsigned char*)yp - (unsigned char*)xp; 
   unsigned char *p1 = (unsigned char*)xp;// provenance P
   unsigned char *p2 = p1 + offset;         
   int *p = (int*)p2;
   int *q = (int*)yp;
-  printf("Addresses: p=%p q=%p\n",(void*)p,(void*)q);
+  printf("Addresses: xp=%p yp=%p p=%p q=%p\n",xp,yp,(void*)p,(void*)q);
   if (memcmp(&p, &q, sizeof(p)) == 0) {
     *p = 11;  // is this free of undefined behaviour?
     printf("*xp=%d *yp=%d *p=%d *q=%d\n",
