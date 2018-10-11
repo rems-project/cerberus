@@ -279,6 +279,6 @@ int main() {
   int *q;
   user_memcpy2((unsigned char*)&q, (unsigned char*)&p, 
               sizeof(p));
-  *q = 11; // is this free of undefined behaviour?
+  *q = 11; // does this have undefined behaviour?
   printf("*p=%d  *q=%d\n",*p,*q);
 }

@@ -13,7 +13,7 @@ int main() {
   if (q != NULL) {
     int *p = (int *)(ux + offset);
     if (memcmp(&p, &q, sizeof(p)) == 0) {
-      *p = 11; // is this free of undefined behaviour?
+      *p = 11; // does this have undefined behaviour?
       printf("x=%d  y=%d  *p=%d  *q=%d\n",x,y,*p,*q); 
     }
   }
