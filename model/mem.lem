@@ -107,7 +107,7 @@ declare ocaml target_rep function le_ptrval = `Ocaml_mem.le_ptrval`
 declare ocaml target_rep function ge_ptrval = `Ocaml_mem.ge_ptrval`
 declare ocaml target_rep function diff_ptrval = `Ocaml_mem.diff_ptrval`
 
-val validForDeref_ptrval: pointer_value -> bool
+val validForDeref_ptrval: Core_ctype.ctype -> pointer_value -> memM bool
 declare ocaml target_rep function validForDeref_ptrval = `Ocaml_mem.validForDeref_ptrval`
 
 val isWellAligned_ptrval: Core_ctype.ctype -> pointer_value -> memM bool

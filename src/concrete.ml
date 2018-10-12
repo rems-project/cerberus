@@ -242,6 +242,7 @@ module Concrete : Memory = struct
     | Prov_none
     | Prov_some of Nat_big_num.num
     | Prov_device
+    | Prov_wildcard
   
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
@@ -369,6 +370,8 @@ module Concrete : Memory = struct
         N.to_string alloc_id
     | Prov_device ->
         "dev"
+    | Prov_wildcard ->
+        "wildcard"
   
   (* pretty printing *)
   open PPrint
@@ -378,7 +381,7 @@ module Concrete : Memory = struct
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
-          (*!^ "Cfunction" ^^ P.parens ( *) !^ (Pp_symbol.to_string_pretty sym) (* ) *)
+          !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
           (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
@@ -755,10 +758,7 @@ module Concrete : Memory = struct
   let dot_of_mem_state st =
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
-      let ty = match alloc.ty with
-        | Some ty -> ty
-        | None -> assert false
-      in
+      let Some ty = alloc.ty in
       let (mval, bs') = combine_bytes ty bs in
       mval
     in
@@ -1160,18 +1160,6 @@ module Concrete : Memory = struct
       | _ ->
           fail MerrPtrdiff
   
-  
-  let validForDeref_ptrval = function
-    | PV (_, PVnull _)
-    | PV (_, PVfunction _) ->
-        false
-    | PV (Prov_device, PVconcrete _) ->
-        true
-    | PV (Prov_some _, PVconcrete _) ->
-        true
-    | PV (Prov_none, _) ->
-        false
-  
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
     match Core_ctype.unatomic ref_ty with
@@ -1188,23 +1176,89 @@ module Concrete : Memory = struct
                 return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
           end
   
+  (* Following §6.5.3.3, footnote 102) *)
+  let validForDeref_ptrval ref_ty = function
+    | PV (_, PVnull _)
+    | PV (_, PVfunction _) ->
+        return false
+    | PV (Prov_device, PVconcrete _) as ptrval ->
+        isWellAligned_ptrval ref_ty ptrval
+    | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
+        is_dead alloc_id >>= begin function
+          | true ->
+              return false
+          | false ->
+              isWellAligned_ptrval ref_ty ptrval
+(*
+              get_allocation alloc_id >>= fun alloc ->
+              begin match alloc.ty with
+                | Some ty ->
+                    isWellAligned_ptrval ty ptrval
+                | None ->
+                    return true
+              end
+*)
+        end
+    | PV (Prov_none, _) ->
+        return false
+  
+  
+  (* TODO: maybe move somewhere else *)
+  let find_overlaping addr st =
+    IntMap.fold (fun alloc_id alloc acc ->
+      match acc with
+        | Some _ ->
+            acc
+        | None ->
+            if    not (List.mem alloc_id st.dead_allocations)
+               && N.less_equal alloc.base addr && N.less_equal addr (N.add alloc.base alloc.size) then
+              Some alloc_id
+            else
+              None
+    ) st.allocations None
+  
   let ptrcast_ival _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
-      (* STD \<section>6.3.2.3#5 *)
+      (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
-    match prov with
-      | Prov_none ->
-          (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-          if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-            return (PV (Prov_device, PVconcrete n))
-          else if N.equal n N.zero then
+    let sw_opt =
+      Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) in
+    match sw_opt with
+      | Some (Switches.SW_no_integer_provenance variant) ->
+          (* TODO: device memory? *)
+          if N.equal n N.zero then
             return (PV (Prov_none, PVnull ref_ty))
           else
-            return (PV (Prov_none, PVconcrete n))
-      | _ ->
-          return (PV (prov, PVconcrete n))
+            get >>= fun st ->
+            (match find_overlaping n st with
+              | None ->
+                  if variant = 0 then
+                    return Prov_none
+                  else if variant = 1 then
+                    fail MerrPtrFromInt
+                  else
+                    (* TODO: assuming variant = 4 *)
+                    return (failwith "Prov_wildcard")
+              | Some alloc_id ->
+                  return (Prov_some alloc_id)) >>= fun prov ->
+            return (PV (prov, PVconcrete n))
+      | Some _ ->
+          assert false
+      | None ->
+          begin match prov with
+            | Prov_none ->
+                (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+                if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+                  return (PV (Prov_device, PVconcrete n))
+                else if N.equal n N.zero then
+                  return (PV (Prov_none, PVnull ref_ty))
+                else
+                  return (PV (Prov_none, PVconcrete n))
+            | _ ->
+                return (PV (prov, PVconcrete n))
+          end
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1360,10 +1414,8 @@ let combine_prov prov1 prov2 =
         Prov_none
     | (Prov_none, Prov_some id) ->
         Prov_some id
-(*
     | (Prov_none, Prov_wildcard) ->
         Prov_wildcard
-*)
     | (Prov_none, Prov_device) ->
         Prov_device
     | (Prov_some id, Prov_none) ->
@@ -1373,10 +1425,8 @@ let combine_prov prov1 prov2 =
           Prov_some id1
         else
           Prov_none
-(*
     | (Prov_some _, Prov_wildcard) ->
         Prov_wildcard
-*)
     | (Prov_some _, Prov_device) ->
         Prov_device
     | (Prov_device, Prov_none) ->
@@ -1385,13 +1435,10 @@ let combine_prov prov1 prov2 =
         Prov_device
     | (Prov_device, Prov_device) ->
         Prov_device
-(*
     | (Prov_device, Prov_wildcard) ->
         Prov_wildcard
-    
     | (Prov_wildcard, _) ->
         Prov_wildcard
-*)
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
@@ -1476,10 +1523,7 @@ let combine_prov prov1 prov2 =
       | Bool ->
           IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
       | _ ->
-          let nbytes = match Impl.sizeof_ity ity with
-            | Some n -> n
-            | None -> assert false
-          in
+          let Some nbytes = Impl.sizeof_ity ity in
           let nbits = 8 * nbytes in
           let is_signed = AilTypesAux.is_signed_ity ity in
           let (min, max) =

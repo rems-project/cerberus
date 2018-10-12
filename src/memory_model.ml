@@ -82,7 +82,7 @@ module type Memory = sig
   val ge_ptrval: pointer_value -> pointer_value -> bool memM
   val diff_ptrval: Core_ctype.ctype0 -> pointer_value -> pointer_value -> integer_value memM
   
-  val validForDeref_ptrval: pointer_value -> bool
+  val validForDeref_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
   val isWellAligned_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
   
   (* Casting operations *)

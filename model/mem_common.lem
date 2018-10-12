@@ -59,6 +59,7 @@ type mem_error =
   | MerrUndefinedRealloc
   
   | MerrIntFromPtr
+  | MerrPtrFromInt
   
   | MerrWIP of string
 
@@ -89,6 +90,8 @@ instance (Show mem_error)
         "MerrUndefinedRealloc"
     | MerrIntFromPtr ->
         "MerrIntFromPtr"
+    | MerrPtrFromInt ->
+        "MerrPtrFromInt"
   end
 end
 
@@ -104,6 +107,9 @@ let undefinedFromMem_error = function
       Just [Undefined.UB010_pointer_to_dead_object]
   | MerrIntFromPtr ->
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
+  | MerrPtrFromInt ->
+      Just [Undefined.UB_CERB001_integer_to_dead_pointer]
+
   | MerrUndefinedFree loc Free_static_allocation ->
       Just [Undefined.UB179a_static_allocation]
   | MerrUndefinedFree loc Free_dead_allocation ->
@@ -157,7 +163,7 @@ type memop =
   | Ptrdiff     (* (address, address) -> eff integer *)
   | IntFromPtr  (* (ctype, ctype, address) -> eff integer *) (* first type is that of the referenced type, second on is type of integer *)
   | PtrFromInt  (* (ctype, ctype, integer) -> eff address *) (* first type is that of integer, second on is type of reference *)
-  | PtrValidForDeref (* address -> eff boolean *)
+  | PtrValidForDeref (* (ctype, address) -> eff boolean *)
   
   | PtrWellAligned (* (ctype, address) -> eff boolean *)
   

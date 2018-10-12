@@ -999,7 +999,10 @@ if AilTypesAux.is_pointer_to_function (ctype_of e) then
           (* maybe need the ailrvalue stuff *)
           translate_function_designator ctx stdlib tagDefs e
           (* error "WIP: Elaboration, A.Indirection, function designator" *)
-else
+else match AilTypesAux.referenced_type (ctype_of e) with
+  | (*BISECT-IGNORE*) Nothing ->
+      illTypedAil loc "AilEunary Indirection, not a pointer type"
+  | Just ref_ty ->
           E.fresh_symbol >>= fun e_sym    ->
           E.fresh_symbol >>= fun obj_sym  ->
           E.fresh_symbol >>= fun test_sym -> (* symbol for the PtrValidForDeref test *)
@@ -1012,7 +1015,7 @@ else
                     [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object C.OTy_pointer))
                       , C.Expr [] (
                           C.Ewseq (Caux.mk_sym_pat test_sym C.BTy_boolean)
-                            (C.Expr [] (C.Ememop Mem_common.PtrValidForDeref [Caux.mk_sym_pe obj_sym])) (
+                            (C.Expr [] (C.Ememop Mem_common.PtrValidForDeref [Caux.mk_ail_ctype_pe ref_ty; Caux.mk_sym_pe obj_sym])) (
                               C.Expr [] (
                                 C.Eif (Caux.mk_sym_pe test_sym)
                                   begin
@@ -1031,6 +1034,7 @@ else
                 )
               )
             )
+end
 
 (*
 The unary * operator denotes indirection.
