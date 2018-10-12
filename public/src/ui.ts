@@ -236,11 +236,6 @@ export class CerberusUI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
-    // About
-    $('#about').on('click', () => {
-      window.open('https://www.cl.cam.ac.uk/~pes20/cerberus/')
-    })
-
     // Update every 2s
     window.setInterval(() => {
       if (this.settings.auto_refresh) this.elab()
