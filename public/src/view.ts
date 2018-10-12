@@ -274,8 +274,8 @@ export default class View {
     if (mem === undefined) return
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
     const createNode = (alloc: Common.MemoryAllocation) => {
-      if (alloc.prefix == null) // HACK! TODO: check malloc case
-        return ''
+      //if (alloc.prefix == null) // HACK! TODO: check malloc case
+      //  return ''
       const box = (n:number, ischar=false) =>
         `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
           <font point-size="1">&nbsp;</font>

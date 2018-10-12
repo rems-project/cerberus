@@ -1696,8 +1696,8 @@ let combine_prov prov1 prov2 =
     let size = sizeof ty in
     let bs = fetch_bytes bytemap alloc.base size in
     let prefix = match alloc.prefix with
-      | Symbol.PrefSource []
-      | Symbol.PrefOther _ -> None
+      | Symbol.PrefSource [] -> None
+      | Symbol.PrefOther s -> Some s
       | Symbol.PrefSource xs -> Some (Pp_symbol.to_string_pretty @@ List.hd (List.rev xs))
     in
     let (mval, _) = combine_bytes ty bs in
