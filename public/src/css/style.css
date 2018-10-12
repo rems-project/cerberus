@@ -320,8 +320,6 @@ code {
   background: whitesmoke;
   float: right;
   font-size: 0.9em;
-  padding: 1em;
-  margin-left: 1em;
   margin-bottom: 1em;
 }
 
@@ -329,14 +327,12 @@ code {
   margin-bottom: 0;
 }
 
-.page ul {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
-}
-
 .page input {
   margin-right: 1em;
+}
+
+.page p {
+  margin: 8px 0 8px 0;
 }
 
 /*********** Graphs ************/
