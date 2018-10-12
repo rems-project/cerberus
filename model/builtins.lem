@@ -819,42 +819,85 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
 
 
 
-(*
-    | "__cerbvar_INT_LEAST8_MIN" -> Just (A.AilEbuiltin "INT_LEAST8_MIN")
-    | "__cerbvar_INT_LEAST16_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
-    | "__cerbvar_INT_LEAST32_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
-    | "__cerbvar_INT_LEAST64_MIN" -> Just (A.AilEbuiltin "INT_LEAST_MIN")
-    | "__cerbvar_INT_LEAST8_MAX" -> Just (A.AilEbuiltin "INT_LEAST8_MAX")
-    | "__cerbvar_INT_LEAST16_MAX" -> Just (A.AilEbuiltin "INT_LEAST16_MAX")
-    | "__cerbvar_INT_LEAST32_MAX" -> Just (A.AilEbuiltin "INT_LEAST32_MAX")
-    | "__cerbvar_INT_LEAST64_MAX" -> Just (A.AilEbuiltin "INT_LEAST64_MAX")
-    | "__cerbvar_UINT_LEAST8_MAX" -> Just (A.AilEbuiltin "UINT_LEAST8_MAX")
-    | "__cerbvar_UINT_LEAST16_MAX" -> Just (A.AilEbuiltin "UINT_LEAST16_MAX")
-    | "__cerbvar_UINT_LEAST32_MAX" -> Just (A.AilEbuiltin "UINT_LEAST32_MAX")
-    | "__cerbvar_UINT_LEAST64_MAX" -> Just (A.AilEbuiltin "UINT_LEAST64_MAX")
-    | "__cerbvar_INT_FAST8_MIN" -> Just (A.AilEbuiltin "INT_FAST8_MIN")
-    | "__cerbvar_INT_FAST16_MIN" -> Just (A.AilEbuiltin "INT_FAST16_MIN")
-    | "__cerbvar_INT_FAST32_MIN" -> Just (A.AilEbuiltin "INT_FAST32_MIN")
-    | "__cerbvar_INT_FAST64_MIN" -> Just (A.AilEbuiltin "INT_FAST64_MIN")
-    | "__cerbvar_INT_FAST8_MAX" -> Just (A.AilEbuiltin "INT_FAST8_MAX")
-    | "__cerbvar_INT_FAST16_MAX" -> Just (A.AilEbuiltin "INT_FAST16_MAX")
-    | "__cerbvar_INT_FAST32_MAX" -> Just (A.AilEbuiltin "INT_FAST32_MAX")
-    | "__cerbvar_INT_FAST64_MAX" -> Just (A.AilEbuiltin "INT_FAST64_MAX")
-    | "__cerbvar_UINT_FAST8_MAX" -> Just (A.AilEbuiltin "UINT_FAST8_MAX")
-    | "__cerbvar_UINT_FAST16_MAX" -> Just (A.AilEbuiltin "UINT_FAST16_MAX")
-    | "__cerbvar_UINT_FAST32_MAX" -> Just (A.AilEbuiltin "UINT_FAST32_MAX")
-    | "__cerbvar_UINT_FAST64_MAX" -> Just (A.AilEbuiltin "UINT_FAST64_MAX")
-    | "__cerbvar_INTPTR_MIN" -> Just (A.AilEbuiltin "INTPTR_MIN")
-    | "__cerbvar_INTPTR_MAX" -> Just (A.AilEbuiltin "INTPTR_MAX")
-    | "__cerbvar_UINTPTR_MAX" -> Just (A.AilEbuiltin "UINTPTR_MAX")
-    | "__cerbvar_INTMAX_MIN" -> Just (A.AilEbuiltin "INTMAX_MIN")
-    | "__cerbvar_INTMAX_MAX" -> Just (A.AilEbuiltin "UNTMAX_MAX")
-    | "__cerbvar_UINTMAX_MAX" -> Just (A.AilEbuiltin "UINTMAX_MAX")
-    | "__cerbvar_PTRDIFF_MIN" -> Just (A.AilEbuiltin "PTRDIFF_MIN")
-    | "__cerbvar_PTRDIFF_MAX" -> Just (A.AilEbuiltin "PTRDIFF_MAX")
-    | "__cerbvar_SIG_ATOMIC_MIN" -> Just (A.AilEbuiltin "SIG_ATOMIC_MIN")
-    | "__cerbvar_SIG_ATOMIC_MAX" -> Just (A.AilEbuiltin "SIG_ATOMIC_MAX")
-    | "__cerbvar_SIZE_MAX" -> Just (A.AilEbuiltin "SIZE_MAX")
+    | "__cerbvar_INT_LEAST8_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST16_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST32_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST64_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST8_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST16_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST32_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_LEAST64_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_leastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_LEAST8_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_leastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_LEAST16_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_leastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_LEAST32_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_leastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_LEAST64_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_leastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST8_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST16_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST32_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST64_MIN" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMin ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST8_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST16_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST32_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_INT_FAST64_MAX" ->
+        let ity = ATypes.Signed (ATypes.Int_fastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_FAST8_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_fastN_t 8) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_FAST16_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_fastN_t 16) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_FAST32_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_fastN_t 32) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+    | "__cerbvar_UINT_FAST64_MAX" ->
+        let ity = ATypes.Unsigned (ATypes.Int_fastN_t 64) in
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ity)), Just (AilTypesAux.mk_ctype_integer ity))
+
+    | "__cerbvar_SIG_ATOMIC_MIN" -> Nothing
+    | "__cerbvar_SIG_ATOMIC_MAX" -> Nothing
+
+    | "__cerbvar_SIZE_MAX" ->
+        Just (A.AilEconst (A.ConstantInteger (A.IConstantMax ATypes.Size_t)), Just (AilTypesAux.mk_ctype_integer ATypes.Size_t))
+    (*
     | "__cerbvar_WCHAR_MIN" -> Just (A.AilEbuiltin "WCHAR_MIN")
     | "__cerbvar_WCHAR_MAX" -> Just (A.AilEbuiltin "WCHAR_MAX")
     | "__cerbvar_WINT_MIN" -> Just (A.AilEbuiltin "WINT_MIN")
@@ -872,18 +915,17 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_SEEK_SET" -> Just (A.AilEbuiltin "SEEK_SET")
     | "__cerbvar_TMP_MAX" -> Just (A.AilEbuiltin "TMP_MAX")
     | "__cerbvar_stderr" -> Just (A.AilEbuiltin "srderr")
-*)
+    *)
     | "__cerbvar_stdin" -> Just (A.AilEbuiltin "stdin", Nothing)
     | "__cerbvar_stdout" -> Just (A.AilEbuiltin "stdout", Nothing)
-(*
+    (*
     | "__cerbvar_EXIT_FAILURE" -> Just (A.AilEbuiltin "EXIT_FAILURE")
     | "__cerbvar_MB_CUR_MAX" -> Just (A.AilEbuiltin "MB_CUR_MAX")
     | "__cerbvar_EXIT_SUCCESS" -> Just (A.AilEbuiltin "EXIT_SUCCESS")
     | "__cerbvar_RAND_MAX" -> Just (A.AilEbuiltin "RAND_MAX")
     | "__cerbvar_ONCE_FLAG_INIT" -> Just (A.AilEbuiltin "ONCE_FLAG_INIT")
     | "__cerbvar_TSS_DTOR_ITERATIONS" -> Just (A.AilEbuiltin "tss_DTOR_ITERATIONS")
-*)
-
+    *)
     | _                   -> Nothing
 end
 
