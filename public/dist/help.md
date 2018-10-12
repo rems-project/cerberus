@@ -168,15 +168,16 @@ Contributors:
 * Kyndylan Nienhuis
 * Justus Matthiesen
 * James Lingard
+* Stella Lau
 * David Chisnall
 * Robert N. M. Watson
 * Peter Sewell
 
 The current main developers are Kayvan Memarian and Victor Gomes.
 Cerberus originated with Justus Matthiesen's 2010-11 Part II project
-dissertation and his 2011-12 MPhil dissertation; James Lingard's 2013-14 MPhil
+dissertation and his 2011-12 MPhil dissertation.  James Lingard's 2013-14 MPhil
 dissertation developed a certifying translation validator for simple C programs
-for the Clang front-end, w.r.t. the Cerberus and Vellvm semantics.
+for the Clang front-end, w.r.t. the Cerberus and Vellvm semantics, and Stella Lau's 2017-18 Part III dissertation developed a translation from Core to Z3 SMT.
 
 
 Funding
