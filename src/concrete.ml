@@ -1173,6 +1173,10 @@ module Concrete : Memory = struct
             | PV (_, PVfunction _) ->
                 fail (MerrOther "called isWellAligned_ptrval on function pointer")
             | PV (_, PVconcrete addr) ->
+(*
+                Printf.printf "addr: %s\n" (Nat_big_num.to_string addr);
+                Printf.printf "align: %d\n" (alignof ref_ty);
+*)
                 return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
           end
   
@@ -1211,7 +1215,7 @@ module Concrete : Memory = struct
             acc
         | None ->
             if    not (List.mem alloc_id st.dead_allocations)
-               && N.less_equal alloc.base addr && N.less_equal addr (N.add alloc.base alloc.size) then
+               && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
               Some alloc_id
             else
               None
