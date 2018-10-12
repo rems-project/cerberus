@@ -116,6 +116,7 @@ namespace Common {
     tagDefs?: Bytes
     ranges?: Range[]
     dirty: boolean
+    switches: string [],
     arena: string
     // Interactive mode
     hide_tau: boolean // Hide tau transition option

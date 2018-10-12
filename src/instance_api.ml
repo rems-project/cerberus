@@ -18,6 +18,7 @@ type conf =
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)
     timeout: int;             (* instance execution timeout *)
     tagDefs: string;          (* marshalled tag defs *)
+    switches: string list;
   }
 
 type active_node =

@@ -79,6 +79,7 @@ let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack conf.pipeline Random;
+  Switches.set conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
     Pipeline.load_core_stdlib () >>= fun core_stdlib ->

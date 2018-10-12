@@ -1,6 +1,6 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
-import { filter, reduce, find, concat } from "lodash"
+import { pull, filter, reduce, find, concat } from "lodash"
 import { Node, Graph, ID, GraphFragment } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
@@ -47,6 +47,7 @@ export default class View {
       if (!this.dirty) {
         this.state.graph.clear()
         this.state.history = []
+        delete this.state.tagDefs
         this.state.arena = this.state.dotMem = this.state.dotExecGraph = ''
         this.emit('updateArena')
         this.emit('updateMemory')
@@ -175,6 +176,7 @@ export default class View {
       locs: [],
       //result: '',
       console: '',
+      switches: [],
       lastNodeId: 0,
       tagDefs: undefined,
       dirty: true,
@@ -187,6 +189,17 @@ export default class View {
       dotMem: '',
       dotExecGraph: '',
     }
+  }
+
+  toggleSwitch (sw: string): void {
+    if (!this.state.switches.includes(sw))
+      this.state.switches.push(sw)
+    else
+      pull(this.state.switches, sw)
+  }
+
+  getSwitches(): string[] {
+    return this.state.switches
   }
 
   findTab(title: string) {

@@ -47,6 +47,7 @@ type incoming_msg =
     rewrite: bool;
     sequentialise: bool;
     interactive: active_node option;
+    ui_switches: string list;
   }
 
 let parse_incoming_msg content =
@@ -56,6 +57,7 @@ let parse_incoming_msg content =
                 rewrite=        false;
                 sequentialise=  false;
                 interactive=    None;
+                ui_switches=    []
               }
   in
   let empty_node_id = { last_id= 0;
@@ -84,6 +86,7 @@ let parse_incoming_msg content =
     | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
     | ("model", [model])     -> { msg with model= model; }
+    | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
     | ("interactive[lastId]", [v]) ->
       { msg with interactive= Some { (get msg.interactive) with last_id = int_of_string v } }
     | ("interactive[state]", [v]) ->
@@ -268,7 +271,8 @@ let cerberus ?(gzipped=false) ~conf ~flow content =
   let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
-                              sequentialise_core = msg.sequentialise
+                              sequentialise_core = msg.sequentialise;
+                              switches = msg.ui_switches;
                   }
   in
   let timeout   = float_of_int conf.timeout in
@@ -384,6 +388,7 @@ let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
     let conf = { rewrite_core = false;
                  sequentialise_core = false;
                  tagDefs = "";
+                 switches = [];
                  cpp_cmd; core_impl; cerb_debug_level; timeout;
                }
     in

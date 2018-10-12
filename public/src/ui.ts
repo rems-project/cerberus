@@ -12,7 +12,7 @@ export interface Settings {
   colour: boolean,
   colour_cursor: boolean,
   short_share: boolean
-  model: Common.Model
+  model: Common.Model,
 }
 
 export class CerberusUI {
@@ -217,6 +217,14 @@ export class CerberusUI {
       $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     })
 
+    $('.switch').on('click', (e) => {
+      const sw = e.currentTarget.id, view = this.getView()
+      view.toggleSwitch(sw)
+      $('#cb_' + sw).prop('checked', view.getSwitches().includes(sw))
+      view.emit('clear')
+      view.emit('dirty')
+    })
+
     // Preferences
     $('#preferences').on('click', () => this.getView().newTab('Preferences'))
 
@@ -398,6 +406,7 @@ export class CerberusUI {
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
     const view = this.getView()
     Util.Cursor.wait()
+    console.log(view.getSwitches())
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
@@ -409,6 +418,7 @@ export class CerberusUI {
         'rewrite': this.settings.rewrite,
         'sequentialise': this.settings.sequentialise,
         'model': Common.string_of_model(this.settings.model),
+        'switches': view.getSwitches(),
         'interactive': interactive
       },
       dataType: 'json'
@@ -510,7 +520,7 @@ function getDefaultSettings(): Settings {
              colour: false,
              colour_cursor: true,
              short_share: false,
-             model: Common.Model.Concrete 
+             model: Common.Model.Concrete,
            }
 }
 
