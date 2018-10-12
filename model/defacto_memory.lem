@@ -1623,11 +1623,11 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
         fail (MerrWIP "casting a pointer to an invalid integer type")
   end
 
-let impl_validForDeref_ptrval ptr_val =
+let impl_validForDeref_ptrval ref_ty ptr_val =
   let () = Debug.warn [] (fun () ->
     "Mem.impl_validForDeref_ptrval IS WRONG"
   ) in
-  true
+  return true
 
 let impl_isWellAligned_ptrval ref_ty ptr_val =
   error "TODO: Symbolic defacto, isWellAligned_ptrval"

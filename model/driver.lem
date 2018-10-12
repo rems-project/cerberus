@@ -804,9 +804,9 @@ let rec driver with_concurrency =
             liftMem (Mem.ptrcast_ival ty ref_ty ival) >>= fun ptrval ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
         
-        | (Mem_common.PtrValidForDeref, [Core.Vobject (Core.OVpointer ptr_val)]) ->
-            (* NOTE: this is pure *)
-            ND.return (mk_th_st (if Mem.validForDeref_ptrval ptr_val then Core.Vtrue else Core.Vfalse))
+        | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
+            liftMem (Mem.validForDeref_ptrval ref_ty ptr_val) >>= fun is_valid ->
+            ND.return (mk_th_st (if is_valid then Core.Vtrue else Core.Vfalse))
         
         | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
             ND.print_debug 2 [Debug.DB_driver] (fun () -> "PtrEq") >> (* DEBUG *)

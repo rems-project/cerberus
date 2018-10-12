@@ -677,6 +677,9 @@ type undefined_behaviour =
   | UB203
   (* The constant expression shall be an integer constant expression. *)
   | UB204_illtyped_Static_assert
+  
+  (* UB from variant 1 of the no integer provenance semantics (see note 0117) *)
+  | UB_CERB001_integer_to_dead_pointer
 
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
@@ -1024,6 +1027,8 @@ let ub_short_string = function
       "the initializer for a scalar shall be a single expression"
   | UB204_illtyped_Static_assert ->
       "static assert expression is not an integral constant expression"
+  | UB_CERB001_integer_to_dead_pointer ->
+      "integer to pointer conversion with no live object (CERB)"
   | ub ->
       "(UB missing short message): " ^ show ub
 end
@@ -1143,6 +1148,8 @@ let pretty_string_of_undefined_behaviour = function
       "Insufficient_arguments_for_format"
   | UB204_illtyped_Static_assert ->
       "(§6.7.10#3) The constant expression shall be an integer constant expression."
+  | UB_CERB001_integer_to_dead_pointer ->
+      "(CERB notes0117 3.3.1) static assert expression is not an integral constant expression"
   | Illtyped_argument_for_format ->
       "Illtyped_argument_for_format"
   | Invalid_format str ->

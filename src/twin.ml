@@ -895,18 +895,18 @@ let rec explode_bytes mval : (meta * char option) list =
     | _ ->
       fail MerrPtrdiff
 
-  let validForDeref_ptrval = function
+  let validForDeref_ptrval ref_ty = function
     | PV (_, PVnull _)
     | PV (_, PVfunction _) ->
-      false
+      return false
     | PV (Prov_device, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_some _, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_double _, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_none, _) ->
-      false
+      return false
 
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
