@@ -1244,7 +1244,7 @@ module Concrete : Memory = struct
                     fail MerrPtrFromInt
                   else
                     (* TODO: assuming variant = 4 *)
-                    return (failwith "Prov_wildcard")
+                    return Prov_wildcard
               | Some alloc_id ->
                   return (Prov_some alloc_id)) >>= fun prov ->
             return (PV (prov, PVconcrete n))
