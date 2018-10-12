@@ -2165,8 +2165,16 @@ TODO: #9
                         Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype expect_param_ty))
                       else
                         arg_sym_pe in
-                    Caux.add_std "§6.5.2.2#7, sentence 1" $
-                    stdlib.mkproc_create_and_store param_ty_sym_pe conv_value)
+                    (Caux.add_std "§6.5.2.2#7, sentence 1"
+                      (Caux.mk_wseq_e arg_ptr_sym_pat
+                        (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_sym_pe) param_ty_sym_pe (Symbol.PrefOther ("arg" ^ show n)))
+                        (Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
+                          (Caux.pstore loc param_ty_sym_pe arg_ptr_sym_pe conv_value Cmm.NA)
+                          (Caux.mk_pure_e arg_ptr_sym_pe)
+                        )
+                      )
+                    )
+                  )
                 )) :: rev_core_creates
               )
           ) (0,[]) (List.zip expect_params args_info) >>= fun (_, rev_core_creates) ->

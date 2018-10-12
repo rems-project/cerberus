@@ -591,7 +591,8 @@ export class Source extends Editor {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.c) {
       this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
-      this.editor.scrollIntoView(loc.c.begin, 200)
+      try { this.editor.scrollIntoView(loc.c.begin, 200) }
+      catch(e) { console.log(e) }
     }
   }
 

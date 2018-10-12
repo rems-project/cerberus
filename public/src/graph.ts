@@ -1,4 +1,4 @@
-import { find, flatten, union } from 'lodash'
+import { find, flatten, union, uniq } from 'lodash'
 import { Locations } from './location'
 
 export type Bytes = string | undefined
@@ -34,13 +34,13 @@ export interface Edge {
   isTau: boolean
 }
 
-export class Graph {
+export class GraphFragment {
   nodes: Node[]
   edges: Edge[]
 
-  constructor (nodes?: Node [], edges?: Edge []) {
-    this.nodes = nodes ? nodes : [];
-    this.edges = edges ? edges : [];
+  constructor (g ?: { nodes: Node [], edges: Edge []} ) {
+    this.nodes = g ? g.nodes : [];
+    this.edges = g ? g.edges : [];
   }
 
   isEmpty() {
@@ -51,19 +51,32 @@ export class Graph {
     return find(this.nodes, n => n.selected)
   }
 
-  getParentByID(nID: ID): Node | undefined {
-    const edgeToParent = find(this.edges, e => e.to == nID)
-    if (edgeToParent && edgeToParent.from) 
-      return this.nodes[edgeToParent.from]
+  parent(nID: ID): ID | undefined {
+    const e = find(this.edges, e => e.to == nID)
+    if (e) return e.from
     return undefined
   }
 
-  isTau(nID: ID): boolean {
-    return this.nodes[nID].isTau
+  children(nID: ID): ID [] {
+    return uniq(this.edges.filter(e => e.from == nID).map(e => e.to))
   }
 
-  children(nID: ID): ID [] {
-    return this.edges.filter(e => e.from == nID).map(e => e.to)
+  // including nID
+  siblings(nID: ID): ID[] {
+    const p = this.parent(nID)
+    if (p) return this.children(p)
+    return [nID]
+  } 
+
+  clear() {
+    this.nodes = []
+    this.edges = []
+  }
+}
+
+export class Graph extends GraphFragment {
+  isTau(nID: ID): boolean {
+    return this.nodes[nID].isTau
   }
 
   nonTauChildren(nID: ID): ID [] {
@@ -81,15 +94,31 @@ export class Graph {
     return union(immediateTauChildren, transitiveTauChildren)
   }
 
-  getChildByID(nID: ID): Node | undefined {
-    const edgeToChild = find(this.edges, e => e.from == nID)
-    if (edgeToChild && edgeToChild.to)
-      return this.nodes[edgeToChild.to]
-    return undefined
+  setChildrenVisible(nID: ID, skip_tau: boolean): Node[] {
+    let children
+    if (skip_tau) {
+      this.tauChildrenTransClosure(nID).map(nID => this.nodes[nID]).map(child => child.isVisible = true)
+      children = this.nonTauChildren(nID).map(nID => this.nodes[nID])
+      children.map(child => child.isVisible = true)
+    } else {
+      children = this.tauChildren(nID).map(nID => this.nodes[nID])
+      if (children.length > 0) {
+        children.map(child => child.isVisible = true)  
+      } else {
+        children = this.children(nID).map (nID => this.nodes[nID])
+        children.map(child => child.isVisible = true)  
+      }
+    }
+    return children
   }
-
-  clear() {
-    this.nodes = []
-    this.edges = []
+  
+  /** Search for a no tau parent */
+  getNoTauParent (nId: ID):  ID | undefined {
+    const e = find(this.edges, n => n.to == nId)
+    if (e == undefined || e.from == undefined)
+      throw new Error('Could not find incomming edge!')
+    if (this.nodes[e.from].isTau)
+      return this.getNoTauParent(e.from)
+    return e.from
   }
 }

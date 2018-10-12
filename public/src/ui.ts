@@ -236,11 +236,6 @@ export class CerberusUI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
-    // About
-    $('#about').on('click', () => {
-      window.open('https://www.cl.cam.ac.uk/~pes20/cerberus/')
-    })
-
     // Update every 2s
     window.setInterval(() => {
       if (this.settings.auto_refresh) this.elab()
@@ -298,6 +293,8 @@ export class CerberusUI {
     $('#current-view-title').text(view.title)
     this.currentView = view
     this.updateInteractiveOptions(view)
+    // HACK: (TODO)
+    view.emit('updateArena')
     view.show()
   }
 
@@ -342,16 +339,25 @@ export class CerberusUI {
     // Interactive stuff
     view.on('updateArena', this, (s: Common.State) => {
       const stepBack = $('#step-back')
-      if (s.history.length == 0 && !stepBack.hasClass('disabled') )
-        stepBack.addClass('disabled')
-      else
-        stepBack.removeClass('disabled')
+      const onInteractiveMode = s.tagDefs != undefined
+      if (onInteractiveMode) {
+        if (s.history.length == 0 && !stepBack.hasClass('disabled'))
+          stepBack.addClass('disabled')
+        else
+          stepBack.removeClass('disabled')
+      } else if (!stepBack.hasClass('disabled')) {
+          stepBack.addClass('disabled')
+      }
       const stepForward = $('#step-forward')
-      if ((s.graph.nodes.length == 0 || s.graph.getSelected() == undefined)
-        && !stepForward.hasClass('disabled'))
-        stepForward.addClass('disabled')
-      else
-        stepForward.removeClass('disabled')
+      if (onInteractiveMode) {
+        if ((s.graph.nodes.length == 0 || s.graph.getSelected() == undefined)
+          && !stepForward.hasClass('disabled'))
+          stepForward.addClass('disabled')
+        else
+          stepForward.removeClass('disabled')
+      } else {
+          stepForward.removeClass('disabled')
+      }
     })
 
     this.setCurrentView(view)

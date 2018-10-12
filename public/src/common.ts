@@ -121,23 +121,18 @@ namespace Common {
     hide_tau: boolean // Hide tau transition option
     skip_tau: boolean // Skip tau transition
     mode: InteractiveMode
-    lastCline: number | undefined
+    //lastCline: number | undefined
     history: ID [] // History of execution (allows to go back)
     graph: Graph // Current execution graph
     dotMem: string // DOT representation
     dotExecGraph: string // DOT representation
   }
 
-  export interface ResultTree {
-    nodes: Node []
-    edges: Edge []
-  }
-
   export type ResultRequest =
     { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
     { status: 'execution', console: string, result: string} |
-    { status: 'interactive', tagDefs: Bytes, ranges: any, steps: ResultTree} |
-    { status: 'stepping', result: string, activeId: number, steps: ResultTree} |
+    { status: 'interactive', tagDefs: Bytes, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
+    { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
     { status: 'failure', console: string, result: string }
 
   export type Event =
