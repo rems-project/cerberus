@@ -494,6 +494,7 @@ class Console extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Console', '', ee)
     this.editor.setOption('lineWrapping', false)
+    this.editor.setOption('mode', 'text')
     ee.on('update', this, this.update)
     ee.on('updateExecution', this, this.update) // in case of failures
   }

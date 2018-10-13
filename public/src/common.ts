@@ -67,11 +67,12 @@ namespace Common {
   }
 
   export type MemoryValueRow = {
-    size: number,
-    ispadding: boolean,
-    path: string[],
-    value: string,
+    size: number
+    ispadding: boolean
+    path: string[]
+    value: string
     pointsto: number | null
+    dashed: boolean
   }
 
   export type MemoryAllocation = {
@@ -124,6 +125,7 @@ namespace Common {
     mode: InteractiveMode
     //lastCline: number | undefined
     history: ID [] // History of execution (allows to go back)
+    exec_options: ID []
     graph: Graph // Current execution graph
     dotMem: string // DOT representation
     dotExecGraph: string // DOT representation
@@ -144,6 +146,7 @@ namespace Common {
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
     'dirty' |             // Fired when file has changed
+    'updateStepButtons' |
     'updateArena' |       // Update arena
     'updateExecutionGraph' | // Update execution graph
     'updateMemory' |      // Update memory graph (calls VIZ)

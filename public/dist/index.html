@@ -61,6 +61,8 @@
       <li class="border"><div id="compile" class="btn">Compile (Godbolt)</div></li>
       <li><div id="step-back" class="btn">Step back</div></li>
       <li><div id="step-forward" class="btn">Step forward<div></li>
+      <li><div id="step-forward-left" class="btn invisible">Step left<div></li>
+      <li><div id="step-forward-right" class="btn invisible">Step right<div></li>
       <li class="border"><div id="restart" class="btn">Restart</div></li>
       <li>
         <div class="btn dropdown">
@@ -91,8 +93,8 @@
             <div id="strict_reads" class="btn switch">
               <input id="cb_strict_reads" type="checkbox">Strict reads
             </div>
-            <div id="free_nullptr_free" class="btn switch">
-              <input id="cb_free_nullptr_free" type="checkbox">UB: Free null pointers
+            <div id="forbid_nullptr_free" class="btn switch">
+              <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
             </div>
             <div id="no_integer_provenance" class="btn switch">
               <input id="cb_no_integer_provenance" type="checkbox">No integer provenance (basic)

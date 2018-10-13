@@ -187,7 +187,8 @@ let get_state_details st =
 let create_node dr_info st next_state =
   let mk_info info =
     { step_kind = info.Driver.step_kind;
-      step_debug = Option.case id (fun _ -> "no debug string") info.Driver.debug_str;
+      step_debug = Option.case (fun i -> i.Core_run.debug_str) (fun _ -> "no debug string") info.Driver.core_run_info;
+      step_file = Option.case (fun i -> i.Core_run.from_file) (fun _ -> None) info.Driver.core_run_info;
     }
   in
   let node_id = new_id () in
@@ -214,7 +215,7 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
     (ns', es', previousNode)
   in
   let check st f = function
-    | `UNSAT -> CS.return (Some "unsat", create_branch (Driver.mk_info "unsat") st step_state)
+    | `UNSAT -> CS.return (Some "unsat", create_branch (Driver.mk_info_kind "unsat") st step_state)
     | `SAT -> CS.return @@ f ()
   in
   let runCS st f = CS.runEff (CS.check_sat >>= check st f) in
@@ -233,7 +234,7 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
             ^ "\", blocked: \""
             ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
           in
-          (Some res, create_branch (Driver.mk_info str_v) st' step_state)
+          (Some res, create_branch (Driver.mk_info_kind str_v) st' step_state)
         end
       | (NDkilled r, st') ->
         let reason = match r with
@@ -290,11 +291,11 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
           in
           "killed: " ^ string_of_driver_error dr_err
         in
-        (Some reason, create_branch (Driver.mk_info reason) st' step_state)
+        (Some reason, create_branch (Driver.mk_info_kind reason) st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
           create_branch str st' step_state
-          |> create_leafs st' [(Driver.mk_info "opt1", m1); (Driver.mk_info "opt2", m2)]
+          |> create_leafs st' [(Driver.mk_info_kind "opt1", m1); (Driver.mk_info_kind "opt2", m2)]
           |> fun res -> (None, res)
         end
       | (NDguard (str, cs, m), st') ->
@@ -340,7 +341,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     last_node_id := 0;
-    let node_info= { step_kind= "init"; step_debug = "init" } in
+    let node_info= { step_kind= "init"; step_debug = "init"; step_file = None } in
     let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
     let (c_loc, core_uid, arena, env) = get_state_details st in
     let next_state = Some (encode (m, st)) in

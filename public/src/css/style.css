@@ -56,6 +56,11 @@ body {
   color: #f1f1f1;
 }
 
+.invisible {
+  display: none;
+  visibility: hidden;
+}
+
 .btn {
   background-color: #5f5f5f;
   color: #f1f1f1;

@@ -83,23 +83,28 @@ end
 
 type driver_info = <|
   step_kind: string;
-  debug_str: maybe string;
+  core_run_info: maybe Core_run.core_run_info;
 |>
 
-let mk_info step = <|
+let mk_info_kind step = <|
   step_kind= step;
-  debug_str= Nothing;
+  core_run_info= Nothing;
 |>
 
 let mk_info_str step str = <|
   step_kind= step;
-  debug_str= Just str;
+  core_run_info= Just <| Core_run.debug_str= str; Core_run.from_file= Nothing; |>
+|>
+
+let mk_info step d_info = <|
+  step_kind= step;
+  core_run_info= Just d_info;
 |>
 
 instance (Show driver_info)
   let show i =
-    match i.debug_str with
-      | Just str -> i.step_kind ^ "(" ^ str ^ ")"
+    match i.core_run_info with
+      | Just d_info -> i.step_kind ^ "(" ^ d_info.Core_run.debug_str ^ ")"
       | Nothing  -> i.step_kind
     end
 end
@@ -317,13 +322,13 @@ let rec drive_core_thread tid =
     | _ ->
         error "drive_core_thread, wrong tid"
   end in
-  ND.mk_step (mk_info "drive_core_thread") $ List.map (function
+  ND.mk_step (mk_info_kind "drive_core_thread") $ List.map (function
     | Core_run.Step_constrained debug_str xs ->
         ( mk_info_str "constrained" debug_str
         , (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> ">> STEP_CONSTRAINED, |xs| = " ^ show (List.length xs)) >>
-          ND.msum (mk_info "step_constrained") (
+          ND.msum (mk_info_kind "step_constrained") (
             List.map (fun (cs, step_m) ->
-              ( mk_info $ Pp.stringFromMem_iv_mem_constraint cs
+              ( mk_info_kind $ Pp.stringFromMem_iv_mem_constraint cs
               , let () = Debug.print_debug 4 [] (fun () ->
                   "ADDING CONSTRAINTS (driver) ===> " ^ Pp.stringFromMem_iv_mem_constraint cs
                 ) in
@@ -337,15 +342,16 @@ let rec drive_core_thread tid =
             ) xs
           ) )
     
-    | Core_run.Step_action_request str _ ->
-        ( mk_info_str "action request" str
+    | Core_run.Step_action_request d_info _ ->
+        ( mk_info "action request" d_info
         , ND.return () )
     | Core_run.Step_memop_request _ _ _ _ ->
-        ( mk_info "memop request"
+        ( mk_info_kind "memop request"
         , ND.return () )
-    | Core_run.Step_tau debug_str step_m ->
-        ( mk_info_str "tau" debug_str
-        , let () = Debug.print_debug 4 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
+    | Core_run.Step_tau d_info step_m ->
+        ( mk_info "tau" d_info
+        , let debug_str = show d_info in
+          let () = Debug.print_debug 4 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
           let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
           let pre_th_st = (* DEBUG *)
             snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
@@ -366,9 +372,10 @@ let rec drive_core_thread tid =
             dr_step_counter= dr_st.dr_step_counter + 1
           |>) >>
           drive_core_thread tid )
-    | Core_run.Step_eval debug_str step_m ->
-        ( mk_info_str "eval" debug_str
-        , let () = Debug.print_debug 4 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+    | Core_run.Step_eval d_info step_m ->
+        ( mk_info "eval" d_info
+        , let debug_str = show d_info in
+          let () = Debug.print_debug 4 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
           let () = Boot.begin_timing ("eval: " ^ debug_str) in (* DEBUG, PROFILING *)
           let pre_th_st = (* DEBUG *)
             snd $ fromJust "Driver.drive_core_thread" (List.lookup tid dr_st.core_state.Core_run.thread_states) in
@@ -385,7 +392,7 @@ let rec drive_core_thread tid =
           drive_core_thread tid )
     
     | Core_run.Step_thread_done parent_tid cval ->
-        ( mk_info "thread_done"
+        ( mk_info_kind "thread_done"
         , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "thread " ^ show tid ^ " is done") >>
           let actions_of_current_thread: set Cmm.action =
             Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
@@ -400,12 +407,12 @@ let rec drive_core_thread tid =
           drive_core_thread parent_tid )
     
     | Core_run.Step_blocked ->
-        (mk_info "blocked", ND.return ())
+        (mk_info_kind "blocked", ND.return ())
     | Core_run.Step_error debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
     (* NOTE: it clears the stack and add the value to the arena *)
     | Core_run.Step_done cval ->
-        ( mk_info "done"
+        ( mk_info_kind "done"
         , ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
               <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
@@ -421,7 +428,7 @@ let rec drive_core_thread tid =
             |>))
 
     | Core_run.Step_spawn_threads mk_th_st th_sts ->
-        ( mk_info "spawn_threads"
+        ( mk_info_kind "spawn_threads"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_spawn_threads") >>
           let ((th_tids, core_st'), run_st') = State.run (
             State.foldlM (fun (th_tids_, core_st_) th_st ->
@@ -439,7 +446,7 @@ let rec drive_core_thread tid =
           drive_core_thread tid )
     
     | Core_run.Step_snprintf s_ptrval n_ival frmt_chars args_ty_ptrvals mk_th_st ->
-        ( mk_info "snprintf"
+        ( mk_info_kind "snprintf"
         , liftMem (Output.snprintf (printf_eval_conv dr_st) s_ptrval n_ival frmt_chars args_ty_ptrvals) >>= function
             | Left err ->
                 error "TODO(msg): a snprintf() got an error"
@@ -459,7 +466,7 @@ let rec drive_core_thread tid =
           end )
     
     | Core_run.Step_sprintf s_ptrval frmt_chars args_ty_ptrvals mk_th_st ->
-        ( mk_info "sprintf"
+        ( mk_info_kind "sprintf"
         , liftMem (Output.sprintf (printf_eval_conv dr_st) s_ptrval frmt_chars args_ty_ptrvals) >>= function
             | Left err ->
                 error "TODO(msg): a sprintf() got an error"
@@ -479,7 +486,7 @@ let rec drive_core_thread tid =
           end )
     
     | Core_run.Step_printf2 frmt_chars args_ty_ptrvals mk_th_st ->
-        ( mk_info "printf2"
+        ( mk_info_kind "printf2"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_printf2") >>
           (*let eval_conv (*ty1*) ty2 mval =
             let () = Debug.print_debug 1 [] (fun () -> "XX 24") in
@@ -513,7 +520,7 @@ let rec drive_core_thread tid =
         end )
 
     | Core_run.Step_bound step_m ->
-        ( mk_info "bound"
+        ( mk_info_kind "bound"
         , liftCore_run step_m >>= fun th_st' ->
           ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
@@ -864,10 +871,10 @@ let rec driver with_concurrency =
       ) >>
       driver with_concurrency
 
-  | Core_run.Step_tau debug_str _ ->
-      error ("FOUND A TAU: '" ^ debug_str ^ "'")
-  | Core_run.Step_eval debug_str _ ->
-      error ("FOUND AN EVAL: '" ^ debug_str ^ "'")
+  | Core_run.Step_tau d_info _ ->
+      error ("FOUND A TAU: '" ^ show d_info ^ "'")
+  | Core_run.Step_eval d_info _ ->
+      error ("FOUND AN EVAL: '" ^ show d_info ^ "'")
 
 (*
   | Step_thread_done of thread_id * Core.value

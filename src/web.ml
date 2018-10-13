@@ -105,7 +105,8 @@ let parse_incoming_msg content =
 let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_info i =
     `Assoc [("kind", `String i.step_kind);
-            ("debug", `String i.step_debug);]
+            ("debug", `String i.step_debug);
+            ("file", Json.of_opt_string i.step_file);]
   in
   let json_of_node n =
     let json_of_loc (loc, uid) =
