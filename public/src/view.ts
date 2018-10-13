@@ -1,6 +1,6 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
-import { pull, filter, reduce, find, concat } from "lodash"
+import { pull, filter, reduce, find, concat, includes, startsWith } from "lodash"
 import { Node, Graph, ID, GraphFragment } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
@@ -183,6 +183,7 @@ export default class View {
       arena: '',
       history: [],
       graph: new Graph(),
+      exec_options: [],
       hide_tau: true,
       skip_tau: true,
       mode: Common.InteractiveMode.Memory,
@@ -192,7 +193,7 @@ export default class View {
   }
 
   toggleSwitch (sw: string): void {
-    if (!this.state.switches.includes(sw))
+    if (!includes(this.state.switches, sw))
       this.state.switches.push(sw)
     else
       pull(this.state.switches, sw)
@@ -287,8 +288,14 @@ export default class View {
     if (mem === undefined) return
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
     const createNode = (alloc: Common.MemoryAllocation) => {
-      //if (alloc.prefix == null) // HACK! TODO: check malloc case
-      //  return ''
+      if (alloc.prefix == null) // HACK! TODO: check malloc case
+        return ''
+      // TODO: bit of a hack, change later!
+      if (alloc.prefix == 'string literal') return ''
+      if (startsWith(alloc.prefix, 'Core')) return ''
+      // TODO: THIS IS ANOTHER HACK!!
+      if (startsWith(alloc.prefix, '__'))
+        return ''
       const box = (n:number, ischar=false) =>
         `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
           <font point-size="1">&nbsp;</font>
@@ -298,7 +305,7 @@ export default class View {
       const title =
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
-          <td border="0" colspan="${maxcols}"><b>${alloc.prefix}</b>: <i>${alloc.type}</i>&nbsp;[${toHex(alloc.base)}]</td>
+          <td border="0" colspan="${maxcols}"><b>${alloc.prefix}</b>: <i>${alloc.type}</i>&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
          </tr>`
       let index = 0
       const body = alloc.rows.reduce((acc, row) => {
@@ -328,13 +335,16 @@ export default class View {
           ${title}${body}${lastrow}
          </table>>, tooltip="${tooltip}"];`
     }
-    type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/}
+    type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/, dashed: boolean}
     const getPointersInAlloc = (alloc: Common.MemoryAllocation) => {
       if (alloc.prefix === null) return []
+      // THIS IS A TERRIBLE HACK:
+      if (startsWith(alloc.prefix, 'arg')) return []
+      if (startsWith(alloc.prefix, 'Core')) return []
       return alloc.rows.reduce((acc: Pointer[], row) => {
         if (row.pointsto !== null) {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
-          const p: Pointer = {from: from, to: row.pointsto, addr: parseInt(row.value)}
+          const p: Pointer = {from: from, to: row.pointsto, addr: parseInt(row.value), dashed: row.dashed}
           return concat(acc, [p])
         } else {
           return acc
@@ -344,15 +354,16 @@ export default class View {
     const createEdges = (ps: Pointer[], mem: Common.Memory) => {
       return reduce(ps, (acc, p) => {
         const target = find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
           const offset = p.addr - target.base
-          const color  = target.id != p.to ? '[color="red"]': ''
-          acc += `${p.from}v->n${target.id}:${offset}${color};`
+          const color  = target.id != p.to ? ',color="red"': ''
+          acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = find(mem, alloc => alloc.id == p.to)
           if (toprov) {
             const offset = p.addr - toprov.base
-            acc += `${p.from}v->n${toprov.id}:${offset}[color="red"];`
+            acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
           } else {
             // TODO: WHAT SHOULD I DO?
             // POINTER TO UNKNOWN MEMORY
@@ -427,20 +438,34 @@ export default class View {
     const lastNode =
       children.length == 1 && this.state.graph.children(firstChoice.id).length == 0
 
+
+    this.state.exec_options = children.map(n => n.id)
+
     children.map(child => child.can_step = !lastNode)
     firstChoice.selected = !lastNode
+
     this.setActiveInteractiveNode(firstChoice)
     this.updateExecutionGraph();
     
     if (lastNode) {
+      this.state.exec_options = []
       this.getConsole().setActive()
-      this.state.console = firstChoice.info.kind // Result (TODO: should do this better)
+      if (includes(firstChoice.info.kind, 'killed')) {
+        // TODO: add location
+        // the killed node has no location coming from cerberus
+        //const loc = firstChoice.loc ? `at line ${firstChoice.loc.c.begin}` : ''
+        this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.kind.replace('killed', 'Undefined behaviour')}`
+      } else {
+        this.state.console = `Successful termination of this execution:\n\t${firstChoice.info.kind}`
+      }
       this.emit('updateExecution')
     }
 
-    if (children.length > 1) {
+    if (children.length > 2) {
       this.getExecutionGraph().setActive()
     }
+
+    this.emit('updateStepButtons')
   }
 
   /** Update interactive state mode and update DOT */
@@ -515,8 +540,10 @@ export default class View {
     active.can_step = true
     this.state.graph.nodes.map(n => n.selected = false)
     active.selected = true
+    this.state.exec_options = this.state.graph.siblings(active.id)
     this.setActiveInteractiveNode(active)
     this.updateExecutionGraph();
+    this.emit('updateStepButtons')
   }
 
   stepForward() {
@@ -529,6 +556,20 @@ export default class View {
       else
         alert('No selected node.')
     }
+  }
+
+  stepForwardLeft() {
+    if (this.state.exec_options.length != 2) {
+      console.log('more than two options')
+    }
+    this.execGraphNodeClick(this.state.exec_options[1])
+  }
+
+  stepForwardRight() {
+    if (this.state.exec_options.length != 2) {
+      console.log('more than two options')
+    }
+    this.execGraphNodeClick(this.state.exec_options[0])
   }
 
   setInteractiveMode(mode: Common.InteractiveMode) {

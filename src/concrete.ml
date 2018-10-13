@@ -790,7 +790,6 @@ module Concrete : Memory = struct
 *)
   (* END DEBUG *)
   
-  
   let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
@@ -1663,6 +1662,7 @@ let combine_prov prov1 prov2 =
       path: string list; (* tag list *)
       value: string;
       pointsto: int option; (* provenance id in case of a pointer *)
+      dashed: bool;
     }
 
   type dot_node =
@@ -1679,18 +1679,24 @@ let combine_prov prov1 prov2 =
                            ispadding = false;
                            path = [];
                            value = v;
-                           pointsto = p
+                           pointsto = p;
+                           dashed = false;
                          }] in
     let mk_pad n v = { size = n;
                        ispadding = true;
                        path = [];
                        value = v;
                        pointsto = None;
+                       dashed = false;
                      } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
       mk_scalar "unspecified" None
+    | MVinteger (Signed Intptr_t, IV(prov, n))
+    | MVinteger (Unsigned Intptr_t, IV(prov, n)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
+      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; pointsto = p; dashed = true; }]
     | MVinteger (_, IV(_, n)) ->
       mk_scalar (N.to_string n) None
     | MVfloating (_, f) ->
@@ -1763,6 +1769,7 @@ let combine_prov prov1 prov2 =
             ("path", `List (List.map (fun s -> `String s) r.path));
             ("value", `String r.value);
             ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
+            ("dashed", `Bool r.dashed);
            ]
   let serialise_dot_node (n:dot_node) : Json.json =
     `Assoc [("id", `Int n.id);

@@ -42,6 +42,7 @@ type range = point * point
 type step_info =
   { step_kind: string; (* kind of step/transition *)
     step_debug: string; (* debug string *)
+    step_file: string option; (* from file *)
   }
 
 type node =

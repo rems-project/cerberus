@@ -1,4 +1,5 @@
 import $ from 'jquery'
+import { includes } from 'lodash'
 import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
@@ -30,6 +31,12 @@ export class CerberusUI {
   defaultCompiler: Common.Compiler
   /** List of compilers */
   compilers?: Common.Compiler []
+
+  /** Step buttons */
+  private stepBack: JQuery<HTMLElement>
+  private stepForward: JQuery<HTMLElement>
+  private stepForwardLeft: JQuery<HTMLElement>
+  private stepForwardRight: JQuery<HTMLElement>
 
   public demo(name: string) {
     console.log(name)
@@ -109,15 +116,21 @@ export class CerberusUI {
     $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
 
-    // Interactive
-    $('#step-back').on('click', (e) => {
+    // Interactive Step Buttons
+    this.stepBack = $('#step-back')
+    this.stepBack.on('click', (e) => {
       if (!$(e.target).hasClass('disabled'))
         this.getView().stepBack()
     })
-    $('#step-forward').on('click', (e) => {
+    this.stepForward = $('#step-forward')
+    this.stepForward.on('click', (e) => {
       if (!$(e.target).hasClass('disabled'))
         this.getView().stepForward()
     })
+    this.stepForwardLeft = $('#step-forward-left')
+    this.stepForwardLeft.on('click', (e) => this.getView().stepForwardLeft())
+    this.stepForwardRight = $('#step-forward-right')
+    this.stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
     $('#restart').on('click', () => this.getView().restartInteractive())
 
     // Interactive Options
@@ -220,7 +233,7 @@ export class CerberusUI {
     $('.switch').on('click', (e) => {
       const sw = e.currentTarget.id, view = this.getView()
       view.toggleSwitch(sw)
-      $('#cb_' + sw).prop('checked', view.getSwitches().includes(sw))
+      $('#cb_' + sw).prop('checked', includes(view.getSwitches(), sw))
       view.emit('clear')
       view.emit('dirty')
     })
@@ -301,8 +314,7 @@ export class CerberusUI {
     $('#current-view-title').text(view.title)
     this.currentView = view
     this.updateInteractiveOptions(view)
-    // HACK: (TODO)
-    view.emit('updateArena')
+    this.updateStepButtons(view.getState())
     view.show()
   }
 
@@ -336,6 +348,15 @@ export class CerberusUI {
     throw new Error("Panic: no view")
   }
 
+  private updateStepButtons(s: Common.State) {
+    const onInteractiveMode = s.tagDefs != undefined
+    Util.setDisabled(this.stepBack, s.history.length == 0 || !onInteractiveMode)
+    Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode)  //(s.graph.nodes.length == 0 || s.graph.getSelected() == undefined) && onInteractiveMode)
+    Util.setInvisible(this.stepForward, s.exec_options.length >= 2)
+    Util.setInvisible(this.stepForwardLeft, s.exec_options.length != 2)
+    Util.setInvisible(this.stepForwardRight, s.exec_options.length != 2)
+  }
+
   private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
@@ -345,28 +366,8 @@ export class CerberusUI {
     nav.on('click', () => this.setCurrentView(view))
 
     // Interactive stuff
-    view.on('updateArena', this, (s: Common.State) => {
-      const stepBack = $('#step-back')
-      const onInteractiveMode = s.tagDefs != undefined
-      if (onInteractiveMode) {
-        if (s.history.length == 0 && !stepBack.hasClass('disabled'))
-          stepBack.addClass('disabled')
-        else
-          stepBack.removeClass('disabled')
-      } else if (!stepBack.hasClass('disabled')) {
-          stepBack.addClass('disabled')
-      }
-      const stepForward = $('#step-forward')
-      if (onInteractiveMode) {
-        if ((s.graph.nodes.length == 0 || s.graph.getSelected() == undefined)
-          && !stepForward.hasClass('disabled'))
-          stepForward.addClass('disabled')
-        else
-          stepForward.removeClass('disabled')
-      } else {
-          stepForward.removeClass('disabled')
-      }
-    })
+    view.on('update', this, (s: Common.State) => this.updateStepButtons(s))
+    view.on('updateStepButtons', this, (s: Common.State) => this.updateStepButtons(s))
 
     this.setCurrentView(view)
     view.getSource().refresh()
