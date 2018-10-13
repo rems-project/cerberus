@@ -80,6 +80,7 @@ let elaborate ~conf ~filename =
   let (>>=)  = Exception.except_bind in
   hack conf.pipeline Random;
   Switches.set conf.instance.switches;
+  Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
     Pipeline.load_core_stdlib () >>= fun core_stdlib ->
@@ -352,6 +353,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
     hack conf.pipeline Random;
+    Switches.set conf.instance.switches;
     last_node_id := n.last_id;
     decode n.marshalled_state
     |> multiple_steps ([], [], n.active_id)

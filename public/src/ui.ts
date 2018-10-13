@@ -232,8 +232,17 @@ export class CerberusUI {
 
     $('.switch').on('click', (e) => {
       const sw = e.currentTarget.id, view = this.getView()
-      view.toggleSwitch(sw)
+      view.toggleProvSwitch(sw)
       $('#cb_' + sw).prop('checked', includes(view.getSwitches(), sw))
+      view.emit('clear')
+      view.emit('dirty')
+    })
+
+    $('.prov-switch').on('click', (e) => {
+      const sw = e.currentTarget.id, view = this.getView()
+      view.toggleProvSwitch(sw)
+      $('.prov-switch input').prop('checked', false)
+      $('#cb_' + sw).prop('checked', true)
       view.emit('clear')
       view.emit('dirty')
     })
@@ -351,8 +360,8 @@ export class CerberusUI {
   private updateStepButtons(s: Common.State) {
     const onInteractiveMode = s.tagDefs != undefined
     Util.setDisabled(this.stepBack, s.history.length == 0 || !onInteractiveMode)
-    Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode)  //(s.graph.nodes.length == 0 || s.graph.getSelected() == undefined) && onInteractiveMode)
-    Util.setInvisible(this.stepForward, s.exec_options.length >= 2)
+    Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
+    Util.setInvisible(this.stepForward, s.exec_options.length == 2)
     Util.setInvisible(this.stepForwardLeft, s.exec_options.length != 2)
     Util.setInvisible(this.stepForwardRight, s.exec_options.length != 2)
   }

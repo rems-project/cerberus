@@ -176,7 +176,7 @@ export default class View {
       locs: [],
       //result: '',
       console: '',
-      switches: [],
+      switches: ['integer_provenance'],
       lastNodeId: 0,
       tagDefs: undefined,
       dirty: true,
@@ -197,6 +197,13 @@ export default class View {
       this.state.switches.push(sw)
     else
       pull(this.state.switches, sw)
+  }
+
+  toggleProvSwitch (sw: string): void {
+    pull(this.state.switches,
+      'integer_provenance', 'no_integer_provenance',
+      'no_integer_provenance_v1', 'no_integer_provenance_v4')
+    this.state.switches.push(sw)
   }
 
   getSwitches(): string[] {
