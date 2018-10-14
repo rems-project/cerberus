@@ -1,6 +1,6 @@
 import $ from "jquery"
 import GoldenLayout from "golden-layout"
-import { pull, filter, reduce, find, concat, includes, startsWith } from "lodash"
+import { pull, filter, reduce, find, concat, includes, startsWith, endsWith } from "lodash"
 import { Node, Graph, ID, GraphFragment } from "./graph"
 import Tabs from "./tabs"
 import Util from "./util"
@@ -186,6 +186,7 @@ export default class View {
       history: [],
       graph: new Graph(),
       step_counter: 0,
+      stdout: '',
       exec_options: [],
       hide_tau: true,
       skip_tau: true,
@@ -445,13 +446,17 @@ export default class View {
       throw new Error('active node has no children')
     }
 
-    this.state.graph.nodes.map(n => n.selected = false)
-    this.state.history.push(activeId)
-
     const firstChoice = children[0]
     const lastNode =
       children.length == 1 && this.state.graph.children(firstChoice.id).length == 0
 
+    if (firstChoice.info.file && (endsWith(firstChoice.info.file, '.h') || endsWith (firstChoice.info.file, '.core'))) {
+      this.executeInteractiveStep(firstChoice.id)
+      return
+    }
+
+    this.state.graph.nodes.map(n => n.selected = false)
+    this.state.history.push(activeId)
 
     this.state.step_counter += 1
     this.state.exec_options = children.map(n => n.id)
@@ -461,6 +466,12 @@ export default class View {
 
     this.setActiveInteractiveNode(firstChoice)
     this.updateExecutionGraph();
+
+    if (firstChoice.outp != this.state.stdout) {
+      this.state.stdout = firstChoice.outp
+    }
+    this.state.console = this.state.stdout
+    this.emit('updateExecution')
     
     if (lastNode) {
       this.state.exec_options = []

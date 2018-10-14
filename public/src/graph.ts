@@ -12,6 +12,7 @@ export type NodeKind =
 export interface NodeInfo {
   kind: NodeKind // Next step kind
   debug: string
+  file?: string
   error_loc?: Range
 }
 
@@ -27,6 +28,7 @@ export interface Node {
   arena: string
   selected: boolean
   can_step: boolean
+  outp: string
 }
 
 export interface Edge {

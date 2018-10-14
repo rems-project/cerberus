@@ -8,7 +8,7 @@ void f(uintptr_t i) {
   printf("j=%d\n",j); 
 }
 int main() {
-  uintptr_t j = 0x60103cULL; // suppose this is the address of j   (P lab)
-  //uintptr_t j = 0x601024ULL; // suppose this is the address of j
+  //uintptr_t j = 0x600914ULL;   // suppose this is the address of j  (gcc 8.1 O0)
+  uintptr_t j = 0x600934ULL; // suppose this is the address of j  (gcc 8.1 O2)
   f(j);
 }
