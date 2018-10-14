@@ -47,10 +47,12 @@ export default class View {
       if (!this.dirty) {
         this.state.graph.clear()
         this.state.history = []
+        this.state.step_counter = 0
         delete this.state.tagDefs
         this.state.arena = this.state.dotMem = this.state.dotExecGraph = ''
         this.emit('updateArena')
         this.emit('updateMemory')
+        this.emit('updateExecution')
         this.emit('updateExecutionGraph')
         this.dirty = true
       }
@@ -183,6 +185,7 @@ export default class View {
       arena: '',
       history: [],
       graph: new Graph(),
+      step_counter: 0,
       exec_options: [],
       hide_tau: true,
       skip_tau: true,
@@ -250,6 +253,9 @@ export default class View {
   resetInteractive() {
     this.state.history = []
     this.state.graph.clear()
+    this.state.step_counter = 0
+    this.state.console = ''
+    this.emit('updateExecution')
   }
 
   /** Restart interactive execution */
@@ -446,6 +452,7 @@ export default class View {
       children.length == 1 && this.state.graph.children(firstChoice.id).length == 0
 
 
+    this.state.step_counter += 1
     this.state.exec_options = children.map(n => n.id)
 
     children.map(child => child.can_step = !lastNode)
@@ -468,9 +475,11 @@ export default class View {
       this.emit('updateExecution')
     }
 
-    if (children.length > 2) {
+    /*
+    if (children.length > 3) {
       this.getExecutionGraph().setActive()
     }
+    */
 
     this.emit('updateStepButtons')
   }
@@ -548,6 +557,7 @@ export default class View {
     this.state.graph.nodes.map(n => n.selected = false)
     active.selected = true
     this.state.exec_options = this.state.graph.siblings(active.id)
+    this.state.step_counter -= 1
     this.setActiveInteractiveNode(active)
     this.updateExecutionGraph();
     this.emit('updateStepButtons')
@@ -566,17 +576,15 @@ export default class View {
   }
 
   stepForwardLeft() {
-    if (this.state.exec_options.length != 2) {
-      console.log('more than two options')
-    }
+    this.execGraphNodeClick(this.state.exec_options[0])
+  }
+
+  stepForwardMiddle() {
     this.execGraphNodeClick(this.state.exec_options[1])
   }
 
   stepForwardRight() {
-    if (this.state.exec_options.length != 2) {
-      console.log('more than two options')
-    }
-    this.execGraphNodeClick(this.state.exec_options[0])
+    this.execGraphNodeClick(this.state.exec_options[this.state.exec_options.length == 2 ? 1 : 2])
   }
 
   setInteractiveMode(mode: Common.InteractiveMode) {
