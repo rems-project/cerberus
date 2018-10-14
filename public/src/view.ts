@@ -293,7 +293,7 @@ export default class View {
 
   private setMemory(mem: Common.Memory | undefined) {
     if (mem === undefined) return
-    const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(-2) }
+    const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(2) }
     const createNode = (alloc: Common.MemoryAllocation) => {
       if (alloc.prefix == null) // HACK! TODO: check malloc case
         return ''
@@ -321,7 +321,7 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const color   = row.ispadding ? ' bgcolor="grey"' : ''
-        const value   = row.pointsto === null ? row.value : toHex(parseInt(row.value))
+        const value   = row.hex ? toHex(parseInt(row.value)) : row.value
         const body = `<td port="${spath}v" rowspan="${row.size}"
                           colspan="${colspan}" ${color}>${value}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`

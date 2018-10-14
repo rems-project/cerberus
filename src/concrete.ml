@@ -1666,6 +1666,7 @@ let combine_prov prov1 prov2 =
       path: string list; (* tag list *)
       value: string;
       pointsto: int option; (* provenance id in case of a pointer *)
+      hex: bool; (* TODO: this is terrible I need to change that *)
       dashed: bool;
     }
 
@@ -1679,11 +1680,12 @@ let combine_prov prov1 prov2 =
     }
 
   let rec mk_rows bs ty mval : row list =
-    let mk_scalar v p = [{ size = sizeof ty;
+    let mk_scalar v p hex = [{ size = sizeof ty;
                            ispadding = false;
                            path = [];
                            value = v;
                            pointsto = p;
+                           hex = hex;
                            dashed = false;
                          }] in
     let mk_pad n v = { size = n;
@@ -1691,29 +1693,30 @@ let combine_prov prov1 prov2 =
                        path = [];
                        value = v;
                        pointsto = None;
+                       hex = false;
                        dashed = false;
                      } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified" None
+      mk_scalar "unspecified" None false
     | MVinteger (Signed Intptr_t, IV(prov, n))
     | MVinteger (Unsigned Intptr_t, IV(prov, n)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; pointsto = p; dashed = true; }]
+      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; pointsto = p; hex = true; dashed = true; }]
     | MVinteger (_, IV(_, n)) ->
-      mk_scalar (N.to_string n) None
+      mk_scalar (N.to_string n) None false
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) None
+      mk_scalar (string_of_float f) None false
     | MVpointer (_, PV(prov, pv)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" None
+          mk_scalar "NULL" None false
         | PVconcrete n ->
-          mk_scalar (N.to_string n) p
+          mk_scalar (N.to_string n) p true
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) None
+          mk_scalar (Pp_symbol.to_string_pretty sym) None false
       end
     | MVarray mvals ->
       begin match ty with
@@ -1773,6 +1776,7 @@ let combine_prov prov1 prov2 =
             ("path", `List (List.map (fun s -> `String s) r.path));
             ("value", `String r.value);
             ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
+            ("hex", `Bool r.hex);
             ("dashed", `Bool r.dashed);
            ]
   let serialise_dot_node (n:dot_node) : Json.json =
