@@ -175,15 +175,16 @@ let get_state_details st =
       ) e "" in
     List.fold_left (fun acc e -> acc ^ f e) "" env
   in
+  let outp = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout) in
   match st.Driver.core_state.Core_run.thread_states with
   | (_, (_, ts))::_ ->
     let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
     let Core.Expr (arena_annots, _) = ts.arena in
     let maybe_uid = Annot.get_uid arena_annots in
     let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
-    (loc, maybe_uid, arena, string_of_env st)
+    (loc, maybe_uid, arena, string_of_env st, outp)
   | _ ->
-    (Location_ocaml.unknown, None, "", "")
+    (Location_ocaml.unknown, None, "", "", outp)
 
 let create_node dr_info st next_state =
   let mk_info info =
@@ -196,8 +197,8 @@ let create_node dr_info st next_state =
   let node_id = new_id () in
   let node_info = mk_info dr_info in
   let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
-  let (c_loc, core_uid, arena, env) = get_state_details st in
-  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state }
+  let (c_loc, core_uid, arena, env, outp) = get_state_details st in
+  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; outp }
 
 let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result, Driver.driver_info, Driver.driver_error, _, _) Nondeterminism.ndM), st) =
   let module CS = (val Ocaml_mem.cs_module) in
@@ -354,9 +355,9 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     last_node_id := 0;
     let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
     let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
-    let (c_loc, core_uid, arena, env) = get_state_details st in
+    let (c_loc, core_uid, arena, env, outp) = get_state_details st in
     let next_state = Some (encode (m, st)) in
-    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state } in
+    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; outp } in
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->

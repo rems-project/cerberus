@@ -120,6 +120,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
             ("loc", json_of_loc (n.c_loc, n.core_uid));
             ("arena", `String n.arena);
             ("env", `String n.env);
+            ("outp", `String n.outp);
             ("state",
              match n.next_state with
              | Some state -> `String (B64.encode state)

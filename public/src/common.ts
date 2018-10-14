@@ -126,6 +126,7 @@ namespace Common {
     skip_tau: boolean // Skip tau transition
     mode: InteractiveMode
     step_counter: number
+    stdout: string
     //lastCline: number | undefined
     history: ID [] // History of execution (allows to go back)
     exec_options: ID []
