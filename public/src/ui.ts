@@ -311,6 +311,20 @@ export class CerberusUI {
         this.compilers       = data
       }
     })
+
+    // THIS TERRIBLE HACK SHOULD BE DELETED AS SOON AS POSSIBLE:
+    const header = $('#main-header')
+    const views = $('#views')
+    let currentHeight = header.height()
+    window.setInterval(() => {
+      if (currentHeight != header.height()) {
+        currentHeight = header.height()
+        console.log('new height: ' + currentHeight)
+        // @ts-ignore
+        views.height($(window).height() - currentHeight)
+        this.getView().refresh()
+      } 
+    }, 1000);
   }
 
   private updateInteractiveOptions(view: Readonly<View>) {
