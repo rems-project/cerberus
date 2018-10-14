@@ -36,7 +36,9 @@ export class CerberusUI {
   private stepBack: JQuery<HTMLElement>
   private stepForward: JQuery<HTMLElement>
   private stepForwardLeft: JQuery<HTMLElement>
+  private stepForwardMiddle: JQuery<HTMLElement>
   private stepForwardRight: JQuery<HTMLElement>
+  private stepCounter: JQuery<HTMLElement>
 
   public demo(name: string) {
     console.log(name)
@@ -129,8 +131,11 @@ export class CerberusUI {
     })
     this.stepForwardLeft = $('#step-forward-left')
     this.stepForwardLeft.on('click', (e) => this.getView().stepForwardLeft())
+    this.stepForwardMiddle = $('#step-forward-middle')
+    this.stepForwardMiddle.on('click', (e) => this.getView().stepForwardMiddle())
     this.stepForwardRight = $('#step-forward-right')
     this.stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
+    this.stepCounter = $('#step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
 
     // Interactive Options
@@ -361,9 +366,11 @@ export class CerberusUI {
     const onInteractiveMode = s.tagDefs != undefined
     Util.setDisabled(this.stepBack, s.history.length == 0 || !onInteractiveMode)
     Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
-    Util.setInvisible(this.stepForward, s.exec_options.length == 2)
-    Util.setInvisible(this.stepForwardLeft, s.exec_options.length != 2)
-    Util.setInvisible(this.stepForwardRight, s.exec_options.length != 2)
+    Util.setInvisible(this.stepForward, s.exec_options.length >= 2)
+    Util.setInvisible(this.stepForwardLeft, s.exec_options.length < 2)
+    Util.setInvisible(this.stepForwardMiddle, s.exec_options.length < 3)
+    Util.setInvisible(this.stepForwardRight, s.exec_options.length < 2)
+    this.stepCounter.text(s.step_counter)
   }
 
   private add (view: View) {
