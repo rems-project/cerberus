@@ -327,7 +327,7 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const color   = row.ispadding ? ' bgcolor="grey"' : ''
-        const prov    = row.prov ? `@${row.prov}, ` : ''
+        const prov    = row.prov != undefined ? `@${row.prov}, ` : ''
         const value   = row.hex ? toHex(parseInt(row.value)) : row.value
         const body = `<td port="${spath}v" rowspan="${row.size}"
                           colspan="${colspan}" ${color}>${prov}${value}</td>`
