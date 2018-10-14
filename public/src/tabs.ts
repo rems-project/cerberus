@@ -176,18 +176,24 @@ class Memory extends SvgGraph {
 
    fitSVG() {
     const svgHeight = this.svg.height()
+    const svgWidth = this.svg.width()
     const containerHeight = this.container.height()
-    if (svgHeight && containerHeight) {
-      const zoom = containerHeight/svgHeight
+    const containerWidth = this.container.width()
+    if (svgHeight && svgWidth && containerHeight && containerWidth) {
+      const zoom_x = containerWidth/svgWidth
+      const zoom_y = containerHeight/svgHeight
+      //console.log (zoom_x, zoom_y, this.svgPos.scale)
+      const zoom = Math.min(zoom_x, zoom_y)
       if (zoom < this.svgPos.scale) {
         // @ts-ignore
         this.svg.panzoom('zoom', zoom, {silent: true})
         const svgOffset = this.svg.offset()
         const containerOffset = this.container.offset()
         if (svgOffset && containerOffset) {
-          const delta = svgOffset.top - containerOffset.top
+          const delta_x = zoom_x == zoom ? svgOffset.left - containerOffset.left : 0
+          const delta_y = svgOffset.top - containerOffset.top
           // @ts-ignore
-          this.svg.panzoom('pan', 0, -delta, { relative: true })
+          this.svg.panzoom('pan', -delta_x, -delta_y, { relative: true })
         }
       }
     }
