@@ -300,6 +300,7 @@ export default class View {
 
   private setMemory(mem: Common.Memory | undefined) {
     if (mem === undefined) return
+    const trackProvInteger = includes(this.state.switches, 'integer_provenance')
     const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(2) }
     const createNode = (alloc: Common.MemoryAllocation) => {
       if (alloc.prefix == null) // HACK! TODO: check malloc case
@@ -328,7 +329,7 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const color   = row.ispadding ? ' bgcolor="grey"' : ''
-        const prov    = row.prov != undefined ? `@${row.prov}, ` : ''
+        const prov    = row.prov != undefined ? ( trackProvInteger || !row.dashed ? `@${row.prov}, ` : '') : ''
         const value   = row.hex ? toHex(parseInt(row.value)) : row.value
         const body = `<td port="${spath}v" rowspan="${row.size}"
                           colspan="${colspan}" ${color}>${prov}${value}</td>`
@@ -372,7 +373,7 @@ export default class View {
         const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
           const offset = p.addr - target.base
-          const color  = target.id != p.to ? ',color="red"': ''
+          const color  = target.id != p.to && trackProvInteger ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = find(mem, alloc => alloc.id == p.to)
