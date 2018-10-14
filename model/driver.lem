@@ -84,21 +84,25 @@ end
 type driver_info = <|
   step_kind: string;
   core_run_info: maybe Core_run.core_run_info;
+  error_loc: maybe Loc.t
 |>
 
 let mk_info_kind step = <|
   step_kind= step;
   core_run_info= Nothing;
+  error_loc= Nothing;
 |>
 
 let mk_info_str step str = <|
   step_kind= step;
-  core_run_info= Just <| Core_run.debug_str= str; Core_run.from_file= Nothing; |>
+  core_run_info= Just <| Core_run.debug_str= str; Core_run.from_file= Nothing; |>;
+  error_loc= Nothing;
 |>
 
 let mk_info step d_info = <|
   step_kind= step;
   core_run_info= Just d_info;
+  error_loc= Nothing;
 |>
 
 instance (Show driver_info)

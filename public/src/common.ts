@@ -74,6 +74,7 @@ namespace Common {
     pointsto: number | null
     dashed: boolean
     hex: boolean
+    prov: number | null
   }
 
   export type MemoryAllocation = {

@@ -1665,6 +1665,7 @@ let combine_prov prov1 prov2 =
       ispadding: bool;
       path: string list; (* tag list *)
       value: string;
+      prov: int option;
       pointsto: int option; (* provenance id in case of a pointer *)
       hex: bool; (* TODO: this is terrible I need to change that *)
       dashed: bool;
@@ -1684,7 +1685,17 @@ let combine_prov prov1 prov2 =
                            ispadding = false;
                            path = [];
                            value = v;
+                           prov = p;
+                           pointsto = None;
+                           hex = hex;
+                           dashed = false;
+                         }] in
+    let mk_pointer v p hex = [{ size = sizeof ty;
+                           ispadding = false;
+                           path = [];
+                           value = v;
                            pointsto = p;
+                           prov = p;
                            hex = hex;
                            dashed = false;
                          }] in
@@ -1693,6 +1704,7 @@ let combine_prov prov1 prov2 =
                        path = [];
                        value = v;
                        pointsto = None;
+                       prov = None;
                        hex = false;
                        dashed = false;
                      } in
@@ -1703,20 +1715,21 @@ let combine_prov prov1 prov2 =
     | MVinteger (Signed Intptr_t, IV(prov, n))
     | MVinteger (Unsigned Intptr_t, IV(prov, n)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; pointsto = p; hex = true; dashed = true; }]
-    | MVinteger (_, IV(_, n)) ->
-      mk_scalar (N.to_string n) None false
+      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; prov = p; pointsto = p; hex = true; dashed = true; }]
+    | MVinteger (_, IV(prov, n)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
+      mk_scalar (N.to_string n) p false
     | MVfloating (_, f) ->
       mk_scalar (string_of_float f) None false
     | MVpointer (_, PV(prov, pv)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" None false
+          mk_pointer "NULL" None false
         | PVconcrete n ->
-          mk_scalar (N.to_string n) p true
+          mk_pointer (N.to_string n) p true
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) None false
+          mk_pointer (Pp_symbol.to_string_pretty sym) None false
       end
     | MVarray mvals ->
       begin match ty with
@@ -1776,6 +1789,7 @@ let combine_prov prov1 prov2 =
             ("path", `List (List.map (fun s -> `String s) r.path));
             ("value", `String r.value);
             ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
+            ("prov", (match r.prov with Some n -> `Int n | None -> `Null));
             ("hex", `Bool r.hex);
             ("dashed", `Bool r.dashed);
            ]

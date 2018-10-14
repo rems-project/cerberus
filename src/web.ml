@@ -106,7 +106,8 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
   let json_of_info i =
     `Assoc [("kind", `String i.step_kind);
             ("debug", `String i.step_debug);
-            ("file", Json.of_opt_string i.step_file);]
+            ("file", Json.of_opt_string i.step_file);
+            ("error_loc", Json.of_option Location_ocaml.to_json i.step_error_loc);]
   in
   let json_of_node n =
     let json_of_loc (loc, uid) =
