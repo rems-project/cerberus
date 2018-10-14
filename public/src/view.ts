@@ -52,7 +52,7 @@ export default class View {
         this.state.arena = this.state.dotMem = this.state.dotExecGraph = ''
         this.emit('updateArena')
         this.emit('updateMemory')
-        this.emit('updateExecution')
+        //this.emit('updateExecution')
         this.emit('updateExecutionGraph')
         this.dirty = true
       }
@@ -255,12 +255,12 @@ export default class View {
     this.state.graph.clear()
     this.state.step_counter = 0
     this.state.console = ''
-    this.emit('updateExecution')
   }
 
   /** Restart interactive execution */
   restartInteractive() {
     this.resetInteractive()
+    this.emit('updateExecution')
     UI.step(null)
   }
 
@@ -327,9 +327,10 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const color   = row.ispadding ? ' bgcolor="grey"' : ''
+        const prov    = row.prov ? `@${row.prov}, ` : ''
         const value   = row.hex ? toHex(parseInt(row.value)) : row.value
         const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${color}>${value}</td>`
+                          colspan="${colspan}" ${color}>${prov}${value}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -467,8 +468,8 @@ export default class View {
       if (includes(firstChoice.info.kind, 'killed')) {
         // TODO: add location
         // the killed node has no location coming from cerberus
-        //const loc = firstChoice.loc ? `at line ${firstChoice.loc.c.begin}` : ''
-        this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.kind.replace('killed', 'Undefined behaviour')}`
+        const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
+        this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.kind.replace('killed', 'Undefined behaviour')}${loc}`
       } else {
         this.state.console = `Successful termination of this execution:\n\t${firstChoice.info.kind}`
       }

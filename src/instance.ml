@@ -190,6 +190,7 @@ let create_node dr_info st next_state =
     { step_kind = info.Driver.step_kind;
       step_debug = Option.case (fun i -> i.Core_run.debug_str) (fun _ -> "no debug string") info.Driver.core_run_info;
       step_file = Option.case (fun i -> i.Core_run.from_file) (fun _ -> None) info.Driver.core_run_info;
+      step_error_loc = info.Driver.error_loc
     }
   in
   let node_id = new_id () in
@@ -238,15 +239,15 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
           (Some res, create_branch (Driver.mk_info_kind str_v) st' step_state)
         end
       | (NDkilled r, st') ->
-        let reason = match r with
+        let loc, reason = match r with
           | Undef0 (loc, ubs) ->
-            "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
-          | Error0 (_, str) ->
-            "Error: " ^ str ^ ""
+            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+          | Error0 (loc, str) ->
+            Some loc, "Error: " ^ str ^ ""
           | Other dr_err ->
             let string_of_driver_error = function
               | Driver.DErr_core_run err ->
-                Pp_errors.string_of_core_run_cause err
+                None, Pp_errors.string_of_core_run_cause err
               | Driver.DErr_memory err ->
                 let open Mem_common in
                 let string_of_access_error = function
@@ -263,36 +264,45 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
                 in
                 begin match err with
                   | MerrOutsideLifetime str ->
-                    "memory outside lifetime: " ^ str
+                    None, "memory outside lifetime: " ^ str
                   | MerrOther str ->
-                    "other memory error: " ^ str
+                    None, "other memory error: " ^ str
                   | MerrPtrdiff ->
-                    "invalid pointer diff"
-                  | MerrAccess (_, LoadAccess, err) ->
-                    "invalid memory load: " ^ string_of_access_error err
-                  | MerrAccess (_, StoreAccess, err) ->
-                    "invalid memory store: " ^ string_of_access_error err
+                    None, "invalid pointer diff"
+                  | MerrAccess (loc, LoadAccess, err) ->
+                    Some loc, "invalid memory load: " ^ string_of_access_error err
+                  | MerrAccess (loc, StoreAccess, err) ->
+                    Some loc, "invalid memory store: " ^ string_of_access_error err
                   | MerrInternal str ->
-                    "internal error: " ^ str
+                    None, "internal error: " ^ str
+                  | MerrPtrFromInt ->
+                    None, "invalid cast pointer from integer"
                   | MerrWriteOnReadOnly _ ->
-                    "writing read only memory"
-                  | MerrUndefinedFree (_, err) ->
-                    "freeing " ^ string_of_free_error err
+                    None, "writing read only memory"
+                  | MerrUndefinedFree (loc, err) ->
+                    Some loc, "freeing " ^ string_of_free_error err
                   | MerrUndefinedRealloc ->
-                    "undefined behaviour in realloc"
+                    None, "undefined behaviour in realloc"
                   | MerrIntFromPtr ->
-                    "invalid cast integer from pointer"
+                    None, "invalid cast integer from pointer"
                   | MerrWIP str ->
-                    "wip: " ^ str
-            end
-          | Driver.DErr_concurrency str ->
-              "Concurrency error: " ^ str
-          | Driver.DErr_other str ->
-              str
+                    None, "wip: " ^ str
+              end
+            | Driver.DErr_concurrency str ->
+                None, "Concurrency error: " ^ str
+            | Driver.DErr_other str ->
+                None, str
           in
-          "killed: " ^ string_of_driver_error dr_err
+          let loc, str = string_of_driver_error dr_err in
+          loc, "killed: " ^ str
         in
-        (Some reason, create_branch (Driver.mk_info_kind reason) st' step_state)
+        let info =
+          let open Driver in
+          { step_kind= reason;
+            core_run_info= None;
+            error_loc= loc;
+          }
+        in (Some reason, create_branch info st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
           create_branch str st' step_state
@@ -342,7 +352,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     last_node_id := 0;
-    let node_info= { step_kind= "init"; step_debug = "init"; step_file = None } in
+    let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
     let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
     let (c_loc, core_uid, arena, env) = get_state_details st in
     let next_state = Some (encode (m, st)) in

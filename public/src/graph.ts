@@ -1,5 +1,5 @@
 import { find, flatten, union, uniq } from 'lodash'
-import { Locations } from './location'
+import { Locations, Range } from './location'
 
 export type Bytes = string | undefined
 export type ID = number
@@ -12,6 +12,7 @@ export type NodeKind =
 export interface NodeInfo {
   kind: NodeKind // Next step kind
   debug: string
+  error_loc?: Range
 }
 
 export interface Node {
