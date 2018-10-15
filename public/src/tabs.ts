@@ -72,10 +72,10 @@ class SvgGraph extends Tab {
   constructor(name: string, ee: Common.EventEmitter) {
     super (name, ee)
     const controls = $('<div class="toolbar"></div>')
-    const zoomIn = $('<div class="btn inline">Zoom In</div>')
-    const zoomOut = $('<div class="btn inline">Zoom Out</div>')
-    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
-    const reset = $('<div class="reset btn inline">Reset</div>')
+    const zoomIn = $('<div class="menu-item btn inline">Zoom In</div>')
+    const zoomOut = $('<div class="menu-item btn inline">Zoom Out</div>')
+    const range = $('<input class="menu-item range" type="range" step="0.05" min="0.1" max="2">')
+    const reset = $('<div class="menu-item reset btn inline">Reset</div>')
     controls.append(zoomIn)
     controls.append(zoomOut)
     controls.append(range)
@@ -148,7 +148,7 @@ class Memory extends SvgGraph {
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
-    this.fit = $('<div class="btn inline clicked">Fit</div>')
+    this.fit = $('<div class="btn menu-item inline clicked">Fit</div>')
     this.dom.find('.reset').before(this.fit)
     this.fit.on('click', () => this.toggleFitMode())
     ee.on('updateMemory', this, s => this.updateMemory(s))
@@ -845,7 +845,7 @@ class Asm extends ReadOnly {
     let toolbar   = $('<div class="toolbar flex"></div>')
 
     this.current = $('<span>'+cc.name+'</span>')
-    const dropdown = $('<div class="btn dropdown"></div>')
+    const dropdown = $('<div class="menu-item btn contain-subitems"></div>')
     dropdown.append(this.current)
     dropdown.append(this.createDropdownContent())
 
@@ -928,12 +928,12 @@ class Asm extends ReadOnly {
   }
 
   createDropdownContent() {
-    const dropdown = $('<div class="dropdown-content" style="max-height:250px;"></div>')
+    const dropdown = $('<div class="dropdown" style="max-height:250px;"></div>')
     const compilers = UI.compilers
     if (!compilers) return dropdown
     for (let i = 0; i < compilers.length; i++) {
       const cc  = compilers[i]
-      const opt = $('<div class="btn">' + cc.name + '</div>')
+      const opt = $('<div class="menu-item btn">' + cc.name + '</div>')
       opt.on('click', () => {
         this.cc = cc
         this.current.text(cc.name)

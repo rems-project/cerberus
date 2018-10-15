@@ -151,6 +151,9 @@ export class CerberusUI {
       view.setInteractiveMode(mode)
       this.updateInteractiveOptions(view)
     }
+    $('#file').on('click', () => {
+      console.log('click')
+    })
     $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
     $('#step-mem-action').on('click', () => setInteractiveMode(Common.InteractiveMode.Memory))
@@ -312,18 +315,24 @@ export class CerberusUI {
       }
     })
 
-    // THIS TERRIBLE HACK SHOULD BE DELETED AS SOON AS POSSIBLE:
-    const header = $('#main-header')
-    const views = $('#views')
-    let currentHeight = header.height()
-    window.setInterval(() => {
-      if (currentHeight != header.height()) {
-        currentHeight = header.height()
-        // @ts-ignore
-        views.height($(window).height() - currentHeight)
-        this.getView().refresh()
-      } 
-    }, 1000);
+    /** Right-align dropdown if menu overflow */
+    $('.contain-subitems').on('mouseenter', (e) => {
+      const item = $(e.currentTarget)
+      const dropdown = $(e.currentTarget).find('.dropdown')
+      const offset = item.offset()
+      if (offset !== undefined) {
+        const left  = offset.left
+        const width = dropdown.width()
+        const winWidth = $(window).width()
+        if (width !== undefined && winWidth !== undefined) {
+          if (left + width > winWidth)
+            dropdown.addClass('dropdown-right')
+          else
+            dropdown.removeClass('dropdown-right')
+        }
+      }
+    })
+
   }
 
   private updateInteractiveOptions(view: Readonly<View>) {
@@ -390,7 +399,7 @@ export class CerberusUI {
     this.views.push(view)
     this.dom.append(view.dom)
 
-    let nav = $('<div class="btn">'+view.title+'</div>')
+    let nav = $('<div class="menu-item btn">'+view.title+'</div>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
 
