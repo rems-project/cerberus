@@ -4,16 +4,14 @@ html, body {
   font-family: Arial,Helvetica,sans-serif;
   font-size: 10pt;
   height: 100%;
-  position: relative;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
   padding: 0;
   background-color: #FFFFFF;
-  display: flex;
-  flex-direction:column;
   height: 100%;
   overflow: hidden;
 }
@@ -22,49 +20,56 @@ body {
 
 #views {
   /* golden layout does not work with flex */
-  height: calc(100% - 28px); /* minus page header height */
+  top: 24px; /* header size */
+  position: absolute;
+  width: 100%;
+  height: calc(100% - 24px); /* minus page header height */
 }
 
-.header {
-  font-size: 0;
+/* Scrollable overlay panel */
+.x-scrollable {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  position: absolute;
+}
+
+.x-scrollable::-webkit-scrollbar {
+  display: none;
+}
+
+.menu {
   color: #f1f1f1;
   background-color: #5f5f5f;
-  line-height: 1.5;
-  display: inline-block;
-  min-width: 750px;
-}
-
-.header ul {
   list-style-type: none;
   margin: 0;
   padding: 0;
+  font-size: 0; /* this ensures that space between items is zero */
 }
 
-.header ul li {
-  float: left;
-  margin: 0;
+.menu > li {
+  display: inline-block;
   font-size: 12px;
 }
 
-.header ul .right {
-  float: right;
-}
-
-
-.title {
-  padding: 5px 10px;
-  color: #f1f1f1;
-}
-
 .invisible {
-  display: none;
+  display: none !important;
   visibility: hidden;
 }
 
-.btn {
+.menu-item {
   background-color: #5f5f5f;
   color: #f1f1f1;
   padding: 5px 10px;
+  text-decoration: none;
+}
+
+.btn {
   text-decoration: none;
   cursor: pointer;
   /* text selection */
@@ -77,17 +82,18 @@ body {
                                   supported by Chrome and Opera */ 
 }
 
-.step-text {
-  background-color: #5f5f5f;
-  color: #f1f1f1;
-  padding: 5px 10px;
-  text-decoration: none;
-}
-
 .btn.clicked {
   box-shadow: inset 2px 10px 5px rgba(0,0,0,.3);
   color: #d1d1d1;
   border-radius: 5px;
+}
+
+.dropdown > .btn:active {
+  transform: scale(0.95);
+}
+
+.active:active {
+  transform: scale(0.95);
 }
 
 .btn.disabled {
@@ -103,62 +109,20 @@ body {
   background-color: #5f5f5f;
 }
 
-.dropdown-content .btn:active {
-  transform: scale(0.97);
-}
-
-.header ul .border {
+.border-right {
   border-right: 1px solid #f1f1f1;
 }
 
-.header hr {
-  display: block;
-  border: 0;
-  height: 1px;
-  margin: 0;
-  color: #fff;
-  background-color: #fff;
+.right {
+  float: right;
 }
 
-.dropdown {
-  display: inline-block;
+.contain-subitems {
+  position: relative; /* move subitems in x-axis */
 }
 
-.dropdown-content {
-  background-color: #5f5f5f;
-  display: none;
-  position: absolute;
-  z-index: 100;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  /*max-height: 250px;*/
-  overflow-y: scroll;
-  /* hack */
-  margin-left: -10px;
-  margin-top: 5px;
-}
-
-.dropdown-content .btn {
-  min-width: 50px;
-}
-
-.dropdown-content-content {
-  background-color: #5f5f5f;
-  display: none;
-  position: absolute;
-  z-index: 150;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  max-height: 250px;
-  overflow: scroll;
-  /* hack */
-  margin-left: -10px;
-  margin-top: 5px;
-}
-
-.dropdown-content input {
-  margin-right: 8px;
-}
-
-.dropdown::after {
+/* make content arrow */
+.contain-subitems::after {
   display: inline-block;
   width: 0;
   height: 0;
@@ -170,17 +134,63 @@ body {
   border-left: 0.3em solid transparent;
 }
 
-.dropdown:empty::after {
+.contain-subitems:empty::after {
   margin-left: 0;
 }
 
-.dropdown:hover .dropdown-content {
+.contain-subitems:hover .dropdown {
   display: block;
 }
 
-.dropdown .dropdown:hover .dropdown-content-content {
+/*
+.contain-subitems .contain-subitems:hover .dropdown-content {
   display: block;
 }
+*/
+
+.dropdown {
+  background-color: #5f5f5f;
+  display: none;
+  position: absolute;
+  z-index: 5; /* on top of codemirror elements */
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: calc(100vh - 100px); /* guarantees that it does not overflow */
+  overflow-y: auto;
+  margin-left: -10px; /* compensate the padding */
+  margin-top: 5px;
+}
+
+.dropdown > hr {
+  display: block;
+  border: 0;
+  height: 1px;
+  margin: 0;
+  color: #fff;
+  background-color: #fff;
+}
+
+.dropdown-right {
+  right: 0;
+}
+
+/*
+.dropdown-content {
+  background-color: #5f5f5f;
+  display: none;
+  position: absolute;
+  z-index: 150;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  max-height: 250px;
+  overflow: scroll;
+  margin-left: -10px;
+  margin-top: 5px;
+}
+*/
+
+.dropdown input {
+  margin-right: 8px;
+}
+
 #sharebtn:after {
   position: relative;
   top: 5px;
@@ -190,6 +200,7 @@ body {
 #sharebtn:active {
   transform: scale(0.90);
 }
+
 
 .tab-content {
   height: 100%;
@@ -373,6 +384,7 @@ code {
 
 .flex {
   display: flex;
+  overflow: visible;
 }
 
 .grow {
@@ -418,6 +430,11 @@ code {
 .cm-ast-constructor {
   font-weight: bold;
   color: #708;
+}
+
+.title {
+  padding: 5px 10px;
+  color: #f1f1f1;
 }
 
 .window {
