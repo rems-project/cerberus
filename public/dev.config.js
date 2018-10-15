@@ -7,8 +7,11 @@ const extractCSS = new ExtractTextPlugin({ filename: 'style.bundle.css' })
 
 module.exports = {
   mode: 'development',
+  //devtool: 'cheap-source-map',
+  devtool: 'source-map',
   entry: './src/index.ts',
   output: {
+    devtoolModuleFilenameTemplate: '[absolute-resource-path]',
     filename: '[name].bundle.js',
     path: Path.resolve(__dirname, 'dist')
   },

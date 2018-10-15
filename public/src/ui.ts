@@ -319,7 +319,6 @@ export class CerberusUI {
     window.setInterval(() => {
       if (currentHeight != header.height()) {
         currentHeight = header.height()
-        console.log('new height: ' + currentHeight)
         // @ts-ignore
         views.height($(window).height() - currentHeight)
         this.getView().refresh()
@@ -437,7 +436,6 @@ export class CerberusUI {
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
     const view = this.getView()
     Util.Cursor.wait()
-    console.log(view.getSwitches())
     $.ajax({
       url:  '/cerberus',
       type: 'POST',

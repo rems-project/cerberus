@@ -417,6 +417,10 @@ export default class View {
           // Nothing to do
           break
         case Common.InteractiveMode.CLine:
+          if (active.info.kind == 'done')
+            return this.state.graph.setChildrenVisible(active.id, skip_tau)
+          if (startsWith(active.info.kind, 'killed'))
+            return children
           if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
             children = this.executeInteractiveMode(active.id, skip_tau, lastCline)
           break
