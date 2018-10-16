@@ -1,8 +1,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: Arial,Helvetica,sans-serif;
-  font-size: 10pt;
+  font-family: 'DejaVu Sans',Arial,Helvetica,sans-serif;
+  font-size: 0;
   height: 100%;
   overflow: hidden;
   box-sizing: border-box;
@@ -14,6 +14,18 @@ body {
   background-color: #FFFFFF;
   height: 100%;
   overflow: hidden;
+}
+
+input[type="radio"] {
+  vertical-align: top;
+  margin: 0;
+  margin-right: 5px;
+}
+
+input[type="checkbox"] {
+  vertical-align: top;
+  margin: 0;
+  margin-right: 7px;
 }
 
 .wait, .wait * { cursor: wait !important; }
@@ -67,6 +79,7 @@ body {
   color: #f1f1f1;
   padding: 5px 10px;
   text-decoration: none;
+  font-size: 12px;
 }
 
 .btn {
@@ -138,15 +151,9 @@ body {
   margin-left: 0;
 }
 
-.contain-subitems:hover .dropdown {
-  display: block;
+.contain-subitems:hover > .dropdown {
+  display: inline-block;
 }
-
-/*
-.contain-subitems .contain-subitems:hover .dropdown-content {
-  display: block;
-}
-*/
 
 .dropdown {
   background-color: #5f5f5f;
@@ -155,9 +162,10 @@ body {
   z-index: 5; /* on top of codemirror elements */
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
   max-height: calc(100vh - 100px); /* guarantees that it does not overflow */
+  overflow-x: hidden;
   overflow-y: auto;
-  margin-left: -10px; /* compensate the padding */
-  margin-top: 5px;
+  top: 24px;
+  margin: 0;
 }
 
 .dropdown > hr {
@@ -169,31 +177,25 @@ body {
   background-color: #fff;
 }
 
+.dropdown-left {
+  left: 0;
+}
+
 .dropdown-right {
   right: 0;
 }
 
-/*
-.dropdown-content {
-  background-color: #5f5f5f;
-  display: none;
-  position: absolute;
-  z-index: 150;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-  max-height: 250px;
-  overflow: scroll;
-  margin-left: -10px;
-  margin-top: 5px;
-}
-*/
-
-.dropdown input {
+#share input {
+  border: 0;
+  padding: 0;
+  margin: 2px;
   margin-right: 8px;
 }
 
 #sharebtn:after {
   position: relative;
-  top: 5px;
+  top: 2px;
+  left: -3px;
   content:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAdtJREFUOBGdlE0oBGEYx2fW5uKjkBQXByUROSguxGGjKEeKyxYlNye5SPnK1dIWtz0o4iDKTT4vVilJkaR2D1siB98f4/esMWZnZ6Zd//r1vu/zPO9/nnnfZhRN0zJhEiJg1TuBJchSUpSXulEYhhW4BrM8LPKgFVbNCae5ytOjJPdUVe2yFpFrIOaHUkvug/U6BNmnmXPSYTFYO1Mwk6424B5uwCyVxSxUUzeI6ZeRJCCaMgL6hNghnILt+RFfA1EIMn73yxk5qZzEPk9/dCiI6fEeRsPUzVCemnA+FuO/11SUbnJBOlXlDP+rBTZKQ0IB+CH8b0OO4gSDAYiL7s6YtLm9sl6aPLC5CXZgGaQ70Sd40zbEoJCN/TAGERgCQ2kZYlbHzhkIwzbIV3QLhlI2xMzHLvk8DyAfAlAC82BILkXe3dUYs0Zq5FanoUwnl7GTy3llNCRGcjs+NuUY0eSJfEm9EII7kNdtx+yJMUFiOAJVEMX0Sqc5oUpR5KvogCBkYzQHb5aa+NJDYpNZPSzCsc4Do/ko+lg/wxFMgJ2kOfkL2YtOd+Ec5KxcRU0lvMC4/IZsRbKFxBZIZ5e2RT9BudgKkLOtcTSUWkxrGfxQJGsHyQ/kAgIcX+wbhtLg1dVYfqAAAAAASUVORK5CYII=");
 }
 
@@ -201,8 +203,11 @@ body {
   transform: scale(0.90);
 }
 
+/**** Tab content ****/
+
 
 .tab-content {
+  font-size: 12px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -362,9 +367,10 @@ code {
 
 .toolbar {
   background-color: #5f5f5f;
+  height: 24px;
   display: inline-block;
   width: 100%;
-  overflow: auto;
+  overflow: hidden;
   white-space: nowrap;
 }
 
@@ -395,15 +401,9 @@ code {
   display: inline-block;
 }
 
-.share {
-  height: 32px;
-  white-space: nowrap;
-  padding-right: 4px;
-  overflow: initial;
-}
-
 .range {
   border: 0;
+  padding: 0;
   vertical-align: middle;
   width: calc(100% - 258px);
 }
@@ -440,6 +440,8 @@ code {
 .window {
   visibility: hidden;
 
+  font-size: 12px;
+
   left: 40px;
   top: 40px;
 
@@ -449,8 +451,6 @@ code {
   border-radius: 3px;
   color: #444;
   /* padding: 2px 5px; */
-  font-size: 90%;
-  font-family: monospace;
   background-color: white;
 
   overflow: hidden;
@@ -472,8 +472,6 @@ code {
 }
 
 .window div {
-  font-family: Arial,Helvetica,sans-serif;
-  font-size: 10pt;
   min-width: 100%;
 }
 

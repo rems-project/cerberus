@@ -22,7 +22,7 @@
         <div id="dropdown-views" class="dropdown"></div>
       </li>
       <li class="menu-item btn contain-subitems">
-        <span id="file" >File</span>
+        <span >File</span>
         <div class="dropdown">
           <div id="new" class="menu-item btn">New empty file</div>
           <hr>
@@ -122,21 +122,21 @@
           <div id="open-interactive" class="menu-item btn">Open execution graph tab</div>
         </div>
       </li>
-      <!-- TODO: SHARE IS BROKEN!
       <li class="menu-item btn contain-subitems">
         <span>Share</span>
-        <div id="share" class="dropdown share">
-          <div class="menu-item btn contain-subitems">
-            <span id="current-share"></span>
-            <div class="dropdown-content">
-              <div id="option-share" class="menu-item btn"></div>
+        <div id="share" class="dropdown" style="overflow: visible;">
+          <div style="display: flex;">
+            <div class="menu-item btn contain-subitems">
+              <span id="current-share"></span>
+              <div class="dropdown" style="width:61px;">
+                <div id="option-share" class="menu-item btn"></div>
+              </div>
             </div>
+            <input id="sharelink" type="text">
+            <span id="sharebtn"></span>
           </div>
-          <input id="sharelink" type="text">
-          <span id="sharebtn btn"></span>
         </div>
-      -->
-      <li id="rems" class="menu-item btn active right"><span>REMS</span></li>
+      <li id="rems" class="menu-item btn active"><span>REMS</span></li>
     </ul>
   </div><!-- header -->
   <div id="views"></div>
