@@ -121,12 +121,12 @@ export class CerberusUI {
     // Interactive Step Buttons
     this.stepBack = $('#step-back')
     this.stepBack.on('click', (e) => {
-      if (!$(e.target).hasClass('disabled'))
+      if (!this.stepBack.hasClass('disabled'))
         this.getView().stepBack()
     })
     this.stepForward = $('#step-forward')
     this.stepForward.on('click', (e) => {
-      if (!$(e.target).hasClass('disabled'))
+      if (!this.stepForward.hasClass('disabled'))
         this.getView().stepForward()
     })
     this.stepForwardLeft = $('#step-forward-left')
@@ -151,9 +151,6 @@ export class CerberusUI {
       view.setInteractiveMode(mode)
       this.updateInteractiveOptions(view)
     }
-    $('#file').on('click', () => {
-      console.log('click')
-    })
     $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
     $('#step-mem-action').on('click', () => setInteractiveMode(Common.InteractiveMode.Memory))
@@ -170,10 +167,7 @@ export class CerberusUI {
     $('#core').on('click', () => this.elab ('Core'))
 
     // Compilers
-    $('#compile').on('click', () => {
-      if (this.currentView)
-        this.currentView.newTab('Asm')
-    })
+    $('#compile').on('click', () => this.getView().newTab('Asm'))
 
     // Share
     let update_share_link = () => {
@@ -315,7 +309,7 @@ export class CerberusUI {
       }
     })
 
-    /** Right-align dropdown if menu overflow */
+    /** Align dropdown menu (left or right) */
     $('.contain-subitems').on('mouseenter', (e) => {
       const item = $(e.currentTarget)
       const dropdown = $(e.currentTarget).find('.dropdown')
@@ -325,10 +319,13 @@ export class CerberusUI {
         const width = dropdown.width()
         const winWidth = $(window).width()
         if (width !== undefined && winWidth !== undefined) {
-          if (left + width > winWidth)
+          if (left + width > winWidth) {
             dropdown.addClass('dropdown-right')
-          else
+            dropdown.removeClass('dropdown-left')
+          } else {
+            dropdown.addClass('dropdown-left')
             dropdown.removeClass('dropdown-right')
+          }
         }
       }
     })
@@ -521,7 +518,7 @@ export class CerberusUI {
 Util.get('defacto_tests.json', (data: any) => {
   let div = $('#defacto_body')
   for (let i = 0; i < data.length; i++) {
-    let questions = $('<ul class="questions"></ul>')
+    let questions = $('<div class="questions"></div>')
     for (let j = 0; j < data[i].questions.length; j++) {
       let q = data[i].questions[j]
       let tests = $('<ul class="tests"></ul>')
