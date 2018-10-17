@@ -7,137 +7,145 @@
 </head>
 <body>
   <div><input id="file-input" type="file" style="display:none;"/></div>
-  <div class="x-scrollable">
-    <ul class="menu">
-      <li class="menu-item btn contain-subitems border-right">
-        <span>Cerberus<span id="server-status" style="color: red;"></span></span>
-        <div class="dropdown">
-          <div id="help" class="menu-item btn">About Cerberus</div>
-          <div id="implementation" class="menu-item btn">Cerberus implementation-defined choices</div>
-          <div id="isoC" class="menu-item btn">C11 International Standard (N1570 draft)</div>
-        </div>
-      </li>
-      <li id="current-view" class="menu-item btn contain-subitems border-right">
-        <span id="current-view-title"></span>
-        <div id="dropdown-views" class="dropdown"></div>
-      </li>
-      <li class="menu-item btn contain-subitems">
-        <span >File</span>
-        <div class="dropdown">
-          <div id="new" class="menu-item btn">New empty file</div>
-          <hr>
-          <div id="load_demo" class="menu-item btn">Load demo test</div>
-          <div id="load_defacto" class="menu-item btn">Load defacto test</div>
-          <div id="load" class="menu-item btn">Load from file</div>
-        </div>
-      </li>
-      <li class="menu-item btn contain-subitems">
-        <span>Elaborate</span>
-        <div class="dropdown">
-          <div id="cabs" class="menu-item btn">Cabs</div>
-          <div id="ail-ast" class="menu-item btn">Ail (AST)</div>
-          <div id="ail" class="menu-item btn">Ail</div>
-          <div id="core" class="menu-item btn">Core</div>
-        </div>
-      </li>
-      <li class="menu-item btn contain-subitems">
-        <span>Search</span>
-        <div class="dropdown">
-          <div id="random" class="menu-item btn">Random (45s timeout)</div>
-          <div id="exhaustive" class="menu-item btn">Exhaustive (45s timeout)</div>
-        </div>
-      </li>
-      <li id="compile" class="menu-item btn active border-right"><span>Compile (Godbolt)</span></li>
-      <li id="step-back" class="menu-item btn active"><span>Step back</span></li>
-      <li id="step-forward" class="menu-item btn active"><span>Step forward</span></li>
-      <li id="step-forward-left" class="menu-item btn active invisible"><span>Step left</span></li>
-      <li id="step-forward-middle" class="menu-item btn active invisible"><span>Step middle</span></li>
-      <li id="step-forward-right" class="menu-item btn active invisible"><span>Step right</span></li>
-      <li id="restart" class="menu-item btn active border-right"><span>Restart</span></li>
-      <li class="menu-item border-right">Step: <span id="step-counter">0</span></li>
-      <li class="menu-item btn contain-subitems">
-        <span>Options</span>
-        <div class="dropdown">
-          <div id="concrete" class="menu-item btn">
-            <input id="cb_concrete" type="checkbox">Use Concrete Model
+  <div id="header">
+    <div class="x-scrollable">
+      <ul class="menu menu-no-transition">
+        <li class="menu-item btn contain-subitems border-right">
+          <span>Cerberus<span id="server-status" style="color: red;"></span></span>
+          <div class="dropdown">
+            <div id="help" class="menu-item btn">About Cerberus</div>
+            <div id="implementation" class="menu-item btn">Cerberus implementation-defined choices</div>
+            <div id="isoC" class="menu-item btn">C11 International Standard (N1570 draft)</div>
           </div>
-          <div id="rewrite" class="menu-item btn">
-            <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+        </li>
+        <li id="current-view" class="menu-item btn contain-subitems border-right">
+          <span id="current-view-title"></span>
+          <div id="dropdown-views" class="dropdown"></div>
+        </li>
+        <li class="menu-item btn contain-subitems">
+          <span >File</span>
+          <div class="dropdown">
+            <div id="new" class="menu-item btn">New empty file</div>
+            <hr>
+            <div id="load_demo" class="menu-item btn">Load demo test</div>
+            <div id="load_defacto" class="menu-item btn">Load defacto test</div>
+            <div id="load" class="menu-item btn">Load from file</div>
           </div>
-          <div id="sequentialise" class="menu-item btn">
-            <input id="cb_sequentialise" type="checkbox">Sequentialise
+        </li>
+        <li class="menu-item btn contain-subitems">
+          <span>Elaborate</span>
+          <div class="dropdown">
+            <div id="cabs" class="menu-item btn">Cabs</div>
+            <div id="ail-ast" class="menu-item btn">Ail (AST)</div>
+            <div id="ail" class="menu-item btn">Ail</div>
+            <div id="core" class="menu-item btn">Core</div>
           </div>
-          <div id="auto_refresh" class="menu-item btn">
-            <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+        </li>
+        <li class="menu-item btn contain-subitems">
+          <span>Search</span>
+          <div class="dropdown">
+            <div id="random" class="menu-item btn">Random (45s timeout)</div>
+            <div id="exhaustive" class="menu-item btn">Exhaustive (45s timeout)</div>
           </div>
-          <div id="colour" class="menu-item btn">
-            <input id="cb_colour" type="checkbox">Colour All
-          </div>
-          <div id="colour_cursor" class="menu-item btn">
-            <input id="cb_colour_cursor" type="checkbox">Colour Cursor
-          </div>
-          <hr>
-          <div id="strict_pointer_arith" class="menu-item btn switch">
-            <input id="cb_strict_pointer_arith" type="checkbox">Strict pointer arithmetic
-          </div>
-          <div id="strict_reads" class="menu-item btn switch">
-            <input id="cb_strict_reads" type="checkbox">Strict reads
-          </div>
-          <div id="forbid_nullptr_free" class="menu-item btn switch">
-            <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
-          </div>
-          <hr>
-          <div id="integer_provenance" class="menu-item btn prov-switch">
-            <input id="cb_integer_provenance" type="radio" checked>Integer provenance
-          </div>
-          <div id="no_integer_provenance" class="menu-item btn prov-switch">
-            <input id="cb_no_integer_provenance" type="radio">No integer provenance (basic)
-          </div>
-          <div id="no_integer_provenance_v1" class="menu-item btn prov-switch">
-            <input id="cb_no_integer_provenance_v1" type="radio">No integer provenance (variant 1)
-          </div>
-          <div id="no_integer_provenance_v4" class="menu-item btn prov-switch">
-            <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (variant 4)
-          </div>
-          <hr>
-          <div id="step-mem-action" class="menu-item btn">
-            <input id="r-step-mem-action" type="radio">Step to the next memory action
-          </div>
-          <div id="step-C-line" class="menu-item btn">
-            <input id="r-step-C-line" type="radio">Step to the next C line
-          </div>
-          <div id="step-Core-trans" class="menu-item btn">
-            <input id="r-step-Core-trans" type="radio">Step through Core transitions
-          </div>
-          <hr>
-          <div id="supress-tau" class="menu-item btn">
-            <input id="cb-supress-tau" type="checkbox">Suppress tau transitions
-          </div>
-          <div id="skip-tau" class="menu-item btn">
-            <input id="cb-skip-tau" type="checkbox">Skip tau transitions
-          </div>
-          <hr>
-          <div id="open-memory" class="menu-item btn">Open memory tab</div>
-          <div id="open-arena" class="menu-item btn">Open runtime arena tab</div>
-          <div id="open-interactive" class="menu-item btn">Open execution graph tab</div>
-        </div>
-      </li>
-      <li class="menu-item btn contain-subitems">
-        <span>Share</span>
-        <div id="share" class="dropdown" style="overflow: visible;">
-          <div style="display: flex;">
-            <div class="menu-item btn contain-subitems">
-              <span id="current-share"></span>
-              <div class="dropdown" style="width:61px;">
-                <div id="option-share" class="menu-item btn"></div>
-              </div>
+        </li>
+        <li id="compile" class="menu-item btn active border-right"><span>Compile (Godbolt)</span></li>
+        <li id="step-back" class="menu-item btn active"><span>Step back</span></li>
+        <li id="step-forward" class="menu-item btn active"><span>Step forward</span></li>
+        <li id="step-forward-left" class="menu-item btn active invisible"><span>Step left</span></li>
+        <li id="step-forward-middle" class="menu-item btn active invisible"><span>Step middle</span></li>
+        <li id="step-forward-right" class="menu-item btn active invisible"><span>Step right</span></li>
+        <li id="restart" class="menu-item btn active border-right"><span>Restart</span></li>
+        <li class="menu-item border-right">Step: <span id="step-counter">0</span></li>
+        <li class="menu-item btn contain-subitems">
+          <span>Options</span>
+          <div class="dropdown">
+            <div id="concrete" class="menu-item btn">
+              <input id="cb_concrete" type="checkbox">Use Concrete Model
             </div>
-            <input id="sharelink" type="text">
-            <span id="sharebtn"></span>
+            <div id="rewrite" class="menu-item btn">
+              <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+            </div>
+            <div id="sequentialise" class="menu-item btn">
+              <input id="cb_sequentialise" type="checkbox">Sequentialise
+            </div>
+            <div id="auto_refresh" class="menu-item btn">
+              <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+            </div>
+            <div id="colour" class="menu-item btn">
+              <input id="cb_colour" type="checkbox">Colour All
+            </div>
+            <div id="colour_cursor" class="menu-item btn">
+              <input id="cb_colour_cursor" type="checkbox">Colour Cursor
+            </div>
+            <hr>
+            <div id="strict_pointer_arith" class="menu-item btn switch">
+              <input id="cb_strict_pointer_arith" type="checkbox">Strict pointer arithmetic
+            </div>
+            <div id="strict_reads" class="menu-item btn switch">
+              <input id="cb_strict_reads" type="checkbox">Strict reads
+            </div>
+            <div id="forbid_nullptr_free" class="menu-item btn switch">
+              <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
+            </div>
+            <hr>
+            <div id="integer_provenance" class="menu-item btn prov-switch">
+              <input id="cb_integer_provenance" type="radio" checked>Integer provenance
+            </div>
+            <div id="no_integer_provenance" class="menu-item btn prov-switch">
+              <input id="cb_no_integer_provenance" type="radio">No integer provenance (basic)
+            </div>
+            <div id="no_integer_provenance_v1" class="menu-item btn prov-switch">
+              <input id="cb_no_integer_provenance_v1" type="radio">No integer provenance (variant 1)
+            </div>
+            <div id="no_integer_provenance_v4" class="menu-item btn prov-switch">
+              <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (variant 4)
+            </div>
+            <hr>
+            <div id="step-mem-action" class="menu-item btn">
+              <input id="r-step-mem-action" type="radio">Step to the next memory action
+            </div>
+            <div id="step-C-line" class="menu-item btn">
+              <input id="r-step-C-line" type="radio">Step to the next C line
+            </div>
+            <div id="step-Core-trans" class="menu-item btn">
+              <input id="r-step-Core-trans" type="radio">Step through Core transitions
+            </div>
+            <hr>
+            <div id="supress-tau" class="menu-item btn">
+              <input id="cb-supress-tau" type="checkbox">Suppress tau transitions
+            </div>
+            <div id="skip-tau" class="menu-item btn">
+              <input id="cb-skip-tau" type="checkbox">Skip tau transitions
+            </div>
+            <hr>
+            <div id="open-memory" class="menu-item btn">Open memory tab</div>
+            <div id="open-arena" class="menu-item btn">Open runtime arena tab</div>
+            <div id="open-interactive" class="menu-item btn">Open execution graph tab</div>
           </div>
-        </div>
-      <li id="rems" class="menu-item btn active"><span>REMS</span></li>
-    </ul>
+        </li>
+        <li class="menu-item btn contain-subitems">
+          <span>Share</span>
+          <div id="share" class="dropdown" style="overflow: visible;">
+            <div style="display: flex;">
+              <div class="menu-item btn contain-subitems">
+                <span id="current-share"></span>
+                <div class="dropdown" style="width:61px;">
+                  <div id="option-share" class="menu-item btn"></div>
+                </div>
+              </div>
+              <input id="sharelink" type="text">
+              <span id="sharebtn"></span>
+            </div>
+          </div>
+        <li id="rems" class="menu-item btn active"><span>REMS</span></li>
+      </ul>
+    </div>
+    <div id="menu-scroll-left" class="menu-scroll">
+        <svg class="menu-scroll-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 551 1024"><path d="M445.44 38.183L-2.53 512l447.97 473.817 85.857-81.173-409.6-433.23v81.172l409.6-433.23L445.44 38.18z"/></svg>
+    </div>
+    <div id="menu-scroll-right" class="menu-scroll">
+        <svg class="menu-scroll-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 551 1024"><path d="M105.56 985.817L553.53 512 105.56 38.183l-85.857 81.173 409.6 433.23v-81.172l-409.6 433.23 85.856 81.174z"/></svg>
+    </div>
   </div><!-- header -->
   <div id="views"></div>
 

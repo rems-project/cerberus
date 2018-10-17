@@ -330,6 +330,78 @@ export class CerberusUI {
       }
     })
 
+    { // Scrolling menu section
+      let ticking = false // to next animation frame
+      let scrolling = false // whenever the menu is scrolling manually
+      let scrollDir = ''
+      const scrollDistance = 120
+      const container = $('.x-scrollable')
+      const menu = $('.x-scrollable > .menu')
+
+      // check if one should display the scroll arrows
+      container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      // check for every window resize
+      window.addEventListener('resize', () =>
+        container.attr('data-overflowing', Util.checkOverflow(menu, container)))
+      // and when scrolling
+      container.on('scroll', () => {
+        if (!ticking) {
+          window.requestAnimationFrame(() => {
+            container.attr('data-overflowing', Util.checkOverflow(menu, container))
+            ticking = false;
+          })
+        }
+        ticking = true;
+      })
+
+      $('#menu-scroll-left').on('click', () => {
+        // if we are already scrolling, do nothing
+        if (scrolling) return
+        const overflow = Util.checkOverflow(menu, container)
+        if (overflow === 'left' || overflow == 'both') {
+          const availableScroll = menu.scrollLeft()
+          if (availableScroll && availableScroll < scrollDistance * 2)
+            menu.css('transform', `translateX(${availableScroll}px)`)
+          else
+            menu.css('transform', `translateX(${scrollDistance}px)`)
+          menu.removeClass('menu-no-transition')
+          scrollDir = 'left'
+          scrolling = true
+        }
+        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      })
+
+      $('#menu-scroll-right').on('click', () => {
+        // if we are already scrolling, do nothing
+        if (scrolling) return
+        const overflow = Util.checkOverflow(menu, container)
+        if (overflow === 'right' || overflow == 'both') {
+          const rightEdge = menu[0].getBoundingClientRect().right;
+          const scrollerRightEdge = container[0].getBoundingClientRect().right;
+          const availableScroll = Math.floor(rightEdge - scrollerRightEdge)
+          if (availableScroll && availableScroll < scrollDistance * 2)
+            menu.css('transform', `translateX(-${availableScroll}px)`)
+          else
+            menu.css('transform', `translateX(-${scrollDistance}px)`)
+          menu.removeClass('menu-no-transition')
+          scrollDir = 'right'
+          scrolling = true
+        }
+        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      })
+
+      menu.on('transitionend', () => {
+        // get the amount to scroll in the transition matrix
+        const style = window.getComputedStyle(menu[0], null)
+        const tr = style.getPropertyValue('-webkit-transform') || style.getPropertyValue('transform')
+        const amount = Math.abs(parseInt(tr.split(',')[4]) || 0)
+        menu.css('transform', 'none')
+        menu.addClass('menu-no-transition')
+        container.scrollLeft((container.scrollLeft() || 0) + (scrollDir === 'left' ? - amount : + amount))
+        scrolling = false
+      })
+    }
+
   }
 
   private updateInteractiveOptions(view: Readonly<View>) {

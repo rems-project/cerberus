@@ -110,6 +110,25 @@ export function createStyle() {
   return style
 }
 
+export function checkOverflow(elem: JQuery<HTMLElement>, container: JQuery<HTMLElement>): string {
+  if (elem.length != 1 || container.length != 1)
+    throw new Error('checkOverflow expects only 1 element and 1 container.')
+  const elemMetrics = elem[0].getBoundingClientRect()
+  const elemRight = Math.floor(elemMetrics.right)
+  const elemLeft  = Math.floor(elemMetrics.left)
+  const containerMetrics = container[0].getBoundingClientRect()
+  const containerRight = Math.floor(containerMetrics.right)
+  const containerLeft  = Math.floor(containerMetrics.left)
+  if (containerLeft > elemLeft && containerRight < elemRight)
+    return 'both'
+  else if (elemLeft < containerLeft)
+    return 'left'
+  else if (elemRight > containerRight)
+    return 'right'
+  else
+    return 'none'
+}
+
 // WARNING: Unused function
 // @ts-ignore
 function getSTDSentence(std: any, section: string) {
