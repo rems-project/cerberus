@@ -4,6 +4,7 @@ open Instance_api
 open Json
 open Util
 
+
 (* Misc *)
 
 let write_tmp_file content =
@@ -46,21 +47,24 @@ type incoming_msg =
     rewrite: bool;
     sequentialise: bool;
     interactive: active_node option;
+    ui_switches: string list;
   }
 
-let parse_incoming_json msg =
+let parse_incoming_msg content =
   let empty = { action=         `Nop;
                 source=         "";
                 model=          "Concrete";
-                rewrite=        true;
-                sequentialise=  true;
+                rewrite=        false;
+                sequentialise=  false;
                 interactive=    None;
+                ui_switches=    []
               }
   in
-  let parse_option f = function
-    | `Null      -> None
-    | `String "" -> None
-    | x          -> Some (f x)
+  let empty_node_id = { last_id= 0;
+                        tagDefs= "";
+                        marshalled_state= "";
+                        active_id= 0;
+                      }
   in
   let action_from_string = function
     | "Elaborate"  -> `Elaborate
@@ -69,62 +73,59 @@ let parse_incoming_json msg =
     | "Step"       -> `Step
     | s -> failwith ("unknown action " ^ s)
   in
-  let parse_string = function
-    | `String s -> s
-    | _ -> failwith "expecting a string"
-  in
   let parse_bool = function
-    | `Bool b -> b
-    | _ -> failwith "expecting a bool"
+    | "true" -> true
+    | "false" -> false
+    | s ->
+      Debug.warn ("Unknown boolean " ^ s); false
   in
-  let parse_interactive = function
-    | `Assoc [("lastId",  `Int n);
-              ("state",   `String state);
-              ("active",  `Int i);
-              ("tagDefs", `String tagDefs);
-             ] -> (n, B64.decode state, i, B64.decode tagDefs)
-    | _ -> failwith "expecting state * integer"
-  in
-  let parse_assoc msg (k, v) =
-    match k with
-    | "action"  -> { msg with action= action_from_string (parse_string v) }
-    | "source"  -> { msg with source= parse_string v }
-    | "rewrite" -> { msg with rewrite= parse_bool v }
-    | "sequentialise" -> { msg with sequentialise= parse_bool v }
-    | "model"   -> { msg with model= parse_string v }
-    | "interactive" -> { msg with interactive=parse_option parse_interactive v }
-    | key ->
-      Debug.warn ("unknown value " ^ key ^ " when parsing incoming message");
+  let get = function Some m -> m | None -> empty_node_id in
+  let parse msg = function
+    | ("action", [act])      -> { msg with action= action_from_string act; }
+    | ("source", [src])      -> { msg with source= src; }
+    | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
+    | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
+    | ("model", [model])     -> { msg with model= model; }
+    | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
+    | ("interactive[lastId]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with last_id = int_of_string v } }
+    | ("interactive[state]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with marshalled_state = B64.decode v } }
+    | ("interactive[active]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with active_id = int_of_string v } }
+    | ("interactive[tagDefs]", [v]) ->
+      { msg with interactive= Some { (get msg.interactive) with tagDefs = B64.decode v } }
+    | (k, _) ->
+      Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
-  in
-  let rec parse msg = function
-    | `Assoc xs -> List.fold_left parse_assoc msg xs
-    | `List xs -> List.fold_left parse msg xs
-    | _ -> failwith "wrong message format"
-  in
-  parse empty msg
+  in List.fold_left parse empty content
 
 (* Outgoing messages *)
 
 let json_of_exec_tree ((ns, es) : exec_tree) =
-  let get_location _ = `Null in
-  let json_of_node = function
-    | Branch (id, lab, mem, loc) ->
-      let json_of_loc (loc, uid) =
-        `Assoc [("c", Json.of_location loc);
-                ("core", Json.of_opt_string uid)]
-      in
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("mem", mem); (* TODO *)
-              ("loc", Json.of_option json_of_loc loc);
-              ("group", `String "branch")]
-    | Leaf (id, lab, st) ->
-      `Assoc [("id", `Int id);
-              ("label", `String lab);
-              ("state", `String (B64.encode st));
-              ("loc", (get_location st)); (* TODO *)
-              ("group", `String "leaf")]
+  let json_of_info i =
+    `Assoc [("kind", `String i.step_kind);
+            ("debug", `String i.step_debug);
+            ("file", Json.of_opt_string i.step_file);
+            ("error_loc", Json.of_option Location_ocaml.to_json i.step_error_loc);]
+  in
+  let json_of_node n =
+    let json_of_loc (loc, uid) =
+      `Assoc [("c", Location_ocaml.to_json loc);
+              ("core", Json.of_opt_string uid) ]
+    in
+    `Assoc [("id", `Int n.node_id);
+            ("info", json_of_info n.node_info);
+            ("mem", n.memory);
+            ("loc", json_of_loc (n.c_loc, n.core_uid));
+            ("arena", `String n.arena);
+            ("env", `String n.env);
+            ("outp", `String n.outp);
+            ("state",
+             match n.next_state with
+             | Some state -> `String (B64.encode state)
+             | None -> `Null);
+           ]
   in
   let json_of_edge = function
     | Edge (p, c) -> `Assoc [("from", `Int p);
@@ -221,9 +222,34 @@ let not_allowed meth path =
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
 
-let respond_json json =
-  let headers = Cohttp.Header.of_list [("content-type", "application/json")] in
-  (Server.respond_string ~flush:true ~headers) `OK (Yojson.to_string json) ()
+let get_headers ?(gzipped=false) contentType =
+  Cohttp.Header.of_list @@
+  ("content-type", contentType) :: if gzipped then [("content-encoding", "gzip")] else []
+
+let respond_json ?(gzipped=false) json =
+  let headers = get_headers ~gzipped "application/json" in
+  let response_string = Yojson.to_string json in
+  Debug.print 10 "[ RESPONSE ]";
+  Debug.print 10 response_string;
+  let data = (if gzipped then Ezgzip.compress ~level:9 else id) response_string in
+  (Server.respond_string ~flush:true ~headers) `OK data ()
+
+let respond_file ~gzipped filename =
+  let ext = Filename.extension filename in
+  let contentType =
+    if ext = ".js" then Some "application/javascript"
+    else if ext = ".css" then Some "text/css"
+    else None
+  in match contentType with
+  | Some contentType ->
+    if gzipped && Sys.file_exists (filename ^ ".gz") then
+      let headers = get_headers ~gzipped contentType in
+      (Server.respond_file ~headers) (filename ^ ".gz") ()
+    else
+      let headers = get_headers contentType in
+      (Server.respond_file ~headers) filename ()
+  | None ->
+    Server.respond_file filename ()
 
 (* Cerberus actions *)
 
@@ -244,12 +270,12 @@ let log_request msg flow =
     ; close_out oc
   | _ -> ()
 
-
-let cerberus ~conf ~flow content =
-  let msg       = parse_incoming_json (Yojson.Basic.from_string content) in
+let cerberus ?(gzipped=false) ~conf ~flow content =
+  let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
-                              sequentialise_core = msg.sequentialise
+                              sequentialise_core = msg.sequentialise;
+                              switches = msg.ui_switches;
                   }
   in
   let timeout   = float_of_int conf.timeout in
@@ -270,11 +296,34 @@ let cerberus ~conf ~flow content =
     | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >>= respond_json % json_of_result
+  do_action msg.action >>= (respond_json ~gzipped) % json_of_result
 
 (* GET and POST *)
 
-let get ~docroot uri path =
+let head ~docroot ?(gzipped=false) uri path =
+  let is_regular filename =
+    match Unix.((stat filename).st_kind) with
+    | Unix.S_REG -> true
+    | _ -> false
+  in
+  let check_local_file () =
+    let filename = Server.resolve_local_file ~docroot ~uri in
+    if is_regular filename && Sys.file_exists filename then
+        Server.respond `OK  `Empty ()
+    else forbidden path
+  in
+  let try_with () =
+    Debug.print 10 ("HEAD " ^ path);
+    match path with
+    | "/" -> Server.respond `OK `Empty ()
+    | _   -> check_local_file ()
+  in catch try_with begin fun e ->
+    Debug.error_exception "HEAD" e;
+    forbidden path
+  end
+
+
+let get ~docroot ?(gzipped=false) uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -282,7 +331,8 @@ let get ~docroot uri path =
   in
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
-    if is_regular filename then Server.respond_file filename ()
+    if is_regular filename then
+      respond_file ~gzipped filename
     else forbidden path
   in
   let try_with () =
@@ -295,12 +345,11 @@ let get ~docroot uri path =
     forbidden path
   end
 
-let post ~docroot ~conf ~flow uri path content =
+let post ~docroot ?(gzipped=false) ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
-    Debug.print 8 ("POST data " ^ content);
     match path with
-    | "/cerberus" -> cerberus ~conf ~flow content
+    | "/cerberus" -> cerberus ~gzipped ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -317,11 +366,24 @@ let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
-  match meth with
-  | `HEAD -> get ~docroot uri path >|= fun (res, _) -> (res, `Empty)
-  | `GET  -> get ~docroot uri path
-  | `POST -> Cohttp_lwt__Body.to_string body >>= post ~docroot ~conf ~flow uri path
-  | _     -> not_allowed meth path
+  let try_with () =
+    let gzipped = match Cohttp__.Header.get req.headers "accept-encoding" with
+      | Some enc -> contains enc "gzip"
+      | None -> false
+    in
+    if gzipped then Debug.print 10 "accepts gzip";
+    match meth with
+    | `HEAD -> head ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
+    | `GET  -> get ~docroot ~gzipped uri path
+    | `POST ->
+      Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
+      post ~docroot ~gzipped ~conf ~flow uri path
+    | _     -> not_allowed meth path
+  in catch try_with begin fun e ->
+    Debug.error_exception "POST" e;
+    forbidden path
+  end
+
 
 let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try
@@ -329,9 +391,12 @@ let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
     let conf = { rewrite_core = false;
                  sequentialise_core = false;
                  tagDefs = "";
+                 switches = [];
                  cpp_cmd; core_impl; cerb_debug_level; timeout;
                }
     in
+    (* NOTE: ad-hoc fix for server crash: https://github.com/mirage/ocaml-cohttp/issues/511 *)
+    Lwt.async_exception_hook := ignore;
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
     Server.make ~callback: (request ~docroot ~conf) ()

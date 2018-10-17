@@ -47,6 +47,7 @@ CodeMirror.defineMode("core", function(_config, modeConfig) {
       return null;
     }
 
+    /*
     if (ch == '\'') {
       if (source.eat('\\')) {
         source.next();  // should handle other escapes here
@@ -59,8 +60,9 @@ CodeMirror.defineMode("core", function(_config, modeConfig) {
       }
       return "string error";
     }
+    */
 
-    if (ch == '"') {
+    if (ch == '"' || ch == "'") {
       return switchState(source, setState, stringLiteral);
     }
 
@@ -150,7 +152,7 @@ CodeMirror.defineMode("core", function(_config, modeConfig) {
   function stringLiteral(source, setState) {
     while (!source.eol()) {
       var ch = source.next();
-      if (ch == '"') {
+      if (ch == '"' || ch == "'") {
         setState(normal);
         return "string";
       }

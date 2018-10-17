@@ -2,6 +2,11 @@ open Prelude
 
 (* Pipeline *)
 
+let (>>=) = Exception.except_bind
+let (>>) m f = m >>= fun _ -> f
+let (<$>)  = Exception.except_fmap
+let return = Exception.except_return
+
 let run_pp with_ext doc =
   let (is_fout, oc) =
     match with_ext with
@@ -36,70 +41,30 @@ let cerb_path =
 let core_stdlib_path =
   Filename.concat cerb_path "include/core"
 
-(* TODO(someday): get rid of the Lexer_util and Input parametric stuff, we don't use it... *)
+(* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
   let filepath = Filename.concat core_stdlib_path "std.core" in
   if not (Sys.file_exists filepath) then
-    error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').");
-  Debug_ocaml.print_debug 5 [] (fun () ->
-    "reading Core standard library from `" ^ filepath ^ "'."
-  );
-  (* A preliminary instance of the Core parser (on that doesn't know the
-     definitions from the stdlib...) *)
-  let module Core_std_parser =
-    Parser_util.Make
-      (struct
-        include Core_parser.Make (struct
-          let sym_counter = sym_counter (* NOTE: this is why we need a reference for the counter ... *)
-          let mode = Core_parser_util.StdMode
-          let std = Pmap.empty Core_parser_util._sym_compare
-        end)
-        type result = Core_parser_util.result
-      end)
-      (Lexer_util.Make (Core_lexer)) in
-  (* TODO: maybe have a nicer handling of errors (though these are all fatal) *)
-  match Core_std_parser.parse (Input.file filepath) with
-    | Exception.Result (Core_parser_util.Rstd (ailnames, std_funs)) ->
-        (ailnames, std_funs)
-    | Exception.Result _ ->
-        error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
-    | Exception.Exception err ->
-        error ("[Core parsing error: stdlib] " ^ Pp_errors.to_string err)
+    error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
+  else
+    Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `" ^ filepath ^ "'.");
+    Core_parser_driver.parse_stdlib sym_counter filepath >>= function
+    | Core_parser_util.Rstd (ailnames, std_funs) ->
+      return (ailnames, std_funs)
+    | _ ->
+      error "while parsing the Core stdlib, the parser didn't recognise it as a stdlib."
 
-
+(* == load the implementation file ============================================================== *)
 let load_core_impl core_stdlib impl_name =
-  let filepath = Filename.concat core_stdlib_path ("impls/" ^ impl_name ^ ".impl") in
-  if not (Sys.file_exists filepath) then
-    error ("couldn't find the implementation file\n (looked at: `" ^ filepath ^ "').");
-  let module Core_parser =
-    Parser_util.Make (struct
-      include Core_parser.Make (struct
-        let sym_counter = sym_counter
-        let mode = Core_parser_util.ImplORFileMode
-        let std = List.fold_left (fun acc (fsym, _) ->
-          match fsym with
-            | Symbol.Symbol (_, Some str) ->
-                let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
-                Pmap.add (str, (std_pos, std_pos)) fsym acc
-            | Symbol.Symbol (_, None) ->
-                 acc
-        ) (Pmap.empty Core_parser_util._sym_compare) (Pmap.bindings_list (snd core_stdlib))
-      end)
-      type result = Core_parser_util.result
-    end) (Lexer_util.Make (Core_lexer)) in
-  (* TODO: maybe have a nicer handling of errors (though these are all fatal) *)
-  match Core_parser.parse (Input.file filepath) with
+  let iname = Filename.concat core_stdlib_path ("impls/" ^ impl_name ^ ".impl") in
+  if not (Sys.file_exists iname) then
+    error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
+  else
+    match Core_parser_driver.parse sym_counter core_stdlib iname with
     | Exception.Result (Core_parser_util.Rimpl impl_map) ->
-        impl_map
-    | Exception.Result (Core_parser_util.Rfile _ | Core_parser_util.Rstd _) ->
-        assert false
-    | Exception.Exception err ->
-        error ("[Core parsing error: impl-file] " ^ Pp_errors.to_string err)
-
-
-let return = Exception.except_return
-let (>>=)  = Exception.except_bind
-let (<$>)  = Exception.except_fmap
+      return impl_map
+    | _ ->
+      error "while parsing the Core impl, the parser didn't recognise it as an impl ."
 
 let (>|>) m1 m2 =
   m1 >>= fun z  ->
@@ -124,8 +89,6 @@ type configuration = {
   rewrite_core: bool;
   sequentialise_core: bool;
   cpp_cmd: string;
-  core_stdlib: (string, Symbol.sym) Pmap.map * unit Core.fun_map;
-  core_impl: Core.impl;
 }
 
 type io_helpers = {
@@ -137,13 +100,20 @@ type io_helpers = {
   warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
+let read_entire_file filename =
+  let ic = open_in filename in
+  let n = in_channel_length ic in
+  let bs = Bytes.create n in
+  really_input ic bs 0 n;
+  close_in ic;
+  Bytes.to_string bs
 
-let c_frontend (conf, io) ~filename =
+let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   let open Debug_ocaml in
   (* -- *)
   let parse filename =
-    Cparser_driver.parse (Input.file filename) >>= fun cabs_tunit ->
+    Cparser_driver.parse filename >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
@@ -154,8 +124,8 @@ let c_frontend (conf, io) ~filename =
     end >>= fun () -> return cabs_tunit in
   (* -- *)
   let desugar cabs_tunit =
-    let (ailnames, core_stdlib_fun_map) = conf.core_stdlib in
-    Cabs_to_ail.desugar !sym_counter (ailnames, core_stdlib_fun_map, conf.core_impl)
+    let (ailnames, core_stdlib_fun_map) = core_stdlib in
+    Cabs_to_ail.desugar !sym_counter (ailnames, core_stdlib_fun_map, core_impl)
       "main" cabs_tunit >>= fun (sym_suppl, ail_prog) ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"
@@ -193,8 +163,8 @@ let c_frontend (conf, io) ~filename =
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
   let processed_filename = Filename.(temp_file (basename filename) "") in
   io.print_debug 5 (fun () -> "C prepocessor outputed in: `" ^ processed_filename ^ "`") >>= fun () ->
-  if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename (*^ " 2> /dev/null"*)) <> 0 then
-    error "the C preprocessor failed";
+  if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename ^ " 2> cpp_error") <> 0 then
+    error @@ read_entire_file "cpp_error";
   (* -- *)
   parse processed_filename  >>= fun cabs_tunit            ->
   desugar cabs_tunit        >>= fun (sym_suppl, ail_prog) ->
@@ -204,48 +174,29 @@ let c_frontend (conf, io) ~filename =
   (* TODO(someday): find a better way *)
   Tags.reset_tagDefs ();
   let (sym_suppl', core_file) =
-    Translation.translate conf.core_stdlib conf.core_impl (sym_suppl, ailtau_prog) in
+    Translation.translate core_stdlib core_impl (sym_suppl, ailtau_prog) in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
   return (Some cabs_tunit, Some ailtau_prog, sym_suppl', core_file)
 
-
-let core_frontend (conf, io) ~filename =
+let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
-  (* An instance of the Core parser knowing about the stdlib functions we just parsed *)
-  let module Core_parser =
-    Parser_util.Make (struct
-      include Core_parser.Make (struct
-        let sym_counter = sym_counter
-        let mode = Core_parser_util.ImplORFileMode
-        let std = List.fold_left (fun acc (fsym, _) ->
-          match fsym with
-            | Symbol.Symbol (_, Some str) ->
-                let std_pos = {Lexing.dummy_pos with Lexing.pos_fname= "core_stdlib"} in
-                Pmap.add (str, (std_pos, std_pos)) fsym acc
-            | Symbol.Symbol (_, None) ->
-                acc
-        ) (Pmap.empty Core_parser_util._sym_compare) (Pmap.bindings_list (snd conf.core_stdlib))
-      end)
-      type result = Core_parser_util.result
-    end) (Lexer_util.Make (Core_lexer)) in
-  Core_parser.parse (Input.file filename) >>= function
-    | Core_parser_util.Rfile (sym_main, globs, funs) ->
-        Exception.except_return
-          ( None
-          , None
-          , Symbol.Symbol (!sym_counter, None)
-          , { Core.main= Some sym_main;
-              Core.tagDefs= (Pmap.empty (Symbol.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method));
-              Core.stdlib= snd conf.core_stdlib;
-              Core.impl= conf.core_impl;
-              Core.globs= globs;
-              Core.funs= funs } )
+  Core_parser_driver.parse sym_counter core_stdlib filename >>= function
+    | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
+        Tags.set_tagDefs tagDefs;
+        return (Symbol.Symbol (!sym_counter, None), {
+           Core.main=   Some sym_main;
+           Core.tagDefs= tagDefs;
+           Core.stdlib= snd core_stdlib;
+           Core.impl=   core_impl;
+           Core.globs=  globs;
+           Core.funs=   funs;
+           Core.funinfo= Pmap.empty (fun _ _ -> 0); (* TODO: need to parse funinfo! *)
+         })
     | Core_parser_util.Rstd _ ->
-        error "found no `main' function in the Core program"
+        error "Found no main function in the Core program"
     | Core_parser_util.Rimpl _ ->
-        error "core_frontend found a Rimpl"
-
+        failwith "core_frontend found a Rimpl"
 
 let rewrite_core (conf, io) core_file =
   return (Core_rewrite.rewrite_file core_file) >|>

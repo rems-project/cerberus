@@ -343,7 +343,7 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   | OTy_array _
   | OTy_struct _ ->
       assert false
-  | OTy_cfunction _ -> CFunctionSort.mk_sort (* TODO *)
+  (*| OTy_cfunction _ -> CFunctionSort.mk_sort (* TODO *)*)
   | OTy_union _ ->
       assert false
 
@@ -418,10 +418,11 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
   | OVpointer pv ->
       assert (is_null pv);
       PointerSort.mk_null
-  | OVcfunction (Sym sym) ->
-      CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym))
+  (*| OVcfunction (Sym sym) ->
+      CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym)) 
   | OVcfunction _ ->
       assert false
+  *)
   | OVarray _
   | OVstruct _
   | OVunion _
@@ -827,7 +828,7 @@ let initialise_simple_param ((sym, ty) : sym_ty * core_base_type)
    *       Pointers: need to do a create maybe. *)
   add_sym_to_sym_table sym ty
 
-let rec add_pattern_to_sym_table (pattern: typed_pattern)
+let rec add_pattern_to_sym_table (Pattern(_, pattern): typed_pattern)
                                  : unit BmcM.eff =
   match pattern with
   | CaseBase(None, _) ->
@@ -852,7 +853,7 @@ let mk_let_binding (maybe_sym: sym_ty option)
       else
         return (mk_eq sym_expr expr)
 
-let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
+let rec mk_let_bindings (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
                         : Expr.expr BmcM.eff =
   match pat with
   | CaseBase(maybe_sym, _) ->
@@ -862,19 +863,19 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
       BmcM.mapM (fun (pat, e) -> mk_let_bindings pat e)
                 (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
       return (mk_and bindings)
-  | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_integer)]) ->
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
       let is_specified = LoadedInteger.is_specified expr in
       let specified_value = LoadedInteger.get_specified_value expr in
       mk_let_binding sym specified_value >>= fun is_eq_value ->
       return (mk_and [is_specified; is_eq_value])
-  | CaseCtor(Cspecified, [CaseBase(sym, BTy_object OTy_pointer)]) ->
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
       let is_specified = LoadedPointer.is_specified expr in
       let specified_value = LoadedPointer.get_specified_value expr in
       mk_let_binding sym specified_value >>= fun is_eq_value ->
       return (mk_and [is_specified; is_eq_value])
   | CaseCtor(Cspecified, _) ->
       assert false
-  | CaseCtor(Cunspecified, [CaseBase(sym, BTy_ctype)]) ->
+  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
       let (is_unspecified, unspecified_value) =
         if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
           let is_unspecified = LoadedInteger.is_unspecified expr in
@@ -895,7 +896,7 @@ let rec mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
       assert false
 
 (* =========== PATTERN MATCHING =========== *)
-let rec pattern_match (pattern: typed_pattern)
+let rec pattern_match (Pattern(_,pattern): typed_pattern)
                       (expr: Expr.expr)
                       : Expr.expr =
   match pattern with
@@ -907,13 +908,13 @@ let rec pattern_match (pattern: typed_pattern)
       let match_conditions =
         List.map2 (fun pat e -> pattern_match pat e) patlist expr_list in
       mk_and match_conditions
-  | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_integer)]) ->
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_integer))]) ->
       LoadedInteger.is_specified expr
-  | CaseCtor(Cspecified, [CaseBase(_, BTy_object OTy_pointer)]) ->
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(_, BTy_object OTy_pointer))]) ->
       LoadedPointer.is_specified expr
   | CaseCtor(Cspecified, _) ->
       assert false
-  | CaseCtor(Cunspecified, [CaseBase(_, BTy_ctype)]) ->
+  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(_, BTy_ctype))]) ->
       if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
         LoadedInteger.is_unspecified expr
       else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
@@ -1762,6 +1763,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
              }
   | Eproc _ ->
       assert false
+  (* TODO: reenable eccall
   | Eccall(_, Pexpr(_, BTy_object (OTy_cfunction (retTy, numArgs, var)),
                     cfun), arglist) ->
       begin
@@ -1854,6 +1856,7 @@ let rec bmc_expr (Expr(_, expr_): unit typed_expr)
           *)
       | _ -> assert false
       end
+  *)
   | Eccall _ -> assert false
   | Eunseq elist ->
       assert (not !!bmc_conf.sequentialise);
@@ -2094,7 +2097,7 @@ let bmc_globals globals : bmc_gret BmcM.eff =
   BmcM.mapM (
     fun (sym, cbt, expr) ->
       bmc_expr expr                                      >>= fun ret_expr ->
-      add_pattern_to_sym_table (CaseBase(Some sym, cbt)) >>= fun () ->
+        add_pattern_to_sym_table (Pattern([], CaseBase(Some sym, cbt))) >>= fun () ->
       mk_let_binding (Some sym) ret_expr.expr            >>= fun binding ->
       return { asserts = (mk_let binding) :: ret_expr.asserts
              ; preexec = ret_expr.preexec

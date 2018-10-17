@@ -4,14 +4,14 @@ import Constraint Undefined
 type typing_misc_error =
   | UntypableIntegerConstant of integer (* §6.4.4.1#6, sentence 5 *)
   | ParameterTypeNotAdjusted (* internal *)
+  | VaStartArgumentType (* §7.16.1.4#1 *)
+  | VaArgArgumentType (* §7.16.1.1#1 *)
 
 type typing_error =
   | TError_ConstraintViolation of Constraint.violation
   | TError_UndefinedBehaviour of Undefined.undefined_behaviour
   | TError_MiscError of typing_misc_error
   | TError_NotYetSupported of string
-  | TError_TODO of nat (* TODO: change this to string later *)
-  | TError of string (* TODO: remove this *)
 
 val std_of_typing_misc_error: typing_misc_error -> list string
 let std_of_typing_misc_error = function
@@ -19,9 +19,12 @@ let std_of_typing_misc_error = function
       ["§6.4.4.1#6, sentence 5"]
   | ParameterTypeNotAdjusted ->
       []
+  | VaStartArgumentType ->
+      ["§7.16.1.4#1"; "§7.16#3"]
+  | VaArgArgumentType ->
+      ["§7.16.1.1#1"; "§7.16#3"]
 end
 
-(* TODO: change return type to just string *)
 val std_of_ail_typing_error: typing_error -> list string
 let std_of_ail_typing_error = function
   | TError_ConstraintViolation v ->
@@ -33,7 +36,7 @@ let std_of_ail_typing_error = function
       end
   | TError_MiscError e ->
       std_of_typing_misc_error e
-  | _ ->
+  | TError_NotYetSupported ->
       []
 end
 

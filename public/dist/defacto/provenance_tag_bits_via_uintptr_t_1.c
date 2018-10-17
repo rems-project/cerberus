@@ -12,13 +12,13 @@ int main() {
   // construct an integer like &x with low-order bit set
   i = i | 1u;  
   // cast back to a pointer
-  int *q = (int *) i; // defined behaviour?
+  int *q = (int *) i; // does this have defined behaviour?
   // cast to integer and mask out the low-order two bits
   uintptr_t j = ((uintptr_t)q) & ~((uintptr_t)3u);  
   // cast back to a pointer
   int *r = (int *) j; 
   // are r and p now equivalent?  
-  *r = 11;           //  defined behaviour? 
-  _Bool b = (r==p); 
+  *r = 11;           //  does this have defined behaviour? 
+  _Bool b = (r==p);  //  is this true?
   printf("x=%i *r=%i (r==p)=%s\n",x,*r,b?"true":"false");  
 }

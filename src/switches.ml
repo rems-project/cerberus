@@ -6,6 +6,9 @@ type cerb_switch =
     (* makes it an error to free a NULL pointer (stricter than ISO) *)
   | SW_forbid_nullptr_free
   | SW_zap_dead_pointers
+  
+    (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
+  | SW_no_integer_provenance of int
 
 
 let internal_ref =
@@ -18,6 +21,9 @@ let get_switches () =
 let has_switch sw =
   List.mem sw !internal_ref
 
+
+let has_switch_pred pred =
+  List.find_opt pred !internal_ref
 
 
 
@@ -32,6 +38,12 @@ let set strs =
         Some SW_forbid_nullptr_free
     | "zap_dead_pointers" ->
         Some SW_zap_dead_pointers
+    | "no_integer_provenance" ->
+        Some (SW_no_integer_provenance 0)
+    | "no_integer_provenance_v1" ->
+        Some (SW_no_integer_provenance 1)
+    | "no_integer_provenance_v4" ->
+        Some (SW_no_integer_provenance 4)
     | _ ->
         None in
   List.iter (fun str ->

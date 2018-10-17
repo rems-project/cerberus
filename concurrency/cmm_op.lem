@@ -291,7 +291,7 @@ import Nondeterminism
 let inline (>>=) = Nondeterminism.bindExhaustive 
 let inline (>>) m1 m2 = Nondeterminism.bindExhaustive m1 (fun _ -> m2)
 
-type ndM 'a = Nondeterminism.ndM 'a string Mem.mem_iv_constraint unit
+type ndM 'a = Nondeterminism.ndM 'a string string Mem.mem_iv_constraint unit
 
 (* Auxiliaries *)
 

@@ -1,9 +1,9 @@
 import { Node, Edge, Graph } from './graph'
+import { Range, Locations } from './location'
 
 namespace Common {
   export type Bytes = string | undefined
-
-  export type ID = string | number
+  export type ID = number
 
   export enum ExecutionMode {
     Random,
@@ -66,37 +66,27 @@ namespace Common {
     throw `Model ${m} does not exist.`
   }
 
-  export type MemoryValue =
-  {
-    kind: 'scalar',
+  export type MemoryValueRow = {
+    size: number
+    ispadding: boolean
+    path: string[]
     value: string
-  } | {
-    kind: 'pointer',
-    provenance: string
-    value: string
-  } | {
-    kind: 'array',
-    value: [MemoryValue]
-  } | {
-    kind: 'struct'
-    fields: [ { tag: string, value: MemoryValue } ]
-  } | {
-    kind: 'union',
-    tag: string,
-    value: MemoryValue
+    pointsto: number | null
+    dashed: boolean
+    hex: boolean
+    prov: number | null
   }
 
-  export type Memory =
-    { 
-      kind: 'concrete',
-      allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
-    } | {
-      kind: 'twin',
-      allocations: {[key: string]: {id: string, base: string, type: string, size: string, value: MemoryValue}},
-    } | {
-      kind: 'symbolic',
-      allocations: any
-    }
+  export type MemoryAllocation = {
+    id: number,
+    base: number,
+    type: string,
+    prefix: string | null,
+    size: number,
+    rows: MemoryValueRow[]
+  }
+
+  export type Memory = {[key:string]: MemoryAllocation}
 
   export interface InteractiveRequest {
     lastId: ID,
@@ -111,20 +101,10 @@ namespace Common {
     core: string
   }
 
-  export interface Point {
-    line: number
-    ch: number
-  }
-
-  export interface Range {
-    begin: Point
-    end: Point
-  }
-
-  export interface Locations {
-    c: Range
-    core: Range
-    color: number
+  export enum InteractiveMode {
+    CLine,  // Step to the next C line
+    Memory, // Step to the next memory transition
+    Core    // Step each Core transition
   }
 
   export interface State {
@@ -133,58 +113,61 @@ namespace Common {
     pp: IR
     ast: IR
     locs: Locations[]
-    graph: Graph
-    mem: Graph
-    result: string
+    //result: string
     console: string
     lastNodeId: ID 
     tagDefs?: Bytes
-    ranges?: any
+    ranges?: Range[]
     dirty: boolean
-  }
-
-  export interface ResultTree {
-    nodes: Node []
-    edges: Edge []
+    switches: string [],
+    arena: string
+    // Interactive mode
+    hide_tau: boolean // Hide tau transition option
+    skip_tau: boolean // Skip tau transition
+    mode: InteractiveMode
+    step_counter: number
+    stdout: string
+    //lastCline: number | undefined
+    history: ID [] // History of execution (allows to go back)
+    exec_options: ID []
+    graph: Graph // Current execution graph
+    dotMem: string // DOT representation
+    dotExecGraph: string // DOT representation
   }
 
   export type ResultRequest =
     { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
     { status: 'execution', console: string, result: string} |
-    { status: 'interactive', tagDefs: Bytes, ranges: any, steps: ResultTree} |
-    { status: 'stepping', result: string, activeId: number, steps: ResultTree} |
+    { status: 'interactive', tagDefs: Bytes, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
+    { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
     { status: 'failure', console: string, result: string }
 
   export type Event =
     'update' |            // Update tab values
     'updateExecution' |   // Update execution result
-    'clearGraph'  |       // Clear step graph
-    'updateGraph' |       // Update step graph
-    'setMemory' |         // Set memory state
-    'updateMemory' |      // Update memory graph
-    'resetInteractive' |  // Reset interactive mode
-    'step' |              // Step interactive mode
     'mark' |              // Mark location
     'markError' |         // Mark error location
-    'markInteractive' |   // Mark when interactive mode
     'clear' |             // Clear all markings
     'highlight' |         // Highlight the entire file
-    'dirty'               // Fired when file has changed
+    'dirty' |             // Fired when file has changed
+    'updateStepButtons' |
+    'updateArena' |       // Update arena
+    'updateExecutionGraph' | // Update execution graph
+    'updateMemory' |      // Update memory graph (calls VIZ)
+    'markInteractive'     // Mark source locations when in interactive mode
 
   export interface EventEmitter {
     on (eventName: 'clear', self: any, f: (locs: Locations) => void): void
     on (eventName: 'mark', self: any, f: (locs: Locations) => void): void
     on (eventName: 'markError', self: any, f: (line: number) => void): void
     on (eventName: 'dirty', self: any, f: () => void): void
-    on (eventName: 'step', self: any, f: (active: Node) => void): void
-    on (eventName: 'setMemory', self: any, f: (mem: any) => void): void
     on (eventName: 'markInteractive', self: any, f: ((l:any, s: Readonly<State>) => void)): void
     on (eventName: Event, self: any, f: ((s: Readonly<State>) => void)): void
     off (self: any): void 
     once (f: ((s: Readonly<State>) => any)): any
     emit (eventName: 'clear'): void
     emit (eventName: 'mark'): void
-    emit (eventName: Event, ...args: any[]): void // TODO: take any any out!!
+    emit (eventName: Event, ...args: any[]): void
   }
 
   export interface Compiler {

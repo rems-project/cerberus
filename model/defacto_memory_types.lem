@@ -112,7 +112,7 @@ and impl_mem_value =
   | MVfloating of AilTypes.floatingType * impl_floating_value
   | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
   | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
-  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * Core_ctype.ctype * impl_mem_value)
   | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
   
   | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value

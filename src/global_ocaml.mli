@@ -31,9 +31,6 @@ type cerberus_conf = {
   cpp_cmd:         string;
   pps:             language list;
   ppflags:         pp_flag list;
-  core_stdlib:     (string, Symbol.sym) Pmap.map * unit Core.fun_map;
-  core_impl_opt:   Core.impl option;
-  core_parser:     Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM;
   exec_mode_opt:   Smt2.execution_mode option;
   ocaml:           bool;
   ocaml_corestd:   bool;
@@ -67,11 +64,8 @@ val set_cerb_conf:
     string ->
     language list ->
     pp_flag list ->
-    (string, Symbol.sym) Pmap.map * unit Core.fun_map ->
-    Core.impl option ->
     bool ->
     Smt2.execution_mode ->
-    (Input.t -> (Core_parser_util.result, Errors.error) Exception.exceptM) ->
     bool ->
     bool ->
     bool ->

@@ -169,7 +169,7 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Eskip ->
         (* unchanged *)
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         (* unchanged *)
         expr
     | Eproc _ _ _ ->
@@ -252,7 +252,7 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
     | Eskip ->
         (* unchanged *)
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         (* unchanged *)
         expr
     | Eproc _ _ _ ->
@@ -472,7 +472,7 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         end
     | Eskip ->
         Left expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         Left expr
     | Eproc _ _ _ ->
         Left expr
@@ -593,13 +593,13 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
         Expr annot (Eif pe1 (flatten_seqs e2) (flatten_seqs e3))
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr
     | Eunseq es ->
         Expr annot (Eunseq (List.map flatten_seqs es))
-    | Ewseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+    | Ewseq (Pattern _ (CaseBase (Nothing, _))) (Expr _ Eskip) e2 ->
         (* TODO: could be generalised to any "always defined" Epure *)
         flatten_seqs e2
     | Ewseq pat e1 e2 ->
@@ -611,7 +611,7 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
           | (e1', e2') ->
               Expr annot (Ewseq pat e1' e2')
         end
-    | Esseq (CaseBase (Nothing, _)) (Expr _ Eskip) e2 ->
+    | Esseq (Pattern _ (CaseBase (Nothing, _))) (Expr _ Eskip) e2 ->
         (* TODO: could be generalised to any "always defined" Epure *)
         flatten_seqs e2
     | Esseq pat e1 e2 ->
@@ -717,6 +717,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEstruct sym (List.map (fun (ident, pe) -> (ident, remove_conv_int_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
         PEunion sym ident (remove_conv_int_pexpr pe)
+    | PEcfunction pe ->
+        PEcfunction (remove_conv_int_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         PEmemberof tag_sym memb_ident (remove_conv_int_pexpr pe)
     | PEcall nm pes ->
@@ -761,7 +763,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEis_unsigned (remove_conv_int_pexpr pe)
     | PEbmc_assume pe ->
         PEbmc_assume (remove_conv_int_pexpr pe)
-
+    | PEare_compatible pe1 pe2 ->
+        PEare_compatible (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
   end
 
 let rec remove_conv_int (Expr annot expr_) =
@@ -784,8 +787,8 @@ let rec remove_conv_int (Expr annot expr_) =
         Eif (remove_conv_int_pexpr pe1) (remove_conv_int e2) (remove_conv_int e3)
     | Eskip ->
         expr_
-    | Eccall () pe pes ->
-        Eccall () (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
+    | Eccall () ty pe pes ->
+        Eccall () (remove_conv_int_pexpr ty) (remove_conv_int_pexpr pe) (List.map remove_conv_int_pexpr pes)
     | Eproc () nm pes ->
         Eproc () nm (List.map remove_conv_int_pexpr pes)
     | Eunseq es ->
@@ -886,14 +889,14 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
         Eif pe1 (sequentialise_creates_kills e2) (sequentialise_creates_kills e3)
     | Eskip ->
         expr_
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr_
     | Eproc _ _ _ ->
         expr_
     | Eunseq es ->
         if List.all is_kill es then
           List.foldr (fun e acc ->
-            Esseq (CaseBase (Nothing, BTy_unit)) e (Expr [] acc)
+            Esseq (Pattern [] (CaseBase (Nothing, BTy_unit))) e (Expr [] acc)
           ) Eskip es
         else
           Eunseq (List.map sequentialise_creates_kills es)
@@ -1040,6 +1043,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         List.all (fun (_, pe) -> isAlwaysDefined pe) ident_pes
     | PEunion _ _ pe ->
         isAlwaysDefined pe
+    | PEcfunction pe ->
+        isAlwaysDefined pe
     | PEmemberof _ _ pe ->
         isAlwaysDefined pe
     | PEcall _ pes ->
@@ -1059,6 +1064,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe
     | PEbmc_assume _ ->
         false
+    | PEare_compatible pe1 pe2 ->
+        isAlwaysDefined pe1 && isAlwaysDefined pe2
 end
 
 let rec pure_propagation2 (Expr annot expr_ as expr) =
@@ -1120,7 +1127,7 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         end
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr
@@ -1141,7 +1148,8 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
                   end) es' in
               Expr annot (Eunseq es'')
         end
-    | Ewseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+        (*
+    | Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1157,17 +1165,23 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Ewseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Ewseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Ewseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
+       *)
     | Ewseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+              match subst_pattern pat pe1 e2 with
+                | Just e -> pure_propagation2 e
+                | Nothing -> Expr annot (Ewseq pat e1' (pure_propagation2 e2))
+              end
+              (*pure_propagation2 (unsafe_subst_pattern pat pe1 e2)*)
           | Nothing ->
               Expr annot (Ewseq pat e1' (pure_propagation2 e2))
        end
-    | Esseq (CaseCtor Ctuple pats) (Expr annot_unseq (Eunseq es)) e2 ->
+       (*
+    | Esseq (Pattern annot_ctor (CaseCtor Ctuple pats)) (Expr annot_unseq (Eunseq es)) e2 ->
         let (cont, pats', es') =
           List.foldr (fun (pat, e) (cont, pats_acc, es_acc) ->
             let e = (pure_propagation2 e) in
@@ -1183,13 +1197,18 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
          | ([pat'], [e']) ->
              Expr annot (Esseq pat' e' (pure_propagation2 (cont e2)))
          | _ ->
-             Expr annot (Esseq (CaseCtor Ctuple pats') (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
+             Expr annot (Esseq (Pattern annot_ctor (CaseCtor Ctuple pats')) (Expr annot_unseq (Eunseq es')) (pure_propagation2 (cont e2)))
        end
+       *)
     | Esseq pat e1 e2 ->
         let e1' = pure_propagation2 e1 in
         match to_pure' e1' with
           | Just pe1 ->
-              pure_propagation2 (unsafe_subst_pattern pat pe1 e2)
+              match subst_pattern pat pe1 e2 with
+                | Just e -> pure_propagation2 e
+                | Nothing -> Expr annot (Esseq pat e1' (pure_propagation2 e2))
+              end
+              (*pure_propagation2 (unsafe_subst_pattern pat pe1 e2)*)
           | Nothing ->
               Expr annot (Esseq pat e1' (pure_propagation2 e2))
        end
@@ -1228,7 +1247,7 @@ this could match for e1, but the current code assumes it doesn't and match e2 in
 
 
 *)
-let rec simpl_match_pattern pat pe =
+let rec simpl_match_pattern (Pattern _ pat) pe =
   if not (isAlwaysDefined pe) then
     Nothing
   else match (pat, pe) with
@@ -1327,6 +1346,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEstruct sym (List.map (fun (ident, pe) -> (ident, simpl_case_pexpr pe)) ident_pes)
     | PEunion sym ident pe ->
         wrap $ PEunion sym ident (simpl_case_pexpr pe)
+    | PEcfunction pe ->
+        wrap $ PEcfunction (simpl_case_pexpr pe)
     | PEmemberof tag_sym memb_ident pe ->
         wrap $ PEmemberof tag_sym memb_ident (simpl_case_pexpr pe)
     | PEcall nm pes ->
@@ -1345,6 +1366,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEis_unsigned (simpl_case_pexpr pe)
     | PEbmc_assume pe ->
         pexpr
+    | PEare_compatible pe1 pe2 ->
+        wrap $ PEare_compatible (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
   end
 
 let rec simpl_case (Expr annot expr_ as expr) =
@@ -1369,7 +1392,7 @@ let rec simpl_case (Expr annot expr_ as expr) =
         wrap $ Eif pe1 (simpl_case e2) (simpl_case e3)
     | Eskip ->
         expr
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
         expr

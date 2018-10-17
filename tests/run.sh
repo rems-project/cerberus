@@ -102,15 +102,15 @@ echo "TCC FAILED: $fail"
 create_testsuite "tcc"
 
 # Running gcc torture
-#for file in gcc-torture/breakdown/success/*.c
-#do
-#  # Disable -traditional-cpp
-#  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec --batch > tmp/result 2> tmp/stderr
-#  grep -E "Specified.0.|EXIT" tmp/result > /dev/null
-#  report $file $?
-#done
-#echo "GCC-TORTURE PASSED: $pass"
-#echo "GCC-TORTURE FAILED: $fail"
-#create_testsuite "gcc-torture"
+for file in gcc-torture/breakdown/success/*.c
+do
+  # Disable -traditional-cpp
+  ../cerberus $file --cpp="cc -E -C -nostdinc -undef -D__cerb__ -I../include/c/libc -I..include/c/posix" --exec --batch > tmp/result 2> tmp/stderr
+  grep -E "Specified.0.|EXIT" tmp/result > /dev/null
+  report $file $?
+done
+echo "GCC-TORTURE PASSED: $pass"
+echo "GCC-TORTURE FAILED: $fail"
+create_testsuite "gcc-torture"
 
 echo "</testsuites>" >> $JOUTPUT_FILE

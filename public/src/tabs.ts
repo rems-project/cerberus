@@ -1,11 +1,12 @@
 import $ from 'jquery'
-import _ from 'lodash'
-import vis from 'vis'
+import { includes } from 'lodash'
 import CodeMirror from 'codemirror'
-import { Node, Edge, Graph } from './graph';
 import Util from './util'
 import Common from './common'
-import UI from './ui'
+import { Point, Locations } from './location'
+import UI from './ui' 
+// @ts-ignore: Viz has type 'any'
+import Viz from './js/viz.js'
 
 namespace Tabs {
 
@@ -31,6 +32,9 @@ export abstract class Tab {
 
   /** Update value (receives current state) */
   update(s: Readonly<Common.State>) {}
+
+  /** Update initial value (receives current state) */
+  initial(s: Readonly<Common.State>) { this.update(s) }
   
   /** Implemented by GoldenLayout when tab content is attached to it */
   setActive () {}
@@ -60,250 +64,170 @@ export class Preferences extends Tab {
   }
 }
 
-export class Interactive extends Tab {
-  // UI
-  stepBtn: JQuery<HTMLElement>
-  nextBtn: JQuery<HTMLElement>
-  hideTau: boolean
-  //
-  graph: Graph
-  network: vis.Network
-
-  constructor(ee: Common.EventEmitter) {
-    super('Interactive', ee)
-
-    let toolbar = $('<div class="toolbar"></div>')
-    toolbar.attr('align', 'right')
-
-    this.stepBtn = $('<div class="btn inline">Step</div>')
-    toolbar.append(this.stepBtn)
-
-    this.nextBtn = $('<div class="btn inline">Next</div>')
-    toolbar.append(this.nextBtn)
-
-    let restartBtn = $('<div class="btn inline">Restart</div>')
-    toolbar.append(restartBtn)
-
-    let hideTauBtn = $('<div class="btn inline">Show tau steps</button>')
-    toolbar.append(hideTauBtn)
-    this.hideTau = true
-
-    let container = $('<div align="center" class="graph"></div>')
-
-    this.dom.append(toolbar)
-    this.dom.append(container)
-
-    // Setup Graph Network
-    let options : vis.Options = {
-      nodes: {
-        shape: 'dot',
-        size: 10,
-        shapeProperties: {
-          borderRadius: 2,
-          borderDashes: false,
-          interpolation: false,
-          useImageSize: false,
-          useBorderWithImage: false
-        },
-        color: {
-          border: '#5f5f5f',
-          background: '#5f5f5f',
-          highlight: {
-            border: '#7f7f7f',
-            background: '#7f7f7f'
-          }
-        },
-        font: {
-          align: 'left'
-        },
-        fixed: true
-      },
-      edges: {
-        arrows: {to: true},
-        font: {
-          background: '#ffffff',
-          color: '#5f5f5f',
-        },
-      },
-      groups: {
-        leaf: {
-          color: {
-            background: '#044777',
-            border: '#044777',
-            highlight: {
-              border: '#7f7f7f',
-              background: '#033777'
-            }
-          }
-        },
-        branch: {
-          color: {
-            border: '#5f5f5f',
-            background: '#5f5f5f',
-            highlight: {
-              border: '#7f7f7f',
-              background: '#7f7f7f'
-            }
-          }
-        }
-      },
-      layout: {
-        hierarchical: {
-          enabled: true,
-          levelSeparation: 90,
-          nodeSpacing: 200
-        }
-      },
-      interaction: {
-        navigationButtons: true,
-        selectable: true,
-        selectConnectedEdges: false
-      }
+class SvgGraph extends Tab {
+  panzoomOptions: any
+  container: JQuery<HTMLElement>
+  svg: JQuery<HTMLElement>
+  
+  constructor(name: string, ee: Common.EventEmitter) {
+    super (name, ee)
+    const controls = $('<div class="toolbar"></div>')
+    const zoomIn = $('<div class="menu-item btn inline">Zoom In</div>')
+    const zoomOut = $('<div class="menu-item btn inline">Zoom Out</div>')
+    const range = $('<input class="menu-item range" type="range" step="0.05" min="0.1" max="2">')
+    const reset = $('<div class="menu-item reset btn inline">Reset</div>')
+    controls.append(zoomIn)
+    controls.append(zoomOut)
+    controls.append(range)
+    controls.append(reset)
+    this.container = $('<div align="center" class="graph"></div>')
+    this.dom.append(controls)
+    this.dom.append(this.container)
+    this.panzoomOptions = {
+      $zoomIn: zoomIn,
+      $zoomOut: zoomOut,
+      $zoomRange: range,
+      $reset: reset,
+      increment: 0.1,
+      minScale: 0.1,
+      maxScale: 2
     }
+    this.svg = $('<span>No data...</span>')
+  }
 
-    this.graph = new Graph()
-    this.network = new vis.Network(container[0], this.graph, options)
-    
-    this.stepBtn.on('click', () => this.step(this.getSelectedNode()))
-    this.nextBtn.on('click', () => this.step(this.getSelectedNode()))
-    restartBtn.on('click', () => ee.emit('resetInteractive'))
-
-    hideTauBtn.on('click', () => {
-      this.hideTau = !this.hideTau
-      if (this.hideTau)
-        hideTauBtn.text('Show tau steps')
-      else
-        hideTauBtn.text('Hide tau steps')
-      this.graph.clear()
-      ee.once((s: Common.State) => this.updateGraph(s.graph))
+  setSVG(data: string) {
+    this.container.empty()
+    this.container.append(Viz(data))
+    this.svg = this.container.find('svg')
+    this.svg.addClass('panzoom')
+    // @ts-ignore
+    this.svg.panzoom(this.panzoomOptions)
+    // Zoom using the mouse
+    this.container.off() // remove all previous events
+    this.container.on('mousewheel.focal', (e: any) => {
+      e.preventDefault()
+      let delta = e.delta || e.originalEvent.wheelDelta
+      let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
+      // @ts-ignore
+      this.svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
     })
-
-    this.network.on('click', (arg: any) => {
-      if (!arg || !arg.nodes) return
-      this.stepBtn.addClass('disable')
-      this.nextBtn.addClass('disable')
-      const nodes = arg.nodes as Common.ID []
-      if (nodes.length == 1) {
-        let active = this.graph.nodes.get(nodes[0])
-        if (active) {
-          if (active.group && active.group == 'leaf') {
-            ee.emit('step', active)
-          } else {
-            ee.emit('clear')
-            if (active.loc) ee.emit('markInteractive', active.loc)
-            ee.emit('setMemory', active.mem)
-          }
-        }
-      }
-    })
-    ee.on('highlight', this, this.highlight)
-    ee.on('clearGraph', this, () => this.graph.clear())
-    ee.on('updateGraph', this, (s: Common.State) => this.updateGraph(s.graph))
   }
-
-  step(active: Node | undefined) {
-    if (!active) return
-    this.stepBtn.addClass('disable')
-    this.nextBtn.addClass('disable')
-    this.ee.emit('step', active)
-  }
-
-  updateGraph(graph: Graph) {
-    const nodeFilter = this.hideTau ? (n: Node) => n.isVisible && !n.isTau
-                                    : (n: Node) => n.isVisible
-    const edgeFilter = (e: Edge) => e.isTau == !this.hideTau
-    const nodes = graph.nodes.get().filter(nodeFilter)
-    const edges = graph.edges.get().filter(edgeFilter)
-    this.graph.update(nodes, edges)
-    this.selectLastLeaf()
-  }
-
-  getSelectedNode () {
-    const selection = this.network.getSelection()
-    if (selection.nodes && selection.nodes.length > 0)
-      return this.graph.nodes.get(selection.nodes[0])
-    return undefined
-  }
-
-  selectLastLeaf () {
-    const nodes = this.graph.nodes.get().filter(n => n.group == 'leaf')
-    const lastLeaf = nodes[nodes.length-1]
-    if (lastLeaf != null) {
-      this.stepBtn.removeClass('disable')
-      this.nextBtn.removeClass('disable')
-      this.network.focus(lastLeaf.id)
-      this.network.selectNodes([lastLeaf.id])
-      this.network.redraw()
-      this.ee.emit('clear')
-      if (lastLeaf.loc) this.ee.emit('markInteractive', lastLeaf.loc)
-      this.ee.emit('setMemory', lastLeaf.mem)
-    }
-  }
-
-  highlight() {
-    this.network.unselectAll()
-  }
-
-  refresh() {
-    this.network.redraw()
-  }
-
 }
 
-class Memory extends Tab {
-  network: vis.Network
+
+export class Interactive extends SvgGraph {
+  constructor(ee: Common.EventEmitter) {
+    super('Interactive', ee)
+    ee.on('updateExecutionGraph', this, (s: Common.State) => this.updateGraph(s))
+  }
+
+  private updateGraph (state: Readonly<Common.State>) {
+    this.setSVG(state.dotExecGraph)
+    // Check if needs to span down
+    const svgHeight = this.svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const delta = containerHeight / 2 - svgHeight
+      if (delta < 0) {
+        // @ts-ignore
+        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+      }
+    }
+  }
+
+  initial(s: Readonly<Common.State>) {
+    // The timeout guarantees that the tab is attached to the DOM.
+    // The update is called in the next event loop cycle.
+    setTimeout (() => this.updateGraph(s), 0)
+  }
+}
+
+class Memory extends SvgGraph {
+  fit: JQuery<HTMLElement>
+  svgPos: { x: number, y: number, scale: number}
 
   constructor(ee: Common.EventEmitter) {
     super('Memory', ee)
+    this.fit = $('<div class="btn menu-item inline clicked">Fit</div>')
+    this.dom.find('.reset').before(this.fit)
+    this.fit.on('click', () => this.toggleFitMode())
+    ee.on('updateMemory', this, s => this.updateMemory(s))
+    this.svgPos = { x: 0, y: 0, scale: 1}
+   }
 
-    let container = $('<div align="center" class="graph"></div>')
-    this.dom.append(container)
+   inFitMode() {
+      return this.fit.hasClass('clicked')
+   }
 
-    // Setup Graph Network
-    let options: vis.Options = {
-      nodes: {
-        shape: 'box',
-        shapeProperties: {
-          borderRadius: 3,
-          borderDashes: false,
-          interpolation: false,
-          useImageSize: false,
-          useBorderWithImage: false
-        },
-        color: {
-          border: '#5f5f5f',
-          background: '#5f5f5f',
-          highlight: {
-            border: '#7f7f7f',
-            background: '#7f7f7f'
-          }
-        },
-        font: {
-          color: '#f1f1f1',
-          align: 'left',
-          multi: 'html'
+   toggleFitMode() {
+      if (this.inFitMode())
+        this.fit.removeClass('clicked')
+      else
+        this.fit.addClass('clicked')
+      // @ts-ignore
+      this.svg.panzoom('reset')
+      this.fitSVG()
+   }
+
+   disableFitMode() {
+      if (this.inFitMode())
+        this.toggleFitMode()
+   }
+
+   fitSVG() {
+    const svgHeight = this.svg.height()
+    const svgWidth = this.svg.width()
+    const containerHeight = this.container.height()
+    const containerWidth = this.container.width()
+    if (svgHeight && svgWidth && containerHeight && containerWidth) {
+      const zoom_x = containerWidth/svgWidth
+      const zoom_y = containerHeight/svgHeight
+      //console.log (zoom_x, zoom_y, this.svgPos.scale)
+      const zoom = Math.min(zoom_x, zoom_y)
+      if (zoom < this.svgPos.scale) {
+        // @ts-ignore
+        this.svg.panzoom('zoom', zoom, {silent: true})
+        const svgOffset = this.svg.offset()
+        const containerOffset = this.container.offset()
+        if (svgOffset && containerOffset) {
+          const delta_x = zoom_x == zoom ? svgOffset.left - containerOffset.left : 0
+          const delta_y = svgOffset.top - containerOffset.top
+          // @ts-ignore
+          this.svg.panzoom('pan', -delta_x, -delta_y, { relative: true })
         }
-      },
-      edges: {
-        arrows: {to: true},
-        smooth: false
-      },
-      interaction: {
-        navigationButtons: true
-      },
-      physics: {
-        barnesHut: {
-          springLength: 200,
-          avoidOverlap: 1
-        },
-        //repulsion: {
-        //  nodeDistance: 120
-        //}
       }
     }
-    this.network = new vis.Network(container[0], new Graph(), options);
-    ee.on('updateMemory', this, (s:Common.State) => this.network.setData(s.mem))
+   }
+
+   updateMemory (s:Common.State) {
+    this.setSVG(s.dotMem)
+    this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
+      this.svgPos.scale = scale
+      this.disableFitMode()
+    })
+    this.svg.on('panzoompan', (elem, panzoom, x, y) => {
+      this.svgPos.x = x
+      this.svgPos.y = y
+    })
+    this.svg.on('panzoomreset', () => {
+      this.svgPos = { x: 0, y: 0, scale: 1}
+    })
+    if (this.inFitMode()) {
+      this.fitSVG()
+    } else {
+      // @ts-ignore
+      this.svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
+      // @ts-ignore
+      this.svg.panzoom('zoom', this.svgPos.scale)
+    }
   }
+
+   initial(s: Readonly<Common.State>) {
+    // The timeout guarantees that the tab is attached to the DOM.
+    // The update is called in the next event loop cycle.
+    setTimeout (() => this.updateMemory(s), 0)
+  } 
+  
 }
 
 /*  with CodeMirror editor */
@@ -386,7 +310,7 @@ export abstract class Editor extends Tab {
     })
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     // TO BE OVERWRITTEN
     return undefined
   }
@@ -528,6 +452,7 @@ export class Implementation extends ReadOnly {
   }
 }
 
+/*
 export class Execution extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Execution', '', ee)
@@ -544,7 +469,7 @@ export class Execution extends ReadOnly {
       .map((s: string) => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
       .sort()
     let result = ""
-    let current = null
+    let current : string | undefined = undefined
     let cnt = 0
     for (let i = 0; i < values.length; i++) {
       if (values[i] != current) {
@@ -569,21 +494,63 @@ export class Execution extends ReadOnly {
     this.setValue(result)
   }
 }
+*/
 
 class Console extends ReadOnly {
   constructor (ee: Common.EventEmitter) {
     super('Console', '', ee)
+    this.editor.setOption('lineWrapping', false)
+    this.editor.setOption('mode', 'text')
     ee.on('update', this, this.update)
+    ee.on('updateExecution', this, this.update) // in case of failures
   }
 
+  /*
   update(s:Common.State) {
-    const vs = s.console.split(':')
-    if (vs.length > 2) {
+    //const vs = s.console.split(':')
+    if (vs.length > 2) { // TODO: should put this change in the server
       this.ee.emit('markError', parseInt(vs[1]))
       this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
     } else {
       this.setValue(s.console)
+    //}
+}*/
+
+  update (s: Common.State) : void {
+    /*
+    if (s.result == '') {
+      this.setValue('')
+      return
     }
+    // TODO: This should be done at the server!!
+    const values = s.result.split(/\nEND EXEC\[\d*\]\nBEGIN EXEC\[\d*\]\n/g)
+      .map((s: string) => s.replace(/BEGIN EXEC\[\d*\]\n/, "").replace(/\nEND EXEC\[\d*\]/, ''))
+      .sort()
+    let result = ""
+    let current : string | undefined = undefined
+    let cnt = 0
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] != current) {
+        if (cnt > 0) {
+          result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+          result += current
+          result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+        }
+        current = values[i]
+        cnt = 1;
+      } else {
+        cnt++
+      }
+    }
+    if (cnt > 0) {
+      let i = values.length
+      result += "BEGIN EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      result += current
+      result += "\nEND EXEC["+(i-cnt)+"-"+(i-1)+"]\n"
+      cnt = 1;
+    } 
+    */
+    this.setValue(s.console)
   }
 }
 
@@ -606,7 +573,7 @@ export class Source extends Editor {
     ee.on('clear', this, this.clear)
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     return this.ee.once((s: Readonly<Common.State>) => {
       let locations = s.locs;
       for (let i = 0; i < locations.length; i++) {
@@ -621,7 +588,7 @@ export class Source extends Editor {
     })
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     let options: CodeMirror.TextMarkerOptions = {
       className: Util.getColor(loc.color)
     }
@@ -631,6 +598,8 @@ export class Source extends Editor {
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.c) {
       this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
+      try { this.editor.scrollIntoView(loc.c.begin, 200) }
+      catch(e) { console.log(e) }
     }
   }
 
@@ -676,11 +645,11 @@ class Ail extends ReadOnly {
         const rx_word: string = "\" "
         let ch = stream.peek()
         let word = ""
-        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined
         }
-        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -743,11 +712,11 @@ export class Core extends ReadOnly {
         const rx_word = "\" "
         let ch = stream.peek()
         let word = ""
-        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined 
         }
-        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -776,17 +745,26 @@ export class Core extends ReadOnly {
       }
     })
 
+    this.setValue('Waiting for core...')
+
     ee.on('update', this, this.update)
     ee.on('highlight', this, this.highlight)
     ee.on('mark', this, this.mark)
     ee.on('markInteractive', this, this.markInteractive)
   }
 
+  initial(s: Readonly<Common.State>) {
+    if (s.pp.core == '')
+      this.setValue("-- Waiting for core...")
+    else
+      this.setValue(s.pp.core)
+  }
+
   update(s: Common.State) {
     this.setValue(s.pp.core)
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     return this.ee.once((s: Common.State) => {
       let locations = s.locs
       for (let i = 0; i < locations.length; i ++) {
@@ -798,15 +776,17 @@ export class Core extends ReadOnly {
     })
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
   markInteractive(loc: any, state: Readonly<Common.State>) {
     if (loc.core && state.ranges) {
       const range = state.ranges[loc.core]
-      if (loc.c && range)
-        this.editor.getDoc().markText(range.begin, range.end, { className: Util.getColorByLocC(state, loc.c) })
+      if (range) {
+        this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? Util.getColorByLocC(state, loc.c) : 'color0'})
+        this.editor.scrollIntoView(range.begin)
+      }
     }
   }
 
@@ -824,6 +804,28 @@ export class Core extends ReadOnly {
     })
   }
 }
+
+/*  Arena */
+export class Arena extends ReadOnly {
+  constructor (ee: Common.EventEmitter) {
+    super('Arena', '', ee)
+
+    this.editor.setOption('mode', 'text/x-core')
+    this.editor.setOption('placeholder', '<Waiting for runtime information...>')
+
+    ee.on('updateArena', this, this.update)
+  }
+
+  initial(s: Readonly<Common.State>) {
+    this.setValue(s.arena)
+  }
+
+  update(s: Readonly<Common.State>) {
+    this.setValue(s.arena)
+  }
+}
+
+
 
 class Asm extends ReadOnly {
   private current: JQuery<HTMLElement>
@@ -843,7 +845,7 @@ class Asm extends ReadOnly {
     let toolbar   = $('<div class="toolbar flex"></div>')
 
     this.current = $('<span>'+cc.name+'</span>')
-    const dropdown = $('<div class="btn dropdown"></div>')
+    const dropdown = $('<div class="menu-item btn contain-subitems"></div>')
     dropdown.append(this.current)
     dropdown.append(this.createDropdownContent())
 
@@ -926,12 +928,12 @@ class Asm extends ReadOnly {
   }
 
   createDropdownContent() {
-    const dropdown = $('<div class="dropdown-content"></div>')
+    const dropdown = $('<div class="dropdown" style="max-height:250px;"></div>')
     const compilers = UI.compilers
     if (!compilers) return dropdown
     for (let i = 0; i < compilers.length; i++) {
       const cc  = compilers[i]
-      const opt = $('<div class="btn">' + cc.name + '</div>')
+      const opt = $('<div class="menu-item btn">' + cc.name + '</div>')
       opt.on('click', () => {
         this.cc = cc
         this.current.text(cc.name)
@@ -961,7 +963,7 @@ class Asm extends ReadOnly {
     })
   }
 
-  getLocation(from: Common.Point, to: Common.Point) {
+  getLocation(from: Point, to: Point) {
     for (let i = 0; i < this.locations.length; i++) {
       if (this.locations[i].begin <= from.line && this.locations[i].end >= to.line)
         return this.locations[i].source
@@ -969,7 +971,7 @@ class Asm extends ReadOnly {
     return null
   }
 
-  mark(loc: Common.Locations) {
+  mark(loc: Locations) {
     let l = this.locations[loc.c.begin.line+1]
     if (l) this.colorLines (l.begin, l.end, l.color)
   }
@@ -983,7 +985,7 @@ class Asm extends ReadOnly {
 /* Concrete Tabs Factory */
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
-  Execution, Console, Asm,
+  Console, Arena, Asm,
   Interactive, Memory,
   Preferences, Implementation, Help
 }

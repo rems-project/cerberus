@@ -372,16 +372,16 @@ postfix_expression:
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
                       CabsEcall (expr, option [] List.rev exprs_opt)) }
 | expr= postfix_expression DOT i= general_identifier 
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
         CabsEmemberof (expr, i)) }
 | expr= postfix_expression MINUS_GT i= general_identifier
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
         CabsEmemberofptr (expr, i)) }
 | expr= postfix_expression PLUS_PLUS
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
                       CabsEpostincr expr) }
 | expr= postfix_expression MINUS_MINUS
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
                       CabsEpostdecr expr) }
 | LPAREN ty= type_name RPAREN LBRACE inits= initializer_list COMMA? RBRACE
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
@@ -458,7 +458,7 @@ cast_expression:
 | expr= unary_expression
     { expr }
 | LPAREN ty= type_name RPAREN expr= cast_expression
-    { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)),
                       CabsEcast (ty, expr)) }
 
 

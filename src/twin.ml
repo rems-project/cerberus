@@ -41,7 +41,7 @@ let ctype_equal ty1 ty2 =
     (unqualify ty1) (unqualify ty2)
 
 module Eff : sig
-  type ('a, 'err, 'cs, 'st) eff = ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+  type ('a, 'err, 'cs, 'st) eff = ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff)
           -> ('b, 'err, 'cs, 'st) eff
@@ -55,13 +55,13 @@ module Eff : sig
   val fail: 'err -> ('a, 'err, 'cs, 'st) eff
   val mapM: ('a -> ('b, 'err, 'cs, 'st) eff) -> 'a list
          -> ('b list, 'err, 'cs, 'st) eff
-  val foldlM: ('a -> 'b -> ('a, 'err, 'cs, 'st) Nondeterminism.ndM) -> 'a
-         -> 'b list -> ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+  val foldlM: ('a -> 'b -> ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM) -> 'a
+         -> 'b list -> ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list
          -> ('a, 'err, 'cs, 'st) eff
 end = struct
   open Nondeterminism
-  type ('a, 'err, 'cs, 'st) eff = ('a, 'err, 'cs, 'st) ndM
+  type ('a, 'err, 'cs, 'st) eff = ('a, string, 'err, 'cs, 'st) ndM
   let return = nd_return
   let (>>=) = nd_bind
   let (>>) f g = f >>= (fun _ -> g)
@@ -77,7 +77,7 @@ end = struct
   let fail err = kill (Other err)
   let mapM _ _ = failwith "TODO: mapM"
   let foldlM = foldlM1
-  let msum str xs = msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict str xs
+  let msum str xs = msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
 end
 
 module IntMap = Map.Make(struct
@@ -221,7 +221,7 @@ module Twin : Memory = struct
     | MVpointer of Core_ctype.ctype0 * pointer_value
     | MVarray of mem_value list
     | MVstruct of Symbol.sym (*struct/union tag*)
-                  * (Cabs.cabs_identifier (*member*) * mem_value) list
+                  * (Cabs.cabs_identifier (*member*) * Core_ctype.ctype0 * mem_value) list
     | MVunion of Symbol.sym (*struct/union tag*)
                  * Cabs.cabs_identifier (*member*) * mem_value
 
@@ -329,7 +329,7 @@ module Twin : Memory = struct
   | MVstruct (tag_sym, xs) ->
     parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym))
     ^^ braces (
-      comma_list (fun (ident, mval) ->
+      comma_list (fun (ident, _, mval) ->
           dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ equals
           ^^^ pp_mem_value mval
         ) xs
@@ -516,7 +516,7 @@ module Twin : Memory = struct
       let f (acc_xs, prev_offset, acc_bs) (memb_ident, memb_ty, memb_offset)=
         let pad = memb_offset - prev_offset in
         combine_bytes memb_ty (L.drop pad acc_bs) >>= fun (mval, acc_bs') ->
-        return ((memb_ident, mval)::acc_xs, prev_offset+sizeof memb_ty, acc_bs')
+        return ((memb_ident, memb_ty, mval)::acc_xs, prev_offset+sizeof memb_ty, acc_bs')
       in
       foldlM f ([], 0, bs1) (fst (offsetsof tag_sym)) >>= fun (rev_xs, _, bs') ->
       return (MVstruct (tag_sym, List.rev rev_xs), bs2)
@@ -592,7 +592,7 @@ let rec explode_bytes mval : (meta * char option) list =
     let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
     snd begin
       (* TODO: rewrite now that offsetsof returns the paddings *)
-      List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, mval) ->
+      List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, _, mval) ->
         let pad = off - last_off in
         ( off + sizeof ty
         , acc @
@@ -895,18 +895,18 @@ let rec explode_bytes mval : (meta * char option) list =
     | _ ->
       fail MerrPtrdiff
 
-  let validForDeref_ptrval = function
+  let validForDeref_ptrval ref_ty = function
     | PV (_, PVnull _)
     | PV (_, PVfunction _) ->
-      false
+      return false
     | PV (Prov_device, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_some _, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_double _, PVconcrete _) ->
-      true
+      return true
     | PV (Prov_none, _) ->
-      false
+      return false
 
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)

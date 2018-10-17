@@ -81,7 +81,7 @@ let impl_initial_mem_state = <|
 (* BEGIN effect ================================================================================= *)
 open import Nondeterminism
 type impl_memM 'a =
-  ndM 'a mem_error (mem_constraint impl_integer_value) impl_mem_state
+  ndM 'a string mem_error (mem_constraint impl_integer_value) impl_mem_state
 
 let impl_return = return
 let inline impl_bind = bind
@@ -420,7 +420,7 @@ let rec mkUnspec ty =
     | Struct tag_sym ->
         let xs = Core_ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
-          List.map (fun (ident, ty) -> (ident, mkUnspec ty)) xs
+          List.map (fun (ident, ty) -> (ident, ty, mkUnspec ty)) xs
         )
     | (Union tag_sym) ->
         let ((memb_ident, ty), _) = Core_ctype_aux.get_unionDef tag_sym in
@@ -760,7 +760,8 @@ let apply_shift_path_element lvalue_ty spe mval =
                stringFromCore_ctype (Core_ctype.Struct tag_sym_) ^
                "' was found."))
        else
-         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident xs))
+         return (fromJust "Defacto_memory.apply_shift_path_element, SPE_member vs MVstruct" (List.lookup memb_ident
+          (List.map (fun (a,_,b) -> (a,b)) xs)))
    
    | (SPE_member tag_sym memb_ident, MVunion tag_sym_ memb_ident_ mval') ->
        if tag_sym <> tag_sym_ then
@@ -1599,10 +1600,10 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
         (* TODO: check that it's ok to assume intptr_t to caracterise the
            size of pointers *)
         (* TODO: maybe we should have a flag *)
-        let intptr_t =
+        (*let intptr_t =
           Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intptr_t)) in
         let unsigned_long =
-          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in
+          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in *)
         
         (* TODO: unsure about this *)
         let unsigned_long_ity = AilTypes.Unsigned AilTypes.Long in
@@ -1622,11 +1623,11 @@ let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
         fail (MerrWIP "casting a pointer to an invalid integer type")
   end
 
-let impl_validForDeref_ptrval ptr_val =
+let impl_validForDeref_ptrval ref_ty ptr_val =
   let () = Debug.warn [] (fun () ->
     "Mem.impl_validForDeref_ptrval IS WRONG"
   ) in
-  true
+  return true
 
 let impl_isWellAligned_ptrval ref_ty ptr_val =
   error "TODO: Symbolic defacto, isWellAligned_ptrval"
@@ -1649,7 +1650,7 @@ let rec impl_eq_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
 
 
 
-let impl_lt_ival mem_st_opt (IV prov1 ival_1 as ival1) (IV prov2 ival_2 as ival2) =
+let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
   let ival_1' = lifted_simplify_integer_value_base ival_1 in
   let ival_2' = lifted_simplify_integer_value_base ival_2 in
   match (ival_1', ival_2') with
@@ -2214,9 +2215,9 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
           let () = Debug.print_debug 2 [Debug.DB_memory] (fun () -> "EXITING: easy_update_mem_value_aux, MVstruct") in
           MVstruct tag_sym <$>
-            mapM (fun (ident, memb_mval) ->
+            mapM (fun (ident, memb_ty, memb_mval) ->
               easy_update_mem_value_aux write_ty sh' write_mval memb_mval >>= fun memb_mval ->
-              return (ident, memb_mval)
+              return (ident, memb_ty, memb_mval)
             ) xs
     
     | (MVunion tag_sym old_memb_ident old_memb_mval, SPE_member tag_sym_ new_memb_ident :: sh') ->
@@ -2242,9 +2243,9 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                   mapM (fun (ident, ty) ->
                     if ident = memb_ident then
                       easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty) >>= fun mval' ->
-                      return (ident, mval')
+                      return (ident, ty, mval')
                     else
-                      return (ident, mkUnspec ty)
+                      return (ident, ty, mkUnspec ty)
                   ) (Core_ctype_aux.get_structDef tag_sym)
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
@@ -2252,7 +2253,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
-            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) as spe_ty) byte_ival_] ->
+            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
                 return (MVdelayed [(sh, write_mval)] current_mval)
 (*
                 match write_mval with
@@ -2363,10 +2364,10 @@ let perform_access accessKind loc lvalue_ty ptrval do_normal do_device =
         end
     
     (* device memory *)
-    | (PV Prov_device _ _ as ptrval) ->
+    | (PV Prov_device _ _) ->
         do_device
 
-    | (PV Prov_wildcard _ _ as ptrval) ->
+    | (PV Prov_wildcard _ _) ->
         error "TODO perform_access: Prov_wildcard"
   end
 

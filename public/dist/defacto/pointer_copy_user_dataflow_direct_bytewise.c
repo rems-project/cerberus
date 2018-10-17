@@ -13,8 +13,8 @@ void user_memcpy(unsigned char* dest,
 int main() {
   int *p = &x;
   int *q;
-  user_memcpy((unsigned char*)&q, (unsigned char*)&p, 
-              sizeof(p));
+  user_memcpy((unsigned char*)&q, 
+              (unsigned char*)&p, sizeof(int *));
   *q = 11; // is this free of undefined behaviour?
   printf("*p=%d  *q=%d\n",*p,*q);
 }

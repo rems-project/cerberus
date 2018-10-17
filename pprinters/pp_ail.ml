@@ -246,11 +246,23 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
           fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
       | Array (elem_ty, n_opt) ->
           fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
-      | Function (has_proto, (ret_qs, ret_ty), params, isVariadic) ->
-          fun _ -> !^ "WIP(Function)"
+      | Function (_, (ret_qs, ret_ty), params, isVariadic) ->
+          fun k -> aux ret_qs ret_ty P.empty ^^^
+                   P.parens (
+                     (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
+                     (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                   ) ^^ k
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
-            aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+            begin match ref_ty with
+              | Ctype (_, Function (_, (ret_qs, ret_ty), params, isVariadic)) ->
+                aux ret_qs ret_ty P.empty ^^^ P.parens (!^"*") ^^^
+                P.parens (
+                  (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
+                  (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                ) ^^ k
+              | _ -> aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
+            end
       | Atomic ty ->
           fun k ->
             pp_qualifiers qs ^^ pp_keyword "_Atomic" ^^

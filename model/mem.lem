@@ -39,7 +39,7 @@ declare ocaml target_rep function initial_mem_state = `Ocaml_mem.initial_mem_sta
 
 
 type memM 'a =
-  Nondeterminism.ndM 'a Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
+  Nondeterminism.ndM 'a string Mem_common.mem_error (Mem_common.mem_constraint integer_value) mem_state
 
 val return: forall 'a. 'a -> memM 'a
 let inline return = Nondeterminism.return
@@ -83,7 +83,11 @@ declare ocaml target_rep function fun_ptrval = `Ocaml_mem.fun_ptrval`
 
 (*TODO: revise that, just a hack for codegen*)
 val concrete_ptrval: integer -> integer -> pointer_value
-val case_ptrval: forall 'a. pointer_value -> (Core_ctype.ctype -> 'a) -> (maybe integer -> integer -> 'a) -> (unit -> 'a) -> 'a
+val case_ptrval: forall 'a. pointer_value ->
+   (* null pointer *) (Core_ctype.ctype -> 'a) ->
+   (* function pointer *) (Symbol.sym -> 'a) ->
+   (* concrete pointer *) (maybe integer -> integer -> 'a) ->
+   (* unspecified value *) (unit -> 'a) -> 'a
 declare ocaml target_rep function concrete_ptrval = `Ocaml_mem.concrete_ptrval`
 declare ocaml target_rep function case_ptrval = `Ocaml_mem.case_ptrval`
 
@@ -103,7 +107,7 @@ declare ocaml target_rep function le_ptrval = `Ocaml_mem.le_ptrval`
 declare ocaml target_rep function ge_ptrval = `Ocaml_mem.ge_ptrval`
 declare ocaml target_rep function diff_ptrval = `Ocaml_mem.diff_ptrval`
 
-val validForDeref_ptrval: pointer_value -> bool
+val validForDeref_ptrval: Core_ctype.ctype -> pointer_value -> memM bool
 declare ocaml target_rep function validForDeref_ptrval = `Ocaml_mem.validForDeref_ptrval`
 
 val isWellAligned_ptrval: Core_ctype.ctype -> pointer_value -> memM bool
@@ -222,7 +226,7 @@ val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
 val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
 val pointer_mval: Core_ctype.ctype -> pointer_value -> mem_value
 val array_mval: list mem_value -> mem_value
-val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> mem_value
+val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * Core_ctype.ctype * mem_value) -> mem_value
 val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
 declare ocaml target_rep function unspecified_mval = `Ocaml_mem.unspecified_mval`
 declare ocaml target_rep function integer_value_mval = `Ocaml_mem.integer_value_mval`
@@ -242,7 +246,7 @@ val case_mem_value: forall 'a.
   (AilTypes.floatingType -> floating_value -> 'a) ->
   (Core_ctype.ctype -> pointer_value -> 'a) ->
   (list mem_value -> 'a) ->
-  (Symbol.sym -> list (Cabs.cabs_identifier * mem_value) -> 'a) ->
+  (Symbol.sym -> list (Cabs.cabs_identifier * Core_ctype.ctype * mem_value) -> 'a) ->
   (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
   'a
 declare ocaml target_rep function case_mem_value = `Ocaml_mem.case_mem_value`

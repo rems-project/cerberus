@@ -15,4 +15,4 @@ B _build/parsers/core
 B _build/sandbox
 
 
-PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64 lambdasoup
+PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64 ezgzip uri

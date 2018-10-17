@@ -470,7 +470,7 @@ val constructValue: map identifier tag_definition -> list (init_path * expressio
 let rec constructValue_aux tagDefs path elems (ATypes.Ctype _ ty as cty) =
   match ty with
     | ATypes.Array elem_ty Nothing ->
-        let () = Debug.print_debug 0 [] (fun () ->
+        let () = Debug.print_debug 1 [] (fun () ->
           "==> " ^ stringFromList (stringFromPair stringFromInit_path Pp.stringFromAil_expression) elems
         ) in
         error "constructValue_aux: Array Nothing"
@@ -747,7 +747,7 @@ end
 (* TODO: this is super partial and hackish *)
 (* TODO: I assume from the "shall only have operands" that arithmetic operations are allowed *)
 val     is_arithmetic_constant_expression: bool -> expression unit -> E.desugM bool
-let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr) as a_expr) =
+let rec is_arithmetic_constant_expression is_lvalue ((AnnotatedExpression () _ loc expr)) =
   match expr with
     | AilEconst (ConstantInteger _) ->
         E.return true
@@ -1400,10 +1400,12 @@ val desugar_direct_abstract_declarator:
 
 
 
+(*
 val arrayFromStringLiteral: maybe int -> stringLiteral -> expression unit
 let arrayFromStringLiteral size_opt (pref_opt, strs) =
   let ns = List.map Decode.decode_character_constant strs in
   error "TODO"
+  *)
 
 
 
@@ -2190,9 +2192,14 @@ STD_ "§6.5.3.1#3" $
               AilEassign <$> desugar_expression e1
                          <*> desugar_expression e2
           | Just aop ->
+(*
               desugar_expression e1 >>= fun d_e1 ->
               desugar_expression e2 >>= fun d_e2 ->
               E.return (AilEcompoundAssign d_e1 aop d_e2)
+*)
+              desugar_expression e1 >>= fun d_e1 ->
+              desugar_expression e2 >>= fun d_e2 ->
+              E.return $ AilEassign d_e1 (AnnotatedExpression () [] loc (AilEbinary d_e1 (Arithmetic aop) d_e2))
         end 
     | CabsEcomma e1 e2 ->
         AilEbinary <$> desugar_expression e1
@@ -2836,7 +2843,7 @@ and foo_aux
                                       )
                                     else () in
                                     let (elems1, elems2) = List.splitAt (List.length membrs) elems in
-                                    let () = Debug.print_debug 0 [] (fun () ->
+                                    let () = Debug.print_debug 1 [] (fun () ->
                                       stringFromList (fun (a,b,c) ->
                                         stringFromInit_path a ^ ", " ^ stringFromInit_path b
                                       ) elems1
@@ -2972,7 +2979,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
   
   let expr = constructValue tagDefs xs current_ty in
 
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "HELLO INITIALIZER_ ==> current_ty: " ^ Pp.stringFromAil_ctype ATypes.no_qualifiers current_ty ^
 (*    "\n desigs ==> " ^ stringFromList stringFromInit_path (elemPathFromCtype_aux tagDefs current_ty) ^ *)
 
@@ -2986,7 +2993,7 @@ and wip_desugar_initializer_ loc dur current_ty init =
                       " := " ^ Pp.stringFromAil_expression expr
                     ) xs
   ) in
-  let () = Debug.print_debug 0 [] (fun () ->
+  let () = Debug.print_debug 1 [] (fun () ->
     "EXPR: " ^ Pp.stringFromAil_expression expr
   ) in
 
