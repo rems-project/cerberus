@@ -55,6 +55,12 @@ input[type="checkbox"] {
   display: none;
 }
 
+#header {
+  height: 24px;
+  width: 100%;
+  background-color: #5f5f5f;
+}
+
 .menu {
   color: #f1f1f1;
   background-color: #5f5f5f;
@@ -62,6 +68,13 @@ input[type="checkbox"] {
   margin: 0;
   padding: 0;
   font-size: 0; /* this ensures that space between items is zero */
+  /*width: min-content;*/
+  float: left;
+  transition: transform .2s ease-in-out;
+}
+
+.menu-no-transition {
+  transition: none;
 }
 
 .menu > li {
@@ -80,6 +93,44 @@ input[type="checkbox"] {
   padding: 5px 10px;
   text-decoration: none;
   font-size: 12px;
+}
+
+.menu-scroll {
+  background: transparent;
+  padding: 0;
+  border: 0;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+#menu-scroll-left {
+  left: 0;
+}
+
+#menu-scroll-right {
+  right: 0;
+}
+
+[data-overflowing="both"] ~ .menu-scroll {
+  opacity: 1;
+}
+
+[data-overflowing="left"] ~ #menu-scroll-left {
+  opacity: 1;
+}
+
+[data-overflowing="right"] ~ #menu-scroll-right {
+  opacity: 1;
+}
+
+.menu-scroll-icon {
+  width: 20px;
+  height: 24px;
+  fill: white;
+  transform: scale(0.9);
 }
 
 .btn {
