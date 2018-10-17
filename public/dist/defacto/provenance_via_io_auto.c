@@ -1,28 +1,26 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 int main() {
-  int x=1, y=2;  
+  int x=1;  
   int *p = &x;
-  int *q = &y;
   uintptr_t i = (uintptr_t) p;
-  uintptr_t j = (uintptr_t) q;
-  FILE *f = fopen("pointer_from_int_6.tmp","w+b");
-  printf("Addresses: i=%"PRIuPTR" j=%"PRIuPTR"\n",i,j);
+  FILE *f = fopen("provenance_via_io_auto.tmp","w+b");
+  printf("Addresses: i=%"PRIuPTR"\n",i);
   // print pointer address to a file
-  fprintf(f,"%"PRIuPTR"\n",j);
+  fprintf(f,"%"PRIuPTR"\n",i);
   rewind(f);
   uintptr_t k;
-  int n = fscanf(f,"%"SCNuPTR"\n",&k);
   // read a pointer address from the file
-  if (n==1) {
-    printf("Addresses: k=%"PRIuPTR"\n",k);
-    int *r = (int *)k;
-    // are r and q now equivalent?  
-    *r=12; // is this free of undefined behaviour?                                                           
-    _Bool b1 = (r==q); // do they compare equal?                      
-    _Bool b2 = (0==memcmp(&r,&q,sizeof(r)));//same reps?
-    printf("x=%i y=%i *r=%i b1=%s b2=%s\n",x,y,*r,
-           b1?"true":"false",b2?"true":"false");
-  }
+  int n = fscanf(f,"%"SCNuPTR"\n",&k);
+  if (n != 1) exit(EXIT_FAILURE);
+  printf("Addresses: k=%"PRIuPTR"\n",k);
+  int *r = (int *)k;
+  // are r and p now equivalent?  
+  *r=12; // is this free of undefined behaviour?                                                           
+  _Bool b1 = (r==p); // do they compare equal?                      
+  _Bool b2 = (0==memcmp(&r,&p,sizeof(r)));//same reps?
+  printf("x=%i *r=%i b1=%s b2=%s\n",x,*r,
+         b1?"true":"false",b2?"true":"false");
 }

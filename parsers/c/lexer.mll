@@ -5,9 +5,6 @@ open Tokens
 
 exception Error of Errors.cparser_cause
 
-let mk_loc lexbuf =
-  (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf)
-
 let offset_location lexbuf new_file new_lnum =
   Lexing.(
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = new_file;

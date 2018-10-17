@@ -21,7 +21,7 @@ module Constraints = struct
     Quantifier.mk_forall ctx sorts syms expr None [] [] None None
   
   type solver_state = {
-      submitted: (string * t) list;
+      submitted: t list;
       ctx: context;
       slv: Solver.solver;
       
@@ -214,8 +214,8 @@ module Constraints = struct
 
   let string_of_solver =
     Eff (fun st ->
-      List.mapi (fun i (str, cs) ->
-        "\n[" ^ (string_of_int i) ^ "] -- '" ^ str ^ "'\n" ^ String_defacto_memory.string_of_iv_memory_constraint cs
+      List.mapi (fun i (cs) ->
+        "\n[" ^ (string_of_int i) ^ "] -- '" (*^ str*) ^ "'\n" ^ String_defacto_memory.string_of_iv_memory_constraint cs
       ) (List.rev st.submitted)
 
 (*
@@ -508,7 +508,7 @@ let mem_constraint_to_expr st (constr: mem_iv_constraint) =
         | None ->
             ()
       end;
-      let st' = { st with submitted= (debug_str, cs) :: st.submitted } in
+      let st' = { st with submitted= cs :: st.submitted } in
       let ret = m st' in
       Solver.pop st.slv 1;
       ret
@@ -558,7 +558,7 @@ let do_overlap _ _ = false (* TODO *)
 type mem_state = Defacto_memory.impl_mem_state
 let initial_mem_state = Defacto_memory.impl_initial_mem_state
 type 'a memM =
-  ('a, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
+  ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
 let return = Defacto_memory.impl_return
 let bind = Nondeterminism.nd_bind
 let allocate_static = Defacto_memory.impl_allocate_static

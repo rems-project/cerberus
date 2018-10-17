@@ -1,19 +1,31 @@
-const merge = require('webpack-merge');
-const baseConfig = require('./base.config.js');
+const Path = require('path');
+const CompressionPlugin = require("compression-webpack-plugin")
 const ExtractTextPlugin = require('extract-text-webpack-plugin')
 const extractCSS = new ExtractTextPlugin({ filename: 'style.bundle.css' })
 
-module.exports = merge(baseConfig, {
+module.exports = {
+  entry: './src/index.ts',
   mode: 'production',
+  output: {
+    filename: '[name].bundle.js',
+    path: Path.resolve(__dirname, 'dist')
+  },
+  externals: [
+    'fs'
+  ],
+  resolve: {
+    extensions: [".ts", ".js"]
+  },
+  /*
   optimization: {
     splitChunks: {
       cacheGroups: {
-        commons: {
+        vis: {
           test: /[\\/]node_modules\/vis[\\/]/,
           name: 'vis',
           chunks: 'all',
         },
-        commons2: {
+        codemirror: {
           test: /[\\/]node_modules\/codemirror[\\/]/,
           name: 'codemirror',
           chunks: 'all',
@@ -21,8 +33,13 @@ module.exports = merge(baseConfig, {
       },
     },
   },
+  */
   module: {
     rules: [{
+        test: /\.tsx?$/,
+        use: 'ts-loader',
+        exclude: [/node_modules/, /tests/]
+    },{
       test: /\.css$/,
       use: extractCSS.extract({
         fallback: 'style-loader',
@@ -32,7 +49,8 @@ module.exports = merge(baseConfig, {
    ]
   },
   plugins: [
-    extractCSS
+    extractCSS,
+    new CompressionPlugin()
   ]
-});
+};
 

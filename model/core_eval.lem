@@ -54,7 +54,8 @@ let call_function file f_nm arg_cvals =
     | Fun _ params body_pe ->
         if List.length params <> List.length arg_cvals then
           error (
-            "CALL(" ^ Pp.stringFromCore_value (Vobject (OVcfunction f_nm)) ^
+            (*  TODO: clean *)
+            "CALL(" (*^ Pp.stringFromCore_value (Vobject (OVcfunction f_nm)) *)^
             ") |params|= " ^ show (List.length params) ^ " <> |args|= " ^ show (List.length arg_cvals)
           )
         else
@@ -99,7 +100,7 @@ let pull_helper pull pe_cons (ps: list ('a * pexpr)) =
 end
 
 val     pull_constrained: nat -> pexpr -> pexpr
-let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
+let rec pull_constrained n (Pexpr _ () pexpr_) =
   let self pe = pull_constrained (n+1) pe in
   let wrap f pe =
     match self pe with
@@ -172,6 +173,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         pull_helper self (PEstruct sym) xs
     | PEunion sym cid pe ->
         wrap (PEunion sym cid) pe
+    | PEcfunction pe ->
+        wrap PEcfunction pe
     | PEmemberof tag_sym memb_ident pe ->
         wrap (PEmemberof tag_sym memb_ident) pe
     | PEcall nm pes ->
@@ -195,6 +198,8 @@ let rec pull_constrained n (Pexpr _ () pexpr_ as pexpr) =
         wrap PEis_unsigned pe
     | PEbmc_assume pe ->
         wrap PEbmc_assume pe
+    | PEare_compatible pe1 pe2 ->
+        wrap_bin PEare_compatible pe1 pe2
   end
 
 
@@ -460,14 +465,13 @@ let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
     | PEsym sym ->
         match Core_aux.lookup_env sym env with
           | Nothing ->
-(*
-              let () = Debug.print_debug 0 [] (fun () ->
-                List.foldl (fun acc (sym, cval) ->
-                  acc ^ show sym ^ " ==> " ^ Pp.stringFromCore_value cval ^ "\n"
-                ) "" (Map_extra.toList env)
-              ) in
-*)
-              EU.fail (Unresolved_symbol sym)
+              (* NOTE: check if it is a procedure pointer *)
+              match Map.lookup sym file.funs with
+                | Just (Proc _ _ _ _) ->
+                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval Core_ctype.Void))))
+                | _ ->
+                    EU.fail (Unresolved_symbol sym)
+              end
           | Just cval ->
               EU.return (PEval cval)
         end
@@ -685,7 +689,7 @@ let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
-                      (memb_ident, mval)
+                      (memb_ident, memb_ty, mval)
                   | Core_ctype.UnionDef _ ->
                       error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
                 end
@@ -712,13 +716,36 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Nothing ->
               EU.return (PEunion tag_sym memb_ident pe')
         end
+    | PEcfunction pe ->
+        self pe >>= fun pe' ->
+        match Caux.valueFromPexpr pe' with
+          | Just (Vloaded (LVspecified (OVpointer pv))) ->
+              Mem.case_ptrval pv
+                (fun _ -> EU.fail $ Illformed_program "null function pointer")
+                (fun sym ->
+                  match Map.lookup sym file.funinfo with
+                    | Just (ret, params, is_variadic, has_proto) ->
+                        EU.return (PEval (Vtuple [Vctype ret;
+                                                  Vlist BTy_ctype (List.map Vctype params);
+                                                  if is_variadic then Vtrue else Vfalse;
+                                                  if has_proto then Vtrue else Vfalse; ]))
+                    | _ ->
+                       EU.fail $ Illformed_program ("'" ^ show sym ^ "' does not point to a function")
+                  end)
+                (fun _ addr-> EU.fail $ Illformed_program (show addr ^ " does not point to a function"))
+                (fun _ -> EU.fail $ Illformed_program "function pointer has an unspecified value")
+          | Just (Vloaded (LVunspecified _)) ->
+              EU.fail $ Illformed_program "function pointer has an unspecified value"
+          | _ ->
+            error "Core_eval.step_eval_pexpr, PEcfunction expects a pointer"
+        end
     | PEmemberof tag_sym memb_ident pe ->
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vobject (OVstruct tag_sym' xs)) ->
               if tag_sym <> tag_sym' then
                 EU.fail $ Illformed_program ("PEmemberof(struct) ==> mismatched tags: " ^ show tag_sym ^ " vs " ^ show tag_sym')
-              else match List.lookup memb_ident xs with
+              else match List.lookup memb_ident (List.map (fun (a,_,b) -> (a,b)) xs) with
                 | Nothing ->
                     EU.fail $ Illformed_program ("PEmemberof ==> invalid member: " ^ show memb_ident)
                 | Just mval ->
@@ -861,6 +888,19 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         end
     | PEbmc_assume pe ->
       EU.fail $ Illformed_program "PEbmc_assume: __bmc_assume is for model checking only"
+    | PEare_compatible pe1 pe2 ->
+        self pe1 >>= fun pe1 ->
+        self pe2 >>= fun pe2 ->
+        match (Caux.valueFromPexpr pe1, Caux.valueFromPexpr pe2) with
+          | (Just (Vctype ty1), Just (Vctype ty2)) ->
+              let are_compatible =
+                AilTypesAux.are_compatible
+                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty1)
+                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty2) in
+              EU.return $ PEval (if are_compatible then Vtrue else Vfalse)
+          | (_, _) ->
+              EU.fail $ Illformed_program "PEare_compatible: the operands should be ctypes"
+        end
   end
   end
 

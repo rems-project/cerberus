@@ -130,7 +130,7 @@ let cps_transform_expr sym_supply globs bvs core_expr =
     | Epure pe            -> to_basic (CpsPure pe)
     | Ememop (memop, pes) -> to_basic (CpsMemop (memop, pes))
     | Eaction act         -> to_basic (CpsAction act)
-    | Eccall (_, nm, pes) ->
+    | Eccall (_, _, nm, pes) ->
       let (bb, args) = block_call es pat2 ce in
       (bb::bbs, ([], (pat1, CpsCcall (nm, args, pes))))
     | Eproc  (_, nm, pes) ->
@@ -194,7 +194,7 @@ let cps_transform_expr sym_supply globs bvs core_expr =
   in
   let (ret_sym, _) = Symbol.fresh sym_supply in
   (* TODO: type check/annotate this symbol *)
-  let ret_pat = Core.CaseBase (Some ret_sym, Core.BTy_unit) in
+  let ret_pat = Core.Pattern ([], Core.CaseBase (Some ret_sym, Core.BTy_unit)) in
   tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) core_expr
 
 

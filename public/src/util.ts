@@ -1,5 +1,6 @@
 import $ from "jquery"
 import Common from "./common"
+import { Range } from './location'
 
 namespace Util {
 
@@ -29,6 +30,21 @@ export function longURL(url: string) {
       console.log(data)
     }
   })
+}
+
+function setClass(el: JQuery<HTMLElement>, val: boolean, cls: string) {
+  if (val && !el.hasClass(cls))
+    el.addClass(cls)
+  else if (!val && el.hasClass(cls))
+    el.removeClass(cls)
+}
+
+export function setDisabled(el: JQuery<HTMLElement>, val: boolean) {
+  setClass(el, val, 'disabled')
+}
+
+export function setInvisible(el: JQuery<HTMLElement>, val: boolean) {
+  setClass(el, val, 'invisible')
 }
 
 export namespace Cursor {
@@ -68,26 +84,11 @@ export function fadeOut(tooltip: HTMLElement) {
     setTimeout(function() { remove(tooltip); }, 1100);
   }
 
-// WARNING: Unused function
-// @ts-ignore
-function generateColor(style: HTMLElement) {
-  function basicColor (mix: number) {
-    return Math.floor((Math.floor(Math.random()*256)+mix)/2)
-  }
-  let r = basicColor(255)
-  let g = basicColor(255)
-  let b = basicColor(255)
-  let className = 'color'+r+g+b
-  style.innerHTML +=
-    '.' + className +' { background-color: rgba('+r+','+g+','+b+',1); }\n'
-  return className
-}
-
 export function getColor(i: number): string {
   return 'color' + (i % 100)
 }
 
-export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Common.Range>): string {
+export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Range>): string {
   for (let i = 0; i < state.locs.length; i ++) {
     const loc = state.locs[i].c
     if ((loc.begin.line < cur.begin.line
@@ -97,14 +98,35 @@ export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Comm
       return 'color' + state.locs[i].color;
     }
   }
-  throw new Error ('getColorByLoC: Location not found!')
+  return 'no-color'
+  //throw new Error ('getColorByLoC: Location not found!')
 }
 
 export function createStyle() {
   let style = document.createElement('style')
   style.type = 'text/css'
+  // @ts-ignore
   document.head.appendChild(style)
   return style
+}
+
+export function checkOverflow(elem: JQuery<HTMLElement>, container: JQuery<HTMLElement>): string {
+  if (elem.length != 1 || container.length != 1)
+    throw new Error('checkOverflow expects only 1 element and 1 container.')
+  const elemMetrics = elem[0].getBoundingClientRect()
+  const elemRight = Math.floor(elemMetrics.right)
+  const elemLeft  = Math.floor(elemMetrics.left)
+  const containerMetrics = container[0].getBoundingClientRect()
+  const containerRight = Math.floor(containerMetrics.right)
+  const containerLeft  = Math.floor(containerMetrics.left)
+  if (containerLeft > elemLeft && containerRight < elemRight)
+    return 'both'
+  else if (elemLeft < containerLeft)
+    return 'left'
+  else if (elemRight > containerRight)
+    return 'right'
+  else
+    return 'none'
 }
 
 // WARNING: Unused function
@@ -131,5 +153,6 @@ export function triggerClick(elem: HTMLElement): void {
 }
 
 } // end namespace
+
 
 export default Util

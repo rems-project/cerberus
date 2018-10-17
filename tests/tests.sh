@@ -79,9 +79,12 @@ citests=(
 # 0114-const_return.error.c
   0115-hex_char_const.c
   0116-enum_constants.c
-  0201-main-return-type.error.c
-  0202-main-not-function.error.c
-  0203-main-params1.error.c
-  0204-main-params2.error.c
+  0127-function-pointer.c
+  0128-function-pointer-void-cast.c
+  0129-function-pointer-wrong-args.c
+#  0201-main-return-type.error.c
+#  0202-main-not-function.error.c
+#  0203-main-params1.error.c
+#  0204-main-params2.error.c
 )
 

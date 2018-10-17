@@ -152,7 +152,7 @@ and pp_mem_value = function
         !^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)
      ) ^^^
      P.braces (
-      comma_list (fun (mb_ident, mval) ->
+      comma_list (fun (mb_ident, _, mval) ->
         P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       ) xs
      )

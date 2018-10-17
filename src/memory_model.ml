@@ -13,7 +13,7 @@ module type Constraints = sig
   val string_of_solver: string list eff
   val check_sat: [ `SAT | `UNSAT ] eff
   
-  val with_constraints: string -> t -> 'a eff -> 'a eff
+  val with_constraints: 'b -> t -> 'a eff -> 'a eff
 end
 
 module type Memory = sig
@@ -36,7 +36,7 @@ module type Memory = sig
   val initial_mem_state: mem_state
   
   type 'a memM =
-    ('a, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
+    ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
   val return: 'a -> 'a memM
   val bind: 'a memM -> ('a -> 'b memM) -> 'b memM
   
@@ -68,10 +68,10 @@ module type Memory = sig
   (*TODO: revise that, just a hack for codegen*)
   val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
   val case_ptrval: pointer_value ->
-    (Core_ctype.ctype0 -> 'a) -> (* null *)
-    (Nat_big_num.num option -> Nat_big_num.num -> 'a) -> (* concrete *)
-    (unit -> 'a) ->
-    'a
+   (* null pointer *) (Core_ctype.ctype0 -> 'a) ->
+   (* function pointer *) (Symbol.sym -> 'a) ->
+   (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) ->
+   (* unspecified value *) (unit -> 'a) -> 'a
 
   (* Operations on pointer values *)
   val eq_ptrval: pointer_value -> pointer_value -> bool memM
@@ -82,7 +82,7 @@ module type Memory = sig
   val ge_ptrval: pointer_value -> pointer_value -> bool memM
   val diff_ptrval: Core_ctype.ctype0 -> pointer_value -> pointer_value -> integer_value memM
   
-  val validForDeref_ptrval: pointer_value -> bool
+  val validForDeref_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
   val isWellAligned_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
   
   (* Casting operations *)
@@ -160,7 +160,7 @@ module type Memory = sig
   val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
   val pointer_mval: Core_ctype.ctype0 -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
-  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * mem_value) list -> mem_value
+  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> mem_value
   val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
   
   (* Memory value destructor *)
@@ -172,7 +172,7 @@ module type Memory = sig
     (AilTypes.floatingType -> floating_value -> 'a) ->
     (Core_ctype.ctype0 -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->
-    (Symbol.sym -> (Cabs.cabs_identifier * mem_value) list -> 'a) ->
+    (Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> 'a) ->
     (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
     'a
   

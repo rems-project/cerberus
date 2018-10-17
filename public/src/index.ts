@@ -10,6 +10,7 @@ import './js/ast.js'
 import './js/core.js'
 import './js/ocaml.js'
 import './js/placeholder.js'
+import './js/panzoom.js'
 import { onLoad } from './ui'
 
 $(window).ready(onLoad)

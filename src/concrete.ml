@@ -42,7 +42,7 @@ let ctype_equal ty1 ty2 =
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =
-    ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
 (*  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff *)
@@ -56,7 +56,7 @@ module Eff : sig
   val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list -> ('a, 'err, 'cs, 'st) eff
 end = struct
   type ('a, 'err, 'cs, 'st) eff =
-    ('a, 'err, 'cs, 'st) Nondeterminism.ndM
+    ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
@@ -77,7 +77,7 @@ end = struct
   
   let msum str xs =
     Nondeterminism.(
-      msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict str xs
+      msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
     )
 end
 
@@ -242,6 +242,7 @@ module Concrete : Memory = struct
     | Prov_none
     | Prov_some of Nat_big_num.num
     | Prov_device
+    | Prov_wildcard
   
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
@@ -266,7 +267,7 @@ module Concrete : Memory = struct
     | MVfloating of AilTypes.floatingType * floating_value
     | MVpointer of Core_ctype.ctype0 * pointer_value
     | MVarray of mem_value list
-    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * mem_value) list
+    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * Core_ctype.ctype0 * mem_value) list
     | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * mem_value
 
   
@@ -324,6 +325,7 @@ module Concrete : Memory = struct
   
   (* INTERNAL: allocation *)
   type allocation = {
+    prefix: Symbol.prefix;
     base: address;
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
@@ -368,6 +370,8 @@ module Concrete : Memory = struct
         N.to_string alloc_id
     | Prov_device ->
         "dev"
+    | Prov_wildcard ->
+        "wildcard"
   
   (* pretty printing *)
   open PPrint
@@ -377,7 +381,8 @@ module Concrete : Memory = struct
       | PVnull ty ->
           !^ "NULL" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
       | PVfunction sym ->
-          !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">")
+          !^ "Cfunction" ^^ P.parens (!^ (Pp_symbol.to_string_pretty sym))
+          (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
 (*
@@ -404,7 +409,7 @@ module Concrete : Memory = struct
         )
     | MVstruct (tag_sym, xs) ->
         parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
-          comma_list (fun (ident, mval) ->
+          comma_list (fun (ident, _, mval) ->
             dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ equals ^^^ pp_mem_value mval
           ) xs
         )
@@ -601,7 +606,13 @@ module Concrete : Memory = struct
           (begin match extract_unspec bs1' with
             | Some cs ->
                 let n = int64_of_bytes false cs in
-                MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                begin match ref_ty with
+                  | Function0 _ ->
+                    (* TODO: this is a quick solution, but maybe not a very good one: *)
+                    MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, None))))
+                  | _->
+                    MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                end
             | None ->
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
            end, bs2)
@@ -622,7 +633,7 @@ module Concrete : Memory = struct
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
-            ((memb_ident, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
+            ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
 (*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
@@ -704,8 +715,13 @@ module Concrete : Memory = struct
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
-            | PVfunction _ ->
-                failwith "TODO: explode_bytes, PVfunction"
+            | PVfunction (Symbol.Symbol (n, _)) ->
+                (* TODO(V): *)
+                List.map (fun z -> (prov, z)) begin
+                  bytes_of_int64
+                      false
+                      ptr_size (N.of_int n)
+                end
             | PVconcrete addr ->
                 List.map (fun z -> (prov, z)) begin
                   bytes_of_int64
@@ -723,7 +739,7 @@ module Concrete : Memory = struct
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
           snd begin
             (* TODO: rewrite now that offsetsof returns the paddings *)
-            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, mval) ->
+            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, _, mval) ->
               let pad = off - last_off in
               ( off + sizeof ty
               , acc @
@@ -774,7 +790,6 @@ module Concrete : Memory = struct
 *)
   (* END DEBUG *)
   
-  
   let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
@@ -797,7 +812,7 @@ module Concrete : Memory = struct
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
+                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
             (* TODO: factorise this with do_store inside Concrete.store *)
@@ -807,7 +822,7 @@ module Concrete : Memory = struct
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
+                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
                   next_address= Nat_big_num.add addr size;
                   bytemap=
                     List.fold_left (fun acc (addr, b) ->
@@ -830,7 +845,7 @@ module Concrete : Memory = struct
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n;
             dynamic_addrs= addr :: st.dynamic_addrs })
     )
@@ -1047,9 +1062,10 @@ module Concrete : Memory = struct
   let concrete_ptrval i addr =
     PV (Prov_some i, PVconcrete addr)
 
-  let case_ptrval pv fnull fconc _ =
+  let case_ptrval pv fnull ffun fconc _ =
     match pv with
     | PV (_, PVnull ty) -> fnull ty
+    | PV (_, PVfunction f) -> ffun f
     | PV (Prov_none, PVconcrete addr) -> fconc None addr
     | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
     | _ -> failwith "case_ptrval"
@@ -1143,18 +1159,6 @@ module Concrete : Memory = struct
       | _ ->
           fail MerrPtrdiff
   
-  
-  let validForDeref_ptrval = function
-    | PV (_, PVnull _)
-    | PV (_, PVfunction _) ->
-        false
-    | PV (Prov_device, PVconcrete _) ->
-        true
-    | PV (Prov_some _, PVconcrete _) ->
-        true
-    | PV (Prov_none, _) ->
-        false
-  
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
     match Core_ctype.unatomic ref_ty with
@@ -1168,26 +1172,96 @@ module Concrete : Memory = struct
             | PV (_, PVfunction _) ->
                 fail (MerrOther "called isWellAligned_ptrval on function pointer")
             | PV (_, PVconcrete addr) ->
+(*
+                Printf.printf "addr: %s\n" (Nat_big_num.to_string addr);
+                Printf.printf "align: %d\n" (alignof ref_ty);
+*)
                 return (N.(equal (modulus addr (of_int (alignof ref_ty))) zero))
           end
   
+  (* Following §6.5.3.3, footnote 102) *)
+  let validForDeref_ptrval ref_ty = function
+    | PV (_, PVnull _)
+    | PV (_, PVfunction _) ->
+        return false
+    | PV (Prov_device, PVconcrete _) as ptrval ->
+        isWellAligned_ptrval ref_ty ptrval
+    | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
+        is_dead alloc_id >>= begin function
+          | true ->
+              return false
+          | false ->
+              isWellAligned_ptrval ref_ty ptrval
+(*
+              get_allocation alloc_id >>= fun alloc ->
+              begin match alloc.ty with
+                | Some ty ->
+                    isWellAligned_ptrval ty ptrval
+                | None ->
+                    return true
+              end
+*)
+        end
+    | PV (Prov_none, _) ->
+        return false
+  
+  
+  (* TODO: maybe move somewhere else *)
+  let find_overlaping addr st =
+    IntMap.fold (fun alloc_id alloc acc ->
+      match acc with
+        | Some _ ->
+            acc
+        | None ->
+            if    not (List.mem alloc_id st.dead_allocations)
+               && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+              Some alloc_id
+            else
+              None
+    ) st.allocations None
+  
   let ptrcast_ival _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
-      (* STD \<section>6.3.2.3#5 *)
+      (* STD §6.3.2.3#5 *)
       Debug_ocaml.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
-    match prov with
-      | Prov_none ->
-          (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-          if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-            return (PV (Prov_device, PVconcrete n))
-          else if N.equal n N.zero then
+    let sw_opt =
+      Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) in
+    match sw_opt with
+      | Some (Switches.SW_no_integer_provenance variant) ->
+          (* TODO: device memory? *)
+          if N.equal n N.zero then
             return (PV (Prov_none, PVnull ref_ty))
           else
-            return (PV (Prov_none, PVconcrete n))
-      | _ ->
-          return (PV (prov, PVconcrete n))
+            get >>= fun st ->
+            (match find_overlaping n st with
+              | None ->
+                  if variant = 0 then
+                    return Prov_none
+                  else if variant = 1 then
+                    fail MerrPtrFromInt
+                  else
+                    (* TODO: assuming variant = 4 *)
+                    return Prov_wildcard
+              | Some alloc_id ->
+                  return (Prov_some alloc_id)) >>= fun prov ->
+            return (PV (prov, PVconcrete n))
+      | Some _ ->
+          assert false
+      | None ->
+          begin match prov with
+            | Prov_none ->
+                (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+                if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+                  return (PV (Prov_device, PVconcrete n))
+                else if N.equal n N.zero then
+                  return (PV (Prov_none, PVnull ref_ty))
+                else
+                  return (PV (Prov_none, PVconcrete n))
+            | _ ->
+                return (PV (prov, PVconcrete n))
+          end
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1343,10 +1417,8 @@ let combine_prov prov1 prov2 =
         Prov_none
     | (Prov_none, Prov_some id) ->
         Prov_some id
-(*
     | (Prov_none, Prov_wildcard) ->
         Prov_wildcard
-*)
     | (Prov_none, Prov_device) ->
         Prov_device
     | (Prov_some id, Prov_none) ->
@@ -1356,10 +1428,8 @@ let combine_prov prov1 prov2 =
           Prov_some id1
         else
           Prov_none
-(*
     | (Prov_some _, Prov_wildcard) ->
         Prov_wildcard
-*)
     | (Prov_some _, Prov_device) ->
         Prov_device
     | (Prov_device, Prov_none) ->
@@ -1368,13 +1438,10 @@ let combine_prov prov1 prov2 =
         Prov_device
     | (Prov_device, Prov_device) ->
         Prov_device
-(*
     | (Prov_device, Prov_wildcard) ->
         Prov_wildcard
-    
     | (Prov_wildcard, _) ->
         Prov_wildcard
-*)
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
@@ -1591,74 +1658,152 @@ let combine_prov prov1 prov2 =
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
 
-  (* JSON serialisation *)
+  (* JSON serialisation: Memory layout for dot *)
 
-  let serialise_cabs_id = function
-   | Cabs.CabsIdentifier (_, s) -> `String s
+  type row =
+    { size: int; (* number of square on the left size of the row *)
+      ispadding: bool;
+      path: string list; (* tag list *)
+      value: string;
+      prov: int option;
+      pointsto: int option; (* provenance id in case of a pointer *)
+      hex: bool; (* TODO: this is terrible I need to change that *)
+      dashed: bool;
+    }
 
-  let serialise_prov = function
-    | Prov_some n -> Json.of_bigint n
-    | Prov_none -> `Null
-    | Prov_device -> `String "Device"
+  type dot_node =
+    { id: int;
+      base: int;
+      prefix: string option;
+      typ: string;
+      size: int;
+      rows: row list;
+    }
 
-  let rec serialise_mem_value mval =
-    let mk_scalar s =
-      `Assoc [("kind", `String "scalar"); ("value", `String s)]
-    in
-    let mk_pointer p s =
-      `Assoc [("kind", `String "pointer"); ("provenance", serialise_prov p); ("value", `String s)]
-    in
-    let mk_array vs =
-      `Assoc [("kind", `String "array"); ("value", `List vs)] in
-    let mk_struct fs =
-      `Assoc [("kind", `String "struct"); ("fields", `List fs)]
-    in
-    let mk_union tag v =
-      `Assoc [("kind", `String "union"); ("tag", tag); ("value", v)]
-    in
+  let rec mk_rows bs ty mval : row list =
+    let mk_scalar v p hex = [{ size = sizeof ty;
+                           ispadding = false;
+                           path = [];
+                           value = v;
+                           prov = p;
+                           pointsto = None;
+                           hex = hex;
+                           dashed = false;
+                         }] in
+    let mk_pointer v p hex = [{ size = sizeof ty;
+                           ispadding = false;
+                           path = [];
+                           value = v;
+                           pointsto = p;
+                           prov = p;
+                           hex = hex;
+                           dashed = false;
+                         }] in
+    let mk_pad n v = { size = n;
+                       ispadding = true;
+                       path = [];
+                       value = v;
+                       pointsto = None;
+                       prov = None;
+                       hex = false;
+                       dashed = false;
+                     } in
+    let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified"
-    | MVinteger (_, IV(p, n)) ->
-      mk_scalar (N.to_string n) (*TODO: maybe track provenance *)
+      mk_scalar "unspecified" None false
+    | MVinteger (Signed Intptr_t, IV(prov, n))
+    | MVinteger (Unsigned Intptr_t, IV(prov, n)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
+      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; prov = p; pointsto = p; hex = true; dashed = true; }]
+    | MVinteger (_, IV(prov, n)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
+      mk_scalar (N.to_string n) p false
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f)
-    | MVpointer (_, PV(p, pv)) ->
+      mk_scalar (string_of_float f) None false
+    | MVpointer (_, PV(prov, pv)) ->
+      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
-        | PVnull _ -> mk_scalar "NULL"
-        | PVconcrete n -> mk_pointer p (N.to_string n)
-        | PVfunction _ -> mk_scalar "POINTER TO FUNCTION"
+        | PVnull _ ->
+          mk_pointer "NULL" None false
+        | PVconcrete n ->
+          mk_pointer (N.to_string n) p true
+        | PVfunction sym ->
+          mk_pointer (Pp_symbol.to_string_pretty sym) None false
       end
     | MVarray mvals ->
-      mk_array (List.map serialise_mem_value mvals)
-    | MVstruct (tag_sym, xs) ->
-      mk_struct (List.map (fun (mem, mval) ->
-          `Assoc [("tag", serialise_cabs_id mem); ("value", serialise_mem_value mval)]) xs)
-    | MVunion (tag_sym, membr_ident, mval) ->
-      mk_union (serialise_cabs_id membr_ident) (serialise_mem_value mval)
+      begin match ty with
+        | Array0 (elem_ty, _) ->
+          let size = sizeof elem_ty in
+          let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
+              let row = List.map (add_path (string_of_int i)) @@ mk_rows acc_bs elem_ty mval in
+              (row::acc, i+1, L.drop size acc_bs)
+            end ([], 0, bs) mvals
+          in List.concat @@ (List.rev rev_rows)
+        | _ ->
+          failwith "mk_rows: array type is wrong"
+      end
+    | MVstruct (tag_sym, _) ->
+      (* NOTE: we recombine the bytes to get paddings *)
+      let (bs1, bs2) = L.split_at (sizeof ty) bs in
+          let (rev_rowss, _, bs') = List.fold_left begin
+          fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
+            let pad = memb_offset - previous_offset in
+            let acc_bs' = L.drop pad acc_bs in
+            let (mval, acc_bs'') = combine_bytes memb_ty acc_bs' in
+            let rows = mk_rows acc_bs' memb_ty mval in
+            let rows' = List.map (add_path memb) rows in
+            (* TODO: set padding value here *)
+            let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
+            (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
+        end ([], 0, bs1) (fst (offsetsof tag_sym))
+      in List.concat (List.rev rev_rowss)
+    | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
+      List.map (add_path memb) (mk_rows bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
-  let serialise_map f m =
-    let serialise_entry (k, v) = let e = N.to_string k in (e, f e v)
+  let mk_dot_node bytemap id alloc : dot_node =
+    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
+    let size = sizeof ty in
+    let bs = fetch_bytes bytemap alloc.base size in
+    let prefix = match alloc.prefix with
+      | Symbol.PrefSource [] -> None
+      | Symbol.PrefOther s -> Some s
+      | Symbol.PrefSource xs -> Some (Pp_symbol.to_string_pretty @@ List.hd (List.rev xs))
+    in
+    let (mval, _) = combine_bytes ty bs in
+    { id = id;
+      base = N.to_int alloc.base;
+      prefix = prefix;
+      typ = String_core_ctype.string_of_ctype ty;
+      size = size;
+      rows = mk_rows bs ty mval;
+    }
+
+  let serialise_map f m : Json.json =
+    let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_allocation bytemap id alloc =
-    let serialise_ctype ty = `String (String_core_ctype.string_of_ctype ty) in
-    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
-    let bs = fetch_bytes bytemap alloc.base (sizeof ty) in
-    let (mval, _) = combine_bytes ty bs in
-    `Assoc [
-      ("id", `String id);
-      ("base", Json.of_bigint alloc.base);
-      ("type", Json.of_option serialise_ctype alloc.ty);
-      ("size", Json.of_bigint alloc.size);
-      ("value", serialise_mem_value mval);
-    ]
+  let serialise_row (r:row) : Json.json =
+    `Assoc [("size", `Int r.size);
+            ("ispadding", `Bool r.ispadding);
+            ("path", `List (List.map (fun s -> `String s) r.path));
+            ("value", `String r.value);
+            ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
+            ("prov", (match r.prov with Some n -> `Int n | None -> `Null));
+            ("hex", `Bool r.hex);
+            ("dashed", `Bool r.dashed);
+           ]
+  let serialise_dot_node (n:dot_node) : Json.json =
+    `Assoc [("id", `Int n.id);
+            ("base", `Int n.base);
+            ("prefix", match n.prefix with | Some x -> `String x | None -> `Null);
+            ("type", `String n.typ);
+            ("size", `Int n.size);
+            ("rows", `List (List.map serialise_row n.rows));
+           ]
 
-  let serialise_mem_state st =
-    `Assoc [
-      ("kind",          `String "concrete");
-      ("allocations",   serialise_map (serialise_allocation st.bytemap) st.allocations)
-    ]
+  let serialise_mem_state (st: mem_state) : Json.json =
+    serialise_map (fun id alloc -> serialise_dot_node @@ mk_dot_node st.bytemap id alloc) st.allocations
 
 end
 

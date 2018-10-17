@@ -103,6 +103,7 @@ let drive sym_supply file args conf : execution_result =
         | (ND.Active _, _, _) ->
             assert false
         | (ND.Killed reason, z3_strs, st) ->
+          (*
             let reason_str = match reason with
               | ND.Undef0 (loc, ubs) ->
                   "undefined behaviour[" ^ Location_ocaml.location_to_string loc ^ "]: "
@@ -111,6 +112,7 @@ let drive sym_supply file args conf : execution_result =
                   "static error[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str
               | ND.Other str ->
                   string_of_driver_error str in
+             *)
             begin
 (*
       if reason_str = "reached unsatisfiable constraints" then
@@ -162,6 +164,9 @@ else
           );
 
       | (ND.Killed (ND.Undef0 (loc, ubs)), _, _) ->
+          prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))))
+
+     (*
           let str_v = Location_ocaml.location_to_string loc ^
             (String.concat "\n" (List.map (fun ub -> Undefined.pretty_string_of_undefined_behaviour ub) ubs)) in
           
@@ -174,6 +179,7 @@ else
             ky := str_v :: !ky;
           ) else
             ()
+        *)
       
       | (ND.Killed (ND.Error0 (loc, str)), _, _) ->
           print_endline (Colour.(ansi_format [Red] ("IMPL-DEFINED STATIC ERROR[" ^ Location_ocaml.location_to_string loc ^ "]: " ^ str)))

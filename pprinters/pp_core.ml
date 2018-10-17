@@ -77,11 +77,13 @@ let rec precedence = function
   | PEcall _
   | PElet _
   | PEif _
+  | PEcfunction _
   | PEis_scalar _
   | PEis_integer _
   | PEis_signed _
   | PEis_unsigned _
   | PEbmc_assume _ -> None
+  | PEare_compatible _ ->None
 
 let rec precedence_expr = function
   | Epure _
@@ -124,6 +126,8 @@ let pp_keyword w = !^ (ansi_format [Bold; Magenta] w)
 let pp_const   c = !^ (ansi_format [Magenta] c)
 let pp_control w = !^ (ansi_format [Bold; Blue] w)
 let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
+(* NOTE: Used to distinguish struct/unions globally *)
+let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string a))
 let pp_number  n = !^ (ansi_format [Yellow] n)
 let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
 
@@ -135,21 +139,22 @@ let rec pp_core_object_type = function
       !^ "floating"
   | OTy_pointer ->
       !^ "pointer"
-  | OTy_array bty ->
+  | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
       !^ "array" ^^ P.parens (pp_core_object_type bty)
   | OTy_struct ident ->
-      !^ "struct(TODO)"
+      !^ "struct" ^^^ !^(Pp_symbol.to_string ident)
   | OTy_union ident  ->
-      !^ "union(TODO)"
-  | OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
+      !^ "union" ^^^ !^(Pp_symbol.to_string ident)
+  (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
             pp_core_object_type ret_oTy
         | None ->
             P.underscore in
       !^ "cfunction" ^^ P.parens (pp_ret ^^ P.comma ^^^ !^ (string_of_int nparams) ^^ if isVariadic then P.comma ^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
-
+*)
 let rec pp_core_base_type = function
+  | BTy_storable   -> !^ "storable"
   | BTy_object bty ->
       pp_core_object_type bty
   | BTy_loaded bty ->
@@ -174,7 +179,7 @@ let pp_binop = function
   | OpRem_t -> pp_keyword "rem_t"
   | OpRem_f -> pp_keyword "rem_f"
   | OpExp -> P.caret
-  | OpEq  -> P.equals ^^ P.equals
+  | OpEq  -> P.equals
   | OpLt  -> P.langle
   | OpLe  -> P.langle ^^ P.equals
   | OpGt  -> P.rangle
@@ -184,7 +189,7 @@ let pp_binop = function
 
 
 let pp_ctype ty =
-  P.dquotes (Pp_core_ctype.pp_ctype ty)
+  P.squotes (Pp_core_ctype.pp_ctype ty)
 
 
 
@@ -278,21 +283,19 @@ let rec pp_object_value = function
   | OVarray lvals ->
       pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
   | OVstruct (tag_sym, xs) ->
-      P.parens (pp_const "struct" ^^^ pp_symbol tag_sym) ^^
+      P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (ident, mval) -> 
-          P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^
-          P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) -> 
+          P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
         ) xs
       )
-  | OVunion (tag_sym, memb_ident, mval) ->
-      P.parens (pp_const "union" ^^^ pp_symbol tag_sym) ^^
+  | OVunion (tag_sym, Cabs.CabsIdentifier (_, ident), mval) ->
+      P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^
-        P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
       )
-  | OVcfunction nm ->
-      !^ "Cfunction" ^^ P.parens (pp_name nm)
+  (*| OVcfunction nm ->
+      !^ "Cfunction" ^^ P.parens (pp_name nm) *)
   | OVcomposite _ ->
       !^ "TODO(OVcomposite)" 
 
@@ -300,7 +303,7 @@ and pp_loaded_value = function
   | LVspecified oval ->
       pp_const "Specified" ^^ P.parens (pp_object_value oval)
   | LVunspecified ty ->
-      pp_const "Unspecified" ^^ P.parens (P.dquotes (Pp_core_ctype.pp_ctype ty))
+      pp_const "Unspecified" ^^ P.parens (P.squotes (Pp_core_ctype.pp_ctype ty))
 
 
 let rec pp_value = function
@@ -324,7 +327,7 @@ let rec pp_value = function
   | Vtuple cvals ->
       P.parens (comma_list pp_value cvals)
   | Vctype ty ->
-      P.dquotes (Pp_core_ctype.pp_ctype ty)
+      P.squotes (Pp_core_ctype.pp_ctype ty)
   | Vobject oval ->
       pp_object_value oval
   | Vloaded lval ->
@@ -365,7 +368,8 @@ let pp_ctor = function
       !^ "Civfromfloat"
 
 
-let rec pp_pattern = function
+let rec pp_pattern (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, bTy) ->
       P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
   | CaseBase (Some sym, bTy) ->
@@ -456,9 +460,9 @@ let pp_pexpr pe =
             pp_keyword "array_shift" ^^ P.parens (
               pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
             )
-        | PEmember_shift (pe, tag_sym, memb_ident) ->
+        | PEmember_shift (pe, tag_sym, (Cabs.CabsIdentifier (_, memb_ident))) ->
             pp_keyword "member_shift" ^^ P.parens (
-              pp pe ^^ P.comma ^^^ pp_symbol tag_sym ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident
+              pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
             )
         | PEnot pe ->
             pp_keyword "not" ^^ P.parens (pp pe)
@@ -469,14 +473,16 @@ let pp_pexpr pe =
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_pure_memop pure_memop ^^ P.comma ^^^ comma_list pp pes)
 *)
         | PEstruct (tag_sym, xs) ->
-            P.parens (pp_keyword "struct" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              comma_list (fun (ident, pe) ->
-                P.dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ P.equals ^^^ pp pe
+            P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
+            P.braces (
+              comma_list (fun (Cabs.CabsIdentifier (_, ident), pe) -> 
+                P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
               ) xs
             )
-        | PEunion (tag_sym, member_ident, pe) ->
-            P.parens (pp_keyword "union" ^^^ pp_symbol tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_cabs.pp_cabs_identifier member_ident ^^ P.equals ^^^ pp pe
+        | PEunion (tag_sym, Cabs.CabsIdentifier (_, ident), pe) ->
+            P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
+            P.braces (
+              P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
             )
         | PEmemberof (tag_sym, memb_ident, pe) ->
             pp_keyword "memberof" ^^ P.parens (
@@ -484,6 +490,8 @@ let pp_pexpr pe =
               Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
               pp pe
             )
+        | PEcfunction pe ->
+            pp_keyword "cfunction" ^^ P.parens (pp pe)
         | PEcall (nm, pes) ->
             pp_name nm ^^ P.parens (comma_list pp pes)
         | PElet (pat, pe1, pe2) ->
@@ -506,8 +514,8 @@ let pp_pexpr pe =
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
         | PEbmc_assume pe ->
             pp_keyword "__bmc_assume" ^^^ P.parens (pp pe)
-(*        | PEstd (_, pe) ->
-            !^ "{-PEstd-}" ^^^ pp pe *)
+        | PEare_compatible (pe1, pe2) ->
+            pp_keyword "are_compatible" ^^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
     end
   in pp None pe
 
@@ -539,7 +547,7 @@ let rec pp_expr expr =
         if compare_precedence prec' prec then
           (* right associativity of ; *)
           match (is_semi, e) with
-            | (true, Esseq (CaseBase (None, BTy_unit), _, _)) ->
+            | (true, Esseq (Pattern (_, CaseBase (None, BTy_unit)), _, _)) ->
                 P.parens
             | _ ->
                 fun z -> z
@@ -576,8 +584,8 @@ let rec pp_expr expr =
             pp_keyword "skip"
         | Eproc (_, nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
-        | Eccall (_, pe, pes) ->
-            pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe :: pes))
+        | Eccall (_, pe_ty, pe, pes) ->
+            pp_keyword "ccall" ^^ P.parens (comma_list pp_pexpr (pe_ty :: pe :: pes))
         | Eunseq [] ->
             !^ "BUG: UNSEQ must have at least two arguments (seen 0)"
         | Eunseq [e] ->
@@ -591,7 +599,7 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Esseq (CaseBase (None, BTy_unit), e1, e2) ->
+        | Esseq (Pattern (_, CaseBase (None, BTy_unit)), e1, e2) ->
             (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
         | Esseq (pat, e1, e2) ->
             P.group (
@@ -704,23 +712,19 @@ let std = [
 let symbol_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
 
-
-
 let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
-  
-  P.separate_map (P.break 1 ^^ P.break 1) (fun (tag, tagDef) ->
-    let (str, xs) = begin match tagDef with
-      | Tags.StructDef z -> ("struct", z)
-      | Tags.UnionDef  z -> ("union", z)
-    end in
-    pp_keyword str ^^^ pp_symbol tag ^^^ P.braces (P.break 1 ^^
-      P.nest 2 (
-        P.separate_map (P.semi ^^ P.break 1) (fun (ident, ty) -> Pp_core_ctype.pp_ctype ty ^^^ Pp_cabs.pp_cabs_identifier ident) xs
-      ) ^^ P.break 1
-    ) ^^ P.semi
-  ) tagDefs
-
+  let pp (sym, tagDef) =
+    let (ty, tags) = match tagDef with
+      | Tags.StructDef tags -> ("struct", tags)
+      | Tags.UnionDef tags -> ("union", tags)
+    in
+    let pp_tag (Cabs.CabsIdentifier (_, name), ty) =
+      !^name ^^ P.colon ^^^ pp_ctype ty
+    in
+    pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
+    ^^ P.nest 2 (P.break 1 ^^ P.separate_map (P.break 1) pp_tag tags)
+  in P.separate_map (P.break 1 ^^ P.break 1) pp tagDefs
 
 let pp_argument (sym, bTy) =
   pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
@@ -733,20 +737,20 @@ let pp_fun_map funs =
     if show_include || Location_ocaml.from_main_file loc then d else P.empty
   in
   Pmap.fold (fun sym decl acc ->
-    acc ^^ P.hardline ^^
+    acc ^^
     match decl with
       | Fun  (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline ^^ P.hardline
       | ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
-          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.break 1 ^^ P.break 1
+          pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
       | Proc (loc, bTy, params, e) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline ^^ P.hardline
     ) funs P.empty
 
 
@@ -771,6 +775,12 @@ let mk_comment doc =
     !^ "{-" ^^ P.break 1 ^^ doc ^^ P.break 1 ^^ !^ "-}"
   )
 
+let pp_funinfo finfos =
+  let mk_pair ty = (AilTypes.no_qualifiers, ty) in
+  Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
+    acc ^^ pp_symbol sym ^^ P.colon
+        ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
+        ^^ P.hardline) finfos P.empty
 
 let pp_file file =
   let pp_glob acc (sym, bTy, e) =
@@ -793,8 +803,14 @@ let pp_file file =
   end
   
   begin
-    mk_comment (pp_tagDefinitions (file.tagDefs)) ^^
-    P.break 1 ^^ P.break 1 ^^
+    !^ "-- Aggregates" ^^ P.break 1 ^^
+    pp_tagDefinitions file.tagDefs ^^
+    
+    if show_include then
+      !^ "-- C function types" ^^ P.break 1 ^^
+      pp_funinfo file.funinfo
+    else P.empty
+    ^^
     
     !^ "-- Globals" ^^ P.break 1 ^^
     List.fold_left pp_glob P.empty file.globs ^^
@@ -807,14 +823,14 @@ let pp_file file =
 (* Runtime stuff *)
 let mk_pp_continuation_element cont_elem = fun z ->
   match cont_elem with
-    | Kunseq (es1, es2) ->
+    | Kunseq (_, es1, es2) ->
         pp_control "unseq" ^^ P.parens (
           comma_list pp_expr es1 ^^ P.comma ^^^ z ^^ P.comma ^^^ comma_list pp_expr es2
         )
-    | Kwseq (pat, e2) ->
+    | Kwseq (_, pat, e2) ->
         pp_control "let weak" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
         pp_control "in" ^^^ pp_expr e2
-    | Ksseq (pat, e2) ->
+    | Ksseq (_, pat, e2) ->
         pp_control "let strong" ^^^ pp_pattern pat ^^^ P.equals ^^^ z ^^^
         pp_control "in" ^^^ pp_expr e2
 

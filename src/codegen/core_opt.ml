@@ -53,6 +53,7 @@ let run opt core =
     impl = core.impl;
     globs = List.map (fun (s, bty, e) -> (s, bty, opt e)) core.globs;
     funs = Pmap.map (runf opt) core.funs;
+    funinfo = core.funinfo;
   }
 
 (* Eliminate procedures declarations *)
@@ -70,5 +71,6 @@ let elim_proc_decls core =
     impl = core.impl;
     globs = core.globs;
     funs = elim_decls core.funs;
+    funinfo = core.funinfo;
   }
 

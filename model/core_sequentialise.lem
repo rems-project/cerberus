@@ -18,31 +18,31 @@ let rec sequentialise_expr (Expr annot expr_) =
         Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
     | Eskip ->
         expr_
-    | Eccall _ _ _ ->
+    | Eccall _ _ _ _ ->
         expr_
     | Eproc _ _ _ ->
         expr_
     | Eunseq es ->
         let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "Core_sequentialise ==> missed an unseq") in
         expr_
-    | Ewseq (CaseBase (Nothing, BTy_tuple bTys)) (Expr _ (Eunseq es)) e2 ->
+    | Ewseq (Pattern annot_ctor (CaseBase (Nothing, BTy_tuple bTys))) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (bTy, e) acc ->
-          Expr [] (Ewseq (CaseBase (Nothing, bTy)) (sequentialise_expr e) acc)
+          Expr [] (Ewseq (Pattern annot_ctor (CaseBase (Nothing, bTy))) (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip bTys es) in
         expr_'
-    | Ewseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+    | Ewseq (Pattern _ (CaseCtor Ctuple pats)) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
           Expr [] (Ewseq pat (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip pats es) in
         expr_'
     | Ewseq pat e1 e2 ->
         Ewseq pat (sequentialise_expr e1) (sequentialise_expr e2)
-    | Esseq (CaseBase (Nothing, BTy_tuple bTys)) (Expr _ (Eunseq es)) e2 ->
+    | Esseq (Pattern annot_ctor (CaseBase (Nothing, BTy_tuple bTys))) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (bTy, e) acc ->
-          Expr [] (Esseq (CaseBase (Nothing, bTy)) (sequentialise_expr e) acc)
+          Expr [] (Esseq (Pattern annot_ctor (CaseBase (Nothing, bTy))) (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip bTys es) in
         expr_'
-    | Esseq (CaseCtor Ctuple pats) (Expr _ (Eunseq es)) e2 ->
+    | Esseq (Pattern _ (CaseCtor Ctuple pats)) (Expr _ (Eunseq es)) e2 ->
         let Expr _ expr_' = List.foldr (fun (pat, e) acc ->
           Expr [] (Esseq pat (sequentialise_expr e) acc)
         ) (sequentialise_expr e2) (List.zip pats es) in

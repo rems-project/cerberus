@@ -186,7 +186,8 @@ let print_ail_basic_type = function
 
 (* Patterns *)
 
-let rec print_pattern = function
+let rec print_pattern (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, _) -> P.underscore
   | CaseBase (Some sym, _) -> print_symbol sym
   | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
@@ -200,7 +201,8 @@ and print_match_ctor arg = function
   | Cunspecified -> !^"RT.Unspecified" ^^ P.parens arg
   | _ -> raise (Unsupported "unsupported pattern")
 
-let rec print_simple_pattern base = function
+let rec print_simple_pattern base (Pattern (_, pat)) =
+  match pat with
   | CaseBase (None, _) -> base
   | CaseBase (Some sym, _) -> print_symbol sym
   | CaseCtor (_, pas) ->
@@ -217,7 +219,7 @@ let print_fun_pattern = print_simple_pattern P.underscore
 let print_case pe pp pas =
   let cmp (pat1, pe1) (pat2, pe2) =
     match pat1, pat2 with
-    | _, CaseBase (None, _) -> 1
+    | _, Pattern (_, CaseBase (None, _)) -> 1
     | _ -> 0
   in
   (* ensure that the pattern "_" is the first in the list,
@@ -302,6 +304,7 @@ let print_float_value fv =
 let print_pointer_value pv =
   Ocaml_mem.case_ptrval pv
     (fun _ -> !^"RT.mk_null_void")
+    (fun _ -> failwith "ERROR")
     (fun opt_i addr -> !^"RT.mk_pointer"
                        ^^^ print_option (fun n -> P.dquotes (!^(Nat_big_num.to_string n))) opt_i
                        ^^^ P.dquotes (!^(Nat_big_num.to_string addr)))
@@ -314,10 +317,10 @@ let rec print_core_object = function
   | OTy_integer    -> !^"M.integer_value"
   | OTy_floating   -> !^"M.floating_value"
   | OTy_pointer    -> !^"M.pointer_value"
-  | OTy_cfunction (ret_oTy, naparams, isVariadic) ->
+  (*| OTy_cfunction (ret_oTy, naparams, isVariadic) ->
      (* TODO: K wip *)
      !^"M.pointer_value" (* cfunction is a pointer value? *)
-                       (*TODO: I am not sure about these: *)
+                       (*TODO: I am not sure about these: *) *)
   | OTy_array obj  -> !^"[" ^^ print_core_object obj ^^ !^"]"
   | OTy_struct sym -> !^"struct" ^^^ print_symbol sym
   | OTy_union sym  -> !^"union" ^^^ print_symbol sym
@@ -330,6 +333,7 @@ let rec print_base_type = function
   | BTy_tuple bTys -> P.parens (P.separate_map P.star print_base_type bTys)
   | BTy_object obj -> print_core_object obj
   | BTy_loaded obj -> P.parens (print_core_object obj) ^^^ !^"RT.loaded"
+  | BTy_storable   -> assert false
 
 let print_core_type = function
   | TyBase   baseTy -> print_base_type baseTy
@@ -414,8 +418,8 @@ let lt_precedence p1 p2 =
 let rec print_object_value globs = function
   | OVstruct _
   | OVunion  _          -> failwith "TODO: NOT SURE IF THIS CAN HAPPEN!"
-  | OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
-  | OVcfunction nm      -> print_name nm
+  (*| OVcfunction (Sym s) -> print_globs_prefix globs s ^^ print_global_symbol s
+  | OVcfunction nm      -> print_name nm *)
   | OVinteger iv        -> print_integer_value iv
   | OVfloating fv       -> print_float_value fv
   | OVpointer pv        -> print_pointer_value pv
@@ -564,6 +568,8 @@ let print_pure_expr globs pe =
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
       | PEis_signed pe -> print_is_expr "is_signed" pp pe
       | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
+      | PEcfunction _
+      | PEare_compatible _ -> assert false
     end
   in pp None pe
 
@@ -741,8 +747,8 @@ let rec print_control globs = function
     ^^^ print_list (print_control globs) ces
 
 let print_seq = function
-  | Some (CaseBase (None, _))
-  | Some (CaseCtor (_, []))
+  | Some (Pattern (_, CaseBase (None, _)))
+  | Some (Pattern (_, CaseCtor (_, [])))
   | None -> tbind ^^^ tfun ^^^ P.underscore ^^^ tarrow ^^ P.break 1
   | Some p -> tbind ^^^ print_anon (print_pattern p) ^^ P.break 1
 

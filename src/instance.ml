@@ -1,6 +1,12 @@
 open Util
 open Instance_api
 
+type conf =
+  { pipeline: Pipeline.configuration;
+    io: Pipeline.io_helpers;
+    instance: Instance_api.conf;
+  }
+
 let dummy_io =
   let open Pipeline in
   let skip = fun _ -> Exception.except_return ()
@@ -14,8 +20,6 @@ let dummy_io =
   }
 
 let setup conf =
-  let core_stdlib = Pipeline.load_core_stdlib () in
-  let core_impl   = Pipeline.load_core_impl core_stdlib conf.core_impl in
   let pipeline_conf =
     { Pipeline.debug_level=        conf.cerb_debug_level;
       Pipeline.pprints=            [];
@@ -25,10 +29,12 @@ let setup conf =
       Pipeline.rewrite_core=       conf.rewrite_core;
       Pipeline.sequentialise_core= conf.sequentialise_core;
       Pipeline.cpp_cmd=            conf.cpp_cmd;
-      Pipeline.core_stdlib=        core_stdlib;
-      Pipeline.core_impl=          core_impl;
+
     }
-  in (pipeline_conf, dummy_io)
+  in { pipeline= pipeline_conf;
+       io= dummy_io;
+       instance= conf;
+      }
 
 (* It would be nice if Smt2 could use polymorphic variant *)
 let to_smt2_mode = function
@@ -38,29 +44,30 @@ let to_smt2_mode = function
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack conf mode =
   let open Global_ocaml in
-  cerb_conf := fun () -> {
-    cpp_cmd=            conf.Pipeline.cpp_cmd;
-    pps=                [];
-    ppflags=            [];
-    core_stdlib=        conf.Pipeline.core_stdlib;
-    core_impl_opt=      Some conf.Pipeline.core_impl;
-    core_parser=        (fun _ -> failwith "No core parser");
-    exec_mode_opt=      Some (to_smt2_mode mode);
-    ocaml=              false;
-    ocaml_corestd=      false;
-    progress=           false;
-    rewrite=            conf.Pipeline.rewrite_core;
-    sequentialise=      conf.Pipeline.sequentialise_core;
-    concurrency=        false;
-    preEx=              false;
-    error_verbosity=    Global_ocaml.Basic;
-    batch=              true;
-    experimental_unseq= false;
-    typecheck_core=     conf.Pipeline.typecheck_core;
-    defacto=            false;
-    default_impl=       false;
-    action_graph=       false;
-  }
+  let conf =
+    { cpp_cmd=            conf.Pipeline.cpp_cmd;
+      pps=                [];
+      ppflags=            [];
+      exec_mode_opt=      Some (to_smt2_mode mode);
+      ocaml=              false;
+      ocaml_corestd=      false;
+      progress=           false;
+      rewrite=            conf.Pipeline.rewrite_core;
+      sequentialise=      conf.Pipeline.sequentialise_core;
+      concurrency=        false;
+      preEx=              false;
+      error_verbosity=    Global_ocaml.QuoteStd;
+      batch=              true;
+      experimental_unseq= false;
+      typecheck_core=     conf.Pipeline.typecheck_core;
+      defacto=            false;
+      default_impl=       false;
+      action_graph=       false;
+      n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
+                            Some (Yojson.Basic.from_file (Pipeline.cerb_path ^ "/tools/n1570.json"))
+                          else None;
+    }
+  in cerb_conf := fun () -> conf
 
 let respond f = function
   | Exception.Result r -> f r
@@ -71,18 +78,21 @@ let respond f = function
 let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack (fst conf) Random;
+  hack conf.pipeline Random;
+  Switches.set conf.instance.switches;
+  Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
-    Pipeline.c_frontend conf filename
+    Pipeline.load_core_stdlib () >>= fun core_stdlib ->
+    Pipeline.load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
+    Pipeline.c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
     >>= function
     | (Some cabs, Some ail, sym_suppl, core) ->
-      Pipeline.core_passes conf ~filename core
+      Pipeline.core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun (_, core') ->
       return (cabs, ail, sym_suppl, core')
     | _ ->
-      Exception.throw (Location_ocaml.unknown,
-                       Errors.OTHER "fatal failure core pass")
+      failwith "fatal failure core pass"
   with
   | e ->
     Debug.warn ("Exception raised during elaboration. " ^ Printexc.to_string e);
@@ -96,19 +106,11 @@ let string_of_doc d =
 
 let pp_core core =
   let locs = ref [] in
-  let point_of_pos pos = Lexing.(pos.pos_lnum-1, pos.pos_cnum-pos.pos_bol) in
-  let range_of_loc = function
-    | Location_ocaml.Loc_region (pos1, pos2, _) ->
-      Some (point_of_pos pos1, point_of_pos pos2)
-    | Location_ocaml.Loc_point pos ->
-      Some (point_of_pos pos, (0, 0))
-    | _ -> None
-  in
   let module PP = Pp_core.Make (struct
       let show_std = true
       let show_include = false
       let handle_location c_loc core_range =
-        match range_of_loc c_loc with
+        match Location_ocaml.to_cartesian c_loc with
         | Some c_range ->
           locs := (c_range, core_range)::!locs
         | None -> ()
@@ -141,7 +143,7 @@ let result_of_elaboration (cabs, ail, _, core) =
 let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack (fst conf) mode;
+  hack conf.pipeline mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
@@ -165,33 +167,58 @@ let new_id () = incr last_node_id; !last_node_id
 let encode s = Marshal.to_string s [Marshal.Closures]
 let decode s = Marshal.from_string s 0
 
-let rec multiple_steps step_state (Nondeterminism.ND m, st) =
+let get_state_details st =
+  let string_of_env st =
+    let env = st.Driver.core_run_state.env in
+    let f e = Pmap.fold (fun (s:Symbol.sym) (v:Core.value) acc ->
+        Pp_symbol.to_string_pretty s ^ "= " ^ String_core.string_of_value v ^ "\n" ^ acc
+      ) e "" in
+    List.fold_left (fun acc e -> acc ^ f e) "" env
+  in
+  let outp = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout) in
+  match st.Driver.core_state.Core_run.thread_states with
+  | (_, (_, ts))::_ ->
+    let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
+    let Core.Expr (arena_annots, _) = ts.arena in
+    let maybe_uid = Annot.get_uid arena_annots in
+    let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
+    (loc, maybe_uid, arena, string_of_env st, outp)
+  | _ ->
+    (Location_ocaml.unknown, None, "", "", outp)
+
+let create_node dr_info st next_state =
+  let mk_info info =
+    { step_kind = info.Driver.step_kind;
+      step_debug = Option.case (fun i -> i.Core_run.debug_str) (fun _ -> "no debug string") info.Driver.core_run_info;
+      step_file = Option.case (fun i -> i.Core_run.from_file) (fun _ -> None) info.Driver.core_run_info;
+      step_error_loc = info.Driver.error_loc
+    }
+  in
+  let node_id = new_id () in
+  let node_info = mk_info dr_info in
+  let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+  let (c_loc, core_uid, arena, env, outp) = get_state_details st in
+  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; outp }
+
+let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result, Driver.driver_info, Driver.driver_error, _, _) Nondeterminism.ndM), st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
-  let get_location st =
-    match st.Driver.core_state.Core_run.thread_states with
-    | (_, (_, ts))::_ -> Some (ts.Core_run.current_loc, ts.Core_run.current_uid)
-    | _ -> None
-  in
-  let create_branch lab (st: Driver.driver_state) (ns, es, previousNode) =
-    let nodeId  = new_id () in
-    let mem     = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
-    let newNode = Branch (nodeId, lab, mem, get_location st) in
-    let ns' = newNode :: ns in
-    let es' = Edge (previousNode, nodeId) :: es in
-    (ns', es', nodeId)
+  let create_branch dr_info st (ns, es, previousNode) =
+    let n = create_node dr_info st None in
+    let ns' = n :: ns in
+    let es' = Edge (previousNode, n.node_id) :: es in
+    (ns', es', n.node_id)
   in
   let create_leafs st ms (ns, es, previousNode) =
-    let (is, ns') = List.fold_left (fun (is, ns) (l, m) ->
-        let i = new_id () in
-        let n = Leaf (i, l, encode (m, st)) in
-        (i::is, n::ns)
+    let (is, ns') = List.fold_left (fun (is, ns) (dr_info, m) ->
+        let n = create_node dr_info st (Some (encode (m, st))) in
+        (n.node_id::is, n::ns)
       ) ([], ns) ms in
     let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
     (ns', es', previousNode)
   in
   let check st f = function
-    | `UNSAT -> CS.return (Some "unsat", create_branch "unsat" st step_state)
+    | `UNSAT -> CS.return (Some "unsat", create_branch (Driver.mk_info_kind "unsat") st step_state)
     | `SAT -> CS.return @@ f ()
   in
   let runCS st f = CS.runEff (CS.check_sat >>= check st f) in
@@ -200,9 +227,8 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
   in
   try
     let open Nondeterminism in
-    let one_step = function
+    let one_step: (_, Driver.driver_info, _, _, _) Nondeterminism.nd_action * _ -> _ = function
       | (NDactive a, st') ->
-        Debug.print 0 "active";
         runCS st' begin fun () ->
           let str_v = String_core.string_of_value a.Driver.dres_core_value in
           let res =
@@ -211,14 +237,77 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
             ^ "\", blocked: \""
             ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
           in
-          (Some res, create_branch str_v st' step_state)
+          (Some res, create_branch (Driver.mk_info_kind str_v) st' step_state)
         end
       | (NDkilled r, st') ->
-        (Some "killed", create_branch "killed" st' step_state)
+        let loc, reason = match r with
+          | Undef0 (loc, ubs) ->
+            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+          | Error0 (loc, str) ->
+            Some loc, "Error: " ^ str ^ ""
+          | Other dr_err ->
+            let string_of_driver_error = function
+              | Driver.DErr_core_run err ->
+                None, Pp_errors.string_of_core_run_cause err
+              | Driver.DErr_memory err ->
+                let open Mem_common in
+                let string_of_access_error = function
+                  | NullPtr -> "null pointer"
+                  | FunctionPtr -> "function pointer"
+                  | DeadPtr -> "dead pointer"
+                  | OutOfBoundPtr -> "out of bound pointer"
+                  | NoProvPtr -> "invalid provenance"
+                in
+                let string_of_free_error = function
+                  | Free_static_allocation -> "static allocated region"
+                  | Free_dead_allocation -> "dead allocation"
+                  | Free_out_of_bound -> "out of bound"
+                in
+                begin match err with
+                  | MerrOutsideLifetime str ->
+                    None, "memory outside lifetime: " ^ str
+                  | MerrOther str ->
+                    None, "other memory error: " ^ str
+                  | MerrPtrdiff ->
+                    None, "invalid pointer diff"
+                  | MerrAccess (loc, LoadAccess, err) ->
+                    Some loc, "invalid memory load: " ^ string_of_access_error err
+                  | MerrAccess (loc, StoreAccess, err) ->
+                    Some loc, "invalid memory store: " ^ string_of_access_error err
+                  | MerrInternal str ->
+                    None, "internal error: " ^ str
+                  | MerrPtrFromInt ->
+                    None, "invalid cast pointer from integer"
+                  | MerrWriteOnReadOnly _ ->
+                    None, "writing read only memory"
+                  | MerrUndefinedFree (loc, err) ->
+                    Some loc, "freeing " ^ string_of_free_error err
+                  | MerrUndefinedRealloc ->
+                    None, "undefined behaviour in realloc"
+                  | MerrIntFromPtr ->
+                    None, "invalid cast integer from pointer"
+                  | MerrWIP str ->
+                    None, "wip: " ^ str
+              end
+            | Driver.DErr_concurrency str ->
+                None, "Concurrency error: " ^ str
+            | Driver.DErr_other str ->
+                None, str
+          in
+          let loc, str = string_of_driver_error dr_err in
+          loc, "killed: " ^ str
+        in
+        let info =
+          let open Driver in
+          { step_kind= reason;
+            core_run_info= None;
+            error_loc= loc;
+          }
+        in (Some reason, create_branch info st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
           create_branch str st' step_state
-          |> create_leafs st' [("opt1", m1); ("opt2", m2)]
+          |> create_leafs st' [(Driver.mk_info_kind "opt1", m1); (Driver.mk_info_kind "opt2", m2)]
           |> fun res -> (None, res)
         end
       | (NDguard (str, cs, m), st') ->
@@ -229,10 +318,10 @@ let rec multiple_steps step_state (Nondeterminism.ND m, st) =
         |> fun s -> Debug.print 0 "finish guard"; s
       | (NDnd (str, ms), st') ->
         (None, create_leafs st' ms step_state)
-      | (NDstep ms, st') ->
+      | (NDstep (_, ms), st') ->
         (None, create_leafs st' ms step_state)
     in begin match m st with
-      | (NDstep [(lab, m')], st') ->
+      | (NDstep (_, [(lab, m')]), st') ->
         let step_state' = create_branch lab st' step_state in
         multiple_steps step_state' (m', st')
       | act -> one_step act
@@ -252,34 +341,39 @@ let create_expr_range_list core =
   ignore (string_of_doc @@ PP.pp_file core);
   Hashtbl.fold (fun k v acc -> (k, v)::acc) table []
 
-let step ~conf ~filename active_node =
+let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  match active_node with
+  match active_node_opt with
   | None -> (* no active node *)
-    hack (fst conf) Random;
+    hack conf.pipeline Random;
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
     let st0      = Driver.initial_driver_state sym_suppl core' in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
-    let initId   = new_id () in
-    let nodeId   = Leaf (initId, "Initial", encode (m, st)) in
+    last_node_id := 0;
+    let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
+    let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+    let (c_loc, core_uid, arena, env, outp) = get_state_details st in
+    let next_state = Some (encode (m, st)) in
+    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; outp } in
     let tagDefs  = encode @@ Tags.tagDefs () in
-    return @@ Interactive (tagDefs, ranges, ([nodeId], []))
-  | Some (last_id, marshalled_state, node, tags) ->
-    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode tags in
+    return @@ Interactive (tagDefs, ranges, ([n], []))
+  | Some n ->
+    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
-    hack (fst conf) Random;
-    last_node_id := last_id;
-    decode marshalled_state
-    |> multiple_steps ([], [], node)
-    |> fun (res, (ns, es, _)) -> return @@ Step (res, node, (ns, es))
+    hack conf.pipeline Random;
+    Switches.set conf.instance.switches;
+    last_node_id := n.last_id;
+    decode n.marshalled_state
+    |> multiple_steps ([], [], n.active_id)
+    |> fun (res, (ns, es, _)) -> return @@ Step (res, n.active_id, (ns, es))
 
 let instance debug_level =
   Debug.level := debug_level;
   Debug.print 7 ("Using model: " ^ Prelude.string_of_mem_switch ());
-  let do_action = function
+  let do_action  : Instance_api.request -> Instance_api.result = function
     | `Elaborate (conf, filename) ->
       elaborate ~conf:(setup conf) ~filename
       |> respond result_of_elaboration
@@ -304,13 +398,19 @@ let instance debug_level =
   let send result =
     Marshal.to_channel stdout result [Marshal.Closures];
   in
+  let stdout = redirect () in
   try
-    let stdout = redirect () in
     let result = do_action @@ Marshal.from_channel stdin in
     recover stdout; send result;
     Debug.print 7 "Instance has successfully finished."
-  with e ->
-    Debug.error ("Exception raised in instance: " ^ Printexc.to_string e)
+  with
+  | Failure msg ->
+    Debug.error ("Exception raised in instance: " ^ msg);
+    recover stdout; send (Failure msg)
+  | e ->
+    Debug.error ("Exception raised in instance: " ^ Printexc.to_string e);
+    recover stdout;
+    send (Failure (Printexc.to_string e))
 
 (* Arguments *)
 
@@ -323,7 +423,7 @@ let debug_level =
 
 let () =
   let instance = Term.(pure instance $ debug_level) in
-  let doc  = "Cerberus instance with fixed memory model." in
+  let doc  = "Cerberus instance with a fixed memory model." in
   let info = Term.info "Cerberus instance" ~doc in
   match Term.eval (instance, info) with
   | `Error _ -> exit 1;

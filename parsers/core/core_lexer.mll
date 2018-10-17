@@ -1,5 +1,6 @@
 {
-open Pervasives_
+
+exception Error
 
 module T = Core_parser_util
 type token = T.token
@@ -46,13 +47,15 @@ let keywords =
       ("integer",   T.INTEGER  );
       ("floating",  T.FLOATING );
       ("pointer",   T.POINTER  );
+      ("array",     T.ARRAY    );
       ("cfunction", T.CFUNCTION);
       
       (* for Core base types *)
-      ("unit",    T.UNIT   );
-      ("boolean", T.BOOLEAN);
-      ("ctype",   T.CTYPE  );
-      ("loaded",  T.LOADED );
+      ("unit",     T.UNIT   );
+      ("boolean",  T.BOOLEAN);
+      ("ctype",    T.CTYPE  );
+      ("loaded",   T.LOADED );
+      ("storable", T.STORABLE);
       
       (* for Core types *)
       ("eff", T.EFF);
@@ -66,15 +69,14 @@ let keywords =
       ("Ivmin",       T.IVMIN          );
       ("Ivsizeof",    T.IVSIZEOF       );
       ("Ivalignof",   T.IVALIGNOF      );
+      ("IvCOMPL",     T.IVCOMPL        );
+      ("IvAND",       T.IVAND          );
+      ("IvOR",        T.IVOR           );
+      ("IvXOR",       T.IVXOR          );
+      ("Specified",   T.SPECIFIED      );
       ("Unspecified", T.UNSPECIFIED    );
       ("Cfunction",   T.CFUNCTION_VALUE);
-(*
-      ("Nil",         T.NIL            );
-      ("Cons",        T.CONS           );
-      ("Tuple",  T.TUPLE );
-*)
-      ("Array",       T.ARRAY          );
-      ("Specified",   T.SPECIFIED      );
+      ("Array",       T.ARRAYCTOR      );
 
       ("Fvfromint",   T.FVFROMINT      );
       ("Ivfromfloat", T.IVFROMFLOAT    );
@@ -144,6 +146,7 @@ let keywords =
       ("is_integer",  T.IS_INTEGER );
       ("is_signed",   T.IS_SIGNED  );
       ("is_unsigned", T.IS_UNSIGNED);
+      ("are_compatible", T.ARE_COMPATIBLE);
       
       (* for Memory operations *)
       ("PtrEq",            T.MEMOP_OP Mem_common.PtrEq           );
@@ -291,14 +294,17 @@ and main = parse
   | "| "  { T.PIPE }
   | '('   { T.LPAREN }
   | ')'   { T.RPAREN }
-  | '['	  { T.LBRACKET }
-  | ']'	  { T.RBRACKET }
+  | '['   { T.LBRACKET }
+  | ']'   { T.RBRACKET }
+  | '{'   { T.LBRACE }
+  | '}'   { T.RBRACE }
   | "..." { T.DOTS }
+  | "."   { T.DOT }
   | ";"   { T.SEMICOLON }
   | ','   { T.COMMA }
   | ':'   { T.COLON }
   | ":="  { T.COLON_EQ }
-  | '!'  { T.BANG }
+  | "'"   { T.SQUOTE }
   
   | "=>" { T.EQ_GT }
   
@@ -311,11 +317,7 @@ and main = parse
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {T.EOF}
   | _
-    { raise_error ("Unexpected symbol \""
-                   ^ Lexing.lexeme lexbuf ^ "\" in "
-                   ^ Position.lines_to_string (Position.from_lexbuf lexbuf)
-                   ^ ".\n")
-    }
+    { raise Error }
 
 
 and comment = parse

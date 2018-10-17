@@ -28,3 +28,6 @@ end
 val stringFromLocation: t -> string
 declare ocaml target_rep function stringFromLocation = `Location_ocaml.location_to_string`
 declare hol   target_rep function stringFromLocation u = ""
+
+val get_filename: t -> maybe string
+declare ocaml target_rep function get_filename = `Location_ocaml.get_filename`

@@ -48,13 +48,28 @@ let string_of_constraint_violation = function
       "calling function returning an array type '" ^ string_of_ctype ty ^ "'"
   | FunctionCallIncorrectType ->
       "called object type is not a function or function pointer"
-  | MemberofReferenceBaseType ->
-      "member reference base type is not a structure or union"
-  | MemberofNoMember (memb, gty) ->
+  | FunctionCallTooManyArguments (expected, have) ->
+      "too many arguments to function call, expected " ^ string_of_int expected ^ ", have " ^ string_of_int have
+  | FunctionCallTooFewArguments (expected, have) ->
+      "too few arguments to function call, expected " ^ string_of_int expected ^ ", have " ^ string_of_int have
+  | MemberofReferenceBaseTypeLvalue (qs, ty) ->
+      "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
+  | MemberofReferenceBaseTypeRvalue gty ->
+      "member reference base type '" ^ string_of_gentype gty ^ "' is not a structure or union"
+  | MemberofNoMemberLvalue (memb, qs, ty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
+  | MemberofNoMemberRvalue (memb, gty) ->
       "no member named '" ^ string_of_cid memb ^ "' in '" ^ string_of_gentype gty ^ "'"
+  | MemberofptrReferenceTypeNotPointer gty ->
+      "member reference type '" ^ string_of_gentype gty ^ "' is not a pointer" ^
+      (if GenTypesAux.is_struct_or_union0 gty then "; did you mean to use '.'?" else "")
+  | MemberofptrReferenceBaseType (qs, ty) ->
+      "member reference base type '" ^ String_ail.string_of_ctype qs ty ^ "' is not a structure or union"
+  | MemberofptrNoMember (memb, qs, ty) ->
+      "no member named '" ^ string_of_cid memb ^ "' in '" ^ String_ail.string_of_ctype qs ty ^ "'"
   | InvalidTypeCompoundLiteral ->
       "compound literal has invalid type"
-  | ExpressionNotLvalue ->
+  | UnaryExpressionNotLvalue ->
       "expression is not assignable"
   | InvalidArgumentTypeUnaryIncrement ty ->
       "cannot increment value of type '" ^ string_of_ctype ty ^ "'"
@@ -68,10 +83,36 @@ let string_of_constraint_violation = function
       "the * operator expects a pointer operand"
   | InvalidArgumentTypeUnaryExpression gty ->
       "invalid argument type '" ^ string_of_gentype gty ^ "' to unary expression"
+  | SizeofInvalidApplication gty ->
+      let suffix =
+        if GenTypesAux.is_function0 gty then "a function type"
+        else "an incomplete type '" ^ string_of_gentype gty ^ "'"
+      in "invalid application of 'sizeof' to " ^ suffix
+  | AlignofInvalidApplication (qs, ty) ->
+      let suffix =
+        if AilTypesAux.is_function ty then "a function type"
+        else "an incomplete type '" ^ String_ail.string_of_ctype qs ty ^ "'"
+      in "invalid application of 'sizeof' to " ^ suffix
+  | CastInvalidType (qs, ty) ->
+      "used type '" ^ String_ail.string_of_ctype qs ty ^ "' where scalar type is required"
+  | CastPointerToFloat ->
+      "pointer cannot be cast to type 'float'"
+  | CastFloatToPointer ->
+      "operand of type 'float' cannot be cast to a pointer type"
+  | ArithBinopOperandsType (_, gty1, gty2)
+  | RelationalInvalidOperandsType (gty1, gty2)
+  | EqualityInvalidOperandsType (gty1, gty2)
+  | AndInvalidOperandsType (gty1, gty2)
+  | OrInvalidOperandsType (gty1, gty2)
+  | CompoundAssignmentAddSubOperandTypes (gty1, gty2)
+  | CompoundAssignmentOthersOperandTypes (_, gty1, gty2) ->
+      "invalid operands to binary expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
   | ConditionalOperatorControlType gty ->
       "'" ^ string_of_gentype gty ^ "' is not a scalar type"
   | ConditionalOperatorInvalidOperandTypes (gty1, gty2) ->
       "type mismatch in conditional expression ('" ^ string_of_gentype gty1 ^ "' and '" ^ string_of_gentype gty2 ^ "')"
+  | AssignmentModifiableLvalue ->
+      "expression is not assignable"
   | SimpleAssignmentViolation (IncompatibleType, ty1, gty2)  ->
       "assigning to '" ^ string_of_ctype ty1 ^ "' from incompatible type '" ^ string_of_gentype gty2 ^ "'"
   | SimpleAssignmentViolation (IncompatiblePointerType, ty1, gty2) ->
@@ -142,6 +183,12 @@ let string_of_constraint_violation = function
       "void function should not return a value"
   | VoidReturnNonVoidFunction ->
       "non-void function should return a value"
+  | ReturnAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "returning '" ^ string_of_gentype gty2 ^ "' from a function with incompatible result type '" ^ string_of_ctype ty1 ^ "'"
+  | ReturnAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "'"
+  | ReturnAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
   | ArrayDeclarationNegativeSize ->
       "array declared with a negative or zero size"
   | ArrayDeclarationIncompleteType ->
@@ -182,6 +229,12 @@ let string_of_constraint_violation = function
       "argument may not have 'void' type"
   | UniqueVoidParameterInFunctionDefinition ->
       "'void' must be the first and only parameter if specified"
+  | FunctionParameterAsSimpleAssignment (IncompatibleType, ty1, gty2) ->
+      "passing '" ^ string_of_gentype gty2 ^ "' to parameter of incompatible type '" ^ string_of_ctype ty1 ^ "'"
+  | FunctionParameterAsSimpleAssignment (IncompatiblePointerType, ty1, gty2) ->
+      "incompatible pointer types passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
+  | FunctionParameterAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
+      "passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
   | ExternalRedefinition sym ->
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
@@ -222,6 +275,10 @@ let string_of_ail_typing_misc_error = function
       "integer constant cannot be represented by any type"
   | ParameterTypeNotAdjusted ->
       "internal: the parameter type was not adjusted"
+  | VaStartArgumentType ->
+      "the first argument of 'va_start' must be of type 'va_list'"
+  | VaArgArgumentType ->
+      "the first argument of 'va_arg' must be of type 'va_list'"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
@@ -230,36 +287,65 @@ let string_of_ail_typing_error = function
       (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | TError_MiscError tme ->
       string_of_ail_typing_misc_error tme
-  (* TODO *)
-  | TError std ->
-      "[Ail typing] (" ^ std ^ ")\n  \"" ^ std ^ "\""
-  | _ ->
-      "[Ail typing error]"
+  | TError_NotYetSupported str ->
+      "feature not yet supported: " ^ str
+
+let string_of_bty =
+  String_core.string_of_core_base_type
+
+let string_of_name = function
+  | Core.Sym sym -> string_of_sym sym
+  | Core.Impl impl -> Implementation_.string_of_implementation_constant impl
+
+let string_of_binop bop =
+  let open Core in
+  match bop with
+  | OpAdd -> "+"
+  | OpSub -> "-"
+  | OpMul -> "*"
+  | OpDiv -> "/"
+  | OpRem_t -> "rem_t"
+  | OpRem_f -> "rem_f"
+  | OpExp -> "^"
+  | OpEq -> "="
+  | OpGt -> ">"
+  | OpLt -> "<"
+  | OpGe -> ">="
+  | OpLe -> "<="
+  | OpAnd -> "/\\"
+  | OpOr -> "\\/"
 
 let string_of_core_typing_cause = function
-  | Undefined_startup sym ->
-      "Undefined_startup " ^ Pp_symbol.to_string sym
-  | MismatchObject (expected_oTy, found_oTy) ->
-      "MismatchObject(" ^
-      String_core.string_of_core_object_type expected_oTy ^ ", " ^
-      String_core.string_of_core_object_type found_oTy ^ ")"
-  | Mismatch (info_str, expected_bTy, found_bTy) ->
-      "Mismatch(" ^ info_str ^ ", " ^
-      String_core.string_of_core_base_type expected_bTy ^ ", " ^
-      String_core.string_of_core_base_type found_bTy ^ ")"
+  | UndefinedStartup sym ->
+      "undefined startup procedure '" ^ string_of_sym sym ^ "'"
+  | Mismatch (str, expected, found) ->
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      "this expression is of type '" ^ string_of_bty found ^
+      "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
+  | MismatchBinaryOperator bop ->
+      "incompatible operand types to binary operation '" ^ string_of_binop bop ^ "'"
+  | TooGeneral ->
+      "unable to infer the type of this expression (too general)"
   | MismatchIf (then_bTy, else_bTy) ->
-      "MismatchIf"
-  | MismatchIfCfunction (xs_then, xs_else) ->
-      (* of (core_base_type * list core_base_type) (* then *) * (core_base_type * list core_base_type) (* else *) *)
-      "MismatchIfCfunction(TODO)"
-  | EmptyArray ->
-      "EmptyArray"
-  | CtorWrongNumber (expected_n, found_n) ->
-      "CtorWrongNumber(" ^ string_of_int expected_n ^ ", " ^ string_of_int found_n ^ ")"
-  | HeterogenousArray (expected_oTy, found_oTy) ->
-      "HeterogenousArray(" ^
-      String_core.string_of_core_object_type expected_oTy ^ ", " ^
-      String_core.string_of_core_object_type found_oTy ^ ")"
+      "type mismatch in conditional expression ('" ^ string_of_bty then_bTy ^ "' and '" ^ string_of_bty else_bTy ^ "')"
+  | MismatchExpected (str, expected, found) ->
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      "this expression is of type '" ^ found ^
+      "' but an expression of type '" ^ string_of_bty expected ^ "' was expected"
+  | MismatchFound (str, expected, m_found) ->
+      (if !Debug_ocaml.debug_level > 0 then "(" ^ str ^ "):\n" else "") ^
+      (match m_found with Some found -> "this expression is of type '" ^ string_of_bty found ^ "' but " | None -> "") ^
+      "an expression of type '" ^ expected ^ "' was expected"
+  | CFunctionExpected nm ->
+      "symbol '" ^ string_of_name nm ^ "' has incorrect type, a symbol of type 'cfunction' was expected"
+  | CFunctionParamsType ->
+      "core procedures used as C functions must only have pointer parameters (or list of pointers when variadic)"
+  | CFunctionReturnType ->
+      "core procedures used as C functions must return unit or an object value"
+  | UnresolvedSymbol nm ->
+      "unresolved symbol '" ^ string_of_name nm ^ "'"
+  | FunctionOrProcedureSymbol sym ->
+      "unexpected function/procedure '" ^ string_of_sym sym ^ "'"
   | HeterogenousList (expected_bTy, found_bTy) ->
       "HeterogenousList(" ^
       String_core.string_of_core_base_type expected_bTy ^ ", " ^
@@ -270,8 +356,6 @@ let string_of_core_typing_cause = function
       "InvalidMember(" ^ Pp_symbol.to_string tag_sym ^ ", " ^ memb_str ^ ")"
   | CoreTyping_TODO str ->
       "CoreTyping_TODO(" ^ str ^ ")"
-  | TooGeneral ->
-      "TooGeneral"
 
 let string_of_core_run_cause = function
   | Illformed_program str ->
@@ -284,6 +368,26 @@ let string_of_core_run_cause = function
       "unknown implementation constant"
   | Unresolved_symbol sym ->
       "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
+
+let string_of_core_parser_cause = function
+  | Core_parser_invalid_symbol ->
+      "invalid symbol"
+  | Core_parser_unexpected_token str ->
+      "unexpected token '"^ str ^ "'"
+  | Core_parser_unresolved_symbol str ->
+      "unresolved symbol '" ^ str ^ "'"
+  | Core_parser_multiple_declaration str ->
+      "multiple declaration of '" ^ str ^ "'"
+  | Core_parser_ctor_wrong_application (expected, found) ->
+      "wrong number of expression in application, expected " ^ string_of_int expected ^ ", found " ^ string_of_int found
+  | Core_parser_wrong_decl_in_std ->
+      "wrong declaration in std" (* TODO: ?? *)
+  | Core_parser_undefined_startup ->
+      "undefined startup function"
+
+let string_of_driver_cause = function
+  | Driver_UB ubs ->
+      String.concat "\n" @@ List.map (fun ub -> (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
 
 let short_message = function
   | CPARSER ccause ->
@@ -298,10 +402,10 @@ let short_message = function
       string_of_core_run_cause cause
   | UNSUPPORTED str ->
       "unsupported " ^ str
-  | PARSER str ->
-      "TODO(msg) PARSER ==> " ^ str
-  | OTHER str ->
-      "TODO(msg) OTHER ==> " ^ str
+  | CORE_PARSER ccause ->
+      string_of_core_parser_cause ccause
+  | DRIVER dcause ->
+      string_of_driver_cause dcause
 
 type std_ref =
   | StdRef of string list
@@ -340,6 +444,14 @@ let get_desugar_ref = function
   | _ ->
       UnknownRef
 
+let get_driver_ref = function
+  | Driver_UB ubs ->
+    StdRef (List.concat
+              (List.map (fun ub ->
+                   match Undefined.std_of_undefined_behaviour ub with
+                   | Some x -> [x]
+                   | None -> []) ubs))
+
 let get_std_ref = function
   | CPARSER _ ->
       NoRef
@@ -347,6 +459,8 @@ let get_std_ref = function
       get_desugar_ref dcause
   | AIL_TYPING tcause ->
       StdRef (std_of_ail_typing_error tcause)
+  | DRIVER dcause ->
+      get_driver_ref dcause
   | _ ->
       NoRef
 
@@ -372,7 +486,7 @@ let make_message loc err k =
     | ref::refs -> ref ^ ", " ^ string_of_refs refs
   in
   let rec string_of_quotes = function
-    | [] -> failwith "make_message: no quote"
+    | [] -> "no C11 reference"
     | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
     | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
@@ -390,3 +504,7 @@ let make_message loc err k =
 
 let to_string (loc, err) =
   make_message loc err Error
+
+let fatal msg =
+  prerr_endline (ansi_format [Bold; Red] "error: " ^ ansi_format [Bold] msg);
+  exit 1

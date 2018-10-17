@@ -35,25 +35,22 @@ instance (Constraints unit)
   let concat x y = ()
 end
 
-
-
-
-type nd_action 'a 'err 'cs 'st =
+type nd_action 'a 'info 'err 'cs 'st =
   | NDactive of 'a
   | NDkilled of kill_reason 'err
-  | NDnd of string * list (string * ndM 'a 'err 'cs 'st)
-  | NDguard of string * 'cs * ndM 'a 'err 'cs 'st
-  | NDbranch of string * 'cs * ndM 'a 'err 'cs 'st * ndM 'a 'err 'cs 'st
-  | NDstep of list (string * ndM 'a 'err 'cs 'st)
+  | NDnd of 'info * list ('info * ndM 'a 'info 'err 'cs 'st)
+  | NDguard of 'info * 'cs * ndM 'a 'info 'err 'cs 'st
+  | NDbranch of 'info * 'cs * ndM 'a 'info 'err 'cs 'st * ndM 'a 'info 'err 'cs 'st
+  | NDstep of 'info * list ('info * ndM 'a 'info 'err 'cs 'st)
 
-and ndM 'a 'err 'cs 'st =
-  ND of ('st -> (nd_action 'a 'err 'cs 'st * 'st))
+and ndM 'a 'info 'err 'cs 'st =
+  ND of ('st -> (nd_action 'a 'info 'err 'cs 'st * 'st))
 
 
 
 (* Monadic operations *)
-val return: forall 'a 'err 'cs 'st. 'a -> ndM 'a 'err 'cs 'st
-val bind:   forall 'a 'b 'err 'cs 'st. ndM 'a 'err 'cs 'st -> ('a -> ndM 'b 'err 'cs 'st) -> ndM 'b 'err 'cs 'st
+val return: forall 'a 'err 'info 'cs 'st. 'a -> ndM 'a 'info 'err 'cs 'st
+val bind:   forall 'a 'b 'info 'err 'cs 'st. ndM 'a 'info 'err 'cs 'st -> ('a -> ndM 'b 'info 'err 'cs 'st) -> ndM 'b 'info 'err 'cs 'st
 
 let nd_return a =
   ND (fun st -> (NDactive a, st))
@@ -72,18 +69,18 @@ let rec nd_bind (ND m_act) f =
           (NDguard debug_str cs (nd_bind m_act' f), st')
       | (NDbranch debug_str cs m_act1 m_act2, st') ->
           (NDbranch debug_str cs (nd_bind m_act1 f) (nd_bind m_act2 f), st')
-      | (NDstep str_ms, st') ->
-          (NDstep (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
+      | (NDstep info str_ms, st') ->
+          (NDstep info (List.map (fun (str, m) -> (str, nd_bind m f)) str_ms), st')
     end
   )
 let inline bind = nd_bind
 
 
 (* State operations *)
-val get: forall 'err 'cs 'st. ndM 'st 'err 'cs 'st
-val put: forall 'err 'cs 'st. 'st -> ndM unit 'err 'cs 'st
-val update: forall 'err 'cs 'st. ('st -> 'st) -> ndM unit 'err 'cs 'st
-val read: forall 'a 'err 'cs 'st. ('st -> 'a) -> ndM 'a 'err 'cs 'st
+val get: forall 'err 'info 'cs 'st. ndM 'st 'info 'err 'cs 'st
+val put: forall 'err 'info 'cs 'st. 'st -> ndM unit 'info 'err 'cs 'st
+val update: forall 'err 'info 'cs 'st. ('st -> 'st) -> ndM unit 'info 'err 'cs 'st
+val read: forall 'a 'err 'info 'cs 'st. ('st -> 'a) -> ndM 'a 'info 'err 'cs 'st
 
 let nd_get =
   ND (fun st -> (NDactive st, st))
@@ -106,7 +103,7 @@ let inline read = nd_read
 
 let inline (>>=) = bind
 
-val bindExhaustive: forall 'a 'b 'err 'cs 'st. ndM 'a 'err 'cs 'st -> ('a -> ndM 'b 'err 'cs 'st) -> ndM 'b 'err 'cs 'st
+val bindExhaustive: forall 'a 'b 'info 'err 'cs 'st. ndM 'a 'info 'err 'cs 'st -> ('a -> ndM 'b 'info 'err 'cs 'st) -> ndM 'b 'info 'err 'cs 'st
 let bindExhaustive m f =
   let () = Debug.print_debug 1 [] (fun () ->
     "ND2.bindExhaustive is wrong"
@@ -115,37 +112,37 @@ let bindExhaustive m f =
 
 
 
-val kill: forall 'a 'err 'cs 'st. kill_reason 'err -> ndM 'a 'err 'cs 'st
+val kill: forall 'a 'info 'err 'cs 'st. kill_reason 'err -> ndM 'a 'info 'err 'cs 'st
 let kill r =
   ND (fun st -> (NDkilled r, st))
 
-val log: forall 'err 'cs 'st. string -> ndM unit 'err 'cs 'st
+val log: forall 'info 'err 'cs 'st. string -> ndM unit 'info 'err 'cs 'st
 let log msg =
   error "ND2.log"
 
-val print_debug: forall 'err 'cs 'st. nat -> list Debug.domain -> (unit -> string) -> ndM unit 'err 'cs 'st
+val print_debug: forall 'info 'err 'cs 'st. nat -> list Debug.domain -> (unit -> string) -> ndM unit 'info 'err 'cs 'st
 let print_debug level doms msg =
   return (Debug.print_debug level doms msg)
 
 
 
-val mplus: forall 'a 'err 'cs 'st. ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st
+val mplus: forall 'a 'info 'err 'cs 'st. ndM 'a 'info 'err 'cs 'st -> ndM 'a 'info 'err 'cs 'st -> ndM 'a 'info 'err 'cs 'st
 let mplus m1 m2 =
   error "ND2.mplus"
 
 (* GENERIC MonadPlus *)
-val msum: forall 'a 'err 'cs 'st. Constraints 'cs => string -> list (string * ndM 'a 'err 'cs 'st) -> ndM 'a 'err 'cs 'st 
-let msum debug_str = function
+val msum: forall 'a 'info 'err 'cs 'st. Constraints 'cs, Show 'info => 'info -> list ('info * ndM 'a 'info 'err 'cs 'st) -> ndM 'a 'info 'err 'cs 'st 
+let msum info = function
   | [] ->
       error "ND2.msum []"
   | [(_, m)] ->
       m
-  | str_ms ->
+  | info_ms ->
     let () = Debug.print_debug 1 [] (fun () ->
-      "ND2.msum (|ms| = " ^ show (List.length str_ms) ^ ")"
+      "ND2.msum (|ms| = " ^ show (List.length info_ms) ^ ")"
     ) in
     ND (fun st ->
-      (NDnd debug_str str_ms, st)
+      (NDnd info info_ms, st)
     )
 end
 
@@ -159,7 +156,7 @@ let inline sequence ms =
 
 let inline listM t xs = sequence (t xs)
 
-val mapM: forall 'a 'b 'err 'cs 'st. ('a -> ndM 'b 'err 'cs 'st) -> list 'a -> ndM (list 'b) 'err 'cs 'st
+val mapM: forall 'a 'b 'info 'err 'cs 'st. ('a -> ndM 'b 'info 'err 'cs 'st) -> list 'a -> ndM (list 'b) 'info 'err 'cs 'st
 let nd_mapM f = listM (List.map f)
 let inline mapM = nd_mapM
 
@@ -169,13 +166,13 @@ let nd_sequence_ ms = foldr (fun m1 m2 -> bind m1 (fun _ -> m2)) (return ()) ms
 let inline sequence_ = nd_sequence_
 
 (* GENERIC Monad *)
-val mapM_: forall 'a 'b 'err 'cs 'st. ('a -> ndM 'b 'err 'cs 'st) -> list 'a -> ndM unit 'err 'cs 'st
+val mapM_: forall 'a 'b 'info 'err 'cs 'st. ('a -> ndM 'b 'info 'err 'cs 'st) -> list 'a -> ndM unit 'info 'err 'cs 'st
 let nd_mapM_ f _as = sequence_ (List.map f _as)
 let inline mapM_ = nd_mapM_
 
 
 (* NOTE: this is foldl *)
-val     foldlM: forall 'a 'b 'err 'cs 'st. ('a -> 'b -> ndM 'a 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'err 'cs 'st (* GENERIC Monad *)
+val     foldlM: forall 'a 'b 'info 'err 'cs 'st. ('a -> 'b -> ndM 'a 'info 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'info 'err 'cs 'st (* GENERIC Monad *)
 let rec foldlM f a = function                                                 (* GENERIC Monad *)
   | [] ->                                                                    (* GENERIC Monad *)
       return a                                                               (* GENERIC Monad *)
@@ -186,10 +183,10 @@ end
 
 
 (* Non-deterministically pick from a list *)
-val pick: forall 'a 'err 'cs 'st. Constraints 'cs => string -> list 'a -> ndM 'a 'err 'cs 'st
-let pick debug_str = function
+val pick: forall 'a 'info 'err 'cs 'st. Constraints 'cs, Show 'info => 'info -> list 'a -> ndM 'a 'info 'err 'cs 'st
+let pick info = function
   | [] ->
-      error ("ND2.pick(" ^ debug_str ^ "), empty list")
+      error ("ND2.pick(" ^ show info ^ "), empty list")
   | [x] ->
       ND (fun st ->
         (NDactive x, st)
@@ -199,12 +196,12 @@ let pick debug_str = function
         "ND2.pick (|ms| = " ^ show (List.length (x::xs)) ^ ")"
       ) in
       ND (fun st ->
-        (NDnd debug_str (("", return x) :: List.map (fun z -> ("", return z)) xs), st)
+        (NDnd info ((info, return x) :: List.map (fun z -> (info, return z)) xs), st)
       )
 end
 
 
-val ifM: forall 'a 'err 'cs 'st. string -> 'cs -> ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st -> ndM 'a 'err 'cs 'st
+val ifM: forall 'a 'info 'err 'cs 'st. 'info -> 'cs -> ndM 'a 'info 'err 'cs 'st -> ndM 'a 'info 'err 'cs 'st -> ndM 'a 'info 'err 'cs 'st
 let ifM debug_str cs mThen mElse =
   ND (fun st ->
     (NDbranch debug_str cs mThen mElse, st)
@@ -212,14 +209,14 @@ let ifM debug_str cs mThen mElse =
 
 
 (* NOTE: this seems to only be used by the concurrency *)
-val mem : forall 'a 'err 'cs 'st. Eq 'a => 'a -> ndM 'a 'err 'cs 'st -> bool
+val mem : forall 'a 'info 'err 'cs 'st. Eq 'a => 'a -> ndM 'a 'info 'err 'cs 'st -> bool
 let nd_mem x m =
   error "ND2.mem"
 let inline mem = nd_mem
 
 
 
-val guard: forall 'err 'cs 'st. bool -> kill_reason 'err -> ndM unit 'err 'cs 'st
+val guard: forall 'info 'err 'cs 'st. bool -> kill_reason 'err -> ndM unit 'info 'err 'cs 'st
 let nd_guard b reason =
   if b then return () else kill reason
 let inline guard = nd_guard
@@ -231,7 +228,7 @@ let warns_if_no_active_ex m =
 
 
 
-val addConstraints: forall 'err 'cs 'st. string -> 'cs -> ndM unit 'err 'cs 'st
+val addConstraints: forall 'info 'err 'cs 'st. 'info -> 'cs -> ndM unit 'info 'err 'cs 'st
 let addConstraints debug_str cs =
   ND (fun st ->
     (NDguard debug_str cs (return ()), st)
@@ -240,13 +237,14 @@ let addConstraints debug_str cs =
 
 
 
-val liftND: forall 'a 'err1 'err2 'cs 'st1 'st2.
+val liftND: forall 'a 'info1 'info2 'err1 'err2 'cs 'st1 'st2.
   ('st2 -> 'st1) ->
   ('st2 -> 'st1 -> 'st2) ->
+  ('info1 -> 'info2) ->
   ('err1 -> 'err2) ->
-  ndM 'a 'err1 'cs 'st1 -> ndM 'a 'err2 'cs 'st2
+  ndM 'a 'info1 'err1 'cs 'st1 -> ndM 'a 'info2 'err2 'cs 'st2
 
-let rec liftAction get put liftErr = function
+let rec liftAction get put liftInfo liftErr = function
   | NDactive a ->
       NDactive a
   | NDkilled r ->
@@ -258,26 +256,26 @@ let rec liftAction get put liftErr = function
         | Other err ->
             Other (liftErr err)
       end
-  | NDnd debug_str str_ms ->
-      NDnd debug_str (List.map (fun (str, m_act) -> (str, liftND get put liftErr m_act)) str_ms)
-  | NDguard debug_str cs act ->
-      NDguard debug_str cs (liftND get put liftErr act)
-  | NDbranch debug_str cs m_act1 m_act2 ->
-      NDbranch debug_str cs (liftND get put liftErr m_act1) (liftND get put liftErr m_act2)
-  | NDstep str_ms ->
-      NDstep (List.map (fun (str, m) -> (str, liftND get put liftErr m)) str_ms)
+  | NDnd info str_ms ->
+      NDnd (liftInfo info) (List.map (fun (info, m_act) -> (liftInfo info, liftND get put liftInfo liftErr m_act)) str_ms)
+  | NDguard info cs act ->
+      NDguard (liftInfo info) cs (liftND get put liftInfo liftErr act)
+  | NDbranch info cs m_act1 m_act2 ->
+      NDbranch (liftInfo info) cs (liftND get put liftInfo liftErr m_act1) (liftND get put liftInfo liftErr m_act2)
+  | NDstep info info_ms ->
+      NDstep (liftInfo info) (List.map (fun (info, m) -> (liftInfo info, liftND get put liftInfo liftErr m)) info_ms)
 end
 
-and liftND get put liftErr (ND m) =
+and liftND get put liftInfo liftErr (ND m) =
   ND (fun st2 ->
     let (act, st1') = m (get st2) in
-    (liftAction get put liftErr act, put st2 st1')
+    (liftAction get put liftInfo liftErr act, put st2 st1')
   )
 
 
 
-let mk_step _ xs =
-  ND (fun st -> (NDstep xs, st))
+let mk_step info xs =
+  ND (fun st -> (NDstep info xs, st))
 
 
 

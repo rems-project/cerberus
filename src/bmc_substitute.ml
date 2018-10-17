@@ -29,6 +29,7 @@ let rec substitute_pexpr (map: substitute_map)
                       substitute_pexpr map pe_index)
     | PEmember_shift (pe_ptr, sym, member) ->
         PEmember_shift(substitute_pexpr map pe_ptr, sym, member)
+    | PEcfunction _ -> assert false
     | PEmemberof _ -> assert false
     | PEnot pe ->
         PEnot(substitute_pexpr map pe)
@@ -54,6 +55,8 @@ let rec substitute_pexpr (map: substitute_map)
         PEis_unsigned (substitute_pexpr map pe)
     | PEbmc_assume pe ->
         PEbmc_assume (substitute_pexpr map pe)
+    | PEare_compatible _ ->
+        assert false
 
   in
     Pexpr(annot, ty, ret)
@@ -128,8 +131,9 @@ let rec substitute_expr (map: substitute_map)
     | Eif(pe1, e2, e3) ->
         Eif(substitute_pexpr map pe1, substitute_expr map e2, substitute_expr map e3)
     | Eskip -> Eskip
-    | Eccall (a, pe, pelist) ->
-        Eccall(a, substitute_pexpr map pe,
+    | Eccall (a, pe1, pe2, pelist) ->
+        Eccall(a, substitute_pexpr map pe1,
+                  substitute_pexpr map pe2,
                   List.map (substitute_pexpr map) pelist)
     | Eproc _ ->
         assert false

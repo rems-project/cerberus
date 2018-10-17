@@ -18,11 +18,15 @@ type conf =
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)
     timeout: int;             (* instance execution timeout *)
     tagDefs: string;          (* marshalled tag defs *)
+    switches: string list;
   }
 
-(* last_id * state * node id * marshalled tagDefs
- * last_id is used to feed node id generation in the current instance *)
-type active_node = int * string * int * string
+type active_node =
+  { last_id: int; (* used to feed node id generation in the current instance *)
+    marshalled_state: string;
+    active_id: int;
+    tagDefs: string;
+  }
 
 type filename = string
 
@@ -30,15 +34,46 @@ type filename = string
 type request =
   [ `Elaborate of conf * filename
   | `Execute of conf * filename * exec_mode
-  | `Step of conf * filename * active_node ]
+  | `Step of conf * filename * active_node option ]
 
 type point = int * int
 type range = point * point
 
+type step_info =
+  { step_kind: string; (* kind of step/transition *)
+    step_debug: string; (* debug string *)
+    step_file: string option; (* from file *)
+    step_error_loc: Location_ocaml.t option;
+  }
+
 type node =
-  | Branch of int * string * Json.json * (Location_ocaml.t * string option) option
-      (* id * label * serialised memory * (c location * uid) *)
-  | Leaf of int * string * string (* id * label * marshalled state *)
+  { node_id: int;
+    node_info: step_info; (* TODO: this might need to be in the edge *)
+    memory: Json.json;
+    c_loc: Location_ocaml.t;
+    core_uid: string option;
+    arena: string;
+    env: string; (* maybe an associate list ? *)
+    next_state: string option; (* marshalled state *)
+    outp: string; (* stdout output *)
+  }
+
+(*
+  | Branch of {
+      branch_id: int;
+      branch_info: step_info;
+      memory: Json.json;
+      c_loc: Location_ocaml.t;
+      uid: string option;
+      arena: string;
+      env: string; (* maybe an associate list ? *)
+    }
+  | Leaf of {
+      leaf_id: int;
+      leaf_info: step_info;
+      leaf_state: string;
+    }
+*)
 
 type edge =
   | Edge of int * int (* from -> to *)

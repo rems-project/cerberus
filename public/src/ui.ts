@@ -1,4 +1,5 @@
 import $ from 'jquery'
+import { includes } from 'lodash'
 import GoldenLayout from 'golden-layout'
 import Common from './common'
 import Util from './util'
@@ -12,7 +13,7 @@ export interface Settings {
   colour: boolean,
   colour_cursor: boolean,
   short_share: boolean
-  model: Common.Model
+  model: Common.Model,
 }
 
 export class CerberusUI {
@@ -31,7 +32,19 @@ export class CerberusUI {
   /** List of compilers */
   compilers?: Common.Compiler []
 
-  constructor (settings: Settings) {
+  /** Step buttons */
+  private stepBack: JQuery<HTMLElement>
+  private stepForward: JQuery<HTMLElement>
+  private stepForwardLeft: JQuery<HTMLElement>
+  private stepForwardMiddle: JQuery<HTMLElement>
+  private stepForwardRight: JQuery<HTMLElement>
+  private stepCounter: JQuery<HTMLElement>
+
+  public demo(name: string) {
+    console.log(name)
+  }
+
+   constructor (settings: Settings) {
     this.views = []          
 
     this.dom = $('#views');
@@ -70,7 +83,7 @@ export class CerberusUI {
       let reader = new FileReader()
       reader.onload = (e: ProgressEvent) => {
         if (e.target instanceof FileReader)
-          this.add(new View(file.name, e.target.result))
+          this.add(new View(file.name, e.target.result as string))
       }
       reader.readAsText(file)
     })
@@ -93,7 +106,7 @@ export class CerberusUI {
     })
 
     $('#demo .tests a').on('click', (e) => {
-      const name = e.target.textContent + '.c'
+      const name = e.target.textContent as string
       Util.get('demo/'+name, (data: string) => {
         $('#demo').css('visibility', 'hidden')
         this.add(new View(name, data))
@@ -104,7 +117,48 @@ export class CerberusUI {
     // Run (Execute)
     $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
     $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
-    $('#interactive').on('click', () => this.startInteractive())
+
+    // Interactive Step Buttons
+    this.stepBack = $('#step-back')
+    this.stepBack.on('click', (e) => {
+      if (!this.stepBack.hasClass('disabled'))
+        this.getView().stepBack()
+    })
+    this.stepForward = $('#step-forward')
+    this.stepForward.on('click', (e) => {
+      if (!this.stepForward.hasClass('disabled'))
+        this.getView().stepForward()
+    })
+    this.stepForwardLeft = $('#step-forward-left')
+    this.stepForwardLeft.on('click', (e) => this.getView().stepForwardLeft())
+    this.stepForwardMiddle = $('#step-forward-middle')
+    this.stepForwardMiddle.on('click', (e) => this.getView().stepForwardMiddle())
+    this.stepForwardRight = $('#step-forward-right')
+    this.stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
+    this.stepCounter = $('#step-counter')
+    $('#restart').on('click', () => this.getView().restartInteractive())
+
+    // Interactive Options
+    const toggleInteractiveOptions = (flag: string) => {
+      const view = this.getView()
+      view.toggleInteractiveOptions(flag)
+      view.updateExecutionGraph()
+      this.updateInteractiveOptions(view)
+      view.emit('updateInteractive')
+    }
+    const setInteractiveMode = (mode: Common.InteractiveMode) => {
+      const view = this.getView()
+      view.setInteractiveMode(mode)
+      this.updateInteractiveOptions(view)
+    }
+    $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
+    $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
+    $('#step-mem-action').on('click', () => setInteractiveMode(Common.InteractiveMode.Memory))
+    $('#step-C-line').on('click', () => setInteractiveMode(Common.InteractiveMode.CLine))
+    $('#step-Core-trans').on('click', () => setInteractiveMode(Common.InteractiveMode.Core))
+    $('#open-memory').on('click', () => this.getView().newTab('Memory'))
+    $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
+    $('#open-arena').on('click', () => this.getView().newTab('Arena'))
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
@@ -113,10 +167,7 @@ export class CerberusUI {
     $('#core').on('click', () => this.elab ('Core'))
 
     // Compilers
-    $('#compile').on('click', () => {
-      if (this.currentView)
-        this.currentView.newTab('Asm')
-    })
+    $('#compile').on('click', () => this.getView().newTab('Asm'))
 
     // Share
     let update_share_link = () => {
@@ -181,6 +232,23 @@ export class CerberusUI {
       $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     })
 
+    $('.switch').on('click', (e) => {
+      const sw = e.currentTarget.id, view = this.getView()
+      view.toggleProvSwitch(sw)
+      $('#cb_' + sw).prop('checked', includes(view.getSwitches(), sw))
+      view.emit('clear')
+      view.emit('dirty')
+    })
+
+    $('.prov-switch').on('click', (e) => {
+      const sw = e.currentTarget.id, view = this.getView()
+      view.toggleProvSwitch(sw)
+      $('.prov-switch input').prop('checked', false)
+      $('#cb_' + sw).prop('checked', true)
+      view.emit('clear')
+      view.emit('dirty')
+    })
+
     // Preferences
     $('#preferences').on('click', () => this.getView().newTab('Preferences'))
 
@@ -200,15 +268,30 @@ export class CerberusUI {
       window.open('http://www.cl.cam.ac.uk/~pes20/rems/')
     })
 
-    // About
-    $('#about').on('click', () => {
-      window.open('https://www.cl.cam.ac.uk/~pes20/cerberus/')
-    })
-
     // Update every 2s
     window.setInterval(() => {
       if (this.settings.auto_refresh) this.elab()
     }, 2000);
+
+    const serverStatus = $('#server-status')
+    let serverStatusFlag = true
+    // Check server status
+    window.setInterval(() => {
+      $.ajax({
+        url: 'index.html',
+        type: 'HEAD'
+      }).done(() => {
+        if (!serverStatusFlag) {
+          serverStatusFlag = true
+          serverStatus.text('')
+        }
+      }).fail(() => {
+        if (serverStatusFlag) {
+          serverStatusFlag = false
+          serverStatus.text(' (SERVER DOWN)')
+        }
+      })
+    }, 5000)
 
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {
@@ -225,6 +308,109 @@ export class CerberusUI {
         this.compilers       = data
       }
     })
+
+    /** Align dropdown menu (left or right) */
+    $('.contain-subitems').on('mouseenter', (e) => {
+      const item = $(e.currentTarget)
+      const dropdown = $(e.currentTarget).find('.dropdown')
+      const offset = item.offset()
+      if (offset !== undefined) {
+        const left  = offset.left
+        const width = dropdown.width()
+        const winWidth = $(window).width()
+        if (width !== undefined && winWidth !== undefined) {
+          if (left + width > winWidth) {
+            dropdown.addClass('dropdown-right')
+            dropdown.removeClass('dropdown-left')
+          } else {
+            dropdown.addClass('dropdown-left')
+            dropdown.removeClass('dropdown-right')
+          }
+        }
+      }
+    })
+
+    { // Scrolling menu section
+      let ticking = false // to next animation frame
+      let scrolling = false // whenever the menu is scrolling manually
+      let scrollDir = ''
+      const scrollDistance = 120
+      const container = $('.x-scrollable')
+      const menu = $('.x-scrollable > .menu')
+
+      // check if one should display the scroll arrows
+      container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      // check for every window resize
+      window.addEventListener('resize', () =>
+        container.attr('data-overflowing', Util.checkOverflow(menu, container)))
+      // and when scrolling
+      container.on('scroll', () => {
+        if (!ticking) {
+          window.requestAnimationFrame(() => {
+            container.attr('data-overflowing', Util.checkOverflow(menu, container))
+            ticking = false;
+          })
+        }
+        ticking = true;
+      })
+
+      $('#menu-scroll-left').on('click', () => {
+        // if we are already scrolling, do nothing
+        if (scrolling) return
+        const overflow = Util.checkOverflow(menu, container)
+        if (overflow === 'left' || overflow == 'both') {
+          const availableScroll = menu.scrollLeft()
+          if (availableScroll && availableScroll < scrollDistance * 2)
+            menu.css('transform', `translateX(${availableScroll}px)`)
+          else
+            menu.css('transform', `translateX(${scrollDistance}px)`)
+          menu.removeClass('menu-no-transition')
+          scrollDir = 'left'
+          scrolling = true
+        }
+        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      })
+
+      $('#menu-scroll-right').on('click', () => {
+        // if we are already scrolling, do nothing
+        if (scrolling) return
+        const overflow = Util.checkOverflow(menu, container)
+        if (overflow === 'right' || overflow == 'both') {
+          const rightEdge = menu[0].getBoundingClientRect().right;
+          const scrollerRightEdge = container[0].getBoundingClientRect().right;
+          const availableScroll = Math.floor(rightEdge - scrollerRightEdge)
+          if (availableScroll && availableScroll < scrollDistance * 2)
+            menu.css('transform', `translateX(-${availableScroll}px)`)
+          else
+            menu.css('transform', `translateX(-${scrollDistance}px)`)
+          menu.removeClass('menu-no-transition')
+          scrollDir = 'right'
+          scrolling = true
+        }
+        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      })
+
+      menu.on('transitionend', () => {
+        // get the amount to scroll in the transition matrix
+        const style = window.getComputedStyle(menu[0], null)
+        const tr = style.getPropertyValue('-webkit-transform') || style.getPropertyValue('transform')
+        const amount = Math.abs(parseInt(tr.split(',')[4]) || 0)
+        menu.css('transform', 'none')
+        menu.addClass('menu-no-transition')
+        container.scrollLeft((container.scrollLeft() || 0) + (scrollDir === 'left' ? - amount : + amount))
+        scrolling = false
+      })
+    }
+
+  }
+
+  private updateInteractiveOptions(view: Readonly<View>) {
+    const state = view.getState()
+    $('#cb-supress-tau').prop('checked', state.hide_tau)
+    $('#cb-skip-tau').prop('checked', state.skip_tau)
+    $('#r-step-mem-action').prop('checked', state.mode == Common.InteractiveMode.Memory)
+    $('#r-step-C-line').prop('checked', state.mode == Common.InteractiveMode.CLine)
+    $('#r-step-Core-trans').prop('checked', state.mode == Common.InteractiveMode.Core)
   }
 
   private setCurrentView(view: View) {
@@ -232,6 +418,8 @@ export class CerberusUI {
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
+    this.updateInteractiveOptions(view)
+    this.updateStepButtons(view.getState())
     view.show()
   }
 
@@ -251,24 +439,12 @@ export class CerberusUI {
   private exec (mode: Common.ExecutionMode) {
     this.request(Common.Execute(mode), (res: Common.ResultRequest) => {
       const view = this.getView()
-      const exec = view.getExec()
-      if (exec) exec.setActive()
+      //const exec = view.getExec()
+      const cons = view.getConsole()
+      if (cons) cons.setActive()
       view.updateState(res)
       view.emit('updateExecution')
     })
-  }
-
-  private startInteractive() {
-    const view = this.getView()
-    const alreadyOpen = view.findTab('Interactive')
-    view.newTab('Interactive')
-    if (alreadyOpen) {
-      view.emit('updateGraph')
-    } else {
-      this.request(Common.Step(), (data: Common.ResultRequest) => {
-        view.updateState(data)
-      })
-    }
   }
 
   private getView(): Readonly<View> {
@@ -277,13 +453,28 @@ export class CerberusUI {
     throw new Error("Panic: no view")
   }
 
+  private updateStepButtons(s: Common.State) {
+    const onInteractiveMode = s.tagDefs != undefined
+    Util.setDisabled(this.stepBack, s.history.length == 0 || !onInteractiveMode)
+    Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
+    Util.setInvisible(this.stepForward, s.exec_options.length >= 2)
+    Util.setInvisible(this.stepForwardLeft, s.exec_options.length < 2)
+    Util.setInvisible(this.stepForwardMiddle, s.exec_options.length < 3)
+    Util.setInvisible(this.stepForwardRight, s.exec_options.length < 2)
+    this.stepCounter.text(s.step_counter)
+  }
+
   private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
 
-    let nav = $('<div class="btn">'+view.title+'</div>')
+    let nav = $('<div class="menu-item btn">'+view.title+'</div>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
+
+    // Interactive stuff
+    view.on('update', this, (s: Common.State) => this.updateStepButtons(s))
+    view.on('updateStepButtons', this, (s: Common.State) => this.updateStepButtons(s))
 
     this.setCurrentView(view)
     view.getSource().refresh()
@@ -298,9 +489,9 @@ export class CerberusUI {
     this.refresh()
   }
 
-  public step(active: {id: Common.ID, state: Common.Bytes}): void {
-    if (active) {
-      let view = this.getView()
+  public step(active: {id: Common.ID, state: Common.Bytes} | null): void {
+    const view = this.getView()
+    if (active != null) {
       this.request(Common.Step(), (data: Common.ResultRequest) => {
         view.updateState(data)
       }, {
@@ -310,8 +501,14 @@ export class CerberusUI {
         tagDefs: view.getState().tagDefs
       })
     } else {
-      console.log('error: node '+active+' unknown')
+      this.request(Common.Step(), (data: Common.ResultRequest) => {
+        view.updateState(data)
+      })
     }
+  }
+
+  public execGraphNodeClick(i: Common.ID) {
+    this.getView().execGraphNodeClick(i)
   }
 
   request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
@@ -320,23 +517,25 @@ export class CerberusUI {
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
-      headers: {Accept: 'application/json'},
-      data: JSON.stringify ({
+      headers: {Accept: 'application/json; charset=utf-8'},
+      contentType: 'application/json; charset=utf-8',
+      data: {
         'action':  Common.string_of_action(action),
         'source':  view.getSource().getValue(),
         'rewrite': this.settings.rewrite,
         'sequentialise': this.settings.sequentialise,
         'model': Common.string_of_model(this.settings.model),
+        'switches': view.getSwitches(),
         'interactive': interactive
-      }),
-      success: (data, status, query) => {
-        onSuccess(data);
-        Util.Cursor.done()
-      }
+      },
+      dataType: 'json'
+    }).done((data, status, query) => {
+      onSuccess(data);
     }).fail((e) => {
       console.log('Failed request!', e)
       // TODO: this looks wrong
       this.settings.auto_refresh = false
+    }).always(() => {
       Util.Cursor.done()
     })
   }
@@ -391,7 +590,7 @@ export class CerberusUI {
 Util.get('defacto_tests.json', (data: any) => {
   let div = $('#defacto_body')
   for (let i = 0; i < data.length; i++) {
-    let questions = $('<ul class="questions"></ul>')
+    let questions = $('<div class="questions"></div>')
     for (let j = 0; j < data[i].questions.length; j++) {
       let q = data[i].questions[j]
       let tests = $('<ul class="tests"></ul>')
@@ -414,7 +613,6 @@ Util.get('defacto_tests.json', (data: any) => {
   }
 })
 
-
 /** UI start up */
 
 type StartupMode =
@@ -424,12 +622,12 @@ type StartupMode =
 
 function getDefaultSettings(): Settings {
     return { rewrite: false,
-             sequentialise: true,
+             sequentialise: false,
              auto_refresh: true,
-             colour: true,
+             colour: false,
              colour_cursor: true,
              short_share: false,
-             model: Common.Model.Concrete 
+             model: Common.Model.Concrete,
            }
 }
 

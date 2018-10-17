@@ -25,6 +25,17 @@ let core_typing_effect_fail loc cause =
   Exception (loc, Errors.CORE_TYPING cause)
 let inline fail = core_typing_effect_fail
 
+(* NOTE: this is different than trysM, since it checks all the cases *)
+val     trysM_: forall 'a 'b. Loc.t -> Errors.core_typing_cause -> ('a -> eff 'b) -> list 'a -> eff 'b
+let rec trysM_ loc err f = function
+  | [] -> fail loc err
+  | x::xs ->
+    match f x with
+    | Result b -> Result b
+    | Exception -> trysM_ loc err f xs
+    end
+  end
+
 val guard: bool -> Loc.t ->  Errors.core_typing_cause -> eff unit
 let core_typing_effect_guard pred loc cause =
   if pred then
