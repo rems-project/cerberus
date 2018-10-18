@@ -299,7 +299,7 @@ export default class View {
     this.emit('updateExecutionGraph')
   }
 
-  private setMemory(mem: Memory.Map) {
+  private setMemory(mem: Memory.State) {
     const trackProvInteger = _.includes(this.state.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
       if (alloc.prefix.kind == 'other') return ''
@@ -323,7 +323,7 @@ export default class View {
         const p = alloc.prefix
         if (p.kind === 'other')
           return p.name
-        switch (Memory.unique(p, mem)) {
+        switch (Memory.unique(p, mem.map)) {
           case 'unique':
             return p.name
           case 'unique-in-scope':
@@ -346,10 +346,12 @@ export default class View {
                           `${acc}<td rowspan="${row.size}">${tag}</td>`, '')
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
-        const color   = Memory.ispadding(row) ? ' bgcolor="grey"' : ''
+        const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : 
+                          (mem.last_modified != null && mem.last_modified === alloc.id ? 'bgcolor="lightcyan"' :
+                          (mem.last_read != null && mem.last_read === alloc.id ? 'bgcolor="palegreen1"' : ''))
         const prov    = row.prov != undefined ? ( trackProvInteger || !Memory.isintptr(row) ? `@${row.prov}, ` : '') : ''
         const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${color}>${prov}${Memory.string_of_value(row)}</td>`
+                          colspan="${colspan}" ${bgcolor}>${prov}${Memory.string_of_value(row)}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -384,16 +386,16 @@ export default class View {
         }
       }, [])
     }
-    const createEdges = (ps: Pointer[], mem: Memory.Map) => {
+    const createEdges = (ps: Pointer[], mem: Memory.State) => {
       return _.reduce(ps, (acc, p) => {
-        const target = _.find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
           const offset = p.addr - target.base
           const color  = target.id != p.to && trackProvInteger ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
-          const toprov = _.find(mem, alloc => alloc.id == p.to)
+          const toprov = _.find(mem.map, alloc => alloc.id == p.to)
           if (toprov) {
             const offset = p.addr - toprov.base
             acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
@@ -406,8 +408,8 @@ export default class View {
       }, '')
     }
     const g = 'digraph Memory { node [shape=none, fontsize=12]; rankdir=LR;'
-    const ns = _.reduce(mem, (ns, alloc) => ns + createNode(alloc), '')
-    const ps: Pointer[] = _.reduce(mem, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
+    const ns = _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
+    const ps: Pointer[] = _.reduce(mem.map, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
     this.state.dotMem = g + ns + es + '}' // Save in case another memory tab is open 
     this.getMemory().setActive()
