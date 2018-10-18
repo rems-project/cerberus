@@ -164,7 +164,7 @@ end
 
 
   (* the boolean tells whether the object was declared with the register storage-class *)
-type bindings (*[name="b*"]*) = list (identifier * ((storageDuration * bool) * qualifiers * ctype))
+type bindings (*[name="b*"]*) = list (identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
 
 type statement_ 'a [name="s*"] = 
   | AilSskip
@@ -224,12 +224,9 @@ type sigma 'a = <|
 |>
 
 
-type gamma = Context.context identifier ((storageDuration * bool) * qualifiers * ctype)
+type gamma = Context.context identifier ((Loc.t * storageDuration * bool) * qualifiers * ctype)
 
 type ail_program 'a = maybe identifier * sigma 'a
-
-
-
 
 
 
@@ -333,7 +330,6 @@ val programEqual: forall 'a.
                 ('a -> 'a -> bool)       ->
                 ail_program 'a -> ail_program 'a ->
                 bool
-
 
 let identifierEqual =
   (=)
@@ -992,7 +988,7 @@ let fresh_bindings bs C = Context.fresh_bindings identifierEqual bs C
 let disjoint C1 C2      = Context.disjoint identifierEqual C1 C2
 *)
 
-val parameters_of_bindings: bindings -> list ((storageDuration * bool) * qualifiers * ctype)
+val parameters_of_bindings: bindings -> list ((Loc.t * storageDuration * bool) * qualifiers * ctype)
 
 val type_from_sigma: forall 'a. (ctype * bindings * bool) * maybe (statement 'a) -> ctype
 

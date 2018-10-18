@@ -53,7 +53,7 @@ type incoming_msg =
 let parse_incoming_msg content =
   let empty = { action=         `Nop;
                 source=         "";
-                model=          "Concrete";
+                model=          "concrete";
                 rewrite=        false;
                 sequentialise=  false;
                 interactive=    None;
@@ -67,10 +67,10 @@ let parse_incoming_msg content =
                       }
   in
   let action_from_string = function
-    | "Elaborate"  -> `Elaborate
-    | "Random"     -> `Random
-    | "Exhaustive" -> `Exhaustive
-    | "Step"       -> `Step
+    | "elaborate"  -> `Elaborate
+    | "random"     -> `Random
+    | "exhaustive" -> `Exhaustive
+    | "step"       -> `Step
     | s -> failwith ("unknown action " ^ s)
   in
   let parse_bool = function
@@ -280,7 +280,7 @@ let cerberus ?(gzipped=false) ~conf ~flow content =
   in
   let timeout   = float_of_int conf.timeout in
   let request req : result Lwt.t =
-    let instance = "./cerb." ^ String.lowercase_ascii msg.model in
+    let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
     let proc = Lwt_process.open_process ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->

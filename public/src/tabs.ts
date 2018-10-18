@@ -1,8 +1,8 @@
 import $ from 'jquery'
-import { includes } from 'lodash'
+import _ from 'lodash'
 import CodeMirror from 'codemirror'
-import Util from './util'
-import Common from './common'
+import * as util from './util'
+import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'
 import UI from './ui' 
 // @ts-ignore: Viz has type 'any'
@@ -14,9 +14,9 @@ namespace Tabs {
 export abstract class Tab {
   title: string | undefined
   dom: JQuery<HTMLElement>
-  ee: Common.EventEmitter
+  ee: EventEmitter
 
-  constructor(title: string, ee: Common.EventEmitter) {
+  constructor(title: string, ee: EventEmitter) {
     this.dom = $('<div class="tab-content"></div>')
     this.ee = ee
     this.setTitle(title)
@@ -31,17 +31,17 @@ export abstract class Tab {
   refresh () {}
 
   /** Update value (receives current state) */
-  update(s: Readonly<Common.State>) {}
+  update(s: Readonly<State>) {}
 
   /** Update initial value (receives current state) */
-  initial(s: Readonly<Common.State>) { this.update(s) }
+  initial(s: Readonly<State>) { this.update(s) }
   
   /** Implemented by GoldenLayout when tab content is attached to it */
   setActive () {}
 }
 
 export class Help extends Tab {
-  constructor(ee: Common.EventEmitter) {
+  constructor(ee: EventEmitter) {
     super('Help', ee)
     this.dom.addClass('page')
     $.ajax({
@@ -53,7 +53,7 @@ export class Help extends Tab {
 }
 
 export class Preferences extends Tab {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Prefernces', ee)
     this.dom.addClass('page') // maybe change this
     $.ajax({
@@ -69,7 +69,7 @@ class SvgGraph extends Tab {
   container: JQuery<HTMLElement>
   svg: JQuery<HTMLElement>
   
-  constructor(name: string, ee: Common.EventEmitter) {
+  constructor(name: string, ee: EventEmitter) {
     super (name, ee)
     const controls = $('<div class="toolbar"></div>')
     const zoomIn = $('<div class="menu-item btn inline">Zoom In</div>')
@@ -116,12 +116,12 @@ class SvgGraph extends Tab {
 
 
 export class Interactive extends SvgGraph {
-  constructor(ee: Common.EventEmitter) {
+  constructor(ee: EventEmitter) {
     super('Interactive', ee)
-    ee.on('updateExecutionGraph', this, (s: Common.State) => this.updateGraph(s))
+    ee.on('updateExecutionGraph', this, (s: State) => this.updateGraph(s))
   }
 
-  private updateGraph (state: Readonly<Common.State>) {
+  private updateGraph (state: Readonly<State>) {
     this.setSVG(state.dotExecGraph)
     // Check if needs to span down
     const svgHeight = this.svg.height()
@@ -135,7 +135,7 @@ export class Interactive extends SvgGraph {
     }
   }
 
-  initial(s: Readonly<Common.State>) {
+  initial(s: Readonly<State>) {
     // The timeout guarantees that the tab is attached to the DOM.
     // The update is called in the next event loop cycle.
     setTimeout (() => this.updateGraph(s), 0)
@@ -146,7 +146,7 @@ class Memory extends SvgGraph {
   fit: JQuery<HTMLElement>
   svgPos: { x: number, y: number, scale: number}
 
-  constructor(ee: Common.EventEmitter) {
+  constructor(ee: EventEmitter) {
     super('Memory', ee)
     this.fit = $('<div class="btn menu-item inline clicked">Fit</div>')
     this.dom.find('.reset').before(this.fit)
@@ -199,7 +199,7 @@ class Memory extends SvgGraph {
     }
    }
 
-   updateMemory (s:Common.State) {
+   updateMemory (s:State) {
     this.setSVG(s.dotMem)
     this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
       this.svgPos.scale = scale
@@ -222,7 +222,7 @@ class Memory extends SvgGraph {
     }
   }
 
-   initial(s: Readonly<Common.State>) {
+   initial(s: Readonly<State>) {
     // The timeout guarantees that the tab is attached to the DOM.
     // The update is called in the next event loop cycle.
     setTimeout (() => this.updateMemory(s), 0)
@@ -236,7 +236,7 @@ export abstract class Editor extends Tab {
   protected tooltip?: HTMLElement
   private skipCursorEvent: boolean
 
-  constructor(title: string, source: string, ee: Common.EventEmitter) {
+  constructor(title: string, source: string, ee: EventEmitter) {
     super(title, ee)
     this.dom.addClass('editor')
 
@@ -418,7 +418,7 @@ export abstract class Editor extends Tab {
     }
 
     let clearActivity = onEditorActivity(this.editor, () => {
-      if (tip.parentNode) Util.fadeOut(tip)
+      if (tip.parentNode) util.fadeOut(tip)
       this.tooltip = undefined
       clearActivity()
     })
@@ -433,14 +433,14 @@ export abstract class Editor extends Tab {
 
 /* ReadOnly Editor */
 export abstract class ReadOnly extends Editor {
-  constructor (title: string, source: string, ee: Common.EventEmitter) {
+  constructor (title: string, source: string, ee: EventEmitter) {
     super(title, source, ee)
     this.editor.setOption ('readOnly', true)
   }
 }
 
 export class Implementation extends ReadOnly {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Implementation Defined', '', ee)
     this.editor.setOption('placeholder', '<Download failed...>')
     this.editor.setOption('mode', {name: "ocaml"})
@@ -454,13 +454,13 @@ export class Implementation extends ReadOnly {
 
 /*
 export class Execution extends ReadOnly {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Execution', '', ee)
     ee.on('update', this, this.update)
     ee.on('updateExecution', this, this.update)
   }
 
-  update (s: Common.State) : void {
+  update (s: State) : void {
     if (s.result == '') {
       this.setValue('')
       return
@@ -497,7 +497,7 @@ export class Execution extends ReadOnly {
 */
 
 class Console extends ReadOnly {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Console', '', ee)
     this.editor.setOption('lineWrapping', false)
     this.editor.setOption('mode', 'text')
@@ -506,7 +506,7 @@ class Console extends ReadOnly {
   }
 
   /*
-  update(s:Common.State) {
+  update(s:State) {
     //const vs = s.console.split(':')
     if (vs.length > 2) { // TODO: should put this change in the server
       this.ee.emit('markError', parseInt(vs[1]))
@@ -516,7 +516,7 @@ class Console extends ReadOnly {
     //}
 }*/
 
-  update (s: Common.State) : void {
+  update (s: State) : void {
     /*
     if (s.result == '') {
       this.setValue('')
@@ -556,7 +556,7 @@ class Console extends ReadOnly {
 
 /*  C source */
 export class Source extends Editor {
-  constructor(title: string, source: string, ee: Common.EventEmitter) {
+  constructor(title: string, source: string, ee: EventEmitter) {
     super(title, source, ee)
     this.editor.setOption('gutters', ['error'])
     this.editor.setOption('mode', 'text/x-csrc')
@@ -574,7 +574,7 @@ export class Source extends Editor {
   }
 
   getLocation(from: Point, to: Point) {
-    return this.ee.once((s: Readonly<Common.State>) => {
+    return this.ee.once((s: Readonly<State>) => {
       let locations = s.locs;
       for (let i = 0; i < locations.length; i++) {
         let loc = locations[i]
@@ -590,14 +590,14 @@ export class Source extends Editor {
 
   mark(loc: Locations) {
     let options: CodeMirror.TextMarkerOptions = {
-      className: Util.getColor(loc.color)
+      className: util.getColor(loc.color)
     }
     this.editor.getDoc().markText(loc.c.begin, loc.c.end, options)
   }
 
-  markInteractive(loc: any, state: Readonly<Common.State>) {
+  markInteractive(loc: any, state: Readonly<State>) {
     if (loc.c) {
-      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: Util.getColorByLocC(state, loc.c) })
+      this.editor.getDoc().markText(loc.c.begin, loc.c.end, { className: util.getColorByLocC(state, loc.c) })
       try { this.editor.scrollIntoView(loc.c.begin, 200) }
       catch(e) { console.log(e) }
     }
@@ -607,7 +607,7 @@ export class Source extends Editor {
     this.editor.setGutterMarker(l-1, 'error', $('<div class="syntax-error">✖</div>')[0])
   }
 
-  highlight(s: Common.State) {
+  highlight(s: State) {
     for (let i = 0; i < s.locs.length; i++)
       this.mark(s.locs[i])
   }
@@ -622,20 +622,20 @@ export class Source extends Editor {
 
 /*  Cabs */
 class Cabs extends ReadOnly {
-  constructor(ee: Common.EventEmitter) {
+  constructor(ee: EventEmitter) {
     super('Cabs', '', ee)
     this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Cabs elaboration failed...>')
     ee.on('update', this, this.update)
   }
-  update(s:Common.State) {
+  update(s: State) {
     this.setValue(s.ast.cabs)
   }
 }
 
 /*  Ail */
 class Ail extends ReadOnly {
-  constructor(ee: Common.EventEmitter) {
+  constructor(ee: EventEmitter) {
     super('Ail', '', ee)
     this.editor.setOption('mode', 'text/x-ast-dump')
     this.editor.setOption('placeholder', '<Ail elaboration failed...>')
@@ -645,11 +645,11 @@ class Ail extends ReadOnly {
         const rx_word: string = "\" "
         let ch = stream.peek()
         let word = ""
-        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined
         }
-        while ((ch = stream.peek()) && !includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -666,7 +666,7 @@ class Ail extends ReadOnly {
       const unsafeTarget = e.target as any
       if ($(e.target).hasClass('cm-std')) {
         if (this.tooltip && unsafeTarget.tooltipVisible) {
-          Util.fadeOut(this.tooltip)
+          util.fadeOut(this.tooltip)
           unsafeTarget.tooltipVisible = false
         } else {
           const stdSection = UI.getSTDSection(unsafeTarget.textContent)
@@ -681,26 +681,26 @@ class Ail extends ReadOnly {
     ee.on('update', this, this.update)
   }
 
-  update(s:Common.State) {
+  update(s:State) {
     this.setValue(s.pp.ail)
   }
 }
 
 class Ail_AST extends Ail {
-  constructor(ee:Common.EventEmitter) {
+  constructor(ee:EventEmitter) {
     super(ee)
     this.setTitle('Ail (AST)')
     ee.on('update', this, this.update)
   }
 
-  update(s:Common.State) {
+  update(s:State) {
     this.setValue(s.ast.ail)
   }
 }
 
 /*  Core */
 export class Core extends ReadOnly {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Core', '', ee)
 
     this.editor.setOption('mode', 'text/x-core')
@@ -712,11 +712,11 @@ export class Core extends ReadOnly {
         const rx_word = "\" "
         let ch = stream.peek()
         let word = ""
-        if (includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
+        if (_.includes(rx_word, ch) || ch === '\uE000' || ch === '\uE001') {
           stream.next()
           return undefined 
         }
-        while ((ch = stream.peek()) && !includes(rx_word, ch)){
+        while ((ch = stream.peek()) && !_.includes(rx_word, ch)){
           word += ch
           stream.next()
         }
@@ -733,7 +733,7 @@ export class Core extends ReadOnly {
       const unsafeTarget = e.target as any
       if ($(e.target).hasClass('cm-std')) {
         if (this.tooltip && unsafeTarget.tooltipVisible) {
-          Util.fadeOut(this.tooltip)
+          util.fadeOut(this.tooltip)
           unsafeTarget.tooltipVisible = false
         } else {
           const stdSection = UI.getSTDSection(unsafeTarget.textContent)
@@ -753,19 +753,19 @@ export class Core extends ReadOnly {
     ee.on('markInteractive', this, this.markInteractive)
   }
 
-  initial(s: Readonly<Common.State>) {
+  initial(s: Readonly<State>) {
     if (s.pp.core == '')
       this.setValue("-- Waiting for core...")
     else
       this.setValue(s.pp.core)
   }
 
-  update(s: Common.State) {
+  update(s: State) {
     this.setValue(s.pp.core)
   }
 
   getLocation(from: Point, to: Point) {
-    return this.ee.once((s: Common.State) => {
+    return this.ee.once((s: State) => {
       let locations = s.locs
       for (let i = 0; i < locations.length; i ++) {
         let loc = locations[i]
@@ -780,17 +780,17 @@ export class Core extends ReadOnly {
     this.colorLines (loc.core.begin.line, loc.core.end.line, loc.color)
   }
 
-  markInteractive(loc: any, state: Readonly<Common.State>) {
+  markInteractive(loc: any, state: Readonly<State>) {
     if (loc.core && state.ranges) {
       const range = state.ranges[loc.core]
       if (range) {
-        this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? Util.getColorByLocC(state, loc.c) : 'color0'})
+        this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? util.getColorByLocC(state, loc.c) : 'color0'})
         this.editor.scrollIntoView(range.begin)
       }
     }
   }
 
-  highlight(s: Common.State) {
+  highlight(s: State) {
     for (let i = s.locs.length - 1; i >= 0; i--)
       this.mark(s.locs[i])
   }
@@ -807,7 +807,7 @@ export class Core extends ReadOnly {
 
 /*  Arena */
 export class Arena extends ReadOnly {
-  constructor (ee: Common.EventEmitter) {
+  constructor (ee: EventEmitter) {
     super('Arena', '', ee)
 
     this.editor.setOption('mode', 'text/x-core')
@@ -816,11 +816,11 @@ export class Arena extends ReadOnly {
     ee.on('updateArena', this, this.update)
   }
 
-  initial(s: Readonly<Common.State>) {
+  initial(s: Readonly<State>) {
     this.setValue(s.arena)
   }
 
-  update(s: Readonly<Common.State>) {
+  update(s: Readonly<State>) {
     this.setValue(s.arena)
   }
 }
@@ -830,11 +830,11 @@ export class Arena extends ReadOnly {
 class Asm extends ReadOnly {
   private current: JQuery<HTMLElement>
   private options: JQuery<HTMLElement>
-  private cc: Common.Compiler
+  private cc: Compiler
   private source?: Readonly<string>
   locations: any // TODO
 
-  constructor(ee: Common.EventEmitter, cc?: any) {
+  constructor(ee: EventEmitter, cc?: any) {
     if (cc == null) cc = UI.defaultCompiler // Global variable
 
     super(cc.name, '', ee)
@@ -873,13 +873,13 @@ class Asm extends ReadOnly {
     ee.on('mark', this, this.mark)
   }
 
-  update(s: Common.State) {
+  update(s: State) {
     this.source = s.source()
     this.compile()
   }
 
   compile() {
-    Util.Cursor.wait()
+    util.Cursor.wait()
     $.ajax({
       headers: {Accept: 'application/json'},
       contentType: "application/json; charset=utf-8",
@@ -918,12 +918,12 @@ class Asm extends ReadOnly {
         this.setValue(value)
         this.updateLocations(lines)
         if (UI.getSettings().colour)
-          this.ee.once((s: Readonly<Common.State>) => this.highlight(s))
-        Util.Cursor.done()
+          this.ee.once((s: Readonly<State>) => this.highlight(s))
+        util.Cursor.done()
       },
     }).fail(() => {
         this.setValue('')
-        Util.Cursor.done()
+        util.Cursor.done()
     })
   }
 
@@ -945,7 +945,7 @@ class Asm extends ReadOnly {
   }
 
   updateLocations(lines: any) {
-    this.ee.once((s: Readonly<Common.State>) => {
+    this.ee.once((s: Readonly<State>) => {
       this.locations = {}
       let locs = s.locs;
       for (let i = locs.length - 1; i >= 0; i--) {
@@ -976,7 +976,7 @@ class Asm extends ReadOnly {
     if (l) this.colorLines (l.begin, l.end, l.color)
   }
 
-  highlight(s: Common.State) {
+  highlight(s: State) {
     for (let i = s.locs.length - 1; i >= 0; i--)
       this.mark(s.locs[i])
   }
@@ -990,7 +990,7 @@ const Tabs: any = {
   Preferences, Implementation, Help
 }
 
-export function create(title: string, ee: Common.EventEmitter): Tab {
+export function create(title: string, ee: EventEmitter): Tab {
   return new Tabs[title](ee)
 }
 

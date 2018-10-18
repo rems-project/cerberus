@@ -1,10 +1,11 @@
 import $ from "jquery"
+import _ from "lodash"
 import GoldenLayout from "golden-layout"
-import { pull, filter, reduce, find, concat, includes, startsWith, endsWith } from "lodash"
 import { Node, Graph, ID, GraphFragment } from "./graph"
 import Tabs from "./tabs"
-import Util from "./util"
-import Common from './common'
+import { triggerClick, toHex } from "./util"
+import * as Memory from './memory'
+import { State, Event, EventEmitter, InteractiveMode, ResultRequest } from './common'
 import UI from './ui'
 
 export default class View {
@@ -19,7 +20,7 @@ export default class View {
   private layout!: GoldenLayout;
 
   /** Private state */
-  private state!: Common.State;
+  private state!: State;
 
   /** Highlight has already been performed */
   private isHighlighted: boolean
@@ -31,16 +32,16 @@ export default class View {
   private events: { [eventName:string]: [any, Function][]; }
 
   /** Event Emitter */
-  private ee: Common.EventEmitter
+  private ee: EventEmitter
 
   constructor (title: string, data: string, config?: GoldenLayout.Config) {
     this.tabs = []
     this.events = {}
     this.ee = {
-      on: (e: Common.Event, l: any, f: Function) => this.on(e, l, f),
+      on: (e: Event, l: any, f: Function) => this.on(e, l, f),
       off: (f) => this.off(f),
       once: (f => f(this.state)),
-      emit: (e: Common.Event, ...args: any[]) => this.emit (e, ...args)
+      emit: (e: Event, ...args: any[]) => this.emit (e, ...args)
     }
     this.dirty = true
     this.on('dirty', this, () => {
@@ -163,7 +164,7 @@ export default class View {
       if (header.contentItem.isComponent) {
         let tab = (header.contentItem as ContentItem).content
         header.element.on('mousedown', () => tab.refresh())
-        tab.setActive = () => Util.triggerClick(header.element[0])
+        tab.setActive = () => triggerClick(header.element[0])
       }
     })
     this.layout.init()
@@ -190,21 +191,21 @@ export default class View {
       exec_options: [],
       hide_tau: true,
       skip_tau: true,
-      mode: Common.InteractiveMode.Memory,
+      mode: InteractiveMode.Memory,
       dotMem: '',
       dotExecGraph: '',
     }
   }
 
   toggleSwitch (sw: string): void {
-    if (!includes(this.state.switches, sw))
+    if (!_.includes(this.state.switches, sw))
       this.state.switches.push(sw)
     else
-      pull(this.state.switches, sw)
+      _.pull(this.state.switches, sw)
   }
 
   toggleProvSwitch (sw: string): void {
-    pull(this.state.switches,
+    _.pull(this.state.switches,
       'integer_provenance', 'no_integer_provenance',
       'no_integer_provenance_v1', 'no_integer_provenance_v4')
     this.state.switches.push(sw)
@@ -270,9 +271,9 @@ export default class View {
     const graph = this.state.graph
     const dotHead = 'digraph Memory { node [shape=box, fontsize=12]; edge [fontsize=10];'
     const nodes = this.state.hide_tau
-                ? filter(graph.nodes, n => !n.isTau && n.isVisible)
-                : filter(graph.nodes, n => n.isVisible)
-    const edges = filter(graph.edges, e => this.state.hide_tau ? !e.isTau : e.isTau)
+                ? _.filter(graph.nodes, n => !n.isTau && n.isVisible)
+                : _.filter(graph.nodes, n => n.isVisible)
+    const edges = _.filter(graph.edges, e => this.state.hide_tau ? !e.isTau : e.isTau)
     const label = (n : Node) => {
       if (n.arena) {
         if (n.arena.length > 30)
@@ -281,13 +282,13 @@ export default class View {
       }
       return n.info.debug
     }
-    const dotNodes = reduce(nodes, (acc, n) => 
+    const dotNodes = _.reduce(nodes, (acc, n) => 
       acc + `n${n.id}[href="javascript:UI.execGraphNodeClick(${n.id})",`
       + (n.selected ? 'color="blue", ' : '')
       + (n.can_step ? 'fontcolor="blue", ' : '')
       + (n.id == 0 ? 'style=invis, height=0, width=0, ' : '')
       + `label="${label(n)}"];`, '')
-    const dotEdges = reduce(edges, (acc, e) => {
+    const dotEdges = _.reduce(edges, (acc, e) => {
       if (graph.nodes[e.from].isVisible && graph.nodes[e.to].isVisible) {
         const label = graph.nodes[e.from].info.kind
         return acc + `n${e.from}->n${e.to}[label="${label}"];`
@@ -298,41 +299,57 @@ export default class View {
     this.emit('updateExecutionGraph')
   }
 
-  private setMemory(mem: Common.Memory | undefined) {
-    if (mem === undefined) return
-    const trackProvInteger = includes(this.state.switches, 'integer_provenance')
-    const toHex = (n:number) => { return "0x" + ("00" + n.toString(16)).substr(2) }
-    const createNode = (alloc: Common.MemoryAllocation) => {
+  private setMemory(mem: Memory.Map) {
+    const trackProvInteger = _.includes(this.state.switches, 'integer_provenance')
+    const createNode = (alloc: Memory.Allocation): string => {
+      if (alloc.prefix.kind == 'other') return ''
+      /*
       if (alloc.prefix == null) // HACK! TODO: check malloc case
         return ''
       // TODO: bit of a hack, change later!
       if (alloc.prefix == 'string literal') return ''
-      if (startsWith(alloc.prefix, 'Core')) return ''
+      if (_.startsWith(alloc.prefix, 'Core')) return ''
+      */
       // TODO: THIS IS ANOTHER HACK!!
-      if (startsWith(alloc.prefix, '__'))
+      if (_.startsWith(alloc.prefix.name, '__'))
         return ''
       const box = (n:number, ischar=false) =>
         `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
           <font point-size="1">&nbsp;</font>
          </td>`
-      const maxcols = alloc.rows.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
+      const maxcols = alloc.values.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
       const tooltip = "allocation: " + String(alloc.id)
+      const name = () => {
+        const p = alloc.prefix
+        if (p.kind === 'other')
+          return p.name
+        switch (Memory.unique(p, mem)) {
+          case 'unique':
+            return p.name
+          case 'unique-in-scope':
+            const uniq_scope = p.scope != null ? p.scope : 'global'
+            return `${p.name}(${uniq_scope})`
+          case 'non-unique':
+            const line = p.loc && p.loc.begin ? `:${p.loc.begin.line+1}` : ''
+            const scope = p.scope != null ? p.scope + line : 'global'
+            return `${alloc.prefix.name}(${scope})`
+        }
+      }
       const title =
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
-          <td border="0" colspan="${maxcols}"><b>${alloc.prefix}</b>: <i>${alloc.type}</i>&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
+          <td border="0" colspan="${maxcols}"><b>${name()}</b>: <i>${alloc.type}</i>&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
          </tr>`
       let index = 0
-      const body = alloc.rows.reduce((acc, row) => {
+      const body = alloc.values.reduce((acc, row) => {
         const head    = row.path.reduce((acc, tag) =>
                           `${acc}<td rowspan="${row.size}">${tag}</td>`, '')
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
-        const color   = row.ispadding ? ' bgcolor="grey"' : ''
-        const prov    = row.prov != undefined ? ( trackProvInteger || !row.dashed ? `@${row.prov}, ` : '') : ''
-        const value   = row.hex ? toHex(parseInt(row.value)) : row.value
+        const color   = Memory.ispadding(row) ? ' bgcolor="grey"' : ''
+        const prov    = row.prov != undefined ? ( trackProvInteger || !Memory.isintptr(row) ? `@${row.prov}, ` : '') : ''
         const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${color}>${prov}${value}</td>`
+                          colspan="${colspan}" ${color}>${prov}${Memory.string_of_value(row)}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -352,31 +369,31 @@ export default class View {
          </table>>, tooltip="${tooltip}"];`
     }
     type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/, dashed: boolean}
-    const getPointersInAlloc = (alloc: Common.MemoryAllocation) => {
-      if (alloc.prefix === null) return []
+    const getPointersInAlloc = (alloc: Memory.Allocation) => {
+      if (alloc.prefix.kind === 'other') return []
       // THIS IS A TERRIBLE HACK:
-      if (startsWith(alloc.prefix, 'arg')) return []
-      if (startsWith(alloc.prefix, 'Core')) return []
-      return alloc.rows.reduce((acc: Pointer[], row) => {
-        if (row.pointsto !== null) {
+      if (_.startsWith(alloc.prefix.name, 'arg')) return []
+      if (_.startsWith(alloc.prefix.name, 'Core')) return []
+      return alloc.values.reduce((acc: Pointer[], row) => {
+        if (Memory.pointsto(row) && row.prov != null) {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
-          const p: Pointer = {from: from, to: row.pointsto, addr: parseInt(row.value), dashed: row.dashed}
-          return concat(acc, [p])
+          const p: Pointer = {from: from, to: row.prov, addr: parseInt(row.value), dashed: Memory.isintptr(row)}
+          return _.concat(acc, [p])
         } else {
           return acc
         }
       }, [])
     }
-    const createEdges = (ps: Pointer[], mem: Common.Memory) => {
-      return reduce(ps, (acc, p) => {
-        const target = find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+    const createEdges = (ps: Pointer[], mem: Memory.Map) => {
+      return _.reduce(ps, (acc, p) => {
+        const target = _.find(mem, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
           const offset = p.addr - target.base
           const color  = target.id != p.to && trackProvInteger ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
-          const toprov = find(mem, alloc => alloc.id == p.to)
+          const toprov = _.find(mem, alloc => alloc.id == p.to)
           if (toprov) {
             const offset = p.addr - toprov.base
             acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
@@ -389,8 +406,8 @@ export default class View {
       }, '')
     }
     const g = 'digraph Memory { node [shape=none, fontsize=12]; rankdir=LR;'
-    const ns = reduce(mem, (ns, alloc) => ns + createNode(alloc), '')
-    const ps: Pointer[] = reduce(mem, (acc: Pointer[], alloc) => concat(acc, getPointersInAlloc(alloc)), [])
+    const ns = _.reduce(mem, (ns, alloc) => ns + createNode(alloc), '')
+    const ps: Pointer[] = _.reduce(mem, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
     this.state.dotMem = g + ns + es + '}' // Save in case another memory tab is open 
     this.getMemory().setActive()
@@ -402,7 +419,7 @@ export default class View {
     if (children.length == 1) {
       const active = children[0]
       switch (this.state.mode) {
-        case Common.InteractiveMode.Memory:
+        case InteractiveMode.Memory:
           switch (active.info.kind) {
             case 'action request':
             case 'done':
@@ -413,13 +430,13 @@ export default class View {
               break
           }
           break
-        case Common.InteractiveMode.Core:
+        case InteractiveMode.Core:
           // Nothing to do
           break
-        case Common.InteractiveMode.CLine:
+        case InteractiveMode.CLine:
           if (active.info.kind == 'done')
             return this.state.graph.setChildrenVisible(active.id, skip_tau)
-          if (startsWith(active.info.kind, 'killed'))
+          if (_.startsWith(active.info.kind, 'killed'))
             return children
           if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
             children = this.executeInteractiveMode(active.id, skip_tau, lastCline)
@@ -434,10 +451,12 @@ export default class View {
     this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
     this.emit('updateArena')
     // Memory graph
-    this.setMemory(active.mem)
+    if (active.mem) this.setMemory(active.mem)
     // Locations
-    this.emit('clear')
-    if (active.loc) this.emit('markInteractive', active.loc)
+    if (active.loc) {
+      this.emit('clear')
+      this.emit('markInteractive', active.loc)
+    }
   }
 
   /** Update interactive display state and raise event to update DOT */
@@ -455,7 +474,7 @@ export default class View {
     const lastNode =
       children.length == 1 && this.state.graph.children(firstChoice.id).length == 0
 
-    if (firstChoice.info.file && (endsWith(firstChoice.info.file, '.h') || endsWith (firstChoice.info.file, '.core'))) {
+    if (firstChoice.info.file && (_.endsWith(firstChoice.info.file, '.h') || _.endsWith (firstChoice.info.file, '.core'))) {
       this.executeInteractiveStep(firstChoice.id)
       return
     }
@@ -481,7 +500,7 @@ export default class View {
     if (lastNode) {
       this.state.exec_options = []
       this.getConsole().setActive()
-      if (includes(firstChoice.info.kind, 'killed')) {
+      if (_.includes(firstChoice.info.kind, 'killed')) {
         // TODO: add location
         // the killed node has no location coming from cerberus
         const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
@@ -502,7 +521,7 @@ export default class View {
   }
 
   /** Update interactive state mode and update DOT */
-  private updateInteractive(activeId: Common.ID, tree: GraphFragment) {
+  private updateInteractive(activeId: ID, tree: GraphFragment) {
     // This is a seed to the server
     this.state.lastNodeId = tree.nodes[0].id
     tree.nodes.reverse()
@@ -525,7 +544,7 @@ export default class View {
       graph.edges.push(e)
     })
     tree.edges.map((e) => {
-      const n = find(graph.nodes, n => n.id == e.to)
+      const n = _.find(graph.nodes, n => n.id == e.to)
       if (n && !n.isTau) {
         const from = graph.getNoTauParent(e.to)
         if (from != undefined)
@@ -537,7 +556,7 @@ export default class View {
   }
 
   /** Execute a step (it might call the server to update interactive state) */
-  execGraphNodeClick(activeId: Common.ID) {
+  execGraphNodeClick(activeId: ID) {
     if (this.state.graph.children(activeId).length == 0) {
       // Node has no children, just ask more to the server
       // TODO: should check if it is the end or if there a state to ask
@@ -584,7 +603,7 @@ export default class View {
     if (this.state.graph.isEmpty()) {
       UI.step(null)
     } else {
-      const active = find(this.state.graph.nodes, n => n.selected)
+      const active = _.find(this.state.graph.nodes, n => n.selected)
       if (active)
         this.execGraphNodeClick(active.id)
       else
@@ -604,7 +623,7 @@ export default class View {
     this.execGraphNodeClick(this.state.exec_options[this.state.exec_options.length == 2 ? 1 : 2])
   }
 
-  setInteractiveMode(mode: Common.InteractiveMode) {
+  setInteractiveMode(mode: InteractiveMode) {
     this.state.mode = mode
   }
 
@@ -666,11 +685,11 @@ export default class View {
     return this.dirty
   }
 
-  getState(): Readonly<Common.State> {
+  getState(): Readonly<State> {
     return this.state
   }
 
-  updateState(res: Common.ResultRequest) {
+  updateState(res: ResultRequest) {
     switch (res.status) {
       case 'elaboration':
         this.state.pp = res.pp
@@ -701,7 +720,7 @@ export default class View {
     this.dirty = false
   }
 
-  on(e: Common.Event, l: any, f: Function) {
+  on(e: Event, l: any, f: Function) {
     let listeners = this.events[e]
     if (!listeners) {
       listeners = []

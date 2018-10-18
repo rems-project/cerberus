@@ -213,7 +213,7 @@ let to_json loc =
     | Loc_other str ->
         `Null (* `String str *)
     | Loc_point p ->
-        of_pos p
+        `Assoc [("begin", of_pos p); ("end", of_pos p)]
     | Loc_region (p1, p2, _) ->
         `Assoc [("begin", of_pos p1); ("end", of_pos p2)]
     | Loc_regions (xs, _) ->

@@ -122,7 +122,7 @@ let print_raw_symbol = function
       (print_int i ^^ P.comma ^^^ P.dquotes !^str)
 
 let print_symbol_prefix = function
-  | Symbol.PrefSource syms ->
+  | Symbol.PrefSource (_, syms) ->
     !^"Symbol.PrefSource" ^^^ print_list print_raw_symbol syms
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str

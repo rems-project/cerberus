@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es3",
+    "target": "es5", /* browsers around 2012 */
+    "lib": ["es5", "dom"],
     "module": "commonjs",
     "sourceMap": true,
     "strict": true,
