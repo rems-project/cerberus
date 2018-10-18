@@ -23,7 +23,7 @@ export interface Node {
   isVisible: boolean
   isTau: boolean
   loc: Locations | undefined
-  mem: Memory.Map | undefined
+  mem: Memory.State | undefined
   info: NodeInfo
   env: string
   arena: string

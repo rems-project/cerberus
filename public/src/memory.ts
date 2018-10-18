@@ -25,6 +25,12 @@ export type Allocation = {
 
 export type Map = {[key:string]: Allocation}
 
+export type State = {
+  map: Map
+  last_modified: number | null
+  last_read: number | null
+}
+
 export function ispointer (v: Value): boolean {
   return v.type != null && _.endsWith(v.type, '*')
 }
