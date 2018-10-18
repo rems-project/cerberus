@@ -1,3 +1,4 @@
+open Bmc_common
 open Bmc_conc
 open Bmc_globals
 open Bmc_sorts
@@ -8,11 +9,14 @@ open Z3
 open Z3.Arithmetic
 
 open AilTypes
+open Annot
 open Core
 open Core_aux
 open Ocaml_mem
 open Printf
 open Util
+
+open Bmc_incremental
 
 (* TODO:
  *  - Maintain memory table properly
@@ -127,7 +131,7 @@ let guard_assert (guard: Expr.expr) ((expr, ty): assertion) =
       (mk_implies guard expr, ty)
   | Assert_vc ->
       (mk_implies guard expr, ty)
-
+(*
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
   | CaseSortBase of ctype * Sort.sort
@@ -143,10 +147,12 @@ let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
   match l with
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
+*)
 
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
+(*
 module ImplFunctions = struct
   open Z3.FuncDecl
   (* ---- Implementation ---- *)
@@ -283,6 +289,7 @@ module ImplFunctions = struct
                     @ sizeof_asserts
                     @ is_unsigned_asserts
 end
+*)
 
 (* =========== MISCELLANEOUS HELPER FUNCTIONS =========== *)
 let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
@@ -316,11 +323,12 @@ let mk_initial_loaded_value (sort: Sort.sort) (name: string)
     (LoadedInteger.mk_specified initial_value, assertions)
   end else
     (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
-
+(*
 let is_integer_type (ctype: ctype) =
   match ctype with
   | Basic0 (Integer _) -> true
   | _ -> false
+  *)
 
 (* =========== PPRINTERS =========== *)
 let rec pp_bmcz3sort (sort: bmcz3sort) =
@@ -335,6 +343,7 @@ let pp_addr (addr: int * int) =
   sprintf "(%d,%d)" (fst addr) (snd addr)
 
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
+(*
 let cot_to_z3 (cot: core_object_type) : Sort.sort =
   match cot with
   | OTy_integer     -> integer_sort
@@ -358,6 +367,7 @@ let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
   | BTy_loaded _            -> assert false
+*)
 
 let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
   let tuple_name =
@@ -403,7 +413,7 @@ let ctor_to_z3 (ctor  : typed_ctor)
         assert false
   | _ ->
       assert false
-
+(*
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
   (* TODO: check which is the correct ival->big num function *)
   match eval_integer_value ival with
@@ -452,7 +462,8 @@ let value_to_z3 (value: value)
           LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype)
       | _ -> assert false
       end
-
+*)
+(*
 let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
                           : Core_ctype.ctype0 =
   match ty with
@@ -503,6 +514,7 @@ let rec ctype_to_bmcz3sort (ty  : ctype)
       end
   | Union0 _
   | Builtin0 _ -> assert false
+  *)
 
 (* =========== SOME MONAD FUN =========== *)
 
@@ -896,6 +908,7 @@ let rec mk_let_bindings (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
       assert false
 
 (* =========== PATTERN MATCHING =========== *)
+(*
 let rec pattern_match (Pattern(_,pattern): typed_pattern)
                       (expr: Expr.expr)
                       : Expr.expr =
@@ -922,10 +935,12 @@ let rec pattern_match (Pattern(_,pattern): typed_pattern)
       else
         assert false
   | _ -> assert false
+*)
 
 (* Compute conditions for matching cases.
  * Returns (vc, case_guard list) where vc asserts that some pattern is matched.
  *)
+(*
 let compute_case_guards (patterns: typed_pattern list)
                         (to_match: Expr.expr)
                         : Expr.expr * Expr.expr list =
@@ -937,7 +952,8 @@ let compute_case_guards (patterns: typed_pattern list)
                ; expr]) pattern_guards in
   let vc = mk_or pattern_guards in
   (vc, case_guards)
-
+*)
+(*
 let mk_guarded_ite (exprs : Expr.expr list)
                    (guards: Expr.expr list) =
   assert (List.length exprs = List.length guards);
@@ -951,10 +967,17 @@ let mk_guarded_ite (exprs : Expr.expr list)
                          last_case_expr
                          (List.tl rev_guards)
                          (List.tl rev_exprs)
-
+*)
 (* =========== MODEL CHECKING FUNCTIONS =========== *)
-let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
+let rec bmc_pexpr (Pexpr(annots, bTy, pe) as pexpr: typed_pexpr) :
                   bmc_pret BmcM.eff =
+  (*
+  printf "%d\n" (List.length annots);
+  (match get_uid annots with
+  | None -> (print_endline ("NONE " ^ (pp_to_string (Pp_core.Basic.pp_pexpr pexpr))))
+  | Some s -> print_endline s
+  );
+  *)
   match pe with
   | PEsym sym ->
       BmcM.lookup_sym sym >>= fun sym_expr ->
@@ -971,7 +994,8 @@ let rec bmc_pexpr (Pexpr(_, bTy, pe): typed_pexpr) :
       return { expr    = value_to_z3 cval
              ; asserts = []
              }
-  | PEconstrained _
+  | PEconstrained _ ->
+      assert false
   | PEundef _ ->
       let sort = cbt_to_z3 bTy in
       return { expr    = mk_fresh_const "undef" sort
@@ -2164,6 +2188,7 @@ let initialise_params
   | None -> (assert (List.length params = 0);
              BmcM.return initial_gret)
 
+
 let bmc_file (file              : unit typed_file)
              (sym_supply        : sym_supply_ty)
              (function_to_check : sym_ty)
@@ -2306,6 +2331,7 @@ let bmc_file (file              : unit typed_file)
         print_endline (Model.to_string model)
       end
 
+(* Find f_name in function map, returning the Core symbol *)
 let find_function (f_name: string)
                   (fun_map: unit typed_fun_map) =
   let is_f_name = (fun (sym, decl) ->
@@ -2333,11 +2359,14 @@ let bmc (core_file  : unit file)
               typed_core in
           if !!bmc_conf.debug_lvl >= 2 then
             pp_file core_to_check;
-          bmc_debug_print 1 "START: model checking";
 
+          (* TODO: rename *)
+          let tmp = Bmc_utils.set_uid core_to_check in 
+
+          bmc_debug_print 1 "START: model checking";
           let fn_sym = find_function !!bmc_conf.fn_to_check
-                                     core_to_check.funs in
-          bmc_file core_to_check sym_supply fn_sym ail_opt
+                                     tmp.funs in
+          bmc_file tmp sym_supply fn_sym ail_opt
         end
     | Exception msg ->
         printf "Typechecking error: %s\n" (Pp_errors.to_string msg)

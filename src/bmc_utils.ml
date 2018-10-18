@@ -201,6 +201,9 @@ let pp_file (core_file: ('a, 'b) generic_file) =
 let pp_ctype (ctype: Core_ctype.ctype0) =
   pp_to_string (Pp_core_ctype.pp_ctype ctype)
 
+let pp_value value =
+  pp_to_string (Pp_core.Basic.pp_value value)
+
 let save_to_file file str =
   let channel = open_out file in
   output_string channel str;
@@ -226,3 +229,107 @@ let read_file filename =
   with End_of_file ->
     close_in chan;
     List.rev !lines ;;
+
+(* ========== SET UIDs ============ *)
+let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) = 
+ (let uid' = (uid ^ string_of_int n) in
+  let self n pe=  (set_uid_pe uid' n pe) in
+  let selfs pes=  (Lem_list.mapi (fun i pe -> self (i+ 1) pe) pes) in
+  Pexpr( Auid uid'::annots1, bty,
+  (match pe_ with
+  | PEsym s -> PEsym s
+  | PEimpl impl1 -> PEimpl impl1
+  | PEval v -> PEval v
+  | PEconstrained cs ->
+    PEconstrained (Lem_list.mapi (fun i (m, pe) -> (m, self (i+ 1) pe)) cs)
+  | PEundef( loc, undef1) -> PEundef( loc, undef1)
+  | PEerror( err, pe) -> PEerror( err, (self( 1) pe))
+  | PEctor( ctor1, pes) -> PEctor( ctor1, (selfs pes))
+  | PEcase( pe, cases) -> PEcase( (self( 0) pe),
+                        (Lem_list.mapi (fun i (pat, pe) -> (pat, self (i+ 1) pe)) cases))
+  | PEarray_shift( pe, cty, pes) -> PEarray_shift( (self( 1) pe), cty, (self( 2) pes))
+  | PEmember_shift( pe, sym2, cid) -> PEmember_shift( (self( 1) pe), sym2, cid)
+  | PEnot pe -> PEnot (self( 1) pe)
+  | PEop( bop, pe1, pe2) -> PEop( bop, (self( 1) pe1), (self( 2) pe2))
+  | PEstruct( sym2, fields) -> PEstruct( sym2,
+                      (Lem_list.mapi (fun i (cid, pe) -> (cid, self (i+ 1) pe)) fields))
+  | PEunion( sym2, cid, pe) -> PEunion( sym2, cid, (self( 1) pe))
+  | PEcfunction pe -> PEcfunction (self( 1) pe)
+  | PEmemberof( tag_sym, memb_ident, pe) -> PEmemberof( tag_sym, memb_ident, (self( 1) pe))
+  | PEcall( name1, pes) -> PEcall( name1, (selfs pes))
+  | PElet( pat, pe1, pe2) -> PElet( pat, (self( 1) pe1), (self( 2) pe2))
+  | PEif( pe1, pe2, pe3) -> PEif( (self( 1) pe1), (self( 2) pe2), (self( 3) pe3))
+  | PEis_scalar pe -> PEis_scalar (self( 1) pe)
+  | PEis_integer pe -> PEis_integer (self( 1) pe)
+  | PEis_signed pe -> PEis_signed (self( 1) pe)
+  | PEis_unsigned pe -> PEis_unsigned (self( 1) pe)
+  | PEbmc_assume pe -> PEbmc_assume (self( 1) pe)
+  | PEare_compatible( pe1, pe2) -> PEare_compatible( (self( 1) pe1), (self( 2) pe2))
+  )))
+
+(*val     set_uid_e: forall 'a. string -> nat -> expr 'a -> expr 'a*)
+let rec set_uid_e uid n (Expr( annots1, e_)) = 
+ (let uid' = (uid ^ string_of_int n) in
+  let pure_uid n pe=  (set_uid_pe uid' n pe) in
+  let pure_uids pes=  (Lem_list.mapi (fun i pe -> pure_uid (i+ 1) pe) pes) in
+  let self n e=  (set_uid_e uid' n e) in
+  let selfs es=  (Lem_list.mapi (fun i e -> self (i+ 1) e) es) in
+  Expr( (Auid uid' :: annots1),
+  (match e_ with
+  | Epure pe -> Epure (set_uid_pe uid'( 0) pe)
+  | Ememop( memop1, pes) -> Ememop( memop1, (pure_uids pes))
+  | Eaction pact -> Eaction pact
+  | Ecase( pe, cases) -> Ecase( (set_uid_pe uid'( 0) pe),
+                        (Lem_list.mapi (fun i (pat, e) -> (pat, self (i+ 1) e)) cases))
+  | Elet( pat, pe, e) -> Elet( pat, (set_uid_pe uid'( 0) pe), (self( 1) e))
+  | Eif( pe, e1, e2) -> Eif( (set_uid_pe uid'( 0) pe), (self( 1) e1), (self( 2) e2))
+  | Eskip -> Eskip
+  | Eccall( x, pe1, pe2, args) -> Eccall( x, (set_uid_pe uid'( 0) pe1), (set_uid_pe uid'( 0) pe2), (pure_uids args))
+  | Eproc( x, name1, args) -> Eproc( x, name1, (pure_uids args))
+  | Eunseq es -> Eunseq (selfs es)
+  | Ewseq( pat, e1, e2) -> Ewseq( pat, (self( 1) e1), (self( 2) e2))
+  | Esseq( pat, e1, e2) -> Esseq( pat, (self( 1) e1), (self( 2) e2))
+  | Easeq( bty, act, pact) -> Easeq( bty, act, pact)
+  | Eindet( n, e) -> Eindet( n, (self( 1) e))
+  | Ebound( n, e) -> Ebound( n, (self( 1) e))
+  | End es -> End (selfs es)
+  | Esave( lab_bty, args, e) -> Esave( lab_bty,
+      (Lem_list.mapi (fun i (s, (bty, pe)) -> (s, (bty, pure_uid (i+ 1) pe))) args),
+      (self( 0) e))
+  | Erun( x, lab, pes) -> Erun( x, lab, (pure_uids pes))
+  | Epar es -> Epar (selfs es)
+  | Ewait thid -> Ewait thid
+  )))
+
+(*val string_of_symbol: Symbol.sym -> string*)
+
+let set_uid_fun fname =  ((function
+  | Fun( bty, args, pe) -> Fun( bty, args, pe)
+  | ProcDecl( loc, ret_bty, args_bty) -> ProcDecl( loc, ret_bty, args_bty)
+  | Proc( loc, bty, args, e) -> Proc( loc, bty, args, (set_uid_e (Pp_symbol.to_string_pretty fname)( 1) e))
+))
+
+let set_uid_globs (gname, bty, e) =
+  (gname, bty, set_uid_e (Pp_symbol.to_string_pretty gname)( 1) e)
+
+let set_uid file1 =
+ ({
+  main=    (file1.main);
+  tagDefs= (file1.tagDefs);
+  stdlib=  (file1.stdlib);
+  impl=    (file1.impl);
+  globs=   (Lem_list.map set_uid_globs file1.globs);
+  funs=    (Pmap.mapi set_uid_fun file1.funs);
+  funinfo= (file1.funinfo);
+ })
+
+let get_uid_or_fail annots : string =
+  match Annot.get_uid annots with
+  | None -> failwith "Uid not found"
+  | Some uid -> uid
+
+let get_uid_pexpr (Pexpr(annots, _, _)): string =
+  get_uid_or_fail annots
+
+let get_uid_expr (Expr(annots, _)): string =
+  get_uid_or_fail annots
