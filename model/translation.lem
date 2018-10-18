@@ -2980,7 +2980,7 @@ let translation_mk_run_e loc sym visibles_before visibles_after pes =
       List.map (fun (sym, ty) ->
         (C.Pattern [] (C.CaseBase (Just sym, C.BTy_object C.OTy_pointer)),
          let core_ty = Caux.mk_ail_ctype_pe ty in
-         Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [(*f; *)sym]))
+         Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [(*f; *)sym]))
       ) created_sym_tys in
   mk_kills_e (mk_creates_e (Caux.mk_run_e sym ((List.map (fun (sym, _) -> Caux.mk_sym_pe sym) visibles_after) ++ pes)))
 let inline mk_run_e = translation_mk_run_e
@@ -3053,26 +3053,27 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         E.return $
           Caux.mk_unit_sseq core_ss Caux.mk_skip_e
     
-    | A.AilSblock [(sym, (dur_opt, qs, ty))] ss ->
+    | A.AilSblock [(sym, ((ident_loc, _, _), qs, ty))] ss ->
         let c_ty = Caux.mk_ail_ctype_pe ty in
         E.with_block_objects [(sym, (qs, ty))] $
           E.mapM self ss >>= fun core_ss ->
         E.return $
           Caux.mk_sseq_e (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer))
-             (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym])) (
+             (Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym])) (
             List.foldr (fun core_s acc ->
               Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) core_s acc
             ) (Caux.pkill loc false (Caux.mk_sym_pe sym)) core_ss
           )
     
     | A.AilSblock binds ss ->
-        let decls = [ (sym, (qs, ty)) | forall ((sym, (dur, qs, ty)) MEM binds ) | true ] in
+        let decls_with_loc = [ (sym, ident_loc, (qs, ty)) | forall ((sym, ((ident_loc, _, _), qs, ty)) MEM binds ) | true ] in
+        let decls = List.map (fun (sym, _, qs_ty) -> (sym, qs_ty)) decls_with_loc in
         (* the symbolic names and create actions for the local variables *)
         let (pats, core_creates) : list C.pattern * list (C.expr unit) =
-          mapUnzip (fun (sym, (qs, ty)) ->
+          mapUnzip (fun (sym, ident_loc, (qs, ty)) ->
             let c_ty = Caux.mk_ail_ctype_pe ty in
-            (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer), Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource [f; sym]))
-          ) decls in
+            (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer), Caux.pcreate loc (Caux.mk_alignof_pe c_ty) c_ty (Symbol.PrefSource ident_loc [f; sym]))
+          ) decls_with_loc in
         E.with_block_objects decls $
           (* TODO: doing the kills here is now redundant if there is are returns before all exit point.
                    but it may be nasty to the check.
@@ -3424,7 +3425,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           (* TODO: qualifiers? *)
           (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
-          let core_create = Caux.pcreate (Loc.other "global alloc") (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource [sym]) in
+          let core_create = Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [sym]) in
           E.fresh_symbol >>= fun sym_global ->
           
           E.print_debugM 2 (fun () -> "(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)

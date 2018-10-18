@@ -16,24 +16,6 @@ module.exports = {
   resolve: {
     extensions: [".ts", ".js"]
   },
-  /*
-  optimization: {
-    splitChunks: {
-      cacheGroups: {
-        vis: {
-          test: /[\\/]node_modules\/vis[\\/]/,
-          name: 'vis',
-          chunks: 'all',
-        },
-        codemirror: {
-          test: /[\\/]node_modules\/codemirror[\\/]/,
-          name: 'codemirror',
-          chunks: 'all',
-        },
-      },
-    },
-  },
-  */
   module: {
     rules: [{
         test: /\.tsx?$/,

@@ -387,8 +387,8 @@ let collect_with_scope scope m =
             match kind with
               | Kind_ordinary (OK_object false) ->
                   match Map.lookup sym st.external_object_declarations with
-                    | Just (isTentative, _, dur, isRegister, qs, ty) ->
-                        (sym, ((dur, isRegister), qs, ty)) :: acc
+                    | Just (isTentative, loc, dur, isRegister, qs, ty) ->
+                        (sym, ((loc, dur, isRegister), qs, ty)) :: acc
                     | Nothing ->
                         match Map.lookup sym st.internal_object_declarations with
                           | Just (_, ATypes.Static, _, _, _) ->
@@ -396,7 +396,7 @@ let collect_with_scope scope m =
                           | Just (_, ATypes.Thread, _, _, _) ->
                               acc
                           | Just (loc, dur, isRegister, qs, ty) ->
-                              (sym, ((dur, isRegister), qs, ty)) :: acc
+                              (sym, ((loc, dur, isRegister), qs, ty)) :: acc
                           | Nothing ->
                               (* TODO: check *)
                               acc
@@ -1839,8 +1839,8 @@ let get_gamma_sofar =
     (* TODO: this is putting too much in gamma (i.e. things which are not in the
        current scope). But since we are dealing with fresh symbols, this
        shouldn't be observable? *)
-    List.map (fun (sym, (_, dur, b, qs, ty)) ->
-      (sym, ((dur, b), qs, ty))
+    List.map (fun (sym, (loc, dur, b, qs, ty)) ->
+      (sym, ((loc, dur, b), qs, ty))
     ) (Map_extra.toList st.internal_object_declarations)
   )
 

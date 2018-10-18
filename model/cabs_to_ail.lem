@@ -3651,7 +3651,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             E.mapM self ss
           ) >>= fun (bs_, d_ss) ->
           
-          let bs = List.filter (fun (_, ((dur, _), _, _)) ->
+          let bs = List.filter (fun (_, ((_, dur, _), _, _)) ->
             match dur with
               | ATypes.Static ->
                   false
@@ -3799,13 +3799,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                     (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty)
                                 end >>= fun () ->
                                 E.return ( (sym, d_e) :: acc1
-                                         , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
                                 E.register_internal_object_declaration sym
                                   (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
                                 E.return ( acc1
-                                         , (sym, ((dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
                           end
                     end
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->

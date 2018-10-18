@@ -1,14 +1,16 @@
 import $ from "jquery"
-import Common from "./common"
+import { State } from "./common"
 import { Range } from './location'
-
-namespace Util {
 
 const gapikey = 'AIzaSyDYrDNMlaTvfLxNX_cJ8EH_qrLq7aKeFJc'
 
 export function option(x: any, y: any) {
   if (x) return x
   return y
+}
+
+export function toHex(n: number): string {
+  return "0x" + ("00" + n.toString(16)).substr(2)
 }
 
 export function shortURL(url: string, f: (_:string) => void) {
@@ -88,7 +90,7 @@ export function getColor(i: number): string {
   return 'color' + (i % 100)
 }
 
-export function getColorByLocC(state: Readonly<Common.State>, cur: Readonly<Range>): string {
+export function getColorByLocC(state: Readonly<State>, cur: Readonly<Range>): string {
   for (let i = 0; i < state.locs.length; i ++) {
     const loc = state.locs[i].c
     if ((loc.begin.line < cur.begin.line
@@ -151,8 +153,3 @@ export function triggerClick(elem: HTMLElement): void {
   clickEvent.initEvent ('mouseup', true, true);
   elem.dispatchEvent (clickEvent);
 }
-
-} // end namespace
-
-
-export default Util

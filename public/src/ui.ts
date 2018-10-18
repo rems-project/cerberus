@@ -1,9 +1,11 @@
 import $ from 'jquery'
-import { includes } from 'lodash'
-import GoldenLayout from 'golden-layout'
-import Common from './common'
-import Util from './util'
+import _ from 'lodash'
+import { ID, Bytes, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest } from './common'
+import * as util from './util'
 import View from './view'
+
+/** Memory models */
+export type Model = 'concrete' | 'symbolic' | 'twin'
 
 /** UI Settings */
 export interface Settings {
@@ -13,8 +15,12 @@ export interface Settings {
   colour: boolean,
   colour_cursor: boolean,
   short_share: boolean
-  model: Common.Model,
+  model: Model,
 }
+
+/** Possible actions to request to the server */
+type ExecutionMode = 'random' | 'exhaustive'
+type Action = 'elaborate' | 'random' | 'exhaustive' | 'step'
 
 export class CerberusUI {
   /** List of existing views */
@@ -25,27 +31,28 @@ export class CerberusUI {
   private dom: JQuery<HTMLElement>
   /** UI settings */
   private settings: Settings
+  private updateSettings: () => void
   /** C11 Standard in JSON */
   private std: any
   /** Godbolt default compiler */
-  defaultCompiler: Common.Compiler
+  defaultCompiler: Compiler
   /** List of compilers */
-  compilers?: Common.Compiler []
-
+  compilers?: Compiler []
   /** Step buttons */
-  private stepBack: JQuery<HTMLElement>
-  private stepForward: JQuery<HTMLElement>
-  private stepForwardLeft: JQuery<HTMLElement>
-  private stepForwardMiddle: JQuery<HTMLElement>
-  private stepForwardRight: JQuery<HTMLElement>
-  private stepCounter: JQuery<HTMLElement>
+  private updateInteractiveButtons: (s: State) => void
 
-  public demo(name: string) {
-    console.log(name)
-  }
-
-   constructor (settings: Settings) {
+  constructor () {
     this.views = []          
+
+    this.settings = {
+      rewrite: false,
+      sequentialise: false,
+      auto_refresh: true,
+      colour: false,
+      colour_cursor: true,
+      short_share: false,
+      model: 'concrete',
+    }
 
     this.dom = $('#views');
     window.onresize = () => this.refresh()
@@ -56,15 +63,14 @@ export class CerberusUI {
     }
 
     // UI settings
-    this.settings = settings
-    $('#cb_concrete').prop('checked', this.settings.model == Common.Model.Concrete)
-    $('#cb_rewrite').prop('checked', this.settings.rewrite)
-    $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
-    $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
-    $('#cb_colour').prop('checked', this.settings.colour)
-    $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
-
-    // Menu bar event handlers
+    this.updateSettings = () => {
+      $('#cb_concrete').prop('checked', this.settings.model === 'concrete')
+      $('#cb_rewrite').prop('checked', this.settings.rewrite)
+      $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
+      $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
+      $('#cb_colour').prop('checked', this.settings.colour)
+      $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
+    }
 
     // New view
     $('#new').on('click', () => {
@@ -107,7 +113,7 @@ export class CerberusUI {
 
     $('#demo .tests a').on('click', (e) => {
       const name = e.target.textContent as string
-      Util.get('demo/'+name, (data: string) => {
+      util.get('demo/'+name, (data: string) => {
         $('#demo').css('visibility', 'hidden')
         this.add(new View(name, data))
         this.refresh()
@@ -115,28 +121,39 @@ export class CerberusUI {
     })
 
     // Run (Execute)
-    $('#random').on('click', () => this.exec (Common.ExecutionMode.Random))
-    $('#exhaustive').on('click', () => this.exec (Common.ExecutionMode.Exhaustive))
+    $('#random').on('click', () => this.exec ('random'))
+    $('#exhaustive').on('click', () => this.exec ('exhaustive'))
 
-    // Interactive Step Buttons
-    this.stepBack = $('#step-back')
-    this.stepBack.on('click', (e) => {
-      if (!this.stepBack.hasClass('disabled'))
+    // Interactive Buttons
+    const stepBack = $('#step-back')
+    stepBack.on('click', (e) => {
+      if (!stepBack.hasClass('disabled'))
         this.getView().stepBack()
     })
-    this.stepForward = $('#step-forward')
-    this.stepForward.on('click', (e) => {
-      if (!this.stepForward.hasClass('disabled'))
+    const stepForward = $('#step-forward')
+    stepForward.on('click', (e) => {
+      if (!stepForward.hasClass('disabled'))
         this.getView().stepForward()
     })
-    this.stepForwardLeft = $('#step-forward-left')
-    this.stepForwardLeft.on('click', (e) => this.getView().stepForwardLeft())
-    this.stepForwardMiddle = $('#step-forward-middle')
-    this.stepForwardMiddle.on('click', (e) => this.getView().stepForwardMiddle())
-    this.stepForwardRight = $('#step-forward-right')
-    this.stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
-    this.stepCounter = $('#step-counter')
+    const stepForwardLeft = $('#step-forward-left')
+    stepForwardLeft.on('click', (e) => this.getView().stepForwardLeft())
+    const stepForwardMiddle = $('#step-forward-middle')
+    stepForwardMiddle.on('click', (e) => this.getView().stepForwardMiddle())
+    const stepForwardRight = $('#step-forward-right')
+    stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
+    const stepCounter = $('#step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
+
+    this.updateInteractiveButtons = (s: State) => {
+      const onInteractiveMode = s.tagDefs != undefined
+      util.setDisabled(stepBack, s.history.length == 0 || !onInteractiveMode)
+      util.setDisabled(stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
+      util.setInvisible(stepForward, s.exec_options.length >= 2)
+      util.setInvisible(stepForwardLeft, s.exec_options.length < 2)
+      util.setInvisible(stepForwardMiddle, s.exec_options.length < 3)
+      util.setInvisible(stepForwardRight, s.exec_options.length < 2)
+      stepCounter.text(s.step_counter)
+    }
 
     // Interactive Options
     const toggleInteractiveOptions = (flag: string) => {
@@ -146,16 +163,16 @@ export class CerberusUI {
       this.updateInteractiveOptions(view)
       view.emit('updateInteractive')
     }
-    const setInteractiveMode = (mode: Common.InteractiveMode) => {
+    const setInteractiveMode = (mode: InteractiveMode) => {
       const view = this.getView()
       view.setInteractiveMode(mode)
       this.updateInteractiveOptions(view)
     }
     $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
-    $('#step-mem-action').on('click', () => setInteractiveMode(Common.InteractiveMode.Memory))
-    $('#step-C-line').on('click', () => setInteractiveMode(Common.InteractiveMode.CLine))
-    $('#step-Core-trans').on('click', () => setInteractiveMode(Common.InteractiveMode.Core))
+    $('#step-mem-action').on('click', () => setInteractiveMode(InteractiveMode.Memory))
+    $('#step-C-line').on('click', () => setInteractiveMode(InteractiveMode.CLine))
+    $('#step-Core-trans').on('click', () => setInteractiveMode(InteractiveMode.Core))
     $('#open-memory').on('click', () => this.getView().newTab('Memory'))
     $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
     $('#open-arena').on('click', () => this.getView().newTab('Arena'))
@@ -175,7 +192,7 @@ export class CerberusUI {
       const url = 'http://www.cl.cam.ac.uk/~pes20/cerberus/server/#'
                 + this.currentView.getEncodedState()
       if (this.settings.short_share)
-        Util.shortURL(url, (url: string) => $('#sharelink').val(url))
+        util.shortURL(url, (url: string) => $('#sharelink').val(url))
       else
         $('#sharelink').val(url)
     }
@@ -203,8 +220,8 @@ export class CerberusUI {
     // Settings
     $('#concrete').on('click', (e) => {
       this.settings.model =
-        (this.settings.model == Common.Model.Concrete ? Common.Model.Symbolic : Common.Model.Concrete)
-      $('#cb_concrete').prop('checked', this.settings.model == Common.Model.Concrete)
+        (this.settings.model === 'concrete' ? 'symbolic' : 'concrete')
+      $('#cb_concrete').prop('checked', this.settings.model === 'concrete')
     })
     $('#rewrite').on('click', (e) => {
       this.settings.rewrite = !this.settings.rewrite;
@@ -235,7 +252,7 @@ export class CerberusUI {
     $('.switch').on('click', (e) => {
       const sw = e.currentTarget.id, view = this.getView()
       view.toggleProvSwitch(sw)
-      $('#cb_' + sw).prop('checked', includes(view.getSwitches(), sw))
+      $('#cb_' + sw).prop('checked', _.includes(view.getSwitches(), sw))
       view.emit('clear')
       view.emit('dirty')
     })
@@ -304,7 +321,7 @@ export class CerberusUI {
       url: 'https://gcc.godbolt.org/api/compilers/c',
       type: 'GET',
       success: (data, status, query) => {
-        this.defaultCompiler = $.grep(data, (e: Common.Compiler) => e.id == 'cclang500')[0]
+        this.defaultCompiler = $.grep(data, (e: Compiler) => e.id == 'cclang500')[0]
         this.compilers       = data
       }
     })
@@ -339,15 +356,15 @@ export class CerberusUI {
       const menu = $('.x-scrollable > .menu')
 
       // check if one should display the scroll arrows
-      container.attr('data-overflowing', Util.checkOverflow(menu, container))
+      container.attr('data-overflowing', util.checkOverflow(menu, container))
       // check for every window resize
       window.addEventListener('resize', () =>
-        container.attr('data-overflowing', Util.checkOverflow(menu, container)))
+        container.attr('data-overflowing', util.checkOverflow(menu, container)))
       // and when scrolling
       container.on('scroll', () => {
         if (!ticking) {
           window.requestAnimationFrame(() => {
-            container.attr('data-overflowing', Util.checkOverflow(menu, container))
+            container.attr('data-overflowing', util.checkOverflow(menu, container))
             ticking = false;
           })
         }
@@ -357,7 +374,7 @@ export class CerberusUI {
       $('#menu-scroll-left').on('click', () => {
         // if we are already scrolling, do nothing
         if (scrolling) return
-        const overflow = Util.checkOverflow(menu, container)
+        const overflow = util.checkOverflow(menu, container)
         if (overflow === 'left' || overflow == 'both') {
           const availableScroll = menu.scrollLeft()
           if (availableScroll && availableScroll < scrollDistance * 2)
@@ -368,13 +385,13 @@ export class CerberusUI {
           scrollDir = 'left'
           scrolling = true
         }
-        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+        container.attr('data-overflowing', util.checkOverflow(menu, container))
       })
 
       $('#menu-scroll-right').on('click', () => {
         // if we are already scrolling, do nothing
         if (scrolling) return
-        const overflow = Util.checkOverflow(menu, container)
+        const overflow = util.checkOverflow(menu, container)
         if (overflow === 'right' || overflow == 'both') {
           const rightEdge = menu[0].getBoundingClientRect().right;
           const scrollerRightEdge = container[0].getBoundingClientRect().right;
@@ -387,7 +404,7 @@ export class CerberusUI {
           scrollDir = 'right'
           scrolling = true
         }
-        container.attr('data-overflowing', Util.checkOverflow(menu, container))
+        container.attr('data-overflowing', util.checkOverflow(menu, container))
       })
 
       menu.on('transitionend', () => {
@@ -408,9 +425,9 @@ export class CerberusUI {
     const state = view.getState()
     $('#cb-supress-tau').prop('checked', state.hide_tau)
     $('#cb-skip-tau').prop('checked', state.skip_tau)
-    $('#r-step-mem-action').prop('checked', state.mode == Common.InteractiveMode.Memory)
-    $('#r-step-C-line').prop('checked', state.mode == Common.InteractiveMode.CLine)
-    $('#r-step-Core-trans').prop('checked', state.mode == Common.InteractiveMode.Core)
+    $('#r-step-mem-action').prop('checked', state.mode == InteractiveMode.Memory)
+    $('#r-step-C-line').prop('checked', state.mode == InteractiveMode.CLine)
+    $('#r-step-Core-trans').prop('checked', state.mode == InteractiveMode.Core)
   }
 
   private setCurrentView(view: View) {
@@ -419,7 +436,7 @@ export class CerberusUI {
     $('#current-view-title').text(view.title)
     this.currentView = view
     this.updateInteractiveOptions(view)
-    this.updateStepButtons(view.getState())
+    this.updateInteractiveButtons(view.getState())
     view.show()
   }
 
@@ -427,7 +444,7 @@ export class CerberusUI {
     const view = this.getView()
     if (lang) view.newTab(lang)
     if (view.isDirty()) {
-      this.request(Common.Elaborate(), (res: Common.ResultRequest) => {
+      this.request('elaborate', (res: ResultRequest) => {
         view.updateState(res)
         view.emit('update')
         view.emit('highlight')
@@ -436,8 +453,8 @@ export class CerberusUI {
     }
   }
 
-  private exec (mode: Common.ExecutionMode) {
-    this.request(Common.Execute(mode), (res: Common.ResultRequest) => {
+  private exec (mode: ExecutionMode) {
+    this.request(mode, (res: ResultRequest) => {
       const view = this.getView()
       //const exec = view.getExec()
       const cons = view.getConsole()
@@ -453,17 +470,6 @@ export class CerberusUI {
     throw new Error("Panic: no view")
   }
 
-  private updateStepButtons(s: Common.State) {
-    const onInteractiveMode = s.tagDefs != undefined
-    Util.setDisabled(this.stepBack, s.history.length == 0 || !onInteractiveMode)
-    Util.setDisabled(this.stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
-    Util.setInvisible(this.stepForward, s.exec_options.length >= 2)
-    Util.setInvisible(this.stepForwardLeft, s.exec_options.length < 2)
-    Util.setInvisible(this.stepForwardMiddle, s.exec_options.length < 3)
-    Util.setInvisible(this.stepForwardRight, s.exec_options.length < 2)
-    this.stepCounter.text(s.step_counter)
-  }
-
   private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
@@ -473,8 +479,9 @@ export class CerberusUI {
     nav.on('click', () => this.setCurrentView(view))
 
     // Interactive stuff
-    view.on('update', this, (s: Common.State) => this.updateStepButtons(s))
-    view.on('updateStepButtons', this, (s: Common.State) => this.updateStepButtons(s))
+    view.on('update', this, (s: State) => this.updateInteractiveButtons(s))
+    // TODO: see if I can delete this event:
+    view.on('updateStepButtons', this, (s: State) => this.updateInteractiveButtons(s))
 
     this.setCurrentView(view)
     view.getSource().refresh()
@@ -484,15 +491,20 @@ export class CerberusUI {
     return this.settings
   }
 
+  setSettings(settings: Readonly<Settings>): void {
+    this.settings = settings;
+    this.updateSettings()
+  }
+
   addView(title: string, source: string, config?: any) {
     this.add(new View(title, source, config))
     this.refresh()
   }
 
-  public step(active: {id: Common.ID, state: Common.Bytes} | null): void {
+  public step(active: {id: ID, state: Bytes} | null): void {
     const view = this.getView()
     if (active != null) {
-      this.request(Common.Step(), (data: Common.ResultRequest) => {
+      this.request('step', (data: ResultRequest) => {
         view.updateState(data)
       }, {
         lastId: view.getState().lastNodeId,
@@ -501,30 +513,30 @@ export class CerberusUI {
         tagDefs: view.getState().tagDefs
       })
     } else {
-      this.request(Common.Step(), (data: Common.ResultRequest) => {
+      this.request('step', (data: ResultRequest) => {
         view.updateState(data)
       })
     }
   }
 
-  public execGraphNodeClick(i: Common.ID) {
+  public execGraphNodeClick(i: ID) {
     this.getView().execGraphNodeClick(i)
   }
 
-  request (action: Common.Action, onSuccess: Function, interactive?: Common.InteractiveRequest) {
+  request (action: Action, onSuccess: Function, interactive?: InteractiveRequest) {
     const view = this.getView()
-    Util.Cursor.wait()
+    util.Cursor.wait()
     $.ajax({
       url:  '/cerberus',
       type: 'POST',
       headers: {Accept: 'application/json; charset=utf-8'},
       contentType: 'application/json; charset=utf-8',
       data: {
-        'action':  Common.string_of_action(action),
+        'action':  action,
         'source':  view.getSource().getValue(),
         'rewrite': this.settings.rewrite,
         'sequentialise': this.settings.sequentialise,
-        'model': Common.string_of_model(this.settings.model),
+        'model': this.settings.model,
         'switches': view.getSwitches(),
         'interactive': interactive
       },
@@ -536,7 +548,7 @@ export class CerberusUI {
       // TODO: this looks wrong
       this.settings.auto_refresh = false
     }).always(() => {
-      Util.Cursor.done()
+      util.Cursor.done()
     })
   }
 
@@ -580,14 +592,16 @@ export class CerberusUI {
   }
 
   refresh() {
-    this.getView().refresh()
+    // Refresh might happen without a view
+    if (this.currentView)
+      this.currentView.refresh()
   }
 
 }
 
 // TODO: move this to a widget
 // Get list of defacto tests
-Util.get('defacto_tests.json', (data: any) => {
+util.get('defacto_tests.json', (data: any) => {
   let div = $('#defacto_body')
   for (let i = 0; i < data.length; i++) {
     let questions = $('<div class="questions"></div>')
@@ -615,127 +629,9 @@ Util.get('defacto_tests.json', (data: any) => {
 
 /** UI start up */
 
-type StartupMode =
-  { kind: 'default', settings: Settings } |
-  { kind: 'permalink', config: any, settings: Settings } |
-  { kind: 'fixedlink', file: string, settings: Settings }
-
-function getDefaultSettings(): Settings {
-    return { rewrite: false,
-             sequentialise: false,
-             auto_refresh: true,
-             colour: false,
-             colour_cursor: true,
-             short_share: false,
-             model: Common.Model.Concrete,
-           }
-}
-
-function getStartupMode(): StartupMode {
-  function parsedFixedArguments(args: string []): [string, Settings] {
-    let file: string | undefined
-    const settings = getDefaultSettings()
-    function updateSettings(param: string, value: string) {
-      const toBool = (b: string) => b === 'true'
-      switch(param) {
-        case 'rewrite':
-          settings.rewrite = toBool(value)
-          break
-        case 'sequentialise':
-          settings.sequentialise = toBool(value)
-          break
-        case 'auto_refresh':
-          settings.auto_refresh = toBool(value)
-          break
-        case 'color':
-        case 'colour':
-          settings.colour = toBool(value)
-          break
-        case 'color_cursor':
-        case 'colour_cursor':
-          settings.colour_cursor = toBool(value)
-          break
-        case 'short_share':
-          settings.short_share = toBool(value)
-          break
-        case 'model':
-          settings.model = Common.model_of_string(value)
-          break
-        default:
-          throw `Unknown argument ${param}`
-      }
-    }
-    args.map(arg => {
-      const params = arg.split('=')
-      if (params[0] && params[1]) {
-        updateSettings(params[0], params[1])
-      } else {
-        file = params[0]
-      }
-    })
-    if (file !== undefined)
-      return [file, settings]
-    throw 'Missing filename in fixed link'
-  }
-  try {
-    // First try a permanent link
-    let uri = document.URL.split('#')
-    if (uri && uri.length == 2 && uri[1] !== '') {
-      const config = GoldenLayout.unminifyConfig(JSON.parse(decodeURIComponent(uri[1])))
-      return { kind: 'permalink',
-              config: config,
-              settings: getDefaultSettings()
-            }
-    }
-    // Try fixed links
-    uri = document.URL.split('?')
-    if (uri && uri.length == 2 && uri[1] !== '') {
-      const [file, settings] = parsedFixedArguments(uri[1].split('&'))
-      return { kind: 'fixedlink',
-              file: file,
-              settings: settings
-            }
-    }
-    // Default
-    return { kind: 'default', settings: getDefaultSettings() }
-  } catch (e) {
-    console.log(`Startup error: ${e}`)
-    return { kind: 'default', settings: getDefaultSettings() }
-  }
-}
-
-function defaultStart() {
-  Util.get('buffer.c', (source: string) => {
-    UI.addView('example.c', source)
-  }, () => {
-    console.log('Error when trying to download "buffer.c"... Using an empty file.')
-    UI.addView('example.c', '')
-  })
-}
-
-export function onLoad() {
-  switch (mode.kind) {
-    case 'default':
-      defaultStart()
-      break
-    case 'permalink':
-      UI.addView(mode.config.title, mode.config.source, mode.config)
-      break
-    case 'fixedlink':
-      Util.get(mode.file, (source: string) => {
-        UI.addView(mode.file, source)
-      }, () => {
-        console.log(`Error when trying to download ${mode.file}`)
-        alert(`Error downloading ${mode.file}...`)
-        defaultStart()
-      })
-      break
-  }
-}
-
-const mode = getStartupMode()
-const UI = new CerberusUI(mode.settings)
-
-//@ts-ignore 
-window.UI = UI
+const UI = new CerberusUI()
 export default UI
+
+// This is used to debug
+//@ts-ignore
+window.UI = UI

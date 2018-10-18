@@ -347,7 +347,7 @@ let dtree_of_expression pp_annot expr =
     end in
   self expr
 
-let dtree_of_binding (i, ((sd, is_reg), qs, ty)) =
+let dtree_of_binding (i, ((_, sd, is_reg), qs, ty)) =
   Dleaf (Pp_ail.pp_id i
          ^^^ Pp_ail.pp_storageDuration sd
          ^^^ pp_cond is_reg (pp_type_keyword "register")

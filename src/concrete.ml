@@ -1658,90 +1658,62 @@ let combine_prov prov1 prov2 =
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
 
-  (* JSON serialisation: Memory layout for dot *)
+  (* JSON serialisation: Memory layout for UI *)
 
-  type row =
+  type ui_value =
     { size: int; (* number of square on the left size of the row *)
-      ispadding: bool;
       path: string list; (* tag list *)
       value: string;
       prov: int option;
-      pointsto: int option; (* provenance id in case of a pointer *)
-      hex: bool; (* TODO: this is terrible I need to change that *)
-      dashed: bool;
+      typ: Core_ctype.ctype0 option;
     }
 
-  type dot_node =
+  type ui_alloc =
     { id: int;
       base: int;
-      prefix: string option;
-      typ: string;
+      prefix: Symbol.prefix;
+      typ: Core_ctype.ctype0;
       size: int;
-      rows: row list;
+      values: ui_value list;
     }
 
-  let rec mk_rows bs ty mval : row list =
-    let mk_scalar v p hex = [{ size = sizeof ty;
-                           ispadding = false;
-                           path = [];
-                           value = v;
-                           prov = p;
-                           pointsto = None;
-                           hex = hex;
-                           dashed = false;
-                         }] in
-    let mk_pointer v p hex = [{ size = sizeof ty;
-                           ispadding = false;
-                           path = [];
-                           value = v;
-                           pointsto = p;
-                           prov = p;
-                           hex = hex;
-                           dashed = false;
-                         }] in
-    let mk_pad n v = { size = n;
-                       ispadding = true;
-                       path = [];
-                       value = v;
-                       pointsto = None;
-                       prov = None;
-                       hex = false;
-                       dashed = false;
-                     } in
+  let rec mk_ui_values bs ty mval : ui_value list =
+    let mk_scalar v p =
+      [{ size = sizeof ty; path = []; value = v;
+         prov = p; typ = Some ty; }] in
+    let mk_pad n v =
+      { size = n; typ = None; path = []; value = v;
+        prov = None; } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified" None false
-    | MVinteger (Signed Intptr_t, IV(prov, n))
-    | MVinteger (Unsigned Intptr_t, IV(prov, n)) ->
-      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      [{ size = sizeof ty; ispadding = false; path = []; value = N.to_string n; prov = p; pointsto = p; hex = true; dashed = true; }]
+      mk_scalar "unspecified" None
     | MVinteger (_, IV(prov, n)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      mk_scalar (N.to_string n) p false
+      mk_scalar (N.to_string n) p
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) None false
+      mk_scalar (string_of_float f) None
     | MVpointer (_, PV(prov, pv)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
         | PVnull _ ->
-          mk_pointer "NULL" None false
+          mk_scalar "NULL" None
         | PVconcrete n ->
-          mk_pointer (N.to_string n) p true
+          mk_scalar (N.to_string n) p
         | PVfunction sym ->
-          mk_pointer (Pp_symbol.to_string_pretty sym) None false
+          mk_scalar (Pp_symbol.to_string_pretty sym) None
       end
     | MVarray mvals ->
       begin match ty with
         | Array0 (elem_ty, _) ->
           let size = sizeof elem_ty in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
-              let row = List.map (add_path (string_of_int i)) @@ mk_rows acc_bs elem_ty mval in
+              let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
               (row::acc, i+1, L.drop size acc_bs)
             end ([], 0, bs) mvals
           in List.concat @@ (List.rev rev_rows)
         | _ ->
-          failwith "mk_rows: array type is wrong"
+          failwith "mk_ui_values: array type is wrong"
       end
     | MVstruct (tag_sym, _) ->
       (* NOTE: we recombine the bytes to get paddings *)
@@ -1751,7 +1723,7 @@ let combine_prov prov1 prov2 =
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
             let (mval, acc_bs'') = combine_bytes memb_ty acc_bs' in
-            let rows = mk_rows acc_bs' memb_ty mval in
+            let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
             let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
@@ -1759,51 +1731,61 @@ let combine_prov prov1 prov2 =
         end ([], 0, bs1) (fst (offsetsof tag_sym))
       in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
-      List.map (add_path memb) (mk_rows bs ty mval) (* FIXME: THE TYPE IS WRONG *)
+      List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
-  let mk_dot_node bytemap id alloc : dot_node =
+  let mk_ui_alloc bytemap id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
     let size = sizeof ty in
     let bs = fetch_bytes bytemap alloc.base size in
-    let prefix = match alloc.prefix with
-      | Symbol.PrefSource [] -> None
-      | Symbol.PrefOther s -> Some s
-      | Symbol.PrefSource xs -> Some (Pp_symbol.to_string_pretty @@ List.hd (List.rev xs))
-    in
     let (mval, _) = combine_bytes ty bs in
     { id = id;
       base = N.to_int alloc.base;
-      prefix = prefix;
-      typ = String_core_ctype.string_of_ctype ty;
+      prefix = alloc.prefix;
+      typ = ty;
       size = size;
-      rows = mk_rows bs ty mval;
+      values = mk_ui_values bs ty mval;
     }
+
+  let serialise_prefix = function
+    | Symbol.PrefOther s ->
+      `Assoc [("kind", `String "other"); ("name", `String s)]
+    | Symbol.PrefSource (_, []) ->
+      failwith "serialise_prefix: PrefSource with an empty list"
+    | Symbol.PrefSource (loc, [name]) ->
+        `Assoc [("kind", `String "source");
+                ("name", `String (Pp_symbol.to_string_pretty name));
+                ("scope", `Null);
+                ("loc", Location_ocaml.to_json loc);]
+    | Symbol.PrefSource (loc, [scope; name]) ->
+        `Assoc [("kind", `String "source");
+                ("name", `String (Pp_symbol.to_string_pretty name));
+                ("scope", `String (Pp_symbol.to_string_pretty scope));
+                ("loc", Location_ocaml.to_json loc);]
+    | Symbol.PrefSource (_, _) ->
+      failwith "serialise_prefix: PrefSource with more than one scope"
 
   let serialise_map f m : Json.json =
     let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_row (r:row) : Json.json =
-    `Assoc [("size", `Int r.size);
-            ("ispadding", `Bool r.ispadding);
-            ("path", `List (List.map (fun s -> `String s) r.path));
-            ("value", `String r.value);
-            ("pointsto", (match r.pointsto with Some n -> `Int n | None -> `Null));
-            ("prov", (match r.prov with Some n -> `Int n | None -> `Null));
-            ("hex", `Bool r.hex);
-            ("dashed", `Bool r.dashed);
-           ]
-  let serialise_dot_node (n:dot_node) : Json.json =
-    `Assoc [("id", `Int n.id);
-            ("base", `Int n.base);
-            ("prefix", match n.prefix with | Some x -> `String x | None -> `Null);
-            ("type", `String n.typ);
-            ("size", `Int n.size);
-            ("rows", `List (List.map serialise_row n.rows));
+  let serialise_ui_values (v:ui_value) : Json.json =
+    `Assoc [("size", `Int v.size);
+            ("path", `List (List.map Json.of_string v.path));
+            ("value", `String v.value);
+            ("prov", Json.of_option Json.of_int v.prov);
+            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);]
+
+  let serialise_ui_alloc (a:ui_alloc) : Json.json =
+    `Assoc [("id", `Int a.id);
+            ("base", `Int a.base);
+            ("prefix", serialise_prefix a.prefix);
+            ("type", `String (String_core_ctype.string_of_ctype a.typ));
+            ("size", `Int a.size);
+            ("values", `List (List.map serialise_ui_values a.values));
            ]
 
   let serialise_mem_state (st: mem_state) : Json.json =
-    serialise_map (fun id alloc -> serialise_dot_node @@ mk_dot_node st.bytemap id alloc) st.allocations
+    serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st.bytemap id alloc) st.allocations
 
 end
 

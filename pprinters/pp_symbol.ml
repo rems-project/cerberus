@@ -24,7 +24,7 @@ let to_string_id (n, _) = string_of_int n
 
 
 let rec pp_prefix = function
-  | PrefSource syms ->
+  | PrefSource (_, syms) ->
       P.braces (P.separate_map P.dot (fun sym -> !^ (to_string_pretty sym)) syms)
   | PrefOther str ->
       P.braces (!^ str)

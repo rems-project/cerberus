@@ -1,7 +1,7 @@
 open import Pervasives
 
 open import Utils Show Show_extra Enum
-import UniqueId
+import UniqueId Loc
 
 import Debug
 
@@ -79,7 +79,7 @@ end
 
 (* Location prefix *)
 type prefix =
-  | PrefSource of list sym
+  | PrefSource of Loc.t * list sym
   | PrefOther of string
 
 

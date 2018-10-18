@@ -13,10 +13,10 @@ let mem_switch: mem_setting ref =
 
 let string_of_mem_switch () =
   match !mem_switch with
-  | `MemSymbolic -> "Symbolic"
-  | `MemConcrete -> "Concrete"
-  | `MemTwin -> "Twin"
-  | `MemCpp -> "Cpp"
+  | `MemSymbolic -> "symbolic"
+  | `MemConcrete -> "concrete"
+  | `MemTwin -> "twin"
+  | `MemCpp -> "cpp"
 
 (*
 external round_to_float32: float -> float = "round_to_float"

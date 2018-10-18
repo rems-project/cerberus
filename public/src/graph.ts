@@ -1,5 +1,6 @@
 import { find, flatten, union, uniq } from 'lodash'
 import { Locations, Range } from './location'
+import * as Memory from './memory'
 
 export type Bytes = string | undefined
 export type ID = number
@@ -22,7 +23,7 @@ export interface Node {
   isVisible: boolean
   isTau: boolean
   loc: Locations | undefined
-  mem: any
+  mem: Memory.Map | undefined
   info: NodeInfo
   env: string
   arena: string

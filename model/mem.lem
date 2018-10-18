@@ -616,7 +616,7 @@ let constraint_leIV = Impl.impl_constraint_leIV
 
 
 let stringFromPrefix = function
-  | Symbol.PrefSource syms ->
+  | Symbol.PrefSource _ syms ->
       "{" ^ String.concat "." (List.map show syms) ^ "}"
   | Symbol.PrefOther str ->
       "{" ^ str ^ "}"
