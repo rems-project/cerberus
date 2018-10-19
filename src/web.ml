@@ -222,34 +222,51 @@ let not_allowed meth path =
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
 
-let get_headers ?(gzipped=false) contentType =
-  Cohttp.Header.of_list @@
-  ("content-type", contentType) :: if gzipped then [("content-encoding", "gzip")] else []
+let create_list_from_options opts =
+  List.concat @@ List.map (fun opt -> Option.case (fun x -> [x]) (fun _ -> []) opt) opts
 
-let respond_json ?(gzipped=false) json =
-  let headers = get_headers ~gzipped "application/json" in
-  let response_string = Yojson.to_string json in
-  Debug.print 10 "[ RESPONSE ]";
-  Debug.print 10 response_string;
-  let data = (if gzipped then Ezgzip.compress ~level:9 else id) response_string in
+let get_type file =
+  match Filename.extension file with
+  | ".js" -> Some ("application/javascript")
+  | ".css" -> Some ("text/css")
+  | ".html" -> Some ("text/html; charset=utf-8")
+  | ".json" -> Some ("application/json")
+  | _ -> None
+
+let content_type =
+  Option.map (fun ty -> ("Content-Type", ty))
+
+let content_encoding accept_gzip =
+  if accept_gzip then Some ("Content-Encoding", "gzip")
+  else None
+
+(* TODO: implement ETag header *)
+let cache_control age =
+  Some ("Cache-Control", "max-age=" ^ string_of_int age)
+
+let create_headers opts =
+  Cohttp.Header.of_list @@ create_list_from_options opts
+
+let respond_json accept_gzip json =
+  let headers =
+    create_headers [content_type @@ Some "application/json";
+                    content_encoding accept_gzip]
+  in
+  let data =
+    (if accept_gzip then Ezgzip.compress ~level:9 else id) @@ Yojson.to_string json
+  in
   (Server.respond_string ~flush:true ~headers) `OK data ()
 
-let respond_file ~gzipped filename =
-  let ext = Filename.extension filename in
-  let contentType =
-    if ext = ".js" then Some "application/javascript"
-    else if ext = ".css" then Some "text/css"
-    else None
-  in match contentType with
-  | Some contentType ->
-    if gzipped && Sys.file_exists (filename ^ ".gz") then
-      let headers = get_headers ~gzipped contentType in
-      (Server.respond_file ~headers) (filename ^ ".gz") ()
-    else
-      let headers = get_headers contentType in
-      (Server.respond_file ~headers) filename ()
-  | None ->
-    Server.respond_file filename ()
+
+let respond_file accept_gzip req_file =
+  let gzipped = accept_gzip && Sys.file_exists (req_file ^ ".gz") in
+  let file = req_file ^ (if gzipped then ".gz" else "") in
+  let headers =
+    create_headers [content_type @@ get_type req_file;
+                    content_encoding gzipped;
+                    cache_control 120 (* 86400 *)]
+  in
+  (Server.respond_file ~headers) file ()
 
 (* Cerberus actions *)
 
@@ -270,7 +287,7 @@ let log_request msg flow =
     ; close_out oc
   | _ -> ()
 
-let cerberus ?(gzipped=false) ~conf ~flow content =
+let cerberus accept_gzip ~conf ~flow content =
   let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
@@ -296,11 +313,11 @@ let cerberus ?(gzipped=false) ~conf ~flow content =
     | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >>= (respond_json ~gzipped) % json_of_result
+  do_action msg.action >>= (respond_json accept_gzip) % json_of_result
 
 (* GET and POST *)
 
-let head ~docroot ?(gzipped=false) uri path =
+let head ~docroot uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -323,7 +340,7 @@ let head ~docroot ?(gzipped=false) uri path =
   end
 
 
-let get ~docroot ?(gzipped=false) uri path =
+let get ~docroot ~accept_gzip uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -332,29 +349,29 @@ let get ~docroot ?(gzipped=false) uri path =
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename then
-      respond_file ~gzipped filename
+      respond_file accept_gzip filename
     else forbidden path
   in
   let try_with () =
     Debug.print 9 ("GET " ^ path);
     match path with
-    | "/" -> Server.respond_file (docroot ^ "/index.html") ()
+    | "/" -> respond_file accept_gzip (docroot ^ "/index.html")
     | _   -> get_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "GET" e;
     forbidden path
   end
 
-let post ~docroot ?(gzipped=false) ~conf ~flow uri path content =
+let post ~docroot ~accept_gzip ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     match path with
-    | "/cerberus" -> cerberus ~gzipped ~conf ~flow content
+    | "/cerberus" -> cerberus accept_gzip ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
       Debug.warn ("Fallback to GET");
-      get ~docroot uri path
+      get ~docroot ~accept_gzip uri path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
     forbidden path
@@ -367,23 +384,32 @@ let request ~docroot ~conf (flow, _) req body =
   let meth = Request.meth req in
   let path = Uri.path uri in
   let try_with () =
-    let gzipped = match Cohttp__.Header.get req.headers "accept-encoding" with
+    let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
       | Some enc -> contains enc "gzip"
       | None -> false
     in
-    if gzipped then Debug.print 10 "accepts gzip";
+    if accept_gzip then Debug.print 10 "accepts gzip";
     match meth with
-    | `HEAD -> head ~docroot ~gzipped uri path >|= fun (res, _) -> (res, `Empty)
-    | `GET  -> get ~docroot ~gzipped uri path
+    | `HEAD -> head ~docroot uri path >|= fun (res, _) -> (res, `Empty)
+    | `GET  -> get ~docroot ~accept_gzip uri path
     | `POST ->
       Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
-      post ~docroot ~gzipped ~conf ~flow uri path
+      post ~docroot ~accept_gzip ~conf ~flow uri path
     | _     -> not_allowed meth path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
     forbidden path
   end
 
+let redirect ~docroot ~conf conn req body =
+  let uri  = Request.uri req in
+  match Uri.path uri with
+  | "/" | "/index/html" ->
+    let headers =
+      Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)]
+    in
+    (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
+  | _ -> request ~docroot ~conf conn req body
 
 let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
   try
@@ -399,8 +425,17 @@ let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
     Lwt.async_exception_hook := ignore;
     Debug.print 1 ("Starting server with public folder: " ^ docroot
                    ^ " in port: " ^ string_of_int port);
-    Server.make ~callback: (request ~docroot ~conf) ()
-    |> Server.create ~mode:(`TCP (`Port port))
+    let server = Server.make ~callback: (request ~docroot ~conf) () in
+    let tls_mode =
+      `TLS (`Crt_file_path "/etc/letsencrypt/live/svr-pes20-cerberus.cl.cam.ac.uk/fullchain.pem",
+            `Key_file_path "/etc/letsencrypt/live/svr-pes20-cerberus.cl.cam.ac.uk/privkey.pem",
+            `No_password, `Port 443)
+    in
+    let tls_port =
+      Server.create ~mode:tls_mode server in
+    let tcp_port = Server.create ~mode:(`TCP (`Port port)) server in
+    Lwt.join [tls_port; tcp_port]
+(*    |> Server.create ~mode:(`TCP (`Port port)) *)
     |> Lwt_main.run
   with
   | e ->

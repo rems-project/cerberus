@@ -22,6 +22,10 @@ let case f g = function
   | Some x -> f x
   | None -> g ()
 
+let map f = function
+  | Some x -> Some (f x)
+  | None -> None
+
 let get x = case id (fun _ -> raise No_value) x
 
 end
