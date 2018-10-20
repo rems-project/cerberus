@@ -172,13 +172,10 @@ instance: src/instance.ml
 	ocamlbuild src/cerberus_cstubs.o;
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
 	cp -L instance.native cerb.concrete 
-#	sed -i '' 's/ref `MemConcrete/ref `MemSymbolic/' src/prelude.ml
-#	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
-#	cp -L instance.native cerb.symbolic
-#	sed -i '' 's/ref `MemSymbolic/ref `MemTwin/' src/prelude.ml
-#	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
-#	cp -L instance.native cerb.twin
-#	sed -i '' 's/ref `MemTwin/ref `MemConcrete/' src/prelude.ml
+	sed -i 's/ref `MemConcrete/ref `MemSymbolic/' src/prelude.ml
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner -libs str,unix instance.native
+	sed -i 's/ref `MemSymbolic/ref `MemConcrete/' src/prelude.ml
+	cp -L instance.native cerb.symbolic
 
 web: src/web.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
@@ -245,5 +242,6 @@ clean:
 	rm -rf generated_doc/*.html
 
 clear: clean
+	rm -rf cerberus cerb.* main.native instance.native web.native
 	rm -rf $(BUILD_DIR)
 
