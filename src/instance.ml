@@ -42,32 +42,32 @@ let to_smt2_mode = function
   | Exhaustive -> Smt2.Exhaustive
 
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
-let hack conf mode =
+let hack ~conf mode =
   let open Global_ocaml in
-  let conf =
-    { cpp_cmd=            conf.Pipeline.cpp_cmd;
+  let pipe_conf = conf.pipeline in
+  cerb_conf := fun () ->
+    { cpp_cmd=            pipe_conf.Pipeline.cpp_cmd;
       pps=                [];
       ppflags=            [];
       exec_mode_opt=      Some (to_smt2_mode mode);
       ocaml=              false;
       ocaml_corestd=      false;
       progress=           false;
-      rewrite=            conf.Pipeline.rewrite_core;
-      sequentialise=      conf.Pipeline.sequentialise_core;
+      rewrite=            pipe_conf.Pipeline.rewrite_core;
+      sequentialise=      pipe_conf.Pipeline.sequentialise_core;
       concurrency=        false;
       preEx=              false;
       error_verbosity=    Global_ocaml.QuoteStd;
       batch=              true;
       experimental_unseq= false;
-      typecheck_core=     conf.Pipeline.typecheck_core;
+      typecheck_core=     pipe_conf.Pipeline.typecheck_core;
       defacto=            false;
       default_impl=       false;
       action_graph=       false;
       n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
-                            Some (Yojson.Basic.from_file (Pipeline.cerb_path ^ "/tools/n1570.json"))
+                            Some (Yojson.Basic.from_file (conf.instance.cerb_path ^ "/tools/n1570.json"))
                           else None;
     }
-  in cerb_conf := fun () -> conf
 
 let respond f = function
   | Exception.Result r -> f r
@@ -78,7 +78,7 @@ let respond f = function
 let elaborate ~conf ~filename =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack conf.pipeline Random;
+  hack ~conf Random;
   Switches.set conf.instance.switches;
   Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
@@ -143,7 +143,7 @@ let result_of_elaboration (cabs, ail, _, core) =
 let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
-  hack conf.pipeline mode;
+  hack ~conf mode;
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
@@ -346,7 +346,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   let (>>=)  = Exception.except_bind in
   match active_node_opt with
   | None -> (* no active node *)
-    hack conf.pipeline Random;
+    hack ~conf Random;
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
@@ -363,7 +363,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   | Some n ->
     let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
-    hack conf.pipeline Random;
+    hack ~conf Random;
     Switches.set conf.instance.switches;
     last_node_id := n.last_id;
     decode n.marshalled_state

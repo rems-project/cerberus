@@ -1,9 +1,141 @@
 open Lwt
 open Cohttp_lwt_unix
 open Instance_api
-open Json
 open Util
 
+(* Web server configuration *)
+
+type webconf =
+  { tls_cert: string;
+    tls_key: string;
+    tls_port: int;
+    tcp_port: int;
+    tcp_redirect: bool;
+    docroot: string;
+    timeout: int;
+    log_file: string;
+    request_file: string;
+    cerb_path: string;
+    core_impl: string;
+    z3_path: string;
+    cerb_debug_level: int;
+  }
+
+let print_webconf c =
+  Printf.printf "[1]: Web server configuration:
+    TLS certificate: %s
+    TLS key: %s
+    TLS port: %d
+    TCP port: %d
+    TCP redirect: %b
+    Public folder: %s
+    Executions timeout: %d
+    Log file: %s
+    Request file: %s
+    CERB_PATH: %s
+    Core implementation file: %s
+    Z3 path: %s\n"
+    c.tls_cert c.tls_key c.tls_port
+    c.tcp_port c.tcp_redirect
+    c.docroot
+    c.timeout
+    c.log_file
+    c.request_file
+    c.cerb_path
+    c.core_impl
+    c.z3_path;
+  flush stdout
+
+let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
+  let cerb_path =
+    try Sys.getenv "CERB_PATH"
+    with Not_found -> "."
+  in
+  let ld_path =
+    try Sys.getenv "LD_LIBRARY_PATH"
+    with Not_found -> "."
+  in
+  let default =
+    { tls_cert= cerb_path ^ "/tools/server.cert";
+      tls_key= cerb_path ^ "/tools/server.key";
+      tls_port= 443;
+      tcp_port= tcp_port;
+      tcp_redirect= false;
+      docroot= docroot;
+      timeout= timeout;
+      cerb_path= cerb_path;
+      core_impl= core_impl;
+      log_file= "server.log";
+      request_file= "request.log";
+      z3_path= ld_path;
+      cerb_debug_level= 0;
+    }
+  in
+  let parse cfg = function
+    | ("tls", `Assoc tls) ->
+      let parse_tls cfg = function
+        | ("cert", `String cert) -> { cfg with tls_cert = cert }
+        | ("key", `String key) -> { cfg with tls_key = key }
+        | ("port", `Int port) -> { cfg with tls_port = port }
+        | (k, _) ->
+          Debug.warn @@ "Unknown TLS configuration key: " ^ k;
+          cfg
+      in
+      List.fold_left parse_tls cfg tls
+    | ("tcp", `Assoc tcp) ->
+      let parse_tcp cfg = function
+        | ("port", `Int port) -> { cfg with tcp_port = port }
+        | ("redirect", `Bool b) -> { cfg with tcp_redirect = b }
+        | (k, _) ->
+          Debug.warn @@ "Unknown TCP configuration key: " ^ k;
+          cfg
+      in
+      List.fold_left parse_tcp cfg tcp
+    | ("docroot", `String docroot) -> { cfg with docroot = docroot }
+    | ("timeout", `Int max) -> { cfg with timeout = max }
+    | ("log", `Assoc log) ->
+      let parse_log cfg = function
+        | ("all", `String file) -> { cfg with log_file = file }
+        | ("request", `String file) -> { cfg with request_file = file }
+        | (k, _) ->
+          Debug.warn @@ "Unknown log configuration key: " ^ k;
+          cfg
+      in
+      List.fold_left parse_log cfg log
+    | ("z3", `String path) -> { cfg with z3_path = path }
+    | (k, _) ->
+      Debug.warn @@ "Unknown configuration key: " ^ k;
+      cfg
+  in
+  try
+    match Yojson.Basic.from_file cfg_file with
+    | `Assoc cfgs ->
+      List.fold_left parse default cfgs
+    | _ ->
+      Debug.warn "Configuration file has an incorrect format...";
+      default
+  with e ->
+    Debug.error_exception "Error reading configuration file:" e;
+    default
+
+(* Create configuration for every instance model *)
+let create_conf w =
+  let cpp_cmd cerb_path =
+    "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
+    ^ cerb_path ^ "/include/c/libc -I "
+    ^ cerb_path ^ "/include/c/posix"
+  in
+  { rewrite_core = false;
+    sequentialise_core = false;
+    tagDefs = "";
+    switches = [];
+    cerb_path = w.cerb_path;
+    z3_path = w.z3_path;
+    cpp_cmd = cpp_cmd w.cerb_path;
+    core_impl = w.core_impl;
+    timeout = w.timeout;
+    cerb_debug_level = w.cerb_debug_level;
+  }
 
 (* Misc *)
 
@@ -88,13 +220,17 @@ let parse_incoming_msg content =
     | ("model", [model])     -> { msg with model= model; }
     | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
     | ("interactive[lastId]", [v]) ->
-      { msg with interactive= Some { (get msg.interactive) with last_id = int_of_string v } }
+      { msg with interactive=
+        Some { (get msg.interactive) with last_id = int_of_string v } }
     | ("interactive[state]", [v]) ->
-      { msg with interactive= Some { (get msg.interactive) with marshalled_state = B64.decode v } }
+      { msg with interactive=
+        Some { (get msg.interactive) with marshalled_state = B64.decode v } }
     | ("interactive[active]", [v]) ->
-      { msg with interactive= Some { (get msg.interactive) with active_id = int_of_string v } }
+      { msg with interactive=
+        Some { (get msg.interactive) with active_id = int_of_string v } }
     | ("interactive[tagDefs]", [v]) ->
-      { msg with interactive= Some { (get msg.interactive) with tagDefs = B64.decode v } }
+      { msg with interactive=
+        Some { (get msg.interactive) with tagDefs = B64.decode v } }
     | (k, _) ->
       Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
@@ -182,7 +318,8 @@ let json_of_result = function
       ("steps", json_of_exec_tree t);
       ("status", `String "interactive");
       ("result", `String "");
-      ("ranges", `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
+      ("ranges",
+       `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
       ("tagDefs", `String (B64.encode tags));
     ]
   | Step (res, activeId, t) ->
@@ -223,7 +360,8 @@ let not_allowed meth path =
   in Server.respond_string ~status:`Method_not_allowed ~body ()
 
 let create_list_from_options opts =
-  List.concat @@ List.map (fun opt -> Option.case (fun x -> [x]) (fun _ -> []) opt) opts
+  List.concat
+  @@ List.map (fun opt -> Option.case (fun x -> [x]) (fun _ -> []) opt) opts
 
 let get_type file =
   match Filename.extension file with
@@ -270,13 +408,13 @@ let respond_file accept_gzip req_file =
 
 (* Cerberus actions *)
 
-let log_request msg flow =
+let log_request ~docroot msg flow =
   match flow with
   | Conduit_lwt_unix.TCP tcp ->
     let open Unix in
     let tm = gmtime @@ time () in
     let oc = open_out_gen [Open_text;Open_append;Open_creat] 0o666
-        "./public/dist/request.log"
+        (docroot ^ "request.log")
     in Printf.fprintf oc "%s %d/%d/%d %d:%d:%d %s:%s \"%s\"\n"
       (Ipaddr.to_string tcp.ip)
       tm.tm_mday (tm.tm_mon+1) (tm.tm_year+1900)
@@ -287,7 +425,7 @@ let log_request msg flow =
     ; close_out oc
   | _ -> ()
 
-let cerberus accept_gzip ~conf ~flow content =
+let cerberus ~accept_gzip ~docroot ~conf ~flow content =
   let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
@@ -299,12 +437,13 @@ let cerberus accept_gzip ~conf ~flow content =
   let request req : result Lwt.t =
     let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
-    let proc = Lwt_process.open_process ~timeout cmd in
+    let env = [|"CERB_PATH="^conf.cerb_path; "LD_LIBRARY_PATH="^conf.z3_path|] in
+    let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
     Lwt_io.close proc#stdin >>= fun () ->
     Lwt_io.read_value proc#stdout
   in
-  log_request msg flow;
+  log_request ~docroot msg flow;
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
     | `Elaborate  -> request @@ `Elaborate (conf, filename)
@@ -366,7 +505,7 @@ let post ~docroot ~accept_gzip ~conf ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     match path with
-    | "/cerberus" -> cerberus accept_gzip ~conf ~flow content
+    | "/cerberus" -> cerberus ~accept_gzip ~docroot ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -403,53 +542,41 @@ let request ~docroot ~conf (flow, _) req body =
 
 let redirect ~docroot ~conf conn req body =
   let uri  = Request.uri req in
-  match Uri.path uri with
-  | "/" | "/index/html" ->
+  let meth = Request.meth req in
+  match meth, Uri.path uri with
+  | `GET, "/" | `GET, "/index.html" ->
     let headers =
-      Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)]
-    in
+      Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)] in
     (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
   | _ -> request ~docroot ~conf conn req body
 
-let setup cerb_debug_level debug_level timeout core_impl cpp_cmd port docroot =
+let initialise ~webconf =
   try
-    Debug.level := debug_level;
-    let conf = { rewrite_core = false;
-                 sequentialise_core = false;
-                 tagDefs = "";
-                 switches = [];
-                 cpp_cmd; core_impl; cerb_debug_level; timeout;
-               }
-    in
-    (* NOTE: ad-hoc fix for server crash: https://github.com/mirage/ocaml-cohttp/issues/511 *)
+    (* NOTE: ad-hoc fix for server crash:
+     * https://github.com/mirage/ocaml-cohttp/issues/511 *)
     Lwt.async_exception_hook := ignore;
-    Debug.print 1 ("Starting server with public folder: " ^ docroot
-                   ^ " in port: " ^ string_of_int port);
-    let server = Server.make ~callback: (request ~docroot ~conf) () in
-    let tls_mode =
-      `TLS (`Crt_file_path "/etc/letsencrypt/live/svr-pes20-cerberus.cl.cam.ac.uk/fullchain.pem",
-            `Key_file_path "/etc/letsencrypt/live/svr-pes20-cerberus.cl.cam.ac.uk/privkey.pem",
-            `No_password, `Port 443)
-    in
-    let tls_port =
-      Server.create ~mode:tls_mode server in
-    let tcp_port = Server.create ~mode:(`TCP (`Port port)) server in
-    Lwt.join [tls_port; tcp_port]
-(*    |> Server.create ~mode:(`TCP (`Port port)) *)
-    |> Lwt_main.run
+    let docroot = webconf.docroot in
+    let conf    = create_conf webconf in
+    let http_server = Server.make
+        ~callback: (if webconf.tcp_redirect then redirect ~docroot ~conf
+                    else request ~docroot ~conf) () in
+    let https_server = Server.make ~callback: (request ~docroot ~conf) () in
+    Lwt_main.run @@ Lwt.join
+      [ Server.create ~mode:(`TCP (`Port webconf.tcp_port)) http_server
+      ; Server.create ~mode:(`TLS (`Crt_file_path webconf.tls_cert,
+                                   `Key_file_path webconf.tls_key,
+                                   `No_password,
+                                   `Port webconf.tls_port)) https_server]
   with
   | e ->
-    Debug.error_exception "Fatal error:" e;
-    Debug.error ("Check port " ^ string_of_int port ^ " access right")
+    Debug.error_exception "Fatal error:" e
 
-(* The path to where Cerberus is installed *)
-let cerb_path =
-    try
-      Sys.getenv "CERB_PATH"
-    with Not_found ->
-      Debug.error "expecting the environment variable CERB_PATH \
-                   set to point to the location cerberus.";
-      exit 1
+let setup cfg_file cerb_debug_level debug_level timeout core_impl port docroot =
+  Debug.level := debug_level;
+  let webconf =
+    create_webconf cfg_file timeout core_impl port docroot cerb_debug_level in
+  if debug_level > 0 then print_webconf webconf;
+  initialise ~webconf
 
 (* Arguments *)
 open Cmdliner
@@ -470,13 +597,6 @@ let impl =
   Arg.(value & opt string "gcc_4.9.0_x86_64-apple-darwin10.8.0"
        & info ["impl"] ~docv:"IMPL" ~doc)
 
-let cpp_cmd =
-  let default = "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
-                ^ cerb_path ^ "/include/c/libc -I "
-                ^ cerb_path ^ "/include/c/posix" in
-  let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string default & info ["cpp"] ~docv:"CMD" ~doc)
-
 let timeout =
   let doc = "Instance execution timeout in seconds." in
   Arg.(value & opt int 45 & info ["t"; "timeout"] ~docv:"TIMEOUT" ~doc)
@@ -485,13 +605,18 @@ let docroot =
   let doc = "Set public (document root) files locations." in
   Arg.(value & pos 0 string "./public/dist" & info [] ~docv:"PUBLIC" ~doc)
 
+let config =
+  let doc = "Configuration file in JSON. \
+             This file overwrites any other command line option." in
+  Arg.(value & opt string "config.json" & info ["c"; "config"] ~docv:"CONFIG" ~doc)
+
 let port =
   let doc = "Set TCP port." in
-  Arg.(value & opt int 8080 & info ["p"; "port"] ~docv:"PORT" ~doc)
+  Arg.(value & opt int 80 & info ["p"; "port"] ~docv:"PORT" ~doc)
 
 let () =
-  let server = Term.(pure setup $ cerb_debug_level $ debug_level $ timeout
-                     $ impl $ cpp_cmd $ port $ docroot) in
+  let server = Term.(pure setup $ config $ cerb_debug_level $ debug_level
+                     $ timeout $ impl $ port $ docroot) in
   let info = Term.info "web" ~doc:"Web server frontend for Cerberus." in
   match Term.eval (server, info) with
   | `Error _ -> exit 1;
