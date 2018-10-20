@@ -10,7 +10,7 @@ core-ott/*.pdf
 core-ott/*.lem
 
 src/main_.ml
-
+public/package-lock.json 
 tests/ci_results.xml
 tests/csmith/tools/ciValidate
 tests/csmith/tools/reValidate

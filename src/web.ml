@@ -102,7 +102,8 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
           cfg
       in
       List.fold_left parse_log cfg log
-    | ("z3", `String path) -> { cfg with z3_path = path }
+    | ("z3_path", `String path) -> { cfg with z3_path = path }
+    | ("cerb_path", `String path) -> { cfg with cerb_path= path }
     | (k, _) ->
       Debug.warn @@ "Unknown configuration key: " ^ k;
       cfg
@@ -437,7 +438,7 @@ let cerberus ~accept_gzip ~docroot ~conf ~flow content =
   let request req : result Lwt.t =
     let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
-    let env = [|"CERB_PATH="^conf.cerb_path; "LD_LIBRARY_PATH="^conf.z3_path|] in
+    let env = [|"PATH=/usr/bin"; "CERB_PATH="^conf.cerb_path; "LD_LIBRARY_PATH="^conf.z3_path|] in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
     Lwt_io.close proc#stdin >>= fun () ->
