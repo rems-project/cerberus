@@ -156,9 +156,7 @@ let are_pointers_to_qualifiedOrUnqualified_compatible_types gty1 gty2 =
      the referenced types *)
   match (gty1, gty2) with
     | (GenPointer _ ref_ty1, GenPointer _ ref_ty2) ->
-           AilTypesAux.is_object ref_ty1
-        && AilTypesAux.is_object ref_ty2
-        && AilTypesAux.are_compatible (no_qualifiers, ref_ty1) (no_qualifiers, ref_ty2)
+        AilTypesAux.are_compatible (no_qualifiers, ref_ty1) (no_qualifiers, ref_ty2)
     | _ ->
         false
   end  

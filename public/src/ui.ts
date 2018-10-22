@@ -184,7 +184,7 @@ export class CerberusUI {
     $('#core').on('click', () => this.elab ('Core'))
 
     // Compilers
-    $('#compile').on('click', () => this.getView().newTab('Asm'))
+    $('#compile').on('click', () => this.getView().newTab('Asm', 'Asm (Godbolt)'))
 
     // Share
     let update_share_link = () => {

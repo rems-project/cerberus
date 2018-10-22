@@ -68,6 +68,7 @@ export default class View {
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
+    this.getCore().setActive()
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -118,11 +119,16 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
-              //component('Execution'),
               component('Memory')
             ]}
-          ]},
-          component('Core')
+          ]}, {
+            type: 'stack',
+            content: [
+              component('Cabs'),
+              component('Ail_AST'),
+              component('Core')
+            ]
+          }
         ]}]
       }
     }
@@ -224,12 +230,13 @@ export default class View {
     return null
   }
 
-  newTab(title: string) {
+  newTab(tab: string, title?: string) {
+    if (title === undefined) title = tab;
     this.layout.root.contentItems[0].addChild({
       type: 'component',
       componentName: 'tab',
       title: title,
-      componentState: { tab: title }
+      componentState: { tab: tab }
     })
     this.refresh()
   }
@@ -656,6 +663,10 @@ export default class View {
 
   getSource(): Readonly<Tabs.Source> {
     return this.source
+  }
+
+  getCore() {
+    return this.getTab('Core')
   }
 
   getConsole() {
