@@ -20,7 +20,8 @@ export interface IR {
 export enum InteractiveMode {
   CLine,  // Step to the next C line
   Memory, // Step to the next memory transition
-  Core    // Step each Core transition
+  Core,   // Step each Core eval transition
+  Tau     // Step each tau transition
 }
 
 export interface State {
@@ -70,7 +71,8 @@ export type Event =
   'updateArena' |       // Update arena
   'updateExecutionGraph' | // Update execution graph
   'updateMemory' |      // Update memory graph (calls VIZ)
-  'markInteractive'     // Mark source locations when in interactive mode
+  'markInteractive' |   // Mark source locations when in interactive mode
+  'layoutChanged'
 
 export interface EventEmitter {
   on (eventName: 'clear', self: any, f: (locs: Locations) => void): void

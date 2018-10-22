@@ -64,10 +64,11 @@ export class CerberusUI {
 
     // UI settings
     this.updateSettings = () => {
-      $('#cb_concrete').prop('checked', this.settings.model === 'concrete')
+      $('#r_concrete').prop('checked', this.settings.model === 'concrete')
+      $('#r_symbolic').prop('checked', this.settings.model === 'symbolic')
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
       $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
-      $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
+      //$('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
       $('#cb_colour').prop('checked', this.settings.colour)
       $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     }
@@ -169,10 +170,10 @@ export class CerberusUI {
       this.updateInteractiveOptions(view)
     }
     $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
-    $('#skip-tau').on('click', () => toggleInteractiveOptions('skip_tau'))
+    $('#step-tau').on('click', () => setInteractiveMode(InteractiveMode.Tau))
+    $('#step-eval').on('click', () => setInteractiveMode(InteractiveMode.Core))
     $('#step-mem-action').on('click', () => setInteractiveMode(InteractiveMode.Memory))
     $('#step-C-line').on('click', () => setInteractiveMode(InteractiveMode.CLine))
-    $('#step-Core-trans').on('click', () => setInteractiveMode(InteractiveMode.Core))
     $('#open-memory').on('click', () => this.getView().newTab('Memory'))
     $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
     $('#open-arena').on('click', () => this.getView().newTab('Arena'))
@@ -218,11 +219,6 @@ export class CerberusUI {
     $('#share').on('mouseover', update_share_link)
 
     // Settings
-    $('#concrete').on('click', (e) => {
-      this.settings.model =
-        (this.settings.model === 'concrete' ? 'symbolic' : 'concrete')
-      $('#cb_concrete').prop('checked', this.settings.model === 'concrete')
-    })
     $('#rewrite').on('click', (e) => {
       this.settings.rewrite = !this.settings.rewrite;
       $('#cb_rewrite').prop('checked', this.settings.rewrite)
@@ -232,10 +228,6 @@ export class CerberusUI {
       this.settings.sequentialise = !this.settings.sequentialise;
       $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
       this.getView().emit('dirty')
-    })
-    $('#auto_refresh').on('click', (e) => {
-      this.settings.auto_refresh = !this.settings.auto_refresh;
-      $('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
     })
     $('#colour').on('click', (e) => {
       const view = this.getView()
@@ -251,12 +243,11 @@ export class CerberusUI {
 
     $('.switch').on('click', (e) => {
       const sw = e.currentTarget.id, view = this.getView()
-      view.toggleProvSwitch(sw)
+      view.toggleSwitch(sw)
       $('#cb_' + sw).prop('checked', _.includes(view.getSwitches(), sw))
       view.emit('clear')
       view.emit('dirty')
     })
-
     $('.prov-switch').on('click', (e) => {
       const sw = e.currentTarget.id, view = this.getView()
       view.toggleProvSwitch(sw)
@@ -264,6 +255,11 @@ export class CerberusUI {
       $('#cb_' + sw).prop('checked', true)
       view.emit('clear')
       view.emit('dirty')
+    })
+    $('.prov-model').on('click', (e) => {
+      this.settings.model = e.currentTarget.id as Model
+      $('#r_concrete').prop('checked', this.settings.model === 'concrete')
+      $('#r_symbolic').prop('checked', this.settings.model === 'symbolic')
     })
 
     // Preferences
@@ -427,7 +423,8 @@ export class CerberusUI {
     $('#cb-skip-tau').prop('checked', state.skip_tau)
     $('#r-step-mem-action').prop('checked', state.mode == InteractiveMode.Memory)
     $('#r-step-C-line').prop('checked', state.mode == InteractiveMode.CLine)
-    $('#r-step-Core-trans').prop('checked', state.mode == InteractiveMode.Core)
+    $('#r-step-eval').prop('checked', state.mode == InteractiveMode.Core)
+    $('#r-step-tau').prop('checked', state.mode == InteractiveMode.Tau)
   }
 
   private setCurrentView(view: View) {
@@ -531,6 +528,7 @@ export class CerberusUI {
       type: 'POST',
       headers: {Accept: 'application/json; charset=utf-8'},
       contentType: 'application/json; charset=utf-8',
+      timeout: 60000, /* 1 min timeout */
       data: {
         'action':  action,
         'source':  view.getSource().getValue(),
@@ -543,10 +541,8 @@ export class CerberusUI {
       dataType: 'json'
     }).done((data, status, query) => {
       onSuccess(data);
-    }).fail((e) => {
-      console.log('Failed request!', e)
-      // TODO: this looks wrong
-      this.settings.auto_refresh = false
+    }).fail((req, status) => {
+      alert('Failed request!' + status)
     }).always(() => {
       util.Cursor.done()
     })

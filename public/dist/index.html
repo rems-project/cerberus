@@ -5,10 +5,9 @@
   <meta name="description" content="Cerberus, a semantic model for the C programming language.">
   <link rel="stylesheet" type="text/css" href="style.bundle.css" />
   <title>Cerberus</title>
-</head>:w3
+</head>
 <body>
   <div><input id="file-input" type="file" style="display:none;"/></div>
-
   <div id="header">
     <div class="x-scrollable">
       <ul class="menu menu-no-transition">
@@ -16,10 +15,8 @@
           <span>Cerberus<span id="server-status" style="color: red;"></span></span>
           <div class="dropdown">
             <div id="help" class="menu-item btn">About Cerberus</div>
-            <hr>
             <div id="implementation" class="menu-item btn">Cerberus implementation-defined choices</div>
             <div id="isoC" class="menu-item btn">C11 International Standard (N1570 draft)</div>
-            <hr>
             <div id="rems" class="menu-item btn">REMS</div>
           </div>
         </li>
@@ -40,6 +37,14 @@
         <li class="menu-item btn contain-subitems">
           <span>Model</span>
           <div class="dropdown">
+            <div class="menu-section">Memory model</div>
+            <div id="concrete" class="menu-item btn prov-model">
+              <input id="r_concrete" type="radio" checked>Concrete memory model
+            </div>
+            <div id="symbolic" class="menu-item btn prov-model">
+              <input id="r_symbolic" type="radio">Symbolic memory model (using Z3)
+            </div>
+            <div class="menu-section border-top">Provenance options</div>
             <div id="integer_provenance" class="menu-item btn prov-switch">
               <input id="cb_integer_provenance" type="radio" checked>Integer provenance
             </div>
@@ -52,7 +57,7 @@
             <div id="no_integer_provenance_v4" class="menu-item btn prov-switch">
               <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (variant 4)
             </div>
-            <hr>
+            <div class="menu-section border-top">Further options</div>
             <div id="strict_pointer_arith" class="menu-item btn switch">
               <input id="cb_strict_pointer_arith" type="checkbox">Strict pointer arithmetic
             </div>
@@ -62,33 +67,30 @@
             <div id="forbid_nullptr_free" class="menu-item btn switch">
               <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
             </div>
-            <hr>
-            <div id="step-mem-action" class="menu-item btn">
+            <div class="menu-section border-top">Interactive execution options</div>
+            <div id="step-tau" class="menu-item btn step-mode disabled">
+              <input id="r-step-tau" type="radio">Step to the next <i>tau</i> transition
+            </div>
+            <div id="step-eval" class="menu-item btn step-mode">
+              <input id="r-step-eval" type="radio">Step to the next <i>eval</i> transition
+            </div>
+            <div id="step-mem-action" class="menu-item btn step-mode">
               <input id="r-step-mem-action" type="radio">Step to the next memory action
             </div>
-            <div id="step-C-line" class="menu-item btn">
+            <div id="step-C-line" class="menu-item btn step-mode">
               <input id="r-step-C-line" type="radio">Step to the next C line
-            </div>
-            <div id="step-Core-trans" class="menu-item btn">
-              <input id="r-step-Core-trans" type="radio">Step through Core transitions
-            </div>
-            <hr>
-            <div id="supress-tau" class="menu-item btn">
-              <input id="cb-supress-tau" type="checkbox">Suppress tau transitions
-            </div>
-            <div id="skip-tau" class="menu-item btn">
-              <input id="cb-skip-tau" type="checkbox">Skip tau transitions
             </div>
           </div>
         </li>
         <li class="menu-item btn contain-subitems border-right">
           <span>View</span>
           <div class="dropdown">
+            <div class="menu-section">Elaboration</div>
             <div id="cabs" class="menu-item btn">C abstract syntax (Cabs)</div>
             <div id="ail-ast" class="menu-item btn">C abstract syntax, typed and desugared (Ail_AST)</div>
             <div id="ail" class="menu-item btn">C abstract syntax, typed and desugared (Ail)</div>
             <div id="core" class="menu-item btn">Core</div>
-            <hr>
+            <div class="menu-section border-top">Interactive execution</div>
             <div id="open-memory" class="menu-item btn">Memory graph</div>
             <div id="open-arena" class="menu-item btn">Core runtime arena</div>
             <div id="open-interactive" class="menu-item btn">Execution graph</div>
@@ -112,28 +114,24 @@
         <li class="menu-item btn contain-subitems">
           <span>Options</span>
           <div class="dropdown">
-            <div id="concrete" class="menu-item btn">
-              <input id="cb_concrete" type="checkbox">Use Concrete Model
-            </div>
+            <div class="menu-section">Core optimisation</div>
             <div id="rewrite" class="menu-item btn">
-              <input id="cb_rewrite" type="checkbox">Core-to-Core Rewrite
+              <input id="cb_rewrite" type="checkbox">Basic rewrite
             </div>
             <div id="sequentialise" class="menu-item btn">
-              <input id="cb_sequentialise" type="checkbox">Sequentialise
+              <input id="cb_sequentialise" type="checkbox">Sequentialise operations
             </div>
-            <div id="auto_refresh" class="menu-item btn">
-              <input id="cb_auto_refresh" type="checkbox">Auto Refresh
+            <div class="menu-section border-top">Interface options</div>
+            <div id="colour_cursor" class="menu-item btn">
+              <input id="cb_colour_cursor" type="checkbox">Colour elaboration expression
             </div>
             <div id="colour" class="menu-item btn">
-              <input id="cb_colour" type="checkbox">Colour All
+              <input id="cb_colour" type="checkbox"><span>Colour <b>every</b> elaboration expression</span>
             </div>
-            <div id="colour_cursor" class="menu-item btn">
-              <input id="cb_colour_cursor" type="checkbox">Colour Cursor
+            <div id="supress-tau" class="menu-item btn">
+              <input id="cb-supress-tau" type="checkbox">Suppress <i>tau</i> transitions
             </div>
-
           </div>
-
-
         </li>
         <li class="menu-item btn contain-subitems">
           <span>Share</span>
@@ -159,39 +157,17 @@
     </div>
   </div><!-- header -->
   <div id="views"></div>
-
-  <!-- LLVM EURO DEMO
+  <!-- demo window -->
   <div id="demo" class="window">
     <div class="header">
-      <ul>
-        <li><div class="title">Load demo tests...</div></li>
-        <li class="right">
-          <div id="load_demo_cancel" class="menu-item btn">Cancel</div>
-        </li>
-      </ul>
-    </div>
-    <div class="window_body" style="width: 40em; height: 30em;">
-      <h3 stype="margin-left: 2em;">LLVM Euro Dev Meeting 2018</h3>
-      <ul class="tests">
-        <li><a href="#" onclick="javascript:UI.demo('Demo 1.c')">Demo 1</a></li>
-        <li><a href="#" onclick="javascript:UI.demo('Demo 2.c')">Demo 2</a></li>
-        <li><a href="#" onclick="javascript:UI.demo('Demo 3.c')">Demo 3</a></li>
-        <li><a href="#" onclick="javascript:UI.demo('Demo 4.c')">Demo 4</a></li>
-      </ul>
-    </div>
-  </div>
--->
-
-  <div id="demo" class="window">
-    <div class="header">
-      <ul class="menu">
+      <ul class="menu x-fill">
         <li><div class="title">Load GCC Cauldron 2018 demo tests...</div></li>
         <li class="right">
           <div id="load_demo_cancel" class="menu-item btn">Cancel</div>
         </li>
       </ul>
     </div>
-    <div class="window_body" style="width: 40em; height: 30em;">
+    <div class="window_body" style="max-width: 40em; max-height: 30em;">
       <h3 style="margin-left: 2em;">GCC Tools Cauldron 2018</h3>
       <h4 style="margin-left: 2em;">Original versions</h2>
       <ul class="tests">
@@ -221,11 +197,10 @@
       </ul>
     </div>
   </div>
-
-
+  <!-- defacto window -->
   <div id="defacto" class="window">
     <div class="header">
-      <ul class="menu">
+      <ul class="menu x-fill">
         <li><div class="title">Load defacto tests...</div></li>
         <li class="right">
           <div id="load_defacto_cancel" class="menu-item btn">Cancel</div>

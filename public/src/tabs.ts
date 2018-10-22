@@ -1,6 +1,7 @@
 import $ from 'jquery'
 import _ from 'lodash'
 import CodeMirror from 'codemirror'
+import GoldenLayout from "golden-layout"
 import * as util from './util'
 import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'
@@ -219,6 +220,10 @@ class Memory extends SvgGraph {
       // @ts-ignore
       this.svg.panzoom('zoom', this.svgPos.scale)
     }
+    this.ee.on('layoutChanged', this, () => {
+      if (this.inFitMode())
+        this.fitSVG()
+    })
   }
 
    initial(s: Readonly<State>) {
@@ -376,7 +381,7 @@ export abstract class Editor extends Tab {
     let cmIsBlur = false
 
     CodeMirror.on(tip, "mousemove", () => {
-      console.log('on move');
+      //console.log('on move');
     })
 
     CodeMirror.on(tip, "mousedown", (e: MouseEvent) => {
@@ -404,7 +409,7 @@ export abstract class Editor extends Tab {
       cm.on("cursorActivity", f)
       cm.on("scroll", f)
       cm.on("blur", () => {
-        console.log('blur');
+        //console.log('blur');
         cmIsBlur = true
       })
       cm.on("setDoc", f)
@@ -927,7 +932,7 @@ class Asm extends ReadOnly {
   }
 
   createDropdownContent() {
-    const dropdown = $('<div class="dropdown" style="max-height:250px;"></div>')
+    const dropdown = $('<div class="dropdown dropdown-left" style="max-height:250px;"></div>')
     const compilers = UI.compilers
     if (!compilers) return dropdown
     for (let i = 0; i < compilers.length; i++) {
