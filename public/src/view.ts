@@ -173,6 +173,7 @@ export default class View {
         tab.setActive = () => triggerClick(header.element[0])
       }
     })
+    this.layout.on('stateChanged', () => this.emit('layoutChanged'))
     this.layout.init()
   }
 
@@ -211,7 +212,7 @@ export default class View {
   }
 
   toggleProvSwitch (sw: string): void {
-    _.pull(this.state.switches,
+    this.state.switches = _.pull(this.state.switches,
       'integer_provenance', 'no_integer_provenance',
       'no_integer_provenance_v1', 'no_integer_provenance_v4')
     this.state.switches.push(sw)
