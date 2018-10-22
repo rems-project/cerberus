@@ -1411,8 +1411,8 @@ module Concrete : Memory = struct
     match ptrval_ with
       | PVnull _ ->
           return (IV (prov, Nat_big_num.zero))
-      | PVfunction _ ->
-          failwith "TODO: intcast_ptrval PVfunction"
+      | PVfunction (Symbol.Symbol (n, _)) ->
+          return (IV (prov, Nat_big_num.of_int n))
       | PVconcrete addr ->
           let IV (_, ity_max) = max_ival ity in
           let IV (_, ity_min) = min_ival ity in

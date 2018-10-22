@@ -337,6 +337,15 @@ let json_of_result = function
       ("result", `String "");
     ]
 
+(* Request headers *)
+
+type rheader =
+  { accept_gzip: bool;
+    if_none_match: string;
+    user_agent: string;
+    referer: string;
+  }
+
 (* Server default responses *)
 
 let forbidden path =
@@ -360,52 +369,96 @@ let not_allowed meth path =
       (Cohttp.Code.string_of_method meth) path
   in Server.respond_string ~status:`Method_not_allowed ~body ()
 
-let create_list_from_options opts =
-  List.concat
-  @@ List.map (fun opt -> Option.case (fun x -> [x]) (fun _ -> []) opt) opts
-
-let get_type file =
+let resolve_mime file =
   match Filename.extension file with
-  | ".js" -> Some ("application/javascript")
-  | ".css" -> Some ("text/css")
-  | ".html" -> Some ("text/html; charset=utf-8")
-  | ".json" -> Some ("application/json")
-  | _ -> None
+  | ".js"   -> "text/javascript; charset=utf-8"
+  | ".css"  -> "text/css; charset=utf-8"
+  | ".html" -> "text/html; charset=utf-8"
+  | ".md"   -> "text/markdown; charset=utf-8"
+  | ".json" -> "text/json; charset=utf-8"
+  | ".png" -> "image/png"
+  | ".gif" -> "image/gif"
+  | ".jpg" -> "image/jpg"
+  | ".ico" -> "image/x-icon"
+  | _ -> "text/plain"
 
-let content_type =
-  Option.map (fun ty -> ("Content-Type", ty))
-
-let content_encoding accept_gzip =
-  if accept_gzip then Some ("Content-Encoding", "gzip")
-  else None
-
-(* TODO: implement ETag header *)
-let cache_control age =
-  Some ("Cache-Control", "max-age=" ^ string_of_int age)
-
-let create_headers opts =
-  Cohttp.Header.of_list @@ create_list_from_options opts
-
-let respond_json accept_gzip json =
-  let headers =
-    create_headers [content_type @@ Some "application/json";
-                    content_encoding accept_gzip]
-  in
-  let data =
-    (if accept_gzip then Ezgzip.compress ~level:9 else id) @@ Yojson.to_string json
-  in
+let respond_json ~time ~rheader json =
+  let gzipped  = rheader.accept_gzip in
+  let compress = (if gzipped then Ezgzip.compress ~level:9 else id) in
+  let headers = Cohttp.Header.of_list
+      [("Content-Type", "text/json; charset=utf-8");
+       ("Content-Encoding", if gzipped then "gzip" else "identity");
+       ("Cache-Control", "no-cache");
+       ("Server-Timing",
+        match time with Some t -> "dur=" ^ string_of_float t | None -> "");
+       ("Server", "Cerberus/1.0")] in
+  let data = compress @@ Yojson.to_string json in
   (Server.respond_string ~flush:true ~headers) `OK data ()
 
-
-let respond_file accept_gzip req_file =
-  let gzipped = accept_gzip && Sys.file_exists (req_file ^ ".gz") in
-  let file = req_file ^ (if gzipped then ".gz" else "") in
-  let headers =
-    create_headers [content_type @@ get_type req_file;
-                    content_encoding gzipped;
-                    cache_control 120 (* 86400 *)]
+let date () =
+  let open Unix in
+  let week = function
+    | 0 -> "Sun" | 1 -> "Mon" | 2 -> "Tue" | 3 -> "Wed" | 4 -> "Thu"
+    | 5 -> "Fri" | 6 -> "Sat" | _ -> assert false
   in
-  (Server.respond_file ~headers) file ()
+  let month = function
+    | 0 -> "Jan" | 1 -> "Feb" | 2 -> "Mar" | 3 -> "Apr" | 4 -> "May"
+    | 5 -> "Jun" | 6 -> "Jul" | 7 -> "Aug" | 8 -> "Sep" | 9 -> "Oct"
+    | 10 -> "Nov" | 11 -> "Dec" | _ -> assert false
+  in
+  let tm = gmtime @@ time () in
+  Printf.sprintf "%s, %02d %s %04d %02d:%02d:%02d GMT"
+    (week tm.tm_wday) tm.tm_mday (month tm.tm_mon) (tm.tm_year+1900)
+    (tm.tm_hour+1) tm.tm_min tm.tm_sec
+
+let respond_file ~rheader fname =
+  let gzipped = rheader.accept_gzip && Sys.file_exists (fname ^ ".gz") in
+  let mime  = resolve_mime fname in
+  let fname = fname ^ (if gzipped then ".gz" else "") in
+  let hash = Digest.to_hex @@ Digest.file fname in
+  Debug.print 7 @@ "File: " ^ fname;
+  Debug.print 7 @@ "Hash: " ^ hash;
+  let try_with () =
+    let count = 16384 (* 16 KB *) in
+    Lwt_io.open_file
+      ~buffer:(Lwt_bytes.create count)
+      ~mode:Lwt_io.input fname
+    >>= fun ic ->
+    Lwt_io.length ic >>= fun len ->
+    let encoding = Cohttp.Transfer.Fixed len in
+    let stream = Lwt_stream.from @@ fun () ->
+      Lwt.catch (fun () ->
+          Lwt_io.read ~count ic >|= function
+          | "" -> None
+          | buf -> Some buf)
+        (fun e ->
+           Debug.error_exception ("Error resolving file " ^ fname) e;
+           return_none)
+    in
+    Lwt.on_success (Lwt_stream.closed stream)
+      (fun () -> ignore_result @@ Lwt_io.close ic);
+    let body = Cohttp_lwt.Body.of_stream stream in
+    let headers = Cohttp.Header.of_list
+      [("Content-Type", mime);
+       ("Content-Encoding", if gzipped then "gzip" else "identity");
+       ("Cache-Control", "max-age=900");
+       ("ETag", hash);
+       ("Date", date ());
+       ("Server", "Cerberus/1.0")]
+    in
+    let res = Cohttp.Response.make ~status:`OK ~encoding ~headers () in
+    return (res, body)
+  in
+  if rheader.if_none_match = hash then begin
+    Debug.warn "not-modified";
+    Server.respond `Not_modified `Empty ()
+  end
+  else Lwt.catch try_with @@ function
+    | Unix.Unix_error (Unix.ENOENT, _, _) ->
+      Server.respond_not_found ()
+    | e ->
+      Debug.error_exception ("responding file : " ^ fname) e;
+      forbidden fname
 
 (* Cerberus actions *)
 
@@ -426,7 +479,9 @@ let log_request ~docroot msg flow =
     ; close_out oc
   | _ -> ()
 
-let cerberus ~accept_gzip ~docroot ~conf ~flow content =
+
+let cerberus ~rheader ~docroot ~conf ~flow content =
+  let start_time = Sys.time () in
   let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
   let conf      = { conf with rewrite_core= msg.rewrite;
@@ -438,11 +493,16 @@ let cerberus ~accept_gzip ~docroot ~conf ~flow content =
   let request req : result Lwt.t =
     let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
-    let env = [|"PATH=/usr/bin"; "CERB_PATH="^conf.cerb_path; "LD_LIBRARY_PATH="^conf.z3_path|] in
+    let env = [|"PATH=/usr/bin";
+                "CERB_PATH="^conf.cerb_path;
+                "LD_LIBRARY_PATH="^conf.z3_path|]
+    in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
     Lwt_io.close proc#stdin >>= fun () ->
-    Lwt_io.read_value proc#stdout
+    Lwt_io.read_value proc#stdout >>= fun data ->
+    Lwt_io.close proc#stdout >>= fun () ->
+    return data
   in
   log_request ~docroot msg flow;
   let do_action = function
@@ -453,7 +513,9 @@ let cerberus ~accept_gzip ~docroot ~conf ~flow content =
     | `Step -> request @@ `Step (conf, filename, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >>= (respond_json accept_gzip) % json_of_result
+  do_action msg.action >|= json_of_result >>=
+  let time = Some ((Sys.time () -. start_time) *. 1000.) in
+  respond_json ~time ~rheader
 
 (* GET and POST *)
 
@@ -480,7 +542,7 @@ let head ~docroot uri path =
   end
 
 
-let get ~docroot ~accept_gzip uri path =
+let get ~docroot ~rheader uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
@@ -489,29 +551,29 @@ let get ~docroot ~accept_gzip uri path =
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename then
-      respond_file accept_gzip filename
+      respond_file ~rheader filename
     else forbidden path
   in
   let try_with () =
     Debug.print 9 ("GET " ^ path);
     match path with
-    | "/" -> respond_file accept_gzip (docroot ^ "/index.html")
+    | "/" -> respond_file ~rheader (docroot ^ "/index.html")
     | _   -> get_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "GET" e;
     forbidden path
   end
 
-let post ~docroot ~accept_gzip ~conf ~flow uri path content =
+let post ~docroot ~conf ~rheader ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     match path with
-    | "/cerberus" -> cerberus ~accept_gzip ~docroot ~conf ~flow content
+    | "/cerberus" -> cerberus ~rheader ~docroot ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
       Debug.warn ("Fallback to GET");
-      get ~docroot ~accept_gzip uri path
+      get ~docroot ~rheader uri path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
     forbidden path
@@ -519,10 +581,19 @@ let post ~docroot ~accept_gzip ~conf ~flow uri path content =
 
 (* Main *)
 
+let parse_req_header header =
+  let get k = match Cohttp.Header.get header k with Some v -> v | None -> "" in
+  { accept_gzip= contains (get "accept-encoding") "gzip";
+    if_none_match= get "if-none-match";
+    referer= get "referer";
+    user_agent= get "user-agent";
+  }
+
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path = Uri.path uri in
+  let rheader = parse_req_header req.headers in
   let try_with () =
     let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
       | Some enc -> contains enc "gzip"
@@ -531,10 +602,10 @@ let request ~docroot ~conf (flow, _) req body =
     if accept_gzip then Debug.print 10 "accepts gzip";
     match meth with
     | `HEAD -> head ~docroot uri path >|= fun (res, _) -> (res, `Empty)
-    | `GET  -> get ~docroot ~accept_gzip uri path
+    | `GET  -> get ~docroot ~rheader uri path
     | `POST ->
       Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
-      post ~docroot ~accept_gzip ~conf ~flow uri path
+      post ~docroot ~conf ~rheader ~flow uri path
     | _     -> not_allowed meth path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;

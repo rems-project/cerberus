@@ -5,8 +5,6 @@ import * as util from './util'
 import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'
 import UI from './ui' 
-// @ts-ignore: Viz has type 'any'
-import Viz from './js/viz.js'
 
 namespace Tabs {
 
@@ -97,6 +95,7 @@ class SvgGraph extends Tab {
 
   setSVG(data: string) {
     this.container.empty()
+    // @ts-ignore: Viz.js is loaded later
     this.container.append(Viz(data))
     this.svg = this.container.find('svg')
     this.svg.addClass('panzoom')
