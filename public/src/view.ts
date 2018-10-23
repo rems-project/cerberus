@@ -430,6 +430,8 @@ export default class View {
       const active = children[0]
       switch (this.state.mode) {
         case InteractiveMode.Memory:
+          if (_.startsWith(active.info.kind, 'killed'))
+            return children
           switch (active.info.kind) {
             case 'action request':
             case 'done':

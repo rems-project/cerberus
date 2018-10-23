@@ -1,7 +1,6 @@
 import $ from 'jquery'
 import _ from 'lodash'
 import CodeMirror from 'codemirror'
-import GoldenLayout from "golden-layout"
 import * as util from './util'
 import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'

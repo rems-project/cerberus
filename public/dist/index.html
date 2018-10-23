@@ -39,10 +39,10 @@
           <div class="dropdown">
             <div class="menu-section">Memory model</div>
             <div id="concrete" class="menu-item btn prov-model">
-              <input id="r_concrete" type="radio" checked>Concrete memory model
+              <input id="r_concrete" type="radio" checked>Concrete-allocation memory model
             </div>
             <div id="symbolic" class="menu-item btn prov-model">
-              <input id="r_symbolic" type="radio">Symbolic memory model (using Z3)
+              <input id="r_symbolic" type="radio">Symbolic-allocation memory model (using Z3)
             </div>
             <div class="menu-section border-top">Provenance options</div>
             <div id="integer_provenance" class="menu-item btn prov-switch">
@@ -58,8 +58,9 @@
               <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (variant 4)
             </div>
             <div class="menu-section border-top">Further options</div>
-            <div id="strict_pointer_arith" class="menu-item btn switch">
-              <input id="cb_strict_pointer_arith" type="checkbox">Strict pointer arithmetic
+            <div id="strict_pointer_arith" class="menu-item btn switch"
+              title="Forbid (non-one-past) out-of-bounds pointer construction">
+              <input id="cb_strict_pointer_arith" type="checkbox">Forbid out-of-bounds pointer construction
             </div>
             <div id="strict_reads" class="menu-item btn switch">
               <input id="cb_strict_reads" type="checkbox">Strict reads
@@ -67,23 +68,10 @@
             <div id="forbid_nullptr_free" class="menu-item btn switch">
               <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
             </div>
-            <div class="menu-section border-top">Interactive execution options</div>
-            <div id="step-tau" class="menu-item btn step-mode disabled">
-              <input id="r-step-tau" type="radio">Step to the next <i>tau</i> transition
-            </div>
-            <div id="step-eval" class="menu-item btn step-mode">
-              <input id="r-step-eval" type="radio">Step to the next <i>eval</i> transition
-            </div>
-            <div id="step-mem-action" class="menu-item btn step-mode">
-              <input id="r-step-mem-action" type="radio">Step to the next memory action
-            </div>
-            <div id="step-C-line" class="menu-item btn step-mode">
-              <input id="r-step-C-line" type="radio">Step to the next C line
-            </div>
           </div>
         </li>
         <li class="menu-item btn contain-subitems border-right">
-          <span>View</span>
+          <span>Views</span>
           <div class="dropdown">
             <div class="menu-section">Elaboration</div>
             <div id="cabs" class="menu-item btn">C abstract syntax (Cabs)</div>
@@ -130,6 +118,19 @@
             </div>
             <div id="supress-tau" class="menu-item btn">
               <input id="cb-supress-tau" type="checkbox">Suppress <i>tau</i> transitions
+            </div>
+            <div class="menu-section border-top">Interactive execution options</div>
+            <div id="step-tau" class="menu-item btn step-mode disabled">
+              <input id="r-step-tau" type="radio">Step to the next <i>tau</i> transition
+            </div>
+            <div id="step-eval" class="menu-item btn step-mode">
+              <input id="r-step-eval" type="radio">Step to the next <i>eval</i> transition
+            </div>
+            <div id="step-mem-action" class="menu-item btn step-mode">
+              <input id="r-step-mem-action" type="radio">Step to the next memory action
+            </div>
+            <div id="step-C-line" class="menu-item btn step-mode">
+              <input id="r-step-C-line" type="radio">Step to the next C line
             </div>
           </div>
         </li>
