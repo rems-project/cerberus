@@ -751,6 +751,10 @@ let pp_file file =
     pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
     P.colon ^^ P.equals ^^
     P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
+
+  let show_aggregate = not @@ Pmap.is_empty file.tagDefs in
+  let show_globs = file.globs != [] in
+  let guard b doc = if b then doc else P.empty in
   
   begin
     if Debug_ocaml.get_debug_level () > 1 then
@@ -766,19 +770,25 @@ let pp_file file =
   end
   
   begin
-    !^ "-- Aggregates" ^^ P.break 1 ^^
-    pp_tagDefinitions file.tagDefs ^^
+    guard show_aggregate begin
+      !^ "-- Aggregates" ^^ P.break 1 ^^
+      pp_tagDefinitions file.tagDefs ^^
+      P.break 1 ^^ P.break 1
+    end ^^
     
-    if show_include then
+    guard show_include begin
       !^ "-- C function types" ^^ P.break 1 ^^
       pp_funinfo file.funinfo
-    else P.empty
-    ^^
+    end ^^
     
-    !^ "-- Globals" ^^ P.break 1 ^^
-    List.fold_left pp_glob P.empty file.globs ^^
+    guard show_globs begin
+      !^ "-- Globals" ^^ P.break 1 ^^
+      List.fold_left pp_glob P.empty file.globs
+    end ^^
     
-    !^ "-- Fun map" ^^ P.break 1 ^^
+    guard (show_aggregate || show_globs) begin
+      !^ "-- Fun map" ^^ P.break 1
+    end ^^
     pp_fun_map file.funs
   end
 
