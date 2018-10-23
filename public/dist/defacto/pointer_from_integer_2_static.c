@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdint.h>
 void f() {
-  uintptr_t i=0x7fffffffdd8cULL;
+  uintptr_t i=0x601024ULL; // suppose this is the address of j
   int *p = (int*)i;
   *p=1;
 }
 int main() {
-  int j=0;
+  static int j=0;
   f();
+  //  printf("&j=%p\n",(void*)&j);
   printf("j=%d\n",j); 
 }
