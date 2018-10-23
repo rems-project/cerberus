@@ -18,7 +18,7 @@ import { Settings, Model } from './ui'
 
 function getDefaultSettings(): Settings {
     return { rewrite: false,
-             sequentialise: false,
+             sequentialise: true,
              auto_refresh: true,
              colour: false,
              colour_cursor: true,

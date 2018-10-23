@@ -27,8 +27,7 @@ export type Map = {[key:string]: Allocation}
 
 export type State = {
   map: Map
-  last_modified: number | null
-  last_read: number | null
+  last_used: number | null
 }
 
 export function ispointer (v: Value): boolean {
@@ -37,6 +36,10 @@ export function ispointer (v: Value): boolean {
 
 export function isintptr (v: Value) {
   return v.type != null && (v.type == 'intptr_t' || v.type == 'uintptr_t' || v.type == 'ptrdiff_t')
+}
+
+export function ischar (v: Value): boolean {
+  return v.type != null && (v.type == 'char' || v.type == 'signed char' || v.type == 'unsigned char')
 }
 
 /** Value points to some place in the memory */
@@ -48,12 +51,38 @@ export function ispadding (v: Value) {
   return v.type == null
 }
 
+function charCode (s:string) {
+  const x = parseInt(s)
+  // printable characters
+  if (32 <= x && x <= 126)
+    return ` '${String.fromCharCode(x)}'`
+  // escaped characters (only ISO ones)
+  switch (x) {
+    case 7: return " '\\a'"
+    case 8: return " '\\b'"
+    case 9: return " '\\t'"
+    case 10: return " '\\n'"
+    case 11: return " '\\v'"
+    case 13: return " '\\r'"
+    case 14: return " '\\f'"
+  }
+  // otherwise
+  return ""
+}
+
 /** string of memory value  */
-export function string_of_value (v: Value): string {
+export function string_of_value (v: Value, track_prov: boolean): string {
+  const with_prov = () => v.prov != undefined ? `@${v.prov}, ` : `@none, `
+  const value = (x:string) => track_prov ? with_prov() + x : x
   if (v.value === 'unspecified')
     return v.value
-  if (pointsto(v))
-    return u.toHex(parseInt(v.value))
+  if (ispointer(v))
+    return with_prov () + u.toHex(parseInt(v.value))
+  if (isintptr(v))
+    return value(u.toHex(parseInt(v.value)))
+  if (ischar(v)) {
+    return value(u.toHex(parseInt(v.value)) + charCode(v.value))
+  }
   return v.value
 }
 

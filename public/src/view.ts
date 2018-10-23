@@ -263,6 +263,8 @@ export default class View {
   resetInteractive() {
     this.state.history = []
     this.state.graph.clear()
+    this.state.dotMem = ''
+    this.state.dotExecGraph = ''
     this.state.step_counter = 0
     this.state.console = ''
   }
@@ -270,8 +272,12 @@ export default class View {
   /** Restart interactive execution */
   restartInteractive() {
     this.resetInteractive()
+    this.emit('clear')
     this.emit('updateExecution')
-    UI.step(null)
+    this.emit('updateExecutionGraph')
+    this.emit('updateMemory')
+    this.emit('updateStepButtons')
+    //UI.step(null)
   }
 
   /** Update execution graph DOT */
@@ -355,11 +361,9 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : 
-                          (mem.last_modified != null && mem.last_modified === alloc.id ? 'bgcolor="lightcyan"' :
-                          (mem.last_read != null && mem.last_read === alloc.id ? 'bgcolor="palegreen1"' : ''))
-        const prov    = row.prov != undefined ? ( trackProvInteger || !Memory.isintptr(row) ? `@${row.prov}, ` : '') : ''
+                          (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
         const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${bgcolor}>${prov}${Memory.string_of_value(row)}</td>`
+                          colspan="${colspan}" ${bgcolor}>${Memory.string_of_value(row, trackProvInteger)}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -523,11 +527,9 @@ export default class View {
       this.emit('updateExecution')
     }
 
-    /*
     if (children.length > 3) {
       this.getExecutionGraph().setActive()
     }
-    */
 
     this.emit('updateStepButtons')
   }
