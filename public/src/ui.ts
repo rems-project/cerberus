@@ -46,7 +46,7 @@ export class CerberusUI {
 
     this.settings = {
       rewrite: false,
-      sequentialise: false,
+      sequentialise: true,
       auto_refresh: true,
       colour: false,
       colour_cursor: true,

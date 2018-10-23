@@ -340,8 +340,7 @@ module Concrete : Memory = struct
     
     dead_allocations: allocation_id list;
     dynamic_addrs: address list;
-    last_read: allocation_id option;
-    last_modified: allocation_id option;
+    last_used: allocation_id option;
   }
   
   let initial_mem_state = {
@@ -352,8 +351,7 @@ module Concrete : Memory = struct
     
     dead_allocations= [];
     dynamic_addrs= [];
-    last_read= None;
-    last_modified= None;
+    last_used= None;
   }
   
   type footprint =
@@ -817,7 +815,7 @@ module Concrete : Memory = struct
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
                   allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
-                  last_modified= Some st.next_alloc_id;
+                  last_used= Some st.next_alloc_id;
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
             (* TODO: factorise this with do_store inside Concrete.store *)
@@ -829,7 +827,7 @@ module Concrete : Memory = struct
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
                   allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
                   next_address= Nat_big_num.add addr size;
-                  last_modified= Some st.next_alloc_id;
+                  last_used= Some st.next_alloc_id;
                   bytemap=
                     List.fold_left (fun acc (addr, b) ->
                       IntMap.add addr b acc
@@ -853,7 +851,7 @@ module Concrete : Memory = struct
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
             allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n;
-            last_modified= Some st.next_alloc_id;
+            last_used= Some st.next_alloc_id;
             dynamic_addrs= addr :: st.dynamic_addrs })
     )
   
@@ -923,7 +921,7 @@ module Concrete : Memory = struct
                 );
                 update begin fun st ->
                   {st with dead_allocations= alloc_id :: st.dead_allocations;
-                           last_modified= Some alloc_id;
+                           last_used= Some alloc_id;
                            allocations= IntMap.remove alloc_id st.allocations}
                 end >>= fun () ->
                 if Switches.(has_switch SW_zap_dead_pointers) then
@@ -944,7 +942,7 @@ module Concrete : Memory = struct
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr (sizeof ty) in
       let (mval, bs') = combine_bytes ty bs in
-      update (fun st -> { st with last_read= alloc_id_opt }) >>= fun () ->
+      update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
       begin match bs' with
         | [] ->
             if Switches.(has_switch SW_strict_reads) then
@@ -1011,7 +1009,7 @@ module Concrete : Memory = struct
           (Nat_big_num.add addr (Nat_big_num.of_int i), b)
         ) (explode_bytes mval) in
         update begin fun st ->
-          { st with last_modified= alloc_id_opt;
+          { st with last_used= alloc_id_opt;
                     bytemap=
                       List.fold_left (fun acc (addr, b) ->
                       IntMap.add addr b acc
@@ -1796,8 +1794,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_mem_state (st: mem_state) : Json.json =
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st.bytemap id alloc) st.allocations);
-            ("last_modified", Json.of_option (fun v -> `Int (N.to_int v)) st.last_modified);
-            ("last_read", Json.of_option (fun v -> `Int (N.to_int v)) st.last_read);]
+            ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
 
 end
 
