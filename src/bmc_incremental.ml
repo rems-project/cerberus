@@ -1,5 +1,8 @@
 open Bmc_common
+open Bmc_globals
+open Bmc_monad
 open Bmc_sorts
+open Bmc_substitute
 open Bmc_utils
 
 open Core
@@ -7,51 +10,266 @@ open Ocaml_mem
 open Printf
 open Z3
 
-module type State = sig type state end
+(* ======= Do inlining ======= *)
+module BmcInline = struct
+  type run_depth_table = (name, int) Pmap.map
+  type state_ty = {
+    id_gen : int;
+    run_depth_table : run_depth_table;
+    
+    file   : unit typed_file; (* unmodified *)
 
-module EffMonad (M: State) = struct
-  type state = M.state
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+  }
+  include EffMonad(struct type state = state_ty end)
 
-  type 'a eff = Eff of (state -> 'a * state)
+  let mk_initial file : state =
+    { id_gen           = 0
+    ; run_depth_table  = Pmap.empty Pervasives.compare
+    ; file             = file
+    ; inline_pexpr_map = Pmap.empty Pervasives.compare
+    ; inline_expr_map  = Pmap.empty Pervasives.compare
+    }
 
-  let return (a: 't) : 't eff = Eff (fun st -> (a,st))
+  (* ======= Accessors ======== *)
+  let get_fresh_id : int eff =
+    get >>= fun st ->
+    put {st with id_gen = st.id_gen + 1} >>
+    return st.id_gen
 
-  let bind ((Eff ma): 'a eff) (f: 'a -> 'b eff) : 'b eff =
-    Eff begin
-      fun st ->
-        let (a, st') = ma st in
-        let Eff mb = f a in
-        mb st'
-    end
+  let get_run_depth_table : run_depth_table eff =
+    get >>= fun st ->
+    return st.run_depth_table
 
-  let (>>=) = bind
+  let put_run_depth_table (new_table: run_depth_table)
+                          : unit eff =
+    get >>= fun st ->
+    put {st with run_depth_table = new_table}
 
-  let (>>) m m' = m >>= fun _ -> m'
+  let lookup_run_depth (label: name) : int eff =
+    get_run_depth_table >>= fun table ->
+    match Pmap.lookup label table with
+    | None  -> return 0
+    | Some i -> return i
 
-  let run : state -> 'a eff -> 'a * state =
-    fun st (Eff ma) -> ma st
+  let increment_run_depth (label: name) : unit eff =
+    lookup_run_depth label  >>= fun depth ->
+    get_run_depth_table     >>= fun table ->
+    put_run_depth_table (Pmap.add label (depth+1) table)
 
-  let sequence ms =
-    List.fold_right (
-      fun m m' ->
-      m  >>= fun x  ->
-      m' >>= fun xs ->
-      return (x :: xs)
-    ) ms (return [])
+  let decrement_run_depth (label: name) : unit eff =
+    lookup_run_depth label >>= fun depth ->
+    get_run_depth_table    >>= fun table ->
+    put_run_depth_table (Pmap.add label (depth-1) table)
 
-  let sequence_ ms = List.fold_right (>>) ms (return ())
-  let mapM  f ms = sequence (List.map f ms)
-  let mapMi f ms = sequence (List.mapi f ms)
-  let mapM2 f ms1 ms2  = sequence (List.map2 f ms1 ms2)
-  let mapM_ f ms = sequence_ (List.map f ms)
-  let mapM2_ f ms1 ms2 = sequence_ (List.map2 f ms1 ms2)
 
-  let get : state eff =
-    Eff (fun st -> (st, st))
+  let get_file : (unit typed_file) eff =
+    get >>= fun st ->
+    return st.file
 
-  let put (st' : state) : unit eff =
-    Eff (fun _ -> ((), st'))
+  let add_inlined_pexpr (id: int) (pexpr: typed_pexpr) : unit eff =
+    get >>= fun st ->
+    put {st with inline_pexpr_map = Pmap.add id pexpr st.inline_pexpr_map}
+
+  (* ======== Inline functions ======= *)
+  let rec inline_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
+    get_fresh_id >>= fun id ->
+    (match pe_ with
+    | PEsym _  -> return pe_
+    | PEimpl const -> 
+        get_file >>= fun file ->
+        begin match Pmap.lookup const file.impl with
+        | Some (Def (_, pe)) ->
+            inline_pe pe >>= fun inlined_pe ->
+            add_inlined_pexpr id inlined_pe >>
+            return (PEimpl const)
+        | _ -> assert false
+        end 
+    | PEval _  -> return pe_
+    | PEconstrained _ -> assert false
+    | PEundef _ -> return pe_
+    | PEerror _ -> return pe_
+    | PEctor (ctor, pes) ->
+        mapM inline_pe pes >>= fun inlined_pes ->
+        return (PEctor(ctor, inlined_pes))
+    | PEcase (pe1, cases) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        mapM (fun (pat, pe) ->
+              inline_pe pe >>= fun inlined_pe ->
+              return (pat, inlined_pe)) cases >>= fun inlined_cases ->
+        return (PEcase(inlined_pe1, inlined_cases))
+    | PEarray_shift (pe1, cty, pe2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PEarray_shift(inlined_pe1, cty, inlined_pe2))
+    | PEmember_shift (pe, sym, cid) ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEmember_shift(inlined_pe, sym, cid))
+    | PEnot pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEnot(inlined_pe))
+    | PEop (bop, pe1, pe2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PEop(bop, inlined_pe1, inlined_pe2))
+    | PEstruct _ -> assert false
+    | PEunion _  -> assert false
+    | PEcfunction _ -> assert false
+    | PEmemberof (tag_sym, memb_ident, pe) ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEmemberof(tag_sym, memb_ident, inlined_pe))
+    | PEcall (name, pes)  -> 
+        lookup_run_depth name >>= fun depth ->
+        get_file >>= fun file ->
+        (* Get the function called; either from stdlib or impl consts *)
+        let (ty, args, fun_expr) =
+          match name with
+          | Sym sym -> 
+              begin match Pmap.lookup sym file.stdlib with
+              | Some (Fun (ty, args, fun_expr)) -> (ty, args, fun_expr)
+              | _ -> assert false
+              end
+          | Impl impl ->
+              begin match Pmap.lookup impl file.impl with
+              | Some (IFun (ty, args, fun_expr)) -> (ty, args, fun_expr)
+              | _ -> assert false
+              end
+        in
+        if depth >= !!bmc_conf.max_run_depth then
+          let error_msg = 
+            sprintf "call_depth_exceeded: %s" (name_to_string  name) in
+          add_inlined_pexpr id (Pexpr([], ty, PEerror(error_msg, pexpr))) >>
+          return (PEcall (name, pes))
+        else begin
+          (* TODO: CBV/CBN semantics? *)
+          (* Inline each argument *)
+          mapM inline_pe pes >>= fun inlined_pes ->
+          (* Substitute arguments in function call *)
+          let sub_map = List.fold_right2
+              (fun (sym, _) pe table -> Pmap.add sym pe table)
+              args inlined_pes (Pmap.empty sym_cmp) in
+          (* Get the new function body to work with *)
+          let pexpr_to_call = substitute_pexpr sub_map fun_expr in
+          increment_run_depth name >>
+          inline_pe pexpr_to_call >>= fun inlined_pexpr_to_call ->
+          decrement_run_depth name >>
+          add_inlined_pexpr id inlined_pexpr_to_call >>
+          return (PEcall (name, inlined_pes))
+        end
+    | PElet (pat, pe1, pe2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PElet (pat, inlined_pe1, inlined_pe2))
+    | PEif (pe1, pe2, pe3) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        return (PEif(inlined_pe1, inlined_pe2, inlined_pe3))
+    | PEis_scalar pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEis_scalar(inlined_pe))
+    | PEis_integer pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEis_integer(inlined_pe))
+    | PEis_signed pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEis_signed(inlined_pe))
+    | PEis_unsigned pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEis_unsigned(inlined_pe))
+    | PEare_compatible _ -> assert false
+    | PEbmc_assume pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (PEbmc_assume(inlined_pe))
+    ) >>= fun inlined_pe ->
+    return (Pexpr(Abmc (Abmc_inline_pexpr_id id)::annots, bTy, inlined_pe))
+
+  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
+    get_fresh_id >>= fun id ->
+    (match e_ with
+    | Epure pe ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (Epure(inlined_pe))
+    | Ememop (memop, pes) ->
+        mapM inline_pe pes >>= fun inlined_pes ->
+        return (Ememop (memop, inlined_pes))
+    | Eaction pact -> (* TODO: lazy assumption on structure of Core *)
+        return (Eaction pact)
+    | Ecase (pe, cases) ->
+        inline_pe pe >>= fun inlined_pe ->
+        mapM (fun (pat, e) -> 
+              inline_e e >>= fun inlined_e ->
+              return (pat, inlined_e)) cases >>= fun inlined_cases ->
+        return (Ecase(inlined_pe, inlined_cases))
+    | Elet (pat, pe, e) ->
+        inline_pe pe  >>= fun inlined_pe ->
+        inline_e e    >>= fun inlined_e  ->
+        return (Elet (pat, inlined_pe, inlined_e))
+    | Eif (pe, e1, e2) ->
+        inline_pe pe >>= fun inlined_pe ->
+        inline_e e1  >>= fun inlined_e1 ->
+        inline_e e2  >>= fun inlined_e2 ->
+        return (Eif (inlined_pe, inlined_e1, inlined_e2))
+    | Eskip -> return Eskip
+    | Eccall _ -> assert false
+    | Eproc _ -> assert false
+    | Eunseq es ->
+        mapM inline_e es >>= fun inlined_es ->
+        return (Eunseq(inlined_es))
+    | Ewseq (pat, e1, e2) ->
+        inline_e e1 >>= fun inlined_e1 ->
+        inline_e e2 >>= fun inlined_e2 ->
+        return (Ewseq(pat, inlined_e1, inlined_e2))
+    | Esseq (pat, e1, e2) ->
+        inline_e e1 >>= fun inlined_e1 ->
+        inline_e e2 >>= fun inlined_e2 ->
+        return (Esseq(pat, inlined_e1, inlined_e2))
+    | Easeq _ -> assert false
+    | Eindet (n, e) ->
+        inline_e e >>= fun inlined_e ->
+        return (Eindet(n, inlined_e))
+    | Ebound (n, e) ->
+        inline_e e >>= fun inlined_e ->
+        return (Ebound(n, inlined_e))
+    | End es ->
+        mapM inline_e es >>= fun inlined_es ->
+        return (End (inlined_es))
+    | Esave _ -> assert false
+    | Erun _  -> assert false
+    | Epar es ->
+        mapM inline_e es >>= fun inlined_es ->
+        return (Epar (inlined_es))
+    | Ewait _       -> assert false
+    ) >>= fun inlined_e ->
+    return (Expr(Abmc (Abmc_inline_expr_id id)::annots, inlined_e))
+
+  let inline_globs (gname, bty, e) =
+    inline_e e >>= fun inlined_e ->
+    return (gname, bty, inlined_e)
+
+  let inline (file: unit typed_file) (fn_to_check: sym_ty)
+             : (unit typed_file) eff =
+    mapM inline_globs file.globs >>= fun globs ->
+    (match Pmap.lookup fn_to_check file.funs with
+     | Some (Proc (annot, bTy, params, e)) ->
+         inline_e e >>= fun inlined_e ->
+         return (Proc (annot, bTy, params, inlined_e))
+     | Some (Fun (ty, params, pe)) ->
+         inline_pe pe >>= fun inlined_pe ->
+         return (Fun (ty, params, inlined_pe))
+     | _ -> assert false
+    ) >>= fun new_fn ->
+    return {file with globs = globs;
+                      funs  = Pmap.add fn_to_check new_fn file.funs}
 end
+
+
+
+
+
+
+
 
 
 (* ======= Convert to Z3 exprs ======= *)
