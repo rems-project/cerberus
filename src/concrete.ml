@@ -1742,8 +1742,8 @@ let combine_prov prov1 prov2 =
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
   let mk_ui_alloc bytemap id alloc : ui_alloc =
-    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
-    let size = sizeof ty in
+    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), Some alloc.size) in
+    let size = N.to_int alloc.size in
     let bs = fetch_bytes bytemap alloc.base size in
     let (mval, _) = combine_bytes ty bs in
     { id = id;

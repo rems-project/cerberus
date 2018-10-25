@@ -50,6 +50,7 @@ export class Help extends Tab {
   }
 }
 
+// TODO: this is not being used
 export class Preferences extends Tab {
   constructor (ee: EventEmitter) {
     super('Prefernces', ee)
@@ -121,7 +122,11 @@ export class Interactive extends SvgGraph {
   }
 
   private updateGraph (state: Readonly<State>) {
-    this.setSVG(state.dotExecGraph)
+    if (!state.interactive || state.interactive.exec === undefined) {
+      this.container.empty()
+      return
+    }
+    this.setSVG(state.interactive.exec)
     // Check if needs to span down
     const svgHeight = this.svg.height()
     const containerHeight = this.container.height()
@@ -137,7 +142,8 @@ export class Interactive extends SvgGraph {
   initial(s: Readonly<State>) {
     // The timeout guarantees that the tab is attached to the DOM.
     // The update is called in the next event loop cycle.
-    setTimeout (() => this.updateGraph(s), 0)
+    if (s.interactive != undefined)
+      setTimeout (() => this.updateGraph(s), 0)
   }
 }
 
@@ -199,7 +205,11 @@ class Memory extends SvgGraph {
    }
 
    updateMemory (s:State) {
-    this.setSVG(s.dotMem)
+    if (!s.interactive || s.interactive.mem === undefined) {
+      this.container.empty()
+      return
+    }
+    this.setSVG(s.interactive.mem)
     this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
       this.svgPos.scale = scale
       this.disableFitMode()
@@ -228,7 +238,8 @@ class Memory extends SvgGraph {
    initial(s: Readonly<State>) {
     // The timeout guarantees that the tab is attached to the DOM.
     // The update is called in the next event loop cycle.
-    setTimeout (() => this.updateMemory(s), 0)
+    if (s.interactive != undefined)
+      setTimeout (() => this.updateMemory(s), 0)
   } 
   
 }
@@ -553,7 +564,9 @@ class Console extends ReadOnly {
       cnt = 1;
     } 
     */
-    this.setValue(s.console)
+   // TODO: check why this is needed!
+   if (s.console != undefined)
+      this.setValue(s.console)
   }
 }
 
@@ -784,8 +797,8 @@ export class Core extends ReadOnly {
   }
 
   markInteractive(loc: any, state: Readonly<State>) {
-    if (loc.core && state.ranges) {
-      const range = state.ranges[loc.core]
+    if (loc.core && state.interactive && state.interactive.ranges) {
+      const range = state.interactive.ranges[loc.core]
       if (range) {
         this.editor.getDoc().markText(range.begin, range.end, { className: loc.c ? util.getColorByLocC(state, loc.c) : 'color0'})
         this.editor.scrollIntoView(range.begin)
@@ -820,11 +833,13 @@ export class Arena extends ReadOnly {
   }
 
   initial(s: Readonly<State>) {
-    this.setValue(s.arena)
+    if (s.interactive)
+      this.setValue(s.interactive.arena)
   }
 
   update(s: Readonly<State>) {
-    this.setValue(s.arena)
+    if (s.interactive)
+      this.setValue(s.interactive.arena)
   }
 }
 
@@ -920,8 +935,10 @@ class Asm extends ReadOnly {
         }
         this.setValue(value)
         this.updateLocations(lines)
-        if (UI.getSettings().colour)
-          this.ee.once((s: Readonly<State>) => this.highlight(s))
+        this.ee.once((s: Readonly<State>) => {
+          if (s.options.colour_all)
+            this.highlight(s)
+        })
         util.Cursor.done()
       },
     }).fail(() => {

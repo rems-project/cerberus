@@ -2,9 +2,6 @@ import { find, flatten, union, uniq } from 'lodash'
 import { Locations, Range } from './location'
 import * as Memory from './memory'
 
-export type Bytes = string | undefined
-export type ID = number
-
 export type NodeKind =
     'tau'
   | 'action request'
@@ -18,8 +15,8 @@ export interface NodeInfo {
 }
 
 export interface Node {
-  id: ID
-  state: Bytes
+  id: number
+  state: string | undefined
   isVisible: boolean
   isTau: boolean
   loc: Locations | undefined
@@ -29,12 +26,12 @@ export interface Node {
   arena: string
   selected: boolean
   can_step: boolean
-  outp: string
+  stdout: string
 }
 
 export interface Edge {
-  from: ID
-  to: ID
+  from: number
+  to: number
   isTau: boolean
 }
 
@@ -55,21 +52,21 @@ export class GraphFragment {
     return find(this.nodes, n => n.selected)
   }
 
-  parent(nID: ID): ID | undefined {
-    const e = find(this.edges, e => e.to == nID)
+  parent(nnumber: number): number | undefined {
+    const e = find(this.edges, e => e.to == nnumber)
     if (e) return e.from
     return undefined
   }
 
-  children(nID: ID): ID [] {
-    return uniq(this.edges.filter(e => e.from == nID).map(e => e.to))
+  children(nnumber: number): number [] {
+    return uniq(this.edges.filter(e => e.from == nnumber).map(e => e.to))
   }
 
-  // including nID
-  siblings(nID: ID): ID[] {
-    const p = this.parent(nID)
+  // including nnumber
+  siblings(nnumber: number): number[] {
+    const p = this.parent(nnumber)
     if (p) return this.children(p)
-    return [nID]
+    return [nnumber]
   } 
 
   clear() {
@@ -79,37 +76,37 @@ export class GraphFragment {
 }
 
 export class Graph extends GraphFragment {
-  isTau(nID: ID): boolean {
-    return this.nodes[nID].isTau
+  isTau(nnumber: number): boolean {
+    return this.nodes[nnumber].isTau
   }
 
-  nonTauChildren(nID: ID): ID [] {
-    return this.edges.filter(e => e.from == nID && !e.isTau).map(e => e.to)
+  nonTauChildren(nnumber: number): number [] {
+    return this.edges.filter(e => e.from == nnumber && !e.isTau).map(e => e.to)
   }
 
-  tauChildren(nID: ID): ID [] {
-    return this.edges.filter(e => e.from == nID && this.isTau(e.to)).map(e => e.to)
+  tauChildren(nnumber: number): number [] {
+    return this.edges.filter(e => e.from == nnumber && this.isTau(e.to)).map(e => e.to)
   }
 
-  tauChildrenTransClosure(nID: ID): ID [] {
-    const immediateTauChildren = this.tauChildren(nID)
+  tauChildrenTransClosure(nnumber: number): number [] {
+    const immediateTauChildren = this.tauChildren(nnumber)
     const transitiveTauChildren =
-      flatten(immediateTauChildren.map(nID => this.tauChildrenTransClosure(nID)))
+      flatten(immediateTauChildren.map(nnumber => this.tauChildrenTransClosure(nnumber)))
     return union(immediateTauChildren, transitiveTauChildren)
   }
 
-  setChildrenVisible(nID: ID, skip_tau: boolean): Node[] {
+  setChildrenVisible(nnumber: number, skip_tau: boolean): Node[] {
     let children
     if (skip_tau) {
-      this.tauChildrenTransClosure(nID).map(nID => this.nodes[nID]).map(child => child.isVisible = true)
-      children = this.nonTauChildren(nID).map(nID => this.nodes[nID])
+      this.tauChildrenTransClosure(nnumber).map(nnumber => this.nodes[nnumber]).map(child => child.isVisible = true)
+      children = this.nonTauChildren(nnumber).map(nnumber => this.nodes[nnumber])
       children.map(child => child.isVisible = true)
     } else {
-      children = this.tauChildren(nID).map(nID => this.nodes[nID])
+      children = this.tauChildren(nnumber).map(nnumber => this.nodes[nnumber])
       if (children.length > 0) {
         children.map(child => child.isVisible = true)  
       } else {
-        children = this.children(nID).map (nID => this.nodes[nID])
+        children = this.children(nnumber).map (nnumber => this.nodes[nnumber])
         children.map(child => child.isVisible = true)  
       }
     }
@@ -117,7 +114,7 @@ export class Graph extends GraphFragment {
   }
   
   /** Search for a no tau parent */
-  getNoTauParent (nId: ID):  ID | undefined {
+  getNoTauParent (nId: number):  number | undefined {
     const e = find(this.edges, n => n.to == nId)
     if (e == undefined || e.from == undefined)
       throw new Error('Could not find incomming edge!')

@@ -81,7 +81,7 @@ export function string_of_value (v: Value, track_prov: boolean): string {
   if (isintptr(v))
     return value(u.toHex(parseInt(v.value)))
   if (ischar(v)) {
-    return value(u.toHex(parseInt(v.value)) + charCode(v.value))
+    return u.toHex(parseInt(v.value)) + charCode(v.value)
   }
   return v.value
 }
