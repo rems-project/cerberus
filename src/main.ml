@@ -280,7 +280,7 @@ let pipeline filename args core_std =
 
   (* TODO (sl715): invoke model checking routine *)
   if !!cerb_conf.bmc then
-    Bmc.bmc rewritten_core_file sym_supply ail_opt;
+    Bmc3.bmc rewritten_core_file sym_supply ail_opt;
   
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
