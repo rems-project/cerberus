@@ -34,21 +34,6 @@ export function longURL(url: string) {
   })
 }
 
-function setClass(el: JQuery<HTMLElement>, val: boolean, cls: string) {
-  if (val && !el.hasClass(cls))
-    el.addClass(cls)
-  else if (!val && el.hasClass(cls))
-    el.removeClass(cls)
-}
-
-export function setDisabled(el: JQuery<HTMLElement>, val: boolean) {
-  setClass(el, val, 'disabled')
-}
-
-export function setInvisible(el: JQuery<HTMLElement>, val: boolean) {
-  setClass(el, val, 'invisible')
-}
-
 export namespace Cursor {
   let waitCounter = 0
   export function wait () {

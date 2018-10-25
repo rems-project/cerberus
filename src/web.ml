@@ -306,7 +306,7 @@ let json_of_result = function
         ]);
       ("locs", json_of_locs r.locs);
       ("console", `String "");
-      ("result", `String "");
+      ("result", `String ""); (* TODO: eliminate result *)
     ]
   | Execution str ->
     `Assoc [

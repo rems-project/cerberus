@@ -1,14 +1,16 @@
 import { Node, Edge, Graph } from './graph'
 import { Range, Locations } from './location'
 
-export type Bytes = string | undefined
-export type ID = number
+export interface Compiler {
+  id: string
+  name: string
+}
 
 export interface InteractiveRequest {
-  lastId: ID,
-  state: Bytes,
-  active: ID,
-  tagDefs: Bytes
+  lastId: number,
+  state: string,
+  active: number,
+  tagDefs: string
 }
 
 export interface IR {
@@ -24,54 +26,97 @@ export enum InteractiveMode {
   Tau     // Step each tau transition
 }
 
+function flags<T extends string>(o: Array<T>): {[K in T]: boolean} {
+  return o.reduce((r, k) => { r[k] = false; return r }, Object.create(null));
+}
+
+export namespace Option {
+  export const opts = flags([
+    'show_integer_provenances',   // Show integer provenances when PVI
+    'show_string_literals',       // Show string literals
+    'hide_tau',                   // Hide tau transitions in execution graph
+    'colour_all',                 // Colorise every expression
+    'colour_cursor'               // Colorise expression on cursor
+  ])
+  export type t = keyof typeof opts
+  export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
+  export const Err = (opt: string) => new Error (`Expecting an 'option' type, got '${opt}'`)
+}
+
+export namespace CoreOpt {
+  const opts = flags(['rewrite', 'sequentialise'])
+  export type t = keyof typeof opts
+  export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
+  export const Err = (opt: string) => new Error (`Expecting an 'core optimisation option' type, got '${opt}'`)
+}
+
+export namespace AllocModel {
+  const opts = flags(['concrete', 'symbolic'])
+  export type t = keyof typeof opts
+  export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
+  export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)
+}
+
+export type Options = {[key in Option.t]: boolean}
+
+export interface Model {
+  alloc_model: AllocModel.t
+  options: {[key in CoreOpt.t]: boolean}
+  switches: string []
+}
+
+export interface Interactive {
+  tag_defs: string          // tag defs of current execution
+  last_node_id: number      // seed to the server (last known node)
+  current: number           // current active step state
+  next_options: number []   // next possible steps
+  ranges: Range[]           // core expression positions
+  counter: number           // step counter
+  steps: Graph              // known steps
+  history: number []        // execution history
+  mem?: string              // DOT representation of memory
+  exec?: string             // DOT representation of execution graph
+  // TODO
+  stdout: string
+  arena: string // I could elminate this using current
+}
+
 export interface State {
   title: () => Readonly<string>
   source: () => Readonly<string>
+  dirty: boolean
   pp: IR
   ast: IR
   locs: Locations[]
-  //result: string
   console: string
-  lastNodeId: ID 
-  tagDefs?: Bytes
-  ranges?: Range[]
-  dirty: boolean
-  switches: string [],
-  arena: string
-  // Interactive mode
-  hide_tau: boolean // Hide tau transition option
+  model: Model
+  interactiveMode: InteractiveMode
+  interactive?: Interactive
+  options: Options
+  // TODO:
   skip_tau: boolean // Skip tau transition
-  mode: InteractiveMode
-  step_counter: number
-  stdout: string
-  //lastCline: number | undefined
-  history: ID [] // History of execution (allows to go back)
-  exec_options: ID []
-  graph: Graph // Current execution graph
-  dotMem: string // DOT representation
-  dotExecGraph: string // DOT representation
 }
 
 export type ResultRequest =
   { status: 'elaboration', pp: IR, ast: IR, locs: Locations[], console: string } |
   { status: 'execution', console: string, result: string} |
-  { status: 'interactive', tagDefs: Bytes, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
+  { status: 'interactive', tagDefs: string, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'failure', console: string, result: string }
 
 export type Event =
-  'update' |            // Update tab values
-  'updateExecution' |   // Update execution result
-  'mark' |              // Mark location
-  'markError' |         // Mark error location
-  'clear' |             // Clear all markings
-  'highlight' |         // Highlight the entire file
-  'dirty' |             // Fired when file has changed
+  'update' |                // Update tab values
+  'updateExecution' |       // Update execution result
+  'mark' |                  // Mark location
+  'markError' |             // Mark error location
+  'clear' |                 // Clear all markings
+  'highlight' |             // Highlight the entire file
+  'dirty' |                 // Fired when file has changed
   'updateStepButtons' |
-  'updateArena' |       // Update arena
-  'updateExecutionGraph' | // Update execution graph
-  'updateMemory' |      // Update memory graph (calls VIZ)
-  'markInteractive' |   // Mark source locations when in interactive mode
+  'updateArena' |           // Update arena
+  'updateExecutionGraph' |  // Update execution graph
+  'updateMemory' |          // Update memory graph (calls VIZ)
+  'markInteractive' |       // Mark source locations when in interactive mode
   'layoutChanged'
 
 export interface EventEmitter {
@@ -86,9 +131,4 @@ export interface EventEmitter {
   emit (eventName: 'clear'): void
   emit (eventName: 'mark'): void
   emit (eventName: Event, ...args: any[]): void
-}
-
-export interface Compiler {
-  id: string
-  name: string
 }
