@@ -24,7 +24,7 @@ export class CerberusUI {
   /** List of compilers */
   compilers?: Compiler []
   /** Step buttons */
-  private updateInteractiveButtons: (s: State) => void
+  private updateUI: (s: State) => void
 
   constructor () {
     this.views = []          
@@ -110,30 +110,13 @@ export class CerberusUI {
     const stepCounter = $('#step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
 
-    this.updateInteractiveButtons = (s: State) => {
-      stepBack.toggleClass('disabled', s.interactive === undefined || s.interactive.history.length == 0)
-      stepForward.toggleClass('disabled', s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
-      stepForward.toggleClass('invisible', s.interactive != undefined && s.interactive.next_options.length >= 2)
-      stepForwardLeft.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
-      stepForwardMiddle.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 3)
-      stepForwardRight.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
-      stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
-    }
 
     // Interactive Options
-    const toggleInteractiveOptions = (flag: string) => {
-      const view = this.getView()
-      view.toggleInteractiveOptions(flag)
-      view.updateExecutionGraph()
-      this.updateInteractiveOptions(view)
-      view.emit('updateInteractive')
-    }
     const setInteractiveMode = (mode: InteractiveMode) => {
       const view = this.getView()
       view.setInteractiveMode(mode)
-      this.updateInteractiveOptions(view)
+      this.updateUI(view.state)
     }
-    $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#step-tau').on('click', () => setInteractiveMode(InteractiveMode.Tau))
     $('#step-eval').on('click', () => setInteractiveMode(InteractiveMode.Core))
     $('#step-mem-action').on('click', () => setInteractiveMode(InteractiveMode.Memory))
@@ -244,11 +227,9 @@ export class CerberusUI {
       this.getView().updateExecutionGraph()
     })
 
-    $('update-mem-graph').on('click', () => {
-      // TODO!
+    $('.update-mem-graph').on('click', () => {
+      this.getView().updateMemory()
     })
-
-
 
     // Help
     $('#help').on('click', () => this.getView().newTab('Help'))
@@ -268,6 +249,30 @@ export class CerberusUI {
 
     // Update every 2s
     window.setInterval(() => this.elab(), 2000);
+
+    // Update UI
+
+    const updateCheckBoxes = (ids: {[key: string]: boolean}) =>
+      _.map(ids, (v, k) => $('#cb_'+k).prop('checked', v))
+
+    this.updateUI = (s: State) => {
+      // Options
+      updateCheckBoxes(s.options)
+      // Model options
+      updateCheckBoxes(s.model.options)
+      $('#r-step-mem-action').prop('checked', s.interactiveMode == InteractiveMode.Memory)
+      $('#r-step-C-line').prop('checked', s.interactiveMode == InteractiveMode.CLine)
+      $('#r-step-eval').prop('checked', s.interactiveMode == InteractiveMode.Core)
+      $('#r-step-tau').prop('checked', s.interactiveMode == InteractiveMode.Tau)
+      // Interactive step buttons
+      stepBack.toggleClass('disabled', s.interactive === undefined || s.interactive.history.length == 0)
+      stepForward.toggleClass('disabled', s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
+      stepForward.toggleClass('invisible', s.interactive != undefined && s.interactive.next_options.length >= 2)
+      stepForwardLeft.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
+      stepForwardMiddle.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 3)
+      stepForwardRight.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
+      stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
+    }
 
     const serverStatus = $('#server-status')
     let serverStatusFlag = true
@@ -400,39 +405,16 @@ export class CerberusUI {
 
   }
 
-  private updateCheckBoxes(ids: {[key: string]: boolean}) {
-    _.map(ids, (v, k) => $('#cb_'+k).prop('checked', v))
-  }
-
-  private updateOptions(s: Readonly<State>) {
-    this.updateCheckBoxes(s.options)
-  }
-
-  private updateModelOptions(s: Readonly<State>) {
-    this.updateCheckBoxes(s.model.options)
-  }
-
-  private updateInteractiveOptions(view: Readonly<View>) {
-    const state = view.state
-    // TODO:
-    //$('#cb-skip-tau').prop('checked', state.skip_tau)
-    $('#r-step-mem-action').prop('checked', state.interactiveMode == InteractiveMode.Memory)
-    $('#r-step-C-line').prop('checked', state.interactiveMode == InteractiveMode.CLine)
-    $('#r-step-eval').prop('checked', state.interactiveMode == InteractiveMode.Core)
-    $('#r-step-tau').prop('checked', state.interactiveMode == InteractiveMode.Tau)
-  }
-
   private setCurrentView(view: View) {
     if (this.currentView)
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
-    this.updateInteractiveOptions(view)
-    this.updateInteractiveButtons(view.state)
+    this.updateUI(view.state)
     view.show()
   }
 
-  private elab (lang?: string) {
+  public elab (lang?: string) {
     const view = this.getView()
     if (lang) view.newTab(lang)
     if (view.isDirty()) {
@@ -464,20 +446,10 @@ export class CerberusUI {
   private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
-
     let nav = $('<div class="menu-item btn">'+view.title+'</div>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
-
-    // Interactive stuff
-    view.on('update', this, (s: State) => this.updateInteractiveButtons(s))
-    // TODO: see if I can delete this event:
-    view.on('updateStepButtons', this, (s: State) => this.updateInteractiveButtons(s))
-
-    // TODO:
-    this.updateOptions(view.state)
-    this.updateModelOptions(view.state)
-
+    view.on('updateUI', this, (s: State) => this.updateUI(s))
     this.setCurrentView(view)
     view.getSource().refresh()
   }
