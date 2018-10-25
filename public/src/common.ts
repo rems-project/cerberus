@@ -68,17 +68,15 @@ export interface Model {
 export interface Interactive {
   tag_defs: string          // tag defs of current execution
   last_node_id: number      // seed to the server (last known node)
-  current: number           // current active step state
+  current: Node             // current active step state
   next_options: number []   // next possible steps
   ranges: Range[]           // core expression positions
   counter: number           // step counter
   steps: Graph              // known steps
   history: number []        // execution history
+  arena: string             // current arena
   mem?: string              // DOT representation of memory
   exec?: string             // DOT representation of execution graph
-  // TODO
-  stdout: string
-  arena: string // I could elminate this using current
 }
 
 export interface State {
@@ -93,8 +91,6 @@ export interface State {
   interactiveMode: InteractiveMode
   interactive?: Interactive
   options: Options
-  // TODO:
-  skip_tau: boolean // Skip tau transition
 }
 
 export type ResultRequest =
@@ -112,12 +108,12 @@ export type Event =
   'clear' |                 // Clear all markings
   'highlight' |             // Highlight the entire file
   'dirty' |                 // Fired when file has changed
-  'updateStepButtons' |
+  'updateUI' |              // Update UI
   'updateArena' |           // Update arena
   'updateExecutionGraph' |  // Update execution graph
   'updateMemory' |          // Update memory graph (calls VIZ)
   'markInteractive' |       // Mark source locations when in interactive mode
-  'layoutChanged'
+  'layoutChanged'           // GoldenLayout has been updated
 
 export interface EventEmitter {
   on (eventName: 'clear', self: any, f: (locs: Locations) => void): void

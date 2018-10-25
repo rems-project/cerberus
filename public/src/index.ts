@@ -50,6 +50,7 @@ function getStartupMode(): StartupMode {
 function defaultStart() {
   get('buffer.c', (source: string) => {
     UI.addView('example.c', source)
+    UI.elab()
   }, () => {
     console.log('Error when trying to download "buffer.c"... Using an empty file.')
     UI.addView('example.c', '')
