@@ -1,22 +1,8 @@
 import $ from 'jquery'
 import _ from 'lodash'
-import { ID, Bytes, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest } from './common'
+import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt } from './common'
 import * as util from './util'
 import View from './view'
-
-/** Memory models */
-export type Model = 'concrete' | 'symbolic' | 'twin'
-
-/** UI Settings */
-export interface Settings {
-  rewrite: boolean,
-  sequentialise: boolean,
-  auto_refresh: boolean,
-  colour: boolean,
-  colour_cursor: boolean,
-  short_share: boolean
-  model: Model,
-}
 
 /** Possible actions to request to the server */
 type ExecutionMode = 'random' | 'exhaustive'
@@ -30,8 +16,7 @@ export class CerberusUI {
   /** Contains the div where views are located */
   private dom: JQuery<HTMLElement>
   /** UI settings */
-  private settings: Settings
-  private updateSettings: () => void
+  private short_share: boolean
   /** C11 Standard in JSON */
   private std: any
   /** Godbolt default compiler */
@@ -39,38 +24,18 @@ export class CerberusUI {
   /** List of compilers */
   compilers?: Compiler []
   /** Step buttons */
-  private updateInteractiveButtons: (s: State) => void
+  private updateUI: (s: State) => void
 
   constructor () {
     this.views = []          
 
-    this.settings = {
-      rewrite: false,
-      sequentialise: false,
-      auto_refresh: true,
-      colour: false,
-      colour_cursor: true,
-      short_share: false,
-      model: 'concrete',
-    }
-
     this.dom = $('#views');
+    this.short_share = false
     window.onresize = () => this.refresh()
 
     this.defaultCompiler = {
       id: 'clang500',
       name: 'x86-64 clang 5.0.0'
-    }
-
-    // UI settings
-    this.updateSettings = () => {
-      $('#r_concrete').prop('checked', this.settings.model === 'concrete')
-      $('#r_symbolic').prop('checked', this.settings.model === 'symbolic')
-      $('#cb_rewrite').prop('checked', this.settings.rewrite)
-      $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
-      //$('#cb_auto_refresh').prop('checked', this.settings.auto_refresh)
-      $('#cb_colour').prop('checked', this.settings.colour)
-      $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
     }
 
     // New view
@@ -145,31 +110,13 @@ export class CerberusUI {
     const stepCounter = $('#step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
 
-    this.updateInteractiveButtons = (s: State) => {
-      const onInteractiveMode = s.tagDefs != undefined
-      util.setDisabled(stepBack, s.history.length == 0 || !onInteractiveMode)
-      util.setDisabled(stepForward, s.exec_options.length != 1 && s.history.length != 0 && onInteractiveMode) 
-      util.setInvisible(stepForward, s.exec_options.length >= 2)
-      util.setInvisible(stepForwardLeft, s.exec_options.length < 2)
-      util.setInvisible(stepForwardMiddle, s.exec_options.length < 3)
-      util.setInvisible(stepForwardRight, s.exec_options.length < 2)
-      stepCounter.text(s.step_counter)
-    }
 
     // Interactive Options
-    const toggleInteractiveOptions = (flag: string) => {
-      const view = this.getView()
-      view.toggleInteractiveOptions(flag)
-      view.updateExecutionGraph()
-      this.updateInteractiveOptions(view)
-      view.emit('updateInteractive')
-    }
     const setInteractiveMode = (mode: InteractiveMode) => {
       const view = this.getView()
       view.setInteractiveMode(mode)
-      this.updateInteractiveOptions(view)
+      this.updateUI(view.state)
     }
-    $('#supress-tau').on('click', () => toggleInteractiveOptions('hide_tau'))
     $('#step-tau').on('click', () => setInteractiveMode(InteractiveMode.Tau))
     $('#step-eval').on('click', () => setInteractiveMode(InteractiveMode.Core))
     $('#step-mem-action').on('click', () => setInteractiveMode(InteractiveMode.Memory))
@@ -192,7 +139,7 @@ export class CerberusUI {
       if (!this.currentView) return
       const url = 'http://www.cl.cam.ac.uk/~pes20/cerberus/server/#'
                 + this.currentView.getEncodedState()
-      if (this.settings.short_share)
+      if (this.short_share)
         util.shortURL(url, (url: string) => $('#sharelink').val(url))
       else
         $('#sharelink').val(url)
@@ -206,10 +153,10 @@ export class CerberusUI {
         $('#option-share').text('Short')
       }
     }
-    update_options_share (this.settings.short_share)
+    update_options_share (this.short_share)
     $('#option-share').on('click', () => {
-      this.settings.short_share = !this.settings.short_share
-      update_options_share (this.settings.short_share)
+      this.short_share = !this.short_share
+      update_options_share (this.short_share)
       update_share_link()
     })
     $('#sharebtn').on('click', () => {
@@ -218,52 +165,71 @@ export class CerberusUI {
     })
     $('#share').on('mouseover', update_share_link)
 
-    // Settings
-    $('#rewrite').on('click', (e) => {
-      this.settings.rewrite = !this.settings.rewrite;
-      $('#cb_rewrite').prop('checked', this.settings.rewrite)
-      this.getView().emit('dirty')
-    })
-    $('#sequentialise').on('click', (e) => {
-      this.settings.sequentialise = !this.settings.sequentialise;
-      $('#cb_sequentialise').prop('checked', this.settings.sequentialise)
-      this.getView().emit('dirty')
-    })
-    $('#colour').on('click', (e) => {
-      const view = this.getView()
-      this.settings.colour = !this.settings.colour
-      $('#cb_colour').prop('checked', this.settings.colour)
-      view.emit('clear')
-      view.emit('highlight')
-    })
-    $('#colour_cursor').on('click', (e) => {
-      this.settings.colour_cursor = !this.settings.colour_cursor;
-      $('#cb_colour_cursor').prop('checked', this.settings.colour_cursor)
+    // Options
+    const toggle = (m:{[k:string]:boolean}, k:string) => {
+      m[k] = !m[k]
+      $('#cb_'+k).prop('checked', m[k])
+    }
+
+    $('.option').on('click', (e) => {
+      const opt = e.currentTarget.id
+      if (!Option.is(opt)) throw Option.Err(opt)
+      toggle(this.getView().state.options, opt)
     })
 
     $('.switch').on('click', (e) => {
-      const sw = e.currentTarget.id, view = this.getView()
-      view.toggleSwitch(sw)
-      $('#cb_' + sw).prop('checked', _.includes(view.getSwitches(), sw))
-      view.emit('clear')
+      const sw = e.currentTarget.id
+      const view = this.getView()
+      const state = view.state
+      const on = _.includes(state.model.switches, sw)
+      if (!on) state.model.switches.push(sw)
+      else _.pull(state.model.switches, sw)
+      $('#cb_'+sw).prop('checked', !on)
       view.emit('dirty')
-    })
-    $('.prov-switch').on('click', (e) => {
-      const sw = e.currentTarget.id, view = this.getView()
-      view.toggleProvSwitch(sw)
-      $('.prov-switch input').prop('checked', false)
-      $('#cb_' + sw).prop('checked', true)
-      view.emit('clear')
-      view.emit('dirty')
-    })
-    $('.prov-model').on('click', (e) => {
-      this.settings.model = e.currentTarget.id as Model
-      $('#r_concrete').prop('checked', this.settings.model === 'concrete')
-      $('#r_symbolic').prop('checked', this.settings.model === 'symbolic')
     })
 
-    // Preferences
-    $('#preferences').on('click', () => this.getView().newTab('Preferences'))
+    $('.prov-switch').on('click', (e) => {
+      const sw = e.currentTarget.id
+      const view = this.getView()
+      _.pull(view.state.model.switches, 'integer_provenance',
+             'no_integer_provenance', 'no_integer_provenance_v1',
+             'no_integer_provenance_v4')
+      view.state.model.switches.push(sw)
+      $('.prov-switch input').prop('checked', false)
+      $('#cb_'+sw).prop('checked', true)
+      view.emit('dirty')
+    })
+
+    $('.prov-model').on('click', (e) => {
+      const am = e.currentTarget.id
+      if (!AllocModel.is(am)) throw AllocModel.Err(am)
+      const model = this.getView().state.model
+      model.alloc_model = am
+      $('#r_concrete').prop('checked', model.alloc_model === 'concrete')
+      $('#r_symbolic').prop('checked', model.alloc_model === 'symbolic')
+    })
+
+    $('.core-opt').on('click', (e) => {
+      const opt = e.currentTarget.id
+      if (!CoreOpt.is(opt)) throw CoreOpt.Err(opt)
+      const view = this.getView()
+      toggle(view.state.model.options, opt)
+      view.emit('dirty')
+    })
+
+    $('.highlight').on('click', () => {
+      const view = this.getView()
+      view.emit('clear')
+      view.emit('highlight')
+    })
+
+    $('.update-exec-graph').on('click', () => {
+      this.getView().updateExecutionGraph()
+    })
+
+    $('.update-mem-graph').on('click', () => {
+      this.getView().updateMemory()
+    })
 
     // Help
     $('#help').on('click', () => this.getView().newTab('Help'))
@@ -282,9 +248,31 @@ export class CerberusUI {
     })
 
     // Update every 2s
-    window.setInterval(() => {
-      if (this.settings.auto_refresh) this.elab()
-    }, 2000);
+    window.setInterval(() => this.elab(), 2000);
+
+    // Update UI
+
+    const updateCheckBoxes = (ids: {[key: string]: boolean}) =>
+      _.map(ids, (v, k) => $('#cb_'+k).prop('checked', v))
+
+    this.updateUI = (s: State) => {
+      // Options
+      updateCheckBoxes(s.options)
+      // Model options
+      updateCheckBoxes(s.model.options)
+      $('#r-step-mem-action').prop('checked', s.interactiveMode == InteractiveMode.Memory)
+      $('#r-step-C-line').prop('checked', s.interactiveMode == InteractiveMode.CLine)
+      $('#r-step-eval').prop('checked', s.interactiveMode == InteractiveMode.Core)
+      $('#r-step-tau').prop('checked', s.interactiveMode == InteractiveMode.Tau)
+      // Interactive step buttons
+      stepBack.toggleClass('disabled', s.interactive === undefined || s.interactive.history.length == 0)
+      stepForward.toggleClass('disabled', s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
+      stepForward.toggleClass('invisible', s.interactive != undefined && s.interactive.next_options.length >= 2)
+      stepForwardLeft.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
+      stepForwardMiddle.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 3)
+      stepForwardRight.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
+      stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
+    }
 
     const serverStatus = $('#server-status')
     let serverStatusFlag = true
@@ -417,27 +405,16 @@ export class CerberusUI {
 
   }
 
-  private updateInteractiveOptions(view: Readonly<View>) {
-    const state = view.getState()
-    $('#cb-supress-tau').prop('checked', state.hide_tau)
-    $('#cb-skip-tau').prop('checked', state.skip_tau)
-    $('#r-step-mem-action').prop('checked', state.mode == InteractiveMode.Memory)
-    $('#r-step-C-line').prop('checked', state.mode == InteractiveMode.CLine)
-    $('#r-step-eval').prop('checked', state.mode == InteractiveMode.Core)
-    $('#r-step-tau').prop('checked', state.mode == InteractiveMode.Tau)
-  }
-
   private setCurrentView(view: View) {
     if (this.currentView)
       this.currentView.hide()
     $('#current-view-title').text(view.title)
     this.currentView = view
-    this.updateInteractiveOptions(view)
-    this.updateInteractiveButtons(view.getState())
+    this.updateUI(view.state)
     view.show()
   }
 
-  private elab (lang?: string) {
+  public elab (lang?: string) {
     const view = this.getView()
     if (lang) view.newTab(lang)
     if (view.isDirty()) {
@@ -453,7 +430,6 @@ export class CerberusUI {
   private exec (mode: ExecutionMode) {
     this.request(mode, (res: ResultRequest) => {
       const view = this.getView()
-      //const exec = view.getExec()
       const cons = view.getConsole()
       if (cons) cons.setActive()
       view.updateState(res)
@@ -470,27 +446,12 @@ export class CerberusUI {
   private add (view: View) {
     this.views.push(view)
     this.dom.append(view.dom)
-
     let nav = $('<div class="menu-item btn">'+view.title+'</div>')
     $('#dropdown-views').append(nav)
     nav.on('click', () => this.setCurrentView(view))
-
-    // Interactive stuff
-    view.on('update', this, (s: State) => this.updateInteractiveButtons(s))
-    // TODO: see if I can delete this event:
-    view.on('updateStepButtons', this, (s: State) => this.updateInteractiveButtons(s))
-
+    view.on('updateUI', this, (s: State) => this.updateUI(s))
     this.setCurrentView(view)
     view.getSource().refresh()
-  }
-
-  getSettings(): Readonly<Settings> {
-    return this.settings
-  }
-
-  setSettings(settings: Readonly<Settings>): void {
-    this.settings = settings;
-    this.updateSettings()
   }
 
   addView(title: string, source: string, config?: any) {
@@ -498,16 +459,19 @@ export class CerberusUI {
     this.refresh()
   }
 
-  public step(active: {id: ID, state: Bytes} | null): void {
+  public step(active: {id: number, state: string} | null): void {
     const view = this.getView()
     if (active != null) {
+      const state = view.state
+      if (state.interactive === undefined)
+        throw new Error('not in interactive mode')
       this.request('step', (data: ResultRequest) => {
         view.updateState(data)
       }, {
-        lastId: view.getState().lastNodeId,
+        lastId: state.interactive.last_node_id,
         state: active.state,
         active: active.id,
-        tagDefs: view.getState().tagDefs
+        tagDefs: state.interactive.tag_defs
       })
     } else {
       this.request('step', (data: ResultRequest) => {
@@ -516,12 +480,13 @@ export class CerberusUI {
     }
   }
 
-  public execGraphNodeClick(i: ID) {
+  public execGraphNodeClick(i: number) {
     this.getView().execGraphNodeClick(i)
   }
 
   request (action: Action, onSuccess: Function, interactive?: InteractiveRequest) {
     const view = this.getView()
+    const model = view.state.model
     util.Cursor.wait()
     $.ajax({
       url:  '/cerberus',
@@ -532,10 +497,10 @@ export class CerberusUI {
       data: {
         'action':  action,
         'source':  view.getSource().getValue(),
-        'rewrite': this.settings.rewrite,
-        'sequentialise': this.settings.sequentialise,
-        'model': this.settings.model,
-        'switches': view.getSwitches(),
+        'rewrite': model.options.rewrite,
+        'sequentialise': model.options.sequentialise,
+        'model': model.alloc_model,
+        'switches': view.state.model.switches,
         'interactive': interactive
       },
       dataType: 'json'

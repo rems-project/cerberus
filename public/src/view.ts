@@ -1,7 +1,8 @@
 import $ from "jquery"
 import _ from "lodash"
 import GoldenLayout from "golden-layout"
-import { Node, Graph, ID, GraphFragment } from "./graph"
+import { Range } from "./location"
+import { Node, Graph, GraphFragment } from "./graph"
 import Tabs from "./tabs"
 import { triggerClick, toHex } from "./util"
 import * as Memory from './memory'
@@ -13,14 +14,9 @@ export default class View {
   dom: JQuery<HTMLElement>
 
   public tabs: Tabs.Tab[]
-
   private source: Tabs.Source
-
-  /** Golden Layout */
   private layout!: GoldenLayout;
-
-  /** Private state */
-  private state!: State;
+  public state!: State;
 
   /** Highlight has already been performed */
   private isHighlighted: boolean
@@ -46,14 +42,10 @@ export default class View {
     this.dirty = true
     this.on('dirty', this, () => {
       if (!this.dirty) {
-        this.state.graph.clear()
-        this.state.history = []
-        this.state.step_counter = 0
-        delete this.state.tagDefs
-        this.state.arena = this.state.dotMem = this.state.dotExecGraph = ''
+        delete this.state.interactive
+        this.emit('clear')
         this.emit('updateArena')
         this.emit('updateMemory')
-        //this.emit('updateExecution')
         this.emit('updateExecutionGraph')
         this.dirty = true
       }
@@ -68,7 +60,7 @@ export default class View {
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
-    this.getCore().setActive()
+    this.getTab('Core').setActive()
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -152,7 +144,7 @@ export default class View {
       tab.initial(self.state)
       tab.refresh()
       const unsafeTab: any = tab
-      if (unsafeTab.highlight && UI.getSettings().colour)
+      if (unsafeTab.highlight && self.state.options.colour_all)
         unsafeTab.highlight(self.state)
     })
     this.layout.on('itemDestroyed', (c: ContentItem) => {
@@ -181,45 +173,29 @@ export default class View {
     this.state = {
       title: () => this.title,
       source: () => this.source.getValue(),
+      dirty: true,
       pp: { cabs: '', ail:  '', core: '' },
       ast: { cabs: '', ail:  '', core: '' },
       locs: [],
-      //result: '',
       console: '',
-      switches: ['integer_provenance'],
-      lastNodeId: 0,
-      tagDefs: undefined,
-      dirty: true,
-      arena: '',
-      history: [],
-      graph: new Graph(),
-      step_counter: 0,
-      stdout: '',
-      exec_options: [],
-      hide_tau: true,
-      skip_tau: true,
-      mode: InteractiveMode.Memory,
-      dotMem: '',
-      dotExecGraph: '',
+      model: {
+        alloc_model: 'concrete',
+        options: {
+          rewrite: false,
+          sequentialise: true
+        },
+        switches: ['integer_provenance']
+      },
+      interactiveMode: InteractiveMode.Memory,
+      interactive: undefined,
+      options: {
+        show_integer_provenances: true,
+        show_string_literals: false,
+        hide_tau: true,
+        colour_all: false,
+        colour_cursor: true
+      },
     }
-  }
-
-  toggleSwitch (sw: string): void {
-    if (!_.includes(this.state.switches, sw))
-      this.state.switches.push(sw)
-    else
-      _.pull(this.state.switches, sw)
-  }
-
-  toggleProvSwitch (sw: string): void {
-    this.state.switches = _.pull(this.state.switches,
-      'integer_provenance', 'no_integer_provenance',
-      'no_integer_provenance_v1', 'no_integer_provenance_v4')
-    this.state.switches.push(sw)
-  }
-
-  getSwitches(): string[] {
-    return this.state.switches
   }
 
   findTab(title: string) {
@@ -243,7 +219,7 @@ export default class View {
   }
 
   /** Start interactive tabs (with the first state Init) */
-  startInteractive(steps: GraphFragment) {
+  startInteractive(ranges: Range[], tag_defs: string, steps: GraphFragment) {
     if (steps.nodes.length != 1)
       throw new Error('impossible initialise interactive mode')
     let init = steps.nodes[0]
@@ -253,35 +229,47 @@ export default class View {
       selected: true,
       can_step: true
     }
-    this.state.graph.clear()
-    this.state.graph.nodes.push(init)
-    this.state.lastNodeId = 0
+    this.state.interactive = {
+      current: init,
+      next_options: [init.id],
+      tag_defs: tag_defs,
+      ranges: ranges,
+      last_node_id: init.id,
+      counter: 0,
+      steps: new Graph({nodes: [init], edges: []}),
+      history: [],
+      arena: '',
+      mem: undefined,
+      exec: undefined,
+    }
     this.execGraphNodeClick(0)
   }
 
   /** Restart interactive mode in all the tabs */
   resetInteractive() {
-    this.state.history = []
-    this.state.graph.clear()
-    this.state.step_counter = 0
+    delete this.state.interactive
     this.state.console = ''
   }
 
   /** Restart interactive execution */
   restartInteractive() {
     this.resetInteractive()
+    this.emit('clear')
     this.emit('updateExecution')
-    UI.step(null)
+    this.emit('updateExecutionGraph')
+    this.emit('updateMemory')
+    this.emit('updateUI')
   }
 
   /** Update execution graph DOT */
   updateExecutionGraph() {
-    const graph = this.state.graph
+    if (!this.state.interactive) return
+    const graph = this.state.interactive.steps
     const dotHead = 'digraph Memory { node [shape=box, fontsize=12]; edge [fontsize=10];'
-    const nodes = this.state.hide_tau
+    const nodes = this.state.options.hide_tau
                 ? _.filter(graph.nodes, n => !n.isTau && n.isVisible)
                 : _.filter(graph.nodes, n => n.isVisible)
-    const edges = _.filter(graph.edges, e => this.state.hide_tau ? !e.isTau : e.isTau)
+    const edges = _.filter(graph.edges, e => this.state.options.hide_tau ? !e.isTau : e.isTau)
     const label = (n : Node) => {
       if (n.arena) {
         if (n.arena.length > 30)
@@ -303,14 +291,22 @@ export default class View {
       }
       else return acc
     }, '')
-    this.state.dotExecGraph = dotHead + dotNodes + dotEdges + '}'
+    if (this.state.interactive === undefined)
+      throw new Error ('not in interactive mode')
+    this.state.interactive.exec = dotHead + dotNodes + dotEdges + '}'
     this.emit('updateExecutionGraph')
   }
 
-  private setMemory(mem: Memory.State) {
-    const trackProvInteger = _.includes(this.state.switches, 'integer_provenance')
+  public updateMemory() {
+    if (!this.state.interactive) return
+    const mem = this.state.interactive.current.mem
+    if (!mem) return
+    const trackProvInteger = _.includes(this.state.model.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
-      if (alloc.prefix.kind == 'other') return ''
+      if (alloc.prefix.kind == 'other') {
+        if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
+          return ''
+      }
       /*
       if (alloc.prefix == null) // HACK! TODO: check malloc case
         return ''
@@ -355,11 +351,9 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : 
-                          (mem.last_modified != null && mem.last_modified === alloc.id ? 'bgcolor="lightcyan"' :
-                          (mem.last_read != null && mem.last_read === alloc.id ? 'bgcolor="palegreen1"' : ''))
-        const prov    = row.prov != undefined ? ( trackProvInteger || !Memory.isintptr(row) ? `@${row.prov}, ` : '') : ''
+                          (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
         const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${bgcolor}>${prov}${Memory.string_of_value(row)}</td>`
+                          colspan="${colspan}" ${bgcolor}>${Memory.string_of_value(row, trackProvInteger && this.state.options.show_integer_provenances)}</td>`
         acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
@@ -399,6 +393,10 @@ export default class View {
         const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
+          if (target.prefix.kind == 'other') {
+            if (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
+              return acc
+          }
           const offset = p.addr - target.base
           const color  = target.id != p.to && trackProvInteger ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
@@ -419,26 +417,31 @@ export default class View {
     const ns = _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
     const ps: Pointer[] = _.reduce(mem.map, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
-    this.state.dotMem = g + ns + es + '}' // Save in case another memory tab is open 
-    this.getMemory().setActive()
+    this.state.interactive.mem = g + ns + es + '}' // Save in case another memory tab is open 
+    this.getTab('Memory').setActive()
     this.emit('updateMemory')
   }
 
-  private executeInteractiveMode(nID: ID, skip_tau: boolean, lastCline?: number): Node[] {
-    let children = this.state.graph.setChildrenVisible(nID, skip_tau)
+  private executeInteractiveMode(nID: number, lastCline?: number): Node[] {
+    if (this.state.interactive === undefined)
+      throw new Error('not in interactive mode')
+    const graph = this.state.interactive.steps
+    let children = graph.setChildrenVisible(nID, this.state.interactiveMode != InteractiveMode.Tau)
     if (children.length == 1) {
       const active = children[0]
-      switch (this.state.mode) {
+      switch (this.state.interactiveMode) {
+        case InteractiveMode.Tau:
+          break
         case InteractiveMode.Memory:
           if (_.startsWith(active.info.kind, 'killed'))
             return children
           switch (active.info.kind) {
             case 'action request':
             case 'done':
-              children = this.state.graph.setChildrenVisible(active.id, skip_tau)
+              children = graph.setChildrenVisible(active.id, true)
               break
             default:
-              children = this.executeInteractiveMode(active.id, skip_tau, lastCline)
+              children = this.executeInteractiveMode(active.id, lastCline)
               break
           }
           break
@@ -447,11 +450,11 @@ export default class View {
           break
         case InteractiveMode.CLine:
           if (active.info.kind == 'done')
-            return this.state.graph.setChildrenVisible(active.id, skip_tau)
+            return graph.setChildrenVisible(active.id, true)
           if (_.startsWith(active.info.kind, 'killed'))
             return children
           if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
-            children = this.executeInteractiveMode(active.id, skip_tau, lastCline)
+            children = this.executeInteractiveMode(active.id, lastCline)
           break
       }
     }
@@ -459,11 +462,14 @@ export default class View {
   }
 
   private setActiveInteractiveNode(active: Node) {
+    if (this.state.interactive === undefined)
+      throw new Error('not in interactive mode')
+    this.state.interactive.current = active
     // Arena
-    this.state.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
+    this.state.interactive.arena = `-- Environment:\n${active.env}-- Arena:\n${active.arena}`
     this.emit('updateArena')
     // Memory graph
-    if (active.mem) this.setMemory(active.mem)
+    this.updateMemory()
     // Locations
     if (active.loc) {
       this.emit('clear')
@@ -472,10 +478,13 @@ export default class View {
   }
 
   /** Update interactive display state and raise event to update DOT */
-  private executeInteractiveStep(activeId: ID) {
-    const active = this.state.graph.nodes[activeId]
+  private executeInteractiveStep(activeId: number) {
+    if (this.state.interactive === undefined)
+      throw new Error('not in interactive mode')
+    const graph = this.state.interactive.steps
+    const active = graph.nodes[activeId]
     const lastCline = (active.loc && active.loc.c ? active.loc.c.begin.line : undefined)
-    let children = this.executeInteractiveMode(activeId, this.state.skip_tau, lastCline)
+    let children = this.executeInteractiveMode(activeId, lastCline)
 
     if (children.length == 0) {
       alert ('Internal error: active node has no children')
@@ -484,18 +493,18 @@ export default class View {
 
     const firstChoice = children[0]
     const lastNode =
-      children.length == 1 && this.state.graph.children(firstChoice.id).length == 0
+      children.length == 1 && graph.children(firstChoice.id).length == 0
 
     if (firstChoice.info.file && (_.endsWith(firstChoice.info.file, '.h') || _.endsWith (firstChoice.info.file, '.core'))) {
       this.executeInteractiveStep(firstChoice.id)
       return
     }
 
-    this.state.graph.nodes.map(n => n.selected = false)
-    this.state.history.push(activeId)
+    graph.nodes.map(n => n.selected = false)
+    this.state.interactive.history.push(activeId)
 
-    this.state.step_counter += 1
-    this.state.exec_options = children.map(n => n.id)
+    this.state.interactive.counter += 1
+    this.state.interactive.next_options = children.map(n => n.id)
 
     children.map(child => child.can_step = !lastNode)
     firstChoice.selected = !lastNode
@@ -503,14 +512,9 @@ export default class View {
     this.setActiveInteractiveNode(firstChoice)
     this.updateExecutionGraph();
 
-    if (firstChoice.outp != this.state.stdout) {
-      this.state.stdout = firstChoice.outp
-    }
-    this.state.console = this.state.stdout
-    this.emit('updateExecution')
-    
+    this.state.console = firstChoice.stdout
     if (lastNode) {
-      this.state.exec_options = []
+      this.state.interactive.next_options = []
       this.getConsole().setActive()
       if (_.includes(firstChoice.info.kind, 'killed')) {
         // TODO: add location
@@ -523,21 +527,21 @@ export default class View {
       this.emit('updateExecution')
     }
 
-    /*
     if (children.length > 3) {
-      this.getExecutionGraph().setActive()
+      this.getTab('Interactive').setActive()
     }
-    */
-
-    this.emit('updateStepButtons')
+    this.emit('updateExecution')
+    this.emit('updateUI')
   }
 
   /** Update interactive state mode and update DOT */
-  private updateInteractive(activeId: ID, tree: GraphFragment) {
+  private updateInteractive(activeId: number, tree: GraphFragment) {
+    if (this.state.interactive === undefined)
+      throw new Error('not in interactive mode')
     // This is a seed to the server
-    this.state.lastNodeId = tree.nodes[0].id
+    this.state.interactive.last_node_id = tree.nodes[0].id
     tree.nodes.reverse()
-    const graph = this.state.graph
+    const graph = this.state.interactive.steps
     // Update current point to become branch
     const active = graph.nodes[activeId]
     if (!active)
@@ -568,13 +572,18 @@ export default class View {
   }
 
   /** Execute a step (it might call the server to update interactive state) */
-  execGraphNodeClick(activeId: ID) {
-    if (this.state.graph.children(activeId).length == 0) {
+  execGraphNodeClick(activeId: number) {
+    if (this.state.interactive === undefined)
+      throw new Error('not in interactive mode')
+    const graph = this.state.interactive.steps
+    if (graph.children(activeId).length == 0) {
       // Node has no children, just ask more to the server
       // TODO: should check if it is the end or if there a state to ask
-      UI.step(this.state.graph.nodes[activeId])
+      const node = graph.nodes[activeId]
+      if (node.state != null)
+        UI.step({id: node.id, state: node.state})
     } else {
-      const active = this.state.graph.nodes[activeId]
+      const active = graph.nodes[activeId]
       if (active.can_step) {
         // Node can step (it has hidden children)
         active.can_step = false
@@ -587,12 +596,16 @@ export default class View {
   }
 
   stepBack() {
-    const activeId = this.state.history.pop()
+    if (this.state.interactive === undefined)
+      throw new Error ('not in interactive mode')
+    const graph = this.state.interactive.steps
+    const activeId = this.state.interactive.history.pop()
     if (activeId == undefined)
       throw new Error('Already in the beginning!')
-    const setChildrenInvisible = (nID: ID) => {
-      this.state.graph.children(nID).map(nID => {
-        const n = this.state.graph.nodes[nID]
+    this.state.interactive.counter -= 1
+    const setChildrenInvisible = (nID: number) => {
+      graph.children(nID).map(nID => {
+        const n = graph.nodes[nID]
         if (n.isVisible) {
           n.isVisible = false
           setChildrenInvisible(nID)
@@ -600,51 +613,43 @@ export default class View {
       })
     }
     setChildrenInvisible(activeId)
-    const active = this.state.graph.nodes[activeId]
+    const active = graph.nodes[activeId]
     active.can_step = true
-    this.state.graph.nodes.map(n => n.selected = false)
+    graph.nodes.map(n => n.selected = false)
     active.selected = true
-    this.state.exec_options = this.state.graph.siblings(active.id)
-    this.state.step_counter -= 1
+    this.state.interactive.next_options = graph.siblings(active.id)
     this.setActiveInteractiveNode(active)
     this.updateExecutionGraph();
-    this.emit('updateStepButtons')
+    this.emit('updateUI')
   }
 
   stepForward() {
-    if (this.state.graph.isEmpty()) {
+    if (!this.state.interactive)
       UI.step(null)
-    } else {
-      const active = _.find(this.state.graph.nodes, n => n.selected)
-      if (active)
-        this.execGraphNodeClick(active.id)
-      else
-        alert('No selected node.')
-    }
+    else
+      this.execGraphNodeClick(this.state.interactive.current.id)
   }
 
   stepForwardLeft() {
-    this.execGraphNodeClick(this.state.exec_options[0])
+    if (this.state.interactive === undefined)
+      throw new Error ('not in interactive mode')
+    this.execGraphNodeClick(this.state.interactive.next_options[0])
   }
 
   stepForwardMiddle() {
-    this.execGraphNodeClick(this.state.exec_options[1])
+    if (this.state.interactive === undefined)
+      throw new Error ('not in interactive mode')
+    this.execGraphNodeClick(this.state.interactive.next_options[1])
   }
 
   stepForwardRight() {
-    this.execGraphNodeClick(this.state.exec_options[this.state.exec_options.length == 2 ? 1 : 2])
+    if (this.state.interactive === undefined)
+      throw new Error ('not in interactive mode')
+    this.execGraphNodeClick(this.state.interactive.next_options[this.state.interactive.next_options.length == 2 ? 1 : 2])
   }
 
   setInteractiveMode(mode: InteractiveMode) {
-    this.state.mode = mode
-  }
-
-  /** Toggle Hide/Skip Tau transition options  */
-  toggleInteractiveOptions(flag: string) {
-    // @ts-ignore: (flag: 'skip_tau' | 'hide_tau')/set
-    this.state[flag] = !this.state[flag]
-    // if we don't skip tau we should show the transitions
-    this.state.hide_tau = this.state.skip_tau && this.state.hide_tau
+    this.state.interactiveMode = mode
   }
 
   getEncodedState() {
@@ -668,20 +673,8 @@ export default class View {
     return this.source
   }
 
-  getCore() {
-    return this.getTab('Core')
-  }
-
   getConsole() {
     return this.getTab('Console')
-  }
-
-  getExecutionGraph() {
-    return this.getTab('Interactive')
-  }
-
-  getMemory() {
-    return this.getTab('Memory')
   }
 
   show() {
@@ -701,10 +694,6 @@ export default class View {
     return this.dirty
   }
 
-  getState(): Readonly<State> {
-    return this.state
-  }
-
   updateState(res: ResultRequest) {
     switch (res.status) {
       case 'elaboration':
@@ -717,10 +706,8 @@ export default class View {
         this.state.console = res.result
         break
       case 'interactive':
-        this.state.tagDefs = res.tagDefs
-        this.state.ranges = res.ranges
         this.state.console = ''
-        this.startInteractive(new GraphFragment(res.steps))
+        this.startInteractive(res.ranges, res.tagDefs, new GraphFragment(res.steps))
         break;
       case 'stepping':
         this.state.console = ''
@@ -756,17 +743,16 @@ export default class View {
   }
 
   emit(e: string, ...args: any[]) {
-    const settings = UI.getSettings()
     switch (e) {
       case 'highlight':
-        if (this.isHighlighted || !settings.colour || this.dirty) return
+        if (this.isHighlighted || !this.state.options.colour_all || this.dirty) return
         this.isHighlighted = true
         break;
       case 'clear':
         this.isHighlighted = false
         break;
       case 'mark':
-        if (!settings.colour_cursor || this.dirty) return
+        if (!this.state.options.colour_cursor || this.dirty) return
         break;
     }
     // DEBUG events
