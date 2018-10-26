@@ -18,6 +18,8 @@ let of_bool b = `Bool b
 
 let of_int i = `Int i
 
+let of_char c = `Int (Char.code c)
+
 let of_bigint n = `String (Nat_big_num.to_string n)
 
 let of_option f = function

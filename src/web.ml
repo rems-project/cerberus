@@ -557,7 +557,7 @@ let get ~docroot ~rheader uri path =
   let try_with () =
     Debug.print 9 ("GET " ^ path);
     match path with
-    | "/" -> respond_file ~rheader (docroot ^ "/index.html")
+    | "" | "/" -> respond_file ~rheader (docroot ^ "/index.html")
     | _   -> get_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "GET" e;
@@ -568,7 +568,7 @@ let post ~docroot ~conf ~rheader ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     match path with
-    | "/cerberus" -> cerberus ~rheader ~docroot ~conf ~flow content
+    | "/query" -> cerberus ~rheader ~docroot ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
@@ -592,7 +592,19 @@ let parse_req_header header =
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
-  let path = Uri.path uri in
+  Debug.print 0 @@ "BEFORE PATH: " ^ Uri.path uri;
+  let path =
+    try
+      let cerb = "/cerberus" in
+      let clen = String.length cerb in
+      let path = Uri.path uri in
+      if String.sub path 0 clen = cerb then
+        String.sub path (clen - 1) (String.length path - clen)
+      else
+        path
+    with Invalid_argument _ -> Uri.path uri
+  in
+  Debug.print 0 @@ "AFTER PATH: " ^ path;
   let rheader = parse_req_header req.headers in
   let try_with () =
     let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
@@ -616,7 +628,7 @@ let redirect ~docroot ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   match meth, Uri.path uri with
-  | `GET, "/" | `GET, "/index.html" ->
+  | `GET, "/" | `GET, "/index.html" | `GET, "/cerberus" | `GET, "/cerberus/index.html" ->
     let headers =
       Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)] in
     (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
