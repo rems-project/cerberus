@@ -10,6 +10,22 @@ module Mem = (
 
 include Mem
 
+
+(* TODO: debug wrappers *)
+let load loc ty ptrval =
+  Debug_ocaml.print_debug 3 [] (fun () ->
+    "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
+    ", ptr= " ^ Pp_utils.to_plain_string (Mem.pp_pointer_value ptrval)
+  );
+  Mem.bind
+    (Mem.load loc ty ptrval) begin fun (fp, mval) ->
+      Debug_ocaml.print_debug 3 [] (fun () ->
+        "EXITING LOAD: mval := " ^ Pp_utils.to_plain_string (Mem.pp_mem_value mval)
+      );
+      Mem.return (fp, mval)
+    end
+
+
 let string_of_integer_value ival =
   Pp_utils.to_plain_string (pp_integer_value ival)
 

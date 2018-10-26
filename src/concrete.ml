@@ -60,7 +60,6 @@ end = struct
   
   let return = Nondeterminism.nd_return
   let (>>=) = Nondeterminism.nd_bind
-(*  let (>>) f g = f >>= (fun _ -> g) *)
   
   let read = Nondeterminism.nd_read
   let update = Nondeterminism.nd_update
@@ -73,7 +72,7 @@ end = struct
   let get = Nondeterminism.nd_get
   let put = Nondeterminism.nd_put
   let fail err = Nondeterminism.kill (Other err)
-  let mapM _ _ = failwith "TODO: mapM"
+  let mapM _ _ = failwith "TODO: Concrete.Eff.mapM"
   
   let msum str xs =
     Nondeterminism.(
@@ -150,7 +149,7 @@ and sizeof = function
               List.fold_left (fun (acc_size, acc_align) (_, ty) ->
                 (max acc_size (sizeof ty), max acc_align (alignof ty))
               ) (0, 0) membrs in
-            (* NOTE: adding padding at the end to satisfy alignment constraints *)
+            (* NOTE: adding padding at the end to satisfy the alignment constraints *)
             let x = max_size mod max_align in
             if x = 0 then max_size else max_size + (max_align - x)
       end
@@ -332,11 +331,43 @@ module Concrete : Memory = struct
     is_readonly: bool;
   }
   
+  (* INTERNAL: Abstract bytes *)
+  module AbsByte = struct
+    type t = {
+      prov: provenance;
+      copy_offset: int option;
+      value: char option;
+    }
+    
+    let v prov ?(copy_offset = None) value =
+      { prov; copy_offset; value }
+    
+    (* Given a (non-empty) list of bytes combine their provenance if their are
+       compatible. Returns the empty provenance otherwise *)
+    let split_bytes = function
+      | [] ->
+          failwith "Concrete.AbsByte.split_bytes: called on an empty list"
+      | b0::bs ->
+          let (prov, rev_values, offset_status) =
+            List.fold_left (fun (prov_acc, val_acc, offset_acc) b ->
+              ( (if b.prov = prov_acc then prov_acc else Prov_none)
+              , b.value :: val_acc
+              , match offset_acc, b.copy_offset with
+                  | `PtrBytes n, Some n' when n+1 = n' ->
+                      `PtrBytes n'
+                  | _ ->
+                      `OtherBytes )
+          ) (b0.prov, [b0.value], match b0.copy_offset with Some 0 -> `PtrBytes 0 | _ -> `OtherBytes) bs in
+          ( prov
+          , (match offset_status with `OtherBytes -> `NotValidPtrProv | _ -> `ValidPtrProv)
+          , List.rev rev_values )
+  end
+  
   type mem_state = {
     next_alloc_id: allocation_id;
     allocations: allocation IntMap.t;
     next_address: address;
-    bytemap: (provenance * char option) IntMap.t;
+    bytemap: AbsByte.t IntMap.t;
     
     dead_allocations: allocation_id list;
     dynamic_addrs: address list;
@@ -389,15 +420,15 @@ module Concrete : Memory = struct
           (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
-(*
-          !^ (Nat_big_num.to_string n)
-*)
   
-  let pp_integer_value (IV (_, n)) =
-        !^ (Nat_big_num.to_string n)
-    
+  let pp_integer_value (IV (prov, n)) =
+    if !Debug_ocaml.debug_level >= 3 then
+      !^ ("<" ^ string_of_provenance prov ^ ">:" ^ Nat_big_num.to_string n)
+    else
+      !^ (Nat_big_num.to_string n)
+  
   let pp_integer_value_for_core = pp_integer_value
-    
+  
   let rec pp_mem_value = function
     | MVunspecified _ ->
         PPrint.string "UNSPEC"
@@ -422,12 +453,10 @@ module Concrete : Memory = struct
           dot ^^ Pp_cabs.pp_cabs_identifier membr_ident ^^ equals ^^^
           pp_mem_value mval
         )
-
-
   
   
-  (* TODO: this is stupid, we need to allow the outside work to specify
-     what memory range is is device *)
+  (* TODO: this is stupid, we need to allow the outside world to specify
+     what memory ranges are in device memory *)
   let device_ranges : (address * address) list =
     (* TODO: these are some hardcoded ranges to match the Charon tests... *)
     (* NOTE: these two ranges only have 4 bytes (e.g. one int) *)
@@ -435,27 +464,33 @@ module Concrete : Memory = struct
     ; (N.of_int64 0xABCL, N.of_int64 0XAC0L) ]
   
   
+  (* NOTE: since we are fusing PVI and PVNI together any creation of an integer_value should
+     be done through this function to unsure we always use Prov_none in PVNI *)
+  let is_PNVI () =
+    match Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) with
+      | None ->
+          false
+      | Some _ ->
+          true
   
+  let mk_ival prov n =
+    if is_PNVI () then
+      IV (Prov_none, n)
+    else
+      (* We are in the mode where integer values have a provenance *)
+      IV (prov, n)
   
-  
-  
-  
-  
-
-
-
-
-
   (* TODO: DEBUG *)
   let print_bytemap str =
-    if !Debug_ocaml.debug_level > 4 then begin
+    if !Debug_ocaml.debug_level >= 3 then begin
       Printf.fprintf stderr "BEGIN BYTEMAP ==> %s\n" str;
       get >>= fun st ->
-      IntMap.iter (fun addr (prov, c_opt) ->
-        Printf.fprintf stderr "@%s ==> %s: %s\n"
+      IntMap.iter AbsByte.(fun addr b ->
+        Printf.fprintf stderr "@%s ==> %s: %s%s\n"
           (N.to_string addr)
-          (string_of_provenance prov)
-          (match c_opt with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          (string_of_provenance b.prov)
+          (match b.value with None -> "UNSPEC" | Some c -> string_of_int (int_of_char c))
+          (match b.copy_offset with None -> "" | Some n -> " [" ^ string_of_int n ^ "]")
       ) st.bytemap;
       prerr_endline "END";
     return ()
@@ -491,13 +526,13 @@ module Concrete : Memory = struct
   
   
   (* INTERNAL: fetch_bytes *)
-  let fetch_bytes bytemap base_addr n_bytes =
+  let fetch_bytes bytemap base_addr n_bytes : AbsByte.t list =
     List.map (fun addr ->
       match IntMap.find_opt addr bytemap with
         | Some b ->
             b
         | None ->
-            (Prov_none, None)
+            AbsByte.v Prov_none None
     ) (List.init n_bytes (fun z ->
            (* NOTE: the reversal in the offset is to model
               little-endianness *)
@@ -543,13 +578,22 @@ module Concrete : Memory = struct
                 aux N.(bitwise_xor (of_int (int_of_char c)) (shift_left acc 8)) cs' in
           aux init cs
   
-  let combine_provenances = function
-    | [] ->
-        failwith "combine_provenances ==> empty"
-    | prov::xs ->
-        if List.for_all (fun z -> z = prov) xs then prov else Prov_none
+  (* TODO: maybe move somewhere else *)
+  let find_overlaping st addr : allocation_id option =
+    IntMap.fold (fun alloc_id alloc acc ->
+      match acc with
+        | Some _ ->
+            acc
+        | None ->
+            if    not (List.mem alloc_id st.dead_allocations)
+               && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+              Some alloc_id
+            else
+              None
+    ) st.allocations None
   
-  let rec combine_bytes ty (bs : (provenance * char option) list) =
+  let rec combine_bytes find_overlaping ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+    let combine_bytes = combine_bytes find_overlaping in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -569,23 +613,19 @@ module Concrete : Memory = struct
       | Function0 _ ->
           assert false
       | Basic0 (Integer ity) ->
-(*          Printf.printf "==> %s sz:%d\n" (Pp_utils.to_plain_string (Pp_core_ctype.pp_ctype ty)) (sizeof ty); *)
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-(*          Printf.printf "==> |bs| = %d,  |bs1| = %d,  " (List.length bs) (List.length bs1); *)
-          let (provs, bs1') = List.split bs1 in
-(*          Printf.printf "==> |provs| = %d\n" (List.length provs); *)
-          let prov = combine_provenances provs in
+          let (prov, _, bs1') = AbsByte.split_bytes bs1 in
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVinteger ( ity
-                          , IV (prov, int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+                          , mk_ival prov (int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
             | None ->
                 MVunspecified ty
           end , bs2)
       | Basic0 (Floating fty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           (* we don't care about provenances for floats *)
-          let bs1' = List.map snd bs1 in
+          let (_, _, bs1') = AbsByte.split_bytes bs1 in
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVfloating ( fty
@@ -605,42 +645,49 @@ module Concrete : Memory = struct
       | Pointer0 (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
-          let (provs, bs1') = List.split bs1 in
-          let prov = combine_provenances provs in
+          let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           (begin match extract_unspec bs1' with
             | Some cs ->
                 let n = int64_of_bytes false cs in
                 begin match ref_ty with
                   | Function0 _ ->
-                    (* TODO: this is a quick solution, but maybe not a very good one: *)
-                    MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, None))))
-                  | _->
-                    MVpointer (ref_ty, PV (prov, if N.equal n N.zero then PVnull ref_ty else PVconcrete n))
+                      (* TODO: this is a quick solution, but maybe not a very good one: *)
+                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, None))))
+                  | _ ->
+                      if N.equal n N.zero then
+                        (* TODO: check *)
+                        MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                      else
+                        let prov =
+                          if is_PNVI () then
+                            match prov_status with
+                              | `NotValidPtrProv ->
+                                  begin match find_overlaping n with
+                                    | None ->
+                                        Prov_none
+                                    | Some alloc_id ->
+                                        Prov_some alloc_id
+                                  end
+                              | `ValidPtrProv ->
+                                  prov
+                          else
+                            prov in
+                        MVpointer (ref_ty, PV (prov, PVconcrete n))
                 end
             | None ->
                 MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
-           end, bs2)
+          end, bs2)
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           combine_bytes atom_ty bs
       | Struct0 tag_sym ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-(*
-          print_string "COMBINE: ";
-          List.iter (fun (_, c_opt) ->
-            match c_opt with
-              | Some c -> print_string (string_of_int (int_of_char c) ^ " ")
-              | None   -> print_string "U "
-          ) bs1;
-          print_newline ();
-*)
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
             ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
-(*          Printf.printf "|bs'| ==> %d\n" (List.length bs'); *)
           (MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
           failwith "TODO: combine_bytes, Union (as value)"
@@ -692,18 +739,18 @@ module Concrete : Memory = struct
           Union0 tag_sym
   
   (* INTERNAL explode_bytes *)
-  let rec explode_bytes mval : (provenance * char option) list =
+  let rec explode_bytes mval : AbsByte.t list =
     match mval with
       | MVunspecified ty ->
-          List.init (sizeof ty) (fun _ -> (Prov_none, None))
+          List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
       | MVinteger (ity, IV (prov, n)) ->
-          List.map (fun z -> (prov, z)) begin
+          List.map (AbsByte.v prov) begin
             bytes_of_int64
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
           end
       | MVfloating (fty, fval) ->
-          List.map (fun z -> (Prov_none, z)) begin
+          List.map (AbsByte.v Prov_none) begin
             bytes_of_int64
               true (* TODO: check that *)
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
@@ -718,16 +765,16 @@ module Concrete : Memory = struct
           begin match ptrval_ with
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
-                List.init ptr_size (fun _ -> (Prov_none, Some '\000'))
+                List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
             | PVfunction (Symbol.Symbol (n, _)) ->
                 (* TODO(V): *)
-                List.map (fun z -> (prov, z)) begin
+                List.map (AbsByte.v prov) begin
                   bytes_of_int64
                       false
                       ptr_size (N.of_int n)
                 end
             | PVconcrete addr ->
-                List.map (fun z -> (prov, z)) begin
+                List.mapi (fun i -> AbsByte.v prov ~copy_offset:(Some i)) begin
                   bytes_of_int64
                     false (* we model address as unsigned *)
                     ptr_size addr
@@ -747,15 +794,15 @@ module Concrete : Memory = struct
               let pad = off - last_off in
               ( off + sizeof ty
               , acc @
-                List.init pad (fun _ -> (Prov_none, None)) @
+                List.init pad (fun _ -> AbsByte.v Prov_none None) @
                 explode_bytes mval )
             ) (0, []) offs xs
           end @
-          List.init final_pad (fun _ -> (Prov_none, None))
+          List.init final_pad (fun _ -> AbsByte.v Prov_none None)
       | MVunion (tag_sym, memb_ident, mval) ->
           let size = sizeof (Core_ctype.Union0 tag_sym) in
           let bs = explode_bytes mval in
-          bs @ List.init (size - List.length bs) (fun _ -> (Prov_none, None))
+          bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None)
   
   
   (* BEGIN DEBUG *)
@@ -763,7 +810,7 @@ module Concrete : Memory = struct
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
       let Some ty = alloc.ty in
-      let (mval, bs') = combine_bytes ty bs in
+      let (mval, bs') = combine_bytes (find_overlaping st) ty bs in
       mval
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
@@ -868,10 +915,10 @@ module Concrete : Memory = struct
               (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
               acc
           | Some ty ->
-              begin match combine_bytes ty bs with
+              begin match combine_bytes (find_overlaping st) ty bs with
                 | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
                     let bs' = List.init (N.to_int alloc.size) (fun i ->
-                      (Nat_big_num.add alloc.base (Nat_big_num.of_int i), (Prov_none, None))
+                      (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
                     ) in
                     List.fold_left (fun acc (addr, b) ->
                       IntMap.add addr b acc
@@ -933,17 +980,15 @@ module Concrete : Memory = struct
               end else
                 fail (MerrUndefinedFree (loc, Free_out_of_bound))
         end
+    | PV (Prov_wildcard, _) ->
+        failwith "TODO: Concrete.kill ==> Prov_wildcard"
   
   let load loc ty (PV (prov, ptrval_)) =
-    Debug_ocaml.print_debug 3 [] (fun () ->
-      "ENTERING LOAD: ty=" ^ String_core_ctype.string_of_ctype ty ^
-      " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_)))
-    );
 (*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load alloc_id_opt addr =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr (sizeof ty) in
-      let (mval, bs') = combine_bytes ty bs in
+      let (mval, bs') = combine_bytes (find_overlaping st) ty bs in
       update (fun st -> { st with last_read= alloc_id_opt }) >>= fun () ->
       begin match bs' with
         | [] ->
@@ -988,6 +1033,8 @@ module Concrete : Memory = struct
             | true ->
                 do_load (Some alloc_id) addr
           end
+      | (Prov_wildcard, _) ->
+          failwith "TODO: Concrete.load ==> Prov_wildcard"
   
   
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
@@ -1055,6 +1102,9 @@ module Concrete : Memory = struct
                     else
                       return fp
             end
+        | (Prov_wildcard, _) ->
+            failwith "TODO: Concrete.store ==> Prov_wildcard"
+
 (*
   (* TODO: DEBUG: *)
   >>= fun ret ->
@@ -1144,6 +1194,13 @@ module Concrete : Memory = struct
   
   
   let diff_ptrval diff_ty ptrval1 ptrval2 =
+    (* TODO: check that this is correct for arrays of arrays ... *)
+    (* TODO: if not, sync with symbolic defacto *)
+    let diff_ty' = match diff_ty with
+      | Core_ctype.Array0 (elem_ty, _) ->
+          elem_ty
+      | _ ->
+          diff_ty in
     match ptrval1, ptrval2 with
       | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2))
         when N.equal alloc_id1 alloc_id2 ->
@@ -1166,6 +1223,29 @@ module Concrete : Memory = struct
             return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
           else
             fail MerrPtrdiff
+(*
+      | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
+          if N.equal alloc_id1 alloc_id2 then
+            get_allocation alloc_id1 >>= fun alloc ->
+            (* NOTE: this is not like "is_within_bound" because it allows one-past pointers *)
+            if    N.less_equal alloc.base addr1
+               && N.less_equal addr1 (N.add alloc.base alloc.size)
+               && N.less_equal alloc.base addr2
+               && N.less_equal addr2 (N.add alloc.base alloc.size) then
+              (* NOTE: the result of subtraction of two pointer values is an integer value with
+                 empty provenance, irrespective of the operand provenances *)
+              return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
+            else
+              fail MerrPtrdiff
+          else
+            get_allocation alloc_id1 >>= fun alloc1 ->
+            get_allocation alloc_id2 >>= fun alloc2 ->
+              if    N.equal addr1 (N.add alloc2.base alloc2.size)
+                 || N.equal addr2 (N.add alloc1.base alloc1.size) then
+                return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
+              else
+                fail MerrPtrdiff
+*)
       | _ ->
           fail MerrPtrdiff
   
@@ -1214,21 +1294,9 @@ module Concrete : Memory = struct
         end
     | PV (Prov_none, _) ->
         return false
-  
-  
-  (* TODO: maybe move somewhere else *)
-  let find_overlaping addr st =
-    IntMap.fold (fun alloc_id alloc acc ->
-      match acc with
-        | Some _ ->
-            acc
-        | None ->
-            if    not (List.mem alloc_id st.dead_allocations)
-               && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
-              Some alloc_id
-            else
-              None
-    ) st.allocations None
+    | PV (Prov_wildcard, _) ->
+        failwith "TODO: Concrete.validForDeref ==> Prov_wildcard"
+
   
   let ptrcast_ival _ ref_ty (IV (prov, n)) =
     if not (N.equal n N.zero) then
@@ -1245,7 +1313,7 @@ module Concrete : Memory = struct
             return (PV (Prov_none, PVnull ref_ty))
           else
             get >>= fun st ->
-            (match find_overlaping n st with
+            (match find_overlaping st n with
               | None ->
                   if variant = 0 then
                     return Prov_none
@@ -1401,25 +1469,24 @@ module Concrete : Memory = struct
       | Enum _ ->
           (* TODO: hack, assuming like int *)
           negate (pow_int (of_int 2) (8*4-1))
-      | IBuiltin _ ->
+      | IBuiltin _ -> 
           failwith "TODO: min_ival: Builtin"
     end)
   
-
   (* TODO: conversion? *)
   let intcast_ptrval _ ity (PV (prov, ptrval_)) =
     match ptrval_ with
       | PVnull _ ->
-          return (IV (prov, Nat_big_num.zero))
+          return (mk_ival prov Nat_big_num.zero)
       | PVfunction (Symbol.Symbol (n, _)) ->
-          return (IV (prov, Nat_big_num.of_int n))
+          return (mk_ival prov (Nat_big_num.of_int n))
       | PVconcrete addr ->
           let IV (_, ity_max) = max_ival ity in
           let IV (_, ity_min) = min_ival ity in
           if N.(less addr ity_min || less ity_max addr) then
             fail MerrIntFromPtr
           else
-            return (IV (prov, addr))
+            return (mk_ival prov addr)
 
 let combine_prov prov1 prov2 =
   match (prov1, prov2) with
@@ -1455,23 +1522,26 @@ let combine_prov prov1 prov2 =
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
-    IV (combine_prov prov1 prov2, begin match iop with
+    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
+    match iop with
       | IntAdd ->
-          Nat_big_num.add
+          IV (combine_prov prov1 prov2, Nat_big_num.add n1 n2)
       | IntSub ->
-          Nat_big_num.sub
+          IV (combine_prov prov1 prov2, Nat_big_num.sub n1 n2)
       | IntMul ->
-          Nat_big_num.mul
+          IV (combine_prov prov1 prov2, Nat_big_num.mul n1 n2)
       | IntDiv ->
-          Nat_big_num.integerDiv_t
+          IV (combine_prov prov1 prov2, Nat_big_num.integerDiv_t n1 n2)
       | IntRem_t ->
-          Nat_big_num.integerRem_t
+          IV (combine_prov prov1 prov2, Nat_big_num.integerRem_t n1 n2)
       | IntRem_f ->
-          Nat_big_num.integerRem_f
+          IV (combine_prov prov1 prov2, Nat_big_num.integerRem_f n1 n2)
       | IntExp ->
+          (* NOTE: this operation doesn't exists in C, but is used in the elaboration of the
+             shift operators. And for these we want the provenance of the left operand to be
+             the one that is forwarded *)
           (* TODO: fail properly when y is too big? *)
-          fun x y -> Nat_big_num.pow_int x (Nat_big_num.to_int y)
-    end n1 n2)
+          IV (Prov_none, Nat_big_num.pow_int n1 (Nat_big_num.to_int n2))
   
   let sizeof_ival ty =
     IV (Prov_none, Nat_big_num.of_int (sizeof ty))
@@ -1479,15 +1549,19 @@ let combine_prov prov1 prov2 =
     IV (Prov_none, Nat_big_num.of_int (alignof ty))
   
   let bitwise_complement_ival _ (IV (prov, n)) =
+    (* NOTE: for PNVI we assume that prov = Prov_none *)
     (* TODO *)
     (* prerr_endline "Concrete.bitwise_complement ==> HACK"; *)
     IV (prov, Nat_big_num.(sub (negate n) (of_int 1)))
 
   let bitwise_and_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
+    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     IV (combine_prov prov1 prov2, Nat_big_num.bitwise_and n1 n2)
   let bitwise_or_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
+    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     IV (combine_prov prov1 prov2, Nat_big_num.bitwise_or n1 n2)
   let bitwise_xor_ival _ (IV (prov1, n1)) (IV (prov2, n2)) =
+    (* NOTE: for PNVI we assume that prov1 = prov2 = Prov_none *)
     IV (combine_prov prov1 prov2, Nat_big_num.bitwise_xor n1 n2)
   
   let case_integer_value (IV (_, n)) f_concrete _ =
@@ -1687,7 +1761,8 @@ let combine_prov prov1 prov2 =
       values: ui_value list;
     }
 
-  let rec mk_ui_values bs ty mval : ui_value list =
+  let rec mk_ui_values st bs ty mval : ui_value list =
+    let mk_ui_values = mk_ui_values st in
     let mk_scalar v p =
       [{ size = sizeof ty; path = []; value = v;
          prov = p; typ = Some ty; }] in
@@ -1732,7 +1807,7 @@ let combine_prov prov1 prov2 =
           fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
-            let (mval, acc_bs'') = combine_bytes memb_ty acc_bs' in
+            let (mval, acc_bs'') = combine_bytes (find_overlaping st) memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
@@ -1743,17 +1818,17 @@ let combine_prov prov1 prov2 =
     | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
-  let mk_ui_alloc bytemap id alloc : ui_alloc =
+  let mk_ui_alloc st id alloc : ui_alloc =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), None) in
     let size = sizeof ty in
-    let bs = fetch_bytes bytemap alloc.base size in
-    let (mval, _) = combine_bytes ty bs in
+    let bs = fetch_bytes st.bytemap alloc.base size in
+    let (mval, _) = combine_bytes (find_overlaping st) ty bs in
     { id = id;
       base = N.to_int alloc.base;
       prefix = alloc.prefix;
       typ = ty;
       size = size;
-      values = mk_ui_values bs ty mval;
+      values = mk_ui_values st bs ty mval;
     }
 
   let serialise_prefix = function
@@ -1795,7 +1870,7 @@ let combine_prov prov1 prov2 =
            ]
 
   let serialise_mem_state (st: mem_state) : Json.json =
-    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st.bytemap id alloc) st.allocations);
+    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) st.allocations);
             ("last_modified", Json.of_option (fun v -> `Int (N.to_int v)) st.last_modified);
             ("last_read", Json.of_option (fun v -> `Int (N.to_int v)) st.last_read);]
 
