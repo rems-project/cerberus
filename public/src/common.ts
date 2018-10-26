@@ -34,6 +34,7 @@ export namespace Option {
   export const opts = flags([
     'show_integer_provenances',   // Show integer provenances when PVI
     'show_string_literals',       // Show string literals
+    'show_pointer_bytes',         // Show all the bytes of a pointer value
     'hide_tau',                   // Hide tau transitions in execution graph
     'colour_all',                 // Colorise every expression
     'colour_cursor'               // Colorise expression on cursor

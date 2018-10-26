@@ -2,12 +2,19 @@ import _ from 'lodash'
 import { Range } from './location'
 import * as u from './util'
 
+export type Byte = {
+  prov: number | null
+  offset: number | null
+  value: number | null
+}
+
 export type Value = {
   size: number
   path: string[]      // access path in case of struct/unions
   value: string
   prov: number | null
   type: string | null // if no type, then it is padding
+  bytes: Byte [] | null
 }
 
 export type Prefix =
@@ -20,6 +27,7 @@ export type Allocation = {
   prefix: Prefix    // source name with scope order
   type: string      // pretty core ctype
   size: number      // type size
+  dyn: boolean      // is dynamic memory (created by malloc)
   values: Value[]   // INV: this should be a singleton in scalar types
 }
 
@@ -51,6 +59,12 @@ export function ispadding (v: Value) {
   return v.type == null
 }
 
+export function isInvalidPointer(pvi: boolean, v: Value) {
+  if (v.bytes == null) return false
+  if (pvi) return v.prov == null
+  return !_.reduce(v.bytes, (acc, b, i) => acc && b.offset != null && b.offset == i, true)
+}
+
 function charCode (s:string) {
   const x = parseInt(s)
   // printable characters
@@ -76,7 +90,7 @@ export function string_of_value (v: Value, track_prov: boolean): string {
   const value = (x:string) => track_prov ? with_prov() + x : x
   if (v.value === 'unspecified')
     return v.value
-  if (ispointer(v))
+  if (ispointer(v) && v.value != 'NULL')
     return with_prov () + u.toHex(parseInt(v.value))
   if (isintptr(v))
     return value(u.toHex(parseInt(v.value)))

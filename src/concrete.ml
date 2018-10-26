@@ -341,6 +341,11 @@ module Concrete : Memory = struct
     
     let v prov ?(copy_offset = None) value =
       { prov; copy_offset; value }
+
+    let to_json b =
+      `Assoc [("prov", match b.prov with Prov_some n -> `Int (N.to_int n) | _ -> `Null);
+              ("offset", Json.of_option Json.of_int b.copy_offset);
+              ("value", Json.of_option Json.of_char b.value);]
     
     (* Given a (non-empty) list of bytes combine their provenance if their are
        compatible. Returns the empty provenance otherwise *)
@@ -1747,6 +1752,7 @@ let combine_prov prov1 prov2 =
       path: string list; (* tag list *)
       value: string;
       prov: int option;
+      bytes: AbsByte.t list option;
       typ: Core_ctype.ctype0 option;
     }
 
@@ -1754,6 +1760,7 @@ let combine_prov prov1 prov2 =
     { id: int;
       base: int;
       prefix: Symbol.prefix;
+      dyn: bool; (* dynamic memory *)
       typ: Core_ctype.ctype0;
       size: int;
       values: ui_value list;
@@ -1761,30 +1768,30 @@ let combine_prov prov1 prov2 =
 
   let rec mk_ui_values st bs ty mval : ui_value list =
     let mk_ui_values = mk_ui_values st in
-    let mk_scalar v p =
+    let mk_scalar v p bs_opt =
       [{ size = sizeof ty; path = []; value = v;
-         prov = p; typ = Some ty; }] in
+         prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
       { size = n; typ = None; path = []; value = v;
-        prov = None; } in
+        prov = None; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified" None
+      mk_scalar "unspecified" None None
     | MVinteger (_, IV(prov, n)) ->
       let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      mk_scalar (N.to_string n) p
+      mk_scalar (N.to_string n) p None
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) None
+      mk_scalar (string_of_float f) None None
     | MVpointer (_, PV(prov, pv)) ->
-      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" None
+          mk_scalar "NULL" None None
         | PVconcrete n ->
-          mk_scalar (N.to_string n) p
+          let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
+          mk_scalar (N.to_string n) p (Some bs)
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) None
+          mk_scalar (Pp_symbol.to_string_pretty sym) None None
       end
     | MVarray mvals ->
       begin match ty with
@@ -1824,6 +1831,7 @@ let combine_prov prov1 prov2 =
     { id = id;
       base = N.to_int alloc.base;
       prefix = alloc.prefix;
+      dyn = List.mem alloc.base st.dynamic_addrs;
       typ = ty;
       size = size;
       values = mk_ui_values st bs ty mval;
@@ -1856,12 +1864,14 @@ let combine_prov prov1 prov2 =
             ("path", `List (List.map Json.of_string v.path));
             ("value", `String v.value);
             ("prov", Json.of_option Json.of_int v.prov);
-            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);]
+            ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
+            ("bytes", Json.of_option (fun bs -> `List (List.map AbsByte.to_json bs)) v.bytes); ]
 
   let serialise_ui_alloc (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
             ("base", `Int a.base);
             ("prefix", serialise_prefix a.prefix);
+            ("dyn", `Bool a.dyn);
             ("type", `String (String_core_ctype.string_of_ctype a.typ));
             ("size", `Int a.size);
             ("values", `List (List.map serialise_ui_values a.values));

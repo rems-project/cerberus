@@ -277,7 +277,7 @@ export class CerberusUI {
     const serverStatus = $('#server-status')
     let serverStatusFlag = true
     // Check server status
-    window.setInterval(() => {
+    /*window.setInterval(() => {
       $.ajax({
         url: 'index.html',
         type: 'HEAD'
@@ -292,7 +292,7 @@ export class CerberusUI {
           serverStatus.text(' (SERVER DOWN)')
         }
       })
-    }, 5000)
+    }, 5000)*/
 
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {
@@ -489,7 +489,7 @@ export class CerberusUI {
     const model = view.state.model
     util.Cursor.wait()
     $.ajax({
-      url:  '/cerberus',
+      url:  '/query',
       type: 'POST',
       headers: {Accept: 'application/json; charset=utf-8'},
       contentType: 'application/json; charset=utf-8',

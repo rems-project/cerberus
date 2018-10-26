@@ -191,6 +191,7 @@ export default class View {
       options: {
         show_integer_provenances: true,
         show_string_literals: false,
+        show_pointer_bytes: false,
         hide_tau: true,
         colour_all: false,
         colour_cursor: true
@@ -301,20 +302,12 @@ export default class View {
     if (!this.state.interactive) return
     const mem = this.state.interactive.current.mem
     if (!mem) return
-    const trackProvInteger = _.includes(this.state.model.switches, 'integer_provenance')
+    const pvi = _.includes(this.state.model.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
-      if (alloc.prefix.kind == 'other') {
+      if (alloc.prefix.kind == 'other' && !alloc.dyn) {
         if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
           return ''
       }
-      /*
-      if (alloc.prefix == null) // HACK! TODO: check malloc case
-        return ''
-      // TODO: bit of a hack, change later!
-      if (alloc.prefix == 'string literal') return ''
-      if (_.startsWith(alloc.prefix, 'Core')) return ''
-      */
-      // TODO: THIS IS ANOTHER HACK!!
       if (_.startsWith(alloc.prefix.name, '__'))
         return ''
       const box = (n:number, ischar=false) =>
@@ -325,6 +318,8 @@ export default class View {
       const tooltip = "allocation: " + String(alloc.id)
       const name = () => {
         const p = alloc.prefix
+        if (alloc.dyn)
+          return `malloc'd`
         if (p.kind === 'other')
           return p.name
         switch (Memory.unique(p, mem.map)) {
@@ -346,18 +341,30 @@ export default class View {
          </tr>`
       let index = 0
       const body = alloc.values.reduce((acc, row) => {
-        const head    = row.path.reduce((acc, tag) =>
-                          `${acc}<td rowspan="${row.size}">${tag}</td>`, '')
+        const head    = row.path.reduce((acc, tag) => `${acc}<td rowspan="${row.size}">${tag}</td>`, '')
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
-        const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : 
-                          (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
-        const body = `<td port="${spath}v" rowspan="${row.size}"
-                          colspan="${colspan}" ${bgcolor}>${Memory.string_of_value(row, trackProvInteger && this.state.options.show_integer_provenances)}</td>`
-        acc += `<tr>${box(index, row.size == 1)}${head}${body}</tr>`
+        const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
+        const ptr_as_bytes = Memory.ispointer(row) && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
+        let value
+        if (ptr_as_bytes && row.bytes != null) {
+          const with_prov = (i: number) => row.bytes != null && row.bytes[i].prov != null ? `@${row.bytes[i].prov}, ` : `@none, `
+          const with_offset = (i: number) => row.bytes != null && row.bytes[i].offset != null ? `${row.bytes[i].offset} : ` : '? : '
+          value = `<table cellpadding="0" cellspacing="0" border="0">`
+          value += `<tr border="1"><td>${(pvi ? with_prov(0) : with_offset(0)) + toHex(row.bytes[0].value as number)}</td>
+                  <td rowspan="${row.bytes.length}">${(row.prov != undefined ? `@${row.prov}, ` : `@none, `) + toHex(parseInt(row.value))}</td></tr>`
+            for (let j = 1; j < row.bytes.length; j++) {
+              value += `<tr><td border="1" sides="t">${(pvi ? with_prov(j) : with_offset(j)) + toHex(row.bytes[j].value as number)}</td></tr>`
+            }
+          value += `</table>`
+        } else {
+          value = Memory.string_of_value(row, pvi && this.state.options.show_integer_provenances)
+        }
+        const body    = `<td port="${spath}v" rowspan="${row.size}" colspan="${colspan}" ${bgcolor}>${value}</td>`
+        acc += `<tr>${box(index, row.size == 1 || (ptr_as_bytes && row.bytes != null))}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
-          acc += `<tr>${box(index)}</tr>`
+          acc += `<tr>${box(index, ptr_as_bytes && row.bytes != null)}</tr>`
         return acc
       }, '')
       const lastrow =
@@ -374,10 +381,9 @@ export default class View {
     }
     type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/, dashed: boolean}
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
-      if (alloc.prefix.kind === 'other') return []
+      if (alloc.prefix.kind === 'other' && !alloc.dyn) return []
       // THIS IS A TERRIBLE HACK:
       if (_.startsWith(alloc.prefix.name, 'arg')) return []
-      if (_.startsWith(alloc.prefix.name, 'Core')) return []
       return alloc.values.reduce((acc: Pointer[], row) => {
         if (Memory.pointsto(row) && row.prov != null) {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
@@ -393,21 +399,23 @@ export default class View {
         const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
         if (target) {
-          if (target.prefix.kind == 'other') {
+          if (target.prefix.kind == 'other' && !target.dyn) {
             if (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
               return acc
           }
           const offset = p.addr - target.base
-          const color  = target.id != p.to && trackProvInteger ? ',color="red"': ''
+          const color  = target.id != p.to && pvi ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = _.find(mem.map, alloc => alloc.id == p.to)
           if (toprov) {
             const offset = p.addr - toprov.base
-            acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
+            if (0 <= offset && offset <= toprov.size)
+              acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
+            else
+              acc += `sink[label="???",color="red"];${p.from}v->sink[${dashed},color="red"];`
           } else {
-            // TODO: WHAT SHOULD I DO?
-            // POINTER TO UNKNOWN MEMORY
+              acc += `sink[label="???",color="red"];${p.from}v->sink[${dashed},color="red"];`
           }
         }
         return acc;
