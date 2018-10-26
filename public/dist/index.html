@@ -46,16 +46,16 @@
             </div>
             <div class="menu-section border-top">Provenance options</div>
             <div id="integer_provenance" class="menu-item btn prov-switch">
-              <input id="cb_integer_provenance" type="radio" checked>Integer provenance
+              <input id="cb_integer_provenance" type="radio" checked>Integer provenance (PVI)
             </div>
             <div id="no_integer_provenance" class="menu-item btn prov-switch">
-              <input id="cb_no_integer_provenance" type="radio">No integer provenance (basic)
+              <input id="cb_no_integer_provenance" type="radio">No integer provenance (PNVI-basic)
             </div>
             <div id="no_integer_provenance_v1" class="menu-item btn prov-switch">
-              <input id="cb_no_integer_provenance_v1" type="radio">No integer provenance (variant 1)
+              <input id="cb_no_integer_provenance_v1" type="radio">No integer provenance (PNVI-address-taken)
             </div>
             <div id="no_integer_provenance_v4" class="menu-item btn prov-switch">
-              <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (variant 4)
+              <input id="cb_no_integer_provenance_v4" type="radio">No integer provenance (PNVI-wildcard)
             </div>
             <div class="menu-section border-top">Further options</div>
             <div id="strict_pointer_arith" class="menu-item btn switch"
@@ -103,24 +103,34 @@
           <span>Options</span>
           <div class="dropdown">
             <div class="menu-section">Core optimisation</div>
-            <div id="rewrite" class="menu-item btn">
+            <div id="rewrite" class="menu-item btn core-opt">
               <input id="cb_rewrite" type="checkbox">Basic rewrite
             </div>
-            <div id="sequentialise" class="menu-item btn">
+            <div id="sequentialise" class="menu-item btn core-opt">
               <input id="cb_sequentialise" type="checkbox">Sequentialise operations
             </div>
             <div class="menu-section border-top">Interface options</div>
-            <div id="colour_cursor" class="menu-item btn">
+            <div id="colour_cursor" class="menu-item btn option">
               <input id="cb_colour_cursor" type="checkbox">Colour elaboration expression
             </div>
-            <div id="colour" class="menu-item btn">
-              <input id="cb_colour" type="checkbox"><span>Colour <b>every</b> elaboration expression</span>
+            <div id="colour_all" class="menu-item btn option highlight">
+              <input id="cb_colour_all" type="checkbox"><span>Colour <b>every</b> elaboration expression</span>
             </div>
-            <div id="supress-tau" class="menu-item btn">
-              <input id="cb-supress-tau" type="checkbox">Suppress <i>tau</i> transitions
+            <div id="show_string_literals" class="menu-item btn option update-mem-graph"
+                title="Show string literals in the memory graph">
+              <input id="cb_show_string_literals" type="checkbox">Show string literals
+            </div>
+            <!--
+            <div id="show-provenances" class="menu-item btn"
+                title="Show provenances in integer values in the memory graph when in PVI.">
+              <input id="cb-show-provenances" type="checkbox" checked>Show provenances for integer values
+            </div>
+            -->
+            <div id="hide_tau" class="menu-item btn option update-exec-graph">
+              <input id="cb_hide_tau" type="checkbox">Suppress <i>tau</i> transitions
             </div>
             <div class="menu-section border-top">Interactive execution options</div>
-            <div id="step-tau" class="menu-item btn step-mode disabled">
+            <div id="step-tau" class="menu-item btn step-mode">
               <input id="r-step-tau" type="radio">Step to the next <i>tau</i> transition
             </div>
             <div id="step-eval" class="menu-item btn step-mode">
