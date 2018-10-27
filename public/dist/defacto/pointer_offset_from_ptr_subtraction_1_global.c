@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h> 
 #include <stddef.h>
-int y = 2, x=1;
+int y=2, x=1;
 int main() {
   int *p = &x;
   int *q = &y;

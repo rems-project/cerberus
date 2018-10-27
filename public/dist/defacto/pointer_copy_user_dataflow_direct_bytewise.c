@@ -5,9 +5,7 @@ void user_memcpy(unsigned char* dest,
                  unsigned char *src, size_t n) {
   while (n > 0)  {		
     *dest = *src;
-    src += 1;
-    dest += 1;
-    n -= 1;
+    src += 1; dest += 1; n -= 1;
   }
 }
 int main() {
