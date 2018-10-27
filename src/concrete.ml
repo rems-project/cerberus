@@ -355,7 +355,8 @@ module Concrete : Memory = struct
       | b0::bs ->
           let (prov, rev_values, offset_status) =
             List.fold_left (fun (prov_acc, val_acc, offset_acc) b ->
-              ( (if b.prov = prov_acc then prov_acc else Prov_none)
+              (* TODO: this probably wrong with respect to Prov_device and Prov_wildcard *)
+              ( (if b.prov = prov_acc || b.prov = Prov_none then prov_acc else Prov_none)
               , b.value :: val_acc
               , match offset_acc, b.copy_offset with
                   | `PtrBytes n, Some n' when n+1 = n' ->
