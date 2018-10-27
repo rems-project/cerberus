@@ -68,7 +68,9 @@ export function onLoad() {
       break
     case 'fixedlink':
       get(mode.file, (source: string) => {
-        UI.addView(mode.file, source)
+        const explode = mode.file.split('/')
+        const name = explode[explode.length-1]
+        UI.addView(name, source)
       }, () => {
         console.log(`Error when trying to download ${mode.file}`)
         alert(`Error downloading ${mode.file}...`)
