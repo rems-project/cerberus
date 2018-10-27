@@ -137,7 +137,7 @@ export class CerberusUI {
     // Share
     let update_share_link = () => {
       if (!this.currentView) return
-      const url = 'http://www.cl.cam.ac.uk/~pes20/cerberus/server/#'
+      const url = 'https://cerberus.cl.cam.ac.uk/#'
                 + this.currentView.getEncodedState()
       if (this.short_share)
         util.shortURL(url, (url: string) => $('#sharelink').val(url))
@@ -277,7 +277,7 @@ export class CerberusUI {
     const serverStatus = $('#server-status')
     let serverStatusFlag = true
     // Check server status
-    /*window.setInterval(() => {
+    window.setInterval(() => {
       $.ajax({
         url: 'index.html',
         type: 'HEAD'
@@ -292,7 +292,7 @@ export class CerberusUI {
           serverStatus.text(' (SERVER DOWN)')
         }
       })
-    }, 5000)*/
+    }, 5000)
 
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {

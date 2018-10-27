@@ -443,6 +443,9 @@ export default class View {
         case InteractiveMode.Memory:
           if (_.startsWith(active.info.kind, 'killed'))
             return children
+          // a bit of a hack here
+          if (_.startsWith(active.arena, 'pure(undef(<<UB'))
+            return children
           switch (active.info.kind) {
             case 'action request':
             case 'done':
@@ -460,6 +463,9 @@ export default class View {
           if (active.info.kind == 'done')
             return graph.setChildrenVisible(active.id, true)
           if (_.startsWith(active.info.kind, 'killed'))
+            return children
+          // a bit of a hack here
+          if (_.startsWith(active.arena, 'pure(undef(<<UB'))
             return children
           if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
             children = this.executeInteractiveMode(active.id, lastCline)
@@ -529,6 +535,8 @@ export default class View {
         // the killed node has no location coming from cerberus
         const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
         this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.kind.replace('killed', 'Undefined behaviour')}${loc}`
+      } else if (_.startsWith(active.arena, 'pure(undef(<<UB')) {
+        this.state.console = `Unsuccessful termination of this execution:\n\t${active.arena}`
       } else {
         this.state.console = `Successful termination of this execution:\n\t${firstChoice.info.kind}`
       }

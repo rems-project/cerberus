@@ -344,6 +344,7 @@ type rheader =
     if_none_match: string;
     user_agent: string;
     referer: string;
+    host: string;
   }
 
 (* Server default responses *)
@@ -587,12 +588,12 @@ let parse_req_header header =
     if_none_match= get "if-none-match";
     referer= get "referer";
     user_agent= get "user-agent";
+    host= get "host";
   }
 
 let request ~docroot ~conf (flow, _) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
-  Debug.print 0 @@ "BEFORE PATH: " ^ Uri.path uri;
   let path =
     try
       let cerb = "/cerberus" in
@@ -604,25 +605,31 @@ let request ~docroot ~conf (flow, _) req body =
         path
     with Invalid_argument _ -> Uri.path uri
   in
-  Debug.print 0 @@ "AFTER PATH: " ^ path;
   let rheader = parse_req_header req.headers in
-  let try_with () =
-    let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
-      | Some enc -> contains enc "gzip"
-      | None -> false
-    in
-    if accept_gzip then Debug.print 10 "accepts gzip";
-    match meth with
-    | `HEAD -> head ~docroot uri path >|= fun (res, _) -> (res, `Empty)
-    | `GET  -> get ~docroot ~rheader uri path
-    | `POST ->
-      Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
-      post ~docroot ~conf ~rheader ~flow uri path
-    | _     -> not_allowed meth path
-  in catch try_with begin fun e ->
-    Debug.error_exception "POST" e;
-    forbidden path
+  if rheader.host = "" || rheader.host = "cerberus.cl.cam.ac.uk" || rheader.host = "localhost" then
+  begin
+    let try_with () =
+      let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
+        | Some enc -> contains enc "gzip"
+        | None -> false
+      in
+      if accept_gzip then Debug.print 10 "accepts gzip";
+      match meth with
+      | `HEAD -> head ~docroot uri path >|= fun (res, _) -> (res, `Empty)
+      | `GET  -> get ~docroot ~rheader uri path
+      | `POST ->
+        Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
+        post ~docroot ~conf ~rheader ~flow uri path
+      | _     -> not_allowed meth path
+    in catch try_with begin fun e ->
+      Debug.error_exception "POST" e;
+      forbidden path
+    end
+  end else begin
+    let headers = Cohttp.Header.of_list [("Location", "https://cerberus.cl.cam.ac.uk" ^ path)] in
+    (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
   end
+
 
 let redirect ~docroot ~conf conn req body =
   let uri  = Request.uri req in
