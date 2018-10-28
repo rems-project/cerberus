@@ -39,17 +39,17 @@
           <div class="dropdown">
             <div class="menu-section">Memory model</div>
             <div id="concrete" class="menu-item btn prov-model">
-              <input id="r_concrete" type="radio" checked>Concrete-allocation memory model
+              <input id="r_concrete" type="radio" checked>Concrete-allocation-address memory model
             </div>
             <div id="symbolic" class="menu-item btn prov-model">
-              <input id="r_symbolic" type="radio">Symbolic-allocation memory model (using Z3)
+              <input id="r_symbolic" type="radio">Symbolic-allocation-address memory model (using Z3)
             </div>
             <div class="menu-section border-top">Provenance options</div>
             <div id="integer_provenance" class="menu-item btn prov-switch">
               <input id="cb_integer_provenance" type="radio" checked>Integer provenance (PVI)
             </div>
             <div id="no_integer_provenance" class="menu-item btn prov-switch">
-              <input id="cb_no_integer_provenance" type="radio">No integer provenance (PNVI-basic)
+              <input id="cb_no_integer_provenance" type="radio">No integer provenance (PNVI)
             </div>
             <div id="no_integer_provenance_v1" class="menu-item btn prov-switch">
               <input id="cb_no_integer_provenance_v1" type="radio">No integer provenance (PNVI-address-taken)
@@ -60,7 +60,7 @@
             <div class="menu-section border-top">Further options</div>
             <div id="strict_pointer_arith" class="menu-item btn switch"
               title="Forbid (non-one-past) out-of-bounds pointer construction">
-              <input id="cb_strict_pointer_arith" type="checkbox">Forbid out-of-bounds pointer construction
+              <input id="cb_strict_pointer_arith" type="checkbox">Forbid (non-one-past) out-of-bounds pointer construction
             </div>
             <div id="strict_reads" class="menu-item btn switch">
               <input id="cb_strict_reads" type="checkbox">Strict reads
@@ -104,7 +104,7 @@
           <div class="dropdown">
             <div class="menu-section">Core optimisation</div>
             <div id="rewrite" class="menu-item btn core-opt">
-              <input id="cb_rewrite" type="checkbox">Basic rewrite
+              <input id="cb_rewrite" type="checkbox">Basic rewrites
             </div>
             <div id="sequentialise" class="menu-item btn core-opt">
               <input id="cb_sequentialise" type="checkbox">Sequentialise operations
