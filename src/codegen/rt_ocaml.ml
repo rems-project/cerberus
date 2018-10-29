@@ -38,6 +38,8 @@ let position fname lnum bol cnum = {
   Lexing.pos_cnum = cnum;
 }
 
+let unknown = Location_ocaml.unknown
+
 let sym (n, s) = Symbol.Symbol (n, Some s)
 let cabsid pos id =
   let mkloc x = x in
@@ -198,10 +200,10 @@ let gt n m = Option.get (M.lt_ival (Some M.initial_mem_state) m n)
 let le n m = Option.get (M.le_ival (Some M.initial_mem_state) n m)
 let ge n m = Option.get (M.le_ival (Some M.initial_mem_state) m n)
 
-let valid_for_deref_ptrval p = return $ M.validForDeref_ptrval p
-let memcmp p q r = return $ M.memcmp p q r
-let memcpy p q r = return $ M.memcpy p q r
-let realloc al p size  = return $ M.realloc 0 al p size
+let valid_for_deref_ptrval p = return @@ M.validForDeref_ptrval p
+let memcmp p q r = return @@ M.memcmp p q r
+let memcpy p q r = return @@ M.memcpy p q r
+let realloc al p size  = return @@ M.realloc 0 al p size
 
 (* Memory actions wrap *)
 
@@ -239,9 +241,9 @@ let load_struct s =
 let load_union s =
   load (C.Union0 s) get_union
 
-let store f ty e1 e2 =
+let store f ty b e1 e2 =
   last_memop := Store;
-  M.store Location_ocaml.Loc_unknown ty e1 $ case_loaded_mval f e2
+  M.store Location_ocaml.unknown ty b e1 @@ case_loaded_mval f e2
 
 let store_integer ity =
   store (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
@@ -346,6 +348,7 @@ let dummy_file =
     globs   = [];
     funs    = Pmap.empty cmp;
     impl    = Pmap.empty impl_cmp;
+    funinfo = Pmap.empty cmp;
   }
 let quit f =
   try

@@ -18,7 +18,13 @@ let print_head filename =
   !^"and _std_function_sprintf cont _ _ _ =\
      \n  RT.sprintf () >>= fun x -> cont x" ^/^
   !^"and _std_function_snprintf cont _ _ _ _ =\
-     \n  RT.snprintf () >>= fun x -> cont x"
+     \n  RT.snprintf () >>= fun x -> cont x" ^/^
+  !^"and _std_function_exit _ =\
+     \n failwith \"_std_function_exit\"" ^/^
+  !^"and _std_function__Exit _ =\
+     \n failwith \"_std_function__Exit\"" ^/^
+  !^"and _std_function_signal _ =\
+     \n  failwith \"_std_function_signal\""
 
 let gen globs impl stdlib =
   let contents =

@@ -123,7 +123,7 @@ let print_raw_symbol = function
 
 let print_symbol_prefix = function
   | Symbol.PrefSource (_, syms) ->
-    !^"Symbol.PrefSource" ^^^ print_list print_raw_symbol syms
+    !^"Symbol.PrefSource" ^^ P.parens (!^"RT.unknown, " ^^^ print_list print_raw_symbol syms)
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
 
@@ -185,11 +185,47 @@ let print_ail_basic_type = function
   | Floating ft -> !^"T.Floating" ^^^ P.parens (print_ail_floating_type ft)
 
 (* Patterns *)
+let pp_ctor = function
+  | Cnil _ ->
+      "Nil"
+  | Ccons ->
+      "Cons"
+  | Ctuple ->
+      "Tuple"
+  | Carray ->
+      "Array"
+  | Civmax ->
+      "Ivmax"
+  | Civmin ->
+      "Ivmin"
+  | Civsizeof ->
+      "Ivsizeof"
+  | Civalignof ->
+      "Ivalignof"
+  | CivCOMPL ->
+      "IvCOMPL"
+  | CivAND ->
+      "IvAND"
+  | CivOR ->
+      "IvOR"
+  | CivXOR ->
+      "IvXOR"
+  | Cspecified ->
+      "Specified"
+  | Cunspecified ->
+      "Unspecified"
+  | Cfvfromint ->
+      "Cfvfromint"
+  | Civfromfloat ->
+      "Civfromfloat"
 
 let rec print_pattern (Pattern (_, pat)) =
   match pat with
   | CaseBase (None, _) -> P.underscore
   | CaseBase (Some sym, _) -> print_symbol sym
+  | CaseCtor (Ccons, []) -> failwith "print_patter cons"
+  | CaseCtor (Ccons, [pa]) -> P.brackets @@ print_pattern pa
+  | CaseCtor (Ccons, [pa1; pa2]) -> print_pattern pa1 ^^^ !^ "::" ^^^ print_pattern pa2
   | CaseCtor (ctor, pas) -> print_match_ctor (match pas with
     | []   -> P.underscore
     | [pa] -> print_pattern pa
@@ -199,7 +235,7 @@ and print_match_ctor arg = function
   | Ctuple       -> arg
   | Cspecified   -> !^"RT.Specified" ^^ P.parens arg
   | Cunspecified -> !^"RT.Unspecified" ^^ P.parens arg
-  | _ -> raise (Unsupported "unsupported pattern")
+  | c -> raise (Unsupported ("unsupported pattern: " ^ pp_ctor c))
 
 let rec print_simple_pattern base (Pattern (_, pat)) =
   match pat with
@@ -595,7 +631,7 @@ let print_memop globs memop pes =
 let choose_load_type pe =
   let get_ctype = function
     | Pexpr (_, _, PEval (Vctype cty)) -> cty
-    | _ -> failwith "fatal error: get_type"
+    | pe -> failwith @@ "fatal error: get_type: " ^ String_core.string_of_pexpr pe
   in
   match get_ctype pe with
   | Void0 ->
@@ -638,7 +674,8 @@ let print_store_array_type = function
 let choose_store_type pe =
   let get_ctype = function
     | Pexpr (_, _, PEval (Vctype cty)) -> cty
-    | _ -> failwith "fatal error: get_type"
+    | Pexpr (_, _, PEsym (Symbol.Symbol (_, Some n))) -> (Basic0 (Integer AilTypes.Char)) (* failwith ("choose_store: PEsym: " ^ n) *)
+    | pe -> failwith @@ "fatal error: get_type: " ^ String_core.string_of_pexpr pe
   in
   match get_ctype pe with
   | Basic0 (Integer ity) ->

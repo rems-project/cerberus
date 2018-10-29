@@ -184,7 +184,7 @@ export default class View {
           rewrite: false,
           sequentialise: true
         },
-        switches: ['integer_provenance']
+        switches: ['no_integer_provenance']
       },
       interactiveMode: InteractiveMode.Memory,
       interactive: undefined,
