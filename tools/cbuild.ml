@@ -110,7 +110,7 @@ let compile_c_stub () =
   sprintf "ocamlbuild src/cerberus_cstubs.o" |> run
 
 let run_ocamlbuild file =
-  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,lem,Z3,unix -libs str %s" file |> run
+  sprintf "ocamlbuild -use-ocamlfind -pkgs pprint,lem,Z3,unix,yojson -libs str %s" file |> run
 
 let run_clink files =
   List.fold_left (fun acc f -> acc ^ chop_extension f ^ ".sym ") "" files
