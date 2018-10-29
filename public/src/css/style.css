@@ -83,11 +83,20 @@ input[type="checkbox"] {
   transition: none;
 }
 
+.menu input[type=checkbox]:focus {
+  outline: none;
+}
+
+.menu input[type=radio]:focus {
+  outline: none;
+}
+
 .menu input[type=checkbox] {
   -ms-appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  pointer-events: none;
   width: 1em;
   height: 1em;
   vertical-align: top;
@@ -112,6 +121,7 @@ input[type="checkbox"] {
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
+  pointer-events: none;
   width: 1em;
   height: 1em;
   vertical-align: top;
@@ -226,6 +236,10 @@ input[type="checkbox"] {
 
 .btn.disabled:hover {
   background-color: #5f5f5f;
+}
+
+.btn:focus {
+  outline: none;
 }
 
 .border-right {

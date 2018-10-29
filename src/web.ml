@@ -176,6 +176,7 @@ let string_of_action = function
 type incoming_msg =
   { action:  action;
     source:  string;
+    name:    string;  (* name of the file in the UI *)
     model:   string;
     rewrite: bool;
     sequentialise: bool;
@@ -186,6 +187,7 @@ type incoming_msg =
 let parse_incoming_msg content =
   let empty = { action=         `Nop;
                 source=         "";
+                name=           "<unknown>";
                 model=          "concrete";
                 rewrite=        false;
                 sequentialise=  false;
@@ -216,6 +218,7 @@ let parse_incoming_msg content =
   let parse msg = function
     | ("action", [act])      -> { msg with action= action_from_string act; }
     | ("source", [src])      -> { msg with source= src; }
+    | ("name", [name])       -> { msg with name= name; }
     | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
     | ("model", [model])     -> { msg with model= model; }
@@ -508,10 +511,10 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
   log_request ~docroot msg flow;
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
-    | `Elaborate  -> request @@ `Elaborate (conf, filename)
-    | `Random -> request @@ `Execute (conf, filename, Random)
-    | `Exhaustive -> request @@ `Execute (conf, filename, Exhaustive)
-    | `Step -> request @@ `Step (conf, filename, msg.interactive)
+    | `Elaborate  -> request @@ `Elaborate (conf, filename, msg.name)
+    | `Random -> request @@ `Execute (conf, filename, msg.name, Random)
+    | `Exhaustive -> request @@ `Execute (conf, filename, msg.name, Exhaustive)
+    | `Step -> request @@ `Step (conf, filename, msg.name, msg.interactive)
   in
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
   do_action msg.action >|= json_of_result >>=

@@ -69,9 +69,11 @@ let hack ~conf mode =
                           else None;
     }
 
-let respond f = function
-  | Exception.Result r -> f r
-  | Exception.Exception err -> Failure (Pp_errors.to_string err)
+let respond filename name f = function
+  | Exception.Result r ->
+    f r
+  | Exception.Exception err ->
+    Failure (Str.replace_first (Str.regexp_string filename) name @@ Pp_errors.to_string err)
 
 (* elaboration *)
 
@@ -374,15 +376,15 @@ let instance debug_level =
   Debug.level := debug_level;
   Debug.print 7 ("Using model: " ^ Prelude.string_of_mem_switch ());
   let do_action  : Instance_api.request -> Instance_api.result = function
-    | `Elaborate (conf, filename) ->
+    | `Elaborate (conf, filename, name) ->
       elaborate ~conf:(setup conf) ~filename
-      |> respond result_of_elaboration
-    | `Execute (conf, filename, mode) ->
+      |> respond filename name result_of_elaboration
+    | `Execute (conf, filename, name, mode) ->
       execute ~conf:(setup conf) ~filename mode
-      |> respond (fun s -> Execution s)
-    | `Step (conf, filename, active) ->
+      |> respond filename name (fun s -> Execution s)
+    | `Step (conf, filename, name, active) ->
       step ~conf:(setup conf) ~filename active
-      |> respond id
+      |> respond filename name id
   in
   let redirect () =
     (* NOTE: redirect stdout to stderr copying stdout file descriptor
