@@ -379,15 +379,27 @@ export default class View {
           ${title}${body}${lastrow}
          </table>>, tooltip="${tooltip}"];`
     }
-    type Pointer = {from: string /*id path*/, to: number /*prov*/, addr: number /*pointer*/, dashed: boolean}
+    type Pointer = {
+      from: string /*id path*/,
+      to: number | null /*prov*/,
+      addr: number /*pointer*/,
+      dashed: boolean,
+      invalid: boolean
+    }
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
       if (alloc.prefix.kind === 'other' && !alloc.dyn) return []
       // THIS IS A TERRIBLE HACK:
       if (_.startsWith(alloc.prefix.name, 'arg')) return []
       return alloc.values.reduce((acc: Pointer[], row) => {
-        if (Memory.pointsto(row) && row.prov != null) {
+        if (Memory.pointsto(row) && Memory.pointsto(row) && row.value != 'unspecified') {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
-          const p: Pointer = {from: from, to: row.prov, addr: parseInt(row.value), dashed: Memory.isintptr(row)}
+          const p: Pointer = {
+            from: from,
+            to: row.prov,
+            addr: parseInt(row.value),
+            dashed: Memory.isintptr(row),
+            invalid: Memory.isInvalidPointer(pvi, row)
+          }
           return _.concat(acc, [p])
         } else {
           return acc
@@ -404,7 +416,7 @@ export default class View {
               return acc
           }
           const offset = p.addr - target.base
-          const color  = target.id != p.to ? ',color="red"': ''
+          const color  = (pvi && target.id != p.to) || p.invalid ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = _.find(mem.map, alloc => alloc.id == p.to)

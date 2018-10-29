@@ -466,6 +466,20 @@ export class Implementation extends ReadOnly {
   }
 }
 
+export class Library extends ReadOnly {
+  constructor (ee: EventEmitter) {
+    super('C11 Library', '', ee)
+    this.editor.setOption('placeholder', '<Download failed...>')
+    this.editor.setOption('mode', 'text/x-csrc')
+    $.ajax({
+      url: 'assets/stdlib.c',
+      type: 'GET',
+      success: (data) => this.setValue(data)
+    })
+  }
+}
+
+
 /*
 export class Execution extends ReadOnly {
   constructor (ee: EventEmitter) {
@@ -1007,7 +1021,7 @@ const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
   Console, Arena, Asm,
   Interactive, Memory,
-  Preferences, Implementation, Help
+  Preferences, Implementation, Library, Help
 }
 
 export function create(title: string, ee: EventEmitter): Tab {

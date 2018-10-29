@@ -34,9 +34,9 @@ type filename = string
 
 (* input: request *)
 type request =
-  [ `Elaborate of conf * filename
-  | `Execute of conf * filename * exec_mode
-  | `Step of conf * filename * active_node option ]
+  [ `Elaborate of conf * filename * string
+  | `Execute of conf * filename * string * exec_mode
+  | `Step of conf * filename * string * active_node option ]
 
 type point = int * int
 type range = point * point

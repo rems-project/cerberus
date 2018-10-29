@@ -237,6 +237,9 @@ export class CerberusUI {
     // Implementation Defined Choices
     $('#implementation').on('click', () => this.getView().newTab('Implementation'))
 
+    // Library
+    $('#library').on('click', () => this.getView().newTab('Library'))
+
     // ISO C
     $('#isoC').on('click', () => {
       window.open('http://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf')
@@ -274,6 +277,7 @@ export class CerberusUI {
       stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
     }
 
+    /*
     const serverStatus = $('#server-status')
     let serverStatusFlag = true
     // Check server status
@@ -292,7 +296,7 @@ export class CerberusUI {
           serverStatus.text(' (SERVER DOWN)')
         }
       })
-    }, 5000)
+    }, 5000)*/
 
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {
@@ -497,6 +501,7 @@ export class CerberusUI {
       data: {
         'action':  action,
         'source':  view.getSource().getValue(),
+        'name': view.getSource().title,
         'rewrite': model.options.rewrite,
         'sequentialise': model.options.sequentialise,
         'model': model.alloc_model,
