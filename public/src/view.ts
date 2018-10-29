@@ -404,7 +404,7 @@ export default class View {
               return acc
           }
           const offset = p.addr - target.base
-          const color  = target.id != p.to && pvi ? ',color="red"': ''
+          const color  = target.id != p.to ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = _.find(mem.map, alloc => alloc.id == p.to)
