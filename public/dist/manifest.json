@@ -1,0 +1,18 @@
+{
+  "short_name": "Cerberus",
+  "name": "Cerberus",
+  "icons": [{
+     "src": "/uni.png",
+     "type": "image/png",
+     "sizes": "128x128"
+   }, {
+     "src": "/cambridge.png",
+     "type": "image/png",
+     "sizes": "256x256"
+   }],
+  "start_url": "/index.html",
+  "background_color": "#3367D6",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#3367D6"
+}

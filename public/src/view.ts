@@ -304,7 +304,7 @@ export default class View {
     if (!mem) return
     const pvi = _.includes(this.state.model.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
-      if (alloc.prefix.kind == 'other' && !alloc.dyn) {
+      if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
         if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
           return ''
       }
@@ -387,10 +387,11 @@ export default class View {
       invalid: boolean
     }
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
-      if (alloc.prefix.kind === 'other' && !alloc.dyn) return []
-      // THIS IS A TERRIBLE HACK:
-      if (_.startsWith(alloc.prefix.name, 'arg')) return []
+      if (alloc.prefix.kind === 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) return []
+      //if (_.startsWith(alloc.prefix.name, 'arg')) return []
       return alloc.values.reduce((acc: Pointer[], row) => {
+        if (Memory.isfunptr(row))
+          return acc
         if (Memory.pointsto(row) && Memory.pointsto(row) && row.value != 'unspecified') {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
           const p: Pointer = {
