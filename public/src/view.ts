@@ -383,7 +383,7 @@ export default class View {
       from: string /*id path*/,
       to: number | null /*prov*/,
       addr: number /*pointer*/,
-      dashed: boolean,
+      intptr: boolean,
       invalid: boolean
     }
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
@@ -397,7 +397,7 @@ export default class View {
             from: from,
             to: row.prov,
             addr: parseInt(row.value),
-            dashed: Memory.isintptr(row),
+            intptr: Memory.isintptr(row),
             invalid: Memory.isInvalidPointer(pvi, row)
           }
           return _.concat(acc, [p])
@@ -409,14 +409,14 @@ export default class View {
     const createEdges = (ps: Pointer[], mem: Memory.State) => {
       return _.reduce(ps, (acc, p) => {
         const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
-        const dashed = p.dashed ? 'style="dashed"' : 'style="solid"'
+        const dashed = p.intptr ? 'style="dashed"' : 'style="solid"'
         if (target) {
           if (target.prefix.kind == 'other' && !target.dyn) {
             if (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
               return acc
           }
           const offset = p.addr - target.base
-          const color  = (pvi && target.id != p.to) || p.invalid ? ',color="red"': ''
+          const color  = (target.id != p.to && (pvi || !p.intptr)) || p.invalid ? ',color="red"': ''
           acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
         } else {
           const toprov = _.find(mem.map, alloc => alloc.id == p.to)
