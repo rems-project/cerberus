@@ -42,6 +42,10 @@ export function ispointer (v: Value): boolean {
   return v.type != null && _.endsWith(v.type, '*')
 }
 
+export function isfunptr (v:Value): boolean {
+  return isNaN (parseInt(v.value))
+}
+
 export function isintptr (v: Value) {
   return v.type != null && (v.type == 'intptr_t' || v.type == 'uintptr_t' || v.type == 'ptrdiff_t')
 }

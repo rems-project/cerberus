@@ -705,7 +705,7 @@ let timeout =
 
 let docroot =
   let doc = "Set public (document root) files locations." in
-  Arg.(value & pos 0 string "./public/dist" & info [] ~docv:"PUBLIC" ~doc)
+  Arg.(value & pos 0 string "./public/dist/" & info [] ~docv:"PUBLIC" ~doc)
 
 let config =
   let doc = "Configuration file in JSON. \

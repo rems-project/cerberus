@@ -51,5 +51,7 @@ public/node_modules
 public/dist/*.bundle.*
 public/dist/src/*
 request.log
+config.json
+cpp_error
 
 bisect*.out
