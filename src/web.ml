@@ -19,6 +19,7 @@ type webconf =
     core_impl: string;
     z3_path: string;
     cerb_debug_level: int;
+    tmp_path: string;
   }
 
 let print_webconf c =
@@ -34,7 +35,8 @@ let print_webconf c =
     Request file: %s
     CERB_PATH: %s
     Core implementation file: %s
-    Z3 path: %s\n"
+    Z3 path: %s\n
+    TMP path: %s\n"
     c.tls_cert c.tls_key c.tls_port
     c.tcp_port c.tcp_redirect
     c.docroot
@@ -43,7 +45,8 @@ let print_webconf c =
     c.request_file
     c.cerb_path
     c.core_impl
-    c.z3_path;
+    c.z3_path
+    c.tmp_path;
   flush stdout
 
 let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
@@ -68,6 +71,7 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
       log_file= "server.log";
       request_file= "request.log";
       z3_path= ld_path;
+      tmp_path= Filename.get_temp_dir_name ();
       cerb_debug_level= 0;
     }
   in
@@ -104,6 +108,7 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
       List.fold_left parse_log cfg log
     | ("z3_path", `String path) -> { cfg with z3_path = path }
     | ("cerb_path", `String path) -> { cfg with cerb_path= path }
+    | ("tmp_path", `String path) -> { cfg with tmp_path= path }
     | (k, _) ->
       Debug.warn @@ "Unknown configuration key: " ^ k;
       cfg
@@ -467,14 +472,17 @@ let respond_file ~rheader fname =
 (* Cerberus actions *)
 
 let log_request ~docroot msg flow =
-  match flow with
-  | Conduit_lwt_unix.TCP tcp ->
+  let endp = Conduit_lwt_unix.endp_of_flow flow in
+  Debug.print 0 (Conduit.sexp_of_endp endp |> Sexplib0__Sexp.to_string);
+  match Conduit_lwt_unix.endp_of_flow flow with
+  | `TLS (_, `TCP (ip, port))
+  | `TCP (ip, port) ->
     let open Unix in
     let tm = gmtime @@ time () in
     let oc = open_out_gen [Open_text;Open_append;Open_creat] 0o666
         (docroot ^ "request.log")
-    in Printf.fprintf oc "%s %d/%d/%d %d:%d:%d %s:%s \"%s\"\n"
-      (Ipaddr.to_string tcp.ip)
+    in Printf.fprintf oc "%s:%d %d/%d/%d %d:%d:%d %s:%s \"%s\"\n"
+      (Ipaddr.to_string ip) port
       tm.tm_mday (tm.tm_mon+1) (tm.tm_year+1900)
       (tm.tm_hour+1) tm.tm_min tm.tm_sec
       (string_of_action msg.action)
@@ -496,7 +504,7 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
   let timeout   = float_of_int conf.timeout in
   let request req : result Lwt.t =
     let instance = "./cerb." ^ msg.model in
-    let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level |]) in
+    let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
                 "CERB_PATH="^conf.cerb_path;
                 "LD_LIBRARY_PATH="^conf.z3_path|]
@@ -594,7 +602,7 @@ let parse_req_header header =
     host= get "host";
   }
 
-let request ~docroot ~conf (flow, _) req body =
+let request ~docroot ~conf (flow, conn) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path =
@@ -633,7 +641,6 @@ let request ~docroot ~conf (flow, _) req body =
     (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
   end
 
-
 let redirect ~docroot ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
@@ -649,6 +656,7 @@ let initialise ~webconf =
     (* NOTE: ad-hoc fix for server crash:
      * https://github.com/mirage/ocaml-cohttp/issues/511 *)
     Lwt.async_exception_hook := ignore;
+    Filename.set_temp_dir_name webconf.tmp_path;
     let docroot = webconf.docroot in
     let conf    = create_conf webconf in
     let http_server = Server.make
@@ -657,7 +665,7 @@ let initialise ~webconf =
     let https_server = Server.make ~callback: (request ~docroot ~conf) () in
     Lwt_main.run @@ Lwt.join
       [ Server.create ~mode:(`TCP (`Port webconf.tcp_port)) http_server
-      ; Server.create ~mode:(`TLS (`Crt_file_path webconf.tls_cert,
+      ; Server.create ~mode:(`TLS_native (`Crt_file_path webconf.tls_cert,
                                    `Key_file_path webconf.tls_key,
                                    `No_password,
                                    `Port webconf.tls_port)) https_server]
