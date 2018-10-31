@@ -373,6 +373,7 @@ module Concrete : Memory = struct
     next_alloc_id: allocation_id;
     allocations: allocation IntMap.t;
     next_address: address;
+    funptrmap: string IntMap.t;
     bytemap: AbsByte.t IntMap.t;
     
     dead_allocations: allocation_id list;
@@ -384,6 +385,7 @@ module Concrete : Memory = struct
     next_alloc_id= Nat_big_num.zero;
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
+    funptrmap = IntMap.empty;
     bytemap= IntMap.empty;
     
     dead_allocations= [];
@@ -597,8 +599,8 @@ module Concrete : Memory = struct
               None
     ) st.allocations None
   
-  let rec combine_bytes find_overlaping ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
-    let combine_bytes = combine_bytes find_overlaping in
+  let rec combine_bytes find_overlaping funptrmap ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+    let combine_bytes = combine_bytes find_overlaping funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -656,8 +658,8 @@ module Concrete : Memory = struct
                 let n = int64_of_bytes false cs in
                 begin match ref_ty with
                   | Function0 _ ->
-                      (* TODO: this is a quick solution, but maybe not a very good one: *)
-                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, None))))
+                      let opt_name = IntMap.find_opt n funptrmap in
+                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, opt_name))))
                   | _ ->
                       if N.equal n N.zero then
                         (* TODO: check *)
@@ -744,18 +746,19 @@ module Concrete : Memory = struct
           Union0 tag_sym
   
   (* INTERNAL explode_bytes *)
-  let rec explode_bytes mval : AbsByte.t list =
+  let rec explode_bytes funptrmap mval : (string IntMap.t * AbsByte.t list) =
+    let ret bs = (funptrmap, bs) in
     match mval with
       | MVunspecified ty ->
-          List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
+          ret @@ List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
       | MVinteger (ity, IV (prov, n)) ->
-          List.map (AbsByte.v prov) begin
+          ret @@List.map (AbsByte.v prov) begin
             bytes_of_int64
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
           end
       | MVfloating (fty, fval) ->
-          List.map (AbsByte.v Prov_none) begin
+          ret @@ List.map (AbsByte.v Prov_none) begin
             bytes_of_int64
               true (* TODO: check that *)
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
@@ -770,44 +773,48 @@ module Concrete : Memory = struct
           begin match ptrval_ with
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
-                List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
-            | PVfunction (Symbol.Symbol (n, _)) ->
+                ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
+            | PVfunction (Symbol.Symbol (n, opt_name)) ->
                 (* TODO(V): *)
-                List.map (AbsByte.v prov) begin
+                (begin match opt_name with
+                  | Some name -> IntMap.add (N.of_int n) name funptrmap
+                  | None -> funptrmap
+                end, List.map (AbsByte.v prov) begin
                   bytes_of_int64
                       false
                       ptr_size (N.of_int n)
-                end
+                  end)
             | PVconcrete addr ->
-                List.mapi (fun i -> AbsByte.v prov ~copy_offset:(Some i)) begin
+                ret @@ List.mapi (fun i -> AbsByte.v prov ~copy_offset:(Some i)) begin
                   bytes_of_int64
                     false (* we model address as unsigned *)
                     ptr_size addr
                 end
           end
       | MVarray mvals ->
+          let (funptrmap, bs_s) =
+            List.fold_left begin fun (funptrmap, bs) mval ->
+              let (funptrmap, bs') = explode_bytes funptrmap mval in
+              (funptrmap, bs' :: bs)
+            end (funptrmap, []) mvals in
           (* TODO: use a fold? *)
-          L.concat (
-            List.map explode_bytes mvals
-          )
+          (funptrmap, L.concat @@ List.rev bs_s)
       | MVstruct (tag_sym, xs) ->
+          let padding_byte _ = AbsByte.v Prov_none None in
           let (offs, last_off) = offsetsof tag_sym in
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
-          snd begin
-            (* TODO: rewrite now that offsetsof returns the paddings *)
-            List.fold_left2 (fun (last_off, acc) (ident, ty, off) (_, _, mval) ->
+          (* TODO: rewrite now that offsetsof returns the paddings *)
+          let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
               let pad = off - last_off in
-              ( off + sizeof ty
-              , acc @
-                List.init pad (fun _ -> AbsByte.v Prov_none None) @
-                explode_bytes mval )
-            ) (0, []) offs xs
-          end @
-          List.init final_pad (fun _ -> AbsByte.v Prov_none None)
+              let (funptrmap, bs) = explode_bytes funptrmap mval in
+              (funptrmap, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
+            end (funptrmap, 0, []) offs xs
+          in
+          (funptrmap, bs @ List.init final_pad padding_byte)
       | MVunion (tag_sym, memb_ident, mval) ->
           let size = sizeof (Core_ctype.Union0 tag_sym) in
-          let bs = explode_bytes mval in
-          bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None)
+          let (funptrmap', bs) = explode_bytes funptrmap mval in
+          (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
   
   
   (* BEGIN DEBUG *)
@@ -815,7 +822,7 @@ module Concrete : Memory = struct
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
       let Some ty = alloc.ty in
-      let (mval, bs') = combine_bytes (find_overlaping st) ty bs in
+      let (mval, bs') = combine_bytes (find_overlaping st) st.funptrmap ty bs in
       mval
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
@@ -873,9 +880,8 @@ module Concrete : Memory = struct
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
             (* TODO: factorise this with do_store inside Concrete.store *)
-            let bs = List.mapi (fun i b ->
-              (Nat_big_num.add addr (Nat_big_num.of_int i), b)
-            ) (explode_bytes mval) in
+            let (funptrmap, pre_bs) = explode_bytes st.funptrmap mval in
+            let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
@@ -885,7 +891,8 @@ module Concrete : Memory = struct
                   bytemap=
                     List.fold_left (fun acc (addr, b) ->
                       IntMap.add addr b acc
-                    ) st.bytemap bs
+                    ) st.bytemap bs;
+                  funptrmap= funptrmap;
               } )
     end
   
@@ -920,7 +927,7 @@ module Concrete : Memory = struct
               (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
               acc
           | Some ty ->
-              begin match combine_bytes (find_overlaping st) ty bs with
+              begin match combine_bytes (find_overlaping st) st.funptrmap ty bs with
                 | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
                     let bs' = List.init (N.to_int alloc.size) (fun i ->
                       (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
@@ -993,7 +1000,7 @@ module Concrete : Memory = struct
     let do_load alloc_id_opt addr =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr (sizeof ty) in
-      let (mval, bs') = combine_bytes (find_overlaping st) ty bs in
+      let (mval, bs') = combine_bytes (find_overlaping st) st.funptrmap ty bs in
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
       begin match bs' with
         | [] ->
@@ -1059,15 +1066,15 @@ module Concrete : Memory = struct
       fail (MerrOther "store with an ill-typed memory value")
     end else
       let do_store alloc_id_opt addr =
-        let bs = List.mapi (fun i b ->
-          (Nat_big_num.add addr (Nat_big_num.of_int i), b)
-        ) (explode_bytes mval) in
         update begin fun st ->
+          let (funptrmap, pre_bs) = explode_bytes st.funptrmap mval in
+          let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
           { st with last_used= alloc_id_opt;
                     bytemap=
                       List.fold_left (fun acc (addr, b) ->
                       IntMap.add addr b acc
-                    ) st.bytemap bs }
+                    ) st.bytemap bs;
+                    funptrmap= funptrmap; }
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
         return Footprint in
@@ -1814,7 +1821,7 @@ let combine_prov prov1 prov2 =
           fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
-            let (mval, acc_bs'') = combine_bytes (find_overlaping st) memb_ty acc_bs' in
+            let (mval, acc_bs'') = combine_bytes (find_overlaping st) st.funptrmap memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
@@ -1829,7 +1836,7 @@ let combine_prov prov1 prov2 =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), Some alloc.size) in
     let size = N.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
-    let (mval, _) = combine_bytes (find_overlaping st) ty bs in
+    let (mval, _) = combine_bytes (find_overlaping st) st.funptrmap ty bs in
     { id = id;
       base = N.to_int alloc.base;
       prefix = alloc.prefix;

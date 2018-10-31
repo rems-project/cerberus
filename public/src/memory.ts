@@ -90,8 +90,12 @@ export function string_of_value (v: Value, track_prov: boolean): string {
   const value = (x:string) => track_prov ? with_prov() + x : x
   if (v.value === 'unspecified')
     return v.value
-  if (ispointer(v) && v.value != 'NULL')
-    return with_prov () + u.toHex(parseInt(v.value))
+  if (ispointer(v) && v.value != 'NULL') {
+    let i = parseInt(v.value)
+    if (isNaN(i))
+      return v.value // function pointers
+    return with_prov() + u.toHex(i)  
+  }
   if (isintptr(v))
     return value(u.toHex(parseInt(v.value)))
   if (ischar(v)) {
