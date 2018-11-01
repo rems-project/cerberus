@@ -6,8 +6,10 @@ open Bmc_substitute
 open Bmc_utils
 
 open Core
+open Core_aux
 open Ocaml_mem
 open Printf
+open Util
 open Z3
 
 (* ======= Do inlining ======= *)
@@ -21,6 +23,9 @@ module BmcInline = struct
 
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
+
+    (* procedure-local state *)
+    proc_expr : (unit typed_expr) option;
   }
   include EffMonad(struct type state = state_ty end)
 
@@ -30,6 +35,7 @@ module BmcInline = struct
     ; file             = file
     ; inline_pexpr_map = Pmap.empty Pervasives.compare
     ; inline_expr_map  = Pmap.empty Pervasives.compare
+    ; proc_expr        = None
     }
 
   (* ======= Accessors ======== *)
@@ -63,14 +69,28 @@ module BmcInline = struct
     get_run_depth_table    >>= fun table ->
     put_run_depth_table (Pmap.add label (depth-1) table)
 
-
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
 
+  (* proc_expr *)
+  let get_proc_expr : (unit typed_expr) eff =
+    get >>= fun st ->
+    return (Option.get st.proc_expr)
+
+  let update_proc_expr (proc_expr: unit typed_expr) : unit eff =
+    get >>= fun st ->
+    put {st with proc_expr = Some proc_expr}
+
+  (* inline maps *)
   let add_inlined_pexpr (id: int) (pexpr: typed_pexpr) : unit eff =
     get >>= fun st ->
     put {st with inline_pexpr_map = Pmap.add id pexpr st.inline_pexpr_map}
+
+  let add_inlined_expr (id: int) (expr: unit typed_expr) : unit eff =
+    get >>= fun st ->
+    put {st with inline_expr_map = Pmap.add id expr st.inline_expr_map}
+
 
   (* ======== Inline functions ======= *)
   let rec inline_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
@@ -194,7 +214,7 @@ module BmcInline = struct
     | Ememop (memop, pes) ->
         mapM inline_pe pes >>= fun inlined_pes ->
         return (Ememop (memop, inlined_pes))
-    | Eaction pact -> (* TODO: lazy assumption on structure of Core *)
+    | Eaction pact -> (* TODO: lazy assumption on structure of Core from C *)
         return (Eaction pact)
     | Ecase (pe, cases) ->
         inline_pe pe >>= fun inlined_pe ->
@@ -235,8 +255,39 @@ module BmcInline = struct
     | End es ->
         mapM inline_e es >>= fun inlined_es ->
         return (End (inlined_es))
-    | Esave _ -> assert false
-    | Erun _  -> assert false
+    | Esave (name, varlist, e) ->
+        let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
+          Pmap.add sym pe map) varlist (Pmap.empty sym_cmp) in
+        let to_check = substitute_expr sub_map e in
+        inline_e to_check >>= fun inlined_to_check ->
+        add_inlined_expr id inlined_to_check >>
+        return (Esave(name, varlist, e))
+    | Erun (a, label, pelist) ->
+        lookup_run_depth (Sym label) >>= fun depth ->
+        if depth >= !!bmc_conf.max_run_depth then
+          let error_msg = 
+            sprintf "Erun_depth_exceeded: %s" (name_to_string (Sym label)) in
+          (* TODO: hacky *)
+          add_inlined_expr id 
+            (Expr([],Epure(Pexpr([], BTy_unit, 
+                                 PEerror(error_msg, Pexpr([], BTy_unit, PEval (Vunit))))))) >>
+          return (Erun(a, label, pelist))
+        else begin
+          get_proc_expr >>= fun proc_expr ->
+          let (cont_syms, cont_expr) = Option.get (find_labeled_continuation
+                            Sym.instance_Basic_classes_Eq_Symbol_sym_dict
+                            label proc_expr) in
+          assert (List.length pelist = List.length cont_syms);
+          let sub_map = List.fold_right2 
+              (fun sym pe map -> Pmap.add sym pe map)
+              cont_syms pelist (Pmap.empty sym_cmp) in
+          let cont_to_check = substitute_expr sub_map cont_expr in
+          increment_run_depth (Sym label) >> 
+          inline_e cont_to_check >>= fun inlined_cont_to_check ->
+          decrement_run_depth (Sym label) >>
+          add_inlined_expr id inlined_cont_to_check >>
+          return (Erun(a, label, pelist))
+        end  
     | Epar es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Epar (inlined_es))
@@ -253,7 +304,8 @@ module BmcInline = struct
     mapM inline_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc (annot, bTy, params, e)) ->
-         inline_e e >>= fun inlined_e ->
+         update_proc_expr e >>= fun () ->
+         inline_e e         >>= fun inlined_e ->
          return (Proc (annot, bTy, params, inlined_e))
      | Some (Fun (ty, params, pe)) ->
          inline_pe pe >>= fun inlined_pe ->
