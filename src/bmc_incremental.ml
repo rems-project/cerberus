@@ -198,7 +198,10 @@ module BmcInline = struct
     | PEis_unsigned pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEis_unsigned(inlined_pe))
-    | PEare_compatible _ -> assert false
+    | PEare_compatible (pe1, pe2) -> 
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (PEare_compatible(pe1,pe2))
     | PEbmc_assume pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEbmc_assume(inlined_pe))
@@ -232,7 +235,7 @@ module BmcInline = struct
         inline_e e2  >>= fun inlined_e2 ->
         return (Eif (inlined_pe, inlined_e1, inlined_e2))
     | Eskip -> return Eskip
-    | Eccall _ -> assert false
+    | Eccall _ -> (* TODO: broken currently *) assert false
     | Eproc _ -> assert false
     | Eunseq es ->
         mapM inline_e es >>= fun inlined_es ->
@@ -316,13 +319,136 @@ module BmcInline = struct
                       funs  = Pmap.add fn_to_check new_fn file.funs}
 end
 
+(* Do SSA renaming and also get a global map from sym -> cbt 
+ * to construct Z3 Expr *)
+module BmcSSA = struct
+  type sym_table_ty = (sym_ty, sym_ty) Pmap.map
+  type sym_ty_table_ty = (sym_ty, core_base_type) Pmap.map
 
+  type state_ty = {
+    sym_supply    : sym_supply_ty;
+    sym_table     : sym_table_ty;
+    sym_ty_table  : sym_ty_table_ty;
+    
+    file   : unit typed_file; (* unmodified *)
 
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+  }
+  include EffMonad(struct type state = state_ty end)
 
+  (* accessors *)
+  let get_sym_table : sym_table_ty eff =
+    get >>= fun st ->
+    return st.sym_table
 
+  let put_sym_table (table: sym_table_ty) : unit eff =
+    get >>= fun st ->
+    put {st with sym_table = table}
 
+  let lookup_sym (sym: sym_ty) : sym_ty eff =
+    get_sym_table >>= fun sym_table ->
+    match Pmap.lookup sym sym_table with
+    | None -> failwith (sprintf "BmcSSA error: sym %s not found" 
+                                (symbol_to_string sym))
+    | Some s -> return s
 
+  let add_to_sym_table (sym1: sym_ty) (sym2: sym_ty) : unit eff =
+    get_sym_table >>= fun table ->
+    put_sym_table (Pmap.add sym1 sym2 table)
 
+  let get_sym_ty_table : sym_ty_table_ty eff =
+    get >>= fun st ->
+    return st.sym_ty_table
+
+  let put_sym_ty_table (table: sym_ty_table_ty) : unit eff =
+    get >>= fun st ->
+    put {st with sym_ty_table = table}
+
+  let put_sym_ty (sym: sym_ty) (ty: core_base_type) : unit eff =
+    get_sym_ty_table >>= fun table ->
+    match Pmap.lookup sym table with
+    | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_ty_table"
+                                  (symbol_to_string sym))
+    | None -> put_sym_ty_table (Pmap.add sym ty table)
+
+  let get_sym_supply : sym_supply_ty eff =
+    get >>= fun st -> 
+    return st.sym_supply
+
+  let update_sym_supply new_supply : unit eff =
+    get >>= fun st ->
+    put {st with sym_supply = new_supply}
+
+  let get_fresh_sym (str: string option) : sym_ty eff =
+    get >>= fun st ->
+    let (new_sym, new_supply) = Sym.fresh_fancy str st.sym_supply in
+    update_sym_supply new_supply >>
+    return new_sym
+
+  (* Core functions*)
+  let rename_sym (Symbol(n, stropt) as sym: sym_ty) : sym_ty eff =
+    let str = match stropt with
+              | None -> "_" ^ (string_of_int n)
+              | Some s -> s ^ "_" ^ (string_of_int n) in
+    get_fresh_sym (Some str) >>= fun new_sym ->
+    add_to_sym_table sym new_sym >>
+    return new_sym
+
+  let rec ssa_pattern (Pattern(annots, pat) : typed_pattern) : typed_pattern eff =
+    (match pat with
+     | CaseBase (Some sym, typ) ->
+         rename_sym sym >>= fun new_sym ->
+         put_sym_ty new_sym typ >>
+         return (CaseBase(Some new_sym, typ))       
+     | CaseBase (None, _) ->
+         return pat
+     | CaseCtor (ctor, patlist) ->
+         mapM ssa_pattern patlist >>= fun ssad_patlist ->
+         return (CaseCtor(ctor, ssad_patlist))
+    ) >>= fun ssad_pat ->
+    return (Pattern(annots, ssad_pat))
+
+  let rec ssa_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
+    (match pe_ with
+    | PEsym sym ->
+        lookup_sym sym >>= fun ssad_sym ->
+        return (PEsym ssad_sym)
+    | PEimpl _ -> return pe_        
+    | PEval _ -> return pe_          
+    | PEconstrained _ -> assert false
+    | PEundef _ -> return pe_
+    | PEerror _ -> return pe_
+    | PEctor (ctor, pelist) ->
+        mapM ssa_pe pelist >>= fun ssad_pelist ->
+        return (PEctor(ctor, ssad_pelist))
+    | PEcase (pe1, caselist) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        mapM (fun (pat,pe) -> ssa_pattern pat >>= fun ssad_pat ->
+                              ssa_pe pe       >>= fun ssad_pe ->
+                              return (ssad_pat, ssad_pe))
+             caselist >>= fun ssad_caselist ->
+        return (PEcase(ssad_pe1, ssad_caselist))      
+    | PEarray_shift _
+    | PEmember_shift _
+    | PEnot _
+    | PEop _
+    | PEstruct _
+    | PEunion _ 
+    | PEcfunction _
+    | PEmemberof _     
+    | PEcall _ 
+    | PElet _ 
+    | PEif _ 
+    | PEis_scalar _
+    | PEis_integer _
+    | PEis_signed _
+    | PEis_unsigned _
+    | PEare_compatible _
+    | PEbmc_assume _ -> assert false
+    ) >>= fun ssad_pe ->
+    return (Pexpr(annots, bTy, ssad_pe))
+end
 
 (* ======= Convert to Z3 exprs ======= *)
 module BmcZ3 = struct
