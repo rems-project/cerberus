@@ -183,6 +183,9 @@ web: src/web.ml
 web.byte: src/web.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
 
+analyse:
+	ocamlbuild -pkgs cmdliner -libs str,unix tools/analyse.native
+
 transformN1570:
 	ocamlbuild -pkgs lambdasoup,yojson -lib str tools/transformN1570.native
 

@@ -1,0 +1,190 @@
+<html>
+  <head>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {
+        'packages':['corechart', 'geochart'],
+        // Note: you will need to get a mapsApiKey for your project.
+        // See: https://developers.google.com/chart/interactive/docs/basic_load_libs#load-settings
+        'mapsApiKey': 'AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY'
+      });
+
+      function drawVisualization() {
+        var data = google.visualization.arrayToDataTable([
+          ['', 'Requests'],
+          ['25/6/2018', 61],
+          ['26/6/2018', 29],
+          ['27/6/2018', 2],
+          ['28/6/2018', 2],
+          ['29/6/2018', 2],
+          ['30/6/2018', 1],
+          ['1/7/2018', 11],
+          ['2/7/2018', 3],
+          ['4/7/2018', 3],
+          ['5/7/2018', 15],
+          ['6/7/2018', 2],
+          ['7/7/2018', 1],
+          ['12/7/2018', 8],
+          ['13/7/2018', 6],
+          ['15/7/2018', 1],
+          ['16/7/2018', 34],
+          ['17/7/2018', 11],
+          ['18/7/2018', 1],
+          ['19/7/2018', 3],
+          ['30/7/2018', 2],
+          ['31/7/2018', 8],
+          ['1/8/2018', 35],
+          ['2/8/2018', 14],
+          ['3/8/2018', 1],
+          ['4/8/2018', 1],
+          ['6/8/2018', 1],
+          ['7/8/2018', 65],
+          ['8/8/2018', 1],
+          ['13/8/2018', 2],
+          ['14/8/2018', 4],
+          ['15/8/2018', 2],
+          ['16/8/2018', 1],
+          ['18/8/2018', 1],
+          ['19/8/2018', 1],
+          ['20/8/2018', 18],
+          ['21/8/2018', 64],
+          ['22/8/2018', 4],
+          ['23/8/2018', 77],
+          ['24/8/2018', 1],
+          ['28/8/2018', 9],
+          ['30/8/2018', 33],
+          ['31/8/2018', 3],
+          ['1/9/2018', 9],
+          ['3/9/2018', 76],
+          ['4/9/2018', 2],
+          ['5/9/2018', 69],
+          ['6/9/2018', 70],
+          ['7/9/2018', 112],
+          ['8/9/2018', 50],
+          ['9/9/2018', 46],
+          ['10/9/2018', 58],
+          ['11/9/2018', 5],
+          ['12/9/2018', 14],
+          ['13/9/2018', 19],
+          ['14/9/2018', 35],
+          ['16/9/2018', 634],
+          ['17/9/2018', 126],
+          ['18/9/2018', 142],
+          ['19/9/2018', 17],
+          ['20/9/2018', 2],
+          ['21/9/2018', 9],
+          ['22/9/2018', 1],
+          ['23/9/2018', 16],
+          ['24/9/2018', 2],
+          ['25/9/2018', 1],
+          ['26/9/2018', 1],
+          ['27/9/2018', 158],
+          ['28/9/2018', 440],
+          ['1/10/2018', 59],
+          ['2/10/2018', 26],
+          ['3/10/2018', 194],
+          ['4/10/2018', 148],
+          ['5/10/2018', 58],
+          ['6/10/2018', 1],
+          ['7/10/2018', 29],
+          ['8/10/2018', 441],
+          ['9/10/2018', 273],
+          ['10/10/2018', 63],
+          ['11/10/2018', 85],
+          ['12/10/2018', 238],
+          ['13/10/2018', 64],
+          ['14/10/2018', 312],
+          ['15/10/2018', 151],
+          ['16/10/2018', 56],
+          ['17/10/2018', 81],
+          ['18/10/2018', 508],
+          ['19/10/2018', 147],
+          ['20/10/2018', 188],
+          ['21/10/2018', 42],
+          ['22/10/2018', 110],
+          ['23/10/2018', 340],
+          ['24/10/2018', 29],
+          ['25/10/2018', 132],
+          ['26/10/2018', 144],
+          ['27/10/2018', 30],
+          ['28/10/2018', 11],
+          ['29/10/2018', 282],
+          ['30/10/2018', 367],
+          ['31/10/2018', 75],
+          ['1/11/2018', 33],
+        ]);
+        var options = {
+          //title : 'Requests in Cerberus per day.',
+          vAxis: {title: 'Date'},
+          hAxis: {title: 'Requests'},
+          seriesType: 'bars',
+          series: {1: {type: 'line'}}
+        };
+
+        var chart = new google.visualization.ComboChart(
+          document.getElementById('chart_div'));
+        chart.draw(data, options);
+      }
+
+      function drawRegionsMap() {
+        var data = google.visualization.arrayToDataTable([
+          ['Country', 'Visits (different IPs)'],
+   ['AR', 1],
+   ['AU', 4],
+   ['BE', 1],
+   ['BR', 2],
+   ['CA', 2],
+   ['CH', 4],
+   ['CN', 2],
+   ['DE', 10],
+   ['DK', 2],
+   ['FR', 2],
+   ['GB', 36],
+   ['GR', 1],
+   ['HR', 3],
+   ['HU', 1],
+   ['IN', 2],
+   ['IT', 3],
+   ['NL', 1],
+   ['PL', 2],
+   ['PT', 1],
+   ['RS', 1],
+   ['RU', 3],
+   ['SE', 3],
+   ['SG', 1],
+   ['TW', 1],
+   ['UA', 1],
+   ['US', 42],
+        ]);
+
+        var options = {};
+
+        var chart = new google.visualization.GeoChart(
+          document.getElementById('regions_div'));
+        chart.draw(data, options);
+      }
+
+      google.charts.setOnLoadCallback(drawVisualization);
+      google.charts.setOnLoadCallback(drawRegionsMap);
+
+    </script>
+  </head>
+  <body style="margin: auto; width: 900px;">
+    <h2>Cerberus server stats</h2>
+    <h3>Summary</h3>
+    <ul>
+      <li>from 25/06/2018 to 31/10/2018</li>
+      <li>7375 requests (elaboration/execution/first forward)</li>
+      <li>1098 from IP 0.0.0.0 due to a bug</li>
+      <li>193 different IPs</li>
+      <li>59 local IPs (10.x.x.x)</li>
+      <li>591 requests from IP 162.246.216.28(from San Jose, US, according to <a href="https://ipapi.co/162.246.216.28/">ipapi.co</a>)</li>
+      <li>524 requests from IP 188.60.175.220 (from Switzerland according to <a href="https://ipapi.co/188.60.175.220/">ipapi.co</a>)</li>
+      <li>27 countries</li>
+    </ul>
+    <h3>Requests per day</h3>
+    <div id="chart_div" style="width: 900px; height: 500px;"></div>
+    <h3>Visits per country</h3>
+    <div id="regions_div" style="width: 900px; height: 500px;"></div>
+  </body>
+</html>
