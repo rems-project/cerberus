@@ -90,7 +90,7 @@ function charCode (s:string) {
 
 /** string of memory value  */
 export function string_of_value (v: Value, track_prov: boolean): string {
-  const with_prov = () => v.prov != undefined ? `@${v.prov}, ` : `@none, `
+  const with_prov = () => v.prov != undefined ? `@${v.prov}, ` : `@empty, `
   const value = (x:string) => track_prov ? with_prov() + x : x
   if (v.value === 'unspecified')
     return v.value

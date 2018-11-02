@@ -178,6 +178,7 @@ export class CerberusUI {
     })
 
     $('.switch').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       const sw = e.currentTarget.id
       const view = this.getView()
       const state = view.state
@@ -189,6 +190,7 @@ export class CerberusUI {
     })
 
     $('.prov-switch').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       const sw = e.currentTarget.id
       const view = this.getView()
       _.pull(view.state.model.switches, 'integer_provenance',
@@ -201,15 +203,20 @@ export class CerberusUI {
     })
 
     $('.prov-model').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       const am = e.currentTarget.id
       if (!AllocModel.is(am)) throw AllocModel.Err(am)
-      const model = this.getView().state.model
+      const view = this.getView()
+      view.emit('dirty')
+      const model = view.state.model
       model.alloc_model = am
       $('#r_concrete').prop('checked', model.alloc_model === 'concrete')
       $('#r_symbolic').prop('checked', model.alloc_model === 'symbolic')
+      this.updateUI(view.state)
     })
 
     $('.core-opt').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       const opt = e.currentTarget.id
       if (!CoreOpt.is(opt)) throw CoreOpt.Err(opt)
       const view = this.getView()
@@ -217,17 +224,20 @@ export class CerberusUI {
       view.emit('dirty')
     })
 
-    $('.highlight').on('click', () => {
+    $('.highlight').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       const view = this.getView()
       view.emit('clear')
       view.emit('highlight')
     })
 
-    $('.update-exec-graph').on('click', () => {
+    $('.update-exec-graph').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       this.getView().updateExecutionGraph()
     })
 
-    $('.update-mem-graph').on('click', () => {
+    $('.update-mem-graph').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
       this.getView().updateMemory()
     })
 
@@ -256,9 +266,13 @@ export class CerberusUI {
     // Update UI
 
     const updateCheckBoxes = (ids: {[key: string]: boolean}) =>
-      _.map(ids, (v, k) => $('#cb_'+k).prop('checked', v))
+      _.map(ids, (v, k) => {
+        //$('#'+k).toggleClass('disabled', !isConc)
+        $('#cb_'+k).prop('checked', v)
+      })
 
     this.updateUI = (s: State) => {
+      const isConc = s.model.alloc_model === 'concrete'
       // Options
       updateCheckBoxes(s.options)
       // Model options
@@ -268,13 +282,15 @@ export class CerberusUI {
       $('#r-step-eval').prop('checked', s.interactiveMode == InteractiveMode.Core)
       $('#r-step-tau').prop('checked', s.interactiveMode == InteractiveMode.Tau)
       // Interactive step buttons
-      stepBack.toggleClass('disabled', s.interactive === undefined || s.interactive.history.length == 0)
-      stepForward.toggleClass('disabled', s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
+      stepBack.toggleClass('disabled', !isConc || s.interactive === undefined || s.interactive.history.length == 0)
+      stepForward.toggleClass('disabled', !isConc || s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
       stepForward.toggleClass('invisible', s.interactive != undefined && s.interactive.next_options.length >= 2)
       stepForwardLeft.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
       stepForwardMiddle.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 3)
       stepForwardRight.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
       stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
+      $('#restart').toggleClass('disabled', !isConc)
+      $('.conc').toggleClass('disabled', !isConc)
     }
 
     /*
