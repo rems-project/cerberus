@@ -29,10 +29,11 @@
           <span >File</span>
           <div class="dropdown">
             <div id="new" class="menu-item btn">New empty file</div>
-            <hr>
-            <div id="load_demo" class="menu-item btn">Load demo test</div>
-            <div id="load_defacto" class="menu-item btn">Load defacto test</div>
             <div id="load" class="menu-item btn">Load from file</div>
+            <div class="menu-section border-top">Load test examples...</div>
+            <div id="load_popl19" class="menu-item btn">POPL 2019: pointer provenance</div>
+            <div id="load_defacto" class="menu-item btn">C defacto standard</div>
+            <div id="load_demo" class="menu-item btn">GCC Tools Chauldron 2018</div>
           </div>
         </li>
         <li class="menu-item btn contain-subitems">
@@ -86,12 +87,12 @@
           </div>
         </li>
         <li class="menu-item">Step: <span id="step-counter">0</span></li>
-        <li id="step-forward" class="menu-item btn active"><span>Forward</span></li>
-        <li id="step-forward-left" class="menu-item btn active invisible"><span>Left</span></li>
-        <li id="step-forward-middle" class="menu-item btn active invisible"><span>Middle</span></li>
-        <li id="step-forward-right" class="menu-item btn active invisible"><span>Right</span></li>
-        <li id="step-back" class="menu-item btn active"><span>Back</span></li>
-        <li id="restart" class="menu-item btn active border-right"><span>Restart</span></li>
+        <li id="step-forward" class="menu-item btn active conc"><span>Forward</span></li>
+        <li id="step-forward-left" class="menu-item btn active invisible conc"><span>Left</span></li>
+        <li id="step-forward-middle" class="menu-item btn active invisible conc"><span>Middle</span></li>
+        <li id="step-forward-right" class="menu-item btn active invisible conc"><span>Right</span></li>
+        <li id="step-back" class="menu-item btn active conc"><span>Back</span></li>
+        <li id="restart" class="menu-item btn active border-right conc"><span>Restart</span></li>
         <li class="menu-item btn contain-subitems">
           <span>Search</span>
           <div class="dropdown">
@@ -173,59 +174,6 @@
     </div>
   </div><!-- header -->
   <div id="views"></div>
-  <!-- demo window -->
-  <div id="demo" class="window">
-    <div class="header">
-      <ul class="menu x-fill">
-        <li><div class="title">Load GCC Cauldron 2018 demo tests...</div></li>
-        <li class="right">
-          <div id="load_demo_cancel" class="menu-item btn">Cancel</div>
-        </li>
-      </ul>
-    </div>
-    <div class="window_body" style="max-width: 40em; max-height: 30em;">
-      <h3 style="margin-left: 2em;">GCC Tools Cauldron 2018</h3>
-      <h4 style="margin-left: 2em;">Original versions</h2>
-      <ul class="tests">
-        <li><a href="#">demo1.c</a></li>
-        <li><a href="#">provenance_basic_global_xy.c</a></li>
-        <li><a href="#">provenance_roundtrip_via_intptr_t.c</a></li>
-        <li><a href="#">pointer_offset_from_subtraction_1_global.c</a></li>
-        <li><a href="#">provenance_tag_bits_via_uintptr_t_1.c</a></li>
-        <li><a href="#">pointer_copy_user_dataflow_direct_bytewise.c</a></li>
-        <li><a href="#">provenance_lost_escape_1.c</a></li>
-        <li><a href="#">provenance_intra_object_1.c</a></li>
-        <li><a href="#">cast_struct_and_first_member_2.c</a></li>
-        <li><a href="#">unspecified_value_struct_copy.c</a></li>
-        <li><a href="#">cheri_03_ii.c</a></li>
-        <li><a href="#">pointer_comparison_eq_zombie_1.c</a></li>
-      </ul>
-      <h4 style="margin-left: 2em;">Simplified (no printf, memcpy, memcmp, ....)</h2>
-      <ul class="tests">
-        <li><a href="#">provenance_basic_global_xy_nolibc.c</a></li>
-        <li><a href="#">provenance_roundtrip_via_intptr_t_nolibc.c</a></li>
-        <li><a href="#">pointer_offset_from_subtraction_1_global_nolibc.c</a></li>
-        <li><a href="#">provenance_tag_bits_via_uintptr_t_1_nolibc.c</a></li>
-        <li><a href="#">provenance_lost_escape_1_nolibc.c</a></li>
-        <li><a href="#">provenance_intra_object_1_nolibc.c</a></li>
-        <li><a href="#">unspecified_value_struct_copy_nolibc.c</a></li>
-        <li><a href="#">cheri_03_ii_nolibc.c</a></li>
-      </ul>
-    </div>
-  </div>
-  <!-- defacto window -->
-  <div id="defacto" class="window">
-    <div class="header">
-      <ul class="menu x-fill">
-        <li><div class="title">Load defacto tests...</div></li>
-        <li class="right">
-          <div id="load_defacto_cancel" class="menu-item btn">Cancel</div>
-        </li>
-      </ul>
-    </div>
-    <div id="defacto_body" class="window_body">
-    </div>
-  </div>
   <script src="main.bundle.js"></script>
   <script src="viz.js"></script>
 </body>

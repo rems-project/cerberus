@@ -3,6 +3,7 @@ import _ from 'lodash'
 import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt } from './common'
 import * as util from './util'
 import View from './view'
+import Widget from './widget';
 
 /** Possible actions to request to the server */
 type ExecutionMode = 'random' | 'exhaustive'
@@ -61,29 +62,26 @@ export class CerberusUI {
     })
 
     // Load defacto tests
+    let defacto: Widget.Widget | undefined
     $('#load_defacto').on('click', () => {
-      $('#defacto').css('visibility', 'visible')
+      if (defacto === undefined)
+        defacto = new Widget.Defacto()
+      else
+        defacto.show()
     })
-
-    $('#load_defacto_cancel').on('click', () => {
-      $('#defacto').css('visibility', 'hidden')
-    })
-
+    let gcc2018: Widget.Widget | undefined
     $('#load_demo').on('click', () => {
-      $('#demo').css('visibility', 'visible')
+      if (gcc2018 === undefined)
+        gcc2018 = new Widget.GCC2018()
+      else
+        gcc2018.show()
     })
-
-    $('#load_demo_cancel').on('click', () => {
-      $('#demo').css('visibility', 'hidden')
-    })
-
-    $('#demo .tests a').on('click', (e) => {
-      const name = e.target.textContent as string
-      util.get('demo/'+name, (data: string) => {
-        $('#demo').css('visibility', 'hidden')
-        this.add(new View(name, data))
-        this.refresh()
-      })
+    let popl19: Widget.POPL19 | undefined
+    $('#load_popl19').on('click', () => {
+      if (popl19 === undefined)
+        popl19 = new Widget.POPL19()
+      else
+        popl19.show()
     })
 
     // Run (Execute)
@@ -109,7 +107,6 @@ export class CerberusUI {
     stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
     const stepCounter = $('#step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
-
 
     // Interactive Options
     const setInteractiveMode = (mode: InteractiveMode) => {
@@ -272,7 +269,6 @@ export class CerberusUI {
       })
 
     this.updateUI = (s: State) => {
-      const isConc = s.model.alloc_model === 'concrete'
       // Options
       updateCheckBoxes(s.options)
       // Model options
@@ -282,37 +278,16 @@ export class CerberusUI {
       $('#r-step-eval').prop('checked', s.interactiveMode == InteractiveMode.Core)
       $('#r-step-tau').prop('checked', s.interactiveMode == InteractiveMode.Tau)
       // Interactive step buttons
-      stepBack.toggleClass('disabled', !isConc || s.interactive === undefined || s.interactive.history.length == 0)
-      stepForward.toggleClass('disabled', !isConc || s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
+      stepBack.toggleClass('disabled', s.interactive === undefined || s.interactive.history.length == 0)
+      stepForward.toggleClass('disabled', s.interactive != undefined && s.interactive.next_options.length != 1 && s.interactive.history.length != 0)
       stepForward.toggleClass('invisible', s.interactive != undefined && s.interactive.next_options.length >= 2)
       stepForwardLeft.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
       stepForwardMiddle.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 3)
       stepForwardRight.toggleClass('invisible', s.interactive === undefined || s.interactive.next_options.length < 2)
       stepCounter.text(s.interactive === undefined ? 0 : s.interactive.counter)
-      $('#restart').toggleClass('disabled', !isConc)
-      $('.conc').toggleClass('disabled', !isConc)
+      // Disabled options only supported by concrete
+      $('.conc').toggleClass('disabled', s.model.alloc_model != 'concrete')
     }
-
-    /*
-    const serverStatus = $('#server-status')
-    let serverStatusFlag = true
-    // Check server status
-    window.setInterval(() => {
-      $.ajax({
-        url: 'index.html',
-        type: 'HEAD'
-      }).done(() => {
-        if (!serverStatusFlag) {
-          serverStatusFlag = true
-          serverStatus.text('')
-        }
-      }).fail(() => {
-        if (serverStatusFlag) {
-          serverStatusFlag = false
-          serverStatus.text(' (SERVER DOWN)')
-        }
-      })
-    }, 5000)*/
 
     // Get standard
     $.getJSON('std.json').done((res) => this.std = res).fail(() => {
@@ -479,6 +454,10 @@ export class CerberusUI {
     this.refresh()
   }
 
+  public openExperimentalTab() {
+    this.getView().newTab('Experimental')
+  }
+
   public step(active: {id: number, state: string} | null): void {
     const view = this.getView()
     if (active != null) {
@@ -578,38 +557,7 @@ export class CerberusUI {
     if (this.currentView)
       this.currentView.refresh()
   }
-
 }
-
-// TODO: move this to a widget
-// Get list of defacto tests
-util.get('defacto_tests.json', (data: any) => {
-  let div = $('#defacto_body')
-  for (let i = 0; i < data.length; i++) {
-    let questions = $('<div class="questions"></div>')
-    for (let j = 0; j < data[i].questions.length; j++) {
-      let q = data[i].questions[j]
-      let tests = $('<ul class="tests"></ul>')
-      for (let k = 0; q.tests && k < q.tests.length; k++) {
-        let name = q.tests[k]
-        let test = $('<li><a href="#">'+name+'</a></li>')
-        test.on('click', () => {
-          $.get('defacto/'+name).done((data) => {
-            $('#defacto').css('visibility', 'hidden')
-            UI.addView(name, data)
-          })
-        })
-        tests.append(test)
-      }
-      questions.append(q.question)
-      questions.append(tests)
-    }
-    div.append($('<h3>'+data[i].section+'</h3>'))
-    div.append(questions)
-  }
-})
-
-/** UI start up */
 
 const UI = new CerberusUI()
 export default UI

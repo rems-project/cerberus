@@ -1,5 +1,4 @@
 const Path = require('path');
-const CompressionPlugin = require("compression-webpack-plugin")
 const ExtractTextPlugin = require('extract-text-webpack-plugin')
 const extractCSS = new ExtractTextPlugin({ filename: 'style.bundle.css' })
 
@@ -30,9 +29,6 @@ module.exports = {
     }
    ]
   },
-  plugins: [
-    extractCSS,
-    new CompressionPlugin()
-  ]
+  plugins: [ extractCSS ]
 };
 

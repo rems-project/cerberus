@@ -1,0 +1,84 @@
+<h2>Example: <code>read_via_invalid_1.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>int main() {<br>  int x;<br>  // is this free of undefined behaviour?<br>  x = *(int*)0x654321;<br>  printf("x=%i\n",x);<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/read_via_invalid_1.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- read_via_invalid_1.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">x=0<br>read_via_invalid_1.c:5:7: runtime error: load of misaligned address 0x000000654321 for type 'int', which requires 4 byte alignment<br>0x000000654321: note: pointer points here<br> 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  00 00 00 00 00<br>              ^ <br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+AddressSanitizer:DEADLYSIGNAL<br>=================================================================<br>==3324==ERROR: AddressSanitizer: SEGV on unknown address 0x000000654321 (pc 0x0000004e71cc bp 0x0000004e7240 sp 0x7ffcc0903110 T0)<br>==3324==The signal is caused by a READ memory access.<br>    #0 0x4e71cb in main (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-ASAN.out+0x4e71cb)<br>    #1 0x7fba36eec82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)<br>    #2 0x419d78 in _start (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-ASAN.out+0x419d78)<br><br>AddressSanitizer can not provide additional info.<br>SUMMARY: AddressSanitizer: SEGV (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-ASAN.out+0x4e71cb) in main<br>==3324==ABORTING<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 77
+MemorySanitizer:DEADLYSIGNAL<br>==3338==ERROR: MemorySanitizer: SEGV on unknown address 0x000000654321 (pc 0x00000048db51 bp 0x00000048dbd0 sp 0x7ffc77069060 T3338)<br>==3338==The signal is caused by a READ memory access.<br>    #0 0x48db50 in main (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-MSAN.out+0x48db50)<br>    #1 0x7f057544382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)<br>    #2 0x41a728 in _start (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-MSAN.out+0x41a728)<br><br>MemorySanitizer can not provide additional info.<br>SUMMARY: MemorySanitizer: SEGV (/auto/homes/vb358/charon2/read_via_invalid_1.c.clang-6.0-MSAN.out+0x48db50) in main<br>==3338==ABORTING<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Undefined [read_via_invalid_1.c:5:7-22]{id: [UB043_indirection_invalid_value]}<br>END EXEC[0]<br>Time spent: 0.019022 seconds<br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Killed {msg: Memory WIP: TODO: load from device memory ==&gt; PV(Prov_device, PVfromint(IVconcrete(6636321)), [])}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Killed {msg: Memory WIP: tried to cast to a pointer type an (non device) integer value non-equal to zero}<br>END EXEC[1]<br>Time spent: 0.034543 seconds<br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 134
+</td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 11: Segmentation fault</td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 11: Segmentation fault</td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 11: Segmentation fault</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 11: Segmentation faultread_via_invalid_1.c:5:3: warning: Conversion from an integer to non-null pointer.<br><br>    Implementation defined behavior (IMPL-CCV13):<br>        see C11 section 6.3.2.3:5 http://rvdoc.org/C11/6.3.2.3<br>        see CERT section INT36-C http://rvdoc.org/CERT/INT36-C<br><br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">Fatal error: exception Main.CH2O_error("cast or initializer cannot be typed")<br>Raised at file "bytes.ml", line 220, characters 25-34<br>Called from file "bytes.ml", line 248, characters 15-34<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">Time 0: calling main()<br>--[step_internal_function]--&gt;<br>Time 1: in function main, statement<br>  x = *((int *) 6636321); printf(__stringlit_1, x); return 0;<br>--[step_seq]--&gt;<br>Time 2: in function main, statement<br>  x = *((int *) 6636321); printf(__stringlit_1, x);<br>--[step_seq]--&gt;<br>Time 3: in function main, statement x = *((int *) 6636321);<br>--[step_do_1]--&gt;<br>Time 4: in function main, expression x = *((int *) 6636321)<br>--[red_var_local]--&gt;<br>Time 5: in function main, expression &lt;loc x&gt; = *((int *) 6636321)<br>--[red_cast]--&gt;<br>Time 6: in function main, expression &lt;loc x&gt; = *6636321<br>Stuck state: in function main, expression &lt;loc x&gt; = *6636321<br>Stuck subexpression: *6636321<br>ERROR: Undefined behavior<br>In file included from read_via_invalid_1.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br></td>
+
+<table></code></pre>
