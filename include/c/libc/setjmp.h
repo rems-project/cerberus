@@ -1,5 +1,5 @@
-#ifndef	_SETJUMP_H_
-#define	_SETJUMP_H_
+#ifndef	_SETJMP_H_
+#define	_SETJMP_H_
 
 typedef __cerbty_jmp_buf jmp_buf;
 
