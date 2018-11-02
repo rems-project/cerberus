@@ -352,19 +352,24 @@ module Concrete : Memory = struct
     let split_bytes = function
       | [] ->
           failwith "Concrete.AbsByte.split_bytes: called on an empty list"
-      | b0::bs ->
-          let (prov, rev_values, offset_status) =
+      | bs ->
+          let (_prov, rev_values, offset_status) =
             List.fold_left (fun (prov_acc, val_acc, offset_acc) b ->
-              (* TODO: this probably wrong with respect to Prov_device and Prov_wildcard *)
-              ( (if b.prov = prov_acc || b.prov = Prov_none then prov_acc else Prov_none)
-              , b.value :: val_acc
-              , match offset_acc, b.copy_offset with
-                  | `PtrBytes n, Some n' when n+1 = n' ->
-                      `PtrBytes n'
-                  | _ ->
-                      `OtherBytes )
-          ) (b0.prov, [b0.value], match b0.copy_offset with Some 0 -> `PtrBytes 0 | _ -> `OtherBytes) bs in
-          ( prov
+              let prov_acc' = match prov_acc, b.prov with
+                | `VALID (Prov_some alloc_id1), Prov_some alloc_id2 when alloc_id1 <> alloc_id2 ->
+                    `INVALID
+                | `VALID Prov_none, (Prov_some _ as new_prov) ->
+                    `VALID new_prov
+                | prev_acc, _ ->
+                    prev_acc in
+              let offset_acc' = match offset_acc, b.copy_offset with
+                | `PtrBytes n1, Some n2 when n1 = n2 ->
+                    `PtrBytes (n1+1)
+                | _ ->
+                    `OtherBytes in
+              (prov_acc', b.value :: val_acc, offset_acc')
+            ) (`VALID Prov_none, [], `PtrBytes 0) bs in
+          ( (match _prov with `INVALID -> Prov_none | `VALID z -> z)
           , (match offset_status with `OtherBytes -> `NotValidPtrProv | _ -> `ValidPtrProv)
           , List.rev rev_values )
   end
@@ -599,8 +604,15 @@ module Concrete : Memory = struct
               None
     ) st.allocations None
   
+  
+  (* INTERNAL combine_bytes: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
+  (* ASSUMES: has_size ty /\ |bs| >= sizeof ty*)
+  (* property that should hold:
+       forall ty bs bs' mval.
+         has_size ty -> |bs| >= sizeof ty -> combine_bytes ty bs = (mval, bs') ->
+         |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
   let rec combine_bytes find_overlaping funptrmap ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
-    let combine_bytes = combine_bytes find_overlaping funptrmap in
+    let self = combine_bytes find_overlaping funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -614,10 +626,12 @@ module Concrete : Memory = struct
     
     if List.length bs < sizeof ty then
       failwith "combine_bytes, |bs| < sizeof(ty)";
+    
     match ty with
       | Void0
       | Array0 (_, None)
       | Function0 _ ->
+          (* ty must have a known size *)
           assert false
       | Basic0 (Integer ity) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
@@ -645,7 +659,7 @@ module Concrete : Memory = struct
             if n <= 0 then
               (MVarray (List.rev acc), cs)
             else
-              let (mval, cs') = combine_bytes elem_ty cs in
+              let (mval, cs') = self elem_ty cs in
               aux (n-1) (mval :: acc) cs'
           in
           aux (Nat_big_num.to_int n) [] bs
@@ -686,12 +700,12 @@ module Concrete : Memory = struct
           end, bs2)
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
-          combine_bytes atom_ty bs
+          self atom_ty bs
       | Struct0 tag_sym ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
-            let (mval, acc_bs') = combine_bytes memb_ty (L.drop pad acc_bs) in
+            let (mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
             ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
           ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
