@@ -2,15 +2,12 @@ open import Pervasives
 
 type t
 declare ocaml target_rep type t = `Location_ocaml.t`
-declare hol target_rep type t = `unit`
 
 val unknown: t
 declare ocaml target_rep function unknown = `Location_ocaml.unknown`
-declare hol target_rep function unknown = `()`
 
 val other: string -> t
 declare ocaml target_rep function other = `Location_ocaml.other`
-declare hol target_rep function other = `()`
 
 val with_regions_and_cursor: list t -> maybe t -> t
 declare ocaml target_rep function with_regions_and_cursor = `Location_ocaml.with_regions_and_cursor`
@@ -27,7 +24,18 @@ end
 
 val stringFromLocation: t -> string
 declare ocaml target_rep function stringFromLocation = `Location_ocaml.location_to_string`
-declare hol   target_rep function stringFromLocation u = ""
 
 val get_filename: t -> maybe string
 declare ocaml target_rep function get_filename = `Location_ocaml.get_filename`
+
+
+(* Mapping this to unit for the theorem provers *)
+declare hol target_rep type t = `unit`
+declare hol target_rep function unknown = `()`
+declare hol target_rep function other = `()`
+declare hol target_rep function stringFromLocation u = ""
+
+declare coq target_rep type t = `unit`
+declare coq target_rep function unknown = `tt`
+declare coq target_rep function other = `tt`
+declare coq target_rep function stringFromLocation u = ""
