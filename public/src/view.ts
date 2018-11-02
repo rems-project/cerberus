@@ -348,11 +348,11 @@ export default class View {
         const ptr_as_bytes = Memory.ispointer(row) && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
         let value
         if (ptr_as_bytes && row.bytes != null) {
-          const with_prov = (i: number) => row.bytes != null && row.bytes[i].prov != null ? `@${row.bytes[i].prov}, ` : `@none, `
+          const with_prov = (i: number) => row.bytes != null && row.bytes[i].prov != null ? `@${row.bytes[i].prov}, ` : `@empty, `
           const with_offset = (i: number) => row.bytes != null && row.bytes[i].offset != null ? `${row.bytes[i].offset} : ` : '? : '
           value = `<table cellpadding="0" cellspacing="0" border="0">`
           value += `<tr border="1"><td>${(pvi ? with_prov(0) : with_offset(0)) + toHex(row.bytes[0].value as number)}</td>
-                  <td rowspan="${row.bytes.length}">${(row.prov != undefined ? `@${row.prov}, ` : `@none, `) + toHex(parseInt(row.value))}</td></tr>`
+                  <td rowspan="${row.bytes.length}">${(row.prov != undefined ? `@${row.prov}, ` : `@empty, `) + toHex(parseInt(row.value))}</td></tr>`
             for (let j = 1; j < row.bytes.length; j++) {
               value += `<tr><td border="1" sides="t">${(pvi ? with_prov(j) : with_offset(j)) + toHex(row.bytes[j].value as number)}</td></tr>`
             }

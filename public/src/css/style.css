@@ -142,6 +142,10 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 
+.menu-item.disabled input:checked::after {
+  color: #afafaf;
+}
+
 .menu > li {
   display: inline-block;
   font-size: 12px;
@@ -221,8 +225,16 @@ input[type="checkbox"] {
   transform: scale(0.95);
 }
 
+.dropdown > .btn.disabled:active {
+  transform: unset;
+}
+
 .active:active {
   transform: scale(0.95);
+}
+
+.active.disabled:active {
+  transform: unset;
 }
 
 .btn.disabled {
