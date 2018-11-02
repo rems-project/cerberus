@@ -1553,7 +1553,13 @@ let combine_prov prov1 prov2 =
       | IntAdd ->
           IV (combine_prov prov1 prov2, Nat_big_num.add n1 n2)
       | IntSub ->
-          IV (combine_prov prov1 prov2, Nat_big_num.sub n1 n2)
+          let prov' = match prov1, prov2 with
+            | Prov_some _, Prov_some _
+            | Prov_none, _ ->
+                Prov_none
+            | _ ->
+                prov1 in
+          IV (prov', Nat_big_num.sub n1 n2)
       | IntMul ->
           IV (combine_prov prov1 prov2, Nat_big_num.mul n1 n2)
       | IntDiv ->
