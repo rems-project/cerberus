@@ -1,0 +1,87 @@
+<h2>Example: <code>use_struct_isomorphic.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>typedef struct { int  i1; float f1; } st1;<br>typedef struct { int  i2; float f2; } st2;<br>int main() {<br>  st1 s1 = {.i1 = 1, .f1 = 1.0 };<br>  st2 s2;<br>  s2 = s1; <br>  printf("s2.i2=%i2  s2.f2=%f\n",s2.i2,s2.f2);<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/use_struct_isomorphic.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- use_struct_isomorphic.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c: In function 'main':<br>use_struct_isomorphic.c:7:6: error: incompatible types when assigning to type 'st2' {aka 'struct &lt;anonymous&gt;'} from type 'st1' {aka 'struct &lt;anonymous&gt;'}<br>   s2 = s1;<br>      ^<br>sh: 1: use_struct_isomorphic.c.gcc-8.1-O0.out: not found<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c: In function 'main':<br>use_struct_isomorphic.c:7:6: error: incompatible types when assigning to type 'st2' {aka 'struct &lt;anonymous&gt;'} from type 'st1' {aka 'struct &lt;anonymous&gt;'}<br>   s2 = s1;<br>      ^<br>sh: 1: use_struct_isomorphic.c.gcc-8.1-O2.out: not found<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c: In function 'main':<br>use_struct_isomorphic.c:7:6: error: incompatible types when assigning to type 'st2' {aka 'struct &lt;anonymous&gt;'} from type 'st1' {aka 'struct &lt;anonymous&gt;'}<br>   s2 = s1;<br>      ^<br>sh: 1: use_struct_isomorphic.c.gcc-8.1-O3.out: not found<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c: In function 'main':<br>use_struct_isomorphic.c:7:6: error: incompatible types when assigning to type 'st2' {aka 'struct &lt;anonymous&gt;'} from type 'st1' {aka 'struct &lt;anonymous&gt;'}<br>   s2 = s1;<br>      ^<br>sh: 1: use_struct_isomorphic.c.gcc-8.1-O2-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c: In function 'main':<br>use_struct_isomorphic.c:7:6: error: incompatible types when assigning to type 'st2' {aka 'struct &lt;anonymous&gt;'} from type 'st1' {aka 'struct &lt;anonymous&gt;'}<br>   s2 = s1;<br>      ^<br>sh: 1: use_struct_isomorphic.c.gcc-8.1-O3-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-O0.out: not found<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-O2.out: not found<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-O3.out: not found<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-O2-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-O3-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-UBSAN.out: not found<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-ASAN.out: not found<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br>sh: 1: use_struct_isomorphic.c.clang-6.0-MSAN.out: not found<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c(7): error: a value of type "st1" cannot be assigned to an entity of type "st2"<br>    s2 = s1; <br>       ^<br><br>compilation aborted for use_struct_isomorphic.c (code 2)<br>sh: 1: use_struct_isomorphic.c.icc-19-O0.out: not found<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c(7): error: a value of type "st1" cannot be assigned to an entity of type "st2"<br>    s2 = s1; <br>       ^<br><br>compilation aborted for use_struct_isomorphic.c (code 2)<br>sh: 1: use_struct_isomorphic.c.icc-19-O2.out: not found<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c(7): error: a value of type "st1" cannot be assigned to an entity of type "st2"<br>    s2 = s1; <br>       ^<br><br>compilation aborted for use_struct_isomorphic.c (code 2)<br>sh: 1: use_struct_isomorphic.c.icc-19-O3.out: not found<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c(7): error: a value of type "st1" cannot be assigned to an entity of type "st2"<br>    s2 = s1; <br>       ^<br><br>compilation aborted for use_struct_isomorphic.c (code 2)<br>sh: 1: use_struct_isomorphic.c.icc-19-O2-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c(7): error: a value of type "st1" cannot be assigned to an entity of type "st2"<br>    s2 = s1; <br>       ^<br><br>compilation aborted for use_struct_isomorphic.c (code 2)<br>sh: 1: use_struct_isomorphic.c.icc-19-O3-no-strict-aliasing.out: not found<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+use_struct_isomorphic.c:7:8: error: [Ail typing] (§6.5.16.1#1)<br>  "One of the following shall hold:<br>— the left operand has atomic, qualified, or unqualified arithmetic type, and the right has arithmetic type;<br>— the left operand has an atomic, qualified, or unqualified version of a structure or union type compatible with the type of the right;<br>— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) both operands are pointers to qualified or unqualified versions of compatible types, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;<br>— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) one operand is a pointer to an object type, and the other is a pointer to a qualified or unqualified version of void, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;<br>— the left operand is an atomic, qualified, or unqualified pointer, and the right is a null pointer constant; or<br>— the left operand has type atomic, qualified, or unqualified _Bool, and the right is a pointer.". (§6.5.16.1#1)<br>  s2 = s1; <br>       ^~ <br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+use_struct_isomorphic.c:7:8: error: [Ail typing] (§6.5.16.1#1)<br>  "One of the following shall hold:<br>— the left operand has atomic, qualified, or unqualified arithmetic type, and the right has arithmetic type;<br>— the left operand has an atomic, qualified, or unqualified version of a structure or union type compatible with the type of the right;<br>— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) both operands are pointers to qualified or unqualified versions of compatible types, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;<br>— the left operand has atomic, qualified, or unqualified pointer type, and (considering the type the left operand would have after lvalue conversion) one operand is a pointer to an object type, and the other is a pointer to a qualified or unqualified version of void, and the type pointed to by the left has all the qualifiers of the type pointed to by the right;<br>— the left operand is an atomic, qualified, or unqualified pointer, and the right is a null pointer constant; or<br>— the left operand has type atomic, qualified, or unqualified _Bool, and the right is a pointer.". (§6.5.16.1#1)<br>  s2 = s1; <br>       ^~ <br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+</td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 1
+use_struct_isomorphic.c:7:6: error: assigning to 'st2' from incompatible type 'st1'<br>  s2 = s1; <br>     ^ ~~<br>1 error generated.<br></td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+use_struct_isomorphic.c:7:3: error: Incompatible types in assignment.<br><br>    Constraint violation (CV-TEAS1):<br>        see C11 section 6.5.16.1:1 http://rvdoc.org/C11/6.5.16.1<br>        see CERT-C section MSC40-C http://rvdoc.org/CERT-C/MSC40-C<br>        see MISRA-C section 8.1:1 http://rvdoc.org/MISRA-C/8.1<br><br>Translation failed (kcc_config dumped). To repeat, run this command in directory charon2:<br>kcc -d -o use_struct_isomorphic.c.RV-Match.out use_struct_isomorphic.c<br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">Fatal error: exception Main.Unknown_specifier(_)<br>Raised at file "bytes.ml", line 220, characters 25-34<br>Called from file "ratio.ml", line 553, characters 12-30<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c:7: error: assigning to 'st2' (aka 'struct ') from incompatible type 'st1' (aka 'struct ')<br>1 error detected.<br>sh: 1: use_struct_isomorphic.c.compcert-3.2.out: not found<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">exit codes: compile 2 / execute 127
+use_struct_isomorphic.c:7: error: assigning to 'st2' (aka 'struct ') from incompatible type 'st1' (aka 'struct ')<br>1 error detected.<br>sh: 1: use_struct_isomorphic.c.compcert-3.2-O.out: not found<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">In file included from use_struct_isomorphic.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br>use_struct_isomorphic.c:7: error: assigning to 'st2' (aka 'struct ') from incompatible type 'st1' (aka 'struct ')<br>1 error detected.<br></td>
+
+<table></code></pre>

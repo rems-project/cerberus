@@ -1,0 +1,61 @@
+<h2>Example: <code>pointer_copy_user_dataflow_direct_bytewise.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>#include &lt;string.h&gt;<br>int  x=1;<br>void user_memcpy(unsigned char* dest, <br>                 unsigned char *src, size_t n) {<br>  while (n &gt; 0)  {		<br>    *dest = *src;<br>    src += 1;<br>    dest += 1;<br>    n -= 1;<br>  }<br>}<br>int main() {<br>  int *p = &amp;x;<br>  int *q;<br>  user_memcpy((unsigned char*)&amp;q, <br>              (unsigned char*)&amp;p, sizeof(int *));<br>  *q = 11; // is this free of undefined behaviour?<br>  printf("*p=%d  *q=%d\n",*p,*q);<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/pointer_copy_user_dataflow_direct_bytewise.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- pointer_copy_user_dataflow_direct_bytewise.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Defined {value: "Specified(0)", stdout: "*p=11  *q=11\n", blocked: "false"}<br>END EXEC[0]<br>Time spent: 0.042101 seconds<br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+cerberus: internal error, uncaught exception:<br>          Failure("TODO: Symbolic defacto, isWellAligned_ptrval")<br>          <br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">Time 0: calling main()<br>--[step_internal_function]--&gt;<br>Time 1: in function main, statement<br>  p = &amp;x;<br>  user_memcpy((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_1, *p, *q);<br>  return 0;<br>--[step_seq]--&gt;<br>Time 2: in function main, statement<br>  p = &amp;x;<br>  user_memcpy((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_1, *p, *q);<br>--[step_seq]--&gt;<br>Time 3: in function main, statement p = &amp;x;<br>--[step_do_1]--&gt;<br>Time 4: in function main, expression p = &amp;x<br>--[red_var_local]--&gt;<br>Time 5: in function main, expression &lt;loc p&gt; = &amp;x<br>--[red_var_global]--&gt;<br>Time 6: in function main, expression &lt;loc p&gt; = &amp;&lt;loc x&gt;<br>--[red_addrof]--&gt;<br>Time 7: in function main, expression &lt;loc p&gt; = &lt;ptr x&gt;<br>--[red_assign]--&gt;<br>Time 8: in function main, expression &lt;ptr x&gt;<br>--[step_do_2]--&gt;<br>Time 9: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 10: in function main, statement<br>  user_memcpy((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_1, *p, *q);<br>--[step_seq]--&gt;<br>Time 11: in function main, statement<br>  user_memcpy((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>--[step_do_1]--&gt;<br>Time 12: in function main, expression<br>  user_memcpy((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *))<br>--[red_var_global]--&gt;<br>Time 13: in function main, expression<br>  &lt;loc user_memcpy&gt;((unsigned char *) &amp;q, <br>                    (unsigned char *) &amp;p, <br>                    sizeof(int *))<br>--[red_rvalof]--&gt;<br>Time 14: in function main, expression<br>  &lt;ptr user_memcpy&gt;((unsigned char *) &amp;q, <br>                    (unsigned char *) &amp;p, <br>                    sizeof(int *))<br>--[red_var_local]--&gt;<br>Time 15: in function main, expression<br>  &lt;ptr user_memcpy&gt;((unsigned char *) &amp;&lt;loc q&gt;, <br>                    (unsigned char *) &amp;p, <br>                    sizeof(int *))<br>--[red_addrof]--&gt;<br>Time 16: in function main, expression<br>  &lt;ptr user_memcpy&gt;((unsigned char *) &lt;ptr q&gt;, <br>                    (unsigned char *) &amp;p, <br>                    sizeof(int *))<br>--[red_cast]--&gt;<br>Time 17: in function main, expression<br>  &lt;ptr user_memcpy&gt;(&lt;ptr q&gt;, (unsigned char *) &amp;p, sizeof(int *))<br>--[red_var_local]--&gt;<br>Time 18: in function main, expression<br>  &lt;ptr user_memcpy&gt;(&lt;ptr q&gt;, (unsigned char *) &amp;&lt;loc p&gt;, sizeof(int *))<br>--[red_addrof]--&gt;<br>Time 19: in function main, expression<br>  &lt;ptr user_memcpy&gt;(&lt;ptr q&gt;, (unsigned char *) &lt;ptr p&gt;, sizeof(int *))<br>--[red_cast]--&gt;<br>Time 20: in function main, expression<br>  &lt;ptr user_memcpy&gt;(&lt;ptr q&gt;, &lt;ptr p&gt;, sizeof(int *))<br>--[red_sizeof]--&gt;<br>Time 21: in function main, expression &lt;ptr user_memcpy&gt;(&lt;ptr q&gt;, &lt;ptr p&gt;, 4U)<br>--[red_call]--&gt;<br>Time 22: calling user_memcpy(&lt;ptr&gt;, &lt;ptr&gt;, 4)<br>--[step_internal_function]--&gt;<br>Time 23: in function user_memcpy, statement<br>  while (n &gt; 0) {<br>    *dest = *src;<br>    src += 1;<br>    dest += 1;<br>    n -= 1;<br>  }<br>--[step_while]--&gt;<br>Time 24: in function user_memcpy, expression n &gt; 0<br>--[red_var_local]--&gt;<br>Time 25: in function user_memcpy, expression &lt;loc n&gt; &gt; 0<br>--[red_rvalof]--&gt;<br>Time 26: in function user_memcpy, expression 4U &gt; 0<br>--[red_binop]--&gt;<br>Time 27: in function user_memcpy, expression 1<br>--[step_while_true]--&gt;<br>Time 28: in function user_memcpy, statement<br>  *dest = *src; src += 1; dest += 1; n -= 1;<br>--[step_seq]--&gt;<br>Time 29: in function user_memcpy, statement *dest = *src;<br>--[step_do_1]--&gt;<br>Time 30: in function user_memcpy, expression *dest = *src<br>--[red_var_local]--&gt;<br>Time 31: in function user_memcpy, expression *&lt;loc dest&gt; = *src<br>--[red_rvalof]--&gt;<br>Time 32: in function user_memcpy, expression *&lt;ptr&gt; = *src<br>--[red_deref]--&gt;<br>Time 33: in function user_memcpy, expression &lt;loc&gt; = *src<br>--[red_var_local]--&gt;<br>Time 34: in function user_memcpy, expression &lt;loc&gt; = *&lt;loc src&gt;<br>--[red_rvalof]--&gt;<br>Time 35: in function user_memcpy, expression &lt;loc&gt; = *&lt;ptr&gt;<br>--[red_deref]--&gt;<br>Time 36: in function user_memcpy, expression &lt;loc&gt; = &lt;loc&gt;<br>--[red_rvalof]--&gt;<br>Time 37: in function user_memcpy, expression &lt;loc&gt; = &lt;undef&gt;<br>Stuck state: in function user_memcpy, expression &lt;loc&gt; = &lt;undef&gt;<br>Stuck subexpression: &lt;loc&gt; = &lt;undef&gt;<br>ERROR: Undefined behavior<br>In file included from pointer_copy_user_dataflow_direct_bytewise.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br></td>
+
+<table></code></pre>

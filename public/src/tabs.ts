@@ -50,16 +50,23 @@ export class Help extends Tab {
   }
 }
 
-// TODO: this is not being used
-export class Preferences extends Tab {
-  constructor (ee: EventEmitter) {
-    super('Prefernces', ee)
-    this.dom.addClass('page') // maybe change this
-    $.ajax({
-      url: 'preferences.html',
-      type: 'GET',
-      success: (data) => this.dom.append(data)
+export class Experimental extends Tab {
+  constructor(ee: EventEmitter) {
+    super('Experimental Data', ee)
+    this.dom.addClass('page')
+    ee.once((s:State) => {
+      $.ajax({
+        url: `experimental/${s.title()}.html`,
+        type: 'GET',
+        // WARNING: This assumes that charon2 is outputting the results as an
+        // array of HTML elements and the relevant data is in index 4
+        success: (data) => {
+          this.dom.append($('<p><b>Experimental data</b></p>'))
+          this.dom.append($(data)[4])
+        }
+      })
     })
+
   }
 }
 
@@ -866,8 +873,8 @@ class Asm extends ReadOnly {
   private source?: Readonly<string>
   locations: any // TODO
 
-  constructor(ee: EventEmitter, cc?: any) {
-    if (cc == null) cc = UI.defaultCompiler // Global variable
+  constructor(ee: EventEmitter) {
+    const cc = UI.defaultCompiler // Global variable
 
     super(cc.name, '', ee)
 
@@ -1021,7 +1028,7 @@ const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
   Console, Arena, Asm,
   Interactive, Memory,
-  Preferences, Implementation, Library, Help
+  Experimental, Implementation, Library, Help
 }
 
 export function create(title: string, ee: EventEmitter): Tab {

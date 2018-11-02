@@ -1,0 +1,49 @@
+<h2>Example: <code>ubc_addr_null_1.c</code></h3><pre><code>#include &lt;stddef.h&gt;<br>#include &lt;inttypes.h&gt;<br>#include &lt;stdio.h&gt;<br>struct s { uint8_t a; uint8_t b; };<br>int main () {<br>  struct s *f = NULL;<br>  uint8_t *p = &amp;(f-&gt;b); // free of undefined behaviour?<br>  // and equal to the offsetof result? <br>  printf("p=%p  offsetof(struct s,b)=0x%zx\n",<br>         (void*)p,offsetof(struct s, b));<br>}<br><br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/ubc_addr_null_1.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- ubc_addr_null_1.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br>ubc_addr_null_1.c:7:21: runtime error: member access within null pointer of type 'struct s'<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Defined {value: "Specified(0)", stdout: "p=&lt;&gt;:1  offsetof(struct s,b)=0x1\n", blocked: "false"}<br>END EXEC[0]<br>Time spent: 0.017071 seconds<br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Undefined [other_location(Core parser)]{id: [DUMMY(rev_listFromStr_aux)]}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Undefined [other_location(Core parser)]{id: [DUMMY(rev_listFromStr_aux)]}<br>END EXEC[1]<br>Time spent: 0.058114 seconds<br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+</td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">ubc_addr_null_1.c:2:10: fatal error: inttypes.h: No such file or directory<br> #include &lt;inttypes.h&gt;<br>          ^~~~~~~~~~~~<br>compilation terminated.<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">p=0x1  offsetof(struct s,b)=0x1<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">Time 0: calling main()<br>--[step_internal_function]--&gt;<br>Time 1: in function main, statement<br>  f = 0; p = &amp;((*.)).b; printf(__stringlit_1, (void *) p, 1U); return 0;<br>--[step_seq]--&gt;<br>Time 2: in function main, statement<br>  f = 0; p = &amp;((*.)).b; printf(__stringlit_1, (void *) p, 1U);<br>--[step_seq]--&gt;<br>Time 3: in function main, statement f = 0;<br>--[step_do_1]--&gt;<br>Time 4: in function main, expression f = 0<br>--[red_var_local]--&gt;<br>Time 5: in function main, expression &lt;loc f&gt; = 0<br>--[red_assign]--&gt;<br>Time 6: in function main, expression 0<br>--[step_do_2]--&gt;<br>Time 7: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 8: in function main, statement<br>  p = &amp;((*.)).b; printf(__stringlit_1, (void *) p, 1U);<br>--[step_seq]--&gt;<br>Time 9: in function main, statement p = &amp;((*.)).b;<br>--[step_do_1]--&gt;<br>Time 10: in function main, expression p = &amp;((*.)).b<br>--[red_var_local]--&gt;<br>Time 11: in function main, expression &lt;loc p&gt; = &amp;((*.)).b<br>--[red_var_local]--&gt;<br>Time 12: in function main, expression &lt;loc p&gt; = &amp;((*.)).b<br>--[red_rvalof]--&gt;<br>Time 13: in function main, expression &lt;loc p&gt; = &amp;((*0)).b<br>Stuck state: in function main, expression &lt;loc p&gt; = &amp;((*0)).b<br>Stuck subexpression: *0<br>ERROR: Undefined behavior<br>In file included from ubc_addr_null_1.c:2:<br>In file included from /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/9.1.0/include/inttypes.h:30:<br>In file included from /usr/include/inttypes.h:223:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br></td>
+
+<table></code></pre>

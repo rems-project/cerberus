@@ -1,0 +1,50 @@
+<h2>Example: <code>effective_type_3.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>#include &lt;stdalign.h&gt;<br>int main() {<br>  _Alignas(float) unsigned char c[sizeof(float)];<br>  float *fp = (float *)c;<br>  *fp=1.0; // does this have defined behaviour?<br>  printf("*fp=%f\n",*fp);<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/effective_type_3.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- effective_type_3.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Undefined [effective_type_3.c:5:3-26]{id: [UB025_misaligned_pointer_conversion]}<br>END EXEC[0]<br>Time spent: 0.015939 seconds<br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+cerberus: internal error, uncaught exception:<br>          Failure("TODO: Symbolic defacto, isWellAligned_ptrval")<br>          <br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">exit codes: compile 1 / execute 127
+</td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">*fp=1.0000000000000000E0<br>Type of lvalue (float) not compatible with the effective type of the object being accessed (unsigned char [4]):<br>      &gt; in main at effective_type_3.c:6:3<br><br>    Undefined behavior (UB-EIO10):<br>        see C11 section 6.5:7 http://rvdoc.org/C11/6.5<br>        see C11 section J.2:1 item 37 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP39-C http://rvdoc.org/CERT-C/EXP39-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Type of lvalue (float) not compatible with the effective type of the object being accessed (unsigned char [4]):<br>      &gt; in main at effective_type_3.c:7:3<br><br>    Undefined behavior (UB-EIO10):<br>        see C11 section 6.5:7 http://rvdoc.org/C11/6.5<br>        see C11 section J.2:1 item 37 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP39-C http://rvdoc.org/CERT-C/EXP39-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">Fatal error: exception Failure("parse_printf")<br>Raised at file "pervasives.ml", line 30, characters 22-33<br>Called from file "list.ml", line 55, characters 20-23<br>Called from file "list.ml", line 55, characters 32-39<br>Called from file "list.ml", line 55, characters 32-39<br>Called from file "list.ml", line 55, characters 32-39<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">*fp=1.000000<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">Time 0: calling main()<br>--[step_internal_function]--&gt;<br>Time 1: in function main, statement<br>  fp = (float *) c; *fp = 1.; printf(__stringlit_1, *fp); return 0;<br>--[step_seq]--&gt;<br>Time 2: in function main, statement<br>  fp = (float *) c; *fp = 1.; printf(__stringlit_1, *fp);<br>--[step_seq]--&gt;<br>Time 3: in function main, statement fp = (float *) c;<br>--[step_do_1]--&gt;<br>Time 4: in function main, expression fp = (float *) c<br>--[red_var_local]--&gt;<br>Time 5: in function main, expression &lt;loc fp&gt; = (float *) c<br>--[red_var_local]--&gt;<br>Time 6: in function main, expression &lt;loc fp&gt; = (float *) &lt;loc c&gt;<br>--[red_rvalof]--&gt;<br>Time 7: in function main, expression &lt;loc fp&gt; = (float *) &lt;ptr c&gt;<br>--[red_cast]--&gt;<br>Time 8: in function main, expression &lt;loc fp&gt; = &lt;ptr c&gt;<br>--[red_assign]--&gt;<br>Time 9: in function main, expression &lt;ptr c&gt;<br>--[step_do_2]--&gt;<br>Time 10: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 11: in function main, statement *fp = 1.; printf(__stringlit_1, *fp);<br>--[step_seq]--&gt;<br>Time 12: in function main, statement *fp = 1.;<br>--[step_do_1]--&gt;<br>Time 13: in function main, expression *fp = 1.<br>--[red_var_local]--&gt;<br>Time 14: in function main, expression *&lt;loc fp&gt; = 1.<br>--[red_rvalof]--&gt;<br>Time 15: in function main, expression *&lt;ptr c&gt; = 1.<br>--[red_deref]--&gt;<br>Time 16: in function main, expression &lt;loc c&gt; = 1.<br>--[red_assign]--&gt;<br>Time 17: in function main, expression 1.f<br>--[step_do_2]--&gt;<br>Time 18: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 19: in function main, statement printf(__stringlit_1, *fp);<br>--[step_do_1]--&gt;<br>Time 20: in function main, expression printf(__stringlit_1, *fp)<br>--[red_var_global]--&gt;<br>Time 21: in function main, expression printf(&lt;loc __stringlit_1&gt;, *fp)<br>--[red_rvalof]--&gt;<br>Time 22: in function main, expression printf(&lt;ptr __stringlit_1&gt;, *fp)<br>--[red_var_local]--&gt;<br>Time 23: in function main, expression printf(&lt;ptr __stringlit_1&gt;, *&lt;loc fp&gt;)<br>--[red_rvalof]--&gt;<br>Time 24: in function main, expression printf(&lt;ptr __stringlit_1&gt;, *&lt;ptr c&gt;)<br>--[red_deref]--&gt;<br>Time 25: in function main, expression printf(&lt;ptr __stringlit_1&gt;, &lt;loc c&gt;)<br>--[red_rvalof]--&gt;<br>Time 26: in function main, expression printf(&lt;ptr __stringlit_1&gt;, 1.f)<br>*fp=1.000000<br>Time 26: observable event: extcall printf(&amp; __stringlit_1,<br>               1.) -&gt; 13<br>--[red_builtin]--&gt;<br>Time 27: in function main, expression 13<br>--[step_do_2]--&gt;<br>Time 28: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 29: in function main, statement return 0;<br>--[step_return_1]--&gt;<br>Time 30: in function main, expression 0<br>--[step_return_2]--&gt;<br>Time 31: returning 0<br>Time 31: program terminated (exit code = 0)<br>In file included from effective_type_3.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br></td>
+
+<table></code></pre>
