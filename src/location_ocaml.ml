@@ -128,9 +128,17 @@ let to_cartesian loc =
     | Loc_region (p1, p2, _) -> Some (point_of_pos p1, point_of_pos p2)
     | _ -> None
 
-let location_to_string loc =
+let location_to_string ?(charon=false) loc =
   let string_of_pos pos =
-    Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+    if charon && from_main_file loc then
+      Printf.sprintf "%d:%d" pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol)
+    else
+      Printf.sprintf "%s:%d:%d" pos.pos_fname pos.pos_lnum (1+pos.pos_cnum-pos.pos_bol) in
+  let shrink z =
+    if charon && from_main_file loc then
+      ""
+    else
+      z in
   match loc with
     | Loc_unknown ->
         "unknown location"
@@ -143,7 +151,7 @@ let location_to_string loc =
         begin if pos1.pos_fname = pos2.pos_fname then
           ""
         else
-          pos2.pos_fname
+          shrink pos2.pos_fname
         end ^
         begin if pos1.pos_lnum = pos2.pos_lnum then
           ""
@@ -157,7 +165,7 @@ let location_to_string loc =
         begin if pos1.pos_fname = pos2.pos_fname then
           ""
         else
-          pos2.pos_fname
+          shrink pos2.pos_fname
         end ^
         begin if pos1.pos_lnum = pos2.pos_lnum then
           ""

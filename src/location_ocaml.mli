@@ -11,7 +11,7 @@ val bbox_location: t list -> t
 val with_regions_and_cursor: t list -> t option -> t
 
 val from_main_file: t -> bool
-val location_to_string: t -> string
+val location_to_string: ?charon:bool -> t -> string
 
 val to_json: t -> Json.json
 val to_cartesian: t -> ((int * int) * (int * int)) option
