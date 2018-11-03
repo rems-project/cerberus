@@ -1,0 +1,11 @@
+<h2>Example: <code>provenance_equality_global_cu_xy_b.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>#include &lt;string.h&gt; <br>extern int y,x;<br>void f(int* p, int* q) {<br>  _Bool b = (p==q);<br>  // can this be false even with identical addresses?<br>  printf("(p==q) = %s\n", b?"true":"false");<br>  return;<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/provenance_equality_global_cu_xy_b.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- provenance_equality_global_cu_xy_b.c -->
+
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+&lt;unknown&gt;: error: No definition for symbol with external linkage: main.<br><br>    Undefined behavior (UB-TDR2):<br>        see C11 section 6.9:5 http://rvdoc.org/C11/6.9<br>        see C11 section J.2:1 item 84 http://rvdoc.org/C11/J.2<br>        see CERT-C section MSC15-C http://rvdoc.org/CERT-C/MSC15-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Translation failed (kcc_config dumped). To repeat, run this command in directory charon2:<br>kcc -d -o provenance_equality_global_cu_xy_b.c.RV-Match.out provenance_equality_global_cu_xy_b.c<br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">Fatal error: exception Main.Unknown_specifier(_)<br>Raised at file "map.ml", line 117, characters 16-25<br>Called from file "str.ml", line 253, characters 6-29<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">In file included from provenance_equality_global_cu_xy_b.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br>ERROR: no main() function<br></td>
+
+<table></code></pre>

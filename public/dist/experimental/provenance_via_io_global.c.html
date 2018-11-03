@@ -1,0 +1,64 @@
+<h2>Example: <code>provenance_via_io_global.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>#include &lt;stdlib.h&gt;<br>#include &lt;string.h&gt;<br>#include &lt;inttypes.h&gt;<br>int x=1;<br>int main() {<br>  int *p = &amp;x;<br>  uintptr_t i = (uintptr_t) p;<br>  FILE *f = fopen("provenance_via_io_global.tmp","w+b");<br>  printf("Addresses: i=%"PRIuPTR" \n",i);<br>  // print pointer address to a file<br>  fprintf(f,"%"PRIuPTR"\n",i);<br>  rewind(f);<br>  uintptr_t k;<br>  // read a pointer address from the file<br>  int n = fscanf(f,"%"SCNuPTR"\n",&amp;k);<br>  if (n != 1) exit(EXIT_FAILURE);<br>  printf("Addresses: k=%"PRIuPTR"\n",k);<br>  int *r = (int *)k;<br>  // are r and q now equivalent?  <br>  *r=12; // is this free of undefined behaviour?                                                           <br>  _Bool b1 = (r==p); // do they compare equal?                      <br>  _Bool b2 = (0==memcmp(&amp;r,&amp;p,sizeof(r)));//same reps?<br>  printf("x=%i *r=%i b1=%s b2=%s\n",x,*r,<br>         b1?"true":"false",b2?"true":"false");<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/provenance_via_io_global.c">[link to test in Cerberus and Compiler Explorer]</a><p>
+<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
+<!-- provenance_via_io_global.c -->
+<font color="red">SOURCES MISMATCH</font>
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">Addresses: i=6294752 <br>Addresses: k=6294752<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">Addresses: i=6294560 <br>Addresses: k=6294560<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">Addresses: i=6294560 <br>Addresses: k=6294560<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6294560 <br>Addresses: k=6294560<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6294560 <br>Addresses: k=6294560<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">Addresses: i=6295656 <br>Addresses: k=6295656<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">Addresses: i=6295648 <br>Addresses: k=6295648<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">Addresses: i=6295648 <br>Addresses: k=6295648<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6295648 <br>Addresses: k=6295648<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6295648 <br>Addresses: k=6295648<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">Addresses: i=6495104 <br>Addresses: k=6495104<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">Addresses: i=7433088 <br>Addresses: k=7433088<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">Addresses: i=7043840 <br>Addresses: k=7043840<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">Addresses: i=6295152 <br>Addresses: k=6295152<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">Addresses: i=6309600 <br>Addresses: k=6309600<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">Addresses: i=6309600 <br>Addresses: k=6309600<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6309600 <br>Addresses: k=6309600<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=6309600 <br>Addresses: k=6309600<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+provenance_via_io_global.c:17:20: error: [desug] use of undeclared identifier '__cerbvar_EXIT_FAILURE'. (§6.5.1#2)<br>  if (n != 1) exit(EXIT_FAILURE);<br>                   ^<br></td>
+<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+provenance_via_io_global.c:17:20: error: [desug] use of undeclared identifier '__cerbvar_EXIT_FAILURE'. (§6.5.1#2)<br>  if (n != 1) exit(EXIT_FAILURE);<br>                   ^<br></td>
+<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 134
+</td>
+<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">Addresses: i=196640 <br>Addresses: k=196640<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">Addresses: i=196640 <br>Addresses: k=196640<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">Addresses: i=196640 <br>Addresses: k=196640<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
+Terminated with signal 34: In-address space security exception</td>
+<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
+provenance_via_io_global.c:9:3: error: Trying to look up identifier j, but no such identifier is in scope.<br><br>    Syntax error (SE-CID1):<br>        see C11 section 6.5.1:2 http://rvdoc.org/C11/6.5.1<br>        see CERT-C section DCL31-C http://rvdoc.org/CERT-C/DCL31-C<br><br>provenance_via_io_global.c:16:15: error: Trying to look up identifier EXIT_FAILURE, but no such identifier is in scope.<br><br>    Syntax error (SE-CID1):<br>        see C11 section 6.5.1:2 http://rvdoc.org/C11/6.5.1<br>        see CERT-C section DCL31-C http://rvdoc.org/CERT-C/DCL31-C<br><br>provenance_via_io_global.c:16:15: error: Trying to look up identifier exit, but no such identifier is in scope.<br><br>    Syntax error (SE-CID1):<br>        see C11 section 6.5.1:2 http://rvdoc.org/C11/6.5.1<br>        see CERT-C section DCL31-C http://rvdoc.org/CERT-C/DCL31-C<br><br>provenance_via_io_global.c:21:3: error: Trying to look up identifier q, but no such identifier is in scope.<br><br>    Syntax error (SE-CID1):<br>        see C11 section 6.5.1:2 http://rvdoc.org/C11/6.5.1<br>        see CERT-C section DCL31-C http://rvdoc.org/CERT-C/DCL31-C<br><br>provenance_via_io_global.c:21:3: error: Invalid operand types to ==.<br><br>    Constraint violation (CV-CERL8):<br>        see C11 section 6.5.9:2 http://rvdoc.org/C11/6.5.9<br>        see CERT-C section MSC40-C http://rvdoc.org/CERT-C/MSC40-C<br>        see MISRA-C section 8.1:1 http://rvdoc.org/MISRA-C/8.1<br><br>provenance_via_io_global.c:23:3: error: Trying to look up identifier y, but no such identifier is in scope.<br><br>    Syntax error (SE-CID1):<br>        see C11 section 6.5.1:2 http://rvdoc.org/C11/6.5.1<br>        see CERT-C section DCL31-C http://rvdoc.org/CERT-C/DCL31-C<br><br>provenance_via_io_global.c: In function 'main':<br>provenance_via_io_global.c:9:41: error: 'j' undeclared (first use in this function)<br>   printf("Addresses: i=%"PRIuPTR" \n",i,j);<br>                                         ^<br>provenance_via_io_global.c:9:41: note: each undeclared identifier is reported only once for each function it appears in<br>provenance_via_io_global.c:16:15: warning: implicit declaration of function 'exit' [-Wimplicit-function-declaration]<br>   if (n != 1) exit(EXIT_FAILURE);<br>               ^<br>provenance_via_io_global.c:16:15: warning: incompatible implicit declaration of built-in function 'exit'<br>provenance_via_io_global.c:16:15: note: include '&lt;stdlib.h&gt;' or provide a declaration of 'exit'<br>provenance_via_io_global.c:16:20: error: 'EXIT_FAILURE' undeclared (first use in this function)<br>   if (n != 1) exit(EXIT_FAILURE);<br>                    ^<br>provenance_via_io_global.c:21:18: error: 'q' undeclared (first use in this function)<br>   _Bool b1 = (r==q); // do they compare equal?                      <br>                  ^<br>provenance_via_io_global.c:23:44: error: 'y' undeclared (first use in this function)<br>   printf("x=%i y=%i *r=%i b1=%s b2=%s\n",x,y,*r,<br>                                            ^<br>Translation failed (kcc_config dumped). To repeat, run this command in directory charon2:<br>kcc -d -o provenance_via_io_global.c.RV-Match.out provenance_via_io_global.c<br></td>
+<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">provenance_via_io_global.c:3:10: fatal error: inttypes.h: No such file or directory<br> #include &lt;inttypes.h&gt;<br>          ^~~~~~~~~~~~<br>compilation terminated.<br></td>
+<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">Addresses: i=6295656 <br>Addresses: k=6295656<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">Addresses: i=6295656 <br>Addresses: k=6295656<br>x=12 *r=12 b1=true b2=true<br></td>
+<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">In file included from provenance_via_io_global.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br>provenance_via_io_global.c:9: error: use of undeclared identifier 'j'<br>1 error detected.<br></td>
+
+<table></code></pre>
