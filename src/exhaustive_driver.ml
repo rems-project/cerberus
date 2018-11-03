@@ -36,7 +36,7 @@ let string_of_driver_error = function
 
 
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
-let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args conf : string list =
+let batch_drive mode (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) args conf : string list =
   Random.self_init ();
   
   (* changing the annotations type from unit to core_run_annotation *)
@@ -45,6 +45,9 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
   let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
+  
+  let has_multiple =
+    List.length values > 1 in
   
   List.mapi (fun i (res, z3_strs, nd_st) ->
     let result = begin match res with
@@ -56,7 +59,11 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
           end
       | ND.Killed (ND.Undef0 (loc, ubs)) ->
           begin
-            "Undefined [" ^ Location_ocaml.location_to_string loc ^ "]{id: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ "}"
+            let is_charon = match mode with
+              | `Batch       -> false
+              | `CharonBatch -> true in
+            "Undefined behaviour: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ " at " ^
+            Location_ocaml.location_to_string ~charon:is_charon loc
           end
       | ND.Killed (ND.Error0 (_, str)) ->
           begin
@@ -77,7 +84,10 @@ let batch_drive (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.file) ar
               |> Printf.sprintf "\nBEGIN CONSTRAINTS%sEND CONSTRAINTS"
       end else ""
     in
-    Printf.sprintf "BEGIN EXEC[%d]\n%s%s\nEND EXEC[%d]" i result constraints i
+    if has_multiple then
+      Printf.sprintf "EXECUTION %d:\n%s%s\n" i result constraints
+    else
+      result ^ constraints
   ) values
 
 

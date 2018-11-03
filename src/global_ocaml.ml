@@ -58,7 +58,7 @@ type cerberus_conf = {
   concurrency:        bool;
   preEx:              bool;
   error_verbosity:    error_verbosity;
-  batch:              bool;
+  batch:              [ `CharonBatch | `Batch | `NotBatch ];
   experimental_unseq: bool;
   typecheck_core:     bool;
   defacto:            bool;

@@ -182,33 +182,32 @@ let backend sym_supply core_file args =
           Exhaustive_driver.concurrency= !!cerb_conf.concurrency;
           Exhaustive_driver.experimental_unseq= !!cerb_conf.experimental_unseq
         } in
-        if !!cerb_conf.batch then
-          begin
-            Exhaustive_driver.batch_drive sym_supply core_file ("cmdname" :: args) dr_conf
-            |> List.iter print_endline;
-            0
-          end
-        else
-          (* TODO: temporary hack for the command name *)
-          Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
-            | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
-              begin
-                (* TODO: yuck *)
-                try
-                  int_of_string (String_mem.string_pretty_of_integer_value ival)
-                with | _ ->
-                  Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
-                  0
-              end
-            | Exception.Result (cval :: _) ->
-                Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_value cval); 0
-            | Exception.Result [] ->
-                Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
-                0
-            | Exception.Exception _ ->
-                Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
-                0
-)
+        match !!cerb_conf.batch with
+          | (`Batch | `CharonBatch) as mode ->
+              Exhaustive_driver.batch_drive mode sym_supply core_file ("cmdname" :: args) dr_conf
+              |> List.iter print_endline;
+              0
+          | `NotBatch ->
+              (* TODO: temporary hack for the command name *)
+              Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
+                | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
+                  begin
+                    (* TODO: yuck *)
+                    try
+                      int_of_string (String_mem.string_pretty_of_integer_value ival)
+                    with | _ ->
+                      Debug_ocaml.warn [] (fun () -> "Return value was not a (simple) specified integer");
+                      0
+                  end
+                | Exception.Result (cval :: _) ->
+                    Debug_ocaml.warn [] (fun () -> "HELLO> " ^ String_core.string_of_value cval); 0
+                | Exception.Result [] ->
+                    Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EMPTY RESULT");
+                    0
+                | Exception.Exception _ ->
+                    Debug_ocaml.warn [] (fun () -> "BACKEND FOUND EXCEPTION");
+                    0
+              )
 
 
 
@@ -422,7 +421,7 @@ let preEx =
 
 let batch =
   let doc = "makes the execution driver produce batch friendly output" in
-  Arg.(value & flag & info["batch"] ~doc)
+  Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc); (`CharonBatch, info["charon-batch"] ~doc:(doc^" (for Charon)"))])
 
 let experimental_unseq =
   let doc = "use a new (experimental) semantics for unseq() in Core_run" in
