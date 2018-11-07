@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <limits.h>
-int  x=1;
+int x=1;
 int main() {
   int *p = &x;
   uintptr_t i = (uintptr_t)p;

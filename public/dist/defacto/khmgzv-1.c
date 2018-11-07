@@ -1,10 +1,11 @@
 #include <stdio.h>
-#include <string.h> 
+#include <string.h>
 #include <inttypes.h>
+#include "charon_concrete_addresses.h"
 int x=0;
 int main() {
   uintptr_t b = (uintptr_t) &x;
-  uintptr_t a = 0x60102C;
+  uintptr_t a = ADDR001;
   printf("Addresses: b=0x%" PRIXPTR " a=0x%" PRIXPTR 
          "\n",b,a);
   if (memcmp(&b, &a, sizeof(b)) == 0) {

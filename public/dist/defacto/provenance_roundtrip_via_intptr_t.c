@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <inttypes.h>
-int  x=1;
+int x=1;
 int main() {
   int *p = &x;
   intptr_t i = (intptr_t)p;

@@ -73,7 +73,7 @@ val core_passes:
 
 val interp_backend:
   io_helpers -> Symbol.sym -> 'a Core.file ->
-  args:(string list) -> do_batch:bool -> concurrency:bool -> experimental_unseq:bool ->
+  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> concurrency:bool -> experimental_unseq:bool ->
 (* TODO: we would be using poly variants if it weren't for Lem... *)
 (*  [`Interactive | `Exhaustive | `Random] -> *)
   Smt2.execution_mode ->

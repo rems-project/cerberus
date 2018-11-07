@@ -1,63 +1,649 @@
-<h2>Example: <code>pointer_copy_user_ctrlflow_bytewise.c</code></h3><pre><code>#include &lt;stdio.h&gt;<br>#include &lt;string.h&gt;<br>#include &lt;assert.h&gt;<br>#include &lt;limits.h&gt;<br>int  x=1;<br>unsigned char control_flow_copy(unsigned char c) {<br>  assert(UCHAR_MAX==255);<br>  switch (c) {<br>  case 0: return(0);<br>  case 1: return(1);<br>  case 2: return(2);<br>  case 3: return(3);<br>  case 4: return(4);<br>  case 5: return(5);<br>  case 6: return(6);<br>  case 7: return(7);<br>  case 8: return(8);<br>  case 9: return(9);<br>  case 10: return(10);<br>  case 11: return(11);<br>  case 12: return(12);<br>  case 13: return(13);<br>  case 14: return(14);<br>  case 15: return(15);<br>  case 16: return(16);<br>  case 17: return(17);<br>  case 18: return(18);<br>  case 19: return(19);<br>  case 20: return(20);<br>  case 21: return(21);<br>  case 22: return(22);<br>  case 23: return(23);<br>  case 24: return(24);<br>  case 25: return(25);<br>  case 26: return(26);<br>  case 27: return(27);<br>  case 28: return(28);<br>  case 29: return(29);<br>  case 30: return(30);<br>  case 31: return(31);<br>  case 32: return(32);<br>  case 33: return(33);<br>  case 34: return(34);<br>  case 35: return(35);<br>  case 36: return(36);<br>  case 37: return(37);<br>  case 38: return(38);<br>  case 39: return(39);<br>  case 40: return(40);<br>  case 41: return(41);<br>  case 42: return(42);<br>  case 43: return(43);<br>  case 44: return(44);<br>  case 45: return(45);<br>  case 46: return(46);<br>  case 47: return(47);<br>  case 48: return(48);<br>  case 49: return(49);<br>  case 50: return(50);<br>  case 51: return(51);<br>  case 52: return(52);<br>  case 53: return(53);<br>  case 54: return(54);<br>  case 55: return(55);<br>  case 56: return(56);<br>  case 57: return(57);<br>  case 58: return(58);<br>  case 59: return(59);<br>  case 60: return(60);<br>  case 61: return(61);<br>  case 62: return(62);<br>  case 63: return(63);<br>  case 64: return(64);<br>  case 65: return(65);<br>  case 66: return(66);<br>  case 67: return(67);<br>  case 68: return(68);<br>  case 69: return(69);<br>  case 70: return(70);<br>  case 71: return(71);<br>  case 72: return(72);<br>  case 73: return(73);<br>  case 74: return(74);<br>  case 75: return(75);<br>  case 76: return(76);<br>  case 77: return(77);<br>  case 78: return(78);<br>  case 79: return(79);<br>  case 80: return(80);<br>  case 81: return(81);<br>  case 82: return(82);<br>  case 83: return(83);<br>  case 84: return(84);<br>  case 85: return(85);<br>  case 86: return(86);<br>  case 87: return(87);<br>  case 88: return(88);<br>  case 89: return(89);<br>  case 90: return(90);<br>  case 91: return(91);<br>  case 92: return(92);<br>  case 93: return(93);<br>  case 94: return(94);<br>  case 95: return(95);<br>  case 96: return(96);<br>  case 97: return(97);<br>  case 98: return(98);<br>  case 99: return(99);<br>  case 100: return(100);<br>  case 101: return(101);<br>  case 102: return(102);<br>  case 103: return(103);<br>  case 104: return(104);<br>  case 105: return(105);<br>  case 106: return(106);<br>  case 107: return(107);<br>  case 108: return(108);<br>  case 109: return(109);<br>  case 110: return(110);<br>  case 111: return(111);<br>  case 112: return(112);<br>  case 113: return(113);<br>  case 114: return(114);<br>  case 115: return(115);<br>  case 116: return(116);<br>  case 117: return(117);<br>  case 118: return(118);<br>  case 119: return(119);<br>  case 120: return(120);<br>  case 121: return(121);<br>  case 122: return(122);<br>  case 123: return(123);<br>  case 124: return(124);<br>  case 125: return(125);<br>  case 126: return(126);<br>  case 127: return(127);<br>  case 128: return(128);<br>  case 129: return(129);<br>  case 130: return(130);<br>  case 131: return(131);<br>  case 132: return(132);<br>  case 133: return(133);<br>  case 134: return(134);<br>  case 135: return(135);<br>  case 136: return(136);<br>  case 137: return(137);<br>  case 138: return(138);<br>  case 139: return(139);<br>  case 140: return(140);<br>  case 141: return(141);<br>  case 142: return(142);<br>  case 143: return(143);<br>  case 144: return(144);<br>  case 145: return(145);<br>  case 146: return(146);<br>  case 147: return(147);<br>  case 148: return(148);<br>  case 149: return(149);<br>  case 150: return(150);<br>  case 151: return(151);<br>  case 152: return(152);<br>  case 153: return(153);<br>  case 154: return(154);<br>  case 155: return(155);<br>  case 156: return(156);<br>  case 157: return(157);<br>  case 158: return(158);<br>  case 159: return(159);<br>  case 160: return(160);<br>  case 161: return(161);<br>  case 162: return(162);<br>  case 163: return(163);<br>  case 164: return(164);<br>  case 165: return(165);<br>  case 166: return(166);<br>  case 167: return(167);<br>  case 168: return(168);<br>  case 169: return(169);<br>  case 170: return(170);<br>  case 171: return(171);<br>  case 172: return(172);<br>  case 173: return(173);<br>  case 174: return(174);<br>  case 175: return(175);<br>  case 176: return(176);<br>  case 177: return(177);<br>  case 178: return(178);<br>  case 179: return(179);<br>  case 180: return(180);<br>  case 181: return(181);<br>  case 182: return(182);<br>  case 183: return(183);<br>  case 184: return(184);<br>  case 185: return(185);<br>  case 186: return(186);<br>  case 187: return(187);<br>  case 188: return(188);<br>  case 189: return(189);<br>  case 190: return(190);<br>  case 191: return(191);<br>  case 192: return(192);<br>  case 193: return(193);<br>  case 194: return(194);<br>  case 195: return(195);<br>  case 196: return(196);<br>  case 197: return(197);<br>  case 198: return(198);<br>  case 199: return(199);<br>  case 200: return(200);<br>  case 201: return(201);<br>  case 202: return(202);<br>  case 203: return(203);<br>  case 204: return(204);<br>  case 205: return(205);<br>  case 206: return(206);<br>  case 207: return(207);<br>  case 208: return(208);<br>  case 209: return(209);<br>  case 210: return(210);<br>  case 211: return(211);<br>  case 212: return(212);<br>  case 213: return(213);<br>  case 214: return(214);<br>  case 215: return(215);<br>  case 216: return(216);<br>  case 217: return(217);<br>  case 218: return(218);<br>  case 219: return(219);<br>  case 220: return(220);<br>  case 221: return(221);<br>  case 222: return(222);<br>  case 223: return(223);<br>  case 224: return(224);<br>  case 225: return(225);<br>  case 226: return(226);<br>  case 227: return(227);<br>  case 228: return(228);<br>  case 229: return(229);<br>  case 230: return(230);<br>  case 231: return(231);<br>  case 232: return(232);<br>  case 233: return(233);<br>  case 234: return(234);<br>  case 235: return(235);<br>  case 236: return(236);<br>  case 237: return(237);<br>  case 238: return(238);<br>  case 239: return(239);<br>  case 240: return(240);<br>  case 241: return(241);<br>  case 242: return(242);<br>  case 243: return(243);<br>  case 244: return(244);<br>  case 245: return(245);<br>  case 246: return(246);<br>  case 247: return(247);<br>  case 248: return(248);<br>  case 249: return(249);<br>  case 250: return(250);<br>  case 251: return(251);<br>  case 252: return(252);<br>  case 253: return(253);<br>  case 254: return(254);<br>  case 255: return(255);<br>  }<br>}<br><br>void user_memcpy2(unsigned char* dest, <br>                  unsigned char *src, size_t n) {<br>  while (n &gt; 0)  {		<br>    *dest = control_flow_copy(*src);<br>    src += 1;<br>    dest += 1;<br>    n -= 1;<br>  }<br>}<br>int main() {<br>  int *p = &amp;x;<br>  int *q;<br>  user_memcpy2((unsigned char*)&amp;q, (unsigned char*)&amp;p, <br>              sizeof(p));<br>  *q = 11; // does this have undefined behaviour?<br>  printf("*p=%d  *q=%d\n",*p,*q);<br>}<br></code></pre><a href="http://www.cl.cam.ac.uk/~pes20/cerberus/server/?defacto/pointer_copy_user_ctrlflow_bytewise.c">[link to test in Cerberus and Compiler Explorer]</a><p>
-<b>Experimental data</b> <a href="help.html">(what does this mean?)</a>
-<!-- pointer_copy_user_ctrlflow_bytewise.c -->
-
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<h2>
+Example: <code>pointer_copy_user_ctrlflow_bytewise.c</code>
+</h3>
+<p>up: <a href="index.html">index</a><br> prev: <a href="pointer_copy_user_dataflow_direct_bytewise.c.html"><code>pointer_copy_user_dataflow_direct_bytewise.c</code></a><br> next: <a href="pointer_copy_user_ctrlflow_bitwise.c.html"><code>pointer_copy_user_ctrlflow_bitwise.c</code></a><br></p>
+<div class="sourceCode"><table class="sourceCode C numberLines"><tr class="sourceCode"><td class="lineNumbers"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+</pre></td><td class="sourceCode"><pre><code class="sourceCode c">    <span class="ot">#include &lt;stdio.h&gt;</span>
+    <span class="ot">#include &lt;string.h&gt;</span>
+    <span class="ot">#include &lt;assert.h&gt;</span>
+    <span class="ot">#include &lt;limits.h&gt;</span>
+    <span class="dt">int</span>  x=<span class="dv">1</span>;
+    <span class="dt">unsigned</span> <span class="dt">char</span> control_flow_copy(<span class="dt">unsigned</span> <span class="dt">char</span> c) {
+      assert(UCHAR_MAX==<span class="dv">255</span>);
+      <span class="kw">switch</span> (c) {
+      <span class="kw">case</span> <span class="dv">0</span>: <span class="kw">return</span>(<span class="dv">0</span>);
+      <span class="kw">case</span> <span class="dv">1</span>: <span class="kw">return</span>(<span class="dv">1</span>);
+      <span class="kw">case</span> <span class="dv">2</span>: <span class="kw">return</span>(<span class="dv">2</span>);
+      <span class="kw">case</span> <span class="dv">3</span>: <span class="kw">return</span>(<span class="dv">3</span>);
+      <span class="kw">case</span> <span class="dv">4</span>: <span class="kw">return</span>(<span class="dv">4</span>);
+      <span class="kw">case</span> <span class="dv">5</span>: <span class="kw">return</span>(<span class="dv">5</span>);
+      <span class="kw">case</span> <span class="dv">6</span>: <span class="kw">return</span>(<span class="dv">6</span>);
+      <span class="kw">case</span> <span class="dv">7</span>: <span class="kw">return</span>(<span class="dv">7</span>);
+      <span class="kw">case</span> <span class="dv">8</span>: <span class="kw">return</span>(<span class="dv">8</span>);
+      <span class="kw">case</span> <span class="dv">9</span>: <span class="kw">return</span>(<span class="dv">9</span>);
+      <span class="kw">case</span> <span class="dv">10</span>: <span class="kw">return</span>(<span class="dv">10</span>);
+      <span class="kw">case</span> <span class="dv">11</span>: <span class="kw">return</span>(<span class="dv">11</span>);
+      <span class="kw">case</span> <span class="dv">12</span>: <span class="kw">return</span>(<span class="dv">12</span>);
+      <span class="kw">case</span> <span class="dv">13</span>: <span class="kw">return</span>(<span class="dv">13</span>);
+      <span class="kw">case</span> <span class="dv">14</span>: <span class="kw">return</span>(<span class="dv">14</span>);
+      <span class="kw">case</span> <span class="dv">15</span>: <span class="kw">return</span>(<span class="dv">15</span>);
+      <span class="kw">case</span> <span class="dv">16</span>: <span class="kw">return</span>(<span class="dv">16</span>);
+      <span class="kw">case</span> <span class="dv">17</span>: <span class="kw">return</span>(<span class="dv">17</span>);
+      <span class="kw">case</span> <span class="dv">18</span>: <span class="kw">return</span>(<span class="dv">18</span>);
+      <span class="kw">case</span> <span class="dv">19</span>: <span class="kw">return</span>(<span class="dv">19</span>);
+      <span class="kw">case</span> <span class="dv">20</span>: <span class="kw">return</span>(<span class="dv">20</span>);
+      <span class="kw">case</span> <span class="dv">21</span>: <span class="kw">return</span>(<span class="dv">21</span>);
+      <span class="kw">case</span> <span class="dv">22</span>: <span class="kw">return</span>(<span class="dv">22</span>);
+      <span class="kw">case</span> <span class="dv">23</span>: <span class="kw">return</span>(<span class="dv">23</span>);
+      <span class="kw">case</span> <span class="dv">24</span>: <span class="kw">return</span>(<span class="dv">24</span>);
+      <span class="kw">case</span> <span class="dv">25</span>: <span class="kw">return</span>(<span class="dv">25</span>);
+      <span class="kw">case</span> <span class="dv">26</span>: <span class="kw">return</span>(<span class="dv">26</span>);
+      <span class="kw">case</span> <span class="dv">27</span>: <span class="kw">return</span>(<span class="dv">27</span>);
+      <span class="kw">case</span> <span class="dv">28</span>: <span class="kw">return</span>(<span class="dv">28</span>);
+      <span class="kw">case</span> <span class="dv">29</span>: <span class="kw">return</span>(<span class="dv">29</span>);
+      <span class="kw">case</span> <span class="dv">30</span>: <span class="kw">return</span>(<span class="dv">30</span>);
+      <span class="kw">case</span> <span class="dv">31</span>: <span class="kw">return</span>(<span class="dv">31</span>);
+      <span class="kw">case</span> <span class="dv">32</span>: <span class="kw">return</span>(<span class="dv">32</span>);
+      <span class="kw">case</span> <span class="dv">33</span>: <span class="kw">return</span>(<span class="dv">33</span>);
+      <span class="kw">case</span> <span class="dv">34</span>: <span class="kw">return</span>(<span class="dv">34</span>);
+      <span class="kw">case</span> <span class="dv">35</span>: <span class="kw">return</span>(<span class="dv">35</span>);
+      <span class="kw">case</span> <span class="dv">36</span>: <span class="kw">return</span>(<span class="dv">36</span>);
+      <span class="kw">case</span> <span class="dv">37</span>: <span class="kw">return</span>(<span class="dv">37</span>);
+      <span class="kw">case</span> <span class="dv">38</span>: <span class="kw">return</span>(<span class="dv">38</span>);
+      <span class="kw">case</span> <span class="dv">39</span>: <span class="kw">return</span>(<span class="dv">39</span>);
+      <span class="kw">case</span> <span class="dv">40</span>: <span class="kw">return</span>(<span class="dv">40</span>);
+      <span class="kw">case</span> <span class="dv">41</span>: <span class="kw">return</span>(<span class="dv">41</span>);
+      <span class="kw">case</span> <span class="dv">42</span>: <span class="kw">return</span>(<span class="dv">42</span>);
+      <span class="kw">case</span> <span class="dv">43</span>: <span class="kw">return</span>(<span class="dv">43</span>);
+      <span class="kw">case</span> <span class="dv">44</span>: <span class="kw">return</span>(<span class="dv">44</span>);
+      <span class="kw">case</span> <span class="dv">45</span>: <span class="kw">return</span>(<span class="dv">45</span>);
+      <span class="kw">case</span> <span class="dv">46</span>: <span class="kw">return</span>(<span class="dv">46</span>);
+      <span class="kw">case</span> <span class="dv">47</span>: <span class="kw">return</span>(<span class="dv">47</span>);
+      <span class="kw">case</span> <span class="dv">48</span>: <span class="kw">return</span>(<span class="dv">48</span>);
+      <span class="kw">case</span> <span class="dv">49</span>: <span class="kw">return</span>(<span class="dv">49</span>);
+      <span class="kw">case</span> <span class="dv">50</span>: <span class="kw">return</span>(<span class="dv">50</span>);
+      <span class="kw">case</span> <span class="dv">51</span>: <span class="kw">return</span>(<span class="dv">51</span>);
+      <span class="kw">case</span> <span class="dv">52</span>: <span class="kw">return</span>(<span class="dv">52</span>);
+      <span class="kw">case</span> <span class="dv">53</span>: <span class="kw">return</span>(<span class="dv">53</span>);
+      <span class="kw">case</span> <span class="dv">54</span>: <span class="kw">return</span>(<span class="dv">54</span>);
+      <span class="kw">case</span> <span class="dv">55</span>: <span class="kw">return</span>(<span class="dv">55</span>);
+      <span class="kw">case</span> <span class="dv">56</span>: <span class="kw">return</span>(<span class="dv">56</span>);
+      <span class="kw">case</span> <span class="dv">57</span>: <span class="kw">return</span>(<span class="dv">57</span>);
+      <span class="kw">case</span> <span class="dv">58</span>: <span class="kw">return</span>(<span class="dv">58</span>);
+      <span class="kw">case</span> <span class="dv">59</span>: <span class="kw">return</span>(<span class="dv">59</span>);
+      <span class="kw">case</span> <span class="dv">60</span>: <span class="kw">return</span>(<span class="dv">60</span>);
+      <span class="kw">case</span> <span class="dv">61</span>: <span class="kw">return</span>(<span class="dv">61</span>);
+      <span class="kw">case</span> <span class="dv">62</span>: <span class="kw">return</span>(<span class="dv">62</span>);
+      <span class="kw">case</span> <span class="dv">63</span>: <span class="kw">return</span>(<span class="dv">63</span>);
+      <span class="kw">case</span> <span class="dv">64</span>: <span class="kw">return</span>(<span class="dv">64</span>);
+      <span class="kw">case</span> <span class="dv">65</span>: <span class="kw">return</span>(<span class="dv">65</span>);
+      <span class="kw">case</span> <span class="dv">66</span>: <span class="kw">return</span>(<span class="dv">66</span>);
+      <span class="kw">case</span> <span class="dv">67</span>: <span class="kw">return</span>(<span class="dv">67</span>);
+      <span class="kw">case</span> <span class="dv">68</span>: <span class="kw">return</span>(<span class="dv">68</span>);
+      <span class="kw">case</span> <span class="dv">69</span>: <span class="kw">return</span>(<span class="dv">69</span>);
+      <span class="kw">case</span> <span class="dv">70</span>: <span class="kw">return</span>(<span class="dv">70</span>);
+      <span class="kw">case</span> <span class="dv">71</span>: <span class="kw">return</span>(<span class="dv">71</span>);
+      <span class="kw">case</span> <span class="dv">72</span>: <span class="kw">return</span>(<span class="dv">72</span>);
+      <span class="kw">case</span> <span class="dv">73</span>: <span class="kw">return</span>(<span class="dv">73</span>);
+      <span class="kw">case</span> <span class="dv">74</span>: <span class="kw">return</span>(<span class="dv">74</span>);
+      <span class="kw">case</span> <span class="dv">75</span>: <span class="kw">return</span>(<span class="dv">75</span>);
+      <span class="kw">case</span> <span class="dv">76</span>: <span class="kw">return</span>(<span class="dv">76</span>);
+      <span class="kw">case</span> <span class="dv">77</span>: <span class="kw">return</span>(<span class="dv">77</span>);
+      <span class="kw">case</span> <span class="dv">78</span>: <span class="kw">return</span>(<span class="dv">78</span>);
+      <span class="kw">case</span> <span class="dv">79</span>: <span class="kw">return</span>(<span class="dv">79</span>);
+      <span class="kw">case</span> <span class="dv">80</span>: <span class="kw">return</span>(<span class="dv">80</span>);
+      <span class="kw">case</span> <span class="dv">81</span>: <span class="kw">return</span>(<span class="dv">81</span>);
+      <span class="kw">case</span> <span class="dv">82</span>: <span class="kw">return</span>(<span class="dv">82</span>);
+      <span class="kw">case</span> <span class="dv">83</span>: <span class="kw">return</span>(<span class="dv">83</span>);
+      <span class="kw">case</span> <span class="dv">84</span>: <span class="kw">return</span>(<span class="dv">84</span>);
+      <span class="kw">case</span> <span class="dv">85</span>: <span class="kw">return</span>(<span class="dv">85</span>);
+      <span class="kw">case</span> <span class="dv">86</span>: <span class="kw">return</span>(<span class="dv">86</span>);
+      <span class="kw">case</span> <span class="dv">87</span>: <span class="kw">return</span>(<span class="dv">87</span>);
+      <span class="kw">case</span> <span class="dv">88</span>: <span class="kw">return</span>(<span class="dv">88</span>);
+      <span class="kw">case</span> <span class="dv">89</span>: <span class="kw">return</span>(<span class="dv">89</span>);
+      <span class="kw">case</span> <span class="dv">90</span>: <span class="kw">return</span>(<span class="dv">90</span>);
+      <span class="kw">case</span> <span class="dv">91</span>: <span class="kw">return</span>(<span class="dv">91</span>);
+      <span class="kw">case</span> <span class="dv">92</span>: <span class="kw">return</span>(<span class="dv">92</span>);
+      <span class="kw">case</span> <span class="dv">93</span>: <span class="kw">return</span>(<span class="dv">93</span>);
+      <span class="kw">case</span> <span class="dv">94</span>: <span class="kw">return</span>(<span class="dv">94</span>);
+      <span class="kw">case</span> <span class="dv">95</span>: <span class="kw">return</span>(<span class="dv">95</span>);
+      <span class="kw">case</span> <span class="dv">96</span>: <span class="kw">return</span>(<span class="dv">96</span>);
+      <span class="kw">case</span> <span class="dv">97</span>: <span class="kw">return</span>(<span class="dv">97</span>);
+      <span class="kw">case</span> <span class="dv">98</span>: <span class="kw">return</span>(<span class="dv">98</span>);
+      <span class="kw">case</span> <span class="dv">99</span>: <span class="kw">return</span>(<span class="dv">99</span>);
+      <span class="kw">case</span> <span class="dv">100</span>: <span class="kw">return</span>(<span class="dv">100</span>);
+      <span class="kw">case</span> <span class="dv">101</span>: <span class="kw">return</span>(<span class="dv">101</span>);
+      <span class="kw">case</span> <span class="dv">102</span>: <span class="kw">return</span>(<span class="dv">102</span>);
+      <span class="kw">case</span> <span class="dv">103</span>: <span class="kw">return</span>(<span class="dv">103</span>);
+      <span class="kw">case</span> <span class="dv">104</span>: <span class="kw">return</span>(<span class="dv">104</span>);
+      <span class="kw">case</span> <span class="dv">105</span>: <span class="kw">return</span>(<span class="dv">105</span>);
+      <span class="kw">case</span> <span class="dv">106</span>: <span class="kw">return</span>(<span class="dv">106</span>);
+      <span class="kw">case</span> <span class="dv">107</span>: <span class="kw">return</span>(<span class="dv">107</span>);
+      <span class="kw">case</span> <span class="dv">108</span>: <span class="kw">return</span>(<span class="dv">108</span>);
+      <span class="kw">case</span> <span class="dv">109</span>: <span class="kw">return</span>(<span class="dv">109</span>);
+      <span class="kw">case</span> <span class="dv">110</span>: <span class="kw">return</span>(<span class="dv">110</span>);
+      <span class="kw">case</span> <span class="dv">111</span>: <span class="kw">return</span>(<span class="dv">111</span>);
+      <span class="kw">case</span> <span class="dv">112</span>: <span class="kw">return</span>(<span class="dv">112</span>);
+      <span class="kw">case</span> <span class="dv">113</span>: <span class="kw">return</span>(<span class="dv">113</span>);
+      <span class="kw">case</span> <span class="dv">114</span>: <span class="kw">return</span>(<span class="dv">114</span>);
+      <span class="kw">case</span> <span class="dv">115</span>: <span class="kw">return</span>(<span class="dv">115</span>);
+      <span class="kw">case</span> <span class="dv">116</span>: <span class="kw">return</span>(<span class="dv">116</span>);
+      <span class="kw">case</span> <span class="dv">117</span>: <span class="kw">return</span>(<span class="dv">117</span>);
+      <span class="kw">case</span> <span class="dv">118</span>: <span class="kw">return</span>(<span class="dv">118</span>);
+      <span class="kw">case</span> <span class="dv">119</span>: <span class="kw">return</span>(<span class="dv">119</span>);
+      <span class="kw">case</span> <span class="dv">120</span>: <span class="kw">return</span>(<span class="dv">120</span>);
+      <span class="kw">case</span> <span class="dv">121</span>: <span class="kw">return</span>(<span class="dv">121</span>);
+      <span class="kw">case</span> <span class="dv">122</span>: <span class="kw">return</span>(<span class="dv">122</span>);
+      <span class="kw">case</span> <span class="dv">123</span>: <span class="kw">return</span>(<span class="dv">123</span>);
+      <span class="kw">case</span> <span class="dv">124</span>: <span class="kw">return</span>(<span class="dv">124</span>);
+      <span class="kw">case</span> <span class="dv">125</span>: <span class="kw">return</span>(<span class="dv">125</span>);
+      <span class="kw">case</span> <span class="dv">126</span>: <span class="kw">return</span>(<span class="dv">126</span>);
+      <span class="kw">case</span> <span class="dv">127</span>: <span class="kw">return</span>(<span class="dv">127</span>);
+      <span class="kw">case</span> <span class="dv">128</span>: <span class="kw">return</span>(<span class="dv">128</span>);
+      <span class="kw">case</span> <span class="dv">129</span>: <span class="kw">return</span>(<span class="dv">129</span>);
+      <span class="kw">case</span> <span class="dv">130</span>: <span class="kw">return</span>(<span class="dv">130</span>);
+      <span class="kw">case</span> <span class="dv">131</span>: <span class="kw">return</span>(<span class="dv">131</span>);
+      <span class="kw">case</span> <span class="dv">132</span>: <span class="kw">return</span>(<span class="dv">132</span>);
+      <span class="kw">case</span> <span class="dv">133</span>: <span class="kw">return</span>(<span class="dv">133</span>);
+      <span class="kw">case</span> <span class="dv">134</span>: <span class="kw">return</span>(<span class="dv">134</span>);
+      <span class="kw">case</span> <span class="dv">135</span>: <span class="kw">return</span>(<span class="dv">135</span>);
+      <span class="kw">case</span> <span class="dv">136</span>: <span class="kw">return</span>(<span class="dv">136</span>);
+      <span class="kw">case</span> <span class="dv">137</span>: <span class="kw">return</span>(<span class="dv">137</span>);
+      <span class="kw">case</span> <span class="dv">138</span>: <span class="kw">return</span>(<span class="dv">138</span>);
+      <span class="kw">case</span> <span class="dv">139</span>: <span class="kw">return</span>(<span class="dv">139</span>);
+      <span class="kw">case</span> <span class="dv">140</span>: <span class="kw">return</span>(<span class="dv">140</span>);
+      <span class="kw">case</span> <span class="dv">141</span>: <span class="kw">return</span>(<span class="dv">141</span>);
+      <span class="kw">case</span> <span class="dv">142</span>: <span class="kw">return</span>(<span class="dv">142</span>);
+      <span class="kw">case</span> <span class="dv">143</span>: <span class="kw">return</span>(<span class="dv">143</span>);
+      <span class="kw">case</span> <span class="dv">144</span>: <span class="kw">return</span>(<span class="dv">144</span>);
+      <span class="kw">case</span> <span class="dv">145</span>: <span class="kw">return</span>(<span class="dv">145</span>);
+      <span class="kw">case</span> <span class="dv">146</span>: <span class="kw">return</span>(<span class="dv">146</span>);
+      <span class="kw">case</span> <span class="dv">147</span>: <span class="kw">return</span>(<span class="dv">147</span>);
+      <span class="kw">case</span> <span class="dv">148</span>: <span class="kw">return</span>(<span class="dv">148</span>);
+      <span class="kw">case</span> <span class="dv">149</span>: <span class="kw">return</span>(<span class="dv">149</span>);
+      <span class="kw">case</span> <span class="dv">150</span>: <span class="kw">return</span>(<span class="dv">150</span>);
+      <span class="kw">case</span> <span class="dv">151</span>: <span class="kw">return</span>(<span class="dv">151</span>);
+      <span class="kw">case</span> <span class="dv">152</span>: <span class="kw">return</span>(<span class="dv">152</span>);
+      <span class="kw">case</span> <span class="dv">153</span>: <span class="kw">return</span>(<span class="dv">153</span>);
+      <span class="kw">case</span> <span class="dv">154</span>: <span class="kw">return</span>(<span class="dv">154</span>);
+      <span class="kw">case</span> <span class="dv">155</span>: <span class="kw">return</span>(<span class="dv">155</span>);
+      <span class="kw">case</span> <span class="dv">156</span>: <span class="kw">return</span>(<span class="dv">156</span>);
+      <span class="kw">case</span> <span class="dv">157</span>: <span class="kw">return</span>(<span class="dv">157</span>);
+      <span class="kw">case</span> <span class="dv">158</span>: <span class="kw">return</span>(<span class="dv">158</span>);
+      <span class="kw">case</span> <span class="dv">159</span>: <span class="kw">return</span>(<span class="dv">159</span>);
+      <span class="kw">case</span> <span class="dv">160</span>: <span class="kw">return</span>(<span class="dv">160</span>);
+      <span class="kw">case</span> <span class="dv">161</span>: <span class="kw">return</span>(<span class="dv">161</span>);
+      <span class="kw">case</span> <span class="dv">162</span>: <span class="kw">return</span>(<span class="dv">162</span>);
+      <span class="kw">case</span> <span class="dv">163</span>: <span class="kw">return</span>(<span class="dv">163</span>);
+      <span class="kw">case</span> <span class="dv">164</span>: <span class="kw">return</span>(<span class="dv">164</span>);
+      <span class="kw">case</span> <span class="dv">165</span>: <span class="kw">return</span>(<span class="dv">165</span>);
+      <span class="kw">case</span> <span class="dv">166</span>: <span class="kw">return</span>(<span class="dv">166</span>);
+      <span class="kw">case</span> <span class="dv">167</span>: <span class="kw">return</span>(<span class="dv">167</span>);
+      <span class="kw">case</span> <span class="dv">168</span>: <span class="kw">return</span>(<span class="dv">168</span>);
+      <span class="kw">case</span> <span class="dv">169</span>: <span class="kw">return</span>(<span class="dv">169</span>);
+      <span class="kw">case</span> <span class="dv">170</span>: <span class="kw">return</span>(<span class="dv">170</span>);
+      <span class="kw">case</span> <span class="dv">171</span>: <span class="kw">return</span>(<span class="dv">171</span>);
+      <span class="kw">case</span> <span class="dv">172</span>: <span class="kw">return</span>(<span class="dv">172</span>);
+      <span class="kw">case</span> <span class="dv">173</span>: <span class="kw">return</span>(<span class="dv">173</span>);
+      <span class="kw">case</span> <span class="dv">174</span>: <span class="kw">return</span>(<span class="dv">174</span>);
+      <span class="kw">case</span> <span class="dv">175</span>: <span class="kw">return</span>(<span class="dv">175</span>);
+      <span class="kw">case</span> <span class="dv">176</span>: <span class="kw">return</span>(<span class="dv">176</span>);
+      <span class="kw">case</span> <span class="dv">177</span>: <span class="kw">return</span>(<span class="dv">177</span>);
+      <span class="kw">case</span> <span class="dv">178</span>: <span class="kw">return</span>(<span class="dv">178</span>);
+      <span class="kw">case</span> <span class="dv">179</span>: <span class="kw">return</span>(<span class="dv">179</span>);
+      <span class="kw">case</span> <span class="dv">180</span>: <span class="kw">return</span>(<span class="dv">180</span>);
+      <span class="kw">case</span> <span class="dv">181</span>: <span class="kw">return</span>(<span class="dv">181</span>);
+      <span class="kw">case</span> <span class="dv">182</span>: <span class="kw">return</span>(<span class="dv">182</span>);
+      <span class="kw">case</span> <span class="dv">183</span>: <span class="kw">return</span>(<span class="dv">183</span>);
+      <span class="kw">case</span> <span class="dv">184</span>: <span class="kw">return</span>(<span class="dv">184</span>);
+      <span class="kw">case</span> <span class="dv">185</span>: <span class="kw">return</span>(<span class="dv">185</span>);
+      <span class="kw">case</span> <span class="dv">186</span>: <span class="kw">return</span>(<span class="dv">186</span>);
+      <span class="kw">case</span> <span class="dv">187</span>: <span class="kw">return</span>(<span class="dv">187</span>);
+      <span class="kw">case</span> <span class="dv">188</span>: <span class="kw">return</span>(<span class="dv">188</span>);
+      <span class="kw">case</span> <span class="dv">189</span>: <span class="kw">return</span>(<span class="dv">189</span>);
+      <span class="kw">case</span> <span class="dv">190</span>: <span class="kw">return</span>(<span class="dv">190</span>);
+      <span class="kw">case</span> <span class="dv">191</span>: <span class="kw">return</span>(<span class="dv">191</span>);
+      <span class="kw">case</span> <span class="dv">192</span>: <span class="kw">return</span>(<span class="dv">192</span>);
+      <span class="kw">case</span> <span class="dv">193</span>: <span class="kw">return</span>(<span class="dv">193</span>);
+      <span class="kw">case</span> <span class="dv">194</span>: <span class="kw">return</span>(<span class="dv">194</span>);
+      <span class="kw">case</span> <span class="dv">195</span>: <span class="kw">return</span>(<span class="dv">195</span>);
+      <span class="kw">case</span> <span class="dv">196</span>: <span class="kw">return</span>(<span class="dv">196</span>);
+      <span class="kw">case</span> <span class="dv">197</span>: <span class="kw">return</span>(<span class="dv">197</span>);
+      <span class="kw">case</span> <span class="dv">198</span>: <span class="kw">return</span>(<span class="dv">198</span>);
+      <span class="kw">case</span> <span class="dv">199</span>: <span class="kw">return</span>(<span class="dv">199</span>);
+      <span class="kw">case</span> <span class="dv">200</span>: <span class="kw">return</span>(<span class="dv">200</span>);
+      <span class="kw">case</span> <span class="dv">201</span>: <span class="kw">return</span>(<span class="dv">201</span>);
+      <span class="kw">case</span> <span class="dv">202</span>: <span class="kw">return</span>(<span class="dv">202</span>);
+      <span class="kw">case</span> <span class="dv">203</span>: <span class="kw">return</span>(<span class="dv">203</span>);
+      <span class="kw">case</span> <span class="dv">204</span>: <span class="kw">return</span>(<span class="dv">204</span>);
+      <span class="kw">case</span> <span class="dv">205</span>: <span class="kw">return</span>(<span class="dv">205</span>);
+      <span class="kw">case</span> <span class="dv">206</span>: <span class="kw">return</span>(<span class="dv">206</span>);
+      <span class="kw">case</span> <span class="dv">207</span>: <span class="kw">return</span>(<span class="dv">207</span>);
+      <span class="kw">case</span> <span class="dv">208</span>: <span class="kw">return</span>(<span class="dv">208</span>);
+      <span class="kw">case</span> <span class="dv">209</span>: <span class="kw">return</span>(<span class="dv">209</span>);
+      <span class="kw">case</span> <span class="dv">210</span>: <span class="kw">return</span>(<span class="dv">210</span>);
+      <span class="kw">case</span> <span class="dv">211</span>: <span class="kw">return</span>(<span class="dv">211</span>);
+      <span class="kw">case</span> <span class="dv">212</span>: <span class="kw">return</span>(<span class="dv">212</span>);
+      <span class="kw">case</span> <span class="dv">213</span>: <span class="kw">return</span>(<span class="dv">213</span>);
+      <span class="kw">case</span> <span class="dv">214</span>: <span class="kw">return</span>(<span class="dv">214</span>);
+      <span class="kw">case</span> <span class="dv">215</span>: <span class="kw">return</span>(<span class="dv">215</span>);
+      <span class="kw">case</span> <span class="dv">216</span>: <span class="kw">return</span>(<span class="dv">216</span>);
+      <span class="kw">case</span> <span class="dv">217</span>: <span class="kw">return</span>(<span class="dv">217</span>);
+      <span class="kw">case</span> <span class="dv">218</span>: <span class="kw">return</span>(<span class="dv">218</span>);
+      <span class="kw">case</span> <span class="dv">219</span>: <span class="kw">return</span>(<span class="dv">219</span>);
+      <span class="kw">case</span> <span class="dv">220</span>: <span class="kw">return</span>(<span class="dv">220</span>);
+      <span class="kw">case</span> <span class="dv">221</span>: <span class="kw">return</span>(<span class="dv">221</span>);
+      <span class="kw">case</span> <span class="dv">222</span>: <span class="kw">return</span>(<span class="dv">222</span>);
+      <span class="kw">case</span> <span class="dv">223</span>: <span class="kw">return</span>(<span class="dv">223</span>);
+      <span class="kw">case</span> <span class="dv">224</span>: <span class="kw">return</span>(<span class="dv">224</span>);
+      <span class="kw">case</span> <span class="dv">225</span>: <span class="kw">return</span>(<span class="dv">225</span>);
+      <span class="kw">case</span> <span class="dv">226</span>: <span class="kw">return</span>(<span class="dv">226</span>);
+      <span class="kw">case</span> <span class="dv">227</span>: <span class="kw">return</span>(<span class="dv">227</span>);
+      <span class="kw">case</span> <span class="dv">228</span>: <span class="kw">return</span>(<span class="dv">228</span>);
+      <span class="kw">case</span> <span class="dv">229</span>: <span class="kw">return</span>(<span class="dv">229</span>);
+      <span class="kw">case</span> <span class="dv">230</span>: <span class="kw">return</span>(<span class="dv">230</span>);
+      <span class="kw">case</span> <span class="dv">231</span>: <span class="kw">return</span>(<span class="dv">231</span>);
+      <span class="kw">case</span> <span class="dv">232</span>: <span class="kw">return</span>(<span class="dv">232</span>);
+      <span class="kw">case</span> <span class="dv">233</span>: <span class="kw">return</span>(<span class="dv">233</span>);
+      <span class="kw">case</span> <span class="dv">234</span>: <span class="kw">return</span>(<span class="dv">234</span>);
+      <span class="kw">case</span> <span class="dv">235</span>: <span class="kw">return</span>(<span class="dv">235</span>);
+      <span class="kw">case</span> <span class="dv">236</span>: <span class="kw">return</span>(<span class="dv">236</span>);
+      <span class="kw">case</span> <span class="dv">237</span>: <span class="kw">return</span>(<span class="dv">237</span>);
+      <span class="kw">case</span> <span class="dv">238</span>: <span class="kw">return</span>(<span class="dv">238</span>);
+      <span class="kw">case</span> <span class="dv">239</span>: <span class="kw">return</span>(<span class="dv">239</span>);
+      <span class="kw">case</span> <span class="dv">240</span>: <span class="kw">return</span>(<span class="dv">240</span>);
+      <span class="kw">case</span> <span class="dv">241</span>: <span class="kw">return</span>(<span class="dv">241</span>);
+      <span class="kw">case</span> <span class="dv">242</span>: <span class="kw">return</span>(<span class="dv">242</span>);
+      <span class="kw">case</span> <span class="dv">243</span>: <span class="kw">return</span>(<span class="dv">243</span>);
+      <span class="kw">case</span> <span class="dv">244</span>: <span class="kw">return</span>(<span class="dv">244</span>);
+      <span class="kw">case</span> <span class="dv">245</span>: <span class="kw">return</span>(<span class="dv">245</span>);
+      <span class="kw">case</span> <span class="dv">246</span>: <span class="kw">return</span>(<span class="dv">246</span>);
+      <span class="kw">case</span> <span class="dv">247</span>: <span class="kw">return</span>(<span class="dv">247</span>);
+      <span class="kw">case</span> <span class="dv">248</span>: <span class="kw">return</span>(<span class="dv">248</span>);
+      <span class="kw">case</span> <span class="dv">249</span>: <span class="kw">return</span>(<span class="dv">249</span>);
+      <span class="kw">case</span> <span class="dv">250</span>: <span class="kw">return</span>(<span class="dv">250</span>);
+      <span class="kw">case</span> <span class="dv">251</span>: <span class="kw">return</span>(<span class="dv">251</span>);
+      <span class="kw">case</span> <span class="dv">252</span>: <span class="kw">return</span>(<span class="dv">252</span>);
+      <span class="kw">case</span> <span class="dv">253</span>: <span class="kw">return</span>(<span class="dv">253</span>);
+      <span class="kw">case</span> <span class="dv">254</span>: <span class="kw">return</span>(<span class="dv">254</span>);
+      <span class="kw">case</span> <span class="dv">255</span>: <span class="kw">return</span>(<span class="dv">255</span>);
+      }
+    }
+    <span class="dt">void</span> user_memcpy2(<span class="dt">unsigned</span> <span class="dt">char</span>* dest, 
+                      <span class="dt">unsigned</span> <span class="dt">char</span> *src, size_t n) {
+      <span class="kw">while</span> (n &gt; <span class="dv">0</span>)  {      
+        *dest = control_flow_copy(*src);
+        src += <span class="dv">1</span>;
+        dest += <span class="dv">1</span>;
+        n -= <span class="dv">1</span>;
+      }
+    }
+    <span class="dt">int</span> main() {
+      <span class="dt">int</span> *p = &amp;x;
+      <span class="dt">int</span> *q;
+      user_memcpy2((<span class="dt">unsigned</span> <span class="dt">char</span>*)&amp;q, (<span class="dt">unsigned</span> <span class="dt">char</span>*)&amp;p, 
+                  <span class="kw">sizeof</span>(p));
+      *q = <span class="dv">11</span>; <span class="co">// does this have undefined behaviour?</span>
+      printf(<span class="st">&quot;*p=%d  *q=%d</span><span class="ch">\n</span><span class="st">&quot;</span>,*p,*q);
+    }</code></pre></td></tr></table></div>
+<a href="https://cerberus.cl.cam.ac.uk/cerberus?defacto/pointer_copy_user_ctrlflow_bytewise.c">[link to run test in Cerberus]</a>
+<p>
+<p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_copy_user_ctrlflow_bytewise.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">gcc-8.1-O0</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">gcc-8.1-O2</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">gcc-8.1-O3</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-O0</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-O2</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-O3</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-UBSAN</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-ASAN</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">clang-6.0-MSAN</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">icc-19-O0</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function "control_flow_copy"<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">icc-19-O2</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function "control_flow_copy"<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">icc-19-O3</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function "control_flow_copy"<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function "control_flow_copy"<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function "control_flow_copy"<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">cerberus-concrete</td><td>&nbsp</td><td valign="top">BEGIN EXEC[0]<br>Undefined [pointer_copy_user_ctrlflow_bytewise.c:282:3-5]{id: [UB043_indirection_invalid_value]}<br>END EXEC[0]<br>Time spent: 0.101601 seconds<br></td>
-<tr><td valign="top">cerberus-symbolic</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
-cerberus: internal error, uncaught exception:<br>          Failure("TODO: Symbolic defacto, isWellAligned_ptrval")<br>          <br></td>
-<tr><td valign="top">gcc-4.9-shadowprov</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 134
-</td>
-<tr><td valign="top">CHERI:MIPS-O0</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">CHERI:MIPS-O2</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">CHERI:MIPS-O2-no-strict-aliasing</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
-<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset-exact-equals</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O0-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-addr</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O0-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">CHERI:CHERI-O2-no-strict-aliasing-uintcap-offset</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute -1
-Terminated with signal 34: In-address space security exceptionpointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br></td>
-<tr><td valign="top">RV-Match</td><td>&nbsp</td><td valign="top">exit codes: compile 0 / execute 1
-</td>
-<tr><td valign="top">ch2o</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:3:10: fatal error: assert.h: No such file or directory<br> #include &lt;assert.h&gt;<br>          ^~~~~~~~~~<br>compilation terminated.<br></td>
-<tr><td valign="top">compcert-3.2</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td>&nbsp</td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2-interp</td><td>&nbsp</td><td valign="top">Time 0: calling main()<br>--[step_internal_function]--&gt;<br>Time 1: in function main, statement<br>  p = &amp;x;<br>  user_memcpy2((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_4, *p, *q);<br>  return 0;<br>--[step_seq]--&gt;<br>Time 2: in function main, statement<br>  p = &amp;x;<br>  user_memcpy2((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_4, *p, *q);<br>--[step_seq]--&gt;<br>Time 3: in function main, statement p = &amp;x;<br>--[step_do_1]--&gt;<br>Time 4: in function main, expression p = &amp;x<br>--[red_var_local]--&gt;<br>Time 5: in function main, expression &lt;loc p&gt; = &amp;x<br>--[red_var_global]--&gt;<br>Time 6: in function main, expression &lt;loc p&gt; = &amp;&lt;loc x&gt;<br>--[red_addrof]--&gt;<br>Time 7: in function main, expression &lt;loc p&gt; = &lt;ptr x&gt;<br>--[red_assign]--&gt;<br>Time 8: in function main, expression &lt;ptr x&gt;<br>--[step_do_2]--&gt;<br>Time 9: in function main, statement /*skip*/;<br>--[step_skip_seq]--&gt;<br>Time 10: in function main, statement<br>  user_memcpy2((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>  *q = 11;<br>  printf(__stringlit_4, *p, *q);<br>--[step_seq]--&gt;<br>Time 11: in function main, statement<br>  user_memcpy2((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *));<br>--[step_do_1]--&gt;<br>Time 12: in function main, expression<br>  user_memcpy2((unsigned char *) &amp;q, (unsigned char *) &amp;p, sizeof(int *))<br>--[red_var_global]--&gt;<br>Time 13: in function main, expression<br>  &lt;loc user_memcpy2&gt;((unsigned char *) &amp;q, <br>                     (unsigned char *) &amp;p, <br>                     sizeof(int *))<br>--[red_rvalof]--&gt;<br>Time 14: in function main, expression<br>  &lt;ptr user_memcpy2&gt;((unsigned char *) &amp;q, <br>                     (unsigned char *) &amp;p, <br>                     sizeof(int *))<br>--[red_var_local]--&gt;<br>Time 15: in function main, expression<br>  &lt;ptr user_memcpy2&gt;((unsigned char *) &amp;&lt;loc q&gt;, <br>                     (unsigned char *) &amp;p, <br>                     sizeof(int *))<br>--[red_addrof]--&gt;<br>Time 16: in function main, expression<br>  &lt;ptr user_memcpy2&gt;((unsigned char *) &lt;ptr q&gt;, <br>                     (unsigned char *) &amp;p, <br>                     sizeof(int *))<br>--[red_cast]--&gt;<br>Time 17: in function main, expression<br>  &lt;ptr user_memcpy2&gt;(&lt;ptr q&gt;, (unsigned char *) &amp;p, sizeof(int *))<br>--[red_var_local]--&gt;<br>Time 18: in function main, expression<br>  &lt;ptr user_memcpy2&gt;(&lt;ptr q&gt;, (unsigned char *) &amp;&lt;loc p&gt;, sizeof(int *))<br>--[red_addrof]--&gt;<br>Time 19: in function main, expression<br>  &lt;ptr user_memcpy2&gt;(&lt;ptr q&gt;, (unsigned char *) &lt;ptr p&gt;, sizeof(int *))<br>--[red_cast]--&gt;<br>Time 20: in function main, expression<br>  &lt;ptr user_memcpy2&gt;(&lt;ptr q&gt;, &lt;ptr p&gt;, sizeof(int *))<br>--[red_sizeof]--&gt;<br>Time 21: in function main, expression<br>  &lt;ptr user_memcpy2&gt;(&lt;ptr q&gt;, &lt;ptr p&gt;, 4U)<br>--[red_call]--&gt;<br>Time 22: calling user_memcpy2(&lt;ptr&gt;, &lt;ptr&gt;, 4)<br>--[step_internal_function]--&gt;<br>Time 23: in function user_memcpy2, statement<br>  while (n &gt; 0) {<br>    *dest = control_flow_copy(*.);<br>    src += 1;<br>    dest += 1;<br>    n -= 1;<br>  }<br>--[step_while]--&gt;<br>Time 24: in function user_memcpy2, expression n &gt; 0<br>--[red_var_local]--&gt;<br>Time 25: in function user_memcpy2, expression &lt;loc n&gt; &gt; 0<br>--[red_rvalof]--&gt;<br>Time 26: in function user_memcpy2, expression 4U &gt; 0<br>--[red_binop]--&gt;<br>Time 27: in function user_memcpy2, expression 1<br>--[step_while_true]--&gt;<br>Time 28: in function user_memcpy2, statement<br>  *dest = control_flow_copy(*.); src += 1; dest += 1; n -= 1;<br>--[step_seq]--&gt;<br>Time 29: in function user_memcpy2, statement *dest = control_flow_copy(*.);<br>--[step_do_1]--&gt;<br>Time 30: in function user_memcpy2, expression *dest = control_flow_copy(*.)<br>--[red_var_local]--&gt;<br>Time 31: in function user_memcpy2, expression<br>  *&lt;loc dest&gt; = control_flow_copy(*.)<br>--[red_rvalof]--&gt;<br>Time 32: in function user_memcpy2, expression *&lt;ptr&gt; = control_flow_copy(*.)<br>--[red_deref]--&gt;<br>Time 33: in function user_memcpy2, expression &lt;loc&gt; = control_flow_copy(*.)<br>--[red_var_global]--&gt;<br>Time 34: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;loc control_flow_copy&gt;(*.)<br>--[red_rvalof]--&gt;<br>Time 35: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(*.)<br>--[red_var_local]--&gt;<br>Time 36: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(*.)<br>--[red_rvalof]--&gt;<br>Time 37: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(*&lt;ptr&gt;)<br>--[red_deref]--&gt;<br>Time 38: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(&lt;loc&gt;)<br>--[red_rvalof]--&gt;<br>Time 39: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(&lt;undef&gt;)<br>Stuck state: in function user_memcpy2, expression<br>  &lt;loc&gt; = &lt;ptr control_flow_copy&gt;(&lt;undef&gt;)<br>Stuck subexpression: &lt;ptr control_flow_copy&gt;(&lt;undef&gt;)<br>ERROR: Undefined behavior<br>In file included from pointer_copy_user_ctrlflow_bytewise.c:1:<br>In file included from /usr/include/stdio.h:64:<br>In file included from /usr/include/_stdio.h:68:<br>/usr/include/sys/cdefs.h:81:2: warning: "Unsupported compiler detected" [-W#warnings]<br>#warning "Unsupported compiler detected"<br> ^<br>1 warning generated.<br>pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Undefined [pointer_copy_user_ctrlflow_bytewise.c:282:3-5]{id: [UB043_indirection_invalid_value]}<br>END EXEC[0]<br>Time spent: 0.076000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;*p=11  *q=11\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.072000 seconds<br></td>
+<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:266:1: warning: control may reach end of non-void function [-Wreturn-type]<br>}<br>^<br>1 warning generated.<br>*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O2</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
+<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Switching on an unspecified controlling expression:<br>      &gt; in control_flow_copy at pointer_copy_user_ctrlflow_bytewise.c:8:3<br>        in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Unspecified value or behavior (USP-ESS1):<br>        see C11 section 6.8.4.2:5 http://rvdoc.org/C11/6.8.4.2<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Casting empty value to type other than void:<br>      &gt; in control_flow_copy at pointer_copy_user_ctrlflow_bytewise.c:8:3<br>        in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Undefined behavior (UB-CCV5):<br>        see C11 section 6.3.2.2:1 http://rvdoc.org/C11/6.3.2.2<br>        see C11 section J.2:1 item 23 http://rvdoc.org/C11/J.2<br>        see CERT-C section MSC15-C http://rvdoc.org/CERT-C/MSC15-C<br>        see CERT-C section MSC37-C http://rvdoc.org/CERT-C/MSC37-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Indeterminate value used in an expression:<br>      &gt; in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Undefined behavior (UB-CEE2):<br>        see C11 section 6.2.4 http://rvdoc.org/C11/6.2.4<br>        see C11 section 6.7.9 http://rvdoc.org/C11/6.7.9<br>        see C11 section 6.8 http://rvdoc.org/C11/6.8<br>        see C11 section J.2:1 item 11 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP33-C http://rvdoc.org/CERT-C/EXP33-C<br>        see MISRA-C section 8.9:1 http://rvdoc.org/MISRA-C/8.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Dereferencing a null pointer:<br>      &gt; in main at pointer_copy_user_ctrlflow_bytewise.c:282:3<br><br>    Undefined behavior (UB-CER3):<br>        see C11 section 6.5.3.2:4 http://rvdoc.org/C11/6.5.3.2<br>        see C11 section J.2:1 item 43 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP34-C http://rvdoc.org/CERT-C/EXP34-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Execution failed (configuration dumped)<br></td>
 
 <table></code></pre>
+</body>
+</html>

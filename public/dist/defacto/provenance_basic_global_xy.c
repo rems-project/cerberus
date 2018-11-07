@@ -9,5 +9,4 @@ int main() {
     *p = 11;  // does this have undefined behaviour?
     printf("x=%d y=%d *p=%d *q=%d\n",x,y,*p,*q);
   }
-  return 0;
 }
