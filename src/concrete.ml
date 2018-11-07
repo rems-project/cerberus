@@ -455,7 +455,7 @@ module Concrete : Memory = struct
           (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
-          !^ ("<" ^ string_of_provenance prov ^ ">0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n)))
+          P.parens (!^ ("@" ^ string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n))))
   
   let pp_integer_value (IV (prov, n)) =
     if !Debug_ocaml.debug_level >= 3 then
