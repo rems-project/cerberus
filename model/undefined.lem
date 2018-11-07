@@ -156,13 +156,13 @@ type undefined_behaviour =
   | UB047b_array_pointer_subtraction_beyond_indirection
   (* Pointers that do not point into, or just beyond, the same array object are subtracted
      (6.5.6). *)
-  | UB048_disjoint_array_pointers_substraction
+  | UB048_disjoint_array_pointers_subtraction
   (* An array subscript is out of range, even if an object is apparently accessible with the given
      subscript (as in the lvalue expression a[1][7] given the declaration int a[4][5]) (6.5.6). *)
   | UB049
   (* The result of subtracting two pointers is not representable in an object of type ptrdiff_t
      (6.5.6). *)
-  | UB050_pointers_substraction_not_representable
+  | UB050_pointers_subtraction_not_representable
   (* An expression is shifted by a negative number or by an amount greater than or equal to the
      width of the promoted expression (6.5.7). *)
   | UB051a_negative_shift
@@ -717,7 +717,7 @@ let std_of_undefined_behaviour = function
       Just "§6.5.2.2#9"
   | UB043_indirection_invalid_value ->
       Just "§6.5.3.2#4, sentence 4"
-  | UB050_pointers_substraction_not_representable ->
+  | UB050_pointers_subtraction_not_representable ->
       Just "§6.5.6#9, sentence 3"
   | UB055_invalid_integer_constant_expression ->
       Just "§6.6#6"
@@ -805,9 +805,9 @@ let ub_str_bimap =
     ; (UB046b_array_pointer_subtraction_outside, "UB046b_array_pointer_subtraction_outside")
     ; (UB047a_array_pointer_addition_beyond_indirection, "UB047a_array_pointer_addition_beyond_indirection")
     ; (UB047b_array_pointer_subtraction_beyond_indirection, "UB047b_array_pointer_subtraction_beyond_indirection")
-    ; (UB048_disjoint_array_pointers_substraction, "UB048_disjoint_array_pointers_substraction")
+    ; (UB048_disjoint_array_pointers_subtraction, "UB048_disjoint_array_pointers_subtraction")
     ; (UB049, "UB049")
-    ; (UB050_pointers_substraction_not_representable, "UB050_pointers_substraction_not_representable")
+    ; (UB050_pointers_subtraction_not_representable, "UB050_pointers_subtraction_not_representable")
     ; (UB051a_negative_shift, "UB051a_negative_shift")
     ; (UB51b_shift_too_large, "UB51b_shift_too_large")
     ; (UB052a_negative_left_shift, "UB052a_negative_left_shift")
@@ -1018,6 +1018,8 @@ let ub_short_string = function
       "incompatible function type"
   | UB043_indirection_invalid_value ->
       "the operand of the unary '*' operator has an invalid value"
+  | UB048_disjoint_array_pointers_subtraction ->
+      "the subtraction of two pointers must be between pointers that points into, or just beyond, the same array object"
   | UB055_invalid_integer_constant_expression ->
       "invalid integer constant expression"
   | UB059_incomplete_no_linkage_identifier ->
@@ -1113,7 +1115,7 @@ let pretty_string_of_undefined_behaviour = function
                   integer type procuding a result that does not point into, or just beyond, the \
                   same array object."
   | UB046b_array_pointer_subtraction_outside ->
-      "(§6.5.6#8) found the substraction of a pointer into, or just beyond, and array object and \
+      "(§6.5.6#8) found the subtraction of a pointer into, or just beyond, and array object and \
                   an integer type procuding a result that does not point into, or just beyond, the \
                   same array object."
   | UB047a_array_pointer_addition_beyond_indirection ->
@@ -1124,11 +1126,11 @@ let pretty_string_of_undefined_behaviour = function
       "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
                   integer type procuding a result that points just beyond the array object and is \
                   used as the operand of a unary * operator that is evaluated."
-  | UB048_disjoint_array_pointers_substraction ->
-      "(§6.5.6#9) found the substraction of two pointers that do not point into, or just beyond, \
+  | UB048_disjoint_array_pointers_subtraction ->
+      "(§6.5.6#9) found the subtraction of two pointers that do not point into, or just beyond, \
                   the same array object."
-  | UB050_pointers_substraction_not_representable ->
-      "(§6.5.6#9) found the substraction of two pointers whose result is not representable in an \
+  | UB050_pointers_subtraction_not_representable ->
+      "(§6.5.6#9) found the subtraction of two pointers whose result is not representable in an \
                   object of type ptrdiff_t"
   | UB051a_negative_shift ->
       "(§6.5.7#3) found a bitwise shift operator (<< >>) whose right operand has negative value."
