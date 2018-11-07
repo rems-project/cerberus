@@ -2,7 +2,7 @@
 #include <string.h>
 #include <assert.h>
 #include <limits.h>
-int  x=1;
+int x=1;
 unsigned char control_flow_copy(unsigned char c) {
   assert(UCHAR_MAX==255);
   switch (c) {

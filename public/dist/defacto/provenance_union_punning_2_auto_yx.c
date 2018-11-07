@@ -3,7 +3,7 @@
 #include <inttypes.h>
 typedef union { uintptr_t ui; int *p; } un;
 int main() {
-  int  y=2, x=1;
+  int y=2, x=1;
   un u; 
   int *px = &x;
   uintptr_t i = (uintptr_t)px;

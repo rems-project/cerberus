@@ -244,14 +244,15 @@ let core_passes (conf, io) ~filename core_file =
   end >>= fun () -> return (core_file', typed_core_file'')
 
 
-let interp_backend io sym_suppl core_file ~args ~do_batch ~concurrency ~experimental_unseq exec_mode =
+let interp_backend io sym_suppl core_file ~args ~batch ~concurrency ~experimental_unseq exec_mode =
   let module D = Exhaustive_driver in
   let conf = {D.concurrency; experimental_unseq; exec_mode=exec_mode } in
   (* TODO: temporary hack for the command name *)
-  if do_batch then begin
-    let executions = D.batch_drive sym_suppl core_file ("cmdname" :: args) conf in
+  match batch with
+  | (`Batch | `CharonBatch) as mode ->
+    let executions = D.batch_drive mode sym_suppl core_file ("cmdname" :: args) conf in
     return (Either.Left executions)
-  end else
+  | `NotBatch ->
     let open Core in
     D.drive sym_suppl core_file ("cmdname" :: args) conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->

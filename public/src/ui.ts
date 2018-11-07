@@ -455,7 +455,9 @@ export class CerberusUI {
   }
 
   public openExperimentalTab() {
-    this.getView().newTab('Experimental')
+    //this.getView().newTab('Experimental')
+    const title = this.getView().state.title()
+    window.open(`/experimental/${title}.html`)
   }
 
   public step(active: {id: number, state: string} | null): void {

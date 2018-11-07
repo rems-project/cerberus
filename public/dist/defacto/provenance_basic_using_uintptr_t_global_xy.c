@@ -2,7 +2,7 @@
 #include <string.h> 
 #include <stdint.h>
 #include <inttypes.h>
-int  x=1, y = 2;
+int x=1, y=2;
 int main() {
   uintptr_t ux = (uintptr_t)&x;
   uintptr_t uy = (uintptr_t)&y;

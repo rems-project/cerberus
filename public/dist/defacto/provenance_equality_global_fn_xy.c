@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h> 
-int  x=1, y=2;
+int x=1, y=2;
 void f(int* p, int* q) {
   _Bool b = (p==q);
   // can this be false even with identical addresses?

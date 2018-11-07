@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h> 
 #include <inttypes.h>
-int  y=2, x=1;
+int y=2, x=1;
 typedef union { uintptr_t ui; int *p; } un;
 int main() {
   un u; 

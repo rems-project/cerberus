@@ -58,7 +58,7 @@ let hack ~conf mode =
       concurrency=        false;
       preEx=              false;
       error_verbosity=    Global_ocaml.QuoteStd;
-      batch=              true;
+      batch=              `Batch;
       experimental_unseq= false;
       typecheck_core=     pipe_conf.Pipeline.typecheck_core;
       defacto=            false;
@@ -151,7 +151,7 @@ let execute ~conf ~filename (mode: exec_mode) =
     elaborate ~conf ~filename
     >>= fun (cabs, ail, sym_suppl, core) ->
     Pipeline.interp_backend dummy_io sym_suppl (Core_run_aux.convert_file core)
-      [] true false false (to_smt2_mode mode)
+      [] `Batch false false (to_smt2_mode mode)
     >>= function
     | Either.Left res ->
       return (String.concat "\n" res)
