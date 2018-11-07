@@ -477,7 +477,12 @@ let () =
         output_string mlm_dbg_oc "\n";
         close_out mlm_dbg_oc;
         (* TODO: hack *)
-        Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
+        begin match !!cerb_conf.batch with
+          | `CharonBatch ->
+              ()
+          | _ ->
+              Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ())
+        end;
         exit n
     | `Version
     | `Help ->
