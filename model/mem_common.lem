@@ -100,7 +100,7 @@ let undefinedFromMem_error = function
   | MerrOutsideLifetime _ ->
       Just [Undefined.UB009_outside_lifetime]
   | MerrPtrdiff ->
-      Just [Undefined.UB048_disjoint_array_pointers_substraction]
+      Just [Undefined.UB048_disjoint_array_pointers_subtraction]
   | MerrAccess _ _ NullPtr ->
       Just [Undefined.UB019_lvalue_not_an_object]
   | MerrAccess _ _ DeadPtr ->

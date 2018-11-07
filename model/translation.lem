@@ -1469,11 +1469,11 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                           Caux.mk_pure_e begin
                             Caux.mk_if_pe (stdlib.mkcall_is_representable memop_sym_pe Aty.ptrdiff_t)
                               (Caux.mk_specified_pe memop_sym_pe)
-                              (Caux.mk_undef_pe loc Undefined.UB050_pointers_substraction_not_representable)
+                              (Caux.mk_undef_pe loc Undefined.UB050_pointers_subtraction_not_representable)
                           end
                         end )
                   ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_pointer])
-                    , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB050_pointers_substraction_not_representable) ) ]
+                    , Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB050_pointers_subtraction_not_representable) ) ]
               )
             )
 
