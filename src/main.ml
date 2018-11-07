@@ -185,7 +185,7 @@ let backend sym_supply core_file args =
         match !!cerb_conf.batch with
           | (`Batch | `CharonBatch) as mode ->
               Exhaustive_driver.batch_drive mode sym_supply core_file ("cmdname" :: args) dr_conf
-              |> List.iter print_endline;
+              |> List.iter print_string;
               0
           | `NotBatch ->
               (* TODO: temporary hack for the command name *)
