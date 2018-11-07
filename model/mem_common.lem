@@ -109,7 +109,13 @@ let undefinedFromMem_error = function
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
   | MerrPtrFromInt ->
       Just [Undefined.UB_CERB001_integer_to_dead_pointer]
-
+  
+  (* TODO do better *)
+  | MerrAccess _ LoadAccess OutOfBoundPtr ->
+      Just [Undefined.UB_CERB002a_out_of_bound_load]
+  | MerrAccess _ StoreAccess OutOfBoundPtr ->
+      Just [Undefined.UB_CERB002b_out_of_bound_store]
+  
   | MerrUndefinedFree loc Free_static_allocation ->
       Just [Undefined.UB179a_static_allocation]
   | MerrUndefinedFree loc Free_dead_allocation ->

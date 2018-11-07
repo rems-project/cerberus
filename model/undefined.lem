@@ -680,6 +680,9 @@ type undefined_behaviour =
   
   (* UB from variant 1 of the no integer provenance semantics (see note 0117) *)
   | UB_CERB001_integer_to_dead_pointer
+  
+  | UB_CERB002a_out_of_bound_load
+  | UB_CERB002b_out_of_bound_store
 
 
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
@@ -963,7 +966,11 @@ let ub_str_bimap =
     ; (UB200, "UB200")
     ; (UB201, "UB201")
     ; (UB202, "UB202")
-    ; (UB203, "UB203") ]
+    ; (UB203, "UB203")
+    ; (UB204_illtyped_Static_assert, "UB204_illtyped_Static_assert")
+    ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
+    ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
+    ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store") ]
 
 
 val stringFromUndefined_behaviour: undefined_behaviour -> string
@@ -1033,6 +1040,10 @@ let ub_short_string = function
       "static assert expression is not an integral constant expression"
   | UB_CERB001_integer_to_dead_pointer ->
       "integer to pointer conversion with no live object (CERB)"
+  | UB_CERB002a_out_of_bound_load ->
+      "out of bounds pointer at memory load"
+  | UB_CERB002b_out_of_bound_store ->
+      "out of bounds pointer at memory store"
   | ub ->
       "(UB missing short message): " ^ show ub
 end
@@ -1154,6 +1165,10 @@ let pretty_string_of_undefined_behaviour = function
       "(§6.7.10#3) The constant expression shall be an integer constant expression."
   | UB_CERB001_integer_to_dead_pointer ->
       "(CERB notes0117 3.3.1) static assert expression is not an integral constant expression"
+  | UB_CERB002a_out_of_bound_load ->
+      "(CERB) provenance check failed during a load"
+  | UB_CERB002b_out_of_bound_store ->
+      "(CERB) provenance check failed during a store"
   | Illtyped_argument_for_format ->
       "Illtyped_argument_for_format"
   | Invalid_format str ->

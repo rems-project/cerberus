@@ -51,7 +51,7 @@ module Eff : sig
   val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
   val get: ('st, 'err, 'cs, 'st) eff
   val put: 'st -> (unit, 'err, 'cs, 'st) eff
-  val fail: 'err -> ('a, 'err, 'cs, 'st) eff
+(*  val fail: 'err -> ('a, 'err, 'cs, 'st) eff *)
   val mapM: ('a -> ('b, 'err, 'cs, 'st) eff) -> 'a list -> ('b list, 'err, 'cs, 'st) eff
   val msum: string -> (string * ('a, 'err, 'cs, 'st) eff) list -> ('a, 'err, 'cs, 'st) eff
 end = struct
@@ -71,7 +71,7 @@ end = struct
   
   let get = Nondeterminism.nd_get
   let put = Nondeterminism.nd_put
-  let fail err = Nondeterminism.kill (Other err)
+(*  let fail err = Nondeterminism.kill (Other err) *)
   let mapM _ _ = failwith "TODO: Concrete.Eff.mapM"
   
   let msum str xs =
@@ -408,6 +408,30 @@ module Concrete : Memory = struct
   
   let return = Eff.return
   let bind = Eff.(>>=)
+  
+  (* TODO: hackish *)
+  let fail err =
+    let loc = match err with
+      | MerrAccess (loc, _, _)
+      | MerrWriteOnReadOnly loc
+      | MerrUndefinedFree (loc, _) ->
+          loc
+      | MerrOutsideLifetime _
+      | MerrInternal _
+      | MerrOther _
+      | MerrPtrdiff
+      | MerrUndefinedRealloc
+      | MerrIntFromPtr
+      | MerrPtrFromInt
+      | MerrWIP _ ->
+          Location_ocaml.other "Concrete" in
+    let open Nondeterminism in
+    match undefinedFromMem_error err with
+      | Some ubs ->
+          kill (Undef0 (loc, ubs))
+      | None ->
+          kill (Other err)
+
   
   
   let string_of_provenance = function

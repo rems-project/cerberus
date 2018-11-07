@@ -44,50 +44,56 @@ let batch_drive mode (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.fil
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state sym_supply file in
-  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
-  
+  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in  
+  let is_charon = match mode with
+    | `Batch       -> false
+    | `CharonBatch -> true in
   let has_multiple =
     List.length values > 1 in
   
   List.mapi (fun i (res, z3_strs, nd_st) ->
-    let result = begin match res with
+    let (exit, result) = begin match res with
       | ND.Active dres ->
           let str_v = String_core.string_of_value dres.Driver.dres_core_value in
+          if is_charon then
+            (" (exit = "^ str_v ^ ")", dres.Driver.dres_stdout)
+          else
+            ("", "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
+            "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}\n")
+      | ND.Killed (ND.Undef0 (loc, [])) ->
+          (* TODO: this is probably an error *)
           begin
-            "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
-            "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}"
+            ("", "Undefined behaviour: [empty UB, probably a cerberus BUG] at " ^
+            Location_ocaml.location_to_string ~charon:is_charon loc ^ "\n")
           end
-      | ND.Killed (ND.Undef0 (loc, ubs)) ->
+      | ND.Killed (ND.Undef0 (loc, ub::_)) ->
           begin
-            let is_charon = match mode with
-              | `Batch       -> false
-              | `CharonBatch -> true in
-            "Undefined behaviour: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs ^ " at " ^
-            Location_ocaml.location_to_string ~charon:is_charon loc
+            ("", "Undefined behaviour: " ^ Undefined.ub_short_string ub ^ " at " ^
+            Location_ocaml.location_to_string ~charon:is_charon loc ^ "\n")
           end
       | ND.Killed (ND.Error0 (_, str)) ->
           begin
-            "Error {msg: " ^ str ^ "}"
+            ("", "Error {msg: " ^ str ^ "}\n")
           end
       | ND.Killed (ND.Other dr_err) ->
           begin
-            "Killed {msg: " ^ string_of_driver_error dr_err ^ "}"
+            ("", "Killed {msg: " ^ string_of_driver_error dr_err ^ "}\n")
           end
     end in
     let constraints =
       if !Debug_ocaml.debug_level > 0 then begin
         match z3_strs with
           | [] ->
-              "\nEMPTY CONSTRAINTS"
+              "EMPTY CONSTRAINTS\n"
           | _ ->
               Colour.(do_colour:=true; ansi_format [Blue] (String.concat "\n" z3_strs))
-              |> Printf.sprintf "\nBEGIN CONSTRAINTS%sEND CONSTRAINTS"
+              |> Printf.sprintf "BEGIN CONSTRAINTS%sEND CONSTRAINTS\n"
       end else ""
     in
     if has_multiple then
-      Printf.sprintf "EXECUTION %d:\n%s%s\n" i result constraints
+      (if i>0 then "\n" else "") ^ Printf.sprintf "EXECUTION %d%s:\n%s%s" i exit constraints result
     else
-      result ^ constraints
+      constraints ^ result
   ) values
 
 
