@@ -22,8 +22,8 @@ export abstract class Widget {
     this.dom.append(this.body)
     $(document.body).append(this.dom)
   }
-  fetch_test(name: string) {
-    util.get(name, (data: string) => {
+  fetch_test(dir: string, name: string) {
+    util.get(dir+'/'+name, (data: string) => {
       this.hide()
       UI.addView(name, data)
     })
@@ -48,7 +48,7 @@ export class Defacto extends Widget {
           for (let k = 0; q.tests && k < q.tests.length; k++) {
             const name = q.tests[k]
             const test = $('<li><a href="#">'+name+'</a></li>')
-            test.on('click', () => this.fetch_test('defacto/'+name))
+            test.on('click', () => this.fetch_test('defacto', name))
             tests.append(test)
           }
           questions.append(q.question)
@@ -79,7 +79,7 @@ export class POPL19 extends Widget {
             })
           })
           const link = $(`<a href="#">${name}</a>`)
-          link.on('click', () => this.fetch_test('defacto/'+name))
+          link.on('click', () => this.fetch_test('defacto', name))
           const test = $('<li>')
           test.append(link)
           test.append($('<br>'))
@@ -128,7 +128,7 @@ export class GCC2018 extends Widget {
       </ul>`))
     this.dom.find('.tests a').on('click', (e) => {
       const name = e.target.textContent as string
-      this.fetch_test('demo/'+name)
+      this.fetch_test('demo', name)
     })
     this.show()
   }

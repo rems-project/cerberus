@@ -409,17 +409,21 @@ export default class View {
     }
     const createEdges = (ps: Pointer[], mem: Memory.State) => {
       const color = (p: Pointer, target: Memory.Allocation) => {
-        // invalid, but correctly pointing to something
-        if (!pvi && p.invalid) 
-          return ',color="blue"'
         // correct provenance
         if (target.id == p.to) 
-          return ''
+          return 'black'
         // intptr in PNVI
         if (!pvi && p.intptr) 
-          return ''
+          return 'black'
         // incorrect pointer
         return ',color="red"'
+      }
+      const style = (p: Pointer) => {
+        if (p.intptr)
+          return 'dashed'
+        if (!pvi && p.invalid)
+          return 'dotted'
+        return 'solid'
       }
       const invisible = (target: Memory.Allocation) => {
         if (target.prefix.kind == 'other' && !target.dyn) {
@@ -428,24 +432,23 @@ export default class View {
         return false
       }
       return _.reduce(ps, (acc, p) => {
-        const dashed = p.intptr ? 'style="dashed"' : 'style="solid"'
         // points in bounds to an allocation
         const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
         if (target) {
           if (invisible(target)) return acc
           const offset = p.addr - target.base
-          acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color(p, target)}];`
+          acc += `${p.from}v->n${target.id}:${offset}[style="${style(p)}",color="${color(p, target)}"];`
           return acc
         } 
         // points to a past one of an allocation
         const pastone = _.find(mem.map, alloc => p.addr === alloc.base + alloc.size)
         if (pastone) {
           if (invisible(pastone)) return acc
-          acc += `${p.from}v->n${pastone.id}:${pastone.size}[${dashed},color="red"];`
+          acc += `${p.from}v->n${pastone.id}:${pastone.size}[style="${style(p)}",color="red"];`
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[${dashed},color="red"];`
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style}",color="red"];`
         return acc;
       }, '')
     }
