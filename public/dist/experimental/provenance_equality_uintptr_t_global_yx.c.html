@@ -79,8 +79,8 @@ Example: <code>provenance_equality_uintptr_t_global_yx.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- provenance_equality_uintptr_t_global_yx.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=40 q=38\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.020000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=40 q=38\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.016000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Addresses: p=40 q=38<br>(p==q) = false<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">Addresses: p=40 q=38<br>(p==q) = false<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=6009b8 q=6009b0<br>(p==q) = false<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=60099c q=60099c<br>(p==q) = true<br></td>
 <tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=60099c q=60099c<br>(p==q) = true<br></td>
@@ -99,9 +99,8 @@ Example: <code>provenance_equality_uintptr_t_global_yx.c</code>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">Addresses: p=6046c8 q=6046c0<br>(p==q) = false<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=6046c8 q=6046c0<br>(p==q) = false<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=6046c8 q=6046c0<br>(p==q) = false<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">Addresses: p=601040 q=601038<br>(p==q) = false<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">Addresses: p=601040 q=601038<br>(p==q) = false<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">Addresses: p=0 q=0<br>(p==q) = true<br>Printing an unspecified value:<br>      &gt; in printf at provenance_equality_uintptr_t_global_yx.c:7:3<br>        in main at provenance_equality_uintptr_t_global_yx.c:7:3<br><br>    Unspecified value or behavior (USP-STDIO2):<br>        see C11 section 7.21.6.1:8 http://rvdoc.org/C11/7.21.6.1<br><br>Comparison of unspecified value:<br>      &gt; in main at provenance_equality_uintptr_t_global_yx.c:11:3<br><br>    Unspecified value or behavior (USP-CERL7):<br>        see C11 section 6.5.9 http://rvdoc.org/C11/6.5.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">Addresses: p=601040 q=601038<br>(p==q) = false<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">Addresses: p=601040 q=601038<br>(p==q) = false<br></td>
 
 <table></code></pre>
 </body>

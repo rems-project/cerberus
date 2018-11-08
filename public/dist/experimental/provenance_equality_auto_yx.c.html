@@ -75,29 +75,28 @@ Example: <code>provenance_equality_auto_yx.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- provenance_equality_auto_yx.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;8&gt;:0x50 q=&lt;7&gt;:0x48\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;8&gt;:0x50 q=&lt;7&gt;:0x48\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[1]<br>Time spent: 0.028000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;8&gt;:0x50 q=&lt;7&gt;:0x48\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;8&gt;:0x50 q=&lt;7&gt;:0x48\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[1]<br>Time spent: 0.028000 seconds<br></td>
-<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=0x7ffe5080c9c8 q=0x7ffe5080c9c8<br>(p==q) = true<br></td>
-<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=0x7ffe25397430 q=0x7ffe25397428<br>(p==q) = false<br></td>
-<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=0x7fff8bd6d210 q=0x7fff8bd6d208<br>(p==q) = false<br></td>
-<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7ffd93e57c20 q=0x7ffd93e57c18<br>(p==q) = false<br></td>
-<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7ffd69a24a20 q=0x7ffd69a24a18<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">Addresses: p=0x7ffec31e81e8 q=0x7ffec31e81e8<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">Addresses: p=0x7fff87a46f54 q=0x7fff87a46f54<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">Addresses: p=0x7ffd26506694 q=0x7ffd26506694<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7ffd5cc2d8e4 q=0x7ffd5cc2d8e4<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7ffcacf85a74 q=0x7ffcacf85a74<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">Addresses: p=0x7ffd385b4184 q=0x7ffd385b4184<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">Addresses: p=0x7fff9056e034 q=0x7fff9056e020<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">Addresses: p=0x7fff7b8768c4 q=0x7fff7b8768c4<br>(p==q) = true<br></td>
-<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">Addresses: p=0x7ffc8d244d0c q=0x7ffc8d244d04<br>(p==q) = false<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">EXECUTION 0 (exit = Specified(0)):<br>Addresses: p=(@8, 0x50) q=(@7, 0x48)<br>(p==q) = false<br><br>EXECUTION 1 (exit = Specified(0)):<br>Addresses: p=(@8, 0x50) q=(@7, 0x48)<br>(p==q) = false<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">EXECUTION 0 (exit = Specified(0)):<br>Addresses: p=(@8, 0x50) q=(@7, 0x48)<br>(p==q) = false<br><br>EXECUTION 1 (exit = Specified(0)):<br>Addresses: p=(@8, 0x50) q=(@7, 0x48)<br>(p==q) = false<br></td>
+<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=0x7fffffffe718 q=0x7fffffffe718<br>(p==q) = true<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=0x7fffffffe730 q=0x7fffffffe728<br>(p==q) = false<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=0x7fffffffe730 q=0x7fffffffe728<br>(p==q) = false<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7fffffffe710 q=0x7fffffffe708<br>(p==q) = false<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7fffffffe710 q=0x7fffffffe708<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">Addresses: p=0x7fffffffe728 q=0x7fffffffe728<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">Addresses: p=0x7fffffffe724 q=0x7fffffffe724<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">Addresses: p=0x7fffffffe724 q=0x7fffffffe724<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7fffffffe704 q=0x7fffffffe704<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x7fffffffe704 q=0x7fffffffe704<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">Addresses: p=0x7fffffffe724 q=0x7fffffffe724<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">Addresses: p=0x7fffffffe6b4 q=0x7fffffffe6a0<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">Addresses: p=0x7fffffffe704 q=0x7fffffffe704<br>(p==q) = true<br></td>
+<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">Addresses: p=0x7fffffffe70c q=0x7fffffffe704<br>(p==q) = false<br></td>
 <tr><td valign="top">icc-19-O2</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">Addresses: p=0x7ffd4f6a9da0 q=0x7ffd4f6a9d98<br>(p==q) = false<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">Addresses: p=0x7ffc64a91640 q=0x7ffc64a91638<br>(p==q) = false<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">Addresses: p=(nil) q=(nil)<br>(p==q) = true<br>Comparison of unspecified value:<br>      &gt; in main at provenance_equality_auto_yx.c:9:3<br><br>    Unspecified value or behavior (USP-CERL7):<br>        see C11 section 6.5.9 http://rvdoc.org/C11/6.5.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">Addresses: p=0x7fffffffe6f0 q=0x7fffffffe6e8<br>(p==q) = false<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">Addresses: p=0x7fffffffe6f0 q=0x7fffffffe6e8<br>(p==q) = false<br></td>
 
 <table></code></pre>
 </body>

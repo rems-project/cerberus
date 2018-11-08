@@ -77,8 +77,8 @@ Example: <code>pointer_arith_algebraic_properties_3_global.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_arith_algebraic_properties_3_global.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Killed {msg: MerrAccess Store [pointer_arith_algebraic_properties_3_global.c:8:3-10] OutOfBoundPtr}<br>END EXEC[0]<br>Time spent: 0.016000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;x[1]=11 *p=11\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.016000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: the operand of the unary '*' operator has an invalid value at 8:3-5<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 <tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
@@ -97,10 +97,8 @@ Example: <code>pointer_arith_algebraic_properties_3_global.c</code>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
-pointer_arith_algebraic_properties_3_global.c:5:3: error: A pointer (or array subscript) outside the bounds of an object.<br><br>    Undefined behavior (UB-CEA1):<br>        see C11 section 6.5.6:8 http://rvdoc.org/C11/6.5.6<br>        see C11 section J.2:1 item 46 http://rvdoc.org/C11/J.2<br>        see CERT-C section ARR30-C http://rvdoc.org/CERT-C/ARR30-C<br>        see CERT-C section ARR37-C http://rvdoc.org/CERT-C/ARR37-C<br>        see CERT-C section STR31-C http://rvdoc.org/CERT-C/STR31-C<br>        see MISRA-C section 8.18:1 http://rvdoc.org/MISRA-C/8.18<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>pointer_arith_algebraic_properties_3_global.c:5:3: error: Computing pointer difference between two different objects.<br><br>    Undefined behavior (UB-CEA5):<br>        see C11 section 6.5.6:9 http://rvdoc.org/C11/6.5.6<br>        see C11 section J.2:1 item 48 http://rvdoc.org/C11/J.2<br>        see CERT-C section ARR36-C http://rvdoc.org/CERT-C/ARR36-C<br>        see MISRA-C section 8.18:2 http://rvdoc.org/MISRA-C/8.18<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>pointer_arith_algebraic_properties_3_global.c:5:3: warning: Conversion from an integer to non-null pointer.<br><br>    Implementation defined behavior (IMPL-CCV13):<br>        see C11 section 6.3.2.3:5 http://rvdoc.org/C11/6.3.2.3<br>        see CERT section INT36-C http://rvdoc.org/CERT/INT36-C<br><br>pointer_arith_algebraic_properties_3_global.c:5:3: error: Indeterminate value used in an expression.<br><br>    Undefined behavior (UB-CEE2):<br>        see C11 section 6.2.4 http://rvdoc.org/C11/6.2.4<br>        see C11 section 6.7.9 http://rvdoc.org/C11/6.7.9<br>        see C11 section 6.8 http://rvdoc.org/C11/6.8<br>        see C11 section J.2:1 item 11 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP33-C http://rvdoc.org/CERT-C/EXP33-C<br>        see MISRA-C section 8.9:1 http://rvdoc.org/MISRA-C/8.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Dereferencing a null pointer:<br>      &gt; in main at pointer_arith_algebraic_properties_3_global.c:8:3<br><br>    Undefined behavior (UB-CER3):<br>        see C11 section 6.5.3.2:4 http://rvdoc.org/C11/6.5.3.2<br>        see C11 section J.2:1 item 43 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP34-C http://rvdoc.org/CERT-C/EXP34-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Execution failed (configuration dumped)<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">x[1]=11 *p=11<br></td>
 
 <table></code></pre>
 </body>
