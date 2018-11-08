@@ -337,7 +337,7 @@ export default class View {
       const title =
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
-          <td border="0" colspan="${maxcols}"><b>${name()}</b>: <i>${alloc.type}</i>&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
+          <td border="0" colspan="${maxcols}"><b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
          </tr>`
       let index = 0
       const body = alloc.values.reduce((acc, row) => {
@@ -408,29 +408,44 @@ export default class View {
       }, [])
     }
     const createEdges = (ps: Pointer[], mem: Memory.State) => {
-      return _.reduce(ps, (acc, p) => {
-        const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
-        const dashed = p.intptr ? 'style="dashed"' : 'style="solid"'
-        if (target) {
-          if (target.prefix.kind == 'other' && !target.dyn) {
-            if (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
-              return acc
-          }
-          const offset = p.addr - target.base
-          const color  = (target.id != p.to && (pvi || !p.intptr)) || p.invalid ? ',color="red"': ''
-          acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color}];`
-        } else {
-          const toprov = _.find(mem.map, alloc => alloc.id == p.to)
-          if (toprov) {
-            const offset = p.addr - toprov.base
-            if (0 <= offset && offset <= toprov.size)
-              acc += `${p.from}v->n${toprov.id}:${offset}[${dashed},color="red"];`
-            else
-              acc += `sink[label="???",color="red"];${p.from}v->sink[${dashed},color="red"];`
-          } else {
-              acc += `sink[label="???",color="red"];${p.from}v->sink[${dashed},color="red"];`
-          }
+      const color = (p: Pointer, target: Memory.Allocation) => {
+        // invalid, but correctly pointing to something
+        if (!pvi && p.invalid) 
+          return ',color="blue"'
+        // correct provenance
+        if (target.id == p.to) 
+          return ''
+        // intptr in PNVI
+        if (!pvi && p.intptr) 
+          return ''
+        // incorrect pointer
+        return ',color="red"'
+      }
+      const invisible = (target: Memory.Allocation) => {
+        if (target.prefix.kind == 'other' && !target.dyn) {
+          return (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
         }
+        return false
+      }
+      return _.reduce(ps, (acc, p) => {
+        const dashed = p.intptr ? 'style="dashed"' : 'style="solid"'
+        // points in bounds to an allocation
+        const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        if (target) {
+          if (invisible(target)) return acc
+          const offset = p.addr - target.base
+          acc += `${p.from}v->n${target.id}:${offset}[${dashed}${color(p, target)}];`
+          return acc
+        } 
+        // points to a past one of an allocation
+        const pastone = _.find(mem.map, alloc => p.addr === alloc.base + alloc.size)
+        if (pastone) {
+          if (invisible(pastone)) return acc
+          acc += `${p.from}v->n${pastone.id}:${pastone.size}[${dashed},color="red"];`
+          return acc
+        }
+        // dangling pointer
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[${dashed},color="red"];`
         return acc;
       }, '')
     }
