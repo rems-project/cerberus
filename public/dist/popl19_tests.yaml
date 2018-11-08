@@ -73,26 +73,15 @@
 - section: Can a function argument alias local variables of the function?
   tests:
     - pointer_from_integer_1i.c
-    - pointer_from_integer_1i_cerb.c
 - section: Allocation-address nondeterminism
   tests:
     - pointer_from_integer_1ig.c
-    - pointer_from_integer_1ig_cerb.c
     - pointer_from_integer_1p.c
-    - pointer_from_integer_1p_cerb.c
     - pointer_from_integer_1pg.c
-    - pointer_from_integer_1pg_cerb.c
 - section: Can a function access local variables of its parent?
   tests:
     - pointer_from_integer_2.c
-    - pointer_from_integer_2_cerb.c
     - pointer_from_integer_2g.c
-    - pointer_from_integer_2g_cerb.c
 - section: The problem with lost address-takens and escapes
   tests:
     - provenance_lost_escape_1.c
-    - provenance_lost_escape_1_cerb.c
-- section: Fancy desugaring of struct/union/array initialisers
-  tests:
-    - init.c
-
