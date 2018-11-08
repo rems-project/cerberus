@@ -457,7 +457,7 @@ export class CerberusUI {
   public openExperimentalTab() {
     //this.getView().newTab('Experimental')
     const title = this.getView().state.title()
-    window.open(`https://www.cl.cam.ac.uk/~pes20/cerberus/supplementary-material-popl2019/generated_html_popl2019/${title}.html`)
+    window.open(`http://www.cl.cam.ac.uk/~pes20/cerberus/supplementary-material-popl2019/generated_html_popl2019/${title}.html`)
   }
 
   public step(active: {id: number, state: string} | null): void {
