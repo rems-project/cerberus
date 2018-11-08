@@ -423,6 +423,7 @@ module Concrete : Memory = struct
       | MerrUndefinedRealloc
       | MerrIntFromPtr
       | MerrPtrFromInt
+      | MerrPtrComparison
       | MerrWIP _ ->
           Location_ocaml.other "Concrete" in
     let open Nondeterminism in
@@ -1208,8 +1209,15 @@ module Concrete : Memory = struct
   let lt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          return (Nat_big_num.compare addr1 addr2 == -1)
+          if Switches.(has_switch SW_strict_pointer_relationals) then
+            match prov1, prov2 with
+              | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
+                  return (Nat_big_num.compare addr1 addr2 == -1)
+              | _ ->
+                  (* TODO: one past case *)
+                  fail MerrPtrComparison
+          else
+            return (Nat_big_num.compare addr1 addr2 == -1)
       | (PVnull _, _)
       | (_, PVnull _) ->
           fail (MerrWIP "lt_ptrval ==> one null pointer")
@@ -1219,26 +1227,49 @@ module Concrete : Memory = struct
   let gt_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          return (Nat_big_num.compare addr1 addr2 == 1)
+          if Switches.(has_switch SW_strict_pointer_relationals) then
+            match prov1, prov2 with
+              | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
+                  return (Nat_big_num.compare addr1 addr2 == 1)
+              | _ ->
+                  (* TODO: one past case *)
+                  fail MerrPtrComparison
+          else
+            return (Nat_big_num.compare addr1 addr2 == 1)
       | _ ->
           fail (MerrWIP "gt_ptrval")
   
   let le_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          let cmp = Nat_big_num.compare addr1 addr2 in
-          return (cmp = -1 || cmp = 0)
+          if Switches.(has_switch SW_strict_pointer_relationals) then
+            match prov1, prov2 with
+              | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
+                  let cmp = Nat_big_num.compare addr1 addr2 in
+                  return (cmp = -1 || cmp = 0)
+              | _ ->
+                  (* TODO: one past case *)
+                  fail MerrPtrComparison
+          else
+            let cmp = Nat_big_num.compare addr1 addr2 in
+            return (cmp = -1 || cmp = 0)
       | _ ->
           fail (MerrWIP "le_ptrval")
   
   let ge_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
       | (PVconcrete addr1, PVconcrete addr2) ->
-          (* TODO: provenance *)
-          let cmp = Nat_big_num.compare addr1 addr2 in
-          return (cmp = 1 || cmp = 0)
+          if Switches.(has_switch SW_strict_pointer_relationals) then
+            match prov1, prov2 with
+              | Prov_some alloc1, Prov_some alloc2 when alloc1 = alloc2 ->
+                  let cmp = Nat_big_num.compare addr1 addr2 in
+                  return (cmp = 1 || cmp = 0)
+              | _ ->
+                  (* TODO: one past case *)
+                  fail MerrPtrComparison
+          else
+            let cmp = Nat_big_num.compare addr1 addr2 in
+            return (cmp = 1 || cmp = 0)
       | _ ->
           fail (MerrWIP "ge_ptrval")
   
@@ -1356,6 +1387,21 @@ module Concrete : Memory = struct
       );
     let sw_opt =
       Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) in
+    
+    let n =
+      let (min, max) = match Impl.sizeof_pointer with
+        | Some sz ->
+            let open Nat_big_num in
+            (of_int 0, sub (pow_int (of_int 2) (8*sz)) (of_int 1))
+        | None ->
+            failwith "the concrete memory model requires a complete implementation sizeof POINTER" in
+      (* wrapI *)
+      let dlt = N.succ (N.sub max min) in
+      let r = N.integerRem_f n dlt in
+      if N.less_equal r max then
+        r
+      else
+        N.sub r dlt in
     match sw_opt with
       | Some (Switches.SW_no_integer_provenance variant) ->
           (* TODO: device memory? *)

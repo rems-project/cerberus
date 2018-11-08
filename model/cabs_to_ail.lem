@@ -1487,7 +1487,7 @@ let rec desugar_type_specifiers specs =
                     E.is_incomplete lastMemb_ty >>= function
                       | true ->
                           if AilTypesAux.is_array_unknown_size lastMemb_ty then
-                            E.return ()
+                            E.fail (Loc.locOf last_ident) (Errors.Desugar_NotYetSupported "flexible array members")
                           else
                             E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType lastMemb_qs lastMemb_ty)
                       | false ->
@@ -2315,8 +2315,27 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         E.determinate_linkage ident E.Namespace_ordinary kind scs >>= fun link ->
         
         (* STD §6.7.9#3 *)
+        (* TODO: STD check+quote *)
+        E.get_tag_definitions >>= fun ident_tagDefs ->
+        let (fake_ail_sigma : sigma unit) = <|
+          declarations= [];
+          object_definitions= [];
+          function_definitions= [];
+          static_assertions= [];
+          tag_definitions=
+            List.foldl (fun acc (ident, tagDef) ->
+              match tagDef with
+                | Struct_definition _ xs ->
+                    (ident, StructDef xs) :: acc
+                | Union_definition _ xs ->
+                    (ident, UnionDef xs) :: acc
+                | Enum_definition _ ->
+                    acc
+              end
+            ) [] (Map_extra.toList ident_tagDefs);
+        |> in
         if not (   AilTypesAux.is_array_unknown_size ty
-                || (AilTypesAux.is_object ty && not (AilTypesAux.is_vla ty)) ) then
+                || (AilTypesAux.is_complete_object fake_ail_sigma ty && not (AilTypesAux.is_vla ty)) ) then
           E.constraint_violation loc IllegalInitializer
         
         (* STD §6.7.9#5 *)

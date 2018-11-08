@@ -7,6 +7,9 @@ type cerb_switch =
   | SW_forbid_nullptr_free
   | SW_zap_dead_pointers
   
+    (* make the relational operators UB when relating distinct objects (ISO) *)
+  | SW_strict_pointer_relationals
+  
     (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
   | SW_no_integer_provenance of int
 
@@ -38,6 +41,9 @@ let set strs =
         Some SW_forbid_nullptr_free
     | "zap_dead_pointers" ->
         Some SW_zap_dead_pointers
+    | "strict_pointer_relationals" ->
+        Some SW_strict_pointer_relationals
+
     | "no_integer_provenance" ->
         Some (SW_no_integer_provenance 0)
     | "no_integer_provenance_v1" ->

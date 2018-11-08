@@ -1458,7 +1458,9 @@ AilTypesAux.make_composite
 *)
 
         if decl <> prev_decl then
-          undef loc Undefined.UB015_incompatible_redeclaration
+(*          undef loc Undefined.UB015_incompatible_redeclaration *)
+          (* TODO: check that we are indeed only dealing with same scope redefinition here *)
+          constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
         else
           let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
           return ()
@@ -1736,8 +1738,20 @@ let extract_program startup_str =
           ) st.function_declarations
         end
         begin
-          Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
-            (loc, A.Decl_object (dur, isRegister) qs ty)
+          Map.map (fun (isTentative, loc, dur, isRegister, qs, ty) ->
+            let ty' =
+              if isTentative then
+                match ty with
+                  | ATypes.Ctype annots (ATypes.Array elem_ty Nothing) ->
+                      (* TODO: check *)
+                      (* STD §6.9.2#5 EXAMPLE 2 *)
+                      ATypes.Ctype annots (ATypes.Array elem_ty (Just 1))
+                  | _ ->
+                      ty
+                end
+              else
+                ty in
+            (loc, A.Decl_object (dur, isRegister) qs ty')
           ) st.external_object_declarations
         end
       end
@@ -1758,6 +1772,10 @@ let extract_program startup_str =
   
   let object_defs =
     List.map (function
+      | (sym, Tentative (ATypes.Ctype _ (ATypes.Array elem_ty Nothing))) ->
+          (* TODO: check *)
+          (* STD §6.9.2#5 EXAMPLE 2 *)
+          (sym, A.AnnotatedExpression () [] Loc.unknown (A.AilEconst (A.ConstantArray elem_ty [mk_zeroInit_aux st.tag_definitions elem_ty])))
       | (sym, Tentative ty) ->
           (sym, mk_zeroInit st.tag_definitions ty)
       | (sym, Definition e) ->

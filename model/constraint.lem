@@ -81,6 +81,7 @@ type violation =
   | NoLinkageMultipleDeclaration of cabs_identifier (* §6.7#3 *)
   | TypedefRedefinition (* §6.7#3, 1st bullet *)
   | TypedefRedefinitionVariablyModifiedType (* §6.7#3, 1st bullet, sentence 2 *)
+  | SameScopeIncompatibleDeclarations (* §6.7#4 *)
   (* 6.7.1 Storage-class specifiers *)
   | IllegalMultipleStorageClasses (* §6.7.1#2 *)
   | IllegalMultipleStorageClassesThreadLocal (* §6.7.1#3, sentence 1 *)
@@ -266,6 +267,8 @@ let std_of_violation = function
       ["§6.7#3, bullet 1"]
   | TypedefRedefinitionVariablyModifiedType ->
       ["§6.7#3, bullet 1, sentence 2"]
+  | SameScopeIncompatibleDeclarations ->
+      ["§6.7#4"]
   | IllegalMultipleStorageClasses ->
       ["§6.7.1#2"]
   | IllegalMultipleStorageClassesThreadLocal ->

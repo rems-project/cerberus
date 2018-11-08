@@ -91,7 +91,7 @@ let rec mk_zeroInit_aux tagDefs (ATypes.Ctype _ ty) =
         A.ConstantInteger (A.IConstant 0 A.Octal Nothing)
     | ATypes.Basic (ATypes.Floating _) ->
         A.ConstantFloating ("0.0", Nothing)
-    | ATypes.Array _ Nothing ->
+    | ATypes.Array elem_ty Nothing ->
         error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Array Nothing"
     | ATypes.Array elem_ty (Just n) ->
         A.ConstantArray elem_ty begin
