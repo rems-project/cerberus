@@ -127,7 +127,7 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
 (* Create configuration for every instance model *)
 let create_conf w =
   let cpp_cmd cerb_path =
-    "cc -E -C -traditional-cpp -nostdinc -undef -D__cerb__ -I "
+    "cc -E -C -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
     ^ cerb_path ^ "/include/c/libc -I "
     ^ cerb_path ^ "/include/c/posix"
   in
