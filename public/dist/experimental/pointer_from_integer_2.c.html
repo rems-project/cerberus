@@ -79,6 +79,8 @@ Example: <code>pointer_from_integer_2.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_from_integer_2.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: the operand of the unary '*' operator has an invalid value at 7:3-5<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">j=7<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
 Segmentation fault (core dumped)<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
@@ -114,6 +116,10 @@ Segmentation fault (core dumped)<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
 Segmentation fault (core dumped)<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
 Segmentation fault (core dumped)<br></td>
 
 <table></code></pre>

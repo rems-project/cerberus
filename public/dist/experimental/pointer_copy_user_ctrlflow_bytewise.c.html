@@ -336,7 +336,7 @@ Example: <code>pointer_copy_user_ctrlflow_bytewise.c</code>
     <span class="ot">#include &lt;string.h&gt;</span>
     <span class="ot">#include &lt;assert.h&gt;</span>
     <span class="ot">#include &lt;limits.h&gt;</span>
-    <span class="dt">int</span>  x=<span class="dv">1</span>;
+    <span class="dt">int</span> x=<span class="dv">1</span>;
     <span class="dt">unsigned</span> <span class="dt">char</span> control_flow_copy(<span class="dt">unsigned</span> <span class="dt">char</span> c) {
       assert(UCHAR_MAX==<span class="dv">255</span>);
       <span class="kw">switch</span> (c) {
@@ -619,8 +619,8 @@ Example: <code>pointer_copy_user_ctrlflow_bytewise.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_copy_user_ctrlflow_bytewise.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Undefined [pointer_copy_user_ctrlflow_bytewise.c:282:3-5]{id: [UB043_indirection_invalid_value]}<br>END EXEC[0]<br>Time spent: 0.076000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;*p=11  *q=11\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.072000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: the operand of the unary '*' operator has an invalid value at 282:3-5<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">*p=11  *q=11<br></td>
@@ -639,10 +639,8 @@ Example: <code>pointer_copy_user_ctrlflow_bytewise.c</code>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c(266): warning #1011: missing return statement at end of non-void function &quot;control_flow_copy&quot;<br>  }<br>  ^<br><br>*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
-Switching on an unspecified controlling expression:<br>      &gt; in control_flow_copy at pointer_copy_user_ctrlflow_bytewise.c:8:3<br>        in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Unspecified value or behavior (USP-ESS1):<br>        see C11 section 6.8.4.2:5 http://rvdoc.org/C11/6.8.4.2<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Casting empty value to type other than void:<br>      &gt; in control_flow_copy at pointer_copy_user_ctrlflow_bytewise.c:8:3<br>        in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Undefined behavior (UB-CCV5):<br>        see C11 section 6.3.2.2:1 http://rvdoc.org/C11/6.3.2.2<br>        see C11 section J.2:1 item 23 http://rvdoc.org/C11/J.2<br>        see CERT-C section MSC15-C http://rvdoc.org/CERT-C/MSC15-C<br>        see CERT-C section MSC37-C http://rvdoc.org/CERT-C/MSC37-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Indeterminate value used in an expression:<br>      &gt; in user_memcpy2 at pointer_copy_user_ctrlflow_bytewise.c:271:5<br>        in main at pointer_copy_user_ctrlflow_bytewise.c:280:3<br><br>    Undefined behavior (UB-CEE2):<br>        see C11 section 6.2.4 http://rvdoc.org/C11/6.2.4<br>        see C11 section 6.7.9 http://rvdoc.org/C11/6.7.9<br>        see C11 section 6.8 http://rvdoc.org/C11/6.8<br>        see C11 section J.2:1 item 11 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP33-C http://rvdoc.org/CERT-C/EXP33-C<br>        see MISRA-C section 8.9:1 http://rvdoc.org/MISRA-C/8.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Dereferencing a null pointer:<br>      &gt; in main at pointer_copy_user_ctrlflow_bytewise.c:282:3<br><br>    Undefined behavior (UB-CER3):<br>        see C11 section 6.5.3.2:4 http://rvdoc.org/C11/6.5.3.2<br>        see C11 section J.2:1 item 43 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP34-C http://rvdoc.org/CERT-C/EXP34-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Execution failed (configuration dumped)<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">pointer_copy_user_ctrlflow_bytewise.c:6: warning: control reaches end of non-void function [-Wreturn-type]<br>*p=11  *q=11<br></td>
 
 <table></code></pre>
 </body>

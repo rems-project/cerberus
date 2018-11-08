@@ -79,29 +79,28 @@ Example: <code>provenance_equality_uintptr_t_auto_xy.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- provenance_equality_uintptr_t_auto_xy.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=3c q=3c\n(p==q) = true\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.016000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=3c q=3c\n(p==q) = true\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.016000 seconds<br></td>
-<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=7ffdd962bc2c q=7ffdd962bc24<br>(p==q) = false<br></td>
-<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=7ffdd1aebf1c q=7ffdd1aebf1c<br>(p==q) = true<br></td>
-<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=7ffec81f829c q=7ffec81f829c<br>(p==q) = true<br></td>
-<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7ffdbad4c9ec q=7ffdbad4c9ec<br>(p==q) = true<br></td>
-<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7ffcab3e763c q=7ffcab3e763c<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">Addresses: p=7ffd2c8153ac q=7ffd2c8153a4<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">Addresses: p=7ffc431e87e8 q=7ffc431e87e0<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">Addresses: p=7ffdcb7dc208 q=7ffdcb7dc200<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7fffeabe41f8 q=7fffeabe41f0<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7ffc3b670bc8 q=7ffc3b670bc0<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">Addresses: p=7ffc49f9ee84 q=7ffc49f9ee84<br>(p==q) = true<br></td>
-<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">Addresses: p=7ffc54966c24 q=7ffc54966c30<br>(p==q) = false<br></td>
-<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">Addresses: p=7ffdfac6eb24 q=7ffdfac6eb24<br>(p==q) = true<br></td>
-<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">Addresses: p=7ffcbb50c558 q=7ffcbb50c558<br>(p==q) = true<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Addresses: p=3c q=3c<br>(p==q) = true<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">Addresses: p=3c q=3c<br>(p==q) = true<br></td>
+<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=7fffffffe70c q=7fffffffe704<br>(p==q) = false<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=7fffffffe70c q=7fffffffe70c<br>(p==q) = true<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=7fffffffe70c q=7fffffffe70c<br>(p==q) = true<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7fffffffe6ec q=7fffffffe6ec<br>(p==q) = true<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7fffffffe6ec q=7fffffffe6ec<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">Addresses: p=7fffffffe71c q=7fffffffe714<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">Addresses: p=7fffffffe718 q=7fffffffe710<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">Addresses: p=7fffffffe718 q=7fffffffe710<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7fffffffe6e8 q=7fffffffe6e0<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=7fffffffe6e8 q=7fffffffe6e0<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">Addresses: p=7fffffffe704 q=7fffffffe704<br>(p==q) = true<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">Addresses: p=7fffffffe684 q=7fffffffe690<br>(p==q) = false<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">Addresses: p=7fffffffe6e4 q=7fffffffe6e4<br>(p==q) = true<br></td>
+<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">Addresses: p=7fffffffe6f8 q=7fffffffe6f8<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O2</td><td> </td><td valign="top">Addresses: p=6046c4 q=6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">Addresses: p=6046c4 q=6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=6046c4 q=6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=6046c4 q=6046c4<br>(p==q) = true<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">Addresses: p=7ffe1f5d070c q=7ffe1f5d070c<br>(p==q) = true<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">Addresses: p=7ffd558f3b2c q=7ffd558f3b2c<br>(p==q) = true<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">Addresses: p=0 q=0<br>(p==q) = true<br>Printing an unspecified value:<br>      &gt; in printf at provenance_equality_uintptr_t_auto_xy.c:7:3<br>        in main at provenance_equality_uintptr_t_auto_xy.c:7:3<br><br>    Unspecified value or behavior (USP-STDIO2):<br>        see C11 section 7.21.6.1:8 http://rvdoc.org/C11/7.21.6.1<br><br>Comparison of unspecified value:<br>      &gt; in main at provenance_equality_uintptr_t_auto_xy.c:11:3<br><br>    Unspecified value or behavior (USP-CERL7):<br>        see C11 section 6.5.9 http://rvdoc.org/C11/6.5.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">Addresses: p=7fffffffe6dc q=7fffffffe6dc<br>(p==q) = true<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">Addresses: p=7fffffffe6dc q=7fffffffe6dc<br>(p==q) = true<br></td>
 
 <table></code></pre>
 </body>

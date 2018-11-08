@@ -74,7 +74,7 @@ Example: <code>pointer_copy_user_ctrlflow_bitwise.c</code>
 </pre></td><td class="sourceCode"><pre><code class="sourceCode c">    <span class="ot">#include &lt;stdio.h&gt;</span>
     <span class="ot">#include &lt;inttypes.h&gt;</span>
     <span class="ot">#include &lt;limits.h&gt;</span>
-    <span class="dt">int</span>  x=<span class="dv">1</span>;
+    <span class="dt">int</span> x=<span class="dv">1</span>;
     <span class="dt">int</span> main() {
       <span class="dt">int</span> *p = &amp;x;
       uintptr_t i = (uintptr_t)p;
@@ -97,8 +97,8 @@ Example: <code>pointer_copy_user_ctrlflow_bitwise.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_copy_user_ctrlflow_bitwise.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Undefined [pointer_copy_user_ctrlflow_bitwise.c:20:3-5]{id: [UB043_indirection_invalid_value]}<br>END EXEC[0]<br>Time spent: 0.072000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;*p=11  *q=11\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>Time spent: 0.072000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: the operand of the unary '*' operator has an invalid value at 20:3-5<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">*p=11  *q=11<br></td>
@@ -117,10 +117,8 @@ Example: <code>pointer_copy_user_ctrlflow_bitwise.c</code>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">*p=11  *q=11<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
-Comparison of unspecified value:<br>      &gt; in main at pointer_copy_user_ctrlflow_bitwise.c:14:5<br><br>    Unspecified value or behavior (USP-CERL7):<br>        see C11 section 6.5.9 http://rvdoc.org/C11/6.5.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Conversion from an integer to non-null pointer:<br>      &gt; in main at pointer_copy_user_ctrlflow_bitwise.c:19:3<br><br>    Implementation defined behavior (IMPL-CCV13):<br>        see C11 section 6.3.2.3:5 http://rvdoc.org/C11/6.3.2.3<br>        see CERT section INT36-C http://rvdoc.org/CERT/INT36-C<br><br>Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">*p=11  *q=11<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">*p=11  *q=11<br></td>
 
 <table></code></pre>
 </body>

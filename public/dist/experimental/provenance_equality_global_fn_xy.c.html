@@ -67,7 +67,7 @@ Example: <code>provenance_equality_global_fn_xy.c</code>
 16
 </pre></td><td class="sourceCode"><pre><code class="sourceCode c">    <span class="ot">#include &lt;stdio.h&gt;</span>
     <span class="ot">#include &lt;string.h&gt; </span>
-    <span class="dt">int</span>  x=<span class="dv">1</span>, y=<span class="dv">2</span>;
+    <span class="dt">int</span> x=<span class="dv">1</span>, y=<span class="dv">2</span>;
     <span class="dt">void</span> f(<span class="dt">int</span>* p, <span class="dt">int</span>* q) {
       <span class="dt">_Bool</span> b = (p==q);
       <span class="co">// can this be false even with identical addresses?</span>
@@ -85,8 +85,8 @@ Example: <code>provenance_equality_global_fn_xy.c</code>
 <p>
 <p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- provenance_equality_global_fn_xy.c --></p>
 <pre><code><table cellpadding="0" cellspacing="0">
-<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;7&gt;:0x4c q=&lt;8&gt;:0x4c\n(p==q) = true\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;7&gt;:0x4c q=&lt;8&gt;:0x4c\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[1]<br>Time spent: 0.028000 seconds<br></td>
-<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">BEGIN EXEC[0]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;7&gt;:0x4c q=&lt;8&gt;:0x4c\n(p==q) = true\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[0]<br>BEGIN EXEC[1]<br>Defined {value: &quot;Specified(0)&quot;, stdout: &quot;Addresses: p=&lt;7&gt;:0x4c q=&lt;8&gt;:0x4c\n(p==q) = false\n&quot;, blocked: &quot;false&quot;}<br>END EXEC[1]<br>Time spent: 0.028000 seconds<br></td>
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">EXECUTION 0 (exit = Specified(0)):<br>Addresses: p=(@7, 0x4c) q=(@8, 0x4c)<br>(p==q) = true<br><br>EXECUTION 1 (exit = Specified(0)):<br>Addresses: p=(@7, 0x4c) q=(@8, 0x4c)<br>(p==q) = false<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">EXECUTION 0 (exit = Specified(0)):<br>Addresses: p=(@7, 0x4c) q=(@8, 0x4c)<br>(p==q) = true<br><br>EXECUTION 1 (exit = Specified(0)):<br>Addresses: p=(@7, 0x4c) q=(@8, 0x4c)<br>(p==q) = false<br></td>
 <tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">Addresses: p=0x600a0c q=0x600a0c<br>(p==q) = true<br></td>
 <tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">Addresses: p=0x6009d0 q=0x6009c8<br>(p==q) = false<br></td>
 <tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">Addresses: p=0x6009d0 q=0x6009c8<br>(p==q) = false<br></td>
@@ -105,9 +105,8 @@ Example: <code>provenance_equality_global_fn_xy.c</code>
 <tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
 <tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">Addresses: p=0x6046c4 q=0x6046c4<br>(p==q) = true<br></td>
-<tr><td valign="top">compcert-3.2</td><td> </td><td valign="top">Addresses: p=0x60103c q=0x60103c<br>(p==q) = true<br></td>
-<tr><td valign="top">compcert-3.2-O</td><td> </td><td valign="top">Addresses: p=0x60103c q=0x60103c<br>(p==q) = true<br></td>
-<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">Addresses: p=(nil) q=(nil)<br>(p==q) = true<br>Comparison of unspecified value:<br>      &gt; in f at provenance_equality_global_fn_xy.c:7:3<br>        in main at provenance_equality_global_fn_xy.c:14:3<br><br>    Unspecified value or behavior (USP-CERL7):<br>        see C11 section 6.5.9 http://rvdoc.org/C11/6.5.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">Addresses: p=0x60103c q=0x60103c<br>(p==q) = true<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">Addresses: p=0x60103c q=0x60103c<br>(p==q) = true<br></td>
 
 <table></code></pre>
 </body>
