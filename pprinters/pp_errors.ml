@@ -127,6 +127,8 @@ let string_of_constraint_violation = function
       "typedef redefinition with different types"
   | TypedefRedefinitionVariablyModifiedType ->
       "typedef redefinition of a variably modified type"
+  | SameScopeIncompatibleDeclarations ->
+      "multiple declarations in the same scope with incompatible types"
   | IllegalMultipleStorageClasses
   | IllegalMultipleStorageClassesThreadLocal ->
       "multiple incompatible storage class specifiers"

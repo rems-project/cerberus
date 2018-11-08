@@ -61,6 +61,8 @@ type mem_error =
   | MerrIntFromPtr
   | MerrPtrFromInt
   
+  | MerrPtrComparison
+  
   | MerrWIP of string
 
 instance (Show mem_error)
@@ -92,6 +94,8 @@ instance (Show mem_error)
         "MerrIntFromPtr"
     | MerrPtrFromInt ->
         "MerrPtrFromInt"
+    | MerrPtrComparison ->
+        "MerrPtrComparison"
   end
 end
 
@@ -109,6 +113,9 @@ let undefinedFromMem_error = function
       Just [Undefined.UB024_out_of_range_pointer_to_integer_conversion]
   | MerrPtrFromInt ->
       Just [Undefined.UB_CERB001_integer_to_dead_pointer]
+  
+  | MerrPtrComparison ->
+      Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
   
   (* TODO do better *)
   | MerrAccess _ LoadAccess OutOfBoundPtr ->
