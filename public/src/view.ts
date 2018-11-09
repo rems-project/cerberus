@@ -416,7 +416,7 @@ export default class View {
         if (!pvi && p.intptr) 
           return 'black'
         // incorrect pointer
-        return ',color="red"'
+        return 'red'
       }
       const style = (p: Pointer) => {
         if (p.intptr)

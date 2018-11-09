@@ -504,6 +504,30 @@ code {
   margin: 8px 0 8px 0;
 }
 
+.page table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.page th, .page td {
+  padding: 6px;
+  text-align: left;
+}
+
+.padding {
+  background-color: #f2f2f2;
+}
+
+.page th {
+  border-bottom: 1px solid #ddd;
+}
+
+.page tr:not(:last-child) {
+  border-bottom: 1px solid #ddd;
+}
+
+.page tr:hover {background-color:#f5f5f5;}
+
 /*********** Graphs ************/
 
 .toolbar {

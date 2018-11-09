@@ -73,11 +73,21 @@
               title="Forbid (non-one-past) out-of-bounds pointer construction">
               <input id="cb_strict_pointer_arith" type="checkbox">Forbid (non-one-past) out-of-bounds pointer construction
             </div>
-            <div id="strict_reads" class="menu-item btn switch conc">
-              <input id="cb_strict_reads" type="checkbox">Strict reads
+            <div id="strict_reads" class="menu-item btn switch conc"
+              title="This switch makes undefined behaviour to read from uninitialised memory.">
+              <input id="cb_strict_reads" type="checkbox">Forbid uninitialised memory read
             </div>
-            <div id="forbid_nullptr_free" class="menu-item btn switch conc">
-              <input id="cb_forbid_nullptr_free" type="checkbox">UB: Free null pointers
+            <div id="forbid_nullptr_free" class="menu-item btn switch conc"
+              title="This switch makes undefined behaviour to free a NULL pointer (this is stricter than ISO C11).">
+              <input id="cb_forbid_nullptr_free" type="checkbox">Forbid free null pointers
+            </div>
+            <div id="zap_dead_pointers" class="menu-item btn switch conc"
+              title="This switch forbits the use of pointer passed its lifetime.">
+              <input id="cb_zap_dead_pointers" type="checkbox">Forbid use of pointers passed their lifetime
+            </div>
+            <div id="strict_pointer_relationals" class="menu-item btn switch conc"
+              title="This switch makes relational operators UB when relating different objects.">
+              <input id="cb_strict_pointer_relationals" type="checkbox">Forbid use of relational operators for objects in different allocations
             </div>
           </div>
         </li>
@@ -91,6 +101,7 @@
             <div id="core" class="menu-item btn">Core</div>
             <div class="menu-section border-top">Interactive execution</div>
             <div id="open-memory" class="menu-item btn">Memory graph</div>
+            <div id="open-simple-memory" class="menu-item btn">Simplified memory representation</div>
             <div id="open-arena" class="menu-item btn">Core runtime arena</div>
             <div id="open-interactive" class="menu-item btn">Execution graph</div>
           </div>
