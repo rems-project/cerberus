@@ -541,9 +541,9 @@ let rec pp_expr expr =
                 P.range (handle_uid uid) acc
             | Abmc annot ->
                 begin match annot with
-                | Abmc_inline_pexpr_id id
-                | Abmc_inline_expr_id id ->
+                | Abmc_id id ->
                     !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
+                | _ -> acc
                 end
         ) doc annot
     end
