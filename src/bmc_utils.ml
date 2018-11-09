@@ -27,6 +27,7 @@ let mk_xor     = Boolean.mk_xor g_ctx
 let mk_eq      = Boolean.mk_eq g_ctx
 let mk_ite     = Boolean.mk_ite g_ctx
 
+let mk_const = Expr.mk_const g_ctx
 let mk_fresh_const = Expr.mk_fresh_const g_ctx
 
 let mk_fresh_func_decl = FuncDecl.mk_fresh_func_decl g_ctx
@@ -340,9 +341,7 @@ let get_uid_expr (Expr(annots, _)): string =
 let rec get_id_or_fail annots : int =
   match annots with
   | [] -> failwith "Id not found"
-  | (Abmc (Abmc_inline_pexpr_id id)) :: _ ->
-      id
-  | (Abmc (Abmc_inline_expr_id id)) :: _ ->
+  | (Abmc (Abmc_id id)) :: _ ->
       id
   | _ :: annots' ->
       get_id_or_fail annots'

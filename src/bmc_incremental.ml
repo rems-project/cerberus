@@ -208,7 +208,7 @@ module BmcInline = struct
         inline_pe pe >>= fun inlined_pe ->
         return (PEbmc_assume(inlined_pe))
     ) >>= fun inlined_pe ->
-    return (Pexpr(Abmc (Abmc_inline_pexpr_id id)::annots, bTy, inlined_pe))
+    return (Pexpr(Abmc (Abmc_id id)::annots, bTy, inlined_pe))
 
   let inline_action (Paction(p, Action(loc, a, action_))) =
     (match action_ with
@@ -362,7 +362,7 @@ module BmcInline = struct
         return (Epar (inlined_es))
     | Ewait _       -> assert false
     ) >>= fun inlined_e ->
-    return (Expr(Abmc (Abmc_inline_expr_id id)::annots, inlined_e))
+    return (Expr(Abmc (Abmc_id id)::annots, inlined_e))
 
   let inline_globs (gname, bty, e) =
     inline_e e >>= fun inlined_e ->
@@ -389,12 +389,12 @@ end
  * to construct Z3 Expr *)
 module BmcSSA = struct
   type sym_table_ty = (sym_ty, sym_ty) Pmap.map
-  (*type sym_ty_table_ty = (sym_ty, core_base_type) Pmap.map*)
+  type sym_expr_table_ty = (sym_ty, Expr.expr) Pmap.map
 
   type state_ty = {
     sym_supply    : sym_supply_ty;
     sym_table     : sym_table_ty;
-    (*sym_ty_table  : sym_ty_table_ty;*)
+    sym_expr_table  : sym_expr_table_ty;
 
     file   : unit typed_file; (* unmodified *)
 
@@ -406,7 +406,7 @@ module BmcSSA = struct
   let mk_initial sym_supply file inline_pexpr_map inline_expr_map : state =
     { sym_supply       = sym_supply;
       sym_table        = Pmap.empty sym_cmp;
-      (*sym_ty_table     = Pmap.empty sym_cmp;*)
+      sym_expr_table     = Pmap.empty sym_cmp;
       file             = file;
       inline_pexpr_map = inline_pexpr_map;
       inline_expr_map  = inline_expr_map;
@@ -431,22 +431,23 @@ module BmcSSA = struct
   let add_to_sym_table (sym1: sym_ty) (sym2: sym_ty) : unit eff =
     get_sym_table >>= fun table ->
     put_sym_table (Pmap.add sym1 sym2 table)
-  (*
-  let get_sym_ty_table : sym_ty_table_ty eff =
-    get >>= fun st ->
-    return st.sym_ty_table
 
-  let put_sym_ty_table (table: sym_ty_table_ty) : unit eff =
+  let get_sym_expr_table : sym_expr_table_ty eff =
     get >>= fun st ->
-    put {st with sym_ty_table = table}
+    return st.sym_expr_table
 
-  let put_sym_ty (sym: sym_ty) (ty: core_base_type) : unit eff =
-    get_sym_ty_table >>= fun table ->
+  let put_sym_expr_table (table: sym_expr_table_ty) : unit eff =
+    get >>= fun st ->
+    put {st with sym_expr_table = table}
+
+  let put_sym_expr (sym: sym_ty) (ty: core_base_type) : unit eff =
+    get_sym_expr_table >>= fun table ->
     match Pmap.lookup sym table with
-    | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_ty_table"
+    | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_expr_table"
                                   (symbol_to_string sym))
-    | None -> put_sym_ty_table (Pmap.add sym ty table)
-  *)
+    | None -> 
+        let expr = mk_fresh_const (symbol_to_string sym) (cbt_to_z3 ty) in
+        put_sym_expr_table (Pmap.add sym expr table)
 
   let get_sym_supply : sym_supply_ty eff =
     get >>= fun st ->
@@ -500,7 +501,7 @@ module BmcSSA = struct
     (match pat with
      | CaseBase (Some sym, typ) ->
          rename_sym sym >>= fun new_sym ->
-         (*put_sym_ty new_sym typ >>*)
+         put_sym_expr new_sym typ >>
          return (CaseBase(Some new_sym, typ))
      | CaseBase (None, _) ->
          return pat
@@ -758,8 +759,8 @@ module BmcSSA = struct
 
     let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
       rename_sym sym >>= fun new_sym ->
-      (*put_sym_ty new_sym cbt >> *)
-     return (new_sym, cbt)
+      put_sym_expr new_sym cbt >> 
+      return (new_sym, cbt)
 
     let ssa (file: unit typed_file) (fn_to_check: sym_ty)
             : (unit typed_file) eff =
@@ -779,33 +780,27 @@ module BmcSSA = struct
                         funs  = Pmap.add fn_to_check new_fn file.funs}
 
 end
-
 (* ======= Convert to Z3 exprs ======= *)
 module BmcZ3 = struct
   type z3_state = {
     (* Builds expr_map and case_guard_map *)
-    expr_map : (string, Expr.expr) Pmap.map;
-    case_guard_map: (string, Expr.expr list) Pmap.map;
+    expr_map      : (int, Expr.expr) Pmap.map;
+    case_guard_map: (int, Expr.expr list) Pmap.map;
 
-    file              : unit typed_file;
+    file          : unit typed_file;
 
-    (* REQUIRED *)
-    sym_table_map : (string, (sym_ty, Expr.expr) Pmap.map) Pmap.map;
-
-    (* PEcall; PEimpl; *)
-    inline_pexpr_map: (string, typed_pexpr) Pmap.map;
-
-    (* Esave; Erun *)
-    inline_expr_map : (string, unit typed_expr) Pmap.map;
+    inline_pexpr_map: (int, typed_pexpr) Pmap.map;
+    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    sym_table       : (sym_ty, Expr.expr) Pmap.map;
   }
 
   include EffMonad(struct type state = z3_state end)
 
-  let add_expr (uid: string) (expr: Expr.expr) : unit eff =
+  let add_expr (uid: int) (expr: Expr.expr) : unit eff =
     get >>= fun st ->
     put {st with expr_map = Pmap.add uid expr st.expr_map}
 
-  let add_guards (uid: string) (guards: Expr.expr list) : unit eff =
+  let add_guards (uid: int) (guards: Expr.expr list) : unit eff =
     get >>= fun st ->
     put {st with case_guard_map = Pmap.add uid guards st.case_guard_map}
 
@@ -813,186 +808,232 @@ module BmcZ3 = struct
     get >>= fun st ->
     return st.file
 
-  let lookup_sym (uid: string) (sym: sym_ty) : Expr.expr eff =
+  let lookup_sym (sym: sym_ty) : Expr.expr eff =
     get >>= fun st ->
-    match Pmap.lookup uid st.sym_table_map with
-    | None -> failwith (sprintf "BmcZ3: Uid %s not found in sym_table_map" uid)
-    | Some table ->
-        begin
-        match Pmap.lookup sym table with
-        | None -> failwith (sprintf "BmcZ3: Sym %s not found in table"
-                                    (symbol_to_string sym))
-        | Some expr -> return expr
-        end
+    match Pmap.lookup sym st.sym_table with
+    | None -> failwith (sprintf "Error: BmcZ3 %s not found in sym_table" 
+                                (symbol_to_string sym))
+    | Some expr -> return expr
 
-  let get_inline_pexpr (uid: string) : typed_pexpr eff =
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
-    | None ->
-        failwith (sprintf "BmcZ3: Uid %s not found in inline_pexpr_map" uid)
-    | Some pe ->  return pe
+    | None -> failwith (sprintf "Error: BmcZ3 inline_pexpr not found %d" uid)
+    | Some pe -> return pe
 
-  let get_inline_expr (uid: string) : (unit typed_expr) eff =
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
-    | None ->
-        failwith (sprintf "BmcZ3: Uid %s not found in inline_expr_map" uid)
-    | Some pe ->  return pe
+    | None -> failwith (sprintf "Error: BmcZ3 inline_expr not found %d" uid)
+    | Some e -> return e
+
+  let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
+    let uid = get_id_pexpr pexpr in
+    (match pe_ with
+    | PEsym sym ->
+        lookup_sym sym
+    | PEimpl _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        z3_pe inline_pe        
+    | PEval cval ->
+       return (value_to_z3 cval) 
+    | PEconstrained _ -> assert false
+    | PEundef _ ->
+        let sort = cbt_to_z3 bTy in
+        return (mk_fresh_const (sprintf "undef_%d" uid) sort)
+    | PEerror _ ->
+        let sort = cbt_to_z3 bTy in
+        return (mk_fresh_const (sprintf "error_%d" uid) sort)
+    | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+        assert (is_integer_type ctype);
+        return (Pmap.find ctype ImplFunctions.ivmin_map)
+    | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+        assert (is_integer_type ctype);
+        return (Pmap.find ctype ImplFunctions.ivmax_map)
+    | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+        assert (is_integer_type ctype);
+        return (Pmap.find ctype ImplFunctions.sizeof_map)
+    | PEctor (ctor, pes) ->
+        mapM z3_pe pes >>= fun z3d_pes ->
+        return (ctor_to_z3 ctor z3d_pes (Some bTy))
+    | PEcase (pe, cases) ->
+        assert (List.length cases > 0);
+        z3_pe pe                              >>= fun z3d_pe ->
+        mapM z3_pe (List.map snd cases)       >>= fun z3d_cases_pe ->
+        let (_,guards) = compute_case_guards (List.map fst cases) z3d_pe in
+        add_guards uid guards >>
+        return (mk_guarded_ite z3d_cases_pe guards)
+    | PEarray_shift (ptr, ty, index) ->
+        (* TODO: do properly *)
+        z3_pe ptr      >>= fun z3d_ptr ->
+        z3_pe index    >>= fun z3d_index ->
+        get_file >>= fun file ->
+        let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
+        let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
+        let addr = PointerSort.get_addr z3d_ptr in
+        return (PointerSort.mk_ptr (AddressSort.shift_index_by_n addr shift_size))
+    | PEmember_shift (ptr, sym, member) ->
+        z3_pe ptr >>= fun z3d_ptr ->
+        get_file  >>= fun file ->
+        begin match Pmap.lookup sym file.tagDefs with
+        | Some (StructDef memlist) ->
+            let memsizes = List.map (fun (cid, cbt) ->
+                (cid, bmcz3sort_size (ctype_to_bmcz3sort cbt file))
+              ) memlist in
+            let (shift_size, _) = List.fold_left (
+                fun (acc, skip) (cid, n) ->
+                  if cabsid_cmp cid member = 0 || skip then (acc, true)
+                  else (acc + n, false)
+            ) (0, false) memsizes in
+            let addr = PointerSort.get_addr z3d_ptr in
+            let new_addr =
+              AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
+            return (PointerSort.mk_ptr new_addr)
+        | _ -> assert false
+        end
+    | PEnot pe ->
+        z3_pe pe >>= fun z3d_pe ->
+        return (mk_not z3d_pe)
+    | PEop (binop, pe1, pe2) ->
+        z3_pe pe1 >>= fun z3d_pe1 ->
+        z3_pe pe2 >>= fun z3d_pe2 ->
+        return (binop_to_z3 binop z3d_pe1 z3d_pe2)
+    | PEstruct _    -> assert false
+    | PEunion _     -> assert false
+    | PEcfunction _ -> assert false
+    | PEmemberof _  -> assert false
+    | PEcall _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        z3_pe inline_pe
+    | PElet (_, pe1, pe2) ->
+        z3_pe pe1 >>= fun _ ->
+        z3_pe pe2
+    | PEif (cond, pe1, pe2) ->
+        z3_pe cond >>= fun z3d_cond ->
+        z3_pe pe1  >>= fun z3d_pe1 ->
+        z3_pe pe2  >>= fun z3d_pe2 ->
+        return (mk_ite z3d_cond z3d_pe1 z3d_pe2)
+    | PEis_scalar _  -> assert false
+    | PEis_integer _ -> assert false
+    | PEis_signed _  -> assert false
+    | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
+        return (Pmap.find ctype ImplFunctions.is_unsigned_map)
+    | PEis_unsigned _    -> assert false
+    | PEare_compatible _ -> assert false
+    | PEbmc_assume pe ->
+        z3_pe pe >>= fun _ ->
+        return UnitSort.mk_unit
+    ) >>= fun z3d_pexpr ->
+    add_expr uid z3d_pexpr >>
+    return z3d_pexpr
+
+  let z3_action (Paction(p, Action(loc, a, action_))) =
+    (match action_ with
+    | Create (pe1, pe2, pref) ->
+        assert false
+    | CreateReadOnly (pe1, pe2, pe3, pref) ->
+        assert false
+    | Alloc0 (pe1, pe2, pref) ->
+        assert false
+    | Kill (b, pe) ->
+        assert false
+    | Store0 (b, pe1, pe2, pe3, memord) ->
+        assert false
+    | Load0 (pe1, pe2, memord) ->
+        assert false
+    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        assert false
+    | Fence0 mo ->
+        assert false
+    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        assert false
+    | LinuxFence (mo) ->
+        assert false
+    | LinuxLoad (pe1, pe2, mo) ->
+        assert false
+    | LinuxStore(pe1, pe2, pe3, mo) ->
+        assert false
+    | LinuxRMW (pe1, pe2, pe3, mo) ->
+          assert false
+    )
+
+  (* TODO: guards should include drop_cont *)
+  let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure pe ->
+        z3_pe pe
+    | Ememop (PtrValidForDeref, [ptr]) ->
+        z3_pe ptr >>= fun z3d_ptr ->
+        let addr = PointerSort.get_addr z3d_ptr in
+        let range_assert = AddressSort.valid_index_range addr in
+        return (mk_and [mk_not (PointerSort.is_null z3d_ptr); range_assert])
+    | Ememop (PtrEq, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        return (mk_eq z3d_p1 z3d_p2)
+    | Ememop _ -> assert false
+    | Eaction _ ->
+        (* TODO!!! *)
+        assert false
+    | Ecase (pe, cases) ->
+        z3_pe pe                       >>= fun z3d_pe ->
+        mapM z3_e (List.map snd cases) >>= fun z3d_cases_e ->
+        let (_, guards) = compute_case_guards (List.map fst cases) z3d_pe in
+        add_guards uid guards >>
+        return (mk_guarded_ite z3d_cases_e guards)
+    | Elet _ -> assert false
+    | Eif (pe, e1, e2) ->
+        z3_pe pe >>= fun z3d_pe ->
+        z3_e e1  >>= fun z3d_e1 ->
+        z3_e e2  >>= fun z3d_e2 ->
+        let (guard1, guard2) = (z3d_pe, mk_not z3d_pe) in
+        add_guards uid [guard1; guard2] >>
+        return (mk_ite guard1 z3d_e1 z3d_e2)
+    | Eskip ->
+        return UnitSort.mk_unit
+    | Eccall _ -> assert false
+    | Eproc _  -> assert false
+    | Eunseq elist -> 
+        assert (not !!bmc_conf.sequentialise);
+        assert (!!bmc_conf.concurrent_mode);
+        mapM z3_e elist >>= fun z3d_elist ->
+        return (ctor_to_z3 Ctuple z3d_elist None)
+    | Ewseq (_, e1, e2) (* fall through *)
+    | Esseq (_, e1, e2) ->
+        z3_e e1 >>= fun _ ->
+        z3_e e2
+    | Easeq _  -> assert false
+    | Eindet _ -> assert false
+    | Ebound (_, e) ->
+        z3_e e
+    | End elist -> 
+        mapM z3_e elist >>= fun z3d_elist ->
+        let choice_vars = List.mapi (
+          fun i _ -> mk_fresh_const ("seq_" ^ (string_of_int i))
+                                    boolean_sort) elist in
+        add_guards uid choice_vars >>
+        let ret_expr = List.fold_left2
+          (fun acc choice res -> mk_ite choice res acc)
+          (List.hd z3d_elist)
+          (List.tl choice_vars)
+          (List.tl z3d_elist) in
+        return ret_expr 
+    | Esave _  -> 
+        get_inline_expr uid >>= fun inlined_expr ->
+        z3_e inlined_expr
+    | Erun _   -> 
+        get_inline_expr uid >>= fun inlined_expr ->
+        z3_e inlined_expr   >>= fun _ ->
+        return (UnitSort.mk_unit)
+    | Epar _   -> assert false
+    | Ewait _  -> assert false
+    ) >>= fun ret ->
+    add_expr uid ret >>
+    return ret
 end
 
-let rec pexpr_to_z3 (Pexpr (annots, bTy, pe): typed_pexpr)
-                    : Expr.expr BmcZ3.eff =
-  let (>>=) = BmcZ3.bind in
-  let (>>) = BmcZ3.(>>) in
-  let return = BmcZ3.return in
-  let uid = get_uid_or_fail annots in
-  (match pe with
-  | PEsym sym ->
-      BmcZ3.lookup_sym uid sym
-  | PEimpl _ ->
-      BmcZ3.get_inline_pexpr uid >>= fun inline_pe ->
-      pexpr_to_z3 inline_pe
-  | PEval cval ->
-      return (value_to_z3 cval)
-  | PEconstrained _ -> assert false
-  | PEundef _ ->
-      let sort = cbt_to_z3 bTy in
-      return (mk_fresh_const "undef" sort)
-  | PEerror _ ->
-      let sort = cbt_to_z3 bTy in
-      return (mk_fresh_const "error" sort)
-  | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-      assert (is_integer_type ctype);
-      return (Pmap.find ctype ImplFunctions.ivmin_map)
-  | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-      assert (is_integer_type ctype);
-      return (Pmap.find ctype ImplFunctions.ivmax_map)
-  | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-      assert (is_integer_type ctype);
-      return (Pmap.find ctype ImplFunctions.sizeof_map)
-  | PEctor (ctor, pes) ->
-      BmcZ3.mapM pexpr_to_z3 pes >>= fun z3s_pe ->
-      return (ctor_to_z3 ctor z3s_pe (Some bTy))
-  | PEcase (pe, cases) ->
-      assert (List.length cases > 0);
-      pexpr_to_z3 pe                              >>= fun z3_pe ->
-      BmcZ3.mapM pexpr_to_z3 (List.map snd cases) >>= fun z3s_cases_pe ->
-      let (_,guards) = compute_case_guards (List.map fst cases) z3_pe in
-      BmcZ3.add_guards uid guards >>
-      return (mk_guarded_ite z3s_cases_pe guards)
-  | PEarray_shift (ptr, ty, index) ->
-      (* TODO: do properly *)
-      pexpr_to_z3 ptr   >>= fun z3_ptr ->
-      pexpr_to_z3 index >>= fun z3_index ->
-      BmcZ3.get_file    >>= fun file ->
-      let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
-      let shift_size = binop_to_z3 OpMul z3_index (int_to_z3 ty_size) in
-      let addr = PointerSort.get_addr z3_ptr in
-      return (PointerSort.mk_ptr (AddressSort.shift_index_by_n addr shift_size))
-  | PEmember_shift (ptr, sym, member) ->
-      pexpr_to_z3 ptr >>= fun z3_ptr ->
-      BmcZ3.get_file  >>= fun file ->
-      begin match Pmap.lookup sym file.tagDefs with
-      | Some (StructDef memlist) ->
-          let memsizes = List.map (fun (cid, cbt) ->
-              (cid, bmcz3sort_size (ctype_to_bmcz3sort cbt file))
-            ) memlist in
-          let (shift_size, _) = List.fold_left (
-              fun (acc, skip) (cid, n) ->
-                if cabsid_cmp cid member = 0 || skip then (acc, true)
-                else (acc + n, false)
-          ) (0, false) memsizes in
-          let addr = PointerSort.get_addr z3_ptr in
-          let new_addr =
-            AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
-          return (PointerSort.mk_ptr new_addr)
-      | _ -> assert false
-      end
-  | PEnot pe ->
-      pexpr_to_z3 pe >>= fun z3_pe ->
-      return (mk_not z3_pe)
-  | PEop (binop, pe1, pe2) ->
-      pexpr_to_z3 pe1 >>= fun z3_pe1 ->
-      pexpr_to_z3 pe2 >>= fun z3_pe2 ->
-      return (binop_to_z3 binop z3_pe1 z3_pe2)
-  | PEstruct _    -> assert false
-  | PEunion _     -> assert false
-  | PEcfunction _ -> assert false
-  | PEmemberof _  -> assert false
-  | PEcall (name, pes) ->
-      BmcZ3.mapM pexpr_to_z3 pes >>= fun _ ->
-      BmcZ3.get_inline_pexpr uid >>= fun inline_pe ->
-      pexpr_to_z3 inline_pe
-  | PElet (_, pe1, pe2) ->
-      pexpr_to_z3 pe1 >>= fun _ ->
-      pexpr_to_z3 pe2
-  | PEif (cond, pe1, pe2) ->
-      pexpr_to_z3 cond >>= fun z3_cond ->
-      pexpr_to_z3 pe1  >>= fun z3_pe1 ->
-      pexpr_to_z3 pe2  >>= fun z3_pe2 ->
-      return (mk_ite z3_cond z3_pe1 z3_pe2)
-  | PEis_scalar _  -> assert false
-  | PEis_integer _ -> assert false
-  | PEis_signed _  -> assert false
-  | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
-      return (Pmap.find ctype ImplFunctions.is_unsigned_map)
-  | PEis_unsigned _    -> assert false
-  | PEare_compatible _ -> assert false
-  | PEbmc_assume pe ->
-      pexpr_to_z3 pe >>= fun _ ->
-      return UnitSort.mk_unit
-  ) >>= fun ret ->
-  BmcZ3.add_expr uid ret >>
-  return ret
-
-let rec expr_to_z3 (Expr(annots, expr_) : unit typed_expr)
-                   : Expr.expr BmcZ3.eff =
-  let (>>=) = BmcZ3.bind in
-  let (>>) = BmcZ3.(>>) in
-  let return = BmcZ3.return in
-  let uid = get_uid_or_fail annots in
-  (match expr_ with
-  | Epure pe ->
-      pexpr_to_z3 pe
-  | Ememop (PtrValidForDeref, [ptr]) ->
-      pexpr_to_z3 ptr >>= fun z3_ptr ->
-      let addr = PointerSort.get_addr z3_ptr in
-      let range_assert = AddressSort.valid_index_range addr in
-      return (mk_and [mk_not (PointerSort.is_null z3_ptr); range_assert])
-  | Ememop (PtrEq, [p1;p2]) ->
-      pexpr_to_z3 p1 >>= fun z3_p1 ->
-      pexpr_to_z3 p2 >>= fun z3_p2 ->
-      return (mk_eq z3_p1 z3_p2)
-  | Ememop _ -> assert false
-  | Eaction _ ->
-      assert false
-  | Ecase (pe, cases) ->
-      assert false
-      (*
-      pexpr_to_z3 pe >>= fun z3_pe ->
-      let guards = compute_case_guards (List.map fst cases) z3_pe in
-      *)
-  | Elet _ -> assert false
-  | Eif _  -> assert false
-  | Eskip ->
-      return UnitSort.mk_unit
-  | Eccall _ -> assert false
-  | Eproc _  -> assert false
-  | Eunseq _ -> assert false
-  | Ewseq _  -> assert false
-  | Esseq _  -> assert false
-  | Easeq _  -> assert false
-  | Eindet _ -> assert false
-  | Ebound _ -> assert false
-  | End _    -> assert false
-  | Esave _  -> assert false
-  | Erun _   -> assert false
-  | Epar _   -> assert false
-  | Ewait _  -> assert false
-  ) >>= fun ret ->
-  BmcZ3.add_expr uid ret >>
-  return ret
-
+(*
 (* ======= Compute verification conditions ======= *)
 
 module BmcVC = struct
@@ -1235,3 +1276,4 @@ let rec vcs_expr (Expr(annots, expr_) : unit typed_expr)
       BmcVC.mapM vcs_expr es >>= fun vcss_es ->
       return (List.concat vcss_es)
   | Ewait _       -> assert false
+*)
