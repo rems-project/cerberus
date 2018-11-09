@@ -1,4 +1,5 @@
 open Bmc_globals
+open Annot
 open Core
 
 module Sym = Symbol
@@ -231,7 +232,7 @@ let read_file filename =
     List.rev !lines ;;
 
 (* ========== SET UIDs ============ *)
-let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) = 
+let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
  (let uid' = (uid ^ string_of_int n) in
   let self n pe=  (set_uid_pe uid' n pe) in
   let selfs pes=  (Lem_list.mapi (fun i pe -> self (i+ 1) pe) pes) in
@@ -268,7 +269,7 @@ let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
   )))
 
 (*val     set_uid_e: forall 'a. string -> nat -> expr 'a -> expr 'a*)
-let rec set_uid_e uid n (Expr( annots1, e_)) = 
+let rec set_uid_e uid n (Expr( annots1, e_)) =
  (let uid' = (uid ^ string_of_int n) in
   let pure_uid n pe=  (set_uid_pe uid' n pe) in
   let pure_uids pes=  (Lem_list.mapi (fun i pe -> pure_uid (i+ 1) pe) pes) in
@@ -333,3 +334,21 @@ let get_uid_pexpr (Pexpr(annots, _, _)): string =
 
 let get_uid_expr (Expr(annots, _)): string =
   get_uid_or_fail annots
+
+(* ===== bmc_annots ===== *)
+
+let rec get_id_or_fail annots : int =
+  match annots with
+  | [] -> failwith "Id not found"
+  | (Abmc (Abmc_inline_pexpr_id id)) :: _ ->
+      id
+  | (Abmc (Abmc_inline_expr_id id)) :: _ ->
+      id
+  | _ :: annots' ->
+      get_id_or_fail annots'
+
+let get_id_pexpr (Pexpr(annots, _, _)) : int =
+  get_id_or_fail annots
+
+let get_id_expr (Expr(annots, _)) : int =
+  get_id_or_fail annots

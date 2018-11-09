@@ -18,7 +18,7 @@ module BmcInline = struct
   type state_ty = {
     id_gen : int;
     run_depth_table : run_depth_table;
-    
+
     file   : unit typed_file; (* unmodified *)
 
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
@@ -94,10 +94,10 @@ module BmcInline = struct
 
   (* ======== Inline functions ======= *)
   let rec inline_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
-    get_fresh_id >>= fun id ->
+    get_fresh_id  >>= fun id ->
     (match pe_ with
     | PEsym _  -> return pe_
-    | PEimpl const -> 
+    | PEimpl const ->
         get_file >>= fun file ->
         begin match Pmap.lookup const file.impl with
         | Some (Def (_, pe)) ->
@@ -105,7 +105,7 @@ module BmcInline = struct
             add_inlined_pexpr id inlined_pe >>
             return (PEimpl const)
         | _ -> assert false
-        end 
+        end
     | PEval _  -> return pe_
     | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
@@ -139,13 +139,13 @@ module BmcInline = struct
     | PEmemberof (tag_sym, memb_ident, pe) ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEmemberof(tag_sym, memb_ident, inlined_pe))
-    | PEcall (name, pes)  -> 
+    | PEcall (name, pes)  ->
         lookup_run_depth name >>= fun depth ->
         get_file >>= fun file ->
         (* Get the function called; either from stdlib or impl consts *)
         let (ty, args, fun_expr) =
           match name with
-          | Sym sym -> 
+          | Sym sym ->
               begin match Pmap.lookup sym file.stdlib with
               | Some (Fun (ty, args, fun_expr)) -> (ty, args, fun_expr)
               | _ -> assert false
@@ -157,9 +157,11 @@ module BmcInline = struct
               end
         in
         if depth >= !!bmc_conf.max_run_depth then
-          let error_msg = 
+          let error_msg =
             sprintf "call_depth_exceeded: %s" (name_to_string  name) in
-          add_inlined_pexpr id (Pexpr([], ty, PEerror(error_msg, pexpr))) >>
+          let new_pexpr = (Pexpr([], ty, PEerror(error_msg, pexpr))) in
+          inline_pe new_pexpr >>= fun inlined_new_pexpr ->
+          add_inlined_pexpr id inlined_new_pexpr >>
           return (PEcall (name, pes))
         else begin
           (* TODO: CBV/CBN semantics? *)
@@ -198,7 +200,7 @@ module BmcInline = struct
     | PEis_unsigned pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEis_unsigned(inlined_pe))
-    | PEare_compatible (pe1, pe2) -> 
+    | PEare_compatible (pe1, pe2) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         return (PEare_compatible(pe1,pe2))
@@ -207,6 +209,66 @@ module BmcInline = struct
         return (PEbmc_assume(inlined_pe))
     ) >>= fun inlined_pe ->
     return (Pexpr(Abmc (Abmc_inline_pexpr_id id)::annots, bTy, inlined_pe))
+
+  let inline_action (Paction(p, Action(loc, a, action_))) =
+    (match action_ with
+    | Create (pe1, pe2, pref) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (Create(inlined_pe1, inlined_pe2, pref))
+    | CreateReadOnly (pe1, pe2, pe3, pref) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        return (CreateReadOnly(inlined_pe1, inlined_pe2, inlined_pe3, pref))
+    | Alloc0 (pe1, pe2, pref) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (Alloc0(inlined_pe1, inlined_pe2, pref))
+    | Kill (b, pe) ->
+        inline_pe pe >>= fun inlined_pe ->
+        return (Kill(b, inlined_pe))
+    | Store0 (b, pe1, pe2, pe3, memord) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        return (Store0(b, inlined_pe1, inlined_pe2, inlined_pe3, memord))
+    | Load0 (pe1, pe2, memord) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (Load0(inlined_pe1, inlined_pe2, memord))
+    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        inline_pe pe4 >>= fun inlined_pe4 ->
+        return (RMW0(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
+    | Fence0 mo ->
+        return (Fence0(mo))
+    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        inline_pe pe4 >>= fun inlined_pe4 ->
+        return (CompareExchangeStrong(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
+    | LinuxFence (mo) ->
+        return (LinuxFence(mo))
+    | LinuxLoad (pe1, pe2, mo) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        return (LinuxLoad(inlined_pe1, inlined_pe2, mo))
+    | LinuxStore(pe1, pe2, pe3, mo) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        return (LinuxStore(inlined_pe1, inlined_pe2, inlined_pe3, mo))
+    | LinuxRMW (pe1, pe2, pe3, mo) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        return (LinuxRMW(inlined_pe1, inlined_pe2, inlined_pe3, mo))
+    ) >>= fun inlined_action ->
+    return (Paction(p, Action(loc, a, inlined_action)))
 
   let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
     get_fresh_id >>= fun id ->
@@ -218,10 +280,11 @@ module BmcInline = struct
         mapM inline_pe pes >>= fun inlined_pes ->
         return (Ememop (memop, inlined_pes))
     | Eaction pact -> (* TODO: lazy assumption on structure of Core from C *)
-        return (Eaction pact)
+        inline_action pact >>= fun inlined_pact ->
+        return (Eaction inlined_pact)
     | Ecase (pe, cases) ->
         inline_pe pe >>= fun inlined_pe ->
-        mapM (fun (pat, e) -> 
+        mapM (fun (pat, e) ->
               inline_e e >>= fun inlined_e ->
               return (pat, inlined_e)) cases >>= fun inlined_cases ->
         return (Ecase(inlined_pe, inlined_cases))
@@ -268,12 +331,15 @@ module BmcInline = struct
     | Erun (a, label, pelist) ->
         lookup_run_depth (Sym label) >>= fun depth ->
         if depth >= !!bmc_conf.max_run_depth then
-          let error_msg = 
+          let error_msg =
             sprintf "Erun_depth_exceeded: %s" (name_to_string (Sym label)) in
           (* TODO: hacky *)
-          add_inlined_expr id 
-            (Expr([],Epure(Pexpr([], BTy_unit, 
-                                 PEerror(error_msg, Pexpr([], BTy_unit, PEval (Vunit))))))) >>
+          let new_expr =
+            (Expr([],Epure(Pexpr([], BTy_unit,
+                           PEerror(error_msg,
+                                  Pexpr([], BTy_unit, PEval (Vunit))))))) in
+          inline_e new_expr >>= fun inlined_new_expr ->
+          add_inlined_expr id inlined_new_expr >>
           return (Erun(a, label, pelist))
         else begin
           get_proc_expr >>= fun proc_expr ->
@@ -281,16 +347,16 @@ module BmcInline = struct
                             Sym.instance_Basic_classes_Eq_Symbol_sym_dict
                             label proc_expr) in
           assert (List.length pelist = List.length cont_syms);
-          let sub_map = List.fold_right2 
+          let sub_map = List.fold_right2
               (fun sym pe map -> Pmap.add sym pe map)
               cont_syms pelist (Pmap.empty sym_cmp) in
           let cont_to_check = substitute_expr sub_map cont_expr in
-          increment_run_depth (Sym label) >> 
+          increment_run_depth (Sym label) >>
           inline_e cont_to_check >>= fun inlined_cont_to_check ->
           decrement_run_depth (Sym label) >>
           add_inlined_expr id inlined_cont_to_check >>
           return (Erun(a, label, pelist))
-        end  
+        end
     | Epar es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Epar (inlined_es))
@@ -319,23 +385,32 @@ module BmcInline = struct
                       funs  = Pmap.add fn_to_check new_fn file.funs}
 end
 
-(* Do SSA renaming and also get a global map from sym -> cbt 
+(* Do SSA renaming and also get a global map from sym -> cbt
  * to construct Z3 Expr *)
 module BmcSSA = struct
   type sym_table_ty = (sym_ty, sym_ty) Pmap.map
-  type sym_ty_table_ty = (sym_ty, core_base_type) Pmap.map
+  (*type sym_ty_table_ty = (sym_ty, core_base_type) Pmap.map*)
 
   type state_ty = {
     sym_supply    : sym_supply_ty;
     sym_table     : sym_table_ty;
-    sym_ty_table  : sym_ty_table_ty;
-    
+    (*sym_ty_table  : sym_ty_table_ty;*)
+
     file   : unit typed_file; (* unmodified *)
 
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
   }
   include EffMonad(struct type state = state_ty end)
+
+  let mk_initial sym_supply file inline_pexpr_map inline_expr_map : state =
+    { sym_supply       = sym_supply;
+      sym_table        = Pmap.empty sym_cmp;
+      (*sym_ty_table     = Pmap.empty sym_cmp;*)
+      file             = file;
+      inline_pexpr_map = inline_pexpr_map;
+      inline_expr_map  = inline_expr_map;
+    }
 
   (* accessors *)
   let get_sym_table : sym_table_ty eff =
@@ -349,14 +424,14 @@ module BmcSSA = struct
   let lookup_sym (sym: sym_ty) : sym_ty eff =
     get_sym_table >>= fun sym_table ->
     match Pmap.lookup sym sym_table with
-    | None -> failwith (sprintf "BmcSSA error: sym %s not found" 
+    | None -> failwith (sprintf "BmcSSA error: sym %s not found"
                                 (symbol_to_string sym))
     | Some s -> return s
 
   let add_to_sym_table (sym1: sym_ty) (sym2: sym_ty) : unit eff =
     get_sym_table >>= fun table ->
     put_sym_table (Pmap.add sym1 sym2 table)
-
+  (*
   let get_sym_ty_table : sym_ty_table_ty eff =
     get >>= fun st ->
     return st.sym_ty_table
@@ -371,9 +446,10 @@ module BmcSSA = struct
     | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_ty_table"
                                   (symbol_to_string sym))
     | None -> put_sym_ty_table (Pmap.add sym ty table)
+  *)
 
   let get_sym_supply : sym_supply_ty eff =
-    get >>= fun st -> 
+    get >>= fun st ->
     return st.sym_supply
 
   let update_sym_supply new_supply : unit eff =
@@ -385,6 +461,31 @@ module BmcSSA = struct
     let (new_sym, new_supply) = Sym.fresh_fancy str st.sym_supply in
     update_sym_supply new_supply >>
     return new_sym
+
+  (* inline maps *)
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_pexpr_map with
+    | None -> failwith (sprintf "Error: BmcSSA inline_pexpr not found %d"
+                                uid)
+    | Some pe -> return pe
+
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcSSA inline_expr not found %d"
+                                uid)
+    | Some e -> return e
+
+
+  let update_inline_pexpr (uid: int) (pexpr: typed_pexpr) : unit eff =
+    get >>= fun st ->
+    put {st with inline_pexpr_map = Pmap.add uid pexpr st.inline_pexpr_map}
+
+  let update_inline_expr (uid: int) (expr: (unit typed_expr)) : unit eff =
+    get >>= fun st ->
+    put {st with inline_expr_map = Pmap.add uid expr st.inline_expr_map}
+
 
   (* Core functions*)
   let rename_sym (Symbol(n, stropt) as sym: sym_ty) : sym_ty eff =
@@ -399,8 +500,8 @@ module BmcSSA = struct
     (match pat with
      | CaseBase (Some sym, typ) ->
          rename_sym sym >>= fun new_sym ->
-         put_sym_ty new_sym typ >>
-         return (CaseBase(Some new_sym, typ))       
+         (*put_sym_ty new_sym typ >>*)
+         return (CaseBase(Some new_sym, typ))
      | CaseBase (None, _) ->
          return pat
      | CaseCtor (ctor, patlist) ->
@@ -410,12 +511,18 @@ module BmcSSA = struct
     return (Pattern(annots, ssad_pat))
 
   let rec ssa_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
+    let uid = get_id_pexpr pexpr in
+    get_sym_table >>= fun original_table ->
     (match pe_ with
     | PEsym sym ->
         lookup_sym sym >>= fun ssad_sym ->
         return (PEsym ssad_sym)
-    | PEimpl _ -> return pe_        
-    | PEval _ -> return pe_          
+    | PEimpl _ ->
+        get_inline_pexpr uid >>= fun inlined_pe ->
+        ssa_pe inlined_pe    >>= fun ssad_inlined_pe ->
+        update_inline_pexpr uid ssad_inlined_pe >>
+        return pe_
+    | PEval _ -> return pe_
     | PEconstrained _ -> assert false
     | PEundef _ -> return pe_
     | PEerror _ -> return pe_
@@ -424,30 +531,253 @@ module BmcSSA = struct
         return (PEctor(ctor, ssad_pelist))
     | PEcase (pe1, caselist) ->
         ssa_pe pe1 >>= fun ssad_pe1 ->
-        mapM (fun (pat,pe) -> ssa_pattern pat >>= fun ssad_pat ->
+        mapM (fun (pat,pe) -> get_sym_table   >>= fun old_table ->
+                              ssa_pattern pat >>= fun ssad_pat ->
                               ssa_pe pe       >>= fun ssad_pe ->
+                              put_sym_table old_table >>
                               return (ssad_pat, ssad_pe))
              caselist >>= fun ssad_caselist ->
-        return (PEcase(ssad_pe1, ssad_caselist))      
-    | PEarray_shift _
-    | PEmember_shift _
-    | PEnot _
-    | PEop _
-    | PEstruct _
-    | PEunion _ 
-    | PEcfunction _
-    | PEmemberof _     
-    | PEcall _ 
-    | PElet _ 
-    | PEif _ 
-    | PEis_scalar _
-    | PEis_integer _
-    | PEis_signed _
-    | PEis_unsigned _
-    | PEare_compatible _
-    | PEbmc_assume _ -> assert false
+        return (PEcase(ssad_pe1, ssad_caselist))
+    | PEarray_shift (pe1, ty, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PEarray_shift(ssad_pe1, ty, ssad_pe2))
+    | PEmember_shift (ptr, name, member) ->
+        ssa_pe ptr >>= fun ssad_ptr ->
+        return (PEmember_shift(ssad_ptr, name, member))
+    | PEnot pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEnot ssad_pe)
+    | PEop (binop, pe1, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PEop(binop, ssad_pe1, ssad_pe2))
+    | PEstruct _ -> assert false
+    | PEunion _  -> assert false
+    | PEcfunction _ -> assert false
+    | PEmemberof (sym, id, pe) ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEmemberof(sym, id, ssad_pe))
+    | PEcall (name, arglist) ->
+        (* syms in arglist was just substituted into inlined_pe;
+         * so nothing different needed to be done to ssa. *)
+        get_inline_pexpr uid >>= fun inlined_pe ->
+        ssa_pe inlined_pe    >>= fun ssad_inlined_pe ->
+        update_inline_pexpr uid ssad_inlined_pe >>
+        (* For debugging purposes, we update arglist *)
+        get_sym_table >>= fun old_table ->
+        mapM ssa_pe arglist >>= fun ssad_arglist ->
+        put_sym_table old_table >>
+        return (PEcall(name, ssad_arglist))
+   | PElet (pat, pe1, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pattern pat >>= fun ssad_pat ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PElet(ssad_pat, ssad_pe1, ssad_pe2))
+    | PEif (pe1, pe2, pe3) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        get_sym_table >>= fun old_table ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        put_sym_table old_table >>
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        put_sym_table old_table >>
+        return (PEif(ssad_pe1, ssad_pe2, ssad_pe3))
+    | PEis_scalar pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEis_scalar(ssad_pe))
+    | PEis_integer pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEis_integer(ssad_pe))
+    | PEis_signed pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEis_signed(ssad_pe))
+    | PEis_unsigned pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEis_unsigned(ssad_pe))
+    | PEare_compatible (pe1, pe2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (PEare_compatible(ssad_pe1,ssad_pe2))
+    | PEbmc_assume pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (PEbmc_assume ssad_pe)
     ) >>= fun ssad_pe ->
+    put_sym_table original_table >>
     return (Pexpr(annots, bTy, ssad_pe))
+
+  let ssa_action (Paction(p, Action(loc, a, action_))) =
+    (match action_ with
+    | Create (pe1, pe2, pref) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (Create(ssad_pe1, ssad_pe2, pref))
+    | CreateReadOnly (pe1, pe2, pe3, pref) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        return (CreateReadOnly(ssad_pe1, ssad_pe2, ssad_pe3, pref))
+    | Alloc0 (pe1, pe2, pref) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (Alloc0(ssad_pe1, ssad_pe2, pref))
+    | Kill (b, pe) ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (Kill(b, ssad_pe))
+    | Store0 (b, pe1, pe2, pe3, memord) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        return (Store0(b, ssad_pe1, ssad_pe2, ssad_pe3, memord))
+    | Load0 (pe1, pe2, memord) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (Load0(ssad_pe1, ssad_pe2, memord))
+    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        ssa_pe pe4 >>= fun ssad_pe4 ->
+        return (RMW0(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
+    | Fence0 mo ->
+        return (Fence0(mo))
+    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        ssa_pe pe4 >>= fun ssad_pe4 ->
+        return (CompareExchangeStrong(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
+    | LinuxFence (mo) ->
+        return (LinuxFence(mo))
+    | LinuxLoad (pe1, pe2, mo) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        return (LinuxLoad(ssad_pe1, ssad_pe2, mo))
+    | LinuxStore(pe1, pe2, pe3, mo) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        return (LinuxStore(ssad_pe1, ssad_pe2, ssad_pe3, mo))
+    | LinuxRMW (pe1, pe2, pe3, mo) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        return (LinuxRMW(ssad_pe1, ssad_pe2, ssad_pe3, mo))
+    ) >>= fun ssad_action ->
+    return (Paction(p, Action(loc, a, ssad_action)))
+
+  let rec ssa_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
+    let uid = get_id_expr expr in
+    get_sym_table >>= fun original_table ->
+    (match e_ with
+    | Epure pe ->
+        ssa_pe pe >>= fun ssad_pe ->
+        return (Epure ssad_pe)
+    | Ememop (memop, pelist) ->
+        mapM ssa_pe pelist >>= fun ssad_pelist ->
+        return (Ememop(memop, ssad_pelist))
+    | Eaction paction ->
+        ssa_action paction >>= fun ssad_paction ->
+        return (Eaction ssad_paction)
+    | Ecase (pe, caselist) ->
+        ssa_pe pe >>= fun ssad_pe ->
+        mapM (fun (pat,e) -> get_sym_table   >>= fun old_table ->
+                             ssa_pattern pat >>= fun ssad_pat ->
+                             ssa_e e         >>= fun ssad_e ->
+                             put_sym_table old_table >>
+                             return (ssad_pat, ssad_e))
+             caselist >>= fun ssad_caselist ->
+        return (Ecase(ssad_pe, ssad_caselist))
+    | Elet (pat, pe1, e2) ->
+        ssa_pe pe1      >>= fun ssad_pe1 ->
+        ssa_pattern pat >>= fun ssad_pat ->
+        ssa_e e2        >>= fun ssad_e2 ->
+        return (Elet(ssad_pat, ssad_pe1, ssad_e2))
+    | Eif (pe, e1, e2) ->
+        ssa_pe pe       >>= fun ssad_pe ->
+        get_sym_table   >>= fun old_table ->
+        ssa_e e1        >>= fun ssad_e1 ->
+        put_sym_table old_table >>
+        ssa_e e2        >>= fun ssad_e2 ->
+        put_sym_table old_table >>
+        return (Eif(ssad_pe, ssad_e1, ssad_e2))
+    | Eskip ->
+        return Eskip
+    | Eccall _ -> assert false
+    | Eproc _  -> assert false
+    | Eunseq es ->
+        mapM ssa_e es >>= fun ssad_es ->
+        return (Eunseq ssad_es)
+    | Ewseq (pat, e1, e2) ->
+        ssa_e e1        >>= fun ssad_e1 ->
+        ssa_pattern pat >>= fun ssad_pat ->
+        ssa_e e2        >>= fun ssad_e2 ->
+        return (Ewseq(ssad_pat, ssad_e1, ssad_e2))
+    | Esseq (pat, e1, e2) ->
+        ssa_e e1        >>= fun ssad_e1 ->
+        ssa_pattern pat >>= fun ssad_pat ->
+        ssa_e e2        >>= fun ssad_e2 ->
+        return (Esseq(ssad_pat, ssad_e1, ssad_e2))
+    | Easeq _ -> assert false
+    | Eindet _ -> assert false
+    | Ebound (n, e1) ->
+        ssa_e e1 >>= fun ssad_e1 ->
+        return (Ebound(n, ssad_e1))
+    | End elist ->
+        mapM ssa_e elist >>= fun ssad_elist ->
+        return (End elist)
+    | Esave (name, varlist, e) ->
+        (* Just update inline_expr_map *)
+        get_inline_expr uid >>= fun inlined_e ->
+        ssa_e inlined_e >>= fun ssad_inlined_e ->
+        update_inline_expr uid ssad_inlined_e >>
+        (* NOT ANYMORE; For debugging purposes, we update varlist *)
+        (*mapM (fun (sym, (cbt, pe)) ->
+                ssa_pe pe >>= fun ssad_pe ->
+                return (sym, (cbt, ssad_pe)))
+             varlist >>= fun ssad_varlist ->*)
+        return (Esave(name, varlist, e))
+    | Erun (a, sym, pelist) ->
+        get_inline_expr uid >>= fun inline_e ->
+        ssa_e inline_e      >>= fun ssad_inlined_e ->
+        update_inline_expr uid ssad_inlined_e >>
+        (* NOT ANYMORE; For debugging purposes, we update pelist *)
+        (*mapM ssa_pe pelist  >>= fun ssad_pelist ->*)
+        return (Erun(a, sym, pelist))
+    | Epar _
+    | Ewait _       ->
+        assert false
+    ) >>= fun ssad_e ->
+      put_sym_table original_table >>
+      return (Expr(annots, ssad_e))
+
+    let ssa_globs (gname, bty, e) =
+      (* Globals are not given fresh names for no arbitrary reason... *)
+      add_to_sym_table gname gname >>
+      ssa_e e >>= fun ssad_e ->
+      return (gname, bty, ssad_e)
+
+    let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
+      rename_sym sym >>= fun new_sym ->
+      (*put_sym_ty new_sym cbt >> *)
+     return (new_sym, cbt)
+
+    let ssa (file: unit typed_file) (fn_to_check: sym_ty)
+            : (unit typed_file) eff =
+      mapM ssa_globs file.globs >>= fun ssad_globs ->
+      (match Pmap.lookup fn_to_check file.funs with
+       | Some (Proc(annot, bTy, params, e)) ->
+          ssa_e e                >>= fun ssad_e ->
+          mapM ssa_param params  >>= fun ssad_params ->
+          return (Proc (annot, bTy, ssad_params, ssad_e))
+       | Some (Fun (ty, params, pe)) ->
+          ssa_pe pe             >>= fun ssad_pe ->
+          mapM ssa_param params >>= fun ssad_params ->
+          return (Fun (ty, ssad_params, ssad_pe))
+       | _ -> assert false
+      ) >>= fun new_fn ->
+      return {file with globs = ssad_globs;
+                        funs  = Pmap.add fn_to_check new_fn file.funs}
+
 end
 
 (* ======= Convert to Z3 exprs ======= *)
