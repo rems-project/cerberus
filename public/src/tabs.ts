@@ -2,6 +2,7 @@ import $ from 'jquery'
 import _ from 'lodash'
 import CodeMirror from 'codemirror'
 import * as util from './util'
+import * as Mem from './memory'
 import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'
 import UI from './ui' 
@@ -249,6 +250,49 @@ class Memory extends SvgGraph {
       setTimeout (() => this.updateMemory(s), 0)
   } 
   
+}
+
+export class SimpleMemory extends Tab {
+  container: JQuery<HTMLElement>
+  constructor(ee: EventEmitter) {
+    super('Simplified Memory', ee)
+    this.container = $('<div style="padding-bottom: 50px;">')
+    this.dom.addClass('page')
+    this.dom.append(this.container)
+    ee.on('updateMemory', this, s => this.updateMemory(s))
+  }
+  updateMemory (s: Readonly<State>) {
+    this.container.empty()
+    if (!s.interactive) return
+    const mem = s.interactive.current.mem
+    if (!mem) return
+    const table = $('<table>')
+    const firstRow = $('<tr><th>id</th><th>address</th><th>type</th><th>name</th><th>value</th></tr>')
+    const mkRow = (id: number, addr: string, ty: string, name: string, val: string) =>
+      $(`<tr><td>@${id}</td><td>${addr}</td><td>${ty}</td><td>${name}</td><td>${val}</td></tr>`)
+    table.append(firstRow)
+    const mkValue = (values: Mem.Value []) => {
+      const maxcols = values.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
+      const val = _.reduce(values, (acc, v) => {
+        const head = v.path.reduce((acc, tag) => `${acc}<td>${tag}</td>`, '')
+        const colspan = String(maxcols-v.path.length)
+        if (Mem.ispadding(v)) {
+          return `${acc}<tr class="padding">${head}<td colspan="${colspan}"></td></tr>`
+        } else {
+          return `${acc}<tr>${head}<td colspan="${colspan}">${Mem.string_of_value(v, false)}</td></tr>`
+        }
+      }, '<table>')
+      return val + '</table>'
+    }
+    _.map(mem.map, alloc => {
+      mkValue(alloc.values)
+      table.append(mkRow(alloc.id, util.toHex(alloc.base), alloc.type, alloc.prefix.name, mkValue(alloc.values)))
+    })
+    this.container.append(table)
+  }
+  initial(s: Readonly<State>) {
+    this.update(s)
+  }
 }
 
 /*  with CodeMirror editor */
@@ -1027,7 +1071,7 @@ class Asm extends ReadOnly {
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST,
   Console, Arena, Asm,
-  Interactive, Memory,
+  Interactive, Memory, SimpleMemory,
   Experimental, Implementation, Library, Help
 }
 

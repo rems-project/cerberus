@@ -13,6 +13,9 @@ type cerb_switch =
     (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
   | SW_no_integer_provenance of int
 
+(*
+UB when reading uninitialised memory
+ *)
 
 let internal_ref =
   ref []
