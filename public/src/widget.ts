@@ -70,20 +70,10 @@ export class POPL19 extends Widget {
         const tests = $('<ul class="tests"></ul>')
         for (let k = 0; data[i].tests && k < data[i].tests.length; k++) {
           const name = data[i].tests[k]
-          const experimental = $('<a href="#">experimental data</a>')
-          experimental.on('click', () => {
-            util.get('defacto/'+name, (data: string) => {
-              this.hide()
-              UI.addView(name, data)
-              UI.openExperimentalTab()
-            })
-          })
           const link = $(`<a href="#">${name}</a>`)
           link.on('click', () => this.fetch_test('defacto', name))
           const test = $('<li>')
           test.append(link)
-          test.append($('<br>'))
-          test.append(experimental)
           tests.append(test)
         }
         this.body.append($('<h3>'+data[i].section+'</h3>'))

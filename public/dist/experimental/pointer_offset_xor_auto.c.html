@@ -1,0 +1,117 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<h2>
+Example: <code>pointer_offset_xor_auto.c</code>
+</h3>
+<p>up: <a href="index.html">index</a><br> prev: <a href="pointer_offset_xor_global.c.html"><code>pointer_offset_xor_global.c</code></a><br> next: <a href="provenance_tag_bits_via_uintptr_t_1.c.html"><code>provenance_tag_bits_via_uintptr_t_1.c</code></a><br></p>
+<div class="sourceCode"><table class="sourceCode C numberLines"><tr class="sourceCode"><td class="lineNumbers"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+</pre></td><td class="sourceCode"><pre><code class="sourceCode c">    <span class="ot">#include &lt;stdio.h&gt;</span>
+    <span class="ot">#include &lt;inttypes.h&gt;</span>
+    <span class="dt">int</span> main() {
+      <span class="dt">int</span> x=<span class="dv">1</span>, y=<span class="dv">2</span>;
+      <span class="dt">int</span> *p = &amp;x;
+      <span class="dt">int</span> *q = &amp;y;
+      uintptr_t i = (uintptr_t) p;
+      uintptr_t j = (uintptr_t) q;
+      uintptr_t k = i ^ j;
+      uintptr_t l = k ^ i;
+      <span class="dt">int</span> *r = (<span class="dt">int</span> *)l;
+      <span class="co">// are r and q now equivalent?  </span>
+      *r = <span class="dv">11</span>;     <span class="co">// does this have defined behaviour?             </span>
+      <span class="dt">_Bool</span> b = (r==q); 
+      printf(<span class="st">&quot;x=%i y=%i *r=%i (r==p)=%s</span><span class="ch">\n</span><span class="st">&quot;</span>,x,y,*r,
+             b?<span class="st">&quot;true&quot;</span>:<span class="st">&quot;false&quot;</span>);  
+    }</code></pre></td></tr></table></div>
+<a href="https://cerberus.cl.cam.ac.uk/cerberus?defacto/pointer_offset_xor_auto.c">[link to run test in Cerberus]</a>
+<p>
+<p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_offset_xor_auto.c --></p>
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: out of bounds pointer at memory store at 13:3-10<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">icc-19-O2</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">x=1 y=11 *r=11 (r==p)=true<br></td>
+<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Conversion from an integer to non-null pointer:<br>      &gt; in main at pointer_offset_xor_auto.c:11:3<br><br>    Implementation defined behavior (IMPL-CCV13):<br>        see C11 section 6.3.2.3:5 http://rvdoc.org/C11/6.3.2.3<br>        see CERT section INT36-C http://rvdoc.org/CERT/INT36-C<br><br>Indeterminate value used in an expression:<br>      &gt; in main at pointer_offset_xor_auto.c:11:3<br><br>    Undefined behavior (UB-CEE2):<br>        see C11 section 6.2.4 http://rvdoc.org/C11/6.2.4<br>        see C11 section 6.7.9 http://rvdoc.org/C11/6.7.9<br>        see C11 section 6.8 http://rvdoc.org/C11/6.8<br>        see C11 section J.2:1 item 11 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP33-C http://rvdoc.org/CERT-C/EXP33-C<br>        see MISRA-C section 8.9:1 http://rvdoc.org/MISRA-C/8.9<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Dereferencing a null pointer:<br>      &gt; in main at pointer_offset_xor_auto.c:13:3<br><br>    Undefined behavior (UB-CER3):<br>        see C11 section 6.5.3.2:4 http://rvdoc.org/C11/6.5.3.2<br>        see C11 section J.2:1 item 43 http://rvdoc.org/C11/J.2<br>        see CERT-C section EXP34-C http://rvdoc.org/CERT-C/EXP34-C<br>        see MISRA-C section 8.1:3 http://rvdoc.org/MISRA-C/8.1<br><br>Execution failed (configuration dumped)<br></td>
+
+<table></code></pre>
+</body>
+</html>

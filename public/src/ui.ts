@@ -453,12 +453,19 @@ export class CerberusUI {
   addView(title: string, source: string, config?: any) {
     this.add(new View(title, source, config))
     this.refresh()
+    // Check Charon2 experimental data
+    $.ajax({
+      url: `experimental/${title}.html`,
+      type: 'GET',
+      success: (data) => {
+        this.getView().newTab('Experimental', 'Experimental Data', data)
+      },
+      error: () => {}
+    })
   }
 
   public openExperimentalTab() {
-    //this.getView().newTab('Experimental')
-    const title = this.getView().state.title()
-    window.open(`http://www.cl.cam.ac.uk/~pes20/cerberus/supplementary-material-popl2019/generated_html_popl2019/${title}.html`)
+    this.getView().newTab('Experimental')
   }
 
   public step(active: {id: number, state: string} | null): void {
