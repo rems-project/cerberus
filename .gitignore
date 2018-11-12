@@ -55,3 +55,4 @@ config.json
 cpp_error
 
 bisect*.out
+logs

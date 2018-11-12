@@ -18,8 +18,6 @@ type conf =
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)
     timeout: int;             (* instance execution timeout *)
     tagDefs: string;          (* marshalled tag defs *)
-    cerb_path: string;        (* CERB_PATH *)
-    z3_path: string;          (* LD_LIBRARY_PATH *)
     switches: string list;
   }
 
@@ -59,23 +57,6 @@ type node =
     next_state: string option; (* marshalled state *)
     outp: string; (* stdout output *)
   }
-
-(*
-  | Branch of {
-      branch_id: int;
-      branch_info: step_info;
-      memory: Json.json;
-      c_loc: Location_ocaml.t;
-      uid: string option;
-      arena: string;
-      env: string; (* maybe an associate list ? *)
-    }
-  | Leaf of {
-      leaf_id: int;
-      leaf_info: step_info;
-      leaf_state: string;
-    }
-*)
 
 type edge =
   | Edge of int * int (* from -> to *)

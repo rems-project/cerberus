@@ -14,6 +14,7 @@ type webconf =
     docroot: string;
     timeout: int;
     log_file: string;
+    index_file: string;
     request_file: string;
     cerb_path: string;
     core_impl: string;
@@ -22,7 +23,11 @@ type webconf =
     tmp_path: string;
   }
 
-let print_webconf c =
+let webconf =
+  ref (fun () -> failwith "webconf undefined")
+
+let print_webconf () =
+  let w = !webconf() in
   Printf.printf "[1]: Web server configuration:
     TLS certificate: %s
     TLS key: %s
@@ -30,26 +35,28 @@ let print_webconf c =
     TCP port: %d
     TCP redirect: %b
     Public folder: %s
-    Executions timeout: %d
+    Executions timeout: %ds
     Log file: %s
+    Index file: %s
     Request file: %s
     CERB_PATH: %s
     Core implementation file: %s
-    Z3 path: %s\n
+    Z3 path: %s
     TMP path: %s\n"
-    c.tls_cert c.tls_key c.tls_port
-    c.tcp_port c.tcp_redirect
-    c.docroot
-    c.timeout
-    c.log_file
-    c.request_file
-    c.cerb_path
-    c.core_impl
-    c.z3_path
-    c.tmp_path;
+    w.tls_cert w.tls_key w.tls_port
+    w.tcp_port w.tcp_redirect
+    w.docroot
+    w.timeout
+    w.log_file
+    w.index_file
+    w.request_file
+    w.cerb_path
+    w.core_impl
+    w.z3_path
+    w.tmp_path;
   flush stdout
 
-let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
+let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
   let cerb_path =
     try Sys.getenv "CERB_PATH"
     with Not_found -> "."
@@ -57,6 +64,14 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
   let ld_path =
     try Sys.getenv "LD_LIBRARY_PATH"
     with Not_found -> "."
+  in
+  let time =
+    let tm = Unix.gmtime @@ Unix.time () in
+    Printf.sprintf "%04d_%02d_%02d-%02d_%02d_%02d"
+      (tm.tm_year+1900) (tm.tm_mon+1) tm.tm_mday tm.tm_hour tm.tm_min tm.tm_sec
+  in
+  let set_log name =
+    Printf.sprintf "%s_%s.log" name time
   in
   let default =
     { tls_cert= cerb_path ^ "/tools/server.cert";
@@ -68,8 +83,9 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
       timeout= timeout;
       cerb_path= cerb_path;
       core_impl= core_impl;
-      log_file= "server.log";
-      request_file= "request.log";
+      log_file= set_log "main";
+      index_file= set_log "index";
+      request_file= set_log "request";
       z3_path= ld_path;
       tmp_path= Filename.get_temp_dir_name ();
       cerb_debug_level= 0;
@@ -99,8 +115,9 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
     | ("timeout", `Int max) -> { cfg with timeout = max }
     | ("log", `Assoc log) ->
       let parse_log cfg = function
-        | ("all", `String file) -> { cfg with log_file = file }
-        | ("request", `String file) -> { cfg with request_file = file }
+        | ("all", `String file) -> { cfg with log_file = set_log file }
+        | ("index", `String file) -> { cfg with index_file = set_log file }
+        | ("request", `String file) -> { cfg with request_file = set_log file }
         | (k, _) ->
           Debug.warn @@ "Unknown log configuration key: " ^ k;
           cfg
@@ -113,31 +130,31 @@ let create_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level 
       Debug.warn @@ "Unknown configuration key: " ^ k;
       cfg
   in
-  try
-    match Yojson.Basic.from_file cfg_file with
-    | `Assoc cfgs ->
-      List.fold_left parse default cfgs
-    | _ ->
-      Debug.warn "Configuration file has an incorrect format...";
+  let c =
+    try
+      match Yojson.Basic.from_file cfg_file with
+      | `Assoc cfgs ->
+        List.fold_left parse default cfgs
+      | _ ->
+        Debug.warn "Configuration file has an incorrect format...";
+        default
+    with e ->
+      Debug.error_exception "Error reading configuration file:" e;
       default
-  with e ->
-    Debug.error_exception "Error reading configuration file:" e;
-    default
+  in webconf := fun () -> c
 
 (* Create configuration for every instance model *)
 let create_conf w =
-  let cpp_cmd cerb_path =
+  let cpp_cmd () =
     "cc -E -C -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
-    ^ cerb_path ^ "/include/c/libc -I "
-    ^ cerb_path ^ "/include/c/posix"
+    ^ w.cerb_path ^ "/include/c/libc -I "
+    ^ w.cerb_path ^ "/include/c/posix"
   in
   { rewrite_core = false;
     sequentialise_core = false;
     tagDefs = "";
     switches = [];
-    cerb_path = w.cerb_path;
-    z3_path = w.z3_path;
-    cpp_cmd = cpp_cmd w.cerb_path;
+    cpp_cmd = cpp_cmd ();
     core_impl = w.core_impl;
     timeout = w.timeout;
     cerb_debug_level = w.cerb_debug_level;
@@ -471,28 +488,41 @@ let respond_file ~rheader fname =
 
 (* Cerberus actions *)
 
-let log_request ~docroot msg flow =
-  let endp = Conduit_lwt_unix.endp_of_flow flow in
-  Debug.print 0 (Conduit.sexp_of_endp endp |> Sexplib0__Sexp.to_string);
+let now () =
+  let tm = Unix.gmtime @@ Unix.time () in
+  Printf.sprintf "%02d/%02d/%04d %02d:%02d:%02d"
+    tm.tm_mday (tm.tm_mon+1) (tm.tm_year+1900)
+    (tm.tm_hour+1) tm.tm_min tm.tm_sec
+
+let log_index flow =
   match Conduit_lwt_unix.endp_of_flow flow with
-  | `TLS (_, `TCP (ip, port))
-  | `TCP (ip, port) ->
-    let open Unix in
-    let tm = gmtime @@ time () in
+  | `TLS (_, `TCP (ip, _))
+  | `TCP (ip, _) ->
+    let oc =
+      open_out_gen [Open_text;Open_append;Open_creat] 0o666 (!webconf()).index_file
+    in
+    Printf.fprintf oc "%s %s\n" (Ipaddr.to_string ip) (now ());
+    close_out oc
+  | _ -> ()
+
+let log_request msg flow =
+  match Conduit_lwt_unix.endp_of_flow flow with
+  | `TLS (_, `TCP (ip, _))
+  | `TCP (ip, _) ->
     let oc = open_out_gen [Open_text;Open_append;Open_creat] 0o666
-        (docroot ^ "request.log")
-    in Printf.fprintf oc "%s:%d %d/%d/%d %d:%d:%d %s:%s \"%s\"\n"
-      (Ipaddr.to_string ip) port
-      tm.tm_mday (tm.tm_mon+1) (tm.tm_year+1900)
-      (tm.tm_hour+1) tm.tm_min tm.tm_sec
+        (!webconf()).request_file
+    in
+    Printf.fprintf oc "%s %s %s:%s \"%s\"\n"
+      (Ipaddr.to_string ip)
+      (now ())
       (string_of_action msg.action)
       (msg.model)
-      (String.escaped msg.source)
-    ; close_out oc
+      (String.escaped msg.source);
+    close_out oc
   | _ -> ()
 
 
-let cerberus ~rheader ~docroot ~conf ~flow content =
+let cerberus ~rheader ~conf ~flow content =
   let start_time = Sys.time () in
   let msg       = parse_incoming_msg content in
   let filename  = write_tmp_file msg.source in
@@ -506,8 +536,8 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
     let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
-                "CERB_PATH="^conf.cerb_path;
-                "LD_LIBRARY_PATH="^conf.z3_path|]
+                "CERB_PATH="^(!webconf()).cerb_path;
+                "LD_LIBRARY_PATH="^(!webconf()).z3_path|]
     in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
@@ -515,7 +545,7 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
     proc#close >>= fun _ ->
     return data
   in
-  log_request ~docroot msg flow;
+  log_request msg flow;
   let do_action = function
     | `Nop   -> return @@ Failure "no action"
     | `Elaborate  -> request @@ `Elaborate (conf, filename, msg.name)
@@ -523,6 +553,7 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
     | `Exhaustive -> request @@ `Execute (conf, filename, msg.name, Exhaustive)
     | `Step -> request @@ `Step (conf, filename, msg.name, msg.interactive)
   in
+  Debug.print 9 ("Time: " ^ now ());
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
   do_action msg.action >|= json_of_result >>=
   let time = Some ((Sys.time () -. start_time) *. 1000.) in
@@ -530,13 +561,14 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
 
 (* GET and POST *)
 
-let head ~docroot uri path =
+let head uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
     | _ -> false
   in
   let check_local_file () =
+    let docroot = (!webconf()).docroot in
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename && Sys.file_exists filename then
         Server.respond `OK  `Empty ()
@@ -553,12 +585,13 @@ let head ~docroot uri path =
   end
 
 
-let get ~docroot ~rheader uri path =
+let get ~rheader ~flow uri path =
   let is_regular filename =
     match Unix.((stat filename).st_kind) with
     | Unix.S_REG -> true
     | _ -> false
   in
+  let docroot = (!webconf()).docroot in
   let get_local_file () =
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename then
@@ -568,23 +601,25 @@ let get ~docroot ~rheader uri path =
   let try_with () =
     Debug.print 9 ("GET " ^ path);
     match path with
-    | "" | "/" -> respond_file ~rheader (docroot ^ "/index.html")
+    | "" | "/" ->
+      log_index flow;
+      respond_file ~rheader (docroot ^ "/index.html")
     | _   -> get_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "GET" e;
     forbidden path
   end
 
-let post ~docroot ~conf ~rheader ~flow uri path content =
+let post ~conf ~rheader ~flow uri path content =
   let try_with () =
     Debug.print 9 ("POST " ^ path);
     match path with
-    | "/query" -> cerberus ~rheader ~docroot ~conf ~flow content
+    | "/query" -> cerberus ~rheader ~conf ~flow content
     | _ ->
       (* Ignore POST, fallback to GET *)
       Debug.warn ("Unknown post action " ^ path);
       Debug.warn ("Fallback to GET");
-      get ~docroot ~rheader uri path
+      get ~rheader ~flow uri path
   in catch try_with begin fun e ->
     Debug.error_exception "POST" e;
     forbidden path
@@ -601,7 +636,7 @@ let parse_req_header header =
     host= get "host";
   }
 
-let request ~docroot ~conf (flow, conn) req body =
+let request ~conf (flow, conn) req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   let path =
@@ -625,11 +660,11 @@ let request ~docroot ~conf (flow, conn) req body =
       in
       if accept_gzip then Debug.print 10 "accepts gzip";
       match meth with
-      | `HEAD -> head ~docroot uri path >|= fun (res, _) -> (res, `Empty)
-      | `GET  -> get ~docroot ~rheader uri path
+      | `HEAD -> head uri path >|= fun (res, _) -> (res, `Empty)
+      | `GET  -> get ~rheader ~flow uri path
       | `POST ->
         Cohttp_lwt.Body.to_string body >|= Uri.query_of_encoded >>=
-        post ~docroot ~conf ~rheader ~flow uri path
+        post ~conf ~rheader ~flow uri path
       | _     -> not_allowed meth path
     in catch try_with begin fun e ->
       Debug.error_exception "POST" e;
@@ -640,7 +675,7 @@ let request ~docroot ~conf (flow, conn) req body =
     (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
   end
 
-let redirect ~docroot ~conf conn req body =
+let redirect ~conf conn req body =
   let uri  = Request.uri req in
   let meth = Request.meth req in
   match meth, Uri.path uri with
@@ -648,20 +683,20 @@ let redirect ~docroot ~conf conn req body =
     let headers =
       Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)] in
     (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
-  | _ -> request ~docroot ~conf conn req body
+  | _ -> request ~conf conn req body
 
-let initialise ~webconf =
+let initialise () =
   try
     (* NOTE: ad-hoc fix for server crash:
      * https://github.com/mirage/ocaml-cohttp/issues/511 *)
     Lwt.async_exception_hook := ignore;
+    let webconf = !webconf() in
     Filename.set_temp_dir_name webconf.tmp_path;
-    let docroot = webconf.docroot in
     let conf    = create_conf webconf in
     let http_server = Server.make
-        ~callback: (if webconf.tcp_redirect then redirect ~docroot ~conf
-                    else request ~docroot ~conf) () in
-    let https_server = Server.make ~callback: (request ~docroot ~conf) () in
+        ~callback: (if webconf.tcp_redirect then redirect ~conf
+                    else request ~conf) () in
+    let https_server = Server.make ~callback: (request ~conf) () in
     Lwt_main.run @@ Lwt.join
       [ Server.create ~mode:(`TCP (`Port webconf.tcp_port)) http_server
       ; Server.create ~mode:(`TLS_native (`Crt_file_path webconf.tls_cert,
@@ -674,10 +709,9 @@ let initialise ~webconf =
 
 let setup cfg_file cerb_debug_level debug_level timeout core_impl port docroot =
   Debug.level := debug_level;
-  let webconf =
-    create_webconf cfg_file timeout core_impl port docroot cerb_debug_level in
-  if debug_level > 0 then print_webconf webconf;
-  initialise ~webconf
+  set_webconf cfg_file timeout core_impl port docroot cerb_debug_level;
+  if debug_level > 0 then print_webconf ();
+  initialise ()
 
 (* Arguments *)
 open Cmdliner

@@ -44,6 +44,13 @@ let to_smt2_mode = function
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ~conf mode =
   let open Global_ocaml in
+  let cerb_path =
+      try
+        Sys.getenv "CERB_PATH"
+      with Not_found ->
+        error "expecting the environment variable CERB_PATH set to point\
+               to the location cerberus."
+  in
   let pipe_conf = conf.pipeline in
   cerb_conf := fun () ->
     { cpp_cmd=            pipe_conf.Pipeline.cpp_cmd;
@@ -65,7 +72,7 @@ let hack ~conf mode =
       default_impl=       false;
       action_graph=       false;
       n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
-                            Some (Yojson.Basic.from_file (conf.instance.cerb_path ^ "/tools/n1570.json"))
+                            Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
                           else None;
     }
 
