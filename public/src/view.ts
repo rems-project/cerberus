@@ -354,7 +354,7 @@ export default class View {
           value += `<tr border="1"><td>${(pvi ? with_prov(0) : with_offset(0)) + toHex(row.bytes[0].value as number)}</td>
                   <td rowspan="${row.bytes.length}">${(row.prov != undefined ? `@${row.prov}, ` : `@empty, `) + toHex(parseInt(row.value))}</td></tr>`
             for (let j = 1; j < row.bytes.length; j++) {
-              value += `<tr><td border="1" sides="t">${(pvi ? with_prov(j) : with_offset(j)) + toHex(row.bytes[j].value as number)}</td></tr>`
+              value += `<tr><td border="1" sides="t">${(pvi ? with_prov(j) : with_offset(j)) + toHex(row.bytes[j].value)}</td></tr>`
             }
           value += `</table>`
         } else {
@@ -448,7 +448,7 @@ export default class View {
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style}",color="red"];`
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"];`
         return acc;
       }, '')
     }

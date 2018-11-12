@@ -511,9 +511,8 @@ let cerberus ~rheader ~docroot ~conf ~flow content =
     in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
-    Lwt_io.close proc#stdin >>= fun () ->
     Lwt_io.read_value proc#stdout >>= fun data ->
-    Lwt_io.close proc#stdout >>= fun () ->
+    proc#close >>= fun _ ->
     return data
   in
   log_request ~docroot msg flow;

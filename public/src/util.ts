@@ -9,7 +9,9 @@ export function option(x: any, y: any) {
   return y
 }
 
-export function toHex(n: number): string {
+export function toHex(n: number | null): string {
+  if (n == null)
+    return '' // TODO: not sure of this!
   return "0x" + ("00" + n.toString(16)).substr(2)
 }
 

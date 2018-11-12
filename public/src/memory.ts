@@ -67,25 +67,30 @@ export function isInvalidPointer(pvi: boolean, v: Value) {
   if (v.bytes == null) return false
   if (pvi) return v.prov == null
   return !_.reduce(v.bytes, (acc, b, i) => acc && b.offset != null && b.offset == i, true)
+
 }
 
-function charCode (s:string) {
+function char_code (s:string) {
   const x = parseInt(s)
   // printable characters
   if (32 <= x && x <= 126)
-    return ` '${String.fromCharCode(x)}'`
+    return String.fromCharCode(x)
   // escaped characters (only ISO ones)
   switch (x) {
-    case 7: return " '\\a'"
-    case 8: return " '\\b'"
-    case 9: return " '\\t'"
-    case 10: return " '\\n'"
-    case 11: return " '\\v'"
-    case 13: return " '\\r'"
-    case 14: return " '\\f'"
+    case 7: return "\\a"
+    case 8: return "\\b"
+    case 9: return "\\t"
+    case 10: return "\\n"
+    case 11: return "\\v"
+    case 13: return "\\r"
+    case 14: return "\\f"
   }
   // otherwise
   return ""
+}
+
+export function mk_string (values: Value []): string {
+  return `"${values.reduce((acc, v) => acc + char_code(v.value), '')}"`
 }
 
 /** string of memory value  */
@@ -103,7 +108,12 @@ export function string_of_value (v: Value, track_prov: boolean): string {
   if (isintptr(v))
     return value(u.toHex(parseInt(v.value)))
   if (ischar(v)) {
-    return u.toHex(parseInt(v.value)) + charCode(v.value)
+    const char = (s: string) => {
+      const c = char_code(s)
+      if (c === '') return ''
+      return ` '${c}'`
+    }
+    return u.toHex(parseInt(v.value)) + char(v.value)
   }
   return v.value
 }
