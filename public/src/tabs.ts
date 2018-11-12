@@ -268,8 +268,10 @@ export class SimpleMemory extends Tab {
     if (!mem) return
     const table = $('<table>')
     const firstRow = $('<tr><th>id</th><th>address</th><th>type</th><th>name</th><th>value</th></tr>')
-    const mkRow = (id: number, addr: string, ty: string, name: string, val: string) =>
-      $(`<tr><td>@${id}</td><td>${addr}</td><td>${ty}</td><td>${name}</td><td>${val}</td></tr>`)
+    const mkRow = (id: number, addr: string, ty: string, name: string, val: string) => {
+      const color = mem.last_used === id ? 'bgcolor="#deffff"' : ''
+      return $(`<tr ${color}><td>@${id}</td><td>${addr}</td><td>${ty}</td><td>${name}</td><td>${val}</td></tr>`)
+    }
     table.append(firstRow)
     const mkValue = (values: Mem.Value []) => {
       const maxcols = values.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
@@ -284,14 +286,17 @@ export class SimpleMemory extends Tab {
       }, '<table>')
       return val + '</table>'
     }
+    const mkString = (values: Mem.Value []) => 
+      `<table><tr><td>${Mem.mk_string(values)}</td></tr></table>`
     _.map(mem.map, alloc => {
       mkValue(alloc.values)
-      table.append(mkRow(alloc.id, util.toHex(alloc.base), alloc.type, alloc.prefix.name, mkValue(alloc.values)))
+      table.append(mkRow(alloc.id, util.toHex(alloc.base), alloc.type, alloc.prefix.name,
+        alloc.prefix.name === 'string literal' ? mkString(alloc.values) : mkValue(alloc.values)))
     })
     this.container.append(table)
   }
   initial(s: Readonly<State>) {
-    this.update(s)
+    this.updateMemory(s)
   }
 }
 

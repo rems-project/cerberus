@@ -119,7 +119,7 @@ export class CerberusUI {
     $('#step-mem-action').on('click', () => setInteractiveMode(InteractiveMode.Memory))
     $('#step-C-line').on('click', () => setInteractiveMode(InteractiveMode.CLine))
     $('#open-memory').on('click', () => this.getView().newTab('Memory'))
-    $('#open-simple-memory').on('click', () => this.getView().newTab('SimpleMemory'))
+    $('#open-memory-table').on('click', () => this.getView().newTab('SimpleMemory'))
     $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
     $('#open-arena').on('click', () => this.getView().newTab('Arena'))
 
