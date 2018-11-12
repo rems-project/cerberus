@@ -136,7 +136,7 @@ export default class View {
       self.source.refresh()
     })
     this.layout.registerComponent('tab', function (container: GoldenLayout.Container, state: any) {
-      const tab = Tabs.create(state.tab, self.ee)
+      const tab = Tabs.create(state.tab, self.ee, state.args)
       self.tabs.push(tab);
       (container.parent as ContentItem).content = tab
       container.getElement().append(tab.dom)
@@ -208,13 +208,13 @@ export default class View {
     return null
   }
 
-  newTab(tab: string, title?: string) {
+  newTab(tab: string, title?: string, ...args: any []) {
     if (title === undefined) title = tab;
     this.layout.root.contentItems[0].addChild({
       type: 'component',
       componentName: 'tab',
       title: title,
-      componentState: { tab: tab }
+      componentState: { tab: tab, args: args }
     })
     this.refresh()
   }

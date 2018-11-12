@@ -60,10 +60,11 @@ export class Experimental extends Tab {
         url: `experimental/${s.title()}.html`,
         type: 'GET',
         // WARNING: This assumes that charon2 is outputting the results as an
-        // array of HTML elements and the relevant data is in index 4
+        // array of HTML elements and the relevant data is in index 24
         success: (data) => {
           this.dom.append($('<p><b>Experimental data</b></p>'))
-          this.dom.append($(data)[4])
+          let d = $(data)
+          this.dom.append(d[24])
         }
       })
     })
@@ -1080,8 +1081,8 @@ const Tabs: any = {
   Experimental, Implementation, Library, Help
 }
 
-export function create(title: string, ee: EventEmitter): Tab {
-  return new Tabs[title](ee)
+export function create(title: string, ee: EventEmitter, ...args: any[]): Tab {
+  return new Tabs[title](ee, args)
 }
 
 export function instanceOf(tab: Tab, title: string) {

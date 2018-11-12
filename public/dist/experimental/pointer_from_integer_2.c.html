@@ -1,0 +1,129 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+</head>
+<body>
+<h2>
+Example: <code>pointer_from_integer_2.c</code>
+</h3>
+<p>up: <a href="index.html">index</a><br> prev: <a href="pointer_from_integer_1i.c.html"><code>pointer_from_integer_1i.c</code></a><br> next: <a href="pointer_from_integer_2g.c.html"><code>pointer_from_integer_2g.c</code></a><br></p>
+<div class="sourceCode"><table class="sourceCode C numberLines"><tr class="sourceCode"><td class="lineNumbers"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+</pre></td><td class="sourceCode"><pre><code class="sourceCode c">    <span class="ot">#include &lt;stdio.h&gt;</span>
+    <span class="ot">#include &lt;stdint.h&gt;</span>
+    <span class="ot">#include &quot;charon_address_guesses.h&quot;</span>
+    <span class="dt">void</span> f() {
+      uintptr_t i=ADDRESS_PFI_2;
+      <span class="dt">int</span> *p = (<span class="dt">int</span>*)i;
+      *p=<span class="dv">7</span>;
+    }
+    <span class="dt">int</span> main() {
+      <span class="dt">int</span> j=<span class="dv">5</span>;
+      f();
+      printf(<span class="st">&quot;j=%d</span><span class="ch">\n</span><span class="st">&quot;</span>,j); 
+    }</code></pre></td></tr></table></div>
+<a href="https://cerberus.cl.cam.ac.uk/cerberus?defacto/pointer_from_integer_2.c">[link to run test in Cerberus]</a>
+<p>
+<p><b>Experimental data</b> <a href="help.html">(what does this mean?)</a> <!-- pointer_from_integer_2.c --></p>
+<pre><code><table cellpadding="0" cellspacing="0">
+<tr><td valign="top">cerberus-concrete-PVI</td><td> </td><td valign="top">Undefined behaviour: the operand of the unary '*' operator has an invalid value at 7:3-5<br></td>
+<tr><td valign="top">cerberus-concrete-PNVI</td><td> </td><td valign="top">j=7<br></td>
+<tr><td valign="top">gcc-8.1-O0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O2</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O3</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O2-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">gcc-8.1-O3-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O2</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O3</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O2-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-O3-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">clang-6.0-UBSAN</td><td> </td><td valign="top">exit codes: compile 0 / execute 1
+pointer_from_integer_2.c:7:3: runtime error: store to misaligned address 0x00000000002a for type 'int', which requires 4 byte alignment<br>0x00000000002a: note: pointer points here<br>&lt;memory cannot be printed&gt;<br>UndefinedBehaviorSanitizer:DEADLYSIGNAL<br>==14846==ERROR: UndefinedBehaviorSanitizer: SEGV on unknown address 0x00000000002a (pc 0x000000420ca0 bp 0x000000420cc0 sp 0x7fffffffdbf0 T14846)<br>==14846==The signal is caused by a WRITE memory access.<br>==14846==Hint: address points to the zero page.<br>    #0 0x420c9f in main (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-UBSAN.out+0x420c9f)<br>    #1 0x7ffff6ee582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)<br>    #2 0x4029c8 in _start (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-UBSAN.out+0x4029c8)<br><br>UndefinedBehaviorSanitizer can not provide additional info.<br>==14846==ABORTING<br></td>
+<tr><td valign="top">clang-6.0-ASAN</td><td> </td><td valign="top">exit codes: compile 0 / execute 1
+AddressSanitizer:DEADLYSIGNAL<br>=================================================================<br>==14860==ERROR: AddressSanitizer: SEGV on unknown address 0x00000000002a (pc 0x0000004e71fc bp 0x0000004e7270 sp 0x7fffffffdbf0 T0)<br>==14860==The signal is caused by a WRITE memory access.<br>==14860==Hint: address points to the zero page.<br>    #0 0x4e71fb in main (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-ASAN.out+0x4e71fb)<br>    #1 0x7ffff6ee582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)<br>    #2 0x419d78 in _start (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-ASAN.out+0x419d78)<br><br>AddressSanitizer can not provide additional info.<br>SUMMARY: AddressSanitizer: SEGV (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-ASAN.out+0x4e71fb) in main<br>==14860==ABORTING<br></td>
+<tr><td valign="top">clang-6.0-MSAN</td><td> </td><td valign="top">exit codes: compile 0 / execute 77
+MemorySanitizer:DEADLYSIGNAL<br>==14874==ERROR: MemorySanitizer: SEGV on unknown address 0x00000000002a (pc 0x00000048db81 bp 0x00000048dc00 sp 0x7fffffffdbf0 T14874)<br>==14874==The signal is caused by a WRITE memory access.<br>==14874==Hint: address points to the zero page.<br>    #0 0x48db80 in main (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-MSAN.out+0x48db80)<br>    #1 0x7ffff6ee582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)<br>    #2 0x41a728 in _start (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-MSAN.out+0x41a728)<br><br>MemorySanitizer can not provide additional info.<br>SUMMARY: MemorySanitizer: SEGV (/local/scratch/pes20/repos/rsem/csem/charon2/pointer_from_integer_2.c.clang-6.0-MSAN.out+0x48db80) in main<br>==14874==ABORTING<br></td>
+<tr><td valign="top">icc-19-O0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O2</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O3</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O2-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">icc-19-O3-no-strict-aliasing</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.4</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">compcert-3.4-O</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Segmentation fault (core dumped)<br></td>
+<tr><td valign="top">kcc-1.0</td><td> </td><td valign="top">exit codes: compile 0 / execute 139
+Conversion from an integer to non-null pointer:<br>      &gt; in f at pointer_from_integer_2.c:6:3<br>        in main at pointer_from_integer_2.c:11:3<br><br>    Implementation defined behavior (IMPL-CCV13):<br>        see C11 section 6.3.2.3:5 http://rvdoc.org/C11/6.3.2.3<br>        see CERT section INT36-C http://rvdoc.org/CERT/INT36-C<br><br></td>
+
+<table></code></pre>
+</body>
+</html>

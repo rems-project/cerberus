@@ -1,0 +1,78 @@
+
+<h2>What does this experimental data mean?</h2>
+
+This is experimental data from compiling and running our C memory
+object model tests on various C implementations and analysis tools. 
+
+
+<h3>The tests</h3>
+Our test cases are typically written to illustrate a particular
+semantic question as concisely as possible.  Some are 
+"natural" examples, of desirable C code that one might find in the
+wild, but many are intentionally pathological or are corner cases, to explore just where the
+defined/undefined-behaviour boundary is; we are <em>not</em>
+suggesting that all these should be supported. 
+<p>
+
+Making the tests concise to illustrate semantic questions also means
+that most are not written to trigger interesting
+compiler behaviour, which might only occur in a
+larger context that permits some analysis or optimisation pass to take
+effect. Moreover, following the
+spirit of C, conventional implementations cannot and do not report all instances of undefined
+behaviour. Hence, only in
+some cases is there anything to be learned from the experimental
+compiler behaviour.  For any executable semantics or analysis tool, on the other hand,
+all the tests should have  instructive outcomes. 
+<p>
+
+Some tests rely on address coincidences for the interesting
+execution; for these we sometimes include multiple variants, tuned to the
+allocation behaviour in the implementations we consider.  Where this
+has not been done, some of the experimental data is not meaningful. 
+<p>
+
+<h3>The platforms</h3>
+The tests have been run with a range of tools:
+<ul>
+<li> GCC 8.1, clang 6.0, and ICC 19.0.0.117, at O0, O2, and O3; the latter two with and without
+<code>-fno-strict-aliasing</code>, on x86_64 on linux, e.g.
+<pre>
+gcc -O2 -std=c11 -pedantic -Wall -Wextra -Wno-unused-variable -pthread
+</pre>
+
+<li> clang 6.0 with address, memory, and undefined-behaviour sanitisers, e.g.
+<pre>
+clang -fsanitize=address -O2 -std=c11 -pedantic -Wall -Wextra -Wno-unused-variable -pthread
+</pre>
+
+<li> Cerberus in concrete and symbolic modes
+
+<li> CHERI, with various compiler and configuration options
+
+<!--<li> the TrustInSoft tis-interpreter tool, version Magnesium-20151002+dev-->
+
+<li> the RV-Match tool, 
+in the Vagrant VM distribution of RV-Match v1.0 by Runtime Verification Inc.
+<a href="https://runtimeverification.com/match/1.0/docs/vagrant/">here</a>,
+downloaded 2018-05-03
+
+<li> the CH2O tool
+
+<li> CompCert 3.4, compiling with and without -O, and running the interpreter
+
+
+
+</ul>
+
+
+<h3>The Charon test harness </h3>
+
+The tests are run using a test harness, charon, that generates
+individual test instances from JSON files describing the tests and
+tools; charon logs all the compile and execution output (together with
+the test itself and information about the host) to another JSON file
+for analysis.  The tests and harness can be packaged up in a single
+tarball that can be run easily.  charon also supports
+cross-compilation, to let the tests be compiled on a normal host and
+executed on other hardware.  
