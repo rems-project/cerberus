@@ -1324,17 +1324,24 @@ TODO: this should be removable, since we already set it in Translation
                 Mem.return argv_ptr_val
                 ))))
               ) >>= fun argv_ptr_val ->
-              
-              ND.return $
-                Core_aux.subst_pattern_val
-                  (Caux.mk_tuple_pat [ Caux.mk_sym_pat argc_sym (Core.BTy_object Core.OTy_pointer)
-                                     ; Caux.mk_sym_pat argv_sym (Core.BTy_object Core.OTy_pointer) ])
-                  (Core.Vtuple [Core.Vobject (Core.OVpointer argc_ptr_val); Core.Vobject (Core.OVpointer argv_ptr_val)])
-(*                  (Core.Etuple [Core.Econst $ Mem.mk_pointer argc_ptr_val; Core.Econst $ Mem.mk_pointer argv_ptr_val]) *)
-                  expr
+              (* Adding the values of argc and argv to the Core symbol environment *)
+              liftCore_run begin
+                SEU.update (fun st ->
+                  <| st with Core_run.env= match st.Core_run.env with
+                      | [] ->
+                          [Map.fromList [ (argc_sym ,Core.Vobject (Core.OVpointer argc_ptr_val))
+                                        ; (argv_sym, Core.Vobject (Core.OVpointer argv_ptr_val)) ]]
+                      | (xs :: xs') ->
+                          (Map.insert argc_sym (Core.Vobject (Core.OVpointer argc_ptr_val))
+                            (Map.insert argv_sym (Core.Vobject (Core.OVpointer argv_ptr_val)) xs)) :: xs'
+                    end |>
+                )
+              end >>= fun () ->
+              ND.return expr
           | _ ->
               ND.return expr
         end >>= fun expr ->
+        
         update_thread_state tid0 <|
           Core_run.arena=  expr;
           Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
