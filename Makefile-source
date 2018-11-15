@@ -54,7 +54,8 @@ SOURCE_utils=\
   state_exception.lem \
   state_exception_undefined.lem \
   std.lem \
-  monadic_parsing.lem
+  monadic_parsing.lem \
+  fs.lem
 
 SOURCE_ail_typing=\
   Range.lem \

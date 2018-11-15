@@ -75,7 +75,7 @@ dependencies:
 	cd dependencies; make -f ../Makefile.dependencies
 
 
-lem: copy_cmm copy_cmm_exec copy_cerberus
+lem: copy_cmm copy_cmm_exec copy_cerberus sibylfs
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 #	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
@@ -134,7 +134,7 @@ ocaml_native:
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,${Z3} -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 

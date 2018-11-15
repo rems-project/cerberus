@@ -19,6 +19,8 @@ import AilSyntax AilTypes
 
 import Translation_aux
 
+import Fs
+
 module Mem = struct
   include import Mem Mem_aux
 end
@@ -60,7 +62,8 @@ type driver_state = <|
   core_state:        Core_run.core_state;       (* state of the core program *)
   core_run_state:    Core_run.core_run_state;   (* state of the core evaluator *)
   layout_state:      Mem.mem_state;         (* state of memory layout model *)
-  concurrency_state: Cmm_op.symState;       (* state of the concurrency memory model *)
+  concurrency_state: Cmm_op.symState;       (* state of the concurrency memmodel *)
+  fs_state:          Fs.fs_state;           (* state of the file system *)
   
   symbolic_assoc: map Symbol.sym Core.object_value;
   
@@ -1069,6 +1072,7 @@ let initial_driver_state sym_supply file =
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
+    fs_state=          Fs.fs_initial_state;
 
 
   symbolic_assoc= Map.empty;
