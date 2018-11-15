@@ -122,6 +122,10 @@ simpl:
 playground:
 	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs lem,cmdliner,pprint,zarith,${Z3} -libs unix,str playground.native
 
+.PHONY: sibylfs
+sibylfs: ${BUILD_DIR}
+	make -C sibylfs
+	cp -vf ./sibylfs/generated/*.{ml,mli} ${BUILD_DIR}
 
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
@@ -243,6 +247,7 @@ clean:
 	rm -rf {src,pprinters}/*.{cmx,cmi}
 	rm -rf alldoc*
 	rm -rf generated_doc/*.html
+	make -C sibylfs clean
 
 clear: clean
 	rm -rf cerberus cerb.* main.native instance.native web.native

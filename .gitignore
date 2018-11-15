@@ -2,6 +2,7 @@ _build
 _cbuild
 ocaml_generated
 generated_doc
+sibylfs/generated
 
 core-ott/*.tex
 core-ott/*.aux
