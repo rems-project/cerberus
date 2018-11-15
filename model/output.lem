@@ -614,12 +614,15 @@ let convert eval_conv prec_opt lm_opt cspec args =
   end in
 *)
   let aux expected_ty_opt _conv_ty_opt cont =
+    (* TODO: wip *)
     match args with
       | [] ->
           Mem.return $
-            Right (U.undef (Loc.other "Output.aux") [U.UB153_insufficient_arguments_for_format])
+            Right (U.undef (Loc.other "Output.aux") [U.UB153a_insufficient_arguments_for_format])
       | (arg_ty, arg_ptr) :: args' ->
-          Mem.load (Loc.other "Output.aux") arg_ty arg_ptr >>= fun (_, mval) ->
+          (* TODO: if this strict (ISO) enforcement of printf works for our CI tests, then we can just rename
+             _conv_ty_opt to conv_ty_opt. Otherwise we should add a switch for a permissive version of printf() *)
+(*
           (* TODO/NOTE: I think that if expected_ty is not compatible with arg_ty then it
              is undefined, but that doesn't seem to match at all what people do. So we are
              just showing a warning for now and performing a conversion from arg_ty to expected_ty
@@ -636,102 +639,81 @@ let convert eval_conv prec_opt lm_opt cspec args =
             | Nothing ->
                 _conv_ty_opt
           end in
-          
-          match conv_ty_opt with
-            | Just conv_ty ->
-                let () = Debug.print_debug 2 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
-                let () = Debug.print_debug 2 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
-                eval_conv conv_ty mval >>= function
-                  | Left err ->
-                      let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
-                      Mem.return (Left err)
-                  | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
-                      match Mem_aux.integerFromIntegerValue ival with
-                        | Just n ->
-                            Mem.return $ Right (U.return (
-                              if prec = 0 && n = 0 then
-                                ([], args')
-                              else
-                                (cont n, args')
-                            ))
-                        | Nothing ->
-                            Mem.return $ Right (U.return (
-                              (String.toCharList (Mem.stringFromInteger_value ival), args')
-                            ))
-                            (*error ("WIP: convert --> not a concrete integer: " ^
-                                   stringFromMemValue (fromJust "Output, not a concrete integer" $
-                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival))))) *)
-                      end
-                  | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
-                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Right (U.Defined cval) ->
-                      error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
-                  | Right (U.Error loc str) ->
-                      Mem.return (Right (U.Error loc str))
-                  | Right (U.Undef loc ubs) ->
-                      Mem.return (Right (U.Undef loc ubs))
-                end
-
-
-
-                (*
-                eval_conv conv_ty mval >>= fun z ->
-                match z with
-                  | Left err ->
-                      let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
-                      Mem.return (Left err)
-                  | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
-                      match Mem_aux.integerFromIntegerValue ival with
-                        | Just n ->
-                            Mem.return $ Right (U.return (
-                              if prec = 0 && n = 0 then
-                                ([], args')
-                              else
-                                (cont n, args')
-                            ))
-                        | Nothing ->
-                            error ("WIP: convert --> not a concrete integer: " ^
-                                   stringFromMemValue (fromJust "Output, not a concrete integer" $
-                                     Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))))
-                      end
-                  | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
-                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Right (U.Defined cval) ->
-                      error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
-                  | Right (U.Error loc str) ->
-                      Mem.return (Right (U.Error loc str))
-                  | Right (U.Undef loc ubs) ->
-                      Mem.return (Right (U.Undef loc ubs))
-                end
-                *)
+*)
+          let (is_illtyped, conv_ty_opt) = match expected_ty_opt with
+            | Just expected_ty ->
+                (expected_ty <> arg_ty, _conv_ty_opt)
             | Nothing ->
-                (* TODO: this is wrong if "not (is_integer ty)" *)
-                match snd (Core_aux.valueFromMemValue mval) with
-                  | Core.Vloaded (Core.LVunspecified _) ->
-                      Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
-                  | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->
-                      match Mem_aux.integerFromIntegerValue ival with
-                        | Just n ->
-                            Mem.return $ Right (U.return (
-                              if prec = 0 && n = 0 then
-                                ([], args')
-                              else
-                                (cont n, args')
-                            ))
-                        | Nothing ->
-                            let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
-                            Mem.return $ Right (U.return ([#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
-                      end
-                  | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
-                      Mem.return $ Right (U.return (
-                        Mem.case_fval fval
-                          (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
-                          (fun x -> String.toCharList (Float.string_of_float x))
-                      , args'))
-                  | _ ->
-                      error "Output.aux should only be called on a loaded(arimetic value)"
-                end
-          end
+                (false, _conv_ty_opt)
+          end in
+          if is_illtyped then
+            (* TODO: location *)
+            Mem.return $
+              Right (U.Undef (Loc.other "TODO: printf()") [U.UB153b_illtyped_argument_for_format])
+          else
+            Mem.load (Loc.other "Output.aux") arg_ty arg_ptr >>= fun (_, mval) ->
+            match conv_ty_opt with
+              | Just conv_ty ->
+                  let () = Debug.print_debug 2 [] (fun () -> "conv_ty= " ^ Pp.stringFromCore_ctype conv_ty) in
+                  let () = Debug.print_debug 2 [] (fun () -> "mval= " ^ Pp.stringFromMem_mem_value mval) in
+                  eval_conv conv_ty mval >>= function
+                    | Left err ->
+                        let () = Debug.print_debug 1 [] (fun () -> "PRINTF ERR 1") in
+                        Mem.return (Left err)
+                    | Right (U.Defined (Core.Vloaded (Core.LVspecified (Core.OVinteger ival)))) ->
+                        match Mem_aux.integerFromIntegerValue ival with
+                          | Just n ->
+                              Mem.return $ Right (U.return (
+                                if prec = 0 && n = 0 then
+                                  ([], args')
+                                else
+                                  (cont n, args')
+                              ))
+                          | Nothing ->
+                              Mem.return $ Right (U.return (
+                                (String.toCharList (Mem.stringFromInteger_value ival), args')
+                              ))
+                              (*error ("WIP: convert --> not a concrete integer: " ^
+                                     stringFromMemValue (fromJust "Output, not a concrete integer" $
+                                       Core_aux.memValueFromValue conv_ty (Core.Vloaded (Core.LVspecified (Core.OVinteger ival))))) *)
+                        end
+                    | Right (U.Defined (Core.Vloaded (Core.LVunspecified _))) ->
+                        Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                    | Right (U.Defined cval) ->
+                        error ("WIP: convert --> not an integer ==> " ^ Pp.stringFromCore_value cval)
+                    | Right (U.Error loc str) ->
+                        Mem.return (Right (U.Error loc str))
+                    | Right (U.Undef loc ubs) ->
+                        Mem.return (Right (U.Undef loc ubs))
+                  end
+              | Nothing ->
+                  (* TODO: this is wrong if "not (is_integer ty)" *)
+                  match snd (Core_aux.valueFromMemValue mval) with
+                    | Core.Vloaded (Core.LVunspecified _) ->
+                        Mem.return $ Right (U.return ([#'U'; #'N'; #'S'; #'P'; #'E'; #'C'], args'))
+                    | Core.Vloaded (Core.LVspecified (Core.OVinteger ival)) ->
+                        match Mem_aux.integerFromIntegerValue ival with
+                          | Just n ->
+                              Mem.return $ Right (U.return (
+                                if prec = 0 && n = 0 then
+                                  ([], args')
+                                else
+                                  (cont n, args')
+                              ))
+                          | Nothing ->
+                              let () = Debug.warn [Debug.DB_core_dynamics] (fun () -> "printf() found an abstract integer value") in
+                              Mem.return $ Right (U.return ([#'A'; #'B'; #'S'; #'_'; #'I'; #'N'; #'T'; #'E'; #'G'; #'E'; #'R'], args'))
+                        end
+                    | Core.Vloaded (Core.LVspecified (Core.OVfloating fval)) ->
+                        Mem.return $ Right (U.return (
+                          Mem.case_fval fval
+                            (fun () -> [#'U'; #'N'; #'S'; #'P'; #'E'; #'C'])
+                            (fun x -> String.toCharList (Float.string_of_float x))
+                        , args'))
+                    | _ ->
+                        error "Output.aux should only be called on a loaded(arimetic value)"
+                  end
+            end
     end in
   
   match cspec with
@@ -830,14 +812,14 @@ let convert eval_conv prec_opt lm_opt cspec args =
               match args with
                 | [] ->
                     Mem.return (
-                      Right (U.undef (Loc.other "printf() %s") [U.UB153_insufficient_arguments_for_format])
+                      Right (U.undef (Loc.other "printf() %s") [U.UB153a_insufficient_arguments_for_format])
                     )
                 | ((Cty.Pointer _ ref_ty as arg_ty), arg_ptr) :: args' ->
                     if not (AilTypesAux.is_character (Core_aux.unproj_ctype ref_ty)) then
                       (* TODO: this is not a strong enough check, we need to point to
                          the "initial element of an array of character type" *)
                       Mem.return (
-                        Right (U.undef (Loc.other "printf() %s") [U.Illtyped_argument_for_format])
+                        Right (U.undef (Loc.other "printf() %s") [U.UB153b_illtyped_argument_for_format])
                       )
                     else
                       Mem.load (Loc.other "printf() %s") arg_ty arg_ptr >>= fun (_, mval) ->
@@ -865,7 +847,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
         match args with
           | [] ->
               Mem.return (
-                Right (U.undef (Loc.other "printf() %p") [U.UB153_insufficient_arguments_for_format])
+                Right (U.undef (Loc.other "printf() %p") [U.UB153a_insufficient_arguments_for_format])
               )
           | ((Cty.Pointer _ Cty.Void as arg_ty), arg_ptr) :: args' ->
               Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
@@ -879,7 +861,7 @@ let convert eval_conv prec_opt lm_opt cspec args =
               end
           | _ ->
               Mem.return (
-                Right (U.undef (Loc.other "printf() %p") [U.Illtyped_argument_for_format])
+                Right (U.undef (Loc.other "printf() %p") [U.UB153b_illtyped_argument_for_format])
               )
         end
     | CS_n ->
