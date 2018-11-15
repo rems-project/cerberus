@@ -24,7 +24,7 @@
 open Sexplib.Std
 open Sexplib.Conv
 
-type t = string 
+type t = string [@@deriving sexp]
 
 (* http://stackoverflow.com/questions/10068713/string-to-list-of-char *)
 let explode s =

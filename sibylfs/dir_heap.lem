@@ -1,4 +1,3 @@
-# 1 "t_dir_heap.lem_cppo"
 open import Bool Maybe Basic_classes Either Tuple Num List List_extra Maybe_extra Function_extra Set Assert_extra
 import Sorting
 
