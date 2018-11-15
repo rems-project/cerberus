@@ -1,0 +1,202 @@
+(* 
+  This is a pure model of char arrays and array updating.
+*)
+
+open import Bool Maybe Basic_classes Tuple Num List List_extra String String_extra Assert_extra 
+
+type t
+declare hol      target_rep type t = `list` char
+declare isabelle target_rep type t = `list` char
+declare ocaml    target_rep type t = `Abstract_string.t`
+
+val list_arrayEqAux : t -> t -> bool
+declare ocaml target_rep function list_arrayEqAux = `Abstract_string.equal` 
+
+val to_listAux : t -> list char
+declare ocaml    target_rep function to_listAux = `Abstract_string.to_list` 
+declare hol      target_rep function to_listAux a = ``a
+declare isabelle target_rep function to_listAux a = ``a
+
+val of_listAux : list char -> t
+declare ocaml    target_rep function of_listAux = `Abstract_string.of_list` 
+declare hol      target_rep function of_listAux a = ``a
+declare isabelle target_rep function of_listAux a = ``a
+
+val of_stringAux : string -> t
+declare ocaml    target_rep function of_stringAux = `Abstract_string.of_string` 
+
+val to_stringAux : t -> string
+declare ocaml    target_rep function to_stringAux = `Abstract_string.to_string` 
+
+val dimAux : t -> nat
+declare ocaml    target_rep function dimAux = `Abstract_string.dim` 
+
+val resizeAux : t -> nat -> t
+declare ocaml    target_rep function resizeAux = `Abstract_string.resize` 
+
+
+
+
+(* Real definitions *)
+val list_arrayEq : t -> t -> bool
+let inline ~{ocaml} list_arrayEq = unsafe_structural_equality
+let {ocaml} list_arrayEq = list_arrayEqAux
+
+instance (Eq t)
+  let (=) = list_arrayEq
+  let (<>) x y = not (list_arrayEq x y)
+end
+
+val to_list : t -> list char
+let to_list arr = to_listAux arr
+
+val of_list : list char -> t
+let of_list l = of_listAux l
+
+val of_string : string -> t
+let ~{ocaml} of_string s = of_list (String.toCharList s)
+let {ocaml} of_string s = of_stringAux s
+
+val to_string : t -> string
+let ~{ocaml} to_string arr = String.toString (to_list arr)
+let {ocaml} to_string arr = to_stringAux arr
+
+lemma of_string_inv : (forall s. to_string (of_string s) = s)
+lemma to_string_inv : (forall a. of_string (to_string a) = a)
+
+assert of_string_1 : (of_string "hello" = of_list [#'h'; #'e'; #'l'; #'l'; #'o'])
+assert to_string_1 : (to_string (of_list [#'h'; #'e'; #'l'; #'l'; #'o']) = "hello")
+
+val dim : t -> nat
+let ~{ocaml} dim arr = List.length (to_list arr)
+let {ocaml} dim arr = dimAux arr
+
+assert dim_0: (dim (of_string "") = 0)
+assert dim_1: (dim (of_string "hello") = 5)
+
+
+(* NB this does not pad *)
+val char_list_sub : list char -> nat -> nat -> list char
+let char_list_sub cs off len = (
+  let cs = drop off cs in
+  let cs = take len cs in
+  cs)
+
+assert char_list_sub_1 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 0 2 = [#'h'; #'e'])
+assert char_list_sub_2 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 0 3 = [#'h'; #'e'; #'l'])
+assert char_list_sub_3 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 1 3 = [#'e'; #'l'; #'l'])
+assert char_list_sub_4 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 2 0 = [])
+assert char_list_sub_5 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 2 3 = [#'l'; #'l'; #'o'])
+assert char_list_sub_6 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 2 7 = [#'l'; #'l'; #'o'])
+assert char_list_sub_7 : 
+   (char_list_sub [#'h'; #'e'; #'l'; #'l'; #'o'] 10 2 = [])
+
+
+val sub : t -> nat -> nat -> t
+let sub arr off len = (
+  of_list (char_list_sub (to_list arr) off len))
+(* FIXME we may want to make these operations more efficient by usign some Abstract_string operation let {ocaml} sub arr off len = subAux arr off len *)
+
+assert sub_1 : 
+   (sub (of_string "hello") 0 2 = of_string "he")
+assert sub_2 : 
+   (sub (of_string "hello") 0 3 = of_string "hel")
+assert sub_3 : 
+   (sub (of_string "hello") 1 3 = of_string "ell")
+assert sub_4 : 
+   (sub (of_string "hello") 2 0 = of_string "")
+assert sub_5 : 
+   (sub (of_string "hello") 2 3 = of_string "llo")
+assert sub_6 : 
+   (sub (of_string "hello") 2 7 = of_string "llo")
+assert sub_7 : 
+   (sub (of_string "hello") 10 2 = of_string "")
+
+
+val char_list_resize : list char -> nat -> list char
+let char_list_resize cs n = (
+  if n < List.length cs then 
+    take n cs 
+  else
+    cs++(replicate (n-(length cs)) #'\x00'))
+
+assert char_list_resize_1: 
+  (char_list_resize [#'h'; #'e'; #'l'; #'l'; #'o'] 2 = [#'h'; #'e'])
+assert char_list_resize_2: 
+  (char_list_resize [#'h'; #'e'; #'l'; #'l'; #'o'] 0 = [])
+assert char_list_resize_3: 
+  (char_list_resize [#'h'; #'e'; #'l'; #'l'; #'o'] 9 = [#'h'; #'e'; #'l'; #'l'; #'o'; #'\x00'; #'\x00'; #'\x00'; #'\x00'])
+lemma char_list_resize_len: (forall l n. length (char_list_resize l n) = n)
+lemma char_list_resize_prefix: 
+  (forall l n. let m = min n (length l) in
+     (char_list_sub (char_list_resize l n) 0 m = char_list_sub l 0 m))
+
+val resize : t -> nat -> t
+let resize arr n = (
+  of_list (char_list_resize (to_list arr) n))
+(* let {ocaml} resize arr n = resizeAux arr n *)
+
+assert resize_1: 
+  (resize (of_string "hello") 2 = (of_string "he"))
+assert resize_2: 
+  (resize (of_string "hello") 0 = (of_string ""))
+assert resize_3: 
+  (resize (of_string "hello") 9 = (of_string "hello\x00\x00\x00\x00"))
+lemma resize_dim: (forall a n. dim (resize a n) = n)
+lemma resize_prefix: 
+  (forall a n. let m = min n (dim a) in
+     (sub (resize a n) 0 m = sub a 0 m))
+
+(* copy bytes from arr1 to arr2, giving a new array; ofs len; ofs *)
+(* val write: (t*int*int) -> (t*int) -> t *)
+(* FIXME this should create a new list based on bs' *)
+(* we want to extend bs' if necessary, and then produce the resultant list *)
+(* assume i<=j<LENGTH bs *)
+(* 
+
+  we first extend bs' so that it is long enough to hold the final result
+
+  then the final result should look like
+
+     p1  p2
+     |   |
+     \/  \/
+   xs++ys++zs
+  
+  where xs and zs are taken from bs', and ys is from bs
+
+*)
+
+val list_array_write : (t * nat * nat) -> (t * nat) -> t
+let list_array_write (arr1,off1,len1) (arr0,off0) = (
+  let bs0 = to_list arr0 in
+  let bs1 = to_list arr1 in
+  if length bs1 < off1+len1 then failwith "t.ml/write: offset + length greater than length of string" else
+  (* get the part of bs1 that we actually want; this is guaranteed to be of length len1 *)
+  let bs1 = char_list_sub bs1 off1 len1 in
+  (* extend bs0 if necessary *)
+  let final_length = max (length bs0) (off0+len1) in
+  let xbs0 = if length bs0 < final_length then char_list_resize bs0 final_length else bs0 in
+  let p1 = off0 in
+  let p2 = off0+len1 in
+  let xs = char_list_sub xbs0 0 p1 in (* NB use of xbs0 not bs0 - may include padding with zeros *)
+  let ys = bs1 in
+  let zs = char_list_sub xbs0 p2 (final_length-p2) in
+  of_list (xs++ys++zs))
+(* let {ocaml} list_array_write (arr1,off1,len1) (arr0,off0) = list_array_writeAux (arr1,off1,len1) (arr0,off0) *)
+
+
+assert list_array_write_1: (to_string (list_array_write (of_string "world",0,5) (of_string "hello",1)) = "hworld")
+assert list_array_write_2: (to_string (list_array_write (of_string "world",0,0) (of_string "hello",1)) = "hello")
+assert list_array_write_3: (to_string (list_array_write (of_string "world",0,2) (of_string "hello",1)) = "hwolo") 
+assert list_array_write_4: (to_string (list_array_write (of_string "world",0,5) (of_string "0123456789",1) ) = "0world6789")
+assert list_array_write_5: (to_string (list_array_write (of_string "world",0,5) (of_string "hello",5)) = "helloworld")
+assert list_array_write_6: (to_string (list_array_write (of_string "world",0,5) (of_string "hello",6)) = "hello\x00world")
+assert list_array_write_7: (to_string (list_array_write (of_string "world",0,5) (of_string "hello",7)) = "hello\x00\x00world")
+assert list_array_write_8: (to_string (list_array_write (of_string "world",4,1) (of_string "hello",7)) = "hello\x00\x00d")
