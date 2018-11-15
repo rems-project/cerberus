@@ -501,12 +501,13 @@ type undefined_behaviour =
   (* There are insufficient arguments for the format in a call to one of the formatted input/output
      functions, or an argument does not have an appropriate type (7.21.6.1, 7.21.6.2, 7.29.2.1,
      7.29.2.2). *)
-  | UB153_insufficient_arguments_for_format
+  | UB153a_insufficient_arguments_for_format
+  | UB153b_illtyped_argument_for_format
   (* The format in a call to one of the formatted input/output functions or to the strftime or
      wcsftime function is not a valid multibyte character sequence that begins and ends in its
      initial shift state (7.21.6.1, 7.21.6.2, 7.27.3.5, 7.29.2.1, 7.29.2.2, 7.29.5.1). *)
-  (* TODO: doc, somethings the STD said the argument "shall" have type blah (e.g. for CS_p) *)
-  | Illtyped_argument_for_format
+  
+  
   | Invalid_format of string (* TODO: check STD *)
 
   | UB154
@@ -913,8 +914,8 @@ let ub_str_bimap =
     ; (UB150, "UB150")
     ; (UB151, "UB151")
     ; (UB152, "UB152")
-    ; (UB153_insufficient_arguments_for_format, "UB153_insufficient_arguments_for_format")
-    ; (Illtyped_argument_for_format, "Illtyped_argument_for_format")
+    ; (UB153a_insufficient_arguments_for_format, "UB153a_insufficient_arguments_for_format")
+    ; (UB153b_illtyped_argument_for_format, "UB153b_illtyped_argument_for_format")
 (*    ; (Invalid_format str, "Invalid_format") *)
     ; (UB154, "UB154")
     ; (UB155, "UB155")
@@ -1161,8 +1162,10 @@ let pretty_string_of_undefined_behaviour = function
                    the function call is used by the caller, the behavior is undefined."
   | UB111_illtyped_assert ->
       "(§7.2.1.1#1) found an assert whose argument does not have a scalar type"
-  | UB153_insufficient_arguments_for_format ->
+  | UB153a_insufficient_arguments_for_format ->
       "Insufficient_arguments_for_format"
+  | UB153b_illtyped_argument_for_format ->
+      "Illtyped_argument_for_format"
   | UB204_illtyped_Static_assert ->
       "(§6.7.10#3) The constant expression shall be an integer constant expression."
   | UB_CERB001_integer_to_dead_pointer ->
@@ -1171,8 +1174,6 @@ let pretty_string_of_undefined_behaviour = function
       "(CERB) provenance check failed during a load"
   | UB_CERB002b_out_of_bound_store ->
       "(CERB) provenance check failed during a store"
-  | Illtyped_argument_for_format ->
-      "Illtyped_argument_for_format"
   | Invalid_format str ->
       "Invalid_format \"" ^ str ^ "\""
   | ub ->
