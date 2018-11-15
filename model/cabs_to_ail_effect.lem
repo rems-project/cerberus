@@ -1263,6 +1263,23 @@ let resolve_declarations =
   )
 *)
 
+(* TODO: maybe have an error when the identifier is not even registered for a function *)
+val is_static_object_identifier: A.identifier -> desugM bool
+let is_static_object_identifier sym =
+  State_exception.read (fun st ->
+    (* ... *)
+    let map_union = Map.(union) in
+    map_union
+      st.external_object_declarations
+      (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
+  ) >>= fun decls ->
+  return match Map.lookup sym decls with
+    | Just (_, _, ATypes.Static, _, _, _) ->
+        true
+    | _ ->
+        false
+  end
+
 
 val fetch_object_declaration: A.identifier -> desugM (bool * Loc.t * ATypes.storageDuration * bool * ATypes.qualifiers * ATypes.ctype)
 let fetch_object_declaration sym =

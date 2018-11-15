@@ -800,13 +800,7 @@ val     is_lvalue_to_static_object: expression unit -> E.desugM bool
 let rec is_lvalue_to_static_object (AnnotatedExpression () _ loc expr) =
   match expr with
     | AilEident sym ->
-        E.fetch_object_declaration sym >>= fun (_, _, dur, _, _, _) ->
-        match dur with
-          | ATypes.Static ->
-              E.return true
-          | _ ->
-              E.return false
-        end
+        E.is_static_object_identifier sym
 (* The array-subscript [] and member-access . and -> operators, the address & and indirection * unary operators, and pointer casts may be used in the creation of an address constant, but the value of an object shall not be accessed by use of these operators. *)
     | AilEbinary e1 (Arithmetic Add) e2 ->
         (* NOTE: this case corresponds to array-subcript *)
@@ -2080,7 +2074,7 @@ STD_ "§6.5.1#2" $
                 (* TODO: only had that annotation if sym_ty is incomplete? *)
                 match kind with
                   | E.OK_object _ ->
-                      E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>
+                      E.print_debugM 2 (fun () -> "before fetch_object_declaration ==> " ^ show (Loc.stringFromLocation (Loc.locOf ident))) >>= fun () ->
                       E.fetch_object_declaration sym >>= fun (isTentative, _, _, _, sym_qs, sym_ty) ->
                       E.return begin
 (*                  AilEannot sym_ty (AnnotatedExpression () [] loc (AilEident sym)) *)
