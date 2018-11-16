@@ -1484,7 +1484,7 @@ let bmc_paction (Paction(pol, Action(_, _, action_)): unit typed_paction)
              ; ret_cond  = mk_true
              ; preexec   = add_action new_action mk_initial_preexec
              }
-  | CompareExchangeStrong(Pexpr(_, _,PEval (Vctype ty)),
+  | CompareExchangeStrong(Pexpr(_,_,PEval (Vctype ty)),
                           Pexpr(_,_,PEsym obj),
                           Pexpr(_,_,PEsym expected),
                           desired, mo_success, mo_failure) ->

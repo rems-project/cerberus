@@ -30,6 +30,10 @@ module BmcM = struct
     inline_expr_map  : (int, unit typed_expr) Pmap.map option;
 
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map option;
+
+    expr_map         : (int, Expr.expr) Pmap.map option;
+    case_guard_map   : (int, Expr.expr list) Pmap.map option;
+    action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -42,6 +46,9 @@ module BmcM = struct
     ; inline_pexpr_map = None
     ; inline_expr_map  = None
     ; sym_expr_table   = None
+    ; expr_map         = None
+    ; case_guard_map   = None
+    ; action_map       = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -66,7 +73,23 @@ module BmcM = struct
                  sym_supply = final_state.sym_supply;
                  inline_pexpr_map = Some final_state.inline_pexpr_map;
                  inline_expr_map  = Some final_state.inline_expr_map;
-                 sym_expr_table   = Some (final_state.sym_expr_table)
+                 sym_expr_table   = Some final_state.sym_expr_table;
+        }
+
+  (* Convert to SMT expressions *)
+  let do_z3 : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcZ3.mk_initial st.file
+                      (Option.get st.inline_pexpr_map)
+                      (Option.get st.inline_expr_map)
+                      (Option.get st.sym_expr_table) in
+    let (file, final_state) =
+      BmcZ3.run initial_state (BmcZ3.z3_file st.file st.fn_to_check) in
+    put {st with file = file;
+                 expr_map       = Some final_state.expr_map;
+                 case_guard_map = Some final_state.case_guard_map;
+                 action_map     = Some final_state.action_map;
         }
 
   (* ===== Getters/setters ===== *)
@@ -95,6 +118,7 @@ let bmc_file (file              : unit typed_file)
   let all_phases =
     BmcM.do_inlining >>
     BmcM.do_ssa      >>
+    BmcM.do_z3       >>
     BmcM.get_file >>= fun file ->
     pp_file file;
     BmcM.return () in
