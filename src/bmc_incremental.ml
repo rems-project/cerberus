@@ -445,7 +445,7 @@ module BmcSSA = struct
     match Pmap.lookup sym table with
     | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_expr_table"
                                   (symbol_to_string sym))
-    | None -> 
+    | None ->
         let expr = mk_fresh_const (symbol_to_string sym) (cbt_to_z3 ty) in
         put_sym_expr_table (Pmap.add sym expr table)
 
@@ -754,12 +754,13 @@ module BmcSSA = struct
     let ssa_globs (gname, bty, e) =
       (* Globals are not given fresh names for no arbitrary reason... *)
       add_to_sym_table gname gname >>
+      put_sym_expr gname bty >>
       ssa_e e >>= fun ssad_e ->
       return (gname, bty, ssad_e)
 
     let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
       rename_sym sym >>= fun new_sym ->
-      put_sym_expr new_sym cbt >> 
+      put_sym_expr new_sym cbt >>
       return (new_sym, cbt)
 
     let ssa (file: unit typed_file) (fn_to_check: sym_ty)
@@ -782,16 +783,50 @@ module BmcSSA = struct
 end
 (* ======= Convert to Z3 exprs ======= *)
 module BmcZ3 = struct
+  type alloc = int
+  type aid = int
+
+  type intermediate_action =
+    | ICreate of aid * (* TODO: align *) Sort.sort list * alloc
+    | IKill of aid
+    | ILoad of aid * (* TODO: list *) Sort.sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
+    | IStore of aid * Sort.sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
+    | ICompareExchangeStrong of aid * Sort.sort * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+    | IFence of aid * Cmm_csem.memory_order
+    | ILinuxLoad of aid * Sort.sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
+    | ILinuxStore of aid * Sort.sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
+    | ILinuxFence of aid * Linux.memory_order0
+
   type z3_state = {
-    (* Builds expr_map and case_guard_map *)
+    (* Builds expr_map, case_guard_map, and action_map *)
     expr_map      : (int, Expr.expr) Pmap.map;
     case_guard_map: (int, Expr.expr list) Pmap.map;
+    action_map    : (int, intermediate_action) Pmap.map;
 
     file          : unit typed_file;
+
+    (* Internal state *)
+    alloc_supply  : alloc;
+    aid_supply    : aid;
 
     inline_pexpr_map: (int, typed_pexpr) Pmap.map;
     inline_expr_map : (int, unit typed_expr) Pmap.map;
     sym_table       : (sym_ty, Expr.expr) Pmap.map;
+  }
+
+  let mk_initial file inline_pexpr_map inline_expr_map sym_table: z3_state = {
+    expr_map       = Pmap.empty Pervasives.compare;
+    case_guard_map = Pmap.empty Pervasives.compare;
+    action_map     = Pmap.empty Pervasives.compare;
+
+    file = file;
+
+    alloc_supply = 0;
+    aid_supply   = 0;
+
+    inline_pexpr_map = inline_pexpr_map;
+    inline_expr_map  = inline_expr_map;
+    sym_table        = sym_table;
   }
 
   include EffMonad(struct type state = z3_state end)
@@ -804,6 +839,10 @@ module BmcZ3 = struct
     get >>= fun st ->
     put {st with case_guard_map = Pmap.add uid guards st.case_guard_map}
 
+  let add_action (uid: int) (action: intermediate_action) : unit eff =
+    get >>= fun st ->
+    put {st with action_map = Pmap.add uid action st.action_map}
+
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
@@ -811,10 +850,26 @@ module BmcZ3 = struct
   let lookup_sym (sym: sym_ty) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup sym st.sym_table with
-    | None -> failwith (sprintf "Error: BmcZ3 %s not found in sym_table" 
+    | None -> failwith (sprintf "Error: BmcZ3 %s not found in sym_table"
                                 (symbol_to_string sym))
     | Some expr -> return expr
 
+  (* internal state *)
+
+  (* get new alloc and update supply *)
+  let get_fresh_alloc : alloc eff =
+    get                    >>= fun st ->
+    return st.alloc_supply >>= fun alloc ->
+    put {st with alloc_supply = alloc + 1} >>= fun () ->
+    return alloc
+
+  let get_fresh_aid : aid eff =
+    get                  >>= fun st ->
+    return st.aid_supply >>= fun aid ->
+    put {st with aid_supply = aid + 1} >>
+    return aid
+
+  (* inline expr maps *)
   let get_inline_pexpr (uid: int): typed_pexpr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_pexpr_map with
@@ -827,6 +882,7 @@ module BmcZ3 = struct
     | None -> failwith (sprintf "Error: BmcZ3 inline_expr not found %d" uid)
     | Some e -> return e
 
+  (* SMT stuff *)
   let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
     let uid = get_id_pexpr pexpr in
     (match pe_ with
@@ -834,9 +890,9 @@ module BmcZ3 = struct
         lookup_sym sym
     | PEimpl _ ->
         get_inline_pexpr uid >>= fun inline_pe ->
-        z3_pe inline_pe        
+        z3_pe inline_pe
     | PEval cval ->
-       return (value_to_z3 cval) 
+       return (value_to_z3 cval)
     | PEconstrained _ -> assert false
     | PEundef _ ->
         let sort = cbt_to_z3 bTy in
@@ -927,35 +983,113 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let z3_action (Paction(p, Action(loc, a, action_))) =
+  let z3_action (Paction(p, Action(loc, a, action_))) uid =
+    get_fresh_aid >>= fun aid ->
     (match action_ with
-    | Create (pe1, pe2, pref) ->
+    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        get_file >>= fun file ->
+        get_fresh_alloc >>= fun alloc_id ->
+        (* TODO: we probably don't actually want to flatten the sort list *)
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
+
+        return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
+                ICreate (aid, List.map snd flat_sortlist, alloc_id))
+    | Create _ ->
         assert false
-    | CreateReadOnly (pe1, pe2, pe3, pref) ->
+    | CreateReadOnly _ ->
         assert false
-    | Alloc0 (pe1, pe2, pref) ->
+    | Alloc0 _ ->
         assert false
     | Kill (b, pe) ->
+        bmc_debug_print 7 "TODO: kill ignored";
+        z3_pe pe >>= fun z3d_pe ->
+        return (UnitSort.mk_unit, IKill aid)
+    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        lookup_sym sym >>= fun sym_expr ->
+        z3_pe wval     >>= fun z3d_wval ->
+        get_file       >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        let (_, sort) = List.hd flat_sortlist in
+        assert (List.length flat_sortlist = 1);
+
+        return (UnitSort.mk_unit,
+                IStore (aid, sort, sym_expr, z3d_wval, mo))
+    | Store0 _ ->
         assert false
-    | Store0 (b, pe1, pe2, pe3, memord) ->
-        assert false
-    | Load0 (pe1, pe2, memord) ->
+    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+        get_file >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        let (_, sort) = List.hd flat_sortlist in
+        (* TODO: can't load multiple memory locations... *)
+        assert (List.length flat_sortlist = 1);
+        lookup_sym sym >>= fun sym_expr ->
+        let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+        return (rval_expr, ILoad (aid, sort, sym_expr, rval_expr, mo))
+    | Load0 _ ->
         assert false
     | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
         assert false
+    | CompareExchangeStrong(Pexpr(_,_,PEval (Vctype ty)),
+                            Pexpr(_,_,PEsym obj),
+                            Pexpr(_,_,PEsym expected),
+                            desired, mo_success, mo_failure) ->
+        get_file >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        assert (List.length flat_sortlist = 1);
+        let (_, sort) = List.hd flat_sortlist in
+
+        let rval_expected =
+          mk_fresh_const ("load_" ^ (symbol_to_string expected)) sort in
+        let rval_object =
+          mk_fresh_const ("load_" ^ (symbol_to_string obj)) sort in
+
+        lookup_sym obj      >>= fun obj_expr ->
+        lookup_sym expected >>= fun expected_expr ->
+        z3_pe desired       >>= fun z3d_desired ->
+
+        let success_guard = mk_eq rval_expected rval_object in
+        (* TODO *)
+        return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
+                                     (LoadedInteger.mk_specified (int_to_z3 0)),
+                ICompareExchangeStrong (aid, sort, obj_expr, expected_expr,
+                                        z3d_desired, rval_expected, rval_object,
+                                        mo_success, mo_failure))
+    | CompareExchangeStrong _ ->
+        assert false
     | Fence0 mo ->
+        return (UnitSort.mk_unit, IFence (aid, mo))
+    | LinuxFence mo ->
+        return (UnitSort.mk_unit, ILinuxFence (aid, mo))
+    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+        assert (g_memory_mode = MemoryMode_Linux);
+        assert (!!bmc_conf.concurrent_mode);
+        get_file >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        let (_, sort) = List.hd flat_sortlist in
+        (* TODO: can't load multiple memory locations... *)
+        assert (List.length flat_sortlist = 1);
+        lookup_sym sym >>= fun sym_expr ->
+        let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+        return (rval_expr, ILinuxLoad (aid, sort, sym_expr, rval_expr, mo))
+    | LinuxLoad _ ->
         assert false
-    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
-        assert false
-    | LinuxFence (mo) ->
-        assert false
-    | LinuxLoad (pe1, pe2, mo) ->
-        assert false
-    | LinuxStore(pe1, pe2, pe3, mo) ->
+    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        lookup_sym sym >>= fun sym_expr ->
+        z3_pe wval     >>= fun z3d_wval ->
+        get_file       >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        let (_, sort) = List.hd flat_sortlist in
+        assert (List.length flat_sortlist = 1);
+        return (UnitSort.mk_unit,
+                ILinuxStore (aid, sort, sym_expr, z3d_wval, mo))
+    | LinuxStore _ ->
         assert false
     | LinuxRMW (pe1, pe2, pe3, mo) ->
-          assert false
-    )
+        assert false
+    ) >>= fun (z3d_action, intermediate_action) ->
+    add_action uid intermediate_action >>
+    return z3d_action
+
 
   (* TODO: guards should include drop_cont *)
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
@@ -973,9 +1107,8 @@ module BmcZ3 = struct
         z3_pe p2 >>= fun z3d_p2 ->
         return (mk_eq z3d_p1 z3d_p2)
     | Ememop _ -> assert false
-    | Eaction _ ->
-        (* TODO!!! *)
-        assert false
+    | Eaction action ->
+        z3_action action uid
     | Ecase (pe, cases) ->
         z3_pe pe                       >>= fun z3d_pe ->
         mapM z3_e (List.map snd cases) >>= fun z3d_cases_e ->
@@ -994,7 +1127,7 @@ module BmcZ3 = struct
         return UnitSort.mk_unit
     | Eccall _ -> assert false
     | Eproc _  -> assert false
-    | Eunseq elist -> 
+    | Eunseq elist ->
         assert (not !!bmc_conf.sequentialise);
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
@@ -1007,7 +1140,7 @@ module BmcZ3 = struct
     | Eindet _ -> assert false
     | Ebound (_, e) ->
         z3_e e
-    | End elist -> 
+    | End elist ->
         mapM z3_e elist >>= fun z3d_elist ->
         let choice_vars = List.mapi (
           fun i _ -> mk_fresh_const ("seq_" ^ (string_of_int i))
@@ -1018,11 +1151,11 @@ module BmcZ3 = struct
           (List.hd z3d_elist)
           (List.tl choice_vars)
           (List.tl z3d_elist) in
-        return ret_expr 
-    | Esave _  -> 
+        return ret_expr
+    | Esave _  ->
         get_inline_expr uid >>= fun inlined_expr ->
         z3_e inlined_expr
-    | Erun _   -> 
+    | Erun _   ->
         get_inline_expr uid >>= fun inlined_expr ->
         z3_e inlined_expr   >>= fun _ ->
         return (UnitSort.mk_unit)
@@ -1031,6 +1164,22 @@ module BmcZ3 = struct
     ) >>= fun ret ->
     add_expr uid ret >>
     return ret
+
+    let z3_globs (gname, bty, e) =
+      z3_e e >>= fun z3d_e ->
+      return (gname, bty, z3d_e)
+
+    let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
+                : (unit typed_file) eff =
+      mapM z3_globs file.globs >>= fun _ ->
+      (match Pmap.lookup fn_to_check file.funs with
+      | Some (Proc(annot, bTy, params, e)) ->
+          z3_e e
+      | Some (Fun(ty, params, pe)) ->
+          z3_pe pe
+      | _ -> assert false
+      ) >>= fun _ ->
+      return file
 end
 
 (*
