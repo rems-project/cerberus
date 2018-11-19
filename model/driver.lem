@@ -4,7 +4,6 @@ import Core Core_ctype Boot UniqueId Decode Output
 import Core_aux 
 module Caux = Core_aux
 
-
 open import Utils Show Errors
 import Cmm_op Cmm_csem Cthread
 
@@ -318,6 +317,87 @@ let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
   end
 *)
 
+val drive_fs_step: Cthread.thread_id -> (integer -> Core_run.thread_state) -> driver_state -> Core_run.fs_oper -> driverM unit
+let drive_fs_step tid mk_th_st dr_st fs_return =
+  let update fs_st n =
+    ND.update $ fun dr_st ->
+      let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+      <| dr_st with
+        fs_state= fs_st;
+        core_state= core_st';
+        dr_step_counter= dr_st.dr_step_counter + 1;
+      |>
+  in
+  let return (fs_st, ret) =
+    let n = match ret with
+      | Left _ -> 0 - 1 (* this is stupid, TODO: should assign the error to errno!! *)
+      | Right n -> integerFromNat n
+    end in
+    (* let () = Debug.print_debug 0 [] (fun () -> Fs.string_of_fs_state fs_st) in *)
+    update fs_st n
+  in
+  let store_buffer ptr (fs_st, res) =
+    match res with
+      | Left e ->
+          update fs_st (0 - 1) (* TODO *)
+      | Right buf ->
+          let n = integerFromNat $ List.length buf in
+          liftMem (Output.store_chars_in_array ptr buf) >>
+          update fs_st n
+    end
+  in
+  let store_buffer_trunc ptr max (fs_st, res) =
+    match res with
+      | Left e ->
+          update fs_st (0 - 1) (* TODO *)
+      | Right buf ->
+          let buf_trunc = List.take (natFromInteger max) buf in
+          let n = integerFromNat $ List.length buf_trunc in
+          liftMem (Output.store_chars_in_array ptr buf_trunc) >>
+          update fs_st n
+    end
+  in
+  match fs_return with
+    | Core_run.FS_MKDIR path mode ->
+      return $ Fs.fs_mkdir dr_st.fs_state path mode
+    | Core_run.FS_OPEN path oflag mode_opt ->
+      return $ Fs.fs_open dr_st.fs_state path oflag mode_opt
+    | Core_run.FS_CLOSE fd ->
+      return $ Fs.fs_close dr_st.fs_state fd
+    | Core_run.FS_WRITE fd buf size ->
+      return $ Fs.fs_write dr_st.fs_state fd buf size
+    | Core_run.FS_READ fd ptr size ->
+      store_buffer ptr $ Fs.fs_read dr_st.fs_state fd size
+    | Core_run.FS_PWRITE fd buf size off ->
+      return $ Fs.fs_pwrite dr_st.fs_state fd buf size off
+    | Core_run.FS_PREAD fd ptr size off ->
+      store_buffer ptr $ Fs.fs_pread dr_st.fs_state fd size off
+    | Core_run.FS_UMASK mode ->
+      return $ Fs.fs_umask dr_st.fs_state mode
+    | Core_run.FS_CHMOD path mode ->
+      return $ Fs.fs_chmod dr_st.fs_state path mode
+    | Core_run.FS_CHDIR path ->
+      return $ Fs.fs_chdir dr_st.fs_state path
+    | Core_run.FS_CHOWN path uid gid ->
+      return $ Fs.fs_chown dr_st.fs_state path uid gid
+    | Core_run.FS_LINK oldpath newpath ->
+      return $ Fs.fs_link dr_st.fs_state oldpath newpath
+    | Core_run.FS_READLINK path ptr max ->
+      store_buffer_trunc ptr max $ Fs.fs_readlink dr_st.fs_state path
+    | Core_run.FS_SYMLINK target lpath ->
+      return $ Fs.fs_symlink dr_st.fs_state target lpath
+    | Core_run.FS_RMDIR path ->
+      return $ Fs.fs_rmdir dr_st.fs_state path
+    | Core_run.FS_TRUNCATE path len ->
+      return $ Fs.fs_truncate dr_st.fs_state path len
+    | Core_run.FS_UNLINK path ->
+      return $ Fs.fs_unlink dr_st.fs_state path
+    | Core_run.FS_LSEEK fd off whence ->
+      return $ Fs.fs_lseek dr_st.fs_state fd off whence
+    | Core_run.FS_RENAME oldpath newpath ->
+      return $ Fs.fs_rename dr_st.fs_state oldpath newpath
+  end
+
 
 (* For a given thread, perform all possible step that are not action requests *)
 val     drive_core_thread: Cthread.thread_id -> driverM unit
@@ -525,7 +605,10 @@ let rec drive_core_thread tid =
           | Right (Undefined.Undef loc ubs) ->
               ND.kill (ND.Undef loc ubs)
         end )
-
+    
+    | Core_run.Step_fs mk_th_st fs_step ->
+        (mk_info_kind "fs_step", drive_fs_step tid mk_th_st dr_st fs_step >> drive_core_thread tid)
+    
     | Core_run.Step_bound step_m ->
         ( mk_info_kind "bound"
         , liftCore_run step_m >>= fun th_st' ->

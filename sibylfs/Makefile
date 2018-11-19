@@ -5,7 +5,8 @@ LEMSRC:=\
 	list_array.lem \
 	fs_prelude.lem \
 	fs_spec.lem \
-	dir_heap.lem
+	dir_heap.lem \
+	sibylfs.lem
 
 generated:
 	mkdir generated

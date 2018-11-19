@@ -9,7 +9,6 @@ open import Implementation_ Decode
 
 open import Cthread Errors
 
-
 import Core_eval
 
 module EU  = Exception_undefined
@@ -230,6 +229,36 @@ instance (Show core_run_info)
   let show d = d.debug_str
 end
 
+type fs_oper =
+  | FS_MKDIR of string * integer (* path * mode_t *)
+  | FS_RMDIR of string (* path *)
+  | FS_OPEN of string * integer * maybe integer (* path * open_flags *)
+  | FS_CLOSE of integer (* fd *)
+  | FS_WRITE of integer * list char * integer (* fd * buf * size_t *)
+  | FS_LSEEK of integer * integer * integer (* fd * off_t * whence_t *)
+  | FS_READ of integer * Mem.pointer_value * integer (* fd * bufptr * size_t *)
+  | FS_PWRITE of integer * list char * integer * integer (* fd * buf * size_t * off_t *)
+  | FS_PREAD of integer * Mem.pointer_value * integer * integer (* fd * bufptr * size_t * off_t *)
+  | FS_UMASK of integer (* file perm *)
+  | FS_RENAME of string * string (* old * new *)
+  | FS_LINK of string * string (* target * link *)
+  | FS_SYMLINK of string * string (* target * link *)
+  | FS_READLINK of string * Mem.pointer_value * integer (* path * buf * size *)
+(*
+    | FS_STAT of cstring
+    | FS_LSTAT of cstring
+*)
+  | FS_TRUNCATE of string * integer (* path * off_t *)
+  | FS_UNLINK of string (* path *)
+  | FS_CHMOD of string * integer (* path * file perm *)
+  | FS_CHOWN of string * integer * integer (* path * uid * gid *)
+  | FS_CHDIR of string (* path *)
+(*
+    | FS_READDIR of ty_dh
+    | FS_OPENDIR of cstring
+    | FS_REWINDDIR of ty_dh
+    | FS_CLOSEDIR of ty_dh
+*)
 
 type core_step =
   | Step_action_request of core_run_info * core_runM action_request
@@ -250,6 +279,8 @@ type core_step =
   | Step_sprintf of Mem.pointer_value * list char * list (Core_ctype.ctype * Mem.pointer_value) * (integer -> thread_state)
   | Step_snprintf of Mem.pointer_value * Mem.integer_value * list char * list (Core_ctype.ctype * Mem.pointer_value) * (integer -> thread_state)
   | Step_printf2 of list char * list (Core_ctype.ctype * Mem.pointer_value) * (integer -> thread_state)
+
+  | Step_fs of (integer -> thread_state) * fs_oper
   
   | Step_bound of core_runM thread_state
 
@@ -965,6 +996,22 @@ BEFORE EVAL_PEXPR2
                 ) xs
               )
           | Just (Left cvals) ->
+              let charFromMValue errmsg = function
+                | Vobject (OVinteger ival) ->
+                    match Mem_aux.integerFromIntegerValue ival with
+                      | Just n -> Decode.encode_character_constant n
+                      | Nothing -> error errmsg
+                    end
+                | _ -> error errmsg
+              end in
+              let forceIntegerFromIntegerValue errmsg ival =
+                match Mem_aux.integerFromIntegerValue ival with
+                  | Just n -> n
+                  | Nothing -> error errmsg
+              end in
+              let mk_th_st n =
+                <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n))) |>
+              in
               match nm with
                 | Sym psym ->
                     Step_tau (mk_info "Eproc") (
@@ -983,7 +1030,9 @@ BEFORE EVAL_PEXPR2
                         exec_loc= push_exec_loc psym th_st.exec_loc
                       |>
                     )
+                (* ----------------------------------------------------------- *)
                 (* 7.14 Signal handling <signal.h> *)
+                (* ----------------------------------------------------------- *)
                 | Impl (StdFunction "signal") ->
                     match cvals with
                       | [Vobject (OVinteger signal); Vobject (OVpointer ptrval)] ->
@@ -1001,7 +1050,9 @@ BEFORE EVAL_PEXPR2
                           error ("Core_run, raise giving arguments of wrong types ==> "
                                   ^ stringFromList Pp.stringFromCore_value cvals)
                     end
+                (* ----------------------------------------------------------- *)
                 (* 7.21 Input/output <stdio.h> *)
+                (* ----------------------------------------------------------- *)
                 | Impl (StdFunction "snprintf") ->
                     (* TODO: factorise with the printf code *)
                     match cvals with
@@ -1091,7 +1142,17 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
+                | Impl (StdFunction "rename") ->
+                  match cvals with
+                    | [Vlist _ oldpath_cvals; Vlist _ newpath_cvals] ->
+                        let oldpath_chars = List.map (charFromMValue "open") (List.reverse oldpath_cvals) in
+                        let newpath_chars = List.map (charFromMValue "open") (List.reverse newpath_cvals) in
+                        Step_fs mk_th_st $ FS_RENAME (String.toString oldpath_chars) (String.toString newpath_chars)
+                    | _ -> error "Core_run, rename"
+                  end
+                (* ----------------------------------------------------------- *)
                 (* 7.22 General utilities <stdlib.h> *)
+                (* ----------------------------------------------------------- *)
                 | Impl (StdFunction "exit") ->
                     (* TODO: it should close all open resources *)
                     match cvals with
@@ -1103,6 +1164,161 @@ BEFORE EVAL_PEXPR2
                       | [cval] -> Step_done cval
                       | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
+                (* ----------------------------------------------------------- *)
+                (* Posix <sys/stat.h> *)
+                (* ----------------------------------------------------------- *)
+                | Impl (StdFunction "mkdir") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
+                        let path_chars = List.map (charFromMValue "mkdir") (List.reverse path_cvals) in
+                        let mode = forceIntegerFromIntegerValue "mkdir" mode_ival in
+                        Step_fs mk_th_st $ FS_MKDIR (String.toString path_chars) mode
+                      | _ -> error "mkdir"
+                    end
+                | Impl (StdFunction "umask") ->
+                    match cvals with
+                      | [Vobject (OVinteger mode_ival)] ->
+                        let mode = forceIntegerFromIntegerValue "umask" mode_ival in
+                        Step_fs mk_th_st $ FS_UMASK mode
+                      | _ -> error "pread"
+                    end
+                | Impl (StdFunction "chmod") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
+                        let path = List.map (charFromMValue "chmod") (List.reverse path_cvals) in
+                        let mode = forceIntegerFromIntegerValue "chmod" mode_ival in
+                        Step_fs mk_th_st $ FS_CHMOD (String.toString path) mode
+                      | _ -> error "chmod"
+                    end
+                | Impl (StdFunction "chdir") ->
+                    match cvals with
+                      | [Vlist _ path_cvals] ->
+                        let path = List.map (charFromMValue "chdir") (List.reverse path_cvals) in
+                        Step_fs mk_th_st $ FS_CHDIR (String.toString path)
+                      | _ -> error "chdir"
+                    end
+                | Impl (StdFunction "chown") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVinteger uid_ival); Vobject (OVinteger gid_ival)] ->
+                        let path = List.map (charFromMValue "chown") (List.reverse path_cvals) in
+                        let uid = forceIntegerFromIntegerValue "chown" uid_ival in
+                        let gid = forceIntegerFromIntegerValue "chown" gid_ival in
+                        Step_fs mk_th_st $ FS_CHOWN (String.toString path) uid gid
+                      | _ -> error "chown"
+                    end
+                (* ----------------------------------------------------------- *)
+                (* Posix <fctnl.h> *)
+                (* ----------------------------------------------------------- *)
+                | Impl (StdFunction "open") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVinteger oflag_ival)] ->
+                        let path_chars = List.map (charFromMValue "open") (List.reverse path_cvals) in
+                        let oflag = forceIntegerFromIntegerValue "open" oflag_ival in
+                        Step_fs mk_th_st $ FS_OPEN (String.toString path_chars) oflag Nothing
+                      | _ -> error "open"
+                    end
+                (* ----------------------------------------------------------- *)
+                (* Posix <unistd.h> *)
+                (* ----------------------------------------------------------- *)
+                | Impl (StdFunction "close") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "close" fd_ival in
+                        Step_fs mk_th_st $ FS_CLOSE fd
+                      | _ -> error "close"
+                    end
+                | Impl (StdFunction "write") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "write" fd_ival in
+                        let buf = List.map (charFromMValue "write") (List.reverse buf_cvals) in
+                        let size = forceIntegerFromIntegerValue "write" size_ival in
+                        Step_fs mk_th_st $ FS_WRITE fd buf size
+                      | _ -> error "write"
+                    end
+                | Impl (StdFunction "read") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "read" fd_ival in
+                        let size = forceIntegerFromIntegerValue "read" size_ival in
+                        Step_fs mk_th_st $ FS_READ fd bufptr size
+                      | _ -> error "read"
+                    end
+                | Impl (StdFunction "pwrite") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "pwrite" fd_ival in
+                        let buf = List.map (charFromMValue "pwrite") (List.reverse buf_cvals) in
+                        let size = forceIntegerFromIntegerValue "pwrite" size_ival in
+                        let off = forceIntegerFromIntegerValue "pwrite" off_ival in
+                        Step_fs mk_th_st $ FS_PWRITE fd buf size off
+                      | _ -> error "pwrite"
+                    end
+                | Impl (StdFunction "pread") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "pread" fd_ival in
+                        let size = forceIntegerFromIntegerValue "pread" size_ival in
+                        let off = forceIntegerFromIntegerValue "pread" off_ival in
+                        Step_fs mk_th_st $ FS_PREAD fd bufptr size off
+                      | _ -> error "pread"
+                    end
+                | Impl (StdFunction "link") ->
+                    match cvals with
+                      | [Vlist _ oldpath_cvals; Vlist _ newpath_cvals] ->
+                        let oldpath = List.map (charFromMValue "link") (List.reverse oldpath_cvals) in
+                        let newpath = List.map (charFromMValue "link") (List.reverse newpath_cvals) in
+                        Step_fs mk_th_st $ FS_LINK (String.toString oldpath) (String.toString newpath)
+                      | _ -> error "link"
+                    end
+                | Impl (StdFunction "readlink") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVpointer ptr); Vobject (OVinteger max_ival)] ->
+                        let path = List.map (charFromMValue "readlink") (List.reverse path_cvals) in
+                        let max = forceIntegerFromIntegerValue "readlink" max_ival in
+                        Step_fs mk_th_st $ FS_READLINK (String.toString path) ptr max
+                      | _ -> error "readlink"
+                    end
+                | Impl (StdFunction "symlink") ->
+                    match cvals with
+                      | [Vlist _ target_cvals; Vlist _ lpath_cvals] ->
+                        let target = List.map (charFromMValue "symlink") (List.reverse target_cvals) in
+                        let lpath = List.map (charFromMValue "symlink") (List.reverse lpath_cvals) in
+                        Step_fs mk_th_st $ FS_SYMLINK (String.toString target) (String.toString lpath)
+                      | _ -> error "symlink"
+                    end
+                | Impl (StdFunction "rmdir") ->
+                    match cvals with
+                      | [Vlist _ path_cvals] ->
+                        let path = List.map (charFromMValue "rmdir") (List.reverse path_cvals) in
+                        Step_fs mk_th_st $ FS_RMDIR (String.toString path)
+                      | _ -> error "rmdir"
+                    end
+                | Impl (StdFunction "truncate") ->
+                    match cvals with
+                      | [Vlist _ path_cvals; Vobject (OVinteger len_ival)] ->
+                        let path_chars = List.map (charFromMValue "truncate") (List.reverse path_cvals) in
+                        let len = forceIntegerFromIntegerValue "truncate" len_ival in
+                        Step_fs mk_th_st $ FS_TRUNCATE (String.toString path_chars) len
+                      | _ -> error "truncate"
+                    end
+                | Impl (StdFunction "unlink") ->
+                    match cvals with
+                      | [Vlist _ path_cvals] ->
+                        let path = List.map (charFromMValue "unlink") (List.reverse path_cvals) in
+                        Step_fs mk_th_st $ FS_UNLINK (String.toString path)
+                      | _ -> error "unlink"
+                    end
+                | Impl (StdFunction "lseek") ->
+                    match cvals with
+                      | [Vobject (OVinteger fd_ival); Vobject (OVinteger off_ival); Vobject (OVinteger whence_ival)] ->
+                        let fd = forceIntegerFromIntegerValue "lseek" fd_ival in
+                        let off = forceIntegerFromIntegerValue "lseek" off_ival in
+                        let whence = forceIntegerFromIntegerValue "lseek" whence_ival in
+                        Step_fs mk_th_st $ FS_LSEEK fd off whence
+                      | _ -> error "lseek"
+                    end
+                (* unknown *)
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
               end

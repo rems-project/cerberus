@@ -1,49 +1,48 @@
+#ifndef _FCNTL_H_
+#define _FCNTL_H_
 
+// fctnl flag operations (int)
+// taken from Linux include/uapi/asm-generic/fcntl.h
+#define F_DUPFD         0
+#define F_GETFD         1
+#define F_SETFD         2
+#define F_GETFL         3
+#define F_SETFL         4
+#define F_GETLK         5
+#define F_SETLK         6
+#define F_SETLKW        7
+#define F_GETOWN        8
+#define F_SETOWN        9
 
-#define F_DUPFD         __cerbvar_F_DUPFD
-#define F_DUPFD_CLOEXEC __cerbvar_F_DUPFD_CLOEXEC
-#define F_GETFD         __cerbvar_F_GETFD
-#define F_SETFD         __cerbvar_F_SETFD
-#define F_GETFL         __cerbvar_F_GETFL
-#define F_SETFL         __cerbvar_F_SETFL
-#define F_GETLK         __cerbvar_F_GETLK
-#define F_SETLK         __cerbvar_F_SETLK
-#define F_SETLKW        __cerbvar_F_SETLKW
-#define F_GETOWN        __cerbvar_F_GETOWN
-#define F_SETOWN        __cerbvar_F_SETOWN
+#define F_DUPFD_CLOEXEC 1
 
+#define F_RDLCK         0
+#define F_UNLCK         1
+#define F_WRLCK_        2
 
-#define F_RDLCK __cerbvar_F_RDLCK
-#define F_UNLCK __cerbvar_F_UNLCK
-#define F_WRLCK __cerbvar_F_WRLCK
-
-
-#define O_CLOEXEC   __cerbvar_O_CLOEXEC
-#define O_CREAT     __cerbvar_O_CREAT
-#define O_DIRECTORY __cerbvar_O_DIRECTORY
-#define O_EXCL      __cerbvar_O_EXCL
-#define O_NOCTTY    __cerbvar_O_NOCTTY
-#define O_NOFOLLOW  __cerbvar_O_NOFOLLOW
-#define O_TRUNC     __cerbvar_O_TRUNC
-#define O_TTY_INIT  __cerbvar_O_TTY_INIT
-
-
-#define O_APPEND   __cerbvar_O_APPEND
-#define O_DSYNC    __cerbvar_O_DSYNC
-#define O_NONBLOCK __cerbvar_O_NONBLOCK
-#define O_RSYNC    __cerbvar_O_RSYNC
-#define O_SYNC     __cerbvar_O_SYNC
-
-
-#define O_ACCMODE  __cerbvar_O_ACCMODE
-
-
-#define O_EXEC     __cerbvar_O_EXEC
-#define O_RDONLY   __cerbvar_O_RDONLY
-#define O_RDWR     __cerbvar_O_RDWR
-#define O_SEARCH   __cerbvar_O_SEARCH
-#define O_WRONLY   __cerbvar_O_WRONLY
-
+// open flags (int)
+// taken from fs_spec.lem
+#define O_EXEC        00000000001
+#define O_RDONLY      00000000002
+#define O_WRONLY      00000000004
+#define O_ACCMODE     00000000006
+#define O_RDWR        00000000010
+#define O_SEARCH      00000000020
+#define O_CREAT       00000000040
+#define O_EXCL        00000000100
+#define O_NOCTTY      00000000200
+#define O_TRUNC       00000000400
+#define O_APPEND      00000001000
+#define O_NONBLOCK    00000002000
+#define O_RSYNC       00000004000
+#define O_SYNC        00000010000
+#define O_DSYNC       00000020000
+#define O_DIRECTORY   00000040000
+#define O_NOFOLLOW    00000100000
+#define O_CLOEXEC     00000200000
+#define O_TTY_INIT    00000400000
 
 int  open(const char *, int, ...);
 int  fcntl(int, int, ...);
+
+#endif

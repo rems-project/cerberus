@@ -178,6 +178,10 @@ else
             "SKIPPING: " ^ if dres.Driver.dres_blocked then "(blocked)" else "" ^
             "eqs= " ^ "Pp_cmm.pp_old_constraints st.ND.eqs"
           );
+        if !!cerb_conf.fs_dump then begin
+          print_endline "File System:";
+          print_endline @@ Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state st.Driver.fs_state
+        end
 
       | (ND.Killed (ND.Undef0 (loc, ubs)), _, _) ->
           prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))))

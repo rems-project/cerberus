@@ -1,0 +1,190 @@
+open import Pervasives Assert_extra List_extra Num Maybe String Either
+open import Fs_prelude Fs_spec Dir_heap
+import List List_array
+
+open Fs_types
+open Dir_heap_types
+open Dir_heap_ops
+open The_monad
+
+open import {ocaml} `Lem_support`
+
+type fs_error = error
+
+type fs_state = dh_os_state
+
+type fs_ret_value = finset (Fs_types.error_or_value Fs_types.ret_value)
+
+(*o
+let sexp_of_fs_state = sexp_of_dh_os_state
+o*)
+
+val fs_initial_state: fs_state
+let fs_initial_state =
+  dh_init_state ARCH_POSIX false
+
+val first: forall 'a. finset 'a -> 'a
+let first fset =
+  match list_from_finset fset with
+  | v::_ -> v
+  | _ -> failwith "sibylfs: first"
+  end
+
+val last_: forall 'a. finset 'a -> 'a
+let last_ fset =
+  match List.reverse (list_from_finset fset) with
+  | v::_ -> v
+  | _ -> failwith "sibylfs: first"
+  end
+
+let return_normal = function
+  | OS_normal v -> v
+  | OS_special (_, str) -> failwith ("return_normal: special: " ^ str)
+  end
+
+let return_nat = function
+  | RV_none -> 0
+  | RV_num n -> n
+  | _ -> failwith "return_nat"
+  end
+
+let return_bytes = function
+  | RV_bytes bs -> List_array.to_list bs
+  | _ -> failwith "return_bytes"
+  end
+
+let return_value return = function
+  | Value v -> Right (return v)
+  | Error e -> Left e
+  end
+
+let run st return os_op =
+  let pid = Pid 1 in
+  let lab = OS_CALL (pid, os_op) in
+  (* do the call transition *)
+  let st_oper = return_normal (first (dh_trans st lab)) in
+  (* do a tau transition *)
+  let st_tau  = return_normal (first (dh_trans st_oper OS_TAU)) in
+  let result = first (dh_allowed_results_for_pid pid st_tau) in
+  (* get state from the chosen value *)
+  let st' = return_normal (first (dh_trans st_tau (OS_RETURN (pid, result)))) in
+  (st', return_value return result)
+
+let run_last st return os_op =
+  let pid = Pid 1 in
+  let lab = OS_CALL (pid, os_op) in
+  (* do the call transition *)
+  let st_oper = return_normal (last_ (dh_trans st lab)) in
+  (* do a tau transition *)
+  let st_tau  = return_normal (last_ (dh_trans st_oper OS_TAU)) in
+  let result = last_ (dh_allowed_results_for_pid pid st_tau) in
+  (* get state from the chosen value *)
+  let st' = return_normal (last_ (dh_trans st_tau (OS_RETURN (pid, result)))) in
+  (st', return_value return result)
+
+
+val file_perm_of_int: integer -> file_perm
+let file_perm_of_int n =
+  File_perm (int32FromInteger n)
+
+val fd_of_int: integer -> ty_fd
+let fd_of_int n =
+  FD (natFromInteger n)
+
+val uid_of_int: integer -> uid
+let uid_of_int n =
+  User_id (natFromInteger n)
+
+val gid_of_int: integer -> gid
+let gid_of_int n =
+  Group_id (natFromInteger n)
+
+val run_mkdir: fs_state -> string -> integer -> fs_state * (either error nat)
+let run_mkdir st path perm_code =
+  run st return_nat $ OS_MKDIR (CS_Some path, file_perm_of_int perm_code)
+
+val run_open: fs_state -> string -> integer -> maybe integer -> fs_state * (either error nat)
+let run_open st path open_flags perm_code_opt =
+  let file_perm_opt =
+    match perm_code_opt with
+    | Just perm_code -> Just (file_perm_of_int perm_code)
+    | Nothing -> Just (file_perm_of_int 0O777) (* TODO *)
+    end
+  in
+  run st return_nat $ OS_OPEN (CS_Some path, int32FromInteger open_flags, file_perm_opt)
+
+val run_close: fs_state -> integer -> fs_state * (either error nat)
+let run_close st fd =
+  run st return_nat $ OS_CLOSE (fd_of_int fd)
+
+val run_write: fs_state -> integer -> list char -> integer -> fs_state * (either error nat)
+let run_write st fd buf size =
+  run st return_nat $ OS_WRITE (fd_of_int fd, List_array.of_list buf, natFromInteger size)
+
+val run_read: fs_state -> integer -> integer -> fs_state * (either error (list char))
+let run_read st fd size =
+  run_last st return_bytes $ OS_READ (fd_of_int fd, natFromInteger size)
+
+val run_pwrite: fs_state -> integer -> list char -> integer -> integer -> fs_state * (either error nat)
+let run_pwrite st fd buf size off =
+  run st return_nat $ OS_PWRITE (fd_of_int fd, List_array.of_list buf, natFromInteger size, intFromInteger off)
+
+val run_pread: fs_state -> integer -> integer -> integer -> fs_state * (either error (list char))
+let run_pread st fd size off =
+  run_last st return_bytes $ OS_PREAD (fd_of_int fd, natFromInteger size, intFromInteger off)
+
+val run_rename: fs_state -> string -> string -> fs_state * (either error nat)
+let run_rename st oldpath newpath =
+  run st return_nat $ OS_RENAME (CS_Some oldpath, CS_Some newpath)
+
+val run_umask: fs_state -> integer -> fs_state * (either error nat)
+let run_umask st mode =
+  run st return_nat $ OS_UMASK (file_perm_of_int mode)
+
+val run_chmod: fs_state -> string -> integer -> fs_state * (either error nat)
+let run_chmod st path mode =
+  run st return_nat $ OS_CHMOD (CS_Some path, file_perm_of_int mode)
+
+val run_chdir: fs_state -> string -> fs_state * (either error nat)
+let run_chdir st path =
+  run st return_nat $ OS_CHDIR (CS_Some path)
+
+val run_chown: fs_state -> string -> integer -> integer -> fs_state * (either error nat)
+let run_chown st path uid gid =
+  run st return_nat $ OS_CHOWN (CS_Some path, uid_of_int uid, gid_of_int gid)
+
+(*
+-- DIR *opendir(const char *filename);
+-- struct dirent *readdir(DIR *dirp);
+-- void rewinddir(DIR *dirp);
+-- int closedir(DIR *dirp);
+*)
+
+val run_link: fs_state -> string -> string -> fs_state * (either error nat)
+let run_link st oldpath newpath =
+  run st return_nat $ OS_LINK (CS_Some oldpath, CS_Some newpath)
+
+val run_readlink: fs_state -> string -> fs_state * (either error (list char))
+let run_readlink st path =
+  run st return_bytes $ OS_READLINK (CS_Some path)
+
+val run_symlink: fs_state -> string -> string -> fs_state * (either error nat)
+let run_symlink st target lpath =
+  run st return_nat $ OS_SYMLINK (CS_Some target, CS_Some lpath)
+
+val run_rmdir: fs_state -> string -> fs_state * (either error nat)
+let run_rmdir st path =
+  run st return_nat $ OS_RMDIR (CS_Some path)
+
+val run_truncate: fs_state -> string -> integer -> fs_state * (either error nat)
+let run_truncate st path len =
+  run st return_nat $ OS_TRUNCATE (CS_Some path, intFromInteger len)
+
+val run_unlink: fs_state -> string -> fs_state * (either error nat)
+let run_unlink st path =
+  run st return_nat $ OS_UNLINK (CS_Some path)
+
+val run_lseek: fs_state -> integer -> integer -> integer -> fs_state * (either error nat)
+let run_lseek st fd off whence =
+  run st return_nat $ OS_LSEEK (fd_of_int fd, intFromInteger off, intFromInteger whence)
+

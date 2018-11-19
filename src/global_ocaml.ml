@@ -55,6 +55,7 @@ type cerberus_conf = {
   progress:           bool;
   rewrite:            bool;
   sequentialise:      bool;
+  fs_dump:            bool;
   concurrency:        bool;
   preEx:              bool;
   error_verbosity:    error_verbosity;
@@ -100,7 +101,7 @@ let cerb_path =
 
 
 let set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite
-                  sequentialise concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
+                  sequentialise fs_dump concurrency preEx ocaml ocaml_corestd error_verbosity batch experimental_unseq
                   typecheck_core defacto default_impl action_graph =
   cerb_exec_mode_opt := if exec then Some exec_mode else None;
   let conf = {
@@ -113,6 +114,7 @@ let set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite
     progress=      progress;
     rewrite=       rewrite;
     sequentialise= sequentialise || ocaml;
+    fs_dump=       fs_dump;
     concurrency=   concurrency || preEx;
     preEx=         preEx;
     error_verbosity= error_verbosity;
