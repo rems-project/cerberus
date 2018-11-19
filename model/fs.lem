@@ -1,0 +1,73 @@
+(* An interface for SibylFS *)
+open import Num Maybe Either
+
+type fs_error
+declare ocaml target_rep type fs_error = `Sibylfs.fs_error`
+
+type fs_state
+declare ocaml target_rep type fs_state = `Sibylfs.fs_state`
+
+val fs_initial_state: fs_state
+declare ocaml target_rep function fs_initial_state = `Sibylfs.fs_initial_state`
+
+val string_of_fs_state: fs_state -> string
+declare ocaml target_rep function string_of_fs_state = `Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state`
+
+val fs_mkdir: fs_state -> string -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_mkdir = `Sibylfs.run_mkdir`
+
+val fs_open: fs_state -> string -> integer -> maybe integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_open = `Sibylfs.run_open`
+
+val fs_close: fs_state -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_close = `Sibylfs.run_close`
+
+val fs_write: fs_state -> integer -> list char -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_write = `Sibylfs.run_write`
+
+val fs_read: fs_state -> integer -> integer -> fs_state * (either fs_error (list char))
+declare ocaml target_rep function fs_read = `Sibylfs.run_read`
+
+val fs_pwrite: fs_state -> integer -> list char -> integer -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_pwrite = `Sibylfs.run_pwrite`
+
+val fs_pread: fs_state -> integer -> integer -> integer -> fs_state * (either fs_error (list char))
+declare ocaml target_rep function fs_pread = `Sibylfs.run_pread`
+
+val fs_rename: fs_state -> string -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_rename = `Sibylfs.run_rename`
+
+val fs_umask: fs_state -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_umask = `Sibylfs.run_umask`
+
+val fs_chmod: fs_state -> string -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_chmod = `Sibylfs.run_chmod`
+
+val fs_chdir: fs_state -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_chdir = `Sibylfs.run_chdir`
+
+val fs_chown: fs_state -> string -> integer -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_chown = `Sibylfs.run_chown`
+
+val fs_link: fs_state -> string -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_link = `Sibylfs.run_link`
+
+val fs_readlink: fs_state -> string -> fs_state * (either fs_error (list char))
+declare ocaml target_rep function fs_readlink = `Sibylfs.run_readlink`
+
+val fs_symlink: fs_state -> string -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_symlink = `Sibylfs.run_symlink`
+
+val fs_rmdir: fs_state -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_rmdir = `Sibylfs.run_rmdir`
+
+val fs_truncate: fs_state -> string -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_truncate = `Sibylfs.run_truncate`
+
+val fs_unlink: fs_state -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_unlink = `Sibylfs.run_unlink`
+
+val fs_lseek: fs_state -> integer -> integer -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_lseek = `Sibylfs.run_lseek`
+
+
