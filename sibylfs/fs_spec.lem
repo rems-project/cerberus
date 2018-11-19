@@ -1150,6 +1150,9 @@ module Fs_types = struct
     fds_FD_CLOEXEC: bool; (* FIXME how to test? *) (* coverage:sexp*) 
   |> (*o with sexp_of o*) (* coverage:sexp*)
 
+(*o
+  let sexp_of_finset f x = sexp_of_list f (list_from_finset x)
+o*)
 
   (*-------------------------------*)
   (* file identifier states        *)
@@ -1160,7 +1163,7 @@ module Fs_types = struct
   type fid_state 'dir_ref 'file_ref = <|                                                           (* coverage:sexp *)
     fids_offset: nat; (* cannot be negative *)                                                     (* coverage:sexp *)
     fids_entry: entry 'dir_ref 'file_ref;                                                          (* coverage:sexp *)
-    fids_oflags: finset open_flag  (*o sexp_opaque o*);  (* flags that were provided on creation *)(* coverage:sexp *)
+    fids_oflags: finset open_flag;   (* flags that were provided on creation *)(* coverage:sexp *)
     fids_open_or_closed: fid_open_closed_state; (* coverage:sexp*) 
   |> (*o with sexp_of o*) (* coverage:sexp*)
 
@@ -1181,8 +1184,8 @@ o*)
 
   type per_process_state 'dir_ref = <|                                    (* coverage:sexp *)
     pps_cwd: 'dir_ref;                                                    (* coverage:sexp *)
-    pps_fd_table: fmap ty_fd (fd_state)  (*o sexp_opaque o*);             (* coverage:sexp *)
-    pps_dh_table: fmap ty_dh (dh_state 'dir_ref) (*o sexp_opaque o*);     (* coverage:sexp *)
+    pps_fd_table: fmap ty_fd (fd_state)  ;                 (* coverage:sexp *)
+    pps_dh_table: fmap ty_dh (dh_state 'dir_ref) ;         (* coverage:sexp *)
     pps_pid_run_state : ty_pps_pid_run_state;                             (* coverage:sexp *)
     pps_file_creation_mask : file_perm;                                   (* coverage:sexp *)
     pps_effective_uid : uid;                                              (* coverage:sexp *)

@@ -37,6 +37,7 @@ type cerberus_conf = {
   progress:        bool;
   rewrite:         bool;
   sequentialise:   bool;
+  fs_dump:         bool;
   concurrency:     bool;
   preEx:           bool;
   error_verbosity: error_verbosity;
@@ -65,6 +66,7 @@ val set_cerb_conf:
     pp_flag list ->
     bool ->
     Smt2.execution_mode ->
+    bool ->
     bool ->
     bool ->
     bool ->

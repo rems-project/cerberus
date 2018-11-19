@@ -124,8 +124,10 @@ playground:
 
 .PHONY: sibylfs
 sibylfs: ${BUILD_DIR}
-	make -C sibylfs
-	cp -vf ./sibylfs/generated/*.{ml,mli} ${BUILD_DIR}
+	@echo $(BOLD)BUILDING SilbylFS$(RESET)
+	@make -C sibylfs
+	@echo $(BOLD)COPYING SibylFS .ml files$(RESET)
+	@cp -vf ./sibylfs/generated/*.{ml,mli} ${BUILD_DIR}
 
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \

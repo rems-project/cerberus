@@ -313,12 +313,12 @@ let gen_corestd (stdlib, impl) =
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
-             sequentialise concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
+             sequentialise fs_dump concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise concurrency preEx ocaml ocaml_corestd
+  set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise fs_dump concurrency preEx ocaml ocaml_corestd
     (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -435,6 +435,10 @@ let defacto =
   let doc = "relax some of the ISO constraints (outside of the memory)" in
   Arg.(value & flag & info["defacto"] ~doc)
 
+let fs_dump =
+  let doc = "dump the file system at the end of the execution" in
+  Arg.(value & flag & info["fs-dump"] ~doc)
+
 let default_impl =
   let doc = "run cerberus with a default implementation choice" in
   Arg.(value & flag & info["defacto_impl"] ~doc)
@@ -462,7 +466,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ switches
-    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise
+    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise $ fs_dump
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
   
