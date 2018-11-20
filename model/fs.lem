@@ -4,6 +4,9 @@ open import Num Maybe Either
 type fs_error
 declare ocaml target_rep type fs_error = `Sibylfs.fs_error`
 
+val fs_string_of_error: fs_error -> string
+declare ocaml target_rep function fs_string_of_error = `Sexplib.Sexp.to_string @@ Fs_spec.Fs_types.sexp_of_error`
+
 type fs_state
 declare ocaml target_rep type fs_state = `Sibylfs.fs_state`
 

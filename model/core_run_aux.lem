@@ -29,6 +29,7 @@ type core_run_annotation = <|
 type thread_state = <|
   arena:  expr core_run_annotation;
   stack:  stack core_run_annotation;
+  errno:  Mem.pointer_value;
   
   (* NON-SEMANTIC stuff *)
   exec_loc: exec_location;
