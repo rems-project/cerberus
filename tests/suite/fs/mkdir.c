@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 int
 main(int argc, char *argv[])
@@ -16,7 +17,7 @@ main(int argc, char *argv[])
   for(i = 1; i < argc; i++){
     if(mkdir(argv[i], 1) < 0){
       printf("mkdir: %s failed to create\n", argv[i]);
-      break;
+      return errno;
     }
   }
 }

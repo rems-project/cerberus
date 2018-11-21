@@ -1,4 +1,4 @@
-open import Pervasives
+open import Pervasives Utils
 import Cabs AilTypes AilTypesAux AilSyntax
 (* Things needed to model in a implementation independant way,
    types and constant the std library defines. *)
@@ -15,7 +15,6 @@ let builtin = [
   ("__cerbvar_EDOM",   Varname (Just (AilTypesAux.mk_ctype_integer (ATypes.Signed ATypes.Int_))));
   ("__cerbvar_EILSEQ", Varname (Just (AilTypesAux.mk_ctype_integer (ATypes.Signed ATypes.Int_))));
   ("__cerbvar_ERANGE", Varname (Just (AilTypesAux.mk_ctype_integer (ATypes.Signed ATypes.Int_))));
-  ("__cerbvar_errno",  Varname (Just (AilTypesAux.mk_ctype_integer (ATypes.Signed ATypes.Int_))));
 
   (* from inttypes.h (§7.8) *)
   ("__cerbty_imaxdiv_t",   Typename);
@@ -534,14 +533,182 @@ let translate_builtin_typenames = function
 
 end
 
+(* errno.h, the values are chosen arbitrarily *)
+val translate_errno: string -> integer
+let translate_errno = function
+  | "__cerbvar_EDOM"            -> 1
+  | "__cerbvar_EILSEQ"          -> 2
+  | "__cerbvar_ERANGE"          -> 3
+  | "__cerbvar_E2BIG"           -> 4
+  | "__cerbvar_EACCES"          -> 5
+  | "__cerbvar_EADDRINUSE"      -> 6
+  | "__cerbvar_EADDRNOTAVAIL"   -> 7
+  | "__cerbvar_EAFNOSUPPORT"    -> 8
+  | "__cerbvar_EAGAIN"          -> 9
+  | "__cerbvar_EALREADY"        -> 10
+  | "__cerbvar_EBADF"           -> 11
+  | "__cerbvar_EBADMSG"         -> 12
+  | "__cerbvar_EBUSY"           -> 13
+  | "__cerbvar_ECANCELED"       -> 14
+  | "__cerbvar_ECHILD"          -> 15
+  | "__cerbvar_ECONNABORTED"    -> 16
+  | "__cerbvar_ECONNREFUSED"    -> 17
+  | "__cerbvar_ECONNRESET"      -> 18
+  | "__cerbvar_EDEADLK"         -> 19
+  | "__cerbvar_EDESTADDRREQ"    -> 20
+  | "__cerbvar_EDQUOT"          -> 21
+  | "__cerbvar_EEXIST"          -> 22
+  | "__cerbvar_EFAULT"          -> 23
+  | "__cerbvar_EFBIG"           -> 24
+  | "__cerbvar_EHOSTUNREACH"    -> 25
+  | "__cerbvar_EIDRM"           -> 26
+  | "__cerbvar_EINPROGRESS"     -> 27
+  | "__cerbvar_EINTR"           -> 28
+  | "__cerbvar_EINVAL"          -> 29
+  | "__cerbvar_EIO"             -> 30
+  | "__cerbvar_EISCONN"         -> 31
+  | "__cerbvar_EISDIR"          -> 32
+  | "__cerbvar_ELOOP"           -> 33
+  | "__cerbvar_EMFILE"          -> 34
+  | "__cerbvar_EMLINK"          -> 35
+  | "__cerbvar_EMSGSIZE"        -> 36
+  | "__cerbvar_EMULTIHOP"       -> 37
+  | "__cerbvar_ENAMETOOLONG"    -> 38
+  | "__cerbvar_ENETDOWN"        -> 39
+  | "__cerbvar_ENETRESET"       -> 40
+  | "__cerbvar_ENETUNREACH"     -> 41
+  | "__cerbvar_ENFILE"          -> 42
+  | "__cerbvar_ENOBUFS"         -> 43
+  | "__cerbvar_ENODATA"         -> 44
+  | "__cerbvar_ENODEV"          -> 45
+  | "__cerbvar_ENOENT"          -> 46
+  | "__cerbvar_ENOEXEC"         -> 47
+  | "__cerbvar_ENOLCK"          -> 48
+  | "__cerbvar_ENOLINK"         -> 49
+  | "__cerbvar_ENOMEM"          -> 50
+  | "__cerbvar_ENOMSG"          -> 51
+  | "__cerbvar_ENOPROTOOPT"     -> 52
+  | "__cerbvar_ENOSPC"          -> 53
+  | "__cerbvar_ENOSR"           -> 54
+  | "__cerbvar_ENOSTR"          -> 55
+  | "__cerbvar_ENOSYS"          -> 56
+  | "__cerbvar_ENOTCONN"        -> 57
+  | "__cerbvar_ENOTDIR"         -> 58
+  | "__cerbvar_ENOTEMPTY"       -> 59
+  | "__cerbvar_ENOTRECOVERABLE" -> 60
+  | "__cerbvar_ENOTSOCK"        -> 61
+  | "__cerbvar_ENOTSUP"         -> 62
+  | "__cerbvar_ENOTTY"          -> 63
+  | "__cerbvar_ENXIO"           -> 64
+  | "__cerbvar_EOPNOTSUPP"      -> 65
+  | "__cerbvar_EOVERFLOW"       -> 66
+  | "__cerbvar_EOWNERDEAD"      -> 67
+  | "__cerbvar_EPERM"           -> 68
+  | "__cerbvar_EPIPE"           -> 69
+  | "__cerbvar_EPROTO"          -> 70
+  | "__cerbvar_EPROTONOSUPPORT" -> 71
+  | "__cerbvar_EPROTOTYPE"      -> 72
+  | "__cerbvar_EROFS"           -> 73
+  | "__cerbvar_ESPIPE"          -> 74
+  | "__cerbvar_ESRCH"           -> 75
+  | "__cerbvar_ESTALE"          -> 76
+  | "__cerbvar_ETIME"           -> 77
+  | "__cerbvar_ETIMEDOUT"       -> 78
+  | "__cerbvar_ETXTBSY"         -> 79
+  | "__cerbvar_EWOULDBLOCK"     -> 80
+  | "__cerbvar_EXDEV"           -> 81
+  | str -> error $ "Unknown errno code: " ^ str
+end
 
 val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (A.expression_ unit * maybe ATypes.ctype)
 let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
+  let signed_int = ATypes.Signed ATypes.Int_ in
+  let const_int n =
+    Just (A.AilEconst (A.ConstantInteger (A.IConstant n A.Decimal Nothing))
+          , Just (AilTypesAux.mk_ctype_integer signed_int))
+  in
   match str with
-    | "__cerbvar_EDOM" -> Just (A.AilEbuiltin "EDOM", Nothing)
-    | "__cerbvar_EILSEQ" -> Just (A.AilEbuiltin "EILSEQ", Nothing)
-    | "__cerbvar_ERANGE" -> Just (A.AilEbuiltin "ERANGE", Nothing)
-    | "__cerbvar_errno" -> Just (A.AilEbuiltin "errno", Nothing)
+    | "__cerbvar_EDOM"            -> const_int $ translate_errno str
+    | "__cerbvar_EILSEQ"          -> const_int $ translate_errno str
+    | "__cerbvar_ERANGE"          -> const_int $ translate_errno str
+    | "__cerbvar_E2BIG"           -> const_int $ translate_errno str
+    | "__cerbvar_EACCES"          -> const_int $ translate_errno str
+    | "__cerbvar_EADDRINUSE"      -> const_int $ translate_errno str
+    | "__cerbvar_EADDRNOTAVAIL"   -> const_int $ translate_errno str
+    | "__cerbvar_EAFNOSUPPORT"    -> const_int $ translate_errno str
+    | "__cerbvar_EAGAIN"          -> const_int $ translate_errno str
+    | "__cerbvar_EALREADY"        -> const_int $ translate_errno str
+    | "__cerbvar_EBADF"           -> const_int $ translate_errno str
+    | "__cerbvar_EBADMSG"         -> const_int $ translate_errno str
+    | "__cerbvar_EBUSY"           -> const_int $ translate_errno str
+    | "__cerbvar_ECANCELED"       -> const_int $ translate_errno str
+    | "__cerbvar_ECHILD"          -> const_int $ translate_errno str
+    | "__cerbvar_ECONNABORTED"    -> const_int $ translate_errno str
+    | "__cerbvar_ECONNREFUSED"    -> const_int $ translate_errno str
+    | "__cerbvar_ECONNRESET"      -> const_int $ translate_errno str
+    | "__cerbvar_EDEADLK"         -> const_int $ translate_errno str
+    | "__cerbvar_EDESTADDRREQ"    -> const_int $ translate_errno str
+    | "__cerbvar_EDQUOT"          -> const_int $ translate_errno str
+    | "__cerbvar_EEXIST"          -> const_int $ translate_errno str
+    | "__cerbvar_EFAULT"          -> const_int $ translate_errno str
+    | "__cerbvar_EFBIG"           -> const_int $ translate_errno str
+    | "__cerbvar_EHOSTUNREACH"    -> const_int $ translate_errno str
+    | "__cerbvar_EIDRM"           -> const_int $ translate_errno str
+    | "__cerbvar_EINPROGRESS"     -> const_int $ translate_errno str
+    | "__cerbvar_EINTR"           -> const_int $ translate_errno str
+    | "__cerbvar_EINVAL"          -> const_int $ translate_errno str
+    | "__cerbvar_EIO"             -> const_int $ translate_errno str
+    | "__cerbvar_EISCONN"         -> const_int $ translate_errno str
+    | "__cerbvar_EISDIR"          -> const_int $ translate_errno str
+    | "__cerbvar_ELOOP"           -> const_int $ translate_errno str
+    | "__cerbvar_EMFILE"          -> const_int $ translate_errno str
+    | "__cerbvar_EMLINK"          -> const_int $ translate_errno str
+    | "__cerbvar_EMSGSIZE"        -> const_int $ translate_errno str
+    | "__cerbvar_EMULTIHOP"       -> const_int $ translate_errno str
+    | "__cerbvar_ENAMETOOLONG"    -> const_int $ translate_errno str
+    | "__cerbvar_ENETDOWN"        -> const_int $ translate_errno str
+    | "__cerbvar_ENETRESET"       -> const_int $ translate_errno str
+    | "__cerbvar_ENETUNREACH"     -> const_int $ translate_errno str
+    | "__cerbvar_ENFILE"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOBUFS"         -> const_int $ translate_errno str
+    | "__cerbvar_ENODATA"         -> const_int $ translate_errno str
+    | "__cerbvar_ENODEV"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOENT"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOEXEC"         -> const_int $ translate_errno str
+    | "__cerbvar_ENOLCK"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOLINK"         -> const_int $ translate_errno str
+    | "__cerbvar_ENOMEM"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOMSG"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOPROTOOPT"     -> const_int $ translate_errno str
+    | "__cerbvar_ENOSPC"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOSR"           -> const_int $ translate_errno str
+    | "__cerbvar_ENOSTR"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOSYS"          -> const_int $ translate_errno str
+    | "__cerbvar_ENOTCONN"        -> const_int $ translate_errno str
+    | "__cerbvar_ENOTDIR"         -> const_int $ translate_errno str
+    | "__cerbvar_ENOTEMPTY"       -> const_int $ translate_errno str
+    | "__cerbvar_ENOTRECOVERABLE" -> const_int $ translate_errno str
+    | "__cerbvar_ENOTSOCK"        -> const_int $ translate_errno str
+    | "__cerbvar_ENOTSUP"         -> const_int $ translate_errno str
+    | "__cerbvar_ENOTTY"          -> const_int $ translate_errno str
+    | "__cerbvar_ENXIO"           -> const_int $ translate_errno str
+    | "__cerbvar_EOPNOTSUPP"      -> const_int $ translate_errno str
+    | "__cerbvar_EOVERFLOW"       -> const_int $ translate_errno str
+    | "__cerbvar_EOWNERDEAD"      -> const_int $ translate_errno str
+    | "__cerbvar_EPERM"           -> const_int $ translate_errno str
+    | "__cerbvar_EPIPE"           -> const_int $ translate_errno str
+    | "__cerbvar_EPROTO"          -> const_int $ translate_errno str
+    | "__cerbvar_EPROTONOSUPPORT" -> const_int $ translate_errno str
+    | "__cerbvar_EPROTOTYPE"      -> const_int $ translate_errno str
+    | "__cerbvar_EROFS"           -> const_int $ translate_errno str
+    | "__cerbvar_ESPIPE"          -> const_int $ translate_errno str
+    | "__cerbvar_ESRCH"           -> const_int $ translate_errno str
+    | "__cerbvar_ESTALE"          -> const_int $ translate_errno str
+    | "__cerbvar_ETIME"           -> const_int $ translate_errno str
+    | "__cerbvar_ETIMEDOUT"       -> const_int $ translate_errno str
+    | "__cerbvar_ETXTBSY"         -> const_int $ translate_errno str
+    | "__cerbvar_EWOULDBLOCK"     -> const_int $ translate_errno str
+    | "__cerbvar_EXDEV"           -> const_int $ translate_errno str
     | "__cerbvar_PRId8" -> Just (A.AilEbuiltin "PRId8", Nothing)
     | "__cerbvar_PRId16" -> Just (A.AilEbuiltin "PRId16", Nothing)
     | "__cerbvar_PRId32" -> Just (A.AilEbuiltin "PRId32", Nothing)
