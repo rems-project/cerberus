@@ -2787,7 +2787,7 @@ let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
         St.mapM_ collect_cases_ ss
   end
 let collect_cases s =
-  snd $ St.run (collect_cases_ s) <| found_default= false; case_csts= [] |>
+  snd $ St.runStateM (collect_cases_ s) <| found_default= false; case_csts= [] |>
 
 
 type collect_visibles_state = <|
@@ -2808,8 +2808,8 @@ val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.state
 let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
   let with_fresh_labels mf =
     fun (<| elc_supply= suppl |> as st) ->
-      let (continue_sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x)) suppl in
-      let (break_sym, suppl'')   = State.run (Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x)) suppl' in
+      let (continue_sym, suppl') = State.runStateM (Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x)) suppl in
+      let (break_sym, suppl'')   = State.runStateM (Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x)) suppl' in
       let (ret, st') = mf <| elc_supply= suppl''; elc_continue= Just continue_sym; elc_break= Just break_sym |> in
       ((continue_sym, break_sym, ret), <| st with elc_supply= st'.elc_supply |>) in 
   A.AnnotatedStatement loc <$> match stmt_ with
@@ -2881,7 +2881,7 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
 
 
 let erase_loop_control stmt suppl =
-  let (stmt', <| elc_supply= suppl' |>) = St.run (erase_loop_control_aux stmt) <|
+  let (stmt', <| elc_supply= suppl' |>) = State.runStateM (erase_loop_control_aux stmt) <|
     elc_supply= suppl;
     elc_continue= Nothing;
     elc_break= Nothing;
@@ -2946,7 +2946,7 @@ let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
 
 val collect_visibles: A.statement GenTypes.genTypeCategory -> collect_visibles_state
 let collect_visibles stmt =
-    snd $ St.run (collect_visibles_ stmt) <|
+    snd $ State.runStateM (collect_visibles_ stmt) <|
       visible_syms= []
     ; goto_visibles_= Map.empty
     ; label_visibles_= Map.empty |>
