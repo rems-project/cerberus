@@ -2075,6 +2075,10 @@ val mk_ccall_e: pexpr -> pexpr -> list pexpr -> expr unit
 let mk_ccall_e cty pe pes =
   Expr [] (Eccall default cty pe pes)
 
+val mk_memop_e: Mem_common.memop -> list pexpr -> expr unit
+let mk_memop_e mop pes =
+  Expr [] (Ememop mop pes)
+
 
 val add_loc: Loc.t -> expr unit -> expr unit
 let add_loc loc (Expr annot expr_) =
