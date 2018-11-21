@@ -51,7 +51,7 @@ char        *getcwd(char *, size_t);
 // int          link(const char *, const char *);
 // int          linkat(int, const char *, int, const char *, int);
 // int          lockf(int, int, off_t);
-// off_t        lseek(int, off_t, int);
+off_t        lseek(int, off_t, int);
 // int          nice(int);
 // long         pathconf(const char *, int);
 // int          pause(void);
