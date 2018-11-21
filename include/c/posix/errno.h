@@ -1,3 +1,8 @@
+#ifndef _POSIX_ERRNO_H_
+#define _POSIX_ERRNO_H_
+
+// Distinct positive values with type int
+
 #define E2BIG           __cerbvar_E2BIG
 #define EACCES          __cerbvar_EACCES
 #define EADDRINUSE      __cerbvar_EADDRINUSE
@@ -15,14 +20,18 @@
 #define ECONNRESET      __cerbvar_ECONNRESET
 #define EDEADLK         __cerbvar_EDEADLK
 #define EDESTADDRREQ    __cerbvar_EDESTADDRREQ
+#ifndef EDOM // defined in ISO C
 #define EDOM            __cerbvar_EDOM
+#endif
 #define EDQUOT          __cerbvar_EDQUOT
 #define EEXIST          __cerbvar_EEXIST
 #define EFAULT          __cerbvar_EFAULT
 #define EFBIG           __cerbvar_EFBIG
 #define EHOSTUNREACH    __cerbvar_EHOSTUNREACH
 #define EIDRM           __cerbvar_EIDRM
+#ifndef EILSEQ // defined in ISO C
 #define EILSEQ          __cerbvar_EILSEQ
+#endif
 #define EINPROGRESS     __cerbvar_EINPROGRESS
 #define EINTR           __cerbvar_EINTR
 #define EINVAL          __cerbvar_EINVAL
@@ -69,7 +78,9 @@
 #define EPROTO          __cerbvar_EPROTO
 #define EPROTONOSUPPORT __cerbvar_EPROTONOSUPPORT
 #define EPROTOTYPE      __cerbvar_EPROTOTYPE
+#ifndef ERANGE // defined in ISO C
 #define ERANGE          __cerbvar_ERANGE
+#endif
 #define EROFS           __cerbvar_EROFS
 #define ESPIPE          __cerbvar_ESPIPE
 #define ESRCH           __cerbvar_ESRCH
@@ -79,3 +90,5 @@
 #define ETXTBSY         __cerbvar_ETXTBSY
 #define EWOULDBLOCK     __cerbvar_EWOULDBLOCK
 #define EXDEV           __cerbvar_EXDEV
+
+#endif
