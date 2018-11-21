@@ -34,7 +34,7 @@ let elab_init suppl = <|
 (* returns a fresh Core symbolic name. *)
 val elab_fresh_symbol: elabM Symbol.sym
 let elab_fresh_symbol = fun (<| symbol_supply= suppl |> as st) ->
-  let (sym, suppl') = State.run Symbol.fresh suppl in
+  let (sym, suppl') = State.runStateM Symbol.fresh suppl in
   (sym, <| st with symbol_supply= suppl' |>)
 
 
@@ -60,7 +60,7 @@ let fresh_typed_symbol is_loaded ty =
 (* returns a fresh Core symbolic name with a specified name for pretty printing. *)
 val fresh_named_symbol: string -> elabM Symbol.sym
 let fresh_named_symbol name = fun (<| symbol_supply= suppl |> as st) ->
-  let (sym, suppl') = State.run (Symbol.fresh_pretty_with_id (fun x -> name ^ "_" ^ show x)) suppl in
+  let (sym, suppl') = State.runStateM (Symbol.fresh_pretty_with_id (fun x -> name ^ "_" ^ show x)) suppl in
   (sym, <| st with symbol_supply= suppl' |>)
 
 

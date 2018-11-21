@@ -39,8 +39,6 @@ let read   f = fun s -> (f s, s)
 val eval : forall 'a 's. stateM 'a 's -> 's -> 'a
 let eval m st = fst (m st)
 
-val run : forall 'a 's. stateM 'a 's -> 's -> 'a * 's
-let run t s = t s
 
 
 let inline (>>=)    = bind
