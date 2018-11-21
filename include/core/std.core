@@ -396,7 +396,7 @@ proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : ef
 -- int stat(const char *pathname, struct stat *statbuf);
 proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded pointer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
-  let strong buf_loaded: loaded integer = load('char*', buf_ptr) in -- TODO: SHOULD BE struct stat*
+  let strong buf_loaded: loaded pointer = load('char*', buf_ptr) in -- TODO: SHOULD BE struct stat*
   case (path_loaded, buf_loaded) of
     | (Specified (path: pointer), Specified (buf: pointer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
@@ -408,7 +408,7 @@ proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff l
 -- int lstat(const char *pathname, struct stat *statbuf);
 proc [ailname = "lstat"] lstat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff loaded pointer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
-  let strong buf_loaded: loaded integer = load('char*', buf_ptr) in -- TODO: SHOULD BE struct stat*
+  let strong buf_loaded: loaded pointer = load('char*', buf_ptr) in -- TODO: SHOULD BE struct stat*
   case (path_loaded, buf_loaded) of
     | (Specified (path: pointer), Specified (buf: pointer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
@@ -495,9 +495,9 @@ proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args:
 
 -- ssize_t write(int, const void *, size_t);
 proc [ailname = "write"] write_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
   let strong buf_loaded: loaded pointer = load('void*', buf_ptr) in
-  let strong size_loaded: loaded pointer = load('size_t', size_ptr) in
+  let strong size_loaded: loaded integer = load('size_t', size_ptr) in
   case (fd_loaded, buf_loaded, size_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, buf) in
@@ -508,9 +508,9 @@ proc [ailname = "write"] write_proxy (fd_ptr: pointer, buf_ptr: pointer, size_pt
 
 -- ssize_t read(int fd, void *buf, size_t count);
 proc [ailname = "read"] read_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
   let strong buf_loaded: loaded pointer = load('void*', buf_ptr) in
-  let strong size_loaded: loaded pointer = load('size_t', size_ptr) in
+  let strong size_loaded: loaded integer = load('size_t', size_ptr) in
   case (fd_loaded, buf_loaded, size_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
       pcall(<std_function_read>, fd, buf, size)
@@ -531,10 +531,10 @@ proc [ailname = "close"] close_proxy (fd_ptr: pointer): eff loaded pointer :=
 
 -- ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);
 proc [ailname = "pwrite"] pwrite_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr: pointer, off_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
   let strong buf_loaded: loaded pointer = load('void*', buf_ptr) in
-  let strong size_loaded: loaded pointer = load('size_t', size_ptr) in
-  let strong off_loaded: loaded pointer = load('signed int', off_ptr) in -- TODO: off_t ?
+  let strong size_loaded: loaded integer = load('size_t', size_ptr) in
+  let strong off_loaded: loaded integer = load('signed int', off_ptr) in -- TODO: off_t ?
   case (fd_loaded, buf_loaded, size_loaded, off_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, buf) in
@@ -545,10 +545,10 @@ proc [ailname = "pwrite"] pwrite_proxy (fd_ptr: pointer, buf_ptr: pointer, size_
 
 -- ssize_t pread(int fd, void *buf, size_t count, off_t offset);
 proc [ailname = "pread"] pread_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr: pointer, off_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
   let strong buf_loaded: loaded pointer = load('void*', buf_ptr) in
-  let strong size_loaded: loaded pointer = load('size_t', size_ptr) in
-  let strong off_loaded: loaded pointer = load('signed int', off_ptr) in -- TODO: off_t ?
+  let strong size_loaded: loaded integer = load('size_t', size_ptr) in
+  let strong off_loaded: loaded integer = load('signed int', off_ptr) in -- TODO: off_t ?
   case (fd_loaded, buf_loaded, size_loaded, off_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
       pcall(<std_function_pread>, fd, buf, size, off)
@@ -632,9 +632,9 @@ proc [ailname = "unlink"] unlink_proxy (path_ptr: pointer) : eff loaded pointer 
 
 -- off_t lseek(int fd, off_t offset, int whence);
 proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
-  let strong off_loaded: loaded pointer = load('signed int', off_ptr) in -- TODO: off_t ?
-  let strong whence_loaded: loaded pointer = load('signed int', whence_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
+  let strong off_loaded: loaded integer = load('signed int', off_ptr) in -- TODO: off_t ?
+  let strong whence_loaded: loaded integer = load('signed int', whence_ptr) in
   case (fd_loaded, off_loaded, whence_loaded) of
     | (Specified (fd: integer), Specified (off: integer), Specified (whence: integer)) =>
       pcall(<std_function_lseek>, fd, off, whence)
