@@ -165,6 +165,9 @@ let keywords =
       
       (* for source attributes *)
       ("ailname", T.AILNAME);
+
+      (* for core builtins *)
+      ("builtin", T.BUILTIN);
     ]
 
 
