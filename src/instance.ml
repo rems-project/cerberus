@@ -252,7 +252,7 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
       | (NDkilled r, st') ->
         let loc, reason = match r with
           | Undef0 (loc, ubs) ->
-            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.ub_short_string ubs
           | Error0 (loc, str) ->
             Some loc, "Error: " ^ str ^ ""
           | Other dr_err ->

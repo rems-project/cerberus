@@ -561,7 +561,7 @@ export default class View {
     if (lastNode) {
       this.state.interactive.next_options = []
       this.getConsole().setActive()
-      if (_.includes(firstChoice.info.kind, 'killed')) {
+      if (_.includes(firstChoice.info.kind, 'killed') || _.includes(firstChoice.info.kind, 'Undefined')) {
         // TODO: add location
         // the killed node has no location coming from cerberus
         const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
