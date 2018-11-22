@@ -847,9 +847,12 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
                 assert false
           end
       | Builtin_decl (_sym, (bTy, bTys)) ->
-          let iCst = Implementation_.StdFunction (fst _sym) in
-          let decl_loc = (Location_ocaml.region (snd _sym) None) in
-          Eff.return (Pmap.add iCst (BuiltinDecl (decl_loc, bTy, bTys)) impl_acc, globs_acc, fun_map_acc, tagDefs_acc)
+          begin lookup_sym _sym >>= function
+            | Some (decl_sym, decl_loc) ->
+                Eff.return (impl_acc, globs_acc, Pmap.add decl_sym (BuiltinDecl (decl_loc, bTy, bTys)) fun_map_acc, tagDefs_acc)
+            | None ->
+                assert false
+          end
       | Aggregate_decl (_sym, tags) ->
           begin lookup_sym _sym >>= function
             | Some (decl_sym, _) ->
@@ -891,7 +894,6 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | IFun_decl (_, (_, _, Pexpr (annots, _, _))) ->
       let loc = Annot.get_loc_ annots in
        Eff.fail loc Core_parser_wrong_decl_in_std
-    | Builtin_decl (_sym, _)
     | Glob_decl (_sym, _, _)  ->
        Eff.fail (Location_ocaml.region (snd _sym) None) Core_parser_wrong_decl_in_std
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
@@ -908,6 +910,13 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
           | None ->
               assert false
         )
+    | Builtin_decl (_sym, (bTy, bTys)) ->
+        begin lookup_sym _sym >>= function
+          | Some (decl_sym, decl_loc) ->
+              Eff.return (Pmap.add decl_sym (BuiltinDecl (decl_loc, bTy, bTys)) fun_map_acc)
+          | None ->
+              assert false
+        end
     | Proc_decl (_sym, attrs, (bTy, _sym_bTys, _e)) ->
         lookup_sym _sym >>= (function
           | Some (decl_sym, decl_loc) ->
@@ -1641,8 +1650,8 @@ proc_declaration:
 ;
 
 builtin_declaration:
-| BUILTIN name= SYM params= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN) COLON EFF bTy= core_base_type
-  { Builtin_decl (name, (bTy, params))  }
+| BUILTIN _sym= SYM params= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN) COLON EFF bTy= core_base_type
+  { Builtin_decl (_sym, (bTy, params))  }
 ;
 
 declaration:
