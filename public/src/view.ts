@@ -472,7 +472,8 @@ export default class View {
         case InteractiveMode.Tau:
           break
         case InteractiveMode.Memory:
-          if (_.startsWith(active.info.kind, 'killed'))
+          // TODO: I NEED TO CHANGE THIS, THIS IS SAD!!
+          if (_.includes(active.info.kind, 'killed') || _.includes(active.info.kind, 'Error') || _.includes(active.info.kind, 'Undefined'))
             return children
           // a bit of a hack here
           if (_.startsWith(active.arena, 'pure(undef(<<UB'))
@@ -493,7 +494,7 @@ export default class View {
         case InteractiveMode.CLine:
           if (active.info.kind == 'done')
             return graph.setChildrenVisible(active.id, true)
-          if (_.startsWith(active.info.kind, 'killed'))
+          if (_.includes(active.info.kind, 'killed') || _.includes(active.info.kind, 'Error') || _.includes(active.info.kind, 'Undefined'))
             return children
           // a bit of a hack here
           if (_.startsWith(active.arena, 'pure(undef(<<UB'))
@@ -561,7 +562,7 @@ export default class View {
     if (lastNode) {
       this.state.interactive.next_options = []
       this.getConsole().setActive()
-      if (_.includes(firstChoice.info.kind, 'killed') || _.includes(firstChoice.info.kind, 'Undefined')) {
+      if (_.includes(firstChoice.info.kind, 'killed') || _.includes(firstChoice.info.kind, 'Error') || _.includes(firstChoice.info.kind, 'Undefined')) {
         // TODO: add location
         // the killed node has no location coming from cerberus
         const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
