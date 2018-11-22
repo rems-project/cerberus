@@ -33,6 +33,7 @@ type declaration =
   | Glob_decl of _sym * Core.core_base_type * parsed_expr
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * attribute list * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
+  | Builtin_decl of _sym * (Core.core_base_type * (Core.core_base_type) list)
   | Aggregate_decl of _sym * Tags.tag_definition
 (*
   | WithAttributes_decl of attribute list * declaration
@@ -845,12 +846,17 @@ let symbolify_impl_or_file decls : ((Core.impl, parsed_core_file) either) Eff.t 
             | None ->
                 assert false
           end
+      | Builtin_decl (_sym, (bTy, bTys)) ->
+          let iCst = Implementation_.StdFunction (fst _sym) in
+          let decl_loc = (Location_ocaml.region (snd _sym) None) in
+          Eff.return (Pmap.add iCst (BuiltinDecl (decl_loc, bTy, bTys)) impl_acc, globs_acc, fun_map_acc, tagDefs_acc)
       | Aggregate_decl (_sym, tags) ->
-          lookup_sym _sym >>= function
-          | Some (decl_sym, _) ->
-              Eff.return (impl_acc, globs_acc, fun_map_acc, Pmap.add decl_sym tags tagDefs_acc)
-          | None ->
-              assert false
+          begin lookup_sym _sym >>= function
+            | Some (decl_sym, _) ->
+                Eff.return (impl_acc, globs_acc, fun_map_acc, Pmap.add decl_sym tags tagDefs_acc)
+            | None ->
+                assert false
+          end
   ) (Pmap.empty iCst_compare, [], Pmap.empty sym_compare, Pmap.empty sym_compare) decls >>= fun (impl, globs, fun_map, tagDefs) ->
   if not (Pmap.is_empty impl) &&  globs = [] && Pmap.is_empty fun_map then
     Eff.return (Left impl)
@@ -868,7 +874,8 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
   Eff.mapM_ (function
     | Glob_decl (_sym, _, _)
     | Fun_decl (_sym, _)
-    | Proc_decl (_sym, _, _) ->
+    | Proc_decl (_sym, _, _)
+    | Builtin_decl (_sym, _) ->
         lookup_sym _sym >>= (function
           | Some (_, loc) ->
               Eff.fail loc (Core_parser_multiple_declaration (fst _sym))
@@ -884,6 +891,7 @@ let symbolify_std decls : (unit Core.fun_map) Eff.t =
     | IFun_decl (_, (_, _, Pexpr (annots, _, _))) ->
       let loc = Annot.get_loc_ annots in
        Eff.fail loc Core_parser_wrong_decl_in_std
+    | Builtin_decl (_sym, _)
     | Glob_decl (_sym, _, _)  ->
        Eff.fail (Location_ocaml.region (snd _sym) None) Core_parser_wrong_decl_in_std
     | Fun_decl (_sym, (bTy, _sym_bTys, _pe)) ->
@@ -1046,6 +1054,9 @@ let mk_file decls =
 
 (* Attributes *)
 %token AILNAME
+
+(* Builtin *)
+%token BUILTIN
 
 
 
@@ -1629,12 +1640,18 @@ proc_declaration:
       Proc_decl (_sym, attrs, (bTy, params, fbody)) }
 ;
 
+builtin_declaration:
+| BUILTIN name= SYM params= delimited(LPAREN, separated_list(COMMA, core_base_type), RPAREN) COLON EFF bTy= core_base_type
+  { Builtin_decl (name, (bTy, params))  }
+;
+
 declaration:
 | decl= def_declaration
 | decl= ifun_declaration
 | decl= glob_declaration
 | decl= fun_declaration
 | decl= proc_declaration
+| decl= builtin_declaration
 | decl= def_aggregate_declaration
     { decl }
 

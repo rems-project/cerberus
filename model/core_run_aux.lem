@@ -515,6 +515,8 @@ let convert_impl_decl = function
       Def bTy (convert_pexpr pe)
   | IFun bTy sym_bTys pe ->
       IFun bTy sym_bTys (convert_pexpr pe)
+  | BuiltinDecl loc bTy bTys ->
+      BuiltinDecl loc bTy bTys
 end
 
 val convert_file: forall 'bty 'a. generic_file 'bty 'a -> file core_run_annotation

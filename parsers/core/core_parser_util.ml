@@ -208,3 +208,4 @@ type token =
   | FVFROMINT
   | IVFROMFLOAT
   | NULL
+  | BUILTIN

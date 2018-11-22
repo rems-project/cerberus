@@ -69,6 +69,7 @@ let hack ~conf mode =
       experimental_unseq= false;
       typecheck_core=     pipe_conf.Pipeline.typecheck_core;
       defacto=            false;
+      fs_dump=            false;
       default_impl=       false;
       action_graph=       false;
       n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
