@@ -1586,9 +1586,9 @@ action:
 
 paction:
 | _act= action
-    { Paction (Pos, Action (Location_ocaml.unknown, (), _act)) }
+    { Paction (Pos, Action (Location_ocaml.region ($startpos, $endpos) None, (), _act)) }
 | NEG _act= delimited(LPAREN, action, RPAREN)
-    { Paction (Neg, Action (Location_ocaml.unknown, (), _act)) }
+    { Paction (Neg, Action (Location_ocaml.region ($startpos, $endpos) None, (), _act)) }
 ;
 
 def_declaration:
