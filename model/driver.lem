@@ -531,7 +531,7 @@ let rec drive_core_thread tid =
     | Core_run.Step_spawn_threads mk_th_st th_sts ->
         ( mk_info_kind "spawn_threads"
         , ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "Step_spawn_threads") >>
-          let ((th_tids, core_st'), run_st') = State.run (
+          let ((th_tids, core_st'), run_st') = State.runStateM (
             State.foldlM (fun (th_tids_, core_st_) th_st ->
               State.bind (Core_run.spawn_thread (Just tid) th_st core_st_)
                 (fun (tid, core_st_') -> State.return (tid :: th_tids_, core_st_'))
@@ -1187,7 +1187,7 @@ let initial_driver_state sym_supply file =
 val spawn_thread: maybe Cthread.thread_id -> Core_run.thread_state -> driverM Cthread.thread_id
 let driver_spawn_thread parent_tid_opt th_st =
   ND.get >>= fun dr_st ->
-  let ((tid, core_st'), run_st') = State.run (
+  let ((tid, core_st'), run_st') = State.runStateM (
     Core_run.spawn_thread parent_tid_opt th_st dr_st.core_state
   ) dr_st.core_run_state in
   ND.update (fun dr_st -> <| dr_st with
