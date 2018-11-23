@@ -1533,6 +1533,12 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
         | Proc _ bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
+        | BuiltinDecl _ bTy bTys ->
+            let name = match sym with
+              | Symbol.Symbol _ (Just name) -> name
+              | _ -> error "typecheck_program: BuiltinDecl"
+            end in
+            insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
       end) file.stdlib $
     Map_extra.fold (fun iCst decl acc ->
       match decl with
@@ -1540,24 +1546,7 @@ let typecheck_program file =
             insert_tdecl (Impl iCst) (TDsym bTy) acc
         | IFun bTy sym_bTys _ ->
             insert_tdecl (Impl iCst) (TDfun bTy (List.map snd sym_bTys)) acc
-      end) file.impl
-    (* TODO: do this is a principled way *)
-      (insert_tdecl (Impl (I.StdFunction "signal")) (TDproc (BTy_loaded OTy_pointer)
-        [ BTy_object OTy_integer; BTy_object OTy_pointer ])
-      (insert_tdecl (Impl (I.StdFunction "exit")) (TDproc BTy_unit [ BTy_loaded OTy_integer ])
-      (insert_tdecl (Impl (I.StdFunction "_Exit")) (TDproc BTy_unit [ BTy_loaded OTy_integer ])
-      (insert_tdecl (Impl (I.StdFunction "snprintf")) (TDproc (BTy_loaded OTy_integer)
-        [ BTy_object OTy_pointer
-        ; BTy_object OTy_integer
-        ; BTy_list (BTy_object OTy_integer)
-        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ])
-      (insert_tdecl (Impl (I.StdFunction "sprintf")) (TDproc (BTy_loaded OTy_integer)
-        [ BTy_object OTy_pointer
-        ; BTy_list (BTy_object OTy_integer)
-        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ])
-      (insert_tdecl (Impl (I.StdFunction "printf")) (TDproc (BTy_loaded OTy_integer)
-        [ BTy_list (BTy_object OTy_integer)
-        ; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer]) ]) empty_env )))))) in
+      end) file.impl empty_env in
     
     (* Then typechecks them *)
     E.mapMapM (fun _ decl ->
@@ -1567,6 +1556,8 @@ let typecheck_program file =
             Fun bTy sym_bTys <$> typecheck_export_pexpr file.tagDefs env' bTy pe
         | ProcDecl loc bTy bTys ->
             E.return (ProcDecl loc bTy bTys)
+        | BuiltinDecl loc bTy bTys ->
+            E.return (BuiltinDecl loc bTy bTys)
         | Proc loc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->
@@ -1597,6 +1588,12 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDfun bTy (List.map snd sym_bTys)) acc
         | ProcDecl _ bTy bTys ->
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
+        | BuiltinDecl _ bTy bTys ->
+            let name = match sym with
+              | Symbol.Symbol _ (Just name) -> name
+              | _ -> error "typecheck_program: BuiltinDecl"
+            end in
+            insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
         | Proc _ bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
@@ -1608,6 +1605,8 @@ let typecheck_program file =
             Fun bTy sym_bTys <$> typecheck_export_pexpr file.tagDefs env' bTy pe
         | ProcDecl loc bTy bTys ->
             E.return (ProcDecl loc bTy bTys)
+        | BuiltinDecl loc bTy bTys ->
+            E.return (BuiltinDecl loc bTy bTys)
         | Proc loc bTy sym_bTys e ->
             let env' = List.foldr (fun (sym, bTy) acc -> insert_tdecl (Sym sym) (TDsym bTy) acc) env sym_bTys in
             collect_labels env' e >>= fun env' ->

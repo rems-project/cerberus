@@ -1837,6 +1837,8 @@ let unsafe_subst_sym_fun_map sym pe' funs =
         Fun bTy params (unsafe_subst_sym_pexpr sym pe' pe)
     | ProcDecl loc bTy params ->
         ProcDecl loc bTy params
+    | BuiltinDecl loc bTy params ->
+        BuiltinDecl loc bTy params
     | Proc loc bTy params e ->
         Proc loc bTy params (unsafe_subst_sym_expr sym pe' e)
   end) funs
@@ -2164,6 +2166,7 @@ declare ocaml target_rep function string_of_symbol = `Pp_symbol.to_string_pretty
 let set_uid_fun fname = function
   | Fun bty args pe -> Fun bty args pe
   | ProcDecl loc ret_bty args_bty -> ProcDecl loc ret_bty args_bty
+  | BuiltinDecl loc ret_bty args_bty -> BuiltinDecl loc ret_bty args_bty
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
 end
 
@@ -2282,6 +2285,8 @@ let collect_labeled_continuations_NEW file =
       | Fun _ _ _ ->
           acc
       | ProcDecl _ _ _ ->
+          acc
+      | BuiltinDecl _ _ _ ->
           acc
       | Proc _ _ _ e ->
           Map.insert fun_sym (collect_saves e) acc

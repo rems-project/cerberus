@@ -62,6 +62,8 @@ let call_function file f_nm arg_cvals =
           Exception.return $ Utils.foldl2 (fun acc (a, _) cval -> Caux.subst_sym_pexpr a cval acc) body_pe params arg_cvals
     | ProcDecl _ _ _ ->
         error "Core_eval.call_function, called on a ProcDecl"
+    | BuiltinDecl _ _ _ ->
+        error "Core_eval.call_function, called on a BuiltinDecl"
     | Proc _ _ _ _ ->
         error "Core_eval.call_function, called on a Proc"
   end

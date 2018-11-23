@@ -210,6 +210,7 @@ let cps_transform_fun sym_supply globs = function
       cps_transform_expr sym_supply globs (List.map fst params) e
     in CpsProc (bty, params, bbs, bbody)
   | ProcDecl _ -> raise (Unsupported "Procedures declaration should be eliminated.")
+  | BuiltinDecl _ -> raise (Unsupported "Builtin procedures declaration should be eliminated.")
 
 type cps_file = {
   main   : Symbol.sym option;

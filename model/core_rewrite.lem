@@ -1440,6 +1440,8 @@ let rewrite_fun_map fun_map =
         Fun ty params (rewrite_pexpr pe)
     | ProcDecl loc ty params ->
         ProcDecl loc ty params
+    | BuiltinDecl loc ty params ->
+        BuiltinDecl loc ty params
     | Proc loc ty params e ->
         Proc loc ty params (rewrite_expr e)
   end) fun_map

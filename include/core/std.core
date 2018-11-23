@@ -212,20 +212,24 @@ proc create_and_store (ty: ctype, x: storable) : eff pointer :=
 -- <errno.h>
 ------------------------------------------------------------------------------
 
-proc [ailname = "__builtin_errno"] errno (): eff loaded pointer :=
-  let strong p: pointer = pcall(<std_function_errno>) in
+builtin errno (): eff pointer
+
+proc [ailname = "__builtin_errno"] errno_proxy (): eff loaded pointer :=
+  let strong p: pointer = pcall(<builtin_errno>) in
   pure(Specified(p))
 
 ------------------------------------------------------------------------------
 -- <signal.h>
 ------------------------------------------------------------------------------
 
+builtin signal (integer, pointer): eff loaded pointer
+
 proc [ailname = "signal"] signal_proxy(sig_ptr: pointer, fn_ptr: pointer): eff loaded pointer :=
   let strong sig : loaded integer = load('signed int', sig_ptr) in
   -- let strong fn_  : loaded pointer = load('void (signed int)*', fn_ptr) in
   case sig of
     | Specified (n: integer) =>
-        pcall(<std_function_signal>, n, fn_ptr)
+        pcall(<builtin_signal>, n, fn_ptr)
     | Unspecified (_: ctype) =>
         pure(undef(<<DUMMY(signal_proxy)>>))
   end
@@ -234,13 +238,17 @@ proc [ailname = "signal"] signal_proxy(sig_ptr: pointer, fn_ptr: pointer): eff l
 -- <stdio.h>
 ------------------------------------------------------------------------------
 
+builtin printf   ([integer], [(ctype, pointer)])                  : eff loaded integer
+builtin snprintf (pointer, integer, [integer], [(ctype, pointer)]): eff loaded integer
+builtin sprintf  (pointer, [integer], [(ctype, pointer)])         : eff loaded integer
+builtin rename   ([integer], [integer])                           : eff loaded integer
 
 proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
   case frmt_ptr_ of
     | Specified(frmt_ptr: pointer) =>
         let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<std_function_printf>, xs, args) in
+        let strong ret: loaded integer = pcall(<builtin_printf>, xs, args) in
         pure(ret)
     | Unspecified(_: ctype) =>
         pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
@@ -253,7 +261,7 @@ proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_p
   case (s_, n_, frmt_ptr_) of
     | (Specified(s: pointer), Specified(n: integer), Specified(frmt_ptr: pointer)) =>
         let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<std_function_snprintf>, s, n, xs, args) in
+        let strong ret: loaded integer = pcall(<builtin_snprintf>, s, n, xs, args) in
         pure(ret)
     | _ : (loaded pointer, loaded integer, loaded pointer) =>
         pure (undef(<<DUMMY(snprintf_proxy)>>)) -- TODO think about that
@@ -265,21 +273,21 @@ proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} poi
   case (s_, frmt_ptr_) of
     | (Specified(s: pointer), Specified(frmt_ptr: pointer)) =>
         let strong xs: [integer] = pcall(rev_listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<std_function_sprintf>, s, xs, args) in
+        let strong ret: loaded integer = pcall(<builtin_sprintf>, s, xs, args) in
         pure(ret)
     | _ : (loaded pointer, loaded pointer) =>
         pure (undef(<<DUMMY(sprintf_proxy)>>)) -- TODO think about that
   end
 
 -- int rename(const char *oldpath, const char *newpath);
-proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: pointer): eff loaded pointer :=
+proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: pointer): eff loaded integer :=
   let strong oldpath_loaded: loaded pointer = load('char*', oldpath_ptr) in
   let strong newpath_loaded: loaded pointer = load('char*', newpath_ptr) in
   case (oldpath_loaded, newpath_loaded) of
     | (Specified (oldpath: pointer), Specified (newpath: pointer)) =>
       let strong cs1: [integer] = pcall(rev_listFromStr, oldpath) in
       let strong cs2: [integer] = pcall(rev_listFromStr, newpath) in
-      pcall(<std_function_rename>, cs1, cs2)
+      pcall(<builtin_rename>, cs1, cs2)
     | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(rename_proxy)>>))
   end
@@ -289,16 +297,19 @@ proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: point
 -- <stdlib.h>
 ------------------------------------------------------------------------------
 
+builtin exit ()  : eff unit
+builtin _Exit () : eff unit
+
 proc [ailname = "abort"] abort_proxy () : eff unit :=
   pure (error(<<<ABORT>>>, False))
 
 proc [ailname = "exit"] exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in
-  pcall(<std_function_exit>, x)
+  pcall(<builtin_exit>, x)
 
 proc [ailname = "_Exit"] _Exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in
-  pcall(<std_function__Exit>, x)
+  pcall(<builtin__Exit>, x)
 
 proc [ailname = "malloc"] malloc_proxy (size_ptr: pointer) : eff loaded pointer :=
   let strong size_: loaded integer = load('size_t', size_ptr) in
@@ -348,6 +359,7 @@ proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_p
 -- <string.h>
 ------------------------------------------------------------------------------
 
+
 proc [ailname= "memcpy"] memcpy_proxy (s1_ptr: pointer, s2_ptr: pointer, n_ptr: pointer) : eff loaded pointer :=
   let strong _s1: loaded pointer = load('void *', s1_ptr) in
   let strong _s2: loaded pointer = load('void *', s2_ptr) in
@@ -381,6 +393,14 @@ proc [ailname = "memcmp"] memcmp_proxy (p_ptr: pointer, q_ptr: pointer, size_ptr
 -- <sys/stat.h>
 ------------------------------------------------------------------------------
 
+builtin mkdir ([integer], integer): eff loaded pointer
+builtin stat  ([integer], pointer): eff loaded pointer
+builtin lstat ([integer], pointer): eff loaded pointer
+builtin umask (integer)           : eff loaded pointer
+builtin chmod ([integer], integer): eff loaded pointer
+builtin chdir ([integer])         : eff loaded pointer
+builtin chown ([integer], integer, integer): eff loaded pointer
+
 -- int mkdir(const char *, mode_t);
 proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : eff loaded pointer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
@@ -388,7 +408,7 @@ proc [ailname = "mkdir"] mkdir_proxy (path_ptr: pointer, mode_ptr: pointer) : ef
   case (path_loaded, mode_loaded) of
     | (Specified (path: pointer), Specified (mode: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_mkdir>, cs, mode)
+      pcall(<builtin_mkdir>, cs, mode)
     | (_: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(mkdir_proxy)>>))
   end
@@ -400,8 +420,8 @@ proc [ailname = "stat"] stat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff l
   case (path_loaded, buf_loaded) of
     | (Specified (path: pointer), Specified (buf: pointer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_stat>, cs, buf)
-    | (_: loaded pointer, _: loaded integer) =>
+      pcall(<builtin_stat>, cs, buf)
+    | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(stat_proxy)>>))
   end
 
@@ -412,8 +432,8 @@ proc [ailname = "lstat"] lstat_proxy (path_ptr: pointer, buf_ptr: pointer) : eff
   case (path_loaded, buf_loaded) of
     | (Specified (path: pointer), Specified (buf: pointer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_lstat>, cs, buf)
-    | (_: loaded pointer, _: loaded integer) =>
+      pcall(<builtin_lstat>, cs, buf)
+    | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(lstat_proxy)>>))
   end
 
@@ -422,8 +442,8 @@ proc [ailname = "umask"] umask_proxy (mode_ptr: pointer) : eff loaded pointer :=
   let strong mode_loaded: loaded integer = load('signed int', mode_ptr) in
   case (mode_loaded) of
     | Specified (mode: integer) =>
-      pcall(<std_function_umask>, mode)
-    | _: loaded pointer =>
+      pcall(<builtin_umask>, mode)
+    | _: loaded integer =>
       pure (undef(<<DUMMY(umask_proxy)>>))
   end
 
@@ -434,7 +454,7 @@ proc [ailname = "chmod"] chmod_proxy (path_ptr: pointer, mode_ptr: pointer) : ef
   case (path_loaded, mode_loaded) of
     | (Specified (path: pointer), Specified (mode: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_chmod>, cs, mode)
+      pcall(<builtin_chmod>, cs, mode)
     | (_: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(chmod_proxy)>>))
   end
@@ -445,7 +465,7 @@ proc [ailname = "chdir"] chdir_proxy (path_ptr: pointer) : eff loaded pointer :=
   case (path_loaded) of
     | Specified (path: pointer) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_chdir>, cs)
+      pcall(<builtin_chdir>, cs)
     | _: loaded pointer =>
       pure (undef(<<DUMMY(chdir_proxy)>>))
   end
@@ -458,7 +478,7 @@ proc [ailname = "chown"] chown_proxy (path_ptr: pointer, owner_ptr: pointer, gro
   case (path_loaded, owner_loaded, group_loaded) of
     | (Specified (path: pointer), Specified (owner: integer), Specified (group: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_chown>, cs, owner, group)
+      pcall(<builtin_chown>, cs, owner, group)
     | (_: loaded pointer, _: loaded integer, _: loaded integer) =>
       pure (undef(<<DUMMY(chown_proxy)>>))
   end
@@ -476,6 +496,8 @@ proc [ailname = "chown"] chown_proxy (path_ptr: pointer, owner_ptr: pointer, gro
 -- <fcntl.h>
 ------------------------------------------------------------------------------
 
+builtin open ([integer], integer): eff loaded pointer
+
 -- int open(const char *path, int oflag, ...);
 proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args: [(ctype, pointer)]): eff loaded pointer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
@@ -484,7 +506,7 @@ proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args:
   case (path_loaded, oflag_loaded) of
     | (Specified (path: pointer), Specified (oflag: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_open>, cs, oflag)
+      pcall(<builtin_open>, cs, oflag)
     | (_: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(open_proxy)>>))
   end
@@ -492,6 +514,19 @@ proc [ailname = "open"] open_proxy (path_ptr: pointer, oflag_ptr: pointer, args:
 ------------------------------------------------------------------------------
 -- <unistd.h>
 ------------------------------------------------------------------------------
+
+builtin write    (integer, [integer], integer): eff loaded pointer
+builtin read     (integer, pointer, integer)  : eff loaded pointer
+builtin close    (integer)                    : eff loaded pointer
+builtin pwrite   (integer, [integer], integer): eff loaded pointer
+builtin pread    (integer, pointer, integer)  : eff loaded pointer
+builtin link     ([integer], [integer])       : eff loaded pointer
+builtin readlink ([integer], pointer, integer): eff loaded pointer
+builtin symlink  ([integer], [integer])       : eff loaded pointer
+builtin rmdir    ([integer])                  : eff loaded pointer
+builtin truncate ([integer], integer)         : eff loaded pointer
+builtin unlink   ([integer])                  : eff loaded pointer
+builtin lseek    (integer, integer, integer)  : eff loaded pointer
 
 -- ssize_t write(int, const void *, size_t);
 proc [ailname = "write"] write_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr: pointer): eff loaded pointer :=
@@ -501,7 +536,7 @@ proc [ailname = "write"] write_proxy (fd_ptr: pointer, buf_ptr: pointer, size_pt
   case (fd_loaded, buf_loaded, size_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, buf) in
-      pcall(<std_function_write>, fd, cs, size)
+      pcall(<builtin_write>, fd, cs, size)
     | (_: loaded integer, _: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(write_proxy)>>))
   end
@@ -513,7 +548,7 @@ proc [ailname = "read"] read_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr:
   let strong size_loaded: loaded integer = load('size_t', size_ptr) in
   case (fd_loaded, buf_loaded, size_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer)) =>
-      pcall(<std_function_read>, fd, buf, size)
+      pcall(<builtin_read>, fd, buf, size)
     | (_: loaded integer, _: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(read_proxy)>>))
   end
@@ -521,10 +556,10 @@ proc [ailname = "read"] read_proxy (fd_ptr: pointer, buf_ptr: pointer, size_ptr:
 
 -- int close(int fd);
 proc [ailname = "close"] close_proxy (fd_ptr: pointer): eff loaded pointer :=
-  let strong fd_loaded: loaded pointer = load('signed int', fd_ptr) in
+  let strong fd_loaded: loaded integer = load('signed int', fd_ptr) in
   case (fd_loaded) of
     | Specified (fd: integer) =>
-      pcall(<std_function_close>, fd)
+      pcall(<builtin_close>, fd)
     | _: loaded integer =>
       pure (undef(<<DUMMY(close_proxy)>>))
   end
@@ -538,7 +573,7 @@ proc [ailname = "pwrite"] pwrite_proxy (fd_ptr: pointer, buf_ptr: pointer, size_
   case (fd_loaded, buf_loaded, size_loaded, off_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, buf) in
-      pcall(<std_function_pwrite>, fd, cs, size, off)
+      pcall(<builtin_pwrite>, fd, cs, size, off)
     | (_: loaded integer, _: loaded pointer, _: loaded integer, _: loaded integer) =>
       pure (undef(<<DUMMY(pwrite_proxy)>>))
   end
@@ -551,7 +586,7 @@ proc [ailname = "pread"] pread_proxy (fd_ptr: pointer, buf_ptr: pointer, size_pt
   let strong off_loaded: loaded integer = load('signed int', off_ptr) in -- TODO: off_t ?
   case (fd_loaded, buf_loaded, size_loaded, off_loaded) of
     | (Specified (fd: integer), Specified (buf: pointer), Specified (size: integer), Specified (off: integer)) =>
-      pcall(<std_function_pread>, fd, buf, size, off)
+      pcall(<builtin_pread>, fd, buf, size, off)
     | (_: loaded integer, _: loaded pointer, _: loaded integer, _: loaded integer) =>
       pure (undef(<<DUMMY(pread_proxy)>>))
   end
@@ -565,7 +600,7 @@ proc [ailname = "link"] link_proxy (path1_ptr: pointer, path2_ptr: pointer): eff
     | (Specified (path1: pointer), Specified (path2: pointer)) =>
       let strong cs1: [integer] = pcall(rev_listFromStr, path1) in
       let strong cs2: [integer] = pcall(rev_listFromStr, path2) in
-      pcall(<std_function_link>, cs1, cs2)
+      pcall(<builtin_link>, cs1, cs2)
     | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(link_proxy)>>))
   end
@@ -574,11 +609,11 @@ proc [ailname = "link"] link_proxy (path1_ptr: pointer, path2_ptr: pointer): eff
 proc [ailname = "readlink"] readlink_proxy (path_ptr: pointer, buf_ptr: pointer, size_ptr: pointer): eff loaded pointer :=
   let strong path_loaded: loaded pointer = load('char*', path_ptr) in
   let strong buf_loaded: loaded pointer = load('char*', buf_ptr) in
-  let strong size_loaded: loaded pointer = load('size_t', size_ptr) in
+  let strong size_loaded: loaded integer = load('size_t', size_ptr) in
   case (path_loaded, buf_loaded, size_loaded) of
     | (Specified (path: pointer), Specified (buf: pointer), Specified (size: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_readlink>, cs, buf, size)
+      pcall(<builtin_readlink>, cs, buf, size)
     | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(readlink_proxy)>>))
   end
@@ -591,7 +626,7 @@ proc [ailname = "symlink"] symlink_proxy (target_ptr: pointer, lpath_ptr: pointe
     | (Specified (target: pointer), Specified (lpath: pointer)) =>
       let strong cs1: [integer] = pcall(rev_listFromStr, target) in
       let strong cs2: [integer] = pcall(rev_listFromStr, lpath) in
-      pcall(<std_function_symlink>, cs1, cs2)
+      pcall(<builtin_symlink>, cs1, cs2)
     | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(symlink_proxy)>>))
   end
@@ -602,7 +637,7 @@ proc [ailname = "rmdir"] rmdir_proxy (path_ptr: pointer) : eff loaded pointer :=
   case (path_loaded) of
     | Specified (path: pointer) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_rmdir>, cs)
+      pcall(<builtin_rmdir>, cs)
     | _: loaded pointer =>
       pure (undef(<<DUMMY(rmdir_proxy)>>))
   end
@@ -614,7 +649,7 @@ proc [ailname = "truncate"] truncate_proxy (path_ptr: pointer, off_ptr: pointer)
   case (path_loaded, off_loaded) of
     | (Specified (path: pointer), Specified (off: integer)) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_truncate>, cs, off)
+      pcall(<builtin_truncate>, cs, off)
     | (_: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(truncate_proxy)>>))
   end
@@ -625,10 +660,11 @@ proc [ailname = "unlink"] unlink_proxy (path_ptr: pointer) : eff loaded pointer 
   case (path_loaded) of
     | Specified (path: pointer) =>
       let strong cs: [integer] = pcall(rev_listFromStr, path) in
-      pcall(<std_function_unlink>, cs)
+      pcall(<builtin_unlink>, cs)
     | _: loaded pointer =>
       pure (undef(<<DUMMY(unlink_proxy)>>))
   end
+
 
 -- off_t lseek(int fd, off_t offset, int whence);
 proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_ptr: pointer): eff loaded pointer :=
@@ -637,7 +673,7 @@ proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_
   let strong whence_loaded: loaded integer = load('signed int', whence_ptr) in
   case (fd_loaded, off_loaded, whence_loaded) of
     | (Specified (fd: integer), Specified (off: integer), Specified (whence: integer)) =>
-      pcall(<std_function_lseek>, fd, off, whence)
+      pcall(<builtin_lseek>, fd, off, whence)
     | (_: loaded integer, _: loaded integer, _: loaded integer) =>
       pure (undef(<<DUMMY(lseek_proxy)>>))
   end
