@@ -1538,7 +1538,7 @@ let typecheck_program file =
               | Symbol.Symbol _ (Just name) -> name
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
-            insert_tdecl (Impl (I.StdFunction name)) (TDproc bTy bTys) acc
+            insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
       end) file.stdlib $
     Map_extra.fold (fun iCst decl acc ->
       match decl with
@@ -1593,7 +1593,7 @@ let typecheck_program file =
               | Symbol.Symbol _ (Just name) -> name
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
-            insert_tdecl (Impl (I.StdFunction name)) (TDproc bTy bTys) acc
+            insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
         | Proc _ bTy sym_bTys _ ->
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
       end) file.funs env in
