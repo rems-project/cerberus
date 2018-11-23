@@ -238,8 +238,8 @@ type implementation_constant =
   | Ctype_min
   | Ctype_max
   
-  (* Standard library functions *)
-  | StdFunction of string
+  (* Builtin functions *)
+  | BuiltinFunction of string
 
 val implementation_constant_to_nat : implementation_constant -> nat
 let implementation_constant_to_nat x =
@@ -271,12 +271,12 @@ let implementation_constant_to_nat x =
     | Atomic_bitfield_permitted -> 24
     | Ctype_min -> 25
     | Ctype_max -> 26
-    | StdFunction _ -> 27
+    | BuiltinFunction _ -> 27
   end
 
 let implementation_constant_equal x y =
   match (x, y) with
-    | (StdFunction name1, StdFunction name2) -> (name1 = name2)
+    | (BuiltinFunction name1, BuiltinFunction name2) -> (name1 = name2)
     | _ -> (implementation_constant_to_nat x = implementation_constant_to_nat y)
   end
 
@@ -287,7 +287,7 @@ end
 
 let ~{hol} implementation_constant_compare x y =
   match (x, y) with
-    | (StdFunction name1, StdFunction name2) -> setElemCompare name1 name2
+    | (BuiltinFunction name1, BuiltinFunction name2) -> setElemCompare name1 name2
     | _ -> setElemCompare (implementation_constant_to_nat x) (implementation_constant_to_nat y)
   end 
 
@@ -385,8 +385,8 @@ let string_of_implementation_constant = function
       "ctype_min"
   | Ctype_max ->
       "ctype_max"
-  | StdFunction fname ->
-       "std_function_" ^ fname
+  | BuiltinFunction fname ->
+       "builtin_" ^ fname
 end
 
 
