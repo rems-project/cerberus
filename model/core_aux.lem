@@ -1002,7 +1002,7 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
         List.foldr (fun (pat', cval') acc ->
           subst_pattern_val pat' cval' acc
         ) expr (List.zip pats' cvals)
-    | (CaseCtor Cloaded [pat'], Vloaded (LVspecified oval)) ->
+    | (CaseCtor Cspecified [pat'], Vloaded (LVspecified oval)) ->
         subst_pattern_val pat' (Vobject oval) expr
     | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
         subst_pattern_val pat' (Vctype ty) expr
@@ -1267,7 +1267,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
         ) expr (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cloaded [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
+    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
         subst_pattern_val pat' (Vobject oval) expr
     | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
         unsafe_subst_pattern pat' pe'' expr
@@ -1351,7 +1351,7 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
         ) (Just expr) (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cloaded [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
+    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
         Just $ subst_pattern_val pat' (Vobject oval) expr
     | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
         subst_pattern pat' pe'' expr
@@ -1983,7 +1983,7 @@ let rec match_pattern (Pattern _ pat) cval =
             )
           )
         ) (Just []) (List.zip pats' cvals')
-    | (CaseCtor Cnil [], Vlist _ []) ->
+    | (CaseCtor (Cnil _) [], Vlist _ []) ->
         let () = Debug.warn [] (fun () -> "Pattern matching nil without checking types!") in
         Just []
     | (CaseCtor Ccons [pat_x; pat_xs], Vlist ty (x::xs)) ->
@@ -2320,7 +2320,7 @@ let rec update_env_aux (Pattern _ pat) cval env =
         List.foldr (fun (pat', cval') acc ->
           update_env_aux pat' cval' acc
         ) env (List.zip pats' cvals)
-    | (CaseCtor Cloaded [pat'], Vloaded (LVspecified oval)) ->
+    | (CaseCtor Cspecified [pat'], Vloaded (LVspecified oval)) ->
         update_env_aux pat' (Vobject oval) env
     | (CaseCtor Cunspecified [pat'], Vloaded (LVunspecified ty)) ->
         update_env_aux pat' (Vctype ty) env
