@@ -65,7 +65,7 @@ instance (Show identifier_kind)
         "struct tag"
     | Kind_tag Kind_union ->
         "union tag"
-    | Kind_tag King_enum ->
+    | Kind_tag Kind_enum ->
         "enum tag"
     | Kind_ordinary OK_typedef ->
         "typedef"
@@ -354,7 +354,7 @@ let under_scope scope m =
   ) >>
   m >>= fun res ->
   State_exception.update (fun st ->
-    let (idents_map, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
+    let (_, ident_table') = Scope_table.destroy_scope st.registered_identifiers in
     let () = Debug.print_debug 3 [Debug.DB_desugaring] (fun () ->
       "EXITING Scope: " ^ string_of_scope scope
     ) in
@@ -448,11 +448,11 @@ let bindings_of_idents_map idents_map =
               match kind with
                 | Kind_ordinary (OK_object _) ->
                     match Map.lookup sym st.external_object_declarations with
-                      | Just (isTentative, loc, dur, isRegister, qs, ty) ->
+                      | Just (isTentative, _, dur, isRegister, qs, ty) ->
                           (sym, ((dur, isRegister), qs, ty)) :: acc
                       | Nothing ->
                           match Map.lookup sym st.internal_object_declarations with
-                            | Just (loc, dur, isRegister, qs, ty) ->
+                            | Just (_, dur, isRegister, qs, ty) ->
                                 (sym, ((dur, isRegister), qs, ty)) :: acc
                             | Nothing ->
                                 (* TODO: check *)
@@ -563,7 +563,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
        ", kind= " ^ show kind ^
        match link_opt with
          | Nothing -> ""
-         | Just link -> ", linkage= " ^ show link_opt
+         | Just _  -> ", linkage= " ^ show link_opt
        end
     ) in
   (* TODO: we should use a smaller type in the state to avoid having to do these
@@ -1846,7 +1846,7 @@ let extract_program startup_str =
                                (sym, A.StructDef membersDefs) :: acc
                            | Union_definition _ membersDefs ->
                                (sym, A.UnionDef membersDefs) :: acc
-                           | Enum_definition ->
+                           | Enum_definition _ ->
                                acc
                            end
                         ) [] $ Map_extra.toList st.tag_definitions
@@ -1920,7 +1920,7 @@ let get_sigma_sofar =
                                  (sym, A.StructDef membersDefs) :: acc
                              | Union_definition _ membersDefs ->
                                  (sym, A.UnionDef membersDefs) :: acc
-                             | Enum_definition ->
+                             | Enum_definition _ ->
                                  acc
                              end
                           ) [] $ Map_extra.toList st.tag_definitions

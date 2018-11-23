@@ -32,11 +32,11 @@ let std_of_ail_typing_error = function
   | TError_UndefinedBehaviour ub ->
       match (Undefined.std_of_undefined_behaviour ub) with
       | Just std -> [std]
-      | None -> []
+      | Nothing -> []
       end
   | TError_MiscError e ->
       std_of_typing_misc_error e
-  | TError_NotYetSupported ->
+  | TError_NotYetSupported _ ->
       []
 end
 

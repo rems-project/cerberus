@@ -32,7 +32,7 @@ let rec trysM_ loc err f = function
   | x::xs ->
     match f x with
     | Result b -> Result b
-    | Exception -> trysM_ loc err f xs
+    | Exception _ -> trysM_ loc err f xs
     end
   end
 
