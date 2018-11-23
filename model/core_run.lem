@@ -1030,7 +1030,7 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* 7.14 Signal handling <signal.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "signal") ->
+                | Impl (BuiltinFunction "signal") ->
                     match cvals with
                       | [Vobject (OVinteger signal); Vobject (OVpointer ptrval)] ->
                           (* should we check whether the ptrval is a function pointer? *)
@@ -1039,7 +1039,7 @@ BEFORE EVAL_PEXPR2
                           error ("Core_run, signal giving arguments of wrong types ==> "
                                   ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "raise") ->
+                | Impl (BuiltinFunction "raise") ->
                     match cvals with
                       | [Vobject (OVinteger ival)] ->
                           error "WIP: raise signal"
@@ -1050,7 +1050,7 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* 7.21 Input/output <stdio.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "snprintf") ->
+                | Impl (BuiltinFunction "snprintf") ->
                     (* TODO: factorise with the printf code *)
                     match cvals with
                       | [Vobject (OVpointer ptrval);
@@ -1081,7 +1081,7 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "sprintf") ->
+                | Impl (BuiltinFunction "sprintf") ->
                     (* TODO: factorise with the printf code *)
                     match cvals with
                       | [Vobject (OVpointer ptrval);
@@ -1111,7 +1111,7 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "printf") ->
+                | Impl (BuiltinFunction "printf") ->
                     match cvals with
                       | [Vlist (*(BTy_object OTy_integer)*)_ frmt_cvals;
                          Vlist (*(BTy_tuple [BTy_ctype; BTy_object OTy_pointer])*)_ args_cvals] ->
@@ -1139,7 +1139,7 @@ BEFORE EVAL_PEXPR2
                       | _ ->
                           error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "rename") ->
+                | Impl (BuiltinFunction "rename") ->
                   match cvals with
                     | [Vlist _ oldpath_cvals; Vlist _ newpath_cvals] ->
                         let oldpath_chars = List.map (charFromMValue "open") (List.reverse oldpath_cvals) in
@@ -1150,7 +1150,7 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* 7.5 Errors <errno.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "errno") ->
+                | Impl (BuiltinFunction "errno") ->
                   match cvals with
                     | [] ->
                       Step_tau (mk_info "Ecase") (
@@ -1162,13 +1162,13 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* 7.22 General utilities <stdlib.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "exit") ->
+                | Impl (BuiltinFunction "exit") ->
                     (* TODO: it should close all open resources *)
                     match cvals with
                       | [cval] -> Step_done cval
                       | _ -> error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (StdFunction "_Exit") ->
+                | Impl (BuiltinFunction "_Exit") ->
                     match cvals with
                       | [cval] -> Step_done cval
                       | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
@@ -1176,7 +1176,7 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* Posix <sys/stat.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "mkdir") ->
+                | Impl (BuiltinFunction "mkdir") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
                         let path_chars = List.map (charFromMValue "mkdir") (List.reverse path_cvals) in
@@ -1184,14 +1184,14 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_MKDIR (String.toString path_chars) mode
                       | _ -> error "mkdir"
                     end
-                | Impl (StdFunction "umask") ->
+                | Impl (BuiltinFunction "umask") ->
                     match cvals with
                       | [Vobject (OVinteger mode_ival)] ->
                         let mode = forceIntegerFromIntegerValue "umask" mode_ival in
                         Step_fs th_st $ FS_UMASK mode
                       | _ -> error "pread"
                     end
-                | Impl (StdFunction "chmod") ->
+                | Impl (BuiltinFunction "chmod") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVinteger mode_ival)] ->
                         let path = List.map (charFromMValue "chmod") (List.reverse path_cvals) in
@@ -1199,14 +1199,14 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_CHMOD (String.toString path) mode
                       | _ -> error "chmod"
                     end
-                | Impl (StdFunction "chdir") ->
+                | Impl (BuiltinFunction "chdir") ->
                     match cvals with
                       | [Vlist _ path_cvals] ->
                         let path = List.map (charFromMValue "chdir") (List.reverse path_cvals) in
                         Step_fs th_st $ FS_CHDIR (String.toString path)
                       | _ -> error "chdir"
                     end
-                | Impl (StdFunction "chown") ->
+                | Impl (BuiltinFunction "chown") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVinteger uid_ival); Vobject (OVinteger gid_ival)] ->
                         let path = List.map (charFromMValue "chown") (List.reverse path_cvals) in
@@ -1218,7 +1218,7 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* Posix <fctnl.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "open") ->
+                | Impl (BuiltinFunction "open") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVinteger oflag_ival)] ->
                         let path_chars = List.map (charFromMValue "open") (List.reverse path_cvals) in
@@ -1229,14 +1229,14 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* Posix <unistd.h> *)
                 (* ----------------------------------------------------------- *)
-                | Impl (StdFunction "close") ->
+                | Impl (BuiltinFunction "close") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival)] ->
                         let fd = forceIntegerFromIntegerValue "close" fd_ival in
                         Step_fs th_st $ FS_CLOSE fd
                       | _ -> error "close"
                     end
-                | Impl (StdFunction "write") ->
+                | Impl (BuiltinFunction "write") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival)] ->
                         let fd = forceIntegerFromIntegerValue "write" fd_ival in
@@ -1245,7 +1245,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_WRITE fd buf size
                       | _ -> error "write"
                     end
-                | Impl (StdFunction "read") ->
+                | Impl (BuiltinFunction "read") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival)] ->
                         let fd = forceIntegerFromIntegerValue "read" fd_ival in
@@ -1253,7 +1253,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_READ fd bufptr size
                       | _ -> error "read"
                     end
-                | Impl (StdFunction "pwrite") ->
+                | Impl (BuiltinFunction "pwrite") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
                         let fd = forceIntegerFromIntegerValue "pwrite" fd_ival in
@@ -1263,7 +1263,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_PWRITE fd buf size off
                       | _ -> error "pwrite"
                     end
-                | Impl (StdFunction "pread") ->
+                | Impl (BuiltinFunction "pread") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vobject (OVpointer bufptr); Vobject (OVinteger size_ival); Vobject (OVinteger off_ival)] ->
                         let fd = forceIntegerFromIntegerValue "pread" fd_ival in
@@ -1272,7 +1272,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_PREAD fd bufptr size off
                       | _ -> error "pread"
                     end
-                | Impl (StdFunction "link") ->
+                | Impl (BuiltinFunction "link") ->
                     match cvals with
                       | [Vlist _ oldpath_cvals; Vlist _ newpath_cvals] ->
                         let oldpath = List.map (charFromMValue "link") (List.reverse oldpath_cvals) in
@@ -1280,7 +1280,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_LINK (String.toString oldpath) (String.toString newpath)
                       | _ -> error "link"
                     end
-                | Impl (StdFunction "readlink") ->
+                | Impl (BuiltinFunction "readlink") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVpointer ptr); Vobject (OVinteger max_ival)] ->
                         let path = List.map (charFromMValue "readlink") (List.reverse path_cvals) in
@@ -1288,7 +1288,7 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_READLINK (String.toString path) ptr max
                       | _ -> error "readlink"
                     end
-                | Impl (StdFunction "symlink") ->
+                | Impl (BuiltinFunction "symlink") ->
                     match cvals with
                       | [Vlist _ target_cvals; Vlist _ lpath_cvals] ->
                         let target = List.map (charFromMValue "symlink") (List.reverse target_cvals) in
@@ -1296,14 +1296,14 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_SYMLINK (String.toString target) (String.toString lpath)
                       | _ -> error "symlink"
                     end
-                | Impl (StdFunction "rmdir") ->
+                | Impl (BuiltinFunction "rmdir") ->
                     match cvals with
                       | [Vlist _ path_cvals] ->
                         let path = List.map (charFromMValue "rmdir") (List.reverse path_cvals) in
                         Step_fs th_st $ FS_RMDIR (String.toString path)
                       | _ -> error "rmdir"
                     end
-                | Impl (StdFunction "truncate") ->
+                | Impl (BuiltinFunction "truncate") ->
                     match cvals with
                       | [Vlist _ path_cvals; Vobject (OVinteger len_ival)] ->
                         let path_chars = List.map (charFromMValue "truncate") (List.reverse path_cvals) in
@@ -1311,14 +1311,14 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_TRUNCATE (String.toString path_chars) len
                       | _ -> error "truncate"
                     end
-                | Impl (StdFunction "unlink") ->
+                | Impl (BuiltinFunction "unlink") ->
                     match cvals with
                       | [Vlist _ path_cvals] ->
                         let path = List.map (charFromMValue "unlink") (List.reverse path_cvals) in
                         Step_fs th_st $ FS_UNLINK (String.toString path)
                       | _ -> error "unlink"
                     end
-                | Impl (StdFunction "lseek") ->
+                | Impl (BuiltinFunction "lseek") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vobject (OVinteger off_ival); Vobject (OVinteger whence_ival)] ->
                         let fd = forceIntegerFromIntegerValue "lseek" fd_ival in

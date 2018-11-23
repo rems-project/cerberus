@@ -69,6 +69,7 @@ let hack ~conf mode =
       experimental_unseq= false;
       typecheck_core=     pipe_conf.Pipeline.typecheck_core;
       defacto=            false;
+      fs_dump=            false;
       default_impl=       false;
       action_graph=       false;
       n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
@@ -251,7 +252,7 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
       | (NDkilled r, st') ->
         let loc, reason = match r with
           | Undef0 (loc, ubs) ->
-            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.stringFromUndefined_behaviour ubs
+            Some loc, "Undefined: " ^ Lem_show.stringFromList Undefined.ub_short_string ubs
           | Error0 (loc, str) ->
             Some loc, "Error: " ^ str ^ ""
           | Other dr_err ->
