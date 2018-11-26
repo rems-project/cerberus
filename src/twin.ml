@@ -76,7 +76,7 @@ end = struct
   let put = nd_put
   let fail err = kill (Other err)
   let mapM _ _ = failwith "TODO: mapM"
-  let foldlM = foldlM1
+  let foldlM = nd_foldlM
   let msum str xs = msum Mem_common.instance_Nondeterminism_Constraints_Mem_common_mem_constraint_dict () str xs
 end
 
