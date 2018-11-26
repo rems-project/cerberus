@@ -23,8 +23,6 @@
 
 
 // POSIX stuff
-#define IOV_MAX __cerbvar_IOV_MAX
+#define IOV_MAX 1
 
-
-#else
 #endif
