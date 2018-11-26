@@ -10,7 +10,11 @@ LEMSRC:=\
 
 generated:
 	mkdir generated
-	cp *.{ml,mli,lem,sed} Makefile generated/
+	cp *.ml generated/
+	cp *.mli generated/
+	cp *.lem generated/
+	cp *.sed generated/
+	cp Makefile generated/
 	make -C generated lem
 
 .PHONY: lem clean ocaml
