@@ -1,4 +1,6 @@
-// TODO
+#ifndef _UNISTD_H_
+#define _UNISTD_H_
+
 #include <sys/types.h>
 
 int          access(const char *, int);
@@ -89,6 +91,11 @@ int          unlink(const char *);
 // int          unlinkat(int, const char *, int);
 ssize_t      write(int, const void *, size_t);
 
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
+
 
 #define F_OK __cerbvar__F_OK
 #define R_OK __cerbvar__R_OK
@@ -97,3 +104,5 @@ ssize_t      write(int, const void *, size_t);
 
 
 #define _SC_PAGESIZE __cerbvar__SC_PAGESIZE
+
+#endif

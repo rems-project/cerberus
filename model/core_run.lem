@@ -1239,10 +1239,15 @@ BEFORE EVAL_PEXPR2
                 | Impl (BuiltinFunction "write") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival); Vlist _ buf_cvals; Vobject (OVinteger size_ival)] ->
-                        let fd = forceIntegerFromIntegerValue "write" fd_ival in
                         let buf = List.map (charFromMValue "write") (List.reverse buf_cvals) in
-                        let size = forceIntegerFromIntegerValue "write" size_ival in
-                        Step_fs th_st $ FS_WRITE fd buf size
+                        let fd = forceIntegerFromIntegerValue "write" fd_ival in
+                        if fd = 1 then (* STDOUT *)
+                           Step_printf2 buf [] (fun n ->
+                             <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n))) |>
+                           )
+                        else (* other FD *)
+                          let size = forceIntegerFromIntegerValue "write" size_ival in
+                          Step_fs th_st $ FS_WRITE fd buf size
                       | _ -> error "write"
                     end
                 | Impl (BuiltinFunction "read") ->
