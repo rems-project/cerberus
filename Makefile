@@ -127,7 +127,8 @@ sibylfs: ${BUILD_DIR}
 	@echo $(BOLD)BUILDING SilbylFS$(RESET)
 	@make -C sibylfs
 	@echo $(BOLD)COPYING SibylFS .ml files$(RESET)
-	@cp -vf ./sibylfs/generated/*.{ml,mli} ${BUILD_DIR}
+	@cp -vf ./sibylfs/generated/*.ml ${BUILD_DIR}
+	@cp -vf ./sibylfs/generated/*.mli ${BUILD_DIR}
 
 ocaml_native:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
