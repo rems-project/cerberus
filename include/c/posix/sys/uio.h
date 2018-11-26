@@ -14,16 +14,20 @@ struct iovec {
 
 ssize_t readv (int fd, const struct iovec * vec, int count)
 {
-  // TODO: this is a hack, assuming IOV_MAX = 1
-  assert (IOV_MAX == 1 && count == 1 && vec != NULL);
-  return read (fd, vec->iov_base, vec->iov_len);
+  int res = 0;
+  for (int i = 0; i < count; i++) {
+    res = read (fd, vec[i].iov_base, vec[i].iov_len);
+  }
+  return res;
 }
 
 ssize_t writev (int fd, const struct iovec * vec, int count)
 {
-  // TODO: this is a hack, assuming IOV_MAX = 1
-  assert (IOV_MAX == 1 && count == 1 && vec != NULL);
-  return write (fd, vec->iov_base, vec->iov_len);
+  int res = 0;
+  for (int i = 0; i < count; i++) {
+    res = write(fd, vec[i].iov_base, vec[i].iov_len);
+  }
+  return res;
 }
 
 
