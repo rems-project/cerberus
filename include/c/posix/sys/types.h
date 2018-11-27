@@ -48,6 +48,5 @@ typedef long                  time_t;
 #define trace_event_id_t      __cerbty_trace_event_id_t
 #define trace_event_set_t     __cerbty_trace_event_set_t
 #define trace_id_t            __cerbty_trace_id_t
-#define ino_t                 __cerbty_ino_t
 
 #endif
