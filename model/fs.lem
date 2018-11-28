@@ -114,3 +114,15 @@ declare ocaml target_rep function fs_stat = `Sibylfs.run_stat`
 
 val fs_lstat: fs_state -> string -> fs_state * (either fs_error fs_stat)
 declare ocaml target_rep function fs_lstat = `Sibylfs.run_lstat`
+
+val fs_opendir: fs_state -> string -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_opendir = `Sibylfs.run_opendir`
+
+val fs_readdir: fs_state -> integer -> fs_state * (either fs_error (list char))
+declare ocaml target_rep function fs_readdir = `Sibylfs.run_readdir`
+
+val fs_rewinddir: fs_state -> integer -> fs_state
+declare ocaml target_rep function fs_rewinddir = `Sibylfs.run_rewinddir`
+
+val fs_closedir: fs_state -> integer -> fs_state * (either fs_error nat)
+declare ocaml target_rep function fs_closedir = `Sibylfs.run_closedir`

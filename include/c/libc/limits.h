@@ -24,5 +24,6 @@
 
 // POSIX
 #define IOV_MAX    1024
+#define NAME_MAX   1024
 
 #endif
