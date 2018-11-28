@@ -380,7 +380,10 @@ let builtin = [
   
 
   (* TODO: some POSIX stuff *)
-  ("__cerbty_ssize_t", Typename)
+  ("__cerbty_ssize_t", Typename);
+
+  (* from dirent.h *)
+  ("__cerbty_DIR", Typename);
 ]
 
 
@@ -519,8 +522,6 @@ let translate_builtin_typenames = function
       (* in sys/types.h *)
       (* it's a signed integer type *)
       Just (AilTypesAux.mk_ctype_integer (ATypes.IBuiltin "ssize_t"))
-
-
 
   | str ->
       (* TODO *)

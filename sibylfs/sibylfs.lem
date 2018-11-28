@@ -51,9 +51,20 @@ let return_nat = function
   end
 
 let return_bytes = function
+  | RV_none -> [] (* used by readdir *)
   | RV_bytes bs -> List_array.to_list bs
   | _ -> failwith "return_bytes"
   end
+
+(* TODO: delete, not used *)
+let return_names = function
+  | RV_none -> failwith "none"
+  | RV_num _ -> failwith "num"
+  | RV_bytes _ -> failwith "bytes"
+  | RV_stats _ -> failwith "stats"
+  | RV_names ns -> ns
+  | _ -> failwith "return_names"
+end
 
 let dest_uid (User_id n) = n
 
@@ -200,8 +211,6 @@ let run_chown st path uid gid =
   run st return_nat $ OS_CHOWN (CS_Some path, uid_of_int uid, gid_of_int gid)
 
 (*
--- DIR *opendir(const char *filename);
--- struct dirent *readdir(DIR *dirp);
 -- void rewinddir(DIR *dirp);
 -- int closedir(DIR *dirp);
 *)
@@ -241,3 +250,19 @@ let run_stat st path =
 val run_lstat: fs_state -> string -> fs_state * (either error fs_stat)
 let run_lstat st path =
   run st return_stat $ OS_LSTAT (CS_Some path)
+
+val run_opendir: fs_state -> string -> fs_state * (either error nat)
+let run_opendir st path =
+  run st return_nat $ OS_OPENDIR (CS_Some path)
+
+val run_readdir: fs_state -> integer -> fs_state * (either error (list char))
+let run_readdir st dh =
+  run st return_bytes $ OS_READDIR (DH (natFromInteger dh))
+
+val run_rewinddir: fs_state -> integer -> fs_state
+let run_rewinddir st dh =
+  fst $ run st return_nat (OS_REWINDDIR (DH (natFromInteger dh)))
+
+val run_closedir: fs_state -> integer -> fs_state * (either error nat)
+let run_closedir st dh =
+  run st return_nat $ OS_CLOSEDIR (DH (natFromInteger dh))

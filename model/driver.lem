@@ -319,13 +319,21 @@ let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
 
 val drive_fs_step: Cthread.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
 let drive_fs_step tid th_st dr_st fs_oper =
-  let mk_th_st n =
+  let th_st_from_int n =
     let (Core.Expr arena_annots _) = th_st.Core_run.arena in
     <| th_st with Core_run.arena= Core.Expr arena_annots (Core.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n))) |>
   in
-  let update fs_st n =
+  let th_st_from_ptr p =
+    let (Core.Expr arena_annots _) = th_st.Core_run.arena in
+    <| th_st with Core_run.arena= Core.Expr arena_annots (Core.Epure (Caux.mk_specified_pe (Caux.mk_value_pe (Core.Vobject (Core.OVpointer p))))) |>
+  in
+  let th_st_from_void () =
+    let (Core.Expr arena_annots _) = th_st.Core_run.arena in
+    <| th_st with Core_run.arena= Core.Expr arena_annots (Core.Epure (Caux.mk_value_pe Core.Vunit)) |>
+  in
+  let update fs_st th_st =
     ND.update $ fun dr_st ->
-      let core_st' = Core_run.update_thread_state tid (mk_th_st n) dr_st.core_state in
+      let core_st' = Core_run.update_thread_state tid th_st dr_st.core_state in
       <| dr_st with
         fs_state= fs_st;
         core_state= core_st';
@@ -342,37 +350,37 @@ let drive_fs_step tid th_st dr_st fs_oper =
     match res with
       | Left e ->
         store_error e >>
-        update fs_st (0 - 1)
+        update fs_st (th_st_from_int (0 - 1))
       | Right n ->
-        update fs_st $ integerFromNat n
+        update fs_st $ th_st_from_int (integerFromNat n)
     end
   in
   let store_buffer ptr (fs_st, res) =
     match res with
       | Left e ->
         store_error e >>
-        update fs_st (0 - 1)
+        update fs_st (th_st_from_int (0 - 1))
       | Right buf ->
         let n = integerFromNat $ List.length buf in
         liftMem (Output.store_chars_in_array ptr buf) >>
-        update fs_st n
+        update fs_st (th_st_from_int n)
     end
   in
   let store_buffer_trunc ptr max (fs_st, res) =
     match res with
       | Left e ->
         store_error e >>
-        update fs_st (0 - 1)
+        update fs_st (th_st_from_int (0 - 1))
       | Right buf ->
         let buf_trunc = List.take (natFromInteger max) buf in
         let n = integerFromNat $ List.length buf_trunc in
         liftMem (Output.store_chars_in_array ptr buf_trunc) >>
-        update fs_st n
+        update fs_st (th_st_from_int n)
     end
   in
   let update_stdout out_chars =
     ND.update (fun dr_st ->
-      let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
+      let core_st' = Core_run.update_thread_state tid (th_st_from_int (integerFromNat (List.length out_chars))) dr_st.core_state in
       <| dr_st with
         core_state= <| core_st' with
           Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stdout=
@@ -385,7 +393,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
   in
   let update_stderr out_chars =
     ND.update (fun dr_st ->
-      let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
+      let core_st' = Core_run.update_thread_state tid (th_st_from_int (integerFromNat (List.length out_chars))) dr_st.core_state in
       <| dr_st with
         core_state= <| core_st' with
           Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stderr=
@@ -396,16 +404,42 @@ let drive_fs_step tid th_st dr_st fs_oper =
       |>
     )
   in
-  let store_stat stat_ptr (fs_st, res) =
-    let sym =
-      let dom = Map.domain dr_st.core_file.Core.tagDefs in
-      let res = Set.filter (fun sym ->
-        match sym with
-        | Symbol.Symbol _ (Just name) -> name = "stat"
-        | _ -> error "symbol struct stat not in tagDefs"
-        end) dom
-      in Set_extra.choose res
+  let struct_sym name =
+    let dom = Map.domain dr_st.core_file.Core.tagDefs in
+    let res = Set.filter (fun sym ->
+      match sym with
+      | Symbol.Symbol _ (Just n) -> n = name
+      | _ -> error ("symbol struct " ^ name ^ " not in tagDefs")
+      end) dom
     in
+    match Set_extra.toList res with
+    | [sym] -> sym
+    | _ -> error ("multiple symbols for struct " ^ name ^ " in tagDefs")
+    end
+  in
+  let store_dir (fs_st, res) =
+    let sym = struct_sym "dirent" in
+    let loc = Loc.other "store struct dirent" in
+    let dirent_cty = Core_ctype.Struct sym in
+    let update_mem dir_name =
+      Mem.bind (Mem.allocate_static tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing) (fun dirent_ptr ->
+        let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Cabs.CabsIdentifier loc "d_name") in
+        Mem.bind (Output.store_chars_in_array d_name_ptr dir_name) (fun _ ->
+          (Mem.return dirent_ptr)))
+    in
+    match res with
+    | Left e ->
+      store_error e >>
+      update fs_st (th_st_from_ptr (Mem.null_ptrval dirent_cty))
+    | Right [] ->
+      update fs_st (th_st_from_ptr (Mem.null_ptrval dirent_cty))
+    | Right dir_name ->
+      liftMem (update_mem dir_name) >>= fun dirent_ptr ->
+      update fs_st (th_st_from_ptr dirent_ptr)
+    end
+  in
+  let store_stat stat_ptr (fs_st, res) =
+    let sym = struct_sym "stat" in
     let update_mem stat =
       let loc = Loc.other "store struct stat" in
       let store iTy memb f =
@@ -430,10 +464,10 @@ let drive_fs_step tid th_st dr_st fs_oper =
     match res with
     | Left e ->
       store_error e >>
-      update fs_st (0 - 1)
+      update fs_st (th_st_from_int (0 - 1))
     | Right stat ->
       liftMem (update_mem stat) >>
-      update fs_st 0
+      update fs_st (th_st_from_int 0)
     end
   in
   match fs_oper with
@@ -488,6 +522,14 @@ let drive_fs_step tid th_st dr_st fs_oper =
       return $ Fs.fs_lseek dr_st.fs_state fd off whence
     | Core_run.FS_RENAME oldpath newpath ->
       return $ Fs.fs_rename dr_st.fs_state oldpath newpath
+    | Core_run.FS_OPENDIR path ->
+      return $ Fs.fs_opendir dr_st.fs_state path
+    | Core_run.FS_READDIR dir ->
+      store_dir $ Fs.fs_readdir dr_st.fs_state dir
+    | Core_run.FS_REWINDDIR dir ->
+      update (Fs.fs_rewinddir dr_st.fs_state dir) (th_st_from_void ())
+    | Core_run.FS_CLOSEDIR dir ->
+      return $ Fs.fs_closedir dr_st.fs_state dir
   end
 
 

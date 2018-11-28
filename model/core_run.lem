@@ -251,12 +251,10 @@ type fs_oper =
   | FS_CHMOD of string * integer (* path * file perm *)
   | FS_CHOWN of string * integer * integer (* path * uid * gid *)
   | FS_CHDIR of string (* path *)
-(*
-    | FS_READDIR of ty_dh
-    | FS_OPENDIR of cstring
-    | FS_REWINDDIR of ty_dh
-    | FS_CLOSEDIR of ty_dh
-*)
+  | FS_OPENDIR of string (* path *)
+  | FS_READDIR of integer (* DIR node *)
+  | FS_REWINDDIR of integer (* DIR node *)
+  | FS_CLOSEDIR of integer (* DIR node *)
 
 type core_step =
   | Step_action_request of core_run_info * core_runM action_request
@@ -1152,7 +1150,7 @@ BEFORE EVAL_PEXPR2
                   match cvals with
                     | [] ->
                       Step_tau (mk_info "Ecase") (
-                        E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_value_pe (Vobject (OVpointer th_st.errno)))) |>
+                        E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno))))) |>
                       )
                     | _ ->
                       error "wrong arguments for __builtin_errno"
@@ -1212,6 +1210,37 @@ BEFORE EVAL_PEXPR2
                         let gid = forceIntegerFromIntegerValue "chown" gid_ival in
                         Step_fs th_st $ FS_CHOWN (String.toString path) uid gid
                       | _ -> error "chown"
+                    end
+                (* ----------------------------------------------------------- *)
+                (* Posix <dirent.h> *)
+                (* ----------------------------------------------------------- *)
+                | Impl (BuiltinFunction "opendir") ->
+                    match cvals with
+                      | [Vlist _ path_cvals] ->
+                        let path = List.map (charFromMValue "opendir") path_cvals in
+                        Step_fs th_st $ FS_OPENDIR (String.toString path)
+                      | _ -> error "opendir"
+                    end
+                | Impl (BuiltinFunction "readdir") ->
+                    match cvals with
+                      | [Vobject (OVinteger dir_ival)] ->
+                        let dir = forceIntegerFromIntegerValue "readdir" dir_ival in
+                        Step_fs th_st $ FS_READDIR dir
+                      | _ -> error "readdir"
+                    end
+                | Impl (BuiltinFunction "rewinddir") ->
+                    match cvals with
+                      | [Vobject (OVinteger dir_ival)] ->
+                        let dir = forceIntegerFromIntegerValue "rewinddir" dir_ival in
+                        Step_fs th_st $ FS_REWINDDIR dir
+                      | _ -> error "rewinddir"
+                    end
+                | Impl (BuiltinFunction "closedir") ->
+                    match cvals with
+                      | [Vobject (OVinteger dir_ival)] ->
+                        let dir = forceIntegerFromIntegerValue "closedir" dir_ival in
+                        Step_fs th_st $ FS_CLOSEDIR dir
+                      | _ -> error "closedir"
                     end
                 (* ----------------------------------------------------------- *)
                 (* Posix <fctnl.h> *)

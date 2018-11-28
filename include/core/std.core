@@ -237,11 +237,10 @@ proc create_and_store (ty: ctype, x: storable) : eff pointer :=
 -- <errno.h>
 ------------------------------------------------------------------------------
 
-builtin errno (): eff pointer
+builtin errno (): eff loaded pointer
 
 proc [ailname = "__builtin_errno"] errno_proxy (): eff loaded pointer :=
-  let strong p: pointer = pcall(<builtin_errno>) in
-  pure(Specified(p))
+  pcall(<builtin_errno>)
 
 ------------------------------------------------------------------------------
 -- <signal.h>
@@ -512,10 +511,72 @@ proc [ailname = "chown"] chown_proxy (path_ptr: pointer, owner_ptr: pointer, gro
 -- <dirent.h>
 ------------------------------------------------------------------------------
 
+builtin opendir ([integer]): eff loaded integer
+builtin readdir (integer): eff loaded pointer
+builtin rewinddir (integer): eff unit
+builtin closedir (integer): eff loaded integer
+
 -- DIR *opendir(const char *filename);
+proc [ailname = "opendir"] opendir_proxy (fname_ptr: pointer): eff loaded pointer :=
+  let strong fname_loaded: loaded pointer = load('char *', fname_ptr) in
+  case fname_loaded of
+    | Specified (fname: pointer) =>
+      let strong cs: [integer] = pcall(listFromStr, fname) in
+      let strong n: loaded integer = pcall(<builtin_opendir>, cs) in
+      let strong p: pointer = pcall(create_and_store, 'signed int', n) in
+      pure(Specified(p))
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(opendir)>>))
+  end
+
 -- struct dirent *readdir(DIR *dirp);
+proc [ailname = "readdir"] readdir_proxy (dir_ptr: pointer): eff loaded pointer :=
+  let strong dir_ptr_loaded: loaded pointer = load('signed int*', dir_ptr) in
+  case dir_ptr_loaded of
+    | Specified (dir_ptr: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dir_ptr) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_readdir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(readdir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(readdir)>>))
+  end
+
 -- void rewinddir(DIR *dirp);
+proc [ailname = "rewinddir"] rewinddir_procy (dir_ptr: pointer): eff unit :=
+  let strong dir_ptr_loaded: loaded pointer = load('signed int*', dir_ptr) in
+  case dir_ptr_loaded of
+    | Specified (dir_ptr: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dir_ptr) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_rewinddir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(rewinddir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(rewinddir)>>))
+  end
+
 -- int closedir(DIR *dirp);
+proc [ailname = "closedir"] closedir_procy (dir_ptr: pointer): eff loaded integer :=
+  let strong dir_ptr_loaded: loaded pointer = load('signed int*', dir_ptr) in
+  case dir_ptr_loaded of
+    | Specified (dir_ptr: pointer) =>
+        let strong dir_loaded: loaded integer = load('signed int', dir_ptr) in
+        case dir_loaded of
+          | Specified (dir: integer) =>
+            pcall(<builtin_closedir>, dir)
+          | _: loaded integer =>
+            pure(undef(<<DUMMY(closedir)>>))
+        end
+    | _: loaded pointer =>
+      pure(undef(<<DUMMY(closedir)>>))
+  end
+
 
 ------------------------------------------------------------------------------
 -- <fcntl.h>
