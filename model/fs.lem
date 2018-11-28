@@ -1,6 +1,42 @@
 (* An interface for SibylFS *)
 open import Num Maybe Either
 
+type fs_stat
+declare ocaml target_rep type fs_stat = `Sibylfs.fs_stat`
+
+val fs_dev: fs_stat -> integer
+declare ocaml target_rep function fs_dev = `Sibylfs.fs_dev`
+
+val fs_ino: fs_stat -> integer
+declare ocaml target_rep function fs_ino = `Sibylfs.fs_ino`
+
+val fs_perm: fs_stat -> integer
+declare ocaml target_rep function fs_perm = `Sibylfs.fs_perm`
+
+val fs_nlink: fs_stat -> integer
+declare ocaml target_rep function fs_nlink = `Sibylfs.fs_nlink`
+
+val fs_uid: fs_stat -> integer
+declare ocaml target_rep function fs_uid = `Sibylfs.fs_uid`
+
+val fs_gid: fs_stat -> integer
+declare ocaml target_rep function fs_gid = `Sibylfs.fs_gid`
+
+val fs_rdev: fs_stat -> integer
+declare ocaml target_rep function fs_rdev = `Sibylfs.fs_rdev`
+
+val fs_size: fs_stat -> integer
+declare ocaml target_rep function fs_size = `Sibylfs.fs_size`
+
+val fs_atime: fs_stat -> integer
+declare ocaml target_rep function fs_atime = `Sibylfs.fs_atime`
+
+val fs_mtime: fs_stat -> integer
+declare ocaml target_rep function fs_mtime = `Sibylfs.fs_mtime`
+
+val fs_ctime: fs_stat -> integer
+declare ocaml target_rep function fs_ctime = `Sibylfs.fs_ctime`
+
 type fs_error
 declare ocaml target_rep type fs_error = `Sibylfs.fs_error`
 
@@ -73,4 +109,8 @@ declare ocaml target_rep function fs_unlink = `Sibylfs.run_unlink`
 val fs_lseek: fs_state -> integer -> integer -> integer -> fs_state * (either fs_error nat)
 declare ocaml target_rep function fs_lseek = `Sibylfs.run_lseek`
 
+val fs_stat: fs_state -> string -> fs_state * (either fs_error fs_stat)
+declare ocaml target_rep function fs_stat = `Sibylfs.run_stat`
 
+val fs_lstat: fs_state -> string -> fs_state * (either fs_error fs_stat)
+declare ocaml target_rep function fs_lstat = `Sibylfs.run_lstat`

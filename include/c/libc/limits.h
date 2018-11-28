@@ -22,9 +22,7 @@
 #define ULLONG_MAX __cerbvar_ULLONG_MAX
 
 
-// POSIX stuff
-#define IOV_MAX __cerbvar_IOV_MAX
+// POSIX
+#define IOV_MAX    1024
 
-
-#else
 #endif

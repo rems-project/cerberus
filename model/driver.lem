@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId Decode Output
+import Core Core_ctype Boot UniqueId Decode Output Set_extra
 import Core_aux Builtins
 module Caux = Core_aux
 
@@ -318,7 +318,7 @@ let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
 *)
 
 val drive_fs_step: Cthread.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
-let drive_fs_step tid th_st dr_st fs_return =
+let drive_fs_step tid th_st dr_st fs_oper =
   let mk_th_st n =
     let (Core.Expr arena_annots _) = th_st.Core_run.arena in
     <| th_st with Core_run.arena= Core.Expr arena_annots (Core.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n))) |>
@@ -350,27 +350,93 @@ let drive_fs_step tid th_st dr_st fs_return =
   let store_buffer ptr (fs_st, res) =
     match res with
       | Left e ->
-          store_error e >>
-          update fs_st (0 - 1)
+        store_error e >>
+        update fs_st (0 - 1)
       | Right buf ->
-          let n = integerFromNat $ List.length buf in
-          liftMem (Output.store_chars_in_array ptr buf) >>
-          update fs_st n
+        let n = integerFromNat $ List.length buf in
+        liftMem (Output.store_chars_in_array ptr buf) >>
+        update fs_st n
     end
   in
   let store_buffer_trunc ptr max (fs_st, res) =
     match res with
       | Left e ->
-          store_error e >>
-          update fs_st (0 - 1)
+        store_error e >>
+        update fs_st (0 - 1)
       | Right buf ->
-          let buf_trunc = List.take (natFromInteger max) buf in
-          let n = integerFromNat $ List.length buf_trunc in
-          liftMem (Output.store_chars_in_array ptr buf_trunc) >>
-          update fs_st n
+        let buf_trunc = List.take (natFromInteger max) buf in
+        let n = integerFromNat $ List.length buf_trunc in
+        liftMem (Output.store_chars_in_array ptr buf_trunc) >>
+        update fs_st n
     end
   in
-  match fs_return with
+  let update_stdout out_chars =
+    ND.update (fun dr_st ->
+      let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
+      <| dr_st with
+        core_state= <| core_st' with
+          Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stdout=
+                Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stdout
+              |>
+        |>;
+        dr_step_counter= dr_st.dr_step_counter + 1;
+      |>
+    )
+  in
+  let update_stderr out_chars =
+    ND.update (fun dr_st ->
+      let core_st' = Core_run.update_thread_state tid (mk_th_st (integerFromNat (List.length out_chars))) dr_st.core_state in
+      <| dr_st with
+        core_state= <| core_st' with
+          Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stderr=
+                Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stdout
+              |>
+        |>;
+        dr_step_counter= dr_st.dr_step_counter + 1;
+      |>
+    )
+  in
+  let store_stat stat_ptr (fs_st, res) =
+    let sym =
+      let dom = Map.domain dr_st.core_file.Core.tagDefs in
+      let res = Set.filter (fun sym ->
+        match sym with
+        | Symbol.Symbol _ (Just name) -> name = "stat"
+        | _ -> error "symbol struct stat not in tagDefs"
+        end) dom
+      in Set_extra.choose res
+    in
+    let update_mem stat =
+      let loc = Loc.other "store struct stat" in
+      let store iTy memb f =
+        let ptr = Mem.member_shift_ptrval stat_ptr sym (Cabs.CabsIdentifier loc memb) in
+        let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
+        Mem.store loc (Core_ctype.Basic (AilTypes.Integer iTy)) false ptr mval
+      in
+      let sint = AilTypes.Unsigned AilTypes.Int_ in
+      let uint = AilTypes.Signed AilTypes.Int_ in
+      let ushort = AilTypes.Unsigned AilTypes.Short in
+      let slonglong = AilTypes.Signed AilTypes.LongLong in
+      let ulonglong = AilTypes.Unsigned AilTypes.LongLong in
+      Mem.bind (store sint "st_dev" Fs.fs_dev) (fun _ ->
+      Mem.bind (store ulonglong "st_ino" Fs.fs_ino) (fun _ ->
+      Mem.bind (store ushort "st_mode" Fs.fs_perm) (fun _ ->
+      Mem.bind (store ushort "st_nlink" Fs.fs_nlink) (fun _ ->
+      Mem.bind (store uint "st_uid" Fs.fs_uid) (fun _ ->
+      Mem.bind (store uint "st_gid" Fs.fs_gid) (fun _ ->
+      Mem.bind (store sint "st_rdev" Fs.fs_rdev) (fun _ ->
+               (store slonglong "st_size" Fs.fs_size) )))))))
+    in
+    match res with
+    | Left e ->
+      store_error e >>
+      update fs_st (0 - 1)
+    | Right stat ->
+      liftMem (update_mem stat) >>
+      update fs_st 0
+    end
+  in
+  match fs_oper with
     | Core_run.FS_MKDIR path mode ->
       return $ Fs.fs_mkdir dr_st.fs_state path mode
     | Core_run.FS_OPEN path oflag mode_opt ->
@@ -378,7 +444,16 @@ let drive_fs_step tid th_st dr_st fs_return =
     | Core_run.FS_CLOSE fd ->
       return $ Fs.fs_close dr_st.fs_state fd
     | Core_run.FS_WRITE fd buf size ->
-      return $ Fs.fs_write dr_st.fs_state fd buf size
+      match natFromInteger fd with
+      | 0 ->
+        error "driver_fs_step: stdin not supported yet."
+      | 1 ->
+        update_stdout (List.take (natFromInteger size) buf)
+      | 2 ->
+        update_stderr (List.take (natFromInteger size) buf)
+      | _ ->
+        return $ Fs.fs_write dr_st.fs_state fd buf size
+      end
     | Core_run.FS_READ fd ptr size ->
       store_buffer ptr $ Fs.fs_read dr_st.fs_state fd size
     | Core_run.FS_PWRITE fd buf size off ->
@@ -397,6 +472,10 @@ let drive_fs_step tid th_st dr_st fs_return =
       return $ Fs.fs_link dr_st.fs_state oldpath newpath
     | Core_run.FS_READLINK path ptr max ->
       store_buffer_trunc ptr max $ Fs.fs_readlink dr_st.fs_state path
+    | Core_run.FS_STAT path ptr ->
+      store_stat ptr $ Fs.fs_stat dr_st.fs_state path
+    | Core_run.FS_LSTAT path ptr ->
+      store_stat ptr $ Fs.fs_lstat dr_st.fs_state path
     | Core_run.FS_SYMLINK target lpath ->
       return $ Fs.fs_symlink dr_st.fs_state target lpath
     | Core_run.FS_RMDIR path ->
