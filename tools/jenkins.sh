@@ -15,6 +15,7 @@ if ! hash opam 2> /dev/null; then
   eval `opam config env`
   opam init
   opam install ocamlfind cmdliner menhir pprint zarith yojson
+  opam install ppx_deriving ppx_sexp_conv sexplib sha
   opam install z3
 fi
 

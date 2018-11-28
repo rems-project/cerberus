@@ -23,6 +23,8 @@ val fs_initial_state: fs_state
 let fs_initial_state =
   dh_init_state ARCH_POSIX false
 
+type fs_stat = ty_stats
+
 val first: forall 'a. finset 'a -> 'a
 let first fset =
   match list_from_finset fset with
@@ -52,6 +54,50 @@ let return_bytes = function
   | RV_bytes bs -> List_array.to_list bs
   | _ -> failwith "return_bytes"
   end
+
+let dest_uid (User_id n) = n
+
+let dest_gid (Group_id n) = n
+
+let dest_float_t (Float n) = n
+
+let return_stat = function
+  | RV_stats st -> st
+  | _ -> failwith "return_stat"
+  end
+
+let fs_dev st =
+  integerFromInt st.st_dev
+
+let fs_ino st =
+  integerFromNat (dest_Inode st.st_ino)
+
+let fs_perm st =
+  integerFromInt32 (dest_file_perm st.st_perm)
+
+let fs_nlink st =
+  integerFromInt st.st_nlink
+
+let fs_uid st =
+  integerFromNat (dest_uid st.st_uid)
+
+let fs_gid st =
+  integerFromNat (dest_gid st.st_gid)
+
+let fs_rdev st =
+  integerFromInt st.st_rdev
+
+let fs_size st =
+  integerFromInt64 st.st_size
+
+let fs_atime st =
+  integerFromNat (dest_float_t st.st_atime)
+
+let fs_mtime st =
+  integerFromNat (dest_float_t st.st_mtime)
+
+let fs_ctime st =
+  integerFromNat (dest_float_t st.st_ctime)
 
 let return_value return = function
   | Value v -> Right (return v)
@@ -188,3 +234,10 @@ val run_lseek: fs_state -> integer -> integer -> integer -> fs_state * (either e
 let run_lseek st fd off whence =
   run st return_nat $ OS_LSEEK (fd_of_int fd, intFromInteger off, intFromInteger whence)
 
+val run_stat: fs_state -> string -> fs_state * (either error fs_stat)
+let run_stat st path =
+  run st return_stat $ OS_STAT (CS_Some path)
+
+val run_lstat: fs_state -> string -> fs_state * (either error fs_stat)
+let run_lstat st path =
+  run st return_stat $ OS_LSTAT (CS_Some path)

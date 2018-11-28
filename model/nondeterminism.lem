@@ -172,13 +172,14 @@ let inline mapM_ = nd_mapM_
 
 
 (* NOTE: this is foldl *)
-val     foldlM: forall 'a 'b 'info 'err 'cs 'st. ('a -> 'b -> ndM 'a 'info 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'info 'err 'cs 'st (* GENERIC Monad *)
-let rec foldlM f a = function                                                 (* GENERIC Monad *)
+val     nd_foldlM: forall 'a 'b 'info 'err 'cs 'st. ('a -> 'b -> ndM 'a 'info 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'info 'err 'cs 'st (* GENERIC Monad *)
+let rec nd_foldlM f a = function                                                 (* GENERIC Monad *)
   | [] ->                                                                    (* GENERIC Monad *)
       return a                                                               (* GENERIC Monad *)
   | x::xs ->                                                                 (* GENERIC Monad *)
-      f a x >>= fun fax -> foldlM f fax xs                                    (* GENERIC Monad *)
+      f a x >>= fun fax -> nd_foldlM f fax xs                                    (* GENERIC Monad *)
 end
+let inline foldlM = nd_foldlM
 
 
 
