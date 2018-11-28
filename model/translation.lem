@@ -3107,29 +3107,30 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         )
     
     | A.AilSif e s1 s2 ->
-        E.fresh_symbol                   >>= fun sym_obj ->
-        E.fresh_symbol                   >>= fun sym_e   ->
-        translate_expression
-             (mkTestExpression TestEq e) >>= fun core_test ->
-        self s1                          >>= fun core_s1   ->
-        self s2                          >>= fun core_s2   ->
-        let oTy = C.OTy_integer in (* this is the type of core_test, not "core_e" *)
-(*
-          (* Since [e] must have scalar type, oTy will always be one
-             of these: OTy_integer, OTy_floating, OTy_pointer *)
-          Caux.core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
-*)
+        E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_then_sym_pat, do_then_sym_pe) ->
+        E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, test_sym_pat, test_sym_pe)       ->
+        E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe)       ->
+        translate_expression (mkTestExpression TestEq e)    >>= fun core_test                            ->
+        self s1                                             >>= fun core_s1                              ->
+        self s2                                             >>= fun core_s2                              ->
+        (* NOTE: here we fix the strictness of unspecified values *)
         E.return $
-          (* NOTE: here we fix the strictness of unspecified values *)
-          Caux.mk_wseq_e (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
-            Caux.mk_case_e (Caux.mk_sym_pe sym_e)
-              [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat sym_obj (C.BTy_object oTy)]),
-                 Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_obj) (Caux.mk_integer_pe 1)))
-                   core_s1 core_s2)
-                (* non-deterministic branching if the test expression had unspecified value *)
-              ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                 Caux.mk_nd_e [core_s1; core_s2]) ]
-          )
+          (* NOTE: the case-of producing a boolean (instead of directly doing the control
+             with the case) is to prevent possible combinatorial explosions of the generated Core code *)
+          Caux.mk_sseq_e test_sym_pat core_test begin
+            Caux.mk_sseq_e do_then_sym_pat begin
+              Caux.mk_case_e test_sym_pe
+                [ (Caux.mk_specified_pat case_sym_pat,
+                   Caux.mk_pure_e begin
+                     Caux.mk_if_pe (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq case_sym_pe (Caux.mk_integer_pe 1)))
+                       (Caux.mk_boolean_pe true) (Caux.mk_boolean_pe false)
+                   end)
+                  (* non-deterministic branching if the test expression had unspecified value *)
+                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                   Caux.mk_nd_e [Caux.mk_pure_e (Caux.mk_boolean_pe true); Caux.mk_pure_e (Caux.mk_boolean_pe false)]) ]
+            end
+            (Caux.mk_if_e do_then_sym_pe core_s1 core_s2)
+          end
     
     | A.AilSwhile e s ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
