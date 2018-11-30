@@ -313,12 +313,13 @@ let gen_corestd (stdlib, impl) =
     Exception.except_return 0
 
 let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
-             sequentialise fs_dump concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
+             sequentialise fs_dump fs concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
-  set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise fs_dump concurrency preEx ocaml ocaml_corestd
+  let fs_state = if fs <> "" then Fs_ocaml.initialise fs else Sibylfs.fs_initial_state in
+  set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise fs_dump fs_state concurrency preEx ocaml ocaml_corestd
     (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   let prelude =
     (* Looking for and parsing the core standard library *)
@@ -389,6 +390,10 @@ let exec_mode =
 let pprints =
   let doc = "Pretty print the intermediate programs for the listed languages (ranging over {cabs, ail, core})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] & info ["pp"] ~docv:"LANG1,..." ~doc)
+
+let fs =
+  let doc = "Initialise the internal file system with the contents of the directory DIR" in
+  Arg.(value & opt string "" & info ["fs"] ~docv:"DIR" ~doc)
 
 let ppflags =
   let doc = "Pretty print flags [annot: include location and ISO annotations, fout: output in a file]." in
@@ -466,7 +471,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ switches
-    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise $ fs_dump
+    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise $ fs_dump $ fs
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
   

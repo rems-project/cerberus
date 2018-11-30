@@ -83,8 +83,20 @@ let fs_dev st =
 let fs_ino st =
   integerFromNat (dest_Inode st.st_ino)
 
-let fs_perm st =
-  integerFromInt32 (dest_file_perm st.st_perm)
+(* NOTE: values from https://git.musl-libc.org/cgit/musl/tree/include/sys/stat.h *)
+val dest_file_kind: file_kind -> integer
+let dest_file_kind = function
+  | S_IFBLK -> 0O060000
+  | S_IFCHR -> 0O020000
+  | S_IFIFO -> 0O010000
+  | S_IFREG -> 0O100000
+  | S_IFDIR -> 0O040000
+  | S_IFLNK -> 0O120000
+  | S_IFSOCK -> 0O140000
+end
+
+let fs_mode st =
+  integerFromInt32 (dest_file_perm st.st_perm) + dest_file_kind st.st_kind
 
 let fs_nlink st =
   integerFromInt st.st_nlink
@@ -209,11 +221,6 @@ let run_chdir st path =
 val run_chown: fs_state -> string -> integer -> integer -> fs_state * (either error nat)
 let run_chown st path uid gid =
   run st return_nat $ OS_CHOWN (CS_Some path, uid_of_int uid, gid_of_int gid)
-
-(*
--- void rewinddir(DIR *dirp);
--- int closedir(DIR *dirp);
-*)
 
 val run_link: fs_state -> string -> string -> fs_state * (either error nat)
 let run_link st oldpath newpath =

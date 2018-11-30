@@ -352,7 +352,7 @@ let dummy_file =
   }
 let quit f =
   try
-    let initial_state = Driver.initial_driver_state (UniqueId.new_supply Symbol.instance_Enum_Enum_Symbol_sym_dict) dummy_file in
+    let initial_state = Driver.initial_driver_state (UniqueId.new_supply Symbol.instance_Enum_Enum_Symbol_sym_dict) dummy_file Sibylfs.fs_initial_drive_state in
     match Smt2.runND Smt2.Random Ocaml_mem.cs_module (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
     | _ -> raise (Error "continuation not raised")
   with

@@ -362,7 +362,8 @@ let drive_fs_step tid th_st dr_st fs_oper =
         update fs_st (th_st_from_int (0 - 1))
       | Right buf ->
         let n = integerFromNat $ List.length buf in
-        liftMem (Output.store_chars_in_array ptr buf) >>
+        (* TODO: store chars is wrong here!! it adds a \0 in the end of the array *)
+        liftMem (Output.store_chars_in_array false ptr buf) >>
         update fs_st (th_st_from_int n)
     end
   in
@@ -374,7 +375,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
       | Right buf ->
         let buf_trunc = List.take (natFromInteger max) buf in
         let n = integerFromNat $ List.length buf_trunc in
-        liftMem (Output.store_chars_in_array ptr buf_trunc) >>
+        liftMem (Output.store_chars_in_array false ptr buf_trunc) >>
         update fs_st (th_st_from_int n)
     end
   in
@@ -424,7 +425,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let update_mem dir_name =
       Mem.bind (Mem.allocate_static tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing) (fun dirent_ptr ->
         let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Cabs.CabsIdentifier loc "d_name") in
-        Mem.bind (Output.store_chars_in_array d_name_ptr dir_name) (fun _ ->
+        Mem.bind (Output.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
     in
     match res with
@@ -454,7 +455,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
       let ulonglong = AilTypes.Unsigned AilTypes.LongLong in
       Mem.bind (store sint "st_dev" Fs.fs_dev) (fun _ ->
       Mem.bind (store ulonglong "st_ino" Fs.fs_ino) (fun _ ->
-      Mem.bind (store ushort "st_mode" Fs.fs_perm) (fun _ ->
+      Mem.bind (store ushort "st_mode" Fs.fs_mode) (fun _ ->
       Mem.bind (store ushort "st_nlink" Fs.fs_nlink) (fun _ ->
       Mem.bind (store uint "st_uid" Fs.fs_uid) (fun _ ->
       Mem.bind (store uint "st_gid" Fs.fs_gid) (fun _ ->
@@ -1260,7 +1261,7 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state sym_supply file =
+let initial_driver_state sym_supply file fs_state =
 (*
   let mk_dr_st core_st run_st = <|
     symbol_supply=     UniqueId.new_supply;
@@ -1290,7 +1291,7 @@ let initial_driver_state sym_supply file =
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;
     concurrency_state= Cmm_op.symInitialState Cmm_op.symInitialPre;
-    fs_state=          Fs.fs_initial_state;
+    fs_state=          fs_state;
 
 
   symbolic_assoc= Map.empty;

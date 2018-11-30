@@ -360,7 +360,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
-    let st0      = Driver.initial_driver_state sym_suppl core' in
+    let st0      = Driver.initial_driver_state sym_suppl core' Sibylfs.fs_initial_state (* TODO *) in
     let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
     last_node_id := 0;
     let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
