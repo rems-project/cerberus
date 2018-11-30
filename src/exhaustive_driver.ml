@@ -43,7 +43,7 @@ let batch_drive mode (sym_supply: Symbol.sym UniqueId.supply) (file: 'a Core.fil
   let file = Core_run_aux.convert_file file in
   
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state sym_supply file in
+  let initial_dr_st = Driver.initial_driver_state sym_supply file !!cerb_conf.fs_state in
   let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in  
   let is_charon = match mode with
     | `Batch       -> false
@@ -102,7 +102,7 @@ let drive sym_supply file args conf : execution_result =
   (* changing the annotations type from unit to core_run_annotation *)
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
-  let initial_dr_st = Driver.initial_driver_state sym_supply file in
+  let initial_dr_st = Driver.initial_driver_state sym_supply file !!cerb_conf.fs_state in
   let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module
       (Driver.drive conf.concurrency conf.experimental_unseq sym_supply file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in

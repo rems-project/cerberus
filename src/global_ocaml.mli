@@ -38,6 +38,7 @@ type cerberus_conf = {
   rewrite:         bool;
   sequentialise:   bool;
   fs_dump:         bool;
+  fs_state:        Sibylfs.fs_state;
   concurrency:     bool;
   preEx:           bool;
   error_verbosity: error_verbosity;
@@ -70,6 +71,7 @@ val set_cerb_conf:
     bool ->
     bool ->
     bool ->
+    Sibylfs.fs_state ->
     bool ->
     bool ->
     bool ->

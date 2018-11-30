@@ -10,8 +10,8 @@ declare ocaml target_rep function fs_dev = `Sibylfs.fs_dev`
 val fs_ino: fs_stat -> integer
 declare ocaml target_rep function fs_ino = `Sibylfs.fs_ino`
 
-val fs_perm: fs_stat -> integer
-declare ocaml target_rep function fs_perm = `Sibylfs.fs_perm`
+val fs_mode: fs_stat -> integer
+declare ocaml target_rep function fs_mode = `Sibylfs.fs_mode`
 
 val fs_nlink: fs_stat -> integer
 declare ocaml target_rep function fs_nlink = `Sibylfs.fs_nlink`

@@ -939,21 +939,24 @@ let printf eval_conv frmt args =
   end
 
 
-val     store_chars_in_array: Mem.pointer_value -> list char -> Mem.memM unit
-let rec store_chars_in_array ptrval = function
+val     store_chars_in_array: bool -> Mem.pointer_value -> list char -> Mem.memM unit
+let rec store_chars_in_array zero_terminated ptrval = function
   | [] ->
-      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char false ptrval
-                  (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0))) begin fun _ ->
+      if zero_terminated then
+        Mem.bind (Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval
+                    (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0))) begin fun _ ->
+          Mem.return ()
+        end
+      else
         Mem.return ()
-      end
   | c::cs ->
       let c_mval =
         Mem.integer_value_mval AilTypes.Char
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
-      Mem.bind (Mem.store (Loc.other "snprintf()") Cty.char false ptrval c_mval) begin fun _ ->
+      Mem.bind (Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval c_mval) begin fun _ ->
         let ptrval' = Mem.array_shift_ptrval ptrval Cty.char (Mem.integer_ival 1) in
-        store_chars_in_array ptrval' cs
+        store_chars_in_array zero_terminated ptrval' cs
       end
 end
 
@@ -974,7 +977,7 @@ let snprintf eval_conv s_ptrval n_ival frmt args =
         printf_aux eval_conv [] fs args >>= function
           | Right (U.Defined cs) ->
               let cs' = List.take (natFromInteger (n-1)) cs in
-              Mem.bind (store_chars_in_array s_ptrval cs') begin fun () ->
+              Mem.bind (store_chars_in_array true s_ptrval cs') begin fun () ->
                 Mem.return (Right (U.return (integerFromNat (List.length cs'))))
               end
           | _ ->
@@ -995,7 +998,7 @@ let sprintf eval_conv s_ptrval frmt args =
     | [(fs, [])] ->
         printf_aux eval_conv [] fs args >>= function
           | Right (U.Defined cs) ->
-              Mem.bind (store_chars_in_array s_ptrval cs) begin fun () ->
+              Mem.bind (store_chars_in_array true s_ptrval cs) begin fun () ->
                 Mem.return (Right (U.return (integerFromNat (List.length cs))))
               end
           | _ ->
