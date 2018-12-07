@@ -250,10 +250,12 @@ let builtin = [
   ("__cerbty_int16_t",          Typename);
   ("__cerbty_int32_t",          Typename);
   ("__cerbty_int64_t",          Typename);
+  ("__cerbty_int128_t",         Typename); (* non standard *)
   ("__cerbty_uint8_t",          Typename);
   ("__cerbty_uint16_t",         Typename);
   ("__cerbty_uint32_t",         Typename);
   ("__cerbty_uint64_t",         Typename);
+  ("__cerbty_uint128_t",        Typename); (* non standard *)
   ("__cerbty_int_least8_t",     Typename);
   ("__cerbty_int_least16_t",    Typename);
   ("__cerbty_int_least32_t",    Typename);
@@ -441,6 +443,8 @@ let translate_builtin_typenames = function
       Just (AilTypesAux.mk_ctype_integer (ATypes.Signed (ATypes.IntN_t 32)))
   | "__cerbty_int64_t" ->
       Just (AilTypesAux.mk_ctype_integer (ATypes.Signed (ATypes.IntN_t 64)))
+  | "__cerbty_int128_t" ->
+      Just (AilTypesAux.mk_ctype_integer (ATypes.Signed (ATypes.IntN_t 128)))
   | "__cerbty_int_fast8_t" ->
       Just (AilTypesAux.mk_ctype_integer (ATypes.Signed (ATypes.Int_fastN_t 8)))
   | "__cerbty_int_fast16_t" ->
@@ -489,6 +493,8 @@ let translate_builtin_typenames = function
       Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned (ATypes.IntN_t 32)))
   | "__cerbty_uint64_t" ->
       Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned (ATypes.IntN_t 64)))
+  | "__cerbty_uint128_t" ->
+      Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned (ATypes.IntN_t 128)))
   | "__cerbty_uint_fast8_t" ->
       Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned (ATypes.Int_fastN_t 8)))
   | "__cerbty_uint_fast16_t" ->

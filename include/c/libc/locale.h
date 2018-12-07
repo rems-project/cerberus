@@ -1,7 +1,7 @@
 #ifndef	_LOCALE_H_
 #define	_LOCALE_H_
 
-struct lconv = {
+struct lconv {
   char *decimal_point;
   char *thousands_sep;
   char *grouping;
