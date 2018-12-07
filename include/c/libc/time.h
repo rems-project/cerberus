@@ -47,6 +47,8 @@ double difftime(time_t time1, time_t time0) { return time1 - time0; }
 
 struct tm *localtime(const time_t *timer);
 
+time_t time(time_t *timer);
+
 //#include "../posix/time.h"
 
 #endif

@@ -700,3 +700,333 @@ void Hacl_Curve25519_crypto_scalarmult(uint8_t *mypublic, uint8_t *secret, uint8
   Hacl_EC_Format_scalar_of_point(mypublic, nq);
 }
 
+/* Copyright (c) INRIA and Microsoft Corporation. All rights reserved.
+   Licensed under the Apache 2.0 License. */
+
+/******************************************************************************/
+/* Machine integers (128-bit arithmetic)                                      */
+/******************************************************************************/
+
+/* This header makes KreMLin-generated C code work with, 0x
+ * - the default setting where we assume the target compiler defines __int128
+ * - the setting where we use FStar.UInt128's implementation instead; in that
+ *   case, generated C files must be compiled with -DKRML_VERIFIED_UINT128
+ * - a refinement of the case above, wherein all structures are passed by
+ *   reference, a.k.a. "-fnostruct-passing", meaning that the KreMLin-generated
+ *   must be compiled with -DKRML_NOSTRUCT_PASSING
+ * Note, 0x no MSVC support in this file.
+ */
+
+/* This file is used for both the minimal and generic kremlib distributions. As
+ * such, it assumes that the machine integers have been bundled the exact same
+ * way in both cases. */
+
+#include "FStar_UInt128.h"
+#include "FStar_UInt_8_16_32_64.h"
+#include "C_Endianness.h"
+
+#if !defined(KRML_VERIFIED_UINT128) && !defined(_MSC_VER)
+
+/* GCC + using native unsigned __int128 support */
+
+uint128_t load128_le(uint8_t *b) {
+  uint128_t l = (uint128_t)load64_le(b);
+  uint128_t h = (uint128_t)load64_le(b + 8);
+  return (h << 64 | l);
+}
+
+void store128_le(uint8_t *b, uint128_t n) {
+  store64_le(b, (uint64_t)n);
+
+  store64_le(b + 8, (uint64_t)(n >> 64));
+}
+
+uint128_t load128_be(uint8_t *b) {
+  uint128_t h = (uint128_t)load64_be(b);
+  uint128_t l = (uint128_t)load64_be(b + 8);
+  return (h << 64 | l);
+}
+
+void store128_be(uint8_t *b, uint128_t n) {
+  store64_be(b, (uint64_t)(n >> 64));
+  store64_be(b + 8, (uint64_t)n);
+}
+
+uint128_t FStar_UInt128_add(uint128_t x, uint128_t y) {
+  return x + y;
+}
+
+uint128_t FStar_UInt128_mul(uint128_t x, uint128_t y) {
+  return x * y;
+}
+
+uint128_t FStar_UInt128_add_mod(uint128_t x, uint128_t y) {
+  return x + y;
+}
+
+uint128_t FStar_UInt128_sub(uint128_t x, uint128_t y) {
+  return x - y;
+}
+
+uint128_t FStar_UInt128_sub_mod(uint128_t x, uint128_t y) {
+  return x - y;
+}
+
+uint128_t FStar_UInt128_logand(uint128_t x, uint128_t y) {
+  return x & y;
+}
+
+uint128_t FStar_UInt128_logor(uint128_t x, uint128_t y) {
+  return x | y;
+}
+
+uint128_t FStar_UInt128_logxor(uint128_t x, uint128_t y) {
+  return x ^ y;
+}
+
+uint128_t FStar_UInt128_lognot(uint128_t x) {
+  return ~x;
+}
+
+uint128_t FStar_UInt128_shift_left(uint128_t x, uint32_t y) {
+  return x << y;
+}
+
+uint128_t FStar_UInt128_shift_right(uint128_t x, uint32_t y) {
+  return x >> y;
+}
+
+uint128_t FStar_UInt128_uint64_to_uint128(uint64_t x) {
+  return (uint128_t)x;
+}
+
+uint64_t FStar_UInt128_uint128_to_uint64(uint128_t x) {
+  return (uint64_t)x;
+}
+
+uint128_t FStar_UInt128_mul_wide(uint64_t x, uint64_t y) {
+  return ((uint128_t) x) * y;
+}
+
+uint128_t FStar_UInt128_eq_mask(uint128_t x, uint128_t y) {
+  uint64_t mask =
+      FStar_UInt64_eq_mask((uint64_t)(x >> 64), (uint64_t)(y >> 64)) &
+      FStar_UInt64_eq_mask(x, y);
+  return ((uint128_t)mask) << 64 | mask;
+}
+
+uint128_t FStar_UInt128_gte_mask(uint128_t x, uint128_t y) {
+  uint64_t mask =
+      (FStar_UInt64_gte_mask(x >> 64, y >> 64) &
+       ~(FStar_UInt64_eq_mask(x >> 64, y >> 64))) |
+      (FStar_UInt64_eq_mask(x >> 64, y >> 64) & FStar_UInt64_gte_mask(x, y));
+  return ((uint128_t)mask) << 64 | mask;
+}
+
+uint128_t FStar_Int_Cast_Full_uint64_to_uint128(uint64_t x) {
+  return x;
+}
+
+uint64_t FStar_Int_Cast_Full_uint128_to_uint64(uint128_t x) {
+  return x;
+}
+
+#elif !defined(_MSC_VER) && defined(KRML_VERIFIED_UINT128)
+
+/* Verified uint128 implementation. */
+
+/* Access 64-bit fields within the int128. */
+#define HIGH64_OF(x) ((x)->high)
+#define LOW64_OF(x)  ((x)->low)
+
+typedef FStar_UInt128_uint128 FStar_UInt128_t_, uint128_t;
+
+/* A series of definitions written using pointers. */
+
+void load128_le_(uint8_t *b, uint128_t *r) {
+  LOW64_OF(r) = load64_le(b);
+  HIGH64_OF(r) = load64_le(b + 8);
+}
+
+void store128_le_(uint8_t *b, uint128_t *n) {
+  store64_le(b, LOW64_OF(n));
+  store64_le(b + 8, HIGH64_OF(n));
+}
+
+void load128_be_(uint8_t *b, uint128_t *r) {
+  HIGH64_OF(r) = load64_be(b);
+  LOW64_OF(r) = load64_be(b + 8);
+}
+
+void store128_be_(uint8_t *b, uint128_t *n) {
+  store64_be(b, HIGH64_OF(n));
+  store64_be(b + 8, LOW64_OF(n));
+}
+
+void
+FStar_Int_Cast_Full_uint64_to_uint128_(uint64_t x, uint128_t *dst) {
+  /* C89 */
+  LOW64_OF(dst) = x;
+  HIGH64_OF(dst) = 0;
+}
+
+uint64_t FStar_Int_Cast_Full_uint128_to_uint64_(uint128_t *x) {
+  return LOW64_OF(x);
+}
+
+#    ifndef KRML_NOSTRUCT_PASSING
+
+uint128_t load128_le(uint8_t *b) {
+  uint128_t r;
+  load128_le_(b, &r);
+  return r;
+}
+
+void store128_le(uint8_t *b, uint128_t n) {
+  store128_le_(b, &n);
+}
+
+uint128_t load128_be(uint8_t *b) {
+  uint128_t r;
+  load128_be_(b, &r);
+  return r;
+}
+
+void store128_be(uint8_t *b, uint128_t n) {
+  store128_be_(b, &n);
+}
+
+uint128_t FStar_Int_Cast_Full_uint64_to_uint128(uint64_t x) {
+  uint128_t dst;
+  FStar_Int_Cast_Full_uint64_to_uint128_(x, &dst);
+  return dst;
+}
+
+uint64_t FStar_Int_Cast_Full_uint128_to_uint64(uint128_t x) {
+  return FStar_Int_Cast_Full_uint128_to_uint64_(&x);
+}
+
+#    else /* !defined(KRML_STRUCT_PASSING) */
+
+#      define print128 print128_
+#      define load128_le load128_le_
+#      define store128_le store128_le_
+#      define load128_be load128_be_
+#      define store128_be store128_be_
+#      define FStar_Int_Cast_Full_uint128_to_uint64                            \
+        FStar_Int_Cast_Full_uint128_to_uint64_
+#      define FStar_Int_Cast_Full_uint64_to_uint128                            \
+        FStar_Int_Cast_Full_uint64_to_uint128_
+
+#    endif /* KRML_STRUCT_PASSING */
+
+#endif
+
+#include "FStar_UInt_8_16_32_64.h"
+
+uint64_t FStar_UInt64_eq_mask(uint64_t a, uint64_t b)
+{
+  uint64_t x = a ^ b;
+  uint64_t minus_x = ~x + (uint64_t)1U;
+  uint64_t x_or_minus_x = x | minus_x;
+  uint64_t xnx = x_or_minus_x >> (uint32_t)63U;
+  return xnx - (uint64_t)1U;
+}
+
+uint64_t FStar_UInt64_gte_mask(uint64_t a, uint64_t b)
+{
+  uint64_t x = a;
+  uint64_t y = b;
+  uint64_t x_xor_y = x ^ y;
+  uint64_t x_sub_y = x - y;
+  uint64_t x_sub_y_xor_y = x_sub_y ^ y;
+  uint64_t q = x_xor_y | x_sub_y_xor_y;
+  uint64_t x_xor_q = x ^ q;
+  uint64_t x_xor_q_ = x_xor_q >> (uint32_t)63U;
+  return x_xor_q_ - (uint64_t)1U;
+}
+
+uint32_t FStar_UInt32_eq_mask(uint32_t a, uint32_t b)
+{
+  uint32_t x = a ^ b;
+  uint32_t minus_x = ~x + (uint32_t)1U;
+  uint32_t x_or_minus_x = x | minus_x;
+  uint32_t xnx = x_or_minus_x >> (uint32_t)31U;
+  return xnx - (uint32_t)1U;
+}
+
+uint32_t FStar_UInt32_gte_mask(uint32_t a, uint32_t b)
+{
+  uint32_t x = a;
+  uint32_t y = b;
+  uint32_t x_xor_y = x ^ y;
+  uint32_t x_sub_y = x - y;
+  uint32_t x_sub_y_xor_y = x_sub_y ^ y;
+  uint32_t q = x_xor_y | x_sub_y_xor_y;
+  uint32_t x_xor_q = x ^ q;
+  uint32_t x_xor_q_ = x_xor_q >> (uint32_t)31U;
+  return x_xor_q_ - (uint32_t)1U;
+}
+
+uint16_t FStar_UInt16_eq_mask(uint16_t a, uint16_t b)
+{
+  uint16_t x = a ^ b;
+  uint16_t minus_x = ~x + (uint16_t)1U;
+  uint16_t x_or_minus_x = x | minus_x;
+  uint16_t xnx = x_or_minus_x >> (uint32_t)15U;
+  return xnx - (uint16_t)1U;
+}
+
+uint16_t FStar_UInt16_gte_mask(uint16_t a, uint16_t b)
+{
+  uint16_t x = a;
+  uint16_t y = b;
+  uint16_t x_xor_y = x ^ y;
+  uint16_t x_sub_y = x - y;
+  uint16_t x_sub_y_xor_y = x_sub_y ^ y;
+  uint16_t q = x_xor_y | x_sub_y_xor_y;
+  uint16_t x_xor_q = x ^ q;
+  uint16_t x_xor_q_ = x_xor_q >> (uint32_t)15U;
+  return x_xor_q_ - (uint16_t)1U;
+}
+
+uint8_t FStar_UInt8_eq_mask(uint8_t a, uint8_t b)
+{
+  uint8_t x = a ^ b;
+  uint8_t minus_x = ~x + (uint8_t)1U;
+  uint8_t x_or_minus_x = x | minus_x;
+  uint8_t xnx = x_or_minus_x >> (uint32_t)7U;
+  return xnx - (uint8_t)1U;
+}
+
+uint8_t FStar_UInt8_gte_mask(uint8_t a, uint8_t b)
+{
+  uint8_t x = a;
+  uint8_t y = b;
+  uint8_t x_xor_y = x ^ y;
+  uint8_t x_sub_y = x - y;
+  uint8_t x_sub_y_xor_y = x_sub_y ^ y;
+  uint8_t q = x_xor_y | x_sub_y_xor_y;
+  uint8_t x_xor_q = x ^ q;
+  uint8_t x_xor_q_ = x_xor_q >> (uint32_t)7U;
+  return x_xor_q_ - (uint8_t)1U;
+}
+
+int main() {
+  uint8_t sk[] = {
+    0xa5, 0x46, 0xe3, 0x6b, 0xf0, 0x52, 0x7c, 0x9d,
+    0x3b, 0x16, 0x15, 0x4b, 0x82, 0x46, 0x5e, 0xdd,
+    0x62, 0x14, 0x4c, 0x0a, 0xc1, 0xfc, 0x5a, 0x18,
+    0x50, 0x6a, 0x22, 0x44, 0xba, 0x44, 0x9a, 0xc4
+  };
+  uint8_t base[] = {
+    0xe6, 0xdb, 0x68, 0x67, 0x58, 0x30, 0x30, 0xdb,
+    0x35, 0x94, 0xc1, 0xa4, 0x24, 0xb1, 0x5f, 0x7c,
+    0x72, 0x66, 0x24, 0xec, 0x26, 0xb3, 0x35, 0x3b,
+    0x10, 0xa9, 0x03, 0xa6, 0xd0, 0xab, 0x1c, 0x4c
+  };
+  uint8_t pub[32];
+  /* c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552 */
+  Hacl_Curve25519_crypto_scalarmult(pub, sk, base);
+  for (int i = 0; i < 32; i++) printf("%hhx", pub[i]);
+}
