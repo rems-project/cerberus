@@ -312,13 +312,17 @@ let gen_corestd (stdlib, impl) =
       cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
-let cerberus debug_level cpp_cmd impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
+let cerberus debug_level cpp_cmd define incl impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
              sequentialise fs_dump fs concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
   (* TODO: move this to the random driver *)
   Random.self_init ();
   let fs_state = if fs <> "" then Fs_ocaml.initialise fs else Sibylfs.fs_initial_state in
+  let cpp_cmd =
+    cpp_cmd ^ (List.fold_left (fun acc d -> acc ^ " -D" ^ d) "" define)
+            ^ (List.fold_left (fun acc i -> acc ^ " -I" ^ i) "" incl)
+  in
   set_cerb_conf cpp_cmd pps ppflags exec exec_mode progress rewrite sequentialise fs_dump fs_state concurrency preEx ocaml ocaml_corestd
     (* TODO *) QuoteStd batch experimental_unseq typecheck_core defacto default_impl action_graph;
   let prelude =
@@ -378,6 +382,15 @@ let cpp_cmd =
   (* TODO: use to be "gcc -DCSMITH_MINIMAL -E -I " ^ cerb_path ^ "/clib -I /Users/catzilla/Applications/Sources/csmith-2.2.0/runtime" *)
   Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__ -I "  ^ cerb_path ^ "/include/c/libc -I "  ^ cerb_path ^ "/include/c/posix")
              & info ["cpp"] ~docv:"CMD" ~doc)
+
+let incl =
+  let doc = "Add the specified directory to the search path for the C preprocessor." in
+  Arg.(value & opt_all string [] & info ["I"] ~doc)
+
+let define =
+  let doc = "Adds  an  implicit  #define  into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["D"] ~doc)
 
 let exec =
   let doc = "Execute the Core program after the elaboration." in
@@ -470,7 +483,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus
-    $ debug_level $ cpp_cmd $ impl $ exec $ exec_mode $ switches
+    $ debug_level $ cpp_cmd $ define $ incl $ impl $ exec $ exec_mode $ switches
     $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise $ fs_dump $ fs
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in

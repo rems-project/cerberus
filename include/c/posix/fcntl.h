@@ -42,6 +42,16 @@
 #define O_CLOEXEC     00000200000
 #define O_TTY_INIT    00000400000
 
+#include <sys/types.h>
+
+struct flock {
+  short  l_type;
+  short  l_whence;
+  off_t  l_start;
+  off_t  l_len;
+  pid_t  l_pid;
+};
+
 int  open(const char *, int, ...);
 int  fcntl(int, int, ...);
 

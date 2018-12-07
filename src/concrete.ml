@@ -594,12 +594,12 @@ module Concrete : Memory = struct
         end
     end
   
-  let int64_of_bytes is_signed bs =
+  let int_of_bytes is_signed bs =
     (* NOTE: the reverse is from little-endianness *)
     match List.rev bs with
       | [] ->
           assert false
-      | cs when L.length cs > 8 ->
+      | cs when L.length cs > 16 ->
           assert false
       | (first::_ as cs) ->
           (* NOTE: this is to preserve the binary signedness *)
@@ -664,7 +664,7 @@ module Concrete : Memory = struct
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVinteger ( ity
-                          , mk_ival prov (int64_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+                          , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
             | None ->
                 MVunspecified ty
           end , bs2)
@@ -675,7 +675,7 @@ module Concrete : Memory = struct
           (begin match extract_unspec bs1' with
             | Some cs ->
                 MVfloating ( fty
-                           , Int64.float_of_bits (N.to_int64 (int64_of_bytes true cs)) )
+                           , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
             | None ->
                 MVunspecified ty
           end, bs2)
@@ -694,7 +694,7 @@ module Concrete : Memory = struct
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           (begin match extract_unspec bs1' with
             | Some cs ->
-                let n = int64_of_bytes false cs in
+                let n = int_of_bytes false cs in
                 begin match ref_ty with
                   | Function0 _ ->
                       let opt_name = IntMap.find_opt n funptrmap in
@@ -741,8 +741,8 @@ module Concrete : Memory = struct
           failwith "TODO: combine_bytes, Builtin"
   
   
-  (* INTERNAL bytes_of_int64 *)
-  let bytes_of_int64 is_signed size i : (char option) list =
+  (* INTERNAL bytes_of_int *)
+  let bytes_of_int is_signed size i : (char option) list =
     let nbits = 8 * size in
     let (min, max) =
       if is_signed then
@@ -751,8 +751,8 @@ module Concrete : Memory = struct
       else
         ( N.zero
         , N.sub (N.pow_int (N.of_int 2) nbits) N.(succ zero) ) in
-    if not (min <= i && i <= max) || nbits > 64 then begin
-      Printf.printf "failed: bytes_of_int64(%s), i= %s, nbits= %d, [%s ... %s]\n"
+    if not (min <= i && i <= max) || nbits > 128 then begin
+      Printf.printf "failed: bytes_of_int(%s), i= %s, nbits= %d, [%s ... %s]\n"
         (if is_signed then "signed" else "unsigned")
         (N.to_string i) nbits (N.to_string min) (N.to_string max);
       assert false
@@ -792,13 +792,13 @@ module Concrete : Memory = struct
           ret @@ List.init (sizeof ty) (fun _ -> AbsByte.v Prov_none None)
       | MVinteger (ity, IV (prov, n)) ->
           ret @@List.map (AbsByte.v prov) begin
-            bytes_of_int64
+            bytes_of_int
               (AilTypesAux.is_signed_ity ity)
               (sizeof (Basic0 (Integer ity))) n
           end
       | MVfloating (fty, fval) ->
           ret @@ List.map (AbsByte.v Prov_none) begin
-            bytes_of_int64
+            bytes_of_int
               true (* TODO: check that *)
               (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
           end
@@ -819,13 +819,13 @@ module Concrete : Memory = struct
                   | Some name -> IntMap.add (N.of_int n) name funptrmap
                   | None -> funptrmap
                 end, List.map (AbsByte.v prov) begin
-                  bytes_of_int64
+                  bytes_of_int
                       false
                       ptr_size (N.of_int n)
                   end)
             | PVconcrete addr ->
                 ret @@ List.mapi (fun i -> AbsByte.v prov ~copy_offset:(Some i)) begin
-                  bytes_of_int64
+                  bytes_of_int
                     false (* we model address as unsigned *)
                     ptr_size addr
                 end
