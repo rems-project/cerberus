@@ -1,3 +1,1 @@
-BEGIN EXEC[0]
 Killed {msg: MerrAccess Load [ci/0020-end_of_lifetime.c:6:3-5] DeadPtr}
-END EXEC[0]
