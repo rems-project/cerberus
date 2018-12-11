@@ -1,13 +1,11 @@
 open import Pervasives
-
-import Mem Cthread
-
+import Mem Core_ctype
 
 type program_impl  = nat
 type location_impl = Mem.pointer_value
 type cvalue_impl   = Mem.mem_value
 type aid_impl      = nat
-type tid_impl      = Cthread.thread_id
+type tid_impl      = Core_ctype.thread_id
 
 (* TODO *)
 type footprint_impl =

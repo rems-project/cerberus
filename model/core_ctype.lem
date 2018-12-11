@@ -2,6 +2,7 @@ open import Pervasives Utils Show
 import Symbol (* Symbolic *) AilTypes
 
 
+
 (*
 val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
 declare ocaml target_rep function string_of_ail_ctype = `String_ail.string_of_ctype`
@@ -46,6 +47,7 @@ instance (Eq modifiable)
   let (<>) = unsafe_structural_inequality
 end
 
+type thread_id = nat
 
 (* TODO: no volatile for now *)
 type ctype =

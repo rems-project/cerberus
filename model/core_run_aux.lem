@@ -2,7 +2,7 @@ open import Pervasives Utils Show Core
 import Global Dlist Pp State_exception_undefined
 
 open import Errors Core
-import Cthread Cmm_csem
+import Cmm_csem
 
 import {hol} `pp_coreTheory`
 
@@ -18,7 +18,7 @@ type exec_location =
 (* C11 concurrency partial version of the pre-execution relations. These are
    incrementaly added as annotations to the Core program as it is evaluated *)
 type core_run_annotation = <|
-  sb_before:  set (Cthread.thread_id * Cmm_csem.aid);
+  sb_before:  set (Core_ctype.thread_id * Cmm_csem.aid);
   dd_before:  set Cmm_csem.aid;
   asw_before: set Cmm_csem.aid;
 |>
@@ -44,17 +44,16 @@ type io_state = <|
 
 type core_state = <|
   (* the [maybe thread_id] is that of the parent thread if any *)
-  thread_states: list (Cthread.thread_id *
-                       (maybe Cthread.thread_id * thread_state));
+  thread_states: list (Core_ctype.thread_id *
+                       (maybe Core_ctype.thread_id * thread_state));
   io: io_state;
 |>
 
 
 (* State of Core evaluator *)
 type core_run_state = <|
-  tid_supply:    UniqueId.supply Cthread.thread_id;
-  symbol_supply: UniqueId.supply Symbol.sym;
-  aid_supply:    UniqueId.supply Cmm_csem.aid;
+  tid_supply:    Core_ctype.thread_id;
+  aid_supply:    Cmm_csem.aid;
   
   (* Scoped environment for the Core symbols *)
   env: list (map Symbol.sym value);
@@ -93,9 +92,8 @@ let initial_core_state = <|
 |>
 
 let initial_core_run_state xs = <|
-  tid_supply=    UniqueId.new_supply;
-  symbol_supply= UniqueId.new_supply;
-  aid_supply=    UniqueId.new_supply;
+  tid_supply=    0;
+  aid_supply=    0;
   
   env=     [Map.empty];
   labeled= xs;
@@ -113,7 +111,7 @@ instance (Default core_run_annotation)
 end
 
 
-val has_sbBefore_on_thread: Cthread.thread_id -> core_run_annotation -> bool
+val has_sbBefore_on_thread: Core_ctype.thread_id -> core_run_annotation -> bool
 let has_sbBefore_on_thread tid annot =
   Set.any (fun (tid', _) ->
     tid = tid'
@@ -132,7 +130,7 @@ let has_sbBefore_on_thread tid annot =
 (* val     annotate_expr: forall 'a. SetType 'a => polarity * 'a -> expr 'a -> expr 'a *)
 
 
-val     add_to_sb: set (polarity * (Cthread.thread_id * Cmm_csem.aid)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
+val     add_to_sb: set (polarity * (Core_ctype.thread_id * Cmm_csem.aid)) -> Core.expr core_run_annotation -> Core.expr core_run_annotation
 let rec add_to_sb p_aids (Expr annot expr_ as expr) =
   if Global.using_concurrency () then
     Expr annot match expr_ with
@@ -189,7 +187,7 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
     expr
 
 
-val add_to_sb_stack: set (polarity * (Cthread.thread_id * Cmm_csem.aid)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+val add_to_sb_stack: set (polarity * (Core_ctype.thread_id * Cmm_csem.aid)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
 
 let rec add_to_sb_continuation p_aids = function
   | [] ->

@@ -42,7 +42,7 @@ module type Memory = sig
   
   (* Memory actions *)
   val allocate_static:
-       Cthread.thread_id  (* the allocating thread *)
+       Core_ctype.thread_id  (* the allocating thread *)
     -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value      (* alignment constraint *)
     -> Core_ctype.ctype0  (* type of the allocation *)
@@ -50,7 +50,7 @@ module type Memory = sig
     -> pointer_value memM
   
   val allocate_dynamic:
-       Cthread.thread_id (* the allocating thread *)
+       Core_ctype.thread_id (* the allocating thread *)
     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value     (* alignment constraint *)
     -> integer_value     (* size *)
@@ -99,7 +99,7 @@ module type Memory = sig
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: Cthread.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+  val realloc: Core_ctype.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
   
   (* Integer value constructors *)

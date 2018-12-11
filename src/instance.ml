@@ -75,6 +75,7 @@ let hack ~conf mode =
       n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
                             Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
                           else None;
+      fs_state=           Sibylfs.fs_initial_state
     }
 
 let respond filename name f = function
@@ -97,10 +98,10 @@ let elaborate ~conf ~filename =
     Pipeline.load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
     Pipeline.c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
     >>= function
-    | (Some cabs, Some ail, sym_suppl, core) ->
+    | (Some cabs, Some ail, core) ->
       Pipeline.core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun (_, core') ->
-      return (cabs, ail, sym_suppl, core')
+      return (cabs, ail, core')
     | _ ->
       failwith "fatal failure core pass"
   with
@@ -129,7 +130,7 @@ let pp_core core =
   let core' = string_of_doc @@ PP.pp_file core in
   (core', !locs)
 
-let result_of_elaboration (cabs, ail, _, core) =
+let result_of_elaboration (cabs, ail, core) =
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
   let mk_elab d = Some (elim_paragraph_sym @@ string_of_doc d) in
   let (core, locs) = pp_core core in
@@ -157,8 +158,8 @@ let execute ~conf ~filename (mode: exec_mode) =
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
-    >>= fun (cabs, ail, sym_suppl, core) ->
-    Pipeline.interp_backend dummy_io sym_suppl (Core_run_aux.convert_file core)
+    >>= fun (cabs, ail, core) ->
+    Pipeline.interp_backend dummy_io (Core_run_aux.convert_file core)
       [] `Batch false false (to_smt2_mode mode)
     >>= function
     | Either.Left res ->
@@ -357,11 +358,11 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   match active_node_opt with
   | None -> (* no active node *)
     hack ~conf Random;
-    elaborate ~conf ~filename >>= fun (_, _, sym_suppl, core) ->
+    elaborate ~conf ~filename >>= fun (_, _, core) ->
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
-    let st0      = Driver.initial_driver_state sym_suppl core' Sibylfs.fs_initial_state (* TODO *) in
-    let (m, st)  = (Driver.drive false false sym_suppl core' [], st0) in
+    let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
+    let (m, st)  = (Driver.drive false false core' [], st0) in
     last_node_id := 0;
     let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
     let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in

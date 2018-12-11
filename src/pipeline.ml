@@ -1,5 +1,7 @@
 open Prelude
 
+external terminal_size: unit -> (int * int) option = "terminal_size"
+
 (* Pipeline *)
 
 let (>>=) = Exception.except_bind
@@ -16,30 +18,18 @@ let run_pp with_ext doc =
           (false, Pervasives.stdout) in
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
-  (* TODO(someday): dynamically get the width of the terminal *)
-  PPrint.ToChannel.pretty 1.0 80 oc doc;
+  let term_col = match terminal_size () with
+    | Some (_, col) -> col
+    | _ -> 80
+  in
+  PPrint.ToChannel.pretty 1.0 term_col oc doc;
   if is_fout then
     close_out oc;
   Colour.do_colour := saved
 
-
-(* This is the symbol counter used by (I think) everything: Core parser,
-   desugaring, elaboratiion ... *)
-(* TODO(someday): find a clean way to get rid of that reference... *)
-let sym_counter =
-  ref 0
-
-
-(* The path to where Cerberus is installed *)
-let cerb_path =
-    try
-      Sys.getenv "CERB_PATH"
-    with Not_found ->
-      error "expecting the environment variable CERB_PATH set to point to the location cerberus."
-
 (* The path to the Core standard library *)
 let core_stdlib_path =
-  Filename.concat cerb_path "include/core"
+  Filename.concat Global_ocaml.cerb_path "include/core"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
@@ -47,8 +37,7 @@ let load_core_stdlib () =
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
-    Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `" ^ filepath ^ "'.");
-    Core_parser_driver.parse_stdlib sym_counter filepath >>= function
+    Core_parser_driver.parse_stdlib filepath >>= function
     | Core_parser_util.Rstd (ailnames, std_funs) ->
       return (ailnames, std_funs)
     | _ ->
@@ -60,7 +49,7 @@ let load_core_impl core_stdlib impl_name =
   if not (Sys.file_exists iname) then
     error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
-    match Core_parser_driver.parse sym_counter core_stdlib iname with
+    match Core_parser_driver.parse core_stdlib iname with
     | Exception.Result (Core_parser_util.Rimpl impl_map) ->
       return impl_map
     | _ ->
@@ -110,7 +99,6 @@ let read_entire_file filename =
 
 let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
-  let open Debug_ocaml in
   (* -- *)
   let parse filename =
     Cparser_driver.parse filename >>= fun cabs_tunit ->
@@ -125,8 +113,8 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   (* -- *)
   let desugar cabs_tunit =
     let (ailnames, core_stdlib_fun_map) = core_stdlib in
-    Cabs_to_ail.desugar !sym_counter (ailnames, core_stdlib_fun_map, core_impl)
-      "main" cabs_tunit >>= fun (sym_suppl, ail_prog) ->
+    Cabs_to_ail.desugar (ailnames, core_stdlib_fun_map, core_impl)
+      "main" cabs_tunit >>= fun ail_prog ->
           io.set_progress "DESUG"
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
@@ -136,7 +124,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
             fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program false false ail_prog)
           end
-      >>= fun () -> return (sym_suppl, ail_prog) in
+      >>= fun () -> return ail_prog in
   (* -- *)
   let ail_typechecking ail_prog =
     ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
@@ -164,27 +152,26 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let processed_filename = Filename.(temp_file (basename filename) "") in
   io.print_debug 5 (fun () -> "C prepocessor outputed in: `" ^ processed_filename ^ "`") >>= fun () ->
   if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename ^ " 2> cpp_error") <> 0 then
-    error @@ read_entire_file "cpp_error";
+    failwith @@ read_entire_file "cpp_error";
   (* -- *)
-  parse processed_filename  >>= fun cabs_tunit            ->
-  desugar cabs_tunit        >>= fun (sym_suppl, ail_prog) ->
-  ail_typechecking ail_prog >>= fun ailtau_prog           ->
+  parse processed_filename  >>= fun cabs_tunit  ->
+  desugar cabs_tunit        >>= fun ail_prog    ->
+  ail_typechecking ail_prog >>= fun ailtau_prog ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
      used more than once, we need to do reset here *)
   (* TODO(someday): find a better way *)
   Tags.reset_tagDefs ();
-  let (sym_suppl', core_file) =
-    Translation.translate core_stdlib core_impl (sym_suppl, ailtau_prog) in
+  let core_file = Translation.translate core_stdlib core_impl ailtau_prog in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
-  return (Some cabs_tunit, Some ailtau_prog, sym_suppl', core_file)
+  return (Some cabs_tunit, Some ailtau_prog, core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
-  Core_parser_driver.parse sym_counter core_stdlib filename >>= function
+  Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
         Tags.set_tagDefs tagDefs;
-        return (Symbol.Symbol (!sym_counter, None), {
+        return {
            Core.main=   Some sym_main;
            Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
@@ -192,7 +179,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.globs=  globs;
            Core.funs=   funs;
            Core.funinfo= Pmap.empty (fun _ _ -> 0); (* TODO: need to parse funinfo! *)
-         })
+         }
     | Core_parser_util.Rstd _ ->
         error "Found no main function in the Core program"
     | Core_parser_util.Rimpl _ ->
@@ -244,17 +231,17 @@ let core_passes (conf, io) ~filename core_file =
   end >>= fun () -> return (core_file', typed_core_file'')
 
 
-let interp_backend io sym_suppl core_file ~args ~batch ~concurrency ~experimental_unseq exec_mode =
+let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   let module D = Exhaustive_driver in
-  let conf = {D.concurrency; experimental_unseq; exec_mode=exec_mode } in
+  let fs_state = if fs <> "" then Fs_ocaml.initialise fs else Sibylfs.fs_initial_state in
   (* TODO: temporary hack for the command name *)
   match batch with
   | (`Batch | `CharonBatch) as mode ->
-    let executions = D.batch_drive mode sym_suppl core_file ("cmdname" :: args) conf in
+    let executions = D.batch_drive mode core_file ("cmdname" :: args) fs_state driver_conf in
     return (Either.Left executions)
   | `NotBatch ->
     let open Core in
-    D.drive sym_suppl core_file ("cmdname" :: args) conf >>= function
+    D.drive core_file ("cmdname" :: args) fs_state driver_conf >>= function
       | (Vloaded (LVspecified (OVinteger ival)) :: _) ->
           (* TODO: yuck *)
           return (Either.Right begin try
@@ -271,12 +258,13 @@ let interp_backend io sym_suppl core_file ~args ~batch ~concurrency ~experimenta
           return (Either.Right 0)
 
 
-let ocaml_backend (conf, io) ~filename ~ocaml_corestd sym_suppl core_file =
+(* FIXME: this is not working *)
+let ocaml_backend (conf, io) ~filename ~ocaml_corestd core_file =
   (* the OCaml backend really needs things to have been sequentialised *)
   (fun (_, typed_core) ->
      if conf.sequentialise_core then typed_core
      else Core_sequentialise.sequentialise_file typed_core)
   <$> core_passes (conf, io) filename core_file
-  >>= Codegen_ocaml.gen filename ocaml_corestd sym_suppl
+  >>= Codegen_ocaml.gen filename ocaml_corestd
 
 

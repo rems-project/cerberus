@@ -1,8 +1,8 @@
-open import Pervasives Utils Show Core Core_ctype Annot
+open import Pervasives Utils Show Core Core_ctype Annot Map Map_extra
 import AilSyntax AilTypes
 import Product Exception Mem Mem_aux
 
-open import Cthread Errors
+open import Errors
 
 open import{hol} `pp_coreTheory`
 
@@ -2387,3 +2387,60 @@ let rec lookup_env sym = function
             Just ret
       end
 end
+
+
+
+(* dummy link *)
+
+let link_main opt_m1 opt_m2 =
+  match (opt_m1, opt_m2) with
+  | (Just _, Just _) -> error "two mains declared"
+  | (Just m1, Nothing) -> Just m1
+  | (Nothing, Just m2) -> Just m2
+  | (Nothing, Nothing) -> Nothing
+  end
+
+let link_tagDefs tagDefs1 tagDefs2 =
+  Map_extra.fold Map.insert tagDefs1 tagDefs2
+
+let rec lookup_by_string (Symbol.Symbol _ name as orig_sym) = function
+  | [] ->
+    Nothing
+  | (Symbol.Symbol n s, f) :: rest ->
+    if name = s then Just (Symbol.Symbol n s, f) else lookup_by_string orig_sym rest
+  end
+
+let link_funs fun1 fun2 =
+  let funs = Map_extra.toList fun1 in
+  Map_extra.fold (fun sym f acc ->
+  match f with
+  | Fun _ _ _ -> Map.insert sym f acc
+  | Proc _ _ _ _ ->
+      match lookup_by_string sym funs with
+      | Nothing -> Map.insert sym f acc
+      | Just (sym2, _) ->
+      Map.insert sym2 f (Map.insert sym f acc)
+      end
+  | ProcDecl _ _ _ ->
+      match lookup_by_string sym funs with
+      | Nothing -> Map.insert sym f acc
+      | Just (sym2, f2) ->
+      Map.insert sym2 f2 (Map.insert sym f2 acc)
+      end
+  | BuiltinDecl _ _ _-> Map.insert sym f acc
+  end) fun2 fun1
+
+let link_funinfo fun1 fun2 =
+  Map_extra.fold Map.insert fun1 fun2
+
+val link: forall 'a 'b. list (generic_file 'a 'b) -> generic_file 'a 'b
+let link files = <|
+  main = List.foldl (fun acc f -> link_main acc f.main) Nothing files;
+  tagDefs = List.foldl (fun acc f -> link_tagDefs acc f.tagDefs) Map.empty files;
+  stdlib = (List_extra.head files).stdlib;
+  impl = (List_extra.head files).impl;
+  globs = List.concat (List.map (fun f -> f.globs) files);
+  funs =  List.foldl (fun acc f -> link_funs acc f.funs) Map.empty files;
+  funinfo = List.foldl (fun acc f -> link_funinfo acc f.funinfo) Map.empty files;
+|>
+

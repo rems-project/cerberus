@@ -8,20 +8,15 @@ SOURCE_prelude=\
   debug.lem \
   enum.lem \
   state.lem \
-  uniqueId.lem \
   symbol.lem \
-  cthread.lem \
   exception.lem \
   product.lem \
   float.lem
-
-
 
 SOURCE_cabs=\
   cabs.lem \
   undefined.lem \
   constraint.lem
-
 
 SOURCE_ail=\
   Common.lem \

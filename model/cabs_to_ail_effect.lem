@@ -1,6 +1,5 @@
-open import Pervasives Cabs Std Show Show_extra
-open import Utils
-import Debug Pp Loc Errors Scope_table State_exception UniqueId Symbol
+open import Pervasives Utils Cabs Std Show Show_extra
+import Debug Pp Loc Errors Scope_table State_exception Symbol
 
 open import Cabs_to_ail_aux
 
@@ -210,9 +209,7 @@ type global_definition =
 
 type state = <|
   (* Counter used to generate fresh cabs label names (see the desugaring of do-while statements) *)
-  aux_supply: UniqueId.supply nat;
-  (* Counter for the symbol generator *)
-  symbol_supply: UniqueId.supply Symbol.sym;
+  aux_supply: nat;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   
   registered_external_identifiers: map (cabs_identifier * namespace) (scope * (A.identifier * identifier_kind * maybe linkage));
@@ -479,10 +476,9 @@ let hack_inject_idents_map idents_map =
 
 
 (* ========================================================================== *)
-val initial_state: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
-let initial_state n core_eval_stuff = <|
-  aux_supply=    UniqueId.new_supply;
-  symbol_supply= UniqueId.new_supply_from n;
+val initial_state: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> state
+let initial_state core_eval_stuff = <|
+  aux_supply=    0;
   
   registered_external_identifiers= Map.empty;
   registered_identifiers=      Scope_table.empty;
@@ -506,14 +502,9 @@ let initial_state n core_eval_stuff = <|
   core_eval_stuff= core_eval_stuff;
 |>
 
-val eval: forall 'a. nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a ->
-  Exception.exceptM (UniqueId.supply Symbol.sym * 'a) Errors.error
-let cabs_to_ail_effect_eval n core_eval_stuff m =
-  State_exception.eval (
-    m                                                 >>= fun res    ->
-    State_exception.read (fun st -> st.symbol_supply) >>= fun supply ->
-    return (supply, res)
-    ) (initial_state n core_eval_stuff)
+val eval: forall 'a. (map string Symbol.sym) * Core.fun_map unit * Core.impl -> desugM 'a -> Exception.exceptM 'a Errors.error
+let cabs_to_ail_effect_eval core_eval_stuff m =
+  State_exception.eval m (initial_state core_eval_stuff)
 let inline eval = cabs_to_ail_effect_eval
 
 
@@ -521,15 +512,15 @@ let inline eval = cabs_to_ail_effect_eval
 val freshify: cabs_identifier -> desugM cabs_identifier
 let freshify (CabsIdentifier loc str) =
   State_exception.modify (fun st ->
-    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
-    (CabsIdentifier loc (str ^ show n), <| st with aux_supply= aux_supply' |>)
+    let n = st.aux_supply in
+    (CabsIdentifier loc (str ^ show n), <| st with aux_supply= n+1 |>)
   )
 
 val fresh_block_scope: desugM scope
 let fresh_block_scope =
   State_exception.modify (fun st ->
-    let (n, aux_supply') = UniqueId.fresh_id st.aux_supply in
-    (Scope_block n, <| st with aux_supply= aux_supply' |>)
+    let n = st.aux_supply in
+    (Scope_block n, <| st with aux_supply= n+1 |>)
   )
 
 
@@ -587,11 +578,8 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   end >>
   let do_fresh () =
     (* generates a fresh symbol *)
-    State_exception.modify (fun st ->
-      let CabsIdentifier _ str = ident in
-      let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
-      (sym, <| st with symbol_supply = symbol_supply |>)
-    ) >>= fun sym ->
+    let CabsIdentifier _ str = ident in
+    let sym = Symbol.fresh_pretty str in
     (* associates it to the identifier *)
     State_exception.update (fun st ->
       match link_opt with
@@ -1861,11 +1849,9 @@ let inline print_debugM n msg =
 
 (* TODO *)
 import Core
-val get_core_eval_stuff: desugM (((map string Symbol.sym) * Core.fun_map unit * Core.impl) * UniqueId.supply Symbol.sym)
+val get_core_eval_stuff: desugM ((map string Symbol.sym) * Core.fun_map unit * Core.impl)
 let get_core_eval_stuff =
-  State_exception.read (fun st ->
-    (st.core_eval_stuff, st.symbol_supply)
-  )
+  State_exception.read (fun st -> st.core_eval_stuff)
 
 
 val get_gamma_sofar: desugM A.gamma

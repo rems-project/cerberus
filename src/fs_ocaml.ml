@@ -31,12 +31,19 @@ let force (st, res) =
   | Either.Right x -> (st, N.of_int x)
   | Either.Left _ -> assert false
 
+let explode bs =
+  let rec exp a b =
+    if a < 0 then b
+    else exp (a - 1) (Bytes.get bs a :: b)
+  in
+  exp (Bytes.length bs - 1) []
+
 let rec fs_write st =
   let open_flag = Nat_big_num.of_int 0O50 (* O_CREAT | O_RDWR *) in
   function
   | File (name, content, size, perm) ->
     let (st, fd) = force @@ run_open st name open_flag (Some (N.of_int perm)) in
-    let (st, _) = run_write st fd (List.of_seq @@ Bytes.to_seq content) (N.of_int size) in
+    let (st, _) = run_write st fd (explode content) (N.of_int size) in
     let (st, _) = run_close st fd in
     st
   | Dir (name, contents, perm) ->

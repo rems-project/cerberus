@@ -470,7 +470,7 @@ let get_quote ref =
   let key =
     String.split_on_char ',' ref |> List.hd (* remove everything after ',' *)
   in
-  match !!cerb_conf.n1507 with
+  match Global_ocaml.n1570 () with
   | Some (`Assoc xs) ->
     begin match List.assoc_opt key xs with
       | Some (`String b) -> "\n" ^ b
@@ -492,7 +492,7 @@ let make_message loc err k =
     | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
     | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
-  match !!cerb_conf.error_verbosity, get_std_ref err with
+  match Global_ocaml.verbose (), get_std_ref err with
   | Basic, _
   | _, NoRef ->
       Printf.sprintf "%s %s %s\n%s" head kind msg pos
