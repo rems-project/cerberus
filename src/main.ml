@@ -217,7 +217,7 @@ let backend sym_supply core_file args =
 
 
 
-let pipeline filename args core_std =
+let pipeline filename (* args *) core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
 
@@ -274,21 +274,19 @@ let pipeline filename args core_std =
     if !!cerb_conf.rewrite && !Debug_ocaml.debug_level >= 5 then
       print_endline "====================";
    );
-  
+  (*
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
     >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
     -| Core_sequentialise.sequentialise_file
   
   else
-    if !!cerb_conf.sequentialise then begin
+     *)
+    if !!cerb_conf.sequentialise then
       Core_typing.typecheck_program rewritten_core_file >>= fun z ->
-      Exception.except_return (
-        backend sym_supply  (Core_run_aux.convert_file (Core_sequentialise.sequentialise_file z)) args
-      )
-    end
+      Exception.except_return (sym_supply, Core_run_aux.convert_file (Core_sequentialise.sequentialise_file z))
     else
-      Exception.except_return (backend sym_supply rewritten_core_file args)
+      Exception.except_return (sym_supply, Core_run_aux.convert_file rewritten_core_file) (* args *)
 
 let gen_corestd (stdlib, impl) =
   let sym_supply = UniqueId.new_supply_from
@@ -312,7 +310,7 @@ let gen_corestd (stdlib, impl) =
       cps_core.Cps_core.impl cps_core.Cps_core.stdlib;
     Exception.except_return 0
 
-let cerberus debug_level cpp_cmd define incl impl_name exec exec_mode switches pps ppflags file_opt progress rewrite
+let cerberus debug_level cpp_cmd define incl impl_name exec exec_mode switches pps ppflags files progress rewrite
              sequentialise fs_dump fs concurrency preEx args ocaml ocaml_corestd batch experimental_unseq typecheck_core
              defacto default_impl action_graph =
   Debug_ocaml.debug_level := debug_level;
@@ -348,14 +346,26 @@ let cerberus debug_level cpp_cmd define incl impl_name exec exec_mode switches p
         else
           n
   in
-  runM $ match file_opt with
-    | None ->
+  runM $ match files with
+    | [] ->
       if ocaml_corestd then
         prelude >>= gen_corestd
       else
         Pp_errors.fatal "no input file"
-    | Some file ->
-        prelude >>= pipeline file args
+    | files ->
+        (*prelude >>= pipeline file args*)
+      prelude >>= fun core_std ->
+      let sym_supply = UniqueId.new_supply_from
+          Symbol.instance_Enum_Enum_Symbol_sym_dict !core_sym_counter
+      in
+      (* TODO: sym supply is not being used here!! IT SHOULD!! *)
+      Exception.foldlM0 (fun (sym_supply, core_files) file ->
+          pipeline file core_std >>= fun (sym_supply, core_file) ->
+          Exception.except_return (sym_supply, core_file::core_files)) (sym_supply, []) files
+      >>= fun (sym_supply, core_files) ->
+      let core_file = Core_aux.link core_files in
+      Tags.set_tagDefs core_file.tagDefs;
+      Exception.except_return (backend sym_supply core_file args)
 
 
 (* CLI stuff *)
@@ -412,9 +422,9 @@ let ppflags =
   let doc = "Pretty print flags [annot: include location and ISO annotations, fout: output in a file]." in
   Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] & info ["pp_flags"] ~doc)
 
-let file =
+let files =
   let doc = "source C or Core file" in
-  Arg.(value & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
+  Arg.(value & pos_all string [] & info [] ~docv:"FILE" ~doc)
 
 let progress =
   let doc = "Progress mode: the return code indicate how far the source program went through the pipeline \
@@ -484,7 +494,7 @@ let args =
 let () =
   let cerberus_t = Term.(pure cerberus
     $ debug_level $ cpp_cmd $ define $ incl $ impl $ exec $ exec_mode $ switches
-    $ pprints $ ppflags $ file $ progress $ rewrite $ sequentialise $ fs_dump $ fs
+    $ pprints $ ppflags $ files $ progress $ rewrite $ sequentialise $ fs_dump $ fs
     $ concurrency $ preEx $ args $ ocaml $ ocaml_corestd
     $ batch $ experimental_unseq $ typecheck_core $ defacto $ default_impl $ action_graph ) in
   
