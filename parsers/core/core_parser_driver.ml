@@ -1,7 +1,7 @@
 open Prelude
 open Core_parser_util
 
-let genparse sym_counter mode std filename =
+let genparse mode std filename =
   let read f input =
     let channel = open_in input in
     let result  = f channel in
@@ -9,7 +9,6 @@ let genparse sym_counter mode std filename =
     result
   in
   let module Parser = Core_parser.Make (struct
-    let sym_counter = sym_counter
     let mode = mode
     let std = std
   end) in
@@ -36,11 +35,11 @@ let genparse sym_counter mode std filename =
   in
   read parse_channel filename
 
-let parse_stdlib sym_counter =
-  genparse sym_counter StdMode (Pmap.empty _sym_compare)
+let parse_stdlib =
+  genparse StdMode (Pmap.empty _sym_compare)
 
-let parse sym_counter stdlib =
-  genparse sym_counter ImplORFileMode
+let parse stdlib =
+  genparse ImplORFileMode
     begin List.fold_left (fun acc (fsym, _) ->
         match fsym with
         | Symbol.Symbol (_, Some str) ->

@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Core_ctype Boot UniqueId Decode Output Set_extra
+import Core Core_ctype Boot Decode Output Set_extra
 import Core_aux Builtins
 module Caux = Core_aux
 
@@ -55,8 +55,6 @@ type driver_error =
   | DErr_other of string
 
 type driver_state = <|
-  symbol_supply:     UniqueId.supply Symbol.sym;
-  
   core_file:         Core.file Core_run.core_run_annotation;
   core_state:        Core_run.core_state;       (* state of the core program *)
   core_run_state:    Core_run.core_run_state;   (* state of the core evaluator *)
@@ -1261,7 +1259,7 @@ let finalize debug_str dr_st =
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
-let initial_driver_state sym_supply file fs_state =
+let initial_driver_state file fs_state =
 (*
   let mk_dr_st core_st run_st = <|
     symbol_supply=     UniqueId.new_supply;
@@ -1285,7 +1283,6 @@ let initial_driver_state sym_supply file fs_state =
   mk_dr_st core_st run_st
 *)
   <|
-    symbol_supply=     sym_supply;
     core_file=         file;
     core_state=        Core_run.initial_core_state;
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
@@ -1332,8 +1329,8 @@ let get_thread_states =
   ND.return dr_st.core_state.Core_run.thread_states
 
 
-val driver_globals: bool -> UniqueId.supply Symbol.sym -> Core.file Core_run.core_run_annotation -> driverM Cthread.thread_id
-let driver_globals with_concurrency sym_supply file =
+val driver_globals: bool -> Core.file Core_run.core_run_annotation -> driverM Cthread.thread_id
+let driver_globals with_concurrency file =
   (* spawning a thread for the initialisation of globals, and later the execution of main *)
   spawn_thread Nothing <|
     (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
@@ -1447,9 +1444,8 @@ end
 
 
 
-val drive: bool -> bool -> UniqueId.supply Symbol.sym -> Core.file Core_run.core_run_annotation -> list string ->
-           driverM driver_result
-let drive (with_concurrency: bool) (use_experimental_unseq: bool) sym_supply file (arg_strs: list string) =
+val drive: bool -> bool -> Core.file Core_run.core_run_annotation -> list string -> driverM driver_result
+let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs: list string) =
   (* Setting the read-only tag definitions (used by the memory model) *)
 (*
 TODO: this should be removable, since we already set it in Translation
@@ -1457,7 +1453,7 @@ TODO: this should be removable, since we already set it in Translation
 *)
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)
-  driver_globals with_concurrency sym_supply file >>= fun tid0 (*, post_globals_dr_st) *) ->
+  driver_globals with_concurrency file >>= fun tid0 (*, post_globals_dr_st) *) ->
   ND.get >>= fun post_globals_dr_st ->
   
   (* we need a startup function to have been declared *)

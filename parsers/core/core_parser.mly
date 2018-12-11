@@ -172,8 +172,7 @@ let under_scope (m: 'a Eff.t) : 'a Eff.t =
 
 let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
-  M.sym_counter := !M.sym_counter + 1;
+  let sym = Symbol.Symbol (Fresh.int(), Some (fst _sym)) in
 (*  let sym = Symbol.Symbol (Global_ocaml.new_int (), Some (fst _sym)) in *)
   Eff.put {st with
     sym_scopes=
@@ -209,8 +208,7 @@ let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
 let register_label ((_, (start_p, end_p)) as _sym) : unit Eff.t =
   let loc = Location_ocaml.region (start_p, end_p) None in
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (!M.sym_counter, Some (fst _sym)) in
-  M.sym_counter := !M.sym_counter + 1;
+  let sym = Symbol.Symbol (Fresh.int(), Some (fst _sym)) in
   Eff.put {st with
     labels= Pmap.add _sym (sym, loc) st.labels
   }
@@ -1089,7 +1087,6 @@ let mk_file decls =
 
 %start <Core_parser_util.result>start
 %parameter <M : sig
-                  val sym_counter: int ref
                   val mode: Core_parser_util.mode
                   val std: (Core_parser_util._sym, Symbol.sym) Pmap.map
                 end>
