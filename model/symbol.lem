@@ -1,11 +1,5 @@
-open import Pervasives
-
-open import Utils Show Show_extra Enum
-import UniqueId Loc
-
-import Debug
-
-open import {hol} `utilTheory`
+open import Pervasives Utils Show Show_extra Enum
+import Loc Debug
 
 (* Symbolic identifiers *)
 type sym =
@@ -82,46 +76,24 @@ type prefix =
   | PrefSource of Loc.t * list sym
   | PrefOther of string
 
+val fresh_int: unit -> nat
+declare ocaml target_rep function fresh_int = `Fresh.int`
 
-(*
-val     stringFromPrefix: prefix -> string
-let rec stringFromPrefix_ syms =
-  match syms with
-    | [] ->
-        ""
-    | sym :: syms' ->
-        show sym ^ "." ^ stringFromPrefix_ syms'
-end
+val fresh: unit -> sym
+let fresh () =
+  Symbol (fresh_int ()) Nothing
 
-let stringFromPrefix = function
-  | PrefSource syms ->
-      "{" ^ stringFromPrefix_ syms ^ "}"
-  | PrefOther str ->
-      "{" ^ str ^ "}"
-end
-*)
-
-
-val fresh: State.stateM (UniqueId.t sym) (UniqueId.supply sym)
-let fresh =
-  UniqueId.fresh_id
-
-val fresh_pretty : string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_pretty : string -> sym
 let fresh_pretty str =
-  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
-    State.return $ Symbol id (Just str)
-  )
+  Symbol (fresh_int ()) (Just str)
 
-
-val fresh_pretty_with_id : (nat -> string) -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_pretty_with_id : (nat -> string) -> sym
 let fresh_pretty_with_id mkStr =
-  State.bind UniqueId.fresh_id (fun (Symbol id _) ->
-    State.return $ Symbol id (Just (mkStr id))
-  )
+  let id = fresh_int () in
+  Symbol id (Just (mkStr id))
 
-
-val fresh_fancy : maybe string -> State.stateM (UniqueId.t sym) (UniqueId.supply sym)
+val fresh_fancy : maybe string -> sym
 let fresh_fancy = function
   | Just str -> fresh_pretty str
-  | Nothing  -> fresh
+  | Nothing  -> fresh ()
 end

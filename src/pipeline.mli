@@ -24,8 +24,6 @@ type io_helpers = {
   warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
-val cerb_path: string
-
 val run_pp: (string * string) option -> PPrint.document -> unit
 
 val load_core_stdlib:
@@ -41,21 +39,8 @@ val c_frontend:
   filename:string ->
   ( Cabs.translation_unit option
   * (GenTypes.genTypeCategory AilSyntax.ail_program) option
-  * Symbol.sym
   * unit Core.file
   , Location_ocaml.t * Errors.cause) Exception.exceptM
-
-(*
-val core_frontend:
-  (configuration * io_helpers) ->
-  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
-  filename:string ->
-  ( Cabs.translation_unit option
-  * (GenTypes.genTypeCategory AilSyntax.ail_program) option
-  * Symbol.sym
-  * unit Core.file
-  , Location_ocaml.t * Errors.cause) Exception.exceptM
-    *)
 
 val core_frontend:
   'a * io_helpers ->
@@ -63,22 +48,19 @@ val core_frontend:
   (Implementation_.implementation_constant, unit Core.generic_impl_decl)
   Pmap.map ->
   filename:string ->
-  (Symbol.sym * (unit, unit) Core.generic_file,
-   Location_ocaml.t * Errors.cause)
-  Exception.exceptM
+  ((unit, unit) Core.generic_file, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
   (unit Core.file * unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val interp_backend:
-  io_helpers -> Symbol.sym -> 'a Core.file ->
-  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> concurrency:bool -> experimental_unseq:bool ->
+  io_helpers -> 'a Core.file ->
+  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> fs:string -> driver_conf:Exhaustive_driver.driver_conf ->
 (* TODO: we would be using poly variants if it weren't for Lem... *)
 (*  [`Interactive | `Exhaustive | `Random] -> *)
-  Smt2.execution_mode ->
   ((string list, int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
 
 val ocaml_backend:
-  (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> Symbol.sym -> unit Core.file ->
+  (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> unit Core.file ->
   (int, Location_ocaml.t * Errors.cause) Exception.exceptM

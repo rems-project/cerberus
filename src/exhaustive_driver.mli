@@ -3,13 +3,13 @@ type driver_conf = {
   exec_mode: Smt2.execution_mode;
   concurrency: bool;
   experimental_unseq: bool;
+  fs_dump: bool;
 }
 
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
-
 val batch_drive:
-  [`Batch | `CharonBatch] -> Symbol.sym UniqueId.supply -> 'a Core.file -> string list -> driver_conf -> string list
+  [`Batch | `CharonBatch] -> 'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> string list
 
 val drive:
-  Symbol.sym UniqueId.supply -> 'a Core.file -> string list -> driver_conf -> execution_result
+  'a Core.file -> string list -> Sibylfs.fs_state -> driver_conf -> execution_result

@@ -3,7 +3,7 @@
 
 open import Pervasives Utils Global Loc String_extra Num
 
-import State Translation_effect Loc
+import State Translation_effect Loc List_extra
 open import Translation_aux
 import Cmm_csem Mem
 
@@ -481,7 +481,7 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   translate e                                         >>= fun core_e                             ->
   E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (e_sym  , e_sym_pat  , e_sym_pe  ) ->
   E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
-  E.fresh_symbol                                      >>= fun memop_sym                          ->
+  let memop_sym = Symbol.fresh () in
   let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   let memop = match bop with
     | A.Eq -> Mem_common.PtrEq
@@ -507,12 +507,12 @@ if    Aaux.is_null_pointer_constant e1 && AilTypesAux.is_pointer (ctype_of e2)
   )
   
 else (* both operands have arithmetic or pointer types *)
-  translate e1   >>= fun core_e1       ->
-  translate e2   >>= fun core_e2       ->
-  E.fresh_symbol >>= fun e1_sym        ->
-  E.fresh_symbol >>= fun e2_sym        ->
-  E.fresh_symbol >>= fun obj1_sym      ->
-  E.fresh_symbol >>= fun obj2_sym      ->
+  translate e1 >>= fun core_e1       ->
+  translate e2 >>= fun core_e2       ->
+  let e1_sym   = Symbol.fresh () in
+  let e2_sym   = Symbol.fresh () in
+  let obj1_sym = Symbol.fresh () in
+  let obj2_sym = Symbol.fresh () in
   (* The object type on which the Core operator is going to work on. *)
   let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e1)) in
   let oTy2 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in
@@ -522,7 +522,7 @@ else (* both operands have arithmetic or pointer types *)
   let obj2_sym_pe = Caux.mk_sym_pe obj2_sym in
   
   (* TODO: could case this only for the pointer case *)
-  E.fresh_symbol >>= fun memop_sym ->
+  let memop_sym    = Symbol.fresh () in
   let memop_sym_pe = Caux.mk_sym_pe memop_sym in
   
   E.return $
@@ -583,12 +583,12 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
     | A.Bor  -> ("§6.5.12", (fun ty pe1 pe2 -> C.Pexpr [] () (C.PEctor C.CivOR [Caux.mk_ail_ctype_pe ty; pe1; pe2])))
     | (*BISECT-IGNORE*) _ -> error "[Translation.translate_bitwise_operator], 'bop' must be a bitwise operator"
   end in
-  E.fresh_symbol >>= fun e1_sym    ->
-  E.fresh_symbol >>= fun e2_sym    ->
-  E.fresh_symbol >>= fun obj1_sym  ->
-  E.fresh_symbol >>= fun obj2_sym  ->
-  E.fresh_symbol >>= fun sym_conv1 ->
-  E.fresh_symbol >>= fun sym_conv2 ->
+  let e1_sym    = Symbol.fresh () in
+  let e2_sym    = Symbol.fresh () in
+  let obj1_sym  = Symbol.fresh () in
+  let obj2_sym  = Symbol.fresh () in
+  let sym_conv1 = Symbol.fresh () in
+  let sym_conv2 = Symbol.fresh () in
   translate e1   >>= fun core_e1   ->
   translate e2   >>= fun core_e2   ->
   let oTy = C.OTy_integer in
@@ -755,9 +755,9 @@ and translate_expression ctx stdlib (tagDefs : Core.core_tag_definitions) a_expr
               (C.OTy_integer, integer_promotion (ctype_of e))
             else
               (C.OTy_floating, fun z -> z) in
-          E.fresh_symbol >>= fun obj_sym ->
-          E.fresh_symbol >>= fun e_sym   ->
-          self e         >>= fun core_e  ->
+          let obj_sym = Symbol.fresh () in
+          let e_sym   = Symbol.fresh () in
+          self e    >>= fun core_e  ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.3#2"] (
               C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
@@ -784,9 +784,9 @@ and translate_expression ctx stdlib (tagDefs : Core.core_tag_definitions) a_expr
               (C.OTy_integer, Caux.mk_integer_pe 0, integer_promotion (ctype_of e))
             else
               (C.OTy_floating, Caux.mk_floating_value_pe Mem.zero_fval, fun z -> z) in
-          E.fresh_symbol >>= fun obj_sym ->
-          E.fresh_symbol >>= fun e_sym   ->
-          self e         >>= fun core_e  ->
+          let obj_sym = Symbol.fresh () in
+          let e_sym   = Symbol.fresh () in
+          self e    >>= fun core_e  ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.3#3"] (
               C.Ewseq (Caux.mk_sym_pat e_sym (C.BTy_loaded oTy)) core_e (
@@ -816,9 +816,9 @@ else
       (* CHECKED IN APR2016 *)
       | A.AilEunary A.Bnot e ->
           (* STD §6.5.3.3#4 *)
-          E.fresh_symbol >>= fun obj_sym ->
-          E.fresh_symbol >>= fun e_sym   ->
-          self e         >>= fun core_e  ->
+          let obj_sym = Symbol.fresh () in
+          let e_sym   = Symbol.fresh () in
+          self e    >>= fun core_e  ->
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
           E.return $
             C.Expr [Annot.Astd "§6.5.3.3#4"] (
@@ -856,8 +856,8 @@ else
           (* STD §6.5.3.2#3, sentence 5 *)
           if AilTypesAux.is_object (ctype_of e) then
             let _ = Debug.print_debug 1 [] (fun _ -> "aileunary adress, result type: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers result_ty) in
-             E.fresh_symbol >>= fun sym    ->
-             self e         >>= fun core_e ->
+             let sym = Symbol.fresh () in
+             self e >>= fun core_e ->
              E.return $
                C.Expr [Annot.Astd "§6.5.3.2#3, sentence 5"] (
                  C.Ewseq (Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) core_e (
@@ -879,7 +879,7 @@ else
             () in
           
           self e >>= fun core_e ->
-          E.print_debugM 1 (fun () -> "TODO: needs to fix this") >>
+          let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
           let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype ty)    in
           let core_ty_e = Caux.mk_ail_ctype_pe ty in
@@ -938,11 +938,9 @@ end
           else
             () in
           (* TODO: qualifiers temporarily not dealt with *)
-(*          E.fresh_symbol     >>= fun lvalue_sym ->
-          E.fresh_symbol     >>= fun load_sym   -> *)
-          E.fresh_symbol >>= fun lvalue_sym ->
-          E.fresh_symbol >>= fun load_sym   ->
-          E.fresh_symbol >>= fun obj_sym    ->
+          let lvalue_sym = Symbol.fresh () in
+          let load_sym   = Symbol.fresh () in
+          let obj_sym    = Symbol.fresh () in
           self e         >>= fun core_e     ->
           let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype ty)    in
@@ -1003,9 +1001,9 @@ else match AilTypesAux.referenced_type (ctype_of e) with
   | (*BISECT-IGNORE*) Nothing ->
       illTypedAil loc "AilEunary Indirection, not a pointer type"
   | Just ref_ty ->
-          E.fresh_symbol >>= fun e_sym    ->
-          E.fresh_symbol >>= fun obj_sym  ->
-          E.fresh_symbol >>= fun test_sym -> (* symbol for the PtrValidForDeref test *)
+          let e_sym    = Symbol.fresh () in
+          let obj_sym  = Symbol.fresh () in
+          let test_sym = Symbol.fresh () in (* symbol for the PtrValidForDeref test *)
           self e         >>= fun core_e   ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.2"] (
@@ -1051,13 +1049,13 @@ If an invalid value has been assigned to the pointer, the behavior of the unary 
           (* STD §6.5.7 *)
           self e1        >>= fun core_e1       ->
           self e2        >>= fun core_e2       ->
-          E.fresh_symbol >>= fun e1_sym        ->
-          E.fresh_symbol >>= fun e2_sym        ->
-          E.fresh_symbol >>= fun obj1_sym      ->
-          E.fresh_symbol >>= fun obj2_sym      ->
-          E.fresh_symbol >>= fun promoted1_sym ->
-          E.fresh_symbol >>= fun promoted2_sym ->
-          E.fresh_symbol >>= fun res_sym       ->
+          let e1_sym        = Symbol.fresh () in
+          let e2_sym        = Symbol.fresh () in
+          let obj1_sym      = Symbol.fresh () in
+          let obj2_sym      = Symbol.fresh () in
+          let promoted1_sym = Symbol.fresh () in
+          let promoted2_sym = Symbol.fresh () in
+          let res_sym       = Symbol.fresh () in
           let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
           let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
           let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
@@ -1123,13 +1121,13 @@ else
           (* STD §6.5.7 *)
           self e1        >>= fun core_e1       ->
           self e2        >>= fun core_e2       ->
-          E.fresh_symbol >>= fun e1_sym        ->
-          E.fresh_symbol >>= fun e2_sym        ->
-          E.fresh_symbol >>= fun obj1_sym      ->
-          E.fresh_symbol >>= fun obj2_sym      ->
-          E.fresh_symbol >>= fun promoted1_sym ->
-          E.fresh_symbol >>= fun promoted2_sym ->
-          E.fresh_symbol >>= fun res_sym       ->
+          let e1_sym        = Symbol.fresh () in
+          let e2_sym        = Symbol.fresh () in
+          let obj1_sym      = Symbol.fresh () in
+          let obj2_sym      = Symbol.fresh () in
+          let promoted1_sym = Symbol.fresh () in
+          let promoted2_sym = Symbol.fresh () in
+          let res_sym       = Symbol.fresh () in
           let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
           let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
           let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
@@ -1212,8 +1210,8 @@ else
           E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (obj_sym, obj_sym_pat, obj_sym_pe) ->
           (* STD §6.3.2.1#2 "lvalue conversion" *)
 (*          E._STD "§6.3.2.1#2" $ (* TODO: what it this std refering too? *) *)
-          self e         >>= fun core_e  ->
-          E.fresh_symbol >>= fun let_sym ->
+          self e    >>= fun core_e  ->
+          let let_sym = Symbol.fresh () in
           E.return $
             Caux.add_std "§6.5.4" (
 if AilTypesAux.is_void cast_ty then
@@ -1370,10 +1368,10 @@ else
                 ref_ty
           end in
           
-            E.fresh_symbol >>= fun ptr_sym         ->
-            E.fresh_symbol >>= fun integer_sym     ->
-            E.fresh_symbol >>= fun ptr_obj_sym     ->
-            E.fresh_symbol >>= fun integer_obj_sym ->
+            let ptr_sym         = Symbol.fresh () in
+            let integer_sym     = Symbol.fresh () in
+            let ptr_obj_sym     = Symbol.fresh () in
+            let integer_obj_sym = Symbol.fresh () in
             let ptr_sym_pe         = Caux.mk_sym_pe ptr_sym         in
             let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
             let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
@@ -1492,10 +1490,10 @@ else
                   ref_ty
             end in
             
-            E.fresh_symbol >>= fun ptr_sym         ->
-            E.fresh_symbol >>= fun integer_sym     ->
-            E.fresh_symbol >>= fun ptr_obj_sym     ->
-            E.fresh_symbol >>= fun integer_obj_sym ->
+            let ptr_sym = Symbol.fresh () in
+            let integer_sym = Symbol.fresh () in
+            let ptr_obj_sym = Symbol.fresh () in
+            let integer_obj_sym = Symbol.fresh () in
             let ptr_sym_pe         = Caux.mk_sym_pe ptr_sym         in
             let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
             let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
@@ -1727,7 +1725,7 @@ else
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (e1_sym, e1_sym_pat, e1_sym_pe)  ->
           let core_ty_pe1 = Caux.mk_ail_ctype_pe $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           
-          E.fresh_symbol >>= fun e2_sym ->
+          let e2_sym = Symbol.fresh () in
           begin
 if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
             self e2 >>= fun core_e ->
@@ -2122,7 +2120,7 @@ TODO: #9
           self e >>= fun core_e ->
           (* symbolic names for the arguments temporary objects *)
           let n_args = List.length es in
-          E.replicateM n_args E.fresh_symbol >>= fun arg_ptr_syms ->
+          let arg_ptr_syms = list_init n_args (fun _ -> Symbol.fresh ()) in
           let arg_ptr_sym_pats = match arg_ptr_syms with
             | [sym] -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)
             | _ -> Caux.mk_tuple_pat $ List.map (fun sym -> Caux.mk_sym_pat sym (C.BTy_object C.OTy_pointer)) arg_ptr_syms
@@ -2351,8 +2349,8 @@ else (* is_pointer *)
           E.foldlM (fun (acc, mk_expr) e_opt ->
              match e_opt with
                | Just e ->
-                   E.fresh_symbol >>= fun e_sym  ->
-                   self e         >>= fun core_e ->
+                   let e_sym = Symbol.fresh () in
+                   self e >>= fun core_e ->
                    let bTy =
                      C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
                    let elem_pe =
@@ -2812,7 +2810,6 @@ type collect_visibles_state = <|
 
 
 type erase_loop_control_state = <|
-  elc_supply: UniqueId.supply Symbol.sym;
   elc_continue: maybe Symbol.sym;
   elc_break: maybe Symbol.sym;
 |>
@@ -2820,11 +2817,11 @@ type erase_loop_control_state = <|
 val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.stateM (A.statement GenTypes.genTypeCategory) erase_loop_control_state
 let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
   let with_fresh_labels mf =
-    fun (<| elc_supply= suppl |> as st) ->
-      let (continue_sym, suppl') = State.runStateM (Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x)) suppl in
-      let (break_sym, suppl'')   = State.runStateM (Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x)) suppl' in
-      let (ret, st') = mf <| elc_supply= suppl''; elc_continue= Just continue_sym; elc_break= Just break_sym |> in
-      ((continue_sym, break_sym, ret), <| st with elc_supply= st'.elc_supply |>) in 
+    fun st ->
+      let continue_sym = Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x) in
+      let break_sym    = Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x) in
+      let (ret, st')   = mf <| elc_continue= Just continue_sym; elc_break= Just break_sym |> in
+      ((continue_sym, break_sym, ret), st) in 
   A.AnnotatedStatement loc <$> match stmt_ with
     | A.AilSskip ->
         St.return stmt_
@@ -2893,13 +2890,11 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
   end
 
 
-let erase_loop_control stmt suppl =
-  let (stmt', <| elc_supply= suppl' |>) = State.runStateM (erase_loop_control_aux stmt) <|
-    elc_supply= suppl;
+let erase_loop_control stmt =
+  let (stmt', _) = State.runStateM (erase_loop_control_aux stmt) <|
     elc_continue= Nothing;
     elc_break= Nothing;
-  |> in
-  (suppl', stmt')
+  |> in stmt'
 
 
 
@@ -3134,7 +3129,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     
     | A.AilSwhile e s ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
-        E.fresh_named_symbol "while" >>= fun sym_loop     ->
+        let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "while_" ^ show x) in
         E.wrapped_fresh_symbol C.BTy_boolean                >>= fun (_, do_loop_sym_pat, do_loop_sym_pe) ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, test_sym_pat, test_sym_pe)       ->
         E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe)       ->
@@ -3180,9 +3175,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
     
     | A.AilSdo s e ->
         let () = Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: make the elab of AilSdo use mkTestExpression") in
-        E.fresh_named_symbol "do" >>= fun sym_loop     ->
-        E.fresh_symbol            >>= fun sym_case     ->
-        E.fresh_symbol            >>= fun sym_e        ->
+        let sym_loop = Symbol.fresh_pretty_with_id (fun x ->  "do_" ^ show x) in
+        let sym_case = Symbol.fresh () in
+        let sym_e    = Symbol.fresh () in
         translate_expression e    >>= fun core_e       ->
         self s                    >>= fun core_s       ->
         E.get_visible_objects     >>= fun visible_syms ->
@@ -3283,8 +3278,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
         let nb_cases = List.length cases.case_csts in
-        E.replicateM nb_cases (E.fresh_named_symbol "case")  >>= fun case_syms   ->
-        E.fresh_named_symbol "default"                       >>= fun default_sym ->
+        let case_syms = list_init nb_cases (fun _ -> Symbol.fresh_pretty_with_id (fun x -> "case_" ^ show x)) in
+        let default_sym = Symbol.fresh_pretty_with_id (fun x -> "default_" ^ show x) in
         let case_labs = List.zip cases.case_csts case_syms in
         translate_cases_block case_labs (Just default_sym) s >>= fun core_s ->
         E.get_visible_objects >>= fun visible_syms ->
@@ -3440,9 +3435,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           (* elaboration of a global variables *)
           let core_ty     = Caux.mk_ail_ctype_pe ty in
           let core_create = Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefSource loc [sym]) in
-          E.fresh_symbol >>= fun sym_global ->
+          let sym_global  = Symbol.fresh () in
           
-          E.print_debugM 2 (fun () -> "(translate_program) CREATE for " ^ show sym_global) >> (* DEBUG *)
+          let () = Debug.print_debug 2 [Debug.DB_elaboration] (fun () -> "(translate_program) CREATE for " ^ show sym_global) in
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Nothing ->
                 (* if the global has no initialisation expression, we set it to (sort of) zero *)
@@ -3463,7 +3458,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             
             | Just expr ->
                 (* otherwise we evaluate that expression and store it's value to the global (duh) *)
-                E.fresh_symbol >>= fun e_sym ->
+                let e_sym = Symbol.fresh () in
                 begin
                   if AilTypesAux.is_pointer ty && Aaux.is_null_pointer_constant expr then
                     E.return (
@@ -3534,9 +3529,9 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
 
-                E.fresh_named_symbol "ret" >>= fun ret_label ->
-                E.fresh_symbol             >>= fun ret_sym   ->
-                E.with_symbol_supply (erase_loop_control stmt) >>= fun stmt ->
+                let ret_label = Symbol.fresh_pretty_with_id (fun x -> "ret_" ^ show x) in
+                let ret_sym = Symbol.fresh () in
+                let stmt = erase_loop_control stmt in
                 let visibles = collect_visibles stmt in
 (*
                 (snd <$> translate_stmt stdlib program sym <|
@@ -3623,13 +3618,13 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   (* adding string literals *)
   E.get_string_literals >>= fun xs ->
   E.foldlM (fun acc (loc, sym, ty, e_init) ->
-    E.fresh_symbol >>= fun sym_lit ->
-      let expr =
-        Caux.pcreate_readonly loc
-          (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
-          (Caux.mk_ctype_pe ty)
-          e_init
-          (Symbol.PrefOther "string literal")
+    let sym_lit = Symbol.fresh () in
+    let expr =
+      Caux.pcreate_readonly loc
+        (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
+        (Caux.mk_ctype_pe ty)
+        e_init
+        (Symbol.PrefOther "string literal")
 (*
       Caux.mk_sseq_e (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
         (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe sym_lit) e_init Cmm.NA)
@@ -3686,24 +3681,22 @@ in
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
-    C.impl -> (UniqueId.supply Symbol.sym) * A.ail_program GenTypes.genTypeCategory ->
-    (UniqueId.supply Symbol.sym * C.file unit)
+    C.impl -> A.ail_program GenTypes.genTypeCategory ->
+    C.file unit
 
-let translate (ailnames, stdlib_fun_map) impl (symbol_counter, prog) =
+let translate (ailnames, stdlib_fun_map) impl prog =
   let translation_stdlib = mk_translation_stdlib (ailnames, stdlib_fun_map) in
   
   (* TODO: this is ugly, we shouldn't expose the internals and properly use the Undefined *)
   (* TODO2: not sure what that comment is refering too ... *)
   let ((core_tagDefs, cglobs, (*cdecls, *) cfuns, funinfo), st) =
-    E.runStateM (translate_program translation_stdlib prog)
-      (E.init symbol_counter) in
-  
-  (st.E.symbol_supply, <|
-    C.main= fst prog;
+    E.runStateM (translate_program translation_stdlib prog) (E.elab_init ())
+  in
+  <|C.main= fst prog;
     C.tagDefs= core_tagDefs;
     C.stdlib= stdlib_fun_map;
     C.impl= impl;
     C.globs= cglobs;
     C.funs= cfuns;
     C.funinfo= funinfo;
-  |>)
+  |>

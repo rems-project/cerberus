@@ -106,9 +106,9 @@ let default = Symbol.Symbol (0, Some "cont")
 
 (* CPS transformation *)
 
-(* Transform Core in CPS Core using sym_supply to create new symbols *)
+(* Transform Core in CPS Core *)
 (* TODO: do I need the bound variable lists (bvs) ? *)
-let cps_transform_expr sym_supply globs bvs core_expr =
+let cps_transform_expr globs bvs core_expr =
   (* Transform the left hand side of an esseq *)
   (* INVARIANT: we consider that Core is associated to the right, so we cannot
    * find any esseq here! *)
@@ -192,7 +192,7 @@ let cps_transform_expr sym_supply globs bvs core_expr =
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
   in
-  let (ret_sym, _) = Symbol.fresh sym_supply in
+  let ret_sym = Symbol.fresh () in
   (* TODO: type check/annotate this symbol *)
   let ret_pat = Core.Pattern ([], Core.CaseBase (Some ret_sym, Core.BTy_unit)) in
   tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) core_expr
@@ -203,11 +203,11 @@ type cps_fun =
   | CpsProc of core_base_type * (Symbol.sym * core_base_type) list
               * block list * block_body
 
-let cps_transform_fun sym_supply globs = function
+let cps_transform_fun globs = function
   | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
   | Proc (_, bty, params, e) ->
     let (bbs, bbody) =
-      cps_transform_expr sym_supply globs (List.map fst params) e
+      cps_transform_expr globs (List.map fst params) e
     in CpsProc (bty, params, bbs, bbody)
   | ProcDecl _ -> raise (Unsupported "Procedures declaration should be eliminated.")
   | BuiltinDecl _ -> raise (Unsupported "Builtin procedures declaration should be eliminated.")
@@ -220,9 +220,9 @@ type cps_file = {
   funs   : (Symbol.sym, cps_fun) Pmap.map;
 }
 
-let cps_transform sym_supply globs_sym (core : unit typed_file) =
+let cps_transform globs_sym (core : unit typed_file) =
   let globs = List.map (fun (s, bty, e) ->
-      let (bbs, bbody) = cps_transform_expr sym_supply globs_sym [] e in
+      let (bbs, bbody) = cps_transform_expr globs_sym [] e in
       (s, bty, bbs, bbody)
     ) core.globs
   in
@@ -235,9 +235,9 @@ let cps_transform sym_supply globs_sym (core : unit typed_file) =
   in
   {
     main = core.main;
-    stdlib = Pmap.map (cps_transform_fun sym_supply globs_sym') core.stdlib;
+    stdlib = Pmap.map (cps_transform_fun globs_sym') core.stdlib;
     impl = core.impl;
     globs = globs;
-    funs = Pmap.map (cps_transform_fun sym_supply globs_sym') core.funs;
+    funs = Pmap.map (cps_transform_fun globs_sym') core.funs;
   }
 
