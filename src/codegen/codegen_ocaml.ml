@@ -62,12 +62,12 @@ let create_globs name core =
         ) core.funs [];
   }
 
-let gen filename corestd sym_supply core =
+let gen filename corestd core =
   let fl = Filename.chop_extension filename in
   let globs = create_globs fl core in
   let cps_core = elim_proc_decls core
     |> run opt_passes
-    |> cps_transform sym_supply globs.statics
+    |> cps_transform globs.statics
   in
   let print_globals_init acc (sym, coreTy, bbs, bbody) =
     (if acc = P.empty then tletrec else acc ^//^ tand) ^^^

@@ -23,11 +23,6 @@ let cerb_path =
 let corelib_path =
   Filename.concat cerb_path "include/core"
 
-
-(* == Symbol counter for the Core parser ======================================================== *)
-let core_sym_counter = ref 0
-
-
 (* == load the Core standard library ============================================================ *)
 let load_stdlib () =
   let filepath = Filename.concat corelib_path "std.core" in
@@ -35,7 +30,7 @@ let load_stdlib () =
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
     Debug_ocaml.print_debug 5 [] (fun () -> "reading Core standard library from `" ^ filepath ^ "'.");
-    Core_parser_driver.parse_stdlib core_sym_counter filepath >>= function
+    Core_parser_driver.parse_stdlib filepath >>= function
     | Core_parser_util.Rstd (ailnames, std_funs) ->
       return (ailnames, std_funs)
     | _ ->
@@ -47,7 +42,7 @@ let load_impl core_stdlib impl_name =
   if not (Sys.file_exists iname) then
     error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
-    match Core_parser_driver.parse core_sym_counter core_stdlib iname with
+    match Core_parser_driver.parse core_stdlib iname with
     | Exception.Result (Core_parser_util.Rimpl impl_map) ->
       return impl_map
     | _ ->
@@ -95,7 +90,7 @@ let c_frontend (core_stdlib, core_impl) filename =
          (* TODO: yuck *)
 (*        let saved_exec_mode_opt = current_execution_mode () in
           cerb_conf := (fun () -> { !!cerb_conf with exec_mode_opt= Some Random }) ; *)
-          let ret = Cabs_to_ail.desugar !core_sym_counter
+          let ret = Cabs_to_ail.desugar
             begin
               let (ailnames, stdlib_fun_map) = core_stdlib in
               (ailnames, stdlib_fun_map, core_impl)
@@ -107,21 +102,21 @@ let c_frontend (core_stdlib, core_impl) filename =
     |> pass_message "2. Cabs -> Ail completed!"
     |> begin
       if !Debug_ocaml.debug_level > 4 then
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program true true -| snd)
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| Pp_ail_ast.pp_program true true)
       else
         Exception.except_fmap (fun z -> z)
     end
-    |> Exception.rbind (fun (counter, z) ->
+    |> Exception.rbind (fun z ->
           Exception.except_bind (ErrorMonad.to_exception (fun (loc, err) -> (loc, Errors.AIL_TYPING err))
                              (GenTyping.annotate_program z))
-          (fun z -> Exception.except_return (counter, z)))
-    |> Exception.except_fmap (fun (counter, (z, annots)) -> (counter, z))
+          (fun z -> Exception.except_return z))
+    |> Exception.except_fmap (fun (z, annots) -> z)
     |> begin
       if !Debug_ocaml.debug_level > 4 then
         Exception.except_fmap (fun z -> z)
       else
         let pp_ail = if !Debug_ocaml.debug_level = 4 then Pp_ail_ast.pp_program_with_annot else Pp_ail_ast.pp_program true true in
-        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail -| snd)
+        pass_through_test (List.mem Ail !!cerb_conf.pps) (run_pp filename "ail" -| pp_ail)
     end
     |> set_progress "AILTY" 12
     |> pass_message "3. Ail typechecking completed!"
@@ -140,10 +135,10 @@ let c_frontend (core_stdlib, core_impl) filename =
 
 
 let core_frontend (core_stdlib, core_impl) filename =
-  Core_parser_driver.parse core_sym_counter core_stdlib filename >>= function
+  Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
         Tags.set_tagDefs tagDefs;
-        Exception.except_return (Symbol.Symbol (!core_sym_counter, None), {
+        Exception.except_return ({
            Core.main=   Some sym_main;
            Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
@@ -172,7 +167,7 @@ let run_test (run: string -> Exhaustive_driver.execution_result) (test:Tests.tes
 *)
 
 
-let backend sym_supply core_file args =
+let backend core_file args =
   match !!cerb_conf.exec_mode_opt with
     | None ->
         0
@@ -184,12 +179,12 @@ let backend sym_supply core_file args =
         } in
         match !!cerb_conf.batch with
           | (`Batch | `CharonBatch) as mode ->
-              Exhaustive_driver.batch_drive mode sym_supply core_file ("cmdname" :: args) dr_conf
+              Exhaustive_driver.batch_drive mode core_file ("cmdname" :: args) dr_conf
               |> List.iter print_string;
               0
           | `NotBatch ->
               (* TODO: temporary hack for the command name *)
-              Core.(match Exhaustive_driver.drive sym_supply core_file ("cmdname" :: args) dr_conf with
+              Core.(match Exhaustive_driver.drive core_file ("cmdname" :: args) dr_conf with
                 | Exception.Result (Vloaded (LVspecified (OVinteger ival)) :: _) ->
                   begin
                     (* TODO: yuck *)
@@ -238,7 +233,7 @@ let pipeline filename args core_std =
        core_frontend core_std filename
       ) else
        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED "The file extention is not supported")
-  end >>= fun ((sym_supply : Symbol.sym UniqueId.supply), core_file) ->
+  end >>= fun core_file ->
   
   begin
     if !!cerb_conf.typecheck_core then
@@ -277,23 +272,20 @@ let pipeline filename args core_std =
   
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
-    >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
+    >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd
     -| Core_sequentialise.sequentialise_file
   
   else
     if !!cerb_conf.sequentialise then begin
       Core_typing.typecheck_program rewritten_core_file >>= fun z ->
       Exception.except_return (
-        backend sym_supply  (Core_run_aux.convert_file (Core_sequentialise.sequentialise_file z)) args
+        backend (Core_run_aux.convert_file (Core_sequentialise.sequentialise_file z)) args
       )
     end
     else
-      Exception.except_return (backend sym_supply rewritten_core_file args)
+      Exception.except_return (backend rewritten_core_file args)
 
 let gen_corestd (stdlib, impl) =
-  let sym_supply = UniqueId.new_supply_from
-      Symbol.instance_Enum_Enum_Symbol_sym_dict !core_sym_counter
-  in
   Core_typing.typecheck_program {
     Core.main=   None;
     Core.tagDefs= Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.Lem_pervasives.compare_method;
@@ -306,7 +298,7 @@ let gen_corestd (stdlib, impl) =
   >>= fun typed_core ->
     let cps_core =
       Core_opt.run Codegen_ocaml.opt_passes typed_core
-      |> Cps_core.cps_transform sym_supply []
+      |> Cps_core.cps_transform []
     in
     Codegen_corestd.gen (Pp_ocaml.empty_globs "coreStd")
       cps_core.Cps_core.impl cps_core.Cps_core.stdlib;

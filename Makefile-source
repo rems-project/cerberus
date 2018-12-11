@@ -8,7 +8,6 @@ SOURCE_prelude=\
   debug.lem \
   enum.lem \
   state.lem \
-  uniqueId.lem \
   symbol.lem \
   cthread.lem \
   exception.lem \

@@ -1,5 +1,4 @@
-open import Pervasives Utils
-open import UniqueId Symbol
+open import Pervasives Utils Symbol
 
 import Pp
 
@@ -51,11 +50,10 @@ let inline (>>=) = Eff.bind
 val evalConstantExpressionAux:
   Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl ->
   A.sigma unit ->
-  UniqueId.supply Symbol.sym ->
   (GenTypes.genTypeCategory -> Eff.exceptM unit Errors.error) ->
   maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM C.value Errors.error
 
-let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm symbol_suppl typing_guard ty_opt expr =
+let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm typing_guard ty_opt expr =
   let toAilTau: A.expression unit -> ErrorMonad.errorM (A.expression GenTypes.genTypeCategory) =
     GenTyping.annotate_expression sigm [] (*TODO: check*)GenTyping.CTXother in
   
@@ -99,7 +97,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         typing_guard (GenTypes.genTypeCategoryOf a_expr) >>= fun () ->
         
         (* elaborate the typed expression into Core *)
-        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.init symbol_suppl) in
+        let (core_expr, translate_final_st) = TranslateEff.runStateM (toCore a_expr) (TranslateEff.elab_init ()) in
         
         let dr_st =
           (* this just builds the shell of the driver state *)
@@ -111,7 +109,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
              ; C.funs= Map.empty
              ; C.tagDefs= Map.empty
              ; C.funinfo= Map.empty |> in
-          let init_dr_st = Driver.initial_driver_state translate_final_st.TranslateEff.symbol_supply dummy_core_file Fs.fs_initial_state in
+          let init_dr_st = Driver.initial_driver_state dummy_core_file Fs.fs_initial_state in
           (* spawning a thread with the Core expression we just generated as it's arena *)
           let ((tid, core_st), run_st) = State.runStateM (
             Core_run.spawn_thread Nothing <|
@@ -152,9 +150,9 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
 
 val evalIntegerConstantExpression:
   Loc.t -> (map string Symbol.sym) * C.fun_map unit * C.impl -> A.sigma unit ->
-  UniqueId.supply Symbol.sym -> maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
+  maybe AilTypes.ctype -> A.expression unit -> Eff.exceptM integer Errors.error
 
-let evalIntegerConstantExpression loc core_env sigm symbol_suppl ty_opt expr =
+let evalIntegerConstantExpression loc core_env sigm ty_opt expr =
   let typing_guard gtc =
     let do_fail =
       Eff.fail (loc, Errors.DESUGAR (Errors.Desugar_UndefinedBehaviour Undefined.UB055_invalid_integer_constant_expression))
@@ -169,7 +167,7 @@ let evalIntegerConstantExpression loc core_env sigm symbol_suppl ty_opt expr =
             do_fail
     end in
   
-  evalConstantExpressionAux loc core_env sigm symbol_suppl typing_guard ty_opt expr >>= function
+  evalConstantExpressionAux loc core_env sigm typing_guard ty_opt expr >>= function
     | C.Vloaded (C.LVspecified (C.OVinteger ival)) ->
         match Mem.eval_integer_value ival with
           | Just n ->

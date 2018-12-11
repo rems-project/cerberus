@@ -52,9 +52,8 @@ type core_state = <|
 
 (* State of Core evaluator *)
 type core_run_state = <|
-  tid_supply:    UniqueId.supply Cthread.thread_id;
-  symbol_supply: UniqueId.supply Symbol.sym;
-  aid_supply:    UniqueId.supply Cmm_csem.aid;
+  tid_supply:    Cthread.thread_id;
+  aid_supply:    Cmm_csem.aid;
   
   (* Scoped environment for the Core symbols *)
   env: list (map Symbol.sym value);
@@ -93,9 +92,8 @@ let initial_core_state = <|
 |>
 
 let initial_core_run_state xs = <|
-  tid_supply=    UniqueId.new_supply;
-  symbol_supply= UniqueId.new_supply;
-  aid_supply=    UniqueId.new_supply;
+  tid_supply=    0;
+  aid_supply=    0;
   
   env=     [Map.empty];
   labeled= xs;

@@ -4,15 +4,13 @@ import Utils
 open import Cabs_to_ail_aux
 import Cabs_to_ail_effect
 
-import Debug Pp Cabs Multiset Decode UniqueId
+import Debug Pp Cabs Multiset Decode
 import AilSyntaxAux AilTypes AilTypesAux Builtins
 
 import Errors
 
 import WipFrontend
 
-
-open import {hol} `pp_ailTheory` `utilTheory`
 
 module ATypes = AilTypes
 
@@ -1064,10 +1062,10 @@ let desugar_character_constant (pref_opt, str) =
 
 val     evaluate_integer_constant_expression: Loc.t -> maybe ATypes.ctype -> expression unit -> E.desugM integer
 let rec evaluate_integer_constant_expression loc ty_opt expr =
-  E.get_core_eval_stuff >>= fun  (core_env, sym_suppl) ->
+  E.get_core_eval_stuff >>= fun core_env ->
   E.get_sigma_sofar >>= fun sigm ->
   E.liftException
-      (WipFrontend.evalIntegerConstantExpression loc core_env sigm sym_suppl ty_opt expr)
+      (WipFrontend.evalIntegerConstantExpression loc core_env sigm ty_opt expr)
 
 
 
@@ -4253,9 +4251,9 @@ let desugar_and_register_external_declaration edecl =
 
 
 import Core
-val desugar: nat -> (map string Symbol.sym) * Core.fun_map unit * Core.impl -> string -> translation_unit ->
-  Exception.exceptM (UniqueId.supply Symbol.sym * ail_program unit) Errors.error
-let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
+val desugar: (map string Symbol.sym) * Core.fun_map unit * Core.impl -> string -> translation_unit ->
+  Exception.exceptM (ail_program unit) Errors.error
+let desugar core_eval_stuff startup_str (TUnit edecls) =
 (*
   E.eval sym_counter core_eval_stuff (
     E.under_scope E.Scope_file (
@@ -4330,7 +4328,7 @@ let desugar sym_counter core_eval_stuff startup_str (TUnit edecls) =
     )
   ) 
 *)
-  E.eval sym_counter core_eval_stuff (
+  E.eval core_eval_stuff (
     E.under_scope E.Scope_file (
       E.mapM_ desugar_and_register_external_declaration edecls >>
       E.extract_program startup_str

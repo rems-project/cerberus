@@ -1,4 +1,1 @@
-open import Pervasives
-import UniqueId
-
-type thread_id = nat (* UniqueId.t nat *)
+type thread_id = nat

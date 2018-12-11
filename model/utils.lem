@@ -15,6 +15,8 @@ val error: forall 'a. string -> 'a
 declare ocaml target_rep function error = `Debug_ocaml.error`
 declare hol target_rep function error = `ARB`
 
+val list_init : forall 'a. nat -> (nat -> 'a) -> list 'a
+declare ocaml target_rep function list_init = `List.init` 
 
 val mkListN: integer -> list integer
 let rec mkListN_aux n (i: integer) acc =
@@ -42,7 +44,6 @@ let rec numerote_ n l =
     | x::xs -> (n,x) :: numerote_ (n+1) xs
   end
 let numerote l = numerote_ 1 l
-
 
 
 let inline (-|) f g x = f (g x)

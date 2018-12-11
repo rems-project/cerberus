@@ -9,7 +9,7 @@ type execution_result = (Core.value list, Errors.error) Exception.exceptM
 
 
 val batch_drive:
-  [`Batch | `CharonBatch] -> Symbol.sym UniqueId.supply -> 'a Core.file -> string list -> driver_conf -> string list
+  [`Batch | `CharonBatch] -> 'a Core.file -> string list -> driver_conf -> string list
 
 val drive:
-  Symbol.sym UniqueId.supply -> 'a Core.file -> string list -> driver_conf -> execution_result
+  'a Core.file -> string list -> driver_conf -> execution_result
