@@ -1,9 +1,10 @@
 open Util
 open Instance_api
+open Pipeline
 
 type conf =
-  { pipeline: Pipeline.configuration;
-    io: Pipeline.io_helpers;
+  { pipeline: configuration;
+    io: io_helpers;
     instance: Instance_api.conf;
   }
 
@@ -21,14 +22,14 @@ let dummy_io =
 
 let setup conf =
   let pipeline_conf =
-    { Pipeline.debug_level=        conf.cerb_debug_level;
-      Pipeline.pprints=            [];
-      Pipeline.astprints=          [];
-      Pipeline.ppflags=            [];
-      Pipeline.typecheck_core=     false;
-      Pipeline.rewrite_core=       conf.rewrite_core;
-      Pipeline.sequentialise_core= conf.sequentialise_core;
-      Pipeline.cpp_cmd=            conf.cpp_cmd;
+    { debug_level=        conf.cerb_debug_level;
+      pprints=            [];
+      astprints=          [];
+      ppflags=            [];
+      typecheck_core=     false;
+      rewrite_core=       conf.rewrite_core;
+      sequentialise_core= conf.sequentialise_core;
+      cpp_cmd=            conf.cpp_cmd;
 
     }
   in { pipeline= pipeline_conf;
@@ -44,38 +45,14 @@ let to_smt2_mode = function
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ~conf mode =
   let open Global_ocaml in
-  let cerb_path =
-      try
-        Sys.getenv "CERB_PATH"
-      with Not_found ->
-        error "expecting the environment variable CERB_PATH set to point\
-               to the location cerberus."
-  in
-  let pipe_conf = conf.pipeline in
   cerb_conf := fun () ->
-    { cpp_cmd=            pipe_conf.Pipeline.cpp_cmd;
-      pps=                [];
-      ppflags=            [];
-      exec_mode_opt=      Some (to_smt2_mode mode);
-      ocaml=              false;
-      ocaml_corestd=      false;
-      progress=           false;
-      rewrite=            pipe_conf.Pipeline.rewrite_core;
-      sequentialise=      pipe_conf.Pipeline.sequentialise_core;
-      concurrency=        false;
-      preEx=              false;
-      error_verbosity=    Global_ocaml.QuoteStd;
-      batch=              `Batch;
-      experimental_unseq= false;
-      typecheck_core=     pipe_conf.Pipeline.typecheck_core;
-      defacto=            false;
-      fs_dump=            false;
-      default_impl=       false;
-      action_graph=       false;
-      n1507=              if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
-                            Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
-                          else None;
-      fs_state=           Sibylfs.fs_initial_state
+   {  exec_mode_opt=    Some (to_smt2_mode mode);
+      concurrency=      false;
+      error_verbosity=  Global_ocaml.QuoteStd;
+      defacto=          false;
+      n1570=            if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
+                          Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
+                        else None;
     }
 
 let respond filename name f = function
@@ -94,12 +71,12 @@ let elaborate ~conf ~filename =
   Debug.print 7 @@ List.fold_left (fun acc sw -> acc ^ " " ^ sw) "Switches: " conf.instance.switches;
   Debug.print 7 ("Elaborating: " ^ filename);
   try
-    Pipeline.load_core_stdlib () >>= fun core_stdlib ->
-    Pipeline.load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    Pipeline.c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
+    load_core_stdlib () >>= fun core_stdlib ->
+    load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
+    c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
     >>= function
     | (Some cabs, Some ail, core) ->
-      Pipeline.core_passes (conf.pipeline, conf.io) ~filename core
+      core_passes (conf.pipeline, conf.io) ~filename core
       >>= fun (_, core') ->
       return (cabs, ail, core')
     | _ ->
@@ -159,8 +136,9 @@ let execute ~conf ~filename (mode: exec_mode) =
   try
     elaborate ~conf ~filename
     >>= fun (cabs, ail, core) ->
-    Pipeline.interp_backend dummy_io (Core_run_aux.convert_file core)
-      [] `Batch false false (to_smt2_mode mode)
+    let open Exhaustive_driver in
+    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
+    interp_backend dummy_io (Core_run_aux.convert_file core) ~args:[] ~batch:`Batch ~fs:"" ~driver_conf
     >>= function
     | Either.Left res ->
       return (String.concat "\n" res)
@@ -359,6 +337,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   | None -> (* no active node *)
     hack ~conf Random;
     elaborate ~conf ~filename >>= fun (_, _, core) ->
+    Tags.set_tagDefs core.tagDefs;
     let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
     let ranges   = create_expr_range_list core' in
     let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
