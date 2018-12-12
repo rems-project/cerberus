@@ -25,7 +25,7 @@ let io, get_progress =
                  return ()
       end;
     run_pp = begin
-      fun opts doc -> Pipeline.run_pp opts doc;
+      fun opts doc -> run_pp opts doc;
                       return ()
       end;
     print_endline = begin

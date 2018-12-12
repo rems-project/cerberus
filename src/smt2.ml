@@ -23,11 +23,11 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
     let xs' = List.init (List.length xs - 1) (fun z ->
       List.nth xs (if z < i then z else z+1)
     ) in
-    m x >>= function
+    m x in (*>>= function
       | [] ->
           with_backtracking m xs'
       | ys ->
-          return ys in
+          return ys in *)
   let rec aux (ND m_act) st =
     (* TODO: graph export *)
     match m_act st with
