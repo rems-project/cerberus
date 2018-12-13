@@ -56,7 +56,7 @@ type driver_error =
 
 type driver_state = <|
   core_file:         Core.file Core_run.core_run_annotation;
-  core_extern:       map Symbol.sym (maybe Symbol.sym); (* declarations -> definitions *)
+  core_extern:       map Symbol.sym Symbol.sym; (* declarations -> definitions *)
   core_state:        Core_run.core_state;       (* state of the core program *)
   core_run_state:    Core_run.core_run_state;   (* state of the core evaluator *)
   layout_state:      Mem.mem_state;         (* state of memory layout model *)
@@ -1159,7 +1159,7 @@ let rec driver with_concurrency =
 
 
 
-val     hack: map Symbol.sym (maybe Symbol.sym) -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
+val     hack: map Symbol.sym Symbol.sym -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
 let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
   let () = Debug.print_debug 1 [] (fun () -> "XX 25") in
   match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") core_extern env (Just mem_st) core_file false pexpr with
@@ -1258,9 +1258,14 @@ let finalize debug_str dr_st =
 
 
 let create_extern_symmap exts =
-  Map_extra.fold (fun _ (decls, def) acc ->
-    List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
-  ) exts Map.empty
+  Map_extra.fold (fun _ (decls, lk) acc ->
+    match lk with
+    | Core.LK_none -> acc
+    | Core.LK_tentative def ->
+      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
+    | Core.LK_normal def ->
+      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
+  end) exts Map.empty
 
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)

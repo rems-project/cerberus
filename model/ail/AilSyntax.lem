@@ -212,6 +212,10 @@ instance (Show tag_definition)
   end
 end
 
+type id_kind =
+  | IK_declaration
+  | IK_tentative
+  | IK_definition
 
 type sigma 'a = <|
   declarations: Context.context identifier (Loc.t * declaration);
@@ -221,7 +225,7 @@ type sigma 'a = <|
   static_assertions: list (expression 'a * stringLiteral);
   
   tag_definitions: Context.context identifier tag_definition;
-  extern_idmap: map Cabs.cabs_identifier (list identifier * maybe identifier);
+  extern_idmap: map Cabs.cabs_identifier (identifier * id_kind);
 |>
 
 

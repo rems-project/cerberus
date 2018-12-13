@@ -2395,21 +2395,34 @@ end
 
 (* Linkage *)
 
+(* NOTE: the function returns a list of redundant tentative global definitions *)
 let link_extern ext acc =
-  Map_extra.fold (fun k (decls, m_def) acc ->
+  Map_extra.fold (fun k (decls, lk_def) (acc_ext, acc_tent) ->
     let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
     match Map.lookup k acc with
     | Nothing ->
-      Map.insert k (decls, m_def) acc
-    | Just (acc_decls, Nothing) ->
-      Map.insert k (decls ++ acc_decls, m_def) acc
-    | Just (acc_decls, Just def) ->
-      match m_def with
-      | Just _ -> error ("two definition for the same identifier: " ^ show k)
-      | Nothing ->
-        Map.insert k (decls ++ acc_decls, Just def) acc
+      (Map.insert k (decls, lk_def) acc_ext, acc_tent)
+    | Just (acc_decls, LK_none) ->
+      (Map.insert k (decls ++ acc_decls, lk_def) acc_ext, acc_tent)
+    | Just (acc_decls, LK_tentative tent) ->
+      match lk_def with
+      | LK_normal _ ->
+        (Map.insert k (decls ++ acc_decls, lk_def) acc_ext, tent :: acc_tent)
+      | LK_tentative _ ->
+        (Map.insert k (decls ++ acc_decls, lk_def) acc_ext, tent :: acc_tent)
+      | LK_none ->
+        (Map.insert k (decls ++ acc_decls, LK_tentative tent) acc_ext, acc_tent)
       end
-  end) ext acc
+    | Just (acc_decls, LK_normal def) ->
+      match lk_def with
+      | LK_normal _ ->
+        error ("two definition for the same identifier: " ^ show k)
+      | LK_tentative tent ->
+        (Map.insert k (decls ++ acc_decls, LK_normal def) acc_ext, tent :: acc_tent)
+      | LK_none ->
+        (Map.insert k (decls ++ acc_decls, LK_normal def) acc_ext, acc_tent)
+      end
+  end) ext (acc, [])
 
 let link_main opt_m1 opt_m2 =
   match (opt_m1, opt_m2) with
@@ -2419,16 +2432,21 @@ let link_main opt_m1 opt_m2 =
   | (Nothing, Nothing) -> Nothing
   end
 
-(* INVARIANT: the input list length > 0 *)
-val link: forall 'a 'b. list (generic_file 'a 'b) -> generic_file 'a 'b
-let link files = <|
-  main = List.foldl (fun acc f -> link_main acc f.main) Nothing files;
-  tagDefs = List.foldl (fun acc f -> acc union f.tagDefs) Map.empty files;
-  stdlib = (List_extra.head files).stdlib;
-  impl = (List_extra.head files).impl;
-  globs = List.foldl (fun acc f -> acc union f.globs) Map.empty files;
-  funs =  List.foldl (fun acc f -> acc union f.funs) Map.empty files;
-  extern = List.foldl (fun acc f -> link_extern f.extern acc) Map.empty files;
-  funinfo = List.foldl (fun acc f -> acc union f.funinfo) Map.empty files;
-|>
+let merge f1 f2 =
+  let (extern, reduntant_globs) = link_extern f2.extern f1.extern in
+  let globs = List.foldl (fun acc g -> Map.delete g acc) (f1.globs union f2.globs) reduntant_globs in
+  <| main = link_main f1.main f2.main;
+     tagDefs = f1.tagDefs union f2.tagDefs;
+     stdlib = f1.stdlib;
+     impl = f1.impl;
+     globs = globs;
+     funs = f1.funs union f2.funs;
+     extern = extern;
+     funinfo = f1.funinfo union f2.funinfo;
+  |>
 
+val link: forall 'a 'b. list (generic_file 'a 'b) -> generic_file 'a 'b
+let link = function
+  | [] -> error "linking: no core files"
+  | f::fs -> List.foldl merge f fs
+end

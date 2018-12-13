@@ -3678,6 +3678,14 @@ in
   E.return (cglobs, cfuns)
 *)
 
+let translate_extern_map (_, sigm) =
+  Map.map (fun (sym, kind) ->
+    match kind with
+    | A.IK_declaration -> ([sym], C.LK_none)
+    | A.IK_tentative -> ([sym], C.LK_tentative sym)
+    | A.IK_definition -> ([sym], C.LK_normal sym)
+    end) sigm.A.extern_idmap
+
 (* This is the entry function (called from main.ml) *)
 val translate:
     (map string Symbol.sym) * C.fun_map unit ->
@@ -3698,6 +3706,6 @@ let translate (ailnames, stdlib_fun_map) impl prog =
     C.impl= impl;
     C.globs= cglobs;
     C.funs= cfuns;
-    C.extern = (snd prog).A.extern_idmap;
+    C.extern = translate_extern_map prog;
     C.funinfo= funinfo;
   |>

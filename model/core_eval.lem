@@ -431,7 +431,7 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
    important for the Coq backend).  To fully evaluate a pure expression,
    it is necessary to call eval repeatedly until is_value returns True. *)
 val     step_eval_pexpr: nat -> Loc.t ->
-                         map Symbol.sym (maybe Symbol.sym) ->
+                         map Symbol.sym Symbol.sym ->
                          list (map Symbol.sym Core.value) ->
                          maybe Mem.mem_state -> Core.file core_run_annotation ->
                          bool -> Core.pexpr  ->
@@ -465,8 +465,8 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
 *)
     | PEsym sym ->
         let sym = match Map.lookup sym core_extern with
-          | Just (Just sym) -> sym
-          | _ -> sym
+          | Just sym -> sym
+          | Nothing -> sym
         end in
         match Core_aux.lookup_env sym env with
           | Nothing ->
@@ -909,7 +909,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
 
 
 val     eval_pexpr_aux2: Loc.t ->
-                         map Symbol.sym (maybe Symbol.sym) ->
+                         map Symbol.sym Symbol.sym ->
                          list (map Symbol.sym Core.value) ->
                          maybe Mem.mem_state -> Core.file core_run_annotation ->
                          Core.pexpr ->
@@ -975,7 +975,7 @@ with
 
 val eval_pexpr_aux_broken:
   Loc.t ->
-  map Symbol.sym (maybe Symbol.sym) ->
+  map Symbol.sym Symbol.sym ->
   list (map Symbol.sym Core.value) ->
   maybe Mem.mem_state -> Core.file core_run_annotation ->
   Core.pexpr ->
@@ -988,7 +988,7 @@ let rec eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe =
     | Nothing ->
         eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe'
   end
-val eval_pexpr: Loc.t -> map Symbol.sym (maybe Symbol.sym) ->
+val eval_pexpr: Loc.t -> map Symbol.sym Symbol.sym ->
                 list (map Symbol.sym Core.value) -> maybe Mem.mem_state -> Core.file core_run_annotation ->
                 Core.pexpr -> either Errors.error (Undefined.t Core.value)
 let eval_pexpr loc core_extern env mem_st_opt file pe =
