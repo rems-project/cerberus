@@ -27,7 +27,7 @@ include Core_run_aux
 
 (* fetching the body and symbol environment for a given Core procedure *)
 val call_proc:
-  map Symbol.sym (maybe Symbol.sym) ->
+  map Symbol.sym Symbol.sym ->
   Core.file core_run_annotation -> Symbol.sym -> list Core.value ->
   Exception.exceptM (map Symbol.sym Core.value * Core.expr core_run_annotation) core_run_cause
 let call_proc core_extern file psym cvals =
@@ -39,8 +39,8 @@ let call_proc core_extern file psym cvals =
           Just (bTy, params, body)
       | _ ->
           let core_sym = match Map.lookup psym core_extern with
-            | Just (Just sym) -> sym
-            | _ -> psym
+            | Just sym -> sym
+            | Nothing -> psym
           end in
           match Map.lookup core_sym file.funs with
             | Just (Proc _ bTy params body) ->
@@ -277,7 +277,7 @@ type core_step =
 
 
 val core_action_step:
-    list annot -> map Symbol.sym (maybe Symbol.sym) -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
+    list annot -> map Symbol.sym Symbol.sym -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
     (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
 (*
@@ -768,7 +768,7 @@ KKK
 
 
 
-val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym (maybe Symbol.sym) -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
+val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
 let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
@@ -1531,7 +1531,13 @@ BEFORE EVAL_PEXPR2
     
     | (Erun annots sym pes, Stack_cons (Just current_proc) cont sk) ->
         one $ Step_tau (mk_info "Erun") begin
-          SEU.read (fun st -> Maybe.bind (Map.lookup current_proc st.labeled) (Map.lookup sym)) >>= function
+          SEU.read (fun st ->
+              let proc_sym = match Map.lookup current_proc core_extern with
+                | Just proc_sym -> proc_sym
+                | Nothing -> current_proc
+              end in
+              Maybe.bind (Map.lookup proc_sym st.labeled) (Map.lookup sym)
+            ) >>= function
             | Nothing ->
                 error ("Erun couldn't resolve label: `" ^ show sym ^
                        "' for procedure `" ^ show current_proc ^ "'")

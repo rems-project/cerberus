@@ -1776,11 +1776,19 @@ let extract_program startup_str =
   ) in
   
   let extern_idmap =
-    let defined_symbols = (Map.domain st.function_definitions) union (Map.domain st.global_object_definitions) in
+    let fundef_syms = Map.domain st.function_definitions in
     Map_extra.fold (fun (cid, namespace) (scope, (sym, id_kind, m_link)) acc ->
     match (namespace, scope, id_kind, m_link) with
       | (Namespace_ordinary, Scope_file, Kind_ordinary, Just Linkage_external) ->
-        Map.insert cid ([sym], (if sym IN defined_symbols then Just sym else Nothing)) acc
+        let kind = match Map.lookup sym st.global_object_definitions with
+          | Just (Tentative _) -> A.IK_tentative
+          | Just (Definition _) -> A.IK_definition
+          | Just (ExternalDefinition _) -> A.IK_definition
+          | Nothing ->
+            if sym IN fundef_syms then A.IK_definition
+            else A.IK_declaration
+        end in
+        Map.insert cid (sym, kind) acc
       | (_, _, _, _) ->
         acc
     end) st.registered_external_identifiers Map.empty in

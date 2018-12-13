@@ -324,9 +324,13 @@ instance forall 'a 'bty 'sym. (Located (generic_expr 'a 'bty 'sym))
     get_loc_ annots
 end
 
-(* TODO: maybe add the type as well *)
+type linking_kind =
+  | LK_none
+  | LK_tentative of Symbol.sym
+  | LK_normal of Symbol.sym
+
 type extern_map =
-  map Cabs.cabs_identifier (list Symbol.sym * maybe Symbol.sym) (* list of declaration * maybe definition *)
+  map Cabs.cabs_identifier (list Symbol.sym * linking_kind)
 
 type generic_globs 'a 'bty=
   | GlobalDef of core_base_type * generic_expr 'a 'bty Symbol.sym
