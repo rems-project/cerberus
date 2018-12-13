@@ -748,15 +748,19 @@ let pp_funinfo finfos =
         ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
         ^^ P.hardline) finfos P.empty
 
-let pp_file file =
-  let pp_glob acc (sym, bTy, e) =
-    acc ^^
-    pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
-    P.colon ^^ P.equals ^^
-    P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1 in
+let pp_globs globs =
+  Pmap.fold (fun sym decl acc ->
+      match decl with
+      | GlobalDef (bTy, e) ->
+        acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
+              P.colon ^^ P.equals ^^
+              P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
+      | GlobalDecl _ ->
+        acc) globs P.empty
 
+let pp_file file =
   let show_aggregate = not @@ Pmap.is_empty file.tagDefs in
-  let show_globs = file.globs != [] in
+  let show_globs = not @@ Pmap.is_empty file.globs in
   let guard b doc = if b then doc else P.empty in
   
   begin
@@ -786,7 +790,7 @@ let pp_file file =
     
     guard show_globs begin
       !^ "-- Globals" ^^ P.break 1 ^^
-      List.fold_left pp_glob P.empty file.globs
+      pp_globs file.globs
     end ^^
     
     guard (show_aggregate || show_globs) begin

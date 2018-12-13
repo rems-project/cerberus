@@ -1827,7 +1827,8 @@ let annotate_sigma sigm =
     function_definitions= function_defs';
     (* TODO: hack *)
     static_assertions= [];
-    tag_definitions= sigm.tag_definitions
+    tag_definitions= sigm.tag_definitions;
+    extern_idmap= sigm.extern_idmap;
   |>
 
 

@@ -1447,9 +1447,16 @@ let rewrite_fun_map fun_map =
   end) fun_map
 
 
+let rewrite_glob_map globs_map =
+  Map.map (function
+    | GlobalDef ty e ->
+        GlobalDef ty (rewrite_expr e)
+    | GlobalDecl ty ->
+        GlobalDecl ty
+  end) globs_map
 
 
 (* TODO *)
 let rewrite_file file =
   <| file with funs=  rewrite_fun_map file.funs;
-               globs= List.map (fun (sym, cTy, e) -> (sym, cTy, rewrite_expr e)) file.globs |>
+               globs= rewrite_glob_map file.globs |>

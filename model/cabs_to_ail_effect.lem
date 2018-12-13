@@ -1,4 +1,4 @@
-open import Pervasives Utils Cabs Std Show Show_extra
+open import Pervasives Utils Cabs Std Show Show_extra Set
 import Debug Pp Loc Errors Scope_table State_exception Symbol
 
 open import Cabs_to_ail_aux
@@ -1775,6 +1775,16 @@ let extract_program startup_str =
       end
   ) in
   
+  let extern_idmap =
+    let defined_symbols = (Map.domain st.function_definitions) union (Map.domain st.global_object_definitions) in
+    Map_extra.fold (fun (cid, namespace) (scope, (sym, id_kind, m_link)) acc ->
+    match (namespace, scope, id_kind, m_link) with
+      | (Namespace_ordinary, Scope_file, Kind_ordinary, Just Linkage_external) ->
+        Map.insert cid ([sym], (if sym IN defined_symbols then Just sym else Nothing)) acc
+      | (_, _, _, _) ->
+        acc
+    end) st.registered_external_identifiers Map.empty in
+  
   let object_defs =
     List.map (function
       | (sym, Tentative (ATypes.Ctype _ (ATypes.Array elem_ty Nothing))) ->
@@ -1803,6 +1813,7 @@ let extract_program startup_str =
             constraint_violation (Loc.locOf ident) (Constraint.ExternalRedefinition sym)
           else
             return ()
+      (*
       | Just Linkage_external ->
           (* TODO: the error is desactivated for functions for now. We need to have a way of telling the desugaring that
              some function are implemented in Core (i.e. printf()) *)
@@ -1817,6 +1828,7 @@ let extract_program startup_str =
             undef (Loc.locOf ident) Undefined.UB084
           else
             return ()
+      *)
       | _ ->
           return ()
     end
@@ -1837,7 +1849,8 @@ let extract_program startup_str =
                            | Enum_definition _ ->
                                acc
                            end
-                        ) [] $ Map_extra.toList st.tag_definitions
+                        ) [] $ Map_extra.toList st.tag_definitions;
+    A.extern_idmap= extern_idmap;
    |>)
 
 
@@ -1909,7 +1922,8 @@ let get_sigma_sofar =
                              | Enum_definition _ ->
                                  acc
                              end
-                          ) [] $ Map_extra.toList st.tag_definitions
+                          ) [] $ Map_extra.toList st.tag_definitions;
+       A.extern_idmap= Map.empty;
      |>
   )
 
@@ -1933,6 +1947,7 @@ let cabs_to_ail_effect_is_incomplete ty =
               acc
         end
       ) [] (Map_extra.toList ident_tagDefs);
+    A.extern_idmap= Map.empty;
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 let inline is_incomplete = cabs_to_ail_effect_is_incomplete

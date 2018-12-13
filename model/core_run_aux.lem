@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core
-import Global Dlist Pp State_exception_undefined
+import Global Dlist Pp State_exception_undefined Map_extra
 
 open import Errors Core
 import Cmm_csem
@@ -73,9 +73,6 @@ let push_exec_loc sym = function
   | ELoc_normal syms ->
       ELoc_normal (sym :: syms)
 end
-
-
-
 
 val initial_io_state: io_state
 val initial_core_state: core_state
@@ -515,6 +512,13 @@ let convert_impl_decl = function
       IFun bTy sym_bTys (convert_pexpr pe)
 end
 
+let convert_globs = function
+  | GlobalDef bTy e ->
+      GlobalDef bTy (convert_expr e)
+  | GlobalDecl bTy ->
+      GlobalDecl bTy
+end
+
 val convert_file: forall 'bty 'a. generic_file 'bty 'a -> file core_run_annotation
 let convert_file file =
   let convert_fun_map_decl = function
@@ -533,8 +537,9 @@ let convert_file file =
   tagDefs= file.tagDefs;
   stdlib=  Map.map convert_fun_map_decl file.stdlib;
   impl=    Map.map convert_impl_decl file.impl;
-  globs=   List.map (fun (sym, bTy, e) -> (sym, bTy, convert_expr e)) file.globs;
+  globs=   Map.map convert_globs file.globs;
   funs=    Map.map convert_fun_map_decl file.funs;
+  extern=  file.extern;
   funinfo= file.funinfo;
  |>
 (* END silly *)

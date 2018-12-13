@@ -221,11 +221,14 @@ type cps_file = {
 }
 
 let cps_transform globs_sym (core : unit typed_file) =
-  let globs = List.map (fun (s, bty, e) ->
-      let (bbs, bbody) = cps_transform_expr globs_sym [] e in
-      (s, bty, bbs, bbody)
-    ) core.globs
-  in
+  let globs = List.rev @@ Pmap.fold (fun s decl acc ->
+      match decl with
+      | GlobalDef (bty, e) ->
+        let (bbs, bbody) = cps_transform_expr globs_sym [] e in
+        (s, bty, bbs, bbody) :: acc
+      | GlobalDecl bty ->
+        acc
+    ) core.globs [] in
   (* Add struct/union members to global symbols *)
   let globs_sym' =
     try

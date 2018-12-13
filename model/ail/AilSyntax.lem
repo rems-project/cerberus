@@ -220,7 +220,8 @@ type sigma 'a = <|
   function_definitions: Context.context identifier (Loc.t * list identifier * statement 'a);
   static_assertions: list (expression 'a * stringLiteral);
   
-  tag_definitions: Context.context identifier tag_definition
+  tag_definitions: Context.context identifier tag_definition;
+  extern_idmap: map Cabs.cabs_identifier (list identifier * maybe identifier);
 |>
 
 
