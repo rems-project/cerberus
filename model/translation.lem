@@ -3440,6 +3440,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           let () = Debug.print_debug 2 [Debug.DB_elaboration] (fun () -> "(translate_program) CREATE for " ^ show sym_global) in
           match Context.lookup (=) sigm.A.object_definitions sym with
             | Nothing ->
+                E.return ( Map.insert sym (C.GlobalDecl (C.BTy_object C.OTy_pointer)) gacc, facc, finfoacc )
+              (*
                 (* if the global has no initialisation expression, we set it to (sort of) zero *)
                 (* TODO: find the std quote *)
                 E.return begin
@@ -3455,6 +3457,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       ) ) :: gacc
                   , facc, finfoacc )
                 end
+            *)
             
             | Just expr ->
                 (* otherwise we evaluate that expression and store it's value to the global (duh) *)
@@ -3478,22 +3481,19 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
                     Caux.mk_sym_pe e_sym in
-                E.return begin
-                  (
-                    ( sym
-                    , C.BTy_object C.OTy_pointer
-                    , Caux.add_loc (locOf core_e) $
-                      Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
-                        Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
-                         Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
-                           (* TODO: proper memory order *)
-                           (Caux.pstore (Loc.other "global init with value") core_ty (Caux.mk_sym_pe sym_global)
-                              core_init_e Cmm.NA)
-                           (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
-                        )
-                      ) ) :: gacc
+                let core_e =
+                  Caux.add_loc (locOf core_e) $
+                    Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
+                      Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
+                       Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
+                         (* TODO: proper memory order *)
+                         (Caux.pstore (Loc.other "global init with value") core_ty (Caux.mk_sym_pe sym_global)
+                            core_init_e Cmm.NA)
+                         (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
+                      )) in
+                E.return
+                  ( Map.insert sym (C.GlobalDef (C.BTy_object C.OTy_pointer) core_e) gacc
                   , facc, finfoacc )
-                end
           end
       
       | A.Decl_function has_proto (_, return_ty) params is_variadic is_inline is_Noreturn ->
@@ -3613,7 +3613,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   , Map.insert sym finfo finfoacc)
           end
     end
-  ) ([], Map.empty, Map.empty) (List.reverse sigm.A.declarations) >>= fun (globs, cfuns, funinfo) ->
+  ) (Map.empty, Map.empty, Map.empty) (List.reverse sigm.A.declarations) >>= fun (globs, cfuns, funinfo) ->
   
   (* adding string literals *)
   E.get_string_literals >>= fun xs ->
@@ -3631,7 +3631,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
           (Caux.mk_pure_e (Caux.mk_sym_pe sym_lit))) 
 *)
 in
-      E.return $ (sym, C.BTy_object C.OTy_pointer, expr) :: acc
+      E.return $ Map.insert sym (C.GlobalDef (C.BTy_object C.OTy_pointer) expr) acc
   ) globs (List.reverse xs) >>= fun globs' ->
   E.return (core_tagDefs, globs', cfuns, funinfo)
 (*
@@ -3698,5 +3698,6 @@ let translate (ailnames, stdlib_fun_map) impl prog =
     C.impl= impl;
     C.globs= cglobs;
     C.funs= cfuns;
+    C.extern = (snd prog).A.extern_idmap;
     C.funinfo= funinfo;
   |>

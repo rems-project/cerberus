@@ -39,6 +39,7 @@ let empty_sigma = <|
   A.function_definitions= [];
   A.static_assertions= [];
   A.tag_definitions= [];
+  A.extern_idmap= Map.empty;
 |>
 
 
@@ -105,9 +106,10 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
             <| C.main= Nothing
              ; C.stdlib= stdlib_fun_map
              ; C.impl= impl
-             ; C.globs= []
+             ; C.globs= Map.empty
              ; C.funs= Map.empty
              ; C.tagDefs= Map.empty
+             ; C.extern= Map.empty
              ; C.funinfo= Map.empty |> in
           let init_dr_st = Driver.initial_driver_state dummy_core_file Fs.fs_initial_state in
           (* spawning a thread with the Core expression we just generated as it's arena *)

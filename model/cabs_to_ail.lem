@@ -2326,6 +2326,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
                     acc
               end
             ) [] (Map_extra.toList ident_tagDefs);
+          extern_idmap= Map.empty;
         |> in
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_complete_object fake_ail_sigma ty && not (AilTypesAux.is_vla ty)) ) then
@@ -3573,6 +3574,7 @@ let desugar_declaration_base specifs idecltors =
                               acc
                         end
                       ) [] (Map_extra.toList ident_tagDefs);
+                    extern_idmap= Map.empty;
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
                   match link with
@@ -4191,6 +4193,7 @@ let desugar_and_register_external_declaration edecl =
                             end
                           ) [] (Map_extra.toList ident_tagDefs)
                         end;
+                      extern_idmap= Map.empty;
                     |> in
                     
                     mk_desug_init () >>= function
@@ -4239,7 +4242,10 @@ let desugar_and_register_external_declaration edecl =
                             if dur = ATypes.Static || dur = ATypes.Thread then
 (*                              E.get_tag_definitions >>= fun tagDefs -> *)
                               (* TODO: not correct for thread? *)
-                              E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
+                              if List.elem SC_extern specifs.storage_classes then
+                                E.return ()
+                              else
+                                E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
                             else
                               E.return ()                    end
               end

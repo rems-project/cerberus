@@ -431,15 +431,16 @@ let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
    important for the Coq backend).  To fully evaluate a pure expression,
    it is necessary to call eval repeatedly until is_value returns True. *)
 val     step_eval_pexpr: nat -> Loc.t ->
+                         map Symbol.sym (maybe Symbol.sym) ->
                          list (map Symbol.sym Core.value) ->
                          maybe Mem.mem_state -> Core.file core_run_annotation ->
                          bool -> Core.pexpr  ->
                          EU.t Core.pexpr core_run_cause
-let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
+let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pexpr =
   match pexpr with Pexpr _ () pexpr_  ->
   let strip (Pexpr _ _ pe_) = pe_ in
   let self pe =
-    step_eval_pexpr (n+1) loc env mem_st_opt file (*hasConstrained *)false pe in
+    step_eval_pexpr (n+1) loc core_extern env mem_st_opt file (*hasConstrained *)false pe in
   Pexpr [] () <$> match pexpr_ with
 
 (* NEW pull_constrained *)
@@ -463,6 +464,10 @@ let rec step_eval_pexpr n loc env mem_st_opt file hasConstrained pexpr =
                  Pp.stringFromCore_pexpr pexpr)
 *)
     | PEsym sym ->
+        let sym = match Map.lookup sym core_extern with
+          | Just (Just sym) -> sym
+          | _ -> sym
+        end in
         match Core_aux.lookup_env sym env with
           | Nothing ->
               (* NOTE: check if it is a procedure pointer *)
@@ -904,11 +909,12 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
 
 
 val     eval_pexpr_aux2: Loc.t ->
+                         map Symbol.sym (maybe Symbol.sym) ->
                          list (map Symbol.sym Core.value) ->
                          maybe Mem.mem_state -> Core.file core_run_annotation ->
                          Core.pexpr ->
                          EU.t (either Core.pexpr Core.value) core_run_cause
-let rec eval_pexpr_aux2 loc env mem_st_opt file pe =
+let rec eval_pexpr_aux2 loc core_extern env mem_st_opt file pe =
   let () = Debug.print_debug 4 [] (fun () ->
     "ENTERING Core_eval.eval_pexpr_aux2 ==> " ^ Pp.stringFromCore_pexpr pe
   ) in
@@ -923,12 +929,12 @@ with
     | ((Pexpr [] () (PEconstrained _)) as pulled_pe) ->
         EU.return (Left pulled_pe)
     | pulled_pe ->
-        step_eval_pexpr 0 loc env mem_st_opt file false pulled_pe >>= fun pe' ->
+        step_eval_pexpr 0 loc core_extern env mem_st_opt file false pulled_pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just cval ->
               EU.return (Right cval)
           | Nothing ->
-              eval_pexpr_aux2 loc env mem_st_opt file pe'
+              eval_pexpr_aux2 loc core_extern env mem_st_opt file pe'
         end
   end
 
@@ -968,22 +974,25 @@ with
 
 
 val eval_pexpr_aux_broken:
-  Loc.t -> list (map Symbol.sym Core.value) ->
+  Loc.t ->
+  map Symbol.sym (maybe Symbol.sym) ->
+  list (map Symbol.sym Core.value) ->
   maybe Mem.mem_state -> Core.file core_run_annotation ->
   Core.pexpr ->
   EU.t Core.value core_run_cause
-let rec eval_pexpr_aux_broken loc env mem_st_opt file pe =
-  step_eval_pexpr 0 loc env mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
+let rec eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe =
+  step_eval_pexpr 0 loc core_extern env mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval
     | Nothing ->
-        eval_pexpr_aux_broken loc env mem_st_opt file pe'
+        eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe'
   end
-val eval_pexpr: Loc.t -> list (map Symbol.sym Core.value) -> maybe Mem.mem_state -> Core.file core_run_annotation ->
+val eval_pexpr: Loc.t -> map Symbol.sym (maybe Symbol.sym) ->
+                list (map Symbol.sym Core.value) -> maybe Mem.mem_state -> Core.file core_run_annotation ->
                 Core.pexpr -> either Errors.error (Undefined.t Core.value)
-let eval_pexpr loc env mem_st_opt file pe =
-  match eval_pexpr_aux_broken loc env mem_st_opt file pe with
+let eval_pexpr loc core_extern env mem_st_opt file pe =
+  match eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe with
     | Exception.Result z ->
         Right z
     | Exception.Exception err ->

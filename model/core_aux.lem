@@ -2170,8 +2170,10 @@ let set_uid_fun fname = function
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
 end
 
-let set_uid_globs (gname, bty, e) =
-  (gname, bty, set_uid_e (string_of_symbol gname) 1 e)
+let set_uid_globs gname = function
+  | GlobalDef bty e -> GlobalDef bty (set_uid_e (string_of_symbol gname) 1 e)
+  | GlobalDecl bty -> GlobalDecl bty
+end
 
 let set_uid file =
  <|
@@ -2179,8 +2181,9 @@ let set_uid file =
   tagDefs= file.tagDefs;
   stdlib=  file.stdlib;
   impl=    file.impl;
-  globs=   List.map set_uid_globs file.globs;
+  globs=   Map.mapi set_uid_globs file.globs;
   funs=    Map.mapi set_uid_fun file.funs;
+  extern=  file.extern;
   funinfo= file.funinfo;
  |>
 
@@ -2390,7 +2393,23 @@ end
 
 
 
-(* dummy link *)
+(* Linkage *)
+
+let link_extern ext acc =
+  Map_extra.fold (fun k (decls, m_def) acc ->
+    let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
+    match Map.lookup k acc with
+    | Nothing ->
+      Map.insert k (decls, m_def) acc
+    | Just (acc_decls, Nothing) ->
+      Map.insert k (decls ++ acc_decls, m_def) acc
+    | Just (acc_decls, Just def) ->
+      match m_def with
+      | Just _ -> error ("two definition for the same identifier: " ^ show k)
+      | Nothing ->
+        Map.insert k (decls ++ acc_decls, Just def) acc
+      end
+  end) ext acc
 
 let link_main opt_m1 opt_m2 =
   match (opt_m1, opt_m2) with
@@ -2400,47 +2419,16 @@ let link_main opt_m1 opt_m2 =
   | (Nothing, Nothing) -> Nothing
   end
 
-let link_tagDefs tagDefs1 tagDefs2 =
-  Map_extra.fold Map.insert tagDefs1 tagDefs2
-
-let rec lookup_by_string (Symbol.Symbol _ name as orig_sym) = function
-  | [] ->
-    Nothing
-  | (Symbol.Symbol n s, f) :: rest ->
-    if name = s then Just (Symbol.Symbol n s, f) else lookup_by_string orig_sym rest
-  end
-
-let link_funs fun1 fun2 =
-  let funs = Map_extra.toList fun1 in
-  Map_extra.fold (fun sym f acc ->
-  match f with
-  | Fun _ _ _ -> Map.insert sym f acc
-  | Proc _ _ _ _ ->
-      match lookup_by_string sym funs with
-      | Nothing -> Map.insert sym f acc
-      | Just (sym2, _) ->
-      Map.insert sym2 f (Map.insert sym f acc)
-      end
-  | ProcDecl _ _ _ ->
-      match lookup_by_string sym funs with
-      | Nothing -> Map.insert sym f acc
-      | Just (sym2, f2) ->
-      Map.insert sym2 f2 (Map.insert sym f2 acc)
-      end
-  | BuiltinDecl _ _ _-> Map.insert sym f acc
-  end) fun2 fun1
-
-let link_funinfo fun1 fun2 =
-  Map_extra.fold Map.insert fun1 fun2
-
+(* INVARIANT: the input list length > 0 *)
 val link: forall 'a 'b. list (generic_file 'a 'b) -> generic_file 'a 'b
 let link files = <|
   main = List.foldl (fun acc f -> link_main acc f.main) Nothing files;
-  tagDefs = List.foldl (fun acc f -> link_tagDefs acc f.tagDefs) Map.empty files;
+  tagDefs = List.foldl (fun acc f -> acc union f.tagDefs) Map.empty files;
   stdlib = (List_extra.head files).stdlib;
   impl = (List_extra.head files).impl;
-  globs = List.concat (List.map (fun f -> f.globs) files);
-  funs =  List.foldl (fun acc f -> link_funs acc f.funs) Map.empty files;
-  funinfo = List.foldl (fun acc f -> link_funinfo acc f.funinfo) Map.empty files;
+  globs = List.foldl (fun acc f -> acc union f.globs) Map.empty files;
+  funs =  List.foldl (fun acc f -> acc union f.funs) Map.empty files;
+  extern = List.foldl (fun acc f -> link_extern f.extern acc) Map.empty files;
+  funinfo = List.foldl (fun acc f -> acc union f.funinfo) Map.empty files;
 |>
 

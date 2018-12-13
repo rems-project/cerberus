@@ -324,7 +324,16 @@ instance forall 'a 'bty 'sym. (Located (generic_expr 'a 'bty 'sym))
     get_loc_ annots
 end
 
+(* TODO: maybe add the type as well *)
+type extern_map =
+  map Cabs.cabs_identifier (list Symbol.sym * maybe Symbol.sym) (* list of declaration * maybe definition *)
 
+type generic_globs 'a 'bty=
+  | GlobalDef of core_base_type * generic_expr 'a 'bty Symbol.sym
+  | GlobalDecl of core_base_type
+
+type generic_globs_map 'a 'bty =
+  map Symbol.sym (generic_globs 'a 'bty)
 
 type core_tag_definitions =
   map Symbol.sym Core_ctype.tag_definition
@@ -335,8 +344,9 @@ type generic_file 'bty 'a = <|
   tagDefs : core_tag_definitions;
   stdlib  : generic_fun_map 'bty 'a;
   impl    : generic_impl 'bty;
-  globs   : list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);
+  globs   : generic_globs_map 'a 'bty; (* list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);*)
   funs    : generic_fun_map 'bty 'a;
+  extern  : extern_map;
   funinfo : map Symbol.sym (ctype * list ctype * bool * bool);
 |>
 

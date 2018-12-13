@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Core_ctype Boot Decode Output Set_extra
+import Core Core_ctype Boot Decode Output Set_extra Map
 import Core_aux Builtins
 module Caux = Core_aux
 
@@ -56,6 +56,7 @@ type driver_error =
 
 type driver_state = <|
   core_file:         Core.file Core_run.core_run_annotation;
+  core_extern:       map Symbol.sym (maybe Symbol.sym); (* declarations -> definitions *)
   core_state:        Core_run.core_state;       (* state of the core program *)
   core_run_state:    Core_run.core_run_state;   (* state of the core evaluator *)
   layout_state:      Mem.mem_state;         (* state of memory layout model *)
@@ -165,7 +166,7 @@ let add_to_concur_sym_map sym oval concur_sym_map =
 
 val     print_eval_conv_aux: driver_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let rec print_eval_conv_aux dr_st pe =
-  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_run_state.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
+  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_extern dr_st.core_run_state.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined (Left (Core.Pexpr [] () (Core.PEconstrained xs)))) ->
@@ -752,7 +753,7 @@ let rec drive_core_thread tid =
           |>) >>
           drive_core_thread tid )
 
-  end) (Core_run.core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc tid th_info)
+  end) (Core_run.core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.core_extern dr_st.symbolic_assoc tid th_info)
 
 
 
@@ -1122,7 +1123,7 @@ let rec driver with_concurrency =
   
     (* TODO: hackish *)
     let non_blocked_th_sts = List.filter (fun (tid, th_info) ->
-      List.any (fun step -> step <> Core_run.Step_blocked) $ Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info
+      List.any (fun step -> step <> Core_run.Step_blocked) $ Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern post_core_dr_st.symbolic_assoc tid th_info
     ) post_core_dr_st.core_state.Core_run.thread_states in
   
   (if Global.current_execution_mode () = Just Global.Random then
@@ -1138,7 +1139,7 @@ let rec driver with_concurrency =
     ND.bindExhaustive (ND.pick (mk_info_str "driver" "2") (* post_core_dr_st.core_state.thread_states *) non_blocked_th_sts)
                       (fun (tid, th_info) ->
 (* OLD                       ND.return $ core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state) *)
-                       ND.pick (mk_info_str "driver" "3") $ Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
+                       ND.pick (mk_info_str "driver" "3") $ Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern post_core_dr_st.symbolic_assoc tid th_info)
     
 
    else
@@ -1148,7 +1149,7 @@ let rec driver with_concurrency =
      ND.return (core_thread_step post_core_dr_st.core_file th_info post_core_dr_st.core_state)
 *)
     ND.pick (mk_info_str "driver" "4") non_blocked_th_sts >>= fun (tid, th_info) ->
-    ND.pick (mk_info_str "driver" "5") (Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.symbolic_assoc tid th_info)
+    ND.pick (mk_info_str "driver" "5") (Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern post_core_dr_st.symbolic_assoc tid th_info)
   ) >>=
       process_core_step2 (*post_core_dr_st*)
 
@@ -1158,16 +1159,16 @@ let rec driver with_concurrency =
 
 
 
-val     hack: list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
-let rec hack env mem_st core_file concur_sym_map pexpr =
+val     hack: map Symbol.sym (maybe Symbol.sym) -> list (map Symbol.sym Core.value) -> Mem.mem_state -> Core.file Core_run.core_run_annotation -> map Symbol.sym Core.object_value -> Core.pexpr -> Core.value
+let rec hack core_extern env mem_st core_file concur_sym_map pexpr =
   let () = Debug.print_debug 1 [] (fun () -> "XX 25") in
-  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") env (Just mem_st) core_file false pexpr with
+  match Core_eval.step_eval_pexpr 0 (Loc.other "Driver.hack") core_extern env (Just mem_st) core_file false pexpr with
     | Exception.Result (Undefined.Defined pexpr') ->
         match Core_aux.valueFromPexpr pexpr' with
           | Just cval ->
               cval
           | Nothing ->
-              hack env mem_st core_file concur_sym_map pexpr'
+              hack core_extern env mem_st core_file concur_sym_map pexpr'
         end
     | _ ->
         error ("Driver.hack, UNDEF/ERROR:" ^ Pp.stringFromCore_pexpr pexpr)
@@ -1226,7 +1227,7 @@ val finalize: string -> driver_state -> driver_result (* (string * (bool * Cmm_o
 let finalize debug_str dr_st =
   match dr_st.core_state.Core_run.thread_states with
     | [(tid, (_, th_st))] ->
-        let cval = hack dr_st.core_run_state.Core_run.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
+        let cval = hack dr_st.core_extern dr_st.core_run_state.Core_run.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.Core_run.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
@@ -1256,6 +1257,11 @@ let finalize debug_str dr_st =
 
 
 
+let create_extern_symmap exts =
+  Map_extra.fold (fun _ (decls, def) acc ->
+    List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
+  ) exts Map.empty
+
 
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
@@ -1284,6 +1290,7 @@ let initial_driver_state file fs_state =
 *)
   <|
     core_file=         file;
+    core_extern=       create_extern_symmap file.Core.extern;
     core_state=        Core_run.initial_core_state;
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;
@@ -1344,7 +1351,12 @@ let driver_globals with_concurrency file =
   ND.read (fun dr_st ->
     dr_st.core_file.Core.globs
   ) >>= fun globs ->
-  
+  let glob_defs = List.reverse $ List.foldl (fun acc (sym, glb) ->
+    match glb with
+    | Core.GlobalDef bTy e -> (sym, bTy, e) :: acc
+    | Core.GlobalDecl _ -> acc
+    end) [] (Map_extra.toList globs)
+  in
   ND.mapM_ (fun (glob_sym, glob_bTy, expr) ->
     let () = Debug.print_debug 6 [Debug.DB_driver] (fun () ->      (* DEBUG *)
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
@@ -1386,7 +1398,7 @@ let driver_globals with_concurrency file =
       | _ ->
           error "ERROR (in Driver, global init didn't evaluate to value)"
     end
-  ) globs >>
+  ) glob_defs >>
   ND.return tid0
 
 

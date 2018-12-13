@@ -1575,11 +1575,15 @@ let typecheck_program file =
       end) file.impl >>= fun impl' ->
     
     (* Typechecking and registering of the globals *)
-    E.foldlM (fun (env_acc, res_acc) (sym, bTy, e) ->
-      collect_labels env_acc e >>= fun env_acc' ->
-      typecheck_expr file.tagDefs env_acc' bTy e >>= fun te ->
-      E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, bTy, te) :: res_acc)
-    ) (env, []) file.globs >>= fun (env, rev_globs') ->
+    E.foldlM (fun (env_acc, acc) (sym, decl) ->
+      match decl with
+        | GlobalDef bTy e ->
+            collect_labels env_acc e >>= fun env_acc' ->
+            typecheck_expr file.tagDefs env_acc' bTy e >>= fun te ->
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', Map.insert sym (GlobalDef bTy te) acc)
+        | GlobalDecl bTy ->
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, Map.insert sym (GlobalDecl bTy) acc)
+      end) (env, Map.empty) (Map_extra.toList file.globs) >>= fun (env, globs') ->
     
     (* Registering the program functions *)
     let env = Map_extra.fold (fun sym decl acc ->
@@ -1613,7 +1617,16 @@ let typecheck_program file =
             Proc loc bTy sym_bTys <$> typecheck_expr file.tagDefs env' bTy e
       end) file.funs >>= fun funs' ->
     
-    E.return <| main= file.main; tagDefs= file.tagDefs; stdlib= stdlib'; impl= impl'; globs= List.reverse rev_globs'; funs= funs'; funinfo= file.funinfo; |>
+    E.return <|
+      main= file.main;
+      tagDefs= file.tagDefs;
+      stdlib= stdlib';
+      impl= impl';
+      globs= globs';
+      funs= funs';
+      extern= file.extern;
+      funinfo= file.funinfo;
+    |>
   in
   match E.runM aux with
     | Exception.Result file' ->

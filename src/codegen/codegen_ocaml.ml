@@ -54,7 +54,7 @@ let opt_passes core =
 let create_globs name core =
   {
     interface = String.capitalize_ascii name ^ "I.";
-    statics = List.map (fun (s,_,_) -> s) core.Core.globs;
+    statics = List.map (fun (s,_) -> s) (Pmap.bindings_list core.Core.globs);
     externs = Pmap.fold
         (fun s f es -> match f with
            | ProcDecl _ -> s::es

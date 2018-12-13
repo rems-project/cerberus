@@ -60,7 +60,7 @@ let frontend conf filename core_std =
 let cerberus debug_level progress
              cpp_cmd macros incl impl_name
              exec exec_mode switches batch experimental_unseq concurrency
-             pprints ppflags
+             astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              fs_dump fs
              ocaml ocaml_corestd
@@ -78,16 +78,16 @@ let cerberus debug_level progress
   in
   (* set global configuration *)
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto;
-  let conf = { astprints = []; ppflags; debug_level; pprints; typecheck_core;
+  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; } in
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
     load_core_stdlib () >>= fun core_stdlib ->
-    io.pass_message "0.1. - Core standard library loaded." >>
+    io.pass_message "Core standard library loaded." >>
     (* Looking for and parsing the implementation file *)
     load_core_impl core_stdlib impl_name >>= fun core_impl ->
-    io.pass_message "0.2. - Implementation file loaded." >>
+    io.pass_message "Implementation file loaded." >>
     return (core_stdlib, core_impl)
   in
   let epilogue n =
@@ -201,8 +201,16 @@ let pprints =
   let open Pipeline in
   let doc = "Pretty print the intermediate programs for the listed languages\
              (ranging over {cabs, ail, core})." in
-  Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail; "core", Core])) [] &
+  Arg.(value & opt (list (enum ["ail", Ail; "core", Core])) [] &
        info ["pp"] ~docv:"LANG1,..." ~doc)
+
+let astprints =
+  let open Pipeline in
+  let doc = "Pretty print the intermediate syntax tree for the listed languages\
+             (ranging over {cabs, ail, core})." in
+  Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
+       info ["ast"] ~docv:"LANG1,..." ~doc)
+
 
 let fs =
   let doc = "Initialise the internal file system with the contents of the\
@@ -300,7 +308,7 @@ let () =
                          cpp_cmd $ macros $ incl $ impl $
                          exec $ exec_mode $ switches $ batch $
                          experimental_unseq $ concurrency $
-                         pprints $ ppflags $
+                         astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          fs_dump $ fs $
                          ocaml $ ocaml_corestd $
