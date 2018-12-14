@@ -3,3 +3,8 @@ let int : unit -> int =
   fun () ->
     assert (!counter <> max_int);
     incr counter; !counter
+
+let digest, set_digest =
+  let digest = ref "" in
+  (fun () -> !digest),
+  (fun filename -> digest := Digest.file filename)

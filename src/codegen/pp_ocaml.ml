@@ -115,9 +115,9 @@ let print_symbol a = !^(Pp_symbol.to_string a)
 let print_global_symbol a = !^(Pp_symbol.to_string_pretty a)
 
 let print_raw_symbol = function
-  | Symbol.Symbol (i, None)     ->
+  | Symbol.Symbol (_, i, None)     ->
     !^"Symbol.Symbol" ^^^ P.parens (print_int i ^^ P.comma ^^^ tnone)
-  | Symbol.Symbol (i, Some str) ->
+  | Symbol.Symbol (_, i, Some str) ->
     !^"RT.sym" ^^^ P.parens
       (print_int i ^^ P.comma ^^^ P.dquotes !^str)
 
@@ -674,7 +674,7 @@ let print_store_array_type = function
 let choose_store_type pe =
   let get_ctype = function
     | Pexpr (_, _, PEval (Vctype cty)) -> cty
-    | Pexpr (_, _, PEsym (Symbol.Symbol (_, Some n))) -> (Basic0 (Integer AilTypes.Char)) (* failwith ("choose_store: PEsym: " ^ n) *)
+    | Pexpr (_, _, PEsym (Symbol.Symbol (_, _, Some n))) -> (Basic0 (Integer AilTypes.Char)) (* failwith ("choose_store: PEsym: " ^ n) *)
     | pe -> failwith @@ "fatal error: get_type: " ^ String_core.string_of_pexpr pe
   in
   match get_ctype pe with

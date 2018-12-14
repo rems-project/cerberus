@@ -4,7 +4,7 @@ let error ?(code = 1) msg =
 
 
 type mem_setting = [
-  `MemSymbolic | `MemConcrete | `MemTwin | `MemCpp
+  `MemSymbolic | `MemConcrete (*| `MemTwin | `MemCpp*)
 ]
 
 (* TODO: I hate this. And it doesn't even work ... *)
@@ -15,8 +15,10 @@ let string_of_mem_switch () =
   match !mem_switch with
   | `MemSymbolic -> "symbolic"
   | `MemConcrete -> "concrete"
+(*
   | `MemTwin -> "twin"
   | `MemCpp -> "cpp"
+*)
 
 (*
 external round_to_float32: float -> float = "round_to_float"

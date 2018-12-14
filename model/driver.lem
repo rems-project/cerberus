@@ -408,7 +408,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let dom = Map.domain dr_st.core_file.Core.tagDefs in
     let res = Set.filter (fun sym ->
       match sym with
-      | Symbol.Symbol _ (Just n) -> n = name
+      | Symbol.Symbol _ _ (Just n) -> n = name
       | _ -> error ("symbol struct " ^ name ^ " not in tagDefs")
       end) dom
     in

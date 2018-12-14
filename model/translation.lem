@@ -264,7 +264,7 @@ let rec translate_function_designator ctx stdlib tagDefs (A.AnnotatedExpression 
         E.return $ Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym))
     | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
-          | Symbol.Symbol _ (Just str) ->
+          | Symbol.Symbol _ _ (Just str) ->
               match Map.lookup str stdlib.ailnames with
                 | Just sym ->
                     Caux.mk_value_pe (Core.Vloaded (C.LVspecified (Core.OVpointer (Mem.fun_ptrval sym))))
@@ -1991,7 +1991,7 @@ end
          end
      
      (* TODO: allow non trivial call to atomic_thread_fence() ... *)
-     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ (Just "atomic_thread_fence")))) [order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEident (Symbol.Symbol _ _ (Just "atomic_thread_fence")))) [order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          E.return $
@@ -3517,7 +3517,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   , Map.insert sym (C.ProcDecl loc ret_bTy (List.map (fun _ -> C.BTy_object C.OTy_pointer) params)) facc
                     (* get the correct symbol if a proxy exists *)
                   , match sym with
-                     | Symbol.Symbol _ (Just str) ->
+                     | Symbol.Symbol _ _ (Just str) ->
                        match Map.lookup str stdlib.ailnames with
                          | Just sym_proxy -> Map.insert sym_proxy finfo finfoacc
                          | Nothing -> Map.insert sym finfo finfoacc

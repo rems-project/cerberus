@@ -698,7 +698,8 @@ module Concrete : Memory = struct
                 begin match ref_ty with
                   | Function0 _ ->
                       let opt_name = IntMap.find_opt n funptrmap in
-                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (N.to_int n, opt_name))))
+                      (* FIXME VICTOR *)
+                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (Fresh.digest (), N.to_int n, opt_name))))
                   | _ ->
                       if N.equal n N.zero then
                         (* TODO: check *)
@@ -813,7 +814,7 @@ module Concrete : Memory = struct
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
-            | PVfunction (Symbol.Symbol (n, opt_name)) ->
+            | PVfunction (Symbol.Symbol (_, n, opt_name)) ->
                 (* TODO(V): *)
                 (begin match opt_name with
                   | Some name -> IntMap.add (N.of_int n) name funptrmap
@@ -1574,7 +1575,7 @@ module Concrete : Memory = struct
     match ptrval_ with
       | PVnull _ ->
           return (mk_ival prov Nat_big_num.zero)
-      | PVfunction (Symbol.Symbol (n, _)) ->
+      | PVfunction (Symbol.Symbol (_, n, _)) ->
           return (mk_ival prov (Nat_big_num.of_int n))
       | PVconcrete addr ->
           let IV (_, ity_max) = max_ival ity in

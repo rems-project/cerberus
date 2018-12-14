@@ -2,11 +2,11 @@ open Symbol
 open Pp_prelude
 
 
-let to_string (Symbol (n, str_opt)) =
+let to_string (Symbol (_, n, str_opt)) =
   let str = match str_opt with | Some str -> str | None -> "a" in
   str ^ "_" ^ string_of_int n
 
-let to_string_pretty (Symbol (n, name_opt) as s) =
+let to_string_pretty (Symbol (_, n, name_opt) as s) =
   match name_opt with
     | Some name ->
         if !Debug_ocaml.debug_level > 4 then

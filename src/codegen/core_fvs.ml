@@ -4,12 +4,13 @@ open Util
 open Symbol
 open Core
 
+(* FIXME VICTOR *)
 let sym_compare s1 s2 =
   match s1, s2 with
-  | Symbol (_, Some l1), Symbol (_, Some l2) -> String.compare l1 l2
-  | Symbol (n, Some _), Symbol (_, None) -> -1
-  | Symbol (_, None), Symbol (m, Some _) -> 1
-  | Symbol (n, None), Symbol (m, None) -> n - m
+  | Symbol (_, _, Some l1), Symbol (_, _, Some l2) -> String.compare l1 l2
+  | Symbol (_, n, Some _), Symbol (_, _, None) -> -1
+  | Symbol (_, _, None), Symbol (_, m, Some _) -> 1
+  | Symbol (_, n, None), Symbol (_, m, None) -> n - m
 
 let sort_uniq fvs =
   List.sort_uniq sym_compare fvs
