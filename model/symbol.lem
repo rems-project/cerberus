@@ -1,15 +1,43 @@
 open import Pervasives Utils Show Show_extra Enum
 import Loc Debug
 
+type digest
+declare ocaml target_rep type digest = `Digest.t`
+
+val digest: unit -> digest
+declare ocaml target_rep function digest = `Fresh.digest`
+
+val digest_compare: digest -> digest ->int 
+declare ocaml target_rep function digest_compare = `Digest.compare`
+
+instance (Eq digest)
+  let (=) x y = digest_compare x y = 0
+  let (<>) x y = digest_compare x y <> 0
+end
+
+instance (Ord digest)
+  let compare x y =
+    let cmp = digest_compare x y in
+    if cmp < 0 then LT else if cmp = 0 then EQ else GT
+  let (<) x y =
+    digest_compare x y < 0
+  let (<=) x y =
+    digest_compare x y <= 0
+  let (>) x y =
+    digest_compare x y > 0
+  let (>=) x y =
+    digest_compare x y >= 0
+end
+
 (* Symbolic identifiers *)
 type sym =
-  Symbol of nat * maybe string
+  Symbol of digest * nat * maybe string
 
 val        symbolEqual: sym -> sym -> bool
 let inline symbolEqual sym1 sym2 =
   match (sym1, sym2) with
-    | (Symbol n1 str_opt1, Symbol n2 str_opt2) ->
-        if n1 = n2 then
+    | (Symbol d1 n1 str_opt1, Symbol d2 n2 str_opt2) ->
+        if d1 = d2 && n1 = n2 then
           if Debug.get_level () >= 5 && str_opt1 <> str_opt2 then
             let () = Debug.print_debug 5 [] (fun () -> "[Symbol.symbolEqual] suspicious equality ==> " ^ show str_opt1 ^ " <-> " ^ show str_opt2) in
             true
@@ -26,39 +54,42 @@ end
 
 instance (Ord sym)
   let compare sym1 sym2 =
-    let (Symbol n1 _) = sym1 in
-    let (Symbol n2 _) = sym2 in
-      compare n1 n2
+    let (Symbol d1 n1 _) = sym1 in
+    let (Symbol d2 n2 _) = sym2 in
+      if d1 = d2 then compare n1 n2
+      else compare d1 d2
   let (<) sym1 sym2 = 
-    let (Symbol n1 _) = sym1 in
-    let (Symbol n2 _) = sym2 in
-    n1 < n2
+    let (Symbol d1 n1 _) = sym1 in
+    let (Symbol d2 n2 _) = sym2 in
+    d1 < d2 || (d1 = d2 && n1 < n2)
   let (<=) sym1 sym2 = 
-    let (Symbol n1 _) = sym1 in
-    let (Symbol n2 _) = sym2 in
-    n1 <= n2
+    let (Symbol d1 n1 _) = sym1 in
+    let (Symbol d2 n2 _) = sym2 in
+    d1 <= d2 || (d1 = d2 && n1 <= n2)
   let (>) sym1 sym2 = 
-    let (Symbol n1 _) = sym1 in
-    let (Symbol n2 _) = sym2 in
-    n1 > n2
+    let (Symbol d1 n1 _) = sym1 in
+    let (Symbol d2 n2 _) = sym2 in
+    d1 > d2 || (d1 = d2 && n1 > n2)
   let (>=) sym1 sym2 = 
-    let (Symbol n1 _) = sym1 in
-    let (Symbol n2 _) = sym2 in
-    n1 >= n2
+    let (Symbol d1 n1 _) = sym1 in
+    let (Symbol d2 n2 _) = sym2 in
+    d1 >= d2 || (d1 = d2 && n1 >= n2)
 end
 
 instance (NumSucc sym)
   let succ sym =
-    let (Symbol n str_opt) = sym in 
-    Symbol (n+1) str_opt
+    let (Symbol d n str_opt) = sym in 
+    Symbol d (n+1) str_opt
 end
 
+(*
 instance (Enum sym)
   let toEnum n =
-    Symbol n Nothing
+    Symbol (digest ()) n Nothing
   let fromEnum sym =
-    let (Symbol n _) = sym in n
+    let (Symbol _ n _) = sym in n
 end
+*)
 
 instance (SetType sym)
   let setElemCompare sym1 sym2 = ordCompare sym1 sym2
@@ -66,7 +97,7 @@ end
 
 instance (Show sym)
   let show sym =
-    let Symbol n str_opt = sym in
+    let Symbol d n str_opt = sym in
     "Symbol" ^ show (n, str_opt)
 end
 
@@ -81,16 +112,16 @@ declare ocaml target_rep function fresh_int = `Fresh.int`
 
 val fresh: unit -> sym
 let fresh () =
-  Symbol (fresh_int ()) Nothing
+  Symbol (digest()) (fresh_int ()) Nothing
 
 val fresh_pretty : string -> sym
 let fresh_pretty str =
-  Symbol (fresh_int ()) (Just str)
+  Symbol (digest()) (fresh_int ()) (Just str)
 
 val fresh_pretty_with_id : (nat -> string) -> sym
 let fresh_pretty_with_id mkStr =
   let id = fresh_int () in
-  Symbol id (Just (mkStr id))
+  Symbol (digest()) id (Just (mkStr id))
 
 val fresh_fancy : maybe string -> sym
 let fresh_fancy = function

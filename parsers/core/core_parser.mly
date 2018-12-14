@@ -172,7 +172,7 @@ let under_scope (m: 'a Eff.t) : 'a Eff.t =
 
 let register_sym ((_, (start_p, end_p)) as _sym) : Symbol.sym Eff.t =
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (Fresh.int(), Some (fst _sym)) in
+  let sym = Symbol.Symbol (Fresh.digest(), Fresh.int(), Some (fst _sym)) in
 (*  let sym = Symbol.Symbol (Global_ocaml.new_int (), Some (fst _sym)) in *)
   Eff.put {st with
     sym_scopes=
@@ -208,7 +208,7 @@ let lookup_sym _sym : ((Symbol.sym * Location_ocaml.t) option) Eff.t =
 let register_label ((_, (start_p, end_p)) as _sym) : unit Eff.t =
   let loc = Location_ocaml.region (start_p, end_p) None in
   Eff.get >>= fun st ->
-  let sym = Symbol.Symbol (Fresh.int(), Some (fst _sym)) in
+  let sym = Symbol.Symbol (Fresh.digest(), Fresh.int(), Some (fst _sym)) in
   Eff.put {st with
     labels= Pmap.add _sym (sym, loc) st.labels
   }
@@ -237,7 +237,7 @@ let symbolify_sym _sym =
 
 let rec symbolify_ctype ty =
   let symbolify_symbol = function
-    | Symbol.Symbol (_, Some str) ->
+    | Symbol.Symbol (_, _, Some str) ->
       begin lookup_sym (str, (Lexing.dummy_pos, Lexing.dummy_pos)) >>= function
         | Some (sym, _) ->
             Eff.return sym
@@ -1217,10 +1217,10 @@ ctype:
     }
 | STRUCT tag= SYM
     (* NOTE: we only collect the string name here *)
-    { Core_ctype.Struct0 (Symbol.Symbol (-1, Some (fst tag))) }
+    { Core_ctype.Struct0 (Symbol.Symbol ("", -1, Some (fst tag))) }
 | UNION tag= SYM
     (* NOTE: we only collect the string name here *)
-    { Core_ctype.Union0 (Symbol.Symbol (-1, Some (fst tag))) }
+    { Core_ctype.Union0 (Symbol.Symbol ("", -1, Some (fst tag))) }
 ;
 (* END Ail types *)
 
@@ -1253,9 +1253,9 @@ core_object_type:
 (* NOTE: this is a hack to use Symbol.sym instead of _sym!
  * The symbol is checked later, but we lose the location *)
 | STRUCT tag= SYM
-    { OTy_struct (Symbol.Symbol (0, Some (fst tag))) }
+    { OTy_struct (Symbol.Symbol ("", 0, Some (fst tag))) }
 | UNION tag= SYM
-    { OTy_union (Symbol.Symbol (0, Some (fst tag))) }
+    { OTy_union (Symbol.Symbol ("", 0, Some (fst tag))) }
 ;
 
 core_base_type:

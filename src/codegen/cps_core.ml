@@ -71,7 +71,7 @@ let uniq_fv globs bes cont =
 let label_id = ref 0
 let fresh_label () =
   label_id := !label_id + 1;
-  Symbol.Symbol (0, Some ("__l" ^ string_of_int !label_id))
+  Symbol.Symbol (Fresh.digest(), 0, Some ("__l" ^ string_of_int !label_id))
 
 (* TODO: correctly type this *)
 let pexpr_of_sym sym = Pexpr ([], BTy_unit, PEsym sym)
@@ -102,7 +102,7 @@ let block_call es pat2 ce =
 let block_compare (BB ((l1, _, _), _)) (BB ((l2, _, _), _)) = sym_compare l1 l2
 
 (* TODO: should review that *)
-let default = Symbol.Symbol (0, Some "cont")
+let default = Symbol.Symbol (Fresh.digest(), 0, Some "cont")
 
 (* CPS transformation *)
 

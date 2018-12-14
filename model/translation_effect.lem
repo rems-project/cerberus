@@ -80,9 +80,9 @@ let resolve_object_type sym = fun st ->
         (qs_ty, st)
     | Nothing ->
         let sym_str = match sym with
-          | Symbol.Symbol n Nothing ->
+          | Symbol.Symbol _ n Nothing ->
               "sym_" ^ show n
-          | Symbol.Symbol n (Just str) ->
+          | Symbol.Symbol _ n (Just str) ->
               str ^ "{" ^ show n ^ "}"
         end in
         error ("Translation_effect.resolve_object_type ===> " ^ sym_str)

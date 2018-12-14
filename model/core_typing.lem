@@ -1535,7 +1535,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDproc bTy (List.map snd sym_bTys)) acc
         | BuiltinDecl _ bTy bTys ->
             let name = match sym with
-              | Symbol.Symbol _ (Just name) -> name
+              | Symbol.Symbol _ _ (Just name) -> name
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
             insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc
@@ -1594,7 +1594,7 @@ let typecheck_program file =
             insert_tdecl (Sym sym) (TDproc bTy bTys) acc
         | BuiltinDecl _ bTy bTys ->
             let name = match sym with
-              | Symbol.Symbol _ (Just name) -> name
+              | Symbol.Symbol _ _ (Just name) -> name
               | _ -> error "typecheck_program: BuiltinDecl"
             end in
             insert_tdecl (Impl (I.BuiltinFunction name)) (TDproc bTy bTys) acc

@@ -45,19 +45,22 @@ let io, get_progress =
 let frontend conf filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
-  begin
-    if Filename.check_suffix filename ".c" then
-      c_frontend conf core_std filename >>= fun (_, _, core_file) ->
-      return core_file
-    else if Filename.check_suffix filename ".core" then
-      core_frontend conf core_std ~filename
-    else
-      Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
-                        "The file extention is not supported")
-  end >>= core_passes conf ~filename >>= fun (core_file, _) ->
-  return core_file
+  if Filename.check_suffix filename ".co" then
+    return @@ read_core_object filename
+  else
+    begin
+      if Filename.check_suffix filename ".c" then
+        c_frontend conf core_std filename >>= fun (_, _, core_file) ->
+        return core_file
+      else if Filename.check_suffix filename ".core" then
+        core_frontend conf core_std ~filename
+      else
+        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
+                          "The file extention is not supported")
+    end >>= core_passes conf ~filename >>= fun (core_file, _) ->
+    return core_file
 
-let cerberus debug_level progress
+let cerberus debug_level progress core_obj
              cpp_cmd macros incl impl_name
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
@@ -128,6 +131,12 @@ let cerberus debug_level progress
         let open Exhaustive_driver in
         let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
         interp_backend io core_file ~args ~batch ~fs ~driver_conf
+      else if core_obj then
+        let core_obj_name =
+          String.concat "_" (List.map Filename.remove_extension files) ^ ".co"
+        in
+        let () = write_core_object core_file core_obj_name in
+        return @@ Either.Right 0
       else
         return @@ Either.Right 0
 
@@ -169,6 +178,10 @@ let impl =
              and excluding the .impl suffix)." in
   Arg.(value & opt string "gcc_4.9.0_x86_64-apple-darwin10.8.0" & info ["impl"]
          ~docv:"NAME" ~doc)
+
+let core_obj =
+  let doc = "Run frontend generating a target '.co' core object file." in
+  Arg.(value & flag & info ["c"] ~doc)
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
@@ -304,7 +317,7 @@ let args =
 
 (* entry point *)
 let () =
-  let cerberus_t = Term.(pure cerberus $ debug_level $ progress $
+  let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
                          cpp_cmd $ macros $ incl $ impl $
                          exec $ exec_mode $ switches $ batch $
                          experimental_unseq $ concurrency $

@@ -175,7 +175,8 @@ module Constraints = struct
     
     (* assert that all the struct/union paddings are positive *)
     begin
-      Pmap.iter (fun (Sym.Symbol (tag_sym_n, _)) tagDef ->
+      (* FIXME VICTOR *)
+      Pmap.iter (fun (Sym.Symbol (_, tag_sym_n, _)) tagDef ->
         let xs = match tagDef with
           | Tags.StructDef z
           | Tags.UnionDef z -> z in
@@ -400,7 +401,7 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
     | Defacto_memory_types.IVoffsetof (tag_sym, memb_ident) ->
       failwith "TODO Smt: IVoffsetof"
-    | Defacto_memory_types.IVpadding (Sym.Symbol (tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
+    | Defacto_memory_types.IVpadding (Sym.Symbol (_, tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
         Expr.mk_const_s slvSt.ctx ("padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str) slvSt.addrSort
     | Defacto_memory_types.IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
         let ptrval_e1 = (* WIP *) aux (Defacto_memory_types.IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1

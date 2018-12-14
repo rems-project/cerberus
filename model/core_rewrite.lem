@@ -725,7 +725,7 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         let pes' = List.map remove_conv_int_pexpr pes in
         match (nm, pes') with
           (* TODO: hack !!!!!!!!! *)
-          | (Sym (Symbol.Symbol _ (Just "conv_int")), [pe_ty; pe_n]) ->
+          | (Sym (Symbol.Symbol _ _ (Just "conv_int")), [pe_ty; pe_n]) ->
               match (valueFromPexpr pe_ty, valueFromPexpr pe_n) with
                 | (Just (Vctype ty), Just ((Vobject (OVinteger ival)) as cval)) ->
                     match Mem_aux.integerFromIntegerValue ival with
@@ -741,7 +741,7 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
                     PEcall nm pes'
 (*                    assert_false ("remove_conv_int_pexpr: Core type error? ==> " ^ pp_pexpr pexpr ^ " <==> " ^ pp_pexpr (PEval cval)) *)
               end
-          | (Sym (Symbol.Symbol _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _ _pe_n]) ->
+          | (Sym (Symbol.Symbol _ _ (Just "conv")), [pe_ty1; pe_ty2; Pexpr _ _ _pe_n]) ->
               if pe_ty1 = pe_ty2 then
                 _pe_n
               else

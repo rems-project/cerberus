@@ -98,6 +98,7 @@ let read_entire_file filename =
   Bytes.to_string bs
 
 let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
+  Fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse filename =
@@ -167,6 +168,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   return (Some cabs_tunit, Some ailtau_prog, core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
+  Fresh.set_digest filename;
   io.print_debug 2 (fun () -> "Using the Core frontend") >>= fun () ->
   Core_parser_driver.parse core_stdlib filename >>= function
     | Core_parser_util.Rfile (sym_main, globs, funs, tagDefs) ->
@@ -257,6 +259,17 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
       | [] ->
           io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") >>= fun () ->
           return (Either.Right 0)
+
+let read_core_object fname =
+  let ic = open_in_bin fname in
+  let core_file = Marshal.from_channel ic in
+  close_in ic;
+  core_file
+
+let write_core_object core_file fname =
+  let oc = open_out_bin fname in
+  Marshal.to_channel oc core_file [Marshal.No_sharing; Marshal.Closures];
+  close_out oc
 
 
 (* FIXME: this is not working *)
