@@ -37,7 +37,8 @@ export namespace Option {
     'show_pointer_bytes',         // Show all the bytes of a pointer value
     'hide_tau',                   // Hide tau transitions in execution graph
     'colour_all',                 // Colorise every expression
-    'colour_cursor'               // Colorise expression on cursor
+    'colour_cursor',              // Colorise expression on cursor
+    'show_mem_order',             // Show memory graph in address order
   ])
   export type t = keyof typeof opts
   export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1

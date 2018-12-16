@@ -194,7 +194,8 @@ export default class View {
         show_pointer_bytes: false,
         hide_tau: true,
         colour_all: false,
-        colour_cursor: true
+        colour_cursor: true,
+        show_mem_order: false
       },
     }
   }
@@ -453,7 +454,9 @@ export default class View {
       }, '')
     }
     const g = 'digraph Memory { node [shape=none, fontsize=12]; rankdir=LR;'
-    const ns = _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
+    const ns = this.state.options.show_mem_order ?
+               _.reduceRight(mem.map, (ns, alloc) => ns + createNode(alloc), '')
+             : _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
     const ps: Pointer[] = _.reduce(mem.map, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
     this.state.interactive.mem = g + ns + es + '}' // Save in case another memory tab is open 
