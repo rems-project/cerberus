@@ -57,27 +57,38 @@ let frontend conf filename core_std =
       else
         Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
                           "The file extention is not supported")
-    end >>= core_passes conf ~filename >>= fun (core_file, _) ->
+    end >>= Pipeline.rewrite_core conf
+    >>= core_passes conf ~filename >>= fun (core_file, _) ->
     return core_file
 
+let create_cpp_cmd cpp_cmd nostdlibinc macros_def macros_undef incl_dirs incl_files =
+  let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "libc/include/posix"] in
+  let incl_dirs = if nostdlibinc then incl_dirs else libc_dirs @ incl_dirs in
+  String.concat " " begin
+    cpp_cmd ::
+    List.map (function
+        | (str1, None)      -> "-D" ^ str1
+        | (str1, Some str2) -> "-D" ^ str1 ^ "=" ^ str2
+      ) macros_def @
+    List.map (fun str -> "-U" ^ str) macros_undef @
+    List.map (fun str -> "-I" ^ str) incl_dirs @
+    List.map (fun str -> "-include " ^ str) incl_files
+  end
+
 let cerberus debug_level progress core_obj
-             cpp_cmd macros incl impl_name
+             cpp_cmd nostdlibinc macros macros_undef
+             incl_dirs incl_files cpp_only
+             impl_name
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              fs_dump fs
              ocaml ocaml_corestd
+             output_file
              files args =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
-    String.concat " " begin
-      cpp_cmd ::
-      List.map (function
-          | (str1, None)      -> "-D" ^ str1
-          | (str1, Some str2) -> "-D" ^ str1 ^ "=" ^ str2
-        ) macros @
-      List.map (fun str -> "-I " ^ str) incl
-    end
+    create_cpp_cmd cpp_cmd nostdlibinc macros macros_undef incl_dirs incl_files
   in
   (* set global configuration *)
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto;
@@ -119,9 +130,16 @@ let cerberus debug_level progress core_obj
         Pp_errors.fatal "no input file"
     | files ->
       prelude >>= fun core_std ->
+      begin
+        if nostdlibinc then
+          return []
+        else
+          frontend (conf, io) (cerb_path ^ "/libc/libc.co") core_std
+          >>= fun core_libc -> return [core_libc]
+      end >>= fun acc ->
       Exception.foldlM (fun core_files file ->
           frontend (conf, io) file core_std >>= fun core_file ->
-          return (core_file::core_files)) [] files
+          return (core_file::core_files)) acc files
       >>= fun core_files ->
       let core_file = Core_aux.link core_files in
       Tags.set_tagDefs core_file.tagDefs;
@@ -132,9 +150,7 @@ let cerberus debug_level progress core_obj
         let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
         interp_backend io core_file ~args ~batch ~fs ~driver_conf
       else if core_obj then
-        let core_obj_name =
-          String.concat "_" (List.map Filename.remove_extension files) ^ ".co"
-        in
+        let core_obj_name = if output_file = "" then "all.co" else output_file in
         let () = write_core_object core_file core_obj_name in
         return @@ Either.Right 0
       else
@@ -183,13 +199,20 @@ let core_obj =
   let doc = "Run frontend generating a target '.co' core object file." in
   Arg.(value & flag & info ["c"] ~doc)
 
+let output_file =
+  let doc = "Write output to file." in
+  Arg.(value & opt string "a.co" & info ["o"] ~doc)
+
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__ -I " ^ cerb_path
-                           ^ "/include/c/libc -I " ^ cerb_path ^ "/include/c/posix")
+  Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
-let incl =
+let cpp_only =
+  let doc = "Run only the preprocessor stage." in
+  Arg.(value & flag & info ["E"] ~doc)
+
+let incl_dir =
   let doc = "Add the specified directory to the search path for the\
              C preprocessor." in
   Arg.(value & opt_all dir [] & info ["I"; "include-directory"]
@@ -200,6 +223,20 @@ let macros =
              read before the source file is preprocessed." in
   Arg.(value & opt_all macro_pair [] & info ["D"; "define-macro"]
          ~docv:"NAME[=VALUE]" ~doc)
+
+let macros_undef =
+  let doc = "Adds an implicit #undef into the predefines buffer which is read \
+             before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["U"] ~doc)
+
+let incl_file =
+  let doc = "Adds  an  implicit  #include into the predefines buffer which is \
+             read before the source file is preprocessed." in
+  Arg.(value & opt_all string [] & info ["include"] ~doc)
+
+let nostdlibinc =
+  let doc = "Do not search the standard system directories for include files." in
+  Arg.(value & flag & info ["nostdlibinc"] ~doc)
 
 let exec =
   let doc = "Execute the Core program after the elaboration." in
@@ -239,7 +276,7 @@ let ppflags =
 
 let files =
   let doc = "source C or Core file" in
-  Arg.(value & pos_all string [] & info [] ~docv:"FILE" ~doc)
+  Arg.(value & pos_all file [] & info [] ~docv:"FILE" ~doc)
 
 let progress =
   let doc = "Progress mode: the return code indicate how far the source program\
@@ -318,13 +355,16 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ macros $ incl $ impl $
+                         cpp_cmd $ nostdlibinc $ macros $ macros_undef $
+                         incl_dir $ incl_file $ cpp_only $
+                         impl $
                          exec $ exec_mode $ switches $ batch $
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          fs_dump $ fs $
                          ocaml $ ocaml_corestd $
+                         output_file $ 
                          files $ args) in
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in

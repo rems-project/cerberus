@@ -45,6 +45,7 @@ cerberus-prof
 cerb.concrete
 cerb.symbolic
 cerb.twin
+libc/libc.co
 
 web.byte
 public/include

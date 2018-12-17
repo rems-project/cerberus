@@ -50,6 +50,11 @@ val core_frontend:
   filename:string ->
   ((unit, unit) Core.generic_file, Location_ocaml.t * Errors.cause) Exception.exceptM
 
+
+val rewrite_core:
+  (configuration * io_helpers) -> unit Core.file ->
+  (unit Core.file, Location_ocaml.t * Errors.cause) Exception.exceptM
+
 val core_passes:
   (configuration * io_helpers) -> filename:string -> unit Core.file ->
   (unit Core.file * unit Core.typed_file, Location_ocaml.t * Errors.cause) Exception.exceptM

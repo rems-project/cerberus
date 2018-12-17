@@ -17,6 +17,6 @@ errno_t* __builtin_errno (void);
 
 // Additional macro definitions, beginning with E and a digit or E and an
 // uppercase letter,
-#include "../posix/errno.h"
+#include "posix/errno.h"
 
 #endif

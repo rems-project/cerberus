@@ -1,7 +1,4 @@
-#ifndef	_CTYPE_H_
-#define	_CTYPE_H_
-
-// TODO: the following implementation is only for "C" locale.
+#include "ctype.h"
 
 int isblank(int c) {
   return c == ' ' || c == '\t';
@@ -67,5 +64,3 @@ int toupper(int c) {
   return c;
 }
 
-#else
-#endif

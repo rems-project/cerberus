@@ -1,9 +1,6 @@
 #ifndef	_STDIO_H_
 #define	_STDIO_H_
 
-#include "../posix/stdio.h"
-
-
 #include <stdarg.h>
 
 typedef __cerbty_size_t size_t;
@@ -108,13 +105,6 @@ int vsprintf_s(char * restrict s, rsize_t n, const char * restrict format, va_li
 int vsscanf_s(const char * restrict s, const char * restrict format, va_list arg);
 char *gets_s(char *s, rsize_t n);
 
+#include "posix/stdio.h"
 
-// TEMPORARY HACK
-// TODO: return printf result
-int putchar(int c) { return printf("%c", c); }
-int puts(const char *s) { return printf("%s", s); }
-
-int fflush(FILE *stream) { return 0; }
-
-#else
 #endif
