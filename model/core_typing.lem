@@ -1580,10 +1580,10 @@ let typecheck_program file =
         | GlobalDef bTy e ->
             collect_labels env_acc e >>= fun env_acc' ->
             typecheck_expr file.tagDefs env_acc' bTy e >>= fun te ->
-            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', Map.insert sym (GlobalDef bTy te) acc)
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef bTy te) :: acc)
         | GlobalDecl bTy ->
-            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, Map.insert sym (GlobalDecl bTy) acc)
-      end) (env, Map.empty) (Map_extra.toList file.globs) >>= fun (env, globs') ->
+            E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, (sym, GlobalDecl bTy) :: acc)
+      end) (env, []) file.globs >>= fun (env, globs') ->
     
     (* Registering the program functions *)
     let env = Map_extra.fold (fun sym decl acc ->

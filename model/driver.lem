@@ -1360,7 +1360,7 @@ let driver_globals with_concurrency file =
     match glb with
     | Core.GlobalDef bTy e -> (sym, bTy, e) :: acc
     | Core.GlobalDecl _ -> acc
-    end) [] (Map_extra.toList globs)
+    end) [] globs
   in
   ND.mapM_ (fun (glob_sym, glob_bTy, expr) ->
     let () = Debug.print_debug 6 [Debug.DB_driver] (fun () ->      (* DEBUG *)

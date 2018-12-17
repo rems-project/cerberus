@@ -2170,10 +2170,11 @@ let set_uid_fun fname = function
   | Proc loc bty args e -> Proc loc bty args (set_uid_e (string_of_symbol fname) 1 e)
 end
 
-let set_uid_globs gname = function
+let set_uid_globs (gname, glb) =
+  (gname, match glb with
   | GlobalDef bty e -> GlobalDef bty (set_uid_e (string_of_symbol gname) 1 e)
   | GlobalDecl bty -> GlobalDecl bty
-end
+  end)
 
 let set_uid file =
  <|
@@ -2181,7 +2182,7 @@ let set_uid file =
   tagDefs= file.tagDefs;
   stdlib=  file.stdlib;
   impl=    file.impl;
-  globs=   Map.mapi set_uid_globs file.globs;
+  globs=   List.map set_uid_globs file.globs;
   funs=    Map.mapi set_uid_fun file.funs;
   extern=  file.extern;
   funinfo= file.funinfo;
@@ -2432,9 +2433,15 @@ let link_main opt_m1 opt_m2 =
   | (Nothing, Nothing) -> Nothing
   end
 
+val list_remove_assoc: forall 'a 'b. 'a -> list ('a * 'b) -> list ('a * 'b)
+declare ocaml target_rep function list_remove_assoc = `List.remove_assoc`
+
 let merge f1 f2 =
   let (extern, reduntant_globs) = link_extern f2.extern f1.extern in
-  let globs = List.foldl (fun acc g -> Map.delete g acc) (f1.globs union f2.globs) reduntant_globs in
+  let globs =
+    List.foldl (fun acc g -> list_remove_assoc g acc)
+      (f1.globs ++ f2.globs) reduntant_globs
+  in
   <| main = link_main f1.main f2.main;
      tagDefs = f1.tagDefs union f2.tagDefs;
      stdlib = f1.stdlib;

@@ -178,7 +178,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
            Core.tagDefs= tagDefs;
            Core.stdlib= snd core_stdlib;
            Core.impl=   core_impl;
-           Core.globs=  Pmap.empty compare;(*globs*) (* FIXME VICTOR *)
+           Core.globs=  List.map (fun (s, bTy, e) -> (s, Core.GlobalDef (bTy, e))) globs;
            Core.funs=   funs;
            Core.extern=  Pmap.empty compare;
            Core.funinfo= Pmap.empty compare; (* TODO: need to parse funinfo! *)
@@ -188,9 +188,20 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 
-let rewrite_core (conf, io) core_file =
-  return (Core_rewrite.rewrite_file core_file) >|>
-  whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
+let pp_core (conf, io) ~filename core_file =
+  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
+  whenM (List.mem Core conf.astprints) begin
+    fun () ->
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
+  end >>= fun () ->
+  whenM (List.mem Core conf.pprints) begin
+    fun () ->
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
+  end
+
+let core_rewrite (conf, io) core_file =
+  return (Core_rewrite.rewrite_file core_file)
+  >|> whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
     fun () ->
       io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
       io.run_pp None (Ast_core.ast_file core_file)   >>= fun () ->
@@ -203,8 +214,7 @@ let rewrite_core (conf, io) core_file =
       io.print_endline "END"
   end
 
-let core_passes (conf, io) ~filename core_file =
-  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
+let typed_core_passes (conf, io) core_file =
   whenM conf.typecheck_core begin
     fun () ->
       Core_typing.typecheck_program core_file >>= fun _ ->
@@ -212,7 +222,7 @@ let core_passes (conf, io) ~filename core_file =
   end >>= fun () ->
   (* TODO: for now assuming a single order comes from indet expressions *)
   Core_indet.hackish_order <$> begin
-    if conf.rewrite_core then rewrite_core (conf, io) core_file
+    if conf.rewrite_core then core_rewrite (conf, io) core_file
     else return core_file
   end >>= fun core_file' ->
   (* NOTE: unlike the earlier call, this is typechecking after the rewriting and
@@ -223,15 +233,27 @@ let core_passes (conf, io) ~filename core_file =
       Core_sequentialise.sequentialise_file typed_core_file'
     else
       typed_core_file' in
+  return (core_file', typed_core_file'')
+
+let core_passes (conf, io) ~filename core_file =
+  let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
+  begin
+    if conf.sequentialise_core || conf.typecheck_core then
+      fst <$> typed_core_passes (conf, io) core_file
+    else if conf.rewrite_core then
+      core_rewrite (conf, io) core_file
+    else
+      return core_file
+  end >>= fun core_file ->
   whenM (List.mem Core conf.astprints) begin
     fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file typed_core_file'')
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
   end >>= fun () ->
   whenM (List.mem Core conf.pprints) begin
     fun () ->
-      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file typed_core_file'')
-  end >>= fun () -> return (core_file', typed_core_file'')
-
+      io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
+  end >>= fun () ->
+  return @@ Core_indet.hackish_order core_file
 
 let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   let module D = Exhaustive_driver in
@@ -277,7 +299,7 @@ let ocaml_backend (conf, io) ~filename ~ocaml_corestd core_file =
   (fun (_, typed_core) ->
      if conf.sequentialise_core then typed_core
      else Core_sequentialise.sequentialise_file typed_core)
-  <$> core_passes (conf, io) filename core_file
+  <$> typed_core_passes (conf, io) core_file
   >>= Codegen_ocaml.gen filename ocaml_corestd
 
 

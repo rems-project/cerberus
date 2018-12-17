@@ -749,18 +749,18 @@ let pp_funinfo finfos =
         ^^ P.hardline) finfos P.empty
 
 let pp_globs globs =
-  Pmap.fold (fun sym decl acc ->
+  List.fold_left (fun acc (sym, decl) ->
       match decl with
       | GlobalDef (bTy, e) ->
         acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
               P.colon ^^ P.equals ^^
               P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
       | GlobalDecl _ ->
-        acc) globs P.empty
+        acc) P.empty globs
 
 let pp_file file =
   let show_aggregate = not @@ Pmap.is_empty file.tagDefs in
-  let show_globs = not @@ Pmap.is_empty file.globs in
+  let show_globs = file.globs != [] in
   let guard b doc = if b then doc else P.empty in
   
   begin
