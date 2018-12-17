@@ -106,7 +106,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
             <| C.main= Nothing
              ; C.stdlib= stdlib_fun_map
              ; C.impl= impl
-             ; C.globs= Map.empty
+             ; C.globs= []
              ; C.funs= Map.empty
              ; C.tagDefs= Map.empty
              ; C.extern= Map.empty

@@ -512,12 +512,13 @@ let convert_impl_decl = function
       IFun bTy sym_bTys (convert_pexpr pe)
 end
 
-let convert_globs = function
+let convert_globs (name, glb) =
+  (name, match glb with
   | GlobalDef bTy e ->
       GlobalDef bTy (convert_expr e)
   | GlobalDecl bTy ->
       GlobalDecl bTy
-end
+  end)
 
 val convert_file: forall 'bty 'a. generic_file 'bty 'a -> file core_run_annotation
 let convert_file file =
@@ -537,7 +538,7 @@ let convert_file file =
   tagDefs= file.tagDefs;
   stdlib=  Map.map convert_fun_map_decl file.stdlib;
   impl=    Map.map convert_impl_decl file.impl;
-  globs=   Map.map convert_globs file.globs;
+  globs=   List.map convert_globs file.globs;
   funs=    Map.map convert_fun_map_decl file.funs;
   extern=  file.extern;
   funinfo= file.funinfo;

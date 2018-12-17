@@ -42,24 +42,20 @@ let io, get_progress =
       end;
   }, fun () -> !progress
 
-let frontend conf filename core_std =
+let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" then
     return @@ read_core_object filename
+  else if Filename.check_suffix filename ".c" then
+    c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
+    core_passes (conf, io) ~filename core_file
+  else if Filename.check_suffix filename ".core" then
+    core_frontend (conf, io) core_std ~filename
+    >>= core_passes (conf, io) ~filename
   else
-    begin
-      if Filename.check_suffix filename ".c" then
-        c_frontend conf core_std filename >>= fun (_, _, core_file) ->
-        return core_file
-      else if Filename.check_suffix filename ".core" then
-        core_frontend conf core_std ~filename
-      else
-        Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
-                          "The file extention is not supported")
-    end >>= Pipeline.rewrite_core conf
-    >>= core_passes conf ~filename >>= fun (core_file, _) ->
-    return core_file
+    Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
+                      "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdlibinc macros_def macros_undef incl_dirs incl_files =
   let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "libc/include/posix"] in
@@ -104,6 +100,19 @@ let cerberus debug_level progress core_obj
     io.pass_message "Implementation file loaded." >>
     return (core_stdlib, core_impl)
   in
+  let main core_std =
+    let libc_core () =
+      frontend (conf, io) (cerb_path ^ "/libc/libc.co") core_std
+      >>= fun libc -> return [libc]
+    in
+    begin
+      if nostdlibinc then return []
+      else libc_core ()
+    end >>= fun acc ->
+    Exception.foldlM (fun core_files file ->
+        frontend (conf, io) file core_std >>= fun core_file ->
+        return (core_file::core_files)) acc files
+  in
   let epilogue n =
     if batch = `Batch then
       Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
@@ -129,18 +138,7 @@ let cerberus debug_level progress core_obj
       else
         Pp_errors.fatal "no input file"
     | files ->
-      prelude >>= fun core_std ->
-      begin
-        if nostdlibinc then
-          return []
-        else
-          frontend (conf, io) (cerb_path ^ "/libc/libc.co") core_std
-          >>= fun core_libc -> return [core_libc]
-      end >>= fun acc ->
-      Exception.foldlM (fun core_files file ->
-          frontend (conf, io) file core_std >>= fun core_file ->
-          return (core_file::core_files)) acc files
-      >>= fun core_files ->
+      prelude >>= main >>= fun core_files ->
       let core_file = Core_aux.link core_files in
       Tags.set_tagDefs core_file.tagDefs;
       if ocaml then

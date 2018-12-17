@@ -45,9 +45,11 @@ let runf opt = function
   | Proc (loc, bty, param, e) -> Proc (loc, bty, param, opt e)
   | f -> f
 
-let run_global opt = function
+let run_global opt (s, decl) =
+  (s, match decl with
   | GlobalDef (bty, e) -> GlobalDef (bty, opt e)
   | GlobalDecl bty -> GlobalDecl bty
+  )
 
 let run opt core =
   {
@@ -55,7 +57,7 @@ let run opt core =
     tagDefs = core.tagDefs;
     stdlib = Pmap.map (runf opt) core.stdlib;
     impl = core.impl;
-    globs = Pmap.map (run_global opt) core.globs;
+    globs = List.map (run_global opt) core.globs;
     funs = Pmap.map (runf opt) core.funs;
     extern = core.extern;
     funinfo = core.funinfo;

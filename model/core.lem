@@ -348,7 +348,7 @@ type generic_file 'bty 'a = <|
   tagDefs : core_tag_definitions;
   stdlib  : generic_fun_map 'bty 'a;
   impl    : generic_impl 'bty;
-  globs   : generic_globs_map 'a 'bty; (* list (Symbol.sym * core_base_type * generic_expr 'a 'bty Symbol.sym);*)
+  globs   : list (Symbol.sym * generic_globs 'a 'bty);
   funs    : generic_fun_map 'bty 'a;
   extern  : extern_map;
   funinfo : map Symbol.sym (ctype * list ctype * bool * bool);

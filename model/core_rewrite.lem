@@ -1448,12 +1448,14 @@ let rewrite_fun_map fun_map =
 
 
 let rewrite_glob_map globs_map =
-  Map.map (function
-    | GlobalDef ty e ->
-        GlobalDef ty (rewrite_expr e)
-    | GlobalDecl ty ->
-        GlobalDecl ty
-  end) globs_map
+  List.map (fun (name, glb) ->
+    (name, match glb with
+      | GlobalDef ty e ->
+          GlobalDef ty (rewrite_expr e)
+      | GlobalDecl ty ->
+          GlobalDecl ty
+    end)
+  ) globs_map
 
 
 (* TODO *)
