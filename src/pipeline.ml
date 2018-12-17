@@ -203,7 +203,6 @@ let rewrite_core (conf, io) core_file =
       io.print_endline "END"
   end
 
-
 let core_passes (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   whenM conf.typecheck_core begin

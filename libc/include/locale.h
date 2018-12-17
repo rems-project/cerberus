@@ -66,9 +66,5 @@ const struct lconv c_lconv = {
 //TODO:
 char *setlocale (int category, const char *locale);
 
-struct lconv *localeconv(void) {
-  return c_lconv;
-}
-
 #else
 #endif

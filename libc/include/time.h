@@ -49,6 +49,6 @@ struct tm *localtime(const time_t *timer);
 
 time_t time(time_t *timer);
 
-//#include "../posix/time.h"
+//#include "posix/time.h"
 
 #endif

@@ -455,13 +455,31 @@ export default class View {
         return acc;
       }, '')
     }
+    const forceOrder = () => {
+      let init = true
+      const order = _.reduce(mem.map, (ns, alloc) => {
+        if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
+          if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
+            return ns
+        }
+        if (_.startsWith(alloc.prefix.name, '__'))
+          return ns
+        if (init) {
+          init = false
+          return `n${alloc.id}`
+        }
+        return `${ns} -> n${alloc.id}`
+      }, '')
+      if (_.includes(order, '->'))
+        return order + '[style=invis,constraint=false];'
+      return ''
+    }
     const g = 'digraph Memory { node [shape=none, fontsize=12]; rankdir=LR;'
-    const ns = this.state.options.show_mem_order ?
-               _.reduceRight(mem.map, (ns, alloc) => ns + createNode(alloc), '')
-             : _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
-    const ps: Pointer[] = _.reduce(mem.map, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
+    const ns =  _.reduce(mem.map, (ns, alloc) => ns + createNode(alloc), '')
+    const order = this.state.options.show_mem_order ? forceOrder() : ''
+    const ps = _.reduce(mem.map, (acc: Pointer[], alloc) => _.concat(acc, getPointersInAlloc(alloc)), [])
     const es = createEdges(ps, mem)
-    this.state.interactive.mem = g + ns + es + '}' // Save in case another memory tab is open 
+    this.state.interactive.mem = g + ns + order + es + '}' // Save in case another memory tab is open 
     this.getTab('Memory').setActive()
     this.emit('updateMemory')
   }
