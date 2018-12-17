@@ -39,6 +39,7 @@ export namespace Option {
     'colour_all',                 // Colorise every expression
     'colour_cursor',              // Colorise expression on cursor
     'show_mem_order',             // Show memory graph in address order
+    'align_allocs',               // Align allocations in a single column
   ])
   export type t = keyof typeof opts
   export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1

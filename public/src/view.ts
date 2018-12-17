@@ -195,7 +195,8 @@ export default class View {
         hide_tau: true,
         colour_all: false,
         colour_cursor: true,
-        show_mem_order: false
+        show_mem_order: false,
+        align_allocs: false,
       },
     }
   }
@@ -435,21 +436,22 @@ export default class View {
       return _.reduce(ps, (acc, p) => {
         // points in bounds to an allocation
         const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        const single_column = this.state.options.align_allocs ? ',constraint=false' : ''
         if (target) {
           if (invisible(target)) return acc
           const offset = p.addr - target.base
-          acc += `${p.from}v->n${target.id}:${offset}[style="${style(p)}",color="${color(p, target)}"];`
+          acc += `${p.from}v->n${target.id}:${offset}[style="${style(p)}",color="${color(p, target)}"${single_column}];`
           return acc
         } 
         // points to a past one of an allocation
         const pastone = _.find(mem.map, alloc => p.addr === alloc.base + alloc.size)
         if (pastone) {
           if (invisible(pastone)) return acc
-          acc += `${p.from}v->n${pastone.id}:${pastone.size}[style="${style(p)}",color="red"];`
+          acc += `${p.from}v->n${pastone.id}:${pastone.size}[style="${style(p)}",color="red"${single_column}];`
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"];`
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column};`
         return acc;
       }, '')
     }
