@@ -6,6 +6,8 @@ export LEMPATH=$DEPPATH/lem
 export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
 export PATH=$LEMPATH:$CERB_PATH:$BINPATH:$PATH
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
 export LEMLIB=$LEMPATH/library
 
 if ! hash opam 2> /dev/null; then
