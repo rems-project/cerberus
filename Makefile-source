@@ -34,7 +34,8 @@ SOURCE_core_ctype=\
 SOURCE_core=\
   core.lem \
   errors.lem \
-  core_aux.lem
+  core_aux.lem \
+  core_linking.lem
 
 SOURCE_core_typing=\
   core_typing.lem \

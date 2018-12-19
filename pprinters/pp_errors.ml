@@ -359,6 +359,13 @@ let string_of_core_typing_cause = function
   | CoreTyping_TODO str ->
       "CoreTyping_TODO(" ^ str ^ ")"
 
+let string_of_core_linking_cause = function
+  | DuplicateExternalName (Cabs.CabsIdentifier (_, name)) ->
+    "duplicate external symbol: " ^ name
+  | DuplicateMain ->
+    "duplicate main function"
+
+
 let string_of_core_run_cause = function
   | Illformed_program str ->
       "ill-formed program: `" ^ str ^ "'"
@@ -400,6 +407,8 @@ let short_message = function
       string_of_ail_typing_error terr
   | CORE_TYPING tcause ->
       string_of_core_typing_cause tcause
+  | CORE_LINKING lcause ->
+      string_of_core_linking_cause lcause
   | CORE_RUN cause ->
       string_of_core_run_cause cause
   | UNSUPPORTED str ->

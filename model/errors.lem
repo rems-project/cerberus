@@ -37,6 +37,10 @@ type core_typing_cause =
   | InvalidTag of Symbol.sym
   | InvalidMember of Symbol.sym * Cabs.cabs_identifier
 
+type core_linking_cause =
+  | DuplicateExternalName of Cabs.cabs_identifier
+  | DuplicateMain
+
 type core_run_cause =
   | Illformed_program of string (* typing or name-scope error *)
   | Found_empty_stack of string (* TODO debug *)
@@ -69,6 +73,7 @@ type cause =
   | AIL_TYPING of TypingError.typing_error
   | CORE_PARSER of core_parser_cause
   | CORE_TYPING of core_typing_cause
+  | CORE_LINKING of core_linking_cause
   | CORE_RUN of core_run_cause
   | DRIVER of driver_cause
   | UNSUPPORTED of string
