@@ -33,6 +33,8 @@ val load_core_impl:
   (string, Symbol.sym) Pmap.map * unit Core.fun_map -> string ->
   (Core.impl, Location_ocaml.t * Errors.cause) Exception.exceptM
 
+val cpp: (configuration * io_helpers) -> filename:string -> (string, Location_ocaml.t * Errors.cause) Exception.exceptM
+
 val c_frontend:
   (configuration * io_helpers) ->
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
@@ -56,7 +58,7 @@ val core_passes:
 
 val interp_backend:
   io_helpers -> 'a Core.file ->
-  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> fs:string -> driver_conf:Exhaustive_driver.driver_conf ->
+  args:(string list) -> batch:[`Batch | `CharonBatch | `NotBatch] -> fs:string option -> driver_conf:Exhaustive_driver.driver_conf ->
 (* TODO: we would be using poly variants if it weren't for Lem... *)
 (*  [`Interactive | `Exhaustive | `Random] -> *)
   ((string list, int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
