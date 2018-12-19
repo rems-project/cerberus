@@ -39,7 +39,7 @@ CMM_EXEC_LEM =\
 
 include Makefile-source
 
-all: lem ocaml_native
+all: lem ocaml_native libc
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
@@ -140,6 +140,8 @@ ocaml_native:
 	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
+
+ocaml: ocaml_native libc
 
 ocaml_profiling:
 	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \

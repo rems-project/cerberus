@@ -2,12 +2,7 @@
 #define _SYS_STAT_H_
 
 #include <sys/types.h>
-
-struct timespec
-{
-  time_t  tv_sec;
-  long    tv_nsec;
-};
+#include <time.h>
 
 // http://pubs.opengroup.org/onlinepubs/9699919799/
 struct stat {
