@@ -138,18 +138,17 @@ let cerberus debug_level progress core_obj
       else
         Pp_errors.fatal "no input file"
     | files ->
-      prelude >>= main >>= fun core_files ->
-      let core_file = Core_aux.link core_files in
-      Tags.set_tagDefs core_file.tagDefs;
+      prelude >>= main >>= Core_linking.link >>= fun core ->
+      Tags.set_tagDefs core.tagDefs;
       if ocaml then
         error "TODO: ocaml_backend"
       else if exec then
         let open Exhaustive_driver in
         let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
-        interp_backend io core_file ~args ~batch ~fs ~driver_conf
+        interp_backend io core ~args ~batch ~fs ~driver_conf
       else if core_obj then
         let core_obj_name = if output_file = "" then "all.co" else output_file in
-        let () = write_core_object core_file core_obj_name in
+        let () = write_core_object core core_obj_name in
         return @@ Either.Right 0
       else
         return @@ Either.Right 0

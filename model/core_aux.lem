@@ -2396,6 +2396,7 @@ end
 
 (* Linkage *)
 
+(*
 (* NOTE: the function returns a list of redundant tentative global definitions *)
 let link_extern ext acc =
   Map_extra.fold (fun k (decls, lk_def) (acc_ext, acc_tent) ->
@@ -2457,3 +2458,4 @@ let link = function
   | [] -> error "linking: no core files"
   | f::fs -> List.foldl merge f fs
 end
+*)

@@ -5,7 +5,7 @@ export DEPPATH=$CERB_PATH/dependencies
 export LEMPATH=$DEPPATH/lem
 export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
-export PATH=$LEMPATH:$BINPATH:$PATH
+export PATH=$LEMPATH:$CERB_PATH:$BINPATH:$PATH
 export LEMLIB=$LEMPATH/library
 
 if ! hash opam 2> /dev/null; then

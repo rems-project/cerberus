@@ -1,0 +1,85 @@
+open import Pervasives Utils Show Map Map_extra
+open import Loc Cabs Symbol Core Exception Errors
+
+let inline (>>=) = except_bind
+val link_fail: forall 'a. Loc.t -> core_linking_cause -> exceptM 'a (Loc.t * cause)
+let link_fail loc cause =
+  Exception (loc, Errors.CORE_LINKING cause)
+
+(* NOTE: the function returns a list of redundant tentative global definitions *)
+val link_extern: forall 'a. SetType 'a =>
+                 map cabs_identifier (list 'a * linking_kind) ->
+                 map cabs_identifier (list 'a * linking_kind) ->
+                 exceptM ((map cabs_identifier (list 'a * linking_kind)) * list sym) (Loc.t * cause)
+let link_extern ext acc =
+  Map_extra.fold (fun k (ds, lk_def) m_acc ->
+    let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
+    m_acc >>= fun (acc_ext, acc_tent) ->
+    match Map.lookup k acc with
+    | Nothing ->
+      return (Map.insert k (ds, lk_def) acc_ext, acc_tent)
+    | Just (acc_ds, LK_none) ->
+      return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, acc_tent)
+    | Just (acc_ds, LK_tentative tent) ->
+      match lk_def with
+      | LK_normal _ ->
+        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, tent :: acc_tent)
+      | LK_tentative _ ->
+        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, tent :: acc_tent)
+      | LK_none ->
+        return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
+      end
+    | Just (acc_ds, LK_normal def) ->
+      match lk_def with
+      | LK_normal _ ->
+        link_fail (locOf k) (DuplicateExternalName k)
+      | LK_tentative tent ->
+        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, tent :: acc_tent)
+      | LK_none ->
+        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, acc_tent)
+      end
+  end) ext (return (acc, []))
+
+
+val link_main: maybe sym -> maybe sym -> exceptM (maybe sym) (Loc.t * cause)
+let link_main opt_m1 opt_m2 =
+  match (opt_m1, opt_m2) with
+  | (Just _, Just _)   -> link_fail Loc.unknown DuplicateMain
+  | (Just m1, Nothing) -> return $ Just m1
+  | (Nothing, Just m2) -> return $ Just m2
+  | (Nothing, Nothing) -> return $ Nothing
+  end
+
+val list_remove_assoc: forall 'a 'b. 'a -> list ('a * 'b) -> list ('a * 'b)
+declare ocaml target_rep function list_remove_assoc = `List.remove_assoc`
+
+val link_aux: forall 'a 'b. generic_file 'a 'b ->
+                           generic_file 'a 'b ->
+                           exceptM (generic_file 'a 'b) (Loc.t * cause)
+let link_aux f1 f2 =
+  link_extern f2.extern f1.extern >>= fun (extern, reduntant_globs) ->
+  link_main f1.main f2.main >>= fun main ->
+  let globs =
+    List.foldl (fun acc g -> list_remove_assoc g acc)
+      (f1.globs ++ f2.globs) reduntant_globs
+  in return
+    <| main=    main;
+       tagDefs= f1.tagDefs union f2.tagDefs;
+       stdlib=  f1.stdlib;
+       impl=    f1.impl;
+       globs=   globs;
+       funs=    f1.funs union f2.funs;
+       extern=  extern;
+       funinfo= f1.funinfo union f2.funinfo;
+    |>
+
+val link: forall 'a 'b. list (generic_file 'a 'b) ->
+                        exceptM (generic_file 'a 'b) (Loc.t * cause)
+let link = function
+  | [] ->
+    error "linking: no core files"
+  | f::fs ->
+    List.foldl (fun m_acc f -> m_acc >>= link_aux f) (return f) fs
+end
+
+
