@@ -45,7 +45,7 @@ let io, get_progress =
 let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
-  if Filename.check_suffix filename ".co" then
+  if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object filename
   else if Filename.check_suffix filename ".c" then
     c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
@@ -57,9 +57,9 @@ let frontend (conf, io) filename core_std =
     Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
-let create_cpp_cmd cpp_cmd nostdlibinc macros_def macros_undef incl_dirs incl_files =
+let create_cpp_cmd cpp_cmd nolibc macros_def macros_undef incl_dirs incl_files =
   let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
-  let incl_dirs = if nostdlibinc then incl_dirs else libc_dirs @ incl_dirs in
+  let incl_dirs = if nolibc then incl_dirs else libc_dirs @ incl_dirs in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -71,25 +71,56 @@ let create_cpp_cmd cpp_cmd nostdlibinc macros_def macros_undef incl_dirs incl_fi
     List.map (fun str -> "-include " ^ str) incl_files
   end
 
+let core_libraries incl lib_paths libs =
+  let lib_paths = if incl then (cerb_path ^ "/libc") :: lib_paths else lib_paths in
+  let libs = if incl then "c" :: libs else libs in
+  List.map (fun lib ->
+      match List.fold_left (fun acc path ->
+          match acc with
+          | Some _ -> acc
+          | None ->
+            let file = path ^ "/lib" ^ lib ^ ".co" in
+            if Sys.file_exists file then Some file else None
+        ) None lib_paths with
+      | Some f -> f
+      | None -> failwith @@ "file lib" ^ lib ^ ".co not found"
+    ) libs
+
+let print_file f =
+  let ic = open_in f in
+  let rec loop () =
+    try print_endline @@ input_line ic; loop ()
+    with End_of_file -> ()
+  in loop ()
+
+let create_executable out =
+  let out = if Filename.is_relative out then Filename.concat (Unix.getcwd ()) out else out in
+  let oc = open_out out in
+  output_string oc "#!/bin/sh\n";
+  output_string oc @@ "cerberus --nolibc --exec " ^ out ^ ".co\n";
+  close_out oc;
+  Unix.chmod out 0o755
+
 let cerberus debug_level progress core_obj
-             cpp_cmd nostdlibinc macros macros_undef
+             cpp_cmd nolibc macros macros_undef
              incl_dirs incl_files cpp_only
+             link_lib_path link_core_obj
              impl_name
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              fs_dump fs
              ocaml ocaml_corestd
-             output_file
+             output_name
              files args =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
-    create_cpp_cmd cpp_cmd nostdlibinc macros macros_undef incl_dirs incl_files
+    create_cpp_cmd cpp_cmd nolibc macros macros_undef incl_dirs incl_files
   in
   (* set global configuration *)
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
-               rewrite_core; sequentialise_core; cpp_cmd; } in
+               rewrite_core; sequentialise_core; cpp_cmd } in
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
@@ -101,17 +132,9 @@ let cerberus debug_level progress core_obj
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    let libc_core () =
-      frontend (conf, io) (cerb_path ^ "/libc/libc.co") core_std
-      >>= fun libc -> return [libc]
-    in
-    begin
-      if nostdlibinc || core_obj then return []
-      else libc_core ()
-    end >>= fun acc ->
     Exception.foldlM (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
-        return (core_file::core_files)) acc files
+        return (core_file::core_files)) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ files)
   in
   let epilogue n =
     if batch = `Batch then
@@ -121,6 +144,7 @@ let cerberus debug_level progress core_obj
     if progress then get_progress ()
     else n
   in
+  let success = Either.Right 0 in
   let runM = function
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err);
@@ -137,21 +161,53 @@ let cerberus debug_level progress core_obj
         error "TODO: ocaml_corestd"
       else
         Pp_errors.fatal "no input file"
+    | [file] when core_obj ->
+      prelude >>= frontend (conf, io) file >>= fun core_file ->
+      begin match output_name with
+        | Some output_file ->
+          write_core_object core_file output_file
+        | None ->
+          let output_file = Filename.remove_extension file ^ ".co" in
+          write_core_object core_file output_file
+      end;
+      return success
     | files ->
-      prelude >>= main >>= Core_linking.link >>= fun core ->
-      Tags.set_tagDefs core.tagDefs;
       if ocaml then
         error "TODO: ocaml_backend"
-      else if exec then
-        let open Exhaustive_driver in
-        let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
-        interp_backend io core ~args ~batch ~fs ~driver_conf
+      else if cpp_only then
+        Exception.foldlM (fun () file ->
+            cpp (conf, io) file >>= fun processed_file ->
+            print_file processed_file;
+            return ()
+          ) () files >>= fun () ->
+        return success
       else if core_obj then
-        let core_obj_name = if output_file = "" then "all.co" else output_file in
-        let () = write_core_object core core_obj_name in
-        return @@ Either.Right 0
+        prelude >>= fun core_std ->
+        Exception.foldlM (fun () file ->
+          frontend (conf, io) file core_std >>= fun core_file ->
+          let output_file = Filename.remove_extension file ^ ".co" in
+          write_core_object core_file output_file;
+          return ()
+          ) () files >>= fun () ->
+        return success
       else
-        return @@ Either.Right 0
+        prelude >>= main >>= Core_linking.link >>= fun core_file ->
+        if exec then
+          let open Exhaustive_driver in
+          let () = Tags.set_tagDefs core_file.tagDefs in
+          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
+          interp_backend io core_file ~args ~batch ~fs ~driver_conf
+        else
+          match output_name with
+          | None ->
+            return success
+          | Some out -> begin
+              if Filename.check_suffix out ".co" || Filename.check_suffix out ".o" then
+                write_core_object core_file out
+              else
+                (write_core_object core_file (out ^ ".co"); create_executable out);
+              return success
+            end
 
 (* CLI stuff *)
 open Cmdliner
@@ -196,9 +252,18 @@ let core_obj =
   let doc = "Run frontend generating a target '.co' core object file." in
   Arg.(value & flag & info ["c"] ~doc)
 
+let link_lib_path =
+  let doc = "Adds a new library search path." in
+  Arg.(value & opt_all string [] & info ["L"] ~docv:"X" ~doc)
+
+let link_core_obj =
+  let doc = "This option tells the core linker to search for lib$(docv).co \
+             in the library search path." in
+  Arg.(value & opt_all string [] & info ["l"] ~docv:"X" ~doc)
+
 let output_file =
   let doc = "Write output to file." in
-  Arg.(value & opt string "a.co" & info ["o"] ~doc)
+  Arg.(value & opt (some string) None & info ["o"] ~doc)
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
@@ -231,9 +296,9 @@ let incl_file =
              read before the source file is preprocessed." in
   Arg.(value & opt_all string [] & info ["include"] ~doc)
 
-let nostdlibinc =
+let nolibc =
   let doc = "Do not search the standard system directories for include files." in
-  Arg.(value & flag & info ["nostdlibinc"] ~doc)
+  Arg.(value & flag & info ["nolibc"] ~doc)
 
 let exec =
   let doc = "Execute the Core program after the elaboration." in
@@ -258,11 +323,10 @@ let astprints =
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
-
 let fs =
   let doc = "Initialise the internal file system with the contents of the\
              directory DIR" in
-  Arg.(value & opt string "" & info ["fs"] ~docv:"DIR" ~doc)
+  Arg.(value & opt (some string) None & info ["fs"] ~docv:"DIR" ~doc)
 
 let ppflags =
   let open Pipeline in
@@ -352,8 +416,9 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nostdlibinc $ macros $ macros_undef $
+                         cpp_cmd $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
+                         link_lib_path $ link_core_obj $
                          impl $
                          exec $ exec_mode $ switches $ batch $
                          experimental_unseq $ concurrency $
@@ -361,7 +426,7 @@ let () =
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          fs_dump $ fs $
                          ocaml $ ocaml_corestd $
-                         output_file $ 
+                         output_file $
                          files $ args) in
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in

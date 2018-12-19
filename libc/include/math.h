@@ -126,7 +126,6 @@ float hypotf(float x, float y);
 long double hypotl(long double x, long double y);
 */
 double pow(double x, double y);
-/*
 float powf(float x, float y);
 long double powl(long double x, long double y);
 double sqrt(double x);
@@ -147,9 +146,7 @@ long double tgammal(long double x);
 double ceil(double x);
 float ceilf(float x);
 long double ceill(long double x);
-*/
 double floor(double x);
-/*
 float floorf(float x);
 long double floorl(long double x);
 double nearbyint(double x);
@@ -209,6 +206,7 @@ long double fminl(long double x, long double y);
 double fma(double x, double y, double z);
 float fmaf(float x, float y, float z);
 long double fmal(long double x, long double y, long double z);
+/*
 int isgreater(real-floating x, real-floating y);
 int isgreaterequal(real-floating x, real-floating y);
 int isless(real-floating x, real-floating y);
@@ -216,6 +214,5 @@ int islessequal(real-floating x, real-floating y);
 int islessgreater(real-floating x, real-floating y);
 int isunordered(real-floating x, real-floating y);
 */
-
 #else
 #endif

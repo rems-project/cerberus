@@ -97,6 +97,13 @@ let read_entire_file filename =
   close_in ic;
   Bytes.to_string bs
 
+let cpp (conf, io) ~filename =
+  let processed_filename = Filename.(temp_file (basename filename) "") in
+  io.print_debug 5 (fun () -> "C prepocessor outputed in: `" ^ processed_filename ^ "`") >>= fun () ->
+  if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename ^ " 2> cpp_error") <> 0 then
+    failwith @@ read_entire_file "cpp_error";
+  return processed_filename
+
 let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
@@ -150,11 +157,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  let processed_filename = Filename.(temp_file (basename filename) "") in
-  io.print_debug 5 (fun () -> "C prepocessor outputed in: `" ^ processed_filename ^ "`") >>= fun () ->
-  if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename ^ " 2> cpp_error") <> 0 then
-    failwith @@ read_entire_file "cpp_error";
-  (* -- *)
+  cpp (conf, io) ~filename >>= fun processed_filename ->
   parse processed_filename  >>= fun cabs_tunit  ->
   desugar cabs_tunit        >>= fun ail_prog    ->
   ail_typechecking ail_prog >>= fun ailtau_prog ->
@@ -261,7 +264,10 @@ let core_passes (conf, io) ~filename core_file =
 
 let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   let module D = Exhaustive_driver in
-  let fs_state = if fs <> "" then Fs_ocaml.initialise fs else Sibylfs.fs_initial_state in
+  let fs_state = match fs with
+    | None -> Sibylfs.fs_initial_state
+    | Some fs -> Fs_ocaml.initialise fs
+  in
   (* TODO: temporary hack for the command name *)
   match batch with
   | (`Batch | `CharonBatch) as mode ->

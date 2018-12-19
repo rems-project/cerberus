@@ -46,6 +46,7 @@ cerb.concrete
 cerb.symbolic
 cerb.twin
 libc/libc.co
+libc/libm.co
 
 web.byte
 public/include
