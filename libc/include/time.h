@@ -43,7 +43,7 @@ struct tm {
 clock_t clock(void);
 
 // 7.27.2.2
-double difftime(time_t time1, time_t time0) { return time1 - time0; }
+double difftime(time_t time1, time_t time0);
 
 struct tm *localtime(const time_t *timer);
 

@@ -235,16 +235,8 @@ let typed_core_passes (conf, io) core_file =
       typed_core_file' in
   return (core_file', typed_core_file'')
 
-let core_passes (conf, io) ~filename core_file =
+let print_core (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
-  begin
-    if conf.sequentialise_core || conf.typecheck_core then
-      fst <$> typed_core_passes (conf, io) core_file
-    else if conf.rewrite_core then
-      core_rewrite (conf, io) core_file
-    else
-      return core_file
-  end >>= fun core_file ->
   whenM (List.mem Core conf.astprints) begin
     fun () ->
       io.run_pp (wrap_fout (Some (filename, "core"))) (Ast_core.ast_file core_file)
@@ -253,7 +245,19 @@ let core_passes (conf, io) ~filename core_file =
     fun () ->
       io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
   end >>= fun () ->
-  return @@ Core_indet.hackish_order core_file
+  return core_file
+
+let core_passes (conf, io) ~filename core_file =
+  Core_indet.hackish_order <$> begin
+    if conf.sequentialise_core || conf.typecheck_core then
+      typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
+      print_core (conf, io) ~filename typed_core_file >>= fun _ ->
+      return core_file
+    else if conf.rewrite_core then
+      core_rewrite (conf, io) core_file >>= print_core (conf, io) ~filename
+    else
+      print_core (conf, io) ~filename core_file
+  end
 
 let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
   let module D = Exhaustive_driver in

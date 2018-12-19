@@ -58,7 +58,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdlibinc macros_def macros_undef incl_dirs incl_files =
-  let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "libc/include/posix"] in
+  let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
   let incl_dirs = if nostdlibinc then incl_dirs else libc_dirs @ incl_dirs in
   String.concat " " begin
     cpp_cmd ::
@@ -106,7 +106,7 @@ let cerberus debug_level progress core_obj
       >>= fun libc -> return [libc]
     in
     begin
-      if nostdlibinc then return []
+      if nostdlibinc || core_obj then return []
       else libc_core ()
     end >>= fun acc ->
     Exception.foldlM (fun core_files file ->
