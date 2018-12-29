@@ -1,0 +1,80 @@
+<html>
+  <head>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {
+        'packages':['corechart', 'geochart'],
+        // Note: you will need to get a mapsApiKey for your project.
+        // See: https://developers.google.com/chart/interactive/docs/basic_load_libs#load-settings
+        'mapsApiKey': 'AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY'
+      });
+
+      function drawVisualization() {
+        var data = google.visualization.arrayToDataTable([
+          ['', 'Requests'],
+['22/11/2018', 11],
+['23/11/2018', 42],
+['24/11/2018', 27],
+['25/11/2018', 31],
+['26/11/2018', 35],
+['27/11/2018', 73],
+['28/11/2018', 36],
+['29/11/2018', 33],
+['30/11/2018', 36],
+['1/12/2018', 23],
+['2/12/2018', 27],
+['3/12/2018', 37],
+['4/12/2018', 32],
+['5/12/2018', 34],
+['6/12/2018', 31],
+['7/12/2018', 71],
+['8/12/2018', 76],
+['9/12/2018', 63],
+['10/12/2018', 41],
+['11/12/2018', 92],
+['12/12/2018', 82],
+['13/12/2018', 73],
+['14/12/2018', 71],
+['15/12/2018', 84],
+['16/12/2018', 96],
+['17/12/2018', 54],
+['18/12/2018', 37],
+['19/12/2018', 33],
+['20/12/2018', 29],
+['21/12/2018', 42],
+['22/12/2018', 29],
+['23/12/2018', 72],
+['24/12/2018', 82],
+['25/12/2018', 50],
+['26/12/2018', 36],
+['27/12/2018', 67],
+['28/12/2018', 39],
+['29/12/2018', 652],
+        ]);
+        var options = {
+          //title : 'Requests in Cerberus per day.',
+          vAxis: {title: 'Date'},
+          hAxis: {title: 'Requests'},
+          seriesType: 'bars',
+          series: {1: {type: 'line'}}
+        };
+
+        var chart = new google.visualization.ComboChart(
+          document.getElementById('chart_div'));
+        chart.draw(data, options);
+      }
+    google.charts.setOnLoadCallback(drawVisualization);
+    </script>
+  </head>
+  <body style="margin: auto; width: 900px;">
+    <h2>Cerberus server stats</h2>
+    <h3>Summary</h3>
+    <ul>
+      <li>from 22/11/2018 to 29/12/2018</li>
+      <li>2479 requests for index.html</li>
+      <li>1509 different IPs</li>
+    </ul>
+    <h3>Requests per day</h3>
+    <div id="chart_div" style="width: 900px; height: 500px;"></div>
+  </body>
+</html>
