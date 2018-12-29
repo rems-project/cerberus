@@ -1090,7 +1090,6 @@ module BmcZ3 = struct
     add_action uid intermediate_action >>
     return z3d_action
 
-
   (* TODO: guards should include drop_cont *)
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
@@ -1180,6 +1179,357 @@ module BmcZ3 = struct
       | _ -> assert false
       ) >>= fun _ ->
       return file
+end
+
+(* ======= Compute syntactic let bindings ====== *)
+module BmcBind = struct
+  type binding_state = {
+    inline_pexpr_map: (int, typed_pexpr) Pmap.map;
+    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    sym_table       : (sym_ty, Expr.expr) Pmap.map;
+    case_guard_map   : (int, Expr.expr list) Pmap.map;
+    expr_map         : (int, Expr.expr) Pmap.map;
+    action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+  }
+
+  include EffMonad(struct type state = binding_state end)
+
+  let mk_initial inline_pexpr_map
+                 inline_expr_map
+                 sym_table
+                 case_guard_map
+                 expr_map
+                 action_map
+                 : state =
+  { inline_pexpr_map = inline_pexpr_map;
+    inline_expr_map  = inline_expr_map;
+    sym_table        = sym_table;
+    case_guard_map   = case_guard_map;
+    expr_map         = expr_map;
+    action_map       = action_map;
+  }
+
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_pexpr_map with
+    | None -> failwith (sprintf "Error: BmcBind inline_pexpr not found %d" uid)
+    | Some pe -> return pe
+
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcBind inline_expr not found %d" uid)
+    | Some e -> return e
+
+  let lookup_sym (sym: sym_ty) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.sym_table with
+    | None -> failwith (sprintf "Error: BmcBind %s not found in sym_table"
+                                (symbol_to_string sym))
+    | Some expr -> return expr
+
+  let get_case_guards (uid: int): (Expr.expr list) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.case_guard_map with
+    | None -> failwith (sprintf "Error: BmcBind case guard not found %d" uid)
+    | Some es -> return es
+
+  let get_expr (uid: int): Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.expr_map with
+    | None -> failwith (sprintf "Error: BmcBind expr not found %d" uid)
+    | Some e -> return e
+
+  let get_action (uid: int) : BmcZ3.intermediate_action eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.action_map with
+    | None -> failwith (sprintf "Error: BmcBind action not found %d" uid)
+    | Some a -> return a
+
+  (* let bindings *)
+  let mk_let_binding (maybe_sym: sym_ty option)
+                     (expr: Expr.expr)
+                     : Expr.expr eff =
+    match maybe_sym with
+    | None -> return mk_true
+    | Some sym ->
+        lookup_sym sym >>= fun sym_expr ->
+        return (mk_eq sym_expr expr)
+
+        (* TODO: hack for C functions... *)
+        (*if (Sort.equal CFunctionSort.mk_sort (Expr.get_sort expr)) then
+          BmcM.add_sym_to_sym_table sym expr >>= fun () ->
+          return (mk_eq sym_expr expr)
+        else
+          return (mk_eq sym_expr expr) *)
+
+  let rec mk_let_bindings (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
+                          : Expr.expr eff =
+    match pat with
+    | CaseBase(sym, _) ->
+        mk_let_binding sym expr
+    | CaseCtor (Ctuple, patlist) ->
+        assert (Expr.get_num_args expr = List.length patlist);
+        mapM (fun (pat, e) -> mk_let_bindings pat e)
+             (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
+        return (mk_and bindings)
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
+      let is_specified = LoadedInteger.is_specified expr in
+      let specified_value = LoadedInteger.get_specified_value expr in
+      mk_let_binding sym specified_value >>= fun is_eq_value ->
+      return (mk_and [is_specified; is_eq_value])
+  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
+      let is_specified = LoadedPointer.is_specified expr in
+      let specified_value = LoadedPointer.get_specified_value expr in
+      mk_let_binding sym specified_value >>= fun is_eq_value ->
+      return (mk_and [is_specified; is_eq_value])
+  | CaseCtor(Cspecified, _) ->
+      assert false
+  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
+      let (is_unspecified, unspecified_value) =
+        if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
+          let is_unspecified = LoadedInteger.is_unspecified expr in
+          let unspecified_value = LoadedInteger.get_unspecified_value expr in
+          (is_unspecified, unspecified_value)
+        else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
+          let is_unspecified = LoadedPointer.is_unspecified expr in
+          let unspecified_value = LoadedPointer.get_unspecified_value expr in
+          (is_unspecified, unspecified_value)
+        else
+          assert false
+      in
+      mk_let_binding sym unspecified_value >>= fun is_eq_value ->
+      return (mk_and [is_unspecified; is_eq_value])
+  | CaseCtor(Cunspecified, _) ->
+      assert false
+  | CaseCtor(_, _) ->
+      assert false
+
+  (* TODO: check if removing guard here is significantly faster *)
+  let guard_assert (guard: Expr.expr) =
+    mk_implies guard
+
+  (* SMT stuff *)
+  let rec bind_pe (Pexpr(annots, bTy, pe_) as pexpr) : (Expr.expr list) eff =
+    let uid = get_id_pexpr pexpr in
+    (match pe_ with
+    | PEsym _ ->
+        return []
+    | PEimpl _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        bind_pe inline_pe
+    | PEval _ ->
+        return []
+    | PEconstrained _ ->
+        assert false
+    | PEundef _ ->
+        return []
+    | PEerror _ ->
+        return []
+    | PEctor (ctor, pes) ->
+        mapM bind_pe pes >>= fun bound_pes ->
+        return (List.concat bound_pes)
+    | PEcase (pe, cases) ->
+        bind_pe pe                        >>= fun bound_pe ->
+        mapM bind_pe (List.map snd cases) >>= fun bound_cases ->
+
+        (* Make let binding for each pattern with z3_pe *)
+        get_expr (get_id_pexpr pe) >>= fun z3_pe ->
+        mapM (fun (pat, _) -> mk_let_bindings pat z3_pe) cases
+             >>= fun bindings ->
+
+        (* Guard the bindings *)
+        get_case_guards uid               >>= fun guards ->
+        let case_bindings = List.map2 mk_implies guards bindings in
+        let guarded_bound_cases = List.concat (List.map2
+          (fun guard case_binds -> List.map (guard_assert guard) case_binds)
+          guards bound_cases) in
+        return (bound_pe @ case_bindings @ guarded_bound_cases)
+    | PEarray_shift (ptr, _, index) ->
+        bind_pe ptr   >>= fun bound_ptr ->
+        bind_pe index >>= fun bound_index ->
+        return (bound_ptr @ bound_index)
+    | PEmember_shift (ptr, _, _) ->
+        bind_pe ptr
+    | PEnot pe ->
+        bind_pe pe
+    | PEop (_, pe1, pe2) ->
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        return (bound_pe1 @ bound_pe2)
+    | PEstruct _    -> assert false
+    | PEunion _     -> assert false
+    | PEcfunction _ -> assert false
+    | PEmemberof _  -> assert false
+    | PEcall _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        bind_pe inline_pe
+    | PElet (pat, pe1, pe2) ->
+        get_expr (get_id_pexpr pe1) >>= fun z3_pe1 ->
+        mk_let_bindings pat z3_pe1  >>= fun let_binding ->
+        bind_pe pe1                 >>= fun bound_pe1 ->
+        bind_pe pe2                 >>= fun bound_pe2 ->
+        return (let_binding :: bound_pe1 @ bound_pe2)
+    | PEif (cond, pe1, pe2) ->
+        bind_pe cond >>= fun bound_cond ->
+        bind_pe pe1  >>= fun bound_pe1 ->
+        bind_pe pe2  >>= fun bound_pe2 ->
+        get_expr (get_id_pexpr cond) >>= fun guard ->
+        return (bound_cond @
+                (* Guarded asserts is unnecessary *)
+                (List.map (guard_assert guard) bound_pe1) @
+                (List.map (guard_assert (mk_not guard)) bound_pe2))
+    | PEis_scalar _
+    | PEis_integer _ ->
+        assert false
+    | PEis_signed _ ->
+        assert false
+    | PEis_unsigned (Pexpr (_, BTy_ctype, PEval (Vctype ctype))) ->
+        return []
+    | PEis_unsigned _ ->
+        assert false
+    | PEare_compatible _ ->
+        assert false
+    | PEbmc_assume pe ->
+        bind_pe pe
+    )
+
+  (* TODO TODO TODO TODO *)
+  let bind_action (Paction(p, Action(loc, a, action_))) uid
+                  : (Expr.expr list) eff =
+    match action_ with
+    | Create (pe1, pe2, pref) ->
+        get_action uid >>= fun action ->
+
+        let (alloc_size, alloc_id) =
+          (match action with
+           | ICreate(_, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
+           | _ -> assert false
+          ) in
+
+        (* Assert alloc_size(alloc_id) = allocation_size *)
+        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+                                         [int_to_z3 alloc_id])
+                      (int_to_z3 alloc_size)]
+    | CreateReadOnly _ -> assert false
+    | Alloc0 _ -> assert false
+    | Kill (_, pe) ->
+        bind_pe pe
+    | Store0 (b, pe1, pe2, pe3, memord) ->
+        return []
+    | Load0 (pe1, pe2, memord) ->
+        return []
+    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        return []
+    | Fence0 mo ->
+        return []
+    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        return []
+    | LinuxFence mo ->
+        return []
+    | LinuxLoad (pe1, pe2, mo) ->
+        return []
+    | LinuxStore(pe1, pe2, pe3, mo) ->
+        return []
+    | LinuxRMW (pe1, pe2, pe3, mo) ->
+        return []
+
+  let rec bind_e (Expr(annots, expr_) as expr: unit typed_expr)
+                 : (Expr.expr list) eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure pe ->
+        bind_pe pe
+    | Ememop (PtrValidForDeref, [ptr]) ->
+        bind_pe ptr
+    | Ememop (PtrEq, [p1;p2]) ->
+        bind_pe p1 >>= fun bound_p1 ->
+        bind_pe p2 >>= fun bound_p2 ->
+        return (bound_p1 @ bound_p2)
+    | Ememop _ -> assert false
+    | Eaction action ->
+        bind_action action uid
+    | Ecase (pe, cases) ->
+        bind_pe pe                       >>= fun bound_pe ->
+        mapM bind_e (List.map snd cases) >>= fun bound_cases ->
+
+        (* Make let binding for each pattern with z3_pe *)
+        get_expr (get_id_pexpr pe)       >>= fun z3_pe ->
+        mapM (fun (pat, _) -> mk_let_bindings pat z3_pe) cases
+             >>= fun bindings ->
+
+        (* Guard the bindings *)
+        get_case_guards uid               >>= fun guards ->
+        let case_bindings = List.map2 mk_implies guards bindings in
+        let guarded_bound_cases = List.concat (List.map2
+          (fun guard case_binds -> List.map (guard_assert guard) case_binds)
+          guards bound_cases) in
+        return (bound_pe @ case_bindings @ guarded_bound_cases)
+    | Elet _ -> assert false
+    | Eif (cond, e1, e2) ->
+        bind_pe cond >>= fun bound_cond ->
+        bind_e  e1   >>= fun bound_e1 ->
+        bind_e  e2   >>= fun bound_e2 ->
+        get_expr (get_id_pexpr cond) >>= fun guard ->
+        return (bound_cond @
+                (* Guarded asserts is unnecessary *)
+                (List.map (guard_assert guard) bound_e1) @
+                (List.map (guard_assert (mk_not guard)) bound_e2))
+    | Eskip ->
+        return []
+    | Eccall _ -> assert false
+    | Eproc _  -> assert false
+    | Eunseq elist ->
+        mapM bind_e elist >>= fun bound_elist ->
+        return (List.concat bound_elist)
+    | Ewseq (pat, e1, e2) (* fall through *)
+    | Esseq (pat, e1, e2) ->
+        bind_e e1 >>= fun bound_e1 ->
+        bind_e e2 >>= fun bound_e2 ->
+        get_expr (get_id_expr e1) >>= fun z3_e1 ->
+        mk_let_bindings pat z3_e1 >>= fun let_binding ->
+        (* TODO: drop_cont guard *)
+        return (let_binding :: bound_e1 @ bound_e2)
+    | Easeq _ -> assert false
+    | Eindet _ -> assert false
+    | Ebound (_, e) ->
+        bind_e e
+    | End elist ->
+        mapM bind_e elist   >>= fun bound_elist ->
+        get_case_guards uid >>= fun guards ->
+        (* Also assert xor guards here *)
+        let guarded_asserts = List.concat (List.map2
+          (fun guard bindings -> List.map (guard_assert guard) bindings)
+          guards bound_elist) in
+        return ((List.fold_left mk_xor mk_false guards) :: guarded_asserts)
+    | Esave _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        bind_e inlined_expr
+    | Erun _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        bind_e inlined_expr
+    | Epar _        -> assert false
+    | Ewait _       -> assert false
+    )
+
+    let bind_globs (gname, _, e) : (Expr.expr list) eff =
+      bind_e e                 >>= fun bound_e ->
+      get_expr (get_id_expr e) >>= fun z3d_e ->
+      mk_let_binding (Some gname) z3d_e >>= fun let_binding ->
+      return (let_binding :: bound_e)
+
+    let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
+                  : (Expr.expr list) eff =
+      mapM bind_globs file.globs >>= fun bound_globs ->
+      (match Pmap.lookup fn_to_check file.funs with
+      | Some (Proc(annot, bTy, params, e)) ->
+          bind_e e
+      | Some (Fun(ty, params, pe)) ->
+          bind_pe pe
+      | _ -> assert false
+      ) >>= fun bound_expr ->
+      return ((List.concat bound_globs) @ bound_expr)
+
 end
 
 (*

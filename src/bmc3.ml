@@ -34,6 +34,8 @@ module BmcM = struct
     expr_map         : (int, Expr.expr) Pmap.map option;
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
+
+    bindings         : (Expr.expr list) option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -49,6 +51,7 @@ module BmcM = struct
     ; expr_map         = None
     ; case_guard_map   = None
     ; action_map       = None
+    ; bindings         = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -92,6 +95,24 @@ module BmcM = struct
                  action_map     = Some final_state.action_map;
         }
 
+  (* Compute let bindings *)
+  let do_bindings : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcBind.mk_initial (Option.get st.inline_pexpr_map)
+                         (Option.get st.inline_expr_map)
+                         (Option.get st.sym_expr_table)
+                         (Option.get st.case_guard_map)
+                         (Option.get st.expr_map)
+                         (Option.get st.action_map) in
+    let (bindings, _) =
+      BmcBind.run initial_state
+                  (BmcBind.bind_file st.file st.fn_to_check) in
+    let simplified_bindings =
+      List.map (fun e -> Expr.simplify e None) bindings in
+
+    put { st with bindings = Some simplified_bindings }
+
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
@@ -119,10 +140,13 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_inlining >>
     BmcM.do_ssa      >>
     BmcM.do_z3       >>
+    BmcM.do_bindings >>
     BmcM.get_file >>= fun file ->
     pp_file file;
     BmcM.return () in
-  let _ = BmcM.run initial_state all_phases in
+  let (_, final_state) = BmcM.run initial_state all_phases in
+  (* Print bindings *)
+  List.iter print_expr (Option.get final_state.bindings);
   assert false
 
 (* Find f_name in function map, returning the Core symbol *)
