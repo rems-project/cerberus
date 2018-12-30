@@ -36,6 +36,7 @@ module BmcM = struct
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
 
     bindings         : (Expr.expr list) option;
+    vcs              : (BmcVC.vc list) option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -52,6 +53,7 @@ module BmcM = struct
     ; case_guard_map   = None
     ; action_map       = None
     ; bindings         = None
+    ; vcs              = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -113,6 +115,24 @@ module BmcM = struct
 
     put { st with bindings = Some simplified_bindings }
 
+  (* Compute verification conditions *)
+  let do_vcs : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcVC.mk_initial (Option.get st.inline_pexpr_map)
+                       (Option.get st.inline_expr_map)
+                       (Option.get st.sym_expr_table)
+                       (Option.get st.case_guard_map)
+                       (Option.get st.expr_map)
+                       (Option.get st.action_map) in
+    let (vcs, _) =
+      BmcVC.run initial_state
+                (BmcVC.vcs_file st.file st.fn_to_check) in
+    let simplified_vcs =
+      List.map (fun (e, dbg) -> (Expr.simplify e None, dbg)) vcs in
+
+    put { st with vcs = Some simplified_vcs}
+
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
@@ -143,10 +163,14 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_bindings >>
     BmcM.get_file >>= fun file ->
     pp_file file;
+    BmcM.do_vcs      >>
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
+  print_endline "====BINDINGS";
   List.iter print_expr (Option.get final_state.bindings);
+  print_endline "====VCS";
+  List.iter (fun (e, _) -> print_expr e) (Option.get final_state.vcs);
   assert false
 
 (* Find f_name in function map, returning the Core symbol *)
