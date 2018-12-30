@@ -1184,9 +1184,9 @@ end
 (* ======= Compute syntactic let bindings ====== *)
 module BmcBind = struct
   type binding_state = {
-    inline_pexpr_map: (int, typed_pexpr) Pmap.map;
-    inline_expr_map : (int, unit typed_expr) Pmap.map;
-    sym_table       : (sym_ty, Expr.expr) Pmap.map;
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    sym_table        : (sym_ty, Expr.expr) Pmap.map;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
@@ -1415,10 +1415,14 @@ module BmcBind = struct
     | Alloc0 _ -> assert false
     | Kill (_, pe) ->
         bind_pe pe
-    | Store0 (b, pe1, pe2, pe3, memord) ->
+    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         return []
-    | Load0 (pe1, pe2, memord) ->
+    | Store0 _ ->
+        assert false
+    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         return []
+    | Load0 _ ->
+        assert false
     | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
         return []
     | Fence0 mo ->
@@ -1529,250 +1533,277 @@ module BmcBind = struct
       | _ -> assert false
       ) >>= fun bound_expr ->
       return ((List.concat bound_globs) @ bound_expr)
-
 end
 
-(*
 (* ======= Compute verification conditions ======= *)
 
 module BmcVC = struct
   type vc_state = {
-    (* Map from uid to guard expr *)
-    expr_map: (string, Expr.expr) Pmap.map;
-
-    (* PEcase, Ecase, End *)
-    case_guard_map: (string, Expr.expr list) Pmap.map;
-
-    drop_cont_map: (string, Expr.expr) Pmap.map;
-
-    (* PEcall; PEimpl; *)
-    inline_pexpr_map: (string, typed_pexpr) Pmap.map;
-
-    (* Esave; Erun *)
-    inline_expr_map : (string, unit typed_expr) Pmap.map;
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    sym_table        : (sym_ty, Expr.expr) Pmap.map;
+    case_guard_map   : (int, Expr.expr list) Pmap.map;
+    expr_map         : (int, Expr.expr) Pmap.map;
+    action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
   }
+
   include EffMonad(struct type state = vc_state end)
 
-  let get_expr (uid: string): (Expr.expr) eff =
+  let mk_initial inline_pexpr_map
+                 inline_expr_map
+                 sym_table
+                 case_guard_map
+                 expr_map
+                 action_map
+                 : state =
+  { inline_pexpr_map = inline_pexpr_map;
+    inline_expr_map  = inline_expr_map;
+    sym_table        = sym_table;
+    case_guard_map   = case_guard_map;
+    expr_map         = expr_map;
+    action_map       = action_map;
+  }
+
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
     get >>= fun st ->
-    match Pmap.lookup uid st.expr_map with
-    | None -> failwith (sprintf "BmcVC: Uid %s not found in expr_map" uid)
+    match Pmap.lookup uid st.inline_pexpr_map with
+    | None -> failwith (sprintf "Error: BmcVC inline_pexpr not found %d" uid)
+    | Some pe -> return pe
+
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcVC inline_expr not found %d" uid)
+    | Some e -> return e
+
+  let lookup_sym (sym: sym_ty) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.sym_table with
+    | None -> failwith (sprintf "Error: BmcVC %s not found in sym_table"
+                                (symbol_to_string sym))
     | Some expr -> return expr
 
-  let get_case_guards (uid: string) : (Expr.expr list) eff =
+  let get_case_guards (uid: int): (Expr.expr list) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.case_guard_map with
-    | None -> failwith (sprintf "BmcVC: Uid %s not found in case_guard_map" uid)
-    | Some exprs -> return exprs
+    | None -> failwith (sprintf "Error: BmcVC case guard not found %d" uid)
+    | Some es -> return es
 
+  let get_expr (uid: int): Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.expr_map with
+    | None -> failwith (sprintf "Error: BmcVC expr not found %d" uid)
+    | Some e -> return e
+
+  let get_action (uid: int) : BmcZ3.intermediate_action eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.action_map with
+    | None -> failwith (sprintf "Error: BmcVC action not found %d" uid)
+    | Some a -> return a
+
+  (*
   let get_drop_cont (uid: string) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.drop_cont_map with
     | None -> failwith (sprintf "BmcVC: Uid %s not found in drop_cont_map" uid)
     | Some expr -> return expr
+  *)
 
-  let get_inline_pexpr (uid: string) : typed_pexpr eff =
-    get >>= fun st ->
-    match Pmap.lookup uid st.inline_pexpr_map with
-    | None ->
-        failwith (sprintf "BmcVC: Uid %s not found in inline_pexpr_map" uid)
-    | Some pe ->  return pe
-
-  let get_inline_expr (uid: string) : (unit typed_expr) eff =
-    get >>= fun st ->
-    match Pmap.lookup uid st.inline_expr_map with
-    | None ->
-        failwith (sprintf "BmcVC: Uid %s not found in inline_expr_map" uid)
-    | Some pe ->  return pe
-
-
-end
-
-type vc_debug =
+  (* ==== VC definitions ==== *)
+  type vc_debug =
   | VCDebugUndef of Location_ocaml.t * Undefined.undefined_behaviour
   | VcDebugStr of string
 
-type vc = Expr.expr * vc_debug
+  type vc = Expr.expr * vc_debug
 
-let guard_vc (guard: Expr.expr) ((vc_expr, dbg): vc) : vc =
-  (mk_implies guard vc_expr, dbg)
+  let guard_vc (guard: Expr.expr) ((vc_expr, dbg): vc) : vc =
+    (mk_implies guard vc_expr, dbg)
 
-let map2_inner (f: 'x->'y->'z) (xs: 'x list) (yss: ('y list) list) : 'z list =
-  List.concat (List.map2 (fun x ys -> List.map (f x) ys) xs yss)
+  let map2_inner (f: 'x->'y->'z) (xs: 'x list) (yss: ('y list) list) : 'z list =
+    List.concat (List.map2 (fun x ys -> List.map (f x) ys) xs yss)
 
+  let rec vcs_pe (Pexpr (annots, bTy, pe_) as pexpr)
+                 : (vc list) eff =
+    let uid = get_id_pexpr pexpr in
+    match pe_ with
+    | PEsym _           -> return []
+    | PEimpl _          ->
+       get_inline_pexpr uid >>= fun inline_pe ->
+       vcs_pe inline_pe
+    | PEval _           -> return []
+    | PEconstrained _   -> assert false
+    | PEundef (loc, ub) -> return [(mk_false, VCDebugUndef (loc,ub))]
+    | PEerror (str, _)  -> return [(mk_false, VcDebugStr (string_of_int uid ^ "_" ^ str))]
+    | PEctor (ctor, pelist) ->
+        mapM vcs_pe pelist >>= fun vcss ->
+        return (List.concat vcss)
+    | PEcase (pe0, cases) ->
+        (* TODO: double check this *)
+        mapM (fun (_, pe) -> vcs_pe pe) cases >>= fun vcss_cases ->
+        get_case_guards uid                   >>= fun guards ->
+        vcs_pe pe0                            >>= fun vcs_pe0 ->
+        assert (List.length vcss_cases == List.length guards);
+        let dbg = VcDebugStr (string_of_int uid ^ "_PEcase_caseMatch") in
+        return ((mk_or guards, dbg) ::
+                vcs_pe0 @ (map2_inner guard_vc guards vcss_cases))
+    | PEarray_shift (ptr, ty, index) ->
+        get_expr (get_id_pexpr ptr) >>= fun ptr_z3 ->
+        vcs_pe ptr                  >>= fun vcs_ptr ->
+        vcs_pe index                >>= fun vcs_index ->
+        let dbg = VcDebugStr (string_of_int uid ^ "_PEarray_shift_notNull") in
+        return ((mk_not (PointerSort.is_null ptr_z3), dbg)
+                :: (vcs_ptr @ vcs_index))
+    | PEmember_shift (ptr, sym, member) ->
+        get_expr (get_id_pexpr ptr) >>= fun ptr_z3 ->
+        vcs_pe ptr                  >>= fun vcs_ptr ->
+        let dbg = VcDebugStr (string_of_int uid ^ "_PEmember_shift_notNull") in
+        return ((mk_not (PointerSort.is_null ptr_z3), dbg) :: vcs_ptr)
+    | PEnot pe         -> vcs_pe pe
+    | PEop (_, pe1, pe2) ->
+        vcs_pe    pe1 >>= fun vc1s ->
+        vcs_pe    pe2 >>= fun vc2s ->
+        return (vc1s @ vc2s)
+    | PEstruct _       -> assert false
+    | PEunion _        -> assert false
+    | PEcfunction _    -> assert false
+    | PEmemberof _     -> assert false
+    | PEcall _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        vcs_pe inline_pe
+    | PElet (pat, pe1, pe2) ->
+        vcs_pe pe1 >>= fun vc1s ->
+        vcs_pe pe2 >>= fun vc2s ->
+        return (vc1s @ vc2s)
+    | PEif (cond, pe1, pe2) ->
+        get_expr (get_id_pexpr cond)          >>= fun guard_z3 ->
+        vcs_pe pe1                            >>= fun vc1s ->
+        vcs_pe pe2                            >>= fun vc2s ->
+        return ((List.map (guard_vc guard_z3) vc1s) @
+                (List.map (guard_vc (mk_not guard_z3)) vc2s))
+    | PEis_scalar pe   -> vcs_pe pe
+    | PEis_integer pe  -> vcs_pe pe
+    | PEis_signed pe   -> vcs_pe pe
+    | PEis_unsigned pe -> vcs_pe pe
+    | PEare_compatible (pe1,pe2) ->
+        vcs_pe pe1 >>= fun vc1s ->
+        vcs_pe pe2 >>= fun vc2s ->
+        return (vc1s @ vc2s)
+    | PEbmc_assume pe -> vcs_pe pe
 
-let rec vcs_pexpr (Pexpr (annots, bTy, pe): typed_pexpr) :
-                  (vc list) BmcVC.eff =
-  let (>>=) = BmcVC.bind in
-  let return = BmcVC.return in
-  let uid = get_uid_or_fail annots in
-  match pe with
-  | PEsym _           -> return []
-  | PEimpl _          ->
-     BmcVC.get_inline_pexpr uid >>= fun inline_pe ->
-     vcs_pexpr inline_pe
-  | PEval _           -> return []
-  | PEconstrained _   -> assert false
-  | PEundef (loc, ub) -> return [(mk_false, VCDebugUndef (loc,ub))]
-  | PEerror (str, _)  -> return [(mk_false, VcDebugStr (uid ^ "_" ^ str))]
-  | PEctor (ctor, pelist) ->
-      BmcVC.mapM vcs_pexpr pelist >>= fun vcss ->
-      return (List.concat vcss)
-  | PEcase (pe0, cases) ->
-      (* TODO: double check this *)
-      BmcVC.mapM (fun (_, pe) -> vcs_pexpr pe) cases >>= fun vcss_cases ->
-      BmcVC.get_case_guards uid                      >>= fun guards ->
-      vcs_pexpr pe0                                  >>= fun vcs_pe0 ->
-      assert (List.length vcss_cases == List.length guards);
-      let dbg = VcDebugStr (uid ^ "_PEcase_caseMatch") in
-      return ((mk_or guards, dbg) ::
-              vcs_pe0 @ (map2_inner guard_vc guards vcss_cases))
-  | PEarray_shift (ptr, ty, index) ->
-      BmcVC.get_expr (get_uid_pexpr ptr) >>= fun ptr_z3 ->
-      vcs_pexpr ptr                      >>= fun vcs_ptr ->
-      vcs_pexpr index                    >>= fun vcs_index ->
-      let dbg = VcDebugStr (uid ^ "_PEarray_shift_notNull") in
-      return ((mk_not (PointerSort.is_null ptr_z3), dbg)
-              :: (vcs_ptr @ vcs_index))
-  | PEmember_shift (ptr, sym, member) ->
-      BmcVC.get_expr (get_uid_pexpr ptr) >>= fun ptr_z3 ->
-      vcs_pexpr ptr                      >>= fun vcs_ptr ->
-      let dbg = VcDebugStr (uid ^ "_PEmember_shift_notNull") in
-      return ((mk_not (PointerSort.is_null ptr_z3), dbg) :: vcs_ptr)
-  | PEnot pe         -> vcs_pexpr pe
-  | PEop (_, pe1, pe2) ->
-      vcs_pexpr pe1 >>= fun vc1s ->
-      vcs_pexpr pe2 >>= fun vc2s ->
-      return (vc1s @ vc2s)
-  | PEstruct _       -> assert false
-  | PEunion _        -> assert false
-  | PEcfunction pe   -> vcs_pexpr pe
-  | PEmemberof _     -> assert false
-  | PEcall (_, pes) ->
-      BmcVC.mapM vcs_pexpr pes    >>= fun vcss_pes ->
-      BmcVC.get_inline_pexpr uid  >>= fun inline_pe ->
-      vcs_pexpr inline_pe         >>= fun vcs_inline ->
-      return (vcs_inline @ (List.concat vcss_pes))
-  | PElet (pat, pe1, pe2) ->
-      vcs_pexpr pe1 >>= fun vc1s ->
-      vcs_pexpr pe2 >>= fun vc2s ->
-      return (vc1s @ vc2s)
-  | PEif (cond, pe1, pe2) ->
-      BmcVC.get_expr (get_uid_pexpr cond)  >>= fun guard_z3 ->
-      vcs_pexpr pe1                        >>= fun vc1s ->
-      vcs_pexpr pe2                        >>= fun vc2s ->
-      return ((List.map (guard_vc guard_z3) vc1s) @
-              (List.map (guard_vc (mk_not guard_z3)) vc2s))
-  | PEis_scalar pe   -> vcs_pexpr pe
-  | PEis_integer pe  -> vcs_pexpr pe
-  | PEis_signed pe   -> vcs_pexpr pe
-  | PEis_unsigned pe -> vcs_pexpr pe
-  | PEare_compatible (pe1,pe2) ->
-      vcs_pexpr pe1 >>= fun vc1s ->
-      vcs_pexpr pe2 >>= fun vc2s ->
-      return (vc1s @ vc2s)
-  | PEbmc_assume pe -> vcs_pexpr pe
+  (* TODO!!! *)
+  let rec vcs_paction (Paction (p, Action(loc, a, action_)) : unit typed_paction)
+                      uid
+                      : (vc list) eff =
+    match action_ with
+    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        return []
+    | Create _ -> assert false
+    | CreateReadOnly _  -> assert false
+    | Alloc0 _          -> assert false
+    | Kill (_, pe) ->
+        (* TODO: Kill ignored *)
+        vcs_pe pe
+    | Store0 (_, Pexpr(_,_,PEval (Vctype ty)),
+                 (Pexpr(_,_,PEsym sym)), wval, memorder) ->
+        (* TODO: Where should we check whether the ptr is valid? *)
+        let valid_memorder =
+          mk_bool (not (memorder = Acquire || memorder = Acq_rel)) in
+        vcs_pe wval                     >>= fun vcs_wval ->
+        lookup_sym sym                  >>= fun ptr_z3 ->
+        return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
+                ::(mk_not (PointerSort.is_null ptr_z3),
+                   VcDebugStr (string_of_int uid ^ "_Store_null"))
+                :: vcs_wval)
+    | Store0 _          -> assert false
+    | Load0 (Pexpr(_,_,PEval (Vctype ty)),
+             (Pexpr(_,_,PEsym sym)), memorder) ->
+        let valid_memorder =
+              mk_bool (not (memorder = Release || memorder = Acq_rel)) in
+        lookup_sym sym >>= fun ptr_z3 ->
+        return [(valid_memorder, VcDebugStr (string_of_int uid ^ "_Load_memorder"))
+               ;(mk_not (PointerSort.is_null ptr_z3),
+                   VcDebugStr (string_of_int uid ^ "_Load_null"))
+               ]
+    | Load0 _ -> assert false
+    | RMW0 _  -> assert false
+    | Fence0 _ -> return []
+    | CompareExchangeStrong _ -> assert false
+    | LinuxFence _ -> return []
+    | LinuxStore _ -> assert false
+    | LinuxLoad _  -> assert false
+    | LinuxRMW _ -> assert false
 
-let rec vcs_paction uid (Paction (_, Action(_, _, action_)) : unit typed_paction)
-                    : (vc list) BmcVC.eff =
-  let (>>=) = BmcVC.bind in
-  let return = BmcVC.return in
+  let rec vcs_e (Expr(annots, expr_) as expr)
+                   : (vc list) eff =
+    let uid = get_id_expr expr in
+    match expr_ with
+    | Epure pe      -> vcs_pe pe
+    | Ememop (memop, pes) ->
+        mapM vcs_pe pes >>= fun vcss_pes ->
+        begin match memop with
+        | PtrValidForDeref | PtrEq -> return (List.concat vcss_pes)
+        | _ -> assert false (* Unimplemented *)
+        end
+    | Eaction paction ->
+        vcs_paction paction uid
+    | Ecase (pe, cases) ->
+        mapM (fun (_, e) -> vcs_e e) cases >>= fun vcss_cases ->
+        get_case_guards uid                >>= fun guards ->
+        vcs_pe pe                          >>= fun vcs_pe ->
+        let dbg = VcDebugStr (string_of_int uid ^ "_Ecase_caseMatch") in
+        return ((mk_or guards, dbg) ::
+                vcs_pe @ (map2_inner guard_vc guards vcss_cases))
+    | Elet _        -> assert false
+    | Eif (cond, e1, e2) ->
+        vcs_pe cond >>= fun vcs_cond ->
+        vcs_e e1    >>= fun vcs_e1 ->
+        vcs_e e2    >>= fun vcs_e2 ->
+        get_expr (get_id_pexpr cond) >>= fun cond_z3 ->
+        return (vcs_cond @ (List.map (guard_vc cond_z3) vcs_e1)
+                         @ (List.map (guard_vc (mk_not cond_z3)) vcs_e2))
+    | Eskip         -> return []
+    | Eccall _      -> assert false
+    | Eproc _       -> assert false
+    | Eunseq es ->
+        mapM vcs_e es >>= fun vcss_es ->
+        return (List.concat vcss_es)
+    | Ewseq (pat, e1, e2)
+    | Esseq (pat, e1, e2) ->
+        vcs_e e1 >>= fun vcs_e1 ->
+        vcs_e e2 >>= fun vcs_e2 ->
+        (*BmcVC.get_drop_cont (get_uid_expr e1) >>= fun e1_drop_cont ->*)
+        (* TODO: drop_cont *)
+        return (vcs_e1 @ vcs_e2)
+        (*return (vcs_e1 @ (List.map (guard_vc e1_drop_cont) vcs_e2))*)
+    | Easeq _       -> assert false
+    | Eindet _      -> assert false
+    | Ebound (_, e) -> vcs_e e
+    | End es ->
+        get_case_guards uid >>= fun guards ->
+        mapM vcs_e es    >>= fun vcss_es ->
+        return (map2_inner guard_vc guards vcss_es)
+    | Esave _       (* fall through *)
+    | Erun _        ->
+        get_inline_expr uid >>= fun inline_expr ->
+        vcs_e inline_expr
+    | Epar es -> assert false
+        (*BmcVC.mapM vcs_e es >>= fun vcss_es ->
+        return (List.concat vcss_es)*)
+    | Ewait _       -> assert false
 
-  match action_ with
-  | Create (pe1, pe2, _) ->
-      vcs_pexpr pe1 >>= fun vc1s ->
-      vcs_pexpr pe2 >>= fun vc2s ->
-      return (vc1s @ vc2s)
-  | CreateReadOnly _  -> assert false
-  | Alloc0 _          -> assert false
-  | Kill (_, pe) ->
-      (* TODO: Kill ignored *)
-      vcs_pexpr pe
-  | Store0 (_, ty, (Pexpr(_,_, PEsym sym) as ptr), wval, memorder) ->
-      (* TODO: Where should we check whether the ptr is valid? *)
-      let valid_memorder =
-        mk_bool (not (memorder = Acquire || memorder = Acq_rel)) in
-      vcs_pexpr ty                       >>= fun vcs_ty ->
-      vcs_pexpr wval                     >>= fun vcs_wval ->
-      BmcVC.get_expr (get_uid_pexpr ptr) >>= fun ptr_z3 ->
-      return (  (valid_memorder, VcDebugStr (uid ^ "_Store_memorder"))
-              ::(mk_not (PointerSort.is_null ptr_z3),
-                 VcDebugStr (uid ^ "_Store_null"))
-              ::vcs_ty @ vcs_wval)
-  | Store0 _          -> assert false
-  | Load0 (ty, (Pexpr(_,_, PEsym _) as ptr), memorder) ->
-      let valid_memorder =
-            mk_bool (not (memorder = Release || memorder = Acq_rel)) in
-      vcs_pexpr ty                       >>= fun vcs_ty ->
-      BmcVC.get_expr (get_uid_pexpr ptr) >>= fun ptr_z3 ->
-      return ((valid_memorder, VcDebugStr (uid ^ "_Load_memorder"))
-              ::(mk_not (PointerSort.is_null ptr_z3),
-                 VcDebugStr (uid ^ "_Load_null"))
-              :: vcs_ty)
-  | Load0 _ -> assert false
-  | RMW0 _  -> assert false
-  | Fence0 _ -> return []
-  | CompareExchangeStrong _ -> assert false
-  | LinuxFence _ -> return []
-  | LinuxStore _ -> assert false
-  | LinuxLoad _  -> assert false
-  | LinuxRMW _ -> assert false
+    let vcs_globs (_, _, e) : (vc list) eff =
+      vcs_e e
 
-let rec vcs_expr (Expr(annots, expr_) : unit typed_expr)
-                 : (vc list) BmcVC.eff =
-  let (>>=) = BmcVC.bind in
-  let return = BmcVC.return in
-  let uid = get_uid_or_fail annots in
-  match expr_ with
-  | Epure pe      -> vcs_pexpr pe
-  | Ememop (memop, pes) ->
-      BmcVC.mapM vcs_pexpr pes >>= fun vcss_pes ->
-      begin match memop with
-      | PtrValidForDeref | PtrEq -> return (List.concat vcss_pes)
-      | _ -> assert false (* Unimplemented *)
-      end
-  | Eaction paction ->
-      vcs_paction uid paction
-  | Ecase (pe, cases) ->
-      BmcVC.mapM (fun (_, e) -> vcs_expr e) cases >>= fun vcss_cases ->
-      BmcVC.get_case_guards uid                   >>= fun guards ->
-      vcs_pexpr pe                                >>= fun vcs_pe ->
-      let dbg = VcDebugStr (uid ^ "_Ecase_caseMatch") in
-      return ((mk_or guards, dbg) ::
-              vcs_pe @ (map2_inner guard_vc guards vcss_cases))
-  | Elet _        -> assert false
-  | Eif (cond, e1, e2) ->
-      vcs_pexpr cond >>= fun vcs_cond ->
-      vcs_expr e1    >>= fun vcs_e1 ->
-      vcs_expr e2    >>= fun vcs_e2 ->
-      BmcVC.get_expr (get_uid_pexpr cond) >>= fun cond_z3 ->
-      return (vcs_cond @ (List.map (guard_vc cond_z3) vcs_e1)
-                       @ (List.map (guard_vc (mk_not cond_z3)) vcs_e2))
-  | Eskip         -> return []
-  | Eccall _      -> assert false
-  | Eproc _       -> assert false
-  | Eunseq es ->
-      BmcVC.mapM vcs_expr es >>= fun vcss_es ->
-      return (List.concat vcss_es)
-  | Ewseq (pat, e1, e2)
-  | Esseq (pat, e1, e2) ->
-      vcs_expr e1 >>= fun vcs_e1 ->
-      vcs_expr e2 >>= fun vcs_e2 ->
-      BmcVC.get_drop_cont (get_uid_expr e1) >>= fun e1_drop_cont ->
-      return (vcs_e1 @ (List.map (guard_vc e1_drop_cont) vcs_e2))
-  | Easeq _       -> assert false
-  | Eindet _      -> assert false
-  | Ebound (_, e) -> vcs_expr e
-  | End es ->
-      BmcVC.get_case_guards uid >>= fun guards ->
-      BmcVC.mapM vcs_expr es    >>= fun vcss_es ->
-      return (map2_inner guard_vc guards vcss_es)
-  | Esave _       (* fall through *)
-  | Erun _        ->
-      BmcVC.get_inline_expr uid >>= fun inline_expr ->
-      vcs_expr inline_expr
-  | Epar es ->
-      BmcVC.mapM vcs_expr es >>= fun vcss_es ->
-      return (List.concat vcss_es)
-  | Ewait _       -> assert false
-*)
+    let vcs_file (file: unit typed_file) (fn_to_check: sym_ty)
+                  : (vc list) eff =
+      mapM vcs_globs file.globs >>= fun vcs_globs ->
+      (match Pmap.lookup fn_to_check file.funs with
+      | Some (Proc(annot, bTy, params, e)) ->
+          vcs_e e
+      | Some (Fun(ty, params, pe)) ->
+          vcs_pe pe
+      | _ -> assert false
+      ) >>= fun vcs_expr ->
+      return ((List.concat vcs_globs) @ vcs_expr)
+
+end
