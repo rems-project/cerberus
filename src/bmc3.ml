@@ -161,9 +161,9 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_ssa      >>
     BmcM.do_z3       >>
     BmcM.do_bindings >>
+    BmcM.do_vcs      >>
     BmcM.get_file >>= fun file ->
     pp_file file;
-    BmcM.do_vcs      >>
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
@@ -171,7 +171,44 @@ let bmc_file (file              : unit typed_file)
   List.iter print_expr (Option.get final_state.bindings);
   print_endline "====VCS";
   List.iter (fun (e, _) -> print_expr e) (Option.get final_state.vcs);
-  assert false
+
+  (* Add bindings *)
+  Solver.add g_solver (Option.get final_state.bindings);
+  begin match Solver.check g_solver [] with
+  | SATISFIABLE ->
+      (*let model = Option.get (Solver.get_model g_solver) in*)
+      print_endline "Ckpt passed: bindings are SAT"
+  | UNSATISFIABLE ->
+      failwith "ERROR: Bindings unsatisfiable. Should always be sat."
+  | UNKNOWN ->
+      failwith (sprintf "ERROR: status unknown. Reason: %s"
+                        (Solver.get_reason_unknown g_solver))
+  end ;
+  (* TODO: add memory constraints *)
+
+  (* Add VCs; TODO: track which ones failed somehow?
+   * Maybe need to record bindings *)
+  let vcs = List.map fst (Option.get final_state.vcs) in
+  Solver.assert_and_track
+    g_solver
+    (Expr.simplify (mk_not (mk_and vcs)) None)
+    (Expr.mk_fresh_const g_ctx "negated_vcs" boolean_sort);
+  bmc_debug_print 1 "==== Checking VCS";
+  begin match Solver.check g_solver [] with
+  | SATISFIABLE ->
+      (*let model = Option.get (Solver.get_model g_solver) in*)
+      begin
+      print_endline "OUTPUT: satisfiable";
+      if !!bmc_conf.output_model then
+        let model = Option.get (Solver.get_model g_solver) in
+        print_endline (Model.to_string model)
+      end
+  | UNSATISFIABLE ->
+      print_endline "OUTPUT: unsatisfiable! No errors found. :)"
+  | UNKNOWN ->
+      printf "OUTPUT: unknown. Reason: %s\n"
+             (Solver.get_reason_unknown g_solver)
+  end
 
 (* Find f_name in function map, returning the Core symbol *)
 let find_function (f_name: string)
