@@ -35,6 +35,8 @@ module BmcM = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
 
+    drop_cont_map    : (int, Expr.expr) Pmap.map option;
+
     bindings         : (Expr.expr list) option;
     vcs              : (BmcVC.vc list) option;
   }
@@ -52,6 +54,7 @@ module BmcM = struct
     ; expr_map         = None
     ; case_guard_map   = None
     ; action_map       = None
+    ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
     }
@@ -97,6 +100,19 @@ module BmcM = struct
                  action_map     = Some final_state.action_map;
         }
 
+  (* Compute drop continuation table *)
+  let do_drop_cont : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcDropCont.mk_initial (Option.get st.inline_pexpr_map)
+                             (Option.get st.inline_expr_map)
+                             (Option.get st.case_guard_map) in
+    let (_, final_state) =
+      BmcDropCont.run initial_state
+                      (BmcDropCont.drop_cont_file st.file st.fn_to_check) in
+    put {st with drop_cont_map = Some final_state.drop_cont_map}
+
+
   (* Compute let bindings *)
   let do_bindings : unit eff =
     get >>= fun st ->
@@ -124,7 +140,8 @@ module BmcM = struct
                        (Option.get st.sym_expr_table)
                        (Option.get st.case_guard_map)
                        (Option.get st.expr_map)
-                       (Option.get st.action_map) in
+                       (Option.get st.action_map)
+                       (Option.get st.drop_cont_map) in
     let (vcs, _) =
       BmcVC.run initial_state
                 (BmcVC.vcs_file st.file st.fn_to_check) in
@@ -157,20 +174,23 @@ let bmc_file (file              : unit typed_file)
   let (>>) = BmcM.(>>) in
 
   let all_phases =
-    BmcM.do_inlining >>
-    BmcM.do_ssa      >>
-    BmcM.do_z3       >>
-    BmcM.do_bindings >>
-    BmcM.do_vcs      >>
+    BmcM.do_inlining  >>
+    BmcM.do_ssa       >>
+    BmcM.do_z3        >>
+    BmcM.do_drop_cont >>
+    BmcM.do_bindings  >>
+    BmcM.do_vcs       >>
     BmcM.get_file >>= fun file ->
-    pp_file file;
+    if !!bmc_conf.debug_lvl >= 3 then pp_file file;
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
-  print_endline "====BINDINGS";
-  List.iter print_expr (Option.get final_state.bindings);
-  print_endline "====VCS";
-  List.iter (fun (e, _) -> print_expr e) (Option.get final_state.vcs);
+  bmc_debug_print 5 "====BINDINGS";
+  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
+            (Option.get final_state.bindings);
+  bmc_debug_print 5 "====VCS";
+  List.iter (fun (e, _) -> bmc_debug_print 5 (Expr.to_string e))
+            (Option.get final_state.vcs);
 
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
@@ -183,7 +203,7 @@ let bmc_file (file              : unit typed_file)
   | UNKNOWN ->
       failwith (sprintf "ERROR: status unknown. Reason: %s"
                         (Solver.get_reason_unknown g_solver))
-  end ;
+  end;
   (* TODO: add memory constraints *)
 
   (* Add VCs; TODO: track which ones failed somehow?

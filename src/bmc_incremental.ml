@@ -12,6 +12,14 @@ open Printf
 open Util
 open Z3
 
+(* CONTENTS *
+ * - BmcInline
+ * - BmcSSA
+ * - BmcBind
+ * - BmcVC
+ * - BmcMemSequential
+ *)
+
 (* ======= Do inlining ======= *)
 module BmcInline = struct
   type run_depth_table = (name, int) Pmap.map
@@ -1090,7 +1098,6 @@ module BmcZ3 = struct
     add_action uid intermediate_action >>
     return z3d_action
 
-  (* TODO: guards should include drop_cont *)
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
     (match expr_ with
@@ -1179,6 +1186,125 @@ module BmcZ3 = struct
       | _ -> assert false
       ) >>= fun _ ->
       return file
+end
+
+(* ======= Compute drop continuation; only matters for Esseq/Ewseq? *)
+module BmcDropCont = struct
+  type internal_state = {
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    case_guard_map   : (int, Expr.expr list) Pmap.map;
+
+    drop_cont_map : (int, Expr.expr) Pmap.map;
+  }
+
+  include EffMonad(struct type state = internal_state end)
+
+  let mk_initial inline_pexpr_map
+                 inline_expr_map
+                 case_guard_map : state =
+  { inline_pexpr_map = inline_pexpr_map;
+    inline_expr_map  = inline_expr_map;
+    case_guard_map   = case_guard_map;
+    drop_cont_map    = Pmap.empty Pervasives.compare;
+  }
+
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_pexpr_map with
+    | None -> failwith (sprintf "Error: BmcDropCont inline_pexpr not found %d"
+                                uid)
+    | Some pe -> return pe
+
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcDropCont inline_expr not found %d"
+                                uid)
+    | Some e -> return e
+
+  let get_case_guards (uid: int): (Expr.expr list) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.case_guard_map with
+    | None -> failwith (sprintf "Error: BmcDropCont case guard not found %d" uid)
+    | Some es -> return es
+
+  let add_to_drop_cont_map (uid: int) (drop_cont: Expr.expr) : unit eff =
+    get >>= fun st ->
+    put {st with drop_cont_map = Pmap.add uid drop_cont st.drop_cont_map}
+
+  (* Z3 stuff *)
+  let rec drop_cont_e (Expr(annots, expr_) as expr)
+                  : Expr.expr eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure _   -> return mk_false
+    | Ememop _  -> return mk_false
+    | Eaction _ -> return mk_false
+    | Ecase (_, cases) ->
+        get_case_guards uid    >>= fun guards ->
+        mapM (fun (_, e) -> drop_cont_e e) cases >>= fun drop_cases ->
+        return (mk_or (List.map2 (
+          fun guard drop_case -> mk_and [guard; drop_case])
+          guards drop_cases))
+    | Elet _ -> assert false
+    | Eif (_, e1, e2) ->
+        get_case_guards uid >>= fun guards ->
+        let (guard1, guard2) = (
+          match guards with
+          | [g1;g2] -> (g1, g2)
+          | _ -> assert false) in
+        drop_cont_e e1 >>= fun drop_e1 ->
+        drop_cont_e e2 >>= fun drop_e2 ->
+        return (mk_or [mk_and [guard1; drop_e1]
+                      ;mk_and [guard2; drop_e2]])
+    | Eskip ->
+        return mk_false
+    | Eccall _ -> assert false
+    | Eproc _  -> assert false
+    | Eunseq elist ->
+        mapM drop_cont_e elist >>= fun drop_cont_elist ->
+        return (mk_or drop_cont_elist)
+    | Ewseq (pat, e1, e2) (* fall through *)
+    | Esseq (pat, e1, e2) ->
+        drop_cont_e e1 >>= fun drop_e1 ->
+        drop_cont_e e2 >>= fun drop_e2 ->
+        return (mk_or [drop_e1; drop_e2])
+    | Easeq _  -> assert false
+    | Eindet _ -> assert false
+    | Ebound (_, e) ->
+        drop_cont_e e
+    | End elist ->
+        mapM drop_cont_e elist >>= fun drop_elist ->
+        get_case_guards uid    >>= fun guards ->
+        return (mk_or (List.map2
+          (fun choice drop_e -> mk_and [choice; drop_e])
+          guards drop_elist))
+    | Esave _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        drop_cont_e inlined_expr
+    | Erun _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        drop_cont_e inlined_expr
+    | Epar _
+    | Ewait _       -> assert false
+    ) >>= fun drop_expr ->
+    add_to_drop_cont_map uid drop_expr >>
+    return drop_expr
+
+  let drop_cont_globs (_, _, e) : Expr.expr eff =
+    drop_cont_e e
+
+  let drop_cont_file (file: unit typed_file) (fn_to_check: sym_ty)
+                     : Expr.expr eff =
+    mapM drop_cont_globs file.globs >>= fun _ ->
+    (match Pmap.lookup fn_to_check file.funs with
+    | Some (Proc(annot, bTy, params, e)) ->
+        drop_cont_e e
+    | Some (Fun(ty, params, pe)) ->
+        return mk_false
+    | _ -> assert false
+    )
 end
 
 (* ======= Compute syntactic let bindings ====== *)
@@ -1545,6 +1671,7 @@ module BmcVC = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    drop_cont_map    : (int, Expr.expr) Pmap.map;
   }
 
   include EffMonad(struct type state = vc_state end)
@@ -1555,6 +1682,7 @@ module BmcVC = struct
                  case_guard_map
                  expr_map
                  action_map
+                 drop_cont_map
                  : state =
   { inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
@@ -1562,6 +1690,7 @@ module BmcVC = struct
     case_guard_map   = case_guard_map;
     expr_map         = expr_map;
     action_map       = action_map;
+    drop_cont_map    = drop_cont_map;
   }
 
   let get_inline_pexpr (uid: int): typed_pexpr eff =
@@ -1601,13 +1730,11 @@ module BmcVC = struct
     | None -> failwith (sprintf "Error: BmcVC action not found %d" uid)
     | Some a -> return a
 
-  (*
-  let get_drop_cont (uid: string) : Expr.expr eff =
+  let get_drop_cont (uid: int) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.drop_cont_map with
-    | None -> failwith (sprintf "BmcVC: Uid %s not found in drop_cont_map" uid)
+    | None -> failwith (sprintf "BmcVC: Uid %d not found in drop_cont_map" uid)
     | Some expr -> return expr
-  *)
 
   (* ==== VC definitions ==== *)
   type vc_debug =
@@ -1771,10 +1898,8 @@ module BmcVC = struct
     | Esseq (pat, e1, e2) ->
         vcs_e e1 >>= fun vcs_e1 ->
         vcs_e e2 >>= fun vcs_e2 ->
-        (*BmcVC.get_drop_cont (get_uid_expr e1) >>= fun e1_drop_cont ->*)
-        (* TODO: drop_cont *)
-        return (vcs_e1 @ vcs_e2)
-        (*return (vcs_e1 @ (List.map (guard_vc e1_drop_cont) vcs_e2))*)
+        get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
+        return (vcs_e1 @ (List.map (guard_vc (mk_not e1_drop_cont)) vcs_e2))
     | Easeq _       -> assert false
     | Eindet _      -> assert false
     | Ebound (_, e) -> vcs_e e
@@ -1805,5 +1930,13 @@ module BmcVC = struct
       | _ -> assert false
       ) >>= fun vcs_expr ->
       return ((List.concat vcs_globs) @ vcs_expr)
-
 end
+
+(* Sequential memory model; read from most recent write *)
+(*module BmcMemSequential = struct
+  type seq_state = {
+
+  }
+  include EffMonad(struct type state = seq_state end)
+
+end*)
