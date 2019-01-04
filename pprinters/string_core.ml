@@ -14,7 +14,6 @@ let string_of_expr e =
 let string_of_file f =
   Pp_utils.to_plain_string (pp_file f)
 
-
 let string_of_params z =
   Pp_utils.to_plain_string (pp_params z)
 (* let pp_cabs0_definition def = to_plain_string (Pp_cabs0.pp_definition def) *)

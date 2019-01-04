@@ -26,8 +26,10 @@ sig
   val pp_params: (Symbol.sym * core_base_type) list -> PPrint.document
   val pp_pexpr: ('ty, Symbol.sym) generic_pexpr -> PPrint.document
   val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
-  val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
   val pp_file: ('a, 'b) generic_file -> PPrint.document
+
+  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * Core_ctype.ctype0 list * bool * bool) Pmap.map -> PPrint.document
+  val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
   val pp_stack: 'a stack -> PPrint.document
@@ -733,8 +735,12 @@ let pp_impl impl =
           P.colon ^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
   ) impl P.empty
-  
 
+let pp_extern_symmap symmap =
+  !^ "-- Extern symbols map:" ^^ P.break 1
+  |> Pmap.fold (fun sym_from sym_to acc ->
+      acc ^^ pp_raw_symbol sym_from ^^^ !^"->" ^^^ pp_raw_symbol sym_to ^^ P.break 1
+    ) symmap
 
 let mk_comment doc =
   pp_ansi_format [Red] (
@@ -744,7 +750,7 @@ let mk_comment doc =
 let pp_funinfo finfos =
   let mk_pair ty = (AilTypes.no_qualifiers, ty) in
   Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
-    acc ^^ pp_symbol sym ^^ P.colon
+    acc ^^ pp_raw_symbol sym ^^ P.colon
         ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
         ^^ P.hardline) finfos P.empty
 
@@ -783,7 +789,7 @@ let pp_file file =
       P.break 1 ^^ P.break 1
     end ^^
     
-    guard show_include begin
+    guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
       !^ "-- C function types" ^^ P.break 1 ^^
       pp_funinfo file.funinfo
     end ^^

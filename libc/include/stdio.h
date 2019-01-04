@@ -1,32 +1,49 @@
-#ifndef	_STDIO_H_
-#define	_STDIO_H_
+#ifndef _STDIO_H_
+#define _STDIO_H_
 
 #include <stdarg.h>
 
 typedef __cerbty_size_t size_t;
-typedef __cerbty_FILE   FILE;
+typedef struct _IO_FILE FILE;
 typedef __cerbty_fpos_t fpos_t;
+
+
+#define F_PERM 1
+#define F_NORD 4
+#define F_NOWR 8
+#define F_EOF 16
+#define F_ERR 32
+#define F_SVB 64
+#define F_APP 128
+
+
 
 #define NULL         __cerbvar_NULL
 #define IOFBF        __cerbvar_IOFBF
 #define IOLBF        __cerbvar_IOLBF
 #define IONBF        __cerbvar_IONBF
-#define BUFSIZ       __cerbvar_BUFSIZ
+//#define BUFSIZ       __cerbvar_BUFSIZ
+#define BUFSIZ 1024
 //#define EOF          __cerbvar_EOF
 #define FOPEN_MAX    __cerbvar_FOPEN_MAX
 #define FILENAME_MAX __cerbvar_FILENAME_MAX
 #define L_tmpnam     __cerbvar_L_tmpnam
-#define SEEK_CUR     __cerbvar_SEEK_CUR
-#define SEEK_END     __cerbvar_SEEK_END
-#define SEEK_SET     __cerbvar_SEEK_SET
+//#define SEEK_CUR     __cerbvar_SEEK_CUR
+//#define SEEK_END     __cerbvar_SEEK_END
+//#define SEEK_SET     __cerbvar_SEEK_SET
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
 #define TMP_MAX      __cerbvar_TMP_MAX
-#define stderr       __cerbvar_stderr
-#define stdin        __cerbvar_stdin
+//#define stderr       __cerbvar_stderr
+//#define stdin        __cerbvar_stdin
 //#define stdout       __cerbvar_stdout
 
 // Temporary hack for Toyota tests
 #define EOF          -1
 #define stdout       (FILE*)0
+#define stderr       (FILE*)1
+#define stdin        (FILE*)2
 
 // TEMPORARY HACK
 // #define restrict
