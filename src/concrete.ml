@@ -378,7 +378,7 @@ module Concrete : Memory = struct
     next_alloc_id: allocation_id;
     allocations: allocation IntMap.t;
     next_address: address;
-    funptrmap: string IntMap.t;
+    funptrmap: (Digest.t * string) IntMap.t;
     bytemap: AbsByte.t IntMap.t;
     
     dead_allocations: allocation_id list;
@@ -697,9 +697,12 @@ module Concrete : Memory = struct
                 let n = int_of_bytes false cs in
                 begin match ref_ty with
                   | Function0 _ ->
-                      let opt_name = IntMap.find_opt n funptrmap in
-                      (* FIXME VICTOR *)
-                      MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (Fresh.digest (), N.to_int n, opt_name))))
+                      (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+                      begin match IntMap.find_opt n funptrmap with
+                        | Some (file_dig, name) ->
+                            MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
+                        | None -> failwith "unknown function pointer"
+                      end
                   | _ ->
                       if N.equal n N.zero then
                         (* TODO: check *)
@@ -786,7 +789,7 @@ module Concrete : Memory = struct
           Union0 tag_sym
   
   (* INTERNAL explode_bytes *)
-  let rec explode_bytes funptrmap mval : (string IntMap.t * AbsByte.t list) =
+  let rec explode_bytes funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
     let ret bs = (funptrmap, bs) in
     match mval with
       | MVunspecified ty ->
@@ -814,10 +817,10 @@ module Concrete : Memory = struct
             | PVnull _ ->
                 Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the representation of all NULL pointers to be 0x0");
                 ret @@ List.init ptr_size (fun _ -> AbsByte.v Prov_none (Some '\000'))
-            | PVfunction (Symbol.Symbol (_, n, opt_name)) ->
-                (* TODO(V): *)
+            | PVfunction (Symbol.Symbol (file_dig, n, opt_name)) ->
+                (* TODO: *)
                 (begin match opt_name with
-                  | Some name -> IntMap.add (N.of_int n) name funptrmap
+                  | Some name -> IntMap.add (N.of_int n) (file_dig, name) funptrmap
                   | None -> funptrmap
                 end, List.map (AbsByte.v prov) begin
                   bytes_of_int

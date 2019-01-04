@@ -1,7 +1,7 @@
 open import Pervasives
 
 import Core Core_ctype Boot Decode Output Set_extra Map
-import Core_aux Builtins
+import Core_aux Builtins Core_linking
 module Caux = Core_aux
 
 open import Utils Show Errors
@@ -1257,17 +1257,6 @@ let finalize debug_str dr_st =
 
 
 
-let create_extern_symmap exts =
-  Map_extra.fold (fun _ (decls, lk) acc ->
-    match lk with
-    | Core.LK_none -> acc
-    | Core.LK_tentative def ->
-      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
-    | Core.LK_normal def ->
-      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
-  end) exts Map.empty
-
-
 (* TODO: it is problematic for proofy backend that this function may diverge *)
 (* TODO: HACK *)
 let initial_driver_state file fs_state =
@@ -1295,7 +1284,7 @@ let initial_driver_state file fs_state =
 *)
   <|
     core_file=         file;
-    core_extern=       create_extern_symmap file.Core.extern;
+    core_extern=       Core_linking.create_extern_symmap file;
     core_state=        Core_run.initial_core_state;
     core_run_state=    Core_run.initial_core_run_state (Caux.collect_labeled_continuations_NEW file);
     layout_state=      Mem.initial_mem_state;

@@ -17,10 +17,13 @@ let link_extern ext acc =
     m_acc >>= fun (acc_ext, acc_tent) ->
     match Map.lookup k acc with
     | Nothing ->
+      let () = Debug.print_debug 3 [] (fun _ -> "linking (Nothing): " ^ show lk_def) in
       return (Map.insert k (ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_none) ->
+      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_none): " ^ show lk_def) in
       return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, acc_tent)
     | Just (acc_ds, LK_tentative tent) ->
+      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_tentative " ^ show tent ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal _ ->
         return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, tent :: acc_tent)
@@ -30,6 +33,7 @@ let link_extern ext acc =
         return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
       end
     | Just (acc_ds, LK_normal def) ->
+      let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_normal " ^ show def ^ "): " ^ show lk_def) in
       match lk_def with
       | LK_normal _ ->
         link_fail (locOf k) (DuplicateExternalName k)
@@ -81,5 +85,16 @@ let link = function
   | f::fs ->
     List.foldl (fun m_acc f -> m_acc >>= link_aux f) (return f) fs
 end
+
+
+let create_extern_symmap core_file =
+  Map_extra.fold (fun _ (decls, lk) acc ->
+    match lk with
+    | Core.LK_none -> acc
+    | Core.LK_tentative def ->
+      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
+    | Core.LK_normal def ->
+      List.foldl (fun acc decl -> Map.insert decl def acc) acc decls
+  end) core_file.extern Map.empty
 
 

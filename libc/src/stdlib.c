@@ -1,3 +1,5 @@
+#include <string.h>
+#include <stdio.h>
 #include "stdlib.h"
 
 int abs(int i) 
@@ -46,4 +48,30 @@ void srand(unsigned int seed)
   __cerb_next = seed;
 }
 
+// TODO: not sure about this!!
+// I might need to include as a Cerberus variable
+static char **__environ;
 
+static char *__strchrnul(const char *s, int c)
+{
+  c = (unsigned char)c;
+  if (!c) return (char *)s + strlen(s);
+  for (; *s && *(unsigned char *)s != c; s++);
+  return (char *)s;
+}
+
+char *getenv(const char *name)
+{
+  size_t l = __strchrnul(name, '=') - (char*)name;
+  if (l && !name[l] && __environ)
+    for (char **e = __environ; *e; e++)
+      if (!strncmp(name, *e, l) && l[*e] == '=')
+        return *e + l+1;
+  return 0;
+}
+
+// TODO: this is wrong!! need to change when include FILE
+int fileno (FILE *f)
+{
+  return (int)f;
+}

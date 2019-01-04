@@ -329,6 +329,16 @@ type linking_kind =
   | LK_tentative of Symbol.sym
   | LK_normal of Symbol.sym
 
+instance (Show linking_kind)
+ let show x = 
+   match x with
+   | LK_none -> "LK_none"
+   | LK_tentative sym -> "LK_tentative" ^ show sym
+   | LK_normal sym -> "LK_normal" ^ show sym
+   end
+end
+
+
 type extern_map =
   map Cabs.cabs_identifier (list Symbol.sym * linking_kind)
 

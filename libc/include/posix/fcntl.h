@@ -14,6 +14,8 @@
 #define F_GETOWN        8
 #define F_SETOWN        9
 
+#define FD_CLOEXEC 1
+
 #define F_DUPFD_CLOEXEC 1
 
 #define F_RDLCK         0

@@ -192,6 +192,10 @@ let cerberus debug_level progress core_obj
         return success
       else
         prelude >>= main >>= Core_linking.link >>= fun core_file ->
+        (*Pipeline.run_pp None (Pp_core.All.pp_file core_file);*)
+        (*Pipeline.run_pp None (Pp_core.All.pp_funinfo core_file.funinfo);
+        Pipeline.run_pp None (Pp_core.All.pp_extern_symmap (Core_linking.create_extern_symmap core_file));
+          *)
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in

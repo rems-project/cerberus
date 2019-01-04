@@ -1000,7 +1000,6 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
         (* TODO: being conservative here (aka STD compliant) *)
         tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
     | (Builtin str1, Builtin str2) ->
-        (* TODO: this is too strict *)
         str1 = str2
     | (Atomic atom_ty1, Atomic atom_ty2) ->
         are_compatible (no_qualifiers, atom_ty1) (no_qualifiers, atom_ty2)
@@ -1141,8 +1140,13 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
         Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
+    | (Builtin str1, Builtin str2) ->
+        (* NOTE: We're conservative here. *)
+        if str1 = str2 then
+          Just (Ctype (a1++a2) (Builtin str1))
+        else
+          Nothing
     | _ ->
-        (* TODO: this might be problematic for Builtins *)
         Nothing
   end
 

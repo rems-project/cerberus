@@ -43,6 +43,9 @@ let parse_tm date time =
 
 let parse_line l =
   match String.split_on_char ' ' l with
+  | ip :: date :: [time] ->
+    let date = parse_tm date time in
+    Some { ip; date; act_model = ""; source = "" }
   | ip :: date :: time :: act_model :: source_0 :: source_n ->
     if String.get source_0 0 <> '"' then begin
       prerr_endline @@ "Error parsing: " ^ l;

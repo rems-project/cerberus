@@ -2,7 +2,8 @@ SRC_C=src/ctype.c \
 		src/stdio.c \
 		src/stdlib.c \
 		src/string.c \
-		src/time.c
+		src/time.c \
+		src/unistd.c
 
 SRC_M=src/math.c
 

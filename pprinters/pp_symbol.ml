@@ -2,9 +2,9 @@ open Symbol
 open Pp_prelude
 
 
-let to_string (Symbol (_, n, str_opt)) =
+let to_string (Symbol (dig, n, str_opt)) =
   let str = match str_opt with | Some str -> str | None -> "a" in
-  str ^ "_" ^ string_of_int n
+  str ^ "_" ^ string_of_int n (*^ "_" ^ (try Digest.to_hex dig with _ -> "invalid")*)
 
 let to_string_pretty (Symbol (_, n, name_opt) as s) =
   match name_opt with
