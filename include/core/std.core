@@ -267,6 +267,7 @@ builtin snprintf (pointer, integer, [integer], [(ctype, pointer)]): eff loaded i
 builtin sprintf  (pointer, [integer], [(ctype, pointer)])         : eff loaded integer
 builtin rename   ([integer], [integer])                           : eff loaded integer
 
+-- int printf(const char * restrict format, ...);
 proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
   case frmt_ptr_ of
@@ -278,6 +279,7 @@ proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctyp
         pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
   end
 
+-- int snprintf(char * restrict s, size_t n, const char * restrict format, ...);
 proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   let strong s_: loaded pointer = load('char*', s_ptr) in
   let strong n_: loaded integer = load('size_t', n_ptr) in
@@ -291,6 +293,7 @@ proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_p
         pure (undef(<<DUMMY(snprintf_proxy)>>)) -- TODO think about that
   end
 
+-- int sprintf(char * restrict s, const char * restrict format, ...);
 proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
   let strong s_: loaded pointer = load('char*', s_ptr) in
   let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
@@ -315,7 +318,6 @@ proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: point
     | (_: loaded pointer, _: loaded pointer) =>
       pure (undef(<<DUMMY(rename_proxy)>>))
   end
-
 
 ------------------------------------------------------------------------------
 -- <stdlib.h>

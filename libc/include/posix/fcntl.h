@@ -44,6 +44,8 @@
 #define O_CLOEXEC     00000200000
 #define O_TTY_INIT    00000400000
 
+#define AT_FDCWD (-100)
+
 #include <sys/types.h>
 
 struct flock {

@@ -6,36 +6,18 @@
 #include <sys/uio.h>
 #include "stdio.h"
 
+#define MAYBE_WAITERS 0x40000000
+
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 
 // No locks
 #define FLOCK(f)
 #define FUNLOCK(f)
 
-int putchar(int c)
-{
-  return printf("%c", c);
-}
-int puts(const char *s)
-{
-  return printf("%s", s);
-}
-
-static int __fmodeflags(const char *mode)
-{
-  int flags;
-  if (strchr(mode, '+')) flags = O_RDWR;
-  else if (*mode == 'r') flags = O_RDONLY;
-  else flags = O_WRONLY;
-  if (strchr(mode, 'x')) flags |= O_EXCL;
-  if (strchr(mode, 'e')) flags |= O_CLOEXEC;
-  if (*mode != 'r') flags |= O_CREAT;
-  if (*mode == 'w') flags |= O_TRUNC;
-  if (*mode == 'a') flags |= O_APPEND;
-  return flags;
-}
-
 #define UNGET 8
+
+#define getc_unlocked(f) \
+  ( ((f)->rpos != (f)->rend) ? *(f)->rpos++ : __uflow((f)) )
 
 struct _IO_FILE {
   unsigned flags;
@@ -72,6 +54,33 @@ static volatile int ofl_lock[1];
 FILE *volatile __stdin_used;
 FILE *volatile __stdout_used;
 FILE *volatile __stderr_used;
+
+
+int putchar(int c)
+{
+  return printf("%c", c);
+}
+int puts(const char *s)
+{
+  return printf("%s", s);
+}
+
+static int __fmodeflags(const char *mode)
+{
+  int flags;
+  if (strchr(mode, '+')) flags = O_RDWR;
+  else if (*mode == 'r') flags = O_RDONLY;
+  else flags = O_WRONLY;
+  if (strchr(mode, 'x')) flags |= O_EXCL;
+  if (strchr(mode, 'e')) flags |= O_CLOEXEC;
+  if (*mode != 'r') flags |= O_CREAT;
+  if (*mode == 'w') flags |= O_TRUNC;
+  if (*mode == 'a') flags |= O_APPEND;
+  return flags;
+}
+
+
+
 
 FILE **__ofl_lock()
 {
@@ -165,7 +174,7 @@ int __stdio_close(FILE *f)
   return close(f->fd);
 }
 
-FILE *__fdopen(int fd, const char *mode)
+FILE *fdopen(int fd, const char *mode)
 {
   FILE *f;
   //struct winsize wsz;
@@ -237,7 +246,7 @@ FILE *fopen(const char *restrict filename, const char *restrict mode)
   if (flags & O_CLOEXEC)
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 
-  f = __fdopen(fd, mode);
+  f = fdopen(fd, mode);
   if (f) return f;
 
   close(fd);
@@ -422,3 +431,116 @@ int ferror(FILE *f)
   return ret;
 }
 
+static int __uflow(FILE *f)
+{
+  unsigned char c;
+  if (!__toread(f) && f->read(f, &c, 1)==1) return c;
+  return EOF;
+}
+
+static int locking_getc(FILE *f)
+{
+  //if (a_cas(&f->lock, 0, MAYBE_WAITERS-1)) __lockfile(f);
+  int c = getc_unlocked(f);
+  //if (a_swap(&f->lock, 0) & MAYBE_WAITERS)
+  //  __wake(&f->lock, 1, 1);
+  return c;
+}
+
+static inline int do_getc(FILE *f)
+{
+  int l = f->lock;
+  if (l < 0 || l) // && (l & ~MAYBE_WAITERS) == __pthread_self()->tid)
+    return getc_unlocked(f);
+  return locking_getc(f);
+}
+
+int fgetc(FILE *f)
+{
+  return do_getc(f);
+}
+
+int fileno(FILE *f)
+{
+  FLOCK(f);
+  int fd = f->fd;
+  FUNLOCK(f);
+  if (fd < 0) {
+    errno = EBADF;
+    return -1;
+  }
+  return fd;
+}
+
+int ungetc(int c, FILE *f)
+{
+  if (c == EOF) return c;
+
+  FLOCK(f);
+
+  if (!f->rpos) __toread(f);
+  if (!f->rpos || f->rpos <= f->buf - UNGET) {
+    FUNLOCK(f);
+    return EOF;
+  }
+
+  *--f->rpos = c;
+  f->flags &= ~F_EOF;
+
+  FUNLOCK(f);
+  return c;
+}
+
+static int __fseeko_unlocked(FILE *f, off_t off, int whence)
+{
+  /* Adjust relative offset for unread data in buffer, if any. */
+  if (whence == SEEK_CUR && f->rend) off -= f->rend - f->rpos;
+
+  /* Flush write buffer, and report error on failure. */
+  if (f->wpos != f->wbase) {
+    f->write(f, 0, 0);
+    if (!f->wpos) return -1;
+  }
+
+  /* Leave writing mode */
+  f->wpos = f->wbase = f->wend = 0;
+
+  /* Perform the underlying seek. */
+  if (f->seek(f, off, whence) < 0) return -1;
+
+  /* If seek succeeded, file is seekable and we discard read buffer. */
+  f->rpos = f->rend = 0;
+  f->flags &= ~F_EOF;
+  
+  return 0;
+}
+
+static int __fseeko(FILE *f, off_t off, int whence)
+{
+  int result;
+  FLOCK(f);
+  result = __fseeko_unlocked(f, off, whence);
+  FUNLOCK(f);
+  return result;
+}
+
+int fseek(FILE *f, long off, int whence)
+{
+  return __fseeko(f, off, whence);
+}
+
+void rewind(FILE *f)
+{
+  FLOCK(f);
+  __fseeko_unlocked(f, 0, SEEK_SET);
+  f->flags &= ~F_ERR;
+  FUNLOCK(f);
+}
+
+int remove(const char *path)
+{
+  int r = unlink(path);
+  if (r==-EISDIR)
+    r = rmdir(path);
+  return r;
+}

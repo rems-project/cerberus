@@ -70,8 +70,3 @@ char *getenv(const char *name)
   return 0;
 }
 
-// TODO: this is wrong!! need to change when include FILE
-int fileno (FILE *f)
-{
-  return (int)f;
-}
