@@ -39,6 +39,9 @@ module BmcM = struct
 
     bindings         : (Expr.expr list) option;
     vcs              : (BmcVC.vc list) option;
+
+    (* Memory stuff *)
+    mem_bindings     : (Expr.expr list) option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -57,6 +60,7 @@ module BmcM = struct
     ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
+    ; mem_bindings     = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -66,8 +70,8 @@ module BmcM = struct
     let (file, final_state) =
       BmcInline.run initial_state (BmcInline.inline st.file st.fn_to_check) in
     put {st with file = file;
-                 inline_pexpr_map = Some (final_state.inline_pexpr_map);
-                 inline_expr_map = Some (final_state.inline_expr_map)}
+                 inline_pexpr_map = Some final_state.inline_pexpr_map;
+                 inline_expr_map = Some final_state.inline_expr_map}
 
   let do_ssa : unit eff =
     get >>= fun st ->
@@ -150,10 +154,35 @@ module BmcM = struct
 
     put { st with vcs = Some simplified_vcs}
 
+  (* Compute memory bindings using sequential mode *)
+  let do_seq_mem : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcSeqMem.mk_initial (Option.get st.inline_expr_map)
+                           (Option.get st.expr_map)
+                           (Option.get st.action_map)
+                           (Option.get st.case_guard_map)
+                           (Option.get st.drop_cont_map) in
+    let (bindings, _) =
+      BmcSeqMem.run initial_state
+                    (BmcSeqMem.do_file st.file st.fn_to_check) in
+    let simplified_bindings =
+      List.map (fun e -> Expr.simplify e None) bindings in
+    put { st with mem_bindings = Some simplified_bindings }
+
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
+
+  (* ===== Extract stuff from model *)
+  let find_satisfied_vcs (model: Model.model) (vcs: BmcVC.vc list)
+                         : BmcVC.vc list =
+    List.filter (fun (expr, dbg) ->
+      match Model.eval model expr false with
+      | Some b -> Boolean.is_false b
+      | None -> assert false
+    ) vcs
 end
 
 let initialise_solver (solver: Solver.solver) =
@@ -180,6 +209,8 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_drop_cont >>
     BmcM.do_bindings  >>
     BmcM.do_vcs       >>
+    BmcM.do_seq_mem   >>
+    (* TODO: memory *)
     BmcM.get_file >>= fun file ->
     if !!bmc_conf.debug_lvl >= 3 then pp_file file;
     BmcM.return () in
@@ -191,23 +222,24 @@ let bmc_file (file              : unit typed_file)
   bmc_debug_print 5 "====VCS";
   List.iter (fun (e, _) -> bmc_debug_print 5 (Expr.to_string e))
             (Option.get final_state.vcs);
+  bmc_debug_print 5 "====MEM_BINDINGS";
+  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
+            (Option.get final_state.mem_bindings);
 
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
+  Solver.add g_solver (Option.get final_state.mem_bindings);
   begin match Solver.check g_solver [] with
   | SATISFIABLE ->
       (*let model = Option.get (Solver.get_model g_solver) in*)
-      print_endline "Ckpt passed: bindings are SAT"
+      print_endline "Checkpoint passed: bindings are SAT"
   | UNSATISFIABLE ->
       failwith "ERROR: Bindings unsatisfiable. Should always be sat."
   | UNKNOWN ->
       failwith (sprintf "ERROR: status unknown. Reason: %s"
                         (Solver.get_reason_unknown g_solver))
   end;
-  (* TODO: add memory constraints *)
 
-  (* Add VCs; TODO: track which ones failed somehow?
-   * Maybe need to record bindings *)
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
     g_solver
@@ -216,12 +248,19 @@ let bmc_file (file              : unit typed_file)
   bmc_debug_print 1 "==== Checking VCS";
   begin match Solver.check g_solver [] with
   | SATISFIABLE ->
-      (*let model = Option.get (Solver.get_model g_solver) in*)
       begin
       print_endline "OUTPUT: satisfiable";
       if !!bmc_conf.output_model then
+        begin
         let model = Option.get (Solver.get_model g_solver) in
-        print_endline (Model.to_string model)
+        print_endline (Model.to_string model);
+        (* TODO: print this out independently of --bmc_output_model*)
+        let satisfied_vcs =
+          BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
+        List.iter (fun (expr, dbg) ->
+          printf "%s: %s\n" (BmcVC.vc_debug_to_str dbg) (Expr.to_string expr)
+        ) satisfied_vcs;
+        end
       end
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)"

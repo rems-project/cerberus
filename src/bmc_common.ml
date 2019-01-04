@@ -157,18 +157,6 @@ let rec pattern_match (Pattern(_,pattern): typed_pattern)
         assert false
   | _ -> assert false
 
-let compute_case_guards (patterns: typed_pattern list)
-                        (to_match: Expr.expr)
-                        : Expr.expr * Expr.expr list =
-  let pattern_guards =
-    List.map (fun pat -> pattern_match pat to_match) patterns in
-  let case_guards = List.mapi (
-      fun i expr ->
-        mk_and [ mk_not (mk_or (list_take i pattern_guards))
-               ; expr]) pattern_guards in
-  let vc = mk_or pattern_guards in
-  (vc, case_guards)
-
 let mk_guarded_ite (exprs : Expr.expr list)
                    (guards: Expr.expr list) =
   assert (List.length exprs = List.length guards);

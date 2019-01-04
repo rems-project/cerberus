@@ -940,7 +940,6 @@ let rec pattern_match (Pattern(_,pattern): typed_pattern)
 (* Compute conditions for matching cases.
  * Returns (vc, case_guard list) where vc asserts that some pattern is matched.
  *)
-(*
 let compute_case_guards (patterns: typed_pattern list)
                         (to_match: Expr.expr)
                         : Expr.expr * Expr.expr list =
@@ -952,7 +951,6 @@ let compute_case_guards (patterns: typed_pattern list)
                ; expr]) pattern_guards in
   let vc = mk_or pattern_guards in
   (vc, case_guards)
-*)
 (*
 let mk_guarded_ite (exprs : Expr.expr list)
                    (guards: Expr.expr list) =
@@ -968,6 +966,7 @@ let mk_guarded_ite (exprs : Expr.expr list)
                          (List.tl rev_guards)
                          (List.tl rev_exprs)
 *)
+
 (* =========== MODEL CHECKING FUNCTIONS =========== *)
 let rec bmc_pexpr (Pexpr(annots, bTy, pe) as pexpr: typed_pexpr) :
                   bmc_pret BmcM.eff =
