@@ -190,5 +190,4 @@ let escaped_char c =
 
 let encode_character_constant n =
   (* TODO: fixing the encoding to ASCII for now *)
-(*  Printf.printf "ENCODING %s\n" (Nat_big_num.to_string n); *)
-  Char.chr (Nat_big_num.to_int n)
+  Char.chr (Nat_big_num.to_int n land 0xff)
