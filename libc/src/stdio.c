@@ -51,10 +51,55 @@ struct _IO_FILE {
 static FILE *ofl_head;
 static volatile int ofl_lock[1];
 
-FILE *volatile __stdin_used;
-FILE *volatile __stdout_used;
-FILE *volatile __stderr_used;
+static int __stdio_close(FILE *f);
+static off_t __stdio_seek(FILE *f, off_t off, int whence);
+static size_t __stdio_read(FILE *f, unsigned char *buf, size_t len);
+static size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len);
+static size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len);
 
+static unsigned char __stdout_buf[BUFSIZ+UNGET];
+static FILE __stdout_FILE = {
+  .flags = F_PERM | F_NORD,
+  .close = __stdio_close,
+  .write = __stdout_write,
+  .seek = __stdio_seek,
+  .buf = __stdout_buf+UNGET,
+  .buf_size = sizeof __stdout_buf-UNGET,
+  .fd = 1,
+  .lock = -1,
+  .lbf = '\n',
+};
+FILE *const stdout = &__stdout_FILE;
+FILE *volatile __stdout_used = &__stdout_FILE;
+
+static unsigned char __stdin_buf[BUFSIZ+UNGET];
+static FILE __stdin_FILE = {
+  .flags = F_PERM | F_NOWR,
+  .close = __stdio_close,
+  .read = __stdio_read,
+  .seek = __stdio_seek,
+  .buf = __stdin_buf+UNGET,
+  .buf_size = sizeof __stdin_buf-UNGET,
+  .fd = 0,
+  .lock = -1,
+};
+FILE *const stdin = &__stdin_FILE;
+FILE *volatile __stdin_used = &__stdin_FILE;
+
+static unsigned char __stderr_buf[UNGET];
+static FILE __stderr_FILE = {
+  .flags = F_PERM | F_NORD,
+  .close = __stdio_close,
+  .write = __stdio_write,
+  .seek = __stdio_seek,
+  .buf = __stderr_buf+UNGET,
+  .buf_size = 0,
+  .fd = 2,
+  .lock = -1,
+  .lbf = -1,
+};
+FILE *const stderr = &__stderr_FILE;
+FILE *volatile __stderr_used = &__stderr_FILE;
 
 int putchar(int c)
 {
@@ -93,7 +138,7 @@ void __ofl_unlock()
   //UNLOCK(ofl_lock);
 }
 
-size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
+static size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 {
   struct iovec iov[2] = {
     { buf, len - !!f->buf_size },
@@ -115,7 +160,7 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
   return len;
 }
 
-size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
+static size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
 {
   struct iovec iovs[2] = {
     { f->wbase, f->wpos-f->wbase },
@@ -147,6 +192,15 @@ size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len)
   }
 }
 
+static size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len)
+{
+  //struct winsize wsz;
+  f->write = __stdio_write;
+  if (!(f->flags & F_SVB)) // && __syscall(SYS_ioctl, f->fd, TIOCGWINSZ, &wsz))
+    f->lbf = -1;
+  return __stdio_write(f, buf, len);
+}
+
 static FILE *__ofl_add(FILE *f)
 {
   FILE **head = __ofl_lock();
@@ -157,19 +211,12 @@ static FILE *__ofl_add(FILE *f)
   return f;
 }
 
-off_t __stdio_seek(FILE *f, off_t off, int whence)
+static off_t __stdio_seek(FILE *f, off_t off, int whence)
 {
-  off_t ret;
-#ifdef SYS__llseek
-  if (llseek(f->fd, off>>32, off, &ret, whence)<0)
-    ret = -1;
-#else
-  ret = lseek(f->fd, off, whence);
-#endif
-  return ret;
+  return lseek(f->fd, off, whence);
 }
 
-int __stdio_close(FILE *f)
+static int __stdio_close(FILE *f)
 {
   return close(f->fd);
 }
