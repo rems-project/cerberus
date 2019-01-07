@@ -3,7 +3,7 @@
 // TODO: isatty
 int isatty (int fd)
 {
-  return 0; // always false
+  return 0;//return (fd == 1 || fd == 2);
 }
 
 static void __procfdname(char *buf, unsigned fd)

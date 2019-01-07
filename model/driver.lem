@@ -413,8 +413,9 @@ let drive_fs_step tid th_st dr_st fs_oper =
       end) dom
     in
     match Set_extra.toList res with
+    | [] -> error ("no symbols for struct " ^ name ^ " in tagDefs")
     | [sym] -> sym
-    | _ -> error ("multiple symbols for struct " ^ name ^ " in tagDefs")
+    | sym::_ -> sym
     end
   in
   let store_dir (fs_st, res) =

@@ -591,3 +591,9 @@ int remove(const char *path)
     r = rmdir(path);
   return r;
 }
+
+// TODO
+void perror(const char *s)
+{
+  printf("perror: %s\n", s);
+}

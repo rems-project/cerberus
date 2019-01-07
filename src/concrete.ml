@@ -697,12 +697,16 @@ module Concrete : Memory = struct
                 let n = int_of_bytes false cs in
                 begin match ref_ty with
                   | Function0 _ ->
-                      (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-                      begin match IntMap.find_opt n funptrmap with
-                        | Some (file_dig, name) ->
-                            MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
-                        | None -> failwith "unknown function pointer"
-                      end
+                      if N.equal n N.zero then
+                        (* TODO: check *)
+                        MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                      else
+                        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+                        begin match IntMap.find_opt n funptrmap with
+                          | Some (file_dig, name) ->
+                              MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
+                          | None -> failwith ("unknown function pointer: " ^ N.to_string n)
+                        end
                   | _ ->
                       if N.equal n N.zero then
                         (* TODO: check *)
