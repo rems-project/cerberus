@@ -41,9 +41,10 @@ typedef __cerbty_fpos_t fpos_t;
 
 // Temporary hack for Toyota tests
 #define EOF          -1
-#define stdout       (FILE*)0
-#define stderr       (FILE*)1
-#define stdin        (FILE*)2
+
+extern FILE *const stdout;
+extern FILE *const stderr;
+extern FILE *const stdin;
 
 // TEMPORARY HACK
 // #define restrict

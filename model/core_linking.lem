@@ -6,11 +6,11 @@ val link_fail: forall 'a. Loc.t -> core_linking_cause -> exceptM 'a (Loc.t * cau
 let link_fail loc cause =
   Exception (loc, Errors.CORE_LINKING cause)
 
-(* NOTE: the function returns a list of redundant tentative global definitions *)
+(* NOTE: the function returns an assoc list of redundant tentative to global definitions *)
 val link_extern: forall 'a. SetType 'a =>
                  map cabs_identifier (list 'a * linking_kind) ->
                  map cabs_identifier (list 'a * linking_kind) ->
-                 exceptM ((map cabs_identifier (list 'a * linking_kind)) * list sym) (Loc.t * cause)
+                 exceptM ((map cabs_identifier (list 'a * linking_kind)) * list (sym * sym)) (Loc.t * cause)
 let link_extern ext acc =
   Map_extra.fold (fun k (ds, lk_def) m_acc ->
     let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in
@@ -25,10 +25,10 @@ let link_extern ext acc =
     | Just (acc_ds, LK_tentative tent) ->
       let () = Debug.print_debug 3 [] (fun _ -> "linking (LK_tentative " ^ show tent ^ "): " ^ show lk_def) in
       match lk_def with
-      | LK_normal _ ->
-        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, tent :: acc_tent)
-      | LK_tentative _ ->
-        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, tent :: acc_tent)
+      | LK_normal def ->
+        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def) :: acc_tent)
+      | LK_tentative def_tent ->
+        return (Map.insert k (ds ++ acc_ds, lk_def) acc_ext, (tent, def_tent) :: acc_tent)
       | LK_none ->
         return (Map.insert k (ds ++ acc_ds, LK_tentative tent) acc_ext, acc_tent)
       end
@@ -38,7 +38,7 @@ let link_extern ext acc =
       | LK_normal _ ->
         link_fail (locOf k) (DuplicateExternalName k)
       | LK_tentative tent ->
-        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, tent :: acc_tent)
+        return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, (tent, def) :: acc_tent)
       | LK_none ->
         return (Map.insert k (ds ++ acc_ds, LK_normal def) acc_ext, acc_tent)
       end
@@ -57,21 +57,195 @@ let link_main opt_m1 opt_m2 =
 val list_remove_assoc: forall 'a 'b. 'a -> list ('a * 'b) -> list ('a * 'b)
 declare ocaml target_rep function list_remove_assoc = `List.remove_assoc`
 
+val set_fold: forall 'a 'b. ('a -> 'b -> 'b) -> set 'a -> 'b -> 'b
+declare ocaml target_rep function set_fold = `Pset.fold`
+
+let rec symbols_in_pattern acc (Pattern _ pat) =
+  match pat with
+  | CaseBase (Just sym, _) -> Set.insert sym acc
+  | CaseBase _ -> {}
+  | CaseCtor _ pats -> List.foldl symbols_in_pattern acc pats
+  end
+
+let rec free_pexpr acc (Pexpr _ _ pe) =
+  match pe with
+  | PEsym sym ->
+      Set.insert sym acc
+  | PEimpl _ ->
+      acc
+  | PEval _ ->
+      acc
+  | PEconstrained cpes ->
+      List.foldl (fun acc (_, pe) -> free_pexpr acc pe) acc cpes
+  | PEundef _ _ ->
+      acc
+  | PEerror _ pe ->
+      free_pexpr acc pe
+  | PEctor _ pes ->
+      List.foldl free_pexpr acc pes
+  | PEcase pe pat_pes ->
+      List.foldl (fun acc (pat, pe) ->
+        (free_pexpr acc pe) \ (symbols_in_pattern {} pat)
+      ) (free_pexpr acc pe) pat_pes
+  | PEarray_shift pe1 _ pe2 ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | PEmember_shift pe1 sym _ ->
+      free_pexpr (Set.insert sym acc) pe1
+  | PEnot pe ->
+      free_pexpr acc pe
+  | PEop _ pe1 pe2 ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | PEstruct _ membs ->
+      List.foldl (fun acc (_, pe) -> free_pexpr acc pe) acc membs
+  | PEunion _ _ pe ->
+      free_pexpr acc pe
+  | PEcfunction pe ->
+      free_pexpr acc pe
+  | PEmemberof _ _ _ ->
+      acc
+  | PEcall _ pes ->
+      List.foldl free_pexpr acc pes
+  | PElet pat pe1 pe2 ->
+      (free_pexpr (free_pexpr acc pe1) pe2) \ (symbols_in_pattern {} pat)
+  | PEif pe1 pe2 pe3 ->
+      free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
+  | PEis_scalar pe ->
+      free_pexpr acc pe
+  | PEis_integer pe ->
+      free_pexpr acc pe
+  | PEis_signed pe ->
+      free_pexpr acc pe
+  | PEis_unsigned pe ->
+      free_pexpr acc pe
+  | PEare_compatible pe1 pe2 ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  end
+
+let free_paction acc (Paction _ (Action _ _ act)) =
+  match act with
+  | Create pe1 pe2 _ ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | CreateReadOnly pe1 pe2 pe3 _ ->
+      free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
+  | Alloc pe1 pe2 _ ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | Kill _ pe ->
+      free_pexpr acc pe
+  | Store _ pe1 pe2 pe3 _ ->
+      free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
+  | Load pe1 pe2 _ ->
+      free_pexpr (free_pexpr acc pe1) pe2
+  | RMW pe1 pe2 pe3 pe4 _ _ ->
+      free_pexpr (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) pe4
+  | Fence _ ->
+      acc
+  end
+
+let rec free_expr acc (Expr _ e) =
+  match e with
+  | Epure pe ->
+      free_pexpr acc pe
+  | Ememop _ pes ->
+      List.foldl free_pexpr acc pes
+  | Eaction pact ->
+      free_paction acc pact
+  | Ecase pe pat_es ->
+      List.foldl (fun acc (pat, e) ->
+        (free_expr acc e) \ (symbols_in_pattern {} pat)
+      ) (free_pexpr acc pe) pat_es
+  | Elet pat pe e ->
+      (free_expr (free_pexpr acc pe) e) \ (symbols_in_pattern {} pat)
+  | Eif pe1 e2 e3 ->
+      free_expr (free_expr (free_pexpr acc pe1) e2) e3
+  | Eskip ->
+      acc
+  | Eccall _ pe1 pe2 pes ->
+      List.foldl free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pes
+  | Eproc _ _ pes ->
+      List.foldl free_pexpr acc pes
+  | Eunseq es ->
+      List.foldl free_expr acc es
+  | Ewseq pat e1 e2 ->
+      (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
+  | Esseq pat e1 e2 ->
+      (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
+  | Easeq _ _ _ ->
+      error ("TODO: free_expr Easeq")
+  | Eindet _ e ->
+      free_expr acc e
+  | Ebound _ e ->
+      free_expr acc e
+  | End es ->
+      List.foldl free_expr acc es
+  | Esave _ _ _ ->
+      (* globals should not depend on Esave *)
+      error ("TODO: free_expr Esave")
+  | Erun _ _ _  ->
+      (* globals should not depend on Erun *)
+      error ("TODO: free_expr Erun")
+  | Epar es ->
+      List.foldl free_expr acc es
+  | Ewait _ ->
+      acc
+  end
+
+let free acc = function
+  | GlobalDef _ e -> free_expr acc e
+  | GlobalDecl _ -> acc
+  end
+
+val empty_dep: list (sym * set sym) -> set sym
+let empty_dep map =
+  Set.fromList (List.map fst (List.filter (fun (_, edges) -> Set.null edges) map))
+
+(* Topological order of globals *)
+val topo_order: list Symbol.sym -> set Symbol.sym ->
+  list (Symbol.sym * set Symbol.sym) -> list Symbol.sym
+let rec topo_order l s g =
+  if Set.null s then l
+  else begin
+    let n = Set_extra.choose s in
+    let g = List.map (fun (m, edges) -> (m, edges \ {n}))
+      (List.filter (fun (n', _) -> n <> n') g) in
+    let s' = empty_dep g in
+    topo_order (n::l) (Set.(union) (s \ {n}) s') g
+  end
+
+let merge_globs gs1 gs2 def_tents =
+  let gs = gs1 ++ gs2 in
+  (* create an associate list of the dependencies for each global *)
+  let dep_map =
+    List.map (fun (sym, g) ->
+      let acc = List.map snd (List.filter (fun (def, _) -> def = sym) def_tents) in
+      (sym, free (Set.fromList acc) g)
+    ) gs
+  in
+  let init_set = empty_dep dep_map in
+  let ordered_syms = topo_order [] init_set dep_map in
+  (* reorder gs according to ordered_syms *)
+  let gs_map = List.foldl (fun acc (s, g) -> Map.insert s g acc) Map.empty gs in
+  let ordered_gs = List.map (fun k ->
+    match Map.lookup k gs_map with
+    | Just g -> (k, g)
+    | Nothing -> error "merge_globs"
+    end) ordered_syms
+  in
+  (* remove reduntant tentative definitions *)
+  List.foldl (fun acc g -> list_remove_assoc g acc) (List.reverse ordered_gs)
+    (List.map fst def_tents)
+
 val link_aux: forall 'a 'b. generic_file 'a 'b ->
                            generic_file 'a 'b ->
                            exceptM (generic_file 'a 'b) (Loc.t * cause)
 let link_aux f1 f2 =
   link_extern f2.extern f1.extern >>= fun (extern, reduntant_globs) ->
   link_main f1.main f2.main >>= fun main ->
-  let globs =
-    List.foldl (fun acc g -> list_remove_assoc g acc)
-      (f1.globs ++ f2.globs) reduntant_globs
-  in return
+  return
     <| main=    main;
        tagDefs= f1.tagDefs union f2.tagDefs;
        stdlib=  f1.stdlib;
        impl=    f1.impl;
-       globs=   globs;
+       globs=   merge_globs f1.globs f2.globs reduntant_globs;
        funs=    f1.funs union f2.funs;
        extern=  extern;
        funinfo= f1.funinfo union f2.funinfo;
