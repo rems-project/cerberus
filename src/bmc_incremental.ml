@@ -488,7 +488,6 @@ module BmcSSA = struct
                                 uid)
     | Some e -> return e
 
-
   let update_inline_pexpr (uid: int) (pexpr: typed_pexpr) : unit eff =
     get >>= fun st ->
     put {st with inline_pexpr_map = Pmap.add uid pexpr st.inline_pexpr_map}
@@ -1960,6 +1959,154 @@ module BmcVC = struct
       | _ -> assert false
       ) >>= fun vcs_expr ->
       return ((List.concat vcs_globs) @ vcs_expr)
+end
+
+(* Return value *)
+module BmcRet = struct
+
+  type internal_state = {
+    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    expr_map        : (int, Expr.expr) Pmap.map;
+    case_guard_map  : (int, Expr.expr list) Pmap.map;
+    drop_cont_map   : (int, Expr.expr) Pmap.map;
+
+    (*ret_map  : (int, Expr.expr) Pmap.map;*)
+    ret_val  : Expr.expr option;
+  }
+
+  include EffMonad(struct type state = internal_state end)
+
+  let mk_initial inline_expr_map
+                 expr_map
+                 case_guard_map
+                 drop_cont_map
+                 : state =
+  { inline_expr_map  = inline_expr_map;
+    expr_map         = expr_map;
+    case_guard_map   = case_guard_map;
+    drop_cont_map    = drop_cont_map;
+
+    ret_val          = None;
+  }
+
+  (* Getters/setters *)
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcRet inline_expr not found %d"
+                                uid)
+    | Some e -> return e
+
+  let get_expr (uid: int): Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.expr_map with
+    | None   -> failwith (sprintf "Error: BmcRet expr not found %d" uid)
+    | Some e -> return e
+
+  let get_case_guards (uid: int): (Expr.expr list) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.case_guard_map with
+    | None -> failwith (sprintf "Error: BmcRet case guard not found %d" uid)
+    | Some es -> return es
+
+  let get_drop_cont (uid: int) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.drop_cont_map with
+    | None -> failwith (sprintf "Error BmcRet: uid %d not found in drop_cont_map" uid)
+    | Some expr -> return expr
+
+  let get_ret_const : Expr.expr eff =
+    get >>= fun st ->
+    assert (is_some st.ret_val);
+    return (Option.get st.ret_val)
+
+  let set_ret_const (expr: Expr.expr) : unit eff =
+    get >>= fun st ->
+    put {st with ret_val = Some expr}
+
+  (* z3 stuff *)
+  let rec do_e (Expr(annots, expr_) as expr)
+              : (Expr.expr list) eff =
+    let uid = get_id_expr expr in
+    match expr_ with
+    | Epure pe ->
+        return []
+    | Ememop (memop, pes) ->
+        return []
+    | Eaction paction ->
+        return []
+    | Ecase (pe, cases) ->
+        mapM do_e (List.map snd cases) >>= fun ret_cases ->
+        get_case_guards uid >>= fun guards ->
+        let guard_cases guard = List.map (mk_implies guard) in
+        return (List.concat (List.map2 guard_cases guards ret_cases))
+    | Elet _        -> assert false
+    | Eif (cond, e1, e2) ->
+        do_e e1 >>= fun ret_e1 ->
+        do_e e2 >>= fun ret_e2 ->
+
+        get_case_guards uid >>= fun guards ->
+        let (guard1, guard2) = (
+          match guards with
+          | [g1;g2] -> (g1,g2)
+          | _ -> assert false) in
+
+        return  ((List.map (mk_implies guard1) ret_e1)
+                @(List.map (mk_implies guard2) ret_e2))
+    | Eskip         ->
+        return []
+    | Eccall _      -> assert false
+    | Eproc _       -> assert false
+    | Eunseq elist ->
+        mapM do_e elist >>= fun ret_elist ->
+        return [mk_or (List.concat ret_elist)]
+    | Ewseq (pat, e1, e2) (* fall through *)
+    | Esseq (pat, e1, e2) ->
+        do_e e1 >>= fun ret_e1 ->
+        do_e e2 >>= fun ret_e2 ->
+
+        get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
+        let e2_guard = mk_not e1_drop_cont in
+        return (ret_e1 @ (List.map (mk_implies e2_guard) ret_e2))
+    | Easeq _       -> assert false
+    | Eindet _      -> assert false
+    | Ebound (_, e) ->
+        do_e e
+    | End es ->
+        mapM do_e es >>= fun ret_es ->
+        get_case_guards uid >>= fun guards ->
+        let guard_cases guard = List.map (mk_implies guard) in
+        return (List.concat (List.map2 guard_cases guards ret_es))
+    | Esave _ ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_e inline_expr
+    | Erun _ ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_e inline_expr    >>= fun ret_expr ->
+        get_expr (get_id_expr inline_expr) >>= fun z3_expr ->
+
+        get_ret_const       >>= fun ret_const ->
+        return ((mk_eq ret_const z3_expr) :: ret_expr)
+    | Epar es -> assert false
+    | Ewait _       -> assert false
+
+  let do_file (file: unit typed_file) (fn_to_check: sym_ty)
+              : (Expr.expr * Expr.expr list) eff =
+    (match Pmap.lookup fn_to_check file.funs with
+    | Some (Proc(annot, bTy, params, e)) ->
+        let uid = get_id_expr e in
+        let expr = mk_fresh_const
+            (sprintf "ret_%s{%d}" (symbol_to_string fn_to_check) uid)
+            (cbt_to_z3 bTy) in
+        set_ret_const expr >>
+        do_e e >>= fun bindings ->
+        return (expr, bindings)
+    | Some (Fun(ty, params, pe)) ->
+        get_expr (get_id_pexpr pe) >>= fun z3_pe ->
+        return (z3_pe, [])
+    | _ -> assert false
+    )
+
 end
 
 (* Sequential memory model; read from most recent write *)

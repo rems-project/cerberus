@@ -40,6 +40,9 @@ module BmcM = struct
     bindings         : (Expr.expr list) option;
     vcs              : (BmcVC.vc list) option;
 
+    ret_expr         : Expr.expr option;
+    ret_bindings     : (Expr.expr list) option;
+
     (* Memory stuff *)
     mem_bindings     : (Expr.expr list) option;
   }
@@ -60,6 +63,8 @@ module BmcM = struct
     ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
+    ; ret_expr         = None
+    ; ret_bindings     = None
     ; mem_bindings     = None
     }
 
@@ -154,6 +159,21 @@ module BmcM = struct
 
     put { st with vcs = Some simplified_vcs}
 
+  let do_ret_cond : unit eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcRet.mk_initial (Option.get st.inline_expr_map)
+                        (Option.get st.expr_map)
+                        (Option.get st.case_guard_map)
+                        (Option.get st.drop_cont_map) in
+    let ((ret_expr, bindings), _) =
+      BmcRet.run initial_state
+                 (BmcRet.do_file st.file st.fn_to_check) in
+    let simplified_bindings =
+      List.map (fun e -> Expr.simplify e None) bindings in
+    put {st with ret_expr = Some ret_expr;
+                 ret_bindings = Some simplified_bindings}
+
   (* Compute memory bindings using sequential mode *)
   let do_seq_mem : unit eff =
     get >>= fun st ->
@@ -209,6 +229,7 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_drop_cont >>
     BmcM.do_bindings  >>
     BmcM.do_vcs       >>
+    BmcM.do_ret_cond  >>
     BmcM.do_seq_mem   >>
     (* TODO: memory *)
     BmcM.get_file >>= fun file ->
@@ -225,20 +246,27 @@ let bmc_file (file              : unit typed_file)
   bmc_debug_print 5 "====MEM_BINDINGS";
   List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
             (Option.get final_state.mem_bindings);
+  bmc_debug_print 5 "====RET_BINDINGS";
+  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
+            (Option.get final_state.ret_bindings);
+
 
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
   Solver.add g_solver (Option.get final_state.mem_bindings);
-  begin match Solver.check g_solver [] with
-  | SATISFIABLE ->
-      (*let model = Option.get (Solver.get_model g_solver) in*)
-      print_endline "Checkpoint passed: bindings are SAT"
-  | UNSATISFIABLE ->
-      failwith "ERROR: Bindings unsatisfiable. Should always be sat."
-  | UNKNOWN ->
-      failwith (sprintf "ERROR: status unknown. Reason: %s"
-                        (Solver.get_reason_unknown g_solver))
-  end;
+  Solver.add g_solver (Option.get final_state.ret_bindings);
+  let ret_value =
+    begin match Solver.check g_solver [] with
+    | SATISFIABLE ->
+        print_endline "Checkpoint passed: bindings are SAT";
+        let model = Option.get (Solver.get_model g_solver) in
+        Model.eval model (Option.get final_state.ret_expr) false
+    | UNSATISFIABLE ->
+        failwith "ERROR: Bindings unsatisfiable. Should always be sat."
+    | UNKNOWN ->
+        failwith (sprintf "ERROR: status unknown. Reason: %s"
+                          (Solver.get_reason_unknown g_solver))
+    end in
 
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
@@ -263,7 +291,9 @@ let bmc_file (file              : unit typed_file)
         end
       end
   | UNSATISFIABLE ->
-      print_endline "OUTPUT: unsatisfiable! No errors found. :)"
+      print_endline "OUTPUT: unsatisfiable! No errors found. :)";
+      assert (is_some ret_value);
+      printf "Return value: %s\n" (Expr.to_string (Option.get ret_value))
   | UNKNOWN ->
       printf "OUTPUT: unknown. Reason: %s\n"
              (Solver.get_reason_unknown g_solver)
