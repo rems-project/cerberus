@@ -196,7 +196,7 @@ module type Memory = sig
 *)
 
   (* JSON serialisation *)
-  val serialise_mem_state: mem_state -> Json.json
+  val serialise_mem_state: Digest.t -> mem_state -> Json.json
   
   
   

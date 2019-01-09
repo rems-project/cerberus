@@ -291,15 +291,61 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
           io.warn (fun () -> "BACKEND FOUND EMPTY RESULT") >>= fun () ->
           return (Either.Right 0)
 
-let read_core_object fname =
+(* NOTE: Every map needs to be serialised as associated lists, since marshalling
+ * maps would require the flag Marshal.Closures. In this case, the output of
+ * marshaling can only be read back in processes that run exactly the same
+ * program, with exactly the same compiled code. *)
+type 'a core_dump =
+  { dump_main: Symbol.sym option;
+    dump_tagDefs: (Symbol.sym * Tags.tag_definition) list;
+    dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
+    dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
+    dump_extern: (Cabs.cabs_identifier * (Symbol.sym list * Core.linking_kind)) list;
+    dump_funinfo: (Symbol.sym * (Core_ctype.ctype0 * Core_ctype.ctype0 list * bool * bool)) list;
+  }
+
+let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
+  if d1 = d2 then compare n1 n2
+  else Digest.compare d1 d2
+
+let cabsid_compare (Cabs.CabsIdentifier (_, s1)) (Cabs.CabsIdentifier (_, s2)) =
+  String.compare s1 s2
+
+let map_from_assoc compare =
+  List.fold_left (fun acc (k, v) -> Pmap.add k v acc) (Pmap.empty compare)
+
+let empty = Pmap.empty compare
+
+let empty2 = Pmap.empty compare
+
+let read_core_object (core_stdlib, core_impl) fname =
+  let open Core in
   let ic = open_in_bin fname in
-  let core_file = Marshal.from_channel ic in
+  let dump = Marshal.from_channel ic in
   close_in ic;
-  core_file
+  { main=    dump.main;
+    tagDefs= map_from_assoc sym_compare dump.dump_tagDefs;
+    stdlib=  snd core_stdlib;
+    impl=    core_impl;
+    globs=   dump.dump_globs;
+    funs=    map_from_assoc sym_compare dump.dump_funs;
+    extern=  map_from_assoc cabsid_compare dump.dump_extern;
+    funinfo= map_from_assoc sym_compare dump.dump_funinfo;
+  }
 
 let write_core_object core_file fname =
+  let open Core in
+  let dump =
+    { dump_main = core_file.main;
+      dump_tagDefs = Pmap.bindings_list core_file.tagDefs;
+      dump_globs = core_file.globs;
+      dump_funs = Pmap.bindings_list core_file.funs;
+      dump_extern = Pmap.bindings_list core_file.extern;
+      dump_funinfo = Pmap.bindings_list core_file.funinfo;
+    }
+  in
   let oc = open_out_bin fname in
-  Marshal.to_channel oc core_file [Marshal.No_sharing; Marshal.Closures];
+  Marshal.to_channel oc dump [];
   close_out oc
 
 

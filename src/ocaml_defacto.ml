@@ -650,7 +650,7 @@ let serialise_map f m =
   let serialise_entry (k, v) = (string_of_int k, f v)
   in `Assoc (List.map serialise_entry (Pmap.bindings_list m))
 
-let serialise_mem_state (m:mem_state) =
+let serialise_mem_state _ (m:mem_state) =
   let not_dead x _ = not @@ Pset.mem x m.dead_allocations in
   let allocs = Pmap.filter not_dead m.allocations in
   `Assoc [("kind", `String "symbolic");

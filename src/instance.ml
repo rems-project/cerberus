@@ -77,8 +77,8 @@ let elaborate ~conf ~filename =
     >>= function
     | (Some cabs, Some ail, core) ->
       core_passes (conf.pipeline, conf.io) ~filename core
-      >>= fun (_, core') ->
-      return (cabs, ail, core')
+      >>= fun core' ->
+      return (core_stdlib, core_impl, cabs, ail, core')
     | _ ->
       failwith "fatal failure core pass"
   with
@@ -107,7 +107,7 @@ let pp_core core =
   let core' = string_of_doc @@ PP.pp_file core in
   (core', !locs)
 
-let result_of_elaboration (cabs, ail, core) =
+let result_of_elaboration (_, _, cabs, ail, core) =
   let elim_paragraph_sym = Str.global_replace (Str.regexp_string "§") "" in
   let mk_elab d = Some (elim_paragraph_sym @@ string_of_doc d) in
   let (core, locs) = pp_core core in
@@ -135,10 +135,13 @@ let execute ~conf ~filename (mode: exec_mode) =
   Debug.print 7 ("Executing in "^string_of_exec_mode mode^" mode: " ^ filename);
   try
     elaborate ~conf ~filename
-    >>= fun (cabs, ail, core) ->
+    >>= fun (core_std, core_lib, cabs, ail, core) ->
+    let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
+    Core_linking.link [core; libc] >>= fun core ->
+    Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
     let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
-    interp_backend dummy_io (Core_run_aux.convert_file core) ~args:[] ~batch:`Batch ~fs:"" ~driver_conf
+    interp_backend dummy_io (Core_run_aux.convert_file core) ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->
       return (String.concat "\n" res)
@@ -175,6 +178,11 @@ let get_state_details st =
   | _ ->
     (Location_ocaml.unknown, None, "", "", outp)
 
+let get_file_hash core =
+  match core.Core.main with
+  | Some (Symbol.Symbol (hash, _, _)) -> hash
+  | None -> failwith "get_file_hash"
+
 let create_node dr_info st next_state =
   let mk_info info =
     { step_kind = info.Driver.step_kind;
@@ -185,7 +193,7 @@ let create_node dr_info st next_state =
   in
   let node_id = new_id () in
   let node_info = mk_info dr_info in
-  let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+  let memory = Ocaml_mem.serialise_mem_state (get_file_hash st.Driver.core_file) st.Driver.layout_state in
   let (c_loc, core_uid, arena, env, outp) = get_state_details st in
   { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; outp }
 
@@ -336,15 +344,18 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   match active_node_opt with
   | None -> (* no active node *)
     hack ~conf Random;
-    elaborate ~conf ~filename >>= fun (_, _, core) ->
+    elaborate ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
+    let core     = Core_aux.set_uid core in
+    let ranges   = create_expr_range_list core in
+    let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
+    Core_linking.link [core; libc] >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
-    let core'    = Core_aux.set_uid @@ Core_run_aux.convert_file core in
-    let ranges   = create_expr_range_list core' in
+    let core'    = Core_run_aux.convert_file core in
     let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
     let (m, st)  = (Driver.drive false false core' [], st0) in
     last_node_id := 0;
     let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
-    let memory = Ocaml_mem.serialise_mem_state st.Driver.layout_state in
+    let memory = Ocaml_mem.serialise_mem_state (get_file_hash core) st.Driver.layout_state in
     let (c_loc, core_uid, arena, env, outp) = get_state_details st in
     let next_state = Some (encode (m, st)) in
     let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; outp } in
