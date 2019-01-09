@@ -46,7 +46,7 @@ let frontend (conf, io) filename core_std =
   if not (Sys.file_exists filename) then
     error ("The file `" ^ filename ^ "' doesn't exist.");
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
-    return @@ read_core_object filename
+    return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
     c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file

@@ -67,5 +67,7 @@ val ocaml_backend:
   (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> unit Core.file ->
   (int, Location_ocaml.t * Errors.cause) Exception.exceptM
 
-val read_core_object: string -> 'a Core.file
-val write_core_object: 'a Core.file -> string -> unit
+val read_core_object:
+  (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
+  string -> unit Core.file
+val write_core_object: unit Core.file -> string -> unit

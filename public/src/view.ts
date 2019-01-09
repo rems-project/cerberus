@@ -504,7 +504,10 @@ export default class View {
           switch (active.info.kind) {
             case 'action request':
             case 'done':
-              children = graph.setChildrenVisible(active.id, true)
+              if (active.info.file === '<internal>' || _.startsWith(active.info.file, 'src/') || _.startsWith(active.info.file, 'include/') || active.info.file === null)
+                children = this.executeInteractiveMode(active.id, lastCline)
+              else
+                children = graph.setChildrenVisible(active.id, true)
               break
             default:
               children = this.executeInteractiveMode(active.id, lastCline)

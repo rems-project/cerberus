@@ -1984,8 +1984,13 @@ let combine_prov prov1 prov2 =
             ("values", `List (List.map serialise_ui_values a.values));
            ]
 
-  let serialise_mem_state (st: mem_state) : Json.json =
-    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) st.allocations);
+  let serialise_mem_state dig (st: mem_state) : Json.json =
+    let allocs = IntMap.filter (fun _ (alloc : allocation) ->
+        match alloc.prefix with
+        | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
+        | _ -> false
+      ) st.allocations in
+    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);
             ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
 
 end
