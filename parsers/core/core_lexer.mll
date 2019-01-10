@@ -162,6 +162,7 @@ let keywords =
       ("Memcpy", T.MEMOP_OP Mem_common.Memcpy);
       ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
       ("Realloc", T.MEMOP_OP Mem_common.Realloc);
+      ("Va_start", T.MEMOP_OP Mem_common.Va_start);
       
       (* for source attributes *)
       ("ailname", T.AILNAME);

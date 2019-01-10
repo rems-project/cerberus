@@ -1089,6 +1089,23 @@ let rec driver with_concurrency =
             liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
 
+        | (Mem_common.Va_start, [Core.Vobject (Core.OVpointer va_ptr); Core.Vlist _ ty_cvals]) ->
+            let ty_ptrs =
+              List.map (function
+                | Core.Vtuple [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr)] -> (ty, ptr)
+                | _ -> error "va_start"
+              end) ty_cvals in
+            liftMem (Mem.va_start va_ptr ty_ptrs) >>
+            ND.return (mk_th_st Core.Vunit)
+
+        | (Mem_common.Va_arg, [Core.Vobject (Core.OVpointer va_ptr); Core.Vctype ty]) ->
+            liftMem (Mem.va_arg va_ptr ty) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
+        | (Mem_common.Va_end, [Core.Vobject (Core.OVpointer va_ptr)]) ->
+            liftMem (Mem.va_end va_ptr) >>
+            ND.return (mk_th_st Core.Vunit)
+
         | _ ->
             error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
       end >>= fun th_st' ->

@@ -25,6 +25,7 @@ let precedence = function
   | CabsEoffsetof _
   | CabsEva_start _
   | CabsEva_arg _
+  | CabsEva_end _
   | CabsEcompound _
   | CabsEprint_type _ -> Some 1
   | CabsEunary _
@@ -231,6 +232,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
               , [dtree_of_cabs_expression e] )
     | CabsEva_arg (e, tyname) ->
         Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ pp_location loc, [dtree_of_cabs_expression e; dtree_of_type_name tyname] )
+    | CabsEva_end (e) ->
+        Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ pp_location loc, [dtree_of_cabs_expression e] )
     | CabsEprint_type e ->
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ pp_location loc, [dtree_of_cabs_expression e])
 

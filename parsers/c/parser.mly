@@ -82,7 +82,7 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 (* NON-STD cppmem syntax *)
   LBRACES PIPES RBRACES
 
-%token VA_START VA_ARG PRINT_TYPE
+%token VA_START VA_ARG VA_END PRINT_TYPE
 
 %token EOF
 
@@ -393,6 +393,9 @@ postfix_expression:
 | VA_ARG LPAREN expr= assignment_expression COMMA ty= type_name RPAREN
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
                       CabsEva_arg(expr, ty)) }
+| VA_END LPAREN expr= assignment_expression RPAREN
+    { CabsExpression (Location_ocaml.region ($startpos, $endpos) (Some $startpos($2)),
+                      CabsEva_end(expr)) }
 | OFFSETOF LPAREN ty= type_name COMMA i= general_identifier RPAREN
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
         CabsEoffsetof (ty, i)) }
