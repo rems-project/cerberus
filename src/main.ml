@@ -281,12 +281,14 @@ let pipeline filename args core_std =
   (* TODO (sl715): invoke model checking routine *)
   if !!cerb_conf.bmc then
     Bmc3.bmc rewritten_core_file sym_supply ail_opt;
-  
+
+    (*Bmc.bmc rewritten_core_file sym_supply ail_opt;*)
+
   if !!cerb_conf.ocaml then
     Core_typing.typecheck_program rewritten_core_file
     >>= Codegen_ocaml.gen filename !!cerb_conf.ocaml_corestd sym_supply
     -| Core_sequentialise.sequentialise_file
-  
+
   else
     if !!cerb_conf.sequentialise then begin
       Core_typing.typecheck_program rewritten_core_file >>= fun z ->

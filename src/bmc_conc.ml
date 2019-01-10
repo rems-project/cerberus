@@ -260,18 +260,19 @@ let pp_actionrel_list (xs : bmcaction_rel list) =
   String.concat "\n" (List.map pp_actionrel xs)
 
 let pp_preexec (preexec: preexec) =
-  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s"
+  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s\n"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
-          "" ""
-          (*(pp_actionrel_list preexec.po)
-            (pp_actionrel_list preexec.asw)*)
+          (pp_actionrel_list preexec.po)
+          (pp_actionrel_list preexec.asw)
+          
 
 
 (* ===== memory model ===== *)
 module type MemoryModel = sig
   type z3_memory_model
   val add_assertions : Solver.solver -> z3_memory_model -> unit
+  val get_assertions : z3_memory_model -> Expr.expr list
 
   val compute_executions : preexec -> z3_memory_model
   val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> unit
@@ -828,7 +829,10 @@ module C11MemoryModel : MemoryModel = struct
     assertions : Expr.expr list;
   }
 
-  let add_assertions solver model = Solver.add solver model.assertions
+  let add_assertions solver model = 
+    Solver.add solver model.assertions
+
+  let get_assertions model = model.assertions
 
   (* ==== Helper aliases ==== *)
 
@@ -1561,6 +1565,11 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     match model.assertions with
     | Some assertions -> Solver.add solver assertions
     | None            -> assert false
+
+  let get_assertions model =
+    match model.assertions with
+    | Some assertions -> assertions
+    | None -> assert false
 
   let lookup_id (id: CatFile.id) (fns: fn_map) =
     match Pmap.lookup id fns with

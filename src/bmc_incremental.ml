@@ -2607,6 +2607,10 @@ module BmcConcActions = struct
     get >>= fun st ->
     put {st with bmc_action_map = Pmap.add aid action st.bmc_action_map}
 
+  let get_bmc_action_map : ((aid, bmc_action) Pmap.map) eff =
+    get >>= fun st ->
+    return st.bmc_action_map
+
   let get_parent_tids : ((tid, tid) Pmap.map) eff =
     get >>= fun st ->
     return st.parent_tids
@@ -2825,6 +2829,35 @@ module BmcConcActions = struct
   let do_po_globs (gname, bty, e) =
     do_po_e e
 
+  let mk_preexec (actions: bmc_action list)
+                 (prod: aid_rel list)
+                 : preexec eff =
+    get_bmc_action_map >>= fun action_map ->
+    get_parent_tids    >>= fun parent_tids ->
+
+    let is_related tid1 tid2 =
+      let p1 = (match Pmap.lookup tid1 parent_tids with (* (x,y) *)
+                | Some a -> tid2 = a | _ -> false) in
+      let p2 = (match Pmap.lookup tid2 parent_tids with (* (y,x) *)
+                | Some a -> tid1 = a | _ -> false) in
+      p1 || p2
+    in
+
+    let po_actions = List.map
+        (fun (a,b) -> (Pmap.find a action_map, Pmap.find b action_map)) prod in
+
+    return
+    { actions = List.filter (fun a -> tid_of_bmcaction a <> initial_tid) actions
+    ; initial_actions = List.filter (fun a -> tid_of_bmcaction a = initial_tid) actions
+
+    ; po = List.filter (fun (a,b) -> tid_of_bmcaction a = tid_of_bmcaction b)
+                       po_actions
+    ; asw = List.filter
+              (fun (a,b) -> is_related (tid_of_bmcaction a) (tid_of_bmcaction b))
+              po_actions
+    ; rmw = []
+    }
+
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (bmc_action list * aid_rel list * Expr.expr list) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
@@ -2840,12 +2873,19 @@ module BmcConcActions = struct
      | _ -> assert false
     ) >>= fun (fn_actions, fn_po) ->
     let actions = (List.concat globs_actions) @ fn_actions in
-    let prod = ((List.map aid_of_bmcaction_rel
+    let po = ((List.map aid_of_bmcaction_rel
                         (cartesian_product (List.concat globs_actions) fn_actions))
               @ (List.concat globs_po) @ fn_po) in
     get_assertions >>= fun assertions ->
+    mk_preexec actions po >>= fun preexec ->
+    print_endline (pp_preexec preexec);
+    (* TODO *)
+    let memory_model = BmcMem.compute_executions preexec in
+    let mem_assertions =
+      if (List.length actions > 0) then BmcMem.get_assertions memory_model
+      else [] in
     (* TODO: return atomic assertions too *)
-    return (actions, po, assertions)
+    return (actions, po, assertions @ mem_assertions)
 end
 
 module BmcConcMem = struct
