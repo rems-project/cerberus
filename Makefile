@@ -10,6 +10,7 @@ else
 Z3="z3"
 endif
 
+LD_LIBRARY_PATH=$(shell ocamlfind query z3)
 
 BOLD="\033[1m"
 RED="\033[31m"
