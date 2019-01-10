@@ -112,10 +112,14 @@ let cerberus debug_level progress core_obj
              fs_dump fs
              ocaml ocaml_corestd
              output_name
-             files args =
+             files args_opt =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nolibc macros macros_undef incl_dirs incl_files
+  in
+  let args = match args_opt with
+    | None -> []
+    | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto;
@@ -413,9 +417,10 @@ let concurrency_tests =
   Arg.(value & flag & info["regression-test"] ~doc)
 *)
 
+
 let args =
   let doc = "List of arguments for the C program" in
-  Arg.(value & opt (list string) [] & info ["args"] ~docv:"ARG1,..." ~doc)
+  Arg.(value & opt (some string) None & info ["args"] ~docv:"ARG1,..." ~doc)
 
 (* entry point *)
 let () =

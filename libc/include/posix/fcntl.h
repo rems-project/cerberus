@@ -20,7 +20,7 @@
 
 #define F_RDLCK         0
 #define F_UNLCK         1
-#define F_WRLCK_        2
+#define F_WRLCK         2
 
 // open flags (int)
 // taken from fs_spec.lem
