@@ -245,13 +245,13 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_bindings  >>
     BmcM.do_vcs       >>
     BmcM.do_ret_cond  >>
-    BmcM.do_seq_mem   >>
+    (*BmcM.do_seq_mem   >>*)
 
     (* TODO: temporary *)
-    (*BmcM.do_conc_actions >>= fun (actions,po) ->
+    BmcM.do_conc_actions >>= fun (actions,po) ->
     List.iter (fun a -> print_endline (pp_bmcaction a)) actions;
     print_endline "PROGRAM ORDER";
-    List.iter (fun (a,b) -> printf "%d,%d\n" a b) po;*)
+    List.iter (fun (a,b) -> printf "%d,%d\n" a b) po;
 
     BmcM.get_file >>= fun file ->
     if !!bmc_conf.debug_lvl >= 3 then pp_file file;

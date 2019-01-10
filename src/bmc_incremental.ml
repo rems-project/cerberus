@@ -374,7 +374,7 @@ module BmcInline = struct
         end
     | Epar es ->
         mapM inline_e es >>= fun inlined_es ->
-        return (Epar (inlined_es))
+        return (Epar inlined_es)
     | Ewait _       -> assert false
     ) >>= fun inlined_e ->
     return (Expr(Abmc (Abmc_id id)::annots, inlined_e))
@@ -760,7 +760,7 @@ module BmcSSA = struct
         return (Erun(a, sym, pelist))
     | Epar elist ->
         mapM ssa_e elist >>= fun ssad_elist ->
-        return (Epar elist)
+        return (Epar ssad_elist)
     | Ewait _       ->
         assert false
     ) >>= fun ssad_e ->
@@ -1677,7 +1677,9 @@ module BmcBind = struct
     | Erun _ ->
         get_inline_expr uid >>= fun inlined_expr ->
         bind_e inlined_expr
-    | Epar _        -> assert false
+    | Epar es ->
+        mapM bind_e es >>= fun bound_es ->
+        return (List.concat bound_es)
     | Ewait _       -> assert false
     )
 
@@ -2107,7 +2109,10 @@ module BmcRet = struct
 
         get_ret_const       >>= fun ret_const ->
         return ((mk_eq ret_const z3_expr) :: ret_expr)
-    | Epar es -> assert false
+    | Epar es ->
+        mapM do_e es >>= fun ret_es ->
+        (* TODO: check this. Really want to assert can't jump out of par... *)
+        return [mk_or (List.map mk_and ret_es)]
     | Ewait _       -> assert false
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
@@ -2482,7 +2487,8 @@ module BmcSeqMem = struct
     | Erun _        ->
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr
-    | Epar es -> assert false
+    | Epar es ->
+        failwith "Error: Epar in sequentialised, concurrent mode only"
     | Ewait _       -> assert false
 
   let do_globs (gname, bty, e) =
@@ -2521,6 +2527,7 @@ module BmcConcActions = struct
     bmc_action_map : (aid, bmc_action) Pmap.map;
     tid            : tid;
     tid_supply     : tid;
+    parent_tids    : (tid, tid) Pmap.map;
     atomic_asserts : Expr.expr list;
   }
 
@@ -2541,6 +2548,7 @@ module BmcConcActions = struct
     bmc_action_map   = Pmap.empty Pervasives.compare;
     tid              = 0;
     tid_supply       = 1;
+    parent_tids      = Pmap.empty Pervasives.compare;
     atomic_asserts   = [];
   }
 
@@ -2594,11 +2602,18 @@ module BmcConcActions = struct
     let aids = Pmap.find uid st.bmc_actions in
     return (List.map (fun aid -> Pmap.find aid st.bmc_action_map) aids)
 
-
   let add_action_to_bmc_action_map (aid: aid) (action: bmc_action)
                                    : unit eff =
     get >>= fun st ->
     put {st with bmc_action_map = Pmap.add aid action st.bmc_action_map}
+
+  let get_parent_tids : ((tid, tid) Pmap.map) eff =
+    get >>= fun st ->
+    return st.parent_tids
+
+  let add_parent_tid (child_tid: tid) (parent_tid: tid) : unit eff =
+    get >>= fun st ->
+    put {st with parent_tids = Pmap.add child_tid parent_tid st.parent_tids}
 
   let add_assertion (assertion: Expr.expr) : unit eff =
     get >>= fun st ->
@@ -2733,6 +2748,7 @@ module BmcConcActions = struct
         mapM (fun e ->
           get_fresh_tid >>= fun tid ->
           put_tid tid   >>
+          add_parent_tid tid old_tid >>
           do_actions_e e) elist >>= fun elist_actions ->
         return (List.concat elist_actions)
     | Ewait _       ->
@@ -2746,7 +2762,8 @@ module BmcConcActions = struct
     do_actions_e e
 
 
-  (* compute po (program order) *)
+  (* TODO: this is currently not po, but ignores thread ids and computes
+   * cartesian product!!! *)
   let rec do_po_e (Expr(annots, expr_) as expr)
                   : (aid_rel list) eff =
     let uid = get_id_expr expr in
@@ -2777,14 +2794,14 @@ module BmcConcActions = struct
         get_actions_from_uid (get_id_expr e1) >>= fun actions_e1 ->
         get_actions_from_uid (get_id_expr e2) >>= fun actions_e2 ->
         let to_sequence = List.filter is_pos_action actions_e1 in
-        return ((List.map aid_of_bmcaction_rel (compute_po to_sequence actions_e2))
+        return ((List.map aid_of_bmcaction_rel (cartesian_product to_sequence actions_e2))
                 @ po_e1 @ po_e2)
     | Esseq (pat, e1, e2) ->
         do_po_e e1 >>= fun po_e1 ->
         do_po_e e2 >>= fun po_e2 ->
         get_actions_from_uid (get_id_expr e1) >>= fun actions_e1 ->
         get_actions_from_uid (get_id_expr e2) >>= fun actions_e2 ->
-        return ((List.map aid_of_bmcaction_rel (compute_po actions_e1 actions_e2))
+        return ((List.map aid_of_bmcaction_rel (cartesian_product actions_e1 actions_e2))
                 @ po_e1 @ po_e2)
     | Easeq _       -> assert false
     | Eindet _      -> assert false
@@ -2823,14 +2840,12 @@ module BmcConcActions = struct
      | _ -> assert false
     ) >>= fun (fn_actions, fn_po) ->
     let actions = (List.concat globs_actions) @ fn_actions in
-    let po = ((List.map aid_of_bmcaction_rel
-                        (compute_po (List.concat globs_actions) fn_actions))
+    let prod = ((List.map aid_of_bmcaction_rel
+                        (cartesian_product (List.concat globs_actions) fn_actions))
               @ (List.concat globs_po) @ fn_po) in
     get_assertions >>= fun assertions ->
     (* TODO: return atomic assertions too *)
     return (actions, po, assertions)
-
-
 end
 
 module BmcConcMem = struct
