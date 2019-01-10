@@ -77,6 +77,7 @@ let bmcaction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
 (* ===== PREEXECS ===== *)
 
 type bmcaction_rel = bmc_action * bmc_action
+type aid_rel = aid * aid
 
 let mk_initial_preexec : preexec =
   { actions         = []
@@ -85,6 +86,9 @@ let mk_initial_preexec : preexec =
   ; asw             = []
   ; rmw             = []
   }
+
+let aid_of_bmcaction_rel ((a1,a2): bmcaction_rel) =
+  (aid_of_bmcaction a1, aid_of_bmcaction a2)
 
 let find_rel ((a,b): bmcaction_rel) (xs: bmcaction_rel list) =
   is_some (List.find_opt (

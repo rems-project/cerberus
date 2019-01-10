@@ -2589,6 +2589,12 @@ module BmcConcActions = struct
     get >>= fun st ->
     put {st with bmc_actions = Pmap.add uid actions st.bmc_actions}
 
+  let get_actions_from_uid (uid: int) : (bmc_action list) eff =
+    get >>= fun st ->
+    let aids = Pmap.find uid st.bmc_actions in
+    return (List.map (fun aid -> Pmap.find aid st.bmc_action_map) aids)
+
+
   let add_action_to_bmc_action_map (aid: aid) (action: bmc_action)
                                    : unit eff =
     get >>= fun st ->
@@ -2597,6 +2603,10 @@ module BmcConcActions = struct
   let add_assertion (assertion: Expr.expr) : unit eff =
     get >>= fun st ->
     put {st with atomic_asserts = assertion :: st.atomic_asserts}
+
+  let get_assertions : Expr.expr list eff =
+    get >>= fun st ->
+    return st.atomic_asserts
 
   (* Helpers *)
   let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
@@ -2661,8 +2671,8 @@ module BmcConcActions = struct
                             (aid_of_bmcaction action) action) actions >>
     return actions
 
-  let rec do_e (Expr(annots, expr_) as expr)
-               : (bmc_action list) eff =
+  let rec do_actions_e (Expr(annots, expr_) as expr)
+                       : (bmc_action list) eff =
     let uid = get_id_expr expr in
     (match expr_ with
     | Epure pe ->
@@ -2673,15 +2683,15 @@ module BmcConcActions = struct
         get_action uid >>= fun interm_action ->
         intermediate_to_bmc_actions interm_action pol
     | Ecase (pe, cases) ->
-        mapM do_e (List.map snd cases) >>= fun case_actions ->
+        mapM do_actions_e (List.map snd cases) >>= fun case_actions ->
         get_case_guards uid            >>= fun case_guards ->
         return (List.concat (
           List.map2 (fun guard actions -> List.map (guard_action guard) actions)
                     case_guards case_actions))
     | Elet _        -> assert false
     | Eif (cond, e1, e2) ->
-        do_e e1 >>= fun e1_actions ->
-        do_e e2 >>= fun e2_actions ->
+        do_actions_e e1 >>= fun e1_actions ->
+        do_actions_e e2 >>= fun e2_actions ->
         (* TODO: do this more nicely *)
         get_case_guards uid >>= fun guards ->
         let (guard1, guard2) = (
@@ -2694,12 +2704,12 @@ module BmcConcActions = struct
     | Eccall _      -> assert false
     | Eproc _       -> assert false
     | Eunseq es ->
-        mapM do_e es >>= fun es_actions ->
+        mapM do_actions_e es >>= fun es_actions ->
         return (List.concat es_actions)
     | Ewseq (pat, e1, e2)
     | Esseq (pat, e1, e2) ->
-        do_e e1 >>= fun e1_actions ->
-        do_e e2 >>= fun e2_actions ->
+        do_actions_e e1 >>= fun e1_actions ->
+        do_actions_e e2 >>= fun e2_actions ->
 
         get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
         let e2_guard = mk_not e1_drop_cont in
@@ -2707,9 +2717,9 @@ module BmcConcActions = struct
     | Easeq _       -> assert false
     | Eindet _      -> assert false
     | Ebound (_, e) ->
-        do_e e
+        do_actions_e e
     | End es ->
-        mapM do_e es        >>= fun es_actions ->
+        mapM do_actions_e es        >>= fun es_actions ->
         get_case_guards uid >>= fun es_guards ->
         return (List.concat (
           List.map2 (fun guard actions -> List.map (guard_action guard) actions)
@@ -2717,13 +2727,13 @@ module BmcConcActions = struct
     | Esave _       (* fall through *)
     | Erun _        ->
         get_inline_expr uid >>= fun inline_expr ->
-        do_e inline_expr
+        do_actions_e inline_expr
     | Epar elist ->
         get_tid >>= fun old_tid ->
         mapM (fun e ->
           get_fresh_tid >>= fun tid ->
           put_tid tid   >>
-          do_e e) elist >>= fun elist_actions ->
+          do_actions_e e) elist >>= fun elist_actions ->
         return (List.concat elist_actions)
     | Ewait _       ->
         assert false
@@ -2732,21 +2742,95 @@ module BmcConcActions = struct
     add_aids_to_bmc_actions uid aids >>
     return actions
 
-  let do_globs (gname, bty, e) =
-    do_e e
+  let do_actions_globs (gname, bty, e) =
+    do_actions_e e
+
+
+  (* compute po (program order) *)
+  let rec do_po_e (Expr(annots, expr_) as expr)
+                  : (aid_rel list) eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure pe ->
+        return []
+    | Ememop (memop, pes) ->
+        return []
+    | Eaction (Paction(pol, action)) ->
+        return []
+    | Ecase (pe, cases) ->
+        mapM do_po_e (List.map snd cases) >>= fun po_cases ->
+        return (List.concat po_cases)
+    | Elet _        -> assert false
+    | Eif (cond, e1, e2) ->
+        do_po_e e1 >>= fun po_e1 ->
+        do_po_e e2 >>= fun po_e2 ->
+        return (po_e1 @ po_e2)
+    | Eskip         -> return []
+    | Eccall _      -> assert false
+    | Eproc _       -> assert false
+    | Eunseq es ->
+        mapM do_po_e es >>= fun po_es ->
+        return (List.concat po_es)
+    | Ewseq (pat, e1, e2) ->
+        do_po_e e1 >>= fun po_e1 ->
+        do_po_e e2 >>= fun po_e2 ->
+        get_actions_from_uid (get_id_expr e1) >>= fun actions_e1 ->
+        get_actions_from_uid (get_id_expr e2) >>= fun actions_e2 ->
+        let to_sequence = List.filter is_pos_action actions_e1 in
+        return ((List.map aid_of_bmcaction_rel (compute_po to_sequence actions_e2))
+                @ po_e1 @ po_e2)
+    | Esseq (pat, e1, e2) ->
+        do_po_e e1 >>= fun po_e1 ->
+        do_po_e e2 >>= fun po_e2 ->
+        get_actions_from_uid (get_id_expr e1) >>= fun actions_e1 ->
+        get_actions_from_uid (get_id_expr e2) >>= fun actions_e2 ->
+        return ((List.map aid_of_bmcaction_rel (compute_po actions_e1 actions_e2))
+                @ po_e1 @ po_e2)
+    | Easeq _       -> assert false
+    | Eindet _      -> assert false
+    | Ebound (_, e) ->
+        do_po_e e
+    | End es ->
+        mapM do_po_e es >>= fun po_es ->
+        return (List.concat po_es)
+    | Esave _       (* fall through *)
+    | Erun _        ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_po_e inline_expr
+    | Epar es ->
+        mapM do_po_e es >>= fun po_es ->
+        return (List.concat po_es)
+    | Ewait _       ->
+        assert false
+    )
+
+  (* TODO: create/store in global can be replaced by single store *)
+  let do_po_globs (gname, bty, e) =
+    do_po_e e
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (bmc_action list) eff =
-    mapM do_globs file.globs >>= fun globs_actions ->
+              : (bmc_action list * aid_rel list * Expr.expr list) eff =
+    mapM do_actions_globs file.globs >>= fun globs_actions ->
+    mapM do_po_globs file.globs      >>= fun globs_po ->
+
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc(annot, bTy, params, e)) ->
-         do_e e
+         do_actions_e e >>= fun actions ->
+         do_po_e e      >>= fun po ->
+         return (actions, po)
      | Some (Fun(ty, params, pe)) ->
-         return []
+         return ([], [])
      | _ -> assert false
-    ) >>= fun fn_actions ->
+    ) >>= fun (fn_actions, fn_po) ->
+    let actions = (List.concat globs_actions) @ fn_actions in
+    let po = ((List.map aid_of_bmcaction_rel
+                        (compute_po (List.concat globs_actions) fn_actions))
+              @ (List.concat globs_po) @ fn_po) in
+    get_assertions >>= fun assertions ->
     (* TODO: return atomic assertions too *)
-    return ((List.concat globs_actions) @ fn_actions)
+    return (actions, po, assertions)
+
+
 end
 
 module BmcConcMem = struct

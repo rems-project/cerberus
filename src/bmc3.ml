@@ -191,7 +191,7 @@ module BmcM = struct
     put { st with mem_bindings = Some simplified_bindings }
 
   (* TODO: temporary for testing; get actions *)
-  let do_conc_actions : (bmc_action list) eff =
+  let do_conc_actions : (bmc_action list * aid_rel list ) eff =
     get >>= fun st ->
     let initial_state =
       BmcConcActions.mk_initial (Option.get st.inline_expr_map)
@@ -199,10 +199,11 @@ module BmcM = struct
                                 (Option.get st.action_map)
                                 (Option.get st.case_guard_map)
                                 (Option.get st.drop_cont_map) in
-    let (actions, _) =
+    let ((actions, po, assertions), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
-    return actions
+    put { st with mem_bindings = Some assertions } >>
+    return (actions, po)
 
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
@@ -247,7 +248,10 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_seq_mem   >>
 
     (* TODO: temporary *)
-    (*BmcM.do_conc_actions >>= fun actions ->*)
+    (*BmcM.do_conc_actions >>= fun (actions,po) ->
+    List.iter (fun a -> print_endline (pp_bmcaction a)) actions;
+    print_endline "PROGRAM ORDER";
+    List.iter (fun (a,b) -> printf "%d,%d\n" a b) po;*)
 
     BmcM.get_file >>= fun file ->
     if !!bmc_conf.debug_lvl >= 3 then pp_file file;
