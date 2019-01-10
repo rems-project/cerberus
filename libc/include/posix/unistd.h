@@ -41,7 +41,7 @@ char        *getcwd(char *, size_t);
 // int          gethostname(char *, size_t);
 // char        *getlogin(void);
 // int          getlogin_r(char *, size_t);
-// int          getopt(int, char * const [], const char *);
+int          getopt(int, char * const [], const char *);
 // pid_t        getpgid(pid_t);
 // pid_t        getpgrp(void);
 //pid_t        getpid(void);
@@ -95,7 +95,8 @@ ssize_t      write(int, const void *, size_t);
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 
-
+extern char *optarg;
+extern int optind, opterr, optopt;
 
 #define F_OK __cerbvar__F_OK
 #define R_OK __cerbvar__R_OK

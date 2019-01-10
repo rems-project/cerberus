@@ -5,7 +5,8 @@ SRC_C=src/ctype.c \
 		src/time.c \
 		src/utime.c \
 		src/unistd.c \
-		src/stat.c
+		src/stat.c \
+		src/uio.c
 
 SRC_M=src/math.c
 
