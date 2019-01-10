@@ -159,6 +159,8 @@ let compute_minimal (actions: bmc_action list)
  * e.g. (a,x) and (b,x) may both be in the result even if (a,b) in po.
  *
  * filter_asw should be called on the result.
+ *
+ * TODO: buggy -- can miss relation. Let's just add everything.
  * *)
 let compute_asw (xs: bmc_action list)
                 (ys: bmc_action list)
