@@ -1176,20 +1176,32 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         end
     
     | AilEva_start e sym ->
+        annotate_rvalue e >>= fun (e', _) ->
+        E.return (AilEva_start e' sym, GenRValueType GenVoid)
+        (* TODO: add this check later
         annotate_rvalue e >>= function
           | (e', GenBuiltin "va_list") ->
               E.return (AilEva_start e' sym, GenRValueType GenVoid)
           | _ ->
               E.misc (locOf e) VaStartArgumentType
         end
+        *)
     
     | AilEva_arg e ty ->
+        annotate_rvalue e >>= fun (e', _) ->
+        E.return (AilEva_arg e' ty, GenRValueType (inject_type ty))
+        (* TODO: add this check later
         annotate_rvalue e >>= function
           | (e', GenBuiltin "va_list") ->
               E.return (AilEva_arg e' ty, GenRValueType (inject_type ty))
           | _ ->
               E.misc (locOf e) VaArgArgumentType
         end
+        *)
+
+    | AilEva_end e ->
+        annotate_rvalue e >>= fun (e', _) ->
+        E.return (AilEva_end e', GenRValueType GenVoid)
     
     | AilEprint_type e ->
         annotate_expression ctx e >>= fun a_e ->

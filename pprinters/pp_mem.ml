@@ -36,6 +36,12 @@ let pp_memop = function
       !^ "Memcpy"
   | Realloc ->
       !^ "Realloc"
+  | Va_start ->
+      !^ "Va_start"
+  | Va_arg ->
+      !^ "Va_arg"
+  | Va_end ->
+      !^ "Va_end"
   | PtrArrayShift ->
       !^ "PtrArrayShift"
 

@@ -379,6 +379,7 @@ module Concrete : Memory = struct
     allocations: allocation IntMap.t;
     next_address: address;
     funptrmap: (Digest.t * string) IntMap.t;
+    varargs: (int * (Core_ctype.ctype0 * pointer_value) list) IntMap.t;
     bytemap: AbsByte.t IntMap.t;
     
     dead_allocations: allocation_id list;
@@ -391,6 +392,7 @@ module Concrete : Memory = struct
     allocations= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
     funptrmap = IntMap.empty;
+    varargs = IntMap.empty;
     bytemap= IntMap.empty;
     
     dead_allocations= [];
@@ -1851,6 +1853,47 @@ let combine_prov prov1 prov2 =
       end
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
+
+  let va_start va_ptr args =
+    match va_ptr with
+    | PV (Prov_some _, PVconcrete addr) ->
+      update @@ fun st ->
+      { st with varargs = IntMap.add addr (0, args) st.varargs }
+    | _ ->
+      fail (MerrWIP "va_start: invalid va_list")
+
+  let va_arg va_ptr ty =
+    match va_ptr with
+    | PV (Prov_some _, PVconcrete addr) ->
+      get >>= fun st ->
+      begin match IntMap.find_opt addr st.varargs with
+        | Some (i, args) ->
+          begin match List.nth_opt args i with
+            | Some (_, ptr) -> (* TODO: check type is compatible *)
+              update (fun st -> { st with varargs = IntMap.add addr (i+1, args) st.varargs })
+              >>= fun _ ->
+              return ptr
+            | None ->
+              fail (MerrWIP "va_arg: invalid number of arguments")
+          end
+        | None ->
+            fail (MerrWIP "va_arg: not initiliased")
+      end
+    | _ ->
+      fail (MerrWIP "va_arg: invalid va_list")
+
+  let va_end va_ptr =
+    match va_ptr with
+    | PV (Prov_some _, PVconcrete addr) ->
+      get >>= fun st ->
+      begin match IntMap.find_opt addr st.varargs with
+        | Some _ ->
+          update (fun st -> { st with varargs = IntMap.remove addr st.varargs })
+        | None ->
+            fail (MerrWIP "va_end: not initiliased")
+      end
+    | _ ->
+      fail (MerrWIP "va_end: invalid va_list")
 
   (* JSON serialisation: Memory layout for UI *)
 
