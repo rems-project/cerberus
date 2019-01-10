@@ -190,6 +190,20 @@ module BmcM = struct
       List.map (fun e -> Expr.simplify e None) bindings in
     put { st with mem_bindings = Some simplified_bindings }
 
+  (* TODO: temporary for testing; get actions *)
+  let do_conc_actions : (bmc_action list) eff =
+    get >>= fun st ->
+    let initial_state =
+      BmcConcActions.mk_initial (Option.get st.inline_expr_map)
+                                (Option.get st.expr_map)
+                                (Option.get st.action_map)
+                                (Option.get st.case_guard_map)
+                                (Option.get st.drop_cont_map) in
+    let (actions, _) =
+      BmcConcActions.run initial_state
+                         (BmcConcActions.do_file st.file st.fn_to_check) in
+    return actions
+
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
@@ -231,7 +245,10 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_vcs       >>
     BmcM.do_ret_cond  >>
     BmcM.do_seq_mem   >>
-    (* TODO: memory *)
+
+    (* TODO: temporary *)
+    (*BmcM.do_conc_actions >>= fun actions ->*)
+
     BmcM.get_file >>= fun file ->
     if !!bmc_conf.debug_lvl >= 3 then pp_file file;
     BmcM.return () in
@@ -249,7 +266,6 @@ let bmc_file (file              : unit typed_file)
   bmc_debug_print 5 "====RET_BINDINGS";
   List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
             (Option.get final_state.ret_bindings);
-
 
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);

@@ -429,7 +429,7 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
       assert (is_null pv);
       PointerSort.mk_null
   (*| OVcfunction (Sym sym) ->
-      CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym)) 
+      CFunctionSort.mk_cfun (int_to_z3 (symbol_to_int sym))
   | OVcfunction _ ->
       assert false
   *)
@@ -2360,7 +2360,7 @@ let bmc (core_file  : unit file)
             pp_file core_to_check;
 
           (* TODO: rename *)
-          let tmp = Bmc_utils.set_uid core_to_check in 
+          let tmp = Bmc_utils.set_uid core_to_check in
 
           bmc_debug_print 1 "START: model checking";
           let fn_sym = find_function !!bmc_conf.fn_to_check
