@@ -249,12 +249,12 @@ let bmc_file (file              : unit typed_file)
 
     (* TODO: temporary *)
     BmcM.do_conc_actions >>= fun (actions,po) ->
-    List.iter (fun a -> print_endline (pp_bmcaction a)) actions;
+    (*List.iter (fun a -> print_endline (pp_bmcaction a)) actions;
     print_endline "PROGRAM ORDER";
     List.iter (fun (a,b) -> printf "%d,%d\n" a b) po;
 
     BmcM.get_file >>= fun file ->
-    if !!bmc_conf.debug_lvl >= 3 then pp_file file;
+    if !!bmc_conf.debug_lvl >= 3 then pp_file file; *)
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
@@ -273,8 +273,8 @@ let bmc_file (file              : unit typed_file)
 
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
-  Solver.add g_solver (Option.get final_state.mem_bindings);
   Solver.add g_solver (Option.get final_state.ret_bindings);
+  Solver.add g_solver (Option.get final_state.mem_bindings);
   let ret_value =
     begin match Solver.check g_solver [] with
     | SATISFIABLE ->
@@ -287,6 +287,7 @@ let bmc_file (file              : unit typed_file)
         failwith (sprintf "ERROR: status unknown. Reason: %s"
                           (Solver.get_reason_unknown g_solver))
     end in
+
 
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
