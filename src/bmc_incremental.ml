@@ -1,8 +1,10 @@
 open Bmc_common
+open Bmc_conc
 open Bmc_globals
 open Bmc_monad
 open Bmc_sorts
 open Bmc_substitute
+open Bmc_types
 open Bmc_utils
 
 open Core
@@ -12,15 +14,18 @@ open Printf
 open Util
 open Z3
 
-(* CONTENTS *
+(* CONTENTS
  * - BmcInline
  * - BmcSSA
  * - BmcZ3
  * - BmcDropCont
  * - BmcBind
  * - BmcVC
+ * - BmcRet
  * - BmcSeqMem
  *)
+
+(* TODO: factor out all the repeated state *)
 
 (* ======= Do inlining ======= *)
 module BmcInline = struct
@@ -753,7 +758,9 @@ module BmcSSA = struct
         (* NOT ANYMORE; For debugging purposes, we update pelist *)
         (*mapM ssa_pe pelist  >>= fun ssad_pelist ->*)
         return (Erun(a, sym, pelist))
-    | Epar _
+    | Epar elist ->
+        mapM ssa_e elist >>= fun ssad_elist ->
+        return (Epar elist)
     | Ewait _       ->
         assert false
     ) >>= fun ssad_e ->
@@ -793,13 +800,12 @@ end
 (* ======= Convert to Z3 exprs ======= *)
 module BmcZ3 = struct
   type alloc = int
-  type aid = int
 
   type ctype_sort = ctype * Sort.sort
 
   (* Massive TODO *)
   type intermediate_action =
-    | ICreate of aid * (* TODO: align *) ctype_sort list * alloc
+    | ICreate of aid list * (* TODO: align *) ctype_sort list * alloc
     | IKill of aid
     | ILoad of aid * (* TODO: list *) ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
@@ -1009,16 +1015,16 @@ module BmcZ3 = struct
     return z3d_pexpr
 
   let z3_action (Paction(p, Action(loc, a, action_))) uid =
-    get_fresh_aid >>= fun aid ->
     (match action_ with
     | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
         get_file >>= fun file ->
         get_fresh_alloc >>= fun alloc_id ->
         (* TODO: we probably don't actually want to flatten the sort list *)
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
+        mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
 
         return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
-                ICreate (aid, flat_sortlist, alloc_id))
+                ICreate (aid_list, flat_sortlist, alloc_id))
     | Create _ ->
         assert false
     | CreateReadOnly _ ->
@@ -1026,10 +1032,12 @@ module BmcZ3 = struct
     | Alloc0 _ ->
         assert false
     | Kill (b, pe) ->
+        get_fresh_aid >>= fun aid ->
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
         return (UnitSort.mk_unit, IKill aid)
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
@@ -1041,6 +1049,7 @@ module BmcZ3 = struct
     | Store0 _ ->
         assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+        get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         (* TODO: can't load multiple memory locations... *)
@@ -1058,6 +1067,7 @@ module BmcZ3 = struct
                             Pexpr(_,_,PEsym obj),
                             Pexpr(_,_,PEsym expected),
                             desired, mo_success, mo_failure) ->
+        get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         assert (List.length flat_sortlist = 1);
@@ -1082,12 +1092,15 @@ module BmcZ3 = struct
     | CompareExchangeStrong _ ->
         assert false
     | Fence0 mo ->
+        get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
+        get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
         assert (g_memory_mode = MemoryMode_Linux);
         assert (!!bmc_conf.concurrent_mode);
+        get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         let (ctype, sort) = List.hd flat_sortlist in
@@ -1100,6 +1113,7 @@ module BmcZ3 = struct
     | LinuxLoad _ ->
         assert false
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
@@ -1183,7 +1197,10 @@ module BmcZ3 = struct
         get_inline_expr uid >>= fun inlined_expr ->
         z3_e inlined_expr   >>= fun _ ->
         return (UnitSort.mk_unit)
-    | Epar _   -> assert false
+    | Epar elist ->
+        assert (!!bmc_conf.concurrent_mode);
+        mapM z3_e elist >>= fun z3d_elist ->
+        return (ctor_to_z3 Ctuple z3d_elist None)
     | Ewait _  -> assert false
     ) >>= fun ret ->
     add_expr uid ret >>
@@ -1305,7 +1322,10 @@ module BmcDropCont = struct
         get_inline_expr uid      >>= fun inlined_expr ->
         drop_cont_e inlined_expr >>= fun _ ->
         return mk_true
-    | Epar _
+    | Epar elist ->
+        mapM drop_cont_e elist >>= fun drop_cont_elist ->
+        (* TODO: Erun within Epar? *)
+        return mk_false
     | Ewait _       -> assert false
     ) >>= fun drop_expr ->
     add_to_drop_cont_map uid drop_expr >>
@@ -1940,9 +1960,9 @@ module BmcVC = struct
     | Erun _        ->
         get_inline_expr uid >>= fun inline_expr ->
         vcs_e inline_expr
-    | Epar es -> assert false
-        (*BmcVC.mapM vcs_e es >>= fun vcss_es ->
-        return (List.concat vcss_es)*)
+    | Epar es ->
+        mapM vcs_e es >>= fun vcss_es ->
+        return (List.concat vcss_es)
     | Ewait _       -> assert false
 
     let vcs_globs (_, _, e) : (vc list) eff =
@@ -2109,6 +2129,46 @@ module BmcRet = struct
 
 end
 
+(* Common functions *)
+module BmcMemCommon = struct
+  (* TODO: move to separate file *)
+  let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
+                          : Expr.expr =
+    if (Sort.equal (LoadedInteger.mk_sort) sort) then
+      LoadedInteger.mk_unspecified ctype
+    else if (Sort.equal (LoadedPointer.mk_sort) sort) then
+      LoadedPointer.mk_unspecified ctype
+    else
+      assert false
+
+  let mk_initial_value (ctype: ctype) (name: string) =
+    match ctype with
+    | Void0 ->
+        (UnitSort.mk_unit, [])
+    | Basic0 (Integer ity) ->
+        let const = mk_fresh_const name integer_sort in
+        let ge_ivmin =
+            binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
+        let le_ivmax =
+            binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
+        (const, [ge_ivmin;le_ivmax])
+    | _ -> assert false
+
+
+  let mk_initial_loaded_value (sort: Sort.sort) (name: string)
+                              (ctype: ctype) (specified: bool)
+                              : Expr.expr * (Expr.expr list) =
+    if specified then begin
+      let (initial_value, assertions) = mk_initial_value ctype name in
+      assert (Sort.equal (LoadedInteger.mk_sort) sort);
+      (LoadedInteger.mk_specified initial_value, assertions)
+    end else
+      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
+
+
+
+end
+
 (* Sequential memory model; read from most recent write *)
 module BmcSeqMem = struct
   type memory_table = (addr_ty, Expr.expr) Pmap.map
@@ -2233,64 +2293,31 @@ module BmcSeqMem = struct
         Pmap.add addr new_expr acc
     ) mod_addr base
 
-  (* TODO: move to separate file *)
-  let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
-                          : Expr.expr =
-    if (Sort.equal (LoadedInteger.mk_sort) sort) then
-      LoadedInteger.mk_unspecified ctype
-    else if (Sort.equal (LoadedPointer.mk_sort) sort) then
-      LoadedPointer.mk_unspecified ctype
-    else
-      assert false
-
-  let mk_initial_value (ctype: ctype) (name: string) =
-    match ctype with
-    | Void0 ->
-        (UnitSort.mk_unit, [])
-    | Basic0 (Integer ity) ->
-        let const = mk_fresh_const name integer_sort in
-        let ge_ivmin =
-            binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
-        let le_ivmax =
-            binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
-        (const, [ge_ivmin;le_ivmax])
-    | _ -> assert false
-
-
-  let mk_initial_loaded_value (sort: Sort.sort) (name: string)
-                              (ctype: ctype) (specified: bool)
-                              : Expr.expr * (Expr.expr list) =
-    if specified then begin
-      let (initial_value, assertions) = mk_initial_value ctype name in
-      assert (Sort.equal (LoadedInteger.mk_sort) sort);
-      (LoadedInteger.mk_specified initial_value, assertions)
-    end else
-      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
-
   (* TODO: mod_addr *)
   let do_paction (Paction(p, Action(loc, a, action_)) : unit typed_paction)
                  uid
                  : ret_ty eff =
     get_action uid >>= fun action ->
     match action with
-    | ICreate(aid, sortlist, alloc_id) ->
+    | ICreate(_, sortlist, alloc_id) ->
         mapMi (fun i (ctype,sort) ->
           let addr = (alloc_id, i) in
           let seq_var =
             mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
           update_memory addr seq_var >>
           let (initial_value, assumptions) =
-            mk_initial_loaded_value sort (sprintf "init_%d,%d" alloc_id i)
-                                    ctype false in
+            BmcMemCommon.mk_initial_loaded_value
+                sort (sprintf "init_%d,%d" alloc_id i)
+                ctype false in
           let binding = mk_eq seq_var initial_value in
           return (addr, binding::assumptions)
         ) sortlist >>= fun retlist ->
         return { bindings = List.concat (List.map snd retlist)
                ; mod_addr = AddrSet.of_list (List.map fst retlist)
                }
-    | IKill(aid) ->
+    | IKill(_) ->
         return empty_ret
-    | ILoad(aid, (ctype,sort), ptr, rval, mo) ->
+    | ILoad(_, (ctype,sort), ptr, rval, mo) ->
         (* TODO: alias analysis *)
         get_memory >>= fun possible_addresses ->
         mapM (fun (addr, expr_in_memory) ->
@@ -2312,7 +2339,7 @@ module BmcSeqMem = struct
                             :: (List.map fst filtered)
                ; mod_addr = AddrSet.empty
                }
-    | IStore(aid, (ctype,sort), ptr, wval, mo) ->
+    | IStore(_, (ctype,sort), ptr, wval, mo) ->
         (* TODO: alias analysis *)
         get_memory >>= fun possible_addresses ->
         mapM (fun (addr, expr_in_memory) ->
@@ -2456,8 +2483,6 @@ module BmcSeqMem = struct
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr
     | Epar es -> assert false
-        (*BmcVC.mapM vcs_e es >>= fun vcss_es ->
-        return (List.concat vcss_es)*)
     | Ewait _       -> assert false
 
   let do_globs (gname, bty, e) =
@@ -2474,4 +2499,274 @@ module BmcSeqMem = struct
      | _ -> assert false
     ) >>= fun ret ->
     return (ret.bindings @ (List.concat (List.map get_bindings globs)))
+end
+
+(* Concurrency
+ *
+ * Compute all actions
+ *
+ * Preexecution:
+ * - sb/po
+ * - asw
+ * - dd
+ *)
+module BmcConcActions = struct
+  type internal_state = {
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    case_guard_map   : (int, Expr.expr list) Pmap.map;
+    drop_cont_map    : (int, Expr.expr) Pmap.map;
+
+    bmc_actions    : (int, aid list) Pmap.map;
+    bmc_action_map : (aid, bmc_action) Pmap.map;
+    tid            : tid;
+    tid_supply     : tid;
+    atomic_asserts : Expr.expr list;
+  }
+
+  include EffMonad(struct type state = internal_state end)
+
+  let mk_initial inline_expr_map
+                 expr_map
+                 action_map
+                 case_guard_map
+                 drop_cont_map
+                 : internal_state =
+  { inline_expr_map  = inline_expr_map;
+    action_map       = action_map;
+    case_guard_map   = case_guard_map;
+    drop_cont_map    = drop_cont_map;
+
+    bmc_actions      = Pmap.empty Pervasives.compare;
+    bmc_action_map   = Pmap.empty Pervasives.compare;
+    tid              = 0;
+    tid_supply       = 1;
+    atomic_asserts   = [];
+  }
+
+  let get_inline_expr (uid: int): (unit typed_expr) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_expr_map with
+    | None -> failwith (sprintf "Error: BmcConcActions inline_expr not found %d"
+                                uid)
+    | Some e -> return e
+
+  let get_action (uid: int) : BmcZ3.intermediate_action eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.action_map with
+    | None -> failwith (sprintf "Error: BmcConcActions action not found %d" uid)
+    | Some a -> return a
+
+  let get_case_guards (uid: int): (Expr.expr list) eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.case_guard_map with
+    | None -> failwith (sprintf "Error: BmcConcActions case guard not found %d" uid)
+    | Some es -> return es
+
+  let get_drop_cont (uid: int) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.drop_cont_map with
+    | None -> failwith (sprintf "BmcConcActions: Uid %d not found in drop_cont_map" uid)
+    | Some expr -> return expr
+
+
+  let get_tid : int eff =
+    get >>= fun st ->
+    return st.tid
+
+  let get_fresh_tid : int eff =
+    get                                >>= fun st ->
+    return st.tid_supply               >>= fun ret ->
+    put {st with tid_supply = ret + 1} >>
+    return ret
+
+  let put_tid (tid: tid) : unit eff =
+    get >>= fun st ->
+    put {st with tid = tid}
+
+  let add_aids_to_bmc_actions (uid: int) (actions: aid list)
+                                 : unit eff =
+    get >>= fun st ->
+    put {st with bmc_actions = Pmap.add uid actions st.bmc_actions}
+
+  let add_action_to_bmc_action_map (aid: aid) (action: bmc_action)
+                                   : unit eff =
+    get >>= fun st ->
+    put {st with bmc_action_map = Pmap.add aid action st.bmc_action_map}
+
+  let add_assertion (assertion: Expr.expr) : unit eff =
+    get >>= fun st ->
+    put {st with atomic_asserts = assertion :: st.atomic_asserts}
+
+  (* Helpers *)
+  let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
+    BmcAction(pol, mk_and [guard;g], action)
+
+  let mk_store (pol: polarity)
+               (guard: Expr.expr)
+               (aid: aid)
+               (tid: tid)
+               (memorder: memory_order)
+               (ptr: Expr.expr)
+               (wval: Expr.expr)
+               : bmc_action =
+    BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval))
+
+  let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
+                                  (pol : polarity)
+                                  : (bmc_action list) eff =
+    (match action with
+    | ICreate(aidlist, sortlist, alloc_id) ->
+        let aid_sortlist = zip aidlist sortlist in
+        let is_atomic = (function ctype -> match ctype with
+                         | Core_ctype.Atomic0 _ -> mk_true
+                         | _ -> mk_false) in
+        mapMi (fun i (aid,(ctype,sort)) ->
+          let addr = (alloc_id, i) in
+          let addr_expr = AddressSort.mk_from_addr addr in
+          let ptr = PointerSort.mk_ptr addr_expr in
+          let is_atomic =
+            AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
+          add_assertion is_atomic >>
+          let (initial_value, assumptions) =
+            BmcMemCommon.mk_initial_loaded_value sort
+                (sprintf "init_%d,%d" alloc_id i)
+                ctype false in
+          return (mk_store pol mk_true aid initial_tid
+                           (C_mem_order Cmm_csem.NA) ptr initial_value)
+        ) aid_sortlist
+    | IKill aid ->
+        (* TODO *)
+        return []
+    | ILoad (aid, (ctype, sort), ptr, rval, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval))]
+    | IStore(aid, (ctype, sort), ptr, wval, mo) ->
+        get_tid >>= fun tid ->
+        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]
+    | ICompareExchangeStrong _ ->
+        assert false (* TODO *)
+    | IFence (aid, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
+    | ILinuxLoad(aid, (ctype,sort), ptr, rval, mo) ->
+        assert false
+    | ILinuxStore(aid, (ctype,sort), ptr, wval, mo) ->
+        assert false
+    | ILinuxFence(aid, mo) ->
+        assert false
+    ) >>= fun actions ->
+    (* Just for convenience *)
+    mapM (fun action -> add_action_to_bmc_action_map
+                            (aid_of_bmcaction action) action) actions >>
+    return actions
+
+  let rec do_e (Expr(annots, expr_) as expr)
+               : (bmc_action list) eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure pe ->
+        return []
+    | Ememop (memop, pes) ->
+        return []
+    | Eaction (Paction(pol, action)) ->
+        get_action uid >>= fun interm_action ->
+        intermediate_to_bmc_actions interm_action pol
+    | Ecase (pe, cases) ->
+        mapM do_e (List.map snd cases) >>= fun case_actions ->
+        get_case_guards uid            >>= fun case_guards ->
+        return (List.concat (
+          List.map2 (fun guard actions -> List.map (guard_action guard) actions)
+                    case_guards case_actions))
+    | Elet _        -> assert false
+    | Eif (cond, e1, e2) ->
+        do_e e1 >>= fun e1_actions ->
+        do_e e2 >>= fun e2_actions ->
+        (* TODO: do this more nicely *)
+        get_case_guards uid >>= fun guards ->
+        let (guard1, guard2) = (
+          match guards with
+          | [g1;g2] -> (g1,g2)
+          | _ -> assert false) in
+        return ((List.map (guard_action guard1) e1_actions) @
+                (List.map (guard_action guard2) e2_actions))
+    | Eskip         -> return []
+    | Eccall _      -> assert false
+    | Eproc _       -> assert false
+    | Eunseq es ->
+        mapM do_e es >>= fun es_actions ->
+        return (List.concat es_actions)
+    | Ewseq (pat, e1, e2)
+    | Esseq (pat, e1, e2) ->
+        do_e e1 >>= fun e1_actions ->
+        do_e e2 >>= fun e2_actions ->
+
+        get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
+        let e2_guard = mk_not e1_drop_cont in
+        return (e1_actions @ (List.map (guard_action e2_guard) e2_actions))
+    | Easeq _       -> assert false
+    | Eindet _      -> assert false
+    | Ebound (_, e) ->
+        do_e e
+    | End es ->
+        mapM do_e es        >>= fun es_actions ->
+        get_case_guards uid >>= fun es_guards ->
+        return (List.concat (
+          List.map2 (fun guard actions -> List.map (guard_action guard) actions)
+                    es_guards es_actions))
+    | Esave _       (* fall through *)
+    | Erun _        ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_e inline_expr
+    | Epar elist ->
+        get_tid >>= fun old_tid ->
+        mapM (fun e ->
+          get_fresh_tid >>= fun tid ->
+          put_tid tid   >>
+          do_e e) elist >>= fun elist_actions ->
+        return (List.concat elist_actions)
+    | Ewait _       ->
+        assert false
+    ) >>= fun actions ->
+    let aids = List.map aid_of_bmcaction actions in
+    add_aids_to_bmc_actions uid aids >>
+    return actions
+
+  let do_globs (gname, bty, e) =
+    do_e e
+
+  let do_file (file: unit typed_file) (fn_to_check: sym_ty)
+              : (bmc_action list) eff =
+    mapM do_globs file.globs >>= fun globs_actions ->
+    (match Pmap.lookup fn_to_check file.funs with
+     | Some (Proc(annot, bTy, params, e)) ->
+         do_e e
+     | Some (Fun(ty, params, pe)) ->
+         return []
+     | _ -> assert false
+    ) >>= fun fn_actions ->
+    (* TODO: return atomic assertions too *)
+    return ((List.concat globs_actions) @ fn_actions)
+end
+
+module BmcConcMem = struct
+  type internal_state = {
+    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    action_map      : (int, BmcZ3.intermediate_action) Pmap.map;
+    case_guard_map  : (int, Expr.expr list) Pmap.map;
+    drop_cont_map   : (int, Expr.expr) Pmap.map;
+
+    bmc_actions    : (int, aid list) Pmap.map;
+    bmc_action_map : (aid, bmc_action) Pmap.map;
+    tid            : tid;
+    tid_supply     : tid;
+  }
+
+  include EffMonad(struct type state = internal_state end)
+
+  (*let do_file (file: unit typed_file)
+              (fn_to_check: sym_ty)
+              : (bmc_action list) eff = *)
+
+
 end

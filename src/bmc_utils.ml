@@ -150,6 +150,11 @@ let rec list_take k l =
     | x :: xs -> x :: (list_take (k-1) xs)
   else []
 
+let rec zip ls1 ls2 = match ls1,ls2 with
+  | [], [] -> []
+  | (x::xs), (y::ys) -> (x,y) :: (zip xs ys)
+  | _,_ -> assert false
+
 (* TODO: not tail recursive *)
 let rec repeat_n n elem =
   if n <= 0 then []
