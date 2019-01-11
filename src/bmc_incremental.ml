@@ -1196,6 +1196,7 @@ module BmcZ3 = struct
     | Erun _   ->
         get_inline_expr uid >>= fun inlined_expr ->
         z3_e inlined_expr   >>= fun _ ->
+        (* Need to save return value *)
         return (UnitSort.mk_unit)
     | Epar elist ->
         assert (!!bmc_conf.concurrent_mode);
@@ -2106,7 +2107,6 @@ module BmcRet = struct
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr    >>= fun ret_expr ->
         get_expr (get_id_expr inline_expr) >>= fun z3_expr ->
-
         get_ret_const       >>= fun ret_const ->
         return ((mk_eq ret_const z3_expr) :: ret_expr)
     | Epar es ->
@@ -2754,6 +2754,7 @@ module BmcConcActions = struct
           put_tid tid   >>
           add_parent_tid tid old_tid >>
           do_actions_e e) elist >>= fun elist_actions ->
+        put_tid old_tid >>
         return (List.concat elist_actions)
     | Ewait _       ->
         assert false
@@ -2859,7 +2860,7 @@ module BmcConcActions = struct
     }
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (bmc_action list * aid_rel list * Expr.expr list) eff =
+              : (preexec * Expr.expr list * BmcMem.z3_memory_model) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->
 
@@ -2884,8 +2885,8 @@ module BmcConcActions = struct
     let mem_assertions =
       if (List.length actions > 0) then BmcMem.get_assertions memory_model
       else [] in
-    (* TODO: return atomic assertions too *)
-    return (actions, po, assertions @ mem_assertions)
+
+    return (preexec, assertions @ mem_assertions, memory_model)
 end
 
 module BmcConcMem = struct
@@ -2906,6 +2907,5 @@ module BmcConcMem = struct
   (*let do_file (file: unit typed_file)
               (fn_to_check: sym_ty)
               : (bmc_action list) eff = *)
-
 
 end
