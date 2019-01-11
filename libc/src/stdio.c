@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/uio.h>
+#include <sys/types.h>
 #include "stdio.h"
 
 #define MAYBE_WAITERS 0x40000000
@@ -18,6 +19,14 @@
 
 #define getc_unlocked(f) \
   ( ((f)->rpos != (f)->rend) ? *(f)->rpos++ : __uflow((f)) )
+
+#define shcnt(f) ((f)->shcnt + ((f)->rpos - (f)->buf))
+#define shlim(f, lim) __shlim((f), (lim))
+#define shgetc(f) (((f)->rpos != (f)->shend) ? *(f)->rpos++ : __shgetc(f))
+#define shunget(f) ((f)->shend ? (void)(f)->rpos-- : (void)0)
+
+#define sh_fromstring(f, s) \
+  ((f)->buf = (f)->rpos = (void *)(s), (f)->rend = (void*)-1)
 
 struct _IO_FILE {
   unsigned flags;
@@ -100,6 +109,69 @@ static FILE __stderr_FILE = {
 };
 FILE *const stderr = &__stderr_FILE;
 FILE *volatile __stderr_used = &__stderr_FILE;
+
+void __shlim(FILE *f, off_t lim)
+{
+  f->shlim = lim;
+  f->shcnt = f->buf - f->rpos;
+  /* If lim is nonzero, rend must be a valid pointer. */
+  if (lim && f->rend - f->rpos > lim)
+    f->shend = f->rpos + lim;
+  else
+    f->shend = f->rend;
+}
+
+static int __uflow(FILE *f);
+
+int __shgetc(FILE *f)
+{
+  int c;
+  off_t cnt = shcnt(f);
+  if (f->shlim && cnt >= f->shlim || (c=__uflow(f)) < 0) {
+    f->shcnt = f->buf - f->rpos + cnt;
+    f->shend = 0;
+    return EOF;
+  }
+  cnt++;
+  if (f->shlim && f->rend - f->rpos > f->shlim - cnt)
+    f->shend = f->rpos + (f->shlim - cnt);
+  else
+    f->shend = f->rend;
+  f->shcnt = f->buf - f->rpos + cnt;
+  if (f->rpos[-1] != c) f->rpos[-1] = c;
+  return c;
+}
+
+// TODO: internal:
+long double __floatscan(FILE *f, int prec, int pok);
+
+long double __strtoxd(const char *s, char **p, int prec)
+{
+  FILE f;
+  sh_fromstring(&f, s);
+  shlim(&f, 0);
+  long double y = __floatscan(&f, prec, 1);
+  off_t cnt = shcnt(&f);
+  if (p) *p = cnt ? (char *)s + cnt : (char *)s;
+  return y;
+}
+
+
+// TODO: internal:
+unsigned long long __intscan(FILE *f, unsigned, int, unsigned long long);
+
+static unsigned long long strtox(const char *s, char **p, int base, unsigned long long lim)
+{
+  FILE f;
+  sh_fromstring(&f, s);
+  shlim(&f, 0);
+  unsigned long long y = __intscan(&f, base, 1, lim);
+  if (p) {
+    size_t cnt = shcnt(&f);
+    *p = (char *)s + cnt;
+  }
+  return y;
+}
 
 int putchar(int c)
 {
