@@ -265,7 +265,7 @@ let pp_preexec (preexec: preexec) =
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
           (pp_actionrel_list preexec.po)
           (pp_actionrel_list preexec.asw)
-          
+
 
 
 (* ===== memory model ===== *)
@@ -829,7 +829,7 @@ module C11MemoryModel : MemoryModel = struct
     assertions : Expr.expr list;
   }
 
-  let add_assertions solver model = 
+  let add_assertions solver model =
     Solver.add solver model.assertions
 
   let get_assertions model = model.assertions
@@ -1432,7 +1432,9 @@ module C11MemoryModel : MemoryModel = struct
       } in
 
     (* ==== Derived data ==== *)
+    (* TODO: fix output/definition of sw *)
     let sw = List.filter (get_relation fns.sw) prod in
+    let hb = List.filter (get_relation fns.hb) prod in
     (*let rs = List.filter (get_relation fns.rs) prod in*)
 
     let data_race = List.filter (fun ((a1,e1),(a2,e2)) ->
@@ -1462,8 +1464,9 @@ module C11MemoryModel : MemoryModel = struct
     ) prod in
 
     let execution_derived_data =
-      { derived_relations = [("sw", List.map proj_fst sw)
+      { derived_relations = [(*("sw", List.map proj_fst sw)*)
                             (*;("rs", List.map proj_fst rs)*)
+                             ("hb", remove_initial (List.map proj_fst hb))
                             ]
       ; undefined_behaviour =
             [("dr",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) data_race))

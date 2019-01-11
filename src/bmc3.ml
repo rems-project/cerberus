@@ -45,6 +45,10 @@ module BmcM = struct
 
     (* Memory stuff *)
     mem_bindings     : (Expr.expr list) option;
+
+    (* Concurrency only *)
+    preexec          : preexec option;
+    memory_model     : BmcMem.z3_memory_model option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -66,6 +70,8 @@ module BmcM = struct
     ; ret_expr         = None
     ; ret_bindings     = None
     ; mem_bindings     = None
+    ; preexec          = None
+    ; memory_model     = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -191,7 +197,7 @@ module BmcM = struct
     put { st with mem_bindings = Some simplified_bindings }
 
   (* TODO: temporary for testing; get actions *)
-  let do_conc_actions : (bmc_action list * aid_rel list ) eff =
+  let do_conc_actions : unit eff =
     get >>= fun st ->
     let initial_state =
       BmcConcActions.mk_initial (Option.get st.inline_expr_map)
@@ -199,11 +205,13 @@ module BmcM = struct
                                 (Option.get st.action_map)
                                 (Option.get st.case_guard_map)
                                 (Option.get st.drop_cont_map) in
-    let ((actions, po, assertions), _) =
+    let ((preexec, assertions, memory_model), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
-    put { st with mem_bindings = Some assertions } >>
-    return (actions, po)
+    put { st with mem_bindings = Some assertions;
+                  preexec      = Some preexec;
+                  memory_model = Some memory_model
+        }
 
   (* ===== Getters/setters ===== *)
   let get_file : (unit typed_file) eff =
@@ -248,13 +256,10 @@ let bmc_file (file              : unit typed_file)
     (*BmcM.do_seq_mem   >>*)
 
     (* TODO: temporary *)
-    BmcM.do_conc_actions >>= fun (actions,po) ->
-    (*List.iter (fun a -> print_endline (pp_bmcaction a)) actions;
-    print_endline "PROGRAM ORDER";
-    List.iter (fun (a,b) -> printf "%d,%d\n" a b) po;
+    BmcM.do_conc_actions >>
 
     BmcM.get_file >>= fun file ->
-    if !!bmc_conf.debug_lvl >= 3 then pp_file file; *)
+    if !!bmc_conf.debug_lvl >= 3 then pp_file file;
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
@@ -288,6 +293,12 @@ let bmc_file (file              : unit typed_file)
                           (Solver.get_reason_unknown g_solver))
     end in
 
+  (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs then
+    BmcMem.extract_executions g_solver
+                              (Option.get final_state.memory_model)
+                              (Option.get final_state.ret_expr)
+  else
+    ());
 
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
