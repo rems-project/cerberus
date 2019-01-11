@@ -4,124 +4,102 @@
 #include <stdarg.h>
 
 typedef __cerbty_size_t size_t;
+
 typedef struct _IO_FILE FILE;
-typedef __cerbty_fpos_t fpos_t;
 
+typedef union _G_fpos64_t {
+  char __opaque[16];
+  long long __lldata;
+  double __align;
+} fpos_t;
 
-#define F_PERM 1
-#define F_NORD 4
-#define F_NOWR 8
-#define F_EOF 16
-#define F_ERR 32
-#define F_SVB 64
-#define F_APP 128
+#define NULL          __cerbvar_NULL
 
+#define _IOFBF        0
+#define _IOLBF        1
+#define _IONBF        2
 
+#define BUFSIZ        1024
+#define EOF           -1
+#define FOPEN_MAX     1000
+#define FILENAME_MAX  4096
 
-#define NULL         __cerbvar_NULL
-#define IOFBF        __cerbvar_IOFBF
-#define IOLBF        __cerbvar_IOLBF
-#define IONBF        __cerbvar_IONBF
-//#define BUFSIZ       __cerbvar_BUFSIZ
-#define BUFSIZ 1024
-//#define EOF          __cerbvar_EOF
-#define FOPEN_MAX    __cerbvar_FOPEN_MAX
-#define FILENAME_MAX __cerbvar_FILENAME_MAX
-#define L_tmpnam     __cerbvar_L_tmpnam
-//#define SEEK_CUR     __cerbvar_SEEK_CUR
-//#define SEEK_END     __cerbvar_SEEK_END
-//#define SEEK_SET     __cerbvar_SEEK_SET
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
-#define TMP_MAX      __cerbvar_TMP_MAX
-//#define stderr       __cerbvar_stderr
-//#define stdin        __cerbvar_stdin
-//#define stdout       __cerbvar_stdout
+#define L_tmpnam      20
 
-// Temporary hack for Toyota tests
-#define EOF          -1
+#define SEEK_SET      0
+#define SEEK_CUR      1
+#define SEEK_END      2
 
-extern FILE *const stdout;
-extern FILE *const stderr;
-extern FILE *const stdin;
+#define TMP_MAX       10000
 
-// TEMPORARY HACK
-// #define restrict
+extern FILE *const __stdout;
+extern FILE *const __stderr;
+extern FILE *const __stdin;
 
-int remove(const char *filename); // FILE
-int rename(const char *old, const char *new); // FILE
-FILE *tmpfile(void); // FILE
-char *tmpnam(char *s); // FILE
-int fclose(FILE *stream); // FILE
-int fflush(FILE *stream); // FILE
-FILE *fopen(const char * restrict filename, const char * restrict mode); // FILE
-FILE *freopen(const char * restrict filename, const char * restrict mode, FILE * restrict stream); // FILE
-void setbuf(FILE * restrict stream, char * restrict buf); // FILE
-int setvbuf(FILE * restrict stream, char * restrict buf, int mode, size_t size); // FILE
-int fprintf(FILE * restrict stream, const char * restrict format, ...); // FILE
-int fscanf(FILE * restrict stream, const char * restrict format, ...); // FILE
+#define stdout  __stdout
+#define stderr  __stderr
+#define stdin   __stdin
 
-int printf(const char * restrict format, ...);
-int scanf(const char * restrict format, ...);
-int snprintf(char * restrict s, size_t n, const char * restrict format, ...);
-int sprintf(char * restrict s, const char * restrict format, ...);
-int sscanf(const char * restrict s, const char * restrict format, ...);
-int vfprintf(FILE * restrict stream, const char * restrict format, va_list arg); // FILE
-int vfscanf(FILE * restrict stream, const char * restrict format, va_list arg); // FILE
-int vprintf(const char * restrict format, va_list arg);
-int vscanf(const char * restrict format, va_list arg);
-int vsnprintf(char * restrict s, size_t n, const char * restrict format, va_list arg);
-int vsprintf(char * restrict s, const char * restrict format, va_list arg);
-int vsscanf(const char * restrict s, const char * restrict format, va_list arg);
-int fgetc(FILE *stream); // FILE
-char *fgets(char * restrict s, int n, FILE * restrict stream); // FILE
-int fputc(int c, FILE *stream); // FILE
-int fputs(const char * restrict s, FILE * restrict stream); // FILE
-int getc(FILE *stream); // FILE
+int remove(const char *filename);
+int rename(const char *old, const char *new);
+FILE *tmpfile(void);
+char *tmpnam(char *s);
+
+int fclose(FILE *stream);
+int fflush(FILE *stream);
+FILE *fopen(const char * restrict filename, const char * restrict mode);
+FILE *freopen(const char * restrict filename, const char * restrict mode, FILE * restrict stream);
+
+void setbuf(FILE * restrict stream, char * restrict buf);
+int setvbuf(FILE * restrict stream, char * restrict buf, int mode, size_t size);
+
+int fprintf(FILE * restrict stream, const char * restrict fmt, ...);
+int fscanf(FILE * restrict stream, const char * restrict fmt, ...);
+
+int printf(const char * restrict fmt, ...);
+int scanf(const char * restrict fmt, ...);
+
+int snprintf(char * restrict s, size_t n, const char * restrict fmt, ...);
+int sprintf(char * restrict s, const char * restrict fmt, ...);
+int sscanf(const char * restrict s, const char * restrict fmt, ...);
+
+int vfprintf(FILE * restrict stream, const char * restrict fmt, va_list arg);
+int vfscanf(FILE * restrict stream, const char * restrict fmt, va_list arg);
+
+int vprintf(const char * restrict fmt, va_list arg);
+int vscanf(const char * restrict fmt, va_list arg);
+
+int vsnprintf(char * restrict s, size_t n, const char * restrict fmt, va_list arg);
+int vsprintf(char * restrict s, const char * restrict fmt, va_list arg);
+int vsscanf(const char * restrict s, const char * restrict fmt, va_list arg);
+
+int fgetc(FILE *stream);
+char *fgets(char * restrict s, int n, FILE * restrict stream);
+
+int fputc(int c, FILE *stream);
+int fputs(const char * restrict s, FILE * restrict stream);
+
+int getc(FILE *stream);
 int getchar(void);
-int putc(int c, FILE *stream); // FILE
+
+int putc(int c, FILE *stream);
 int putchar(int c);
+
 int puts(const char *s);
-int ungetc(int c, FILE *stream); // FILE
-size_t fread(void * restrict ptr, size_t size, size_t nmemb, FILE * restrict stream); // FILE
-size_t fwrite(const void * restrict ptr, size_t size, size_t nmemb, FILE * restrict stream); // FILE
-int fgetpos(FILE * restrict stream, fpos_t * restrict pos); // FILE
-int fseek(FILE *stream, long int offset, int whence); // FILE
-int fsetpos(FILE *stream, const fpos_t *pos); // FILE
-long int ftell(FILE *stream); // FILE
-void rewind(FILE *stream); // FILE
-void clearerr(FILE *stream); // FILE
-int feof(FILE *stream); // FILE
-int ferror(FILE *stream); // FILE
+int ungetc(int c, FILE *stream);
+
+size_t fread(void * restrict p, size_t size, size_t nmemb, FILE * restrict stream);
+size_t fwrite(const void * restrict p, size_t size, size_t nmemb, FILE * restrict stream);
+
+int fgetpos(FILE * restrict stream, fpos_t * restrict pos);
+int fseek(FILE *stream, long int offset, int whence);
+int fsetpos(FILE *stream, const fpos_t *pos);
+long int ftell(FILE *stream);
+void rewind(FILE *stream);
+void clearerr(FILE *stream);
+int feof(FILE *stream);
+int ferror(FILE *stream);
 void perror(const char *s);
-
-// Annex K: Bounds-checking interfaces
-//TODO: L_tmpnam_s TMP_MAX_S
-typedef int errno_t;
-typedef size_t rsize_t;
-
-
-errno_t tmpfile_s(FILE * restrict * restrict streamptr);
-errno_t tmpnam_s(char *s, rsize_t maxsize);
-
-errno_t fopen_s(FILE * restrict * restrict streamptr, const char * restrict filename, const char * restrict mode); // FILE
-errno_t freopen_s(FILE * restrict * restrict newstreamptr, const char * restrict filename, const char * restrict mode, FILE * restrict stream);  // FILE
-int fprintf_s(FILE * restrict stream, const char * restrict format, ...); // FILE
-int fscanf_s(FILE * restrict stream, const char * restrict format, ...); // FILE
-int printf_s(const char * restrict format, ...);
-int scanf_s(const char * restrict format, ...);
-int snprintf_s(char * restrict s, rsize_t n, const char * restrict format, ...);
-int sprintf_s(char * restrict s, rsize_t n, const char * restrict format, ...);
-int sscanf_s(const char * restrict s, const char * restrict format, ...);
-int vfprintf_s(FILE * restrict stream, const char * restrict format, va_list arg); // FILE
-int vfscanf_s(FILE * restrict stream, const char * restrict format, va_list arg); // FILE
-int vprintf_s(const char * restrict format, va_list arg);
-int vscanf_s(const char * restrict format, va_list arg);
-int vsnprintf_s(char * restrict s, rsize_t n, const char * restrict format, va_list arg);
-int vsprintf_s(char * restrict s, rsize_t n, const char * restrict format, va_list arg);
-int vsscanf_s(const char * restrict s, const char * restrict format, va_list arg);
-char *gets_s(char *s, rsize_t n);
 
 #include "posix/stdio.h"
 

@@ -1,9 +1,11 @@
+// Used in stdio.c
+#define CLOCK_REALTIME           0
 // char      *asctime(const struct tm *);
 // char      *asctime_r(const struct tm *restrict, char *restrict);
 // clock_t    clock(void);
 // int        clock_getcpuclockid(pid_t, clockid_t *);
 // int        clock_getres(clockid_t, struct timespec *);
-// int        clock_gettime(clockid_t, struct timespec *);
+int        clock_gettime(clockid_t, struct timespec *);
 // int        clock_nanosleep(clockid_t, int, const struct timespec *, struct timespec *);
 // int        clock_settime(clockid_t, const struct timespec *);
 // char      *ctime(const time_t *);
