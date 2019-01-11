@@ -1162,11 +1162,6 @@ BEFORE EVAL_PEXPR2
                       | [cval] -> Step_done cval
                       | _ -> error ("Core_run, exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
                     end
-                | Impl (BuiltinFunction "_Exit") ->
-                    match cvals with
-                      | [cval] -> Step_done cval
-                      | _ -> error ("Core_run, _Exit giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
-                    end
                 (* ----------------------------------------------------------- *)
                 (* Posix <sys/stat.h> *)
                 (* ----------------------------------------------------------- *)
