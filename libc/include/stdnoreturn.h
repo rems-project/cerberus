@@ -1,7 +1,6 @@
-#ifndef	_STDNORETURN_H_
-#define	_STDNORETURN_H_
+#ifndef _STDNORETURN_H_
+#define _STDNORETURN_H_
 
 #define noreturn _Noreturn
 
-#else
 #endif

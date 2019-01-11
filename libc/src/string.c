@@ -1,5 +1,34 @@
-#include "string.h"
 #include <stdint.h>
+#include <assert.h>
+#include <stdlib.h>
+#include "string.h"
+
+#define MAX(a,b) ((a)>(b)?(a):(b))
+#define MIN(a,b) ((a)<(b)?(a):(b))
+
+#define BITOP(a,b,op) \
+ ((a)[(size_t)(b)/(8*sizeof *(a))] op (size_t)1<<((size_t)(b)%(8*sizeof *(a))))
+
+/***************************************************************************
+ * 7.24.2 Copying functions
+ ***************************************************************************/
+
+void *memmove(void *dest, const void *src, size_t n)
+{
+  char *d = dest;
+  const char *s = src;
+
+  if (d==s) return d;
+  if ((uintptr_t)s-(uintptr_t)d-n <= -2*n) return memcpy(d, s, n);
+
+  if (d<s) {
+    for (; n; n--) *d++ = *s++;
+  } else {
+    while (n) n--, d[n] = s[n];
+  }
+
+  return dest;
+}
 
 char *strcpy (char * restrict s1, const char * restrict s2)
 {
@@ -18,19 +47,39 @@ char *strncpy (char * restrict s1, const char * restrict s2, size_t n)
   return (res);
 }
 
-void* memset(void *s, int c, size_t n)
+/***************************************************************************
+ * 7.24.3 Concatenation functions
+ ***************************************************************************/
+
+char *strcat(char *restrict dest, const char *restrict src)
 {
-  unsigned char *p = s;
-  while (n--)
-    *p++ = (unsigned char)c;
-  return s;
+  strcpy(dest + strlen(dest), src);
+  return dest;
 }
+
+char *strncat(char *restrict d, const char *restrict s, size_t n)
+{
+  char *a = d;
+  d += strlen(d);
+  while (n && *s) n--, *d++ = *s++;
+  *d++ = 0;
+  return a;
+}
+
+/***************************************************************************
+ * 7.24.4 Comparison functions
+ ***************************************************************************/
 
 int strcmp (const char *s1, const char *s2)
 {
   while (*s1 && *s1 == *s2)
     s1++, s2++;
   return (*(unsigned char*)s1 - *(unsigned char*)s2);
+}
+
+int strcoll(const char *l, const char *r)
+{
+  return strcmp(l, r);
 }
 
 int strncmp(const char *s1, const char *s2, size_t n)
@@ -40,20 +89,23 @@ int strncmp(const char *s1, const char *s2, size_t n)
   return (*s1 - *s2);
 }
 
-size_t strlen(const char *s)
+size_t strxfrm(char *restrict dest, const char *restrict src, size_t n)
 {
-  size_t len = 0;
-  while(*s) len++, s++;
-  return len;
+  size_t l = strlen(src);
+  if (n > l) strcpy(dest, src);
+  return l;
 }
 
-char *strcat(char * restrict s1, const char * restrict s2)
+/***************************************************************************
+ * 7.24.5 Search functions
+ ***************************************************************************/
+
+void *memchr(const void *src, int c, size_t n)
 {
-  while(*s1++);
-  s1--;
-  while(*s2) *s1++ = *s2++;
-  *s1 = '\0';
-  return s1;
+  const unsigned char *s = src;
+  c = (unsigned char)c;
+  for (; n && *s != c; s++, n--);
+  return n ? (void *)s : 0;
 }
 
 char *strchr(const char *s, int n)
@@ -63,6 +115,25 @@ char *strchr(const char *s, int n)
   if (*s || !c)
     return (char*)s;
   return NULL;
+}
+
+size_t strcspn(const char *s, const char *c)
+{
+  const char *a = s;
+  size_t byteset[32/sizeof(size_t)];
+
+  if (!c[0] || !c[1]) return strchrnul(s, *c)-(char*)a;
+
+  memset(byteset, 0, sizeof byteset);
+  for (; *c && BITOP(byteset, *(unsigned char *)c, |=); c++);
+  for (; *s && !BITOP(byteset, *(unsigned char *)s, &); s++);
+  return s-a;
+}
+
+char *strpbrk(const char *s, const char *b)
+{
+  s += strcspn(s, b);
+  return *s ? (char *)s : 0;
 }
 
 char *strrchr(const char *s, int n)
@@ -77,21 +148,21 @@ char *strrchr(const char *s, int n)
   return NULL;
 }
 
-char* strdup(const char *s)
+size_t strspn(const char *s, const char *c)
 {
-  void *malloc(size_t);
-  size_t len = strlen(s)+1;
-  char *sc = malloc(len);
-  memcpy(sc, s, len);
-  return sc;
-}
+  const char *a = s;
+  size_t byteset[32/sizeof(size_t)] = { 0 };
 
-// TODO:
-char *strerror(int errnum)
-{
-  return "NOT IMPLEMENTED!";
-}
+  if (!c[0]) return 0;
+  if (!c[1]) {
+    for (; *s == *c; s++);
+    return s-a;
+  }
 
+  for (; *c && BITOP(byteset, *(unsigned char *)c, |=); c++);
+  for (; *s && BITOP(byteset, *(unsigned char *)s, &); s++);
+  return s-a;
+}
 
 static char *twobyte_strstr(const unsigned char *h, const unsigned char *n)
 {
@@ -115,12 +186,6 @@ static char *fourbyte_strstr(const unsigned char *h, const unsigned char *n)
   for (h+=3; *h && hw != nw; hw = hw<<8 | *++h);
   return *h ? (char *)h-3 : 0;
 }
-
-#define MAX(a,b) ((a)>(b)?(a):(b))
-#define MIN(a,b) ((a)<(b)?(a):(b))
-
-#define BITOP(a,b,op) \
- ((a)[(size_t)(b)/(8*sizeof *(a))] op (size_t)1<<((size_t)(b)%(8*sizeof *(a))))
 
 static char *twoway_strstr(const unsigned char *h, const unsigned char *n)
 {
@@ -244,3 +309,70 @@ char *strstr(const char *h, const char *n)
 
   return twoway_strstr((void *)h, (void *)n);
 }
+
+char *strtok(char *restrict s, const char *restrict sep)
+{
+  static char *p;
+  if (!s && !(s = p)) return NULL;
+  s += strspn(s, sep);
+  if (!*s) return p = 0;
+  p = s + strcspn(s, sep);
+  if (*p) *p++ = 0;
+  else p = 0;
+  return s;
+}
+
+
+/***************************************************************************
+ * 7.24.6 Miscellaneous functions
+ ***************************************************************************/
+
+void* memset(void *s, int c, size_t n)
+{
+  unsigned char *p = s;
+  while (n--)
+    *p++ = (unsigned char)c;
+  return s;
+}
+
+char *strerror(int errnum)
+{
+  assert(0 && "not supported");
+  _Exit(127);
+}
+
+size_t strlen(const char *s)
+{
+  size_t len = 0;
+  while(*s) len++, s++;
+  return len;
+}
+
+
+/***************************************************************************
+ * POSIX
+ ***************************************************************************/
+
+char* strdup(const char *s)
+{
+  void *malloc(size_t);
+  size_t len = strlen(s)+1;
+  char *sc = malloc(len);
+  memcpy(sc, s, len);
+  return sc;
+}
+
+
+/***************************************************************************
+ * GNU Extension
+ ***************************************************************************/
+
+char *strchrnul(const char *s, int c)
+{
+  c = (unsigned char)c;
+  if (!c) return (char *)s + strlen(s);
+  for (; *s && *(unsigned char *)s != c; s++);
+  return (char *)s;
+}
+
+
