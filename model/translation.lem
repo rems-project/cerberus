@@ -2675,35 +2675,46 @@ a
       | A.AilEannot _ e ->
           self e
       
-      | A.AilEva_start (A.AnnotatedExpression _ _ _ (A.AilErvalue (A.AnnotatedExpression _ _ _ (A.AilEident va_sym)))) last_sym ->
+      | A.AilEva_start _ last_sym ->
           let (variadic_sym, last_arg_sym) =
             match variadic_env with
             | (Just var_sym, Just last_sym) -> (var_sym, last_sym)
             | _ -> error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": va_start not in a variadic function")
             end in
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, va_sym_pat, va_sym_pe ) ->
           E.return $
             if last_sym = last_arg_sym then
-              C.Expr [] (C.Ememop Mem_common.Va_start [Caux.mk_sym_pe va_sym; Caux.mk_sym_pe variadic_sym])
+              Caux.mk_sseq_e va_sym_pat (C.Expr [] (C.Ememop Mem_common.Va_start [Caux.mk_sym_pe variadic_sym]))
+                (Caux.mk_pure_e (Caux.mk_specified_pe va_sym_pe))
             else
               error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ " : " ^ show last_sym ^ " is not the last argument") (* it should be UB I think *)
-
-      | A.AilEva_start e last_sym ->
-          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": general va_start TODO")
       
-      | A.AilEva_arg (A.AnnotatedExpression _ _ _ (A.AilErvalue (A.AnnotatedExpression _ _ _ (A.AilEident va_sym)))) ty ->
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, ptr_sym_pat, ptr_sym_pe ) ->
-          E.return $
-            Caux.mk_sseq_e ptr_sym_pat (C.Expr [] (C.Ememop Mem_common.Va_arg [Caux.mk_sym_pe va_sym; Caux.mk_ail_ctype_pe ty]))
-              (Caux.pload loc (Caux.mk_ail_ctype_pe ty) ptr_sym_pe Cmm.NA)
-
       | A.AilEva_arg e ty ->
-          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": general va_args TODO")
-
-      | A.AilEva_end (A.AnnotatedExpression _ _ _ (A.AilErvalue (A.AnnotatedExpression _ _ _ (A.AilEident va_sym)))) ->
-          E.return (C.Expr [] (C.Ememop Mem_common.Va_end [Caux.mk_sym_pe va_sym]))
-
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e_sym_pat, e_sym_pe ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, ptr_sym_pat, ptr_sym_pe ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe) ->
+          self e >>= fun core_e ->
+          E.return $
+            Caux.mk_sseq_e e_sym_pat core_e
+              (Caux.mk_sseq_e ptr_sym_pat
+                (Caux.mk_case_e e_sym_pe
+                  [ (Caux.mk_specified_pat case_sym_pat,
+                      (C.Expr [] (C.Ememop Mem_common.Va_arg [case_sym_pe; Caux.mk_ail_ctype_pe ty])))
+                  ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                      Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc)) ] )
+                (Caux.pload loc (Caux.mk_ail_ctype_pe ty) ptr_sym_pe Cmm.NA))
+      
       | A.AilEva_end e ->
-          error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": general va_end TODO")
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e_sym_pat, e_sym_pe ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe) ->
+          self e >>= fun core_e ->
+          E.return $
+            Caux.mk_sseq_e e_sym_pat core_e
+              (Caux.mk_case_e e_sym_pe
+                [ (Caux.mk_specified_pat case_sym_pat,
+                    (C.Expr [] (C.Ememop Mem_common.Va_end [case_sym_pe])))
+                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc)) ] )
       
       | A.AilEprint_type e ->
           let (qs, ty) = qualified_ctype_of e in

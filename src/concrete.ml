@@ -380,6 +380,7 @@ module Concrete : Memory = struct
     next_address: address;
     funptrmap: (Digest.t * string) IntMap.t;
     varargs: (int * (Core_ctype.ctype0 * pointer_value) list) IntMap.t;
+    next_varargs_id: N.num;
     bytemap: AbsByte.t IntMap.t;
     
     dead_allocations: allocation_id list;
@@ -393,6 +394,7 @@ module Concrete : Memory = struct
     next_address= Nat_big_num.(succ zero);
     funptrmap = IntMap.empty;
     varargs = IntMap.empty;
+    next_varargs_id = N.zero;
     bytemap= IntMap.empty;
     
     dead_allocations= [];
@@ -1854,23 +1856,23 @@ let combine_prov prov1 prov2 =
     | PV _ ->
       fail (MerrWIP "realloc: invalid pointer")
 
-  let va_start va_ptr args =
-    match va_ptr with
-    | PV (Prov_some _, PVconcrete addr) ->
-      update @@ fun st ->
-      { st with varargs = IntMap.add addr (0, args) st.varargs }
-    | _ ->
-      fail (MerrWIP "va_start: invalid va_list")
+  let va_start args =
+    get >>= fun st ->
+    let id = st.next_varargs_id in
+    update (fun st -> { st with varargs = IntMap.add id (0, args) st.varargs;
+                                next_varargs_id = N.succ st.next_varargs_id;
+                      } ) >>= fun _ ->
+    return (IV (Prov_none, id))
 
-  let va_arg va_ptr ty =
-    match va_ptr with
-    | PV (Prov_some _, PVconcrete addr) ->
+  let va_arg va ty =
+    match va with
+    | IV (Prov_none, id) ->
       get >>= fun st ->
-      begin match IntMap.find_opt addr st.varargs with
+      begin match IntMap.find_opt id st.varargs with
         | Some (i, args) ->
           begin match List.nth_opt args i with
             | Some (_, ptr) -> (* TODO: check type is compatible *)
-              update (fun st -> { st with varargs = IntMap.add addr (i+1, args) st.varargs })
+              update (fun st -> { st with varargs = IntMap.add id (i+1, args) st.varargs })
               >>= fun _ ->
               return ptr
             | None ->
@@ -1882,13 +1884,13 @@ let combine_prov prov1 prov2 =
     | _ ->
       fail (MerrWIP "va_arg: invalid va_list")
 
-  let va_end va_ptr =
-    match va_ptr with
-    | PV (Prov_some _, PVconcrete addr) ->
+  let va_end va =
+    match va with
+    | IV (Prov_none, id) ->
       get >>= fun st ->
-      begin match IntMap.find_opt addr st.varargs with
+      begin match IntMap.find_opt id st.varargs with
         | Some _ ->
-          update (fun st -> { st with varargs = IntMap.remove addr st.varargs })
+          update (fun st -> { st with varargs = IntMap.remove id st.varargs })
         | None ->
             fail (MerrWIP "va_end: not initiliased")
       end
