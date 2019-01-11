@@ -137,9 +137,9 @@ val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_valu
 val memcmp: pointer_value -> pointer_value -> integer_value -> memM integer_value
 val realloc: Core_ctype.thread_id -> integer_value -> pointer_value -> integer_value -> memM pointer_value
 
-val va_start: pointer_value -> list (Core_ctype.ctype * pointer_value) -> memM unit
-val va_arg: pointer_value -> Core_ctype.ctype -> memM pointer_value
-val va_end: pointer_value -> memM unit
+val va_start: list (Core_ctype.ctype * pointer_value) -> memM integer_value
+val va_arg: integer_value -> Core_ctype.ctype -> memM pointer_value
+val va_end: integer_value -> memM unit
 
 declare ocaml target_rep function memcpy = `Ocaml_mem.memcpy`
 declare ocaml target_rep function memcmp = `Ocaml_mem.memcmp`

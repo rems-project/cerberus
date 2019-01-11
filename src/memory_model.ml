@@ -101,9 +101,9 @@ module type Memory = sig
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
   val realloc: Core_ctype.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
-  val va_start: pointer_value -> (Core_ctype.ctype0 * pointer_value) list -> unit memM
-  val va_arg: pointer_value -> Core_ctype.ctype0 -> pointer_value memM
-  val va_end: pointer_value -> unit memM
+  val va_start: (Core_ctype.ctype0 * pointer_value) list -> integer_value memM
+  val va_arg: integer_value -> Core_ctype.ctype0 -> pointer_value memM
+  val va_end: integer_value -> unit memM
 
   
   (* Integer value constructors *)

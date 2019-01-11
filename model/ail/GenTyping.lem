@@ -1177,7 +1177,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEva_start e sym ->
         annotate_rvalue e >>= fun (e', _) ->
-        E.return (AilEva_start e' sym, GenRValueType GenVoid)
+        E.return (AilEva_start e' sym, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
         (* TODO: add this check later
         annotate_rvalue e >>= function
           | (e', GenBuiltin "va_list") ->

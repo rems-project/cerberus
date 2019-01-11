@@ -1270,11 +1270,11 @@ let memop_signature = function
   | Mem_common.PtrArrayShift ->
       (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_ctype; BTy_object OTy_integer])
   | Mem_common.Va_start ->
-      (BTy_unit, [BTy_object OTy_pointer; BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])])
+      (BTy_object OTy_integer, [BTy_list (BTy_tuple [BTy_ctype; BTy_object OTy_pointer])])
   | Mem_common.Va_arg ->
-      (BTy_object OTy_pointer, [BTy_object OTy_pointer; BTy_ctype])
+      (BTy_object OTy_pointer, [BTy_object OTy_integer; BTy_ctype])
   | Mem_common.Va_end ->
-      (BTy_unit, [BTy_object OTy_pointer])
+      (BTy_unit, [BTy_object OTy_integer])
 end
 
 
