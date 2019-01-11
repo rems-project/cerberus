@@ -1,6 +1,5 @@
-#ifndef	_STDINT_H_
-#define	_STDINT_H_
-
+#ifndef _STDINT_H_
+#define _STDINT_H_
 
 // TODO: temporarily fixing the implemetation of stdint.h
 #define FIXED_STDINT

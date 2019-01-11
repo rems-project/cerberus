@@ -13,7 +13,7 @@ int          close(int);
 // int          dup(int);
 
 
-// int          dup2(int, int);
+int          dup2(int, int);
 // void         _exit(int);
 // void         encrypt(char [64], int);
 // int          execl(const char *, const char *, ...);

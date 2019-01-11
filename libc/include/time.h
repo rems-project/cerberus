@@ -11,6 +11,8 @@
 
 #define TIME_UTC
 
+#include <sys/types.h>
+
 // 7.27#3
 typedef __cerbty_size_t  size_t;
 
@@ -49,6 +51,6 @@ struct tm *localtime(const time_t *timer);
 
 time_t time(time_t *timer);
 
-//#include "posix/time.h"
+#include "posix/time.h"
 
 #endif

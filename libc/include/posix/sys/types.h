@@ -9,7 +9,7 @@
 typedef int64_t               blkcnt_t;
 typedef int32_t               blksize_t;
 typedef unsigned long         clock_t;
-#define clockid_t             __cerbty_clockid_t
+typedef int                   clockid_t;
 typedef int32_t               dev_t;
 typedef unsigned int          fsblkcnt_t;
 typedef unsigned int          fsfilcnt_t;
