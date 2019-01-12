@@ -39,6 +39,9 @@ module BmcInline = struct
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
 
+    (* Return type for Erun *)
+    fn_type : core_base_type option;
+
     (* procedure-local state *)
     proc_expr : (unit typed_expr) option;
   }
@@ -50,6 +53,7 @@ module BmcInline = struct
     ; file             = file
     ; inline_pexpr_map = Pmap.empty Pervasives.compare
     ; inline_expr_map  = Pmap.empty Pervasives.compare
+    ; fn_type          = None
     ; proc_expr        = None
     }
 
@@ -87,6 +91,15 @@ module BmcInline = struct
   let get_file : (unit typed_file) eff =
     get >>= fun st ->
     return st.file
+
+  let get_fn_type : core_base_type eff =
+    get >>= fun st ->
+    assert (is_some st.fn_type);
+    return (Option.get st.fn_type)
+
+  let put_fn_type (cbt : core_base_type) : unit eff =
+    get >>= fun st ->
+    put {st with fn_type = Some cbt}
 
   (* proc_expr *)
   let get_proc_expr : (unit typed_expr) eff =
@@ -348,11 +361,16 @@ module BmcInline = struct
         if depth >= !!bmc_conf.max_run_depth then
           let error_msg =
             sprintf "Erun_depth_exceeded: %s" (name_to_string (Sym label)) in
-          (* TODO: hacky *)
+          (* TODO: hacky; type is wrong. *)
+          (* This should also be error but then would need to make expression...
+           *)
+          get_fn_type >>= fun ret_type ->
           let new_expr =
-            (Expr([],Epure(Pexpr([], BTy_unit,
+            (Expr([],Epure(Pexpr([], ret_type,
                            PEerror(error_msg,
-                                  Pexpr([], BTy_unit, PEval (Vunit))))))) in
+                                   Pexpr([], BTy_unit, PEval(Vunit)))))))
+                           (*error(error_msg,
+                                  Pexpr([], BTy_unit, PEval (Vunit))))))) *)in
           inline_e new_expr >>= fun inlined_new_expr ->
           add_inlined_expr id inlined_new_expr >>
           return (Erun(a, label, pelist))
@@ -388,7 +406,8 @@ module BmcInline = struct
     mapM inline_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc (annot, bTy, params, e)) ->
-         update_proc_expr e >>= fun () ->
+         update_proc_expr e >>
+         put_fn_type bTy    >>
          inline_e e         >>= fun inlined_e ->
          return (Proc (annot, bTy, params, inlined_e))
      | Some (Fun (ty, params, pe)) ->
@@ -2879,7 +2898,7 @@ module BmcConcActions = struct
               @ (List.concat globs_po) @ fn_po) in
     get_assertions >>= fun assertions ->
     mk_preexec actions po >>= fun preexec ->
-    print_endline (pp_preexec preexec);
+    (*print_endline (pp_preexec preexec);*)
     (* TODO *)
     let memory_model = BmcMem.compute_executions preexec in
     let mem_assertions =
