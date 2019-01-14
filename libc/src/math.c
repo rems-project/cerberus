@@ -1,6 +1,108 @@
 #include <stdint.h>
 #include <math.h>
 
+double fabs(double x)
+{
+  union {double f; uint64_t i;} u = {x};
+  u.i &= -1ULL/2;
+  return u.f;
+}
+
+double scalbn(double x, int n)
+{
+  union {double f; uint64_t i;} u;
+  double_t y = x;
+
+  if (n > 1023) {
+    y *= 0x1p1023;
+    n -= 1023;
+    if (n > 1023) {
+      y *= 0x1p1023;
+      n -= 1023;
+      if (n > 1023)
+        n = 1023;
+    }
+  } else if (n < -1022) {
+    /* make sure final n < -53 to avoid double
+       rounding in the subnormal range */
+    y *= 0x1p-1022 * 0x1p53;
+    n += 1022 - 53;
+    if (n < -1022) {
+      y *= 0x1p-1022 * 0x1p53;
+      n += 1022 - 53;
+      if (n < -1022)
+        n = -1022;
+    }
+  }
+  u.i = (uint64_t)(0x3ff+n)<<52;
+  x = y * u.f;
+  return x;
+}
+
+float scalbnf(float x, int n)
+{
+  union {float f; uint32_t i;} u;
+  float_t y = x;
+
+  if (n > 127) {
+    y *= 0x1p127f;
+    n -= 127;
+    if (n > 127) {
+      y *= 0x1p127f;
+      n -= 127;
+      if (n > 127)
+        n = 127;
+    }
+  } else if (n < -126) {
+    y *= 0x1p-126f * 0x1p24f;
+    n += 126 - 24;
+    if (n < -126) {
+      y *= 0x1p-126f * 0x1p24f;
+      n += 126 - 24;
+      if (n < -126)
+        n = -126;
+    }
+  }
+  u.i = (uint32_t)(0x7f+n)<<23;
+  x = y * u.f;
+  return x;
+}
+
+#if LDBL_MANT_DIG == 53 && LDBL_MAX_EXP == 1024
+long double scalbnl(long double x, int n)
+{
+	return scalbn(x, n);
+}
+#elif (LDBL_MANT_DIG == 64 || LDBL_MANT_DIG == 113) && LDBL_MAX_EXP == 16384
+long double scalbnl(long double x, int n)
+{
+	union ldshape u;
+
+	if (n > 16383) {
+		x *= 0x1p16383L;
+		n -= 16383;
+		if (n > 16383) {
+			x *= 0x1p16383L;
+			n -= 16383;
+			if (n > 16383)
+				n = 16383;
+		}
+	} else if (n < -16382) {
+		x *= 0x1p-16382L * 0x1p113L;
+		n += 16382 - 113;
+		if (n < -16382) {
+			x *= 0x1p-16382L * 0x1p113L;
+			n += 16382 - 113;
+			if (n < -16382)
+				n = -16382;
+		}
+	}
+	u.f = 1.0;
+	u.i.se = 0x3fff + n;
+	return x * u.f;
+}
+#endif
+
 /* Get two 32 bit ints from a double.  */
 #define EXTRACT_WORDS(hi,lo,d)                    \
 do {                                              \

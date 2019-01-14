@@ -1,3 +1,8 @@
+#ifndef _POSIX_TIME_H_
+#define _POSIX_TIME_H_
+
+#include <sys/types.h>
+
 // Used in stdio.c
 #define CLOCK_REALTIME           0
 // char      *asctime(const struct tm *);
@@ -28,3 +33,5 @@ time_t     time(time_t *);
 // int        timer_gettime(timer_t, struct itimerspec *);
 // int        timer_settime(timer_t, int, const struct itimerspec *restrict, struct itimerspec *restrict);
 // void       tzset(void);
+
+#endif

@@ -173,5 +173,5 @@ let string_of_core_run_error = function
       "Reached_end_of_proc"
   | Unknown_impl ->
       "Unknown_impl"
-  | Unresolved_symbol sym ->
+  | Unresolved_symbol (_, sym) ->
       "Unresolved_symbol[" ^ Pp_symbol.to_string_pretty sym ^ "]"

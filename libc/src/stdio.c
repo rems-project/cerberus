@@ -10,6 +10,7 @@
 #include "sys/stat.h"
 #include "sys/types.h"
 
+#include "internal.h"
 #include "stdio.h"
 
 #define MAYBE_WAITERS 0x40000000
@@ -17,11 +18,6 @@
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 
 #define MAXTRIES 100
-
-#define _IOFBF 0
-#define _IOLBF 1
-#define _IONBF 2
-
 #define UNGET 8
 
 #undef getc_unlocked
@@ -33,11 +29,6 @@
   ? *(f)->wpos++ = (unsigned char)(c) \
   : __overflow((f),(unsigned char)(c)) )
 
-#define shcnt(f) ((f)->shcnt + ((f)->rpos - (f)->buf))
-#define shlim(f, lim) __shlim((f), (lim))
-#define shgetc(f) (((f)->rpos != (f)->shend) ? *(f)->rpos++ : __shgetc(f))
-#define shunget(f) ((f)->shend ? (void)(f)->rpos-- : (void)0)
-
 #define sh_fromstring(f, s) \
   ((f)->buf = (f)->rpos = (void *)(s), (f)->rend = (void*)-1)
 
@@ -48,53 +39,6 @@
 #define F_ERR 32
 #define F_SVB 64
 #define F_APP 128
-
-/***************************************************************************
- * 7.21.3 Files
- ***************************************************************************/
-
-#undef FILE
-#define FILE struct _IO_FILE
-
-struct _IO_FILE {
-  unsigned flags;
-  unsigned char *rpos, *rend;
-  int (*close)(FILE *);
-  unsigned char *wend, *wpos;
-  unsigned char *mustbezero_1;
-  unsigned char *wbase;
-  size_t (*read)(FILE *, unsigned char *, size_t);
-  size_t (*write)(FILE *, const unsigned char *, size_t);
-  off_t (*seek)(FILE *, off_t, int);
-  unsigned char *buf;
-  size_t buf_size;
-  FILE *prev, *next;
-  int fd;
-  int pipe_pid;
-  long lockcount;
-  int mode;
-  volatile int lock;
-  int lbf;
-  void *cookie;
-  off_t off;
-  char *getln_buf;
-  void *mustbezero_2;
-  unsigned char *shend;
-  off_t shlim, shcnt;
-  FILE *prev_locked, *next_locked;
-  struct __locale_struct *locale;
-};
-
-/***************************************************************************
- * Internal functions declarations
- ***************************************************************************/
-
-static int __stdio_close(FILE *f);
-static off_t __stdio_seek(FILE *f, off_t off, int whence);
-static size_t __stdio_read(FILE *f, unsigned char *buf, size_t len);
-static size_t __stdio_write(FILE *f, const unsigned char *buf, size_t len);
-static size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len);
-
 
 /***************************************************************************
  * Globals
@@ -166,7 +110,7 @@ static char *__randname(char *template)
   return template;
 }
 
-static void __shlim(FILE *f, off_t lim)
+void __shlim(FILE *f, off_t lim)
 {
   f->shlim = lim;
   f->shcnt = f->buf - f->rpos;
@@ -179,7 +123,7 @@ static void __shlim(FILE *f, off_t lim)
 
 static int __uflow(FILE *f);
 
-static int __shgetc(FILE *f)
+int __shgetc(FILE *f)
 {
   int c;
   off_t cnt = shcnt(f);
@@ -198,14 +142,11 @@ static int __shgetc(FILE *f)
   return c;
 }
 
-// TODO: internal:
-long double __floatscan(FILE *f, int prec, int pok);
-
 long double __strtoxd(const char *s, char **p, int prec)
 {
   FILE f;
   sh_fromstring(&f, s);
-  shlim(&f, 0);
+  fshlim(&f, 0);
   long double y = __floatscan(&f, prec, 1);
   off_t cnt = shcnt(&f);
   if (p) *p = cnt ? (char *)s + cnt : (char *)s;
@@ -213,14 +154,11 @@ long double __strtoxd(const char *s, char **p, int prec)
 }
 
 
-// TODO: internal:
-unsigned long long __intscan(FILE *f, unsigned, int, unsigned long long);
-
-static unsigned long long strtox(const char *s, char **p, int base, unsigned long long lim)
+unsigned long long __strtox(const char *s, char **p, int base, unsigned long long lim)
 {
   FILE f;
   sh_fromstring(&f, s);
-  shlim(&f, 0);
+  fshlim(&f, 0);
   unsigned long long y = __intscan(&f, base, 1, lim);
   if (p) {
     size_t cnt = shcnt(&f);
@@ -992,7 +930,6 @@ int ferror(FILE *f)
   int ret = !!(f->flags & F_ERR);
   return ret;
 }
-
 
 void perror(const char *msg)
 {

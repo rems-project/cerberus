@@ -475,7 +475,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
                 | Just (Proc _ _ _ _) ->
                     EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval Core_ctype.Void))))
                 | _ ->
-                    EU.fail (Unresolved_symbol sym)
+                    EU.fail (Unresolved_symbol loc sym)
               end
           | Just cval ->
               EU.return (PEval cval)
@@ -723,21 +723,34 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vloaded (LVspecified (OVpointer pv))) ->
+              let case_funptrval sym = 
+                let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
+                match Map.lookup sym file.funinfo with
+                  | Just (ret, params, is_variadic, has_proto) ->
+                      let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
+                      EU.return (PEval (Vtuple [Vctype ret;
+                                                Vlist BTy_ctype (List.map Vctype params);
+                                                if is_variadic then Vtrue else Vfalse;
+                                                if has_proto then Vtrue else Vfalse; ]))
+                  | _ ->
+                     EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": '" ^ show sym ^ "' does not point to a function (cfunction)")
+                end in
               Mem.case_ptrval pv
                 (fun _ -> EU.fail $ Illformed_program "null function pointer")
-                (fun sym ->
-                  let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
-                  match Map.lookup sym file.funinfo with
-                    | Just (ret, params, is_variadic, has_proto) ->
-                        let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
-                        EU.return (PEval (Vtuple [Vctype ret;
-                                                  Vlist BTy_ctype (List.map Vctype params);
-                                                  if is_variadic then Vtrue else Vfalse;
-                                                  if has_proto then Vtrue else Vfalse; ]))
-                    | _ ->
-                       EU.fail $ Illformed_program ("'" ^ show sym ^ "' does not point to a function (cfunction)")
+                 case_funptrval
+                (fun _ addr ->
+                (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
+                  match mem_st_opt with
+                  | Just mem_st ->
+                      match Mem.case_funsym_opt mem_st pv with
+                      | Just sym ->
+                          case_funptrval sym
+                      | None ->
+                          EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
+                      end
+                  | None ->
+                      EU.fail $ Illformed_program (Loc.stringFromLocation loc ^ ": " ^ show addr ^ " does not point to a function")
                   end)
-                (fun _ addr-> EU.fail $ Illformed_program (show addr ^ " does not point to a function"))
                 (fun _ -> EU.fail $ Illformed_program "function pointer has an unspecified value")
           | Just (Vloaded (LVunspecified _)) ->
               EU.fail $ Illformed_program "function pointer has an unspecified value"

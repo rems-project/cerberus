@@ -15,10 +15,6 @@ typedef union _G_fpos64_t {
 
 #define NULL          __cerbvar_NULL
 
-#define _IOFBF        0
-#define _IOLBF        1
-#define _IONBF        2
-
 #define BUFSIZ        1024
 #define EOF           -1
 #define FOPEN_MAX     1000

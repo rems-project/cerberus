@@ -572,6 +572,7 @@ let null_ptrval = Defacto_memory.impl_null_ptrval
 let fun_ptrval = Defacto_memory.impl_fun_ptrval
 let concrete_ptrval _ _ = failwith "symbolic: concrete_ptrval"
 let case_ptrval _ _ _ _ = failwith "symbolic: case_ptrval"
+let case_funsym_opt _ _ = failwith "symbolic: case_funsym_val"
 let eq_ptrval = Defacto_memory.impl_eq_ptrval
 let ne_ptrval = Defacto_memory.impl_ne_ptrval
 let lt_ptrval = Defacto_memory.impl_lt_ptrval

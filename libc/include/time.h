@@ -6,12 +6,8 @@
 #define NULL __cerbvar_NULL
 #endif
 
-
-#define CLOCKS_PER_SEC
-
-#define TIME_UTC
-
-#include <sys/types.h>
+#define CLOCKS_PER_SEC    1000000L
+#define TIME_UTC          1
 
 // 7.27#3
 typedef __cerbty_size_t  size_t;
@@ -41,15 +37,22 @@ struct tm {
   char  *tm_zone; /* timezone abbreviation */
 };
 
-// 7.27.2.1
 clock_t clock(void);
-
-// 7.27.2.2
 double difftime(time_t time1, time_t time0);
+time_t mktime(struct tm *timeptr);
+struct tm *localtime(const time_t *timer);
+time_t time(time_t *timer);
+int timespec_get(struct timespec *ts, int base);
 
+char *asctime(const struct tm *timeptr);
+char *ctime(const time_t *timer);
+struct tm *gmtime(const time_t *timer);
 struct tm *localtime(const time_t *timer);
 
-time_t time(time_t *timer);
+size_t strftime(char * restrict s,
+             size_t maxsize,
+             const char * restrict format,
+             const struct tm * restrict timeptr);
 
 #include "posix/time.h"
 

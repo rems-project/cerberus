@@ -25,13 +25,13 @@ int isspace(int c) {
 }
 
 int islower(int c) {
-  if (iscntrl(c) || isdigit(c) || isgraph(c) || isspace(c))
+  if (iscntrl(c) || isdigit(c) || !isgraph(c) || isspace(c))
     return 0;
   return (unsigned)c-'a' < 26;
 }
 
 int isupper(int c) {
-  if (iscntrl(c) || isdigit(c) || isgraph(c) || isspace(c))
+  if (iscntrl(c) || isdigit(c) || !isgraph(c) || isspace(c))
     return 0;
   return (unsigned)c-'A' < 26;
 }

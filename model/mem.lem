@@ -88,8 +88,11 @@ val case_ptrval: forall 'a. pointer_value ->
    (* function pointer *) (Symbol.sym -> 'a) ->
    (* concrete pointer *) (maybe integer -> integer -> 'a) ->
    (* unspecified value *) (unit -> 'a) -> 'a
+val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
+
 declare ocaml target_rep function concrete_ptrval = `Ocaml_mem.concrete_ptrval`
 declare ocaml target_rep function case_ptrval = `Ocaml_mem.case_ptrval`
+declare ocaml target_rep function case_funsym_opt = `Ocaml_mem.case_funsym_opt`
 
 (* Operations on pointer values *)
 val eq_ptrval: pointer_value -> pointer_value -> memM bool

@@ -10,6 +10,9 @@ declare ocaml target_rep function digest = `Fresh.digest`
 val digest_compare: digest -> digest ->int 
 declare ocaml target_rep function digest_compare = `Digest.compare`
 
+val string_of_digest: digest -> string
+declare ocaml target_rep function string_of_digest = `Digest.to_hex`
+
 instance (Eq digest)
   let (=) x y = digest_compare x y = 0
   let (<>) x y = digest_compare x y <> 0
@@ -27,6 +30,11 @@ instance (Ord digest)
     digest_compare x y > 0
   let (>=) x y =
     digest_compare x y >= 0
+end
+
+
+instance (Show digest)
+  let show d = string_of_digest d
 end
 
 (* Symbolic identifiers *)
@@ -101,6 +109,8 @@ instance (Show sym)
     "Symbol" ^ show (n, str_opt)
 end
 
+let show_raw (Symbol d n str_opt) =
+  "Symbol(" ^ show d ^ ", " ^ show n ^ ", " ^ show str_opt ^ ")"
 
 (* Location prefix *)
 type prefix =

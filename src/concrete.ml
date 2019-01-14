@@ -632,6 +632,8 @@ module Concrete : Memory = struct
             else
               None
     ) st.allocations None
+
+
   
   
   (* INTERNAL combine_bytes: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
@@ -1193,6 +1195,19 @@ module Concrete : Memory = struct
     | PV (Prov_some i, PVconcrete addr) -> fconc (Some i) addr
     | _ -> failwith "case_ptrval"
 
+  let case_funsym_opt st (PV (_, ptrval)) =
+    match ptrval with
+    | PVfunction sym -> Some sym
+    | PVconcrete addr ->
+      (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+      begin match IntMap.find_opt addr st.funptrmap with
+        | Some (file_dig, name) ->
+            Some (Symbol.Symbol (file_dig, N.to_int addr, Some name))
+        | None ->
+            None
+      end
+    | _ -> None
+    
   
   let eq_ptrval (PV (prov1, ptrval_1)) (PV (prov2, ptrval_2)) =
     match (ptrval_1, ptrval_2) with
