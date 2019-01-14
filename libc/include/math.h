@@ -1,6 +1,21 @@
 #ifndef	_MATH_H_
 #define	_MATH_H_
 
+#define HUGE_VALF 3.40282347e+38F
+#define INFINITY HUGE_VALF
+
+// TODO:??
+#define NAN 0x7fc00000
+
+typedef float float_t;
+typedef double double_t;
+
+double fabs(double x);
+
+float scalbnf(float x, int n);
+double scalbn(double x, int n);
+long double scalbnl(long double x, int n);
+
 /* // TODO: floating
 
 float_t
@@ -118,7 +133,6 @@ long double scalblnl(long double x, long int n);
 double cbrt(double x);
 float cbrtf(float x);
 long double cbrtl(long double x);
-double fabs(double x);
 float fabsf(float x);
 long double fabsl(long double x);
 double hypot(double x, double y);

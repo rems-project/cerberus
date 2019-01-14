@@ -4,9 +4,9 @@
 typedef __cerbty_size_t size_t;
 typedef __cerbty_wchar_t wchar_t;
 
-typedef struct { int quot, rem; } div_t;
-typedef struct { long quot, rem; } ldiv_t;
-typedef struct { long long quot, rem; } lldiv_t;
+typedef struct div { int quot, rem; } div_t;
+typedef struct ldiv { long quot, rem; } ldiv_t;
+typedef struct lldiv { long long quot, rem; } lldiv_t;
 
 #define NULL __cerbvar_NULL
 

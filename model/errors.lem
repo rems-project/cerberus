@@ -46,7 +46,7 @@ type core_run_cause =
   | Found_empty_stack of string (* TODO debug *)
   | Reached_end_of_proc
   | Unknown_impl
-  | Unresolved_symbol of Symbol.sym (* found an unresolved symbolic name in core_eval *)
+  | Unresolved_symbol of Loc.t * Symbol.sym (* found an unresolved symbolic name in core_eval *)
 
 type cparser_cause =
   | Cparser_invalid_symbol
@@ -90,7 +90,7 @@ instance (Show core_run_cause)
         "Reached_end_of_proc"
     | Unknown_impl ->
         "Unknown_impl"
-    | Unresolved_symbol sym ->
+    | Unresolved_symbol _ sym ->
         "Unresolved_symbol[" ^ show sym ^ "]"
   end
 end

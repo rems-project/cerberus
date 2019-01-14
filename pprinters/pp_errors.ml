@@ -375,8 +375,8 @@ let string_of_core_run_cause = function
       "reached the end of a procedure"
   | Unknown_impl ->
       "unknown implementation constant"
-  | Unresolved_symbol sym ->
-      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym))
+  | Unresolved_symbol (loc, sym) ->
+      "unresolved symbol: " ^ (Pp_utils.to_plain_string (Pp_ail.pp_id sym)) ^ " at " ^ Location_ocaml.location_to_string loc
 
 let string_of_core_parser_cause = function
   | Core_parser_invalid_symbol ->

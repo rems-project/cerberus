@@ -1701,7 +1701,7 @@ else
                        if AilTypesAux.is_integer (ctype_of e1) then
                          Caux.mk_not_pe (Caux.mk_op_pe C.OpEq obj1_sym_pe (Caux.mk_integer_pe 0))
                        else
-                         error "WIP: AilEcond, pointer e1" in
+                         error ("WIP: " ^ (Loc.stringFromLocation (Loc.locOf a_expr)) ^ " : AilEcond, pointer e1") in
                      C.Expr [Annot.Astd "§6.5.15#4, sentence 2"] (
                        C.Eif core_test core_e2 core_e3
                      ) )

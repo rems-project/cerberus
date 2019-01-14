@@ -125,8 +125,16 @@ size_t strcspn(const char *s, const char *c)
   if (!c[0] || !c[1]) return strchrnul(s, *c)-(char*)a;
 
   memset(byteset, 0, sizeof byteset);
-  for (; *c && BITOP(byteset, *(unsigned char *)c, |=); c++);
-  for (; *s && !BITOP(byteset, *(unsigned char *)s, &); s++);
+  do {
+    if (!BITOP(byteset, *(unsigned char *)c, |=))
+      break;
+    c++;
+  } while (*c);
+  do {
+    if (BITOP(byteset, *(unsigned char *)s, &))
+      break;
+    s++;
+  } while (*s);
   return s-a;
 }
 
@@ -310,15 +318,15 @@ char *strstr(const char *h, const char *n)
   return twoway_strstr((void *)h, (void *)n);
 }
 
+static char *strtok_p;
 char *strtok(char *restrict s, const char *restrict sep)
 {
-  static char *p;
-  if (!s && !(s = p)) return NULL;
+  if (!s && !(s = strtok_p)) return NULL;
   s += strspn(s, sep);
-  if (!*s) return p = 0;
-  p = s + strcspn(s, sep);
-  if (*p) *p++ = 0;
-  else p = 0;
+  if (!*s) return strtok_p = 0;
+  strtok_p = s + strcspn(s, sep);
+  if (*strtok_p) *strtok_p++ = 0;
+  else strtok_p = 0;
   return s;
 }
 
@@ -337,8 +345,9 @@ void* memset(void *s, int c, size_t n)
 
 char *strerror(int errnum)
 {
-  assert(0 && "not supported");
-  _Exit(127);
+  return "error";
+  //assert(0 && "not supported");
+  //_Exit(127);
 }
 
 size_t strlen(const char *s)
