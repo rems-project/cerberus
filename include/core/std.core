@@ -262,48 +262,35 @@ proc [ailname = "signal"] signal_proxy(sig_ptr: pointer, fn_ptr: pointer): eff l
 -- <stdio.h>
 ------------------------------------------------------------------------------
 
-builtin printf   ([integer], [(ctype, pointer)])                  : eff loaded integer
-builtin snprintf (pointer, integer, [integer], [(ctype, pointer)]): eff loaded integer
-builtin sprintf  (pointer, [integer], [(ctype, pointer)])         : eff loaded integer
-builtin rename   ([integer], [integer])                           : eff loaded integer
+builtin vprintf   (integer, [integer], integer) : eff loaded integer
+builtin vsnprintf (pointer, integer, [integer], integer) : eff loaded integer
+builtin rename    ([integer], [integer]) : eff loaded integer
 
--- int printf(const char * restrict format, ...);
-proc [ailname = "printf"] printf_proxy(tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
-  let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
-  case frmt_ptr_ of
-    | Specified(frmt_ptr: pointer) =>
-        let strong xs: [integer] = pcall(listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<builtin_printf>, xs, args) in
-        pure(ret)
-    | Unspecified(_: ctype) =>
-        pure (undef(<<DUMMY(printf_proxy)>>)) -- TODO think about that
+-- int vprintf (int fd, char * restrict format, va_list ap)
+proc [ailname = "__builtin_vprintf"] vprintf_proxy (fd_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
+  let strong fd_ptr_: loaded integer = load('signed int', fd_ptr) in
+  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
+  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+  case (fd_ptr_, fmt_ptr_, ap_ptr_) of
+    | (Specified (fd: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
+        let strong xs: [integer] = pcall(listFromStr, fmt) in
+        pcall(<builtin_vprintf>, fd, xs, ap)
+    | _: (loaded integer, loaded pointer, loaded integer) =>
+        pure (undef(<<DUMMY(vprintf_proxy)>>))
   end
 
--- int snprintf(char * restrict s, size_t n, const char * restrict format, ...);
-proc [ailname = "snprintf"] snprintf_proxy(s_ptr: pointer, n_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
-  let strong s_: loaded pointer = load('char*', s_ptr) in
-  let strong n_: loaded integer = load('size_t', n_ptr) in
-  let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
-  case (s_, n_, frmt_ptr_) of
-    | (Specified(s: pointer), Specified(n: integer), Specified(frmt_ptr: pointer)) =>
-        let strong xs: [integer] = pcall(listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<builtin_snprintf>, s, n, xs, args) in
-        pure(ret)
-    | _ : (loaded pointer, loaded integer, loaded pointer) =>
-        pure (undef(<<DUMMY(snprintf_proxy)>>)) -- TODO think about that
-  end
-
--- int sprintf(char * restrict s, const char * restrict format, ...);
-proc [ailname = "sprintf"] sprintf_proxy(s_ptr: pointer, tmp_ptr: {-loaded-} pointer, args: [(ctype, pointer)]) : eff loaded integer :=
-  let strong s_: loaded pointer = load('char*', s_ptr) in
-  let strong frmt_ptr_: loaded pointer = load('char*', tmp_ptr) in
-  case (s_, frmt_ptr_) of
-    | (Specified(s: pointer), Specified(frmt_ptr: pointer)) =>
-        let strong xs: [integer] = pcall(listFromStr, frmt_ptr) in
-        let strong ret: loaded integer = pcall(<builtin_sprintf>, s, xs, args) in
-        pure(ret)
-    | _ : (loaded pointer, loaded pointer) =>
-        pure (undef(<<DUMMY(sprintf_proxy)>>)) -- TODO think about that
+-- int vsnprintf(int fd, size_t n, const char * restrict fmt, va_list arg);
+proc [ailname = "__builtin_vsnprintf"] vsnprintf_proxy (s_ptr: pointer, size_ptr: pointer, fmt_ptr: pointer, ap_ptr: pointer) : eff loaded integer :=
+  let strong s_ptr_: loaded pointer = load('char*', s_ptr) in
+  let strong size_ptr_: loaded integer = load('size_t', size_ptr) in
+  let strong fmt_ptr_: loaded pointer = load('char*', fmt_ptr) in
+  let strong ap_ptr_: loaded integer = load('signed int', ap_ptr) in
+  case (s_ptr_, size_ptr_, fmt_ptr_, ap_ptr_) of
+    | (Specified (s: pointer), Specified (size: integer), Specified (fmt: pointer), Specified(ap: integer)) =>
+        let strong xs: [integer] = pcall(listFromStr, fmt) in
+        pcall(<builtin_vsnprintf>, s, size, xs, ap)
+    | _: (loaded pointer, loaded integer, loaded pointer, loaded integer) =>
+        pure (undef(<<DUMMY(vsnprintf_proxy)>>))
   end
 
 -- int rename(const char *oldpath, const char *newpath);
@@ -379,7 +366,6 @@ proc [ailname = "aligned_alloc"] aligned_alloc_proxy (align_ptr: pointer, size_p
 ------------------------------------------------------------------------------
 -- <string.h>
 ------------------------------------------------------------------------------
-
 
 proc [ailname= "memcpy"] memcpy_proxy (s1_ptr: pointer, s2_ptr: pointer, n_ptr: pointer) : eff loaded pointer :=
   let strong _s1: loaded pointer = load('void *', s1_ptr) in

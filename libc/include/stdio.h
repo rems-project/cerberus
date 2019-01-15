@@ -36,6 +36,10 @@ extern FILE *const __stdin;
 #define stderr  __stderr
 #define stdin   __stdin
 
+#define _IOFBF 0
+#define _IOLBF 1
+#define _IONBF 2
+
 int remove(const char *filename);
 int rename(const char *old, const char *new);
 FILE *tmpfile(void);

@@ -105,6 +105,7 @@ module type Memory = sig
   val va_start: (Core_ctype.ctype0 * pointer_value) list -> integer_value memM
   val va_arg: integer_value -> Core_ctype.ctype0 -> pointer_value memM
   val va_end: integer_value -> unit memM
+  val va_list: Nat_big_num.num -> ((Core_ctype.ctype0 * pointer_value) list) memM
 
   
   (* Integer value constructors *)

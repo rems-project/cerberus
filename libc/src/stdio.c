@@ -451,7 +451,7 @@ FILE *tmpfile(void)
   FILE *f;
   int try;
   for (try=0; try<MAXTRIES; try++) {
-    __randname(s+13);
+    __randname(s+8);
     fd = open(s, O_RDWR|O_CREAT|O_EXCL, 0600);
     if (fd >= 0) {
       unlink(s);
@@ -470,7 +470,7 @@ char *tmpnam(char *buf)
   int try;
   int r;
   for (try=0; try<MAXTRIES; try++) {
-    __randname(s+12);
+    __randname(s+7);
     struct stat st = {0};
     r = lstat(s, &st);
     if (r == -ENOENT) return strcpy(buf != NULL ? buf : internal, s);
@@ -704,11 +704,11 @@ int sscanf(const char *restrict s, const char *restrict fmt, ...)
   return ret;
 }
 
-
-// TODO
 int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
 {
-  return 0;
+  int __builtin_vprintf(int, const char* restrict, va_list);
+  int fd = fileno(f);
+  return __builtin_vprintf(fd, fmt, ap);
 }
 
 // TODO
@@ -716,9 +716,10 @@ int vfscanf(FILE *restrict f, const char *restrict fmt, va_list ap)
 {
 }
 
-// TODO
 int vsnprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap)
 {
+  int __builtin_vsnprintf(char *, size_t, const char* restrict, va_list);
+  return __builtin_vsnprintf(s, n, fmt, ap);
 }
 
 int vsprintf(char *restrict s, const char *restrict fmt, va_list ap)

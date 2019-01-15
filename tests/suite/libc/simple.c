@@ -94,8 +94,39 @@ void test_stdlib()
   //assert (r.quot = 1);
 }
 
+void test_stdio()
+{
+  FILE *f = fopen("test", "w+");
+  char *text = "something to write!!";
+  fwrite(text, 20, sizeof(char), f);
+  fflush(f);
+  putc('?', f);
+  fclose(f);
+
+  rename("test", "oldtest");
+
+  f = fopen("oldtest", "r+");
+  char buf[128];
+  fread(buf, 20, sizeof(char), f);
+  buf[20] ='\0';
+  assert (strcmp(text, buf) == 0);
+  fclose(f);
+
+  remove("oldtest");
+
+  f = tmpfile();
+  char tiny_buf[1];
+  setvbuf(f, tiny_buf, _IONBF, 1);
+  fwrite(text, 20, sizeof(char), f);
+  fprintf(f, "\nnumbers: %d, %x\n", 42, 0xAFu);
+
+  fprintf(stderr, "error output!! %d\n", 0);
+
+}
+
 int main()
 {
   test_ctype();
   test_stdlib();
+  test_stdio();
 }

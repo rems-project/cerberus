@@ -593,6 +593,7 @@ let realloc _ _ _ = failwith "Defacto: realloc!"
 let va_start _ = failwith "Defacto: va_start"
 let va_arg _ _ = failwith "Defacto: va_arg"
 let va_end _ = failwith "Defacto: va_end"
+let va_list _ = failwith "Defacto: va_list"
 let concurRead_ival = Defacto_memory.impl_concurRead_ival
 let integer_ival = Defacto_memory.impl_integer_ival
 let max_ival = Defacto_memory.impl_max_ival
