@@ -924,29 +924,13 @@ let rec printf_aux eval_conv acc fs ty_ptrvals =
           Right (U.return acc)
   end
 
-
-(* TODO: return -1, if "encoding error" *)
-
-val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
-            list char -> list (Cty.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
-let printf eval_conv frmt args =
-  match parse format frmt with
-    | [(fs, [])] ->
-        printf_aux eval_conv [] fs args
-    | _ ->
-        Mem.return $
-          Right (U.undef (Loc.other "printf()") [U.Invalid_format (String.toString frmt)])
-  end
-
-
 val     store_chars_in_array: bool -> Mem.pointer_value -> list char -> Mem.memM unit
 let rec store_chars_in_array zero_terminated ptrval = function
   | [] ->
       if zero_terminated then
-        Mem.bind (Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval
-                    (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0))) begin fun _ ->
-          Mem.return ()
-        end
+        Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval
+                    (Mem.integer_value_mval AilTypes.Char (Mem.integer_ival 0)) >>= fun _ ->
+        Mem.return ()
       else
         Mem.return ()
   | c::cs ->
@@ -954,32 +938,29 @@ let rec store_chars_in_array zero_terminated ptrval = function
         Mem.integer_value_mval AilTypes.Char
           (Mem.integer_ival (Decode.decode_character_constant (Decode.escaped_char c))) in
       (* TODO: maybe needs to be unsigned char *)
-      Mem.bind (Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval c_mval) begin fun _ ->
-        let ptrval' = Mem.array_shift_ptrval ptrval Cty.char (Mem.integer_ival 1) in
-        store_chars_in_array zero_terminated ptrval' cs
-      end
+      Mem.store (Loc.other "store_chars_in_array()") Cty.char false ptrval c_mval >>= fun _ ->
+      let ptrval' = Mem.array_shift_ptrval ptrval Cty.char (Mem.integer_ival 1) in
+      store_chars_in_array zero_terminated ptrval' cs
 end
 
-
-(* STD §7.21.6.5 *)
-val snprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
-              Mem.pointer_value -> Mem.integer_value -> list char -> list (Cty.ctype * Mem.pointer_value) ->
+val vsnprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
+              Mem.pointer_value -> Mem.integer_value -> list char -> integer ->
               Mem.memM (either Errors.error (Undefined.t integer))
-let snprintf eval_conv s_ptrval n_ival frmt args =
+let vsnprintf eval_conv s_ptrval n_ival frmt ap_idx =
   let n = Mem.case_integer_value n_ival
     (fun n -> n)
-    (fun () -> error "TODO: snprintf(), symbolic value for the size n") in
+    (fun () -> error "TODO: vsnprintf(), symbolic value for the size n") in
   (* TODO: overlap undefined behaviour *)
   if n = 0 then
     Mem.return (Right (U.return 0))
   else match parse format frmt with
     | [(fs, [])] ->
+        Mem.va_list ap_idx >>= fun args ->
         printf_aux eval_conv [] fs args >>= function
           | Right (U.Defined cs) ->
               let cs' = List.take (natFromInteger (n-1)) cs in
-              Mem.bind (store_chars_in_array true s_ptrval cs') begin fun () ->
-                Mem.return (Right (U.return (integerFromNat (List.length cs'))))
-              end
+              store_chars_in_array true s_ptrval cs' >>= fun () ->
+              Mem.return (Right (U.return (integerFromNat (List.length cs'))))
           | _ ->
               error "TODO: snprintf()"
         end
@@ -988,23 +969,17 @@ let snprintf eval_conv s_ptrval n_ival frmt args =
           Right (U.undef (Loc.other "snprintf()") [U.Invalid_format (String.toString frmt)])
   end
 
-
-(* STD §7.21.6.6 *)
-val sprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
-             Mem.pointer_value -> list char -> list (Cty.ctype * Mem.pointer_value) ->
-             Mem.memM (either Errors.error (Undefined.t integer))
-let sprintf eval_conv s_ptrval frmt args =
+(* TODO: return -1, if "encoding error" *)
+val vprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
+            list char -> integer -> Mem.memM (either Errors.error (Undefined.t (list char)))
+let vprintf eval_conv frmt ap_idx =
   match parse format frmt with
     | [(fs, [])] ->
-        printf_aux eval_conv [] fs args >>= function
-          | Right (U.Defined cs) ->
-              Mem.bind (store_chars_in_array true s_ptrval cs) begin fun () ->
-                Mem.return (Right (U.return (integerFromNat (List.length cs))))
-              end
-          | _ ->
-              error "TODO: sprintf()"
-        end
+        Mem.va_list ap_idx >>= fun args ->
+        printf_aux eval_conv [] fs args
     | _ ->
         Mem.return $
-          Right (U.undef (Loc.other "sprintf()") [U.Invalid_format (String.toString frmt)])
+          Right (U.undef (Loc.other "vprintf()") [U.Invalid_format (String.toString frmt)])
   end
+
+

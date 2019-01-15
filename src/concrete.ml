@@ -1912,6 +1912,16 @@ let combine_prov prov1 prov2 =
     | _ ->
       fail (MerrWIP "va_end: invalid va_list")
 
+  let va_list va_idx =
+    get >>= fun st ->
+    begin match IntMap.find_opt va_idx st.varargs with
+      | Some (n, args) ->
+          assert (n = 0); (* not sure what happens with n <> 0 *)
+          return args
+      | None ->
+          fail (MerrWIP "va_list")
+    end
+
   (* JSON serialisation: Memory layout for UI *)
 
   type ui_value =
