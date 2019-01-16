@@ -210,6 +210,9 @@ let pp_ctype (ctype: Core_ctype.ctype0) =
 let pp_value value =
   pp_to_string (Pp_core.Basic.pp_value value)
 
+let pp_expr = Pp_core.Basic.pp_expr
+let pp_pexpr = Pp_core.Basic.pp_pexpr
+
 let save_to_file file str =
   let channel = open_out file in
   output_string channel str;
@@ -354,7 +357,7 @@ let rec get_id_or_fail annots : int =
   | _ :: annots' ->
       get_id_or_fail annots'
 
-let get_id_pexpr (Pexpr(annots, _, _)) : int =
+let get_id_pexpr (Pexpr(annots, _, _) as pexpr) : int =
   get_id_or_fail annots
 
 let get_id_expr (Expr(annots, _)) : int =

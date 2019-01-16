@@ -14,7 +14,6 @@ let is_integer_type (ctype: Core_ctype.ctype0) =
   | Basic0 (Integer _) -> true
   | _ -> false
 
-
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
@@ -36,6 +35,13 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
   | OVcomposite _ ->
       assert false
 
+(* TODO: HACK; need some function like this *)
+let is_fun_ptr (p: Ocaml_mem.pointer_value) : bool =
+  let ptr_str = pp_to_string (Ocaml_mem.pp_pointer_value p) in
+  let cfun_hdr = "Cfunction(" in
+  if String.length ptr_str < String.length cfun_hdr then false
+  else (String.sub ptr_str 0 (String.length cfun_hdr) = cfun_hdr)
+
 let value_to_z3 (value: value) : Expr.expr =
   match value with
   | Vunit        -> UnitSort.mk_unit
@@ -49,6 +55,12 @@ let value_to_z3 (value: value) : Expr.expr =
       begin match oval with
        | OVinteger ival ->
            LoadedInteger.mk_specified (integer_value_to_z3 ival)
+       | OVpointer p ->
+           (* TODO: function is a hack *)
+           if is_fun_ptr p then
+             LoadedPointer.mk_specified (PointerSort.mk_fn_ptr)
+           else
+             assert false
        | _ -> assert false
       end
   | Vloaded (LVunspecified ctype) ->
@@ -71,11 +83,12 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   | OTy_union _ ->
       assert false
 
-let cbt_to_z3 (cbt: core_base_type) : Sort.sort =
+let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   match cbt with
   | BTy_unit                -> UnitSort.mk_sort
   | BTy_boolean             -> boolean_sort
   | BTy_ctype               -> CtypeSort.mk_sort
+  | BTy_list BTy_ctype      -> CtypeListSort.mk_sort
   | BTy_list _              -> assert false
   | BTy_tuple cbt_list      -> assert false
   | BTy_object obj_type     -> cot_to_z3 obj_type
@@ -91,12 +104,13 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
     (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
   Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
 
-let ctor_to_z3 (ctor  : typed_ctor)
-               (exprs : Expr.expr list)
-               (bTy   : core_base_type option) =
+let rec ctor_to_z3 (ctor  : typed_ctor)
+                   (exprs : Expr.expr list)
+                   (bTy   : core_base_type option) =
   match ctor with
   | Ctuple ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
+      print_endline (Sort.to_string sort);
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl exprs
   | Civmax ->
@@ -126,6 +140,16 @@ let ctor_to_z3 (ctor  : typed_ctor)
         LoadedPointer.mk_unspecified (List.hd exprs)
       else
         assert false
+  | Ccons ->
+      assert (List.length exprs = 2);
+      begin match exprs with
+      | [hd;tl] ->
+          CtypeListSort.mk_cons hd tl
+      | _ -> assert false
+      end
+  | Cnil BTy_ctype ->
+      assert (List.length exprs = 0);
+      CtypeListSort.mk_nil
   | _ ->
       assert false
 
@@ -155,6 +179,15 @@ let rec pattern_match (Pattern(_,pattern): typed_pattern)
         LoadedPointer.is_unspecified expr
       else
         assert false
+  | CaseCtor(Cnil BTy_ctype, []) ->
+      CtypeListSort.is_nil expr
+  | CaseCtor(Ccons, [hd;tl]) ->
+      (* BTy_ctype supported only *)
+      assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
+      mk_and [CtypeListSort.is_cons expr
+             ;pattern_match hd (CtypeListSort.get_head expr)
+             ;pattern_match tl (CtypeListSort.get_tail expr)
+             ]
   | _ -> assert false
 
 let mk_guarded_ite (exprs : Expr.expr list)
@@ -377,3 +410,66 @@ module ImplFunctions = struct
                     @ sizeof_asserts
                     @ is_unsigned_asserts
 end
+
+(* TODO: big hack for function calls...
+ * let weak (p': loaded pointer, (...)) =
+ *     let strong p : loaded pointer = pure(Specified(Cfunction(f))) in
+ *     (p, cfunction(p))
+ * in...
+ *)
+
+let is_c_function_call (pat: typed_pattern) (expr: unit typed_expr)
+                       : bool =
+  match (pat, expr) with
+  | (Pattern(_, (CaseCtor(Ctuple,
+              [Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer)))
+              ;Pattern(_, (CaseCtor(Ctuple, _)))
+              ]))),
+     Expr(_, (Esseq(Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer))),
+                    Expr(_, (Epure(Pexpr(_,_,
+                                         PEval(Vloaded (LVspecified (OVpointer p))))))),
+                    Expr(_,
+                    (Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction
+                    _)]))))))))) -> true
+  | _ -> false
+
+type cfun_call_symbols = {
+  fn_ptr  : sym_ty;
+  fn_ptr_inner : sym_ty;
+  ret_ty  : sym_ty;
+  arg_tys : sym_ty;
+  bool1   : sym_ty; (* TODO: no idea what these are *)
+  bool2   : sym_ty;
+  ptr     : Ocaml_mem.pointer_value;
+  core_ptr_pexpr: typed_pexpr;
+
+}
+
+let extract_cfun (pat: typed_pattern) (expr: unit typed_expr)
+                 : cfun_call_symbols =
+  match (pat, expr) with
+  | (Pattern(_, (CaseCtor(Ctuple,
+              [Pattern(_, (CaseBase(Some fn_ptr, BTy_loaded OTy_pointer)))
+              ;Pattern(_, (CaseCtor(Ctuple, tuple)))
+              ]))),
+     Expr(_, (Esseq(Pattern(_, (CaseBase(Some sym2, BTy_loaded OTy_pointer))),
+              (Expr(_, (Epure
+                        ((Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p)))) as core_ptr_pexpr))))),
+              Expr(_,(Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction
+                    _)]))))))))) ->
+       let tuple_syms  = List.map (fun pat ->
+         match pat with
+         | Pattern(_, (CaseBase(Some sym, _))) -> sym
+         | _ -> assert false
+       ) tuple in
+       assert (List.length tuple_syms = 4);
+       { fn_ptr  = fn_ptr;
+         fn_ptr_inner = sym2;
+         ret_ty  = List.nth tuple_syms 0;
+         arg_tys = List.nth tuple_syms 1;
+         bool1   = List.nth tuple_syms 2; (* TODO: no idea what these are *)
+         bool2   = List.nth tuple_syms 3;
+         ptr     = p;
+         core_ptr_pexpr = core_ptr_pexpr
+       }
+  | _ -> assert false
