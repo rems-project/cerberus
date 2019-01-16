@@ -247,7 +247,7 @@ module ImplFunctions = struct
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
 
   (* TODO: precision of Bool is currently 8... *)
-  let impl : Implementation.implementation = {
+  let impl : Implementation.implementation0 = {
     binary_mode = Two'sComplement;
     signed      = (function
                    | Char       -> Ocaml_implementation.Impl.char_is_signed
@@ -259,12 +259,12 @@ module ImplFunctions = struct
     precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
                    | None   -> assert false );
-    size_t     = Unsigned Long;
-    ptrdiff_t0  = Signed Long
+    size_t0     = Unsigned Long;
+    ptrdiff_t1  = Signed Long
   }
 
   (* ---- Helper functions ---- *)
-  let integer_range (impl: Implementation.implementation)
+  let integer_range (impl: Implementation.implementation0)
                     (ity : AilTypes.integerType) =
     let prec = impl.precision ity in
     if impl.signed ity then
