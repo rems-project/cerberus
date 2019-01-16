@@ -1,0 +1,12 @@
+{- In every execution the non-atomic load races with the non-atomic
+write.  -}
+
+proc main () : eff unit :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong _ : unit    = store(!(signed int), x, Specified(0)) in
+  let strong (_ : loaded integer, _ : unit) = par(
+    load(!(signed int), x)
+  ,
+    store(!(signed int), x, Specified(1))
+  ) in
+  kill(x)

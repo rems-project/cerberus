@@ -1,0 +1,11 @@
+{- In every execution the two non-atomic writes race.
+-}
+
+proc main () : eff unit :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong (_ : unit, _ : unit) = par(
+    store(!(signed int), x, Specified(0))
+  ,
+    store(!(signed int), x, Specified(1))
+  ) in
+  kill(x)

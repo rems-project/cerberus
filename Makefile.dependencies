@@ -21,7 +21,7 @@ endif
 
 default:
 	@if (command -v opam >/dev/null 2>&1); then \
-	  echo "Please install the following packages with opam: cmdliner, pprint"; \
+	  echo "Please install the following packages with opam: cmdliner, pprint,angstrom"; \
 	else \
 	  make -f ../Makefile.dependencies pprint z3; \
 	fi
