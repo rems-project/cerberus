@@ -84,6 +84,7 @@ let rec precedence = function
   | PEis_integer _
   | PEis_signed _
   | PEis_unsigned _
+  | PEbmc_assume _ -> None
   | PEare_compatible _ ->None
 
 let rec precedence_expr = function
@@ -217,7 +218,18 @@ let pp_memory_order = function
   | Cmm_csem.Acquire -> pp_keyword "acquire"
   | Cmm_csem.Consume -> pp_keyword "consume"
   | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
-  
+
+let pp_linux_memory_order = function
+  | Linux.Once      -> pp_keyword "once"
+  | Linux.Acquire0  -> pp_keyword "acquire"
+  | Linux.Release0  -> pp_keyword "release"
+  | Linux.Rmb       -> pp_keyword "rmb"
+  | Linux.Wmb       -> pp_keyword "wmb"
+  | Linux.Mb        -> pp_keyword "mb"
+  | Linux.RbDep     -> pp_keyword "rb-dep"
+  | Linux.RcuLock   -> pp_keyword "rcu-lock"
+  | Linux.RcuUnlock -> pp_keyword "rcu-unlock"
+  | Linux.SyncRcu   -> pp_keyword "sync-rcu"
 
 let pp_mem_addr (pref, addr) =
 (*
@@ -502,6 +514,8 @@ let pp_pexpr pe =
             pp_keyword "is_signed" ^^^ P.parens (pp pe)
         | PEis_unsigned pe ->
             pp_keyword "is_unsigned" ^^^ P.parens (pp pe)
+        | PEbmc_assume pe ->
+            pp_keyword "__bmc_assume" ^^^ P.parens (pp pe)
         | PEare_compatible (pe1, pe2) ->
             pp_keyword "are_compatible" ^^^ P.parens (pp pe1 ^^ P.comma ^^^ pp pe2)
     end
@@ -527,6 +541,12 @@ let rec pp_expr expr =
                   acc
             | Auid uid ->
                 P.range (handle_uid uid) acc
+            | Abmc annot ->
+                begin match annot with
+                | Abmc_id id ->
+                    !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
+                | _ -> acc
+                end
         ) doc annot
     end
     begin
@@ -648,6 +668,29 @@ and pp_action act =
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
     | Fence0 mo ->
         pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
+    | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_strong" ^^
+        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | LinuxFence mo ->
+        pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
+    | LinuxStore (ty, e1, e2, mo) ->
+        pp_keyword "linux_store" ^^
+        P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+    | LinuxLoad (ty, e, mo) ->
+        pp_keyword "linux_load" ^^
+        P.parens (comma_list pp_pexpr [ty;e] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+    | LinuxRMW (ty, e1, e2, mo) ->
+        pp_keyword "linux_rmw" ^^
+        P.parens (comma_list pp_pexpr [ty;e1;e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+
+
+
+
 (*
     | Ptr (ptr_act, es) ->
        pp_pointer_action ptr_act ^^ P.parens (comma_list pp_pexpr es)

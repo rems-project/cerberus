@@ -11,6 +11,7 @@ type cerberus_conf = {
   error_verbosity: error_verbosity;
   defacto:         bool;
   n1570:           Yojson.Basic.json option;
+  bmc:            bool;
 }
 
 (* print an error fatal message and exit with a given code (default is 1) *)
@@ -27,6 +28,7 @@ val set_cerb_conf:
     Smt2.execution_mode ->
     bool ->
     error_verbosity ->
+    bool ->
     bool ->
     unit
 

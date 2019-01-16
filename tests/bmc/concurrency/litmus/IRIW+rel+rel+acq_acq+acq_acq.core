@@ -1,0 +1,33 @@
+{- The reading threads do not have to see the writes to x and y in the
+same order. The first reading thread could for example read ax <- 1,
+ay <- 0 while the second reading thread reads by <- 1, bx <- 0. An
+exhaustive execution will therefore produce the values 0-15. -}
+
+proc main () : eff integer :=
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit    = store(!(_Atomic(signed int)), x, Specified(0)) in
+  let strong _ : unit    = store(!(_Atomic(signed int)), y, Specified(0)) in
+  let strong (_ : unit, _ : unit, a : integer, b : integer) = par(
+      store(!(_Atomic(signed int)), x, Specified(1), release)
+  ,
+      store(!(_Atomic(signed int)), y, Specified(1), release)
+
+  ,
+      let strong _ax : loaded integer = load(!(_Atomic(signed int)), x, acquire) in
+      let strong _ay : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+      case (_ax, _ay) of
+        | (Specified (ax: integer), Specified(ay: integer)) =>
+            pure(ax + (2 * ay))
+      end
+  ,
+      let strong _by : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+      let strong _bx : loaded integer = load(!(_Atomic(signed int)), x, acquire) in
+      case (_bx, _by) of
+        | (Specified (bx: integer), Specified(by: integer)) =>
+            pure(by + (2 * bx))
+      end
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(a + (4 * b))

@@ -605,7 +605,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
         else
           E.constraint_violation loc InvalidTypeCompoundLiteral
-    
+
     | AilEbuiltin str ->
         match Builtins.ctype_of_builtin_varname str with
           | Just ty ->
@@ -700,6 +700,11 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         annotate_rvalue order_e   >>= fun (order_e',   order_gty)   ->
         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_store_explicit")) [object_e'; desired_e'; order_e'],
                   GenRValueType GenVoid)
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEident (Symbol.Symbol digest s (Just "atomic_thread_fence")))) [order_e] ->
+        (* TODO: do typechecking *)
+        annotate_rvalue order_e >>= fun (order_e', order_gty) ->
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEident (Symbol.Symbol digest s (Just "atomic_thread_fence")))) [order_e'], GenRValueType GenVoid)
+                  
 (*
          match (object_gty, desired_e; order_gty) with
            | () ->
@@ -719,7 +724,40 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *) GenRValueType GenVoid) annots' loc' (AilEbuiltin "atomic_compare_exchange_strong_explicit"))
                     [object_e'; expected_e'; desired_e'; order_success_e'; order_failure_e'],
                    GenRValueType (GenBasic (GenInteger (Concrete (AilTypes.Bool)))))
-    
+     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_fence")) [order_e] ->
+        annotate_rvalue order_e  >>= fun (order_e' , order_gty) ->
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots'
+loc' (AilEbuiltin "linux_fence")) [order_e'], GenRValueType GenVoid)
+
+     | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_read")) [object_e; order_e] ->
+        annotate_rvalue object_e >>= fun (object_e', object_gty) ->
+        annotate_rvalue order_e  >>= fun (order_e' , order_gty ) ->
+        match (object_gty) with
+          | (GenPointer qs object_ty) ->
+              E.return ( AilEcall (AnnotatedExpression ((* TODO: HACK *)GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_read")) [object_e';order_e']
+                       , GenRValueType (inject_type $ Ctype [] (AAux.unatomic object_ty)) )
+          | _ ->
+              error "WIP: typing of linux_read"
+        end
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_write")) [object_e; desired_e; order_e] ->
+        annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
+        annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
+        annotate_rvalue order_e   >>= fun (order_e' , order_gty )   ->
+        E.return (AilEcall (AnnotatedExpression (GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_write")) [object_e'; desired_e'; order_e'],
+                  GenRValueType GenVoid)
+
+    | AilEcall (AnnotatedExpression _ annots' loc' (AilEbuiltin "linux_rmw")) [object_e; desired_e; order_e] ->
+        annotate_rvalue object_e  >>= fun (object_e',  object_gty)  ->
+        annotate_rvalue desired_e >>= fun (desired_e', desired_gty) ->
+        annotate_rvalue order_e   >>= fun (order_e' , order_gty )   ->
+        match (object_gty) with
+          | (GenPointer qs object_ty) ->
+              E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *)
+GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_rmw"))
+[object_e'; desired_e'; order_e'], GenRValueType (inject_type $ Ctype [] (AAux.unatomic object_ty)))
+          | _ ->
+              error "WIP: typing of linux_rmw"
+        end
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
@@ -1206,7 +1244,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEprint_type e ->
         annotate_expression ctx e >>= fun a_e ->
         E.return (AilEprint_type a_e, genTypeCategoryOf a_e)
-    
+    | AilEbmc_assume e ->
+        annotate_rvalue e >>= fun (e', gty) ->
+        E.return (AilEbmc_assume e', GenRValueType GenVoid)
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit any AilErvalue *)
         error "annotate_expression(AilErvalue)"

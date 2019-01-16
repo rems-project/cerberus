@@ -1,0 +1,116 @@
+Bounded model checking
+5 Sept 2018
+
+1. Current state
+2. TODOs
+3. Plan
+
+===== 1. Current state =====
+Features:
+  - Sequential mode: loads read from "most-recent write"
+  - Concurrency mode:
+    - extract and graphically output all executions with checks for races
+    - check C program wrt hand-coded RC11 model (w/o locks, w/ RMWs/fences/etc)
+    - read from (mostly) arbitrary .cat files
+    - race-detection
+    - (partially implemented): linux kernel operations
+  - Detect UB of simple C programs:
+    - loops, (recursive) function calls, simple types, simple structs, 1D arrays
+    - no pointer type casting, function pointers
+    - (unimplemented): multi-dimensional arrays, struct/array initialization
+  - Symbolic execution: model check functions with (unknown) input arguments
+  - __BMC_ASSUME: add assumptions to program to restrict executions or inputs
+
+Memory model: abstract memory model
+  - Address = (allocation id, index id)
+    - allocation id: each Core Create is associated with a new allocation id
+    - index id: Creates of structs/arrays --> possibly create multiple addresses
+  - Each address is associated with a SMT sort (derived from a C type)
+  - Limitation: disallow pointer type casting
+  - Limitation: subobjects? E.g. can't distinguish between x[5][4] and x[0][20]?
+  - Mallocs?
+
+Concurrency:
+  - Generically extract memory actions: Loads, Stores, RMWs, Fences
+    - Use symbolic address, load values, etc
+  - Compute preexecution: actions, program order, asw relation
+    - (need data/address/control dependencies for Linux model)
+  - Constrain set of possible executions using concurrency model
+    - direct translation of .cat file into logical constraints on memory actions
+
+
+===== 2. TODOs =====
+Linux model
+  - Implement the Linux atomics in Cerberus
+  - Compute data/address/control dependencies as part of preexecution
+  - Compare Linux kernel and C11 model on simple litmus tests
+  - Goal: check Linux locking code from ARM
+
+Feature completeness
+  - Allow structs/arrays as values (support multi-dimensional arrays, etc)
+  - Handle kills and more Ememops (pointer comparisons, etc)
+  - Goal: support sufficiently large and logical fragment of C that is easy to
+    describe
+
+Benchmarking/Testing
+  - Test scaling of incrementally larger C programs --> produce graph
+  - Test on concurrent data structures (Treiber stack, more complex things)
+  - Compare performance with examples from RCMC/Demsky/other work
+  - Produce useful suite of tests
+  - Goal: understand performance/scaling, have suite of self-documenting tests
+    for demonstrating and evaluating tool
+
+Optimizations:
+  - Alias analysis (sequential mode)
+  - Thread local analysis (=> decrease memory actions)
+  - More efficient constraint generation from .cat file (e.g. specify/infer
+    input/output domain of relations)
+  - Explore Core-to-Core rewrites to reduce symbols and redundant branches
+    - "Unwind" loops (runs/saves)
+    - Collapse Core memory actions into single action where possible
+      (runs/saves, branches)
+
+Bug-fixes:
+  - Fix asw computation
+    - Currently computes asw without accounting for guard of action/action not
+      occurring in execution
+    - Asw should actually be computed by SMT solver as subset of relation
+      computed from static analysis
+
+Usability:
+  - Improve error messages and output
+  - Document code/important files
+  - Write README with examples
+  - Goal: let someone use tool on semi-arbitrary C program without
+    frustration...
+
+Style/readability:
+  - separate analyses into smaller standalone analyses
+  - can always clean up code... ;)
+
+
+===== 3. Plan =====
+
+(September)
+- Implement enough of Linux kernel model to check locking code from ARM and run
+  the basic litmus tests
+    - Add Linux atomics to Cerberus and BMC
+    - Do dependency analyses (and fix asw)
+    - Generic sensible contraints from Linux .cat file (do simple optimizations)
+
+(end of September/early October)
+- Lots of benchmarking and performance evaluation to get a baseline
+    - Test scaling
+    - Compare with preexisting work
+    - Produce test/benchmarking suite and scripts
+- Compile results into some easily readable/understandable/accessible form
+
+(October)
+- Pursue performance optimizations based on benchmarking results
+- Pretty open-ended... --> basically go as far as time allows
+
+Eventually...
+- identify remaining feature completeness/usability things that need to be done
+- do them.
+
+CAV deadline: 7 Feb 2019

@@ -556,7 +556,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         Eff.return (Pexpr (annot, (), PEis_signed pe))
     | PEis_unsigned _pe ->
         symbolify_pexpr _pe >>= fun pe ->
-        Eff.return (Pexpr (annot, (), PEis_unsigned pe))
+        Eff.return (Pexpr ([], (), PEis_unsigned pe))
+    | PEbmc_assume _pe ->
+        symbolify_pexpr _pe >>= fun pe ->
+        Eff.return (Pexpr ([], (), PEbmc_assume pe))
     | PEare_compatible (_pe1, _pe2) ->
         symbolify_pexpr _pe1 >>= fun pe1 ->
         symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -710,6 +713,32 @@ and symbolify_action_ = function
      Eff.return (RMW0 (pe1, pe2, pe3, pe4, mo1, mo2))
  | Fence0 mo ->
      Eff.return (Fence0 mo)
+ | CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     symbolify_pexpr _pe4 >>= fun pe4 ->
+     Eff.return (CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2))
+ | LinuxFence mo ->
+     Eff.return (LinuxFence mo)
+ | LinuxStore (_pe1, _pe2, _pe3, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     Eff.return (LinuxStore (pe1, pe2, pe3, mo))
+ | LinuxLoad (_pe1, _pe2, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     Eff.return (LinuxLoad (pe1, pe2, mo))
+ | LinuxRMW (_pe1, _pe2, _pe3, mo) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     Eff.return (LinuxRMW (pe1, pe2, pe3, mo))
+
+
+
+
 
 and symbolify_paction = function
  | Paction (p, Action (loc, (), _act_)) ->
@@ -1038,7 +1067,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE
+%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE COMPARE_EXCHANGE_STRONG
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1588,6 +1617,8 @@ action:
     { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN
     { Fence0 mo }
+| COMPARE_EXCHANGE_STRONG LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
+    { CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 ;
 
 paction:

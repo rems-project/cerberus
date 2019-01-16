@@ -750,6 +750,9 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
         Pexpr annot InferredType_boolean <$> (PEis_signed <$> typecheck_pexpr tagDefs env BTy_ctype pe)
     | PEis_unsigned pe ->
         Pexpr annot InferredType_boolean <$> (PEis_unsigned <$> typecheck_pexpr tagDefs env BTy_ctype pe)
+    | PEbmc_assume pe ->
+        Pexpr annot InferredType_unit <$> (PEbmc_assume <$> typecheck_pexpr 
+tagDefs env BTy_boolean pe)
     | PEare_compatible pe1 pe2 ->
         Pexpr annot InferredType_boolean <$> (PEare_compatible <$> typecheck_pexpr tagDefs env BTy_ctype pe1 <*> typecheck_pexpr tagDefs env BTy_ctype pe2)
   end
@@ -1073,6 +1076,9 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEis_unsigned pe ->
         guard_match loc "is_unsigned()" bTy BTy_boolean >>
         (PEis_unsigned <$> typecheck_pexpr tagDefs env BTy_ctype pe)
+    | PEbmc_assume pe ->
+        guard_match loc "bmc_assume()" bTy BTy_unit >>
+        (PEbmc_assume <$> typecheck_pexpr tagDefs env BTy_boolean pe)
     | PEare_compatible pe1 pe2 ->
         guard_match loc "are_compatible()" bTy BTy_boolean >>
         (PEare_compatible <$> typecheck_pexpr tagDefs env BTy_ctype pe1 <*> typecheck_pexpr tagDefs env BTy_ctype pe2)
@@ -1153,6 +1159,55 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         error "WIP infer_paction: RMW"
     | Fence mo ->
         E.return (BTy_unit, Fence mo)
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP infer_paction: CompareExchangeStrong"
+    | LinuxFence mo ->
+        E.return (BTy_unit, LinuxFence mo)
+    | LinuxStore pe1 pe2 pe3 mo ->
+        match pe1 with
+          | Pexpr [] () (PEval (Vctype ty)) ->
+              let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+              match core_object_type_of_ctype ty with
+                | Just lvalue_oTy ->
+                    typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    typecheck_export_pexpr tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                    E.return (BTy_unit, LinuxStore tpe1 tpe2 tpe3 mo)
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO "LinuxStore, not oTy")
+              end
+          | _ ->
+              E.fail loc (CoreTyping_TODO "LinuxStore, non-trivial ctype")
+        end
+    | LinuxLoad pe1 pe2 mo ->
+        match pe1 with
+          | Pexpr [] () (PEval (Vctype ty)) ->
+              let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+              match core_object_type_of_ctype ty with
+                | Just lvalue_oTy ->
+                    typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    E.return (BTy_loaded lvalue_oTy, LinuxLoad tpe1 tpe2 mo)
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO "LinuxLoad, not oTy")
+              end
+          | _ ->
+              E.fail loc (CoreTyping_TODO "LinuxLoad, non-trivial ctype")
+        end
+    | LinuxRMW pe1 pe2 pe3 mo ->
+        match pe1 with
+          | Pexpr [] () (PEval (Vctype ty)) ->
+              let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+              match core_object_type_of_ctype ty with
+                | Just lvalue_oTy ->
+                    typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                    typecheck_export_pexpr tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                    E.return (BTy_unit, LinuxRMW tpe1 tpe2 tpe3 mo)
+                | Nothing ->
+                    E.fail loc (CoreTyping_TODO "LinuxRMW, not oTy")
+              end
+          | _ ->
+              E.fail loc (CoreTyping_TODO "LinuxRMW, non-trivial ctype")
+        end
+
   end >>= fun (bTy, act_') ->
   E.return (bTy, Action loc annot act_')
 
@@ -1233,6 +1288,75 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | Fence mo ->
       guard_match loc "fence()" bTy BTy_unit >>
       E.return (Fence mo)
+  | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+      guard_match loc "compareExchangeStrong()" bTy (BTy_loaded OTy_integer) >>
+      match pe1 with
+      | Pexpr [] () (PEval (Vctype ty)) ->
+        let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+        match core_object_type_of_ctype ty with
+          | Just lvalue_oTy ->
+              typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+              typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe3 >>= fun tpe3 ->
+              typecheck_export_pexpr tagDefs env (BTy_loaded lvalue_oTy)  pe4  >>= fun tpe4 ->
+              E.return (CompareExchangeStrong tpe1 tpe2 tpe3 tpe4 mo1 mo2)
+          | Nothing ->
+              E.fail loc (CoreTyping_TODO "CompareExchangeStrong, not oTy")
+        end
+      | _ ->
+          E.fail loc (CoreTyping_TODO "CompareExchangeStrong, non-trivial ctype")
+      end
+  | LinuxFence mo ->
+      guard_match loc "linuxFence()" bTy BTy_unit >>
+      E.return (LinuxFence mo)
+  | LinuxStore pe1 pe2 pe3 mo ->
+      guard_match loc "store()" bTy BTy_unit >>
+      match pe1 with
+        | Pexpr [] () (PEval (Vctype ty)) ->
+            let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+            match core_object_type_of_ctype ty with
+              | Just lvalue_oTy ->
+                  typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                  typecheck_export_pexpr tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                  E.return (LinuxStore tpe1 tpe2 tpe3 mo)
+              | Nothing ->
+                  E.fail loc (CoreTyping_TODO "Store, not oTy")
+            end
+        | _ ->
+            E.fail loc (CoreTyping_TODO "Store, non-trivial ctype")
+      end
+  | LinuxLoad pe1 pe2 mo ->
+      match pe1 with
+        | Pexpr [] () (PEval (Vctype ty)) ->
+            let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+            match core_object_type_of_ctype ty with
+              | Just lvalue_oTy ->
+                  typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                  guard_match loc "load()" bTy (BTy_loaded lvalue_oTy) >>
+                  E.return (LinuxLoad tpe1 tpe2 mo)
+              | Nothing ->
+                  E.fail loc (CoreTyping_TODO "LinuxLoad, not oTy")
+            end
+        | _ ->
+            E.fail loc (CoreTyping_TODO "LinuxLoad, non-trivial ctype")
+      end
+  | LinuxRMW pe1 pe2 pe3 mo ->
+      match pe1 with
+        | Pexpr [] () (PEval (Vctype ty)) ->
+            let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
+            match core_object_type_of_ctype ty with
+              | Just lvalue_oTy ->
+                  typecheck_export_pexpr tagDefs env (BTy_object OTy_pointer) pe2 >>= fun tpe2 ->
+                  typecheck_export_pexpr tagDefs env (BTy_loaded lvalue_oTy)  pe3 >>= fun tpe3 ->
+                  guard_match loc "rmw()" bTy (BTy_loaded lvalue_oTy) >>
+                  E.return (LinuxRMW tpe1 tpe2 tpe3 mo)
+              | Nothing ->
+                  E.fail loc (CoreTyping_TODO "LinuxRMW, not oTy")
+            end
+        | _ ->
+            E.fail loc (CoreTyping_TODO "LinuxRmw, non-trivial ctype")
+      end
+
+
   end
 
 
