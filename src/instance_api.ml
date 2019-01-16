@@ -34,7 +34,8 @@ type filename = string
 type request =
   [ `Elaborate of conf * filename * string
   | `Execute of conf * filename * string * exec_mode
-  | `Step of conf * filename * string * active_node option ]
+  | `Step of conf * filename * string * active_node option 
+  | `BMC of conf * filename * string ]
 
 type point = int * int
 type range = point * point
@@ -85,4 +86,5 @@ type result =
   | Execution of string               (* cerberus result *)
   | Interactive of string * (string * PPrint.range) list * exec_tree (* tagDefs * range list * execution tree *)
   | Step of string option * int * exec_tree (* maybe result * active node id * execution tree *)
+  | BMC of [ `Satisfiable of string | `Unsatisfiable of string | `Unknown of string ]
   | Failure of string

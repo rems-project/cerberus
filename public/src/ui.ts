@@ -7,7 +7,7 @@ import Widget from './widget';
 
 /** Possible actions to request to the server */
 type ExecutionMode = 'random' | 'exhaustive'
-type Action = 'elaborate' | 'random' | 'exhaustive' | 'step'
+type Action = 'elaborate' | 'random' | 'exhaustive' | 'step' | 'bmc'
 
 export class CerberusUI {
   /** List of existing views */
@@ -83,6 +83,9 @@ export class CerberusUI {
       else
         popl19.show()
     })
+
+    // BMC
+    $('#bmc').on('click', () => this.bmc ())
 
     // Run (Execute)
     $('#random').on('click', () => this.exec ('random'))
@@ -430,6 +433,16 @@ export class CerberusUI {
       if (cons) cons.setActive()
       view.updateState(res)
       view.emit('updateExecution')
+    })
+  }
+
+  private bmc () {
+    this.request('bmc', (res: ResultRequest) => {
+      const view = this.getView()
+      const cons = view.getConsole()
+      if (cons) cons.setActive()
+      view.updateState(res)
+      view.emit('updateExecution') // Not sure
     })
   }
 

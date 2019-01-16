@@ -304,27 +304,32 @@ let bmc_file (file              : unit typed_file)
   bmc_debug_print 1 "==== Checking VCS";
   begin match Solver.check g_solver [] with
   | SATISFIABLE ->
-      begin
+    begin
       print_endline "OUTPUT: satisfiable";
+      let model = Option.get (Solver.get_model g_solver) in
+      let str_model = Model.to_string model in
       if !!bmc_conf.output_model then
         begin
-        let model = Option.get (Solver.get_model g_solver) in
-        print_endline (Model.to_string model);
+        print_endline str_model;
         (* TODO: print this out independently of --bmc_output_model*)
         let satisfied_vcs =
           BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
         List.iter (fun (expr, dbg) ->
           printf "%s: %s\n" (BmcVC.vc_debug_to_str dbg) (Expr.to_string expr)
         ) satisfied_vcs;
-        end
-      end
+        end;
+    `Satisfiable str_model
+    end
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)";
       assert (is_some ret_value);
-      printf "Return value: %s\n" (Expr.to_string (Option.get ret_value))
+      let str_ret_value = Expr.to_string (Option.get ret_value) in
+      printf "Return value: %s\n" str_ret_value;
+      `Unsatisfiable str_ret_value
   | UNKNOWN ->
-      printf "OUTPUT: unknown. Reason: %s\n"
-             (Solver.get_reason_unknown g_solver)
+      let str_error = Solver.get_reason_unknown g_solver in
+      printf "OUTPUT: unknown. Reason: %s\n" str_error;
+      `Unknown str_error
   end
 
 (* Find f_name in function map, returning the Core symbol *)
@@ -359,4 +364,6 @@ let bmc (core_file  : unit file)
         bmc_file core_to_check fn_sym ail_opt
     end
     | Exception msg ->
-        printf "Typechecking error: %s\n" (Pp_errors.to_string msg)
+        let str_err = Pp_errors.to_string msg in
+        printf "Typechecking error: %s\n" str_err;
+        `Unknown str_err

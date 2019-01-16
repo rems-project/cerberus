@@ -165,10 +165,10 @@ ocaml_profiling:
 
 instance: src/instance.ml
 	ocamlbuild src/cerberus_cstubs.o;
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv -libs str instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
 	cp -L instance.native cerb.concrete 
 	sed -i '' 's/ref `MemConcrete/ref `MemSymbolic/' src/prelude.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv -libs str instance.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
 	sed -i '' 's/ref `MemSymbolic/ref `MemConcrete/' src/prelude.ml
 	cp -L instance.native cerb.symbolic
 
