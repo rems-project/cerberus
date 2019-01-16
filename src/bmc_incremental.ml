@@ -1712,8 +1712,6 @@ module BmcBind = struct
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
                   : (Expr.expr list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
-        print_endline "GLOBS";
-      List.iter print_expr (List.concat(bound_globs));
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, bTy, params, e)) ->
           bind_e e
