@@ -119,6 +119,8 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       free_pexpr acc pe
   | PEare_compatible pe1 pe2 ->
       free_pexpr (free_pexpr acc pe1) pe2
+  | PEbmc_assume _ ->
+      error "free_pexpr PEbmc_assume"
   end
 
 let free_paction acc (Paction _ (Action _ _ act)) =
@@ -139,6 +141,16 @@ let free_paction acc (Paction _ (Action _ _ act)) =
       free_pexpr (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) pe4
   | Fence _ ->
       acc
+ | CompareExchangeStrong _ _ _ _ _ _ ->
+      error "free_paction: CompareExchangeStrong"
+ | LinuxFence _ ->
+      error "free_paction: LinuxFence"
+ | LinuxLoad _ _ _ ->
+      error "free_paction: LinuxLoad"
+ | LinuxStore _ _ _ _ ->
+      error "free_paction: LinuxStore"
+ | LinuxRMW _ _ _ _ ->
+      error "free_paction: LinuxRMW"
   end
 
 let rec free_expr acc (Expr _ e) =

@@ -1,0 +1,33 @@
+{- The reading threads have to see the writes to x and y in the same
+order. An exhaustive execution will therefore produce the values 0-15,
+except 5. This contrasts with the test with release/acquire
+atomics where the two reading threads do not have to see the writes in
+the same order. -}
+
+proc main () : eff integer :=
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(0)) in
+  let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(0)) in
+  let strong (_ : unit, _ : unit, a : integer, b : integer) = par(
+      store(!(_Atomic(signed int)), x, Specified(1), seq_cst)
+  ,
+      store(!(_Atomic(signed int)), y, Specified(1), seq_cst)
+  ,
+      let strong _ax : loaded integer = load(!(_Atomic(signed int)), x, seq_cst) in
+      let strong _ay : loaded integer = load(!(_Atomic(signed int)), y, seq_cst) in
+      case (_ax, _ay) of
+        | (Specified (ax : integer), Specified (ay : integer)) =>
+            pure(ax + (2 * ay))
+      end
+  ,
+      let strong _by : loaded integer = load(!(_Atomic(signed int)), y, seq_cst) in
+      let strong _bx : loaded integer = load(!(_Atomic(signed int)), x, seq_cst) in
+      case (_bx, _by) of
+        | (Specified (bx : integer), Specified (by : integer)) =>
+            pure(by + (2 * bx))
+      end
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(a + (4 * b))

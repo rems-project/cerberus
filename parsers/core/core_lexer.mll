@@ -125,6 +125,7 @@ let keywords =
       ("load",   T.LOAD  );
       ("rmw",    T.RMW   );
       ("fence",  T.FENCE );
+      ("compare_exchange_strong",  T.COMPARE_EXCHANGE_STRONG);
       
       (* for toplevel declarations *)
       ("def",  T.DEF ); (* for implementation files only *)

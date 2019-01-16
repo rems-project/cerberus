@@ -38,6 +38,10 @@ CMM_EXEC_DIR=concurrency
 CMM_EXEC_LEM =\
   cmm_op.lem
 
+LINUX_MODEL_DIR=concurrency
+LINUX_MODEL_LEM =\
+  linux.lem
+
 include Makefile-source
 
 all: lem ocaml_native libc
@@ -62,6 +66,10 @@ copy_cmm_exec: $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING$(RESET) $(CMM_EXEC_LEM)
 	@cp $(addprefix $(CMM_EXEC_DIR)/, $(CMM_EXEC_LEM)) $(BUILD_DIR)
 
+copy_linux_model: $(addprefix $(LINUX_MODEL_DIR)/, $(LINUX_MODEL_LEM)) | $(BUILD_DIR)
+	@echo $(BOLD)COPYING$(RESET) $(LINUX_MODEL_LEM)
+	@cp $(addprefix $(LINUX_MODEL_DIR)/, $(LINUX_MODEL_LEM)) $(BUILD_DIR)
+
 # Copy the cerberus model files to the build dir
 copy_cerberus: $(addprefix model/, $(CERBERUS_LEM_SOURCES)) | $(BUILD_DIR)
 	@echo $(BOLD)COPYING cerberus .lem files$(RESET)
@@ -76,7 +84,7 @@ dependencies:
 	cd dependencies; make -f ../Makefile.dependencies
 
 
-lem: copy_cmm copy_cmm_exec copy_cerberus sibylfs
+lem: copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 #	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
@@ -91,7 +99,7 @@ DOC_BUILD_DIR = generated_doc
 $(DOC_BUILD_DIR):
 	mkdir $(DOC_BUILD_DIR)
 
-alldoc.tex: copy_cmm copy_cmm_exec copy_cerberus | $(DOC_BUILD_DIR)
+alldoc.tex: copy_cmm copy_cmm_exec copy_linux_model copy_cerberus | $(DOC_BUILD_DIR)
         # @OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(wildcard $(BUILD_DIR)/*.lem) 
 	@OCAMLRUNPARAM=b $(LEM0) -no_dep_reorder -outdir $(DOC_BUILD_DIR) -cerberus_pp -html -tex_all alldoc.tex -html $(addprefix $(BUILD_DIR)/,$(CERBERUS_LEM_FLAT_SOURCES))
 
@@ -132,13 +140,13 @@ sibylfs: ${BUILD_DIR}
 	@cp -vf ./sibylfs/generated/*.mli ${BUILD_DIR}
 
 ocaml_native:
-	@if ! (ocamlfind query cmdliner pprint zarith >/dev/null 2>&1); then \
+	@if ! (ocamlfind query cmdliner pprint zarith angstrom >/dev/null 2>&1); then \
 	  echo "Please first do a 'make -f Makefile.dependencies'" ; \
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native; \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native; \
 	  cp -L main_.native cerberus; \
 	fi
 

@@ -474,6 +474,16 @@ let pload loc ty x mo =
   Expr [] (Eaction (Paction Pos (Action loc default (Load ty x mo))))
 let prmw loc ty x n1 n2 mo1 mo2 =
   Expr [] (Eaction (Paction Pos (Action loc default (RMW ty x n1 n2 mo1 mo2))))
+let pcompare_exchange_strong loc ty x n1 n2 mo1 mo2 =
+  Expr [] (Eaction (Paction Pos (
+        Action loc default (CompareExchangeStrong ty x n1 n2 mo1 mo2))))
+let plinux_load loc ty x mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (LinuxLoad ty x mo))))
+let plinux_store loc ty x n mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (LinuxStore ty x n mo))))
+let plinux_rmw loc ty x n mo =
+  Expr [] (Eaction (Paction Pos (Action loc default (LinuxRMW ty x n mo))))
+
 
 
 
@@ -879,6 +889,8 @@ let rec subst_sym_pexpr sym cval (Pexpr annot bty pexpr_) =
         PEis_signed (subst_sym_pexpr sym cval pe)
     | PEis_unsigned pe ->
         PEis_unsigned (subst_sym_pexpr sym cval pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (subst_sym_pexpr sym cval pe)
     | PEare_compatible pe1 pe2 ->
         PEare_compatible (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
 end
@@ -974,6 +986,21 @@ and subst_sym_action_ sym cval = function
         (subst_sym_pexpr sym cval pe3) (subst_sym_pexpr sym cval pe4) mo1 mo2
   | Fence mo ->
       Fence mo
+  | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+      CompareExchangeStrong (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+        (subst_sym_pexpr sym cval pe3) (subst_sym_pexpr sym cval pe4) mo1 mo2
+  | LinuxFence mo ->
+      LinuxFence mo
+  | LinuxStore pe1 pe2 pe3 mo ->
+      LinuxStore (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+        (subst_sym_pexpr sym cval pe3) mo
+  | LinuxLoad pe1 pe2 mo ->
+      LinuxLoad (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2) mo
+  | LinuxRMW pe1 pe2 pe3 mo ->
+      LinuxRMW (subst_sym_pexpr sym cval pe1) (subst_sym_pexpr sym cval pe2)
+        (subst_sym_pexpr sym cval pe3) mo
+
+
 end
 and subst_sym_action sym cval (Action loc bs act_) =
   Action loc bs (subst_sym_action_ sym cval act_)
@@ -1125,6 +1152,8 @@ let rec unsafe_subst_sym_pexpr sym (Pexpr annot bty pe_' as pe') (Pexpr _ _ pe_)
         PEis_signed (unsafe_subst_sym_pexpr sym pe' pe)
     | PEis_unsigned pe ->
         PEis_unsigned (unsafe_subst_sym_pexpr sym pe' pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (unsafe_subst_sym_pexpr sym pe' pe)
     | PEare_compatible pe1 pe2 ->
         PEare_compatible (unsafe_subst_sym_pexpr sym pe' pe1) (unsafe_subst_sym_pexpr sym pe' pe2)
 end
@@ -1219,9 +1248,21 @@ and unsafe_subst_sym_action_ a pe' = function
         (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
   | Fence mo ->
       Fence mo
-(*
   | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
       CompareExchangeStrong (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
+  | LinuxFence mo ->
+      LinuxFence mo
+  | LinuxStore pe1 pe2 pe3 mo ->
+      LinuxStore (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
+        (unsafe_subst_sym_pexpr a pe' pe3) mo
+  | LinuxLoad pe1 pe2 mo ->
+      LinuxLoad (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) mo
+  | LinuxRMW pe1 pe2 pe3 mo ->
+      LinuxRMW (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2)
+        (unsafe_subst_sym_pexpr a pe' pe3) mo
+
+
+(*
   | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
         CompareExchangeWeak (unsafe_subst_sym_pexpr a pe' pe1) (unsafe_subst_sym_pexpr a pe' pe2) (unsafe_subst_sym_pexpr a pe' pe3) (unsafe_subst_sym_pexpr a pe' pe4) mo1 mo2
 *)
@@ -2124,6 +2165,7 @@ let rec set_uid_pe uid n (Pexpr annots bty pe_) =
   | PEis_integer pe -> PEis_integer (self 1 pe)
   | PEis_signed pe -> PEis_signed (self 1 pe)
   | PEis_unsigned pe -> PEis_unsigned (self 1 pe)
+  | PEbmc_assume pe -> PEbmc_assume (self 1 pe)
   | PEare_compatible pe1 pe2 -> PEare_compatible (self 1 pe1) (self 2 pe2)
   end
 

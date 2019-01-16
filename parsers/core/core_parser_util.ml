@@ -106,6 +106,7 @@ type token =
   | LOAD
   | RMW
   | FENCE
+  | COMPARE_EXCHANGE_STRONG
   | DEF
   | GLOB
   | FUN

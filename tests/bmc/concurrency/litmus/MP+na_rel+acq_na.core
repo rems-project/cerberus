@@ -1,0 +1,48 @@
+{- MP+na_rel+acq_na Message Passing, of data held in non-atomic x,
+   with release/acquire synchronisation on y.  If the value of a1 is
+   1, then the value of a2 should also be 1.  An exhaustive execution
+   of this program should therefore return the value 1 and 2, but not
+   0.  -}
+
+{-
+fun main () : [integer] :=
+  x <- create(signed int);
+  store(signed int, x, 0);
+  y <- create(_Atomic(signed int));
+  store(signed int, y, 0);
+  (foo, a2) <- {{{
+       store(signed int, x, 1);
+       store(_Atomic(signed int), y, 1, release)
+  |||
+       a1 <- load(_Atomic(signed int), y, acquire);
+       (if a1 = 1 then       
+           load(signed int, x)
+        else
+           2)
+  }}};
+  kill(x);
+  kill(y);
+  ret a2
+-}
+proc main () : eff loaded integer :=
+  let strong x : pointer = create(Ivalignof(!(signed int)), !(signed int)) in
+  let strong _ : unit    = store(!(signed int), x, Specified(0)) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong _ : unit    = store(!(signed int), y, Specified(0)) in
+  let strong (_ : unit, a2 : loaded integer) = par(
+    let strong _ : unit = store(!(signed int), x, Specified(1)) in
+    store(!(_Atomic(signed int)), y, Specified(1), release)
+  ,
+    let strong _a1 : loaded integer = load(!(_Atomic(signed int)), y, acquire) in
+    case _a1 of
+      | Specified(a1 : integer) =>
+          if a1 = 1 then
+            load(!(signed int), x)
+          else
+            pure(Specified(2))
+    end
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  pure(a2)
+

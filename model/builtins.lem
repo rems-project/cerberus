@@ -991,7 +991,10 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_atomic_compare_exchange_weak_explicit" -> Just (A.AilEbuiltin "atomic_compare_exchange_weak_explicit", Nothing)
     | "__cerbvar_atomic_fetch_key_explicit" -> Just (A.AilEbuiltin "atomic_fetch_key_explicit", Nothing)
 
-
+    | "__cerbvar_linux_fence" -> Just (A.AilEbuiltin "linux_fence", Nothing)
+    | "__cerbvar_linux_read"  -> Just (A.AilEbuiltin "linux_read", Nothing)
+    | "__cerbvar_linux_write" -> Just (A.AilEbuiltin "linux_write", Nothing)
+    | "__cerbvar_linux_rmw"   -> Just (A.AilEbuiltin "linux_rmw", Nothing)
 
     | "__cerbvar_INT_LEAST8_MIN" ->
         let ity = ATypes.Signed (ATypes.Int_leastN_t 8) in
