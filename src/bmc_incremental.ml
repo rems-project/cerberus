@@ -14,6 +14,8 @@ open Printf
 open Util
 open Z3
 
+module Caux = Core_aux
+
 (* CONTENTS
  * - BmcInline
  * - BmcSSA
@@ -44,7 +46,12 @@ module BmcInline = struct
 
     (* procedure-local state *)
     proc_expr : (unit typed_expr) option;
+
+    (* function call map: map from Core symbol -> function ptr*)
+    fn_ptr_map : (sym_ty, sym_ty) Pmap.map;
+
   }
+
   include EffMonad(struct type state = state_ty end)
 
   let mk_initial file : state =
@@ -55,6 +62,7 @@ module BmcInline = struct
     ; inline_expr_map  = Pmap.empty Pervasives.compare
     ; fn_type          = None
     ; proc_expr        = None
+    ; fn_ptr_map       = Pmap.empty Pervasives.compare
     }
 
   (* ======= Accessors ======== *)
@@ -119,6 +127,53 @@ module BmcInline = struct
     get >>= fun st ->
     put {st with inline_expr_map = Pmap.add id expr st.inline_expr_map}
 
+  (* fn_ptr_map *)
+  let add_to_fn_ptr_map (sym: sym_ty) (fn_sym: sym_ty) : unit eff =
+    get >>= fun st ->
+    put {st with fn_ptr_map = Pmap.add sym fn_sym st.fn_ptr_map}
+
+  let get_fn_ptr_sym (sym : sym_ty) : sym_ty eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.fn_ptr_map with
+    | None -> failwith (sprintf "BmcInline: fn_sym %s not found"
+                        (symbol_to_string sym))
+    | Some fn_sym -> return fn_sym
+
+  (* TODO: move this; really same as core_aux except typed. *)
+
+  let mk_sym_pat sym2 bTy: typed_pattern =
+   (Pattern( [], (CaseBase (Some sym2, bTy))))
+
+  let mk_ctype_pe ty: typed_pexpr =
+   (Pexpr( [], BTy_ctype, (PEval (Vctype ty))))
+
+  let mk_boolean_pe b: typed_pexpr =
+   (Pexpr( [], BTy_boolean, (PEval (if b then Vtrue else Vfalse))))
+
+  let rec mk_list_pe pes : typed_pexpr =
+  (Pexpr( [], BTy_list BTy_ctype, (match pes with
+    | [] ->
+        PEctor( (Cnil BTy_ctype), [])
+    | pe :: pes' ->
+        PEctor( Ccons, [pe; mk_list_pe pes'])
+  )))
+
+  let mk_tuple_pe pes: typed_pexpr =
+    let cbts = List.map (fun (Pexpr(_, cbt, _)) -> cbt) pes in
+    (Pexpr( [], BTy_tuple cbts, (PEctor( Ctuple, pes))))
+
+  let mk_ewseq pat e1 e2 : unit typed_expr =
+    Expr([], Ewseq(pat, e1, e2))
+
+  (* TODO: hack to compute function from pointer *)
+  let get_function_from_ptr (ptr: Ocaml_mem.pointer_value): sym_ty eff =
+    get_file >>= fun file ->
+    let ptr_str = pp_to_string (Ocaml_mem.pp_pointer_value ptr) in
+    let (fn_sym, _) = List.find (fun (sym, _) ->
+      ptr_str = (sprintf "Cfunction(%s)"
+                         (Pp_symbol.to_string_pretty sym))
+    ) (Pmap.bindings_list file.funinfo) in
+    return fn_sym
 
   (* ======== Inline functions ======= *)
   let rec inline_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
@@ -163,11 +218,33 @@ module BmcInline = struct
         return (PEop(bop, inlined_pe1, inlined_pe2))
     | PEstruct _ -> assert false
     | PEunion _  -> assert false
-    | PEcfunction _ -> assert false
+    (*
+    | PEcfunction (Pexpr(_,_, PEsym sym) as pe) ->
+        (* Replace with tuple *)
+        get_fn_ptr_sym sym >>= fun fn_ptr_sym ->
+        get_file >>= fun file ->
+        begin match Pmap.lookup fn_ptr_sym file.funinfo with
+        | Some (ret_ty, args_ty, b1, b2) ->
+            let new_pexpr =
+              mk_tuple_pe
+                  [mk_ctype_pe ret_ty
+                  ;mk_list_pe (List.map mk_ctype_pe args_ty)
+                  ;mk_boolean_pe b1 (* TODO *)
+                  ;mk_boolean_pe b2
+                  ] in
+            inline_pe new_pexpr >>= fun inlined_new_pexpr ->
+            add_inlined_pexpr id inlined_new_pexpr >>
+            return (PEcfunction pe)
+        | _ -> assert false
+        end
+        *)
+    | PEcfunction _ ->
+        assert false
     | PEmemberof (tag_sym, memb_ident, pe) ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEmemberof(tag_sym, memb_ident, inlined_pe))
     | PEcall (name, pes)  ->
+        mapM inline_pe pes >>= fun inlined_pes ->
         lookup_run_depth name >>= fun depth ->
         get_file >>= fun file ->
         (* Get the function called; either from stdlib or impl consts *)
@@ -184,17 +261,17 @@ module BmcInline = struct
               | _ -> assert false
               end
         in
-        if depth >= !!bmc_conf.max_run_depth then
+        if depth >= !!bmc_conf.max_pe_call_depth then
           let error_msg =
             sprintf "call_depth_exceeded: %s" (name_to_string  name) in
-          let new_pexpr = (Pexpr([], ty, PEerror(error_msg, pexpr))) in
+          let new_pexpr =
+            (Pexpr([], ty, PEerror(error_msg, Pexpr([], BTy_unit,PEval(Vunit))))) in
           inline_pe new_pexpr >>= fun inlined_new_pexpr ->
           add_inlined_pexpr id inlined_new_pexpr >>
-          return (PEcall (name, pes))
+          return (PEcall (name, inlined_pes))
         else begin
           (* TODO: CBV/CBN semantics? *)
           (* Inline each argument *)
-          mapM inline_pe pes >>= fun inlined_pes ->
           (* Substitute arguments in function call *)
           let sub_map = List.fold_right2
               (fun (sym, _) pe table -> Pmap.add sym pe table)
@@ -231,7 +308,7 @@ module BmcInline = struct
     | PEare_compatible (pe1, pe2) ->
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
-        return (PEare_compatible(pe1,pe2))
+        return (PEare_compatible(inlined_pe1,inlined_pe2))
     | PEbmc_assume pe ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEbmc_assume(inlined_pe))
@@ -298,7 +375,7 @@ module BmcInline = struct
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
-  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
+  let rec inline_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
     get_fresh_id >>= fun id ->
     (match e_ with
     | Epure pe ->
@@ -326,15 +403,101 @@ module BmcInline = struct
         inline_e e2  >>= fun inlined_e2 ->
         return (Eif (inlined_pe, inlined_e1, inlined_e2))
     | Eskip -> return Eskip
-    | Eccall _ -> (* TODO: broken currently *) assert false
+    | Eccall (a, pe_ty, (Pexpr(_,_,PEsym fn_ptr) as pe_fn), pe_args) ->
+        inline_pe pe_ty >>= fun inlined_pe_ty ->
+        inline_pe pe_fn >>= fun inlined_pe_fn ->
+        mapM inline_pe pe_args >>= fun inlined_pe_args ->
+
+        get_fn_ptr_sym fn_ptr >>= fun fn_ptr_sym ->
+        get_file >>= fun file ->
+        begin match Pmap.lookup fn_ptr_sym file.funs with
+        | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
+          lookup_run_depth (Sym fn_ptr_sym) >>= fun depth ->
+          if depth >= !!bmc_conf.max_run_depth then
+            begin
+            let error_msg =
+              sprintf "Eccall_depth_exceeded: %s" (name_to_string (Sym fn_ptr_sym)) in
+            let new_expr =
+              (Expr([],Epure(Pexpr([], fun_ty,
+                             PEerror(error_msg,
+                                     Pexpr([], BTy_unit, PEval(Vunit))))))) in
+            inline_e new_expr >>= fun inlined_new_expr ->
+            add_inlined_expr id inlined_new_expr >>
+            return (Eccall(a, pe_ty, pe_fn, pe_args))
+            end
+          else
+            begin
+              (* TODO: not true for variadic *)
+              assert (List.length pe_args = List.length fun_args);
+              let sub_map = List.fold_right2
+                (fun (sym,_) pe map -> Pmap.add sym pe map)
+                fun_args inlined_pe_args (Pmap.empty sym_cmp) in
+              let expr_to_check = substitute_expr sub_map fun_expr in
+
+              get_proc_expr >>= fun old_proc_expr ->
+              get_fn_type  >>= fun old_fn_type ->
+
+              (* TODO: fn_ptr_map should be saved... *)
+              update_proc_expr expr_to_check >>
+              put_fn_type fun_ty >>
+              increment_run_depth (Sym fn_ptr_sym) >>
+              inline_e expr_to_check >>= fun inlined_expr_to_check ->
+              decrement_run_depth (Sym fn_ptr_sym) >>
+              put_fn_type old_fn_type >>
+              update_proc_expr old_proc_expr >>
+
+              add_inlined_expr id inlined_expr_to_check >>
+              return (Eccall(a, pe_ty, pe_fn, pe_args))
+            end
+        | Some (ProcDecl _) ->
+            assert false
+        | _ -> assert false
+        end
+    | Eccall _ ->
+        assert false
     | Eproc _ -> assert false
     | Eunseq es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Eunseq(inlined_es))
     | Ewseq (pat, e1, e2) ->
-        inline_e e1 >>= fun inlined_e1 ->
-        inline_e e2 >>= fun inlined_e2 ->
-        return (Ewseq(pat, inlined_e1, inlined_e2))
+        (* TODO: Hacky rewrite b/c Z3 dislikes tuples with any interesting type
+         * Flatten structure to avoid tuply listy stuff. *)
+        if is_c_function_call pat e1 then
+          begin
+          let cfun_info = extract_cfun pat e1 in
+          get_function_from_ptr cfun_info.ptr >>= fun fn_sym ->
+          get_file >>= fun file ->
+          let to_seq_list =
+            begin match Pmap.lookup fn_sym file.funinfo with
+            | Some (ret_ty, args_ty, b1, b2) ->
+              [(mk_sym_pat (cfun_info.fn_ptr) (BTy_loaded OTy_pointer),
+                cfun_info.core_ptr_pexpr)
+              ;(mk_sym_pat (cfun_info.ret_ty) BTy_ctype,
+                mk_ctype_pe ret_ty)
+              ;(mk_sym_pat (cfun_info.arg_tys) (BTy_list BTy_ctype),
+                mk_list_pe (List.map mk_ctype_pe args_ty))
+              ;(mk_sym_pat (cfun_info.bool1) BTy_boolean,
+                mk_boolean_pe b1)
+              ;(mk_sym_pat (cfun_info.bool2) BTy_boolean,
+                mk_boolean_pe b2)
+              ]
+            | _ -> assert false
+            end in
+            add_to_fn_ptr_map cfun_info.fn_ptr fn_sym >>
+
+            let Expr([], Elet(new_pat, new_pe1, new_e2)) =
+              List.fold_right (fun (pat, pe) erest ->
+                Expr([], Elet(pat, pe, erest))
+              ) to_seq_list e2 in
+            inline_pe new_pe1 >>= fun inlined_new_pe1 ->
+            inline_e new_e2 >>= fun inlined_new_e2 ->
+            return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
+          end
+        else begin
+          inline_e e1 >>= fun inlined_e1 ->
+          inline_e e2 >>= fun inlined_e2 ->
+          return (Ewseq(pat, inlined_e1, inlined_e2))
+        end
     | Esseq (pat, e1, e2) ->
         inline_e e1 >>= fun inlined_e1 ->
         inline_e e2 >>= fun inlined_e2 ->
@@ -399,7 +562,7 @@ module BmcInline = struct
 
   let inline_globs (gname, glb) =
     match glb with
-    | GlobalDef (bty, e) -> 
+    | GlobalDef (bty, e) ->
       inline_e e >>= fun inlined_e ->
       return (gname, GlobalDef (bty, inlined_e))
     | GlobalDecl bty ->
@@ -581,6 +744,10 @@ module BmcSSA = struct
     | PEstruct _ -> assert false
     | PEunion _  -> assert false
     | PEcfunction _ -> assert false
+        (*get_inline_pexpr uid >>= fun inlined_pe ->
+        ssa_pe inlined_pe >>= fun ssad_inlined_pe ->
+        update_inline_pexpr uid ssad_inlined_pe >>
+        return (PEcfunction pe) *)
     | PEmemberof (sym, id, pe) ->
         ssa_pe pe >>= fun ssad_pe ->
         return (PEmemberof(sym, id, ssad_pe))
@@ -728,7 +895,11 @@ module BmcSSA = struct
         return (Eif(ssad_pe, ssad_e1, ssad_e2))
     | Eskip ->
         return Eskip
-    | Eccall _ -> assert false
+    | Eccall (a,pe_ty, pe_ptr, pe_args) ->
+        get_inline_expr uid >>= fun inline_e ->
+        ssa_e inline_e      >>= fun ssad_inlined_e ->
+        update_inline_expr uid ssad_inlined_e >>
+        return (Eccall (a,pe_ty, pe_ptr, pe_args))
     | Eproc _  -> assert false
     | Eunseq es ->
         mapM ssa_e es >>= fun ssad_es ->
@@ -1002,7 +1173,10 @@ module BmcZ3 = struct
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
     | PEstruct _    -> assert false
     | PEunion _     -> assert false
-    | PEcfunction _ -> assert false
+    | PEcfunction _ ->
+        (*get_inline_pexpr uid >>= fun inline_pe ->
+        z3_pe inline_pe *)
+        assert false
     | PEmemberof _  -> assert false
     | PEcall _ ->
         get_inline_pexpr uid >>= fun inline_pe ->
@@ -1021,7 +1195,11 @@ module BmcZ3 = struct
     | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
         return (Pmap.find ctype ImplFunctions.is_unsigned_map)
     | PEis_unsigned _    -> assert false
-    | PEare_compatible _ -> assert false
+    | PEare_compatible (pe1, pe2) ->
+        print_endline "TODO: PEare_compatible";
+        z3_pe pe1 >>= fun z3d_pe1 ->
+        z3_pe pe2 >>= fun z3d_pe2 ->
+        return mk_true
     | PEbmc_assume pe ->
         z3_pe pe >>= fun _ ->
         return UnitSort.mk_unit
@@ -1029,9 +1207,9 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let z3_action (Paction(p, Action(loc, a, action_))) uid =
+  let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), _) ->
         get_file >>= fun file ->
         get_fresh_alloc >>= fun alloc_id ->
         (* TODO: we probably don't actually want to flatten the sort list *)
@@ -1041,6 +1219,7 @@ module BmcZ3 = struct
         return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
                 ICreate (aid_list, flat_sortlist, alloc_id))
     | Create _ ->
+        print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
     | CreateReadOnly _ ->
         assert false
@@ -1168,7 +1347,9 @@ module BmcZ3 = struct
         let (_, guards) = compute_case_guards (List.map fst cases) z3d_pe in
         add_guards uid guards >>
         return (mk_guarded_ite z3d_cases_e guards)
-    | Elet _ -> assert false
+    | Elet (pat, pe, e) ->
+        z3_pe pe >>= fun _ ->
+        z3_e e
     | Eif (pe, e1, e2) ->
         z3_pe pe >>= fun z3d_pe ->
         z3_e e1  >>= fun z3d_e1 ->
@@ -1185,7 +1366,9 @@ module BmcZ3 = struct
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
         return (ctor_to_z3 Ctuple z3d_elist None)
-    | Ewseq (_, e1, e2) (* fall through *)
+    | Ewseq (pat, e1, e2) ->
+        z3_e e1 >>= fun _ ->
+        z3_e e2
     | Esseq (_, e1, e2) ->
         z3_e e1 >>= fun _ ->
         z3_e e2
