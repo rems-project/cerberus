@@ -787,6 +787,9 @@ export default class View {
         this.state.console = ''
         this.updateInteractive(res.activeId, new GraphFragment(res.steps))
         break
+      case 'bmc':
+        this.state.console = res.result
+        break;
       case 'failure':
         this.setStateEmpty()
         this.state.console = res.console

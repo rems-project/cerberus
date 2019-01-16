@@ -186,7 +186,8 @@ type action =
   | `Elaborate
   | `Random
   | `Exhaustive
-  | `Step ]
+  | `Step
+  | `BMC ]
 
 let string_of_action = function
   | `Nop        -> "Nop"
@@ -194,6 +195,7 @@ let string_of_action = function
   | `Random     -> "Random"
   | `Exhaustive -> "Exhaustive"
   | `Step       -> "Step"
+  | `BMC        -> "BMC"
 
 type incoming_msg =
   { action:  action;
@@ -228,6 +230,7 @@ let parse_incoming_msg content =
     | "random"     -> `Random
     | "exhaustive" -> `Exhaustive
     | "step"       -> `Step
+    | "bmc"        -> `BMC
     | s -> failwith ("unknown action " ^ s)
   in
   let parse_bool = function
@@ -354,6 +357,18 @@ let json_of_result = function
       ("activeId", `Int activeId);
       ("status", `String "stepping");
       ("result", Json.of_opt_string res);
+    ]
+  | BMC (`Unsatisfiable res | `Satisfiable res) ->
+    `Assoc [
+      ("status", `String "bmc");
+      ("console", `String "");
+      ("result", `String res)
+    ]
+  | BMC (`Unknown err) ->
+    `Assoc [
+      ("status", `String "failure");
+      ("console", `String err);
+      ("result", `String "");
     ]
   | Failure err ->
     `Assoc [
@@ -552,6 +567,7 @@ let cerberus ~rheader ~conf ~flow content =
     | `Random -> request @@ `Execute (conf, filename, msg.name, Random)
     | `Exhaustive -> request @@ `Execute (conf, filename, msg.name, Exhaustive)
     | `Step -> request @@ `Step (conf, filename, msg.name, msg.interactive)
+    | `BMC -> request @@ `BMC (conf, filename, msg.name)
   in
   Debug.print 9 ("Time: " ^ now ());
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);

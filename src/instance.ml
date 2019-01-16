@@ -126,8 +126,22 @@ let result_of_elaboration (_, _, cabs, ail, core) =
       result= "success";
     }
 
-(* execution *)
+let bmc ~conf ~filename () =
+  let return = Exception.except_return in
+  let (>>=)  = Exception.except_bind in
+  Debug.print 7 ("Running BMC...");
+  try
+    elaborate ~conf ~filename
+    >>= fun (core_std, core_lib, cabs, ail, core) ->
+    Tags.set_tagDefs core.tagDefs;
+    Bmc_globals.set 3 true false "main" 0 true false;
+    return @@ Bmc3.bmc core (Some ail);
+  with
+  | e ->
+    Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
+    raise e
 
+(* execution *)
 let execute ~conf ~filename (mode: exec_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
@@ -384,6 +398,10 @@ let instance debug_level =
     | `Step (conf, filename, name, active) ->
       step ~conf:(setup conf) ~filename active
       |> respond filename name id
+    | `BMC (conf, filename, name) ->
+      bmc ~conf:(setup conf) ~filename ()
+      |> respond filename name (fun res -> BMC res)
+
   in
   let redirect () =
     (* NOTE: redirect stdout to stderr copying stdout file descriptor
