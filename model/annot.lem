@@ -1,10 +1,16 @@
 open import Maybe
+open import Pervasives
 import Loc
+import Symbol
+
+type bmc_annot =
+  | Abmc_id of nat (* TODO: basically same as uid *)
 
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
   | Auid of string (* Unique ID *)
+  | Abmc of bmc_annot
 
 
 val     get_loc: list annot -> maybe Loc.t
@@ -17,6 +23,8 @@ let rec get_loc annots =
     | (Astd _ :: annots') ->
         get_loc annots'
     | (Auid _ :: annots') ->
+        get_loc annots'
+    | (Abmc _ :: annots') ->
         get_loc annots'
   end
 
@@ -38,5 +46,7 @@ let rec get_uid annots =
         get_uid annots'
     | (Auid uid :: _) ->
         Just uid
+    | (Abmc _ :: annots') ->
+        get_uid annots'
   end
 

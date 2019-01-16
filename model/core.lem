@@ -4,6 +4,7 @@ open import Pervasives
 open import Core_ctype Annot Loc
 import Symbol Implementation_ Undefined Cmm_csem
 import Mem Mem_common
+import Linux
 
 type core_object_type =  (* types for C objects *)
  | OTy_integer
@@ -241,6 +242,7 @@ type pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEis_integer of (generic_pexpr 'bty 'sym)
  | PEis_signed of (generic_pexpr 'bty 'sym)
  | PEis_unsigned of (generic_pexpr 'bty 'sym)
+ | PEbmc_assume of (generic_pexpr 'bty 'sym)
  | PEare_compatible of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
 
 and generic_pexpr 'bty 'sym = 
@@ -256,6 +258,12 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | Load of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order
  | RMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
  | Fence of Cmm_csem.memory_order
+ | CompareExchangeStrong of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | LinuxFence of Linux.memory_order
+ | LinuxLoad of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+ | LinuxStore of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+ | LinuxRMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+
 
 
 type generic_action 'a 'bty 'sym =  (* memory actions *)

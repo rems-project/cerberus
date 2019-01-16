@@ -14,6 +14,8 @@ import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import GenTypes
 import Core Core_aux Undefined
 
+import Linux
+
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
 module Aty  = AilTypes
@@ -207,6 +209,29 @@ let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
     | (*BISECT-IGNORE*) _ ->
         error ("Translation.translate_memory_order: " ^ Pp.stringFromAil_expression a_expr)
   end
+
+val translate_linux_memory_order: A.expression GenTypes.genTypeCategory -> Linux.memory_order
+let translate_linux_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
+  match expr with
+    | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
+        match natFromInteger n with
+          | 0 -> Linux.Once
+          | 1 -> Linux.Acquire
+          | 2 -> Linux.Release
+          | 3 -> Linux.Rmb
+          | 4 -> Linux.Wmb
+          | 5 -> Linux.Mb
+          | 6 -> Linux.RbDep
+          | 7 -> Linux.RcuLock
+          | 8 -> Linux.RcuUnlock
+          | 9 -> Linux.SyncRcu
+          | (*BISECT-IGNORE*) _ ->
+              error ("Translation.translate_linux_memory_order: " ^ show n)
+        end
+    | (*BISECT-IGNORE*) _ ->
+        error ("Translation.translate_linux_memory_order: " ^ Pp.stringFromAil_expression a_expr)
+  end
+
 
 
 
@@ -1707,7 +1732,8 @@ else
                      ) )
                     (* non-deterministic branching if the test expression had unspecified value *)
                   ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                     C.Expr [] (C.End [core_e2; core_e3]) ) ]
+                     (* C.Expr [] (C.End [core_e2; core_e3]) *)
+                     Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilEcond"))) ]
               end (
               if AilTypesAux.is_integer result_ty then
                 Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty res_sym_pe)
@@ -1997,12 +2023,146 @@ end
          E.return $
            C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.Fence mo))))
 
+    | A.AilEcall
+          (A.AnnotatedExpression _ _ _
+              (A.AilEbuiltin "atomic_compare_exchange_strong_explicit"))
+          [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
+      let mo_success = translate_memory_order order_success_e in
+      let mo_failure = translate_memory_order order_failure_e in
+      let (ty1,ty2) = match (ctype_of object_e, ctype_of expected_e) with
+        | (Aty.Ctype _ (Aty.Pointer _ ty1), Aty.Ctype _ (Aty.Pointer _ ty2)) -> (ty1,ty2)
+        | _ ->
+          illTypedAil loc "AilEcall atomic_compare_exchange_strong_explicit"
+      end in
+      let oTy = force_core_object_type_of_ctype
+                    (Caux.proj_ctype (ctype_of desired_e)) in
+
+      self object_e   >>= fun core_object_e ->
+      self expected_e >>= fun core_expected_e ->
+      self desired_e  >>= fun core_desired_e ->
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer)
+                 >>= fun (_, loaded_object_sym_pat, loaded_object_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
+                 >>= fun (_, object_sym_pat, object_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer)
+                 >>= fun (_, loaded_expected_sym_pat, loaded_expected_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
+                 >>= fun (_, expected_sym_pat, expected_sym_pe) ->
+      E.wrapped_fresh_symbol (C.BTy_loaded oTy)
+                 >>= fun (_, desired_sym_pat, desired_sym_pe) ->
+      (* TODO: conversion? *)
+      E.return begin
+        Caux.mk_sseq_e
+          (Caux.mk_tuple_pat [loaded_object_sym_pat
+                             ;loaded_expected_sym_pat
+                             ;desired_sym_pat])
+          (Caux.mk_unseq_e [core_object_e
+                           ;core_expected_e
+                           ;core_desired_e])
+          (Caux.mk_case_e (Caux.mk_tuple_pe [loaded_object_sym_pe
+                                            ;loaded_expected_sym_pe])
+              [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
+                                   ;Caux.mk_specified_pat expected_sym_pat],
+                 Caux.pcompare_exchange_strong
+                    loc (Caux.mk_ail_ctype_pe (Aty.Ctype [] (AilTypesAux.unatomic ty1)))
+                    object_sym_pe expected_sym_pe desired_sym_pe
+                    mo_success mo_failure
+                )
+              ; (Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer
+                                                ;C.BTy_loaded C.OTy_pointer]),
+                 Caux.mk_pure_e
+                   (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)
+                )
+              ]
+          )
+      end
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_fence")) [order_e] ->
+        let mo = translate_linux_memory_order order_e in
+         E.return $
+           C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.LinuxFence mo))))
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_read")) [lobject_e; order_e] ->
+         (* TODO: remove code duplication *)
+         let mo = translate_linux_memory_order order_e in
+         let ref_ty = match ctype_of lobject_e with
+           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+               ref_ty
+           | (*BISECT-IGNORE*) _ ->
+               illTypedAil loc "AilEcall linux_read"
+         end in
+         self lobject_e  >>= fun lobject_core_e  ->
+         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe) ->
+         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe) ->
+         E.return begin
+           Caux.mk_sseq_e loaded_sym_pat lobject_core_e
+             begin
+               Caux.mk_case_e loaded_sym_pe
+                 [ (Caux.mk_specified_pat object_sym_pat,
+                    Caux.plinux_load loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe mo)
+                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+             end
+         end
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_write")) [lobject_e; desired_e; order_e] ->
+         let mo = translate_linux_memory_order order_e in
+         let ref_ty = match ctype_of lobject_e with
+           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+               ref_ty
+           | (*BISECT-IGNORE*) _ ->
+               illTypedAil loc "AilEcall linux_write"
+         end in
+         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of desired_e)) in
+         self lobject_e >>= fun lobject_core_e  ->
+         self desired_e >>= fun desired_core_e ->
+         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
+         E.return begin
+           Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+             begin
+               Caux.mk_unseq_e [lobject_core_e; desired_core_e]
+             end
+             begin
+               Caux.mk_case_e loaded_sym_pe
+                 [ (Caux.mk_specified_pat object_sym_pat,
+                    Caux.plinux_store loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo)
+                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+             end
+         end
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_rmw")) [lobject_e; desired_e; order_e] ->
+         let mo = translate_linux_memory_order order_e in
+         let ref_ty = match ctype_of lobject_e with
+           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+               ref_ty
+           | (*BISECT-IGNORE*) _ ->
+               illTypedAil loc "AilEcall linux_rmw"
+         end in
+         let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of desired_e)) in
+         self lobject_e >>= fun lobject_core_e  ->
+         self desired_e >>= fun desired_core_e ->
+         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, loaded_sym_pat, loaded_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, object_sym_pat, object_sym_pe)   ->
+         E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (_, desired_sym_pat, desired_sym_pe) ->
+         E.return begin
+           Caux.mk_sseq_e (Caux.mk_tuple_pat [loaded_sym_pat; desired_sym_pat])
+             begin
+               Caux.mk_unseq_e [lobject_core_e; desired_core_e]
+             end
+             begin
+               Caux.mk_case_e loaded_sym_pe
+                 [ (Caux.mk_specified_pat object_sym_pat,
+                    Caux.plinux_rmw loc (Caux.mk_ail_ctype_pe ref_ty) object_sym_pe desired_sym_pe mo)
+                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
+             end
+         end
 
 
 
 
 
-      
+
+
 (*
      | A.AilEcall (A.AnnotatedExpression _ _ (A.AilEbuiltin "atomic_compare_exchange_strong_explicit")) [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
          let mo_success = translate_memory_order order_success_e in
@@ -2722,6 +2882,43 @@ a
             "PRINT_TYPE: " ^ Loc.stringFromLocation loc ^ " -- " ^ Pp.stringFromAil_ctype qs ty
           ) in
           self e
+      | A.AilEbmc_assume e ->
+          let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat    , e_sym_pe    ) ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy) >>= fun (_, obj_sym_pat  , obj_sym_pe  ) ->
+          E.wrapped_fresh_symbol C.BTy_boolean      >>= fun (_, memop_sym_pat, memop_sym_pe) ->
+          self e         >>= fun core_e  ->
+          E.return $
+            Caux.mk_sseq_e e_sym_pat core_e (
+if AilTypesAux.is_arithmetic (ctype_of e) then
+              let zero_pe =
+                if AilTypesAux.is_integer (ctype_of e) then
+                  Caux.mk_integer_pe 0
+                else
+                  Caux.mk_floating_value_pe Mem.zero_fval in
+              Caux.mk_pure_e (
+                Caux.mk_case_pe e_sym_pe
+                  [ (Caux.mk_specified_pat obj_sym_pat,
+                     (C.Pexpr [] () (C.PEbmc_assume (Caux.mk_not_pe
+                          (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)))))
+                  ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                     Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe) ]
+              )
+else (* is_pointer *)
+              Caux.mk_case_e e_sym_pe
+                [ (Caux.mk_specified_pat obj_sym_pat,
+                   Caux.mk_wseq_e memop_sym_pat
+                     (C.Expr [] (C.Ememop Mem_common.PtrEq [obj_sym_pe; Caux.mk_nullptr_pe Cty.Void]))
+                     begin
+                       Caux.mk_pure_e begin
+                         (C.Pexpr [] () (C.PEbmc_assume (memop_sym_pe)))
+                       end
+                     end)
+                ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
+                   Caux.mk_pure_e (Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe)) ]
+            )
+
+
       
       | A.AilErvalue e ->
           (* TODO: check + I don't like have a wseq here *)
@@ -3150,6 +3347,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         self s2                                             >>= fun core_s2                              ->
         (* NOTE: here we fix the strictness of unspecified values *)
         E.return $
+(* <<<<<<< HEAD *)
           (* NOTE: the case-of producing a boolean (instead of directly doing the control
              with the case) is to prevent possible combinatorial explosions of the generated Core code *)
           Caux.mk_sseq_e test_sym_pat core_test begin
@@ -3166,6 +3364,20 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
             end
             (Caux.mk_if_e do_then_sym_pe core_s1 core_s2)
           end
+(*=======
+          (* NOTE: here we fix the strictness of unspecified values *)
+          Caux.mk_wseq_e (Caux.mk_sym_pat sym_e (C.BTy_loaded oTy)) core_test (
+            Caux.mk_case_e (Caux.mk_sym_pe sym_e)
+              [ (C.Pattern [] (C.CaseCtor C.Cspecified [Caux.mk_sym_pat sym_obj (C.BTy_object oTy)]),
+                 Caux.mk_if_e (Caux.mk_not_pe (Caux.mk_op_pe C.OpEq (Caux.mk_sym_pe sym_obj) (Caux.mk_integer_pe 1)))
+                   core_s1 core_s2)
+                (* non-deterministic branching if the test expression had unspecified value *)
+              ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                 (* Caux.mk_nd_e [core_s1; core_s2] *)
+                 Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSif"))) ]
+
+          )
+>>>>>>> bmc_v3 *)
     
     | A.AilSwhile e s ->
         (* NOTE: the object type is OTy_integer since we are using mkTestExpression which turns [e] into [e == 0] *)
@@ -3193,7 +3405,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                      core_s_loop Caux.mk_skip_e)
                   (* non-deterministic branching if the test expression had unspecified value *)
                 ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                   Caux.mk_nd_e [core_s_loop; Caux.mk_skip_e]) ]
+                 (* Caux.mk_nd_e [core_s_loop; Caux.mk_skip_e] *)
+                 Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSwhile"))) ]
                )
             )
 *)
@@ -3240,7 +3453,8 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                          core_loop Caux.mk_skip_e)
                       (* non-deterministic branching if the test expression had unspecified value *)
                     ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
-                       Caux.mk_nd_e [core_loop; Caux.mk_skip_e]) ]
+                       (* Caux.mk_nd_e [core_loop; Caux.mk_skip_e] *)
+                       Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified AilSdo"))) ]
                    )
               end
           )

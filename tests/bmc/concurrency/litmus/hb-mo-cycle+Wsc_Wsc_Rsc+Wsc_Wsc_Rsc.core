@@ -1,0 +1,23 @@
+{- The loads are not allowed to both read 0, and there cannot be a
+   cycle in mo union hb. The total set of allowed outcomes is 1, 2,
+   3. This contrasts with the same test where release/acquire atomics
+   are used and the rloads can both read 0. -}
+
+proc main () : eff integer :=
+  let strong x : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong y : pointer = create(Ivalignof(!(_Atomic(signed int))), !(_Atomic(signed int))) in
+  let strong (_a1 : loaded integer, _a2 : loaded integer) = par(
+    let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(0), seq_cst) in
+    let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(1), seq_cst) in
+    load(!(_Atomic(signed int)), y, seq_cst)
+  ,
+    let strong _ : unit = store(!(_Atomic(signed int)), y, Specified(0), seq_cst) in
+    let strong _ : unit = store(!(_Atomic(signed int)), x, Specified(1), seq_cst) in
+    load(!(_Atomic(signed int)), x, seq_cst)
+  ) in
+  let strong _ : unit = kill(x) in
+  let strong _ : unit = kill(y) in
+  case (_a1, _a2) of
+    | (Specified(a1: integer), Specified(a2: integer)) =>
+        pure(a1 + (2 * a2))
+  end

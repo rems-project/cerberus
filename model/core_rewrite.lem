@@ -761,6 +761,8 @@ let rec remove_conv_int_pexpr (Pexpr annot bTy _pe) =
         PEis_signed (remove_conv_int_pexpr pe)
     | PEis_unsigned pe ->
         PEis_unsigned (remove_conv_int_pexpr pe)
+    | PEbmc_assume pe ->
+        PEbmc_assume (remove_conv_int_pexpr pe)
     | PEare_compatible pe1 pe2 ->
         PEare_compatible (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2)
   end
@@ -835,6 +837,16 @@ and remove_conv_int_action_ act_ =
         RMW (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
     | Fence mo ->
         Fence mo
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+        CompareExchangeStrong (remove_conv_int_pexpr pe1) (remove_conv_int_pexpr pe2) (remove_conv_int_pexpr pe3) (remove_conv_int_pexpr pe4) mo1 mo2
+    | LinuxFence mo ->
+        LinuxFence mo
+    | LinuxLoad pe1 pe2 mo ->
+        LinuxLoad pe1 pe2 mo
+    | LinuxStore pe1 pe2 pe3 mo ->
+        LinuxStore pe1 pe2 pe3 mo
+    | LinuxRMW pe1 pe2 pe3 mo ->
+        LinuxRMW pe1 pe2 pe3 mo
   end
 
 and remove_conv_int_action (Action loc () act_) = Action loc () (remove_conv_int_action_ act_)
@@ -1050,6 +1062,8 @@ let rec isAlwaysDefined (Pexpr _ _ pexpr_) =
         isAlwaysDefined pe
     | PEis_unsigned pe ->
         isAlwaysDefined pe
+    | PEbmc_assume _ ->
+        false
     | PEare_compatible pe1 pe2 ->
         isAlwaysDefined pe1 && isAlwaysDefined pe2
 end
@@ -1350,6 +1364,8 @@ let rec simpl_case_pexpr (Pexpr annot bTy pexpr_ as pexpr) =
         wrap $ PEis_signed (simpl_case_pexpr pe)
     | PEis_unsigned pe ->
         wrap $ PEis_unsigned (simpl_case_pexpr pe)
+    | PEbmc_assume pe ->
+        pexpr
     | PEare_compatible pe1 pe2 ->
         wrap $ PEare_compatible (simpl_case_pexpr pe1) (simpl_case_pexpr pe2)
   end

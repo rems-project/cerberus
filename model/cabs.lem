@@ -128,6 +128,7 @@ type cabs_expression_ =
   | CabsEva_arg of cabs_expression * type_name
   | CabsEva_end of cabs_expression
   | CabsEprint_type of cabs_expression (* CERBERUS EXTENSION *)
+  | CabsEbmc_assume of cabs_expression
 and cabs_expression =
   | CabsExpression of Loc.t * cabs_expression_
 
