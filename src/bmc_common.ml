@@ -110,7 +110,6 @@ let rec ctor_to_z3 (ctor  : typed_ctor)
   match ctor with
   | Ctuple ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
-      print_endline (Sort.to_string sort);
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl exprs
   | Civmax ->
