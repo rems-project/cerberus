@@ -34,6 +34,7 @@ module BmcM = struct
     expr_map         : (int, Expr.expr) Pmap.map option;
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
+    param_actions    : (BmcZ3.intermediate_action option) list option;
 
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
@@ -64,6 +65,7 @@ module BmcM = struct
     ; expr_map         = None
     ; case_guard_map   = None
     ; action_map       = None
+    ; param_actions    = None
     ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
@@ -114,6 +116,7 @@ module BmcM = struct
                  expr_map       = Some final_state.expr_map;
                  case_guard_map = Some final_state.case_guard_map;
                  action_map     = Some final_state.action_map;
+                 param_actions  = Some final_state.param_actions;
         }
 
   (* Compute drop continuation table *)
@@ -188,8 +191,10 @@ module BmcM = struct
     get >>= fun st ->
     let initial_state =
       BmcSeqMem.mk_initial (Option.get st.inline_expr_map)
+                           (Option.get st.sym_expr_table)
                            (Option.get st.expr_map)
                            (Option.get st.action_map)
+                           (Option.get st.param_actions)
                            (Option.get st.case_guard_map)
                            (Option.get st.drop_cont_map) in
     let (bindings, _) =
@@ -255,10 +260,12 @@ let bmc_file (file              : unit typed_file)
     BmcM.do_bindings  >>
     BmcM.do_vcs       >>
     BmcM.do_ret_cond  >>
-    (*BmcM.do_seq_mem   >>*)
 
-    (* TODO: temporary *)
-    BmcM.do_conc_actions >>
+    (if !!bmc_conf.concurrent_mode then
+      BmcM.do_conc_actions
+    else
+      BmcM.do_seq_mem
+    ) >>
 
     BmcM.get_file >>= fun file ->
     if !!bmc_conf.debug_lvl >= 3 then pp_file file;

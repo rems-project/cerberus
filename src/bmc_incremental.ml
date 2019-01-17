@@ -998,12 +998,12 @@ module BmcSSA = struct
       mapM ssa_globs file.globs >>= fun ssad_globs ->
       (match Pmap.lookup fn_to_check file.funs with
        | Some (Proc(annot, bTy, params, e)) ->
-          ssa_e e                >>= fun ssad_e ->
           mapM ssa_param params  >>= fun ssad_params ->
+          ssa_e e                >>= fun ssad_e ->
           return (Proc (annot, bTy, ssad_params, ssad_e))
        | Some (Fun (ty, params, pe)) ->
-          ssa_pe pe             >>= fun ssad_pe ->
           mapM ssa_param params >>= fun ssad_params ->
+          ssa_pe pe             >>= fun ssad_pe ->
           return (Fun (ty, ssad_params, ssad_pe))
        | _ -> assert false
       ) >>= fun new_fn ->
@@ -1034,6 +1034,7 @@ module BmcZ3 = struct
     expr_map      : (int, Expr.expr) Pmap.map;
     case_guard_map: (int, Expr.expr list) Pmap.map;
     action_map    : (int, intermediate_action) Pmap.map;
+    param_actions : (intermediate_action option) list;
 
     file          : unit typed_file;
 
@@ -1050,6 +1051,7 @@ module BmcZ3 = struct
     expr_map       = Pmap.empty Pervasives.compare;
     case_guard_map = Pmap.empty Pervasives.compare;
     action_map     = Pmap.empty Pervasives.compare;
+    param_actions  = [];
 
     file = file;
 
@@ -1113,6 +1115,11 @@ module BmcZ3 = struct
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcZ3 inline_expr not found %d" uid)
     | Some e -> return e
+
+  let set_param_actions (actions: (intermediate_action option) list)
+                        : unit eff =
+    get >>= fun st ->
+    put {st with param_actions = actions}
 
   (* HELPERS *)
   let compute_case_guards (patterns: typed_pattern list)
@@ -1224,7 +1231,7 @@ module BmcZ3 = struct
         return (Pmap.find ctype ImplFunctions.is_unsigned_map)
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
-        print_endline "TODO: PEare_compatible";
+        bmc_debug_print 1 "TODO: PEare_compatible";
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return mk_true
@@ -1235,17 +1242,19 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
+  let mk_create ctype =
+    get_file >>= fun file ->
+    get_fresh_alloc >>= fun alloc_id ->
+    (* TODO: we probably don't actually want to flatten the sort list *)
+    let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
+    mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
+    return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
+            ICreate (aid_list, flat_sortlist, alloc_id))
+
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
     | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), _) ->
-        get_file >>= fun file ->
-        get_fresh_alloc >>= fun alloc_id ->
-        (* TODO: we probably don't actually want to flatten the sort list *)
-        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-        mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
-
-        return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
-                ICreate (aid_list, flat_sortlist, alloc_id))
+        mk_create ctype
     | Create _ ->
         print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
@@ -1443,11 +1452,33 @@ module BmcZ3 = struct
       | GlobalDecl _ ->
         assert false
 
+    let z3_param ((sym, cbt) as param : (sym_ty * core_base_type))
+                 (ctype: ctype)
+                 : (intermediate_action option) eff =
+      if not (is_core_ptr_bty cbt) then
+        return None
+      else begin
+        mk_create ctype >>= fun (_,action) ->
+        return (Some action)
+      end
+
+    let z3_params (params : (sym_ty * core_base_type) list)
+                  (fn_to_check : sym_ty)
+                  : (intermediate_action option) list eff =
+      get_file >>= fun file ->
+      match Pmap.lookup fn_to_check file.funinfo with
+      | None -> failwith (sprintf "BmcZ3 z3_params: %s not found"
+                                  (symbol_to_string fn_to_check))
+      | Some (_, param_tys, _, _) ->
+          mapM2 z3_param params param_tys
+
     let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
                 : (unit typed_file) eff =
       mapM z3_globs file.globs >>= fun _ ->
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, bTy, params, e)) ->
+          z3_params params fn_to_check >>= fun param_actions ->
+          set_param_actions param_actions >>
           z3_e e
       | Some (Fun(ty, params, pe)) ->
           z3_pe pe
@@ -2484,8 +2515,10 @@ module BmcSeqMem = struct
   type memory_table = (addr_ty, Expr.expr) Pmap.map
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    param_actions    : (BmcZ3.intermediate_action option) list;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
 
@@ -2495,14 +2528,18 @@ module BmcSeqMem = struct
   include EffMonad(struct type state = seq_state end)
 
   let mk_initial inline_expr_map
+                 sym_expr_table
                  expr_map
                  action_map
+                 param_actions
                  case_guard_map
                  drop_cont_map
                  : state =
   { inline_expr_map  = inline_expr_map;
+    sym_expr_table   = sym_expr_table;
     expr_map         = expr_map;
     action_map       = action_map;
+    param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
     memory           = Pmap.empty Pervasives.compare
@@ -2529,19 +2566,28 @@ module BmcSeqMem = struct
                                 uid)
     | Some e -> return e
 
-
   let get_expr (uid: int): Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.expr_map with
     | None -> failwith (sprintf "Error: BmcSeqMem expr not found %d" uid)
     | Some e -> return e
 
+  let get_sym_expr (sym: sym_ty) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.sym_expr_table with
+    | None -> failwith (sprintf "Error: BmcSeqMem sym_expr %s not found"
+                                (symbol_to_string sym))
+    | Some e -> return e
 
   let get_action (uid: int) : BmcZ3.intermediate_action eff =
     get >>= fun st ->
     match Pmap.lookup uid st.action_map with
     | None -> failwith (sprintf "Error: BmcSeqMem action not found %d" uid)
     | Some a -> return a
+
+  let get_param_actions : (BmcZ3.intermediate_action option) list eff =
+    get >>= fun st ->
+    return st.param_actions
 
   let get_case_guards (uid: int): (Expr.expr list) eff =
     get >>= fun st ->
@@ -2603,6 +2649,26 @@ module BmcSeqMem = struct
         Pmap.add addr new_expr acc
     ) mod_addr base
 
+  let do_create (sortlist: BmcZ3.ctype_sort list)
+                (alloc_id: BmcZ3.alloc)
+                (initialise: bool)
+                : ret_ty eff =
+    mapMi (fun i (ctype,sort) ->
+      let addr = (alloc_id, i) in
+      let seq_var =
+        mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
+      update_memory addr seq_var >>
+      let (initial_value, assumptions) =
+        BmcMemCommon.mk_initial_loaded_value
+            sort (sprintf "init_%d,%d" alloc_id i)
+            ctype initialise in
+      let binding = mk_eq seq_var initial_value in
+      return (addr, binding::assumptions)
+    ) sortlist >>= fun retlist ->
+    return { bindings = List.concat (List.map snd retlist)
+           ; mod_addr = AddrSet.of_list (List.map fst retlist)
+           }
+
   (* TODO: mod_addr *)
   let do_paction (Paction(p, Action(loc, a, action_)) : unit typed_paction)
                  uid
@@ -2610,21 +2676,7 @@ module BmcSeqMem = struct
     get_action uid >>= fun action ->
     match action with
     | ICreate(_, sortlist, alloc_id) ->
-        mapMi (fun i (ctype,sort) ->
-          let addr = (alloc_id, i) in
-          let seq_var =
-            mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
-          update_memory addr seq_var >>
-          let (initial_value, assumptions) =
-            BmcMemCommon.mk_initial_loaded_value
-                sort (sprintf "init_%d,%d" alloc_id i)
-                ctype false in
-          let binding = mk_eq seq_var initial_value in
-          return (addr, binding::assumptions)
-        ) sortlist >>= fun retlist ->
-        return { bindings = List.concat (List.map snd retlist)
-               ; mod_addr = AddrSet.of_list (List.map fst retlist)
-               }
+        do_create sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
     | ILoad(_, (ctype,sort), ptr, rval, mo) ->
@@ -2796,18 +2848,56 @@ module BmcSeqMem = struct
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr
     | Epar es ->
-        failwith "Error: Epar in sequentialised, concurrent mode only"
+        failwith "Error: Epar in sequentialised; concurrent mode only"
     | Ewait _       -> assert false
 
   let do_globs (gname, GlobalDef (bty, e)) =
     do_e e
+
+  (* Initialize value of argument to something specified in valid range **)
+  let initialise_param ((sym,cbt) as param : (sym_ty * core_base_type))
+                       (action_opt: BmcZ3.intermediate_action option)
+                       : ret_ty eff =
+    match action_opt with
+    | None ->
+        (* Param is not a pointer; nothing to be done *)
+        assert (not (is_core_ptr_bty cbt));
+        return empty_ret
+    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+        do_create sortlist alloc_id true >>= fun ret ->
+        (* Make let binding *)
+        get_sym_expr sym >>= fun sym_expr ->
+        let eq_expr =
+          mk_eq sym_expr
+                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+        (* TODO: need extra assertions for arrays/pointers *)
+        return { bindings = eq_expr :: ret.bindings
+               ; mod_addr = ret.mod_addr
+               }
+    | _ ->
+        assert false
+
+  let initialise_params (params: ((sym_ty * core_base_type) list))
+                        (fn_to_check: sym_ty)
+                        : ret_ty eff =
+    get_param_actions >>= fun param_actions ->
+    mapM2 initialise_param params param_actions >>= fun rets ->
+    return (List.fold_left (fun acc ret ->
+      { bindings = ret.bindings @ acc.bindings
+      ; mod_addr = AddrSet.union ret.mod_addr acc.mod_addr
+      }) empty_ret rets)
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (Expr.expr list) eff =
     mapM do_globs file.globs >>= fun globs ->
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc (annot, bTy, params, e)) ->
-        do_e e
+        initialise_params params fn_to_check >>= fun ret_params ->
+          List.iter (fun e -> print_endline (Expr.to_string e)) ret_params.bindings;
+        do_e e >>= fun ret_e ->
+        return { bindings = ret_params.bindings @ ret_e.bindings
+               ; mod_addr = AddrSet.union ret_params.mod_addr ret_e.mod_addr
+               }
      | Some (Fun(ty, params, pe)) ->
         return empty_ret
      | _ -> assert false
