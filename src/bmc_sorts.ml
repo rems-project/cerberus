@@ -197,6 +197,10 @@ module PointerSort = struct
       ; mk_constructor_s g_ctx "null"
             (mk_sym "is_null")
             [] [] []
+      (* TODO: Just a placeholder *)
+      ; mk_constructor_s g_ctx "fn"
+            (mk_sym "is_fn")
+            [] [] []
       ]
 
   let mk_ptr (addr: Expr.expr) =
@@ -205,6 +209,10 @@ module PointerSort = struct
 
   let mk_null =
     let ctor = List.nth (get_constructors mk_sort) 1 in
+    Expr.mk_app g_ctx ctor []
+
+  let mk_fn_ptr =
+    let ctor = List.nth (get_constructors mk_sort) 2 in
     Expr.mk_app g_ctx ctor []
 
   let is_null (expr: Expr.expr) =
@@ -317,4 +325,32 @@ module CFunctionSort = struct
     let constructors = get_constructors sort in
     let func_decl = List.nth constructors 0 in
     Expr.mk_app g_ctx func_decl [ id ]
+end
+
+module CtypeListSort = struct
+  let mk_sort =
+    Z3List.mk_list_s g_ctx "[ctype]" CtypeSort.mk_sort
+
+  let mk_cons x xs =
+    let cons_decl = Z3List.get_cons_decl mk_sort in
+    FuncDecl.apply cons_decl [x; xs]
+
+  let mk_nil = Z3List.nil mk_sort
+
+  let is_nil expr =
+    let is_nil_decl = Z3List.get_is_nil_decl mk_sort in
+    FuncDecl.apply is_nil_decl [expr]
+
+  let is_cons expr =
+    let is_cons_decl = Z3List.get_is_cons_decl mk_sort in
+    FuncDecl.apply is_cons_decl [expr]
+
+  let get_head expr =
+    let get_head_decl = Z3List.get_head_decl mk_sort in
+    FuncDecl.apply get_head_decl [expr]
+
+  let get_tail expr =
+    let get_tail_decl = Z3List.get_tail_decl mk_sort in
+    FuncDecl.apply get_tail_decl [expr]
+
 end

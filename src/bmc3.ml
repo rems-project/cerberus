@@ -27,6 +27,7 @@ module BmcM = struct
 
     inline_pexpr_map : (int, typed_pexpr) Pmap.map option;
     inline_expr_map  : (int, unit typed_expr) Pmap.map option;
+    fn_call_map      : (int, sym_ty) Pmap.map option;
 
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map option;
 
@@ -58,6 +59,7 @@ module BmcM = struct
     ; ail_opt     = ail_opt
     ; inline_pexpr_map = None
     ; inline_expr_map  = None
+    ; fn_call_map      = None
     ; sym_expr_table   = None
     ; expr_map         = None
     ; case_guard_map   = None
@@ -80,7 +82,9 @@ module BmcM = struct
       BmcInline.run initial_state (BmcInline.inline st.file st.fn_to_check) in
     put {st with file = file;
                  inline_pexpr_map = Some final_state.inline_pexpr_map;
-                 inline_expr_map = Some final_state.inline_expr_map}
+                 inline_expr_map  = Some final_state.inline_expr_map;
+                 fn_call_map      = Some final_state.fn_call_map;
+        }
 
   let do_ssa : unit eff =
     get >>= fun st ->
@@ -165,7 +169,9 @@ module BmcM = struct
   let do_ret_cond : unit eff =
     get >>= fun st ->
     let initial_state =
-      BmcRet.mk_initial (Option.get st.inline_expr_map)
+      BmcRet.mk_initial st.file
+                        (Option.get st.inline_expr_map)
+                        (Option.get st.fn_call_map)
                         (Option.get st.expr_map)
                         (Option.get st.case_guard_map)
                         (Option.get st.drop_cont_map) in

@@ -185,7 +185,7 @@ module type Memory = sig
   
   (* For race detection *)
   val sequencePoint: unit memM
-  
+
   (* pretty printing *)
   val pp_pointer_value: pointer_value -> PPrint.document
   val pp_integer_value: integer_value -> PPrint.document
