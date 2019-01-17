@@ -2422,7 +2422,12 @@ module BmcRet = struct
             (cbt_to_z3 bTy) in
         set_ret_const expr >>
         do_e e >>= fun bindings ->
-        return (expr, bindings)
+
+        get_expr (get_id_expr e) >>= fun z3_e ->
+        get_drop_cont (get_id_expr e) >>= fun e_drop_cont ->
+        let guard = mk_not e_drop_cont in
+
+        return (expr, (mk_implies guard (mk_eq expr z3_e)) :: bindings)
     | Some (Fun(ty, params, pe)) ->
         get_expr (get_id_pexpr pe) >>= fun z3_pe ->
         return (z3_pe, [])
