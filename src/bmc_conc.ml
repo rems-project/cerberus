@@ -276,7 +276,7 @@ module type MemoryModel = sig
   val get_assertions : z3_memory_model -> Expr.expr list
 
   val compute_executions : preexec -> z3_memory_model
-  val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> unit
+  val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> string list
 end
 
 module MemoryModelCommon = struct
@@ -666,7 +666,7 @@ module MemoryModelCommon = struct
       (mem: 'a)
       (extract_execution: Model.model -> 'a -> Expr.expr -> execution )
       (ret_value: Expr.expr)
-      : unit =
+      : string list =
 
     Solver.push solver;
     let rec aux ret =
@@ -687,19 +687,20 @@ module MemoryModelCommon = struct
     printf "Return values: %s\n"
            (String.concat ", " (List.map
               (fun e -> Expr.to_string e.ret) executions));
-    List.iteri (fun i exec ->
+    let dots = List.fold_left (fun acc exec ->
       if (List.length exec.preexec.actions > 0) then
-        begin
-        let dot_str =
           pp_dot () (ppmode_default_web,
-                          (exec.preexec, Some exec.witness,
-                           Some (exec.exdd))) in
-        let filename = sprintf "%s_%d.dot" "graph" i in
-        save_to_file filename dot_str
-        end
-    ) executions;
-
-    Solver.pop solver 1
+                     (exec.preexec, Some exec.witness,
+                      Some (exec.exdd))) :: acc
+      else acc
+      ) [] executions in
+    (* TODO: we probably don't want this anymore: *)
+    List.iteri (fun i dot ->
+      let filename = sprintf "%s_%d.dot" "graph" i in
+      save_to_file filename dot
+      ) dots;
+    Solver.pop solver 1;
+    dots
 end
 
 
@@ -1502,7 +1503,7 @@ module C11MemoryModel : MemoryModel = struct
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
-                         : unit =
+                         : string list =
     MemoryModelCommon.extract_executions
       solver mem extract_execution ret_value
       (*
@@ -1901,7 +1902,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
-                         : unit =
+                         : string list =
     MemoryModelCommon.extract_executions
       solver mem extract_execution ret_value
 end

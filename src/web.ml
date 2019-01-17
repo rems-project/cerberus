@@ -358,10 +358,10 @@ let json_of_result = function
       ("status", `String "stepping");
       ("result", Json.of_opt_string res);
     ]
-  | BMC (`Unsatisfiable res | `Satisfiable res) ->
+  | BMC (`Unsatisfiable (res, dots) | `Satisfiable (res, dots)) ->
     `Assoc [
       ("status", `String "bmc");
-      ("console", `String "");
+      ("executions", `List (List.map (fun s -> `String s) dots));
       ("result", `String res)
     ]
   | BMC (`Unknown err) ->

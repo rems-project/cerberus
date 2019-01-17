@@ -134,7 +134,7 @@ let bmc ~conf ~filename () =
     elaborate ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     Tags.set_tagDefs core.tagDefs;
-    Bmc_globals.set 3 true false "main" 0 true false;
+    Bmc_globals.set 3 true true "main" 0 true false;
     return @@ Bmc3.bmc core (Some ail);
   with
   | e ->
