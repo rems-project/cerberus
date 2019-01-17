@@ -1231,10 +1231,11 @@ module BmcZ3 = struct
         return (Pmap.find ctype ImplFunctions.is_unsigned_map)
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
-        bmc_debug_print 1 "TODO: PEare_compatible";
+        bmc_debug_print 7 "TODO: PEare_compatible";
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
-        return mk_true
+        (* TODO: Currently just assert they are the same type *)
+        return (mk_eq z3d_pe1 z3d_pe2)
     | PEbmc_assume pe ->
         z3_pe pe >>= fun _ ->
         return UnitSort.mk_unit
@@ -1452,7 +1453,7 @@ module BmcZ3 = struct
       | GlobalDecl _ ->
         assert false
 
-    let z3_param ((sym, cbt) as param : (sym_ty * core_base_type))
+    let z3_param ((sym, cbt): (sym_ty * core_base_type))
                  (ctype: ctype)
                  : (intermediate_action option) eff =
       if not (is_core_ptr_bty cbt) then
@@ -2598,7 +2599,7 @@ module BmcSeqMem = struct
   let get_drop_cont (uid: int) : Expr.expr eff =
     get >>= fun st ->
     match Pmap.lookup uid st.drop_cont_map with
-    | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map" uid)
+    | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map"                                 uid)
     | Some expr -> return expr
 
   let get_memory : memory_table eff =
@@ -2612,6 +2613,12 @@ module BmcSeqMem = struct
   let update_memory_table (memory: memory_table) : unit eff =
     get >>= fun st ->
     put {st with memory = memory}
+
+  let print_memory : unit eff =
+    get_memory >>= fun memory ->
+    return (Pmap.iter (fun (x,y) expr ->
+      printf "(%d,%d) %s\n" x y (Expr.to_string expr)
+    ) memory)
 
   type ret_ty = {
     bindings : Expr.expr list;
@@ -2635,16 +2642,28 @@ module BmcSeqMem = struct
                    (guards   : Expr.expr list) =
     let guarded_tables : (memory_table * Expr.expr) list =
       List.combine tables guards in
-    AddrSet.fold (fun addr acc ->
-      match Pmap.lookup addr acc with
-      | None -> acc
-      | Some expr_base ->
-        let new_expr =
-          List.fold_right (fun (table, guard) acc_expr ->
+    AddrSet.fold (fun ((alloc_id, i) as addr) acc ->
+      let expr_base =
+        match Pmap.lookup addr acc with
+        | None ->
+            let (table, guard) = List.find
+                (fun (table, _) -> is_some (Pmap.lookup addr table))
+                guarded_tables in
+            let sort =
+              match Pmap.lookup addr table with
+              | None -> assert false
+              | Some expr -> Expr.get_sort expr
+            in
+            mk_fresh_const (sprintf "merge_(%d %d)" alloc_id i) sort
+        | Some expr_base ->
+            expr_base
+        in
+      let new_expr =
+        List.fold_right (fun (table, guard) acc_expr ->
             match Pmap.lookup addr table with
             | None      -> acc_expr
             | Some expr -> mk_ite guard expr acc_expr
-         ) guarded_tables expr_base in
+        ) guarded_tables expr_base in
         (* TODO: create new seq variable? *)
         Pmap.add addr new_expr acc
     ) mod_addr base
@@ -2688,17 +2707,16 @@ module BmcSeqMem = struct
             let addr_expr = AddressSort.mk_from_addr addr in
             let addr_eq =
               mk_and [mk_not (PointerSort.is_null ptr)
-                     ; mk_eq addr_expr (PointerSort.get_addr ptr)] in
-            let impl_expr =
-              mk_implies addr_eq (mk_eq rval expr_in_memory) in
+                     ;mk_eq addr_expr (PointerSort.get_addr ptr)] in
+            let impl_expr = mk_implies addr_eq (mk_eq rval expr_in_memory) in
             return (Some (impl_expr, addr_eq))
           else
             return None
         ) (Pmap.bindings_list possible_addresses) >>= fun retlist ->
         let filtered = List.map Option.get (List.filter is_some retlist) in
         (* TODO: should mk_or (List.map snd filtered be a vc? *)
-        return { bindings = (mk_or (List.map snd filtered))
-                            :: (List.map fst filtered)
+        return { bindings = (mk_or (List.map snd filtered))::
+                            (List.map fst filtered)
                ; mod_addr = AddrSet.empty
                }
     | IStore(_, (ctype,sort), ptr, wval, mo) ->
@@ -2777,8 +2795,8 @@ module BmcSeqMem = struct
           guards retlist) in
         return { bindings = guarded_asserts
                ; mod_addr = mod_addr}
-    | Elet (pat, e, e1) ->
-        do_e e1
+    | Elet (pat, pe, e) ->
+        do_e e
     | Eif (cond, e1, e2) ->
         get_memory                     >>= fun old_memory ->
         do_e e1                        >>= fun res_e1 ->
@@ -2851,11 +2869,13 @@ module BmcSeqMem = struct
         failwith "Error: Epar in sequentialised; concurrent mode only"
     | Ewait _       -> assert false
 
-  let do_globs (gname, GlobalDef (bty, e)) =
-    do_e e
+  let do_globs (gname, glb) =
+    match glb with
+    | GlobalDef(bty, e) -> do_e e
+    | _ -> assert false
 
-  (* Initialize value of argument to something specified in valid range **)
-  let initialise_param ((sym,cbt) as param : (sym_ty * core_base_type))
+  (* Initialize value of argument to something specified in valid range *)
+  let initialise_param ((sym,cbt): (sym_ty * core_base_type))
                        (action_opt: BmcZ3.intermediate_action option)
                        : ret_ty eff =
     match action_opt with
@@ -2893,7 +2913,6 @@ module BmcSeqMem = struct
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc (annot, bTy, params, e)) ->
         initialise_params params fn_to_check >>= fun ret_params ->
-          List.iter (fun e -> print_endline (Expr.to_string e)) ret_params.bindings;
         do_e e >>= fun ret_e ->
         return { bindings = ret_params.bindings @ ret_e.bindings
                ; mod_addr = AddrSet.union ret_params.mod_addr ret_e.mod_addr
@@ -3166,7 +3185,6 @@ module BmcConcActions = struct
 
   let do_actions_globs (gname, GlobalDef(bty, e)) =
     do_actions_e e
-
 
   (* TODO: this is currently not po, but ignores thread ids and computes
    * cartesian product!!! *)
