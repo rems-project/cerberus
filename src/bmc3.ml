@@ -289,7 +289,8 @@ let bmc_file (file              : unit typed_file)
         let model = Option.get (Solver.get_model g_solver) in
         Model.eval model (Option.get final_state.ret_expr) false
     | UNSATISFIABLE ->
-        failwith "ERROR: Bindings unsatisfiable. Should always be sat."
+        failwith ("ERROR: Bindings unsatisfiable. Should always be sat."
+                  ^ "This can also be caused by an invalid __BMC_ASSUME.")
     | UNKNOWN ->
         failwith (sprintf "ERROR: status unknown. Reason: %s"
                           (Solver.get_reason_unknown g_solver))
