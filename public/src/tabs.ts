@@ -156,6 +156,27 @@ export class Interactive extends SvgGraph {
   }
 }
 
+export class BMC extends SvgGraph {
+  constructor(ee: EventEmitter) {
+    super('BMC Executions', ee)
+    ee.on('updateBMC', this, (s: State) => this.updateGraph(s))
+  }
+
+  private updateGraph (state: Readonly<State>) {
+    this.setSVG(state.bmc_executions[0])
+    // Check if needs to span down
+    const svgHeight = this.svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const delta = containerHeight / 2 - svgHeight
+      if (delta < 0) {
+        // @ts-ignore
+        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+      }
+    }
+  }
+}
+
 class Memory extends SvgGraph {
   fit: JQuery<HTMLElement>
   svgPos: { x: number, y: number, scale: number}
@@ -1075,7 +1096,7 @@ class Asm extends ReadOnly {
 
 /* Concrete Tabs Factory */
 const Tabs: any = {
-  Source, Cabs, Ail, Core, Ail_AST,
+  Source, Cabs, Ail, Core, Ail_AST, BMC,
   Console, Arena, Asm,
   Interactive, Memory, SimpleMemory,
   Experimental, Implementation, Library, Help
