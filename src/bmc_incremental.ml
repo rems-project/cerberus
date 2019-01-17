@@ -1804,7 +1804,10 @@ module BmcBind = struct
         bind_pe pe2 >>= fun bound_pe2 ->
         return (bound_pe1 @ bound_pe2)
     | PEbmc_assume pe ->
-        bind_pe pe
+        bind_pe pe >>= fun bound_pe ->
+        (* TODO: move this to a separate phase for easier debugging *)
+        get_expr (get_id_pexpr pe) >>= fun z3_pe ->
+        return (z3_pe :: bound_pe)
     )
 
   (* TODO TODO TODO TODO *)
