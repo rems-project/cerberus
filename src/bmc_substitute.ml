@@ -55,9 +55,9 @@ let rec substitute_pexpr (map: substitute_map)
         PEis_unsigned (substitute_pexpr map pe)
     | PEbmc_assume pe ->
         PEbmc_assume (substitute_pexpr map pe)
-    | PEare_compatible _ ->
-        assert false
-
+    | PEare_compatible (pe1, pe2) ->
+        PEare_compatible(substitute_pexpr map pe1,
+                         substitute_pexpr map pe2)
   in
     Pexpr(annot, ty, ret)
 

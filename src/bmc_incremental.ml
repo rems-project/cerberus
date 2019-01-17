@@ -28,6 +28,10 @@ module Caux = Core_aux
  *)
 
 (* TODO: factor out all the repeated state *)
+(* TODO: inline does some bad rewrites:
+  * - function calls
+  * - core type compatibility
+  *)
 
 (* ======= Do inlining ======= *)
 module BmcInline = struct
@@ -40,6 +44,8 @@ module BmcInline = struct
 
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
+
+    fn_call_map : (int, sym_ty) Pmap.map;
 
     (* Return type for Erun *)
     fn_type : core_base_type option;
@@ -60,6 +66,7 @@ module BmcInline = struct
     ; file             = file
     ; inline_pexpr_map = Pmap.empty Pervasives.compare
     ; inline_expr_map  = Pmap.empty Pervasives.compare
+    ; fn_call_map      = Pmap.empty Pervasives.compare
     ; fn_type          = None
     ; proc_expr        = None
     ; fn_ptr_map       = Pmap.empty Pervasives.compare
@@ -126,6 +133,10 @@ module BmcInline = struct
   let add_inlined_expr (id: int) (expr: unit typed_expr) : unit eff =
     get >>= fun st ->
     put {st with inline_expr_map = Pmap.add id expr st.inline_expr_map}
+
+  let add_fn_call (id: int) (fn_sym: sym_ty) : unit eff =
+    get >>= fun st ->
+    put {st with fn_call_map = Pmap.add id fn_sym st.fn_call_map}
 
   (* fn_ptr_map *)
   let add_to_fn_ptr_map (sym: sym_ty) (fn_sym: sym_ty) : unit eff =
@@ -393,6 +404,21 @@ module BmcInline = struct
               inline_e e >>= fun inlined_e ->
               return (pat, inlined_e)) cases >>= fun inlined_cases ->
         return (Ecase(inlined_pe, inlined_cases))
+    | Elet((Pattern(_, CaseBase(Some cty_sym, BTy_ctype))) as pat,
+           pe,
+           (Expr(_,Eif(
+             Pexpr(_,_,PEnot(Pexpr(_,_,PEare_compatible(pe_ty, Pexpr(_,_,PEsym sym2))))),
+                       Expr(_, Epure(Pexpr(_,_,PEundef _))),
+                       _)) as e)) ->
+        assert (sym_cmp cty_sym sym2 = 0);
+        (* TODO: ugly hack. This changes the semantics and is just wrong. *)
+        bmc_debug_print 7 "TODO: Elet hack for function calls";
+        let sub_map = Pmap.add cty_sym pe_ty (Pmap.empty sym_cmp) in
+        let hacky_expr = substitute_expr sub_map e in
+
+        inline_pe pe >>= fun inlined_pe ->
+        inline_e hacky_expr >>= fun inlined_hacky_expr ->
+        return (Elet(pat, inlined_pe, inlined_hacky_expr))
     | Elet (pat, pe, e) ->
         inline_pe pe  >>= fun inlined_pe ->
         inline_e e    >>= fun inlined_e  ->
@@ -409,6 +435,7 @@ module BmcInline = struct
         mapM inline_pe pe_args >>= fun inlined_pe_args ->
 
         get_fn_ptr_sym fn_ptr >>= fun fn_ptr_sym ->
+        add_fn_call id fn_ptr_sym >>
         get_file >>= fun file ->
         begin match Pmap.lookup fn_ptr_sym file.funs with
         | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
@@ -491,6 +518,7 @@ module BmcInline = struct
               ) to_seq_list e2 in
             inline_pe new_pe1 >>= fun inlined_new_pe1 ->
             inline_e new_e2 >>= fun inlined_new_e2 ->
+            bmc_debug_print 7 "TODO: fn_call hack";
             return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
           end
         else begin
@@ -1359,7 +1387,9 @@ module BmcZ3 = struct
         return (mk_ite guard1 z3d_e1 z3d_e2)
     | Eskip ->
         return UnitSort.mk_unit
-    | Eccall _ -> assert false
+    | Eccall _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        z3_e inlined_expr
     | Eproc _  -> assert false
     | Eunseq elist ->
         assert (not !!bmc_conf.sequentialise);
@@ -1485,7 +1515,8 @@ module BmcDropCont = struct
         return (mk_or (List.map2 (
           fun guard drop_case -> mk_and [guard; drop_case])
           guards drop_cases))
-    | Elet _ -> assert false
+    | Elet (pat, pe, e) ->
+        drop_cont_e e
     | Eif (_, e1, e2) ->
         get_case_guards uid >>= fun guards ->
         let (guard1, guard2) = (
@@ -1498,7 +1529,10 @@ module BmcDropCont = struct
                       ;mk_and [guard2; drop_e2]])
     | Eskip ->
         return mk_false
-    | Eccall _ -> assert false
+    | Eccall _ ->
+        get_inline_expr uid      >>= fun inlined_expr ->
+        drop_cont_e inlined_expr >>= fun _ ->
+        return mk_false
     | Eproc _  -> assert false
     | Eunseq elist ->
         mapM drop_cont_e elist >>= fun drop_cont_elist ->
@@ -1670,6 +1704,15 @@ module BmcBind = struct
       return (mk_and [is_unspecified; is_eq_value])
   | CaseCtor(Cunspecified, _) ->
       assert false
+  | CaseCtor(Cnil BTy_ctype, []) ->
+      assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
+      return mk_true
+  | CaseCtor(Ccons, [hd;tl]) ->
+      assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
+      let is_cons = CtypeListSort.is_cons expr in
+      mk_let_bindings hd (CtypeListSort.get_head expr) >>= fun eq_head ->
+      mk_let_bindings tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
+      return (mk_and [is_cons; eq_head; eq_tail])
   | CaseCtor(_, _) ->
       assert false
 
@@ -1756,8 +1799,10 @@ module BmcBind = struct
         return []
     | PEis_unsigned _ ->
         assert false
-    | PEare_compatible _ ->
-        assert false
+    | PEare_compatible (pe1, pe2) ->
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        return (bound_pe1 @ bound_pe2)
     | PEbmc_assume pe ->
         bind_pe pe
     )
@@ -1837,7 +1882,13 @@ module BmcBind = struct
           (fun guard case_binds -> List.map (guard_assert guard) case_binds)
           guards bound_cases) in
         return (bound_pe @ case_bindings @ guarded_bound_cases)
-    | Elet _ -> assert false
+    | Elet (pat, pe, e) ->
+        bind_pe pe >>= fun bound_pe ->
+        bind_e   e >>= fun bound_e  ->
+
+        get_expr (get_id_pexpr pe) >>= fun z3_pe ->
+        mk_let_bindings pat z3_pe >>= fun let_binding ->
+        return (let_binding :: bound_pe @ bound_e)
     | Eif (cond, e1, e2) ->
         bind_pe cond >>= fun bound_cond ->
         bind_e  e1   >>= fun bound_e1 ->
@@ -1849,7 +1900,9 @@ module BmcBind = struct
                 (List.map (guard_assert (mk_not guard)) bound_e2))
     | Eskip ->
         return []
-    | Eccall _ -> assert false
+    | Eccall _ ->
+        get_inline_expr uid >>= fun inlined_expr ->
+        bind_e inlined_expr
     | Eproc _  -> assert false
     | Eunseq elist ->
         mapM bind_e elist >>= fun bound_elist ->
@@ -2132,7 +2185,10 @@ module BmcVC = struct
         let dbg = VcDebugStr (string_of_int uid ^ "_Ecase_caseMatch") in
         return ((mk_or guards, dbg) ::
                 vcs_pe @ (map2_inner guard_vc guards vcss_cases))
-    | Elet _        -> assert false
+    | Elet (pat, pe, e) ->
+        vcs_pe pe >>= fun vcs_pe ->
+        vcs_e   e >>= fun vcs_e  ->
+        return (vcs_pe @ vcs_e)
     | Eif (cond, e1, e2) ->
         vcs_pe cond >>= fun vcs_cond ->
         vcs_e e1    >>= fun vcs_e1 ->
@@ -2141,7 +2197,9 @@ module BmcVC = struct
         return (vcs_cond @ (List.map (guard_vc cond_z3) vcs_e1)
                          @ (List.map (guard_vc (mk_not cond_z3)) vcs_e2))
     | Eskip         -> return []
-    | Eccall _      -> assert false
+    | Eccall _      ->
+        get_inline_expr uid >>= fun inline_expr ->
+        vcs_e inline_expr
     | Eproc _       -> assert false
     | Eunseq es ->
         mapM vcs_e es >>= fun vcss_es ->
@@ -2188,7 +2246,9 @@ end
 module BmcRet = struct
 
   type internal_state = {
+    file            : unit typed_file;
     inline_expr_map : (int, unit typed_expr) Pmap.map;
+    fn_call_map     : (int, sym_ty) Pmap.map;
     expr_map        : (int, Expr.expr) Pmap.map;
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
@@ -2199,12 +2259,16 @@ module BmcRet = struct
 
   include EffMonad(struct type state = internal_state end)
 
-  let mk_initial inline_expr_map
+  let mk_initial file
+                 inline_expr_map
+                 fn_call_map
                  expr_map
                  case_guard_map
                  drop_cont_map
                  : state =
-  { inline_expr_map  = inline_expr_map;
+  { file             = file;
+    inline_expr_map  = inline_expr_map;
+    fn_call_map      = fn_call_map;
     expr_map         = expr_map;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
@@ -2213,12 +2277,23 @@ module BmcRet = struct
   }
 
   (* Getters/setters *)
+  let get_file : (unit typed_file) eff =
+    get >>= fun st ->
+    return st.file
+
   let get_inline_expr (uid: int): (unit typed_expr) eff =
     get >>= fun st ->
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcRet inline_expr not found %d"
                                 uid)
     | Some e -> return e
+
+  let get_fn_call (uid: int) : sym_ty eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.fn_call_map with
+    | None -> failwith (sprintf "Error: BmcRet fn_call not found %d"
+                                uid)
+    | Some sym -> return sym
 
   let get_expr (uid: int): Expr.expr eff =
     get >>= fun st ->
@@ -2263,7 +2338,8 @@ module BmcRet = struct
         get_case_guards uid >>= fun guards ->
         let guard_cases guard = List.map (mk_implies guard) in
         return (List.concat (List.map2 guard_cases guards ret_cases))
-    | Elet _        -> assert false
+    | Elet (pat, pe, e) ->
+        do_e e
     | Eif (cond, e1, e2) ->
         do_e e1 >>= fun ret_e1 ->
         do_e e2 >>= fun ret_e2 ->
@@ -2278,7 +2354,28 @@ module BmcRet = struct
                 @(List.map (mk_implies guard2) ret_e2))
     | Eskip         ->
         return []
-    | Eccall _      -> assert false
+    | Eccall _ ->
+        get_ret_const >>= fun old_ret ->
+        get_fn_call uid >>= fun fn_sym ->
+        get_file >>= fun file ->
+        let new_ret_const =
+          begin match Pmap.lookup fn_sym file.funs with
+          | Some Proc(_, ret_ty, _, _) ->
+              mk_fresh_const (sprintf "ret_%s_%s"
+                                      (Pp_symbol.to_string fn_sym)
+                                      (string_of_int uid))
+                             (cbt_to_z3 ret_ty)
+          | _ -> assert false
+          end in
+        set_ret_const new_ret_const >>
+
+        get_inline_expr uid >>= fun inline_expr ->
+        do_e inline_expr    >>= fun ret_expr ->
+        get_expr (get_id_expr inline_expr) >>= fun z3_expr ->
+
+        set_ret_const old_ret >>
+
+        return ((mk_eq z3_expr new_ret_const) :: ret_expr)
     | Eproc _       -> assert false
     | Eunseq elist ->
         mapM do_e elist >>= fun ret_elist ->
@@ -2620,7 +2717,8 @@ module BmcSeqMem = struct
           guards retlist) in
         return { bindings = guarded_asserts
                ; mod_addr = mod_addr}
-    | Elet _        -> assert false
+    | Elet (pat, e, e1) ->
+        do_e e1
     | Eif (cond, e1, e2) ->
         get_memory                     >>= fun old_memory ->
         do_e e1                        >>= fun res_e1 ->
@@ -2641,7 +2739,9 @@ module BmcSeqMem = struct
                ; mod_addr = mod_addr
                }
     | Eskip         -> return empty_ret
-    | Eccall _      -> assert false
+    | Eccall _      ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_e inline_expr
     | Eproc _       -> assert false
     | Eunseq _ ->
         failwith "Error: Eunseq in sequentialised, concurrent mode only"
@@ -2907,7 +3007,8 @@ module BmcConcActions = struct
         return (List.concat (
           List.map2 (fun guard actions -> List.map (guard_action guard) actions)
                     case_guards case_actions))
-    | Elet _        -> assert false
+    | Elet (pat, pe, e) ->
+        do_actions_e e
     | Eif (cond, e1, e2) ->
         do_actions_e e1 >>= fun e1_actions ->
         do_actions_e e2 >>= fun e2_actions ->
@@ -2920,7 +3021,9 @@ module BmcConcActions = struct
         return ((List.map (guard_action guard1) e1_actions) @
                 (List.map (guard_action guard2) e2_actions))
     | Eskip         -> return []
-    | Eccall _      -> assert false
+    | Eccall _ ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_actions_e inline_expr
     | Eproc _       -> assert false
     | Eunseq es ->
         mapM do_actions_e es >>= fun es_actions ->
@@ -2982,13 +3085,16 @@ module BmcConcActions = struct
     | Ecase (pe, cases) ->
         mapM do_po_e (List.map snd cases) >>= fun po_cases ->
         return (List.concat po_cases)
-    | Elet _        -> assert false
+    | Elet (pat, pe, e) ->
+        do_po_e e
     | Eif (cond, e1, e2) ->
         do_po_e e1 >>= fun po_e1 ->
         do_po_e e2 >>= fun po_e2 ->
         return (po_e1 @ po_e2)
     | Eskip         -> return []
-    | Eccall _      -> assert false
+    | Eccall _ ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_po_e inline_expr
     | Eproc _       -> assert false
     | Eunseq es ->
         mapM do_po_e es >>= fun po_es ->
