@@ -263,9 +263,9 @@ let pp_preexec (preexec: preexec) =
   sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s\n"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
-          "" ""
-          (*(pp_actionrel_list preexec.po)
-          (pp_actionrel_list preexec.asw)*)
+          (*"" ""*)
+          (pp_actionrel_list preexec.po)
+          (pp_actionrel_list preexec.asw)
 
 
 

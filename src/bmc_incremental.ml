@@ -2935,29 +2935,34 @@ end
  *)
 module BmcConcActions = struct
   type internal_state = {
-    inline_expr_map  : (int, unit typed_expr) Pmap.map;
-    action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
-    case_guard_map   : (int, Expr.expr list) Pmap.map;
-    drop_cont_map    : (int, Expr.expr) Pmap.map;
+    inline_expr_map : (int, unit typed_expr) Pmap.map;
+    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
+    action_map      : (int, BmcZ3.intermediate_action) Pmap.map;
+    param_actions   : (BmcZ3.intermediate_action option) list;
+    case_guard_map  : (int, Expr.expr list) Pmap.map;
+    drop_cont_map   : (int, Expr.expr) Pmap.map;
 
     bmc_actions    : (int, aid list) Pmap.map;
     bmc_action_map : (aid, bmc_action) Pmap.map;
     tid            : tid;
     tid_supply     : tid;
     parent_tids    : (tid, tid) Pmap.map;
-    atomic_asserts : Expr.expr list;
+    assertions     : Expr.expr list;
   }
 
   include EffMonad(struct type state = internal_state end)
 
   let mk_initial inline_expr_map
-                 expr_map
+                 sym_expr_table
                  action_map
+                 param_actions
                  case_guard_map
                  drop_cont_map
                  : internal_state =
   { inline_expr_map  = inline_expr_map;
+    sym_expr_table   = sym_expr_table;
     action_map       = action_map;
+    param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
 
@@ -2966,7 +2971,7 @@ module BmcConcActions = struct
     tid              = 0;
     tid_supply       = 1;
     parent_tids      = Pmap.empty Pervasives.compare;
-    atomic_asserts   = [];
+    assertions       = [];
   }
 
   let get_inline_expr (uid: int): (unit typed_expr) eff =
@@ -2976,11 +2981,22 @@ module BmcConcActions = struct
                                 uid)
     | Some e -> return e
 
+  let get_sym_expr (sym: sym_ty) : Expr.expr eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.sym_expr_table with
+    | None -> failwith (sprintf "Error: BmcConcActions sym_expr %s not found"
+                                (symbol_to_string sym))
+    | Some e -> return e
+
   let get_action (uid: int) : BmcZ3.intermediate_action eff =
     get >>= fun st ->
     match Pmap.lookup uid st.action_map with
     | None -> failwith (sprintf "Error: BmcConcActions action not found %d" uid)
     | Some a -> return a
+
+  let get_param_actions : (BmcZ3.intermediate_action option) list eff =
+    get >>= fun st ->
+    return st.param_actions
 
   let get_case_guards (uid: int): (Expr.expr list) eff =
     get >>= fun st ->
@@ -2993,7 +3009,6 @@ module BmcConcActions = struct
     match Pmap.lookup uid st.drop_cont_map with
     | None -> failwith (sprintf "BmcConcActions: Uid %d not found in drop_cont_map" uid)
     | Some expr -> return expr
-
 
   let get_tid : int eff =
     get >>= fun st ->
@@ -3038,11 +3053,11 @@ module BmcConcActions = struct
 
   let add_assertion (assertion: Expr.expr) : unit eff =
     get >>= fun st ->
-    put {st with atomic_asserts = assertion :: st.atomic_asserts}
+    put {st with assertions = assertion :: st.assertions}
 
   let get_assertions : Expr.expr list eff =
     get >>= fun st ->
-    return st.atomic_asserts
+    return st.assertions
 
   (* Helpers *)
   let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
@@ -3058,29 +3073,38 @@ module BmcConcActions = struct
                : bmc_action =
     BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval))
 
+  let do_create (aidlist : aid list)
+                (sortlist: BmcZ3.ctype_sort list)
+                (alloc_id: BmcZ3.alloc)
+                (pol: polarity)
+                (initialise : bool)
+                : (bmc_action list) eff =
+    let aid_sortlist = zip aidlist sortlist in
+    let is_atomic = (function ctype -> match ctype with
+                     | Core_ctype.Atomic0 _ -> mk_true
+                     | _ -> mk_false) in
+    mapMi (fun i (aid,(ctype,sort)) ->
+      let addr = (alloc_id, i) in
+      let addr_expr = AddressSort.mk_from_addr addr in
+      let ptr = PointerSort.mk_ptr addr_expr in
+      let is_atomic =
+        AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
+      add_assertion is_atomic >>
+      let (initial_value, assumptions) =
+        BmcMemCommon.mk_initial_loaded_value sort
+            (sprintf "init_%d,%d" alloc_id i)
+            ctype initialise in
+      mapM add_assertion assumptions >>
+      return (mk_store pol mk_true aid initial_tid
+                       (C_mem_order Cmm_csem.NA) ptr initial_value)
+    ) aid_sortlist
+
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
                                   : (bmc_action list) eff =
     (match action with
     | ICreate(aidlist, sortlist, alloc_id) ->
-        let aid_sortlist = zip aidlist sortlist in
-        let is_atomic = (function ctype -> match ctype with
-                         | Core_ctype.Atomic0 _ -> mk_true
-                         | _ -> mk_false) in
-        mapMi (fun i (aid,(ctype,sort)) ->
-          let addr = (alloc_id, i) in
-          let addr_expr = AddressSort.mk_from_addr addr in
-          let ptr = PointerSort.mk_ptr addr_expr in
-          let is_atomic =
-            AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
-          add_assertion is_atomic >>
-          let (initial_value, assumptions) =
-            BmcMemCommon.mk_initial_loaded_value sort
-                (sprintf "init_%d,%d" alloc_id i)
-                ctype false in
-          return (mk_store pol mk_true aid initial_tid
-                           (C_mem_order Cmm_csem.NA) ptr initial_value)
-        ) aid_sortlist
+        do_create aidlist sortlist alloc_id pol false
     | IKill aid ->
         (* TODO *)
         return []
@@ -3186,10 +3210,40 @@ module BmcConcActions = struct
   let do_actions_globs (gname, GlobalDef(bty, e)) =
     do_actions_e e
 
+  let do_actions_param ((sym,cbt): (sym_ty * core_base_type))
+                       (action_opt : BmcZ3.intermediate_action option)
+                       : bmc_action list eff =
+    match action_opt with
+    | None ->
+        (* Param is not a pointer; nothing to be done *)
+        assert (not (is_core_ptr_bty cbt));
+        return []
+    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+        (* Polarity is irrelevant? *)
+        do_create aid_list sortlist alloc_id Pos true >>= fun actions ->
+        (* Make let binding *)
+        get_sym_expr sym >>= fun sym_expr ->
+        let eq_expr =
+          mk_eq sym_expr
+                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+        add_assertion eq_expr >>
+        return actions
+    | _ -> assert false
+
+  let do_actions_params (params: ((sym_ty * core_base_type) list))
+                        (fn_to_check: sym_ty)
+                        : bmc_action list eff =
+    get_param_actions >>= fun param_actions ->
+    mapM2 do_actions_param params param_actions >>= fun actionss ->
+    let actions = List.concat actionss in
+    mapM (fun action -> add_action_to_bmc_action_map
+                            (aid_of_bmcaction action) action) actions >>
+    return actions
+
   (* TODO: this is currently not po, but ignores thread ids and computes
    * cartesian product!!! *)
   let rec do_po_e (Expr(annots, expr_) as expr)
-                  : (aid_rel list) eff =
+                  : aid_rel list eff =
     let uid = get_id_expr expr in
     (match expr_ with
     | Epure pe ->
@@ -3272,7 +3326,6 @@ module BmcConcActions = struct
     return
     { actions = List.filter (fun a -> tid_of_bmcaction a <> initial_tid) actions
     ; initial_actions = List.filter (fun a -> tid_of_bmcaction a = initial_tid) actions
-
     ; po = List.filter (fun (a,b) -> tid_of_bmcaction a = tid_of_bmcaction b)
                        po_actions
     ; asw = List.filter
@@ -3281,6 +3334,12 @@ module BmcConcActions = struct
     ; rmw = []
     }
 
+  let compute_po (xs: bmc_action list)
+                 (ys: bmc_action list)
+                 : aid_rel list =
+    List.map aid_of_bmcaction_rel (cartesian_product xs ys)
+
+
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
               : (preexec * Expr.expr list * BmcMem.z3_memory_model) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
@@ -3288,17 +3347,19 @@ module BmcConcActions = struct
 
     (match Pmap.lookup fn_to_check file.funs with
      | Some (Proc(annot, bTy, params, e)) ->
+         do_actions_params params fn_to_check >>= fun actions_params ->
          do_actions_e e >>= fun actions ->
          do_po_e e      >>= fun po ->
-         return (actions, po)
+         return (actions @ actions_params,
+                 (compute_po actions_params actions) @ po)
      | Some (Fun(ty, params, pe)) ->
          return ([], [])
      | _ -> assert false
     ) >>= fun (fn_actions, fn_po) ->
+
     let actions = (List.concat globs_actions) @ fn_actions in
-    let po = ((List.map aid_of_bmcaction_rel
-                        (cartesian_product (List.concat globs_actions) fn_actions))
-              @ (List.concat globs_po) @ fn_po) in
+    let po = ((compute_po (List.concat globs_actions) fn_actions))
+              @ (List.concat globs_po) @ fn_po in
     get_assertions >>= fun assertions ->
     mk_preexec actions po >>= fun preexec ->
     (*print_endline (pp_preexec preexec);*)
