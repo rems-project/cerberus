@@ -367,6 +367,7 @@ let bmc (core_file  : unit file)
         (ail_opt    : GenTypes.genTypeCategory AilSyntax.ail_program option) =
   match Core_typing.typecheck_program core_file with
   | Result typed_core -> begin
+      let t = Sys.time() in
       let core_to_check =
           if !!bmc_conf.sequentialise then
             Core_sequentialise.sequentialise_file typed_core
@@ -377,7 +378,10 @@ let bmc (core_file  : unit file)
 
         bmc_debug_print 1 "START: model checking";
         let fn_sym = find_function !!bmc_conf.fn_to_check core_to_check.funs in
-        bmc_file core_to_check fn_sym ail_opt
+        let ret = bmc_file core_to_check fn_sym ail_opt in
+        bmc_debug_print 1 (sprintf "BMC execution time: %fs\n"
+                                   (Sys.time() -. t));
+        ret
     end
     | Exception msg ->
         let str_err = Pp_errors.to_string msg in
