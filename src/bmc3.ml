@@ -306,12 +306,13 @@ let bmc_file (file              : unit typed_file)
                           (Solver.get_reason_unknown g_solver))
     end in
 
-  (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs then
-    BmcMem.extract_executions g_solver
-                              (Option.get final_state.memory_model)
-                              (Option.get final_state.ret_expr)
+  let dots =
+    (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs then
+      BmcMem.extract_executions g_solver
+                                (Option.get final_state.memory_model)
+                                (Option.get final_state.ret_expr)
   else
-    ());
+    []) in
 
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
@@ -335,14 +336,14 @@ let bmc_file (file              : unit typed_file)
           printf "%s: %s\n" (BmcVC.vc_debug_to_str dbg) (Expr.to_string expr)
         ) satisfied_vcs;
         end;
-    `Satisfiable str_model
+    `Satisfiable (str_model, dots)
     end
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)";
       assert (is_some ret_value);
       let str_ret_value = Expr.to_string (Option.get ret_value) in
       printf "Return value: %s\n" str_ret_value;
-      `Unsatisfiable str_ret_value
+      `Unsatisfiable (str_ret_value, dots)
   | UNKNOWN ->
       let str_error = Solver.get_reason_unknown g_solver in
       printf "OUTPUT: unknown. Reason: %s\n" str_error;
