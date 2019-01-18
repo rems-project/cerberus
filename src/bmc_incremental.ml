@@ -187,7 +187,7 @@ module BmcInline = struct
     return fn_sym
 
   (* ======== Inline functions ======= *)
-  let rec inline_pe (Pexpr(annots, bTy, pe_) as pexpr) : typed_pexpr eff =
+  let rec inline_pe (Pexpr(annots, bTy, pe_)) : typed_pexpr eff =
     get_fresh_id  >>= fun id ->
     (match pe_ with
     | PEsym _  -> return pe_
@@ -386,7 +386,7 @@ module BmcInline = struct
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
-  let rec inline_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
+  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
     get_fresh_id >>= fun id ->
     (match e_ with
     | Epure pe ->
@@ -512,14 +512,17 @@ module BmcInline = struct
             end in
             add_to_fn_ptr_map cfun_info.fn_ptr fn_sym >>
 
-            let Expr([], Elet(new_pat, new_pe1, new_e2)) =
-              List.fold_right (fun (pat, pe) erest ->
+            begin
+            match List.fold_right (fun (pat, pe) erest ->
                 Expr([], Elet(pat, pe, erest))
-              ) to_seq_list e2 in
-            inline_pe new_pe1 >>= fun inlined_new_pe1 ->
-            inline_e new_e2 >>= fun inlined_new_e2 ->
-            bmc_debug_print 7 "TODO: fn_call hack";
-            return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
+              ) to_seq_list e2  with
+            | Expr([], Elet(new_pat, new_pe1, new_e2)) ->
+                inline_pe new_pe1 >>= fun inlined_new_pe1 ->
+                inline_e new_e2 >>= fun inlined_new_e2 ->
+                bmc_debug_print 7 "TODO: fn_call hack";
+                return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
+            | _ -> assert false
+            end
           end
         else begin
           inline_e e1 >>= fun inlined_e1 ->
@@ -1600,8 +1603,11 @@ module BmcDropCont = struct
     add_to_drop_cont_map uid drop_expr >>
     return drop_expr
 
-  let drop_cont_globs (_, GlobalDef (_, e)) : Expr.expr eff =
-    drop_cont_e e
+  let drop_cont_globs(gname, glb) =
+    match glb with
+    | GlobalDef(_, e) ->
+        drop_cont_e e
+    | _ -> assert false
 
   let drop_cont_file (file: unit typed_file) (fn_to_check: sym_ty)
                      : Expr.expr eff =
@@ -1974,11 +1980,15 @@ module BmcBind = struct
     | Ewait _       -> assert false
     )
 
-    let bind_globs (gname, GlobalDef (_, e)) : (Expr.expr list) eff =
-      bind_e e                 >>= fun bound_e ->
-      get_expr (get_id_expr e) >>= fun z3d_e ->
-      mk_let_binding (Some gname) z3d_e >>= fun let_binding ->
-      return (let_binding :: bound_e)
+    let bind_globs(gname, glb) : (Expr.expr list) eff =
+      match glb with
+      | GlobalDef (_, e) ->
+          bind_e e                 >>= fun bound_e ->
+          get_expr (get_id_expr e) >>= fun z3d_e ->
+          mk_let_binding (Some gname) z3d_e >>= fun let_binding ->
+          return (let_binding :: bound_e)
+      | _ ->
+          assert false
 
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
                   : (Expr.expr list) eff =
@@ -2261,8 +2271,10 @@ module BmcVC = struct
         return (List.concat vcss_es)
     | Ewait _       -> assert false
 
-    let vcs_globs (_, GlobalDef (_, e)) : (vc list) eff =
-      vcs_e e
+    let vcs_globs(_, glb) : (vc list) eff =
+      match glb with
+      | GlobalDef(_, e) -> vcs_e e
+      | _ -> assert false
 
     let vcs_file (file: unit typed_file) (fn_to_check: sym_ty)
                   : (vc list) eff =
@@ -3207,8 +3219,10 @@ module BmcConcActions = struct
     add_aids_to_bmc_actions uid aids >>
     return actions
 
-  let do_actions_globs (gname, GlobalDef(bty, e)) =
-    do_actions_e e
+  let do_actions_globs(gname, glb) =
+    match glb with
+    | GlobalDef(_, e) -> do_actions_e e
+    | _ -> assert false
 
   let do_actions_param ((sym,cbt): (sym_ty * core_base_type))
                        (action_opt : BmcZ3.intermediate_action option)
@@ -3303,8 +3317,10 @@ module BmcConcActions = struct
     )
 
   (* TODO: create/store in global can be replaced by single store *)
-  let do_po_globs (gname, GlobalDef (bty, e)) =
-    do_po_e e
+  let do_po_globs(gname, glb) =
+    match glb with
+    | GlobalDef(_, e) -> do_po_e e
+    | _ -> assert false
 
   let mk_preexec (actions: bmc_action list)
                  (prod: aid_rel list)
