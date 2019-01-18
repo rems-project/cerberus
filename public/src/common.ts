@@ -93,7 +93,8 @@ export interface State {
   model: Model
   interactiveMode: InteractiveMode
   interactive?: Interactive
-  options: Options
+  options: Options,
+  bmc_executions: string[],
 }
 
 export type ResultRequest =
@@ -102,7 +103,7 @@ export type ResultRequest =
   { status: 'interactive', tagDefs: string, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'failure', console: string, result: string } |
-  { status: 'bmc', result: string }
+  { status: 'bmc', result: string, executions: string[] }
 
 export type Event =
   'update' |                // Update tab values
@@ -117,7 +118,8 @@ export type Event =
   'updateExecutionGraph' |  // Update execution graph
   'updateMemory' |          // Update memory graph (calls VIZ)
   'markInteractive' |       // Mark source locations when in interactive mode
-  'layoutChanged'           // GoldenLayout has been updated
+  'layoutChanged' |         // GoldenLayout has been updated
+  'updateBMC'
 
 export interface EventEmitter {
   on (eventName: 'clear', self: any, f: (locs: Locations) => void): void

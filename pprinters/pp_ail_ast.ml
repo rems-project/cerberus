@@ -412,7 +412,8 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
                           , [dtree_of_expression e])
                 ) xs )
     | AilSpar ss ->
-        failwith "NON-STD cppmem threads"
+        Dnode (pp_stmt_ctor "AilSpar"
+               , List.map (fun s -> dtree_of_statement s) ss)
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
   let param_dtrees =

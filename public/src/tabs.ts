@@ -156,6 +156,63 @@ export class Interactive extends SvgGraph {
   }
 }
 
+export class BMC extends SvgGraph {
+  currentExecution: number = 0;
+  prev: JQuery<HTMLElement>
+  next: JQuery<HTMLElement>
+
+  constructor(ee: EventEmitter) {
+    super('BMC Executions', ee)
+    const controls = $('<div class="toolbar"></div>')
+    this.prev = $('<div class="menu-item btn inline">Previous Execution</div>')
+    this.prev.addClass('disabled')
+    this.next = $('<div class="menu-item btn inline">Next Execution</div>')
+    controls.append(this.prev)
+    controls.append(this.next)
+    this.prev.on('click', () => {
+      if (!this.prev.hasClass('disabled')) {
+        ee.once(s => {
+          this.currentExecution -= 1
+          this.setSVG(s.bmc_executions[this.currentExecution])
+          this.next.removeClass('disabled')
+          if (this.currentExecution == 0)
+            this.prev.addClass('disabled')
+        })
+      }
+    })
+    this.next.on('click', () => {
+      if (!this.next.hasClass('disabled')) {
+        ee.once(s => {
+          this.currentExecution += 1
+          this.setSVG(s.bmc_executions[this.currentExecution])
+          this.prev.removeClass('disabled')
+          if (this.currentExecution == s.bmc_executions.length - 1)
+            this.next.addClass('disabled')
+        })
+      }
+    })
+    this.container.before(controls)
+    ee.on('updateBMC', this, (s: State) => this.updateGraph(s))
+  }
+
+  private updateGraph (state: Readonly<State>) {
+    this.currentExecution = 0
+    this.setSVG(state.bmc_executions[0])
+    this.prev.addClass('disabled')
+    this.next.removeClass('disabled')
+    // Check if needs to span down
+    const svgHeight = this.svg.height()
+    const containerHeight = this.container.height()
+    if (svgHeight && containerHeight) {
+      const delta = containerHeight / 2 - svgHeight
+      if (delta < 0) {
+        // @ts-ignore
+        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+      }
+    }
+  }
+}
+
 class Memory extends SvgGraph {
   fit: JQuery<HTMLElement>
   svgPos: { x: number, y: number, scale: number}
@@ -1075,7 +1132,7 @@ class Asm extends ReadOnly {
 
 /* Concrete Tabs Factory */
 const Tabs: any = {
-  Source, Cabs, Ail, Core, Ail_AST,
+  Source, Cabs, Ail, Core, Ail_AST, BMC,
   Console, Arena, Asm,
   Interactive, Memory, SimpleMemory,
   Experimental, Implementation, Library, Help

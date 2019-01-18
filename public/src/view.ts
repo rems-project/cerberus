@@ -198,6 +198,7 @@ export default class View {
         show_mem_order: false,
         align_allocs: false,
       },
+      bmc_executions: []
     }
   }
 
@@ -789,10 +790,15 @@ export default class View {
         break
       case 'bmc':
         this.state.console = res.result
+        this.state.bmc_executions = res.executions
+        if (res.executions && res.executions.length > 0)
+          this.newTab('BMC')
+        this.emit('updateBMC')
         break;
       case 'failure':
         this.setStateEmpty()
         this.state.console = res.console
+        this.state.bmc_executions = []
         this.getConsole().setActive()
         break
     }
