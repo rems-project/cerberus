@@ -35,7 +35,7 @@ declare ocaml target_rep function typeof_enum = `Ocaml_implementation.Impl.typeo
 
 
 (* NEW WAY *)
-type implementation = <|
+type implementation_ = <|
   (* we use partial maps for sizeof/alignof *)
   sizeof:  map AilTypes.ctype integer;
   alignof: map AilTypes.ctype integer;
