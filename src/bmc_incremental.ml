@@ -1037,12 +1037,27 @@ module BmcZ3 = struct
     | ILinuxStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
+  type permission_flag =
+    | ReadWrite
+    | ReadOnly
+
+  (* TODO: kind in {object, region} *)
+
+  type allocation_metadata =
+    (* size *) int * ctype option * (* base address *) int * permission_flag *
+    (* C prefix *) Sym.prefix
+
+  let get_metadata_prefix (_,_,_,_,pref) : Sym.prefix = pref
+
   type z3_state = {
-    (* Builds expr_map, case_guard_map, and action_map *)
+    (* Builds the following *)
     expr_map      : (int, Expr.expr) Pmap.map;
     case_guard_map: (int, Expr.expr list) Pmap.map;
     action_map    : (int, intermediate_action) Pmap.map;
     param_actions : (intermediate_action option) list;
+    (* TODO: extend this to include type *)
+
+    alloc_meta_map: (alloc, allocation_metadata) Pmap.map;
 
     file          : unit typed_file;
 
@@ -1060,6 +1075,7 @@ module BmcZ3 = struct
     case_guard_map = Pmap.empty Pervasives.compare;
     action_map     = Pmap.empty Pervasives.compare;
     param_actions  = [];
+    alloc_meta_map = Pmap.empty Pervasives.compare;
 
     file = file;
 
@@ -1128,6 +1144,10 @@ module BmcZ3 = struct
                         : unit eff =
     get >>= fun st ->
     put {st with param_actions = actions}
+
+  let add_metadata (alloc_id: alloc) (meta: allocation_metadata) : unit eff =
+    get >>= fun st ->
+    put {st with alloc_meta_map = Pmap.add alloc_id meta st.alloc_meta_map}
 
   (* HELPERS *)
   let compute_case_guards (patterns: typed_pattern list)
@@ -1251,19 +1271,23 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create ctype =
+  let mk_create ctype (pref: Sym.prefix) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
     mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
+
+    add_metadata alloc_id (List.length flat_sortlist, Some ctype,
+                           0 (* TODO *),
+                           ReadWrite, pref) >>
     return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
             ICreate (aid_list, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), _) ->
-        mk_create ctype
+    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        mk_create ctype prefix
     | Create _ ->
         print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
@@ -1472,11 +1496,14 @@ module BmcZ3 = struct
 
     let z3_param ((sym, cbt): (sym_ty * core_base_type))
                  (ctype: ctype)
+                 (fn_to_check: sym_ty)
                  : (intermediate_action option) eff =
       if not (is_core_ptr_bty cbt) then
         return None
       else begin
-        mk_create ctype >>= fun (_,action) ->
+        mk_create ctype
+            (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
+            >>= fun (_,action) ->
         return (Some action)
       end
 
@@ -1488,7 +1515,7 @@ module BmcZ3 = struct
       | None -> failwith (sprintf "BmcZ3 z3_params: %s not found"
                                   (symbol_to_string fn_to_check))
       | Some (_, param_tys, _, _) ->
-          mapM2 z3_param params param_tys
+          mapM2 (fun p ty -> z3_param p ty fn_to_check) params param_tys
 
     let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
                 : (unit typed_file) eff =
