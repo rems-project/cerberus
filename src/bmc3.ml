@@ -337,15 +337,17 @@ let bmc_file (file              : unit typed_file)
       print_endline "OUTPUT: satisfiable";
       let model = Option.get (Solver.get_model g_solver) in
       let str_model = Model.to_string model in
+      let satisfied_vcs =
+        BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
+      (* TODO: Display this in UI *)
+      List.iter (fun (expr, dbg) ->
+        printf "%s: \n" (BmcVC.vc_debug_to_str dbg) (*(Expr.to_string expr)*)
+      ) satisfied_vcs;
+
       if !!bmc_conf.output_model then
         begin
         print_endline str_model;
         (* TODO: print this out independently of --bmc_output_model*)
-        let satisfied_vcs =
-          BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
-        List.iter (fun (expr, dbg) ->
-          printf "%s: %s\n" (BmcVC.vc_debug_to_str dbg) (Expr.to_string expr)
-        ) satisfied_vcs;
         end;
     `Satisfiable (str_model, dots)
     end
