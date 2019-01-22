@@ -1404,7 +1404,7 @@ module BmcZ3 = struct
     (match expr_ with
     | Epure pe ->
         z3_pe pe
-    | Ememop (PtrValidForDeref, [ptr]) ->
+    | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         (* TODO: includes type *)
         bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
         z3_pe ptr >>= fun z3d_ptr ->
@@ -1939,7 +1939,7 @@ module BmcBind = struct
     (match expr_ with
     | Epure pe ->
         bind_pe pe
-    | Ememop (PtrValidForDeref, [ptr]) ->
+    | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         bind_pe ptr
     | Ememop (PtrEq, [p1;p2]) ->
         bind_pe p1 >>= fun bound_p1 ->
