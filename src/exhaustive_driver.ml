@@ -60,6 +60,7 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
             (" (exit = "^ str_v ^ ")", dres.Driver.dres_stdout)
           else
             ("", "Defined {value: \"" ^ str_v ^ "\", stdout: \"" ^ String.escaped dres.Driver.dres_stdout ^
+            "\", stderr: \"" ^ String.escaped dres.Driver.dres_stderr ^
             "\", blocked: \"" ^ if dres.Driver.dres_blocked then "true\"}" else "false\"}\n")
       | ND.Killed (ND.Undef0 (loc, [])) ->
           (* TODO: this is probably an error *)
@@ -155,7 +156,7 @@ else
           let str_v_ = str_v ^ dres.Driver.dres_stdout in
           if true (* not (List.mem str_v_ !ky) *) then (
             if Debug_ocaml.get_debug_level () = 0 then
-              (print_string dres.Driver.dres_stdout; flush_all());
+              (print_string dres.Driver.dres_stdout; prerr_string dres.Driver.dres_stderr; flush_all());
             
             Debug_ocaml.print_debug 1 [] (fun () ->
 (*              Printf.sprintf "\n\n\n\n\nExecution #%d (value = %s) under constraints:\n=====\n%s\n=====\n" n str_v (Pp_cmm.pp_old_constraints st.ND.eqs) ^*)

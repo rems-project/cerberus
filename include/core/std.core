@@ -243,22 +243,6 @@ proc [ailname = "__builtin_errno"] errno_proxy (): eff loaded pointer :=
   pcall(<builtin_errno>)
 
 ------------------------------------------------------------------------------
--- <signal.h>
-------------------------------------------------------------------------------
-
-builtin signal (integer, pointer): eff loaded pointer
-
-proc [ailname = "signal"] signal_proxy(sig_ptr: pointer, fn_ptr: pointer): eff loaded pointer :=
-  let strong sig : loaded integer = load('signed int', sig_ptr) in
-  -- let strong fn_  : loaded pointer = load('void (signed int)*', fn_ptr) in
-  case sig of
-    | Specified (n: integer) =>
-        pcall(<builtin_signal>, n, fn_ptr)
-    | Unspecified (_: ctype) =>
-        pure(undef(<<DUMMY(signal_proxy)>>))
-  end
-
-------------------------------------------------------------------------------
 -- <stdio.h>
 ------------------------------------------------------------------------------
 
@@ -324,9 +308,6 @@ proc [ailname = "rename"] rename_proxy (oldpath_ptr: pointer, newpath_ptr: point
 ------------------------------------------------------------------------------
 
 builtin exit ()  : eff unit
-
-proc [ailname = "abort"] abort_proxy () : eff unit :=
-  pure (error(<<<ABORT>>>, False))
 
 proc [ailname = "__builtin_exit"] exit_proxy (x_ptr: pointer) : eff unit :=
   let strong x: loaded integer = load('signed int', x_ptr) in
