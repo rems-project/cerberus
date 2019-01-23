@@ -1067,6 +1067,10 @@ let rec driver with_concurrency =
             liftMem (Mem.va_start ty_ptrs) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
 
+        | (Mem_common.Va_copy, [Core.Vobject (Core.OVinteger va)]) ->
+            liftMem (Mem.va_copy va) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
+
         | (Mem_common.Va_arg, [Core.Vobject (Core.OVinteger va); Core.Vctype ty]) ->
             liftMem (Mem.va_arg va ty) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
