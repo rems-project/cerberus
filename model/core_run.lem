@@ -250,6 +250,7 @@ type fs_oper =
   | FS_READDIR of integer (* DIR node *)
   | FS_REWINDDIR of integer (* DIR node *)
   | FS_CLOSEDIR of integer (* DIR node *)
+  | FS_PRINTF of list char (* fmt *) * list (Core_ctype.ctype * Mem.pointer_value) (* args *)
   | FS_VPRINTF of integer (* fd *) * list char (* fmt *) * integer (* va_list *)
   | FS_VSNPRINTF of Mem.pointer_value * Mem.integer_value * list char * integer (* NOTE: this is arguably not a fs operation *)
 
@@ -1060,6 +1061,19 @@ BEFORE EVAL_PEXPR2
                 (* ----------------------------------------------------------- *)
                 (* 7.21 Input/output <stdio.h> *)
                 (* ----------------------------------------------------------- *)
+                | Impl (BuiltinFunction "printf") ->
+                    match cvals with
+                      | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
+                           let fmt = List.map (charFromMValue "printf") fmt_cvals in
+                           let args_ptrvals = List.map (function
+                             | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
+                             | _ -> error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
+                           end) args_cvals in
+                           Step_fs th_st $ FS_PRINTF fmt args_ptrvals
+                      | _ ->
+                          error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+
                 | Impl (BuiltinFunction "vprintf") ->
                     match cvals with
                       | [Vobject (OVinteger fd_ival);
