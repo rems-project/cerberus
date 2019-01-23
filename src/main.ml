@@ -57,9 +57,9 @@ let frontend (conf, io) filename core_std =
     Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
-let create_cpp_cmd cpp_cmd nolibc macros_def macros_undef incl_dirs incl_files =
+let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files =
   let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
-  let incl_dirs = if nolibc then incl_dirs else libc_dirs @ incl_dirs in
+  let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -102,7 +102,7 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd nolibc macros macros_undef
+             cpp_cmd nostdinc nolibc macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
@@ -117,7 +117,7 @@ let cerberus debug_level progress core_obj
              files args_opt =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
-    create_cpp_cmd cpp_cmd nolibc macros macros_undef incl_dirs incl_files
+    create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files
   in
   let args = match args_opt with
     | None -> []
@@ -329,6 +329,10 @@ let incl_file =
              read before the source file is preprocessed." in
   Arg.(value & opt_all string [] & info ["include"] ~doc)
 
+let nostdinc =
+  let doc = "Do not search includes in the standard lib C directories." in
+  Arg.(value & flag & info ["nostdinc"] ~doc)
+
 let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
@@ -483,7 +487,7 @@ let bmc_output_model =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nolibc $ macros $ macros_undef $
+                         cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $

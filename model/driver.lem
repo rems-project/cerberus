@@ -531,6 +531,17 @@ let drive_fs_step tid th_st dr_st fs_oper =
       update (Fs.fs_rewinddir dr_st.fs_state dir) (th_st_from_void ())
     | Core_run.FS_CLOSEDIR dir ->
       return $ Fs.fs_closedir dr_st.fs_state dir
+    | Core_run.FS_PRINTF fmt args ->
+      liftMem (Output.printf (printf_eval_conv dr_st) fmt args) >>= function
+        | Left err ->
+          error "TODO: printf error"
+        | Right (Undefined.Defined buf) ->
+          update_stdout buf
+        | Right (Undefined.Error loc str) ->
+          ND.kill (ND.Error loc str)
+        | Right (Undefined.Undef loc ubs) ->
+          ND.kill (ND.Undef loc ubs)
+      end
     | Core_run.FS_VPRINTF fd fmt ap ->
       liftMem (Output.vprintf (printf_eval_conv dr_st) fmt ap) >>= function
         | Left err ->
