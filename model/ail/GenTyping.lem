@@ -1225,6 +1225,11 @@ GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_rmw"))
         end
         *)
     
+    | AilEva_copy e1 e2 ->
+        annotate_rvalue e1 >>= fun (e1', _) ->
+        annotate_rvalue e2 >>= fun (e2', _) ->
+        E.return (AilEva_copy e1' e2', GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_)))))
+    
     | AilEva_arg e ty ->
         annotate_rvalue e >>= fun (e', _) ->
         E.return (AilEva_arg e' ty, GenRValueType (inject_type ty))

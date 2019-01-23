@@ -711,11 +711,6 @@ int vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap)
   return __builtin_vprintf(fd, fmt, ap);
 }
 
-// TODO
-int vfscanf(FILE *restrict f, const char *restrict fmt, va_list ap)
-{
-}
-
 int vsnprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap)
 {
   int __builtin_vsnprintf(char *, size_t, const char* restrict, va_list);
@@ -786,6 +781,12 @@ char *fgets(char *restrict s, int n, FILE *restrict f)
 int fputc(int c, FILE *f)
 {
   return do_putc(c, f);
+}
+
+int fputs(const char *restrict s, FILE *restrict f)
+{
+  size_t l = strlen(s);
+  return (fwrite(s, 1, l, f)==l) - 1;
 }
 
 int getc(FILE *f)

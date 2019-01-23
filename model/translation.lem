@@ -2849,6 +2849,20 @@ a
             else
               error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ " : " ^ show last_sym ^ " is not the last argument") (* it should be UB I think *)
       
+      | A.AilEva_copy _ e ->
+          E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e_sym_pat, e_sym_pe ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, case_sym_pat, case_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_integer) >>= fun (_, va_sym_pat, va_sym_pe ) ->
+          self e >>= fun core_e ->
+          E.return $
+            Caux.mk_sseq_e e_sym_pat core_e
+              (Caux.mk_case_e e_sym_pe
+                [ (Caux.mk_specified_pat case_sym_pat,
+                    Caux.mk_sseq_e va_sym_pat (C.Expr [] (C.Ememop Mem_common.Va_copy [case_sym_pe]))
+                      (Caux.mk_pure_e (Caux.mk_specified_pe va_sym_pe)))
+                ; (Caux.mk_unspecified_pat (Caux.mk_empty_pat C.BTy_ctype),
+                    Caux.mk_pure_e (Caux.mk_undef_exceptional_condition loc)) ] )
+      
       | A.AilEva_arg e ty ->
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_integer) >>= fun (_, e_sym_pat, e_sym_pe ) ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, ptr_sym_pat, ptr_sym_pe ) ->

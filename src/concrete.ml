@@ -1879,6 +1879,23 @@ let combine_prov prov1 prov2 =
                       } ) >>= fun _ ->
     return (IV (Prov_none, id))
 
+  let va_copy va =
+    match va with
+    | IV (Prov_none, id) ->
+      get >>= fun st ->
+      begin match IntMap.find_opt id st.varargs with
+        | Some args ->
+          let id = st.next_varargs_id in
+          update (fun st -> { st with varargs = IntMap.add id args st.varargs;
+                                      next_varargs_id = N.succ st.next_varargs_id;
+                            } ) >>= fun _ ->
+          return (IV (Prov_none, id))
+        | None ->
+            fail (MerrWIP "va_copy: not initiliased")
+      end
+    | _ ->
+      fail (MerrWIP "va_copy: invalid va_list")
+
   let va_arg va ty =
     match va with
     | IV (Prov_none, id) ->

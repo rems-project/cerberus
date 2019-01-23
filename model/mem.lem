@@ -145,11 +145,13 @@ declare ocaml target_rep function memcmp = `Ocaml_mem.memcmp`
 declare ocaml target_rep function realloc = `Ocaml_mem.realloc`
 
 val va_start: list (Core_ctype.ctype * pointer_value) -> memM integer_value
+val va_copy: integer_value -> memM integer_value
 val va_arg: integer_value -> Core_ctype.ctype -> memM pointer_value
 val va_end: integer_value -> memM unit
 val va_list: integer -> memM (list (Core_ctype.ctype * pointer_value))
 
 declare ocaml target_rep function va_start = `Ocaml_mem.va_start`
+declare ocaml target_rep function va_copy = `Ocaml_mem.va_copy`
 declare ocaml target_rep function va_arg = `Ocaml_mem.va_arg`
 declare ocaml target_rep function va_end = `Ocaml_mem.va_end`
 declare ocaml target_rep function va_list = `Ocaml_mem.va_list`
