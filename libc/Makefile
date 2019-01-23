@@ -8,7 +8,8 @@ SRC_C=src/ctype.c \
 		src/stat.c \
 		src/uio.c \
 		src/internal.c \
-		src/vfscanf.c
+		src/vfscanf.c \
+		src/signal.c
 
 SRC_M=src/math.c
 
