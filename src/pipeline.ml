@@ -91,20 +91,22 @@ type io_helpers = {
 
 let cpp (conf, io) ~filename =
   io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
-  let cpp_out = Unix.open_process_in (conf.cpp_cmd ^ " " ^ filename) in
-  let rec read acc ic =
-    try read (input_line ic :: acc) ic
-    with End_of_file -> List.rev acc
-  in
-  let out = read [] cpp_out in
-  match Unix.close_process_in cpp_out with
-  | WEXITED n
-  | WSIGNALED n
-  | WSTOPPED n ->
-    if n <> 0 then
-      exit n
-    else
-      return @@ String.concat "\n" out
+  Unix.handle_unix_error begin fun () ->
+    let cpp_out = Unix.open_process_in (conf.cpp_cmd ^ " " ^ filename) in
+    let rec read acc ic =
+      try read (input_line ic :: acc) ic
+      with End_of_file -> List.rev acc
+    in
+    let out = read [] cpp_out in
+    match Unix.close_process_in cpp_out with
+    | WEXITED n
+    | WSIGNALED n
+    | WSTOPPED n ->
+      if n <> 0 then
+        exit n
+      else
+        return @@ String.concat "\n" out
+  end ()
 
 let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
