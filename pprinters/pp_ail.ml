@@ -579,6 +579,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             !^ "/* annot */" ^^^ pp e
         | AilEva_start (e, sym) ->
             pp_keyword "va_start" ^^ P.parens (pp e ^^ P.comma ^^^ pp_id sym)
+        | AilEva_copy (e1, e2) ->
+            pp_keyword "va_copy" ^^ P.parens (pp e1 ^^ P.comma ^^^ pp e2)
         | AilEva_arg (e, ty) ->
             pp_keyword "va_arg" ^^ P.parens (pp e ^^ P.comma ^^^ pp_ctype no_qualifiers ty)
         | AilEva_end e ->

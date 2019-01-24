@@ -152,6 +152,7 @@ let create_conf w =
   in
   { rewrite_core = false;
     sequentialise_core = false;
+    link_libc = false;
     tagDefs = "";
     switches = [];
     cpp_cmd = cpp_cmd ();
@@ -204,6 +205,7 @@ type incoming_msg =
     model:   string;
     rewrite: bool;
     sequentialise: bool;
+    libc: bool;
     interactive: active_node option;
     ui_switches: string list;
   }
@@ -215,6 +217,7 @@ let parse_incoming_msg content =
                 model=          "concrete";
                 rewrite=        false;
                 sequentialise=  false;
+                libc=           false;
                 interactive=    None;
                 ui_switches=    []
               }
@@ -246,6 +249,7 @@ let parse_incoming_msg content =
     | ("name", [name])       -> { msg with name= name; }
     | ("rewrite", [b])       -> { msg with rewrite= parse_bool b; }
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
+    | ("libc", [b])          -> { msg with libc= parse_bool b; }
     | ("model", [model])     -> { msg with model= model; }
     | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
     | ("interactive[lastId]", [v]) ->
@@ -544,6 +548,7 @@ let cerberus ~rheader ~conf ~flow content =
   let conf      = { conf with rewrite_core= msg.rewrite;
                               sequentialise_core = msg.sequentialise;
                               switches = msg.ui_switches;
+                              link_libc = msg.libc;
                   }
   in
   let timeout   = float_of_int conf.timeout in

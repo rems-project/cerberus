@@ -29,7 +29,7 @@ let run_pp with_ext doc =
 
 (* The path to the Core standard library *)
 let core_stdlib_path =
-  Filename.concat Global_ocaml.cerb_path "include/core"
+  Filename.concat Global_ocaml.cerb_path "libcore"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
@@ -313,10 +313,6 @@ let cabsid_compare (Cabs.CabsIdentifier (_, s1)) (Cabs.CabsIdentifier (_, s2)) =
 
 let map_from_assoc compare =
   List.fold_left (fun acc (k, v) -> Pmap.add k v acc) (Pmap.empty compare)
-
-let empty = Pmap.empty compare
-
-let empty2 = Pmap.empty compare
 
 let read_core_object (core_stdlib, core_impl) fname =
   let open Core in

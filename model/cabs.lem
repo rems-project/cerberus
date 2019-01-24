@@ -125,6 +125,7 @@ type cabs_expression_ =
   | CabsEassert of cabs_expression
   | CabsEoffsetof of type_name * cabs_identifier
   | CabsEva_start of cabs_expression * cabs_identifier
+  | CabsEva_copy of cabs_expression * cabs_expression
   | CabsEva_arg of cabs_expression * type_name
   | CabsEva_end of cabs_expression
   | CabsEprint_type of cabs_expression (* CERBERUS EXTENSION *)

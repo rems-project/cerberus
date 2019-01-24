@@ -13,6 +13,7 @@ let string_of_exec_mode = function
 type conf =
   { rewrite_core: bool;       (* run rewriting step *)
     sequentialise_core: bool; (* sequentialise flag *)
+    link_libc: bool;          (* link core with libc *)
     cpp_cmd: string;          (* cpp command used before parsing *)
     core_impl: string;        (* core implementation file *)
     cerb_debug_level: int;    (* Cerberus debug level (not include server) *)

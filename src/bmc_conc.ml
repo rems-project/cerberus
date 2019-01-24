@@ -695,10 +695,11 @@ module MemoryModelCommon = struct
       else acc
       ) [] executions in
     (* TODO: we probably don't want this anymore: *)
-    List.iteri (fun i dot ->
-      let filename = sprintf "%s_%d.dot" "graph" i in
-      save_to_file filename dot
-      ) dots;
+    if !!bmc_conf.output_model then
+      List.iteri (fun i dot ->
+        let filename = sprintf "%s_%d.dot" "graph" i in
+        save_to_file filename dot
+        ) dots;
     Solver.pop solver 1;
     dots
 end

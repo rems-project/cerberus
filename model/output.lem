@@ -970,6 +970,18 @@ let vsnprintf eval_conv s_ptrval n_ival frmt ap_idx =
   end
 
 (* TODO: return -1, if "encoding error" *)
+val printf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
+            list char -> list (Core_ctype.ctype * Mem.pointer_value) -> Mem.memM (either Errors.error (Undefined.t (list char)))
+let printf eval_conv frmt args =
+  match parse format frmt with
+    | [(fs, [])] ->
+        printf_aux eval_conv [] fs args
+    | _ ->
+        Mem.return $
+          Right (U.undef (Loc.other "printf()") [U.Invalid_format (String.toString frmt)])
+  end
+
+(* TODO: return -1, if "encoding error" *)
 val vprintf: (Cty.ctype -> (*Cty.ctype -> *)Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))) ->
             list char -> integer -> Mem.memM (either Errors.error (Undefined.t (list char)))
 let vprintf eval_conv frmt ap_idx =

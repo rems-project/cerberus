@@ -330,6 +330,9 @@ let dtree_of_expression pp_annot expr =
       | AilEva_start (e, sym) ->
           Dnode ( pp_stmt_ctor "AilEva_start" ^^^ Pp_ail.pp_id sym
                 , (*add_std_annot*) [self e] )
+      | AilEva_copy (e1, e2) ->
+          Dnode ( pp_stmt_ctor "AilEva_copy"
+                , (*add_std_annot*) [self e1; self e2] )
       | AilEva_arg (e, ty) ->
           Dnode ( pp_stmt_ctor "AilEva_arg" ^^^ P.squotes (pp_ctype empty_qs ty)
                 , (*add_std_annot*) [self e] )

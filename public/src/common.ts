@@ -53,6 +53,13 @@ export namespace CoreOpt {
   export const Err = (opt: string) => new Error (`Expecting an 'core optimisation option' type, got '${opt}'`)
 }
 
+export namespace ExecOpt {
+  const opts = flags(['libc'])
+  export type t = keyof typeof opts
+  export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
+  export const Err = (opt: string) => new Error (`Expecting an execution option, got '${opt}'`)
+}
+
 export namespace AllocModel {
   const opts = flags(['concrete', 'symbolic'])
   export type t = keyof typeof opts
@@ -64,7 +71,8 @@ export type Options = {[key in Option.t]: boolean}
 
 export interface Model {
   alloc_model: AllocModel.t
-  options: {[key in CoreOpt.t]: boolean}
+  core_options: {[key in CoreOpt.t]: boolean}
+  exec_options: {[key in ExecOpt.t]: boolean}
   switches: string []
 }
 

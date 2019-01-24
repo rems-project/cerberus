@@ -186,6 +186,7 @@ type memop =
   | Memcmp
   | Realloc (* TODO: not sure about this *)
   | Va_start
+  | Va_copy
   | Va_arg
   | Va_end
 
@@ -224,6 +225,8 @@ instance (Show memop)
         "ptrarrayshift"
     | Va_start ->
         "va_start"
+    | Va_copy ->
+        "va_copy"
     | Va_arg ->
         "va_arg"
     | Va_end ->

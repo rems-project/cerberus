@@ -180,9 +180,12 @@ export default class View {
       console: '',
       model: {
         alloc_model: 'concrete',
-        options: {
+        core_options: {
           rewrite: false,
           sequentialise: true
+        },
+        exec_options: {
+          libc: false
         },
         switches: ['no_integer_provenance']
       },

@@ -397,7 +397,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
       <| dr_st with
         core_state= <| core_st' with
           Core_run.io= <| dr_st.core_state.Core_run.io with Core_run.stderr=
-                Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stdout
+                Dlist.append (Dlist.singleton (String.toString out_chars)) dr_st.core_state.Core_run.io.Core_run.stderr
               |>
         |>;
         dr_step_counter= dr_st.dr_step_counter + 1;
@@ -531,6 +531,17 @@ let drive_fs_step tid th_st dr_st fs_oper =
       update (Fs.fs_rewinddir dr_st.fs_state dir) (th_st_from_void ())
     | Core_run.FS_CLOSEDIR dir ->
       return $ Fs.fs_closedir dr_st.fs_state dir
+    | Core_run.FS_PRINTF fmt args ->
+      liftMem (Output.printf (printf_eval_conv dr_st) fmt args) >>= function
+        | Left err ->
+          error "TODO: printf error"
+        | Right (Undefined.Defined buf) ->
+          update_stdout buf
+        | Right (Undefined.Error loc str) ->
+          ND.kill (ND.Error loc str)
+        | Right (Undefined.Undef loc ubs) ->
+          ND.kill (ND.Undef loc ubs)
+      end
     | Core_run.FS_VPRINTF fd fmt ap ->
       liftMem (Output.vprintf (printf_eval_conv dr_st) fmt ap) >>= function
         | Left err ->
@@ -1056,6 +1067,10 @@ let rec driver with_concurrency =
             liftMem (Mem.va_start ty_ptrs) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
 
+        | (Mem_common.Va_copy, [Core.Vobject (Core.OVinteger va)]) ->
+            liftMem (Mem.va_copy va) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
+
         | (Mem_common.Va_arg, [Core.Vobject (Core.OVinteger va); Core.Vctype ty]) ->
             liftMem (Mem.va_arg va ty) >>= fun res ->
             ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
@@ -1196,6 +1211,7 @@ type driver_result = <|
   dres_driver_steps: nat;
   dres_core_value: Core.value;
   dres_stdout: string;
+  dres_stderr: string;
 |>
 
 
@@ -1221,6 +1237,7 @@ let finalize debug_str dr_st =
           dres_driver_steps= dr_st.dr_step_counter;
           dres_core_value= cval;
           dres_stdout= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stdout);
+          dres_stderr= List.foldr String.stringAppend "" (Dlist.toList dr_st.core_state.Core_run.io.Core_run.stderr);
         |>
     | xs ->
         let () = Debug.print_debug 3 [Debug.DB_driver] (fun () -> "ERROR (end of the Driver)\n" ^ stringFromCore_core_state dr_st.core_state) in (* DEBUG *)
