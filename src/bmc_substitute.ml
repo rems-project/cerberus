@@ -29,7 +29,8 @@ let rec substitute_pexpr (map: substitute_map)
                       substitute_pexpr map pe_index)
     | PEmember_shift (pe_ptr, sym, member) ->
         PEmember_shift(substitute_pexpr map pe_ptr, sym, member)
-    | PEcfunction _ -> assert false
+    | PEcfunction pe ->
+        PEcfunction(substitute_pexpr map pe)
     | PEmemberof _ -> assert false
     | PEnot pe ->
         PEnot(substitute_pexpr map pe)
