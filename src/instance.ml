@@ -150,8 +150,12 @@ let execute ~conf ~filename (mode: exec_mode) =
   try
     elaborate ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
-    let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
-    Core_linking.link [core; libc] >>= fun core ->
+    begin if conf.instance.link_libc then
+      let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
+      Core_linking.link [core; libc]
+    else
+      return core
+    end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
     let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
@@ -361,8 +365,12 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     elaborate ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
     let core     = Core_aux.set_uid core in
     let ranges   = create_expr_range_list core in
-    let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
-    Core_linking.link [core; libc] >>= fun core ->
+    begin if conf.instance.link_libc then
+      let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in
+      Core_linking.link [core; libc]
+    else
+      return core
+    end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let core'    = Core_run_aux.convert_file core in
     let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in

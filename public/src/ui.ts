@@ -1,6 +1,6 @@
 import $ from 'jquery'
 import _ from 'lodash'
-import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt } from './common'
+import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt, ExecOpt } from './common'
 import * as util from './util'
 import View from './view'
 import Widget from './widget';
@@ -221,7 +221,16 @@ export class CerberusUI {
       const opt = e.currentTarget.id
       if (!CoreOpt.is(opt)) throw CoreOpt.Err(opt)
       const view = this.getView()
-      toggle(view.state.model.options, opt)
+      toggle(view.state.model.core_options, opt)
+      view.emit('dirty')
+    })
+
+    $('.exec-opt').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
+      const opt = e.currentTarget.id
+      if (!ExecOpt.is(opt)) throw ExecOpt.Err(opt)
+      const view = this.getView()
+      toggle(view.state.model.exec_options, opt)
       view.emit('dirty')
     })
 
@@ -275,8 +284,10 @@ export class CerberusUI {
     this.updateUI = (s: State) => {
       // Options
       updateCheckBoxes(s.options)
-      // Model options
-      updateCheckBoxes(s.model.options)
+      // Core options
+      updateCheckBoxes(s.model.core_options)
+      // Execution options
+      updateCheckBoxes(s.model.exec_options)
       $('#r-step-mem-action').prop('checked', s.interactiveMode == InteractiveMode.Memory)
       $('#r-step-C-line').prop('checked', s.interactiveMode == InteractiveMode.CLine)
       $('#r-step-eval').prop('checked', s.interactiveMode == InteractiveMode.Core)
@@ -520,8 +531,9 @@ export class CerberusUI {
         'action':  action,
         'source':  view.getSource().getValue(),
         'name': view.getSource().title,
-        'rewrite': model.options.rewrite,
-        'sequentialise': model.options.sequentialise,
+        'rewrite': model.core_options.rewrite,
+        'sequentialise': model.core_options.sequentialise,
+        'libc': model.exec_options.libc,
         'model': model.alloc_model,
         'switches': view.state.model.switches,
         'interactive': interactive
