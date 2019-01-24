@@ -1191,7 +1191,7 @@ module BmcZ3 = struct
         return (Pmap.find ctype ImplFunctions.sizeof_map)
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
-        return (ctor_to_z3 ctor z3d_pes (Some bTy))
+        return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
     | PEcase (pe, cases) ->
         assert (List.length cases > 0);
         z3_pe pe                              >>= fun z3d_pe ->
@@ -1446,7 +1446,7 @@ module BmcZ3 = struct
         assert (not !!bmc_conf.sequentialise);
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None)
+        return (ctor_to_z3 Ctuple z3d_elist None uid)
     | Ewseq (pat, e1, e2) ->
         z3_e e1 >>= fun _ ->
         z3_e e2
@@ -1480,7 +1480,7 @@ module BmcZ3 = struct
     | Epar elist ->
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None)
+        return (ctor_to_z3 Ctuple z3d_elist None uid)
     | Ewait _  -> assert false
     ) >>= fun ret ->
     add_expr uid ret >>

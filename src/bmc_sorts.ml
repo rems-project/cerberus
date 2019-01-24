@@ -288,6 +288,34 @@ module LoadedInteger =
 module LoadedPointer =
   LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
 
+module IntArray = struct
+  let default_value = LoadedInteger.mk_specified (int_to_z3 0)
+
+  let mk_sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort)
+
+  let mk_const_s (sym: string) =
+    Z3Array.mk_const_s g_ctx sym integer_sort (LoadedInteger.mk_sort)
+
+  (*let mk_const_array =
+    Z3Array.mk_const_array g_ctx mk_sort default_value *)
+
+  let mk_select (array: Expr.expr) (index: Expr.expr) =
+    Z3Array.mk_select g_ctx array index
+
+  let mk_store (array: Expr.expr) (index: Expr.expr) (value: Expr.expr) : Expr.expr =
+    Z3Array.mk_store g_ctx array index value
+
+  (*let mk_array_from_exprs (values: Expr.expr list) : Expr.expr =
+    let indexed_values = List.mapi (fun i value -> (i,value)) values in
+    List.fold_left (fun array (i,value) -> mk_store array (int_to_z3 i) value)
+                   mk_const_array indexed_values *)
+
+end
+
+module LoadedIntArray = struct
+  include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
+end
+
 module Loaded = struct
   open Z3.Datatype
 
@@ -299,6 +327,9 @@ module Loaded = struct
       ; mk_constructor_s g_ctx "loaded_ptr" (mk_sym "is_loaded_ptr")
                          [mk_sym "_loaded_ptr"]
                          [Some LoadedPointer.mk_sort] [0]
+      ; mk_constructor_s g_ctx "loaded_int[]" (mk_sym "is_loaded_int[]")
+                         [mk_sym "_loaded_int[]"]
+                         [Some LoadedIntArray.mk_sort] [0]
       ]
 
   let mk_expr (expr: Expr.expr) =
@@ -307,6 +338,8 @@ module Loaded = struct
       Expr.mk_app g_ctx (List.nth ctors 0) [expr]
     else if (Sort.equal LoadedPointer.mk_sort (Expr.get_sort expr)) then
       Expr.mk_app g_ctx (List.nth ctors 1) [expr]
+    else if (Sort.equal LoadedIntArray.mk_sort (Expr.get_sort expr)) then
+      Expr.mk_app g_ctx (List.nth ctors 2) [expr]
     else
       assert false
 end
