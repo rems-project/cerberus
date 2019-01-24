@@ -114,6 +114,7 @@ type token =
   | PIPES
   | RBRACES
   | VA_START
+  | VA_COPY
   | VA_ARG
   | VA_END
   | BMC_ASSUME
@@ -222,6 +223,7 @@ let string_of_token = function
   | RBRACES -> "RBRACES"
   | VA_START -> "__cerbvar_va_start"
   | VA_ARG -> "__cerbvar_va_arg"
+  | VA_COPY -> "__cerbvar_va_copy"
   | VA_END -> "__cerbvar_va_end"
   | BMC_ASSUME -> "__bmc_assume"
   | PRINT_TYPE -> "__cerb_printtype"

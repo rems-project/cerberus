@@ -38,6 +38,8 @@ let pp_memop = function
       !^ "Realloc"
   | Va_start ->
       !^ "Va_start"
+  | Va_copy ->
+      !^ "Va_copy"
   | Va_arg ->
       !^ "Va_arg"
   | Va_end ->

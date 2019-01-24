@@ -36,6 +36,11 @@ fi
 # Initialise OPAM
 . $OPAMROOT/opam-init/init.sh > /dev/null 2> /dev/null || true
 
+if ! (ocamlfind query angstrom > /dev/null 2>&1); then
+  echo "Install depedency: angstrom"
+  opam install angstrom
+fi
+
 # Clean and make Cerberus
 make clear
 make

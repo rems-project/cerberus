@@ -604,6 +604,8 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
 
     | AilEva_start _ _ ->
         E.return false
+    | AilEva_copy _ _ ->
+        E.return false
     | AilEva_arg _ _ ->
         E.return false
     | AilEva_end _ ->
@@ -2215,6 +2217,10 @@ STD_ "§6.5.3.1#3" $
               (* TODO: is this a fatal error? *)
               error "the second operand of va_start() was not paramN"
         end
+    | CabsEva_copy e1 e2 ->
+        desugar_expression e1 >>= fun d_e1 ->
+        desugar_expression e2 >>= fun d_e2 ->
+        E.return (AilEva_copy d_e1 d_e2)
     | CabsEva_arg e tyname ->
         (* TODO: do something with the qualifiers? *)
         desugar_expression e     >>= fun d_e      ->

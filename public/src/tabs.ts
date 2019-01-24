@@ -158,15 +158,18 @@ export class Interactive extends SvgGraph {
 
 export class BMC extends SvgGraph {
   currentExecution: number = 0;
+  status: JQuery<HTMLElement>
   prev: JQuery<HTMLElement>
   next: JQuery<HTMLElement>
 
   constructor(ee: EventEmitter) {
     super('BMC Executions', ee)
     const controls = $('<div class="toolbar"></div>')
-    this.prev = $('<div class="menu-item btn inline">Previous Execution</div>')
+    this.status = $('<div class="menu-item inline">Execution 1 of N</div>')
+    this.prev = $('<div class="menu-item btn inline">Prev</div>')
     this.prev.addClass('disabled')
-    this.next = $('<div class="menu-item btn inline">Next Execution</div>')
+    this.next = $('<div class="menu-item btn inline">Next</div>')
+    controls.append(this.status)
     controls.append(this.prev)
     controls.append(this.next)
     this.prev.on('click', () => {
@@ -174,6 +177,7 @@ export class BMC extends SvgGraph {
         ee.once(s => {
           this.currentExecution -= 1
           this.setSVG(s.bmc_executions[this.currentExecution])
+          this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.next.removeClass('disabled')
           if (this.currentExecution == 0)
             this.prev.addClass('disabled')
@@ -185,6 +189,7 @@ export class BMC extends SvgGraph {
         ee.once(s => {
           this.currentExecution += 1
           this.setSVG(s.bmc_executions[this.currentExecution])
+          this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.prev.removeClass('disabled')
           if (this.currentExecution == s.bmc_executions.length - 1)
             this.next.addClass('disabled')
@@ -198,6 +203,7 @@ export class BMC extends SvgGraph {
   private updateGraph (state: Readonly<State>) {
     this.currentExecution = 0
     this.setSVG(state.bmc_executions[0])
+    this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
     this.prev.addClass('disabled')
     this.next.removeClass('disabled')
     // Check if needs to span down

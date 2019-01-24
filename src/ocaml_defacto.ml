@@ -591,6 +591,7 @@ let memcpy = Defacto_memory.impl_memcpy
 let memcmp = Defacto_memory.impl_memcmp
 let realloc _ _ _ = failwith "Defacto: realloc!"
 let va_start _ = failwith "Defacto: va_start"
+let va_copy _ = failwith "Defacto: va_copy"
 let va_arg _ _ = failwith "Defacto: va_arg"
 let va_end _ = failwith "Defacto: va_end"
 let va_list _ = failwith "Defacto: va_list"

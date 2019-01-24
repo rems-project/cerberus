@@ -1,23 +1,27 @@
-#ifndef	_SIGNAL_H_
-#define	_SIGNAL_H_
+#ifndef _SIGNAL_H_
+#define _SIGNAL_H_
 
-typedef __cerbty_sig_atomic_t sig_atomic_t;
-#define SIG_IGN 1 //__cerbvar_SIG_IGN
-#define SIGILL  2 //__cerbvar_SIGILL
-#define SIGTERM 3 //__cerbvar_SIGTERM
-#define SIG_DFL 4 //__cerbvar_SIG_DFL
-#define SIGABRT 5 //__cerbvar_SIGABRT
-#define SIGINT  6 //__cerbvar_SIGINT
-#define SIG_ERR 7 //__cerbvar_SIG_ERR
-#define SIGFPE  8 //__cerbvar_SIGFPE
-#define SIGSEGV 9 //__cerbvar_SIGSEGV
+typedef int sig_atomic_t;
 
-// TODO: not sure about these signals
-#define SIGBUS  10 //__cerbvar_SIGBUS
-#define SIGHUP  11
+void __sigdefault(int);
+void __sigignore(int);
+void __sigerror(int);
+
+#define SIG_DFL __sigdefault
+#define SIG_IGN __sigignore
+#define SIG_ERR __sigerror
+
+#define SIGABRT 0
+#define SIGFPE  1
+#define SIGILL  2
+#define SIGINT  3
+#define SIGSEGV 4
+#define SIGTERM 5
+
+#define SIGBUS  6
+#define SIGHUP  7
 
 void (*signal(int sig, void (*func)(int)))(int);
 int raise(int sig);
 
-#else
 #endif
