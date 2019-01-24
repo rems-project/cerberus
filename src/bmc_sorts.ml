@@ -316,6 +316,22 @@ module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
 
+(* Get ith index in loaded value *)
+(* TODO: This will change once we switch to byte representation *)
+let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
+  if (Sort.equal (Expr.get_sort loaded) LoadedInteger.mk_sort) then
+    (assert (i = 0); loaded)
+  else if (Sort.equal (Expr.get_sort loaded) LoadedPointer.mk_sort) then
+    (assert (i = 0); loaded)
+  else if (Sort.equal (Expr.get_sort loaded) (LoadedIntArray.mk_sort)) then
+    (* TODO: What if unspecified? *)
+    begin
+      let spec_value = LoadedIntArray.get_specified_value loaded in
+      IntArray.mk_select spec_value (int_to_z3 i)
+    end
+  else
+    assert false
+
 module Loaded = struct
   open Z3.Datatype
 

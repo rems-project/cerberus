@@ -306,6 +306,11 @@ let bmc_file (file              : unit typed_file)
     | SATISFIABLE ->
         print_endline "Checkpoint passed: bindings are SAT";
         let model = Option.get (Solver.get_model g_solver) in
+        (if (!!bmc_conf.debug_lvl >= 7) then
+          begin
+            print_endline "BINDING MODEL:";
+            print_endline (Model.to_string model)
+          end);
         Model.eval model (Option.get final_state.ret_expr) false
     | UNSATISFIABLE ->
         (*let assertions = Solver.get_assertions g_solver in

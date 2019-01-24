@@ -1025,16 +1025,17 @@ module BmcZ3 = struct
   type intermediate_action =
     | ICreate of aid list * (* TODO: align *) ctype_sort list * alloc
     | IKill of aid
-    | ILoad of aid * (* TODO: list *) ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
-    | IStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
+    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
+    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
+        (* TODO: type *)
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
         (* If succeed, do a rmw *) aid *
-        ctype_sort * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
-    | ILinuxLoad of aid * ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
-    | ILinuxStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
+    | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
+    | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
   type permission_flag =
@@ -1289,7 +1290,6 @@ module BmcZ3 = struct
     | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
         mk_create ctype prefix
     | Create _ ->
-        print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
     | CreateReadOnly _ ->
         assert false
@@ -1306,10 +1306,9 @@ module BmcZ3 = struct
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
 
         return (UnitSort.mk_unit,
-                IStore (aid, List.hd flat_sortlist, sym_expr, z3d_wval, mo))
+                IStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | Store0 _ ->
         assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
@@ -1321,8 +1320,7 @@ module BmcZ3 = struct
         let (_, sort) = List.hd flat_sortlist in
         lookup_sym sym >>= fun sym_expr ->
         let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
-        return (rval_expr, ILoad (aid, List.hd flat_sortlist,
-                sym_expr, rval_expr, mo))
+        return (rval_expr, ILoad (aid, ty, flat_sortlist, sym_expr, rval_expr, mo))
     | Load0 _ ->
         assert false
     | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
@@ -1337,7 +1335,7 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid_succeed_rmw ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         let (ctype, sort) = List.hd flat_sortlist in
 
         let rval_expected =
@@ -1355,7 +1353,7 @@ module BmcZ3 = struct
                                      (LoadedInteger.mk_specified (int_to_z3 0)),
                 ICompareExchangeStrong (
                   aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
-                  (ctype,sort), obj_expr, expected_expr,
+                  flat_sortlist, obj_expr, expected_expr,
                   z3d_desired, rval_expected, rval_object,
                   mo_success, mo_failure))
     | CompareExchangeStrong _ ->
@@ -1374,10 +1372,10 @@ module BmcZ3 = struct
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         let (ctype, sort) = List.hd flat_sortlist in
         (* TODO: can't load multiple memory locations... *)
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         lookup_sym sym >>= fun sym_expr ->
         let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
-        return (rval_expr, ILinuxLoad (aid, (ctype,sort),
+        return (rval_expr, ILinuxLoad (aid, ty, flat_sortlist,
                 sym_expr, rval_expr, mo))
     | LinuxLoad _ ->
         assert false
@@ -1387,10 +1385,9 @@ module BmcZ3 = struct
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         return (UnitSort.mk_unit,
-                ILinuxStore (aid, List.hd flat_sortlist,
-                             sym_expr, z3d_wval, mo))
+                ILinuxStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | LinuxStore _ ->
         assert false
     | LinuxRMW (pe1, pe2, pe3, mo) ->
@@ -1816,6 +1813,16 @@ module BmcBind = struct
         return []
     | PEerror _ ->
         return []
+    | PEctor (Carray, pes) ->
+        (* Need to bind array values to constant symbol *)
+        get_expr uid >>= fun z3_array_expr ->
+        mapM (fun pe -> get_expr (get_id_pexpr pe)) pes >>= fun z3_pes ->
+        assert (Sort.equal (Expr.get_sort z3_array_expr) IntArray.mk_sort);
+        let array_bindings = List.mapi (fun i expr ->
+            mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr
+          ) z3_pes in
+        mapM bind_pe pes >>= fun bound_pes ->
+        return (array_bindings @ (List.concat bound_pes))
     | PEctor (ctor, pes) ->
         mapM bind_pe pes >>= fun bound_pes ->
         return (List.concat bound_pes)
@@ -2779,7 +2786,10 @@ module BmcSeqMem = struct
         do_create sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
-    | ILoad(_, (ctype,sort), ptr, rval, mo) ->
+    | ILoad(_, ctype, type_list, ptr, rval, mo) ->
+        assert (List.length type_list = 1);
+        let (_, sort) = List.hd type_list in
+    (*| ILoad(_, (ctype,sort), ptr, rval, mo) ->*)
         (* TODO: alias analysis *)
         get_memory >>= fun possible_addresses ->
         mapM (fun (addr, expr_in_memory) ->
@@ -2800,28 +2810,38 @@ module BmcSeqMem = struct
                             (List.map fst filtered)
                ; mod_addr = AddrSet.empty
                }
-    | IStore(_, (ctype,sort), ptr, wval, mo) ->
+    | IStore(_, ctype, type_list, ptr, wval, mo) ->
+    (*| IStore(_, (ctype,sort), ptr, wval, mo) ->*)
         (* TODO: alias analysis *)
-        get_memory >>= fun possible_addresses ->
-        mapM (fun (addr, expr_in_memory) ->
-          let addr_sort = Expr.get_sort expr_in_memory in
-          if (Sort.equal sort addr_sort) then
-            let addr_expr = AddressSort.mk_from_addr addr in
+        (* TODO: ugly complexity *)
+        mapMi (fun i (ctype, sort) ->
+          let indexed_wval = get_ith_in_loaded i wval in
+          get_memory >>= fun possible_addresses ->
+          mapM (fun (addr, expr_in_memory) ->
+            let addr_sort = Expr.get_sort expr_in_memory in
+            if (Sort.equal sort addr_sort) then
+              let addr_expr = AddressSort.mk_from_addr addr in
 
-            let new_seq_var =
-              mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
-            in
-            (* new_seq_var is equal to to_store if addr_eq, else old value *)
-            let addr_eq =
-              mk_and [ mk_not (PointerSort.is_null ptr)
-                     ; mk_eq (PointerSort.get_addr ptr) addr_expr] in
-            let new_val = mk_eq new_seq_var wval in
-            let old_val = mk_eq new_seq_var expr_in_memory in
-            update_memory addr new_seq_var >>
-            return (Some (addr, mk_ite addr_eq new_val old_val))
-          else
-            return None
-        ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
+              let new_seq_var =
+                mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
+              in
+              (* new_seq_var is equal to to_store if addr_eq, else old value *)
+              let target_addr =
+                  AddressSort.shift_index_by_n
+                      (PointerSort.get_addr ptr) (int_to_z3 i) in
+              let addr_eq =
+                mk_and [ mk_not (PointerSort.is_null ptr)
+                       ; mk_eq target_addr addr_expr] in
+              (* Write ith element of wval *)
+              let new_val = mk_eq new_seq_var indexed_wval in
+              let old_val = mk_eq new_seq_var expr_in_memory in
+              update_memory addr new_seq_var >>
+              return (Some (addr, mk_ite addr_eq new_val old_val))
+            else
+              return None
+          ) (Pmap.bindings_list possible_addresses)
+        ) type_list >>= fun update_list_list ->
+        let update_list = List.concat update_list_list in
         let filtered = List.map Option.get (List.filter is_some update_list) in
         assert (List.length filtered > 0);
         return { bindings = List.map snd filtered
@@ -2831,9 +2851,9 @@ module BmcSeqMem = struct
         failwith "Error: CompareExchangeStrong only supported with --bmc_conc"
     | IFence (aid, mo) ->
        assert false
-    | ILinuxLoad(aid, (ctype,sort), ptr, rval, mo) ->
+    | ILinuxLoad(aid, _, type_list, ptr, rval, mo) ->
        assert false
-    | ILinuxStore(aid, (ctype,sort), ptr, wval, mo) ->
+    | ILinuxStore(aid, _, type_list, ptr, wval, mo) ->
        assert false
     | ILinuxFence(aid, mo) ->
        assert false
@@ -3189,14 +3209,18 @@ module BmcConcActions = struct
     | IKill aid ->
         (* TODO *)
         return []
-    | ILoad (aid, (ctype, sort), ptr, rval, mo) ->
-        get_tid >>= fun tid ->
-        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval))]
-    | IStore(aid, (ctype, sort), ptr, wval, mo) ->
-        get_tid >>= fun tid ->
-        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]
+    (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
+    | ILoad (aid, _, _, ptr, rval, mo) ->
+        assert false
+        (*get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval))] *)
+    (*| IStore(aid, (ctype, sort), ptr, wval, mo) ->*)
+    | IStore (_,_,_,_,_,_) ->
+        assert false
+        (*get_tid >>= fun tid ->
+        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]*)
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
-                              (ctype, sort), ptr_obj, ptr_exp,
+                              _, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,
                               mo_success, mo_failure) ->
         get_tid >>= fun tid ->
@@ -3215,12 +3239,13 @@ module BmcConcActions = struct
           BmcAction(pol, success_guard,
                     RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired))
         ]
+
     | IFence (aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
-    | ILinuxLoad(aid, (ctype,sort), ptr, rval, mo) ->
+    | ILinuxLoad(aid, _, _, ptr, rval, mo) ->
         assert false
-    | ILinuxStore(aid, (ctype,sort), ptr, wval, mo) ->
+    | ILinuxStore(aid, _, _, ptr, wval, mo) ->
         assert false
     | ILinuxFence(aid, mo) ->
         assert false

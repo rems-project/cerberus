@@ -94,6 +94,8 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_object obj_type     -> cot_to_z3 obj_type
   | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
+  | BTy_loaded (OTy_array OTy_integer) ->
+      LoadedIntArray.mk_sort
   | BTy_loaded _            -> assert false
   | BTy_storable            -> assert false
 
@@ -104,9 +106,10 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
     (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
   Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
 
-let rec ctor_to_z3 (ctor  : typed_ctor)
-                   (exprs : Expr.expr list)
-                   (bTy   : core_base_type option) =
+let ctor_to_z3 (ctor  : typed_ctor)
+               (exprs : Expr.expr list)
+               (bTy   : core_base_type option)
+               (uid   : int) =
   match ctor with
   | Ctuple ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
@@ -128,6 +131,8 @@ let rec ctor_to_z3 (ctor  : typed_ctor)
         LoadedInteger.mk_specified (List.hd exprs)
       else if (Option.get bTy = BTy_loaded OTy_pointer) then
         LoadedPointer.mk_specified (List.hd exprs)
+      else if (Option.get bTy = BTy_loaded (OTy_array OTy_integer)) then
+        LoadedIntArray.mk_specified (List.hd exprs)
       else
         assert false
   | Cunspecified ->
@@ -149,6 +154,13 @@ let rec ctor_to_z3 (ctor  : typed_ctor)
   | Cnil BTy_ctype ->
       assert (List.length exprs = 0);
       CtypeListSort.mk_nil
+  | Carray ->
+      begin match Option.get bTy with
+      | BTy_object (OTy_array OTy_integer) ->
+          (* Just create a new array; need to bind values to Z3 though *)
+          IntArray.mk_const_s (sprintf "array_%d" uid)
+      | _ -> assert false
+      end
   | _ ->
       assert false
 
