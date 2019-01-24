@@ -89,27 +89,29 @@ type io_helpers = {
   warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
-let read_entire_file filename =
-  let ic = open_in filename in
-  let n = in_channel_length ic in
-  let bs = Bytes.create n in
-  really_input ic bs 0 n;
-  close_in ic;
-  Bytes.to_string bs
-
 let cpp (conf, io) ~filename =
-  let processed_filename = Filename.(temp_file (basename filename) "") in
-  io.print_debug 5 (fun () -> "C prepocessor outputed in: `" ^ processed_filename ^ "`") >>= fun () ->
-  if Sys.command (conf.cpp_cmd ^ " " ^ filename ^ " 1> " ^ processed_filename ^ " 2> cpp_error") <> 0 then
-    failwith @@ read_entire_file "cpp_error";
-  return processed_filename
+  io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
+  let cpp_out = Unix.open_process_in (conf.cpp_cmd ^ " " ^ filename) in
+  let rec read acc ic =
+    try read (input_line ic :: acc) ic
+    with End_of_file -> List.rev acc
+  in
+  let out = read [] cpp_out in
+  match Unix.close_process_in cpp_out with
+  | WEXITED n
+  | WSIGNALED n
+  | WSTOPPED n ->
+    if n <> 0 then
+      exit n
+    else
+      return @@ String.concat "\n" out
 
 let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
-  let parse filename =
-    Cparser_driver.parse filename >>= fun cabs_tunit ->
+  let parse file_content =
+    Cparser_driver.parse_from_string file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
@@ -157,8 +159,8 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     end >>= fun () -> return ailtau_prog in
   (* -- *)
   io.print_debug 2 (fun () -> "Using the C frontend") >>= fun () ->
-  cpp (conf, io) ~filename >>= fun processed_filename ->
-  parse processed_filename  >>= fun cabs_tunit  ->
+  cpp (conf, io) ~filename  >>= fun file_content ->
+  parse file_content        >>= fun cabs_tunit  ->
   desugar cabs_tunit        >>= fun ail_prog    ->
   ail_typechecking ail_prog >>= fun ailtau_prog ->
   (* NOTE: the elaboration sets the struct/union tag definitions, so to allow the frontend to be
