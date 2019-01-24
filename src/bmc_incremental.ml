@@ -29,9 +29,10 @@ module Caux = Core_aux
 
 (* TODO: factor out all the repeated state *)
 (* TODO: inline does some bad rewrites:
-  * - function calls
-  * - core type compatibility
-  *)
+ *  - function calls
+ *  - core type compatibility
+ *  PEare_compatible is currently just equality
+ *)
 
 (* ======= Do inlining ======= *)
 module BmcInline = struct
@@ -1026,18 +1027,37 @@ module BmcZ3 = struct
     | IKill of aid
     | ILoad of aid * (* TODO: list *) ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
-    | ICompareExchangeStrong of aid * ctype_sort * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+    | ICompareExchangeStrong of
+        (* Load expected value *) aid *
+        (* If fail, do a load of obj then a store *) aid * aid *
+        (* If succeed, do a rmw *) aid *
+        ctype_sort * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
     | ILinuxLoad of aid * ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
     | ILinuxStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
+  type permission_flag =
+    | ReadWrite
+    | ReadOnly
+
+  (* TODO: kind in {object, region} *)
+
+  type allocation_metadata =
+    (* size *) int * ctype option * (* base address *) int * permission_flag *
+    (* C prefix *) Sym.prefix
+
+  let get_metadata_prefix (_,_,_,_,pref) : Sym.prefix = pref
+
   type z3_state = {
-    (* Builds expr_map, case_guard_map, and action_map *)
+    (* Builds the following *)
     expr_map      : (int, Expr.expr) Pmap.map;
     case_guard_map: (int, Expr.expr list) Pmap.map;
     action_map    : (int, intermediate_action) Pmap.map;
     param_actions : (intermediate_action option) list;
+    (* TODO: extend this to include type *)
+
+    alloc_meta_map: (alloc, allocation_metadata) Pmap.map;
 
     file          : unit typed_file;
 
@@ -1055,6 +1075,7 @@ module BmcZ3 = struct
     case_guard_map = Pmap.empty Pervasives.compare;
     action_map     = Pmap.empty Pervasives.compare;
     param_actions  = [];
+    alloc_meta_map = Pmap.empty Pervasives.compare;
 
     file = file;
 
@@ -1123,6 +1144,10 @@ module BmcZ3 = struct
                         : unit eff =
     get >>= fun st ->
     put {st with param_actions = actions}
+
+  let add_metadata (alloc_id: alloc) (meta: allocation_metadata) : unit eff =
+    get >>= fun st ->
+    put {st with alloc_meta_map = Pmap.add alloc_id meta st.alloc_meta_map}
 
   (* HELPERS *)
   let compute_case_guards (patterns: typed_pattern list)
@@ -1246,19 +1271,23 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create ctype =
+  let mk_create ctype (pref: Sym.prefix) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
     mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
+
+    add_metadata alloc_id (List.length flat_sortlist, Some ctype,
+                           0 (* TODO *),
+                           ReadWrite, pref) >>
     return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
             ICreate (aid_list, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), _) ->
-        mk_create ctype
+    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        mk_create ctype prefix
     | Create _ ->
         print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
@@ -1302,7 +1331,10 @@ module BmcZ3 = struct
                             Pexpr(_,_,PEsym obj),
                             Pexpr(_,_,PEsym expected),
                             desired, mo_success, mo_failure) ->
-        get_fresh_aid  >>= fun aid ->
+        get_fresh_aid  >>= fun aid_load ->
+        get_fresh_aid  >>= fun aid_fail_load ->
+        get_fresh_aid  >>= fun aid_fail_store ->
+        get_fresh_aid  >>= fun aid_succeed_rmw ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         assert (List.length flat_sortlist = 1);
@@ -1321,9 +1353,11 @@ module BmcZ3 = struct
         (* TODO *)
         return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
                                      (LoadedInteger.mk_specified (int_to_z3 0)),
-                ICompareExchangeStrong (aid, (ctype,sort), obj_expr, expected_expr,
-                                        z3d_desired, rval_expected, rval_object,
-                                        mo_success, mo_failure))
+                ICompareExchangeStrong (
+                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
+                  (ctype,sort), obj_expr, expected_expr,
+                  z3d_desired, rval_expected, rval_object,
+                  mo_success, mo_failure))
     | CompareExchangeStrong _ ->
         assert false
     | Fence0 mo ->
@@ -1370,7 +1404,9 @@ module BmcZ3 = struct
     (match expr_ with
     | Epure pe ->
         z3_pe pe
-    | Ememop (PtrValidForDeref, [ptr]) ->
+    | Ememop (PtrValidForDeref, [ctype;ptr]) ->
+        (* TODO: includes type *)
+        bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
         z3_pe ptr >>= fun z3d_ptr ->
         let addr = PointerSort.get_addr z3d_ptr in
         let range_assert = AddressSort.valid_index_range addr in
@@ -1379,7 +1415,9 @@ module BmcZ3 = struct
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
         return (mk_eq z3d_p1 z3d_p2)
-    | Ememop _ -> assert false
+    | Ememop _ ->
+        (* TODO *)
+        assert false
     | Eaction action ->
         z3_action action uid
     | Ecase (pe, cases) ->
@@ -1458,11 +1496,14 @@ module BmcZ3 = struct
 
     let z3_param ((sym, cbt): (sym_ty * core_base_type))
                  (ctype: ctype)
+                 (fn_to_check: sym_ty)
                  : (intermediate_action option) eff =
       if not (is_core_ptr_bty cbt) then
         return None
       else begin
-        mk_create ctype >>= fun (_,action) ->
+        mk_create ctype
+            (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
+            >>= fun (_,action) ->
         return (Some action)
       end
 
@@ -1474,7 +1515,7 @@ module BmcZ3 = struct
       | None -> failwith (sprintf "BmcZ3 z3_params: %s not found"
                                   (symbol_to_string fn_to_check))
       | Some (_, param_tys, _, _) ->
-          mapM2 z3_param params param_tys
+          mapM2 (fun p ty -> z3_param p ty fn_to_check) params param_tys
 
     let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
                 : (unit typed_file) eff =
@@ -1898,7 +1939,7 @@ module BmcBind = struct
     (match expr_ with
     | Epure pe ->
         bind_pe pe
-    | Ememop (PtrValidForDeref, [ptr]) ->
+    | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         bind_pe ptr
     | Ememop (PtrEq, [p1;p2]) ->
         bind_pe p1 >>= fun bound_p1 ->
@@ -2204,6 +2245,34 @@ module BmcVC = struct
     | Load0 _ -> assert false
     | RMW0 _  -> assert false
     | Fence0 _ -> return []
+    | CompareExchangeStrong (Pexpr(_,_,PEval (Vctype ty)),
+                             Pexpr(_,_,PEsym obj),
+                             Pexpr(_,_,PEsym expected),
+                             desired, mo_success, mo_failure) ->
+        assert (!!bmc_conf.concurrent_mode);
+        assert (g_memory_mode = MemoryMode_C);
+        (* Check valid memory orders:
+         * mo_failure must not be RELEASE or ACQ_REL
+         * mo_failure must be no stronger than mo_success
+         *)
+        let invalid_mo_failure =
+          (mo_failure = Release || mo_failure = Acq_rel) in
+        let mo_failure_stronger =
+          (mo_failure = Seq_cst && mo_success <> Seq_cst) ||
+          (mo_failure = Acquire && mo_success = Relaxed) in
+        let valid_memorder =
+          mk_bool (not (invalid_mo_failure || mo_failure_stronger)) in
+        if invalid_mo_failure then
+          bmc_debug_print 3
+            "`failure' memory order of CompareExchangeStrong` must not be
+             release or acq_rel"
+        else if mo_failure_stronger then
+          bmc_debug_print 3
+            "'failure' memory order of CompareExchangeStrong' must not be
+             stronger than the success argument"
+        ;
+        return [(valid_memorder,
+                 VcDebugStr(string_of_int uid ^ "_CompareExchangeStrong_memorder"))]
     | CompareExchangeStrong _ -> assert false
     | LinuxFence _ -> return []
     | LinuxStore _ -> assert false
@@ -2948,7 +3017,7 @@ end
 module BmcConcActions = struct
   type internal_state = {
     inline_expr_map : (int, unit typed_expr) Pmap.map;
-    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
+    sym_expr_table  : (sym_ty, Expr.expr) Pmap.map;
     action_map      : (int, BmcZ3.intermediate_action) Pmap.map;
     param_actions   : (BmcZ3.intermediate_action option) list;
     case_guard_map  : (int, Expr.expr list) Pmap.map;
@@ -3126,8 +3195,26 @@ module BmcConcActions = struct
     | IStore(aid, (ctype, sort), ptr, wval, mo) ->
         get_tid >>= fun tid ->
         return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]
-    | ICompareExchangeStrong _ ->
-        assert false (* TODO *)
+    | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
+                              (ctype, sort), ptr_obj, ptr_exp,
+                              desired, rval_expected, rval_object,
+                              mo_success, mo_failure) ->
+        get_tid >>= fun tid ->
+        let success_guard = mk_eq rval_expected rval_object in
+        (* TODO: need to change this type *)
+        return [
+          (* NA load of ptr_exp -> rval_expected *)
+          BmcAction(pol, mk_true,
+                    Load(aid_load, tid, C_mem_order NA, ptr_exp, rval_expected));
+          (* if fail: do a load of object and then a store *)
+          BmcAction(pol, mk_not success_guard,
+                    Load(aid_fail_load, tid, C_mem_order mo_failure, ptr_obj, rval_object));
+          BmcAction(pol, mk_not success_guard,
+                    Store(aid_fail_store, tid, C_mem_order NA, ptr_exp, rval_object));
+          (* if succeed, do a rmw *)
+          BmcAction(pol, success_guard,
+                    RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired))
+        ]
     | IFence (aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
@@ -3265,7 +3352,19 @@ module BmcConcActions = struct
     | Ememop (memop, pes) ->
         return []
     | Eaction (Paction(pol, action)) ->
-        return []
+        (* Only need to do something for RMW *)
+        get_action uid >>= fun interm_action ->
+        begin match interm_action with
+        | ICompareExchangeStrong
+              (aid_load, aid_fail_load, aid_fail_store, aid_success_rmw,
+               _, _, _, _, _, _, _, _) ->
+            return [(aid_load, aid_fail_load)
+                   ;(aid_load, aid_fail_store)
+                   ;(aid_load, aid_success_rmw)
+                   ;(aid_fail_load, aid_fail_store)]
+        | _ ->
+            return []
+        end
     | Ecase (pe, cases) ->
         mapM do_po_e (List.map snd cases) >>= fun po_cases ->
         return (List.concat po_cases)

@@ -47,6 +47,11 @@ type aid = int
 type tid = int
 
 type z3_location = Expr.expr
+(*
+  | LocZ3Expr of Expr.expr
+  | LocStr of string 
+*)
+
 type z3_value    = Expr.expr
 type guard       = Expr.expr
 
@@ -179,10 +184,20 @@ let pp_memory_order_enum3 m () =
 let pp_tid = string_of_int
 let pp_aid = string_of_int
 let pp_loc () loc =
-  match Expr.get_args loc with
+  begin match Expr.get_args loc with
   | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
-  | _ -> Expr.to_string loc
+  | _ -> Expr.to_string loc 
+  end
 
+  (*match loc with
+  | LocZ3Expr expr ->
+      begin match Expr.get_args expr with
+      | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
+      | _ -> Expr.to_string expr
+      end
+  | LocStr str ->
+      str*)
+    
 let pp_thread_id () tid =
   pp_tid tid
 

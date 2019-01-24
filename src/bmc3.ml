@@ -35,6 +35,7 @@ module BmcM = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
     param_actions    : (BmcZ3.intermediate_action option) list option;
+    alloc_meta       : (BmcZ3.alloc, BmcZ3.allocation_metadata) Pmap.map option;
 
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
@@ -66,6 +67,7 @@ module BmcM = struct
     ; case_guard_map   = None
     ; action_map       = None
     ; param_actions    = None
+    ; alloc_meta       = None
     ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
@@ -117,6 +119,7 @@ module BmcM = struct
                  case_guard_map = Some final_state.case_guard_map;
                  action_map     = Some final_state.action_map;
                  param_actions  = Some final_state.param_actions;
+                 alloc_meta     = Some final_state.alloc_meta_map;
         }
 
   (* Compute drop continuation table *)
@@ -286,6 +289,14 @@ let bmc_file (file              : unit typed_file)
   List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
             (Option.get final_state.ret_bindings);
 
+  (* TODO: Output this in the dot graph *)
+  if !!bmc_conf.debug_lvl >= 3 then
+  ( print_endline "====ALLOCATION PREFIXES";
+    Pmap.iter (fun alloc meta ->
+      printf "%d: %s\n" alloc (prefix_to_string (BmcZ3.get_metadata_prefix meta)))
+      (Option.get final_state.alloc_meta)
+  );
+
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
   Solver.add g_solver (Option.get final_state.ret_bindings);
@@ -326,15 +337,17 @@ let bmc_file (file              : unit typed_file)
       print_endline "OUTPUT: satisfiable";
       let model = Option.get (Solver.get_model g_solver) in
       let str_model = Model.to_string model in
+      let satisfied_vcs =
+        BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
+      (* TODO: Display this in UI *)
+      List.iter (fun (expr, dbg) ->
+        printf "%s: \n" (BmcVC.vc_debug_to_str dbg) (*(Expr.to_string expr)*)
+      ) satisfied_vcs;
+
       if !!bmc_conf.output_model then
         begin
         print_endline str_model;
         (* TODO: print this out independently of --bmc_output_model*)
-        let satisfied_vcs =
-          BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
-        List.iter (fun (expr, dbg) ->
-          printf "%s: %s\n" (BmcVC.vc_debug_to_str dbg) (Expr.to_string expr)
-        ) satisfied_vcs;
         end;
     `Satisfiable (str_model, dots)
     end
