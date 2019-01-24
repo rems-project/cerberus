@@ -349,7 +349,7 @@ let exec_mode =
 let pprints =
   let open Pipeline in
   let doc = "Pretty print the intermediate programs for the listed languages\
-             (ranging over {cabs, ail, core})." in
+             (ranging over {ail, core})." in
   Arg.(value & opt (list (enum ["ail", Ail; "core", Core])) [] &
        info ["pp"] ~docv:"LANG1,..." ~doc)
 
