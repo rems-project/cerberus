@@ -180,6 +180,17 @@ module AddressSort = struct
     let index = get_index addr in
     mk_expr alloc (binop_to_z3 OpAdd index n)
 
+  (* TODO: extend this so x is a range of addresses *)
+  let addr_subset (x: Expr.expr) (min_addr: Expr.expr) (max_addr: Expr.expr)
+                  : Expr.expr =
+    (* assume: max_addr >= min_addr *)
+    (* Checks alloc are equal and index(min) <= index(x) <= index(max) *)
+    mk_and [mk_eq (get_alloc x) (get_alloc min_addr)
+           ;mk_eq (get_alloc x) (get_alloc max_addr)
+           ;binop_to_z3 OpLe (get_index min_addr) (get_index x)
+           ;binop_to_z3 OpLe (get_index x) (get_index max_addr)
+           ]
+
   (* ====== Atomic ====== *)
   let is_atomic_decl =
     mk_fresh_func_decl g_ctx "is_atomic" [mk_sort] boolean_sort
@@ -323,21 +334,6 @@ module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
 
-(* Get ith index in loaded value *)
-(* TODO: This will change once we switch to byte representation *)
-let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
-  if (Sort.equal (Expr.get_sort loaded) LoadedInteger.mk_sort) then
-    (assert (i = 0); loaded)
-  else if (Sort.equal (Expr.get_sort loaded) LoadedPointer.mk_sort) then
-    (assert (i = 0); loaded)
-  else if (Sort.equal (Expr.get_sort loaded) (LoadedIntArray.mk_sort)) then
-    (* TODO: What if unspecified? *)
-    begin
-      let spec_value = LoadedIntArray.get_specified_value loaded in
-      IntArray.mk_select spec_value (int_to_z3 i)
-    end
-  else
-    assert false
 
 module Loaded = struct
   open Z3.Datatype
@@ -365,7 +361,52 @@ module Loaded = struct
       Expr.mk_app g_ctx (List.nth ctors 2) [expr]
     else
       assert false
+
+  let is_loaded_int (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 0 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let is_loaded_ptr (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 1 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let is_loaded_int_array (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 2 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let get_int_array (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 2) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  (* TODO: pretty bad code *)
+  let get_ith_in_loaded_2 (i: Expr.expr) (loaded: Expr.expr) : Expr.expr =
+    assert (Sort.equal (Expr.get_sort loaded) mk_sort);
+    let spec_int_array = LoadedIntArray.get_specified_value (get_int_array loaded) in
+    mk_ite (mk_or [is_loaded_int loaded; is_loaded_ptr loaded])
+           loaded
+           (* Else: must be (specified?) int array in currently supported C fragment *)
+           (mk_expr (IntArray.mk_select spec_int_array i))
+
 end
+
+(* Get ith index in loaded value *)
+(* TODO: This will change once we switch to byte representation *)
+(* TODO: duplicate from above right now for testing and assertion purposes *)
+let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
+  if (Sort.equal (Expr.get_sort loaded) LoadedInteger.mk_sort) then
+    (assert (i = 0); loaded)
+  else if (Sort.equal (Expr.get_sort loaded) LoadedPointer.mk_sort) then
+    (assert (i = 0); loaded)
+  else if (Sort.equal (Expr.get_sort loaded) (LoadedIntArray.mk_sort)) then
+    (* TODO: What if unspecified? *)
+    begin
+      let spec_value = LoadedIntArray.get_specified_value loaded in
+      IntArray.mk_select spec_value (int_to_z3 i)
+    end
+  else
+    assert false
+
 
 (* TODO: CFunctions are currently just identifiers *)
 module CFunctionSort = struct

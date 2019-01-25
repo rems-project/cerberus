@@ -49,7 +49,7 @@ type tid = int
 type z3_location = Expr.expr
 (*
   | LocZ3Expr of Expr.expr
-  | LocStr of string 
+  | LocStr of string
 *)
 
 type z3_value    = Expr.expr
@@ -134,6 +134,12 @@ let wval_of_action (a: action) = match a with
   | RMW   (_, _, _, _, _, v,_) -> v
   | _ -> assert false
 
+let ctype_of_action (a: action) = match a with
+  | Load(_,_,_,_,_,ty)
+  | Store(_,_,_,_,_,ty)
+  | RMW (_, _, _, _, _, _,ty) -> ty
+  | _ -> assert false
+
 let is_write (a: action) = match a with
   | Store _ | RMW _ -> true
   | _ -> false
@@ -186,7 +192,7 @@ let pp_aid = string_of_int
 let pp_loc () loc =
   begin match Expr.get_args loc with
   | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
-  | _ -> Expr.to_string loc 
+  | _ -> Expr.to_string loc
   end
 
   (*match loc with
@@ -197,7 +203,7 @@ let pp_loc () loc =
       end
   | LocStr str ->
       str*)
-    
+
 let pp_thread_id () tid =
   pp_tid tid
 
