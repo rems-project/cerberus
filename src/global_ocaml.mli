@@ -40,3 +40,4 @@ val isDefacto: unit -> bool
 (* NOTE: used in pp_errors.ml *)
 val verbose: unit -> error_verbosity
 val n1570: unit -> Yojson.Basic.json option
+
