@@ -163,6 +163,12 @@ ocaml_profiling:
 	  cp -L main_.native cerberus-prof; \
 	fi
 
+
+instance_profiling:
+	ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)'  src/cerberus_cstubs.o;
+	BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
+	cp -L instance.native cerb.concrete 
+
 instance: src/instance.ml
 	ocamlbuild src/cerberus_cstubs.o;
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
@@ -173,7 +179,10 @@ instance: src/instance.ml
 	cp -L instance.native cerb.symbolic
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip -libs str web.native
+
+web_profiling: src/web.ml
+	BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
 
 web.byte: src/web.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64 web.d.byte
