@@ -230,15 +230,15 @@ let string_of_polarity = function
 
 let pp_action (a: action) =
   match a with
-  | Load(aid,tid,memorder,loc,rval) ->
+  | Load(aid,tid,memorder,loc,rval,_) ->
       sprintf "Load(%d,%d,%s,%s,%s)"
               aid tid (string_of_memory_order memorder)
               (Expr.to_string loc) (Expr.to_string rval)
-  | Store(aid,tid,memorder,loc,wval) ->
+  | Store(aid,tid,memorder,loc,wval,_) ->
       sprintf "Store(%d,%d,%s,%s,%s)"
               aid tid (string_of_memory_order memorder)
               (Expr.to_string loc) (Expr.to_string wval)
-  | RMW(aid,tid,memorder,loc,rval,wval) ->
+  | RMW(aid,tid,memorder,loc,rval,wval,_) ->
       sprintf "RMW(%d,%d,%s,%s,%s,%s)"
               aid tid (string_of_memory_order memorder)
               (Expr.to_string loc) (Expr.to_string wval) (Expr.to_string rval)
@@ -1380,19 +1380,19 @@ module C11MemoryModel : MemoryModel = struct
       if (Boolean.get_bool_value (interp (fns.getGuard event))
                = L_TRUE) then
         let new_action = match action with
-          | Load (aid,tid,memorder,loc,rval) ->
+          | Load (aid,tid,memorder,loc,rval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let rval = interp (fns.getRval event) in
-              Load(aid,tid,memorder,loc,rval)
-          | Store(aid,tid,memorder,loc,wval) ->
+              Load(aid,tid,memorder,loc,rval,ctype)
+          | Store(aid,tid,memorder,loc,wval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let wval = interp (fns.getWval event) in
-              Store(aid,tid,memorder,loc,wval)
-          | RMW (aid,tid,memorder,loc,rval,wval) ->
+              Store(aid,tid,memorder,loc,wval,ctype)
+          | RMW (aid,tid,memorder,loc,rval,wval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let rval = interp (fns.getRval event) in
               let wval = interp (fns.getWval event) in
-              RMW(aid,tid,memorder,loc,rval,wval)
+              RMW(aid,tid,memorder,loc,rval,wval,ctype)
           | Fence _ ->
               action
         in (new_action, event) :: acc
@@ -1810,19 +1810,19 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       (*if tid_of_action action = initial_tid then acc*)
       if (Boolean.get_bool_value (interp (fns.getGuard event)) = L_TRUE) then
         let new_action = match action with
-          | Load (aid,tid,memorder,loc,rval) ->
+          | Load (aid,tid,memorder,loc,rval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let rval = interp (fns.getRval event) in
-              Load(aid,tid,memorder,loc,rval)
-          | Store(aid,tid,memorder,loc,wval) ->
+              Load(aid,tid,memorder,loc,rval,ctype)
+          | Store(aid,tid,memorder,loc,wval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let wval = interp (fns.getWval event) in
-              Store(aid,tid,memorder,loc,wval)
-          | RMW (aid,tid,memorder,loc,rval,wval) ->
+              Store(aid,tid,memorder,loc,wval,ctype)
+          | RMW (aid,tid,memorder,loc,rval,wval,ctype) ->
               let loc = interp (fns.getAddr event) in
               let rval = interp (fns.getRval event) in
               let wval = interp (fns.getWval event) in
-              RMW(aid,tid,memorder,loc,rval,wval)
+              RMW(aid,tid,memorder,loc,rval,wval,ctype)
           | Fence _ ->
               action
         in (new_action, event) :: acc
