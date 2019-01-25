@@ -304,6 +304,9 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
   | Union0 _
   | Builtin0 _ -> assert false
 
+let size_of_ctype (ty: Core_ctype.ctype0)
+                  (file: unit typed_file) =
+  bmcz3sort_size (ctype_to_bmcz3sort ty file)
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)

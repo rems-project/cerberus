@@ -3203,7 +3203,6 @@ module BmcConcActions = struct
       BmcMemCommon.mk_initial_loaded_value sort
           (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
           ctype initialise in
-    print_endline (Expr.to_string initial_value);
     mapM add_assertion assumptions >>
     return [mk_store pol mk_true aid initial_tid
                      (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
@@ -3540,7 +3539,7 @@ module BmcConcActions = struct
     mk_preexec actions po >>= fun preexec ->
     (*print_endline (pp_preexec preexec);*)
     (* TODO *)
-    let memory_model = BmcMem.compute_executions preexec in
+    let memory_model = BmcMem.compute_executions preexec file in
     let mem_assertions =
       if (List.length actions > 0) then BmcMem.get_assertions memory_model
       else [] in
