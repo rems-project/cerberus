@@ -1023,7 +1023,7 @@ module BmcZ3 = struct
 
   (* Massive TODO *)
   type intermediate_action =
-    | ICreate of aid list * (* TODO: align *) ctype_sort list * alloc
+    | ICreate of aid * ctype * (* TODO: align *) ctype_sort list * alloc
     | IKill of aid
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
@@ -1031,7 +1031,7 @@ module BmcZ3 = struct
         (* TODO: type *)
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
-        (* If succeed, do a rmw *) aid *
+        (* If succeed, do a rmw *) aid * ctype *
         ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
     | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
@@ -1277,13 +1277,14 @@ module BmcZ3 = struct
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-    mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
+    get_fresh_aid >>= fun aid ->
+    (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
 
     add_metadata alloc_id (List.length flat_sortlist, Some ctype,
                            0 (* TODO *),
                            ReadWrite, pref) >>
     return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
-            ICreate (aid_list, flat_sortlist, alloc_id))
+            ICreate (aid, ctype, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
@@ -1352,7 +1353,7 @@ module BmcZ3 = struct
         return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
                                      (LoadedInteger.mk_specified (int_to_z3 0)),
                 ICompareExchangeStrong (
-                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
+                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw, ty,
                   flat_sortlist, obj_expr, expected_expr,
                   z3d_desired, rval_expected, rval_object,
                   mo_success, mo_failure))
@@ -1905,7 +1906,7 @@ module BmcBind = struct
 
         let (alloc_size, alloc_id) =
           (match action with
-           | ICreate(_, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
+           | ICreate(_, _, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
            | _ -> assert false
           ) in
 
@@ -2568,6 +2569,8 @@ module BmcMemCommon = struct
       LoadedInteger.mk_unspecified ctype
     else if (Sort.equal (LoadedPointer.mk_sort) sort) then
       LoadedPointer.mk_unspecified ctype
+    else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
+      LoadedIntArray.mk_unspecified ctype
     else
       assert false
 
@@ -2782,7 +2785,7 @@ module BmcSeqMem = struct
                  : ret_ty eff =
     get_action uid >>= fun action ->
     match action with
-    | ICreate(_, sortlist, alloc_id) ->
+    | ICreate(_, _, sortlist, alloc_id) ->
         do_create sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
@@ -2984,7 +2987,7 @@ module BmcSeqMem = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return empty_ret
-    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+    | Some (ICreate(_, _, sortlist, alloc_id)) ->
         do_create sortlist alloc_id true >>= fun ret ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
@@ -3171,9 +3174,43 @@ module BmcConcActions = struct
                (memorder: memory_order)
                (ptr: Expr.expr)
                (wval: Expr.expr)
+               (ctype: ctype)
                : bmc_action =
-    BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval))
+    BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval, ctype))
 
+  (* Make a single create *)
+  let do_create (aid: aid)
+                (ctype: ctype)
+                (sortlist: BmcZ3.ctype_sort list)
+                (alloc_id: BmcZ3.alloc)
+                (pol: polarity)
+                (initialise: bool) =
+    let sort = ctype_to_z3_sort ctype in
+    let is_atomic_fn = (function ctype -> match ctype with
+                       | Core_ctype.Atomic0 _ -> mk_true
+                       | _ -> mk_false) in
+    mapMi_ (fun i (cype,sort) ->
+      let addr = (alloc_id, i) in
+      let addr_expr = AddressSort.mk_from_addr addr in
+      let is_atomic =
+        AddressSort.assert_is_atomic addr_expr (is_atomic_fn ctype) in
+      add_assertion is_atomic
+    ) sortlist >>
+    let ptr_0 = PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id,0)) in
+
+
+    let (initial_value, assumptions) =
+      BmcMemCommon.mk_initial_loaded_value sort
+          (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+          ctype initialise in
+    print_endline (Expr.to_string initial_value);
+    mapM add_assertion assumptions >>
+    return [mk_store pol mk_true aid initial_tid
+                     (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
+
+
+
+  (*
   let do_create (aidlist : aid list)
                 (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
@@ -3199,28 +3236,27 @@ module BmcConcActions = struct
       return (mk_store pol mk_true aid initial_tid
                        (C_mem_order Cmm_csem.NA) ptr initial_value)
     ) aid_sortlist
+  *)
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
                                   : (bmc_action list) eff =
     (match action with
-    | ICreate(aidlist, sortlist, alloc_id) ->
-        do_create aidlist sortlist alloc_id pol false
+    | ICreate(aid, ctype, sortlist, alloc_id) ->
+        do_create aid ctype sortlist alloc_id pol false
     | IKill aid ->
         (* TODO *)
         return []
     (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
-    | ILoad (aid, _, _, ptr, rval, mo) ->
-        assert false
-        (*get_tid >>= fun tid ->
-        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval))] *)
+    | ILoad (aid, ctype, _, ptr, rval, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval, ctype))]
     (*| IStore(aid, (ctype, sort), ptr, wval, mo) ->*)
-    | IStore (_,_,_,_,_,_) ->
-        assert false
-        (*get_tid >>= fun tid ->
-        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]*)
+    | IStore (aid,ctype,_,ptr,wval,mo) ->
+        get_tid >>= fun tid ->
+        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval ctype]
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
-                              _, ptr_obj, ptr_exp,
+                              ctype,_, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,
                               mo_success, mo_failure) ->
         get_tid >>= fun tid ->
@@ -3229,15 +3265,15 @@ module BmcConcActions = struct
         return [
           (* NA load of ptr_exp -> rval_expected *)
           BmcAction(pol, mk_true,
-                    Load(aid_load, tid, C_mem_order NA, ptr_exp, rval_expected));
+                    Load(aid_load, tid, C_mem_order NA, ptr_exp, rval_expected,ctype));
           (* if fail: do a load of object and then a store *)
           BmcAction(pol, mk_not success_guard,
-                    Load(aid_fail_load, tid, C_mem_order mo_failure, ptr_obj, rval_object));
+                    Load(aid_fail_load, tid, C_mem_order mo_failure, ptr_obj, rval_object,ctype));
           BmcAction(pol, mk_not success_guard,
-                    Store(aid_fail_store, tid, C_mem_order NA, ptr_exp, rval_object));
+                    Store(aid_fail_store, tid, C_mem_order NA, ptr_exp, rval_object,ctype));
           (* if succeed, do a rmw *)
           BmcAction(pol, success_guard,
-                    RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired))
+                    RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired,ctype))
         ]
 
     | IFence (aid, mo) ->
@@ -3344,9 +3380,9 @@ module BmcConcActions = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return []
-    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+    | Some (ICreate(aid, ctype, sortlist, alloc_id)) ->
         (* Polarity is irrelevant? *)
-        do_create aid_list sortlist alloc_id Pos true >>= fun actions ->
+        do_create aid ctype sortlist alloc_id Pos true >>= fun actions ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
         let eq_expr =
@@ -3382,7 +3418,7 @@ module BmcConcActions = struct
         begin match interm_action with
         | ICompareExchangeStrong
               (aid_load, aid_fail_load, aid_fail_store, aid_success_rmw,
-               _, _, _, _, _, _, _, _) ->
+               _,_, _, _, _, _, _, _, _) ->
             return [(aid_load, aid_fail_load)
                    ;(aid_load, aid_fail_store)
                    ;(aid_load, aid_success_rmw)

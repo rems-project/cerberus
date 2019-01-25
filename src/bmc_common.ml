@@ -247,6 +247,28 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Union v ->  Union0 v
   | Builtin v -> Builtin0 v
 
+let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+                         : Sort.sort =
+   match ty with
+  | Void0     -> assert false
+  | Basic0(Integer i) -> LoadedInteger.mk_sort
+  | Basic0 _ -> assert false
+  | Array0(Basic0 (Integer i), Some n) ->
+      LoadedIntArray.mk_sort
+  | Array0(_, _) ->
+      assert false
+  | Function0 _ -> assert false
+  | Pointer0 _ -> LoadedPointer.mk_sort
+  | Atomic0 (Basic0 _ as _ty) (* fall through *)
+  | Atomic0 (Pointer0 _ as _ty) ->
+      ctype_to_z3_sort _ty
+  | Atomic0 _ ->
+      assert false
+  | Struct0 _ ->
+      assert false
+  | Union0 _
+  | Builtin0 _ -> assert false
+
 let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                            (file: unit typed_file)
                            : bmcz3sort =

@@ -60,9 +60,9 @@ type memory_order =
   | Linux_mem_order of Linux.memory_order0
 
 type action =
-  | Load  of aid * tid * memory_order * z3_location * z3_value
-  | Store of aid * tid * memory_order * z3_location * z3_value
-  | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value
+  | Load  of aid * tid * memory_order * z3_location * z3_value * ctype
+  | Store of aid * tid * memory_order * z3_location * z3_value * ctype
+  | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value * ctype
   | Fence of aid * tid * memory_order
 
 type location_kind =
@@ -98,40 +98,40 @@ type execution_derived_data = {
 
 (* ===== ACCESSORS ===== *)
 let aid_of_action (a: action) = match a with
-  | Load  (aid, _, _, _, _)
-  | Store (aid, _, _, _, _)
-  | RMW   (aid, _, _, _, _, _)
+  | Load  (aid, _, _, _, _, _)
+  | Store (aid, _, _, _, _,_)
+  | RMW   (aid, _, _, _, _, _,_)
   | Fence (aid, _, _) ->
       aid
 
 let tid_of_action (a: action) = match a with
-  | Load  (_, tid, _, _, _)
-  | Store (_, tid, _, _, _)
-  | RMW   (_, tid, _, _, _, _)
+  | Load  (_, tid, _, _, _,_)
+  | Store (_, tid, _, _, _,_)
+  | RMW   (_, tid, _, _, _, _,_)
   | Fence (_, tid, _) ->
       tid
 
 let memorder_of_action (a: action) = match a with
-  | Load  (_,_,m,_,_)
-  | Store (_,_,m,_,_)
-  | RMW   (_,_,m,_,_,_)
+  | Load  (_,_,m,_,_,_)
+  | Store (_,_,m,_,_,_)
+  | RMW   (_,_,m,_,_,_,_)
   | Fence (_,_,m) ->
       m
 
 let addr_of_action (a: action) = match a with
-  | Load  (_, _, _, l, _)
-  | Store (_, _, _, l, _)
-  | RMW   (_, _, _, l, _, _) -> l
+  | Load  (_, _, _, l, _,_)
+  | Store (_, _, _, l, _,_)
+  | RMW   (_, _, _, l, _, _,_) -> l
   | Fence (_, _, _) -> assert false
 
 let rval_of_action (a: action) = match a with
-  | Load (_, _, _, _, v)
-  | RMW (_, _, _, _, v, _) -> v
+  | Load (_, _, _, _, v,_)
+  | RMW (_, _, _, _, v, _,_) -> v
   | _ -> assert false
 
 let wval_of_action (a: action) = match a with
-  | Store (_, _, _, _, v)
-  | RMW   (_, _, _, _, _, v) -> v
+  | Store (_, _, _, _, v,_)
+  | RMW   (_, _, _, _, _, v,_) -> v
   | _ -> assert false
 
 let is_write (a: action) = match a with
@@ -224,10 +224,10 @@ let pp_value () expr =
     Expr.to_string arg
 
 let pp_action_long = function
-  | Load (aid, tid, memord, loc, cval) ->
+  | Load (aid, tid, memord, loc, cval,_) ->
     sprintf "%s:Load %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc () loc)
                                   (pp_memory_order memord) (pp_value () cval)
-  | Store (aid, tid, memord, loc, cval) ->
+  | Store (aid, tid, memord, loc, cval,_) ->
     sprintf "%s:Store %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc () loc)
                                    (pp_memory_order memord) (pp_value () cval)
   | _ -> assert false
@@ -367,14 +367,14 @@ let rec pp_action rl () a = match a with
       assert false
   | Unlock (aid,tid,l) ->
       assert false*)
-  | Load (aid,tid,mo,l,v) ->
+  | Load (aid,tid,mo,l,v,_) ->
      sprintf "%a,%a:Load %a %a %a"
              (pp_action_id' rl) aid  (pp_thread_id' rl) tid
              pp_memory_order_enum2 mo  pp_loc l  pp_value v
-  | Store (aid,tid,mo,l,v) ->
+  | Store (aid,tid,mo,l,v,_) ->
      sprintf "%a,%a:Store %a %a %a" (pp_action_id' rl) aid  (pp_thread_id' rl)
              tid  pp_memory_order_enum2 mo  pp_loc l  pp_value v
-  | RMW (aid,tid,mo,l,v1,v2) ->
+  | RMW (aid,tid,mo,l,v1,v2,_) ->
      sprintf "%a,%a:RMW %a %a %a %a" (pp_action_id' rl) aid  (pp_thread_id' rl)
              tid  pp_memory_order_enum2 mo  pp_loc l  pp_value v1  pp_value v2
   (*| Blocked_rmw (aid,tid,l) ->
@@ -403,15 +403,15 @@ and pp_action' m rl () = function a -> match a with
       assert false
   | Unlock(aid,tid,l) ->
       assert false*)
-  | Load (aid,tid,mo,l,v) ->
+  | Load (aid,tid,mo,l,v,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\RA{%a}{%a}{%a}{%a}" else format_of_string "%a:R%a %a=%a" in
       sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  pp_loc l  pp_value v
-  | Store (aid,tid,mo,l,v) ->
+  | Store (aid,tid,mo,l,v,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\WA{%a}{%a}{%a}{%a}" else format_of_string "%a:W%a %a=%a" in
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  pp_loc l  pp_value v
-  | RMW (aid,tid,mo,l,v1,v2) ->
+  | RMW (aid,tid,mo,l,v1,v2,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\RMWA{%a}{%a}{%a}{%a}{%a}" else
           format_of_string "%a:RMW%a %a=%a/%a" in

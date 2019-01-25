@@ -106,6 +106,9 @@ module CtypeSort = struct
         (* TODO: recursive data types can not be nested in other types
          * such as tuple  *)
         (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
+    ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
+        [mk_sym "_array_ty_n"]
+        [Some integer_sort] [0]
     ]
 
   let rec mk_expr (ctype: ctype) : Expr.expr =
@@ -117,6 +120,10 @@ module CtypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
     | Pointer0 (_, ty) ->
         Expr.mk_app g_ctx (List.nth fdecls 2) []
+    | Array0(cty, Some n) ->
+        (* TODO: cty ignored b/c recursive types and tuples *)
+        (* Sort of assumed it's always integer for now... *)
+        Expr.mk_app g_ctx (List.nth fdecls 3) [big_num_to_z3 n]
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
