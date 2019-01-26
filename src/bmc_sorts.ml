@@ -137,6 +137,7 @@ end
 module AddressSortPNVI = struct
   open Z3.Datatype
   open Z3.FuncDecl
+  type base_ty = Expr.expr
 
   let mk_sort =
     mk_sort_s g_ctx ("Addr_PNVI")
