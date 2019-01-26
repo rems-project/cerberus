@@ -1044,8 +1044,9 @@ module BmcZ3 = struct
 
   (* TODO: kind in {object, region} *)
 
+  (* We assume for now we always know the ctype of what we're allocating *)
   type allocation_metadata =
-    (* size *) int * ctype option * (* base address *) int * permission_flag *
+    (* size *) int * ctype option * (* base address *) Expr.expr * permission_flag *
     (* C prefix *) Sym.prefix
 
   let get_metadata_prefix (_,_,_,_,pref) : Sym.prefix = pref
@@ -1205,6 +1206,7 @@ module BmcZ3 = struct
         z3_pe ptr      >>= fun z3d_ptr ->
         z3_pe index    >>= fun z3d_index ->
         get_file >>= fun file ->
+        (* TODO: different w/ address type *)
         let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
         let addr = PointerSort.get_addr z3d_ptr in
@@ -1279,11 +1281,12 @@ module BmcZ3 = struct
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
     get_fresh_aid >>= fun aid ->
     (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
+    let base_addr = AddressSort.mk_nd_addr alloc_id in
 
     add_metadata alloc_id (List.length flat_sortlist, Some ctype,
-                           0 (* TODO *),
+                           base_addr,
                            ReadWrite, pref) >>
-    return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
+    return (PointerSort.mk_ptr base_addr,
             ICreate (aid, ctype, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
@@ -2597,14 +2600,100 @@ module BmcMemCommon = struct
       (LoadedInteger.mk_specified initial_value, assertions)
     end else
       (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
-
-
-
 end
 
 (* Sequential memory model; read from most recent write *)
 module BmcSeqMem = struct
-  type memory_table = (addr_ty, Expr.expr) Pmap.map
+
+  module type SEQMEM = sig
+    type addr
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    val addr_cmp : addr -> addr -> int
+    val mk_addr : alloc_id -> index -> addr
+
+    val empty_memory : memory_table
+    val print_memory : memory_table -> unit
+    val print_addr : addr -> string
+
+    val update_memory : addr -> Expr.expr -> memory_table -> memory_table
+
+    val merge_memory : memory_table -> addr_set ->
+                       memory_table list -> Expr.expr list -> memory_table
+
+    val mk_addr_expr : addr -> Expr.expr
+  end
+
+  module MemConcrete : SEQMEM = struct
+    type addr = addr_ty
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    let addr_cmp = Pervasives.compare
+
+    let mk_addr (alloc: alloc_id) (index: index) =
+      (alloc, index)
+
+    let empty_memory = Pmap.empty addr_cmp
+
+    let print_memory (table: memory_table): unit =
+      Pmap.iter (fun (x,y) expr ->
+          printf "(%d,%d) %s\n" x y (Expr.to_string expr)
+      ) table
+
+    let print_addr ((x,y): addr) =
+      sprintf "(%d,%d)" x y
+
+    let update_memory (addr: addr) (expr: Expr.expr) (table: memory_table)
+                      : memory_table =
+      Pmap.add addr expr table
+
+    (* For each modified address, update base memory using tables
+     * guarded by guards. *)
+    let merge_memory (base     : memory_table)
+                     (mod_addr : addr_set)
+                     (tables   : memory_table list)
+                     (guards   : Expr.expr list) =
+      let guarded_tables : (memory_table * Expr.expr) list =
+        List.combine tables guards in
+      Pset.fold (fun ((alloc_id, i) as addr) acc ->
+        let expr_base =
+          match Pmap.lookup addr acc with
+          | None ->
+              let (table, guard) = List.find
+                  (fun (table, _) -> is_some (Pmap.lookup addr table))
+                  guarded_tables in
+              let sort =
+                match Pmap.lookup addr table with
+                | None -> assert false
+                | Some expr -> Expr.get_sort expr
+              in
+              mk_fresh_const (sprintf "merge_(%d %d)" alloc_id i) sort
+          | Some expr_base ->
+              expr_base
+          in
+        let new_expr =
+          List.fold_right (fun (table, guard) acc_expr ->
+              match Pmap.lookup addr table with
+              | None      -> acc_expr
+              | Some expr -> mk_ite guard expr acc_expr
+          ) guarded_tables expr_base in
+          (* TODO: create new seq variable? *)
+          Pmap.add addr new_expr acc
+      ) mod_addr base
+
+    let mk_addr_expr (addr: addr) =
+      AddressSort.mk_from_addr addr
+
+  end
+
+  module SeqMem = MemConcrete
+
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
@@ -2614,7 +2703,7 @@ module BmcSeqMem = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
 
-    memory           : memory_table;
+    memory           : SeqMem.memory_table;
   }
 
   include EffMonad(struct type state = seq_state end)
@@ -2634,21 +2723,21 @@ module BmcSeqMem = struct
     param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
-    memory           = Pmap.empty Pervasives.compare
+    memory           = SeqMem.empty_memory;
   }
 
   (* TODO: use Set.Make *)
   module AddrSet = struct
-      type t = addr_ty Pset.set
+      type t = SeqMem.addr_set
 
-      let cmp = Pervasives.compare
+      let cmp = SeqMem.addr_cmp
       let empty = Pset.empty cmp
       let of_list = Pset.from_list cmp
       let union s1 s2 = Pset.union s1 s2
       let fold = Pset.fold
 
-      let pp s = Pset.fold (fun (x,y) acc ->
-        sprintf "(%d,%d) %s" x y acc) s ""
+      let pp s = Pset.fold (fun addr acc ->
+        sprintf "%s %s" (SeqMem.print_addr addr) acc) s ""
   end
 
   let get_inline_expr (uid: int): (unit typed_expr) eff =
@@ -2693,78 +2782,42 @@ module BmcSeqMem = struct
     | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map"                                 uid)
     | Some expr -> return expr
 
-  let get_memory : memory_table eff =
+  let get_memory : SeqMem.memory_table eff =
    get >>= fun st ->
    return st.memory
 
-  let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
+  let update_memory (addr: SeqMem.addr) (expr: Expr.expr) : unit eff =
     get >>= fun st ->
-    put {st with memory = Pmap.add addr expr st.memory}
+    put {st with memory = SeqMem.update_memory addr expr st.memory}
 
-  let update_memory_table (memory: memory_table) : unit eff =
+  let update_memory_table (memory: SeqMem.memory_table) : unit eff =
     get >>= fun st ->
     put {st with memory = memory}
 
   let print_memory : unit eff =
     get_memory >>= fun memory ->
-    return (Pmap.iter (fun (x,y) expr ->
-      printf "(%d,%d) %s\n" x y (Expr.to_string expr)
-    ) memory)
+    return (SeqMem.print_memory memory)
 
   type ret_ty = {
     bindings : Expr.expr list;
-    mod_addr : AddrSet.t;
+    mod_addr : SeqMem.addr_set;
   }
 
   let get_bindings (ret: ret_ty) : Expr.expr list =
     ret.bindings
 
-  let empty_ret = { bindings = []; mod_addr = AddrSet.empty }
+  let empty_ret = { bindings = []; mod_addr = Pset.empty SeqMem.addr_cmp }
   let mk_ret bindings mod_addr =
     { bindings = bindings
     ; mod_addr = mod_addr
     }
-
-  (* For each modified address, update base memory using tables
-   * guarded by guards. *)
-  let merge_memory (base     : memory_table)
-                   (mod_addr : AddrSet.t)
-                   (tables   : memory_table list)
-                   (guards   : Expr.expr list) =
-    let guarded_tables : (memory_table * Expr.expr) list =
-      List.combine tables guards in
-    AddrSet.fold (fun ((alloc_id, i) as addr) acc ->
-      let expr_base =
-        match Pmap.lookup addr acc with
-        | None ->
-            let (table, guard) = List.find
-                (fun (table, _) -> is_some (Pmap.lookup addr table))
-                guarded_tables in
-            let sort =
-              match Pmap.lookup addr table with
-              | None -> assert false
-              | Some expr -> Expr.get_sort expr
-            in
-            mk_fresh_const (sprintf "merge_(%d %d)" alloc_id i) sort
-        | Some expr_base ->
-            expr_base
-        in
-      let new_expr =
-        List.fold_right (fun (table, guard) acc_expr ->
-            match Pmap.lookup addr table with
-            | None      -> acc_expr
-            | Some expr -> mk_ite guard expr acc_expr
-        ) guarded_tables expr_base in
-        (* TODO: create new seq variable? *)
-        Pmap.add addr new_expr acc
-    ) mod_addr base
 
   let do_create (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
                 (initialise: bool)
                 : ret_ty eff =
     mapMi (fun i (ctype,sort) ->
-      let addr = (alloc_id, i) in
+      let addr = SeqMem.mk_addr alloc_id i in
       let seq_var =
         mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
       update_memory addr seq_var >>
@@ -2798,7 +2851,7 @@ module BmcSeqMem = struct
         mapM (fun (addr, expr_in_memory) ->
           let addr_sort = Expr.get_sort expr_in_memory in
           if (Sort.equal sort addr_sort) then
-            let addr_expr = AddressSort.mk_from_addr addr in
+            let addr_expr = SeqMem.mk_addr_expr addr in
             let addr_eq =
               mk_and [mk_not (PointerSort.is_null ptr)
                      ;mk_eq addr_expr (PointerSort.get_addr ptr)] in
@@ -2823,7 +2876,7 @@ module BmcSeqMem = struct
           mapM (fun (addr, expr_in_memory) ->
             let addr_sort = Expr.get_sort expr_in_memory in
             if (Sort.equal sort addr_sort) then
-              let addr_expr = AddressSort.mk_from_addr addr in
+              let addr_expr = SeqMem.mk_addr_expr addr in
 
               let new_seq_var =
                 mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
@@ -2890,8 +2943,8 @@ module BmcSeqMem = struct
         let mod_addr = List.fold_right (fun res acc ->
           AddrSet.union acc res.mod_addr) retlist AddrSet.empty in
         let new_memory =
-          merge_memory old_memory mod_addr
-                       (List.map fst res_cases) guards in
+          SeqMem.merge_memory old_memory mod_addr
+                              (List.map fst res_cases) guards in
         update_memory_table new_memory >>
 
         let guarded_asserts = List.concat (List.map2
@@ -2913,8 +2966,9 @@ module BmcSeqMem = struct
         let (guard1, guard2) = (cond_z3, mk_not cond_z3) in
 
         let mod_addr = AddrSet.union res_e1.mod_addr res_e2.mod_addr in
-        let new_memory = merge_memory old_memory mod_addr
-                                      [mem_e1; mem_e2] [guard1; guard2] in
+        let new_memory =
+          SeqMem.merge_memory old_memory mod_addr
+                              [mem_e1; mem_e2] [guard1; guard2] in
         update_memory_table new_memory >>
         return { bindings = (List.map (guard_assert guard1) res_e1.bindings)
                            @(List.map (guard_assert guard2) res_e2.bindings)
@@ -2957,8 +3011,9 @@ module BmcSeqMem = struct
         let mod_addr = List.fold_right
           (fun res acc -> AddrSet.union acc res.mod_addr)
           ress AddrSet.empty in
-        let new_memory = merge_memory old_memory mod_addr
-                                      mem_tables guards in
+        let new_memory =
+          SeqMem.merge_memory old_memory mod_addr
+                              mem_tables guards in
         update_memory_table new_memory >>
         let guarded_asserts = List.concat (List.map2
           (fun guard res -> List.map (guard_assert guard) res.bindings)
