@@ -1,6 +1,8 @@
 open Bmc_globals
 open Bmc_utils
+open Core
 open Printf
+open Util
 open Z3
 open Z3.Arithmetic
 
@@ -137,10 +139,10 @@ module AddressSortPNVI = struct
   open Z3.FuncDecl
 
   let mk_sort =
-    mk_sort_s g_ctx ("Addr")
-      [ mk_constructor_s g_ctx "addr"
-            (mk_sym ("_addr"))
-            [mk_sym ("get_index")]
+    mk_sort_s g_ctx ("Addr_PNVI")
+      [ mk_constructor_s g_ctx "addr_pnvi"
+            (mk_sym ("_addr_pnvi"))
+            [mk_sym ("get_index_pnvi")]
             [Some integer_sort] [0]
       ]
 
@@ -162,28 +164,31 @@ module AddressSortPNVI = struct
     Expr.mk_app g_ctx get_value [ expr ]
 
   let get_index (expr: Expr.expr) : Expr.expr =
-    assert false;
     assert (Sort.equal (Expr.get_sort expr) mk_sort);
     let accessors = get_accessors mk_sort in
-    let get_value = List.nth (List.nth accessors 0) 1 in
+    let get_value = List.hd (List.nth accessors 0) in
     Expr.mk_app g_ctx get_value [ expr ]
 
   (* ======== *)
+  (* Map from address to provenance *)
+  let provenance_decl =
+    mk_fresh_func_decl g_ctx "prov_of_addr" [mk_sort] integer_sort
+
   let alloc_size_decl =
     mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
 
   let valid_index_range (addr: Expr.expr) : Expr.expr =
-    assert false;
-    let alloc = get_alloc addr in
+    (* Need to check address exists *)
     let index = get_index addr in
-    let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in
-    mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
+    (*let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in*)
+    print_endline "TODO: AddressSortPNVI valid_index_range";
+    mk_true
+    (*mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
            ; binop_to_z3 OpLt index alloc_size
-           ]
+           ]*)
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
-    assert false;
-    let alloc = get_alloc addr in
+    (*let alloc = get_alloc addr in *)
     let index = get_index addr in
     mk_expr (*alloc*) (binop_to_z3 OpAdd index n)
 
@@ -208,6 +213,24 @@ module AddressSortPNVI = struct
   let assert_is_atomic (addr: Expr.expr) (is_atomic: Expr.expr) =
     assert false;
     mk_eq (mk_is_atomic addr) is_atomic
+
+  (* TODO: This really uses bmc_common; need to toggle based on global conf *)
+  let sizeof_ity ity = Option.get (Ocaml_implementation.Impl.sizeof_ity ity)
+
+  (* TODO: Move this elsewhere *)
+  let rec type_size (ctype: ctype) : int =
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 (Integer ity) ->
+        sizeof_ity ity
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0 _ -> assert false
+    | Function0 _ -> assert false
+    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Atomic0 (Basic0 _ as _ty) (* fall through *)
+    | Atomic0 (Pointer0 _ as _ty) ->
+        type_size _ty
+    | _ -> assert false
 end
 
 module AddressSortConcrete = struct
@@ -281,9 +304,23 @@ module AddressSortConcrete = struct
 
   let assert_is_atomic (addr: Expr.expr) (is_atomic: Expr.expr) =
     mk_eq (mk_is_atomic addr) is_atomic
+
+  (* TODO *)
+  let rec type_size (ctype: ctype) : int =
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 _ -> 1
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0 _ -> assert false
+    | Function0 _ -> assert false
+    | Pointer0 _ -> 1
+    | Atomic0 (Basic0 _ as _ty) (* fall through *)
+    | Atomic0 (Pointer0 _ as _ty) ->
+        type_size _ty
+    | _ -> assert false
 end
 
-module AddressSort = AddressSortConcrete
+module AddressSort = AddressSortPNVI
 
 module PointerSort = struct
   open Z3.Datatype
