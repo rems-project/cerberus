@@ -1089,7 +1089,7 @@ module BmcZ3 = struct
 
     file = file;
 
-    alloc_supply = 0;
+    alloc_supply = 1; (* 0 is empty provenance *)
     aid_supply   = 0;
 
     inline_pexpr_map = inline_pexpr_map;
@@ -1218,8 +1218,12 @@ module BmcZ3 = struct
         let ty_size = AddressSort.type_size ty in
           (*bmcz3sort_size (ctype_to_bmcz3sort ty file) in*)
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
-        let addr = PointerSort.get_addr z3d_ptr in
+
+        (*let addr = PointerSort.get_addr z3d_ptr in
+
         return (PointerSort.mk_ptr (AddressSort.shift_index_by_n addr shift_size))
+        *)
+        return (PointerSort.shift_by_n z3d_ptr shift_size)
     | PEmember_shift (ptr, sym, member) ->
         z3_pe ptr >>= fun z3d_ptr ->
         get_file  >>= fun file ->
@@ -1233,10 +1237,12 @@ module BmcZ3 = struct
                   if cabsid_cmp cid member = 0 || skip then (acc, true)
                   else (acc + n, false)
             ) (0, false) memsizes in
+            return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift_size))
+            (*
             let addr = PointerSort.get_addr z3d_ptr in
             let new_addr =
               AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
-            return (PointerSort.mk_ptr new_addr)
+            return (PointerSort.mk_ptr new_addr)*)
         | _ -> assert false
         end
     | PEnot pe ->
@@ -1311,7 +1317,7 @@ module BmcZ3 = struct
                            alignof_type align_ty,
                            base_addr,
                            ReadWrite, pref) >>
-    return (PointerSort.mk_ptr base_addr,
+    return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
             ICreate (aid, ctype, align_ty, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
@@ -1435,9 +1441,12 @@ module BmcZ3 = struct
         (* TODO: includes type *)
         bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
         z3_pe ptr >>= fun z3d_ptr ->
-        let addr = PointerSort.get_addr z3d_ptr in
+        (*let addr = PointerSort.get_addr z3d_ptr in
         let range_assert = AddressSort.valid_index_range addr in
-        return (mk_and [mk_not (PointerSort.is_null z3d_ptr); range_assert])
+        return (mk_and [mk_not (PointerSort.is_null z3d_ptr)
+                       ;range_assert])
+        *)
+        return (PointerSort.valid_ptr z3d_ptr)
     | Ememop (PtrEq, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
@@ -1698,6 +1707,7 @@ module BmcBind = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
   }
 
   include EffMonad(struct type state = binding_state end)
@@ -1708,6 +1718,7 @@ module BmcBind = struct
                  case_guard_map
                  expr_map
                  action_map
+                 alloc_meta
                  : state =
   { inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
@@ -1715,6 +1726,7 @@ module BmcBind = struct
     case_guard_map   = case_guard_map;
     expr_map         = expr_map;
     action_map       = action_map;
+    alloc_meta_map   = alloc_meta;
   }
 
   let get_inline_pexpr (uid: int): typed_pexpr eff =
@@ -1753,6 +1765,13 @@ module BmcBind = struct
     match Pmap.lookup uid st.action_map with
     | None -> failwith (sprintf "Error: BmcBind action not found %d" uid)
     | Some a -> return a
+
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcBind: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
 
   (* let bindings *)
   let mk_let_binding (maybe_sym: sym_ty option)
@@ -1932,17 +1951,28 @@ module BmcBind = struct
     match action_ with
     | Create (pe1, pe2, pref) ->
         get_action uid >>= fun action ->
-
-        let (alloc_size, alloc_id) =
-          (match action with
-           | ICreate(_, _, _, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
-           | _ -> assert false
+        let alloc_id = (
+          match action with
+          | ICreate(_,_,_,_, alloc_id) -> alloc_id
+          | _ -> assert false
           ) in
+        get_meta alloc_id >>= fun metadata ->
+        let base_addr = BmcZ3.get_metadata_base metadata in
+        let max_addr =
+          binop_to_z3 OpAdd (AddressSort.get_index base_addr)
+                            (int_to_z3 (BmcZ3.get_metadata_size metadata)) in
 
         (* Assert alloc_size(alloc_id) = allocation_size *)
-        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_min_decl
                                          [int_to_z3 alloc_id])
-                      (int_to_z3 alloc_size)]
+                      (AddressSort.get_index base_addr)
+               ;mk_eq (Expr.mk_app g_ctx AddressSort.alloc_max_decl
+                                         [int_to_z3 alloc_id])
+                      max_addr
+              ]
+          (*mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+                                         [int_to_z3 alloc_id])
+                      (int_to_z3 alloc_size)]*)
     | CreateReadOnly _ -> assert false
     | Alloc0 _ -> assert false
     | Kill (_, pe) ->
@@ -2863,7 +2893,7 @@ module BmcSeqMem = struct
       @ disjoint_asserts
   end
 
-  module SeqMem = MemPNVI
+  module SeqMem = MemConcrete
 
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
@@ -3251,7 +3281,8 @@ module BmcSeqMem = struct
         get_sym_expr sym >>= fun sym_expr ->
         let eq_expr =
           mk_eq sym_expr
-                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+                (PointerSort.mk_ptr (int_to_z3 alloc_id)
+                                    (AddressSort.mk_from_addr (alloc_id, 0))) in
         (* TODO: need extra assertions for arrays/pointers *)
         return { bindings = eq_expr :: ret.bindings
                ; mod_addr = ret.mod_addr
@@ -3439,6 +3470,7 @@ module BmcConcActions = struct
                : bmc_action =
     BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval, ctype))
 
+  (* TODO: allocation size assertions *)
   (* Make a single create *)
   let do_create (aid: aid)
                 (ctype: ctype)
@@ -3457,7 +3489,8 @@ module BmcConcActions = struct
         AddressSort.assert_is_atomic addr_expr (is_atomic_fn ctype) in
       add_assertion is_atomic
     ) sortlist >>
-    let ptr_0 = PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id,0)) in
+    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id)
+                                    (AddressSort.mk_from_addr (alloc_id,0)) in
 
 
     let (initial_value, assumptions) =
@@ -3647,7 +3680,8 @@ module BmcConcActions = struct
         get_sym_expr sym >>= fun sym_expr ->
         let eq_expr =
           mk_eq sym_expr
-                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+                (PointerSort.mk_ptr (int_to_z3 alloc_id)
+                                    (AddressSort.mk_from_addr (alloc_id, 0))) in
         add_assertion eq_expr >>
         return actions
     | _ -> assert false
