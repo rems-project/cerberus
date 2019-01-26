@@ -1207,7 +1207,8 @@ module BmcZ3 = struct
         z3_pe index    >>= fun z3d_index ->
         get_file >>= fun file ->
         (* TODO: different w/ address type *)
-        let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
+        let ty_size = AddressSort.type_size ty in
+          (*bmcz3sort_size (ctype_to_bmcz3sort ty file) in*)
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
         let addr = PointerSort.get_addr z3d_ptr in
         return (PointerSort.mk_ptr (AddressSort.shift_index_by_n addr shift_size))
@@ -2687,9 +2688,74 @@ module BmcSeqMem = struct
           Pmap.add addr new_expr acc
       ) mod_addr base
 
+    (* TODO: concrete only *)
     let mk_addr_expr (addr: addr) =
       AddressSort.mk_from_addr addr
+  end
 
+  module MemPNVI: SEQMEM = struct
+    type addr = Expr.expr (* Symbolic address *)
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    let addr_cmp = Expr.compare
+
+    let mk_addr (alloc: alloc_id) (index: index) =
+      AddressSort.mk_from_addr (alloc, index)
+
+    let empty_memory = Pmap.empty addr_cmp
+
+    let print_addr (addr: addr) =
+      Expr.to_string addr
+
+    let print_memory (table: memory_table): unit =
+      Pmap.iter (fun addr expr ->
+          printf "%s %s\n" (print_addr addr) (Expr.to_string expr)
+      ) table
+
+    let update_memory (addr: addr) (expr: Expr.expr) (table: memory_table)
+                      : memory_table =
+      Pmap.add addr expr table
+
+    (* For each modified address, update base memory using tables
+     * guarded by guards. *)
+    let merge_memory (base     : memory_table)
+                     (mod_addr : addr_set)
+                     (tables   : memory_table list)
+                     (guards   : Expr.expr list) =
+      let guarded_tables : (memory_table * Expr.expr) list =
+        List.combine tables guards in
+      Pset.fold (fun addr acc ->
+        let expr_base =
+          match Pmap.lookup addr acc with
+          | None ->
+              let (table, guard) = List.find
+                  (fun (table, _) -> is_some (Pmap.lookup addr table))
+                  guarded_tables in
+              let sort =
+                match Pmap.lookup addr table with
+                | None -> assert false
+                | Some expr -> Expr.get_sort expr
+              in
+              mk_fresh_const (sprintf "merge_%s" (print_addr addr)) sort
+          | Some expr_base ->
+              expr_base
+          in
+        let new_expr =
+          List.fold_right (fun (table, guard) acc_expr ->
+              match Pmap.lookup addr table with
+              | None      -> acc_expr
+              | Some expr -> mk_ite guard expr acc_expr
+          ) guarded_tables expr_base in
+          (* TODO: create new seq variable? *)
+          Pmap.add addr new_expr acc
+      ) mod_addr base
+
+    (* TODO: concrete only *)
+    let mk_addr_expr (addr: addr) =
+      addr
   end
 
   module SeqMem = MemConcrete
