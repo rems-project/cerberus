@@ -1023,7 +1023,7 @@ module BmcZ3 = struct
 
   (* Massive TODO *)
   type intermediate_action =
-    | ICreate of aid * ctype * (* TODO: align *) ctype_sort list * alloc
+    | ICreate of aid * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | IKill of aid
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
@@ -1046,10 +1046,18 @@ module BmcZ3 = struct
 
   (* We assume for now we always know the ctype of what we're allocating *)
   type allocation_metadata =
-    (* size *) int * ctype option * (* base address *) Expr.expr * permission_flag *
+    (* size *) int * ctype option * (* alignment *) int * (* base address *) Expr.expr * permission_flag *
     (* C prefix *) Sym.prefix
 
-  let get_metadata_prefix (_,_,_,_,pref) : Sym.prefix = pref
+  let get_metadata_size (sz,_,_,_,_,_) : int = sz
+  let get_metadata_base (_,_,_,base,_,_) : Expr.expr = base
+  let get_metadata_ctype (_,ctype,_,_,_,_) : ctype option = ctype
+  let get_metadata_align (_,_,align,_,_,_) : int = align
+  let get_metadata_prefix (_,_,_,_,_,pref) : Sym.prefix = pref
+  let print_metadata (size, cty, align, expr, _, pref) =
+    sprintf "Size: %d, Base: %s, Align %d, prefix: %s"
+                size (Expr.to_string expr) align
+                (prefix_to_string pref)
 
   type z3_state = {
     (* Builds the following *)
@@ -1275,7 +1283,21 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create ctype (pref: Sym.prefix) =
+  let rec alignof_type (ctype: ctype) : int =
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 (Integer ity) ->
+        Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+    | Array0(ty, _) -> alignof_type ty
+    | Function0 _ -> assert false
+    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Atomic0 (Basic0 _ as _ty) ->
+        alignof_type _ty
+    | Atomic0 (Pointer0 _ as _ty) ->
+        Option.get (Ocaml_implementation.Impl.alignof_pointer)
+    | _ -> assert false
+
+  let mk_create ctype align_ty (pref: Sym.prefix) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
@@ -1284,16 +1306,19 @@ module BmcZ3 = struct
     (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
     let base_addr = AddressSort.mk_nd_addr alloc_id in
 
-    add_metadata alloc_id (List.length flat_sortlist, Some ctype,
+    add_metadata alloc_id (AddressSort.type_size ctype,
+                           Some ctype,
+                           alignof_type align_ty,
                            base_addr,
                            ReadWrite, pref) >>
     return (PointerSort.mk_ptr base_addr,
-            ICreate (aid, ctype, flat_sortlist, alloc_id))
+            ICreate (aid, ctype, align_ty, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
-        mk_create ctype prefix
+    | Create (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype align))])),
+              Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        mk_create ctype align prefix
     | Create _ ->
         assert false
     | CreateReadOnly _ ->
@@ -1503,7 +1528,7 @@ module BmcZ3 = struct
       if not (is_core_ptr_bty cbt) then
         return None
       else begin
-        mk_create ctype
+        mk_create ctype ctype (* TODO: alignment *)
             (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
             >>= fun (_,action) ->
         return (Some action)
@@ -1910,7 +1935,7 @@ module BmcBind = struct
 
         let (alloc_size, alloc_id) =
           (match action with
-           | ICreate(_, _, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
+           | ICreate(_, _, _, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
            | _ -> assert false
           ) in
 
@@ -2626,6 +2651,11 @@ module BmcSeqMem = struct
                        memory_table list -> Expr.expr list -> memory_table
 
     val mk_addr_expr : addr -> Expr.expr
+    (* TODO: gross hack *)
+    val mk_shift : alloc_id -> index -> Expr.expr -> addr
+
+    val metadata_assertions :
+          (int * BmcZ3.allocation_metadata) list -> Expr.expr list
   end
 
   module MemConcrete : SEQMEM = struct
@@ -2691,6 +2721,11 @@ module BmcSeqMem = struct
     (* TODO: concrete only *)
     let mk_addr_expr (addr: addr) =
       AddressSort.mk_from_addr addr
+
+    let mk_shift (alloc: alloc_id) (index: index) (_: Expr.expr) =
+      (alloc, index)
+
+    let metadata_assertions = fun _ -> []
   end
 
   module MemPNVI: SEQMEM = struct
@@ -2756,9 +2791,79 @@ module BmcSeqMem = struct
     (* TODO: concrete only *)
     let mk_addr_expr (addr: addr) =
       addr
+
+    let mk_shift (_: alloc_id) (index: index) (addr: Expr.expr) =
+      AddressSort.shift_index_by_n addr (int_to_z3 index)
+
+    (* Base address aligned: assert address is a multiple of alignment > 0*)
+    let alignment_assertions ((alloc,metadata) )
+                             : Expr.expr list =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let alignment = BmcZ3.get_metadata_align metadata in
+      let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
+                                     integer_sort in
+      let align_assert =
+        mk_eq (AddressSort.get_index base_addr)
+              (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
+      print_endline (BmcZ3.print_metadata metadata);
+      [align_assert
+      ;binop_to_z3 OpGe fresh_int (int_to_z3 0)]
+
+    (* Address isn't too large *)
+    let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let size = BmcZ3.get_metadata_size metadata in
+      let max_address =
+        binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
+      binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
+
+    (* TODO: Ew quadratic *)
+    (* [start_1, end_1), [start_2, end_2)
+     *
+     * Assert that
+     * start_2 >= end_1 or
+     * start_1 >= end_2
+     *)
+    let disjoint_assertions ((id1, meta1) : int * BmcZ3.allocation_metadata)
+                            ((id2, meta2) : int * BmcZ3.allocation_metadata)
+                            : Expr.expr list =
+      if id1 = id2 then []
+      else begin
+        let start_1 = AddressSort.get_index (BmcZ3.get_metadata_base meta1) in
+        let end_1   = binop_to_z3 OpAdd start_1
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta1)) in
+        let start_2 = AddressSort.get_index (BmcZ3.get_metadata_base meta2) in
+        let end_2   = binop_to_z3 OpAdd start_2
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta2)) in
+        [mk_or [binop_to_z3 OpGe start_2 end_1
+               ;binop_to_z3 OpGe start_1 end_2]
+        ]
+      end
+
+    (* TODO: add provenance somewhere *)
+    (* For each allocation, we need to assert
+     * - The base addresses are correctly aligned
+     * - Addresses < some max value
+     * - the allocations are disjoint
+     * - Somehow create a function expressing whether an address is valid for pointers
+     * - Eventually the provenance
+     *)
+    let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
+                            : Expr.expr list =
+      let alignment_asserts =
+        List.concat (List.map alignment_assertions data) in
+      let addr_lt_max_asserts = List.map addr_lt_max_assertions data in
+      let disjoint_asserts = List.concat
+        (List.map (fun (d1,d2) -> disjoint_assertions d1 d2)
+                  (cartesian_product data data)) in
+      List.iter (fun e -> print_endline (Expr.to_string e)) disjoint_asserts;
+
+        alignment_asserts
+      @ addr_lt_max_asserts
+      @ disjoint_asserts
   end
 
-  module SeqMem = MemConcrete
+  module SeqMem = MemPNVI
 
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
@@ -2768,6 +2873,7 @@ module BmcSeqMem = struct
     param_actions    : (BmcZ3.intermediate_action option) list;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
 
     memory           : SeqMem.memory_table;
   }
@@ -2781,6 +2887,7 @@ module BmcSeqMem = struct
                  param_actions
                  case_guard_map
                  drop_cont_map
+                 alloc_meta
                  : state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -2789,6 +2896,8 @@ module BmcSeqMem = struct
     param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
+    alloc_meta_map   = alloc_meta;
+
     memory           = SeqMem.empty_memory;
   }
 
@@ -2848,6 +2957,17 @@ module BmcSeqMem = struct
     | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map"                                 uid)
     | Some expr -> return expr
 
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcSeqMem: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
+
+  let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
+    get >>= fun st ->
+    return st.alloc_meta_map
+
   let get_memory : SeqMem.memory_table eff =
    get >>= fun st ->
    return st.memory
@@ -2882,10 +3002,21 @@ module BmcSeqMem = struct
                 (alloc_id: BmcZ3.alloc)
                 (initialise: bool)
                 : ret_ty eff =
+    (* Get metadata *)
+    get_meta alloc_id >>= fun metadata ->
+    print_endline (BmcZ3.print_metadata metadata);
+    let base_addr = BmcZ3.get_metadata_base metadata in
+
+    (* Get base address, shift by size of ctype *)
     mapMi (fun i (ctype,sort) ->
-      let addr = SeqMem.mk_addr alloc_id i in
+      let index = List.fold_left
+          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          0 (list_take i sortlist) in
+      let addr = SeqMem.mk_shift alloc_id index base_addr in
+
+      (*let addr = SeqMem.mk_addr alloc_id index in*)
       let seq_var =
-        mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
+        mk_fresh_const (sprintf "store_(%d %d)" alloc_id index) sort in
       update_memory addr seq_var >>
       let (initial_value, assumptions) =
         BmcMemCommon.mk_initial_loaded_value
@@ -2894,7 +3025,7 @@ module BmcSeqMem = struct
       let binding = mk_eq seq_var initial_value in
       return (addr, binding::assumptions)
     ) sortlist >>= fun retlist ->
-    return { bindings = List.concat (List.map snd retlist)
+    return { bindings = (List.concat (List.map snd retlist))
            ; mod_addr = AddrSet.of_list (List.map fst retlist)
            }
 
@@ -2904,7 +3035,7 @@ module BmcSeqMem = struct
                  : ret_ty eff =
     get_action uid >>= fun action ->
     match action with
-    | ICreate(_, _, sortlist, alloc_id) ->
+    | ICreate(_, _, _, sortlist, alloc_id) ->
         do_create sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
@@ -2939,6 +3070,15 @@ module BmcSeqMem = struct
         mapMi (fun i (ctype, sort) ->
           let indexed_wval = get_ith_in_loaded i wval in
           get_memory >>= fun possible_addresses ->
+
+          let index = List.fold_left
+              (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+              0 (list_take i type_list) in
+          let target_addr =
+            AddressSort.shift_index_by_n (PointerSort.get_addr ptr) (int_to_z3 index) in
+          (*let target_addr =
+              AddressSort.shift_index_by_n
+                        (PointerSort.get_addr ptr) (int_to_z3 i) in*)
           mapM (fun (addr, expr_in_memory) ->
             let addr_sort = Expr.get_sort expr_in_memory in
             if (Sort.equal sort addr_sort) then
@@ -2948,10 +3088,7 @@ module BmcSeqMem = struct
                 mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
               in
               (* new_seq_var is equal to to_store if addr_eq, else old value *)
-              let target_addr =
-                  AddressSort.shift_index_by_n
-                      (PointerSort.get_addr ptr) (int_to_z3 i) in
-              let addr_eq =
+                        let addr_eq =
                 mk_and [ mk_not (PointerSort.is_null ptr)
                        ; mk_eq target_addr addr_expr] in
               (* Write ith element of wval *)
@@ -3108,7 +3245,7 @@ module BmcSeqMem = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return empty_ret
-    | Some (ICreate(_, _, sortlist, alloc_id)) ->
+    | Some (ICreate(_, _, _, sortlist, alloc_id)) ->
         do_create sortlist alloc_id true >>= fun ret ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
@@ -3146,7 +3283,10 @@ module BmcSeqMem = struct
         return empty_ret
      | _ -> assert false
     ) >>= fun ret ->
-    return (ret.bindings @ (List.concat (List.map get_bindings globs)))
+    print_memory >>
+    get_meta_map >>= fun metadata ->
+    let meta_asserts = SeqMem.metadata_assertions (Pmap.bindings_list metadata) in
+    return (meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
 end
 
 (* Concurrency
@@ -3362,7 +3502,7 @@ module BmcConcActions = struct
                                   (pol : polarity)
                                   : (bmc_action list) eff =
     (match action with
-    | ICreate(aid, ctype, sortlist, alloc_id) ->
+    | ICreate(aid, ctype, _, sortlist, alloc_id) ->
         do_create aid ctype sortlist alloc_id pol false
     | IKill aid ->
         (* TODO *)
@@ -3500,7 +3640,7 @@ module BmcConcActions = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return []
-    | Some (ICreate(aid, ctype, sortlist, alloc_id)) ->
+    | Some (ICreate(aid, ctype, _, sortlist, alloc_id)) ->
         (* Polarity is irrelevant? *)
         do_create aid ctype sortlist alloc_id Pos true >>= fun actions ->
         (* Make let binding *)
