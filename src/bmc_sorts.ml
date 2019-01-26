@@ -172,21 +172,19 @@ module AddressSortPNVI = struct
 
   (* ======== *)
   (* Map from address to provenance *)
-  let provenance_decl =
-    mk_fresh_func_decl g_ctx "prov_of_addr" [mk_sort] integer_sort
+  let alloc_min_decl =
+    mk_fresh_func_decl g_ctx "alloc_min" [integer_sort] integer_sort
 
-  let alloc_size_decl =
-    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
+  let alloc_max_decl =
+    mk_fresh_func_decl g_ctx "alloc_max" [integer_sort] integer_sort
 
-  let valid_index_range (addr: Expr.expr) : Expr.expr =
-    (* Need to check address exists *)
+  let valid_index_range (alloc: Expr.expr) (addr: Expr.expr) : Expr.expr =
     let index = get_index addr in
-    (*let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in*)
-    print_endline "TODO: AddressSortPNVI valid_index_range";
-    mk_true
-    (*mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
-           ; binop_to_z3 OpLt index alloc_size
-           ]*)
+    let alloc_min = Expr.mk_app g_ctx alloc_min_decl [alloc] in
+    let alloc_max = Expr.mk_app g_ctx alloc_max_decl [alloc] in
+    mk_and [ binop_to_z3 OpGe index alloc_min
+           ; binop_to_z3 OpLt index alloc_max
+           ]
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
     (*let alloc = get_alloc addr in *)
@@ -269,15 +267,22 @@ module AddressSortConcrete = struct
     Expr.mk_app g_ctx get_value [ expr ]
 
   (* ======== *)
-  let alloc_size_decl =
-    mk_fresh_func_decl g_ctx "alloc_size" [integer_sort] integer_sort
+  let alloc_min_decl =
+    mk_fresh_func_decl g_ctx "alloc_min" [integer_sort] integer_sort
+
+  let alloc_max_decl =
+    mk_fresh_func_decl g_ctx "alloc_max" [integer_sort] integer_sort
 
   let valid_index_range (addr: Expr.expr) : Expr.expr =
     let alloc = get_alloc addr in
     let index = get_index addr in
+    let alloc_min = Expr.mk_app g_ctx alloc_min_decl [alloc] in
+    let alloc_max = Expr.mk_app g_ctx alloc_max_decl [alloc] in
+    (*
     let alloc_size = Expr.mk_app g_ctx alloc_size_decl [alloc] in
-    mk_and [ binop_to_z3 OpGe index (int_to_z3 0)
-           ; binop_to_z3 OpLt index alloc_size
+    *)
+    mk_and [ binop_to_z3 OpGe index alloc_min (* should be 0 *)
+           ; binop_to_z3 OpLt index alloc_max
            ]
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
@@ -321,28 +326,111 @@ module AddressSortConcrete = struct
     | _ -> assert false
 end
 
-module AddressSort = AddressSortPNVI
 
-module PointerSort = struct
+(* PNVI ptr:
+   | Null
+   | Ptr of provenance * addr
+
+  Provenance:
+   | Empty
+   | Prov of int
+
+  Let's just define 0 = empty provenance
+*)
+
+(* TODO: figure out how to consistently switch between concrete and PNVI *)
+module PointerSortPNVI = struct
   open Z3.Datatype
   open Z3.FuncDecl
 
+  module AddrModule = AddressSortPNVI
+
   let mk_sort =
-    mk_sort_s g_ctx ("Ptr")
-      [ mk_constructor_s g_ctx "ptr"
+    mk_sort_s g_ctx ("Ptr_PNVI")
+      [ mk_constructor_s g_ctx "ptr_pnvi"
             (mk_sym "_ptr")
-            [mk_sym ("get_addr")]
-            [Some AddressSort.mk_sort] [0]
-      ; mk_constructor_s g_ctx "null"
+            [mk_sym "get_prov"; mk_sym ("get_addr")]
+            [Some integer_sort; Some AddressSortPNVI.mk_sort] [0; 0]
+      ; mk_constructor_s g_ctx "null_pnvi"
             (mk_sym "is_null")
             [] [] []
       (* TODO: Just a placeholder *)
-      ; mk_constructor_s g_ctx "fn"
+      ; mk_constructor_s g_ctx "fn_pnvi"
             (mk_sym "is_fn")
             [] [] []
       ]
 
-  let mk_ptr (addr: Expr.expr) =
+  let mk_ptr (prov: Expr.expr) (addr: Expr.expr) =
+    let ctor = List.nth (get_constructors mk_sort) 0 in
+    Expr.mk_app g_ctx ctor [prov;addr]
+
+  let mk_null =
+    let ctor = List.nth (get_constructors mk_sort) 1 in
+    Expr.mk_app g_ctx ctor []
+
+  let mk_fn_ptr =
+    let ctor = List.nth (get_constructors mk_sort) 2 in
+    Expr.mk_app g_ctx ctor []
+
+  let is_null (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 1 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let get_prov (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    let accessors = get_accessors mk_sort in
+    let get_value = List.nth (List.nth accessors 0) 0 in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_addr (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    let accessors = get_accessors mk_sort in
+    let get_value = List.nth (List.nth accessors 0) 1 in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let shift_by_n (ptr: Expr.expr) (n: Expr.expr) =
+    mk_ptr (get_prov ptr)
+           (AddressSortPNVI.shift_index_by_n (get_addr ptr) n)
+
+  let has_provenance (ptr: Expr.expr) : Expr.expr =
+    binop_to_z3 OpGt (get_prov ptr) (int_to_z3 0)
+
+  (* Not null
+   * Provenance of ptr is > 0
+   * Not out of bounds
+   * >>>Need to check alignment? No type-casting yet
+   *)
+  let valid_ptr (ptr: Expr.expr) =
+    mk_and [mk_not (is_null ptr)
+           ;has_provenance ptr
+           ;AddressSortPNVI.valid_index_range (get_prov ptr) (get_addr ptr)
+           ]
+
+end
+
+module PointerSortConcrete = struct
+  open Z3.Datatype
+  open Z3.FuncDecl
+
+  module AddrModule = AddressSortConcrete
+
+  let mk_sort =
+    mk_sort_s g_ctx ("Ptr_concrete")
+      [ mk_constructor_s g_ctx "ptr_concrete"
+            (mk_sym "_ptr")
+            [mk_sym ("get_addr")]
+            [Some AddressSortConcrete.mk_sort] [0]
+      ; mk_constructor_s g_ctx "null_concrete"
+            (mk_sym "is_null")
+            [] [] []
+      (* TODO: Just a placeholder *)
+      ; mk_constructor_s g_ctx "fn_concrete"
+            (mk_sym "is_fn")
+            [] [] []
+      ]
+
+  (* TODO: Ignore provenance *)
+  let mk_ptr (_: Expr.expr) (addr: Expr.expr) =
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [addr]
 
@@ -363,7 +451,19 @@ module PointerSort = struct
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 0) in
     Expr.mk_app g_ctx get_value [ expr ]
+
+  let shift_by_n (ptr: Expr.expr) (n: Expr.expr) =
+    let addr = get_addr ptr in
+    mk_ptr (AddressSortConcrete.get_alloc addr)
+          (AddressSortConcrete.shift_index_by_n addr n)
+
+  let valid_ptr (ptr: Expr.expr) =
+    mk_and [mk_not (is_null ptr)
+           ;AddressSortConcrete.valid_index_range (get_addr ptr)]
 end
+
+module PointerSort = PointerSortConcrete
+module AddressSort = PointerSort.AddrModule
 
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)

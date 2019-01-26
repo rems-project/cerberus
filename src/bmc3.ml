@@ -144,7 +144,8 @@ module BmcM = struct
                          (Option.get st.sym_expr_table)
                          (Option.get st.case_guard_map)
                          (Option.get st.expr_map)
-                         (Option.get st.action_map) in
+                         (Option.get st.action_map)
+                         (Option.get st.alloc_meta) in
     let (bindings, _) =
       BmcBind.run initial_state
                   (BmcBind.bind_file st.file st.fn_to_check) in
