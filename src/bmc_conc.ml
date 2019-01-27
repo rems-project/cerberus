@@ -59,12 +59,12 @@ let addr_of_bmcaction (bmcaction: bmc_action) =
 let ctype_of_bmcaction(bmcaction: bmc_action) : ctype =
   ctype_of_action (get_action bmcaction)
 
-let size_of_bmcaction(bmcaction: bmc_action) (file: unit typed_file): int =
-  size_of_ctype(ctype_of_bmcaction bmcaction) file
+let size_of_bmcaction(bmcaction: bmc_action) : int =
+  AddressSort.type_size (ctype_of_bmcaction bmcaction)
 
-let max_addr_of_bmcaction (bmcaction: bmc_action) (file: unit typed_file) =
+let max_addr_of_bmcaction (bmcaction: bmc_action) =
   let base_addr = addr_of_bmcaction bmcaction in
-  let size = size_of_bmcaction bmcaction file in
+  let size = size_of_bmcaction bmcaction in
   assert (size > 0);
   AddressSort.shift_index_by_n base_addr (int_to_z3 (size - 1))
 
@@ -586,7 +586,7 @@ module MemoryModelCommon = struct
     ) (List.filter has_addr all_actions) in
 
     let addr_max_asserts = List.map (fun action ->
-      mk_eq (fns.getAddrMax (z3action action)) (max_addr_of_bmcaction action file)
+      mk_eq (fns.getAddrMax (z3action action)) (max_addr_of_bmcaction action)
     ) (List.filter has_addr all_actions) in
 
     let memord_asserts = List.map (fun action ->
@@ -653,8 +653,11 @@ module MemoryModelCommon = struct
       let read_addr = AddressSort.get_index (addr_of_bmcaction action) in
       let write_base = AddressSort.get_index (fns.getAddr (fns.rf_inv e)) in
       let diff = binop_to_z3 OpSub read_addr write_base in
+      let sizeof_read = size_of_bmcaction action in
+      let index = binop_to_z3 OpDiv diff (int_to_z3 sizeof_read) in
+
       let indexed_wval =
-          Loaded.get_ith_in_loaded_2 diff (fns.getWval (fns.rf_inv e)) in
+          Loaded.get_ith_in_loaded_2 index (fns.getWval (fns.rf_inv e)) in
       mk_implies (fns.getGuard e)
                  (mk_and [fns.isWrite (fns.rf_inv e)
                          ;fns.same_loc (e, fns.rf_inv e)
