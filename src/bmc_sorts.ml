@@ -36,6 +36,7 @@ module IntegerBaseTypeSort = struct
     ; mk_ctor "int_ibty"
     ; mk_ctor "long_ibty"
     ; mk_ctor "long_long_ibty"
+    ; mk_ctor "intptr_t_ibty"
     ]
 
   let mk_expr (ibty: AilTypes.integerBaseType) =
@@ -51,6 +52,8 @@ module IntegerBaseTypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 3) []
     | LongLong ->
         Expr.mk_app g_ctx (List.nth fdecls 4) []
+    | Intptr_t ->
+        Expr.mk_app g_ctx (List.nth fdecls 5) []
     | _ -> assert false
 end
 
