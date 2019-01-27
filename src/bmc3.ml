@@ -84,6 +84,7 @@ module BmcM = struct
     let initial_state = BmcInline.mk_initial st.file in
     let (file, final_state) =
       BmcInline.run initial_state (BmcInline.inline st.file st.fn_to_check) in
+    bmc_debug_print 7 "Done BmcInline phase";
     put {st with file = file;
                  inline_pexpr_map = Some final_state.inline_pexpr_map;
                  inline_expr_map  = Some final_state.inline_expr_map;
@@ -98,6 +99,8 @@ module BmcM = struct
                         (Option.get st.inline_expr_map) in
     let (file, final_state) =
       BmcSSA.run initial_state (BmcSSA.ssa st.file st.fn_to_check) in
+
+    bmc_debug_print 7 "Done BmcSSA phase";
     put {st with file = file;
                  inline_pexpr_map = Some final_state.inline_pexpr_map;
                  inline_expr_map  = Some final_state.inline_expr_map;
@@ -114,6 +117,7 @@ module BmcM = struct
                       (Option.get st.sym_expr_table) in
     let (file, final_state) =
       BmcZ3.run initial_state (BmcZ3.z3_file st.file st.fn_to_check) in
+    bmc_debug_print 7 "Done BmcZ3 phase";
     put {st with file = file;
                  expr_map       = Some final_state.expr_map;
                  case_guard_map = Some final_state.case_guard_map;
@@ -132,6 +136,8 @@ module BmcM = struct
     let (_, final_state) =
       BmcDropCont.run initial_state
                       (BmcDropCont.drop_cont_file st.file st.fn_to_check) in
+
+    bmc_debug_print 7 "Done BmcDropCont phase";
     put {st with drop_cont_map = Some final_state.drop_cont_map}
 
 
@@ -152,6 +158,7 @@ module BmcM = struct
     let simplified_bindings =
       List.map (fun e -> Expr.simplify e None) bindings in
 
+    bmc_debug_print 7 "Done BmcBind phase";
     put { st with bindings = Some simplified_bindings }
 
   (* Compute verification conditions *)
@@ -171,6 +178,7 @@ module BmcM = struct
     let simplified_vcs =
       List.map (fun (e, dbg) -> (Expr.simplify e None, dbg)) vcs in
 
+    bmc_debug_print 7 "Done BmcVC phase";
     put { st with vcs = Some simplified_vcs}
 
   let do_ret_cond : unit eff =
@@ -187,6 +195,8 @@ module BmcM = struct
                  (BmcRet.do_file st.file st.fn_to_check) in
     let simplified_bindings =
       List.map (fun e -> Expr.simplify e None) bindings in
+
+    bmc_debug_print 7 "Done BmcRet phase";
     put {st with ret_expr = Some ret_expr;
                  ret_bindings = Some simplified_bindings}
 
@@ -207,6 +217,8 @@ module BmcM = struct
                     (BmcSeqMem.do_file st.file st.fn_to_check) in
     let simplified_bindings =
       List.map (fun e -> Expr.simplify e None) bindings in
+
+    bmc_debug_print 7 "Done BmcSeqMem phase";
     put { st with mem_bindings = Some simplified_bindings }
 
   (* TODO: temporary for testing; get actions *)
@@ -222,6 +234,8 @@ module BmcM = struct
     let ((preexec, assertions, memory_model), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
+
+    bmc_debug_print 7 "Done BmcConcActions phase";
     put { st with mem_bindings = Some assertions;
                   preexec      = Some preexec;
                   memory_model = Some memory_model

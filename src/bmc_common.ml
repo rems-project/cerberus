@@ -324,6 +324,7 @@ module ImplFunctions = struct
                    | Signed _   -> true
                    | Unsigned _ -> false
                    | Size_t     -> false
+                   | Ptrdiff_t  -> true
                    | _          -> assert false);
     impl_precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
@@ -357,7 +358,7 @@ module ImplFunctions = struct
 
   let ity_list = signed_ibt_list
                @ unsigned_ibt_list
-               @ [Char; Bool; Size_t]
+               @ [Char; Bool; Size_t; Ptrdiff_t]
 
   let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
     Core_ctype.Basic0 (Integer ity)

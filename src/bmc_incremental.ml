@@ -1434,12 +1434,14 @@ module BmcZ3 = struct
 
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
+
     (match expr_ with
     | Epure pe ->
         z3_pe pe
     | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         (* TODO: includes type *)
         bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
+        z3_pe ctype >>= fun _ ->
         z3_pe ptr >>= fun z3d_ptr ->
         (*let addr = PointerSort.get_addr z3d_ptr in
         let range_assert = AddressSort.valid_index_range addr in
@@ -1453,8 +1455,17 @@ module BmcZ3 = struct
         z3_pe p2 >>= fun z3d_p2 ->
         return (PointerSort.ptr_eq z3d_p1 z3d_p2)
         (*return (mk_eq z3d_p1 z3d_p2)*)
-    | Ememop _ ->
+    | Ememop (Ptrdiff, [((Pexpr(_,BTy_ctype, (PEval (Vctype ctype)))) as ty);p1;p2]) ->
+        assert g_pnvi;
+        z3_pe ty >>= fun _ ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        (* TODO: assert PNVI model *)
+        let raw_ptr_diff = PointerSort.ptr_diff_raw z3d_p1 z3d_p2 in
+        let type_size = AddressSort.type_size ctype in
         (* TODO *)
+        return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
+    | Ememop _ ->
         assert false
     | Eaction action ->
         z3_action action uid
@@ -2014,6 +2025,10 @@ module BmcBind = struct
         bind_pe p1 >>= fun bound_p1 ->
         bind_pe p2 >>= fun bound_p2 ->
         return (bound_p1 @ bound_p2)
+    | Ememop (Ptrdiff, [ctype;p1;p2]) ->
+        bind_pe p1 >>= fun bound_p1 ->
+        bind_pe p2 >>= fun bound_p2 ->
+        return (bound_p1 @ bound_p2)
     | Ememop _ -> assert false
     | Eaction action ->
         bind_action action uid
@@ -2353,6 +2368,25 @@ module BmcVC = struct
     let uid = get_id_expr expr in
     match expr_ with
     | Epure pe      -> vcs_pe pe
+    | Ememop (Ptrdiff, [ctype;pe1;pe2]) ->
+        assert (g_pnvi);
+        vcs_pe pe1 >>= fun vcs_pe1 ->
+        vcs_pe pe2 >>= fun vcs_pe2 ->
+
+        get_expr (get_id_pexpr pe1) >>= fun z3_pe1 ->
+        get_expr (get_id_pexpr pe2) >>= fun z3_pe2 ->
+
+        let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_Ptrdiff") in
+        let valid_assert =
+          mk_and [PointerSort.valid_ptr z3_pe1
+                 ;PointerSort.valid_ptr z3_pe2
+                 ;PointerSort.ptr_in_range z3_pe1
+                 ;PointerSort.ptr_in_range z3_pe2
+                 ;PointerSort.ptr_comparable z3_pe1 z3_pe2
+                 ] in
+        return ((valid_assert, dbg_valid_ptr)
+                :: (vcs_pe1 @ vcs_pe2))
+
     | Ememop (memop, pes) ->
         mapM vcs_pe pes >>= fun vcss_pes ->
         begin match memop with
@@ -3108,7 +3142,8 @@ module BmcSeqMem = struct
               (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
               0 (list_take i type_list) in
           let target_addr =
-            AddressSort.shift_index_by_n (PointerSort.get_addr ptr) (int_to_z3 index) in
+            AddressSort.shift_index_by_n (PointerSort.get_addr ptr)
+                                         (int_to_z3 index) in
           (*let target_addr =
               AddressSort.shift_index_by_n
                         (PointerSort.get_addr ptr) (int_to_z3 i) in*)

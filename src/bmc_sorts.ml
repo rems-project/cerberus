@@ -64,6 +64,7 @@ module IntegerTypeSort = struct
     ; mk_constructor_s g_ctx "unsigned_ity" (mk_sym "is_unsigned_ity")
         [mk_sym "_unsigned_ity"] [Some IntegerBaseTypeSort.mk_sort] [0]
     ; mk_ctor "size_t_ity"
+    ; mk_ctor "ptrdiff_t_ity"
     ]
 
   let mk_expr (ity: AilTypes.integerType) =
@@ -79,6 +80,8 @@ module IntegerTypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 3) [IntegerBaseTypeSort.mk_expr ibty]
     | Size_t ->
         Expr.mk_app g_ctx (List.nth fdecls 4) []
+    | Ptrdiff_t ->
+        Expr.mk_app g_ctx (List.nth fdecls 5) []
     | _ -> assert false
 end
 
@@ -405,6 +408,9 @@ module PointerSortPNVI = struct
            ;has_provenance ptr
            ]
 
+  let ptr_comparable (p1: Expr.expr) (p2: Expr.expr) =
+    mk_eq (get_prov p1) (get_prov p2)
+
   let ptr_in_range (ptr: Expr.expr) =
     AddressSortPNVI.valid_index_range (get_prov ptr) (get_addr ptr)
 
@@ -422,6 +428,10 @@ module PointerSortPNVI = struct
                                             (Expr.to_string p1)
                                             (Expr.to_string p2)) boolean_sort)
                    mk_false)
+
+  let ptr_diff_raw (p1: Expr.expr) (p2: Expr.expr) =
+    binop_to_z3 OpSub (AddressSortPNVI.get_index (get_addr p1))
+                      (AddressSortPNVI.get_index (get_addr p2))
 end
 
 module PointerSortConcrete = struct
@@ -479,8 +489,14 @@ module PointerSortConcrete = struct
   let ptr_in_range (ptr: Expr.expr) =
     AddressSortConcrete.valid_index_range (get_addr ptr)
 
+  let ptr_comparable (p1: Expr.expr) (p2: Expr.expr) =
+    mk_true
+
   let ptr_eq (p1: Expr.expr) (p2: Expr.expr) =
     mk_eq p1 p2
+
+  let ptr_diff_raw (p1: Expr.expr) (p2: Expr.expr) =
+    assert false
 end
 
 module PointerSort = PointerSortPNVI
