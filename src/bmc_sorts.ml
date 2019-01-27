@@ -403,9 +403,25 @@ module PointerSortPNVI = struct
   let valid_ptr (ptr: Expr.expr) =
     mk_and [mk_not (is_null ptr)
            ;has_provenance ptr
-           ;AddressSortPNVI.valid_index_range (get_prov ptr) (get_addr ptr)
            ]
 
+  let ptr_in_range (ptr: Expr.expr) =
+    AddressSortPNVI.valid_index_range (get_prov ptr) (get_addr ptr)
+
+  (* PNVI semantics:
+   * - if p1 = p2, true
+   * - if different provenance, {a=a', false}
+   * - else false *)
+  let ptr_eq (p1: Expr.expr) (p2: Expr.expr) =
+    mk_ite (mk_eq p1 p2) mk_true
+           (mk_ite (mk_and[mk_not (is_null p1); mk_not (is_null p2)
+                          ;mk_not (mk_eq (get_prov p1) (get_prov p2))
+                          ;mk_eq (get_addr p1) (get_addr p2)
+                          ])
+                   (mk_fresh_const (sprintf "ptr_eq(%s,%s)"
+                                            (Expr.to_string p1)
+                                            (Expr.to_string p2)) boolean_sort)
+                   mk_false)
 end
 
 module PointerSortConcrete = struct
@@ -458,11 +474,16 @@ module PointerSortConcrete = struct
           (AddressSortConcrete.shift_index_by_n addr n)
 
   let valid_ptr (ptr: Expr.expr) =
-    mk_and [mk_not (is_null ptr)
-           ;AddressSortConcrete.valid_index_range (get_addr ptr)]
+    mk_and [mk_not (is_null ptr)]
+
+  let ptr_in_range (ptr: Expr.expr) =
+    AddressSortConcrete.valid_index_range (get_addr ptr)
+
+  let ptr_eq (p1: Expr.expr) (p2: Expr.expr) =
+    mk_eq p1 p2
 end
 
-module PointerSort = PointerSortConcrete
+module PointerSort = PointerSortPNVI
 module AddressSort = PointerSort.AddrModule
 
 (* TODO: should create once using fresh names and reuse.

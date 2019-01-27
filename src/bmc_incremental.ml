@@ -1446,11 +1446,13 @@ module BmcZ3 = struct
         return (mk_and [mk_not (PointerSort.is_null z3d_ptr)
                        ;range_assert])
         *)
-        return (PointerSort.valid_ptr z3d_ptr)
+        return (mk_and [PointerSort.valid_ptr z3d_ptr
+                       ;PointerSort.ptr_in_range z3d_ptr])
     | Ememop (PtrEq, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
-        return (mk_eq z3d_p1 z3d_p2)
+        return (PointerSort.ptr_eq z3d_p1 z3d_p2)
+        (*return (mk_eq z3d_p1 z3d_p2)*)
     | Ememop _ ->
         (* TODO *)
         assert false
@@ -2296,8 +2298,8 @@ module BmcVC = struct
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
         return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
-                ::(mk_not (PointerSort.is_null ptr_z3),
-                   VcDebugStr (string_of_int uid ^ "_Store_null"))
+                ::(PointerSort.valid_ptr ptr_z3,
+                   VcDebugStr (string_of_int uid ^ "_Store_valid_ptr"))
                 :: vcs_wval)
     | Store0 _          -> assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)),
@@ -2306,8 +2308,8 @@ module BmcVC = struct
               mk_bool (not (memorder = Release || memorder = Acq_rel)) in
         lookup_sym sym >>= fun ptr_z3 ->
         return [(valid_memorder, VcDebugStr (string_of_int uid ^ "_Load_memorder"))
-               ;(mk_not (PointerSort.is_null ptr_z3),
-                   VcDebugStr (string_of_int uid ^ "_Load_null"))
+               ;(PointerSort.valid_ptr ptr_z3,
+                 VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
                ]
     | Load0 _ -> assert false
     | RMW0 _  -> assert false
@@ -2893,7 +2895,8 @@ module BmcSeqMem = struct
       @ disjoint_asserts
   end
 
-  module SeqMem = MemConcrete
+  (*module SeqMem = MemConcrete*)
+  module SeqMem = MemPNVI
 
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
