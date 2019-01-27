@@ -17,6 +17,11 @@ let g_macro_finder = true
 let g_bv = false
 let g_bv_precision = 33
 
+(* TODO: get value from somewhere else *)
+let g_max_addr = 1028
+
+let g_pnvi = true
+
 (*let g_model_file = "bmc/example.cat"*)
 
 type memory_mode =
