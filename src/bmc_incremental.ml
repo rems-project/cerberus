@@ -2692,6 +2692,72 @@ module BmcMemCommon = struct
       (LoadedInteger.mk_specified initial_value, assertions)
     end else
       (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
+
+  (* ==== PNVI STUFF ==== *)
+  (* Base address aligned: assert address is a multiple of alignment > 0*)
+  let alignment_assertions ((alloc,metadata) )
+                           : Expr.expr list =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let alignment = BmcZ3.get_metadata_align metadata in
+      let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
+                                     integer_sort in
+      let align_assert =
+        mk_eq (AddressSort.get_index base_addr)
+              (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
+      [align_assert
+      ;binop_to_z3 OpGe fresh_int (int_to_z3 0)]
+
+    (* Address isn't too large *)
+    let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let size = BmcZ3.get_metadata_size metadata in
+      let max_address =
+        binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
+      binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
+
+    (* TODO: Ew quadratic *)
+    (* [start_1, end_1), [start_2, end_2)
+     *
+     * Assert that
+     * start_2 >= end_1 or
+     * start_1 >= end_2
+     *)
+    let disjoint_assertions ((id1, meta1) : int * BmcZ3.allocation_metadata)
+                            ((id2, meta2) : int * BmcZ3.allocation_metadata)
+                            : Expr.expr list =
+      if id1 = id2 then []
+      else begin
+        let start_1 = AddressSort.get_index (BmcZ3.get_metadata_base meta1) in
+        let end_1   = binop_to_z3 OpAdd start_1
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta1)) in
+        let start_2 = AddressSort.get_index (BmcZ3.get_metadata_base meta2) in
+        let end_2   = binop_to_z3 OpAdd start_2
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta2)) in
+        [mk_or [binop_to_z3 OpGe start_2 end_1
+               ;binop_to_z3 OpGe start_1 end_2]
+        ]
+      end
+
+    (* TODO: add provenance somewhere *)
+    (* For each allocation, we need to assert
+     * - The base addresses are correctly aligned
+     * - Addresses < some max value
+     * - the allocations are disjoint
+     * - Somehow create a function expressing whether an address is valid for pointers
+     * - Eventually the provenance
+     *)
+    let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
+                            : Expr.expr list =
+      let alignment_asserts =
+        List.concat (List.map alignment_assertions data) in
+      let addr_lt_max_asserts = List.map addr_lt_max_assertions data in
+      let disjoint_asserts = List.concat
+        (List.map (fun (d1,d2) -> disjoint_assertions d1 d2)
+                  (cartesian_product data data)) in
+
+        (alignment_asserts @
+         addr_lt_max_asserts @
+         disjoint_asserts)
 end
 
 (* Sequential memory model; read from most recent write *)
@@ -2861,72 +2927,9 @@ module BmcSeqMem = struct
     let mk_shift (_: alloc_id) (index: index) (addr: Expr.expr) =
       AddressSort.shift_index_by_n addr (int_to_z3 index)
 
-    (* Base address aligned: assert address is a multiple of alignment > 0*)
-    let alignment_assertions ((alloc,metadata) )
-                             : Expr.expr list =
-      let base_addr = BmcZ3.get_metadata_base metadata in
-      let alignment = BmcZ3.get_metadata_align metadata in
-      let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
-                                     integer_sort in
-      let align_assert =
-        mk_eq (AddressSort.get_index base_addr)
-              (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
-      print_endline (BmcZ3.print_metadata metadata);
-      [align_assert
-      ;binop_to_z3 OpGe fresh_int (int_to_z3 0)]
-
-    (* Address isn't too large *)
-    let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
-      let base_addr = BmcZ3.get_metadata_base metadata in
-      let size = BmcZ3.get_metadata_size metadata in
-      let max_address =
-        binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
-      binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
-
-    (* TODO: Ew quadratic *)
-    (* [start_1, end_1), [start_2, end_2)
-     *
-     * Assert that
-     * start_2 >= end_1 or
-     * start_1 >= end_2
-     *)
-    let disjoint_assertions ((id1, meta1) : int * BmcZ3.allocation_metadata)
-                            ((id2, meta2) : int * BmcZ3.allocation_metadata)
-                            : Expr.expr list =
-      if id1 = id2 then []
-      else begin
-        let start_1 = AddressSort.get_index (BmcZ3.get_metadata_base meta1) in
-        let end_1   = binop_to_z3 OpAdd start_1
-                                        (int_to_z3 (BmcZ3.get_metadata_size meta1)) in
-        let start_2 = AddressSort.get_index (BmcZ3.get_metadata_base meta2) in
-        let end_2   = binop_to_z3 OpAdd start_2
-                                        (int_to_z3 (BmcZ3.get_metadata_size meta2)) in
-        [mk_or [binop_to_z3 OpGe start_2 end_1
-               ;binop_to_z3 OpGe start_1 end_2]
-        ]
-      end
-
-    (* TODO: add provenance somewhere *)
-    (* For each allocation, we need to assert
-     * - The base addresses are correctly aligned
-     * - Addresses < some max value
-     * - the allocations are disjoint
-     * - Somehow create a function expressing whether an address is valid for pointers
-     * - Eventually the provenance
-     *)
     let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
                             : Expr.expr list =
-      let alignment_asserts =
-        List.concat (List.map alignment_assertions data) in
-      let addr_lt_max_asserts = List.map addr_lt_max_assertions data in
-      let disjoint_asserts = List.concat
-        (List.map (fun (d1,d2) -> disjoint_assertions d1 d2)
-                  (cartesian_product data data)) in
-      List.iter (fun e -> print_endline (Expr.to_string e)) disjoint_asserts;
-
-        alignment_asserts
-      @ addr_lt_max_asserts
-      @ disjoint_asserts
+      BmcMemCommon.metadata_assertions data
   end
 
   (*module SeqMem = MemConcrete*)
@@ -3071,7 +3074,6 @@ module BmcSeqMem = struct
                 : ret_ty eff =
     (* Get metadata *)
     get_meta alloc_id >>= fun metadata ->
-    print_endline (BmcZ3.print_metadata metadata);
     let base_addr = BmcZ3.get_metadata_base metadata in
 
     (* Get base address, shift by size of ctype *)
@@ -3352,7 +3354,6 @@ module BmcSeqMem = struct
         return empty_ret
      | _ -> assert false
     ) >>= fun ret ->
-    print_memory >>
     get_meta_map >>= fun metadata ->
     let meta_asserts = SeqMem.metadata_assertions (Pmap.bindings_list metadata) in
     return (meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
@@ -3455,6 +3456,10 @@ module BmcConcActions = struct
                                 alloc_id)
     | Some data -> return data
 
+  let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
+    get >>= fun st ->
+    return st.alloc_meta_map
+
   let get_tid : int eff =
     get >>= fun st ->
     return st.tid
@@ -3532,7 +3537,6 @@ module BmcConcActions = struct
                        | Core_ctype.Atomic0 _ -> mk_true
                        | _ -> mk_false) in
     get_meta alloc_id >>= fun metadata ->
-    print_endline (BmcZ3.print_metadata metadata);
     let base_addr = BmcZ3.get_metadata_base metadata in
 
     mapMi_ (fun i (cype,sort) ->
@@ -3868,26 +3872,8 @@ module BmcConcActions = struct
       if (List.length actions > 0) then BmcMem.get_assertions memory_model
       else [] in
 
-    return (preexec, assertions @ mem_assertions, memory_model)
-end
+    get_meta_map >>= fun metadata ->
+    let meta_asserts = BmcMemCommon.metadata_assertions (Pmap.bindings_list metadata) in
 
-module BmcConcMem = struct
-  type internal_state = {
-    inline_expr_map : (int, unit typed_expr) Pmap.map;
-    action_map      : (int, BmcZ3.intermediate_action) Pmap.map;
-    case_guard_map  : (int, Expr.expr list) Pmap.map;
-    drop_cont_map   : (int, Expr.expr) Pmap.map;
-
-    bmc_actions    : (int, aid list) Pmap.map;
-    bmc_action_map : (aid, bmc_action) Pmap.map;
-    tid            : tid;
-    tid_supply     : tid;
-  }
-
-  include EffMonad(struct type state = internal_state end)
-
-  (*let do_file (file: unit typed_file)
-              (fn_to_check: sym_ty)
-              : (bmc_action list) eff = *)
-
+    return (preexec, assertions @ mem_assertions @ meta_asserts, memory_model)
 end
