@@ -438,49 +438,58 @@ module BmcInline = struct
         get_fn_ptr_sym fn_ptr >>= fun fn_ptr_sym ->
         add_fn_call id fn_ptr_sym >>
         get_file >>= fun file ->
-        begin match Pmap.lookup fn_ptr_sym file.funs with
-        | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
-          lookup_run_depth (Sym fn_ptr_sym) >>= fun depth ->
-          if depth >= !!bmc_conf.max_run_depth then
-            begin
-            let error_msg =
-              sprintf "Eccall_depth_exceeded: %s" (name_to_string (Sym fn_ptr_sym)) in
-            let new_expr =
-              (Expr([],Epure(Pexpr([], fun_ty,
-                             PEerror(error_msg,
-                                     Pexpr([], BTy_unit, PEval(Vunit))))))) in
-            inline_e new_expr >>= fun inlined_new_expr ->
-            add_inlined_expr id inlined_new_expr >>
+
+        (* Check if it is in file.stdlib (e.g. memcmp_proxy) or in file.funs *)
+        let (fun_ty, fun_args, fun_expr) =
+          match Pmap.lookup fn_ptr_sym file.stdlib with
+          | Some (Proc(_, fun_ty, fun_args, fun_expr)) ->
+             (fun_ty, fun_args, fun_expr)
+          | Some _ -> assert false
+          | None ->
+              begin match Pmap.lookup fn_ptr_sym file.funs with
+              | Some (Proc (_, fun_ty, fun_args, fun_expr)) ->
+                  (fun_ty, fun_args, fun_expr)
+              | Some _ -> assert false
+              | None -> assert false
+              end
+        in
+        lookup_run_depth (Sym fn_ptr_sym) >>= fun depth ->
+        if depth >= !!bmc_conf.max_run_depth then
+          begin
+          let error_msg =
+            sprintf "Eccall_depth_exceeded: %s" (name_to_string (Sym fn_ptr_sym)) in
+          let new_expr =
+            (Expr([],Epure(Pexpr([], fun_ty,
+                           PEerror(error_msg,
+                                   Pexpr([], BTy_unit, PEval(Vunit))))))) in
+          inline_e new_expr >>= fun inlined_new_expr ->
+          add_inlined_expr id inlined_new_expr >>
+          return (Eccall(a, pe_ty, pe_fn, pe_args))
+          end
+        else
+          begin
+            (* TODO: not true for variadic *)
+            assert (List.length pe_args = List.length fun_args);
+            let sub_map = List.fold_right2
+              (fun (sym,_) pe map -> Pmap.add sym pe map)
+              fun_args inlined_pe_args (Pmap.empty sym_cmp) in
+            let expr_to_check = substitute_expr sub_map fun_expr in
+
+            get_proc_expr >>= fun old_proc_expr ->
+            get_fn_type  >>= fun old_fn_type ->
+
+            (* TODO: fn_ptr_map should be saved... *)
+            update_proc_expr expr_to_check >>
+            put_fn_type fun_ty >>
+            increment_run_depth (Sym fn_ptr_sym) >>
+            inline_e expr_to_check >>= fun inlined_expr_to_check ->
+            decrement_run_depth (Sym fn_ptr_sym) >>
+            put_fn_type old_fn_type >>
+            update_proc_expr old_proc_expr >>
+
+            add_inlined_expr id inlined_expr_to_check >>
             return (Eccall(a, pe_ty, pe_fn, pe_args))
-            end
-          else
-            begin
-              (* TODO: not true for variadic *)
-              assert (List.length pe_args = List.length fun_args);
-              let sub_map = List.fold_right2
-                (fun (sym,_) pe map -> Pmap.add sym pe map)
-                fun_args inlined_pe_args (Pmap.empty sym_cmp) in
-              let expr_to_check = substitute_expr sub_map fun_expr in
-
-              get_proc_expr >>= fun old_proc_expr ->
-              get_fn_type  >>= fun old_fn_type ->
-
-              (* TODO: fn_ptr_map should be saved... *)
-              update_proc_expr expr_to_check >>
-              put_fn_type fun_ty >>
-              increment_run_depth (Sym fn_ptr_sym) >>
-              inline_e expr_to_check >>= fun inlined_expr_to_check ->
-              decrement_run_depth (Sym fn_ptr_sym) >>
-              put_fn_type old_fn_type >>
-              update_proc_expr old_proc_expr >>
-
-              add_inlined_expr id inlined_expr_to_check >>
-              return (Eccall(a, pe_ty, pe_fn, pe_args))
-            end
-        | Some (ProcDecl _) ->
-            assert false
-        | _ -> assert false
-        end
+          end
     | Eccall _ ->
         assert false
     | Eproc _ -> assert false
@@ -1197,8 +1206,12 @@ module BmcZ3 = struct
         assert (is_integer_type ctype);
         return (Pmap.find ctype ImplFunctions.ivmax_map)
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        assert (is_integer_type ctype);
-        return (Pmap.find ctype ImplFunctions.sizeof_map)
+        if is_pointer_type ctype then
+          return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
+        else begin
+          assert (is_integer_type ctype);
+          return (Pmap.find ctype ImplFunctions.sizeof_map)
+        end
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -1465,6 +1478,22 @@ module BmcZ3 = struct
         let type_size = AddressSort.type_size ctype in
         (* TODO *)
         return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
+    | Ememop(IntFromPtr, [ctype_ptr; ctype_int; ptr]) ->
+        assert g_pnvi;
+        z3_pe ctype_ptr >>= fun _ ->
+        z3_pe ctype_int >>= fun _ ->
+        z3_pe ptr       >>= fun z3d_ptr ->
+
+        (* 0 if p = null;
+         * a if p = (prov,a) and a is in value_range(ctype_int),
+         * UB otherwise
+         *
+         * We leave UB to BmcVCs*)
+        return (mk_ite (PointerSort.is_null z3d_ptr) (int_to_z3 0)
+                       (AddressSort.get_index (PointerSort.get_addr z3d_ptr))
+               )
+    | Ememop (Memcmp, [p;q;size]) ->
+        assert false
     | Ememop _ ->
         assert false
     | Eaction action ->
@@ -2019,17 +2048,14 @@ module BmcBind = struct
     (match expr_ with
     | Epure pe ->
         bind_pe pe
-    | Ememop (PtrValidForDeref, [ctype;ptr]) ->
-        bind_pe ptr
-    | Ememop (PtrEq, [p1;p2]) ->
-        bind_pe p1 >>= fun bound_p1 ->
-        bind_pe p2 >>= fun bound_p2 ->
-        return (bound_p1 @ bound_p2)
-    | Ememop (Ptrdiff, [ctype;p1;p2]) ->
-        bind_pe p1 >>= fun bound_p1 ->
-        bind_pe p2 >>= fun bound_p2 ->
-        return (bound_p1 @ bound_p2)
-    | Ememop _ -> assert false
+    | Ememop(PtrValidForDeref, args) (* fall through *)
+    | Ememop(PtrEq, args)            (* fall through *)
+    | Ememop(Ptrdiff, args)          (* fall through *)
+    | Ememop(IntFromPtr, args)       (* fall through *) ->
+        mapM bind_pe args >>= fun bound_args ->
+        return (List.concat bound_args)
+    | Ememop _ ->
+        assert false
     | Eaction action ->
         bind_action action uid
     | Ecase (pe, cases) ->
@@ -2314,7 +2340,7 @@ module BmcVC = struct
         lookup_sym sym                  >>= fun ptr_z3 ->
         return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
                 ::(PointerSort.valid_ptr ptr_z3,
-                   VcDebugStr (string_of_int uid ^ "_Store_valid_ptr"))
+                   VcDebugStr (string_of_int uid ^ "_Store_invalid_ptr"))
                 :: vcs_wval)
     | Store0 _          -> assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)),
@@ -2386,6 +2412,27 @@ module BmcVC = struct
                  ] in
         return ((valid_assert, dbg_valid_ptr)
                 :: (vcs_pe1 @ vcs_pe2))
+    | Ememop(IntFromPtr, [ctype_ptr;ctype_int;ptr]) ->
+        (* assert ptr is null or ptr is (prov,a) and
+         * a is in value_range (ctype_int) *)
+        vcs_pe ctype_ptr >>= fun vcs_ctype_ptr ->
+        vcs_pe ctype_int >>= fun vcs_ctype_int ->
+        vcs_pe ptr       >>= fun vcs_ptr ->
+
+        let ctype = (match ctype_int with
+          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
+          | _ -> assert false
+          ) in
+        get_expr (get_id_pexpr ptr) >>= fun z3d_ptr ->
+        let ptr_addr = AddressSort.get_index (PointerSort.get_addr z3d_ptr) in
+        let min_value = Pmap.find ctype ImplFunctions.ivmin_map in
+        let max_value = Pmap.find ctype ImplFunctions.ivmax_map in
+
+        let dbg = VcDebugStr (string_of_int uid ^ "_IntFromPtr_invalid_cast") in
+        return ((mk_or [PointerSort.is_null z3d_ptr
+                      ;binop_to_z3 OpGe ptr_addr min_value
+                      ;binop_to_z3 OpLe ptr_addr max_value
+                      ], dbg) ::(vcs_ctype_ptr @ vcs_ctype_int @ vcs_ptr))
 
     | Ememop (memop, pes) ->
         mapM vcs_pe pes >>= fun vcss_pes ->

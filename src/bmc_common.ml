@@ -14,6 +14,11 @@ let is_integer_type (ctype: Core_ctype.ctype0) =
   | Basic0 (Integer _) -> true
   | _ -> false
 
+let is_pointer_type (ctype: Core_ctype.ctype0) =
+  match ctype with
+  | Pointer0 (_,Basic0 (Integer _)) -> true
+  | _ -> false
+
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
@@ -314,6 +319,7 @@ module ImplFunctions = struct
   open Z3.FuncDecl
   (* ---- Implementation ---- *)
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
+  let sizeof_ptr = Ocaml_implementation.Impl.sizeof_pointer
 
   (* TODO: precision of Bool is currently 8... *)
   let impl : Implementation.implementation = {
@@ -352,7 +358,7 @@ module ImplFunctions = struct
      Nat_big_num.of_int 0,
      Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
                      (Nat_big_num.of_int 1)
-  let ibt_list = [Ichar; Short; Int_; Long; LongLong]
+  let ibt_list = [Ichar; Short; Int_; Long; LongLong; Intptr_t]
   let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list
   let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list
 
@@ -423,6 +429,9 @@ module ImplFunctions = struct
       match ctype with
       | Basic0 (Integer ity) ->
           mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
+      (*| Pointer0 _ ->
+          (* TODO: Check this *)
+          mk_eq const (int_to_z3 (Option.get (sizeof_pointer)) *)
       | _ -> assert false
     in
     List.map (fun ity -> sizeof_assert (ity_to_ctype ity))
