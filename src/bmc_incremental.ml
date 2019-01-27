@@ -1023,18 +1023,19 @@ module BmcZ3 = struct
 
   (* Massive TODO *)
   type intermediate_action =
-    | ICreate of aid list * (* TODO: align *) ctype_sort list * alloc
+    | ICreate of aid * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | IKill of aid
-    | ILoad of aid * (* TODO: list *) ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
-    | IStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
+    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
+    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
+        (* TODO: type *)
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
-        (* If succeed, do a rmw *) aid *
-        ctype_sort * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+        (* If succeed, do a rmw *) aid * ctype *
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
-    | ILinuxLoad of aid * ctype_sort * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
-    | ILinuxStore of aid * ctype_sort * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
+    | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
+    | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
   type permission_flag =
@@ -1043,11 +1044,20 @@ module BmcZ3 = struct
 
   (* TODO: kind in {object, region} *)
 
+  (* We assume for now we always know the ctype of what we're allocating *)
   type allocation_metadata =
-    (* size *) int * ctype option * (* base address *) int * permission_flag *
+    (* size *) int * ctype option * (* alignment *) int * (* base address *) Expr.expr * permission_flag *
     (* C prefix *) Sym.prefix
 
-  let get_metadata_prefix (_,_,_,_,pref) : Sym.prefix = pref
+  let get_metadata_size (sz,_,_,_,_,_) : int = sz
+  let get_metadata_base (_,_,_,base,_,_) : Expr.expr = base
+  let get_metadata_ctype (_,ctype,_,_,_,_) : ctype option = ctype
+  let get_metadata_align (_,_,align,_,_,_) : int = align
+  let get_metadata_prefix (_,_,_,_,_,pref) : Sym.prefix = pref
+  let print_metadata (size, cty, align, expr, _, pref) =
+    sprintf "Size: %d, Base: %s, Align %d, prefix: %s"
+                size (Expr.to_string expr) align
+                (prefix_to_string pref)
 
   type z3_state = {
     (* Builds the following *)
@@ -1079,7 +1089,7 @@ module BmcZ3 = struct
 
     file = file;
 
-    alloc_supply = 0;
+    alloc_supply = 1; (* 0 is empty provenance *)
     aid_supply   = 0;
 
     inline_pexpr_map = inline_pexpr_map;
@@ -1191,7 +1201,7 @@ module BmcZ3 = struct
         return (Pmap.find ctype ImplFunctions.sizeof_map)
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
-        return (ctor_to_z3 ctor z3d_pes (Some bTy))
+        return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
     | PEcase (pe, cases) ->
         assert (List.length cases > 0);
         z3_pe pe                              >>= fun z3d_pe ->
@@ -1204,10 +1214,16 @@ module BmcZ3 = struct
         z3_pe ptr      >>= fun z3d_ptr ->
         z3_pe index    >>= fun z3d_index ->
         get_file >>= fun file ->
-        let ty_size = bmcz3sort_size (ctype_to_bmcz3sort ty file) in
+        (* TODO: different w/ address type *)
+        let ty_size = AddressSort.type_size ty in
+          (*bmcz3sort_size (ctype_to_bmcz3sort ty file) in*)
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
-        let addr = PointerSort.get_addr z3d_ptr in
+
+        (*let addr = PointerSort.get_addr z3d_ptr in
+
         return (PointerSort.mk_ptr (AddressSort.shift_index_by_n addr shift_size))
+        *)
+        return (PointerSort.shift_by_n z3d_ptr shift_size)
     | PEmember_shift (ptr, sym, member) ->
         z3_pe ptr >>= fun z3d_ptr ->
         get_file  >>= fun file ->
@@ -1221,10 +1237,12 @@ module BmcZ3 = struct
                   if cabsid_cmp cid member = 0 || skip then (acc, true)
                   else (acc + n, false)
             ) (0, false) memsizes in
+            return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift_size))
+            (*
             let addr = PointerSort.get_addr z3d_ptr in
             let new_addr =
               AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
-            return (PointerSort.mk_ptr new_addr)
+            return (PointerSort.mk_ptr new_addr)*)
         | _ -> assert false
         end
     | PEnot pe ->
@@ -1271,25 +1289,43 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create ctype (pref: Sym.prefix) =
+  let rec alignof_type (ctype: ctype) : int =
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 (Integer ity) ->
+        Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+    | Array0(ty, _) -> alignof_type ty
+    | Function0 _ -> assert false
+    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Atomic0 (Basic0 _ as _ty) ->
+        alignof_type _ty
+    | Atomic0 (Pointer0 _ as _ty) ->
+        Option.get (Ocaml_implementation.Impl.alignof_pointer)
+    | _ -> assert false
+
+  let mk_create ctype align_ty (pref: Sym.prefix) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-    mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->
+    get_fresh_aid >>= fun aid ->
+    (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
+    let base_addr = AddressSort.mk_nd_addr alloc_id in
 
-    add_metadata alloc_id (List.length flat_sortlist, Some ctype,
-                           0 (* TODO *),
+    add_metadata alloc_id (AddressSort.type_size ctype,
+                           Some ctype,
+                           alignof_type align_ty,
+                           base_addr,
                            ReadWrite, pref) >>
-    return (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0)),
-            ICreate (aid_list, flat_sortlist, alloc_id))
+    return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
+            ICreate (aid, ctype, align_ty, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
-    | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
-        mk_create ctype prefix
+    | Create (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype align))])),
+              Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
+        mk_create ctype align prefix
     | Create _ ->
-        print_endline (pp_to_string (Pp_core.Basic.pp_action action_));
         assert false
     | CreateReadOnly _ ->
         assert false
@@ -1306,10 +1342,9 @@ module BmcZ3 = struct
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
 
         return (UnitSort.mk_unit,
-                IStore (aid, List.hd flat_sortlist, sym_expr, z3d_wval, mo))
+                IStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | Store0 _ ->
         assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
@@ -1321,8 +1356,7 @@ module BmcZ3 = struct
         let (_, sort) = List.hd flat_sortlist in
         lookup_sym sym >>= fun sym_expr ->
         let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
-        return (rval_expr, ILoad (aid, List.hd flat_sortlist,
-                sym_expr, rval_expr, mo))
+        return (rval_expr, ILoad (aid, ty, flat_sortlist, sym_expr, rval_expr, mo))
     | Load0 _ ->
         assert false
     | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
@@ -1337,7 +1371,7 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid_succeed_rmw ->
         get_file >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         let (ctype, sort) = List.hd flat_sortlist in
 
         let rval_expected =
@@ -1354,8 +1388,8 @@ module BmcZ3 = struct
         return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
                                      (LoadedInteger.mk_specified (int_to_z3 0)),
                 ICompareExchangeStrong (
-                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
-                  (ctype,sort), obj_expr, expected_expr,
+                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw, ty,
+                  flat_sortlist, obj_expr, expected_expr,
                   z3d_desired, rval_expected, rval_object,
                   mo_success, mo_failure))
     | CompareExchangeStrong _ ->
@@ -1374,10 +1408,10 @@ module BmcZ3 = struct
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
         let (ctype, sort) = List.hd flat_sortlist in
         (* TODO: can't load multiple memory locations... *)
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         lookup_sym sym >>= fun sym_expr ->
         let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
-        return (rval_expr, ILinuxLoad (aid, (ctype,sort),
+        return (rval_expr, ILinuxLoad (aid, ty, flat_sortlist,
                 sym_expr, rval_expr, mo))
     | LinuxLoad _ ->
         assert false
@@ -1387,10 +1421,9 @@ module BmcZ3 = struct
         z3_pe wval     >>= fun z3d_wval ->
         get_file       >>= fun file ->
         let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
-        assert (List.length flat_sortlist = 1);
+        assert (List.length flat_sortlist = 1); (* TODO *)
         return (UnitSort.mk_unit,
-                ILinuxStore (aid, List.hd flat_sortlist,
-                             sym_expr, z3d_wval, mo))
+                ILinuxStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | LinuxStore _ ->
         assert false
     | LinuxRMW (pe1, pe2, pe3, mo) ->
@@ -1401,22 +1434,38 @@ module BmcZ3 = struct
 
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
+
     (match expr_ with
     | Epure pe ->
         z3_pe pe
     | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         (* TODO: includes type *)
         bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
+        z3_pe ctype >>= fun _ ->
         z3_pe ptr >>= fun z3d_ptr ->
-        let addr = PointerSort.get_addr z3d_ptr in
+        (*let addr = PointerSort.get_addr z3d_ptr in
         let range_assert = AddressSort.valid_index_range addr in
-        return (mk_and [mk_not (PointerSort.is_null z3d_ptr); range_assert])
+        return (mk_and [mk_not (PointerSort.is_null z3d_ptr)
+                       ;range_assert])
+        *)
+        return (mk_and [PointerSort.valid_ptr z3d_ptr
+                       ;PointerSort.ptr_in_range z3d_ptr])
     | Ememop (PtrEq, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
-        return (mk_eq z3d_p1 z3d_p2)
-    | Ememop _ ->
+        return (PointerSort.ptr_eq z3d_p1 z3d_p2)
+        (*return (mk_eq z3d_p1 z3d_p2)*)
+    | Ememop (Ptrdiff, [((Pexpr(_,BTy_ctype, (PEval (Vctype ctype)))) as ty);p1;p2]) ->
+        assert g_pnvi;
+        z3_pe ty >>= fun _ ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        (* TODO: assert PNVI model *)
+        let raw_ptr_diff = PointerSort.ptr_diff_raw z3d_p1 z3d_p2 in
+        let type_size = AddressSort.type_size ctype in
         (* TODO *)
+        return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
+    | Ememop _ ->
         assert false
     | Eaction action ->
         z3_action action uid
@@ -1446,7 +1495,7 @@ module BmcZ3 = struct
         assert (not !!bmc_conf.sequentialise);
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None)
+        return (ctor_to_z3 Ctuple z3d_elist None uid)
     | Ewseq (pat, e1, e2) ->
         z3_e e1 >>= fun _ ->
         z3_e e2
@@ -1480,7 +1529,7 @@ module BmcZ3 = struct
     | Epar elist ->
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None)
+        return (ctor_to_z3 Ctuple z3d_elist None uid)
     | Ewait _  -> assert false
     ) >>= fun ret ->
     add_expr uid ret >>
@@ -1501,7 +1550,7 @@ module BmcZ3 = struct
       if not (is_core_ptr_bty cbt) then
         return None
       else begin
-        mk_create ctype
+        mk_create ctype ctype (* TODO: alignment *)
             (PrefSource(Location_ocaml.other "param", [fn_to_check; sym]))
             >>= fun (_,action) ->
         return (Some action)
@@ -1671,6 +1720,7 @@ module BmcBind = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
   }
 
   include EffMonad(struct type state = binding_state end)
@@ -1681,6 +1731,7 @@ module BmcBind = struct
                  case_guard_map
                  expr_map
                  action_map
+                 alloc_meta
                  : state =
   { inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
@@ -1688,6 +1739,7 @@ module BmcBind = struct
     case_guard_map   = case_guard_map;
     expr_map         = expr_map;
     action_map       = action_map;
+    alloc_meta_map   = alloc_meta;
   }
 
   let get_inline_pexpr (uid: int): typed_pexpr eff =
@@ -1726,6 +1778,13 @@ module BmcBind = struct
     match Pmap.lookup uid st.action_map with
     | None -> failwith (sprintf "Error: BmcBind action not found %d" uid)
     | Some a -> return a
+
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcBind: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
 
   (* let bindings *)
   let mk_let_binding (maybe_sym: sym_ty option)
@@ -1816,6 +1875,16 @@ module BmcBind = struct
         return []
     | PEerror _ ->
         return []
+    | PEctor (Carray, pes) ->
+        (* Need to bind array values to constant symbol *)
+        get_expr uid >>= fun z3_array_expr ->
+        mapM (fun pe -> get_expr (get_id_pexpr pe)) pes >>= fun z3_pes ->
+        assert (Sort.equal (Expr.get_sort z3_array_expr) IntArray.mk_sort);
+        let array_bindings = List.mapi (fun i expr ->
+            mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr
+          ) z3_pes in
+        mapM bind_pe pes >>= fun bound_pes ->
+        return (array_bindings @ (List.concat bound_pes))
     | PEctor (ctor, pes) ->
         mapM bind_pe pes >>= fun bound_pes ->
         return (List.concat bound_pes)
@@ -1895,17 +1964,28 @@ module BmcBind = struct
     match action_ with
     | Create (pe1, pe2, pref) ->
         get_action uid >>= fun action ->
-
-        let (alloc_size, alloc_id) =
-          (match action with
-           | ICreate(_, sortlist, alloc_id) -> (List.length sortlist, alloc_id)
-           | _ -> assert false
+        let alloc_id = (
+          match action with
+          | ICreate(_,_,_,_, alloc_id) -> alloc_id
+          | _ -> assert false
           ) in
+        get_meta alloc_id >>= fun metadata ->
+        let base_addr = BmcZ3.get_metadata_base metadata in
+        let max_addr =
+          binop_to_z3 OpAdd (AddressSort.get_index base_addr)
+                            (int_to_z3 (BmcZ3.get_metadata_size metadata)) in
 
         (* Assert alloc_size(alloc_id) = allocation_size *)
-        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_min_decl
                                          [int_to_z3 alloc_id])
-                      (int_to_z3 alloc_size)]
+                      (AddressSort.get_index base_addr)
+               ;mk_eq (Expr.mk_app g_ctx AddressSort.alloc_max_decl
+                                         [int_to_z3 alloc_id])
+                      max_addr
+              ]
+          (*mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
+                                         [int_to_z3 alloc_id])
+                      (int_to_z3 alloc_size)]*)
     | CreateReadOnly _ -> assert false
     | Alloc0 _ -> assert false
     | Kill (_, pe) ->
@@ -1942,6 +2022,10 @@ module BmcBind = struct
     | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         bind_pe ptr
     | Ememop (PtrEq, [p1;p2]) ->
+        bind_pe p1 >>= fun bound_p1 ->
+        bind_pe p2 >>= fun bound_p2 ->
+        return (bound_p1 @ bound_p2)
+    | Ememop (Ptrdiff, [ctype;p1;p2]) ->
         bind_pe p1 >>= fun bound_p1 ->
         bind_pe p2 >>= fun bound_p2 ->
         return (bound_p1 @ bound_p2)
@@ -2229,8 +2313,8 @@ module BmcVC = struct
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
         return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
-                ::(mk_not (PointerSort.is_null ptr_z3),
-                   VcDebugStr (string_of_int uid ^ "_Store_null"))
+                ::(PointerSort.valid_ptr ptr_z3,
+                   VcDebugStr (string_of_int uid ^ "_Store_valid_ptr"))
                 :: vcs_wval)
     | Store0 _          -> assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)),
@@ -2239,8 +2323,8 @@ module BmcVC = struct
               mk_bool (not (memorder = Release || memorder = Acq_rel)) in
         lookup_sym sym >>= fun ptr_z3 ->
         return [(valid_memorder, VcDebugStr (string_of_int uid ^ "_Load_memorder"))
-               ;(mk_not (PointerSort.is_null ptr_z3),
-                   VcDebugStr (string_of_int uid ^ "_Load_null"))
+               ;(PointerSort.valid_ptr ptr_z3,
+                 VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
                ]
     | Load0 _ -> assert false
     | RMW0 _  -> assert false
@@ -2284,6 +2368,25 @@ module BmcVC = struct
     let uid = get_id_expr expr in
     match expr_ with
     | Epure pe      -> vcs_pe pe
+    | Ememop (Ptrdiff, [ctype;pe1;pe2]) ->
+        assert (g_pnvi);
+        vcs_pe pe1 >>= fun vcs_pe1 ->
+        vcs_pe pe2 >>= fun vcs_pe2 ->
+
+        get_expr (get_id_pexpr pe1) >>= fun z3_pe1 ->
+        get_expr (get_id_pexpr pe2) >>= fun z3_pe2 ->
+
+        let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_Ptrdiff") in
+        let valid_assert =
+          mk_and [PointerSort.valid_ptr z3_pe1
+                 ;PointerSort.valid_ptr z3_pe2
+                 ;PointerSort.ptr_in_range z3_pe1
+                 ;PointerSort.ptr_in_range z3_pe2
+                 ;PointerSort.ptr_comparable z3_pe1 z3_pe2
+                 ] in
+        return ((valid_assert, dbg_valid_ptr)
+                :: (vcs_pe1 @ vcs_pe2))
+
     | Ememop (memop, pes) ->
         mapM vcs_pe pes >>= fun vcss_pes ->
         begin match memop with
@@ -2561,6 +2664,8 @@ module BmcMemCommon = struct
       LoadedInteger.mk_unspecified ctype
     else if (Sort.equal (LoadedPointer.mk_sort) sort) then
       LoadedPointer.mk_unspecified ctype
+    else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
+      LoadedIntArray.mk_unspecified ctype
     else
       assert false
 
@@ -2587,14 +2692,246 @@ module BmcMemCommon = struct
       (LoadedInteger.mk_specified initial_value, assertions)
     end else
       (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
-
-
-
 end
 
 (* Sequential memory model; read from most recent write *)
 module BmcSeqMem = struct
-  type memory_table = (addr_ty, Expr.expr) Pmap.map
+
+  module type SEQMEM = sig
+    type addr
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    val addr_cmp : addr -> addr -> int
+    val mk_addr : alloc_id -> index -> addr
+
+    val empty_memory : memory_table
+    val print_memory : memory_table -> unit
+    val print_addr : addr -> string
+
+    val update_memory : addr -> Expr.expr -> memory_table -> memory_table
+
+    val merge_memory : memory_table -> addr_set ->
+                       memory_table list -> Expr.expr list -> memory_table
+
+    val mk_addr_expr : addr -> Expr.expr
+    (* TODO: gross hack *)
+    val mk_shift : alloc_id -> index -> Expr.expr -> addr
+
+    val metadata_assertions :
+          (int * BmcZ3.allocation_metadata) list -> Expr.expr list
+  end
+
+  module MemConcrete : SEQMEM = struct
+    type addr = addr_ty
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    let addr_cmp = Pervasives.compare
+
+    let mk_addr (alloc: alloc_id) (index: index) =
+      (alloc, index)
+
+    let empty_memory = Pmap.empty addr_cmp
+
+    let print_memory (table: memory_table): unit =
+      Pmap.iter (fun (x,y) expr ->
+          printf "(%d,%d) %s\n" x y (Expr.to_string expr)
+      ) table
+
+    let print_addr ((x,y): addr) =
+      sprintf "(%d,%d)" x y
+
+    let update_memory (addr: addr) (expr: Expr.expr) (table: memory_table)
+                      : memory_table =
+      Pmap.add addr expr table
+
+    (* For each modified address, update base memory using tables
+     * guarded by guards. *)
+    let merge_memory (base     : memory_table)
+                     (mod_addr : addr_set)
+                     (tables   : memory_table list)
+                     (guards   : Expr.expr list) =
+      let guarded_tables : (memory_table * Expr.expr) list =
+        List.combine tables guards in
+      Pset.fold (fun ((alloc_id, i) as addr) acc ->
+        let expr_base =
+          match Pmap.lookup addr acc with
+          | None ->
+              let (table, guard) = List.find
+                  (fun (table, _) -> is_some (Pmap.lookup addr table))
+                  guarded_tables in
+              let sort =
+                match Pmap.lookup addr table with
+                | None -> assert false
+                | Some expr -> Expr.get_sort expr
+              in
+              mk_fresh_const (sprintf "merge_(%d %d)" alloc_id i) sort
+          | Some expr_base ->
+              expr_base
+          in
+        let new_expr =
+          List.fold_right (fun (table, guard) acc_expr ->
+              match Pmap.lookup addr table with
+              | None      -> acc_expr
+              | Some expr -> mk_ite guard expr acc_expr
+          ) guarded_tables expr_base in
+          (* TODO: create new seq variable? *)
+          Pmap.add addr new_expr acc
+      ) mod_addr base
+
+    (* TODO: concrete only *)
+    let mk_addr_expr (addr: addr) =
+      AddressSort.mk_from_addr addr
+
+    let mk_shift (alloc: alloc_id) (index: index) (_: Expr.expr) =
+      (alloc, index)
+
+    let metadata_assertions = fun _ -> []
+  end
+
+  module MemPNVI: SEQMEM = struct
+    type addr = Expr.expr (* Symbolic address *)
+    type alloc_id = int
+    type index = int
+    type memory_table = (addr, Expr.expr) Pmap.map
+    type addr_set = addr Pset.set
+
+    let addr_cmp = Expr.compare
+
+    let mk_addr (alloc: alloc_id) (index: index) =
+      AddressSort.mk_from_addr (alloc, index)
+
+    let empty_memory = Pmap.empty addr_cmp
+
+    let print_addr (addr: addr) =
+      Expr.to_string addr
+
+    let print_memory (table: memory_table): unit =
+      Pmap.iter (fun addr expr ->
+          printf "%s %s\n" (print_addr addr) (Expr.to_string expr)
+      ) table
+
+    let update_memory (addr: addr) (expr: Expr.expr) (table: memory_table)
+                      : memory_table =
+      Pmap.add addr expr table
+
+    (* For each modified address, update base memory using tables
+     * guarded by guards. *)
+    let merge_memory (base     : memory_table)
+                     (mod_addr : addr_set)
+                     (tables   : memory_table list)
+                     (guards   : Expr.expr list) =
+      let guarded_tables : (memory_table * Expr.expr) list =
+        List.combine tables guards in
+      Pset.fold (fun addr acc ->
+        let expr_base =
+          match Pmap.lookup addr acc with
+          | None ->
+              let (table, guard) = List.find
+                  (fun (table, _) -> is_some (Pmap.lookup addr table))
+                  guarded_tables in
+              let sort =
+                match Pmap.lookup addr table with
+                | None -> assert false
+                | Some expr -> Expr.get_sort expr
+              in
+              mk_fresh_const (sprintf "merge_%s" (print_addr addr)) sort
+          | Some expr_base ->
+              expr_base
+          in
+        let new_expr =
+          List.fold_right (fun (table, guard) acc_expr ->
+              match Pmap.lookup addr table with
+              | None      -> acc_expr
+              | Some expr -> mk_ite guard expr acc_expr
+          ) guarded_tables expr_base in
+          (* TODO: create new seq variable? *)
+          Pmap.add addr new_expr acc
+      ) mod_addr base
+
+    (* TODO: concrete only *)
+    let mk_addr_expr (addr: addr) =
+      addr
+
+    let mk_shift (_: alloc_id) (index: index) (addr: Expr.expr) =
+      AddressSort.shift_index_by_n addr (int_to_z3 index)
+
+    (* Base address aligned: assert address is a multiple of alignment > 0*)
+    let alignment_assertions ((alloc,metadata) )
+                             : Expr.expr list =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let alignment = BmcZ3.get_metadata_align metadata in
+      let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
+                                     integer_sort in
+      let align_assert =
+        mk_eq (AddressSort.get_index base_addr)
+              (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
+      print_endline (BmcZ3.print_metadata metadata);
+      [align_assert
+      ;binop_to_z3 OpGe fresh_int (int_to_z3 0)]
+
+    (* Address isn't too large *)
+    let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
+      let base_addr = BmcZ3.get_metadata_base metadata in
+      let size = BmcZ3.get_metadata_size metadata in
+      let max_address =
+        binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
+      binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
+
+    (* TODO: Ew quadratic *)
+    (* [start_1, end_1), [start_2, end_2)
+     *
+     * Assert that
+     * start_2 >= end_1 or
+     * start_1 >= end_2
+     *)
+    let disjoint_assertions ((id1, meta1) : int * BmcZ3.allocation_metadata)
+                            ((id2, meta2) : int * BmcZ3.allocation_metadata)
+                            : Expr.expr list =
+      if id1 = id2 then []
+      else begin
+        let start_1 = AddressSort.get_index (BmcZ3.get_metadata_base meta1) in
+        let end_1   = binop_to_z3 OpAdd start_1
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta1)) in
+        let start_2 = AddressSort.get_index (BmcZ3.get_metadata_base meta2) in
+        let end_2   = binop_to_z3 OpAdd start_2
+                                        (int_to_z3 (BmcZ3.get_metadata_size meta2)) in
+        [mk_or [binop_to_z3 OpGe start_2 end_1
+               ;binop_to_z3 OpGe start_1 end_2]
+        ]
+      end
+
+    (* TODO: add provenance somewhere *)
+    (* For each allocation, we need to assert
+     * - The base addresses are correctly aligned
+     * - Addresses < some max value
+     * - the allocations are disjoint
+     * - Somehow create a function expressing whether an address is valid for pointers
+     * - Eventually the provenance
+     *)
+    let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
+                            : Expr.expr list =
+      let alignment_asserts =
+        List.concat (List.map alignment_assertions data) in
+      let addr_lt_max_asserts = List.map addr_lt_max_assertions data in
+      let disjoint_asserts = List.concat
+        (List.map (fun (d1,d2) -> disjoint_assertions d1 d2)
+                  (cartesian_product data data)) in
+      List.iter (fun e -> print_endline (Expr.to_string e)) disjoint_asserts;
+
+        alignment_asserts
+      @ addr_lt_max_asserts
+      @ disjoint_asserts
+  end
+
+  (*module SeqMem = MemConcrete*)
+  module SeqMem = MemPNVI
+
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
@@ -2603,8 +2940,9 @@ module BmcSeqMem = struct
     param_actions    : (BmcZ3.intermediate_action option) list;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
 
-    memory           : memory_table;
+    memory           : SeqMem.memory_table;
   }
 
   include EffMonad(struct type state = seq_state end)
@@ -2616,6 +2954,7 @@ module BmcSeqMem = struct
                  param_actions
                  case_guard_map
                  drop_cont_map
+                 alloc_meta
                  : state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -2624,21 +2963,23 @@ module BmcSeqMem = struct
     param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
-    memory           = Pmap.empty Pervasives.compare
+    alloc_meta_map   = alloc_meta;
+
+    memory           = SeqMem.empty_memory;
   }
 
   (* TODO: use Set.Make *)
   module AddrSet = struct
-      type t = addr_ty Pset.set
+      type t = SeqMem.addr_set
 
-      let cmp = Pervasives.compare
+      let cmp = SeqMem.addr_cmp
       let empty = Pset.empty cmp
       let of_list = Pset.from_list cmp
       let union s1 s2 = Pset.union s1 s2
       let fold = Pset.fold
 
-      let pp s = Pset.fold (fun (x,y) acc ->
-        sprintf "(%d,%d) %s" x y acc) s ""
+      let pp s = Pset.fold (fun addr acc ->
+        sprintf "%s %s" (SeqMem.print_addr addr) acc) s ""
   end
 
   let get_inline_expr (uid: int): (unit typed_expr) eff =
@@ -2683,80 +3024,66 @@ module BmcSeqMem = struct
     | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map"                                 uid)
     | Some expr -> return expr
 
-  let get_memory : memory_table eff =
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcSeqMem: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
+
+  let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
+    get >>= fun st ->
+    return st.alloc_meta_map
+
+  let get_memory : SeqMem.memory_table eff =
    get >>= fun st ->
    return st.memory
 
-  let update_memory (addr: addr_ty) (expr: Expr.expr) : unit eff =
+  let update_memory (addr: SeqMem.addr) (expr: Expr.expr) : unit eff =
     get >>= fun st ->
-    put {st with memory = Pmap.add addr expr st.memory}
+    put {st with memory = SeqMem.update_memory addr expr st.memory}
 
-  let update_memory_table (memory: memory_table) : unit eff =
+  let update_memory_table (memory: SeqMem.memory_table) : unit eff =
     get >>= fun st ->
     put {st with memory = memory}
 
   let print_memory : unit eff =
     get_memory >>= fun memory ->
-    return (Pmap.iter (fun (x,y) expr ->
-      printf "(%d,%d) %s\n" x y (Expr.to_string expr)
-    ) memory)
+    return (SeqMem.print_memory memory)
 
   type ret_ty = {
     bindings : Expr.expr list;
-    mod_addr : AddrSet.t;
+    mod_addr : SeqMem.addr_set;
   }
 
   let get_bindings (ret: ret_ty) : Expr.expr list =
     ret.bindings
 
-  let empty_ret = { bindings = []; mod_addr = AddrSet.empty }
+  let empty_ret = { bindings = []; mod_addr = Pset.empty SeqMem.addr_cmp }
   let mk_ret bindings mod_addr =
     { bindings = bindings
     ; mod_addr = mod_addr
     }
 
-  (* For each modified address, update base memory using tables
-   * guarded by guards. *)
-  let merge_memory (base     : memory_table)
-                   (mod_addr : AddrSet.t)
-                   (tables   : memory_table list)
-                   (guards   : Expr.expr list) =
-    let guarded_tables : (memory_table * Expr.expr) list =
-      List.combine tables guards in
-    AddrSet.fold (fun ((alloc_id, i) as addr) acc ->
-      let expr_base =
-        match Pmap.lookup addr acc with
-        | None ->
-            let (table, guard) = List.find
-                (fun (table, _) -> is_some (Pmap.lookup addr table))
-                guarded_tables in
-            let sort =
-              match Pmap.lookup addr table with
-              | None -> assert false
-              | Some expr -> Expr.get_sort expr
-            in
-            mk_fresh_const (sprintf "merge_(%d %d)" alloc_id i) sort
-        | Some expr_base ->
-            expr_base
-        in
-      let new_expr =
-        List.fold_right (fun (table, guard) acc_expr ->
-            match Pmap.lookup addr table with
-            | None      -> acc_expr
-            | Some expr -> mk_ite guard expr acc_expr
-        ) guarded_tables expr_base in
-        (* TODO: create new seq variable? *)
-        Pmap.add addr new_expr acc
-    ) mod_addr base
-
   let do_create (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
                 (initialise: bool)
                 : ret_ty eff =
+    (* Get metadata *)
+    get_meta alloc_id >>= fun metadata ->
+    print_endline (BmcZ3.print_metadata metadata);
+    let base_addr = BmcZ3.get_metadata_base metadata in
+
+    (* Get base address, shift by size of ctype *)
     mapMi (fun i (ctype,sort) ->
-      let addr = (alloc_id, i) in
+      let index = List.fold_left
+          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          0 (list_take i sortlist) in
+      let addr = SeqMem.mk_shift alloc_id index base_addr in
+
+      (*let addr = SeqMem.mk_addr alloc_id index in*)
       let seq_var =
-        mk_fresh_const (sprintf "store_(%d %d)" alloc_id i) sort in
+        mk_fresh_const (sprintf "store_(%d %d)" alloc_id index) sort in
       update_memory addr seq_var >>
       let (initial_value, assumptions) =
         BmcMemCommon.mk_initial_loaded_value
@@ -2765,7 +3092,7 @@ module BmcSeqMem = struct
       let binding = mk_eq seq_var initial_value in
       return (addr, binding::assumptions)
     ) sortlist >>= fun retlist ->
-    return { bindings = List.concat (List.map snd retlist)
+    return { bindings = (List.concat (List.map snd retlist))
            ; mod_addr = AddrSet.of_list (List.map fst retlist)
            }
 
@@ -2775,17 +3102,20 @@ module BmcSeqMem = struct
                  : ret_ty eff =
     get_action uid >>= fun action ->
     match action with
-    | ICreate(_, sortlist, alloc_id) ->
+    | ICreate(_, _, _, sortlist, alloc_id) ->
         do_create sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
-    | ILoad(_, (ctype,sort), ptr, rval, mo) ->
+    | ILoad(_, ctype, type_list, ptr, rval, mo) ->
+        assert (List.length type_list = 1);
+        let (_, sort) = List.hd type_list in
+    (*| ILoad(_, (ctype,sort), ptr, rval, mo) ->*)
         (* TODO: alias analysis *)
         get_memory >>= fun possible_addresses ->
         mapM (fun (addr, expr_in_memory) ->
           let addr_sort = Expr.get_sort expr_in_memory in
           if (Sort.equal sort addr_sort) then
-            let addr_expr = AddressSort.mk_from_addr addr in
+            let addr_expr = SeqMem.mk_addr_expr addr in
             let addr_eq =
               mk_and [mk_not (PointerSort.is_null ptr)
                      ;mk_eq addr_expr (PointerSort.get_addr ptr)] in
@@ -2800,28 +3130,45 @@ module BmcSeqMem = struct
                             (List.map fst filtered)
                ; mod_addr = AddrSet.empty
                }
-    | IStore(_, (ctype,sort), ptr, wval, mo) ->
+    | IStore(_, ctype, type_list, ptr, wval, mo) ->
+    (*| IStore(_, (ctype,sort), ptr, wval, mo) ->*)
         (* TODO: alias analysis *)
-        get_memory >>= fun possible_addresses ->
-        mapM (fun (addr, expr_in_memory) ->
-          let addr_sort = Expr.get_sort expr_in_memory in
-          if (Sort.equal sort addr_sort) then
-            let addr_expr = AddressSort.mk_from_addr addr in
+        (* TODO: ugly complexity *)
+        mapMi (fun i (ctype, sort) ->
+          let indexed_wval = get_ith_in_loaded i wval in
+          get_memory >>= fun possible_addresses ->
 
-            let new_seq_var =
-              mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
-            in
-            (* new_seq_var is equal to to_store if addr_eq, else old value *)
-            let addr_eq =
-              mk_and [ mk_not (PointerSort.is_null ptr)
-                     ; mk_eq (PointerSort.get_addr ptr) addr_expr] in
-            let new_val = mk_eq new_seq_var wval in
-            let old_val = mk_eq new_seq_var expr_in_memory in
-            update_memory addr new_seq_var >>
-            return (Some (addr, mk_ite addr_eq new_val old_val))
-          else
-            return None
-        ) (Pmap.bindings_list possible_addresses) >>= fun update_list ->
+          let index = List.fold_left
+              (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+              0 (list_take i type_list) in
+          let target_addr =
+            AddressSort.shift_index_by_n (PointerSort.get_addr ptr)
+                                         (int_to_z3 index) in
+          (*let target_addr =
+              AddressSort.shift_index_by_n
+                        (PointerSort.get_addr ptr) (int_to_z3 i) in*)
+          mapM (fun (addr, expr_in_memory) ->
+            let addr_sort = Expr.get_sort expr_in_memory in
+            if (Sort.equal sort addr_sort) then
+              let addr_expr = SeqMem.mk_addr_expr addr in
+
+              let new_seq_var =
+                mk_fresh_const (sprintf "store_%s" (Expr.to_string addr_expr)) sort
+              in
+              (* new_seq_var is equal to to_store if addr_eq, else old value *)
+                        let addr_eq =
+                mk_and [ mk_not (PointerSort.is_null ptr)
+                       ; mk_eq target_addr addr_expr] in
+              (* Write ith element of wval *)
+              let new_val = mk_eq new_seq_var indexed_wval in
+              let old_val = mk_eq new_seq_var expr_in_memory in
+              update_memory addr new_seq_var >>
+              return (Some (addr, mk_ite addr_eq new_val old_val))
+            else
+              return None
+          ) (Pmap.bindings_list possible_addresses)
+        ) type_list >>= fun update_list_list ->
+        let update_list = List.concat update_list_list in
         let filtered = List.map Option.get (List.filter is_some update_list) in
         assert (List.length filtered > 0);
         return { bindings = List.map snd filtered
@@ -2831,9 +3178,9 @@ module BmcSeqMem = struct
         failwith "Error: CompareExchangeStrong only supported with --bmc_conc"
     | IFence (aid, mo) ->
        assert false
-    | ILinuxLoad(aid, (ctype,sort), ptr, rval, mo) ->
+    | ILinuxLoad(aid, _, type_list, ptr, rval, mo) ->
        assert false
-    | ILinuxStore(aid, (ctype,sort), ptr, wval, mo) ->
+    | ILinuxStore(aid, _, type_list, ptr, wval, mo) ->
        assert false
     | ILinuxFence(aid, mo) ->
        assert false
@@ -2867,8 +3214,8 @@ module BmcSeqMem = struct
         let mod_addr = List.fold_right (fun res acc ->
           AddrSet.union acc res.mod_addr) retlist AddrSet.empty in
         let new_memory =
-          merge_memory old_memory mod_addr
-                       (List.map fst res_cases) guards in
+          SeqMem.merge_memory old_memory mod_addr
+                              (List.map fst res_cases) guards in
         update_memory_table new_memory >>
 
         let guarded_asserts = List.concat (List.map2
@@ -2890,8 +3237,9 @@ module BmcSeqMem = struct
         let (guard1, guard2) = (cond_z3, mk_not cond_z3) in
 
         let mod_addr = AddrSet.union res_e1.mod_addr res_e2.mod_addr in
-        let new_memory = merge_memory old_memory mod_addr
-                                      [mem_e1; mem_e2] [guard1; guard2] in
+        let new_memory =
+          SeqMem.merge_memory old_memory mod_addr
+                              [mem_e1; mem_e2] [guard1; guard2] in
         update_memory_table new_memory >>
         return { bindings = (List.map (guard_assert guard1) res_e1.bindings)
                            @(List.map (guard_assert guard2) res_e2.bindings)
@@ -2934,8 +3282,9 @@ module BmcSeqMem = struct
         let mod_addr = List.fold_right
           (fun res acc -> AddrSet.union acc res.mod_addr)
           ress AddrSet.empty in
-        let new_memory = merge_memory old_memory mod_addr
-                                      mem_tables guards in
+        let new_memory =
+          SeqMem.merge_memory old_memory mod_addr
+                              mem_tables guards in
         update_memory_table new_memory >>
         let guarded_asserts = List.concat (List.map2
           (fun guard res -> List.map (guard_assert guard) res.bindings)
@@ -2964,13 +3313,14 @@ module BmcSeqMem = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return empty_ret
-    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+    | Some (ICreate(_, _, _, sortlist, alloc_id)) ->
         do_create sortlist alloc_id true >>= fun ret ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
         let eq_expr =
           mk_eq sym_expr
-                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+                (PointerSort.mk_ptr (int_to_z3 alloc_id)
+                                    (AddressSort.mk_from_addr (alloc_id, 0))) in
         (* TODO: need extra assertions for arrays/pointers *)
         return { bindings = eq_expr :: ret.bindings
                ; mod_addr = ret.mod_addr
@@ -3002,7 +3352,10 @@ module BmcSeqMem = struct
         return empty_ret
      | _ -> assert false
     ) >>= fun ret ->
-    return (ret.bindings @ (List.concat (List.map get_bindings globs)))
+    print_memory >>
+    get_meta_map >>= fun metadata ->
+    let meta_asserts = SeqMem.metadata_assertions (Pmap.bindings_list metadata) in
+    return (meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
 end
 
 (* Concurrency
@@ -3023,6 +3376,8 @@ module BmcConcActions = struct
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
 
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+
     bmc_actions    : (int, aid list) Pmap.map;
     bmc_action_map : (aid, bmc_action) Pmap.map;
     tid            : tid;
@@ -3039,6 +3394,7 @@ module BmcConcActions = struct
                  param_actions
                  case_guard_map
                  drop_cont_map
+                 alloc_meta_map
                  : internal_state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -3046,6 +3402,7 @@ module BmcConcActions = struct
     param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
+    alloc_meta_map   = alloc_meta_map;
 
     bmc_actions      = Pmap.empty Pervasives.compare;
     bmc_action_map   = Pmap.empty Pervasives.compare;
@@ -3090,6 +3447,13 @@ module BmcConcActions = struct
     match Pmap.lookup uid st.drop_cont_map with
     | None -> failwith (sprintf "BmcConcActions: Uid %d not found in drop_cont_map" uid)
     | Some expr -> return expr
+
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcConcActions: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
 
   let get_tid : int eff =
     get >>= fun st ->
@@ -3151,52 +3515,67 @@ module BmcConcActions = struct
                (memorder: memory_order)
                (ptr: Expr.expr)
                (wval: Expr.expr)
+               (ctype: ctype)
                : bmc_action =
-    BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval))
+    BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval, ctype))
 
-  let do_create (aidlist : aid list)
+  (* TODO: allocation size assertions *)
+  (* Make a single create *)
+  let do_create (aid: aid)
+                (ctype: ctype)
                 (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
                 (pol: polarity)
-                (initialise : bool)
-                : (bmc_action list) eff =
-    let aid_sortlist = zip aidlist sortlist in
-    let is_atomic = (function ctype -> match ctype with
-                     | Core_ctype.Atomic0 _ -> mk_true
-                     | _ -> mk_false) in
-    mapMi (fun i (aid,(ctype,sort)) ->
-      let addr = (alloc_id, i) in
+                (initialise: bool) =
+    let sort = ctype_to_z3_sort ctype in
+    let is_atomic_fn = (function ctype -> match ctype with
+                       | Core_ctype.Atomic0 _ -> mk_true
+                       | _ -> mk_false) in
+    get_meta alloc_id >>= fun metadata ->
+    print_endline (BmcZ3.print_metadata metadata);
+    let base_addr = BmcZ3.get_metadata_base metadata in
+
+    mapMi_ (fun i (cype,sort) ->
+      let index = List.fold_left
+          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          0 (list_take i sortlist) in
+
+      let addr = (alloc_id, index) in
       let addr_expr = AddressSort.mk_from_addr addr in
-      let ptr = PointerSort.mk_ptr addr_expr in
       let is_atomic =
-        AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
-      add_assertion is_atomic >>
-      let (initial_value, assumptions) =
-        BmcMemCommon.mk_initial_loaded_value sort
-            (sprintf "init_%d,%d" alloc_id i)
-            ctype initialise in
-      mapM add_assertion assumptions >>
-      return (mk_store pol mk_true aid initial_tid
-                       (C_mem_order Cmm_csem.NA) ptr initial_value)
-    ) aid_sortlist
+        AddressSort.assert_is_atomic addr_expr (is_atomic_fn ctype) in
+      add_assertion is_atomic
+    ) sortlist >>
+    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
+                                   (*(AddressSort.mk_from_addr (alloc_id,0)) in*)
+
+    let (initial_value, assumptions) =
+      BmcMemCommon.mk_initial_loaded_value sort
+          (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+          ctype initialise in
+    mapM add_assertion assumptions >>
+    return [mk_store pol mk_true aid initial_tid
+                     (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
                                   : (bmc_action list) eff =
     (match action with
-    | ICreate(aidlist, sortlist, alloc_id) ->
-        do_create aidlist sortlist alloc_id pol false
+    | ICreate(aid, ctype, _, sortlist, alloc_id) ->
+        do_create aid ctype sortlist alloc_id pol false
     | IKill aid ->
         (* TODO *)
         return []
-    | ILoad (aid, (ctype, sort), ptr, rval, mo) ->
+    (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
+    | ILoad (aid, ctype, _, ptr, rval, mo) ->
         get_tid >>= fun tid ->
-        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval))]
-    | IStore(aid, (ctype, sort), ptr, wval, mo) ->
+        return [BmcAction(pol, mk_true, Load(aid, tid, C_mem_order mo, ptr, rval, ctype))]
+    (*| IStore(aid, (ctype, sort), ptr, wval, mo) ->*)
+    | IStore (aid,ctype,_,ptr,wval,mo) ->
         get_tid >>= fun tid ->
-        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval]
+        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval ctype]
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
-                              (ctype, sort), ptr_obj, ptr_exp,
+                              ctype,_, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,
                               mo_success, mo_failure) ->
         get_tid >>= fun tid ->
@@ -3205,22 +3584,23 @@ module BmcConcActions = struct
         return [
           (* NA load of ptr_exp -> rval_expected *)
           BmcAction(pol, mk_true,
-                    Load(aid_load, tid, C_mem_order NA, ptr_exp, rval_expected));
+                    Load(aid_load, tid, C_mem_order NA, ptr_exp, rval_expected,ctype));
           (* if fail: do a load of object and then a store *)
           BmcAction(pol, mk_not success_guard,
-                    Load(aid_fail_load, tid, C_mem_order mo_failure, ptr_obj, rval_object));
+                    Load(aid_fail_load, tid, C_mem_order mo_failure, ptr_obj, rval_object,ctype));
           BmcAction(pol, mk_not success_guard,
-                    Store(aid_fail_store, tid, C_mem_order NA, ptr_exp, rval_object));
+                    Store(aid_fail_store, tid, C_mem_order NA, ptr_exp, rval_object,ctype));
           (* if succeed, do a rmw *)
           BmcAction(pol, success_guard,
-                    RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired))
+                    RMW(aid_succeed_rmw, tid, (C_mem_order mo_success), ptr_obj, rval_object, desired,ctype))
         ]
+
     | IFence (aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
-    | ILinuxLoad(aid, (ctype,sort), ptr, rval, mo) ->
+    | ILinuxLoad(aid, _, _, ptr, rval, mo) ->
         assert false
-    | ILinuxStore(aid, (ctype,sort), ptr, wval, mo) ->
+    | ILinuxStore(aid, _, _, ptr, wval, mo) ->
         assert false
     | ILinuxFence(aid, mo) ->
         assert false
@@ -3319,14 +3699,18 @@ module BmcConcActions = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return []
-    | Some (ICreate(aid_list, sortlist, alloc_id)) ->
+    | Some (ICreate(aid, ctype, _, sortlist, alloc_id)) ->
         (* Polarity is irrelevant? *)
-        do_create aid_list sortlist alloc_id Pos true >>= fun actions ->
+        do_create aid ctype sortlist alloc_id Pos true >>= fun actions ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
+        get_meta alloc_id >>= fun metadata ->
+        let base_addr = BmcZ3.get_metadata_base metadata in
+
+
         let eq_expr =
           mk_eq sym_expr
-                (PointerSort.mk_ptr (AddressSort.mk_from_addr (alloc_id, 0))) in
+                (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr) in
         add_assertion eq_expr >>
         return actions
     | _ -> assert false
@@ -3357,7 +3741,7 @@ module BmcConcActions = struct
         begin match interm_action with
         | ICompareExchangeStrong
               (aid_load, aid_fail_load, aid_fail_store, aid_success_rmw,
-               _, _, _, _, _, _, _, _) ->
+               _,_, _, _, _, _, _, _, _) ->
             return [(aid_load, aid_fail_load)
                    ;(aid_load, aid_fail_store)
                    ;(aid_load, aid_success_rmw)
@@ -3479,7 +3863,7 @@ module BmcConcActions = struct
     mk_preexec actions po >>= fun preexec ->
     (*print_endline (pp_preexec preexec);*)
     (* TODO *)
-    let memory_model = BmcMem.compute_executions preexec in
+    let memory_model = BmcMem.compute_executions preexec file in
     let mem_assertions =
       if (List.length actions > 0) then BmcMem.get_assertions memory_model
       else [] in
