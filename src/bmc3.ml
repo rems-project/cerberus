@@ -376,8 +376,9 @@ let bmc_file (file              : unit typed_file)
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)";
       assert (is_some ret_value);
+      (* TODO: there could be multiple return values ... *)
       let str_ret_value = Expr.to_string (Option.get ret_value) in
-      printf "Return value: %s\n" str_ret_value;
+      printf "Possible return value: %s\n" str_ret_value;
       `Unsatisfiable (str_ret_value, dots)
   | UNKNOWN ->
       let str_error = Solver.get_reason_unknown g_solver in
