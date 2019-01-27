@@ -36,6 +36,7 @@ module BmcM = struct
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
     param_actions    : (BmcZ3.intermediate_action option) list option;
     alloc_meta       : (BmcZ3.alloc, BmcZ3.allocation_metadata) Pmap.map option;
+    prov_syms        : (Expr.expr * (Expr.expr * Core_ctype.ctype0)) list option;
 
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
@@ -68,6 +69,7 @@ module BmcM = struct
     ; action_map       = None
     ; param_actions    = None
     ; alloc_meta       = None
+    ; prov_syms        = None
     ; drop_cont_map    = None
     ; bindings         = None
     ; vcs              = None
@@ -124,6 +126,7 @@ module BmcM = struct
                  action_map     = Some final_state.action_map;
                  param_actions  = Some final_state.param_actions;
                  alloc_meta     = Some final_state.alloc_meta_map;
+                 prov_syms      = Some final_state.prov_syms;
         }
 
   (* Compute drop continuation table *)
@@ -211,7 +214,8 @@ module BmcM = struct
                            (Option.get st.param_actions)
                            (Option.get st.case_guard_map)
                            (Option.get st.drop_cont_map)
-                           (Option.get st.alloc_meta) in
+                           (Option.get st.alloc_meta)
+                           (Option.get st.prov_syms) in
     let (bindings, _) =
       BmcSeqMem.run initial_state
                     (BmcSeqMem.do_file st.file st.fn_to_check) in
@@ -231,7 +235,8 @@ module BmcM = struct
                                 (Option.get st.param_actions)
                                 (Option.get st.case_guard_map)
                                 (Option.get st.drop_cont_map)
-                                (Option.get st.alloc_meta) in
+                                (Option.get st.alloc_meta)
+                                (Option.get st.prov_syms) in
     let ((preexec, assertions, memory_model), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in

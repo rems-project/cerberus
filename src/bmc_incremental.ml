@@ -1076,7 +1076,9 @@ module BmcZ3 = struct
     param_actions : (intermediate_action option) list;
     (* TODO: extend this to include type *)
 
+    (* Provenance symbols and types that need to be constrained *)
     alloc_meta_map: (alloc, allocation_metadata) Pmap.map;
+    prov_syms       : (Expr.expr * (Expr.expr * ctype)) list;
 
     file          : unit typed_file;
 
@@ -1095,6 +1097,7 @@ module BmcZ3 = struct
     action_map     = Pmap.empty Pervasives.compare;
     param_actions  = [];
     alloc_meta_map = Pmap.empty Pervasives.compare;
+    prov_syms      = [];
 
     file = file;
 
@@ -1167,6 +1170,10 @@ module BmcZ3 = struct
   let add_metadata (alloc_id: alloc) (meta: allocation_metadata) : unit eff =
     get >>= fun st ->
     put {st with alloc_meta_map = Pmap.add alloc_id meta st.alloc_meta_map}
+
+  let add_prov_sym (sym: Expr.expr) ((ival,ty): Expr.expr * ctype) : unit eff =
+    get >>= fun st ->
+    put {st with prov_syms = (sym,(ival,ty)) :: st.prov_syms}
 
   (* HELPERS *)
   let compute_case_guards (patterns: typed_pattern list)
@@ -1478,10 +1485,10 @@ module BmcZ3 = struct
         let type_size = AddressSort.type_size ctype in
         (* TODO *)
         return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
-    | Ememop(IntFromPtr, [ctype_ptr; ctype_int; ptr]) ->
+    | Ememop(IntFromPtr, [ctype_src; ctype_dst; ptr]) ->
         assert g_pnvi;
-        z3_pe ctype_ptr >>= fun _ ->
-        z3_pe ctype_int >>= fun _ ->
+        z3_pe ctype_src >>= fun _ ->
+        z3_pe ctype_dst >>= fun _ ->
         z3_pe ptr       >>= fun z3d_ptr ->
 
         (* 0 if p = null;
@@ -1491,6 +1498,31 @@ module BmcZ3 = struct
          * We leave UB to BmcVCs*)
         return (mk_ite (PointerSort.is_null z3d_ptr) (int_to_z3 0)
                        (AddressSort.get_index (PointerSort.get_addr z3d_ptr))
+               )
+    | Ememop(PtrFromInt, [ctype_src;ctype_dst;ival]) ->
+        assert g_pnvi;
+        z3_pe ctype_src >>= fun _ ->
+        z3_pe ctype_dst >>= fun _ ->
+        z3_pe ival      >>= fun z3d_ival ->
+
+        let ctype = (match ctype_dst with
+          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
+          | _ -> assert false
+          ) in
+
+        let new_prov_sym =
+          mk_fresh_const (sprintf "Prov_PtrFromInt_%d" uid) integer_sort in
+        add_prov_sym new_prov_sym (z3d_ival,ctype) >>= fun _ ->
+
+        (* null if x = 0
+         * (@i,x) if @i is the allocation corresponding to x
+         * (@empty, x) if there is no such allocation *)
+        (* TODO: stuff breaks right now if the ival does not correspond to
+         * the larger addresses (e.g. char* casts...) *)
+        bmc_debug_print 7 "TODO: PtrFromInt allows casts to unsupported addresses";
+        return (mk_ite (mk_eq z3d_ival (int_to_z3 0))
+                       PointerSort.mk_null
+                       (PointerSort.mk_ptr_from_int_addr new_prov_sym z3d_ival)
                )
     | Ememop (Memcmp, [p;q;size]) ->
         assert false
@@ -2051,7 +2083,8 @@ module BmcBind = struct
     | Ememop(PtrValidForDeref, args) (* fall through *)
     | Ememop(PtrEq, args)            (* fall through *)
     | Ememop(Ptrdiff, args)          (* fall through *)
-    | Ememop(IntFromPtr, args)       (* fall through *) ->
+    | Ememop(IntFromPtr, args)       (* fall through *)
+    | Ememop(PtrFromInt, args)       (* fall through *) ->
         mapM bind_pe args >>= fun bound_args ->
         return (List.concat bound_args)
     | Ememop _ ->
@@ -2412,14 +2445,14 @@ module BmcVC = struct
                  ] in
         return ((valid_assert, dbg_valid_ptr)
                 :: (vcs_pe1 @ vcs_pe2))
-    | Ememop(IntFromPtr, [ctype_ptr;ctype_int;ptr]) ->
+    | Ememop(IntFromPtr, [ctype_src;ctype_dst;ptr]) ->
         (* assert ptr is null or ptr is (prov,a) and
          * a is in value_range (ctype_int) *)
-        vcs_pe ctype_ptr >>= fun vcs_ctype_ptr ->
-        vcs_pe ctype_int >>= fun vcs_ctype_int ->
+        vcs_pe ctype_src >>= fun vcs_ctype_src ->
+        vcs_pe ctype_dst >>= fun vcs_ctype_dst ->
         vcs_pe ptr       >>= fun vcs_ptr ->
 
-        let ctype = (match ctype_int with
+        let ctype = (match ctype_dst with
           | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
           | _ -> assert false
           ) in
@@ -2432,12 +2465,12 @@ module BmcVC = struct
         return ((mk_or [PointerSort.is_null z3d_ptr
                       ;binop_to_z3 OpGe ptr_addr min_value
                       ;binop_to_z3 OpLe ptr_addr max_value
-                      ], dbg) ::(vcs_ctype_ptr @ vcs_ctype_int @ vcs_ptr))
+                      ], dbg) ::(vcs_ctype_src @ vcs_ctype_dst @ vcs_ptr))
 
     | Ememop (memop, pes) ->
         mapM vcs_pe pes >>= fun vcss_pes ->
         begin match memop with
-        | PtrValidForDeref | PtrEq -> return (List.concat vcss_pes)
+        | PtrValidForDeref | PtrEq | PtrFromInt -> return (List.concat vcss_pes)
         | _ -> assert false (* Unimplemented *)
         end
     | Eaction paction ->
@@ -2741,6 +2774,11 @@ module BmcMemCommon = struct
       (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
 
   (* ==== PNVI STUFF ==== *)
+  let provenance_constraint (sym: Expr.expr)
+                            ((ival,ctype) : Expr.expr * ctype)
+                            : Expr.expr list =
+    assert false
+
   (* Base address aligned: assert address is a multiple of alignment > 0*)
   let alignment_assertions ((alloc,metadata) )
                            : Expr.expr list =
@@ -2752,7 +2790,7 @@ module BmcMemCommon = struct
         mk_eq (AddressSort.get_index base_addr)
               (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
       [align_assert
-      ;binop_to_z3 OpGe fresh_int (int_to_z3 0)]
+      ;binop_to_z3 OpGt fresh_int (int_to_z3 0)] (* > 0 *)
 
     (* Address isn't too large *)
     let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
@@ -2805,6 +2843,29 @@ module BmcMemCommon = struct
         (alignment_asserts @
          addr_lt_max_asserts @
          disjoint_asserts)
+
+    (* TODO: this is probably the wrong place to do it *)
+    (* Constrain provenances from cast_ival_to_ptrval *)
+    let provenance_assertions ((sym,(ival, ctype)) : Expr.expr * (Expr.expr * ctype))
+                              (data: (int * BmcZ3.allocation_metadata) list)
+                              : Expr.expr list =
+      let ival_max =
+        binop_to_z3 OpAdd ival (int_to_z3 ((AddressSort.type_size ctype) - 1)) in
+
+      let assertion = List.fold_left (fun base (alloc_id, metadata) ->
+        let addr_size : int = BmcZ3.get_metadata_size metadata in
+        let addr_base : Expr.expr = BmcZ3.get_metadata_base metadata in
+        let addr_min = (AddressSort.get_index addr_base) in
+        let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
+
+        let ival_in_range =
+          mk_and [binop_to_z3 OpGe ival addr_min
+                 ;binop_to_z3 OpLe ival_max addr_max] in
+        mk_ite ival_in_range
+               (int_to_z3 alloc_id)
+               base
+      ) (int_to_z3 0) data in
+      [mk_eq sym assertion]
 end
 
 (* Sequential memory model; read from most recent write *)
@@ -2835,6 +2896,11 @@ module BmcSeqMem = struct
 
     val metadata_assertions :
           (int * BmcZ3.allocation_metadata) list -> Expr.expr list
+
+    val provenance_assertions :
+          (Expr.expr * (Expr.expr * ctype)) list ->
+          (int * BmcZ3.allocation_metadata) list ->
+          Expr.expr list
   end
 
   module MemConcrete : SEQMEM = struct
@@ -2905,6 +2971,8 @@ module BmcSeqMem = struct
       (alloc, index)
 
     let metadata_assertions = fun _ -> []
+
+    let provenance_assertions = fun _ _ -> []
   end
 
   module MemPNVI: SEQMEM = struct
@@ -2977,6 +3045,13 @@ module BmcSeqMem = struct
     let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
                             : Expr.expr list =
       BmcMemCommon.metadata_assertions data
+
+    let provenance_assertions (provsyms : (Expr.expr * (Expr.expr * ctype)) list)
+                              (data: (int * BmcZ3.allocation_metadata) list)
+                              : Expr.expr list =
+      List.concat (List.map
+          (fun x -> BmcMemCommon.provenance_assertions x data)
+          provsyms)
   end
 
   (*module SeqMem = MemConcrete*)
@@ -2991,6 +3066,7 @@ module BmcSeqMem = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
     alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+    prov_syms        : (Expr.expr * (Expr.expr * ctype)) list;
 
     memory           : SeqMem.memory_table;
   }
@@ -3005,6 +3081,7 @@ module BmcSeqMem = struct
                  case_guard_map
                  drop_cont_map
                  alloc_meta
+                 prov_syms
                  : state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -3014,6 +3091,7 @@ module BmcSeqMem = struct
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
     alloc_meta_map   = alloc_meta;
+    prov_syms        = prov_syms;
 
     memory           = SeqMem.empty_memory;
   }
@@ -3084,6 +3162,10 @@ module BmcSeqMem = struct
   let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
     get >>= fun st ->
     return st.alloc_meta_map
+
+  let get_prov_syms : (Expr.expr * (Expr.expr * ctype)) list eff =
+    get >>= fun st ->
+    return st.prov_syms
 
   let get_memory : SeqMem.memory_table eff =
    get >>= fun st ->
@@ -3402,8 +3484,11 @@ module BmcSeqMem = struct
      | _ -> assert false
     ) >>= fun ret ->
     get_meta_map >>= fun metadata ->
-    let meta_asserts = SeqMem.metadata_assertions (Pmap.bindings_list metadata) in
-    return (meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
+    get_prov_syms >>= fun prov_syms ->
+    let metadata_list = Pmap.bindings_list metadata in
+    let meta_asserts = SeqMem.metadata_assertions metadata_list in
+    let provenance_asserts = SeqMem.provenance_assertions prov_syms metadata_list in
+    return (provenance_asserts @ meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
 end
 
 (* Concurrency
@@ -3424,7 +3509,8 @@ module BmcConcActions = struct
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
 
-    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+    alloc_meta_map  : (int, BmcZ3.allocation_metadata) Pmap.map;
+    prov_syms       : (Expr.expr * (Expr.expr * ctype)) list;
 
     bmc_actions    : (int, aid list) Pmap.map;
     bmc_action_map : (aid, bmc_action) Pmap.map;
@@ -3443,6 +3529,7 @@ module BmcConcActions = struct
                  case_guard_map
                  drop_cont_map
                  alloc_meta_map
+                 prov_syms
                  : internal_state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -3451,6 +3538,7 @@ module BmcConcActions = struct
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
     alloc_meta_map   = alloc_meta_map;
+    prov_syms        = prov_syms;
 
     bmc_actions      = Pmap.empty Pervasives.compare;
     bmc_action_map   = Pmap.empty Pervasives.compare;
@@ -3555,6 +3643,10 @@ module BmcConcActions = struct
   let get_assertions : Expr.expr list eff =
     get >>= fun st ->
     return st.assertions
+
+  let get_prov_syms : (Expr.expr * (Expr.expr * ctype)) list eff =
+    get >>= fun st ->
+    return st.prov_syms
 
   (* Helpers *)
   let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
@@ -3920,7 +4012,10 @@ module BmcConcActions = struct
       else [] in
 
     get_meta_map >>= fun metadata ->
-    let meta_asserts = BmcMemCommon.metadata_assertions (Pmap.bindings_list metadata) in
-
-    return (preexec, assertions @ mem_assertions @ meta_asserts, memory_model)
+    get_prov_syms >>= fun prov_syms ->
+    let metadata_list = Pmap.bindings_list metadata in
+    let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
+    let provenance_asserts =
+      List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata_list)prov_syms) in
+    return (preexec, assertions @ mem_assertions @ meta_asserts @ provenance_asserts, memory_model)
 end

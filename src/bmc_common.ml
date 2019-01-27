@@ -73,7 +73,10 @@ let value_to_z3 (value: value) : Expr.expr =
       match ctype with
       | Basic0 (Integer _) ->
           LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype)
-      | _ -> assert false
+      | Pointer0 (_, Basic0 (Integer _)) ->
+          LoadedPointer.mk_unspecified (CtypeSort.mk_expr ctype)
+      | _ ->
+          assert false
       end
 
 let cot_to_z3 (cot: core_object_type) : Sort.sort =

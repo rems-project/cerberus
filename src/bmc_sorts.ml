@@ -357,6 +357,9 @@ module PointerSortPNVI = struct
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [prov;addr]
 
+  let mk_ptr_from_int_addr (prov: Expr.expr) (int_addr: Expr.expr) =
+      mk_ptr prov (AddressSortPNVI.mk_expr int_addr)
+
   let mk_null =
     let ctor = List.nth (get_constructors mk_sort) 1 in
     Expr.mk_app g_ctx ctor []
@@ -384,6 +387,10 @@ module PointerSortPNVI = struct
   let shift_by_n (ptr: Expr.expr) (n: Expr.expr) =
     mk_ptr (get_prov ptr)
            (AddressSortPNVI.shift_index_by_n (get_addr ptr) n)
+
+  (* TODO: domain should really be address *)
+  let provenance_of_decl =
+    mk_fresh_func_decl g_ctx "prov_of" [integer_sort] integer_sort
 
   let has_provenance (ptr: Expr.expr) : Expr.expr =
     binop_to_z3 OpGt (get_prov ptr) (int_to_z3 0)
@@ -450,6 +457,9 @@ module PointerSortConcrete = struct
     let ctor = List.nth (get_constructors mk_sort) 0 in
     Expr.mk_app g_ctx ctor [addr]
 
+  let mk_ptr_from_int_addr (prov: Expr.expr) (int_addr: Expr.expr) =
+      mk_ptr prov (AddressSortConcrete.mk_expr prov int_addr)
+
   let mk_null =
     let ctor = List.nth (get_constructors mk_sort) 1 in
     Expr.mk_app g_ctx ctor []
@@ -487,6 +497,10 @@ module PointerSortConcrete = struct
 
   let ptr_diff_raw (p1: Expr.expr) (p2: Expr.expr) =
     assert false
+
+  (* TODO: should not exist *)
+  let provenance_of_decl =
+    mk_fresh_func_decl g_ctx "prov_of" [integer_sort] integer_sort
 end
 
 module PointerSort = PointerSortPNVI
