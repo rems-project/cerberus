@@ -1474,7 +1474,35 @@ module BmcZ3 = struct
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
         return (PointerSort.ptr_eq z3d_p1 z3d_p2)
-        (*return (mk_eq z3d_p1 z3d_p2)*)
+    | Ememop (PtrNe, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        return (mk_not (PointerSort.ptr_eq z3d_p1 z3d_p2))
+    | Ememop (PtrLt, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        (* TODO: Get rid of this code duplication *)
+        return (binop_to_z3 OpLt (AddressSort.get_index (PointerSort.get_addr z3d_p1))
+                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
+               )
+    | Ememop (PtrGt, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        return (binop_to_z3 OpGt (AddressSort.get_index (PointerSort.get_addr z3d_p1))
+                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
+               )
+    | Ememop (PtrLe, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        return (binop_to_z3 OpLe (AddressSort.get_index (PointerSort.get_addr z3d_p1))
+                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
+               )
+    | Ememop (PtrGe, [p1;p2]) ->
+        z3_pe p1 >>= fun z3d_p1 ->
+        z3_pe p2 >>= fun z3d_p2 ->
+        return (binop_to_z3 OpGe (AddressSort.get_index (PointerSort.get_addr z3d_p1))
+                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
+               )
     | Ememop (Ptrdiff, [((Pexpr(_,BTy_ctype, (PEval (Vctype ctype)))) as ty);p1;p2]) ->
         assert g_pnvi;
         z3_pe ty >>= fun _ ->
@@ -2082,6 +2110,11 @@ module BmcBind = struct
         bind_pe pe
     | Ememop(PtrValidForDeref, args) (* fall through *)
     | Ememop(PtrEq, args)            (* fall through *)
+    | Ememop(PtrNe, args)            (* fall through *)
+    | Ememop(PtrLt, args)            (* fall through *)
+    | Ememop(PtrGt, args)            (* fall through *)
+    | Ememop(PtrLe, args)            (* fall through *)
+    | Ememop(PtrGe, args)            (* fall through *)
     | Ememop(Ptrdiff, args)          (* fall through *)
     | Ememop(IntFromPtr, args)       (* fall through *)
     | Ememop(PtrFromInt, args)       (* fall through *) ->
@@ -2466,11 +2499,11 @@ module BmcVC = struct
                       ;binop_to_z3 OpGe ptr_addr min_value
                       ;binop_to_z3 OpLe ptr_addr max_value
                       ], dbg) ::(vcs_ctype_src @ vcs_ctype_dst @ vcs_ptr))
-
     | Ememop (memop, pes) ->
         mapM vcs_pe pes >>= fun vcss_pes ->
         begin match memop with
-        | PtrValidForDeref | PtrEq | PtrFromInt -> return (List.concat vcss_pes)
+        | PtrValidForDeref | PtrEq | PtrNe | PtrLt | PtrGt | PtrLe | PtrGe
+        | PtrFromInt -> return (List.concat vcss_pes)
         | _ -> assert false (* Unimplemented *)
         end
     | Eaction paction ->
