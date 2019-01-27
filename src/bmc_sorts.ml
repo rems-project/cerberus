@@ -160,13 +160,6 @@ module AddressSortPNVI = struct
   let mk_from_addr ((alloc_id, index) : int * int) : Expr.expr =
     mk_expr (int_to_z3 index)
 
-  let get_alloc (expr: Expr.expr) : Expr.expr =
-    assert false;
-    assert (Sort.equal (Expr.get_sort expr) mk_sort);
-    let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 0) in
-    Expr.mk_app g_ctx get_value [ expr ]
-
   let get_index (expr: Expr.expr) : Expr.expr =
     assert (Sort.equal (Expr.get_sort expr) mk_sort);
     let accessors = get_accessors mk_sort in
@@ -190,17 +183,13 @@ module AddressSortPNVI = struct
            ]
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
-    (*let alloc = get_alloc addr in *)
     let index = get_index addr in
-    mk_expr (*alloc*) (binop_to_z3 OpAdd index n)
+    mk_expr (binop_to_z3 OpAdd index n)
 
   (* TODO: extend this so x is a range of addresses *)
   let addr_subset (x: Expr.expr) (min_addr: Expr.expr) (max_addr: Expr.expr)
                   : Expr.expr =
-    assert false;
-    mk_and [mk_eq (get_alloc x) (get_alloc min_addr)
-           ;mk_eq (get_alloc x) (get_alloc max_addr)
-           ;binop_to_z3 OpLe (get_index min_addr) (get_index x)
+    mk_and [binop_to_z3 OpLe (get_index min_addr) (get_index x)
            ;binop_to_z3 OpLe (get_index x) (get_index max_addr)
            ]
 
@@ -209,11 +198,9 @@ module AddressSortPNVI = struct
     mk_fresh_func_decl g_ctx "is_atomic" [mk_sort] boolean_sort
 
   let mk_is_atomic (addr: Expr.expr) =
-    assert false;
     Expr.mk_app g_ctx is_atomic_decl [addr]
 
   let assert_is_atomic (addr: Expr.expr) (is_atomic: Expr.expr) =
-    assert false;
     mk_eq (mk_is_atomic addr) is_atomic
 
   (* TODO: This really uses bmc_common; need to toggle based on global conf *)

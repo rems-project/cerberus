@@ -3376,6 +3376,8 @@ module BmcConcActions = struct
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
 
+    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+
     bmc_actions    : (int, aid list) Pmap.map;
     bmc_action_map : (aid, bmc_action) Pmap.map;
     tid            : tid;
@@ -3392,6 +3394,7 @@ module BmcConcActions = struct
                  param_actions
                  case_guard_map
                  drop_cont_map
+                 alloc_meta_map
                  : internal_state =
   { inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
@@ -3399,6 +3402,7 @@ module BmcConcActions = struct
     param_actions    = param_actions;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
+    alloc_meta_map   = alloc_meta_map;
 
     bmc_actions      = Pmap.empty Pervasives.compare;
     bmc_action_map   = Pmap.empty Pervasives.compare;
@@ -3443,6 +3447,13 @@ module BmcConcActions = struct
     match Pmap.lookup uid st.drop_cont_map with
     | None -> failwith (sprintf "BmcConcActions: Uid %d not found in drop_cont_map" uid)
     | Some expr -> return expr
+
+  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+    get >>= fun st ->
+    match Pmap.lookup alloc_id st.alloc_meta_map with
+    | None -> failwith (sprintf "BmcConcActions: alloc id %d not found in alloc_meta"
+                                alloc_id)
+    | Some data -> return data
 
   let get_tid : int eff =
     get >>= fun st ->
@@ -3520,16 +3531,23 @@ module BmcConcActions = struct
     let is_atomic_fn = (function ctype -> match ctype with
                        | Core_ctype.Atomic0 _ -> mk_true
                        | _ -> mk_false) in
+    get_meta alloc_id >>= fun metadata ->
+    print_endline (BmcZ3.print_metadata metadata);
+    let base_addr = BmcZ3.get_metadata_base metadata in
+
     mapMi_ (fun i (cype,sort) ->
-      let addr = (alloc_id, i) in
+      let index = List.fold_left
+          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          0 (list_take i sortlist) in
+
+      let addr = (alloc_id, index) in
       let addr_expr = AddressSort.mk_from_addr addr in
       let is_atomic =
         AddressSort.assert_is_atomic addr_expr (is_atomic_fn ctype) in
       add_assertion is_atomic
     ) sortlist >>
-    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id)
-                                    (AddressSort.mk_from_addr (alloc_id,0)) in
-
+    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
+                                   (*(AddressSort.mk_from_addr (alloc_id,0)) in*)
 
     let (initial_value, assumptions) =
       BmcMemCommon.mk_initial_loaded_value sort
@@ -3538,36 +3556,6 @@ module BmcConcActions = struct
     mapM add_assertion assumptions >>
     return [mk_store pol mk_true aid initial_tid
                      (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
-
-
-
-  (*
-  let do_create (aidlist : aid list)
-                (sortlist: BmcZ3.ctype_sort list)
-                (alloc_id: BmcZ3.alloc)
-                (pol: polarity)
-                (initialise : bool)
-                : (bmc_action list) eff =
-    let aid_sortlist = zip aidlist sortlist in
-    let is_atomic = (function ctype -> match ctype with
-                     | Core_ctype.Atomic0 _ -> mk_true
-                     | _ -> mk_false) in
-    mapMi (fun i (aid,(ctype,sort)) ->
-      let addr = (alloc_id, i) in
-      let addr_expr = AddressSort.mk_from_addr addr in
-      let ptr = PointerSort.mk_ptr addr_expr in
-      let is_atomic =
-        AddressSort.assert_is_atomic addr_expr (is_atomic ctype) in
-      add_assertion is_atomic >>
-      let (initial_value, assumptions) =
-        BmcMemCommon.mk_initial_loaded_value sort
-            (sprintf "init_%d,%d" alloc_id i)
-            ctype initialise in
-      mapM add_assertion assumptions >>
-      return (mk_store pol mk_true aid initial_tid
-                       (C_mem_order Cmm_csem.NA) ptr initial_value)
-    ) aid_sortlist
-  *)
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
@@ -3716,10 +3704,13 @@ module BmcConcActions = struct
         do_create aid ctype sortlist alloc_id Pos true >>= fun actions ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
+        get_meta alloc_id >>= fun metadata ->
+        let base_addr = BmcZ3.get_metadata_base metadata in
+
+
         let eq_expr =
           mk_eq sym_expr
-                (PointerSort.mk_ptr (int_to_z3 alloc_id)
-                                    (AddressSort.mk_from_addr (alloc_id, 0))) in
+                (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr) in
         add_assertion eq_expr >>
         return actions
     | _ -> assert false

@@ -230,7 +230,8 @@ module BmcM = struct
                                 (Option.get st.action_map)
                                 (Option.get st.param_actions)
                                 (Option.get st.case_guard_map)
-                                (Option.get st.drop_cont_map) in
+                                (Option.get st.drop_cont_map)
+                                (Option.get st.alloc_meta) in
     let ((preexec, assertions, memory_model), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
