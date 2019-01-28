@@ -132,6 +132,9 @@ let ctor_to_z3 (ctor  : typed_ctor)
   | Civsizeof ->
       (* Handled as special case in bmc_pexpr *)
       assert false
+  | Civalignof ->
+      (* Handled as special case in bmc_pexpr *)
+      assert false
   | Cspecified ->
       assert (List.length exprs = 1);
       assert (is_some bTy);

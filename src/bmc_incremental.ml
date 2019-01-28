@@ -1188,6 +1188,20 @@ module BmcZ3 = struct
     let vc = mk_or pattern_guards in
     (vc, case_guards)
 
+  let rec alignof_type (ctype: ctype) : int =
+    match ctype with
+    | Void0 -> assert false
+    | Basic0 (Integer ity) ->
+        Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+    | Array0(ty, _) -> alignof_type ty
+    | Function0 _ -> assert false
+    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Atomic0 (Basic0 _ as _ty) ->
+        alignof_type _ty
+    | Atomic0 (Pointer0 _ as _ty) ->
+        Option.get (Ocaml_implementation.Impl.alignof_pointer)
+    | _ -> assert false
+
   (* SMT stuff *)
   let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
     let uid = get_id_pexpr pexpr in
@@ -1207,6 +1221,7 @@ module BmcZ3 = struct
         let sort = cbt_to_z3 bTy in
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
     | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+        (* TODO: Get rid of ImplFunctions *)
         assert (is_integer_type ctype);
         return (Pmap.find ctype ImplFunctions.ivmin_map)
     | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
@@ -1219,6 +1234,12 @@ module BmcZ3 = struct
           assert (is_integer_type ctype);
           return (Pmap.find ctype ImplFunctions.sizeof_map)
         end
+    | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+        (* We can just directly compute the values rather than do it in the
+         * roundabout way as in the above *)
+        assert (is_integer_type ctype);
+        return (int_to_z3 (alignof_type ctype));
+
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -1308,20 +1329,6 @@ module BmcZ3 = struct
     ) >>= fun z3d_pexpr ->
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
-
-  let rec alignof_type (ctype: ctype) : int =
-    match ctype with
-    | Void0 -> assert false
-    | Basic0 (Integer ity) ->
-        Option.get (Ocaml_implementation.Impl.alignof_ity ity)
-    | Array0(ty, _) -> alignof_type ty
-    | Function0 _ -> assert false
-    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
-    | Atomic0 (Basic0 _ as _ty) ->
-        alignof_type _ty
-    | Atomic0 (Pointer0 _ as _ty) ->
-        Option.get (Ocaml_implementation.Impl.alignof_pointer)
-    | _ -> assert false
 
   let mk_create ctype align_ty (pref: Sym.prefix) =
     get_file >>= fun file ->
