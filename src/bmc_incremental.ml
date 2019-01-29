@@ -273,7 +273,7 @@ module BmcInline = struct
               | _ -> assert false
               end
         in
-        if depth >= !!bmc_conf.max_pe_call_depth then
+        if depth >= !!bmc_conf.max_core_call_depth then
           let error_msg =
             sprintf "call_depth_exceeded: %s" (name_to_string  name) in
           let new_pexpr =
@@ -387,7 +387,7 @@ module BmcInline = struct
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
-  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
+  let rec inline_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
     get_fresh_id >>= fun id ->
     (match e_ with
     | Epure pe ->
@@ -492,8 +492,43 @@ module BmcInline = struct
           end
     | Eccall _ ->
         assert false
-    | Eproc _ ->
-        assert false
+    | Eproc (a,name, pes) ->
+        (* TODO: code duplication with PEcall/Eccall *)
+        mapM inline_pe pes >>= fun inlined_pes ->
+        lookup_run_depth name >>= fun depth ->
+        get_file >>= fun file ->
+        let (ty, args, fun_expr) =
+          match name with
+          | Sym sym ->
+              begin match Pmap.lookup sym file.stdlib with
+              | Some (Proc(_,ty, args, fun_expr)) -> (ty, args, fun_expr)
+              | _ -> assert false
+              end
+          | Impl impl ->
+                failwith (sprintf "EProc: %s not found" (name_to_string name))
+        in
+        if depth >= !!bmc_conf.max_core_call_depth then
+          let error_msg =
+            sprintf "call_depth_exceeded: %s" (name_to_string name) in
+          let new_expr =
+            (Expr([],Epure(Pexpr([], ty,
+                           PEerror(error_msg,
+                                   Pexpr([], BTy_unit, PEval(Vunit))))))) in
+          inline_e new_expr >>= fun inlined_new_expr ->
+          add_inlined_expr id inlined_new_expr >>
+          return (Eproc(a, name, pes))
+        else begin
+          bmc_debug_print 7 "Eproc: Check this";
+          let sub_map = List.fold_right2
+            (fun (sym, _) pe table -> Pmap.add sym pe table)
+            args inlined_pes (Pmap.empty sym_cmp) in
+          let expr_to_check = substitute_expr sub_map fun_expr in
+          increment_run_depth name >>
+          inline_e expr_to_check >>= fun inlined_expr_to_check ->
+          decrement_run_depth name >>
+          add_inlined_expr id inlined_expr_to_check >>
+          return (Eproc(a, name, pes))
+        end
     | Eunseq es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Eunseq(inlined_es))

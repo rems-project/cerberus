@@ -136,8 +136,8 @@ let rec substitute_expr (map: substitute_map)
         Eccall(a, substitute_pexpr map pe1,
                   substitute_pexpr map pe2,
                   List.map (substitute_pexpr map) pelist)
-    | Eproc _ ->
-        assert false
+    | Eproc (a, name, pes) ->
+        Eproc(a, name, List.map (substitute_pexpr map) pes)
     | Eunseq elist ->
         Eunseq (List.map (substitute_expr map) elist)
     | Ewseq(pat, e1, e2) ->
