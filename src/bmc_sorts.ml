@@ -9,6 +9,30 @@ open Z3.Arithmetic
 type addr_ty = int * int
 type ctype = Core_ctype.ctype0
 
+type permission_flag =
+  | ReadWrite
+  | ReadOnly
+
+
+type alloc = int
+  (* We assume for now we always know the ctype of what we're allocating *)
+type allocation_metadata =
+    (* size *) int * ctype option * (* alignment *) int * (* base address *) Expr.expr * permission_flag *
+    (* C prefix *) Sym.prefix
+
+let get_metadata_size (sz,_,_,_,_,_) : int = sz
+let get_metadata_base (_,_,_,base,_,_) : Expr.expr = base
+let get_metadata_ctype (_,ctype,_,_,_,_) : ctype option = ctype
+let get_metadata_align (_,_,align,_,_,_) : int = align
+let get_metadata_prefix (_,_,_,_,_,pref) : Sym.prefix = pref
+let print_metadata (size, cty, align, expr, _, pref) =
+  sprintf "Size: %d, Base: %s, Align %d, prefix: %s"
+              size (Expr.to_string expr) align
+              (prefix_to_string pref)
+
+
+
+
 (* =========== CUSTOM SORTS =========== *)
 let mk_ctor str =
   Datatype.mk_constructor_s g_ctx str (mk_sym ("is_" ^ str)) [] [] []
@@ -223,6 +247,32 @@ module AddressSortPNVI = struct
     | Atomic0 (Pointer0 _ as _ty) ->
         type_size _ty
     | _ -> assert false
+
+  let get_provenance (ival_min: Expr.expr)
+                     (ival_max: Expr.expr)
+                     (data: (int,allocation_metadata) Pmap.map)
+                     : Expr.expr option =
+      Some (Pmap.fold (fun alloc_id metadata base ->
+        let addr_size : int = get_metadata_size metadata in
+        let addr_base : Expr.expr = get_metadata_base metadata in
+        let addr_min = get_index addr_base in
+        let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
+        let ival_in_range =
+          mk_and [binop_to_z3 OpGe ival_min addr_min
+                 ;binop_to_z3 OpLe ival_max addr_max] in
+        mk_ite ival_in_range
+               (int_to_z3 alloc_id)
+               base
+      ) data (int_to_z3 0))
+
+  let pp (expr: Expr.expr) : string =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    match Expr.get_args expr with
+    | [a] ->
+        if Arithmetic.is_int a then (string_of_int (Integer.get_int a))
+        else Expr.to_string expr
+    | _ -> Expr.to_string expr
+
 end
 
 module AddressSortConcrete = struct
@@ -317,6 +367,8 @@ module AddressSortConcrete = struct
     | Atomic0 (Pointer0 _ as _ty) ->
         type_size _ty
     | _ -> assert false
+
+  let get_provenance _ _ _ = None
 end
 
 
@@ -429,6 +481,18 @@ module PointerSortPNVI = struct
   let ptr_diff_raw (p1: Expr.expr) (p2: Expr.expr) =
     binop_to_z3 OpSub (AddressSortPNVI.get_index (get_addr p1))
                       (AddressSortPNVI.get_index (get_addr p2))
+
+  let pp (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) mk_sort);
+    match Expr.get_args expr with
+    | [prov;addr] ->
+        let pp_prov =
+          if Arithmetic.is_int prov
+          then (string_of_int (Integer.get_int prov))
+          else Expr.to_string prov in
+        let pp_addr = AddressSortPNVI.pp addr in
+        sprintf "ptr(@%s, %s)" pp_prov pp_addr
+    | _ -> Expr.to_string expr
 end
 
 module PointerSortConcrete = struct
@@ -501,6 +565,8 @@ module PointerSortConcrete = struct
   (* TODO: should not exist *)
   let provenance_of_decl =
     mk_fresh_func_decl g_ctx "prov_of" [integer_sort] integer_sort
+
+  let pp expr = Expr.to_string expr
 end
 
 module PointerSort = PointerSortPNVI
@@ -560,6 +626,7 @@ module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 1) in
     Expr.mk_app g_ctx get_value [ expr ]
+
 end
 
 module LoadedInteger =
