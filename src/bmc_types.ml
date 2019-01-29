@@ -38,8 +38,10 @@
 
 open Auxl
 open Bmc_sorts
+open Bmc_utils
 open Core
 open Printf
+open Util
 open Z3
 
 (* ======== Concurrency ========= *)
@@ -189,11 +191,18 @@ let pp_memory_order_enum3 m () =
 
 let pp_tid = string_of_int
 let pp_aid = string_of_int
-let pp_loc () loc =
-  begin match Expr.get_args loc with
-  | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
-  | _ -> Expr.to_string loc
-  end
+let pp_loc pp_loc_opt () loc =
+  let default =
+    begin match Expr.get_args loc with
+    | [a] ->
+        sprintf "(%s)" (Expr.to_string a)
+    | [a1;a2] -> sprintf "(%s.%s)" (Expr.to_string a1) (Expr.to_string a2)
+    | _ -> Expr.to_string loc
+    end in
+  if pp_loc_opt = None then default
+  else match Pmap.lookup loc (Option.get pp_loc_opt) with
+  | Some s -> s ^ default
+  | None -> default
 
   (*match loc with
   | LocZ3Expr expr ->
@@ -223,18 +232,19 @@ let pp_value () expr =
       if (Boolean.is_true
         (Expr.simplify (LoadedPointer.is_unspecified arg) None)) then
         "?"
-      else
-      Expr.to_string (List.hd (Expr.get_args arg))
+      else begin
+        PointerSort.pp (List.hd (Expr.get_args arg))
+      end
     end
   else
     Expr.to_string arg
 
 let pp_action_long = function
   | Load (aid, tid, memord, loc, cval,_) ->
-    sprintf "%s:Load %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc () loc)
+    sprintf "%s:Load %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc None () loc)
                                   (pp_memory_order memord) (pp_value () cval)
   | Store (aid, tid, memord, loc, cval,_) ->
-    sprintf "%s:Store %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc () loc)
+    sprintf "%s:Store %s @%s %s %s" (pp_aid aid) (pp_tid tid) (pp_loc None () loc)
                                    (pp_memory_order memord) (pp_value () cval)
   | _ -> assert false
 
@@ -376,13 +386,13 @@ let rec pp_action rl () a = match a with
   | Load (aid,tid,mo,l,v,_) ->
      sprintf "%a,%a:Load %a %a %a"
              (pp_action_id' rl) aid  (pp_thread_id' rl) tid
-             pp_memory_order_enum2 mo  pp_loc l  pp_value v
+             pp_memory_order_enum2 mo  (pp_loc None) l  pp_value v
   | Store (aid,tid,mo,l,v,_) ->
      sprintf "%a,%a:Store %a %a %a" (pp_action_id' rl) aid  (pp_thread_id' rl)
-             tid  pp_memory_order_enum2 mo  pp_loc l  pp_value v
+             tid  pp_memory_order_enum2 mo  (pp_loc None) l  pp_value v
   | RMW (aid,tid,mo,l,v1,v2,_) ->
      sprintf "%a,%a:RMW %a %a %a %a" (pp_action_id' rl) aid  (pp_thread_id' rl)
-             tid  pp_memory_order_enum2 mo  pp_loc l  pp_value v1  pp_value v2
+             tid  pp_memory_order_enum2 mo  (pp_loc None) l  pp_value v1  pp_value v2
   (*| Blocked_rmw (aid,tid,l) ->
       assert false*)
   | Fence (aid,tid,mo) ->
@@ -404,7 +414,7 @@ and pp_action_thread_id' m rl () (aid,tid) =
   else
     sprintf "%a" (pp_action_id' rl) aid
 
-and pp_action' m rl () = function a -> match a with
+and pp_action' m rl pp_loc_opt () = function a -> match a with
   (*| Lock (aid,tid,l,oc) ->
       assert false
   | Unlock(aid,tid,l) ->
@@ -412,17 +422,17 @@ and pp_action' m rl () = function a -> match a with
   | Load (aid,tid,mo,l,v,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\RA{%a}{%a}{%a}{%a}" else format_of_string "%a:R%a %a=%a" in
-      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  pp_loc l  pp_value v
+      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  (pp_loc pp_loc_opt) l  pp_value v
   | Store (aid,tid,mo,l,v,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\WA{%a}{%a}{%a}{%a}" else format_of_string "%a:W%a %a=%a" in
-     sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  pp_loc l  pp_value v
+     sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo  (pp_loc pp_loc_opt) l  pp_value v
   | RMW (aid,tid,mo,l,v1,v2,_) ->
       let fmt =
         if m.texmode then format_of_string "\\\\RMWA{%a}{%a}{%a}{%a}{%a}" else
           format_of_string "%a:RMW%a %a=%a/%a" in
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3
-     m) mo  pp_loc l  pp_value v1 pp_value v2
+     m) mo  (pp_loc pp_loc_opt) l  pp_value v1 pp_value v2
   (*| Blocked_rmw (aid,tid,l) ->
       assert false *)
   | Fence (aid,tid,mo) ->
@@ -432,7 +442,7 @@ and pp_action' m rl () = function a -> match a with
 
 and pp_column_head rl () = function
   | CH_tid tid -> sprintf "%a" (pp_thread_id' rl) tid
-  | CH_loc loc -> sprintf "%a" pp_loc loc
+  | CH_loc loc -> sprintf "%a" (pp_loc None) loc
 
 exception NonLinearSB
 
@@ -445,7 +455,7 @@ let partition_faults faults =
       ([],[]) faults in
   (List.rev unary, List.rev binary)
 
-let pp_dot () (m, (preexec, exedo, exddo)) =
+let pp_dot () (m, (preexec, exedo, exddo),pploc_opt) =
   let lo = layout_by_thread false preexec in
   let fontsize_node   = m.fontsize in
   let fontsize_edge   = m.fontsize in
@@ -536,7 +546,7 @@ let pp_dot () (m, (preexec, exedo, exddo)) =
       (if m.filled then ", style=\"filled\"" else "")
       pp_fontcolor color
       rank
-      (((pp_action' m lo.relabelling) () a))
+      (((pp_action' m lo.relabelling pploc_opt) () a))
       pp_action_position (x,y)
       axygeometry
   in

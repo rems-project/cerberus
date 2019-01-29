@@ -290,7 +290,9 @@ module type MemoryModel = sig
   val get_assertions : z3_memory_model -> Expr.expr list
 
   val compute_executions : preexec -> (unit typed_file) -> z3_memory_model
-  val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr -> string list
+  val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr
+                           -> (alloc, allocation_metadata) Pmap.map option
+                           -> string list
 end
 
 module MemoryModelCommon = struct
@@ -548,6 +550,8 @@ module MemoryModelCommon = struct
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
     bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
+    List.iter (fun a -> bmc_debug_print 5 (pp_bmcaction a)) all_actions;
+
     let event_sort = mk_event_sort all_actions in
     let all_events = Enumeration.get_consts event_sort in
     (* Map from aid to corresponding Z3 event *)
@@ -735,20 +739,24 @@ module MemoryModelCommon = struct
     exdd           : execution_derived_data;
 
     race_free      : bool;
+    loc_pprinting  : (Expr.expr, string) Pmap.map;
   }
 
   let extract_executions
       (solver: Solver.solver)
       (mem: 'a)
-      (extract_execution: Model.model -> 'a -> Expr.expr -> execution )
+      (extract_execution: Model.model -> 'a -> Expr.expr
+                          -> (alloc, allocation_metadata) Pmap.map option
+                          -> execution)
       (ret_value: Expr.expr)
+      (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
       : string list =
 
     Solver.push solver;
     let rec aux ret =
       if Solver.check solver [] = SATISFIABLE then
         let model = Option.get (Solver.get_model solver) in
-        let execution = extract_execution model mem ret_value in
+        let execution = extract_execution model mem ret_value metadata_opt in
         Solver.add solver [mk_not execution.z3_asserts];
         aux (execution :: ret)
       else
@@ -767,7 +775,7 @@ module MemoryModelCommon = struct
       if (List.length exec.preexec.actions > 0) then
           pp_dot () (ppmode_default_web,
                      (exec.preexec, Some exec.witness,
-                      Some (exec.exdd))) :: acc
+                      Some (exec.exdd)), Some exec.loc_pprinting) :: acc
       else acc
       ) [] executions in
     (* TODO: we probably don't want this anymore: *)
@@ -1437,9 +1445,51 @@ module C11MemoryModel : MemoryModel = struct
                  @ sbrf_clk
     }
 
+  (* ==== HACKY STUFF TO PPRINT LOCATIONS ==== *)
+  (* Get map from alloc -> (base addr, max_addr, prefix) *)
+  let get_address_ranges (data: (int * allocation_metadata) list)
+                         (interp: Expr.expr -> Expr.expr option)
+                         : (int * (int * int) option * Sym.prefix) list =
+    List.map (fun (alloc,metadata) ->
+      let addr_base = get_metadata_base metadata in
+      let addr_size = get_metadata_size metadata in
+      let addr_min = AddressSort.get_index addr_base in
+      let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
+      let prefix = get_metadata_prefix metadata in
+      match (interp addr_min, interp addr_max) with
+      | Some min , Some max ->
+          if (Arithmetic.is_int min && Arithmetic.is_int max) then
+            (alloc,Some (Integer.get_int min, Integer.get_int max),prefix)
+          else
+            (alloc,None, prefix)
+      | _ -> (alloc,None, prefix)
+    ) data
+
+  let loc_to_string (loc: Expr.expr)
+                    (ranges: (int * ((int * int) option) * Sym.prefix) list)
+                    : string =
+    match Expr.get_args loc with
+    | [a1] ->
+        if (Arithmetic.is_int a1) then
+          let addr = Integer.get_int a1 in
+          match (List.find_opt (fun (alloc, range_opt, prefix) ->
+            if range_opt = None then false
+            else
+              let (addr_min, addr_max) = Option.get range_opt in
+              (addr_min <= addr && addr <= addr_max)
+            ) ranges) with
+          | Some (alloc, Some (min, max), prefix) ->
+              sprintf "%s{%d}"  (prefix_to_string prefix)
+                                (addr - min)
+          | _ -> Expr.to_string loc
+        else Expr.to_string loc
+    | _ ->
+        Expr.to_string loc
+
   let extract_execution (model    : Model.model)
                         (mem      : z3_memory_model)
                         (ret_value: Expr.expr)
+                        (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
                         : execution =
     let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
     let fns = mem.fns in
@@ -1449,6 +1499,14 @@ module C11MemoryModel : MemoryModel = struct
        | L_FALSE -> false
        | _ -> false in
     let get_relation rel (p1,p2) = get_bool (interp (rel (snd p1, snd p2))) in
+
+    let ranges =
+      if is_some metadata_opt then
+        get_address_ranges (Pmap.bindings_list (Option.get metadata_opt))
+                           (fun expr -> Model.eval model expr false)
+      else
+        []
+    in
 
     (* ==== Compute preexecution ==== *)
     let action_events = List.fold_left (fun acc (aid, action) ->
@@ -1475,6 +1533,16 @@ module C11MemoryModel : MemoryModel = struct
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
+
+    let loc_pprinting = List.fold_left (fun base (action,_) ->
+      match action with
+      | Load (_,_,_,loc,_,_) (* fall through *)
+      | Store(_,_,_,loc,_,_) (* fall through *)
+      | RMW(_,_,_,loc,_,_,_) ->
+          Pmap.add loc (loc_to_string loc ranges) base
+      | Fence _ ->
+          base
+      ) (Pmap.empty Expr.compare) (action_events) in
 
     let not_initial action = (tid_of_action action <> initial_tid) in
     let remove_initial rel =
@@ -1576,14 +1644,16 @@ module C11MemoryModel : MemoryModel = struct
     ; exdd    = execution_derived_data
 
     ; race_free = (List.length data_race = 0) && (List.length unseq_race = 0)
+    ; loc_pprinting = loc_pprinting
     }
 
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
+                         (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
                          : string list =
     MemoryModelCommon.extract_executions
-      solver mem extract_execution ret_value
+      solver mem extract_execution ret_value metadata_opt
       (*
     Solver.push solver;
     let rec aux ret =
@@ -1873,7 +1943,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
   (* TODO: code duplication here with C11MemoryModel *)
   let extract_execution (model: Model.model)
                         (mem: z3_memory_model)
-                        (ret_value: Expr.expr) =
+                        (ret_value: Expr.expr)
+                        (metadata_opt: (alloc, allocation_metadata) Pmap.map option)=
     let interp (expr: Expr.expr) = Option.get (Model.eval model expr false) in
     let fns = mem.builtin_fns in
     let proj_fst = (fun (p1,p2) -> (fst p1, fst p2))  in
@@ -1974,15 +2045,17 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; race_free = true (* TODO *)
     (*race_free = (List.length data_race = 0) && (List.length unseq_race =
       0)*)
+    ; loc_pprinting = Pmap.empty Expr.compare
     }
 
   (* TODO: fix api *)
   let extract_executions (solver   : Solver.solver)
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
+                         (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
                          : string list =
     MemoryModelCommon.extract_executions
-      solver mem extract_execution ret_value
+      solver mem extract_execution ret_value metadata_opt
 end
 
 module BmcMem = C11MemoryModel

@@ -108,9 +108,15 @@ let symbol_to_string (sym: sym_ty) =
 
 let symbol_to_int (Symbol(_, num, _): sym_ty) = num
 
+let symbol_to_string_simple (sym: sym_ty) =
+  match sym with
+  | Symbol (_, _, Some str) -> str
+  | Symbol (_, num, None) ->
+      ("?_" ^ (string_of_int num))
+
 let prefix_to_string (prefix: Sym.prefix) =
   match prefix with
-  | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string l)) ^ "]"
+  | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string_simple l)) ^ "]"
   | PrefOther s -> s
 
 let name_cmp = fun nm1 nm2 ->

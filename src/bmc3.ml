@@ -35,7 +35,7 @@ module BmcM = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map option;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
     param_actions    : (BmcZ3.intermediate_action option) list option;
-    alloc_meta       : (BmcZ3.alloc, BmcZ3.allocation_metadata) Pmap.map option;
+    alloc_meta       : (alloc, allocation_metadata) Pmap.map option;
     prov_syms        : (Expr.expr * (Expr.expr * Core_ctype.ctype0)) list option;
 
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
@@ -315,7 +315,7 @@ let bmc_file (file              : unit typed_file)
   if !!bmc_conf.debug_lvl >= 3 then
   ( print_endline "====ALLOCATION PREFIXES";
     Pmap.iter (fun alloc meta ->
-      printf "%d: %s\n" alloc (prefix_to_string (BmcZ3.get_metadata_prefix meta)))
+      printf "%d: %s\n" alloc (prefix_to_string (get_metadata_prefix meta)))
       (Option.get final_state.alloc_meta)
   );
 
@@ -350,6 +350,7 @@ let bmc_file (file              : unit typed_file)
       BmcMem.extract_executions g_solver
                                 (Option.get final_state.memory_model)
                                 (Option.get final_state.ret_expr)
+                                (final_state.alloc_meta)
   else
     []) in
 
@@ -367,17 +368,19 @@ let bmc_file (file              : unit typed_file)
       let str_model = Model.to_string model in
       let satisfied_vcs =
         BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
-      (* TODO: Display this in UI *)
-      List.iter (fun (expr, dbg) ->
-        printf "%s: \n" (BmcVC.vc_debug_to_str dbg) (*(Expr.to_string expr)*)
-      ) satisfied_vcs;
+
+      let vc_str = String.concat "\n"
+          (List.map (fun (expr, dbg) -> BmcVC.vc_debug_to_str dbg)
+                    satisfied_vcs) in
+      print_endline vc_str;
 
       if !!bmc_conf.output_model then
         begin
         print_endline str_model;
         (* TODO: print this out independently of --bmc_output_model*)
         end;
-    `Satisfiable (str_model, dots)
+    let output = sprintf "UB found:\n%s\n\nModel:\n%s" vc_str str_model in
+    `Satisfiable (output, dots)
     end
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)";

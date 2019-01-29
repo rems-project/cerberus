@@ -1085,17 +1085,17 @@ module BmcZ3 = struct
     | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
-  type permission_flag =
+  (*type permission_flag =
     | ReadWrite
-    | ReadOnly
+    | ReadOnly*)
 
   (* TODO: kind in {object, region} *)
 
-  (* We assume for now we always know the ctype of what we're allocating *)
-  type allocation_metadata =
+  (*type allocation_metadata =
     (* size *) int * ctype option * (* alignment *) int * (* base address *) Expr.expr * permission_flag *
     (* C prefix *) Sym.prefix
-
+    *)
+  (*
   let get_metadata_size (sz,_,_,_,_,_) : int = sz
   let get_metadata_base (_,_,_,base,_,_) : Expr.expr = base
   let get_metadata_ctype (_,ctype,_,_,_,_) : ctype option = ctype
@@ -1105,6 +1105,7 @@ module BmcZ3 = struct
     sprintf "Size: %d, Base: %s, Align %d, prefix: %s"
                 size (Expr.to_string expr) align
                 (prefix_to_string pref)
+  *)
 
   type z3_state = {
     (* Builds the following *)
@@ -1856,7 +1857,7 @@ module BmcBind = struct
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
-    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+    alloc_meta_map   : (int, allocation_metadata) Pmap.map;
   }
 
   include EffMonad(struct type state = binding_state end)
@@ -1915,7 +1916,7 @@ module BmcBind = struct
     | None -> failwith (sprintf "Error: BmcBind action not found %d" uid)
     | Some a -> return a
 
-  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+  let get_meta (alloc_id: int) : allocation_metadata eff =
     get >>= fun st ->
     match Pmap.lookup alloc_id st.alloc_meta_map with
     | None -> failwith (sprintf "BmcBind: alloc id %d not found in alloc_meta"
@@ -2106,10 +2107,10 @@ module BmcBind = struct
           | _ -> assert false
           ) in
         get_meta alloc_id >>= fun metadata ->
-        let base_addr = BmcZ3.get_metadata_base metadata in
+        let base_addr = get_metadata_base metadata in
         let max_addr =
           binop_to_z3 OpAdd (AddressSort.get_index base_addr)
-                            (int_to_z3 (BmcZ3.get_metadata_size metadata)) in
+                            (int_to_z3 (get_metadata_size metadata)) in
 
         (* Assert alloc_size(alloc_id) = allocation_size *)
         return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_min_decl
@@ -2862,8 +2863,8 @@ module BmcMemCommon = struct
   (* Base address aligned: assert address is a multiple of alignment > 0*)
   let alignment_assertions ((alloc,metadata) )
                            : Expr.expr list =
-      let base_addr = BmcZ3.get_metadata_base metadata in
-      let alignment = BmcZ3.get_metadata_align metadata in
+      let base_addr = get_metadata_base metadata in
+      let alignment = get_metadata_align metadata in
       let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
                                      integer_sort in
       let align_assert =
@@ -2874,8 +2875,8 @@ module BmcMemCommon = struct
 
     (* Address isn't too large *)
     let addr_lt_max_assertions ((alloc,metadata)) : Expr.expr =
-      let base_addr = BmcZ3.get_metadata_base metadata in
-      let size = BmcZ3.get_metadata_size metadata in
+      let base_addr = get_metadata_base metadata in
+      let size = get_metadata_size metadata in
       let max_address =
         binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
       binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
@@ -2887,17 +2888,17 @@ module BmcMemCommon = struct
      * start_2 >= end_1 or
      * start_1 >= end_2
      *)
-    let disjoint_assertions ((id1, meta1) : int * BmcZ3.allocation_metadata)
-                            ((id2, meta2) : int * BmcZ3.allocation_metadata)
+    let disjoint_assertions ((id1, meta1) : int * allocation_metadata)
+                            ((id2, meta2) : int * allocation_metadata)
                             : Expr.expr list =
       if id1 = id2 then []
       else begin
-        let start_1 = AddressSort.get_index (BmcZ3.get_metadata_base meta1) in
+        let start_1 = AddressSort.get_index (get_metadata_base meta1) in
         let end_1   = binop_to_z3 OpAdd start_1
-                                        (int_to_z3 (BmcZ3.get_metadata_size meta1)) in
-        let start_2 = AddressSort.get_index (BmcZ3.get_metadata_base meta2) in
+                                        (int_to_z3 (get_metadata_size meta1)) in
+        let start_2 = AddressSort.get_index (get_metadata_base meta2) in
         let end_2   = binop_to_z3 OpAdd start_2
-                                        (int_to_z3 (BmcZ3.get_metadata_size meta2)) in
+                                        (int_to_z3 (get_metadata_size meta2)) in
         [mk_or [binop_to_z3 OpGe start_2 end_1
                ;binop_to_z3 OpGe start_1 end_2]
         ]
@@ -2911,7 +2912,7 @@ module BmcMemCommon = struct
      * - Somehow create a function expressing whether an address is valid for pointers
      * - Eventually the provenance
      *)
-    let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
+    let metadata_assertions (data: (int * allocation_metadata) list)
                             : Expr.expr list =
       let alignment_asserts =
         List.concat (List.map alignment_assertions data) in
@@ -2927,25 +2928,13 @@ module BmcMemCommon = struct
     (* TODO: this is probably the wrong place to do it *)
     (* Constrain provenances from cast_ival_to_ptrval *)
     let provenance_assertions ((sym,(ival, ctype)) : Expr.expr * (Expr.expr * ctype))
-                              (data: (int * BmcZ3.allocation_metadata) list)
+                              (data: (int, allocation_metadata) Pmap.map)
                               : Expr.expr list =
       let ival_max =
         binop_to_z3 OpAdd ival (int_to_z3 ((AddressSort.type_size ctype) - 1)) in
-
-      let assertion = List.fold_left (fun base (alloc_id, metadata) ->
-        let addr_size : int = BmcZ3.get_metadata_size metadata in
-        let addr_base : Expr.expr = BmcZ3.get_metadata_base metadata in
-        let addr_min = (AddressSort.get_index addr_base) in
-        let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
-
-        let ival_in_range =
-          mk_and [binop_to_z3 OpGe ival addr_min
-                 ;binop_to_z3 OpLe ival_max addr_max] in
-        mk_ite ival_in_range
-               (int_to_z3 alloc_id)
-               base
-      ) (int_to_z3 0) data in
-      [mk_eq sym assertion]
+      let prov = AddressSort.get_provenance ival ival_max data in
+      assert (is_some prov);
+      [mk_eq sym (Option.get prov)]
 end
 
 (* Sequential memory model; read from most recent write *)
@@ -2975,11 +2964,11 @@ module BmcSeqMem = struct
     val mk_shift : alloc_id -> index -> Expr.expr -> addr
 
     val metadata_assertions :
-          (int * BmcZ3.allocation_metadata) list -> Expr.expr list
+          (int * allocation_metadata) list -> Expr.expr list
 
     val provenance_assertions :
           (Expr.expr * (Expr.expr * ctype)) list ->
-          (int * BmcZ3.allocation_metadata) list ->
+          (int , allocation_metadata) Pmap.map ->
           Expr.expr list
   end
 
@@ -3122,12 +3111,12 @@ module BmcSeqMem = struct
     let mk_shift (_: alloc_id) (index: index) (addr: Expr.expr) =
       AddressSort.shift_index_by_n addr (int_to_z3 index)
 
-    let metadata_assertions (data: (int * BmcZ3.allocation_metadata) list)
+    let metadata_assertions (data: (int * allocation_metadata) list)
                             : Expr.expr list =
       BmcMemCommon.metadata_assertions data
 
     let provenance_assertions (provsyms : (Expr.expr * (Expr.expr * ctype)) list)
-                              (data: (int * BmcZ3.allocation_metadata) list)
+                              (data: (int , allocation_metadata) Pmap.map)
                               : Expr.expr list =
       List.concat (List.map
           (fun x -> BmcMemCommon.provenance_assertions x data)
@@ -3145,7 +3134,7 @@ module BmcSeqMem = struct
     param_actions    : (BmcZ3.intermediate_action option) list;
     case_guard_map   : (int, Expr.expr list) Pmap.map;
     drop_cont_map    : (int, Expr.expr) Pmap.map;
-    alloc_meta_map   : (int, BmcZ3.allocation_metadata) Pmap.map;
+    alloc_meta_map   : (int, allocation_metadata) Pmap.map;
     prov_syms        : (Expr.expr * (Expr.expr * ctype)) list;
 
     memory           : SeqMem.memory_table;
@@ -3232,14 +3221,14 @@ module BmcSeqMem = struct
     | None -> failwith (sprintf "BmcSeqMem: Uid %d not found in drop_cont_map"                                 uid)
     | Some expr -> return expr
 
-  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+  let get_meta (alloc_id: int) : allocation_metadata eff =
     get >>= fun st ->
     match Pmap.lookup alloc_id st.alloc_meta_map with
     | None -> failwith (sprintf "BmcSeqMem: alloc id %d not found in alloc_meta"
                                 alloc_id)
     | Some data -> return data
 
-  let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
+  let get_meta_map : (int, allocation_metadata) Pmap.map eff =
     get >>= fun st ->
     return st.alloc_meta_map
 
@@ -3283,7 +3272,7 @@ module BmcSeqMem = struct
                 : ret_ty eff =
     (* Get metadata *)
     get_meta alloc_id >>= fun metadata ->
-    let base_addr = BmcZ3.get_metadata_base metadata in
+    let base_addr = get_metadata_base metadata in
 
     (* Get base address, shift by size of ctype *)
     mapMi (fun i (ctype,sort) ->
@@ -3567,7 +3556,7 @@ module BmcSeqMem = struct
     get_prov_syms >>= fun prov_syms ->
     let metadata_list = Pmap.bindings_list metadata in
     let meta_asserts = SeqMem.metadata_assertions metadata_list in
-    let provenance_asserts = SeqMem.provenance_assertions prov_syms metadata_list in
+    let provenance_asserts = SeqMem.provenance_assertions prov_syms metadata in
     return (provenance_asserts @ meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
 end
 
@@ -3589,7 +3578,7 @@ module BmcConcActions = struct
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
 
-    alloc_meta_map  : (int, BmcZ3.allocation_metadata) Pmap.map;
+    alloc_meta_map  : (int, allocation_metadata) Pmap.map;
     prov_syms       : (Expr.expr * (Expr.expr * ctype)) list;
 
     bmc_actions    : (int, aid list) Pmap.map;
@@ -3664,14 +3653,14 @@ module BmcConcActions = struct
     | None -> failwith (sprintf "BmcConcActions: Uid %d not found in drop_cont_map" uid)
     | Some expr -> return expr
 
-  let get_meta (alloc_id: int) : BmcZ3.allocation_metadata eff =
+  let get_meta (alloc_id: int) : allocation_metadata eff =
     get >>= fun st ->
     match Pmap.lookup alloc_id st.alloc_meta_map with
     | None -> failwith (sprintf "BmcConcActions: alloc id %d not found in alloc_meta"
                                 alloc_id)
     | Some data -> return data
 
-  let get_meta_map : (int, BmcZ3.allocation_metadata) Pmap.map eff =
+  let get_meta_map : (int, allocation_metadata) Pmap.map eff =
     get >>= fun st ->
     return st.alloc_meta_map
 
@@ -3756,7 +3745,7 @@ module BmcConcActions = struct
                        | Core_ctype.Atomic0 _ -> mk_true
                        | _ -> mk_false) in
     get_meta alloc_id >>= fun metadata ->
-    let base_addr = BmcZ3.get_metadata_base metadata in
+    let base_addr = get_metadata_base metadata in
 
     mapMi_ (fun i (cype,sort) ->
       let index = List.fold_left
@@ -3928,7 +3917,7 @@ module BmcConcActions = struct
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
         get_meta alloc_id >>= fun metadata ->
-        let base_addr = BmcZ3.get_metadata_base metadata in
+        let base_addr = get_metadata_base metadata in
 
 
         let eq_expr =
@@ -4098,6 +4087,6 @@ module BmcConcActions = struct
     let metadata_list = Pmap.bindings_list metadata in
     let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
     let provenance_asserts =
-      List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata_list)prov_syms) in
+      List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata)prov_syms) in
     return (preexec, assertions @ mem_assertions @ meta_asserts @ provenance_asserts, memory_model)
 end
