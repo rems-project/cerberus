@@ -237,14 +237,14 @@ module BmcM = struct
                                 (Option.get st.drop_cont_map)
                                 (Option.get st.alloc_meta)
                                 (Option.get st.prov_syms) in
-    let ((preexec, assertions, memory_model), _) =
+    let ((preexec, assertions, memory_model_opt), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
 
     bmc_debug_print 7 "Done BmcConcActions phase";
     put { st with mem_bindings = Some assertions;
                   preexec      = Some preexec;
-                  memory_model = Some memory_model
+                  memory_model = memory_model_opt
         }
 
   (* ===== Getters/setters ===== *)
@@ -345,7 +345,8 @@ let bmc_file (file              : unit typed_file)
     end in
 
   let dots =
-    (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs then
+    (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
+        (is_some final_state.memory_model) then
       BmcMem.extract_executions g_solver
                                 (Option.get final_state.memory_model)
                                 (Option.get final_state.ret_expr)

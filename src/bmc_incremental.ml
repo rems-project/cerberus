@@ -1239,7 +1239,6 @@ module BmcZ3 = struct
          * roundabout way as in the above *)
         assert (is_integer_type ctype);
         return (int_to_z3 (alignof_type ctype));
-
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -4023,7 +4022,7 @@ module BmcConcActions = struct
 
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (preexec * Expr.expr list * BmcMem.z3_memory_model) eff =
+              : (preexec * Expr.expr list * BmcMem.z3_memory_model option) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->
 
@@ -4046,10 +4045,12 @@ module BmcConcActions = struct
     mk_preexec actions po >>= fun preexec ->
     (*print_endline (pp_preexec preexec);*)
     (* TODO *)
-    let memory_model = BmcMem.compute_executions preexec file in
-    let mem_assertions =
-      if (List.length actions > 0) then BmcMem.get_assertions memory_model
-      else [] in
+    let (mem_assertions, memory_model) =
+      if (List.length actions > 0) then
+         let model = BmcMem.compute_executions preexec file in
+         (BmcMem.get_assertions model, Some model)
+      else
+        ([], None) in
 
     get_meta_map >>= fun metadata ->
     get_prov_syms >>= fun prov_syms ->

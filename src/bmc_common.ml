@@ -118,54 +118,64 @@ let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type option)
                (uid   : int) =
-  match ctor with
-  | Ctuple ->
+  match ctor,exprs with
+  | Ctuple,exprs ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
       let mk_decl = Tuple.get_mk_decl sort in
       FuncDecl.apply mk_decl exprs
-  | Civmax ->
+  | Civmax,_ ->
       (* Handled as special case in bmc_pexpr *)
       assert false
-  | Civmin ->
+  | Civmin,_ ->
       (* Handled as special case in bmc_pexpr *)
       assert false
-  | Civsizeof ->
+  | Civsizeof,_ ->
       (* Handled as special case in bmc_pexpr *)
       assert false
-  | Civalignof ->
+  | Civalignof,_ ->
       (* Handled as special case in bmc_pexpr *)
       assert false
-  | Cspecified ->
-      assert (List.length exprs = 1);
+  | CivAND,[ctype;e1;e2] -> (* bitwise AND *)
+      assert false;
+      if (not g_bv) then failwith "CivAND is supported only with bitvectors";
+      assert (g_bv);
+      bmc_debug_print 7 "TODO: ctype ignored in CivAND";
+      BitVector.mk_and g_ctx e1 e2
+  | CivOR,[ctype;e1;e2] -> (* bitwise OR *)
+      assert false;
+      if (not g_bv) then failwith "CivOR is supported only with bitvectors";
+      assert (g_bv);
+      bmc_debug_print 7 "TODO: ctype ignored in CivOR";
+      BitVector.mk_or g_ctx e1 e2
+  | CivXOR,[ctype;e1;e2] -> (* bitwise XOR *)
+      assert false;
+      if (not g_bv) then failwith "CivXOR is supported only with bitvectors";
+      assert (g_bv);
+      bmc_debug_print 7 "TODO: ctype ignored in CivXOR";
+      BitVector.mk_xor g_ctx e1 e2
+  | Cspecified,[e] ->
       assert (is_some bTy);
       if (Option.get bTy = BTy_loaded OTy_integer) then
-        LoadedInteger.mk_specified (List.hd exprs)
+        LoadedInteger.mk_specified e
       else if (Option.get bTy = BTy_loaded OTy_pointer) then
-        LoadedPointer.mk_specified (List.hd exprs)
+        LoadedPointer.mk_specified e
       else if (Option.get bTy = BTy_loaded (OTy_array OTy_integer)) then
-        LoadedIntArray.mk_specified (List.hd exprs)
+        LoadedIntArray.mk_specified e
       else
         assert false
-  | Cunspecified ->
-      assert (List.length exprs = 1);
+  | Cunspecified, [e] ->
       assert (is_some bTy);
       if (Option.get bTy = BTy_loaded OTy_integer) then
-        LoadedInteger.mk_unspecified (List.hd exprs)
+        LoadedInteger.mk_unspecified e
       else if (Option.get bTy = BTy_loaded OTy_pointer) then
-        LoadedPointer.mk_unspecified (List.hd exprs)
+        LoadedPointer.mk_unspecified e
       else
         assert false
-  | Ccons ->
-      assert (List.length exprs = 2);
-      begin match exprs with
-      | [hd;tl] ->
-          CtypeListSort.mk_cons hd tl
-      | _ -> assert false
-      end
-  | Cnil BTy_ctype ->
-      assert (List.length exprs = 0);
+  | Ccons,[hd;tl] ->
+      CtypeListSort.mk_cons hd tl
+  | Cnil BTy_ctype, [] ->
       CtypeListSort.mk_nil
-  | Carray ->
+  | Carray,_ ->
       begin match Option.get bTy with
       | BTy_object (OTy_array OTy_integer) ->
           (* Just create a new array; need to bind values to Z3 though *)
