@@ -492,7 +492,8 @@ module BmcInline = struct
           end
     | Eccall _ ->
         assert false
-    | Eproc _ -> assert false
+    | Eproc _ ->
+        assert false
     | Eunseq es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Eunseq(inlined_es))
@@ -999,6 +1000,8 @@ module BmcSSA = struct
         ssa_e e >>= fun ssad_e ->
         return (gname, GlobalDef (bty, ssad_e))
       | GlobalDecl bty ->
+        add_to_sym_table gname gname >>
+        put_sym_expr gname bty >>
         return (gname, GlobalDecl bty)
 
     let ssa_param ((sym, cbt): (sym_ty * core_base_type)) =
@@ -1634,9 +1637,10 @@ module BmcZ3 = struct
       match glb with
       | GlobalDef (bty, e) ->
         z3_e e >>= fun z3d_e ->
-        return (gname, bty, z3d_e)
-      | GlobalDecl _ ->
-        assert false
+(*        return (gname, bty, z3d_e)*)
+        return ()
+      | GlobalDecl ty ->
+        return ()
 
     let z3_param ((sym, cbt): (sym_ty * core_base_type))
                  (ctype: ctype)
@@ -1663,7 +1667,7 @@ module BmcZ3 = struct
 
     let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
                 : (unit typed_file) eff =
-      mapM z3_globs file.globs >>= fun _ ->
+      mapM z3_globs file.globs >>
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, bTy, params, e)) ->
           z3_params params fn_to_check >>= fun param_actions ->
@@ -1791,12 +1795,14 @@ module BmcDropCont = struct
   let drop_cont_globs(gname, glb) =
     match glb with
     | GlobalDef(_, e) ->
-        drop_cont_e e
-    | _ -> assert false
+        drop_cont_e e >>= fun _ ->
+        return ()
+    | GlobalDecl _ ->
+        return ()
 
   let drop_cont_file (file: unit typed_file) (fn_to_check: sym_ty)
                      : Expr.expr eff =
-    mapM drop_cont_globs file.globs >>= fun _ ->
+    mapM drop_cont_globs file.globs >>
     (match Pmap.lookup fn_to_check file.funs with
     | Some (Proc(annot, bTy, params, e)) ->
         drop_cont_e e
@@ -2210,8 +2216,8 @@ module BmcBind = struct
           get_expr (get_id_expr e) >>= fun z3d_e ->
           mk_let_binding (Some gname) z3d_e >>= fun let_binding ->
           return (let_binding :: bound_e)
-      | _ ->
-          assert false
+      | GlobalDecl _ ->
+          return []
 
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
                   : (Expr.expr list) eff =
@@ -2565,7 +2571,7 @@ module BmcVC = struct
     let vcs_globs(_, glb) : (vc list) eff =
       match glb with
       | GlobalDef(_, e) -> vcs_e e
-      | _ -> assert false
+      | GlobalDecl _ -> return []
 
     let vcs_file (file: unit typed_file) (fn_to_check: sym_ty)
                   : (vc list) eff =
@@ -3472,7 +3478,7 @@ module BmcSeqMem = struct
   let do_globs (gname, glb) =
     match glb with
     | GlobalDef(bty, e) -> do_e e
-    | _ -> assert false
+    | GlobalDecl _ -> return empty_ret
 
   (* Initialize value of argument to something specified in valid range *)
   let initialise_param ((sym,cbt): (sym_ty * core_base_type))
@@ -3871,7 +3877,7 @@ module BmcConcActions = struct
   let do_actions_globs(gname, glb) =
     match glb with
     | GlobalDef(_, e) -> do_actions_e e
-    | _ -> assert false
+    | GlobalDecl _ -> return []
 
   let do_actions_param ((sym,cbt): (sym_ty * core_base_type))
                        (action_opt : BmcZ3.intermediate_action option)
@@ -3985,7 +3991,7 @@ module BmcConcActions = struct
   let do_po_globs(gname, glb) =
     match glb with
     | GlobalDef(_, e) -> do_po_e e
-    | _ -> assert false
+    | GlobalDecl _ -> return []
 
   let mk_preexec (actions: bmc_action list)
                  (prod: aid_rel list)
