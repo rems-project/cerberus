@@ -32,7 +32,7 @@ let g_memory_mode = MemoryMode_C
 
 type bmc_conf = {
   max_run_depth     : int;
-  max_pe_call_depth : int;
+  max_core_call_depth : int;
   sequentialise   : bool;
   concurrent_mode : bool;
 
@@ -52,7 +52,7 @@ let set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug bmc_all_execs
         bmc_output_model =
   bmc_conf := fun () ->
   { max_run_depth   = bmc_max_depth;
-    max_pe_call_depth = if bmc_max_depth > 5 then bmc_max_depth else 5;
+    max_core_call_depth = if bmc_max_depth > 10 then bmc_max_depth else 10;
     sequentialise   = bmc_seq;
     concurrent_mode = bmc_conc;
     fn_to_check     = bmc_fn;
