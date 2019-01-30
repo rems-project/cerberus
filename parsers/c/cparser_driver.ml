@@ -8,9 +8,6 @@ let parse lexbuf =
   | Parser.Error ->
     let loc = Location_ocaml.region (Lexing.lexeme_start_p lexbuf, Lexing.lexeme_end_p lexbuf) None in
     Exception.fail (loc, Errors.CPARSER (Errors.Cparser_unexpected_token (Lexing.lexeme lexbuf)))
-  | Failure "lexing: empty token" ->
-    (* NOTE: this is thrown by any error using Lexing.from_string *)
-    exit 127
   | Failure msg ->
     prerr_endline "CPARSER_DRIVER (Failure)";
     failwith msg

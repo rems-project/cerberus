@@ -149,7 +149,7 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
 (* Create configuration for every instance model *)
 let create_conf w =
   let cpp_cmd () =
-    "cc -E -C -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
+    "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
     ^ w.cerb_path ^ "/libc/include -I "
     ^ w.cerb_path ^ "/libc/include/posix"
   in
@@ -293,7 +293,8 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
             ("loc", json_of_loc (n.c_loc, n.core_uid));
             ("arena", `String n.arena);
             ("env", `String n.env);
-            ("outp", `String n.outp);
+            ("stdout", `String n.stdout);
+            ("stderr", `String n.stderr);
             ("state",
              match n.next_state with
              | Some state -> `String (B64.encode state)
@@ -580,9 +581,10 @@ let cerberus ~rheader ~conf ~flow content =
   in
   Debug.print 9 ("Time: " ^ now ());
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);
-  do_action msg.action >|= json_of_result >>=
+  do_action msg.action >|= json_of_result >>= fun json ->
   let time = Some ((Sys.time () -. start_time) *. 1000.) in
-  respond_json ~time ~rheader
+  Sys.remove filename;
+  respond_json ~time ~rheader json
 
 (* GET and POST *)
 

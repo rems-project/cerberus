@@ -13,6 +13,7 @@ type configuration = {
   rewrite_core: bool;
   sequentialise_core: bool;
   cpp_cmd: string;
+  cpp_stderr: bool;
 }
 
 type io_helpers = {

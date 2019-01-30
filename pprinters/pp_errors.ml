@@ -399,6 +399,8 @@ let string_of_driver_cause = function
       String.concat "\n" @@ List.map (fun ub -> (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
 
 let short_message = function
+  | CPP err ->
+      err
   | CPARSER ccause ->
       string_of_cparser_cause ccause
   | DESUGAR dcause ->
@@ -514,7 +516,9 @@ let make_message loc err k =
       Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
 
 let to_string (loc, err) =
-  make_message loc err Error
+  match err with
+  | CPP err -> err (* NOTE: the err string is already formatted by CPP *)
+  | _ -> make_message loc err Error
 
 let fatal msg =
   prerr_endline (ansi_format [Bold; Red] "error: " ^ ansi_format [Bold] msg);

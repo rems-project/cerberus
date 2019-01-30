@@ -68,6 +68,7 @@ type driver_cause =
   | Driver_UB of list Undefined.undefined_behaviour
 
 type cause =
+  | CPP of string (* NOTE: this is an empty string when piping to stderr *)
   | CPARSER of cparser_cause
   | DESUGAR of desugar_cause
   | AIL_TYPING of TypingError.typing_error

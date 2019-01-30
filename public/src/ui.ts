@@ -125,6 +125,8 @@ export class CerberusUI {
     $('#open-memory-table').on('click', () => this.getView().newTab('SimpleMemory'))
     $('#open-interactive').on('click', () => this.getView().newTab('Interactive'))
     $('#open-arena').on('click', () => this.getView().newTab('Arena'))
+    $('#open-stdout').on('click', () => this.getView().newTab('Stdout'))
+    $('#open-stderr').on('click', () => this.getView().newTab('Stderr'))
 
     // Pretty print elab IRs
     $('#cabs').on('click', () => this.elab ('Cabs'))
