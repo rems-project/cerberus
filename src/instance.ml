@@ -2,6 +2,13 @@ open Util
 open Instance_api
 open Pipeline
 
+let time label f =
+  let t = Unix.gettimeofday () in
+  let res = f () in
+  Printf.fprintf stderr "%s: Execution time: %f seconds\n" label
+                (Unix.gettimeofday () -. t);
+  res
+
 type conf =
   { pipeline: configuration;
     io: io_helpers;
@@ -45,15 +52,14 @@ let to_smt2_mode = function
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ~conf mode =
   let open Global_ocaml in
-  cerb_conf := fun () ->
+  let conf =
    {  exec_mode_opt=    Some (to_smt2_mode mode);
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
       defacto=          false;
-      n1570=            if true (* TODO: put a switch in the web *) (* error_verbosity = QuoteStd *) then
-                          Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
-                        else None;
+      n1570=            Some conf.instance.n1570;
     }
+  in cerb_conf := fun () -> conf
 
 let respond filename name f = function
   | Exception.Result r ->
@@ -159,7 +165,7 @@ let execute ~conf ~filename (mode: exec_mode) =
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
     let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
-    interp_backend dummy_io (Core_run_aux.convert_file core) ~args:[] ~batch:`Batch ~fs:None ~driver_conf
+    interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->
       return (String.concat "\n" res)
@@ -169,6 +175,95 @@ let execute ~conf ~filename (mode: exec_mode) =
   | e ->
     Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
     raise e
+
+let set_uid file =
+  let fresh =
+    let n = ref 0 in
+    fun () -> incr n; string_of_int !n
+  in
+  let open Core in
+  let rec set_pe (Pexpr (annots, bty, pe_)) =
+    let pe_' = match pe_ with
+      | PEsym s -> PEsym s
+      | PEimpl impl -> PEimpl impl
+      | PEval v -> PEval v
+      | PEconstrained cs ->
+        PEconstrained (List.mapi (fun i (m, pe) -> (m, set_pe pe)) cs)
+      | PEundef (loc, undef) -> PEundef (loc, undef)
+      | PEerror (err, pe) -> PEerror (err, set_pe pe)
+      | PEctor (ctor, pes) -> PEctor (ctor, List.map set_pe pes)
+      | PEcase (pe, cases) -> PEcase (set_pe pe,
+                                      List.mapi (fun i (pat, pe) -> (pat, set_pe pe)) cases)
+      | PEarray_shift (pe, cty, pes) -> PEarray_shift (set_pe pe, cty, set_pe pes)
+      | PEmember_shift (pe, sym, cid) -> PEmember_shift (set_pe pe, sym, cid)
+      | PEnot pe -> PEnot (set_pe pe)
+      | PEop (bop, pe1, pe2) -> PEop (bop, set_pe pe1, set_pe pe2)
+      | PEstruct (sym, fields) ->
+          PEstruct (sym, List.mapi (fun i (cid, pe) -> (cid, set_pe pe)) fields)
+      | PEunion (sym, cid, pe) -> PEunion (sym, cid, set_pe pe)
+      | PEcfunction pe -> PEcfunction (set_pe pe)
+      | PEmemberof (tag_sym, memb_ident, pe) -> PEmemberof (tag_sym, memb_ident, set_pe pe)
+      | PEcall (name, pes) -> PEcall (name, List.map set_pe pes)
+      | PElet (pat, pe1, pe2) -> PElet (pat, set_pe pe1, set_pe pe2)
+      | PEif (pe1, pe2, pe3) -> PEif (set_pe pe1, set_pe pe2, set_pe pe3)
+      | PEis_scalar pe -> PEis_scalar (set_pe pe)
+      | PEis_integer pe -> PEis_integer (set_pe pe)
+      | PEis_signed pe -> PEis_signed (set_pe pe)
+      | PEis_unsigned pe -> PEis_unsigned (set_pe pe)
+      | PEbmc_assume pe -> PEbmc_assume (set_pe pe)
+      | PEare_compatible (pe1, pe2) -> PEare_compatible (set_pe pe1, set_pe pe2)
+    in Pexpr (Annot.Auid (fresh ()) :: annots, bty, pe_')
+  in
+  let rec set_e (Expr (annots, e_)) =
+    let e_' = match e_ with
+      | Epure pe -> Epure (set_pe pe)
+      | Ememop (memop, pes) -> Ememop (memop, List.map set_pe pes)
+      | Eaction pact -> Eaction pact
+      | Ecase (pe, cases) ->
+        Ecase (set_pe pe, List.mapi (fun i (pat, e) -> (pat, set_e e)) cases)
+      | Elet (pat, pe, e) -> Elet (pat, set_pe pe, set_e e)
+      | Eif (pe, e1, e2) -> Eif (set_pe pe, set_e e1, set_e e2)
+      | Eskip -> Eskip
+      | Eccall (x, pe1, pe2, args) -> Eccall (x, set_pe pe1, set_pe pe2, List.map set_pe args)
+      | Eproc (x, name, args) -> Eproc (x, name, List.map set_pe args)
+      | Eunseq es -> Eunseq (List.map set_e es)
+      | Ewseq (pat, e1, e2) -> Ewseq (pat, set_e e1, set_e e2)
+      | Esseq (pat, e1, e2) -> Esseq (pat, set_e e1, set_e e2)
+      | Easeq (bty, act, pact) -> Easeq (bty, act, pact)
+      | Eindet (n, e) -> Eindet (n, set_e e)
+      | Ebound (n, e) -> Ebound (n, set_e e)
+      | End es -> End (List.map set_e es)
+      | Esave (lab_bty, args, e) ->
+        Esave (lab_bty,
+               List.mapi (fun i (s, (bty, pe)) -> (s, (bty, set_pe pe))) args,
+               set_e e)
+      | Erun (x, lab, pes) -> Erun (x, lab, List.map set_pe pes)
+      | Epar es -> Epar (List.map set_e es)
+      | Ewait thid -> Ewait thid
+    in Expr (Annot.Auid (fresh ()) :: annots, e_')
+  in
+  let set_fun fname = function
+    | Proc (loc, bty, args, e) ->
+      Proc (loc, bty, args, set_e e)
+    | f -> f
+  in
+  let set_globs (gname, glb) =
+    (gname, match glb with
+      | GlobalDef (bty, e) ->
+        GlobalDef (bty, set_e e)
+      | GlobalDecl bty ->
+        GlobalDecl bty
+    )
+  in
+  { main=    file.main;
+    tagDefs= file.tagDefs;
+    stdlib=  file.stdlib;
+    impl=    file.impl;
+    globs=   List.map set_globs file.globs;
+    funs=    Pmap.mapi set_fun file.funs;
+    extern=  file.extern;
+    funinfo= file.funinfo;
+  }
 
 (* WARN: fresh new ids *)
 let last_node_id : int ref = ref 0
@@ -215,7 +310,7 @@ let create_node dr_info st next_state =
   let (c_loc, core_uid, arena, env, outp) = get_state_details st in
   { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; outp }
 
-let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result, Driver.driver_info, Driver.driver_error, _, _) Nondeterminism.ndM), st) =
+let rec multiple_steps step_state ((Nondeterminism.ND m), st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
   let create_branch dr_info st (ns, es, previousNode) =
@@ -335,11 +430,24 @@ let rec multiple_steps step_state (((Nondeterminism.ND m): (Driver.driver_result
         (None, create_leafs st' ms step_state)
       | (NDstep (_, ms), st') ->
         (None, create_leafs st' ms step_state)
-    in begin match m st with
+    in
+    begin match m st with
       | (NDstep (_, [(lab, m')]), st') ->
-        let step_state' = create_branch lab st' step_state in
-        multiple_steps step_state' (m', st')
-      | act -> one_step act
+        begin match st.Driver.core_state.Core_run.thread_states with
+          | (_, (_, ts))::_ ->
+            let Core.Expr (arena_annots, _) = ts.arena in
+            begin match Annot.get_uid arena_annots with
+              | None ->
+                time "mult none" (fun () -> multiple_steps step_state (m', st'))
+              | Some _ ->
+                let step_state' = time "branch" (fun () -> create_branch lab st' step_state) in
+                multiple_steps step_state' (m', st')
+            end
+          | _ ->
+            let step_state' = time "branch _ " (fun () -> create_branch lab st' step_state) in
+            time "mult _" (fun () -> multiple_steps step_state' (m', st'))
+        end
+      | act -> time "act" (fun () -> one_step act)
     end
   with
   | e -> Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
@@ -363,7 +471,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
   | None -> (* no active node *)
     hack ~conf Random;
     elaborate ~conf ~filename >>= fun (core_std, core_lib, _, _, core) ->
-    let core     = Core_aux.set_uid core in
+    let core     = set_uid core in
     let ranges   = create_expr_range_list core in
     begin if conf.instance.link_libc then
       let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/libc/libc.co" in

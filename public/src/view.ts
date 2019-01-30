@@ -185,7 +185,7 @@ export default class View {
           sequentialise: true
         },
         exec_options: {
-          libc: false
+          libc: true
         },
         switches: ['no_integer_provenance']
       },

@@ -35,6 +35,7 @@ module EffMonad (M: State) = struct
   let mapMi f ms = sequence (List.mapi f ms)
   let mapM2 f ms1 ms2  = sequence (List.map2 f ms1 ms2)
   let mapM_ f ms = sequence_ (List.map f ms)
+  let mapMi_ f ms = sequence_ (List.mapi f ms)
   let mapM2_ f ms1 ms2 = sequence_ (List.map2 f ms1 ms2)
 
   let get : state eff =
