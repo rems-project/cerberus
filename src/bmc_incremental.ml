@@ -13,6 +13,7 @@ open Ocaml_mem
 open Printf
 open Util
 open Z3
+open Z3.Arithmetic
 
 module Caux = Core_aux
 
@@ -1599,8 +1600,23 @@ module BmcZ3 = struct
                )
     | Ememop (Memcmp, [p;q;size]) ->
         assert false
-    | Ememop _ ->
-        assert false
+    | Ememop (PtrWellAligned,[ctype_pe;ptr]) ->
+        assert g_pnvi;
+        (* address of ptr % align of ctype is 0 *)
+        (* TODO: what if NULL? *)
+        let ctype = (match ctype_pe with
+          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
+          | _ -> assert false
+          ) in
+        z3_pe ctype_pe >>= fun _ ->
+        z3_pe ptr      >>= fun z3d_ptr ->
+        let addr_of_ptr =
+          AddressSort.get_index (PointerSort.get_addr z3d_ptr) in
+        let alignment = int_to_z3 (alignof_type ctype) in
+        return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
+                      (int_to_z3 0)
+               )
+    | Ememop _ -> assert false
     | Eaction action ->
         z3_action action uid
     | Ecase (pe, cases) ->
@@ -2165,7 +2181,8 @@ module BmcBind = struct
     | Ememop(PtrGe, args)            (* fall through *)
     | Ememop(Ptrdiff, args)          (* fall through *)
     | Ememop(IntFromPtr, args)       (* fall through *)
-    | Ememop(PtrFromInt, args)       (* fall through *) ->
+    | Ememop(PtrFromInt, args)       (* fall through *)
+    | Ememop(PtrWellAligned, args)       (* fall through *) ->
         mapM bind_pe args >>= fun bound_args ->
         return (List.concat bound_args)
     | Ememop _ ->
@@ -2551,7 +2568,7 @@ module BmcVC = struct
         mapM vcs_pe pes >>= fun vcss_pes ->
         begin match memop with
         | PtrValidForDeref | PtrEq | PtrNe | PtrLt | PtrGt | PtrLe | PtrGe
-        | PtrFromInt -> return (List.concat vcss_pes)
+        | PtrFromInt | PtrWellAligned -> return (List.concat vcss_pes)
         | _ -> assert false (* Unimplemented *)
         end
     | Eaction paction ->

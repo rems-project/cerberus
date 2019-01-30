@@ -344,7 +344,7 @@ let bmc_file (file              : unit typed_file)
                           (Solver.get_reason_unknown g_solver))
     end in
 
-  let dots =
+  let (exec_output_str, dots) =
     (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
         (is_some final_state.memory_model) then
       BmcMem.extract_executions g_solver
@@ -352,7 +352,7 @@ let bmc_file (file              : unit typed_file)
                                 (Option.get final_state.ret_expr)
                                 (final_state.alloc_meta)
   else
-    []) in
+    ("",[])) in
 
   let vcs = List.map fst (Option.get final_state.vcs) in
   Solver.assert_and_track
@@ -379,15 +379,23 @@ let bmc_file (file              : unit typed_file)
         print_endline str_model;
         (* TODO: print this out independently of --bmc_output_model*)
         end;
-    let output = sprintf "UB found:\n%s\n\nModel:\n%s" vc_str str_model in
+    let output = sprintf "UB found:\n%s\n\n%s\n\nModel:\n%s" vc_str exec_output_str str_model in
+
     `Satisfiable (output, dots)
     end
   | UNSATISFIABLE ->
       print_endline "OUTPUT: unsatisfiable! No errors found. :)";
       assert (is_some ret_value);
       (* TODO: there could be multiple return values ... *)
-      let str_ret_value = Expr.to_string (Option.get ret_value) in
-      printf "Possible return value: %s\n" str_ret_value;
+      let str_ret_value =
+        if (List.length dots > 0) then
+          exec_output_str
+        else
+          (let ret = sprintf "Possible return value: %s\n" (Expr.to_string (Option.get ret_value)) in
+           print_endline ret; ret) in
+
+      (*let str_ret_value = Expr.to_string (Option.get ret_value) in
+      printf "Possible return value: %s\n" str_ret_value;*)
       `Unsatisfiable (str_ret_value, dots)
   | UNKNOWN ->
       let str_error = Solver.get_reason_unknown g_solver in
