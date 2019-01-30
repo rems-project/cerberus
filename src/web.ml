@@ -276,11 +276,23 @@ let parse_incoming_msg content =
 (* Outgoing messages *)
 
 let json_of_exec_tree ((ns, es) : exec_tree) =
-  let json_of_info i =
-    `Assoc [("kind", `String i.step_kind);
-            ("debug", `String i.step_debug);
-            ("file", Json.of_opt_string i.step_file);
-            ("error_loc", Json.of_option Location_ocaml.to_json i.step_error_loc);]
+  let json_of_info = function
+      | `Init ->
+        `Assoc [("kind", `String "init")]
+      | `Done res ->
+        `Assoc [("kind", `String "done");
+                ("result", `String res)]
+      | `Error (loc_opt, reason) ->
+        `Assoc [("kind", `String "error");
+                ("reason", `String reason);
+                ("loc", Json.of_option Location_ocaml.to_json loc_opt)]
+      | `Branch ->
+        `Assoc [("kind", `String "branch")]
+      | `Step args ->
+        `Assoc [("kind", `String "step");
+                ("step_kind", args)]
+      | `Unsat ->
+        `Assoc [("kind", `String "unsat")]
   in
   let json_of_node n =
     let json_of_loc (loc, uid) =

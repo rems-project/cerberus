@@ -2,17 +2,49 @@ import { find, flatten, union, uniq } from 'lodash'
 import { Locations, Range } from './location'
 import * as Memory from './memory'
 
-export type NodeKind =
-    'tau'
+export type StepKind =
+  | { kind: "action request", debug: string }
+  | { kind: "memop request" }
+  | { kind: "tau", debug: string }
+  | { kind: "eval", debug: string }
+  | { kind: "done" }
+  | { kind: "misc", debug: string [] }
+
+export type NodeInfo =
+  | { kind: "init" }
+  | { kind: "done", result: string }
+  | { kind: "error", loc?: Range, reason: string }
+  | { kind: "branch" }
+  | { kind: "step", step_kind: StepKind }
+  | { kind: "unsat" }
+  /*
+  // Stop steps
   | 'action request'
+  | 'memop request'
+  // Finish steps
   | 'done'
+  | 'thread_done'
+  // Skip steps
+  | 'tau'
+  | 'eval'
+  | 'memory'
+  | 'concurrency'
+  | 'drive_core_thread'
+  | 'constrained'
+  | 'driver'
+  | 'blocked'
+  | 'spawn_threads'
+  | 'fs_step'
+  | 'bound'
 
 export interface NodeInfo {
-  kind: NodeKind // Next step kind
+  kind: DriverStepKind // Next step kind
   debug: string
-  file?: string
+  //file?: string
   error_loc?: Range
 }
+*/
+
 
 export interface Node {
   id: number
