@@ -393,6 +393,7 @@ let mplus m1 m2 =
   error "ND2.mplus"
 
 (* GENERIC MonadPlus *)
+(*
 val msum: forall 'a 'err 'cs 'st. Constraints 'cs => string -> list (string * ndM 'a 'err 'cs 'st) -> ndM 'a 'err 'cs 'st 
 let msum debug_str = function
   | [] ->
@@ -407,6 +408,7 @@ let msum debug_str = function
       NDnd debug_str st (List.map (fun (str, ND m) -> (str, m st)) str_ms)
     )
 end
+*)
 (*
 let msum debug_str = function
   | [] ->
