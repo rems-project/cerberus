@@ -14,6 +14,11 @@ let is_integer_type (ctype: Core_ctype.ctype0) =
   | Basic0 (Integer _) -> true
   | _ -> false
 
+let is_pointer_type (ctype: Core_ctype.ctype0) =
+  match ctype with
+  | Pointer0 (_,Basic0 (Integer _)) -> true
+  | _ -> false
+
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
@@ -68,7 +73,10 @@ let value_to_z3 (value: value) : Expr.expr =
       match ctype with
       | Basic0 (Integer _) ->
           LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype)
-      | _ -> assert false
+      | Pointer0 (_, Basic0 (Integer _)) ->
+          LoadedPointer.mk_unspecified (CtypeSort.mk_expr ctype)
+      | _ ->
+          assert false
       end
 
 let cot_to_z3 (cot: core_object_type) : Sort.sort =
@@ -94,6 +102,8 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_object obj_type     -> cot_to_z3 obj_type
   | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
+  | BTy_loaded (OTy_array OTy_integer) ->
+      LoadedIntArray.mk_sort
   | BTy_loaded _            -> assert false
   | BTy_storable            -> assert false
 
@@ -104,9 +114,10 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
     (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
   Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
 
-let rec ctor_to_z3 (ctor  : typed_ctor)
-                   (exprs : Expr.expr list)
-                   (bTy   : core_base_type option) =
+let ctor_to_z3 (ctor  : typed_ctor)
+               (exprs : Expr.expr list)
+               (bTy   : core_base_type option)
+               (uid   : int) =
   match ctor with
   | Ctuple ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
@@ -128,6 +139,8 @@ let rec ctor_to_z3 (ctor  : typed_ctor)
         LoadedInteger.mk_specified (List.hd exprs)
       else if (Option.get bTy = BTy_loaded OTy_pointer) then
         LoadedPointer.mk_specified (List.hd exprs)
+      else if (Option.get bTy = BTy_loaded (OTy_array OTy_integer)) then
+        LoadedIntArray.mk_specified (List.hd exprs)
       else
         assert false
   | Cunspecified ->
@@ -149,6 +162,13 @@ let rec ctor_to_z3 (ctor  : typed_ctor)
   | Cnil BTy_ctype ->
       assert (List.length exprs = 0);
       CtypeListSort.mk_nil
+  | Carray ->
+      begin match Option.get bTy with
+      | BTy_object (OTy_array OTy_integer) ->
+          (* Just create a new array; need to bind values to Z3 though *)
+          IntArray.mk_const_s (sprintf "array_%d" uid)
+      | _ -> assert false
+      end
   | _ ->
       assert false
 
@@ -235,6 +255,28 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Union v ->  Union0 v
   | Builtin v -> Builtin0 v
 
+let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+                         : Sort.sort =
+   match ty with
+  | Void0     -> assert false
+  | Basic0(Integer i) -> LoadedInteger.mk_sort
+  | Basic0 _ -> assert false
+  | Array0(Basic0 (Integer i), Some n) ->
+      LoadedIntArray.mk_sort
+  | Array0(_, _) ->
+      assert false
+  | Function0 _ -> assert false
+  | Pointer0 _ -> LoadedPointer.mk_sort
+  | Atomic0 (Basic0 _ as _ty) (* fall through *)
+  | Atomic0 (Pointer0 _ as _ty) ->
+      ctype_to_z3_sort _ty
+  | Atomic0 _ ->
+      assert false
+  | Struct0 _ ->
+      assert false
+  | Union0 _
+  | Builtin0 _ -> assert false
+
 let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                            (file: unit typed_file)
                            : bmcz3sort =
@@ -270,6 +312,9 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
   | Union0 _
   | Builtin0 _ -> assert false
 
+let size_of_ctype (ty: Core_ctype.ctype0)
+                  (file: unit typed_file) =
+  bmcz3sort_size (ctype_to_bmcz3sort ty file)
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
@@ -277,6 +322,7 @@ module ImplFunctions = struct
   open Z3.FuncDecl
   (* ---- Implementation ---- *)
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
+  let sizeof_ptr = Ocaml_implementation.Impl.sizeof_pointer
 
   (* TODO: precision of Bool is currently 8... *)
   let impl : Implementation.implementation = {
@@ -287,6 +333,7 @@ module ImplFunctions = struct
                    | Signed _   -> true
                    | Unsigned _ -> false
                    | Size_t     -> false
+                   | Ptrdiff_t  -> true
                    | _          -> assert false);
     impl_precision   = (fun i -> match sizeof_ity i with
                    | Some x -> x * 8
@@ -314,13 +361,13 @@ module ImplFunctions = struct
      Nat_big_num.of_int 0,
      Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
                      (Nat_big_num.of_int 1)
-  let ibt_list = [Ichar; Short; Int_; Long; LongLong]
+  let ibt_list = [Ichar; Short; Int_; Long; LongLong; Intptr_t]
   let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list
   let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list
 
   let ity_list = signed_ibt_list
                @ unsigned_ibt_list
-               @ [Char; Bool; Size_t]
+               @ [Char; Bool; Size_t; Ptrdiff_t]
 
   let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
     Core_ctype.Basic0 (Integer ity)
@@ -385,6 +432,9 @@ module ImplFunctions = struct
       match ctype with
       | Basic0 (Integer ity) ->
           mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
+      (*| Pointer0 _ ->
+          (* TODO: Check this *)
+          mk_eq const (int_to_z3 (Option.get (sizeof_pointer)) *)
       | _ -> assert false
     in
     List.map (fun ity -> sizeof_assert (ity_to_ctype ity))
