@@ -205,7 +205,10 @@ export class BMC extends SvgGraph {
     this.setSVG(state.bmc_executions[0])
     this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
     this.prev.addClass('disabled')
-    this.next.removeClass('disabled')
+    if (state.bmc_executions.length > 1)
+      this.next.removeClass('disabled')
+    else
+      this.next.addClass('disabled')
     // Check if needs to span down
     const svgHeight = this.svg.height()
     const containerHeight = this.container.height()
@@ -644,7 +647,7 @@ export class Execution extends ReadOnly {
 }
 */
 
-class Console extends ReadOnly {
+class Stdout extends ReadOnly {
   constructor (ee: EventEmitter) {
     super('Console', '', ee)
     this.editor.setOption('lineWrapping', false)
@@ -652,18 +655,36 @@ class Console extends ReadOnly {
     ee.on('update', this, this.update)
     ee.on('updateExecution', this, this.update) // in case of failures
   }
+  update (s: State) : void {
+    if (s.interactive && s.interactive.current)
+      this.setValue(s.interactive.current.stdout)
+  }
+}
 
-  /*
-  update(s:State) {
-    //const vs = s.console.split(':')
-    if (vs.length > 2) { // TODO: should put this change in the server
-      this.ee.emit('markError', parseInt(vs[1]))
-      this.setValue(s.title() + ':' + _.join(_.drop(vs, 1), ':'))
-    } else {
-      this.setValue(s.console)
-    //}
-}*/
+class Stderr extends ReadOnly {
+  constructor (ee: EventEmitter) {
+    super('Console', '', ee)
+    this.editor.setOption('lineWrapping', false)
+    this.editor.setOption('mode', 'text')
+    ee.on('update', this, this.update)
+    ee.on('updateExecution', this, this.update) // in case of failures
+  }
+  update (s: State) : void {
+    if (s.interactive && s.interactive.current)
+      this.setValue(s.interactive.current.stderr)
+  }
+}
 
+
+
+class Console extends ReadOnly {
+  constructor (ee: EventEmitter) {
+    super('Console', '', ee)
+    this.editor.setOption('lineWrapping', false)
+    this.editor.setOption('mode', 'text')
+    ee.on('update', this, this.update)
+    ee.on('updateExecution', this, this.update)
+  }
   update (s: State) : void {
     /*
     if (s.result == '') {
@@ -703,6 +724,8 @@ class Console extends ReadOnly {
       this.setValue(s.console)
   }
 }
+
+
 
 /*  C source */
 export class Source extends Editor {
@@ -1139,7 +1162,7 @@ class Asm extends ReadOnly {
 /* Concrete Tabs Factory */
 const Tabs: any = {
   Source, Cabs, Ail, Core, Ail_AST, BMC,
-  Console, Arena, Asm,
+  Console, Stdout, Stderr, Arena, Asm,
   Interactive, Memory, SimpleMemory,
   Experimental, Implementation, Library, Help
 }

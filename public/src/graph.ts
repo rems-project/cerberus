@@ -27,6 +27,7 @@ export interface Node {
   selected: boolean
   can_step: boolean
   stdout: string
+  stderr: string
 }
 
 export interface Edge {

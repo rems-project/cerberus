@@ -47,6 +47,7 @@ export default class View {
         this.emit('updateArena')
         this.emit('updateMemory')
         this.emit('updateExecutionGraph')
+        this.emit('updateUI')
         this.dirty = true
       }
     })
@@ -111,6 +112,8 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
+              component('Stdout'),
+              component('Stderr'),
               component('Memory')
             ]}
           ]}, {
@@ -502,6 +505,8 @@ export default class View {
           // TODO: I NEED TO CHANGE THIS, THIS IS SAD!!
           if (_.includes(active.info.kind, 'killed') || _.includes(active.info.kind, 'Error') || _.includes(active.info.kind, 'Undefined'))
             return children
+          if (_.startsWith(active.info.kind, 'Specified('))
+            return children
           // a bit of a hack here
           if (_.startsWith(active.arena, 'pure(undef(<<UB'))
             return children
@@ -533,7 +538,7 @@ export default class View {
             children = this.executeInteractiveMode(active.id, lastCline)
           break
       }
-    }
+    } 
     return children
   }
 
@@ -794,8 +799,10 @@ export default class View {
       case 'bmc':
         this.state.console = res.result
         this.state.bmc_executions = res.executions
-        if (res.executions && res.executions.length > 0)
-          this.newTab('BMC')
+        if (res.executions && res.executions.length > 0) {
+          let bmc = this.getTab('BMC')
+          if (bmc) bmc.setActive()
+        }
         this.emit('updateBMC')
         break;
       case 'failure':

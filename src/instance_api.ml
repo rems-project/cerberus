@@ -58,7 +58,8 @@ type node =
     arena: string;
     env: string; (* maybe an associate list ? *)
     next_state: string option; (* marshalled state *)
-    outp: string; (* stdout output *)
+    stdout: string;
+    stderr: string;
   }
 
 type edge =
