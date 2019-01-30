@@ -572,6 +572,7 @@ end
 module PointerSort = PointerSortPNVI
 module AddressSort = PointerSort.AddrModule
 
+
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
 module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
@@ -634,6 +635,87 @@ module LoadedInteger =
 
 module LoadedPointer =
   LoadedSort (struct let obj_sort = PointerSort.mk_sort end)
+
+module LoadedByte = LoadedInteger
+
+module OptionSort (M : sig val obj_sort : Sort.sort end) = struct
+  open Z3.Datatype
+  let mk_sort =
+    let obj_name = Sort.to_string M.obj_sort in
+    mk_sort_s g_ctx ("Option_" ^ obj_name)
+              [ mk_constructor_s g_ctx
+                                 ("some_" ^ obj_name)
+                                 (mk_sym ("is_specified_" ^ obj_name))
+                                 [mk_sym ("get_" ^ obj_name)]
+                                 [Some M.obj_sort] [0]
+              ; mk_ctor ("none_" ^ obj_name)
+              ]
+
+  let mk_some (expr: Expr.expr) =
+    let ctors = get_constructors mk_sort in
+    let some_ctor = List.nth ctors 0 in
+    Expr.mk_app g_ctx some_ctor [expr]
+
+  let mk_none =
+    let ctors = get_constructors mk_sort in
+    let none_ctor = List.nth ctors 1 in
+    Expr.mk_app g_ctx none_ctor []
+end
+
+module IntOption = OptionSort (struct let obj_sort = integer_sort end)
+
+module PNVIByte = struct
+  (* Triples of (provenance, value, byte index *)
+  open Z3.Datatype
+  let mk_sort =
+    mk_sort_s g_ctx ("Byte")
+      [mk_constructor_s g_ctx "byte"
+        (mk_sym "_byte")
+        [mk_sym "_prov"; mk_sym "_val"; mk_sym "_index"]
+        [Some integer_sort; Some LoadedByte.mk_sort; Some IntOption.mk_sort]
+        [0;0;0]
+      ]
+
+  let mk_byte (prov: Expr.expr) (value: Expr.expr) (index_opt: Expr.expr) =
+    let ctor = List.hd (get_constructors mk_sort) in
+    Expr.mk_app g_ctx ctor [prov;value;index_opt]
+
+  let get_provenance (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 0) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_value (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 1) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_index(expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 2) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let unspec_byte : Expr.expr =
+    let byte_ctype = CtypeSort.mk_expr (Basic0 (Integer Char)) in
+    mk_byte (int_to_z3 0)
+            (LoadedByte.mk_unspecified byte_ctype)
+            (IntOption.mk_none)
+end
+
+(* TODO: duplicate with IntArray *)
+module PNVIByteArray = struct
+  let mk_sort = Z3Array.mk_sort g_ctx integer_sort PNVIByte.mk_sort
+
+  let mk_const_s (sym: string) =
+    Z3Array.mk_const_s g_ctx sym integer_sort PNVIByte.mk_sort
+
+  let mk_select (array: Expr.expr) (index: Expr.expr) =
+    Z3Array.mk_select g_ctx array index
+
+  let mk_store (array: Expr.expr) (index: Expr.expr) (value: Expr.expr) : Expr.expr =
+    Z3Array.mk_store g_ctx array index value
+end
+
 
 module IntArray = struct
   let default_value = LoadedInteger.mk_specified (int_to_z3 0)
