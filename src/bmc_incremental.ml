@@ -3751,11 +3751,10 @@ module BmcConcActions = struct
       let index = List.fold_left
           (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
           0 (list_take i sortlist) in
-
-      let addr = (alloc_id, index) in
-      let addr_expr = AddressSort.mk_from_addr addr in
+      let target_addr =
+        AddressSort.shift_index_by_n base_addr (int_to_z3 index) in
       let is_atomic =
-        AddressSort.assert_is_atomic addr_expr (is_atomic_fn ctype) in
+        AddressSort.assert_is_atomic target_addr (is_atomic_fn ctype) in
       add_assertion is_atomic
     ) sortlist >>
     let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
@@ -4088,5 +4087,7 @@ module BmcConcActions = struct
     let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
     let provenance_asserts =
       List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata)prov_syms) in
-    return (preexec, assertions @ mem_assertions @ meta_asserts @ provenance_asserts, memory_model)
+    return (preexec,
+            assertions @ mem_assertions @ meta_asserts @ provenance_asserts,
+            memory_model)
 end
