@@ -52,8 +52,8 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpSub   -> BitVector.mk_sub  g_ctx arg1 arg2
     | OpMul   -> BitVector.mk_mul  g_ctx arg1 arg2
     | OpDiv   -> BitVector.mk_sdiv g_ctx arg1 arg2
-    | OpRem_t -> BitVector.mk_srem g_ctx arg1 arg2
-    | OpRem_f -> BitVector.mk_srem g_ctx arg1 arg2
+    | OpRem_t -> assert false (*BitVector.mk_srem g_ctx arg1 arg2*)
+    | OpRem_f -> BitVector.mk_smod g_ctx arg1 arg2
     | OpExp   ->
         if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
           let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
