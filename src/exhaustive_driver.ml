@@ -35,7 +35,6 @@ let string_of_driver_error = function
   | Driver.DErr_other str ->
       str
 
-
 (* TODO: make the output match the json format from charon2 (or at least add a option for that) *)
 let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
   Random.self_init ();
@@ -45,7 +44,7 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state file fs_state in
-  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in  
+  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in
   let is_charon = match mode with
     | `Batch       -> false
     | `CharonBatch -> true in
@@ -97,7 +96,6 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
     else
       constraints ^ result
   ) values
-
 
 let drive file args fs_state conf : execution_result =
   Random.self_init ();
