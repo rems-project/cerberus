@@ -78,6 +78,7 @@ type configuration = {
   rewrite_core: bool;
   sequentialise_core: bool;
   cpp_cmd: string;
+  cpp_stderr: bool; (* pipe cpp stderr to stderr *)
 }
 
 type io_helpers = {
@@ -92,18 +93,44 @@ type io_helpers = {
 let cpp (conf, io) ~filename =
   io.print_debug 5 (fun () -> "C prepocessor") >>= fun () ->
   Unix.handle_unix_error begin fun () ->
-    let cpp_out = Unix.open_process_in (conf.cpp_cmd ^ " " ^ filename) in
+    let (out_read, out_write) = Unix.pipe () in
+    Unix.set_close_on_exec out_read;
+    let out_ic = Unix.in_channel_of_descr out_read in
+    let (err_ic_opt, err_write) =
+      if conf.cpp_stderr then (None, Unix.stderr) else begin
+        let (err_read, err_write) = Unix.pipe () in
+        Unix.set_close_on_exec err_read;
+        let err_ic = Unix.in_channel_of_descr err_read in
+        (Some err_ic, err_write)
+      end
+    in
+    let cpp_cmd = Str.split (Str.regexp "[ \t]+") conf.cpp_cmd in
+    let cpp_args = Array.of_list @@ cpp_cmd @ [filename] in
+    let cpp_pid = Unix.create_process (List.hd cpp_cmd) cpp_args
+        Unix.stdin out_write err_write
+    in
+    Unix.close out_write;
+    if not conf.cpp_stderr then Unix.close err_write;
     let rec read acc ic =
       try read (input_line ic :: acc) ic
       with End_of_file -> List.rev acc
     in
-    let out = read [] cpp_out in
-    match Unix.close_process_in cpp_out with
-    | WEXITED n
-    | WSIGNALED n
-    | WSTOPPED n ->
+    flush_all ();
+    let out = read [] out_ic in
+    close_in out_ic;
+    let err = match err_ic_opt with
+      | Some err_ic ->
+        let err = read [] err_ic in
+        close_in err_ic;
+        err
+      | None -> []
+    in
+    match Unix.waitpid [] cpp_pid with
+    | _, WEXITED n
+    | _, WSIGNALED n
+    | _, WSTOPPED n ->
       if n <> 0 then
-        exit n
+        Exception.fail (Location_ocaml.unknown, Errors.CPP (String.concat "\n" err))
       else
         return @@ String.concat "\n" out
   end ()

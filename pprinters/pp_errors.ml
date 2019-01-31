@@ -241,6 +241,10 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
       "assert expression should have scalar type"
+  | AtomicAddressArgumentMustBeAtomic (_, ty) ->
+      "address argument to atomic operation must be a pointer to _Atomic type ('" ^ string_of_ctype ty ^ "' invalid)"
+  | AtomicAddressArgumentMustBePointer (_, gty) ->
+      "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->
@@ -281,6 +285,8 @@ let string_of_ail_typing_misc_error = function
       "the first argument of 'va_start' must be of type 'va_list'"
   | VaArgArgumentType ->
       "the first argument of 'va_arg' must be of type 'va_list'"
+  | GenericFunctionMustBeDirectlyCalled ->
+      "builtin generic functions must be directly called"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
@@ -399,6 +405,8 @@ let string_of_driver_cause = function
       String.concat "\n" @@ List.map (fun ub -> (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
 
 let short_message = function
+  | CPP err ->
+      err
   | CPARSER ccause ->
       string_of_cparser_cause ccause
   | DESUGAR dcause ->
@@ -514,7 +522,9 @@ let make_message loc err k =
       Printf.sprintf "%s %s %s\n%s\n%s" head kind msg pos (string_of_quotes refs)
 
 let to_string (loc, err) =
-  make_message loc err Error
+  match err with
+  | CPP err -> err (* NOTE: the err string is already formatted by CPP *)
+  | _ -> make_message loc err Error
 
 let fatal msg =
   prerr_endline (ansi_format [Bold; Red] "error: " ^ ansi_format [Bold] msg);

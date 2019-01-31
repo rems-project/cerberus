@@ -678,6 +678,13 @@ type undefined_behaviour =
   | UB203
   (* The constant expression shall be an integer constant expression. *)
   | UB204_illtyped_Static_assert
+
+  (* The order argument shall not be memory_order_acquire, memory_order_consume, nor memory_order_acq_rel. *)
+  | UB205_atomic_store_memorder
+  (* The order argument shall not be memory_order_release nor memory_order_acq_rel. *)
+  | UB206_atomic_load_memorder
+  (* The failure argument shall not be memory_order_release nor memory_order_acq_rel. *)
+  | UB207_atomic_compare_exchange_memorder
   
   (* UB from variant 1 of the no integer provenance semantics (see note 0117) *)
   | UB_CERB001_integer_to_dead_pointer
@@ -740,6 +747,12 @@ let std_of_undefined_behaviour = function
       Just "§6.9.2#3"
   | UB204_illtyped_Static_assert ->
       Just "§6.7.10#3"
+  | UB205_atomic_store_memorder ->
+      Just "§7.17.7.1#2"
+  | UB206_atomic_load_memorder ->
+      Just "§7.17.7.2#2"
+  | UB207_atomic_compare_exchange_memorder ->
+      Just "§7.17.7.4#2"
 
   | _ ->
       (* TODO *)
@@ -969,6 +982,9 @@ let ub_str_bimap =
     ; (UB202, "UB202")
     ; (UB203, "UB203")
     ; (UB204_illtyped_Static_assert, "UB204_illtyped_Static_assert")
+    ; (UB205_atomic_store_memorder, "UB205_atomic_store_memorder")
+    ; (UB206_atomic_load_memorder, "UB206_atomic_load_memorder")
+    ; (UB207_atomic_compare_exchange_memorder, "UB207_atomic_compare_exchange_memorder")
     ; (UB_CERB001_integer_to_dead_pointer, "UB_CERB001_integer_to_dead_pointer")
     ; (UB_CERB002a_out_of_bound_load, "UB_CERB002a_out_of_bound_load")
     ; (UB_CERB002b_out_of_bound_store, "UB_CERB002b_out_of_bound_store") ]
@@ -1041,6 +1057,12 @@ let ub_short_string = function
       "the initializer for a scalar shall be a single expression"
   | UB204_illtyped_Static_assert ->
       "static assert expression is not an integral constant expression"
+  | UB205_atomic_store_memorder ->
+      "memory order argument to atomic operation is invalid"
+  | UB206_atomic_load_memorder ->
+      "memory order argument to atomic operation is invalid"
+  | UB207_atomic_compare_exchange_memorder ->
+      "memory order argument to atomic operation is invalid"
   | UB_CERB001_integer_to_dead_pointer ->
       "integer to pointer conversion with no live object (CERB)"
   | UB_CERB002a_out_of_bound_load ->

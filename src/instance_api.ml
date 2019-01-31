@@ -42,23 +42,33 @@ type request =
 type point = int * int
 type range = point * point
 
-type step_info =
-  { step_kind: string; (* kind of step/transition *)
-    step_debug: string; (* debug string *)
-    step_file: string option; (* from file *)
-    step_error_loc: Location_ocaml.t option;
-  }
+type step_kind =
+  [ `Action_request of string
+  | `Memop_request
+  | `Tau of string
+  | `Eval of string
+  | `Done
+  | `Misc of string list ]
+
+type node_info =
+  [ `Init
+  | `Done of string
+  | `Error of Location_ocaml.t option * string
+  | `Branch
+  | `Step of Json.json
+  | `Unsat ]
 
 type node =
   { node_id: int;
-    node_info: step_info; (* TODO: this might need to be in the edge *)
+    node_info: node_info;
     memory: Json.json;
     c_loc: Location_ocaml.t;
     core_uid: string option;
     arena: string;
     env: string; (* maybe an associate list ? *)
     next_state: string option; (* marshalled state *)
-    outp: string; (* stdout output *)
+    stdout: string;
+    stderr: string;
   }
 
 type edge =
