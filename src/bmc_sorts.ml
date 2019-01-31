@@ -569,7 +569,7 @@ module PointerSortConcrete = struct
   let pp expr = Expr.to_string expr
 end
 
-module PointerSort = PointerSortPNVI
+module PointerSort = PointerSortConcrete
 module AddressSort = PointerSort.AddrModule
 
 
