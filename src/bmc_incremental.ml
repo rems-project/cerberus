@@ -1579,10 +1579,7 @@ module BmcZ3 = struct
         z3_pe ctype_dst >>= fun _ ->
         z3_pe ival      >>= fun z3d_ival ->
 
-        let ctype = (match ctype_dst with
-          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
-          | _ -> assert false
-          ) in
+        let ctype = ctype_from_pexpr ctype_dst in
 
         let new_prov_sym =
           mk_fresh_const (sprintf "Prov_PtrFromInt_%d" uid) integer_sort in
@@ -1604,10 +1601,7 @@ module BmcZ3 = struct
         assert g_pnvi;
         (* address of ptr % align of ctype is 0 *)
         (* TODO: what if NULL? *)
-        let ctype = (match ctype_pe with
-          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
-          | _ -> assert false
-          ) in
+        let ctype = ctype_from_pexpr ctype_pe in
         z3_pe ctype_pe >>= fun _ ->
         z3_pe ptr      >>= fun z3d_ptr ->
         let addr_of_ptr =
@@ -2970,12 +2964,13 @@ module BmcMemCommon = struct
         binop_to_z3 OpRem_f shifted_right mask
       )
     (*
-     * 2 ^ N - value
+     * If > 0 then just value
+     * 2 ^ N - (-value)
      *)
     let twos_complement_repr (value: Expr.expr) (num_bytes: int)
                              : Expr.expr list =
       let max_value = int_exp 2 (8 * num_bytes) in
-      let sub_value = binop_to_z3 OpSub (int_to_z3 max_value) value in
+      let sub_value = binop_to_z3 OpAdd (int_to_z3 max_value) value in
       unsigned_repr sub_value num_bytes
 
     (* Return representation + Z3 assertions *)
@@ -3029,6 +3024,49 @@ module BmcMemCommon = struct
           assert false (* Deal with this later *)
       | _ -> assert false
 
+
+    let interpret_unsigned_ity (bytes: Expr.expr list) : Expr.expr =
+      Arithmetic.mk_add g_ctx
+        (List.mapi (fun i byte ->
+          let factor = int_to_z3 (int_exp 2 (8*i)) in
+          binop_to_z3 OpMul (PNVIByte.get_spec_value byte) factor
+        ) bytes)
+
+    let interpret_signed_ity (bytes: Expr.expr list) : Expr.expr =
+      Arithmetic.mk_add g_ctx
+        (List.mapi (fun i byte ->
+          let factor = int_to_z3 (int_exp 2 (8*i)) in
+          let spec_value = PNVIByte.get_spec_value byte in
+          (* Special case for the last byte *)
+          if i = List.length bytes - 1 then begin
+            (* if byte >= 128 then it's negative; else it's just the value *)
+            mk_ite (binop_to_z3 OpGe spec_value (int_to_z3 128))
+                   (binop_to_z3 OpMul (binop_to_z3 OpSub spec_value (int_to_z3 256))
+                                      factor)
+                   (binop_to_z3 OpMul spec_value factor)
+          end else begin
+            binop_to_z3 OpMul spec_value factor
+          end
+        ) bytes)
+
+    let abst (ctype: ctype) (bytes: Expr.expr list)
+             : Expr.expr =
+      match ctype with
+      | Void0 -> assert false
+      | Basic0 (Integer ity) ->
+          assert (List.length bytes = Option.get (ImplFunctions.sizeof_ity ity));
+          let interp =
+            if ImplFunctions.impl.impl_signed ity then
+              (* Interpret as two's complement *)
+              interpret_signed_ity bytes
+            else interpret_unsigned_ity bytes in
+          (* If any byte is unspec then unspec; else interp *)
+          mk_ite (mk_or (List.map PNVIByte.is_unspec bytes))
+                 (LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype))
+                 (LoadedInteger.mk_specified interp)
+      | Array0 _ -> assert false
+      | Atomic0 _ -> assert false
+      | _ -> assert false
 
 end
 
@@ -3516,12 +3554,42 @@ module BmcSeqMem = struct
            * get a Ocaml list of n bytes corresponding to the ctype
            * and get an integer based on that
          *)
-        (*get_memory >>= fun memory ->
-        mapM (fun (alloc, expr_in_memory) ->
-          let base_addr =
+        get_memory >>= fun memory ->
 
-        ) (Pmap.bindings_list memory) >>= fun _ ->*)
-        assert false;
+        let ptr_addr = PointerSort.get_addr ptr in
+        let ptr_not_null = mk_not (PointerSort.is_null ptr) in
+        let size = AddressSort.type_size ctype in
+        bmc_debug_print 7 "TODO: Check addr range ";
+
+        mapM (fun (alloc_id, expr_in_memory) ->
+          get_meta alloc_id >>= fun metadata ->
+          let base_addr = get_metadata_base metadata in
+
+          let diff =
+            binop_to_z3 OpSub (AddressSort.get_index ptr_addr)
+                              (AddressSort.get_index base_addr) in
+          let bytes = List.init size (fun i ->
+              let index = binop_to_z3 OpAdd diff (int_to_z3 i) in
+              PNVIByteArray.mk_select expr_in_memory index
+            ) in
+          let value = BmcMemCommon.abst ctype bytes in
+          bmc_debug_print 7 "TODO: Check addr range ";
+          let addr_guard =
+            mk_and [ ptr_not_null
+                   ; AddressSort.valid_index_range (int_to_z3 alloc_id)
+                                                   ptr_addr
+                     (* TODO: check max is in range *)
+                   ] in
+          let impl_expr = mk_implies addr_guard (mk_eq rval value) in
+          return (Some (impl_expr, addr_guard))
+        ) (Pmap.bindings_list memory) >>= fun retlist ->
+        let filtered = List.map Option.get (List.filter is_some retlist) in
+        (* TODO: should mk_or (List.map snd filtered be a vc? *)
+        return { bindings = (mk_or (List.map snd filtered))::
+                            (List.map fst filtered)
+               ; mod_addr = AddrSet.empty
+               }
+
         (* TODO: alias analysis *)
         (*
          *
@@ -3546,8 +3614,47 @@ module BmcSeqMem = struct
                ; mod_addr = AddrSet.empty
                }
         *)
-    | IStore(_, ctype, type_list, ptr, wval, mo) ->
-        assert false
+    | IStore(aid, ctype, type_list, ptr, wval, mo) ->
+        (* Store: find allocation *)
+        (* Basic idea:
+          * for each allocation:
+            * if the address is within the range of the allocation then
+              * create an array of bytes based on that *)
+        get_memory >>= fun memory ->
+        let ptr_addr = PointerSort.get_addr ptr in
+        let ptr_not_null = mk_not (PointerSort.is_null ptr) in
+        let size = AddressSort.type_size ctype in
+
+        (* Get representation of wval *)
+        let (wval_repr, assertions) = BmcMemCommon.repr wval ctype aid in
+
+        bmc_debug_print 7 "TODO: Check addr range ";
+        mapM (fun (alloc_id, expr_in_memory) ->
+          get_meta alloc_id >>= fun metadata ->
+          let base_addr = get_metadata_base metadata in
+          let diff =
+            binop_to_z3 OpSub (AddressSort.get_index ptr_addr)
+                              (AddressSort.get_index base_addr) in
+          (* The new value is the old value except with indexed bytes set *)
+          let addr_guard =
+            mk_and [ptr_not_null
+                   ;AddressSort.valid_index_range (int_to_z3 alloc_id)
+                                                  ptr_addr
+                   ] in
+          (* TODO TODO *)
+          let new_seq_var =
+            mk_fresh_const (sprintf "store_%s" (Expr.to_string ptr_addr))
+                           (PNVIByteArray.mk_sort) in
+          let new_val = mk_eq new_seq_var wval_repr in
+          let old_val = mk_eq new_seq_var expr_in_memory in
+          update_memory alloc_id new_seq_var >>
+          return (Some (alloc_id, mk_ite addr_guard new_val old_val))
+        ) (Pmap.bindings_list memory) >>= fun update_list ->
+        let filtered = List.map Option.get (List.filter is_some update_list) in
+        assert (List.length filtered > 0);
+        return { bindings = assertions @(List.map snd filtered)
+               ; mod_addr = AddrSet.of_list (List.map fst filtered)
+               }
     (*| IStore(_, (ctype,sort), ptr, wval, mo) ->*)
         (* TODO: alias analysis *)
         (* TODO: ugly complexity *)

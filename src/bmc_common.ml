@@ -114,6 +114,12 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
     (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
   Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
 
+let ctype_from_pexpr (ctype_pe: typed_pexpr) =
+  match ctype_pe with
+  | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
+  | _ -> assert false
+
+
 let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type option)
