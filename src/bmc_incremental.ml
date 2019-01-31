@@ -2950,7 +2950,7 @@ module BmcMemCommon = struct
 
     (* ===== REPR from PNVI ===== *)
 
-    let int_exp x y =
+    (*let int_exp x y =
       (float_of_int x) ** (float_of_int y) |> int_of_float
     (* Return an Ocaml list of expressions.
      *
@@ -3125,6 +3125,7 @@ module BmcMemCommon = struct
       | Array0 _ -> assert false
       | Atomic0 _ -> assert false
       | _ -> assert false
+      *)
 
 end
 
@@ -3406,7 +3407,7 @@ module BmcSeqMem = struct
   *)
 
   (*module SeqMem = MemConcrete*)
-  module SeqMem = MemPNVI
+  module SeqMem = MemConcrete
 
   type seq_state = {
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
@@ -4460,11 +4461,18 @@ module BmcConcActions = struct
 
     get_meta_map >>= fun metadata ->
     get_prov_syms >>= fun prov_syms ->
-    let metadata_list = Pmap.bindings_list metadata in
-    let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
-    let provenance_asserts =
-      List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata)prov_syms) in
+
+    let pnvi_asserts =
+      if g_pnvi then begin
+        let metadata_list = Pmap.bindings_list metadata in
+        let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
+        let provenance_asserts =
+          List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata)prov_syms) in
+        meta_asserts @ provenance_asserts
+      end else
+        []
+    in
     return (preexec,
-            assertions @ mem_assertions @ meta_asserts @ provenance_asserts,
+            assertions @ mem_assertions @ pnvi_asserts,
             memory_model)
 end

@@ -21,7 +21,7 @@ let g_bv_precision = 33
 (* TODO: get value from somewhere else *)
 let g_ptr_size = 8 (* Ocaml_implementation*)
 let g_max_addr = 2147483648
-let g_pnvi = true
+let g_pnvi = false
 
 (*let g_model_file = "bmc/example.cat"*)
 
