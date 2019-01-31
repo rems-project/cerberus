@@ -458,7 +458,7 @@ export default class View {
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column};`
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column}];`
         return acc;
       }, '')
     }

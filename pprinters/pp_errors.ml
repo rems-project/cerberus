@@ -241,6 +241,10 @@ let string_of_constraint_violation = function
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
       "assert expression should have scalar type"
+  | AtomicAddressArgumentMustBeAtomic (_, ty) ->
+      "address argument to atomic operation must be a pointer to _Atomic type ('" ^ string_of_ctype ty ^ "' invalid)"
+  | AtomicAddressArgumentMustBePointer (_, gty) ->
+      "address argument to atomic operation must be a pointer ('" ^ string_of_gentype gty ^ "' invalid)"
 
 let string_of_misc_violation = function
   | MultipleEnumDeclaration x ->
@@ -281,6 +285,8 @@ let string_of_ail_typing_misc_error = function
       "the first argument of 'va_start' must be of type 'va_list'"
   | VaArgArgumentType ->
       "the first argument of 'va_arg' must be of type 'va_list'"
+  | GenericFunctionMustBeDirectlyCalled ->
+      "builtin generic functions must be directly called"
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
