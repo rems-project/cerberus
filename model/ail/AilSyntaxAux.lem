@@ -1,5 +1,5 @@
 open import Pervasives Common AilTypes AilTypesAux AilSyntax Loc
-
+import Cmm_csem Builtins
 
 (* Removes non-semantic constructor from a expression. Pattern matching with mor
    than one level of unfolding should usually only be done on stripped expressions *)
@@ -72,4 +72,12 @@ let expression_FromNat loc ty n =
   AilEannot ty (
     AnnotatedExpression () [] loc (AilEconst (ConstantInteger (IConstant (integerFromNat n) basis Nothing)))
   )
+
+val memory_order_of_expr: forall 'a. expression 'a -> maybe Cmm_csem.memory_order
+let memory_order_of_expr (AnnotatedExpression _ _ _ expr as a_expr) =
+  match expr with
+    | AilEconst (ConstantInteger (IConstant n _ _)) -> Builtins.decode_memory_order $ natFromInteger n
+    | _ -> Nothing
+  end
+
 

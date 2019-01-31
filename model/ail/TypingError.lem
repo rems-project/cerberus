@@ -6,6 +6,7 @@ type typing_misc_error =
   | ParameterTypeNotAdjusted (* internal *)
   | VaStartArgumentType (* §7.16.1.4#1 *)
   | VaArgArgumentType (* §7.16.1.1#1 *)
+  | GenericFunctionMustBeDirectlyCalled
 
 type typing_error =
   | TError_ConstraintViolation of Constraint.violation
@@ -23,6 +24,8 @@ let std_of_typing_misc_error = function
       ["§7.16.1.4#1"; "§7.16#3"]
   | VaArgArgumentType ->
       ["§7.16.1.1#1"; "§7.16#3"]
+  | GenericFunctionMustBeDirectlyCalled ->
+      []
 end
 
 val std_of_ail_typing_error: typing_error -> list string

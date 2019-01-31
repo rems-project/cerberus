@@ -6,6 +6,7 @@ val point: Lexing.position -> t
 val region: Lexing.position * Lexing.position -> Lexing.position option -> t
 val regions: (Lexing.position * Lexing.position) list -> Lexing.position option -> t
 
+val with_cursor: t -> t (* NOTE: useful when pointing to an expanded macro *)
 val with_cursor_from: t -> t -> t
 val bbox_location: t list -> t
 val with_regions_and_cursor: t list -> t option -> t

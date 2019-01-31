@@ -128,7 +128,7 @@ let cerberus debug_level progress core_obj
                 bmc_all_execs bmc_output_model;
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
-               rewrite_core; sequentialise_core; cpp_cmd } in
+               rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
 (*
 
     (*Bmc.bmc rewritten_core_file sym_supply ail_opt;*)
@@ -300,7 +300,7 @@ let output_file =
 
 let cpp_cmd =
   let doc = "Command to call for the C preprocessing." in
-  Arg.(value & opt string ("cc -E -C -nostdinc -undef -D__cerb__")
+  Arg.(value & opt string ("cc -E -C -Werror -nostdinc -undef -D__cerb__")
              & info ["cpp"] ~docv:"CMD" ~doc)
 
 let cpp_only =
@@ -349,7 +349,7 @@ let exec_mode =
 let pprints =
   let open Pipeline in
   let doc = "Pretty print the intermediate programs for the listed languages\
-             (ranging over {cabs, ail, core})." in
+             (ranging over {ail, core})." in
   Arg.(value & opt (list (enum ["ail", Ail; "core", Core])) [] &
        info ["pp"] ~docv:"LANG1,..." ~doc)
 

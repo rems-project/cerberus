@@ -12,7 +12,7 @@ import Core_typing
 
 import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import GenTypes
-import Core Core_aux Undefined
+import Core Core_aux Undefined Builtins
 
 import Linux
 
@@ -196,14 +196,9 @@ val translate_memory_order: A.expression GenTypes.genTypeCategory -> Cmm.memory_
 let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
   match expr with
     | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
-        match natFromInteger n with
-          | 0 -> Cmm.Relaxed
-          | 1 -> Cmm.Consume
-          | 2 -> Cmm.Acquire
-          | 3 -> Cmm.Release
-          | 4 -> Cmm.Acq_rel
-          | 5 -> Cmm.Seq_cst
-          | (*BISECT-IGNORE*) _ ->
+        match Builtins.decode_memory_order $ natFromInteger n with
+          | Just mo -> mo
+          | Nothing ->
               error ("Translation.translate_memory_order: " ^ show n)
         end
     | (*BISECT-IGNORE*) _ ->

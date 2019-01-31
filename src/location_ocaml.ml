@@ -28,6 +28,19 @@ let regions xs cursor_opt =
         (* TODO: need to sort the regions *)
         Loc_regions (xs, cursor_opt)
 
+let with_cursor = function
+  | Loc_unknown
+  | Loc_other _
+  | Loc_regions ([], None) ->
+    Loc_unknown
+  | Loc_point z
+  | Loc_region (_, _, Some z)
+  | Loc_region (z, _, None)
+  | Loc_regions (_, Some z)
+  | Loc_regions ((z,_)::_, None) ->
+    Loc_point z
+
+
 (* [with_cursor_from loc1 loc2] makes a new (region location) with the region from loc1 and the cursor (if any) from loc2 *)
 let with_cursor_from loc1 loc2 =
   let cursor_opt = match loc2 with

@@ -5,8 +5,8 @@ open Pipeline
 let time label f =
   let t = Unix.gettimeofday () in
   let res = f () in
-  Printf.fprintf stderr "%s: Execution time: %f seconds\n" label
-                (Unix.gettimeofday () -. t);
+  let delta = string_of_float @@ Unix.gettimeofday () -. t in
+  Debug.print 5 @@ label ^ ": execution time: " ^ delta ^ " seconds";
   res
 
 type conf =
@@ -37,7 +37,7 @@ let setup conf =
       rewrite_core=       conf.rewrite_core;
       sequentialise_core= conf.sequentialise_core;
       cpp_cmd=            conf.cpp_cmd;
-
+      cpp_stderr=         false;
     }
   in { pipeline= pipeline_conf;
        io= dummy_io;
@@ -280,66 +280,81 @@ let get_state_details st =
       ) e "" in
     List.fold_left (fun acc e -> acc ^ f e) "" env
   in
-  let outp = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout) in
+  (* TODO: this is a bit naive *)
+  let stdout = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stdout) in
+  let stderr = String.concat "" @@ Dlist.toList (st.Driver.core_state.Core_run.io.Core_run.stderr) in
   match st.Driver.core_state.Core_run.thread_states with
   | (_, (_, ts))::_ ->
     let arena = Pp_utils.to_plain_pretty_string @@ Pp_core.Basic.pp_expr ts.arena in
     let Core.Expr (arena_annots, _) = ts.arena in
     let maybe_uid = Annot.get_uid arena_annots in
     let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
-    (loc, maybe_uid, arena, string_of_env st, outp)
+    (loc, maybe_uid, arena, string_of_env st, stdout, stderr)
   | _ ->
-    (Location_ocaml.unknown, None, "", "", outp)
+    (Location_ocaml.unknown, None, "", "", stdout, stderr)
 
 let get_file_hash core =
   match core.Core.main with
   | Some (Symbol.Symbol (hash, _, _)) -> hash
   | None -> failwith "get_file_hash"
 
-let create_node dr_info st next_state =
-  let mk_info info =
-    { step_kind = info.Driver.step_kind;
-      step_debug = Option.case (fun i -> i.Core_run.debug_str) (fun _ -> "no debug string") info.Driver.core_run_info;
-      step_file = Option.case (fun i -> i.Core_run.from_file) (fun _ -> None) info.Driver.core_run_info;
-      step_error_loc = info.Driver.error_loc
-    }
-  in
-  let node_id = new_id () in
-  let node_info = mk_info dr_info in
-  let memory = Ocaml_mem.serialise_mem_state (get_file_hash st.Driver.core_file) st.Driver.layout_state in
-  let (c_loc, core_uid, arena, env, outp) = get_state_details st in
-  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; outp }
+(* NOTE: Web doesn't depend on Driver *)
+let json_of_step_kind step =
+  let open Driver in
+  match step with
+  | SK_action_request str ->
+    `Assoc [("kind", `String "action request");
+            ("debug", `String str)]
+  | SK_memop_request ->
+    `Assoc [("kind", `String "memop request")]
+  | SK_tau str ->
+    `Assoc [("kind", `String "tau");
+            ("debug", `String str)]
+  | SK_eval str ->
+    `Assoc [("kind", `String "eval");
+            ("debug", `String str)]
+  | SK_done ->
+    `Assoc [("kind", `String "done")]
+  | SK_misc strs ->
+    `Assoc [("kind", `String "action request");
+            ("debug", `List (List.map (fun str -> `String str) strs))]
 
-let rec multiple_steps step_state ((Nondeterminism.ND m), st) =
+let create_node node_info st next_state =
+  let node_id = new_id () in
+  let memory = Ocaml_mem.serialise_mem_state (get_file_hash st.Driver.core_file) st.Driver.layout_state in
+  let (c_loc, core_uid, arena, env, stdout, stderr) = get_state_details st in
+  { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr }
+
+let multiple_steps step_state (m, st) =
   let module CS = (val Ocaml_mem.cs_module) in
   let (>>=) = CS.bind in
-  let create_branch dr_info st (ns, es, previousNode) =
-    let n = create_node dr_info st None in
+  let create_branch node_info st (ns, es, previousNode) =
+    let n = create_node node_info st None in
     let ns' = n :: ns in
     let es' = Edge (previousNode, n.node_id) :: es in
     (ns', es', n.node_id)
   in
   let create_leafs st ms (ns, es, previousNode) =
     let (is, ns') = List.fold_left (fun (is, ns) (dr_info, m) ->
-        let n = create_node dr_info st (Some (encode (m, st))) in
+        let n = create_node (`Step (json_of_step_kind dr_info)) st (Some (encode (m, st))) in
         (n.node_id::is, n::ns)
       ) ([], ns) ms in
     let es' = (List.map (fun n -> Edge (previousNode, n)) is) @ es in
     (ns', es', previousNode)
   in
-  let check st f = function
-    | `UNSAT -> CS.return (Some "unsat", create_branch (Driver.mk_info_kind "unsat") st step_state)
+  let check step_state st f = function
+    | `UNSAT -> CS.return (Some "unsat", create_branch `Unsat st step_state)
     | `SAT -> CS.return @@ f ()
   in
-  let runCS st f = CS.runEff (CS.check_sat >>= check st f) in
+  let runCS step_state st f = CS.runEff (CS.check_sat >>= check step_state st f) in
   let withCS str cs st f =
-    CS.runEff (CS.with_constraints str cs (CS.check_sat >>= check st f))
+    CS.runEff (CS.with_constraints str cs (CS.check_sat >>= check step_state st f))
   in
   try
     let open Nondeterminism in
-    let one_step: (_, Driver.driver_info, _, _, _) Nondeterminism.nd_action * _ -> _ = function
+    let one_step step_state : (_, Driver.step_kind, _, _, _) Nondeterminism.nd_action * _ -> _ = function
       | (NDactive a, st') ->
-        runCS st' begin fun () ->
+        runCS step_state st' begin fun () ->
           let str_v = String_core.string_of_value a.Driver.dres_core_value in
           let res =
             "Defined {value: \"" ^ str_v ^ "\", stdout: \""
@@ -347,7 +362,7 @@ let rec multiple_steps step_state ((Nondeterminism.ND m), st) =
             ^ "\", blocked: \""
             ^ if a.Driver.dres_blocked then "true\"}" else "false\"}"
           in
-          (Some res, create_branch (Driver.mk_info_kind str_v) st' step_state)
+          (Some res, create_branch (`Done str_v) st' step_state)
         end
       | (NDkilled r, st') ->
         let loc, reason = match r with
@@ -404,20 +419,12 @@ let rec multiple_steps step_state ((Nondeterminism.ND m), st) =
             | Driver.DErr_other str ->
                 None, str
           in
-          let loc, str = string_of_driver_error dr_err in
-          loc, "killed: " ^ str
-        in
-        let info =
-          let open Driver in
-          { step_kind= reason;
-            core_run_info= None;
-            error_loc= loc;
-          }
-        in (Some reason, create_branch info st' step_state)
+          string_of_driver_error dr_err
+        in (Some reason, create_branch (`Error (loc, reason)) st' step_state)
       | (NDbranch (str, cs, m1, m2), st') ->
         withCS str cs st' begin fun () ->
-          create_branch str st' step_state
-          |> create_leafs st' [(Driver.mk_info_kind "opt1", m1); (Driver.mk_info_kind "opt2", m2)]
+          create_branch `Branch st' step_state
+          |> create_leafs st' [(SK_misc ["1"], m1); (SK_misc ["2"], m2)]
           |> fun res -> (None, res)
         end
       | (NDguard (str, cs, m), st') ->
@@ -426,29 +433,35 @@ let rec multiple_steps step_state ((Nondeterminism.ND m), st) =
           |> fun res -> (None, res)
         end
         |> fun s -> Debug.print 0 "finish guard"; s
-      | (NDnd (str, ms), st') ->
+      | (NDnd (_, ms), st') ->
         (None, create_leafs st' ms step_state)
       | (NDstep (_, ms), st') ->
         (None, create_leafs st' ms step_state)
     in
-    begin match m st with
-      | (NDstep (_, [(lab, m')]), st') ->
-        begin match st.Driver.core_state.Core_run.thread_states with
-          | (_, (_, ts))::_ ->
-            let Core.Expr (arena_annots, _) = ts.arena in
-            begin match Annot.get_uid arena_annots with
-              | None ->
-                time "mult none" (fun () -> multiple_steps step_state (m', st'))
-              | Some _ ->
-                let step_state' = time "branch" (fun () -> create_branch lab st' step_state) in
-                multiple_steps step_state' (m', st')
-            end
-          | _ ->
-            let step_state' = time "branch _ " (fun () -> create_branch lab st' step_state) in
-            time "mult _" (fun () -> multiple_steps step_state' (m', st'))
+    let is_user_state st =
+      (* NOTE: it checks that the first thread core expression in the
+       * arena has an identifier, which means it's user code *)
+      match st.Driver.core_state.Core_run.thread_states with
+      | (_, (_, ts))::_ ->
+        let Core.Expr (arena_annots, _) = ts.arena in
+        begin match Annot.get_uid arena_annots with
+          | None -> false
+          | Some _ -> true
         end
-      | act -> time "act" (fun () -> one_step act)
-    end
+      | _ -> false
+    in
+    let rec aux step_state (ND m) st =
+      let is_user_state = is_user_state st in
+      match m st with
+      | (NDstep (_, [(step_kind, m')]), st') when is_user_state ->
+        let step_state' = create_branch (`Step (json_of_step_kind step_kind)) st' step_state in
+        aux step_state' m' st'
+      | (NDstep (_, (_, m')::_), st') when not is_user_state ->
+        (* if not user state, choose the first one and continue executing *)
+        aux step_state m' st'
+      | act ->
+        one_step step_state act
+    in aux step_state m st
   with
   | e -> Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
     raise e
@@ -484,11 +497,11 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let st0      = Driver.initial_driver_state core' Sibylfs.fs_initial_state (* TODO *) in
     let (m, st)  = (Driver.drive false false core' [], st0) in
     last_node_id := 0;
-    let node_info= { step_kind= "init"; step_debug = "init"; step_file = None; step_error_loc = None } in
+    let node_info= `Init in
     let memory = Ocaml_mem.serialise_mem_state (get_file_hash core) st.Driver.layout_state in
-    let (c_loc, core_uid, arena, env, outp) = get_state_details st in
+    let (c_loc, core_uid, arena, env, stdout, stderr) = get_state_details st in
     let next_state = Some (encode (m, st)) in
-    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; outp } in
+    let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr } in
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->

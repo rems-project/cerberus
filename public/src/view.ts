@@ -47,6 +47,7 @@ export default class View {
         this.emit('updateArena')
         this.emit('updateMemory')
         this.emit('updateExecutionGraph')
+        this.emit('updateUI')
         this.dirty = true
       }
     })
@@ -111,6 +112,8 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
+              component('Stdout'),
+              component('Stderr'),
               component('Memory')
             ]}
           ]}, {
@@ -283,7 +286,7 @@ export default class View {
           return n.arena.substring(0,30) + '...'
         return n.arena
       }
-      return n.info.debug
+      return n.info.kind
     }
     const dotNodes = _.reduce(nodes, (acc, n) => 
       acc + `n${n.id}[href="javascript:UI.execGraphNodeClick(${n.id})",`
@@ -455,7 +458,7 @@ export default class View {
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column};`
+        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column}];`
         return acc;
       }, '')
     }
@@ -499,41 +502,58 @@ export default class View {
         case InteractiveMode.Tau:
           break
         case InteractiveMode.Memory:
-          // TODO: I NEED TO CHANGE THIS, THIS IS SAD!!
-          if (_.includes(active.info.kind, 'killed') || _.includes(active.info.kind, 'Error') || _.includes(active.info.kind, 'Undefined'))
-            return children
-          // a bit of a hack here
-          if (_.startsWith(active.arena, 'pure(undef(<<UB'))
-            return children
           switch (active.info.kind) {
-            case 'action request':
+            case 'error':
             case 'done':
-              if (active.info.file === '<internal>' || _.startsWith(active.info.file, 'src/') || _.startsWith(active.info.file, 'include/') || active.info.file === null)
-                children = this.executeInteractiveMode(active.id, lastCline)
-              else
-                children = graph.setChildrenVisible(active.id, true)
+              return children
+            case 'step':
+              switch (active.info.step_kind.kind) {
+                case 'action request':
+                case 'done':
+                  children = graph.setChildrenVisible(active.id, true)
+                  break
+                default:
+                  children = this.executeInteractiveMode(active.id, lastCline)
+                  break
+              }
               break
-            default:
-              children = this.executeInteractiveMode(active.id, lastCline)
-              break
+            case "init":
+              throw new Error ("fatal error: init step")
+            case "branch":
+              throw new Error ("fatal error: branch step")
+            case "unsat":
+              throw new Error ("fatal error: unsat step")
           }
           break
         case InteractiveMode.Core:
           // Nothing to do
           break
         case InteractiveMode.CLine:
-          if (active.info.kind == 'done')
-            return graph.setChildrenVisible(active.id, true)
-          if (_.includes(active.info.kind, 'killed') || _.includes(active.info.kind, 'Error') || _.includes(active.info.kind, 'Undefined'))
-            return children
-          // a bit of a hack here
-          if (_.startsWith(active.arena, 'pure(undef(<<UB'))
-            return children
-          if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
+          switch (active.info.kind) {
+            case 'error':
+            case 'done':
+              return children
+            case 'step':
+              switch (active.info.step_kind.kind) {
+                case 'done':
+                  children = graph.setChildrenVisible(active.id, true)
+                  break
+                default:
+                  break
+              }
+              break
+            case "init":
+              throw new Error ("fatal error: init step")
+            case "branch":
+              throw new Error ("fatal error: branch step")
+            case "unsat":
+              throw new Error ("fatal error: unsat step")
+          }
+          if (lastCline != undefined && active.loc != undefined && active.loc.c != undefined && lastCline == active.loc.c.begin.line)
             children = this.executeInteractiveMode(active.id, lastCline)
           break
       }
-    }
+    } 
     return children
   }
 
@@ -571,11 +591,6 @@ export default class View {
     const lastNode =
       children.length == 1 && graph.children(firstChoice.id).length == 0
 
-    if (firstChoice.info.file && (_.endsWith(firstChoice.info.file, '.h') || _.endsWith (firstChoice.info.file, '.core'))) {
-      this.executeInteractiveStep(firstChoice.id)
-      return
-    }
-
     graph.nodes.map(n => n.selected = false)
     this.state.interactive.history.push(activeId)
 
@@ -592,15 +607,16 @@ export default class View {
     if (lastNode) {
       this.state.interactive.next_options = []
       this.getConsole().setActive()
-      if (_.includes(firstChoice.info.kind, 'killed') || _.includes(firstChoice.info.kind, 'Error') || _.includes(firstChoice.info.kind, 'Undefined')) {
-        // TODO: add location
-        // the killed node has no location coming from cerberus
-        const loc = firstChoice.info.error_loc && firstChoice.info.error_loc.begin ? ` at line ${firstChoice.info.error_loc.begin.line+1}` : ''
-        this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.kind.replace('killed', 'Undefined behaviour')}${loc}`
-      } else if (_.startsWith(active.arena, 'pure(undef(<<UB')) {
-        this.state.console = `Unsuccessful termination of this execution:\n\t${active.arena}`
-      } else {
-        this.state.console = `Successful termination of this execution:\n\t${firstChoice.info.kind}`
+      switch (firstChoice.info.kind) {
+        case 'error':
+          const loc = firstChoice.info.loc && firstChoice.info.loc.begin ? ` at line ${firstChoice.info.loc.begin.line+1}` : ''
+          this.state.console = `Unsuccessful termination of this execution:\n\t${firstChoice.info.reason}${loc}`
+          break
+        case 'done':
+          this.state.console = `Successful termination of this execution:\n\t${firstChoice.info.result}`
+          break
+        default:
+          throw new Error("fatal lastNode")
       }
       this.emit('updateExecution')
     }
@@ -628,7 +644,7 @@ export default class View {
     delete active.state
     // Add nodes
     tree.nodes.map((n) => {
-      n.isTau = n && n.info.kind == 'tau' && tree.siblings(n.id).length == 1
+      n.isTau = n && n.info.kind == 'step' && n.info.step_kind.kind == 'tau' && tree.siblings(n.id).length == 1
       n.isVisible = false
       graph.nodes.push(n)
     })
@@ -794,8 +810,10 @@ export default class View {
       case 'bmc':
         this.state.console = res.result
         this.state.bmc_executions = res.executions
-        if (res.executions && res.executions.length > 0)
-          this.newTab('BMC')
+        if (res.executions && res.executions.length > 0) {
+          let bmc = this.getTab('BMC')
+          if (bmc) bmc.setActive()
+        }
         this.emit('updateBMC')
         break;
       case 'failure':
