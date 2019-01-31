@@ -1,5 +1,5 @@
 open import Pervasives Utils
-import Cabs AilTypes AilTypesAux AilSyntax
+import Cabs AilTypes AilTypesAux AilSyntax Cmm_csem
 (* Things needed to model in a implementation independant way,
    types and constant the std library defines. *)
 
@@ -541,6 +541,7 @@ let translate_builtin_typenames = function
 end
 
 (* errno.h, the values are chosen arbitrarily *)
+(* NOTE: this is used by the driver *)
 val translate_errno: string -> integer
 let translate_errno = function
   | "__cerbvar_EDOM"            -> 1
@@ -627,6 +628,28 @@ let translate_errno = function
   | str -> error $ "Unknown errno code: " ^ str
 end
 
+val encode_memory_order: Cmm_csem.memory_order -> integer
+let encode_memory_order  = function
+  | Cmm_csem.Relaxed -> 0
+  | Cmm_csem.Consume -> 1
+  | Cmm_csem.Acquire -> 2
+  | Cmm_csem.Release -> 3
+  | Cmm_csem.Acq_rel -> 4
+  | Cmm_csem.Seq_cst -> 5
+  | Cmm_csem.NA -> error $ "encode_memory_order NA"
+end
+
+val decode_memory_order: nat -> maybe Cmm_csem.memory_order
+let decode_memory_order  = function
+  | 0 -> Just $ Cmm_csem.Relaxed
+  | 1 -> Just $ Cmm_csem.Consume
+  | 2 -> Just $ Cmm_csem.Acquire
+  | 3 -> Just $ Cmm_csem.Release
+  | 4 -> Just $ Cmm_csem.Acq_rel
+  | 5 -> Just $ Cmm_csem.Seq_cst
+  | _ -> Nothing
+end
+
 val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (A.expression_ unit * maybe ATypes.ctype)
 let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
   let signed_int = ATypes.Signed ATypes.Int_ in
@@ -635,6 +658,7 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
           , Just (AilTypesAux.mk_ctype_integer signed_int))
   in
   match str with
+    (* errno.h *)
     | "__cerbvar_EDOM"            -> const_int $ translate_errno str
     | "__cerbvar_EILSEQ"          -> const_int $ translate_errno str
     | "__cerbvar_ERANGE"          -> const_int $ translate_errno str
@@ -716,6 +740,14 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
     | "__cerbvar_ETXTBSY"         -> const_int $ translate_errno str
     | "__cerbvar_EWOULDBLOCK"     -> const_int $ translate_errno str
     | "__cerbvar_EXDEV"           -> const_int $ translate_errno str
+    (* stdatomic.h *)
+    | "__cerbvar_memory_order_relaxed" -> const_int $ encode_memory_order Cmm_csem.Relaxed
+    | "__cerbvar_memory_order_consume" -> const_int $ encode_memory_order Cmm_csem.Consume
+    | "__cerbvar_memory_order_acquire" -> const_int $ encode_memory_order Cmm_csem.Acquire
+    | "__cerbvar_memory_order_release" -> const_int $ encode_memory_order Cmm_csem.Release
+    | "__cerbvar_memory_order_acq_rel" -> const_int $ encode_memory_order Cmm_csem.Acq_rel
+    | "__cerbvar_memory_order_seq_cst" -> const_int $ encode_memory_order Cmm_csem.Seq_cst
+    (* stdint.h *)
     | "__cerbvar_PRId8" -> Just (A.AilEbuiltin "PRId8", Nothing)
     | "__cerbvar_PRId16" -> Just (A.AilEbuiltin "PRId16", Nothing)
     | "__cerbvar_PRId32" -> Just (A.AilEbuiltin "PRId32", Nothing)

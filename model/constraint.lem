@@ -20,6 +20,12 @@ type arith_binop_violation =
   (* 6.5.12 Bitwise inclusive OR operator *)
   | BitwiseOrInvalidOperandsType (* §6.5.12#2 *)
 
+type atomic_operations_synopsys =
+  | AtomicLoad
+  | AtomicStore
+  | AtomicExchange
+  | AtomicCompareExchange
+
 type violation =
   (* 6.5 Expressions *)
   (* 6.5.2.2 Function calls *)
@@ -156,6 +162,9 @@ type violation =
   (* 7.2 Diagnostics <assert.h> *)
   (* 7.2.1.1 The assert macro *)
   | AssertMacroExpressionScalarType (* §7.2.1.1#2 *)
+  (* 7.17 Atomics <stdatomic.h> *)
+  | AtomicAddressArgumentMustBeAtomic of atomic_operations_synopsys * ctype
+  | AtomicAddressArgumentMustBePointer of atomic_operations_synopsys * genType
 
 type assignment_violation =
   simple_assignment_violation -> ctype -> genType -> violation
@@ -184,6 +193,17 @@ let std_of_arith_binop_violation = function
       ["§6.5.11#2"]
   | BitwiseOrInvalidOperandsType ->
       ["§6.5.12#2"]
+end
+
+let std_of_atomic_operation_synopsis = function
+  | AtomicStore ->
+      ["§7.17.7.1#1"]
+  | AtomicLoad ->
+      ["§7.17.7.2#1"]
+  | AtomicExchange ->
+      ["§7.17.7.3#1"]
+  | AtomicCompareExchange ->
+      ["§7.17.7.4#1"]
 end
 
 let std_of_violation = function
@@ -373,4 +393,8 @@ let std_of_violation = function
       "§6.9.1#10" :: std_of_assign_violation viol
   | AssertMacroExpressionScalarType ->
       ["§7.2.1.1#2"]
+  | AtomicAddressArgumentMustBeAtomic op _ ->
+      "§7.17.1#5" :: std_of_atomic_operation_synopsis op
+  | AtomicAddressArgumentMustBePointer op _ ->
+      std_of_atomic_operation_synopsis op
 end
