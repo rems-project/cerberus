@@ -549,7 +549,7 @@ export default class View {
             case "unsat":
               throw new Error ("fatal error: unsat step")
           }
-          if (lastCline != undefined && active.loc != undefined && lastCline == active.loc.c.begin.line)
+          if (lastCline != undefined && active.loc != undefined && active.loc.c != undefined && lastCline == active.loc.c.begin.line)
             children = this.executeInteractiveMode(active.id, lastCline)
           break
       }
