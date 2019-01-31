@@ -19,10 +19,6 @@
 #define LDBL_MIN        3.36210314311209350626e-4932L
 #define LDBL_MAX        1.18973149535723176502e+4932L
 
-#define DBL_MANT_DIG 0
-#define DBL_MIN_EXP 0
-#define LDBL_MIN_EXP 0
-#define INFINITY 0
-#define NAN 0
+#define LDBL_MIN_EXP    (-16381)
 
 #endif
