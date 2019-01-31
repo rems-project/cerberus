@@ -1235,7 +1235,8 @@ module BmcZ3 = struct
         Option.get (Ocaml_implementation.Impl.alignof_ity ity)
     | Array0(ty, _) -> alignof_type ty
     | Function0 _ -> assert false
-    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Pointer0 _ ->
+        Option.get (Ocaml_implementation.Impl.sizeof_pointer)
     | Atomic0 (Basic0 _ as _ty) ->
         alignof_type _ty
     | Atomic0 (Pointer0 _ as _ty) ->
@@ -2890,7 +2891,7 @@ module BmcMemCommon = struct
       let size = get_metadata_size metadata in
       let max_address =
         binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
-      binop_to_z3 OpLe max_address (int_to_z3 g_max_addr)
+      binop_to_z3 OpLt max_address (int_to_z3 g_max_addr)
 
     (* TODO: Ew quadratic *)
     (* [start_1, end_1), [start_2, end_2)
@@ -2987,7 +2988,7 @@ module BmcMemCommon = struct
         else
           unsigned_repr spec_value num_bytes in
       let new_array =
-        PNVIByteArray.mk_const_s (sprintf "repr_%d_%d" aid num_bytes) in
+        PNVIByteArray.mk_const_s (sprintf "repr_int_%d_%d" aid num_bytes) in
 
       let spec_asserts = mk_and
         (List.mapi (fun i byte ->
@@ -3008,16 +3009,55 @@ module BmcMemCommon = struct
                unspec_asserts
        ])
 
+    let repr_ptr (value: Expr.expr) (aid: int) =
+      assert (Sort.equal (Expr.get_sort value) LoadedPointer.mk_sort);
+      let ptr = LoadedPointer.get_specified_value value in
+      let num_bytes = g_ptr_size in
+
+      let ptr_addr = AddressSort.get_index (PointerSort.get_addr ptr) in
+
+      let bytes = unsigned_repr ptr_addr num_bytes in
+      let new_array =
+        PNVIByteArray.mk_const_s (sprintf "repr_ptr_%d_%d" aid num_bytes) in
+      let spec_asserts = mk_and
+        (List.mapi (fun i byte ->
+          mk_eq (PNVIByteArray.mk_select new_array (int_to_z3 i))
+                (PNVIByte.mk_byte (PointerSort.get_prov ptr)
+                                  (LoadedInteger.mk_specified byte)
+                                  (IntOption.mk_some (int_to_z3 i))
+                )
+        ) bytes) in
+      let null_asserts = mk_and
+        (List.init num_bytes (fun i ->
+          mk_eq (PNVIByteArray.mk_select new_array (int_to_z3 i))
+                (PNVIByte.mk_byte (int_to_z3 0)
+                                  (LoadedInteger.mk_specified (int_to_z3 0))
+                                  (IntOption.mk_none)
+                )
+        )) in
+      let unspec_asserts = mk_and
+        (List.init num_bytes (fun i ->
+            mk_eq (PNVIByteArray.mk_select new_array (int_to_z3 i))
+                  PNVIByte.unspec_byte
+        )) in
+      (new_array,
+       [mk_ite (LoadedPointer.is_specified value)
+               (mk_ite (PointerSort.is_null ptr)
+                       null_asserts
+                       spec_asserts)
+               unspec_asserts
+       ])
+
     (* Value of sort loaded _*)
     let repr (value: Expr.expr) (ctype: ctype)
              (aid: int)
-             : Expr.expr * Expr.expr list=
+             : Expr.expr * Expr.expr list =
       match ctype with
       | Void0 -> assert false
       | Basic0 (Integer ity) ->
           repr_ity value ity aid
-      | Pointer0 (_, ty) ->
-          assert false
+      | Pointer0 (_, _) ->
+          repr_ptr value aid
       | Array0(cty, Some n) ->
           assert false
       | Atomic0 _ ->
@@ -3064,6 +3104,24 @@ module BmcMemCommon = struct
           mk_ite (mk_or (List.map PNVIByte.is_unspec bytes))
                  (LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype))
                  (LoadedInteger.mk_specified interp)
+      | Pointer0 _ ->
+          assert (List.length bytes = g_ptr_size);
+          let interp_addr = interpret_unsigned_ity bytes in
+          let interp_provenance =
+            let appropriate_index =
+              mk_and (List.mapi (fun i byte ->
+                mk_eq (IntOption.mk_some (int_to_z3 i)) (PNVIByte.get_index byte)
+              ) bytes) in
+            let prov_candidate = PNVIByte.get_provenance (List.hd bytes) in
+            (bmc_debug_print 7 "TODO: look up allocation";
+             mk_ite appropriate_index
+                    prov_candidate
+                    (int_to_z3 0) (* TODO *)
+            ) in
+          mk_ite (mk_or (List.map PNVIByte.is_unspec bytes))
+                 (LoadedPointer.mk_unspecified (CtypeSort.mk_expr ctype))
+                 (LoadedPointer.mk_specified
+                    (PointerSort.mk_ptr_from_int_addr interp_provenance interp_addr))
       | Array0 _ -> assert false
       | Atomic0 _ -> assert false
       | _ -> assert false
