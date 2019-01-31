@@ -682,18 +682,24 @@ module PNVIByte = struct
 
   let get_provenance (expr: Expr.expr) =
     let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 0) in
+    let get_value = List.nth (List.hd accessors) 0 in
     Expr.mk_app g_ctx get_value [ expr ]
 
   let get_value (expr: Expr.expr) =
     let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 1) in
+    let get_value = List.nth (List.hd accessors) 1 in
     Expr.mk_app g_ctx get_value [ expr ]
 
   let get_index(expr: Expr.expr) =
     let accessors = get_accessors mk_sort in
-    let get_value = List.hd (List.nth accessors 2) in
+    let get_value = List.nth (List.hd accessors) 2 in
     Expr.mk_app g_ctx get_value [ expr ]
+
+  let is_unspec (expr: Expr.expr) =
+    LoadedByte.is_unspecified (get_value expr)
+
+  let get_spec_value (expr: Expr.expr) =
+    LoadedByte.get_specified_value (get_value expr)
 
   let unspec_byte : Expr.expr =
     let byte_ctype = CtypeSort.mk_expr (Basic0 (Integer Char)) in
