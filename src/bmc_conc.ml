@@ -292,7 +292,7 @@ module type MemoryModel = sig
   val compute_executions : preexec -> (unit typed_file) -> z3_memory_model
   val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr
                            -> (alloc, allocation_metadata) Pmap.map option
-                           -> string * string list
+                           -> string * string list * bool
 end
 
 module MemoryModelCommon = struct
@@ -750,7 +750,7 @@ module MemoryModelCommon = struct
                           -> execution)
       (ret_value: Expr.expr)
       (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
-      : string * string list =
+      : string * string list * bool =
 
     Solver.push solver;
     let rec aux ret =
@@ -765,11 +765,8 @@ module MemoryModelCommon = struct
     let executions = aux [] in
     let num_races =
         (List.length (List.filter (fun e -> not e.race_free) executions)) in
-
     let output_str =
-      sprintf "# consistent executions: %d\n
-               # executions with races: %d\n
-               Return values: %s\n"
+      sprintf "# consistent executions: %d\n# executions with races: %d\nReturn values: %s\n"
                (List.length executions)
                num_races
                (String.concat ", " (List.map
@@ -797,7 +794,7 @@ module MemoryModelCommon = struct
         save_to_file filename dot
         ) dots;
     Solver.pop solver 1;
-    (output_str,dots)
+    (output_str,dots, num_races = 0)
 end
 
 
@@ -1663,7 +1660,7 @@ module C11MemoryModel : MemoryModel = struct
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
                          (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
-                         : string * string list =
+                         : string * string list * bool =
     MemoryModelCommon.extract_executions
       solver mem extract_execution ret_value metadata_opt
       (*
@@ -2065,7 +2062,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                          (mem      : z3_memory_model)
                          (ret_value: Expr.expr)
                          (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
-                         : string * string list =
+                         : string * string list * bool =
     MemoryModelCommon.extract_executions
       solver mem extract_execution ret_value metadata_opt
 end

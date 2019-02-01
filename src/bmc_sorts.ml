@@ -648,7 +648,7 @@ let pointer_sort =
   else
     (module PointerSortConcrete : PointerSortAPI)
 
-module PointerSort = (val pointer_sort : PointerSortAPI )
+module PointerSort = (val pointer_sort : PointerSortAPI)
 (*module AddressSort = PointerSort.AddrModule*)
 
 
