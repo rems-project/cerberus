@@ -1296,7 +1296,7 @@ module BmcZ3 = struct
         z3_pe index    >>= fun z3d_index ->
         get_file >>= fun file ->
         (* TODO: different w/ address type *)
-        let ty_size = AddressSort.type_size ty in
+        let ty_size = PointerSort.type_size ty in
           (*bmcz3sort_size (ctype_to_bmcz3sort ty file) in*)
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
 
@@ -1377,9 +1377,9 @@ module BmcZ3 = struct
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
     get_fresh_aid >>= fun aid ->
     (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
-    let base_addr = AddressSort.mk_nd_addr alloc_id in
+    let base_addr = PointerSort.mk_nd_addr alloc_id in
 
-    add_metadata alloc_id (AddressSort.type_size ctype,
+    add_metadata alloc_id (PointerSort.type_size ctype,
                            Some ctype,
                            alignof_type align_ty,
                            base_addr,
@@ -1529,39 +1529,35 @@ module BmcZ3 = struct
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
         (* TODO: Get rid of this code duplication *)
-        return (binop_to_z3 OpLt (AddressSort.get_index (PointerSort.get_addr z3d_p1))
-                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
-               )
+        return (binop_to_z3 OpLt (PointerSort.get_addr_index z3d_p1)
+                                 (PointerSort.get_addr_index z3d_p2))
     | Ememop (PtrGt, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
-        return (binop_to_z3 OpGt (AddressSort.get_index (PointerSort.get_addr z3d_p1))
-                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
-               )
+        return (binop_to_z3 OpGt (PointerSort.get_addr_index z3d_p1)
+                                 (PointerSort.get_addr_index z3d_p2))
     | Ememop (PtrLe, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
-        return (binop_to_z3 OpLe (AddressSort.get_index (PointerSort.get_addr z3d_p1))
-                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
-               )
+        return (binop_to_z3 OpLe (PointerSort.get_addr_index z3d_p1)
+                                 (PointerSort.get_addr_index z3d_p2))
     | Ememop (PtrGe, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
-        return (binop_to_z3 OpGe (AddressSort.get_index (PointerSort.get_addr z3d_p1))
-                                 (AddressSort.get_index (PointerSort.get_addr z3d_p2))
-               )
+        return (binop_to_z3 OpGe (PointerSort.get_addr_index z3d_p1)
+                                 (PointerSort.get_addr_index z3d_p2))
     | Ememop (Ptrdiff, [((Pexpr(_,BTy_ctype, (PEval (Vctype ctype)))) as ty);p1;p2]) ->
-        assert g_pnvi;
+        assert (g_pnvi);
         z3_pe ty >>= fun _ ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
         (* TODO: assert PNVI model *)
         let raw_ptr_diff = PointerSort.ptr_diff_raw z3d_p1 z3d_p2 in
-        let type_size = AddressSort.type_size ctype in
+        let type_size = PointerSort.type_size ctype in
         (* TODO *)
         return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
     | Ememop(IntFromPtr, [ctype_src; ctype_dst; ptr]) ->
-        assert g_pnvi;
+        assert (g_pnvi);
         z3_pe ctype_src >>= fun _ ->
         z3_pe ctype_dst >>= fun _ ->
         z3_pe ptr       >>= fun z3d_ptr ->
@@ -1572,10 +1568,10 @@ module BmcZ3 = struct
          *
          * We leave UB to BmcVCs*)
         return (mk_ite (PointerSort.is_null z3d_ptr) (int_to_z3 0)
-                       (AddressSort.get_index (PointerSort.get_addr z3d_ptr))
+                       (PointerSort.get_addr_index z3d_ptr)
                )
     | Ememop(PtrFromInt, [ctype_src;ctype_dst;ival]) ->
-        assert g_pnvi;
+        assert (g_pnvi);
         z3_pe ctype_src >>= fun _ ->
         z3_pe ctype_dst >>= fun _ ->
         z3_pe ival      >>= fun z3d_ival ->
@@ -1599,14 +1595,15 @@ module BmcZ3 = struct
     | Ememop (Memcmp, [p;q;size]) ->
         assert false
     | Ememop (PtrWellAligned,[ctype_pe;ptr]) ->
-        assert g_pnvi;
+        assert (g_pnvi);
+        (* We only support this with byte-wise mode *)
+        failwith "Ptr type-casting not supported";
         (* address of ptr % align of ctype is 0 *)
         (* TODO: what if NULL? *)
         let ctype = ctype_from_pexpr ctype_pe in
         z3_pe ctype_pe >>= fun _ ->
         z3_pe ptr      >>= fun z3d_ptr ->
-        let addr_of_ptr =
-          AddressSort.get_index (PointerSort.get_addr z3d_ptr) in
+        let addr_of_ptr = PointerSort.get_addr_index z3d_ptr in
         let alignment = int_to_z3 (alignof_type ctype) in
         return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
                       (int_to_z3 0)
@@ -2120,14 +2117,14 @@ module BmcBind = struct
         get_meta alloc_id >>= fun metadata ->
         let base_addr = get_metadata_base metadata in
         let max_addr =
-          binop_to_z3 OpAdd (AddressSort.get_index base_addr)
+          binop_to_z3 OpAdd (PointerSort.get_index_from_addr base_addr)
                             (int_to_z3 (get_metadata_size metadata)) in
 
         (* Assert alloc_size(alloc_id) = allocation_size *)
-        return [mk_eq (Expr.mk_app g_ctx AddressSort.alloc_min_decl
+        return [mk_eq (Expr.mk_app g_ctx PointerSort.alloc_min_decl
                                          [int_to_z3 alloc_id])
-                      (AddressSort.get_index base_addr)
-               ;mk_eq (Expr.mk_app g_ctx AddressSort.alloc_max_decl
+                      (PointerSort.get_index_from_addr base_addr)
+               ;mk_eq (Expr.mk_app g_ctx PointerSort.alloc_max_decl
                                          [int_to_z3 alloc_id])
                       max_addr
               ]
@@ -2550,7 +2547,7 @@ module BmcVC = struct
           | _ -> assert false
           ) in
         get_expr (get_id_pexpr ptr) >>= fun z3d_ptr ->
-        let ptr_addr = AddressSort.get_index (PointerSort.get_addr z3d_ptr) in
+        let ptr_addr = PointerSort.get_addr_index z3d_ptr in
         let min_value = Pmap.find ctype ImplFunctions.ivmin_map in
         let max_value = Pmap.find ctype ImplFunctions.ivmax_map in
 
@@ -2880,7 +2877,7 @@ module BmcMemCommon = struct
       let fresh_int = mk_fresh_const (sprintf "align_multiplier: %d" alloc)
                                      integer_sort in
       let align_assert =
-        mk_eq (AddressSort.get_index base_addr)
+        mk_eq (PointerSort.get_index_from_addr base_addr)
               (binop_to_z3 OpMul (int_to_z3 alignment) fresh_int) in
       [align_assert
       ;binop_to_z3 OpGt fresh_int (int_to_z3 0)] (* > 0 *)
@@ -2890,7 +2887,7 @@ module BmcMemCommon = struct
       let base_addr = get_metadata_base metadata in
       let size = get_metadata_size metadata in
       let max_address =
-        binop_to_z3 OpAdd (AddressSort.get_index base_addr) (int_to_z3 size) in
+        binop_to_z3 OpAdd (PointerSort.get_index_from_addr base_addr) (int_to_z3 size) in
       binop_to_z3 OpLt max_address (int_to_z3 g_max_addr)
 
     (* TODO: Ew quadratic *)
@@ -2905,10 +2902,10 @@ module BmcMemCommon = struct
                             : Expr.expr list =
       if id1 = id2 then []
       else begin
-        let start_1 = AddressSort.get_index (get_metadata_base meta1) in
+        let start_1 = PointerSort.get_index_from_addr (get_metadata_base meta1) in
         let end_1   = binop_to_z3 OpAdd start_1
                                         (int_to_z3 (get_metadata_size meta1)) in
-        let start_2 = AddressSort.get_index (get_metadata_base meta2) in
+        let start_2 = PointerSort.get_index_from_addr (get_metadata_base meta2) in
         let end_2   = binop_to_z3 OpAdd start_2
                                         (int_to_z3 (get_metadata_size meta2)) in
         [mk_or [binop_to_z3 OpGe start_2 end_1
@@ -2943,8 +2940,8 @@ module BmcMemCommon = struct
                               (data: (int, allocation_metadata) Pmap.map)
                               : Expr.expr list =
       let ival_max =
-        binop_to_z3 OpAdd ival (int_to_z3 ((AddressSort.type_size ctype) - 1)) in
-      let prov = AddressSort.get_provenance ival ival_max data in
+        binop_to_z3 OpAdd ival (int_to_z3 ((PointerSort.type_size ctype) - 1)) in
+      let prov = PointerSort.get_provenance ival ival_max data in
       assert (is_some prov);
       [mk_eq sym (Option.get prov)]
 
@@ -3226,7 +3223,7 @@ module BmcSeqMem = struct
 
     (* TODO: concrete only *)
     let mk_addr_expr (addr: addr) =
-      AddressSort.mk_from_addr addr
+      PointerSort.mk_from_alloc_index addr
 
     let mk_shift (alloc: alloc_id) (index: index) (_: Expr.expr) =
       (alloc, index)
@@ -3238,7 +3235,7 @@ module BmcSeqMem = struct
 
   module MemPNVI : SEQMEM = struct
     type alloc_id = int
-    type addr = alloc_id (* addr is really just a range of addresses *)
+    type addr = Expr.expr (* addr is really just a range of addresses *)
     type index = int
     (* memory_table as an alloc_id/address range? alloc_id
      * associated with address range *)
@@ -3253,8 +3250,7 @@ module BmcSeqMem = struct
     let empty_memory = Pmap.empty addr_cmp
 
     let print_addr (addr: addr) =
-      string_of_int addr
-      (*Expr.to_string addr*)
+      Expr.to_string addr
 
     let print_memory (table: memory_table): unit =
       Pmap.iter (fun addr expr ->
@@ -3299,14 +3295,11 @@ module BmcSeqMem = struct
           Pmap.add addr new_expr acc
       ) mod_addr base
 
-    (* TODO: concrete only *)
     let mk_addr_expr (addr: addr) =
-      assert false
-      (*addr*)
+      addr
 
     let mk_shift (_: alloc_id) (index: index) (addr: Expr.expr) =
-      assert false
-      (*AddressSort.shift_index_by_n addr (int_to_z3 index)*)
+      PointerSort.shift_index_by_n addr (int_to_z3 index)
 
     let metadata_assertions (data: (int * allocation_metadata) list)
                             : Expr.expr list =
@@ -3586,7 +3579,7 @@ module BmcSeqMem = struct
     let base_addr = get_metadata_base metadata in
     mapMi (fun i (ctype,sort) ->
       let index = List.fold_left
-          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
           0 (list_take i sortlist) in
       let addr = SeqMem.mk_shift alloc_id index base_addr in
 
@@ -3717,10 +3710,10 @@ module BmcSeqMem = struct
           get_memory >>= fun possible_addresses ->
 
           let index = List.fold_left
-              (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+              (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
               0 (list_take i type_list) in
           let target_addr =
-            AddressSort.shift_index_by_n (PointerSort.get_addr ptr)
+            PointerSort.shift_index_by_n (PointerSort.get_addr ptr)
                                          (int_to_z3 index) in
           (*let target_addr =
               AddressSort.shift_index_by_n
@@ -3898,7 +3891,7 @@ module BmcSeqMem = struct
         let eq_expr =
           mk_eq sym_expr
                 (PointerSort.mk_ptr (int_to_z3 alloc_id)
-                                    (AddressSort.mk_from_addr (alloc_id, 0))) in
+                                    (PointerSort.mk_from_alloc_index (alloc_id, 0))) in
         (* TODO: need extra assertions for arrays/pointers *)
         return { bindings = eq_expr :: ret.bindings
                ; mod_addr = ret.mod_addr
@@ -4127,12 +4120,12 @@ module BmcConcActions = struct
 
     mapMi_ (fun i (cype,sort) ->
       let index = List.fold_left
-          (fun acc (ty, _) -> acc + (AddressSort.type_size ctype))
+          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
           0 (list_take i sortlist) in
       let target_addr =
-        AddressSort.shift_index_by_n base_addr (int_to_z3 index) in
+        PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
       let is_atomic =
-        AddressSort.assert_is_atomic target_addr (is_atomic_fn ctype) in
+        PointerSort.assert_is_atomic target_addr (is_atomic_fn ctype) in
       add_assertion is_atomic
     ) sortlist >>
     let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
@@ -4463,7 +4456,7 @@ module BmcConcActions = struct
     get_prov_syms >>= fun prov_syms ->
 
     let pnvi_asserts =
-      if g_pnvi then begin
+      if (g_pnvi) then begin
         let metadata_list = Pmap.bindings_list metadata in
         let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
         let provenance_asserts =

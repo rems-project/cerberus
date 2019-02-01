@@ -60,13 +60,13 @@ let ctype_of_bmcaction(bmcaction: bmc_action) : ctype =
   ctype_of_action (get_action bmcaction)
 
 let size_of_bmcaction(bmcaction: bmc_action) : int =
-  AddressSort.type_size (ctype_of_bmcaction bmcaction)
+  PointerSort.type_size (ctype_of_bmcaction bmcaction)
 
 let max_addr_of_bmcaction (bmcaction: bmc_action) =
   let base_addr = addr_of_bmcaction bmcaction in
   let size = size_of_bmcaction bmcaction in
   assert (size > 0);
-  AddressSort.shift_index_by_n base_addr (int_to_z3 (size - 1))
+  PointerSort.shift_index_by_n base_addr (int_to_z3 (size - 1))
 
 let is_initial_bmcaction (bmcaction: bmc_action) =
   tid_of_bmcaction bmcaction = initial_tid
@@ -407,8 +407,8 @@ module MemoryModelCommon = struct
     ; tid      = mk_decl "tid"      [events] (Integer.mk_sort g_ctx)
     ; guard    = mk_decl "guard"    [events] boolean_sort
     ; etype    = mk_decl "etype"    [events] mk_event_type
-    ; addr     = mk_decl "addr"     [events] AddressSort.mk_sort
-    ; addr_max = mk_decl "addr_max" [events] AddressSort.mk_sort
+    ; addr     = mk_decl "addr"     [events] PointerSort.mk_addr_sort
+    ; addr_max = mk_decl "addr_max" [events] PointerSort.mk_addr_sort
     ; memord   = mk_decl "memord"   [events] mk_memord_type
     ; rval     = mk_decl "rval"     [events] Loaded.mk_sort
     ; wval     = mk_decl "wval"     [events] Loaded.mk_sort
@@ -632,19 +632,19 @@ module MemoryModelCommon = struct
                 r_r) @
       (List.map (fun (w1,w2) ->
         mk_eq (mk_same_loc (w1,w2))
-              (mk_or [AddressSort.addr_subset (get_addr w1)
+              (mk_or [PointerSort.addr_subset (get_addr w1)
                                               (get_addr w2) (get_addr_max w2)
-                     ;AddressSort.addr_subset (get_addr w2)
+                     ;PointerSort.addr_subset (get_addr w2)
                                               (get_addr w1) (get_addr_max w1)
                      ])
       ) w_w) @
       (List.map (fun (w,r) ->
         mk_eq (mk_same_loc (w,r))
-              (AddressSort.addr_subset (get_addr r) (get_addr w) (get_addr_max w))
+              (PointerSort.addr_subset (get_addr r) (get_addr w) (get_addr_max w))
       ) w_r) @
       (List.map (fun (r,w) ->
         mk_eq (mk_same_loc (r,w))
-              (AddressSort.addr_subset (get_addr r) (get_addr w) (get_addr_max w))
+              (PointerSort.addr_subset (get_addr r) (get_addr w) (get_addr_max w))
       ) r_w) @
       (List.map (fun (a,b) -> mk_eq (mk_same_loc (a,b)) mk_false) not_rel) in
 
@@ -654,8 +654,8 @@ module MemoryModelCommon = struct
      * write *)
     let well_formed_rf = List.map (fun action ->
       let e = z3action action in
-      let read_addr = AddressSort.get_index (addr_of_bmcaction action) in
-      let write_base = AddressSort.get_index (fns.getAddr (fns.rf_inv e)) in
+      let read_addr = PointerSort.get_index_from_addr (addr_of_bmcaction action) in
+      let write_base = PointerSort.get_index_from_addr (fns.getAddr (fns.rf_inv e)) in
       let diff = binop_to_z3 OpSub read_addr write_base in
       let sizeof_read = size_of_bmcaction action in
       let index = binop_to_z3 OpDiv diff (int_to_z3 sizeof_read) in
@@ -1465,7 +1465,7 @@ module C11MemoryModel : MemoryModel = struct
     List.map (fun (alloc,metadata) ->
       let addr_base = get_metadata_base metadata in
       let addr_size = get_metadata_size metadata in
-      let addr_min = AddressSort.get_index addr_base in
+      let addr_min = PointerSort.get_index_from_addr addr_base in
       let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
       let prefix = get_metadata_prefix metadata in
       match (interp addr_min, interp addr_max) with
