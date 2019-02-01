@@ -154,8 +154,8 @@ module BmcInline = struct
 
   (* TODO: move this; really same as core_aux except typed. *)
 
-  let mk_sym_pat sym2 bTy: typed_pattern =
-   (Pattern( [], (CaseBase (Some sym2, bTy))))
+  let mk_sym_pat sym_opt bTy: typed_pattern =
+   (Pattern( [], (CaseBase (sym_opt, bTy))))
 
   let mk_ctype_pe ty: typed_pexpr =
    (Pexpr( [], BTy_ctype, (PEval (Vctype ty))))
@@ -533,18 +533,20 @@ module BmcInline = struct
     | Eunseq es ->
         mapM inline_e es >>= fun inlined_es ->
         return (Eunseq(inlined_es))
-    | Ewseq (pat, e1, e2) ->
+    | Ewseq (pat, e1, e2) (* fall through *)
+    | Esseq (pat, e1, e2) ->
         (* TODO: Hacky rewrite b/c Z3 dislikes tuples with any interesting type
          * Flatten structure to avoid tuply listy stuff. *)
-        if is_c_function_call pat e1 then
+        let cfun_opt = extract_cfun_if_cfun_call pat e1 e2 in
+        if is_some cfun_opt then
           begin
-          let cfun_info = extract_cfun pat e1 in
+          let cfun_info = Option.get cfun_opt in
           get_function_from_ptr cfun_info.ptr >>= fun fn_sym ->
           get_file >>= fun file ->
           let to_seq_list =
             begin match Pmap.lookup fn_sym file.funinfo with
             | Some (ret_ty, args_ty, b1, b2) ->
-              [(mk_sym_pat (cfun_info.fn_ptr) (BTy_loaded OTy_pointer),
+              [(mk_sym_pat (Some cfun_info.fn_ptr) (BTy_loaded OTy_pointer),
                 cfun_info.core_ptr_pexpr)
               ;(mk_sym_pat (cfun_info.ret_ty) BTy_ctype,
                 mk_ctype_pe ret_ty)
@@ -562,10 +564,10 @@ module BmcInline = struct
             begin
             match List.fold_right (fun (pat, pe) erest ->
                 Expr([], Elet(pat, pe, erest))
-              ) to_seq_list e2  with
+              ) to_seq_list cfun_info.continuation  with
             | Expr([], Elet(new_pat, new_pe1, new_e2)) ->
                 inline_pe new_pe1 >>= fun inlined_new_pe1 ->
-                inline_e new_e2 >>= fun inlined_new_e2 ->
+                inline_e new_e2   >>= fun inlined_new_e2 ->
                 bmc_debug_print 7 "TODO: fn_call hack";
                 return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
             | _ -> assert false
@@ -574,12 +576,11 @@ module BmcInline = struct
         else begin
           inline_e e1 >>= fun inlined_e1 ->
           inline_e e2 >>= fun inlined_e2 ->
-          return (Ewseq(pat, inlined_e1, inlined_e2))
+          match e_ with
+          | Ewseq _ -> return (Ewseq(pat, inlined_e1, inlined_e2))
+          | Esseq _ -> return (Esseq(pat, inlined_e1, inlined_e2))
+          | _ -> assert false
         end
-    | Esseq (pat, e1, e2) ->
-        inline_e e1 >>= fun inlined_e1 ->
-        inline_e e2 >>= fun inlined_e2 ->
-        return (Esseq(pat, inlined_e1, inlined_e2))
     | Easeq _ -> assert false
     | Eindet (n, e) ->
         inline_e e >>= fun inlined_e ->
@@ -683,7 +684,7 @@ module BmcSSA = struct
 
   let mk_initial file inline_pexpr_map inline_expr_map : state =
     { sym_table        = Pmap.empty sym_cmp;
-      sym_expr_table     = Pmap.empty sym_cmp;
+      sym_expr_table   = Pmap.empty sym_cmp;
       file             = file;
       inline_pexpr_map = inline_pexpr_map;
       inline_expr_map  = inline_expr_map;

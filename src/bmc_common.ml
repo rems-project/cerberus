@@ -486,58 +486,110 @@ end
  * in...
  *)
 
-let is_c_function_call (pat: typed_pattern) (expr: unit typed_expr)
-                       : bool =
-  match (pat, expr) with
-  | (Pattern(_, (CaseCtor(Ctuple,
-              [Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer)))
-              ;Pattern(_, (CaseCtor(Ctuple, _)))
-              ]))),
-     Expr(_, (Esseq(Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer))),
-                    Expr(_, (Epure(Pexpr(_,_,
-                                         PEval(Vloaded (LVspecified (OVpointer p))))))),
-                    Expr(_,
-                    (Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction
-                    _)]))))))))) -> true
+let is_ptr_pat (pat: typed_pattern) : bool =
+  match pat with
+  | Pattern(_, (CaseBase(Some _, BTy_loaded OTy_pointer))) -> true
   | _ -> false
+
+let get_sym_from_base_pattern (pat: typed_pattern) : sym_ty option =
+  match pat with
+  | Pattern(_, (CaseBase(sym, _))) -> sym
+  | _ -> assert false
+
+let is_loaded_ptr_expr (expr: unit typed_expr) =
+  match expr with
+  | Expr(_, (Epure(Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p))))))) ->
+      true
+  | _ -> false
+
+let get_ptr_from_loaded_ptr_expr (expr: unit typed_expr)
+                                 : Ocaml_mem.pointer_value =
+  match expr with
+  | Expr(_, (Epure(Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p))))))) ->
+      p
+  | _ -> assert false
+
 
 type cfun_call_symbols = {
   fn_ptr  : sym_ty;
-  fn_ptr_inner : sym_ty;
-  ret_ty  : sym_ty;
-  arg_tys : sym_ty;
-  bool1   : sym_ty; (* TODO: no idea what these are *)
-  bool2   : sym_ty;
+  (*fn_ptr_inner : sym_ty;*)
+  ret_ty  : sym_ty option;
+  arg_tys : sym_ty option;
+  bool1   : sym_ty option; (* TODO: no idea what these are *)
+  bool2   : sym_ty option;
   ptr     : Ocaml_mem.pointer_value;
   core_ptr_pexpr: typed_pexpr;
-
+  continuation  : unit typed_expr;
 }
 
-let extract_cfun (pat: typed_pattern) (expr: unit typed_expr)
-                 : cfun_call_symbols =
-  match (pat, expr) with
+(* TODO: big hack for function calls...
+ *
+ *)
+
+let extract_cfun_if_cfun_call (pat: typed_pattern)
+                              (e1: unit typed_expr)
+                              (e2: unit typed_expr)
+                              : cfun_call_symbols option =
+  match (pat, e1,e2) with
   | (Pattern(_, (CaseCtor(Ctuple,
-              [Pattern(_, (CaseBase(Some fn_ptr, BTy_loaded OTy_pointer)))
-              ;Pattern(_, (CaseCtor(Ctuple, tuple)))
-              ]))),
-     Expr(_, (Esseq(Pattern(_, (CaseBase(Some sym2, BTy_loaded OTy_pointer))),
-              (Expr(_, (Epure
-                        ((Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p)))) as core_ptr_pexpr))))),
-              Expr(_,(Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction
-                    _)]))))))))) ->
-       let tuple_syms  = List.map (fun pat ->
-         match pat with
-         | Pattern(_, (CaseBase(Some sym, _))) -> sym
-         | _ -> assert false
-       ) tuple in
-       assert (List.length tuple_syms = 4);
-       { fn_ptr  = fn_ptr;
-         fn_ptr_inner = sym2;
-         ret_ty  = List.nth tuple_syms 0;
-         arg_tys = List.nth tuple_syms 1;
-         bool1   = List.nth tuple_syms 2; (* TODO: no idea what these are *)
-         bool2   = List.nth tuple_syms 3;
-         ptr     = p;
-         core_ptr_pexpr = core_ptr_pexpr
-       }
-  | _ -> assert false
+              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))]))),
+     Expr(_, (Esseq(
+       ptr_pat2,
+       ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),
+       Expr(_,(Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction _)])))))))),_) ->
+   (*
+   * let weak (p': loaded pointer, (...)) =
+   *     let strong p : loaded pointer = pure(Specified(Cfunction(f))) in
+   *     (p, cfunction(p))
+   * in...
+   *)
+      if (is_ptr_pat ptr_pat1 && is_ptr_pat ptr_pat2 &&
+          is_loaded_ptr_expr loaded_ptr_expr)
+      then begin
+        pp_to_stdout (Pp_core.Basic.pp_expr e1);
+        pp_to_stdout (Pp_core.Basic.pp_expr e2);
+
+        let tuple_syms  = List.map get_sym_from_base_pattern tuple in
+        assert (List.length tuple_syms = 4);
+        Some { fn_ptr       = Option.get (get_sym_from_base_pattern ptr_pat1);
+               (*fn_ptr_inner = get_sym_from_base_pattern ptr_pat2;*)
+               ret_ty       = List.nth tuple_syms 0;
+               arg_tys      = List.nth tuple_syms 1;
+               bool1 = List.nth tuple_syms 2; (* TODO: No idea what these are *)
+               bool2 = List.nth tuple_syms 3;
+               ptr   = get_ptr_from_loaded_ptr_expr loaded_ptr_expr;
+               core_ptr_pexpr = loaded_ptr_pexpr;
+               continuation   = e2;
+             }
+      end else
+        None
+  | (_,
+    Expr(_, (Epure(loaded_ptr_pexpr))),
+    Expr(_, (Esseq(Pattern(_, (CaseCtor(Ctuple, tuple))),
+                   Expr(_,(Epure(Pexpr(_,_,PEcfunction (Pexpr(_,_,PEsym p)))))),
+                   continuation
+            )))) ->
+     (*
+      * for a void function call:
+      *   let strong p : loaded pointer = pure(Specified(Cfunction(f...))) in
+      *   let strong (... : tuple) = pure (c_function(p)) in ...
+      *)
+      if (is_ptr_pat pat && is_loaded_ptr_expr e1 &&
+          sym_eq p (Option.get (get_sym_from_base_pattern pat)))
+      then begin
+        let tuple_syms  = List.map get_sym_from_base_pattern tuple in
+        assert (List.length tuple_syms = 4);
+        Some { fn_ptr       = Option.get(get_sym_from_base_pattern pat);
+               (*fn_ptr_inner = get_sym_from_base_pattern ptr_pat2;*)
+               ret_ty       = List.nth tuple_syms 0;
+               arg_tys      = List.nth tuple_syms 1;
+               bool1 = List.nth tuple_syms 2; (* TODO: No idea what these are *)
+               bool2 = List.nth tuple_syms 3;
+               ptr   = get_ptr_from_loaded_ptr_expr e1;
+               core_ptr_pexpr = loaded_ptr_pexpr;
+               continuation   = continuation;
+             }
+      end else
+        None
+  | _ -> None
+
