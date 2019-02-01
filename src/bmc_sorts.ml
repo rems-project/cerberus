@@ -371,7 +371,6 @@ module AddressSortConcrete = struct
   let get_provenance _ _ _ = None
 end
 
-
 (* PNVI ptr:
    | Null
    | Ptr of provenance * addr
@@ -383,8 +382,49 @@ end
   Let's just define 0 = empty provenance
 *)
 
-(* TODO: figure out how to consistently switch between concrete and PNVI *)
-module PointerSortPNVI = struct
+module type PointerSortAPI = sig
+  val mk_sort : Sort.sort
+
+  val mk_ptr : Expr.expr -> Expr.expr -> Expr.expr
+  val mk_ptr_from_int_addr : Expr.expr -> Expr.expr -> Expr.expr
+
+  val mk_null : Expr.expr
+  val mk_fn_ptr : Expr.expr
+
+  val is_null : Expr.expr -> Expr.expr
+  val get_addr : Expr.expr -> Expr.expr
+
+  val shift_by_n : Expr.expr -> Expr.expr -> Expr.expr
+  val provenance_of_decl : FuncDecl.func_decl
+
+  val valid_ptr : Expr.expr -> Expr.expr
+
+  val ptr_comparable : Expr.expr -> Expr.expr -> Expr.expr
+  val ptr_in_range : Expr.expr -> Expr.expr
+
+  val ptr_eq : Expr.expr -> Expr.expr -> Expr.expr
+  val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
+
+  val type_size : ctype -> int
+  val mk_nd_addr : int -> Expr.expr
+  val get_index_from_addr : Expr.expr -> Expr.expr
+  val get_addr_index : Expr.expr -> Expr.expr
+  val alloc_min_decl : FuncDecl.func_decl
+  val alloc_max_decl : FuncDecl.func_decl
+
+  val get_provenance : Expr.expr -> Expr.expr ->
+                      (int, allocation_metadata) Pmap.map -> Expr.expr option
+  val shift_index_by_n : Expr.expr -> Expr.expr -> Expr.expr
+
+  val mk_addr_sort : Sort.sort
+  val addr_subset : Expr.expr -> Expr.expr -> Expr.expr -> Expr.expr
+  val mk_from_alloc_index  : (int * int) -> Expr.expr
+  val assert_is_atomic : Expr.expr -> Expr.expr -> Expr.expr
+
+  val pp : Expr.expr -> string
+end
+
+module PointerSortPNVI : PointerSortAPI = struct
   open Z3.Datatype
   open Z3.FuncDecl
 
@@ -493,9 +533,26 @@ module PointerSortPNVI = struct
         let pp_addr = AddressSortPNVI.pp addr in
         sprintf "ptr(@%s, %s)" pp_prov pp_addr
     | _ -> Expr.to_string expr
+
+  (* TODO: Do this properly with signatures *)
+  let type_size = AddrModule.type_size
+  let mk_nd_addr = AddrModule.mk_nd_addr
+  let get_index_from_addr addr =
+    AddrModule.get_index addr
+  let get_addr_index ptr =
+    get_index_from_addr (get_addr ptr)
+  let alloc_min_decl = AddrModule.alloc_min_decl
+  let alloc_max_decl = AddrModule.alloc_max_decl
+  let get_provenance = AddrModule.get_provenance
+  let shift_index_by_n = AddrModule.shift_index_by_n
+
+  let mk_addr_sort = AddrModule.mk_sort
+  let addr_subset = AddrModule.addr_subset
+  let mk_from_alloc_index = AddrModule.mk_from_addr
+  let assert_is_atomic = AddrModule.assert_is_atomic
 end
 
-module PointerSortConcrete = struct
+module PointerSortConcrete : PointerSortAPI = struct
   open Z3.Datatype
   open Z3.FuncDecl
 
@@ -567,10 +624,32 @@ module PointerSortConcrete = struct
     mk_fresh_func_decl g_ctx "prov_of" [integer_sort] integer_sort
 
   let pp expr = Expr.to_string expr
+
+  (* TODO: Do this properly with signatures *)
+  let type_size = AddrModule.type_size
+  let mk_nd_addr = AddrModule.mk_nd_addr
+  let get_index_from_addr addr =
+    AddrModule.get_index addr
+  let get_addr_index ptr =
+    get_index_from_addr (get_addr ptr)
+  let alloc_min_decl = AddrModule.alloc_min_decl
+  let alloc_max_decl = AddrModule.alloc_max_decl
+  let get_provenance = AddrModule.get_provenance
+  let shift_index_by_n = AddrModule.shift_index_by_n
+  let mk_addr_sort = AddrModule.mk_sort
+  let addr_subset = AddrModule.addr_subset
+  let mk_from_alloc_index = AddrModule.mk_from_addr
+  let assert_is_atomic = AddrModule.assert_is_atomic
 end
 
-module PointerSort = PointerSortConcrete
-module AddressSort = PointerSort.AddrModule
+let pointer_sort =
+  if g_pnvi then
+    (module PointerSortPNVI : PointerSortAPI)
+  else
+    (module PointerSortConcrete : PointerSortAPI)
+
+module PointerSort = (val pointer_sort : PointerSortAPI )
+(*module AddressSort = PointerSort.AddrModule*)
 
 
 (* TODO: should create once using fresh names and reuse.
