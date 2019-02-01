@@ -2067,12 +2067,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       solver mem extract_execution ret_value metadata_opt
 end
 
-module BmcMem = C11MemoryModel
+(*module BmcMem = C11MemoryModel*)
 (*module BmcMem = GenericModel(Partial_RC11Model)*)
 
 (* TODO: figure out syntax *)
-(*
 let cat_model =
   CatParser.load_file g_model_file
 module BmcMem = GenericModel (val cat_model)
-  *)

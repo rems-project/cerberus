@@ -2509,7 +2509,22 @@ module BmcVC = struct
                  VcDebugStr(string_of_int uid ^ "_CompareExchangeStrong_memorder"))]
     | CompareExchangeStrong _ -> assert false
     | LinuxFence _ -> return []
+    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
+                  (Pexpr(_,_,PEsym sym)), wval, memorder) ->
+        vcs_pe wval                     >>= fun vcs_wval ->
+        lookup_sym sym                  >>= fun ptr_z3 ->
+
+        bmc_debug_print 7 "TODO: VCs of LinuxStore. Check memory order";
+        return ((PointerSort.valid_ptr ptr_z3,
+                 VcDebugStr (string_of_int uid ^ "_Store_invalid_ptr"))
+                 :: vcs_wval)
     | LinuxStore _ -> assert false
+    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
+                 (Pexpr(_,_,PEsym sym)), memorder) ->
+        lookup_sym sym >>= fun ptr_z3 ->
+        return [(PointerSort.valid_ptr ptr_z3,
+                 VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
+               ]
     | LinuxLoad _  -> assert false
     | LinuxRMW _ -> assert false
 
@@ -4181,12 +4196,15 @@ module BmcConcActions = struct
     | IFence (aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
-    | ILinuxLoad(aid, _, _, ptr, rval, mo) ->
-        assert false
-    | ILinuxStore(aid, _, _, ptr, wval, mo) ->
-        assert false
+    | ILinuxLoad(aid, ctype, _, ptr, rval, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Load(aid, tid, Linux_mem_order mo, ptr, rval, ctype))]
+    | ILinuxStore(aid, ctype, _, ptr, wval, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Store(aid, tid, Linux_mem_order mo, ptr, wval, ctype))]
     | ILinuxFence(aid, mo) ->
-        assert false
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Fence(aid, tid, Linux_mem_order mo))]
     ) >>= fun actions ->
     (* Just for convenience *)
     mapM (fun action -> add_action_to_bmc_action_map
