@@ -99,6 +99,8 @@ let int_to_z3 (i: int) : Expr.expr =
 (* ========== Core symbol functions ============= *)
 let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method
 
+let sym_eq sym1 sym2 = sym_cmp sym1 sym2 = 0
+
 let symbol_to_string (sym: sym_ty) =
   match sym with
   | Symbol (_, num, Some str) ->
