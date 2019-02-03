@@ -795,6 +795,46 @@ module MemoryModelCommon = struct
         ) dots;
     Solver.pop solver 1;
     (output_str,dots, num_races = 0)
+
+  let get_address_ranges (data: (int * allocation_metadata) list)
+                         (interp: Expr.expr -> Expr.expr option)
+                         : (int * (int * int) option * Sym.prefix) list =
+    List.map (fun (alloc,metadata) ->
+      let addr_base = get_metadata_base metadata in
+      let addr_size = get_metadata_size metadata in
+      let addr_min = PointerSort.get_index_from_addr addr_base in
+      let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
+      let prefix = get_metadata_prefix metadata in
+      match (interp addr_min, interp addr_max) with
+      | Some min , Some max ->
+          if (Arithmetic.is_int min && Arithmetic.is_int max) then
+            (alloc,Some (Integer.get_int min, Integer.get_int max),prefix)
+          else
+            (alloc,None, prefix)
+      | _ -> (alloc,None, prefix)
+    ) data
+
+  let loc_to_string (loc: Expr.expr)
+                    (ranges: (int * ((int * int) option) * Sym.prefix) list)
+                    : string =
+    match Expr.get_args loc with
+    | [a1] ->
+        if (Arithmetic.is_int a1) then
+          let addr = Integer.get_int a1 in
+          match (List.find_opt (fun (alloc, range_opt, prefix) ->
+            if range_opt = None then false
+            else
+              let (addr_min, addr_max) = Option.get range_opt in
+              (addr_min <= addr && addr <= addr_max)
+            ) ranges) with
+          | Some (alloc, Some (min, max), prefix) ->
+              sprintf "%s{%d}"  (prefix_to_string prefix)
+                                (addr - min)
+          | _ -> Expr.to_string loc
+        else Expr.to_string loc
+    | _ ->
+        Expr.to_string loc
+
 end
 
 
@@ -1454,47 +1494,6 @@ module C11MemoryModel : MemoryModel = struct
                  @ sbrf_clk
     }
 
-  (* ==== HACKY STUFF TO PPRINT LOCATIONS ==== *)
-  (* Get map from alloc -> (base addr, max_addr, prefix) *)
-  let get_address_ranges (data: (int * allocation_metadata) list)
-                         (interp: Expr.expr -> Expr.expr option)
-                         : (int * (int * int) option * Sym.prefix) list =
-    List.map (fun (alloc,metadata) ->
-      let addr_base = get_metadata_base metadata in
-      let addr_size = get_metadata_size metadata in
-      let addr_min = PointerSort.get_index_from_addr addr_base in
-      let addr_max = binop_to_z3 OpAdd addr_min (int_to_z3 (addr_size - 1)) in
-      let prefix = get_metadata_prefix metadata in
-      match (interp addr_min, interp addr_max) with
-      | Some min , Some max ->
-          if (Arithmetic.is_int min && Arithmetic.is_int max) then
-            (alloc,Some (Integer.get_int min, Integer.get_int max),prefix)
-          else
-            (alloc,None, prefix)
-      | _ -> (alloc,None, prefix)
-    ) data
-
-  let loc_to_string (loc: Expr.expr)
-                    (ranges: (int * ((int * int) option) * Sym.prefix) list)
-                    : string =
-    match Expr.get_args loc with
-    | [a1] ->
-        if (Arithmetic.is_int a1) then
-          let addr = Integer.get_int a1 in
-          match (List.find_opt (fun (alloc, range_opt, prefix) ->
-            if range_opt = None then false
-            else
-              let (addr_min, addr_max) = Option.get range_opt in
-              (addr_min <= addr && addr <= addr_max)
-            ) ranges) with
-          | Some (alloc, Some (min, max), prefix) ->
-              sprintf "%s{%d}"  (prefix_to_string prefix)
-                                (addr - min)
-          | _ -> Expr.to_string loc
-        else Expr.to_string loc
-    | _ ->
-        Expr.to_string loc
-
   let extract_execution (model    : Model.model)
                         (mem      : z3_memory_model)
                         (ret_value: Expr.expr)
@@ -1511,8 +1510,9 @@ module C11MemoryModel : MemoryModel = struct
 
     let ranges =
       if is_some metadata_opt then
-        get_address_ranges (Pmap.bindings_list (Option.get metadata_opt))
-                           (fun expr -> Model.eval model expr false)
+        MemoryModelCommon.get_address_ranges
+            (Pmap.bindings_list (Option.get metadata_opt))
+            (fun expr -> Model.eval model expr false)
       else
         []
     in
@@ -1548,7 +1548,7 @@ module C11MemoryModel : MemoryModel = struct
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
       | RMW(_,_,_,loc,_,_,_) ->
-          Pmap.add loc (loc_to_string loc ranges) base
+          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       | Fence _ ->
           base
       ) (Pmap.empty Expr.compare) (action_events) in
@@ -1962,6 +1962,16 @@ module GenericModel (M: CatModel) : MemoryModel = struct
        | L_FALSE -> false
        | _ -> false in
     let get_relation rel (p1,p2) = get_bool (interp (rel (snd p1, snd p2))) in
+
+    let ranges =
+      if is_some metadata_opt then
+        MemoryModelCommon.get_address_ranges
+            (Pmap.bindings_list (Option.get metadata_opt))
+            (fun expr -> Model.eval model expr false)
+      else
+        []
+    in
+
     let action_events = List.fold_left (fun acc (aid, action) ->
       let event = Pmap.find aid mem.event_map in
       (*if tid_of_action action = initial_tid then acc*)
@@ -1985,6 +1995,17 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
+
+    let loc_pprinting = List.fold_left (fun base (action,_) ->
+      match action with
+      | Load (_,_,_,loc,_,_) (* fall through *)
+      | Store(_,_,_,loc,_,_) (* fall through *)
+      | RMW(_,_,_,loc,_,_,_) ->
+          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+      | Fence _ ->
+          base
+      ) (Pmap.empty Expr.compare) (action_events) in
+
     let not_initial action = (tid_of_action action <> initial_tid) in
     let remove_initial rel =
       List.filter (fun (x,y) -> not_initial x && not_initial y) rel in
@@ -2054,7 +2075,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; race_free = true (* TODO *)
     (*race_free = (List.length data_race = 0) && (List.length unseq_race =
       0)*)
-    ; loc_pprinting = Pmap.empty Expr.compare
+    ; loc_pprinting = loc_pprinting
     }
 
   (* TODO: fix api *)
@@ -2067,10 +2088,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       solver mem extract_execution ret_value metadata_opt
 end
 
-(*module BmcMem = C11MemoryModel*)
+module BmcMem = C11MemoryModel
 (*module BmcMem = GenericModel(Partial_RC11Model)*)
 
 (* TODO: figure out syntax *)
-let cat_model =
+(*let cat_model =
   CatParser.load_file g_model_file
-module BmcMem = GenericModel (val cat_model)
+module BmcMem = GenericModel (val cat_model)*)

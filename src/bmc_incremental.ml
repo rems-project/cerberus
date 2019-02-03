@@ -2145,19 +2145,35 @@ module BmcBind = struct
     | Load0 _ ->
         assert false
     | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-        return []
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        bind_pe pe3 >>= fun bound_pe3 ->
+        bind_pe pe4 >>= fun bound_pe4 ->
+        return (bound_pe1 @ bound_pe2 @ bound_pe3 @ bound_pe4)
     | Fence0 mo ->
         return []
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
-        return []
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        bind_pe pe3 >>= fun bound_pe3 ->
+        bind_pe pe4 >>= fun bound_pe4 ->
+        return (bound_pe1 @ bound_pe2 @ bound_pe3 @ bound_pe4)
     | LinuxFence mo ->
         return []
     | LinuxLoad (pe1, pe2, mo) ->
-        return []
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        return (bound_pe1 @ bound_pe2)
     | LinuxStore(pe1, pe2, pe3, mo) ->
-        return []
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        bind_pe pe3 >>= fun bound_pe3 ->
+        return (bound_pe1 @ bound_pe2 @ bound_pe3)
     | LinuxRMW (pe1, pe2, pe3, mo) ->
-        return []
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        bind_pe pe3 >>= fun bound_pe3 ->
+        return (bound_pe1 @ bound_pe2 @ bound_pe3)
 
   let rec bind_e (Expr(annots, expr_) as expr: unit typed_expr)
                  : (Expr.expr list) eff =
@@ -3958,12 +3974,13 @@ end
  *)
 module BmcConcActions = struct
   type internal_state = {
-    inline_expr_map : (int, unit typed_expr) Pmap.map;
-    sym_expr_table  : (sym_ty, Expr.expr) Pmap.map;
-    action_map      : (int, BmcZ3.intermediate_action) Pmap.map;
-    param_actions   : (BmcZ3.intermediate_action option) list;
-    case_guard_map  : (int, Expr.expr list) Pmap.map;
-    drop_cont_map   : (int, Expr.expr) Pmap.map;
+    inline_pexpr_map : (int, typed_pexpr) Pmap.map;
+    inline_expr_map  : (int, unit typed_expr) Pmap.map;
+    sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
+    action_map       : (int, BmcZ3.intermediate_action) Pmap.map;
+    param_actions    : (BmcZ3.intermediate_action option) list;
+    case_guard_map   : (int, Expr.expr list) Pmap.map;
+    drop_cont_map    : (int, Expr.expr) Pmap.map;
 
     alloc_meta_map  : (int, allocation_metadata) Pmap.map;
     prov_syms       : (Expr.expr * (Expr.expr * ctype)) list;
@@ -3974,11 +3991,14 @@ module BmcConcActions = struct
     tid_supply     : tid;
     parent_tids    : (tid, tid) Pmap.map;
     assertions     : Expr.expr list;
+
+    taint_table    : (sym_ty, aid Pset.set) Pmap.map;
   }
 
   include EffMonad(struct type state = internal_state end)
 
-  let mk_initial inline_expr_map
+  let mk_initial inline_pexpr_map
+                 inline_expr_map
                  sym_expr_table
                  action_map
                  param_actions
@@ -3987,7 +4007,8 @@ module BmcConcActions = struct
                  alloc_meta_map
                  prov_syms
                  : internal_state =
-  { inline_expr_map  = inline_expr_map;
+  { inline_pexpr_map = inline_pexpr_map;
+    inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
     action_map       = action_map;
     param_actions    = param_actions;
@@ -4002,7 +4023,16 @@ module BmcConcActions = struct
     tid_supply       = 1;
     parent_tids      = Pmap.empty Pervasives.compare;
     assertions       = [];
+
+    taint_table      = Pmap.empty Pervasives.compare;
   }
+
+  let get_inline_pexpr (uid: int): typed_pexpr eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.inline_pexpr_map with
+    | None -> failwith (sprintf "Error: BmcConcActions inline_pexpr not found %d"
+                                uid)
+    | Some pe -> return pe
 
   let get_inline_expr (uid: int): (unit typed_expr) eff =
     get >>= fun st ->
@@ -4406,6 +4436,218 @@ module BmcConcActions = struct
     | GlobalDef(_, e) -> do_po_e e
     | GlobalDecl _ -> return []
 
+  (* ==== Taint analysis ===== *)
+  let get_taint (sym: sym_ty) : aid Pset.set eff =
+    get >>= fun st ->
+    match Pmap.lookup sym st.taint_table with
+    | None -> failwith (sprintf "BmcConcActions: taint %s not found"
+                                (symbol_to_string sym))
+    | Some ret -> return ret
+
+  let add_taint (sym: sym_ty) (taint: aid Pset.set) : unit eff =
+    get >>= fun st ->
+    put {st with taint_table = Pmap.add sym taint st.taint_table}
+
+  let print_taint_table : unit eff =
+    get >>= fun st ->
+    return (Pmap.iter (fun sym taints ->
+      printf "%s: [" (symbol_to_string sym);
+      Pset.iter (fun taint -> printf "%d," taint) taints;
+      print_endline "]";
+    ) st.taint_table)
+
+  let rec do_taint_pat (Pattern(_,pat): typed_pattern) (aids: aid Pset.set)
+                       : unit eff =
+    match pat with
+    | CaseBase(Some sym, _) ->
+        add_taint sym aids
+    | CaseBase(None, _) ->
+        return ()
+    | CaseCtor(_, patlist) ->
+        mapM_ (fun pat -> do_taint_pat pat aids) patlist
+
+  let union_taints (taints: (aid Pset.set) list) : aid Pset.set =
+    List.fold_left (fun x y -> Pset.union x y)
+                   (Pset.empty Pervasives.compare)
+                   taints
+
+  let rec do_taint_pe (Pexpr(annots, bTy, pe_) as pexpr)
+                      : aid Pset.set eff =
+  let uid = get_id_pexpr pexpr in
+  (match pe_ with
+    | PEsym sym ->
+        get_taint sym
+    | PEimpl const ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        do_taint_pe inline_pe
+    | PEval cval ->
+        return (Pset.empty Pervasives.compare)
+    | PEconstrained _ -> assert false
+    | PEundef _ ->
+        return (Pset.empty Pervasives.compare)
+    | PEerror _ ->
+        return (Pset.empty Pervasives.compare)
+    | PEctor (_, pes) ->
+        mapM do_taint_pe pes >>= fun taint_pes ->
+        return (union_taints taint_pes)
+    | PEcase (pe, cases) ->
+        do_taint_pe pe >>= fun taint_pe ->
+        (* Add taint to each symbol in pattern *)
+        mapM (fun (pat, _) -> do_taint_pat pat taint_pe) cases >>
+        mapM (fun (_, case_pe) -> do_taint_pe case_pe) cases
+              >>= fun case_taints ->
+        return (union_taints case_taints)
+    | PEarray_shift (ptr, _, index) ->
+        do_taint_pe ptr >>= fun taint_ptr ->
+        do_taint_pe index >>= fun taint_index ->
+        return (Pset.union taint_ptr taint_index)
+    | PEmember_shift (ptr, _, _) ->
+        do_taint_pe ptr
+    | PEnot pe ->
+        do_taint_pe pe
+    | PEop (_, pe1, pe2) ->
+        do_taint_pe pe1 >>= fun taint_pe1 ->
+        do_taint_pe pe2 >>= fun taint_pe2 ->
+        return (Pset.union taint_pe1 taint_pe2)
+    | PEstruct _    -> assert false
+    | PEunion _     -> assert false
+    | PEcfunction _ -> assert false
+    | PEmemberof _  -> assert false
+    | PEcall _ ->
+        get_inline_pexpr uid >>= fun inline_pe ->
+        do_taint_pe inline_pe
+    | PElet (pat, pe1, pe2) ->
+        do_taint_pe pe1 >>= fun taint_pe1 ->
+        do_taint_pat pat taint_pe1 >>
+        do_taint_pe pe2
+    | PEif (cond, pe1, pe2) ->
+        do_taint_pe cond >>= fun _ ->
+        do_taint_pe pe1 >>= fun taint_pe1 ->
+        do_taint_pe pe2 >>= fun taint_pe2 ->
+        return (Pset.union taint_pe1 taint_pe2)
+    | PEis_scalar pe   (* fall through *)
+    | PEis_integer pe  (* fall through *)
+    | PEis_signed pe   (* fall through *)
+    | PEis_unsigned pe ->
+        do_taint_pe pe
+    | PEare_compatible (pe1, pe2) ->
+        do_taint_pe pe1 >>= fun taint_pe1 ->
+        do_taint_pe pe2 >>= fun taint_pe2 ->
+        return (Pset.union taint_pe1 taint_pe2)
+    | PEbmc_assume pe ->
+        do_taint_pe pe
+    )
+
+  let do_taint_action (Paction(p, Action(loc, a, action_))) (uid: int)
+                      : aid Pset.set eff =
+    match action_ with
+    | Create(pe1, pe2, pref) ->
+        do_taint_pe pe1 >>= fun _ ->
+        do_taint_pe pe2 >>= fun _ ->
+        return (Pset.empty Pervasives.compare)
+    | CreateReadOnly _ -> assert false
+    | Alloc0 _ -> assert false
+    | Kill(_, pe) ->
+        do_taint_pe pe
+    | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        do_taint_pe wval >>= fun _ ->
+        return (Pset.empty Pervasives.compare)
+    | Store0 _ ->
+        assert false
+    | Load0 (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+        get_action uid >>= fun interm_action ->
+        begin match interm_action with
+        | ILoad(aid, _,_,_,_,_) ->
+            return (Pset.add aid (Pset.empty Pervasives.compare))
+        | _ -> assert false
+        end
+
+    | Load0 _ ->
+        assert false
+    | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
+        bmc_debug_print 7 "TODO: Taint RMW0";
+        (* TODO *)
+        return (Pset.empty Pervasives.compare)
+    | Fence0 mo ->
+        return (Pset.empty Pervasives.compare)
+    | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        bmc_debug_print 7 "TODO: Taint CompareExchangeStrong";
+        return (Pset.empty Pervasives.compare)
+    | LinuxFence mo ->
+        return (Pset.empty Pervasives.compare)
+
+    | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
+        get_action uid >>= fun interm_action ->
+        begin match interm_action with
+        | ILinuxLoad(aid, _,_,_,_,_) ->
+            return (Pset.add aid (Pset.empty Pervasives.compare))
+        | _ -> assert false
+        end
+    | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        do_taint_pe wval >>= fun _ ->
+        return (Pset.empty Pervasives.compare)
+    | LinuxRMW (pe1, pe2, pe3, mo) ->
+        return (Pset.empty Pervasives.compare)
+    | _ -> assert false
+
+  let rec do_taint_e (Expr(annots, expr_) as expr)
+                     : aid Pset.set eff =
+    let uid = get_id_expr expr in
+    (match expr_ with
+    | Epure pe ->
+        do_taint_pe pe
+    | Ememop (memop, pes) ->
+        mapM do_taint_pe pes >>= fun taints ->
+        return (union_taints taints)
+    | Eaction paction ->
+        do_taint_action paction uid
+    | Ecase (pe, cases) ->
+        do_taint_pe pe >>= fun taint_pe ->
+        (* Add taint to each symbol in pattern *)
+        mapM (fun (pat, _) -> do_taint_pat pat taint_pe) cases >>
+        mapM (fun (_, case_e) -> do_taint_e case_e) cases
+              >>= fun case_taints ->
+        return (union_taints case_taints)
+    | Elet (pat, pe, e) ->
+        do_taint_pe pe >>= fun taint_pe ->
+        do_taint_pat pat taint_pe >>
+        do_taint_e e
+    | Eif (cond, e1, e2) ->
+        do_taint_pe cond >>= fun _ ->
+        do_taint_e e1 >>= fun taint_e1 ->
+        do_taint_e e2 >>= fun taint_e2 ->
+        return (Pset.union taint_e1 taint_e2)
+    | Eskip         -> return (Pset.empty Pervasives.compare)
+    | Eccall _ ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_taint_e inline_expr
+    | Eproc _       -> assert false
+    | Eunseq es ->
+        mapM do_taint_e es >>= fun taint_es ->
+        return (union_taints taint_es)
+    | Ewseq (pat, e1, e2) (* fall through *)
+    | Esseq (pat, e1, e2) ->
+        do_taint_e e1 >>= fun taint_e1 ->
+        do_taint_pat pat taint_e1 >>
+        do_taint_e e2
+    | Easeq _       -> assert false
+    | Eindet _      -> assert false
+    | Ebound (_, e) ->
+        do_taint_e e
+    | End es ->
+        mapM do_taint_e es >>= fun taint_es ->
+        return (union_taints taint_es)
+    | Esave _       (* fall through *)
+    | Erun _        ->
+        get_inline_expr uid >>= fun inline_expr ->
+        do_taint_e inline_expr
+    | Epar es ->
+        mapM do_taint_e es >>= fun taint_es ->
+        return (union_taints taint_es)
+    | Ewait _       ->
+        assert false
+    )
+
   let mk_preexec (actions: bmc_action list)
                  (prod: aid_rel list)
                  : preexec eff =
@@ -4449,6 +4691,7 @@ module BmcConcActions = struct
      | Some (Proc(annot, bTy, params, e)) ->
          do_actions_params params fn_to_check >>= fun actions_params ->
          do_actions_e e >>= fun actions ->
+         do_taint_e e   >>= fun _ ->
          do_po_e e      >>= fun po ->
          return (actions @ actions_params,
                  (compute_po actions_params actions) @ po)
@@ -4457,12 +4700,17 @@ module BmcConcActions = struct
      | _ -> assert false
     ) >>= fun (fn_actions, fn_po) ->
 
+
     let actions = (List.concat globs_actions) @ fn_actions in
     let po = ((compute_po (List.concat globs_actions) fn_actions))
               @ (List.concat globs_po) @ fn_po in
     get_assertions >>= fun assertions ->
     mk_preexec actions po >>= fun preexec ->
-    (*print_endline (pp_preexec preexec);*)
+    print_endline (pp_preexec preexec);
+    (* Debug: iterate through taint map *)
+    print_taint_table >>
+
+
     (* TODO *)
     let (mem_assertions, memory_model) =
       if (List.length actions > 0) then

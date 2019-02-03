@@ -23,6 +23,7 @@ let g_ptr_size = 8 (* Ocaml_implementation*)
 let g_max_addr = 2147483648
 let g_pnvi = true
 
+(*let g_model_file = "bmc/simple.cat"*)
 let g_model_file = "bmc/simple.cat"
 
 type memory_mode =
