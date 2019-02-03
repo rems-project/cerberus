@@ -4741,6 +4741,7 @@ module BmcConcActions = struct
 
   let mk_preexec (actions: bmc_action list)
                  (prod: aid_rel list)
+                 (deps: deps)
                  : preexec eff =
     get_bmc_action_map >>= fun action_map ->
     get_parent_tids    >>= fun parent_tids ->
@@ -4753,8 +4754,21 @@ module BmcConcActions = struct
       p1 || p2
     in
 
-    let po_actions = List.map
-        (fun (a,b) -> (Pmap.find a action_map, Pmap.find b action_map)) prod in
+    let aid_rel_to_bmcaction (a,b) =
+      (Pmap.find a action_map, Pmap.find b action_map) in
+
+    let po_actions = List.map aid_rel_to_bmcaction prod in
+    let po = List.filter (fun (a,b) -> tid_of_bmcaction a = tid_of_bmcaction b)
+                         po_actions in
+
+    let in_po (a,b) =
+      is_some (List.find_opt
+      (fun (x,y) -> aid_of_bmcaction a = aid_of_bmcaction x &&
+                    aid_of_bmcaction b = aid_of_bmcaction y) po) in
+
+    let addr = List.map aid_rel_to_bmcaction deps.addr in
+    let data = List.map aid_rel_to_bmcaction deps.data in
+    let ctrl = List.map aid_rel_to_bmcaction deps.ctrl in
 
     return
     { actions = List.filter (fun a -> tid_of_bmcaction a <> initial_tid) actions
@@ -4765,6 +4779,9 @@ module BmcConcActions = struct
               (fun (a,b) -> is_related (tid_of_bmcaction a) (tid_of_bmcaction b))
               po_actions
     ; rmw = []
+    ; addr = List.filter in_po addr
+    ; data = List.filter in_po data
+    ; ctrl = List.filter in_po ctrl
     }
 
   let compute_po (xs: bmc_action list)
@@ -4796,18 +4813,10 @@ module BmcConcActions = struct
     let po = ((compute_po (List.concat globs_actions) fn_actions))
               @ (List.concat globs_po) @ fn_po in
     get_assertions >>= fun assertions ->
-    mk_preexec actions po >>= fun preexec ->
+    mk_preexec actions po fn_deps >>= fun preexec ->
     print_endline (pp_preexec preexec);
     (* Debug: iterate through taint map *)
-    print_taint_table >>
-
-    let in_po x =
-      is_some (List.find_opt (fun y -> compare x y = 0) po) in
-    let filtered_deps =
-      { addr = List.filter in_po fn_deps.addr
-      ; data = List.filter in_po fn_deps.data
-      ; ctrl = List.filter in_po fn_deps.ctrl
-      } in
+    (*print_taint_table >>*)
 
     (*pp_deps filtered_deps;*)
 

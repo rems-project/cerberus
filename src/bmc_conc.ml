@@ -20,6 +20,11 @@ type preexec = {
   po              : (bmc_action * bmc_action) list;
   asw             : (bmc_action * bmc_action) list;
   rmw             : (bmc_action * bmc_action) list;
+
+  (* dependencies *)
+  addr            : (bmc_action * bmc_action) list;
+  data            : (bmc_action * bmc_action) list;
+  ctrl            : (bmc_action * bmc_action) list;
 }
 
 (* ========== BMC ACTIONS ============= *)
@@ -99,6 +104,9 @@ let mk_initial_preexec : preexec =
   ; po              = []
   ; asw             = []
   ; rmw             = []
+  ; addr            = []
+  ; data            = []
+  ; ctrl            = []
   }
 
 let aid_of_bmcaction_rel ((a1,a2): bmcaction_rel) =
@@ -131,37 +139,40 @@ let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
 let guard_preexec (guard: Expr.expr) (preexec: preexec) =
   {preexec with actions = List.map (guard_action guard) preexec.actions}
 
-let combine_preexecs (preexecs: preexec list) =
+(*let combine_preexecs (preexecs: preexec list) =
   List.fold_left (fun acc preexec ->
     { actions         = preexec.actions @ acc.actions
     ; initial_actions = preexec.initial_actions @ acc.initial_actions
     ; po              = preexec.po @ acc.po
     ; asw             = preexec.asw @ acc.asw
     ; rmw             = preexec.rmw @ acc.rmw
-    }) mk_initial_preexec preexecs
+    }) mk_initial_preexec preexecs *)
 
 let compute_po (xs: bmc_action list) (ys: bmc_action list) : bmcaction_rel list =
   let cp = cartesian_product xs ys in
   List.filter (fun (x,y) -> tid_of_bmcaction x = tid_of_bmcaction y) cp
 
-let combine_preexecs_and_po (p1: preexec) (p2: preexec) =
+(*let combine_preexecs_and_po (p1: preexec) (p2: preexec) =
   let combined = combine_preexecs [p1;p2] in
   let extra_po = compute_po p1.actions p2.actions in
   {combined with po = extra_po @ combined.po}
+*)
 
-let compute_maximal (actions: bmc_action list)
+(*let compute_maximal (actions: bmc_action list)
                     (rel: bmcaction_rel list)
                     : aid list =
   let candidates = List.map aid_of_bmcaction actions in
   let not_maximal = List.map (fun (a, _) -> aid_of_bmcaction a) rel in
   List.filter (fun x -> not (List.mem x not_maximal)) candidates
+  *)
 
-let compute_minimal (actions: bmc_action list)
+(*let compute_minimal (actions: bmc_action list)
                     (rel: bmcaction_rel list)
                     : aid list =
   let candidates = List.map aid_of_bmcaction actions in
   let not_minimal = List.map (fun (_, b) -> aid_of_bmcaction b) rel in
   List.filter (fun x -> not (List.mem x not_minimal)) candidates
+  *)
 
 (* Computes Cartesian products of xs and ys, filtered such that
  * (x,y) in result => (tid x, tid y) or (tid y, tid x) in parent_tids.
@@ -176,7 +187,7 @@ let compute_minimal (actions: bmc_action list)
  *
  * TODO: buggy -- can miss relation. Let's just add everything.
  * *)
-let compute_asw (xs: bmc_action list)
+(*let compute_asw (xs: bmc_action list)
                 (ys: bmc_action list)
                 (po_xs: bmcaction_rel list)
                 (po_ys: bmcaction_rel list)
@@ -196,7 +207,8 @@ let compute_asw (xs: bmc_action list)
       List.mem aid_x maximal && List.mem aid_y minimal
     else false
     ) cp
-
+*)
+(*
 let filter_asw (asw: bmcaction_rel list)
                (po : bmcaction_rel list)
                : bmcaction_rel list =
@@ -211,7 +223,7 @@ let filter_asw (asw: bmcaction_rel list)
       (not fst_test) && (not snd_test)
     ) asw
   ) asw
-
+*)
 (* ===== PPRINTERS ===== *)
 let string_of_memory_order = function
   | C_mem_order mo ->
@@ -274,12 +286,15 @@ let pp_actionrel_list (xs : bmcaction_rel list) =
   String.concat "\n" (List.map pp_actionrel xs)
 
 let pp_preexec (preexec: preexec) =
-  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s\n"
+  sprintf ">>Initial:\n%s\n>>Actions:\n%s\n>>PO:\n%s\nASW:\n%s\nAddr:\n%s\nData:\n%s\nCtrl:\n%s\n"
           (String.concat "\n" (List.map pp_bmcaction preexec.initial_actions))
           (String.concat "\n" (List.map pp_bmcaction preexec.actions))
           (*"" ""*)
           (pp_actionrel_list preexec.po)
           (pp_actionrel_list preexec.asw)
+          (pp_actionrel_list preexec.addr)
+          (pp_actionrel_list preexec.data)
+          (pp_actionrel_list preexec.ctrl)
 
 
 
@@ -397,6 +412,11 @@ module MemoryModelCommon = struct
 
     po       : FuncDecl.func_decl;
     asw      : FuncDecl.func_decl;
+
+    addr_dep : FuncDecl.func_decl;
+    data_dep : FuncDecl.func_decl;
+    ctrl_dep : FuncDecl.func_decl;
+
   }
 
   let apply = FuncDecl.apply
@@ -420,6 +440,10 @@ module MemoryModelCommon = struct
 
     ; po       = mk_decl "po"       [events;events] boolean_sort
     ; asw      = mk_decl "asw"      [events;events] boolean_sort
+
+    ; addr_dep = mk_decl "addr_dep" [events;events] boolean_sort
+    ; data_dep = mk_decl "data_dep" [events;events] boolean_sort
+    ; ctrl_dep = mk_decl "ctrl_dep" [events;events] boolean_sort
     }
 
   type builtin_fnapps = {
@@ -452,6 +476,11 @@ module MemoryModelCommon = struct
     po         : Expr.expr * Expr.expr -> Expr.expr;
     po_loc     : Expr.expr * Expr.expr -> Expr.expr;
     asw        : Expr.expr * Expr.expr -> Expr.expr;
+
+    addr_dep   : Expr.expr * Expr.expr -> Expr.expr;
+    data_dep   : Expr.expr * Expr.expr -> Expr.expr;
+    ctrl_dep   : Expr.expr * Expr.expr -> Expr.expr;
+
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -522,6 +551,10 @@ module MemoryModelCommon = struct
     ; po        = po
     ; po_loc    = po_loc
     ; asw       = (fun (e1,e2) -> apply decls.asw [e1;e2])
+
+    ; addr_dep  = (fun (e1,e2) -> apply decls.addr_dep [e1;e2])
+    ; data_dep  = (fun (e1,e2) -> apply decls.data_dep [e1;e2])
+    ; ctrl_dep  = (fun (e1,e2) -> apply decls.ctrl_dep [e1;e2])
     }
 
   type ret =
@@ -533,18 +566,28 @@ module MemoryModelCommon = struct
 
     ; po_assert       : Expr.expr list
     ; asw_assert      : Expr.expr list
+    ; addr_assert     : Expr.expr list
+    ; data_assert     : Expr.expr list
+    ; ctrl_assert     : Expr.expr list
     ; well_formed_rf  : Expr.expr list
     ; well_formed_co  : Expr.expr list
     ; co_init         : Expr.expr list
     }
 
   let gen_all_assertions (ret: ret) =
-      ret.po_assert
-    @ ret.asw_assert
-    @ ret.well_formed_rf
-    @ ret.well_formed_co
-    @ ret.co_init
-    @ ret.assertions
+    let common =
+        ret.po_assert
+      @ ret.asw_assert
+      @ ret.well_formed_rf
+      @ ret.well_formed_co
+      @ ret.co_init
+      @ ret.assertions in
+    if g_parse_from_model then
+        ret.addr_assert
+      @ ret.data_assert
+      @ ret.ctrl_assert
+      @ common
+    else common
 
   let initialise (exec: preexec) (file: unit typed_file) =
     let all_actions = exec.initial_actions @ exec.actions in
@@ -691,20 +734,33 @@ module MemoryModelCommon = struct
         exec.actions
     in
 
+    let asserts_from_relation rel fn =
+      let mk_rel = (fun (a,b) -> fn (z3action a, z3action b)) in
+      let not_rel = not_related rel prod_actions find_rel in
+        (List.map (fun (a,b) -> mk_eq (mk_rel (a,b)) mk_true) rel)
+      @ (List.map (fun (a,b) -> mk_eq (mk_rel (a,b)) mk_false) not_rel) in
+
+
     (* ==== po assert ==== *)
-    let po_asserts =
+    (*let po_asserts =
       let mk_po = (fun (a,b) -> fns.po (z3action a, z3action b)) in
       let not_po = not_related exec.po prod_actions find_rel in
         (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_true) exec.po)
-      @ (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_false) not_po) in
+      @ (List.map (fun (a,b) -> mk_eq (mk_po (a,b)) mk_false) not_po) in*)
+    let po_asserts = asserts_from_relation exec.po fns.po in
+    let asw_asserts = asserts_from_relation exec.asw fns.asw in
+    let addr_dep_asserts = asserts_from_relation exec.addr fns.addr_dep in
+    let data_dep_asserts = asserts_from_relation exec.data fns.data_dep in
+    let ctrl_dep_asserts = asserts_from_relation exec.ctrl fns.ctrl_dep in
 
     (* ==== asw assert ==== *)
     (* TODO: code duplication *)
-    let asw_asserts =
+    (*let asw_asserts =
       let mk_asw = (fun (a,b) -> fns.asw (z3action a, z3action b)) in
       let not_asw = not_related exec.asw prod_actions find_rel in
         (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_true) exec.asw)
-      @ (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_false) not_asw) in
+      @ (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_false) not_asw) in*)
+
 
 
     { event_sort = event_sort
@@ -725,6 +781,9 @@ module MemoryModelCommon = struct
 
     ; po_assert      = po_asserts
     ; asw_assert     = asw_asserts
+    ; addr_assert    = addr_dep_asserts
+    ; data_assert    = data_dep_asserts
+    ; ctrl_assert    = ctrl_dep_asserts
     ; well_formed_rf = well_formed_rf
     ; well_formed_co = well_formed_co
     ; co_init        = co_init
@@ -1797,11 +1856,9 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_rfi    -> model.builtin_fns.rfi (ea,eb)
         | BaseId_rfe    -> model.builtin_fns.rfe (ea,eb)
         | BaseId_po_loc -> model.builtin_fns.po_loc (ea,eb)
-        (*
-        | BaseId_addr   -> model.builtin_fns.po (ea,eb)
-        | BaseId_ctrl   -> model.builtin_fns.po (ea,eb)
-        | BaseId_data   -> model.builtin_fns.po (ea,eb)
-        *)
+        | BaseId_addr_dep -> model.builtin_fns.addr_dep (ea,eb)
+        | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
+        | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
         end
 
   (* === Expr -> boolean *)
