@@ -1219,7 +1219,8 @@ module BmcZ3 = struct
         get_inline_pexpr uid >>= fun inline_pe ->
         z3_pe inline_pe
     | PEval cval ->
-       return (value_to_z3 cval)
+       get_file >>= fun file ->
+       return (value_to_z3 cval file)
     | PEconstrained _ -> assert false
     | PEundef _ ->
         let sort = cbt_to_z3 bTy in
@@ -2828,7 +2829,9 @@ end
 (* Common functions *)
 module BmcMemCommon = struct
   (* TODO: move to separate file *)
-  let mk_unspecified_expr (sort: Sort.sort) (ctype: Expr.expr)
+  let mk_unspecified_expr (sort: Sort.sort)
+                          (ctype: Expr.expr)
+                          (file: unit typed_file)
                           : Expr.expr =
     if (Sort.equal (LoadedInteger.mk_sort) sort) then
       LoadedInteger.mk_unspecified ctype
@@ -2836,8 +2839,22 @@ module BmcMemCommon = struct
       LoadedPointer.mk_unspecified ctype
     else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
       LoadedIntArray.mk_unspecified ctype
-    else
-      assert false
+    else begin
+      (* TODO: Pretty bad... *)
+      let ret = List.fold_left (fun acc (sym, memlist) ->
+        if is_some acc then acc
+        else begin
+          let struct_sort = (struct_to_sort (sym, memlist) file) in
+          let module LoadedStructSort = (val struct_sort : LoadedSortTy) in
+          if (Sort.equal (LoadedStructSort.mk_sort) sort) then
+            Some (LoadedStructSort.mk_unspecified ctype)
+          else
+            None
+        end
+      ) None (Pmap.bindings_list file.tagDefs) in
+      assert (is_some ret);
+      Option.get ret
+    end
 
   let mk_initial_value (ctype: ctype) (name: string) =
     match ctype with
@@ -2855,13 +2872,14 @@ module BmcMemCommon = struct
 
   let mk_initial_loaded_value (sort: Sort.sort) (name: string)
                               (ctype: ctype) (specified: bool)
+                              (file: unit typed_file)
                               : Expr.expr * (Expr.expr list) =
     if specified then begin
       let (initial_value, assertions) = mk_initial_value ctype name in
       assert (Sort.equal (LoadedInteger.mk_sort) sort);
       (LoadedInteger.mk_specified initial_value, assertions)
     end else
-      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype), [])
+      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) file, [])
 
   (* ==== PNVI STUFF ==== *)
   let provenance_constraint (sym: Expr.expr)
@@ -3601,7 +3619,7 @@ module BmcSeqMem = struct
       let (initial_value, assumptions) =
         BmcMemCommon.mk_initial_loaded_value
             sort (sprintf "init_%d,%d" alloc_id i)
-            ctype initialise in
+            ctype initialise file in
       let binding = mk_eq seq_var initial_value in
       return (addr, binding::assumptions)
     ) sortlist >>= fun retlist ->
@@ -3954,6 +3972,7 @@ end
  * - dd
  *)
 module BmcConcActions = struct
+
   type internal_state = {
     file             : unit typed_file;
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
@@ -3974,10 +3993,15 @@ module BmcConcActions = struct
     parent_tids    : (tid, tid) Pmap.map;
     assertions     : Expr.expr list;
 
+    mem_module     : (module MemoryModel);
+
     taint_table    : (sym_ty, aid Pset.set) Pmap.map;
   }
 
   include EffMonad(struct type state = internal_state end)
+
+  let mk_memory_module (file: unit typed_file) =
+    (module C11MemoryModel : MemoryModel)
 
   let mk_initial file
                  inline_pexpr_map
@@ -3990,6 +4014,7 @@ module BmcConcActions = struct
                  alloc_meta_map
                  prov_syms
                  : internal_state =
+
   { file             = file;
     inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
@@ -4009,6 +4034,7 @@ module BmcConcActions = struct
     assertions       = [];
 
     taint_table      = Pmap.empty Pervasives.compare;
+    mem_module       = mk_memory_module file;
   }
 
   let get_file : unit typed_file eff =
@@ -4145,13 +4171,13 @@ module BmcConcActions = struct
                 (alloc_id: BmcZ3.alloc)
                 (pol: polarity)
                 (initialise: bool) =
-    let sort = ctype_to_z3_sort ctype in
+    get_file >>= fun file ->
+    let sort = ctype_to_z3_sort ctype file in
     let is_atomic_fn = (function ctype -> match ctype with
                        | Core_ctype.Atomic0 _ -> mk_true
                        | _ -> mk_false) in
     get_meta alloc_id >>= fun metadata ->
     let base_addr = get_metadata_base metadata in
-    get_file >>= fun file ->
 
     mapMi_ (fun i (cype,sort) ->
       let index = List.fold_left
@@ -4169,7 +4195,7 @@ module BmcConcActions = struct
     let (initial_value, assumptions) =
       BmcMemCommon.mk_initial_loaded_value sort
           (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
-          ctype initialise in
+          ctype initialise file in
     mapM add_assertion assumptions >>
     return [mk_store pol mk_true aid initial_tid
                      (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
@@ -4780,7 +4806,7 @@ module BmcConcActions = struct
 
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (preexec * Expr.expr list * BmcMem.z3_memory_model option) eff =
+              : (preexec * Expr.expr list * 't option) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->
     mapM do_taint_globs file.globs   >>
@@ -4832,6 +4858,8 @@ module BmcConcActions = struct
     in
     return (preexec,
             assertions @ mem_assertions @ pnvi_asserts,
-            memory_model
+            if is_some memory_model then
+              Some (BmcMem.extract_executions g_solver (Option.get memory_model))
+            else None
             )
 end
