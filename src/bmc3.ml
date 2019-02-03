@@ -229,7 +229,8 @@ module BmcM = struct
   let do_conc_actions : unit eff =
     get >>= fun st ->
     let initial_state =
-      BmcConcActions.mk_initial (Option.get st.inline_expr_map)
+      BmcConcActions.mk_initial (Option.get st.inline_pexpr_map)
+                                (Option.get st.inline_expr_map)
                                 (Option.get st.sym_expr_table)
                                 (Option.get st.action_map)
                                 (Option.get st.param_actions)
