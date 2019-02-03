@@ -479,6 +479,7 @@ module ImplFunctions = struct
                     @ is_unsigned_asserts
 end
 
+
 (* TODO: big hack for function calls...
  * let weak (p': loaded pointer, (...)) =
  *     let strong p : loaded pointer = pure(Specified(Cfunction(f))) in

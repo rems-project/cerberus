@@ -164,6 +164,34 @@ module CtypeSort = struct
     | _ -> mk_expr ctype
 end
 
+let rec alignof_type (ctype: ctype) (file: unit typed_file) : int =
+  match ctype with
+  | Void0 -> assert false
+  | Basic0 (Integer ity) ->
+      Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+  | Array0(ty, _) -> alignof_type ty file
+  | Function0 _ -> assert false
+  | Pointer0 _ ->
+      Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+  | Atomic0 (Basic0 _ as _ty) ->
+      alignof_type _ty file
+  | Atomic0 (Pointer0 _ as _ty) ->
+      Option.get (Ocaml_implementation.Impl.alignof_pointer)
+  | Struct0 sym ->
+      begin match Pmap.lookup sym file.tagDefs with
+      | Some (StructDef members) ->
+          (* Let alignment be max alignment of a member? *)
+          let alignments =
+            List.map (fun (_, mem_ctype) -> alignof_type mem_ctype file)
+                     members in
+          assert (List.length alignments > 0);
+          List.fold_left max (List.hd alignments) (List.tl alignments)
+      | _ -> assert false
+      end
+  | _ -> assert false
+
+
+
 module AddressSortPNVI = struct
   open Z3.Datatype
   open Z3.FuncDecl
@@ -234,18 +262,28 @@ module AddressSortPNVI = struct
   let sizeof_ity ity = Option.get (Ocaml_implementation.Impl.sizeof_ity ity)
 
   (* TODO: Move this elsewhere *)
-  let rec type_size (ctype: ctype) : int =
+  let rec type_size (ctype: ctype) (file: unit typed_file): int =
     match ctype with
     | Void0 -> assert false
     | Basic0 (Integer ity) ->
         sizeof_ity ity
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
     | Array0 _ -> assert false
     | Function0 _ -> assert false
     | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
     | Atomic0 (Basic0 _ as _ty) (* fall through *)
     | Atomic0 (Pointer0 _ as _ty) ->
-        type_size _ty
+        type_size _ty file
+    | Struct0 tag ->
+        begin match Pmap.lookup tag file.tagDefs with
+        | Some (StructDef members) ->
+            let sizes = List.map (fun (_, ty) -> type_size ty file) members in
+            List.fold_left (fun acc sz ->
+              if acc mod sz = 0 then acc + sz
+              else acc + sz + (sz - (acc mod sz))
+            ) 0 sizes
+        | _ -> assert false
+        end
     | _ -> assert false
 
   let get_provenance (ival_min: Expr.expr)
@@ -355,17 +393,19 @@ module AddressSortConcrete = struct
     mk_eq (mk_is_atomic addr) is_atomic
 
   (* TODO *)
-  let rec type_size (ctype: ctype) : int =
+  let rec type_size (ctype: ctype) (file: unit typed_file) : int =
     match ctype with
     | Void0 -> assert false
     | Basic0 _ -> 1
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
     | Array0 _ -> assert false
     | Function0 _ -> assert false
     | Pointer0 _ -> 1
     | Atomic0 (Basic0 _ as _ty) (* fall through *)
     | Atomic0 (Pointer0 _ as _ty) ->
-        type_size _ty
+        type_size _ty file
+    | Struct0 _ ->
+        assert false
     | _ -> assert false
 
   let get_provenance _ _ _ = None
@@ -405,7 +445,7 @@ module type PointerSortAPI = sig
   val ptr_eq : Expr.expr -> Expr.expr -> Expr.expr
   val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
 
-  val type_size : ctype -> int
+  val type_size : ctype -> unit typed_file -> int
   val mk_nd_addr : int -> Expr.expr
   val get_index_from_addr : Expr.expr -> Expr.expr
   val get_addr_index : Expr.expr -> Expr.expr
