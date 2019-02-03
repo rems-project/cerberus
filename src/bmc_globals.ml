@@ -25,6 +25,7 @@ let g_pnvi = true
 
 (*let g_model_file = "bmc/simple.cat"*)
 let g_model_file = "bmc/simple.cat"
+let g_parse_from_model = true
 
 type memory_mode =
   | MemoryMode_C

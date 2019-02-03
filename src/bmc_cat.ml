@@ -25,9 +25,9 @@ module CatFile = struct
     | BaseSet_LinuxRelease
 
     (*
-    | BaseRel_dep_addr
-    | BaseRel_dep_data
-    | BaseRel_dep_ctrl
+    | BaseRel_addr_dep
+    | BaseRel_data_dep
+    | BaseRel_ctrl_dep
     *)
 
   type base_identifier =
@@ -43,9 +43,9 @@ module CatFile = struct
     | BaseId_rfi
     | BaseId_rfe
     | BaseId_po_loc
-    (*| BaseId_dep_addr
-    | BaseId_dep_data
-    | BaseId_dep_ctrl*)
+    | BaseId_addr_dep
+    | BaseId_data_dep
+    | BaseId_ctrl_dep
 
   type id =
     | Id of string (* TODO: only relations allowed currently *)
@@ -116,9 +116,9 @@ module CatFile = struct
   let mk_rfi = Eid (BaseId BaseId_rfi)
   let mk_rfe = Eid (BaseId BaseId_rfe)
   let mk_po_loc = Eid (BaseId BaseId_po_loc)
-  (*let mk_dep_addr = Eid (BaseId BaseId_dep_addr)
-  let mk_dep_ctrl = Eid (BaseId BaseId_dep_ctrl)
-  let mk_dep_data = Eid (BaseId BaseId_dep_data)*)
+  let mk_addr_dep = Eid (BaseId BaseId_addr_dep)
+  let mk_ctrl_dep = Eid (BaseId BaseId_ctrl_dep)
+  let mk_data_dep = Eid (BaseId BaseId_data_dep)
 
   let mk_prod (x: set) (y: set) =
     Eprod(x,y)
@@ -177,9 +177,9 @@ module CatFile = struct
     | BaseId_rfi -> "rfi"
     | BaseId_rfe -> "rfe"
     | BaseId_po_loc -> "po-loc"
-    (*| BaseId_dep_addr -> "addr"
-    | BaseId_dep_ctrl -> "ctrl"
-    | BaseId_dep_data -> "data"*)
+    | BaseId_addr_dep -> "addr"
+    | BaseId_ctrl_dep -> "ctrl"
+    | BaseId_data_dep -> "data"
 
   let pprint_id = function
     | Id s -> "|" ^ s ^ "|"
@@ -358,9 +358,9 @@ module CatParser = struct
       else if s = "rfi"    then mk_rfi
       else if s = "rfe"    then mk_rfe
       else if s = "po-loc" then mk_po_loc
-      (*else if s = "addr"   then mk_dep_addr
-      else if s = "ctrl"   then mk_dep_ctrl
-      else if s = "data"   then mk_dep_data *)
+      else if s = "addr"   then mk_addr_dep
+      else if s = "ctrl"   then mk_ctrl_dep
+      else if s = "data"   then mk_data_dep
       else mk_id s
     in return ret
 
