@@ -141,6 +141,9 @@ module CtypeSort = struct
     ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
         [mk_sym "_array_ty_n"]
         [Some integer_sort] [0]
+    ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
+        [mk_sym "_struct_ty"]
+        [Some integer_sort] [0]
     ]
 
   let rec mk_expr (ctype: ctype) : Expr.expr =
@@ -156,6 +159,8 @@ module CtypeSort = struct
         (* TODO: cty ignored b/c recursive types and tuples *)
         (* Sort of assumed it's always integer for now... *)
         Expr.mk_app g_ctx (List.nth fdecls 3) [big_num_to_z3 n]
+    | Struct0 (Symbol (_, n, _))->
+        Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
@@ -692,9 +697,18 @@ module PointerSort = (val pointer_sort : PointerSortAPI)
 (*module AddressSort = PointerSort.AddrModule*)
 
 
+module type LoadedSortTy = sig
+  val mk_sort : Sort.sort
+  val mk_specified : Expr.expr -> Expr.expr
+  val mk_unspecified: Expr.expr -> Expr.expr
+  val is_specified : Expr.expr -> Expr.expr
+  val is_unspecified : Expr.expr -> Expr.expr
+  val get_specified_value : Expr.expr -> Expr.expr
+  val get_unspecified_value : Expr.expr -> Expr.expr
+end
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
-module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
+module LoadedSort (M : sig val obj_sort : Sort.sort end) : LoadedSortTy = struct
   open Z3.Datatype
   let mk_sort =
     let obj_name = Sort.to_string M.obj_sort in
@@ -870,8 +884,14 @@ module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
 
+module type LoadedSig = sig
+  val mk_sort : Sort.sort
+  val mk_expr : Expr.expr -> Expr.expr
 
-module Loaded = struct
+  val get_ith_in_loaded_2  : Expr.expr -> Expr.expr -> Expr.expr
+end
+
+module Loaded : LoadedSig = struct
   open Z3.Datatype
 
   let mk_sort  =
@@ -895,8 +915,10 @@ module Loaded = struct
       Expr.mk_app g_ctx (List.nth ctors 1) [expr]
     else if (Sort.equal LoadedIntArray.mk_sort (Expr.get_sort expr)) then
       Expr.mk_app g_ctx (List.nth ctors 2) [expr]
-    else
+    else begin
+      print_endline (Expr.to_string expr);
       assert false
+    end
 
   let is_loaded_int (expr: Expr.expr) =
     let recognizer = List.nth (get_recognizers mk_sort) 0 in

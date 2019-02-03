@@ -50,8 +50,10 @@ module BmcM = struct
     mem_bindings     : (Expr.expr list) option;
 
     (* Concurrency only *)
-    preexec          : preexec option;
-    memory_model     : BmcMem.z3_memory_model option;
+    preexec            : preexec option;
+    (*memory_module      : (module MemoryModel) option;*)
+    extract_executions : (Expr.expr -> (alloc, allocation_metadata) Pmap.map option
+                          -> string * string list * bool) option;
   }
 
   include EffMonad(struct type state = state_ty end)
@@ -77,7 +79,8 @@ module BmcM = struct
     ; ret_bindings     = None
     ; mem_bindings     = None
     ; preexec          = None
-    ; memory_model     = None
+    (*; memory_module    = None*)
+    ; extract_executions = None
     }
 
   (* ===== Transformations/analyses ==== *)
@@ -229,6 +232,7 @@ module BmcM = struct
   (* TODO: temporary for testing; get actions *)
   let do_conc_actions : unit eff =
     get >>= fun st ->
+    (*let memory_module = (module C11MemoryModel : MemoryModel) in*)
     let initial_state =
       BmcConcActions.mk_initial st.file
                                 (Option.get st.inline_pexpr_map)
@@ -239,15 +243,17 @@ module BmcM = struct
                                 (Option.get st.case_guard_map)
                                 (Option.get st.drop_cont_map)
                                 (Option.get st.alloc_meta)
-                                (Option.get st.prov_syms) in
-    let ((preexec, assertions, memory_model_opt), _) =
+                                (Option.get st.prov_syms)
+                                (*memory_module*) in
+    let ((preexec, assertions, extract_executions), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
 
     bmc_debug_print 7 "Done BmcConcActions phase";
-    put { st with mem_bindings = Some assertions;
-                  preexec      = Some preexec;
-                  memory_model = memory_model_opt
+    put { st with mem_bindings  = Some assertions;
+                  preexec       = Some preexec;
+                  (*memory_module = Some memory_module;*)
+                  extract_executions = extract_executions;
         }
 
   (* ===== Getters/setters ===== *)
@@ -349,9 +355,9 @@ let bmc_file (file              : unit typed_file)
 
   let (exec_output_str, dots, race_free) =
     (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
-        (is_some final_state.memory_model) then
-      BmcMem.extract_executions g_solver
-                                (Option.get final_state.memory_model)
+        (is_some final_state.extract_executions) then
+      (Option.get final_state.extract_executions) (*g_solver
+                                (Option.get final_state.memory_model)*)
                                 (Option.get final_state.ret_expr)
                                 (final_state.alloc_meta)
      else
