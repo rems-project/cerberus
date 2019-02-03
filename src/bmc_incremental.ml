@@ -231,26 +231,6 @@ module BmcInline = struct
         return (PEop(bop, inlined_pe1, inlined_pe2))
     | PEstruct _ -> assert false
     | PEunion _  -> assert false
-    (*
-    | PEcfunction (Pexpr(_,_, PEsym sym) as pe) ->
-        (* Replace with tuple *)
-        get_fn_ptr_sym sym >>= fun fn_ptr_sym ->
-        get_file >>= fun file ->
-        begin match Pmap.lookup fn_ptr_sym file.funinfo with
-        | Some (ret_ty, args_ty, b1, b2) ->
-            let new_pexpr =
-              mk_tuple_pe
-                  [mk_ctype_pe ret_ty
-                  ;mk_list_pe (List.map mk_ctype_pe args_ty)
-                  ;mk_boolean_pe b1 (* TODO *)
-                  ;mk_boolean_pe b2
-                  ] in
-            inline_pe new_pexpr >>= fun inlined_new_pexpr ->
-            add_inlined_pexpr id inlined_new_pexpr >>
-            return (PEcfunction pe)
-        | _ -> assert false
-        end
-        *)
     | PEcfunction _ ->
         assert false
     | PEmemberof (tag_sym, memb_ident, pe) ->
@@ -1229,21 +1209,6 @@ module BmcZ3 = struct
     let vc = mk_or pattern_guards in
     (vc, case_guards)
 
-  let rec alignof_type (ctype: ctype) : int =
-    match ctype with
-    | Void0 -> assert false
-    | Basic0 (Integer ity) ->
-        Option.get (Ocaml_implementation.Impl.alignof_ity ity)
-    | Array0(ty, _) -> alignof_type ty
-    | Function0 _ -> assert false
-    | Pointer0 _ ->
-        Option.get (Ocaml_implementation.Impl.sizeof_pointer)
-    | Atomic0 (Basic0 _ as _ty) ->
-        alignof_type _ty
-    | Atomic0 (Pointer0 _ as _ty) ->
-        Option.get (Ocaml_implementation.Impl.alignof_pointer)
-    | _ -> assert false
-
   (* SMT stuff *)
   let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
     let uid = get_id_pexpr pexpr in
@@ -1280,7 +1245,8 @@ module BmcZ3 = struct
         (* We can just directly compute the values rather than do it in the
          * roundabout way as in the above *)
         assert (is_integer_type ctype);
-        return (int_to_z3 (alignof_type ctype));
+        get_file >>= fun file ->
+        return (int_to_z3 (alignof_type ctype file));
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -1297,7 +1263,7 @@ module BmcZ3 = struct
         z3_pe index    >>= fun z3d_index ->
         get_file >>= fun file ->
         (* TODO: different w/ address type *)
-        let ty_size = PointerSort.type_size ty in
+        let ty_size = PointerSort.type_size ty file in
           (*bmcz3sort_size (ctype_to_bmcz3sort ty file) in*)
         let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
 
@@ -1380,9 +1346,9 @@ module BmcZ3 = struct
     (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
     let base_addr = PointerSort.mk_nd_addr alloc_id in
 
-    add_metadata alloc_id (PointerSort.type_size ctype,
+    add_metadata alloc_id (PointerSort.type_size ctype file,
                            Some ctype,
-                           alignof_type align_ty,
+                           alignof_type align_ty file,
                            base_addr,
                            ReadWrite, pref) >>
     return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
@@ -1552,9 +1518,10 @@ module BmcZ3 = struct
         z3_pe ty >>= fun _ ->
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
+        get_file >>= fun file ->
         (* TODO: assert PNVI model *)
         let raw_ptr_diff = PointerSort.ptr_diff_raw z3d_p1 z3d_p2 in
-        let type_size = PointerSort.type_size ctype in
+        let type_size = PointerSort.type_size ctype file in
         (* TODO *)
         return (binop_to_z3 OpDiv raw_ptr_diff (int_to_z3 type_size))
     | Ememop(IntFromPtr, [ctype_src; ctype_dst; ptr]) ->
@@ -1604,8 +1571,9 @@ module BmcZ3 = struct
         let ctype = ctype_from_pexpr ctype_pe in
         z3_pe ctype_pe >>= fun _ ->
         z3_pe ptr      >>= fun z3d_ptr ->
+        get_file       >>= fun file ->
         let addr_of_ptr = PointerSort.get_addr_index z3d_ptr in
-        let alignment = int_to_z3 (alignof_type ctype) in
+        let alignment = int_to_z3 (alignof_type ctype file) in
         return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
                       (int_to_z3 0)
                )
@@ -2970,9 +2938,10 @@ module BmcMemCommon = struct
     (* Constrain provenances from cast_ival_to_ptrval *)
     let provenance_assertions ((sym,(ival, ctype)) : Expr.expr * (Expr.expr * ctype))
                               (data: (int, allocation_metadata) Pmap.map)
+                              (file: unit typed_file)
                               : Expr.expr list =
       let ival_max =
-        binop_to_z3 OpAdd ival (int_to_z3 ((PointerSort.type_size ctype) - 1)) in
+        binop_to_z3 OpAdd ival (int_to_z3 ((PointerSort.type_size ctype file) - 1)) in
       let prov = PointerSort.get_provenance ival ival_max data in
       assert (is_some prov);
       [mk_eq sym (Option.get prov)]
@@ -3189,7 +3158,8 @@ module BmcSeqMem = struct
 
     val provenance_assertions :
           (Expr.expr * (Expr.expr * ctype)) list ->
-          (int , allocation_metadata) Pmap.map ->
+          (int, allocation_metadata) Pmap.map ->
+          unit typed_file ->
           Expr.expr list
   end
 
@@ -3262,7 +3232,7 @@ module BmcSeqMem = struct
 
     let metadata_assertions = fun _ -> []
 
-    let provenance_assertions = fun _ _ -> []
+    let provenance_assertions = fun _ _ _ -> []
   end
 
   module MemPNVI : SEQMEM = struct
@@ -3339,9 +3309,10 @@ module BmcSeqMem = struct
 
     let provenance_assertions (provsyms : (Expr.expr * (Expr.expr * ctype)) list)
                               (data: (int , allocation_metadata) Pmap.map)
+                              (file: unit typed_file)
                               : Expr.expr list =
       List.concat (List.map
-          (fun x -> BmcMemCommon.provenance_assertions x data)
+          (fun x -> BmcMemCommon.provenance_assertions x data file)
           provsyms)
   end
 
@@ -3435,6 +3406,7 @@ module BmcSeqMem = struct
   module SeqMem = MemConcrete
 
   type seq_state = {
+    file             : unit typed_file;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
     expr_map         : (int, Expr.expr) Pmap.map;
@@ -3450,7 +3422,8 @@ module BmcSeqMem = struct
 
   include EffMonad(struct type state = seq_state end)
 
-  let mk_initial inline_expr_map
+  let mk_initial file
+                 inline_expr_map
                  sym_expr_table
                  expr_map
                  action_map
@@ -3460,7 +3433,8 @@ module BmcSeqMem = struct
                  alloc_meta
                  prov_syms
                  : state =
-  { inline_expr_map  = inline_expr_map;
+  { file             = file;
+    inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
     expr_map         = expr_map;
     action_map       = action_map;
@@ -3486,6 +3460,10 @@ module BmcSeqMem = struct
       let pp s = Pset.fold (fun addr acc ->
         sprintf "%s %s" (SeqMem.print_addr addr) acc) s ""
   end
+
+  let get_file : (unit typed_file) eff =
+    get >>= fun st ->
+    return st.file
 
   let get_inline_expr (uid: int): (unit typed_expr) eff =
     get >>= fun st ->
@@ -3608,10 +3586,11 @@ module BmcSeqMem = struct
     (* Get base address, shift by size of ctype *)
 
     get_meta alloc_id >>= fun metadata ->
+    get_file >>= fun file ->
     let base_addr = get_metadata_base metadata in
     mapMi (fun i (ctype,sort) ->
       let index = List.fold_left
-          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
+          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
           0 (list_take i sortlist) in
       let addr = SeqMem.mk_shift alloc_id index base_addr in
 
@@ -3740,9 +3719,10 @@ module BmcSeqMem = struct
           mapMi (fun i (ctype, sort) ->
           let indexed_wval = get_ith_in_loaded i wval in
           get_memory >>= fun possible_addresses ->
+          get_file >>= fun file ->
 
           let index = List.fold_left
-              (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
+              (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
               0 (list_take i type_list) in
           let target_addr =
             PointerSort.shift_index_by_n (PointerSort.get_addr ptr)
@@ -3959,7 +3939,8 @@ module BmcSeqMem = struct
     get_prov_syms >>= fun prov_syms ->
     let metadata_list = Pmap.bindings_list metadata in
     let meta_asserts = SeqMem.metadata_assertions metadata_list in
-    let provenance_asserts = SeqMem.provenance_assertions prov_syms metadata in
+    let provenance_asserts =
+      SeqMem.provenance_assertions prov_syms metadata file in
     return (provenance_asserts @ meta_asserts @ ret.bindings @ (List.concat (List.map get_bindings globs)))
 end
 
@@ -3974,6 +3955,7 @@ end
  *)
 module BmcConcActions = struct
   type internal_state = {
+    file             : unit typed_file;
     inline_pexpr_map : (int, typed_pexpr) Pmap.map;
     inline_expr_map  : (int, unit typed_expr) Pmap.map;
     sym_expr_table   : (sym_ty, Expr.expr) Pmap.map;
@@ -3997,7 +3979,8 @@ module BmcConcActions = struct
 
   include EffMonad(struct type state = internal_state end)
 
-  let mk_initial inline_pexpr_map
+  let mk_initial file
+                 inline_pexpr_map
                  inline_expr_map
                  sym_expr_table
                  action_map
@@ -4007,7 +3990,8 @@ module BmcConcActions = struct
                  alloc_meta_map
                  prov_syms
                  : internal_state =
-  { inline_pexpr_map = inline_pexpr_map;
+  { file             = file;
+    inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
     sym_expr_table   = sym_expr_table;
     action_map       = action_map;
@@ -4026,6 +4010,10 @@ module BmcConcActions = struct
 
     taint_table      = Pmap.empty Pervasives.compare;
   }
+
+  let get_file : unit typed_file eff =
+    get >>= fun st ->
+    return st.file
 
   let get_inline_pexpr (uid: int): typed_pexpr eff =
     get >>= fun st ->
@@ -4163,10 +4151,11 @@ module BmcConcActions = struct
                        | _ -> mk_false) in
     get_meta alloc_id >>= fun metadata ->
     let base_addr = get_metadata_base metadata in
+    get_file >>= fun file ->
 
     mapMi_ (fun i (cype,sort) ->
       let index = List.fold_left
-          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype))
+          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
           0 (list_take i sortlist) in
       let target_addr =
         PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
@@ -4836,7 +4825,7 @@ module BmcConcActions = struct
         let metadata_list = Pmap.bindings_list metadata in
         let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
         let provenance_asserts =
-          List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata)prov_syms) in
+          List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata file)prov_syms) in
         meta_asserts @ provenance_asserts
       end else
         []
