@@ -4000,8 +4000,17 @@ module BmcConcActions = struct
 
   include EffMonad(struct type state = internal_state end)
 
+  (* TODO: the sort of Loaded needs to include struct stuff *)
   let mk_memory_module (file: unit typed_file) =
-    (module C11MemoryModel : MemoryModel)
+    if g_parse_from_model then
+      let cat_model = Bmc_cat.CatParser.load_file g_model_file in
+      (module GenericModel (val cat_model) : MemoryModel)
+    else
+      (module C11MemoryModel : MemoryModel)
+
+  let get_memory_module =
+    get >>= fun st ->
+    return st.mem_module
 
   let mk_initial file
                  inline_pexpr_map
@@ -4836,6 +4845,9 @@ module BmcConcActions = struct
     (*pp_deps filtered_deps;*)
 
     (* TODO *)
+    get_memory_module >>= fun memory_module ->
+    let module BmcMem = (val memory_module : MemoryModel) in
+
     let (mem_assertions, memory_model) =
       if (List.length actions > 0) then
          let model = BmcMem.compute_executions preexec file in

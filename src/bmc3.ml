@@ -332,6 +332,7 @@ let bmc_file (file              : unit typed_file)
   Solver.add g_solver (Option.get final_state.bindings);
   Solver.add g_solver (Option.get final_state.ret_bindings);
   Solver.add g_solver (Option.get final_state.mem_bindings);
+  bmc_debug_print 1 "START FIRST CHECK";
   let ret_value =
     begin match Solver.check g_solver [] with
     | SATISFIABLE ->

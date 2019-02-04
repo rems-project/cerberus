@@ -475,7 +475,7 @@ module CatParser = struct
     return (Constraint (s_opt, Irreflexive e))
 
   let output =
-    token (string "show") *>
+    token (string "output") *>
     token lowers >>= fun s ->
     return (Output s)
 
@@ -498,6 +498,64 @@ module CatParser = struct
            ]
     <* end_of_input
 
+  let get_domain_range_id (id: CatFile.base_identifier) : set * set =
+    match id with
+    | BaseId_rf     -> (mk_set_W, mk_set_R)
+    | BaseId_rf_inv -> (mk_set_R, mk_set_W)
+    | BaseId_co     -> (mk_set_W, mk_set_W)
+    | BaseId_id     -> (mk_set_U, mk_set_U)
+    | BaseId_asw    -> (mk_set_U, mk_set_U)
+    | BaseId_po     -> (mk_set_U, mk_set_U)
+    | BaseId_loc    -> (mk_set_M, mk_set_M)
+    | BaseId_int    -> (mk_set_U, mk_set_U)
+    | BaseId_ext    -> (mk_set_U, mk_set_U)
+    | BaseId_rfi    -> (mk_set_W, mk_set_R)
+    | BaseId_rfe    -> (mk_set_W, mk_set_R)
+    | BaseId_po_loc -> (mk_set_M, mk_set_M)
+    | BaseId_addr_dep -> (mk_set_R, mk_set_M)
+    | BaseId_data_dep -> (mk_set_R, mk_set_M)
+    | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
+
+  let rec get_domain_range_simple_expr (expr: CatFile.simple_expr)
+                                       : set * set  =
+    match expr with
+    | Eid (Id str) -> (mk_set_U, mk_set_U)
+    | Eid (BaseId base_id) ->
+        get_domain_range_id base_id
+    | Einverse e ->
+        let (domain, range) = get_domain_range_simple_expr e in
+        (range,domain)
+    | Eunion (e1,e2) ->
+        let (domain1, range1) = get_domain_range_simple_expr e1 in
+        let (domain2, range2) = get_domain_range_simple_expr e2 in
+        (mk_set_union domain1 domain2,
+         mk_set_union range1 range2)
+    | Eintersection (e1,e2) ->
+        let (domain1, range1) = get_domain_range_simple_expr e1 in
+        let (domain2, range2) = get_domain_range_simple_expr e2 in
+        (mk_set_intersection domain1 domain2,
+         mk_set_intersection range1 range2)
+    | Esequence (e1,e2) ->
+        let (domain1, _) = get_domain_range_simple_expr e1 in
+        let (_, range2)  = get_domain_range_simple_expr e2 in
+        (domain1, range2)
+    | Edifference (e1,_) ->
+        get_domain_range_simple_expr e1
+    | Eset set ->
+        (set, set)
+    | Eprod (s1,s2) ->
+        (s1, s2)
+    | Eoptional _ ->
+        (mk_set_U, mk_set_U)
+
+  (* Given an expr, compute it's domain and range and return a simplified expr *)
+  let get_domain_range_expr (expr: CatFile.expr) : set * set =
+    match expr with
+    | Esimple simple_expr ->
+        get_domain_range_simple_expr simple_expr
+    | _ ->
+       (mk_set_U, mk_set_U)
+
   let load_file filename =
     let lines = read_file filename in
     let (bindings, constraints, outputs) =
@@ -507,9 +565,10 @@ module CatParser = struct
         | Result.Ok v ->
             print_endline (pprint_instruction v);
             begin match v with
-            Binding (s, expr) ->
+            | Binding (s, expr) ->
                 (* TODO: domain and range *)
-                ((s, (mk_set_U, mk_set_U),expr)::binding, constraints, output)
+                let (domain, range) = get_domain_range_expr expr in
+                ((s, (domain, range),expr)::binding, constraints, output)
             | Constraint (s_opt, expr) ->
                 (binding, (s_opt, expr)::constraints, output)
             | Output s ->
@@ -530,4 +589,4 @@ end
 
 (*let load_catfile filename =
   let m = CatParser.load_file filename in
-  let module M = (val m) in*)
+  let module M = (val m) in *)
