@@ -7,6 +7,11 @@ import { State, EventEmitter, Compiler } from './common'
 import { Point, Locations } from './location'
 import UI from './ui' 
 
+//@ts-ignore
+import Viz from 'viz.js'
+//@ts-ignore
+import { Module, render } from 'viz.js/full.render.js'
+
 namespace Tabs {
 
 /* Generic  */
@@ -103,26 +108,29 @@ class SvgGraph extends Tab {
     this.svg = $('<span>No data...</span>')
   }
 
-  setSVG(data: string) {
+  setSVG(data: string, engine?: string) {
     this.container.empty()
-    // @ts-ignore: Viz.js is loaded later
-    this.container.append(Viz(data))
-    this.svg = this.container.find('svg')
-    this.svg.addClass('panzoom')
     // @ts-ignore
-    this.svg.panzoom(this.panzoomOptions)
-    // Zoom using the mouse
-    this.container.off() // remove all previous events
-    this.container.on('mousewheel.focal', (e: any) => {
-      e.preventDefault()
-      let delta = e.delta || e.originalEvent.wheelDelta
-      let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
+    const viz = new Viz({ Module, render })
+    // @ts-ignore: Viz.js is loaded later
+    viz.renderString(data, {engine}).then(result => {
+      this.container.append(result)
+      this.svg = this.container.find('svg')
+      this.svg.addClass('panzoom')
       // @ts-ignore
-      this.svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
+      this.svg.panzoom(this.panzoomOptions)
+      // Zoom using the mouse
+      this.container.off() // remove all previous events
+      this.container.on('mousewheel.focal', (e: any) => {
+        e.preventDefault()
+        let delta = e.delta || e.originalEvent.wheelDelta
+        let zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0
+        // @ts-ignore
+        this.svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
+      })
     })
   }
 }
-
 
 export class Interactive extends SvgGraph {
   constructor(ee: EventEmitter) {
@@ -188,7 +196,7 @@ export class BMC extends SvgGraph {
       if (!this.next.hasClass('disabled')) {
         ee.once(s => {
           this.currentExecution += 1
-          this.setSVG(s.bmc_executions[this.currentExecution])
+          this.setSVG(s.bmc_executions[this.currentExecution], 'neato')
           this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.prev.removeClass('disabled')
           if (this.currentExecution == s.bmc_executions.length - 1)
@@ -202,7 +210,7 @@ export class BMC extends SvgGraph {
 
   private updateGraph (state: Readonly<State>) {
     this.currentExecution = 0
-    this.setSVG(state.bmc_executions[0])
+    this.setSVG(state.bmc_executions[0], 'neato')
     this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
     this.prev.addClass('disabled')
     if (state.bmc_executions.length > 1)
