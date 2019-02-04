@@ -690,7 +690,8 @@ let request ~conf (flow, conn) req body =
     with Invalid_argument _ -> Uri.path uri
   in
   let rheader = parse_req_header req.headers in
-  if rheader.host = "" || rheader.host = "cerberus.cl.cam.ac.uk" || rheader.host = "localhost" then
+  if rheader.host = "" || rheader.host = "cerberus.cl.cam.ac.uk" || rheader.host = "localhost"
+     || (String.length rheader.host > 10 && String.sub rheader.host 0 9 = "localhost") then
   begin
     let try_with () =
       let accept_gzip = match Cohttp__.Header.get req.headers "accept-encoding" with
