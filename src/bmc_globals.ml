@@ -24,7 +24,7 @@ let g_max_addr = 2147483648
 let g_pnvi = true
 
 (*let g_model_file = "bmc/simple.cat"*)
-let g_model_file = "bmc/simple.cat"
+let g_model_file = "bmc/example.cat"
 let g_parse_from_model = true
 
 type memory_mode =

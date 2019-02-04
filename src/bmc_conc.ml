@@ -887,7 +887,7 @@ module MemoryModelCommon = struct
               (addr_min <= addr && addr <= addr_max)
             ) ranges) with
           | Some (alloc, Some (min, max), prefix) ->
-              sprintf "%s{%d}"  (prefix_to_string prefix)
+              sprintf "%s{%d}"  (prefix_to_string_short prefix)
                                 (addr - min)
           | _ -> Expr.to_string loc
         else Expr.to_string loc
@@ -1614,7 +1614,8 @@ module C11MemoryModel : MemoryModel = struct
 
     let not_initial action = (tid_of_action action <> initial_tid) in
     let remove_initial rel =
-      List.filter (fun (x,y) -> not_initial x && not_initial y) rel in
+      List.filter (fun (x,y) -> not_initial x && not_initial y
+                                (*)&& (aid_of_action x <> aid_of_action y)*)) rel in
 
     let actions = List.map fst action_events in
     let noninitial_actions = List.filter not_initial actions in
@@ -2145,7 +2146,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       solver mem extract_execution ret_value metadata_opt
 end
 
-module BmcMem = C11MemoryModel
+(*module BmcMem = C11MemoryModel*)
 (*module BmcMem = GenericModel(Partial_RC11Model)*)
 
 (* TODO: figure out syntax *)

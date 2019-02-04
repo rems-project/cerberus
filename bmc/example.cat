@@ -6,7 +6,8 @@ let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rfstar
 
 //let sw = [REL | ACQ_REL | SC] ; ([F] ; sb)? ; rs ; rf ; [R & ~NA] ; (sb ; [F])? ; [ACQ | ACQ_REL | SC]
 
-let sw = ([REL | ACQ_REL | SC] ; rs ; rf ; [R & ~NA & (ACQ | ACQ_REL | SC)]) | asw
+let sw_prime = [REL | ACQ_REL | SC] ; rs ; rf ; [R & ~NA & (ACQ | ACQ_REL | SC)]
+let sw = sw_prime | asw
 let hb = (sb | sw)+
 
 let mo = co
@@ -28,4 +29,4 @@ let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr
 //let psc =  psc_base | psc_f
 let psc = scb
 
-output sw
+//output sw
