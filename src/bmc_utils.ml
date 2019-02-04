@@ -121,6 +121,12 @@ let prefix_to_string (prefix: Sym.prefix) =
   | PrefSource (_, l) -> "[" ^ (String.concat "," (List.map symbol_to_string_simple l)) ^ "]"
   | PrefOther s -> s
 
+
+let prefix_to_string_short (prefix: Sym.prefix) =
+  match prefix with
+  | PrefSource (_, l) ->  symbol_to_string_simple (List.hd (List.rev l))
+  | PrefOther s -> s
+
 let name_cmp = fun nm1 nm2 ->
   match (nm1, nm2) with
   | (Sym sym1, Sym sym2) -> sym_cmp sym1 sym2

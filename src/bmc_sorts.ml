@@ -141,6 +141,9 @@ module CtypeSort = struct
     ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
         [mk_sym "_array_ty_n"]
         [Some integer_sort] [0]
+    ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
+        [mk_sym "_struct_ty"]
+        [Some integer_sort] [0]
     ]
 
   let rec mk_expr (ctype: ctype) : Expr.expr =
@@ -156,6 +159,8 @@ module CtypeSort = struct
         (* TODO: cty ignored b/c recursive types and tuples *)
         (* Sort of assumed it's always integer for now... *)
         Expr.mk_app g_ctx (List.nth fdecls 3) [big_num_to_z3 n]
+    | Struct0 (Symbol (_, n, _))->
+        Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
@@ -163,6 +168,34 @@ module CtypeSort = struct
     | Atomic0 ty -> mk_expr ty
     | _ -> mk_expr ctype
 end
+
+let rec alignof_type (ctype: ctype) (file: unit typed_file) : int =
+  match ctype with
+  | Void0 -> assert false
+  | Basic0 (Integer ity) ->
+      Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+  | Array0(ty, _) -> alignof_type ty file
+  | Function0 _ -> assert false
+  | Pointer0 _ ->
+      Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+  | Atomic0 (Basic0 _ as _ty) ->
+      alignof_type _ty file
+  | Atomic0 (Pointer0 _ as _ty) ->
+      Option.get (Ocaml_implementation.Impl.alignof_pointer)
+  | Struct0 sym ->
+      begin match Pmap.lookup sym file.tagDefs with
+      | Some (StructDef members) ->
+          (* Let alignment be max alignment of a member? *)
+          let alignments =
+            List.map (fun (_, mem_ctype) -> alignof_type mem_ctype file)
+                     members in
+          assert (List.length alignments > 0);
+          List.fold_left max (List.hd alignments) (List.tl alignments)
+      | _ -> assert false
+      end
+  | _ -> assert false
+
+
 
 module AddressSortPNVI = struct
   open Z3.Datatype
@@ -234,18 +267,28 @@ module AddressSortPNVI = struct
   let sizeof_ity ity = Option.get (Ocaml_implementation.Impl.sizeof_ity ity)
 
   (* TODO: Move this elsewhere *)
-  let rec type_size (ctype: ctype) : int =
+  let rec type_size (ctype: ctype) (file: unit typed_file): int =
     match ctype with
     | Void0 -> assert false
     | Basic0 (Integer ity) ->
         sizeof_ity ity
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
     | Array0 _ -> assert false
     | Function0 _ -> assert false
     | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
     | Atomic0 (Basic0 _ as _ty) (* fall through *)
     | Atomic0 (Pointer0 _ as _ty) ->
-        type_size _ty
+        type_size _ty file
+    | Struct0 tag ->
+        begin match Pmap.lookup tag file.tagDefs with
+        | Some (StructDef members) ->
+            let sizes = List.map (fun (_, ty) -> type_size ty file) members in
+            List.fold_left (fun acc sz ->
+              if acc mod sz = 0 then acc + sz
+              else acc + sz + (sz - (acc mod sz))
+            ) 0 sizes
+        | _ -> assert false
+        end
     | _ -> assert false
 
   let get_provenance (ival_min: Expr.expr)
@@ -355,17 +398,19 @@ module AddressSortConcrete = struct
     mk_eq (mk_is_atomic addr) is_atomic
 
   (* TODO *)
-  let rec type_size (ctype: ctype) : int =
+  let rec type_size (ctype: ctype) (file: unit typed_file) : int =
     match ctype with
     | Void0 -> assert false
     | Basic0 _ -> 1
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * type_size(ty)
+    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
     | Array0 _ -> assert false
     | Function0 _ -> assert false
     | Pointer0 _ -> 1
     | Atomic0 (Basic0 _ as _ty) (* fall through *)
     | Atomic0 (Pointer0 _ as _ty) ->
-        type_size _ty
+        type_size _ty file
+    | Struct0 _ ->
+        assert false
     | _ -> assert false
 
   let get_provenance _ _ _ = None
@@ -405,7 +450,7 @@ module type PointerSortAPI = sig
   val ptr_eq : Expr.expr -> Expr.expr -> Expr.expr
   val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
 
-  val type_size : ctype -> int
+  val type_size : ctype -> unit typed_file -> int
   val mk_nd_addr : int -> Expr.expr
   val get_index_from_addr : Expr.expr -> Expr.expr
   val get_addr_index : Expr.expr -> Expr.expr
@@ -652,9 +697,18 @@ module PointerSort = (val pointer_sort : PointerSortAPI)
 (*module AddressSort = PointerSort.AddrModule*)
 
 
+module type LoadedSortTy = sig
+  val mk_sort : Sort.sort
+  val mk_specified : Expr.expr -> Expr.expr
+  val mk_unspecified: Expr.expr -> Expr.expr
+  val is_specified : Expr.expr -> Expr.expr
+  val is_unspecified : Expr.expr -> Expr.expr
+  val get_specified_value : Expr.expr -> Expr.expr
+  val get_unspecified_value : Expr.expr -> Expr.expr
+end
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
-module LoadedSort (M : sig val obj_sort : Sort.sort end) = struct
+module LoadedSort (M : sig val obj_sort : Sort.sort end) : LoadedSortTy = struct
   open Z3.Datatype
   let mk_sort =
     let obj_name = Sort.to_string M.obj_sort in
@@ -830,8 +884,14 @@ module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
 
+module type LoadedSig = sig
+  val mk_sort : Sort.sort
+  val mk_expr : Expr.expr -> Expr.expr
 
-module Loaded = struct
+  val get_ith_in_loaded_2  : Expr.expr -> Expr.expr -> Expr.expr
+end
+
+module Loaded : LoadedSig = struct
   open Z3.Datatype
 
   let mk_sort  =
@@ -855,8 +915,10 @@ module Loaded = struct
       Expr.mk_app g_ctx (List.nth ctors 1) [expr]
     else if (Sort.equal LoadedIntArray.mk_sort (Expr.get_sort expr)) then
       Expr.mk_app g_ctx (List.nth ctors 2) [expr]
-    else
+    else begin
+      print_endline (Expr.to_string expr);
       assert false
+    end
 
   let is_loaded_int (expr: Expr.expr) =
     let recognizer = List.nth (get_recognizers mk_sort) 0 in

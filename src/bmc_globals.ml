@@ -23,7 +23,9 @@ let g_ptr_size = 8 (* Ocaml_implementation*)
 let g_max_addr = 2147483648
 let g_pnvi = true
 
-(*let g_model_file = "bmc/example.cat"*)
+(*let g_model_file = "bmc/simple.cat"*)
+let g_model_file = "bmc/example.cat"
+let g_parse_from_model = false
 
 type memory_mode =
   | MemoryMode_C
@@ -32,7 +34,7 @@ type memory_mode =
 let g_memory_mode = MemoryMode_C
 
 type bmc_conf = {
-  max_run_depth     : int;
+  max_run_depth       : int;
   max_core_call_depth : int;
   sequentialise   : bool;
   concurrent_mode : bool;
