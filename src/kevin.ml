@@ -11,8 +11,6 @@ let option_map f xs =
     g l' xs in
   g [] xs
 
-let (|>) x f = f x
-
 module Ord_pair (X : Set.OrderedType) (Y : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t = struct
   type t = X.t * Y.t
   let compare ((x1, x2) : t) (y1, y2) =
