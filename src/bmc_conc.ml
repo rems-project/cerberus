@@ -370,6 +370,8 @@ module MemoryModelCommon = struct
   let linux_release_memord = List.nth (Enumeration.get_consts mk_memord_type) 8
   let linux_rmb_memord = List.nth (Enumeration.get_consts mk_memord_type) 9
   let linux_wmb_memord = List.nth (Enumeration.get_consts mk_memord_type) 10
+  let linux_mb_memord = List.nth (Enumeration.get_consts mk_memord_type) 11
+  let linux_rbdep_memord = List.nth (Enumeration.get_consts mk_memord_type) 12
 
   let action_to_memord (BmcAction(_,_,a): bmc_action) : Expr.expr =
     match memorder_of_action a with
@@ -390,6 +392,8 @@ module MemoryModelCommon = struct
         | Release0 -> linux_release_memord
         | Rmb      -> linux_rmb_memord
         | Wmb      -> linux_wmb_memord
+        | Mb       -> linux_mb_memord
+        | RbDep    -> linux_rbdep_memord
         | _        -> assert false
         end)
 
