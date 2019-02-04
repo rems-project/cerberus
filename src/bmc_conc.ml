@@ -1780,6 +1780,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; fns           : fn_map
     ; decls         : decl_map
     ; assertions    : (Expr.expr list) option
+    ; undefs        : (Expr.expr list) option
     (* TODO *)
     }
 
@@ -1961,6 +1962,24 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                              ])
                      (mk_lt g_ctx (clk_fn ea) (clk_fn eb))
         ) model.prod_actions
+    | Empty expr ->
+        List.map (fun (a,b) ->
+          let (ea,eb) = (z3action a, z3action b) in
+          mk_implies (mk_and [getGuard ea; getGuard eb])
+                     (mk_not (simple_expr_to_z3 model expr (a,b)))
+          ) model.prod_actions
+
+  let mk_undef_unless
+               ((s_opt, constr): string option * CatFile.constraint_expr)
+               (model: z3_memory_model)
+               : Expr.expr list =
+    match constr with
+    | Irreflexive expr ->
+        failwith "TODO: undefined_unless irreflexive currently not supported"
+    | Acyclic expr ->
+        failwith "TODO: undefined_unless acyclic currently not supported"
+    | Empty expr ->
+        mk_constraint (s_opt, constr) model
 
   let mk_decls_and_fnapps (events: Sort.sort) =
     List.fold_left (fun (decls, fnapps) id ->
@@ -1995,6 +2014,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       ; decls         = decls
       ; fns           = fns
       ; assertions    = None
+      ; undefs        = None
       } in
     let assertions =
       gen_all_assertions common
@@ -2003,9 +2023,12 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       @ List.concat (List.map
           (fun binding -> mk_assertion binding model) M.bindings)
     in
+    let undefs =
+      List.concat (List.map
+          (fun constr -> mk_undef_unless constr model) M.undefs) in
     (*List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
-    {model with assertions = Some assertions}
-
+    {model with assertions = Some assertions;
+                undefs     = Some undefs}
 
   (* TODO: code duplication here with C11MemoryModel *)
   let extract_execution (model: Model.model)
