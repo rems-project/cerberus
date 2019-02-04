@@ -25,9 +25,9 @@ module CatFile = struct
     | BaseSet_LinuxRelease
 
     (*
-    | BaseRel_dep_addr
-    | BaseRel_dep_data
-    | BaseRel_dep_ctrl
+    | BaseRel_addr_dep
+    | BaseRel_data_dep
+    | BaseRel_ctrl_dep
     *)
 
   type base_identifier =
@@ -43,9 +43,9 @@ module CatFile = struct
     | BaseId_rfi
     | BaseId_rfe
     | BaseId_po_loc
-    (*| BaseId_dep_addr
-    | BaseId_dep_data
-    | BaseId_dep_ctrl*)
+    | BaseId_addr_dep
+    | BaseId_data_dep
+    | BaseId_ctrl_dep
 
   type id =
     | Id of string (* TODO: only relations allowed currently *)
@@ -77,6 +77,7 @@ module CatFile = struct
   type constraint_expr =
     | Irreflexive of simple_expr
     | Acyclic of simple_expr
+    | Empty of simple_expr
 
   let mk_set_U = Set_base BaseSet_U
   let mk_set_R = Set_base BaseSet_R
@@ -116,9 +117,9 @@ module CatFile = struct
   let mk_rfi = Eid (BaseId BaseId_rfi)
   let mk_rfe = Eid (BaseId BaseId_rfe)
   let mk_po_loc = Eid (BaseId BaseId_po_loc)
-  (*let mk_dep_addr = Eid (BaseId BaseId_dep_addr)
-  let mk_dep_ctrl = Eid (BaseId BaseId_dep_ctrl)
-  let mk_dep_data = Eid (BaseId BaseId_dep_data)*)
+  let mk_addr_dep = Eid (BaseId BaseId_addr_dep)
+  let mk_ctrl_dep = Eid (BaseId BaseId_ctrl_dep)
+  let mk_data_dep = Eid (BaseId BaseId_data_dep)
 
   let mk_prod (x: set) (y: set) =
     Eprod(x,y)
@@ -160,6 +161,15 @@ module CatFile = struct
   let mk_simple (es: simple_expr) =
     Esimple es
 
+  let mk_irreflexive (e: simple_expr) =
+    Irreflexive e
+
+  let mk_acyclic (e: simple_expr) =
+    Acyclic e
+
+  let mk_empty (e: simple_expr) =
+    Empty e
+
   (* ====== pprinters ======== *)
   let wrap s =
     "(" ^ s ^ ")"
@@ -177,9 +187,9 @@ module CatFile = struct
     | BaseId_rfi -> "rfi"
     | BaseId_rfe -> "rfe"
     | BaseId_po_loc -> "po-loc"
-    (*| BaseId_dep_addr -> "addr"
-    | BaseId_dep_ctrl -> "ctrl"
-    | BaseId_dep_data -> "data"*)
+    | BaseId_addr_dep -> "addr"
+    | BaseId_ctrl_dep -> "ctrl"
+    | BaseId_data_dep -> "data"
 
   let pprint_id = function
     | Id s -> "|" ^ s ^ "|"
@@ -256,6 +266,8 @@ module type CatModel = sig
                     * CatFile.expr) list
   val constraints : (string option * CatFile.constraint_expr) list
 
+  val undefs_unless_empty :  string list (* TODO: support generic UBs *)
+
   val to_output : string list (* TODO: should be id? *)
 end
 
@@ -299,6 +311,8 @@ module Partial_RC11Model : CatModel = struct
     ; (Some "sb|rf", Acyclic ((mk_union (mk_id "sb", mk_rf))))
     ]
 
+  let undefs_unless_empty = []
+
   let to_output = ["sw"]
 end
 
@@ -309,20 +323,31 @@ module CatParser = struct
   type instruction =
     | Binding of string * CatFile.expr
     | Constraint of string option * CatFile.constraint_expr
+    | Undefined_unless_empty of string (* TODO: support Undefined_unless acyclic/irreflexive *)
     | Output of string
     | Skip of string
+
+  let pprint_constraint (s_opt: string option) (constr : CatFile.constraint_expr) =
+    let name =
+        (if is_some s_opt then " as " ^ (Option.get s_opt) else "") in
+    match constr with
+    | Irreflexive se ->
+        sprintf "irreflexive (%s)%s"
+          (CatFile.pprint_simple_expr se) name
+    | Acyclic se ->
+        sprintf "acyclic (%s)%s"
+          (CatFile.pprint_simple_expr se) name
+    | Empty se ->
+        sprintf "empty (%s)%s"
+          (CatFile.pprint_simple_expr se) name
 
   let pprint_instruction = function
     | Binding (s, expr) ->
         sprintf "let %s = %s" s (CatFile.pprint_expr expr)
-    | Constraint (s_opt, Irreflexive se) ->
-        sprintf "irreflexive (%s)%s"
-          (CatFile.pprint_simple_expr se)
-          (if is_some s_opt then " as " ^ (Option.get s_opt) else "")
-    | Constraint (s_opt, Acyclic se) ->
-        sprintf "acyclic (%s)%s"
-          (CatFile.pprint_simple_expr se)
-          (if is_some s_opt then " as " ^ (Option.get s_opt) else "")
+    | Constraint (s_opt, constr) ->
+        pprint_constraint s_opt constr
+    | Undefined_unless_empty s ->
+        sprintf "undefined_unless empty %s" (s)
     | Output s ->
         sprintf "output %s" s
     | Skip s ->
@@ -358,9 +383,9 @@ module CatParser = struct
       else if s = "rfi"    then mk_rfi
       else if s = "rfe"    then mk_rfe
       else if s = "po-loc" then mk_po_loc
-      (*else if s = "addr"   then mk_dep_addr
-      else if s = "ctrl"   then mk_dep_ctrl
-      else if s = "data"   then mk_dep_data *)
+      else if s = "addr"   then mk_addr_dep
+      else if s = "ctrl"   then mk_ctrl_dep
+      else if s = "data"   then mk_data_dep
       else mk_id s
     in return ret
 
@@ -460,22 +485,31 @@ module CatParser = struct
     end_of_input         *>
     return (Binding (id, e))
 
-  let acyclic_expr =
-    token (string "acyclic") *>
-    token simple_expr     >>= fun e ->
-    ((token (string "as") *> token lowers >>= fun s -> return (Some s))
-    <|> return None) >>= fun s_opt ->
-    return (Constraint (s_opt, Acyclic e))
+  let check =
+    choice[token (string "acyclic") *> return mk_acyclic
+          ;token (string "irreflexive") *> return mk_irreflexive
+          ;token (string "empty") *> return mk_empty
+          ]
 
-  let irreflexive_expr =
-    token (string "irreflexive") *>
-    token simple_expr            >>= fun e ->
+  let constraint_expr =
+    token check >>= fun constr_fn ->
+    token simple_expr >>= fun e ->
     ((token (string "as") *> token lowers >>= fun s -> return (Some s))
     <|> return None) >>= fun s_opt ->
-    return (Constraint (s_opt, Irreflexive e))
+    return (Constraint(s_opt, constr_fn e))
+
+  let undefined_expr =
+    token (string "undefined_unless") *>
+    token (string "empty") *>
+    (*token check >>= fun constr_fn ->*)
+    token lowers >>= fun e ->
+    (*token simple_expr >>= fun e ->*)
+    ((token (string "as") *> token lowers >>= fun s -> return (Some s))
+    <|> return None) >>= fun s_opt ->
+    return (Undefined_unless_empty e)
 
   let output =
-    token (string "show") *>
+    token (string "output") *>
     token lowers >>= fun s ->
     return (Output s)
 
@@ -489,8 +523,8 @@ module CatParser = struct
     return (Skip ("//" ^ s))
 
   let instruction =
-    choice [irreflexive_expr
-           ;acyclic_expr
+    choice [constraint_expr
+           ;undefined_expr
            ;binding
            ;output
            ;comment
@@ -498,31 +532,120 @@ module CatParser = struct
            ]
     <* end_of_input
 
+  let get_domain_range_id (id: CatFile.base_identifier) : set * set =
+    match id with
+    | BaseId_rf     -> (mk_set_W, mk_set_R)
+    | BaseId_rf_inv -> (mk_set_R, mk_set_W)
+    | BaseId_co     -> (mk_set_W, mk_set_W)
+    | BaseId_id     -> (mk_set_U, mk_set_U)
+    | BaseId_asw    -> (mk_set_U, mk_set_U)
+    | BaseId_po     -> (mk_set_U, mk_set_U)
+    | BaseId_loc    -> (mk_set_M, mk_set_M)
+    | BaseId_int    -> (mk_set_U, mk_set_U)
+    | BaseId_ext    -> (mk_set_U, mk_set_U)
+    | BaseId_rfi    -> (mk_set_W, mk_set_R)
+    | BaseId_rfe    -> (mk_set_W, mk_set_R)
+    | BaseId_po_loc -> (mk_set_M, mk_set_M)
+    | BaseId_addr_dep -> (mk_set_R, mk_set_M)
+    | BaseId_data_dep -> (mk_set_R, mk_set_M)
+    | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
+
+  let rec get_domain_range_simple_expr (expr: CatFile.simple_expr)
+                                       : set * set  =
+    match expr with
+    | Eid (Id str) -> (mk_set_U, mk_set_U)
+    | Eid (BaseId base_id) ->
+        get_domain_range_id base_id
+    | Einverse e ->
+        let (domain, range) = get_domain_range_simple_expr e in
+        (range,domain)
+    | Eunion (e1,e2) ->
+        let (domain1, range1) = get_domain_range_simple_expr e1 in
+        let (domain2, range2) = get_domain_range_simple_expr e2 in
+        (mk_set_union domain1 domain2,
+         mk_set_union range1 range2)
+    | Eintersection (e1,e2) ->
+        let (domain1, range1) = get_domain_range_simple_expr e1 in
+        let (domain2, range2) = get_domain_range_simple_expr e2 in
+        (mk_set_intersection domain1 domain2,
+         mk_set_intersection range1 range2)
+    | Esequence (e1,e2) ->
+        let (domain1, _) = get_domain_range_simple_expr e1 in
+        let (_, range2)  = get_domain_range_simple_expr e2 in
+        (domain1, range2)
+    | Edifference (e1,_) ->
+        get_domain_range_simple_expr e1
+    | Eset set ->
+        (set, set)
+    | Eprod (s1,s2) ->
+        (s1, s2)
+    | Eoptional _ ->
+        (mk_set_U, mk_set_U)
+
+  (* Given an expr, compute it's domain and range and return a simplified expr *)
+  let get_domain_range_expr (expr: CatFile.expr) : set * set =
+    match expr with
+    | Esimple simple_expr ->
+        get_domain_range_simple_expr simple_expr
+    | _ ->
+        (mk_set_U, mk_set_U)
+
+
+  (* If sequence of expressions ending in a set, we can replace with
+   * domain/range restrictions *)
+  let rec strip_hd_set (expr: CatFile.simple_expr) : CatFile.simple_expr =
+    match expr with
+    | Esequence(Eset s, e2) ->
+        e2
+    | Esequence(e1, e2) ->
+        Esequence (strip_hd_set e1, e2)
+    | _ -> expr
+
+  let rec strip_tl_set (expr: CatFile.simple_expr) : CatFile.simple_expr =
+    match expr with
+    | Esequence(e1, Eset s) ->
+        e1
+    | Esequence(e1, e2) ->
+        Esequence(e1, strip_tl_set e2)
+    | _ -> expr
+
+  let simplify_sequenced_exprs (expr: CatFile.expr) : CatFile.expr =
+    match expr with
+    | Esimple simple_expr ->
+        Esimple (strip_tl_set (strip_hd_set simple_expr))
+    | _ -> expr
+
   let load_file filename =
     let lines = read_file filename in
-    let (bindings, constraints, outputs) =
-      List.fold_left (fun (binding, constraints, output) s ->
+    let (bindings, constraints, undefs_unless_empty, outputs) =
+      List.fold_left (fun (binding, constraints, undefs_unless_empty, output) s ->
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
-            print_endline (pprint_instruction v);
+            bmc_debug_print 3 (pprint_instruction v);
             begin match v with
-            Binding (s, expr) ->
+            | Binding (s, expr) ->
                 (* TODO: domain and range *)
-                ((s, (mk_set_U, mk_set_U),expr)::binding, constraints, output)
+                let (domain, range) = get_domain_range_expr expr in
+                let simplified_expr = simplify_sequenced_exprs expr in
+                bmc_debug_print 3 (CatFile.pprint_expr simplified_expr);
+                ((s, (domain, range),simplified_expr)::binding, constraints, undefs_unless_empty, output)
             | Constraint (s_opt, expr) ->
-                (binding, (s_opt, expr)::constraints, output)
+                (binding, (s_opt, expr)::constraints, undefs_unless_empty, output)
+            | Undefined_unless_empty s ->
+                (binding, constraints, s::undefs_unless_empty, output)
             | Output s ->
-                (binding, constraints, s::output)
-            | Skip _ -> (binding, constraints, output)
+                (binding, constraints, undefs_unless_empty, s::output)
+            | Skip _ -> (binding, constraints, undefs_unless_empty, output)
             end
         | Result.Error msg ->
             printf "ERROR: %s (input: '%s')\n" msg s;
-            (binding, constraints, output)
-      ) ([],[], []) lines in
+            (binding, constraints, undefs_unless_empty, output)
+      ) ([],[], [], []) lines in
     (module struct
       let bindings = bindings
       let constraints = constraints
+      let undefs_unless_empty = undefs_unless_empty
       let to_output = outputs
      end : CatModel)
 end
@@ -530,4 +653,4 @@ end
 
 (*let load_catfile filename =
   let m = CatParser.load_file filename in
-  let module M = (val m) in*)
+  let module M = (val m) in *)
