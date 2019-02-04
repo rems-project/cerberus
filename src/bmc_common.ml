@@ -47,7 +47,7 @@ let is_fun_ptr (p: Ocaml_mem.pointer_value) : bool =
   if String.length ptr_str < String.length cfun_hdr then false
   else (String.sub ptr_str 0 (String.length cfun_hdr) = cfun_hdr)
 
-let value_to_z3 (value: value) : Expr.expr =
+let value_to_z3 (value: value) (file: unit typed_file) : Expr.expr =
   match value with
   | Vunit        -> UnitSort.mk_unit
   | Vtrue        -> mk_true
@@ -275,6 +275,7 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Builtin v -> Builtin0 v
 
 let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+                         (file: unit typed_file)
                          : Sort.sort =
    match ty with
   | Void0     -> assert false
@@ -288,13 +289,41 @@ let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
   | Pointer0 _ -> LoadedPointer.mk_sort
   | Atomic0 (Basic0 _ as _ty) (* fall through *)
   | Atomic0 (Pointer0 _ as _ty) ->
-      ctype_to_z3_sort _ty
+      ctype_to_z3_sort _ty file
   | Atomic0 _ ->
       assert false
-  | Struct0 _ ->
-      assert false
+  | Struct0 tagdef ->
+      begin match Pmap.lookup tagdef file.tagDefs with
+      | Some (StructDef memlist) ->
+          let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
+          let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
+          Loaded_tuple_sort.mk_sort
+          (*)
+          let sortlist =
+            List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
+          (* TODO: Does Z3 allow tuples to contain tuples? *)
+          let tuple_sort = sorts_to_tuple sortlist in
+          let module Loaded_tuple_sort =
+            LoadedSort(struct let obj_sort = tuple_sort end) in
+          Loaded_tuple_sort.mk_sort
+          *)
+      | _ -> assert false
+      end
   | Union0 _
   | Builtin0 _ -> assert false
+and
+struct_to_sort (sym, memlist_def) file  =
+  match memlist_def with
+  | StructDef  memlist ->
+    let sortlist =
+        List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
+      (* TODO: Does Z3 allow tuples to contain tuples? *)
+    let tuple_sort = sorts_to_tuple sortlist in
+    (module LoadedSort(struct let obj_sort = tuple_sort end) : LoadedSortTy)
+  | _ -> assert false
+
+
+
 
 let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                            (file: unit typed_file)
@@ -479,6 +508,7 @@ module ImplFunctions = struct
                     @ is_unsigned_asserts
 end
 
+
 (* TODO: big hack for function calls...
  * let weak (p': loaded pointer, (...)) =
  *     let strong p : loaded pointer = pure(Specified(Cfunction(f))) in
@@ -592,4 +622,3 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
       end else
         None
   | _ -> None
-
