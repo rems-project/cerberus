@@ -347,8 +347,8 @@ let string_of_graph_attr = function
     ^ "labeljust=left;"
   | Rankdir TB -> "rankdir=TB;";
   | Rankdir LR -> "rankdir=LR;"
-  | Splines b -> "splines=" ^ string_of_bool b
-  | Overlap b -> "overlap=" ^ string_of_bool b
+  | Splines b -> "splines=" ^ string_of_bool b ^ ";"
+  | Overlap b -> "overlap=" ^ string_of_bool b ^ ";"
 
 type graph_element =
   | Node of node_info
@@ -1159,7 +1159,7 @@ let display_edges display_info ex ew d =
     (Aid_times_aid_map.bindings (make_edges display_info ex ew d))
 
 let digraph_of_execution_aux loc_map display_info (ex, ew, d) g =
-  [Dot.Graph_attr (Dot.Overlap true); Dot.Graph_attr (Dot.Splines false)] @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
+  [Dot.Graph_attr (Dot.Overlap false); Dot.Graph_attr (Dot.Splines true)] @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
 
 let digraph_of_execution loc_map display_info (ex, ew, d) =
   let ths = Layout.layout_threads display_info ex in
