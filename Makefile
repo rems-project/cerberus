@@ -46,6 +46,13 @@ include Makefile-source
 
 all: lem ocaml_native libc
 
+.PHONY: check-cerb-path
+check-cerb-path:
+ifndef CERB_PATH
+	$(error CERB_PATH is undefined. Please set it to point to the location of \
+		Cerberus.)
+endif
+
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
 
@@ -84,8 +91,9 @@ dependencies:
 	cd dependencies; make -f ../Makefile.dependencies
 
 
-lem: copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
+lem: check-cerb-path copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
+	@ulimit -n 7168
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 #	@OCAMLRUNPARAM=b $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml

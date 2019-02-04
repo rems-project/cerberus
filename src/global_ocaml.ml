@@ -33,7 +33,7 @@ let cerb_path =
     try
       Sys.getenv "CERB_PATH"
     with Not_found ->
-      error "expecting the environment variable CERB_PATH set to point to the location cerberus."
+      error "expecting the environment variable CERB_PATH set to point to the location of Cerberus."
 
 
 let set_cerb_conf exec exec_mode concurrency error_verbosity defacto bmc =
