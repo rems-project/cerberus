@@ -37,6 +37,6 @@ let race = ext & (((conflict \ hb) \ (hb^-1)) \ (A * A))
 //undefined_unless empty race as racy
 undefined_unless empty race as racy
 
-output race
+//output race
 
 //output sw

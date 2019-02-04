@@ -1614,8 +1614,8 @@ module C11MemoryModel : MemoryModel = struct
 
     let not_initial action = (tid_of_action action <> initial_tid) in
     let remove_initial rel =
-      List.filter (fun (x,y) -> not_initial x && not_initial y
-                                (*)&& (aid_of_action x <> aid_of_action y)*)) rel in
+      List.filter (fun (x,y) -> not_initial x && not_initial y)
+                  rel in
 
     let actions = List.map fst action_events in
     let noninitial_actions = List.filter not_initial actions in
@@ -1780,7 +1780,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; fns           : fn_map
     ; decls         : decl_map
     ; assertions    : (Expr.expr list) option
-    ; undefs        : (Expr.expr list) option
+    (*; undefs        : (string option * (Expr.expr list)) list*)
     (* TODO *)
     }
 
@@ -1969,17 +1969,18 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                      (mk_not (simple_expr_to_z3 model expr (a,b)))
           ) model.prod_actions
 
-  let mk_undef_unless
+  (*let mk_undef_unless
                ((s_opt, constr): string option * CatFile.constraint_expr)
                (model: z3_memory_model)
-               : Expr.expr list =
+               : string option * (Expr.expr list) =
     match constr with
     | Irreflexive expr ->
         failwith "TODO: undefined_unless irreflexive currently not supported"
     | Acyclic expr ->
         failwith "TODO: undefined_unless acyclic currently not supported"
     | Empty expr ->
-        mk_constraint (s_opt, constr) model
+        (s_opt, mk_constraint (s_opt, constr) model)
+  *)
 
   let mk_decls_and_fnapps (events: Sort.sort) =
     List.fold_left (fun (decls, fnapps) id ->
@@ -2014,7 +2015,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       ; decls         = decls
       ; fns           = fns
       ; assertions    = None
-      ; undefs        = None
+      (*; undefs        = []*)
       } in
     let assertions =
       gen_all_assertions common
@@ -2023,12 +2024,11 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       @ List.concat (List.map
           (fun binding -> mk_assertion binding model) M.bindings)
     in
-    let undefs =
-      List.concat (List.map
-          (fun constr -> mk_undef_unless constr model) M.undefs) in
+    (*let undefs =
+      (List.map (fun constr -> mk_undef_unless constr model) M.undefs) in*)
     (*List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
     {model with assertions = Some assertions;
-                undefs     = Some undefs}
+                (*undefs     = M.undefs*)}
 
   (* TODO: code duplication here with C11MemoryModel *)
   let extract_execution (model: Model.model)
@@ -2125,10 +2125,18 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         (s, remove_initial (List.map proj_fst rel))
       ) M.to_output in
 
+    let ubs_unless_empty =
+      List.map (fun s ->
+        let fn = lookup_id (CatFile.Id s) mem.fns in
+        let rel = List.filter (get_relation fn) prod in
+        (s, remove_initial (List.map proj_fst rel))
+      ) M.undefs_unless_empty in
+
     (*let sw = List.filter (get_relation fns.sw) prod in *)
     let execution_derived_data =
       { derived_relations =  derived_relations
-      ; undefined_behaviour = []
+      ; undefined_behaviour =
+          List.map (fun (s, rel) -> (s, Two rel)) ubs_unless_empty
             (*[("dr",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) data_race))
             ;("ur",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) unseq_race))
             ]*)
@@ -2146,6 +2154,9 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let ret = interp ret_value in
     bmc_debug_print 4 (sprintf "RET_VALUE: %s\n" (Expr.to_string ret));
 
+    let race_free = List.fold_left (fun acc (_, rel) ->
+        acc && (List.length rel = 0)) true ubs_unless_empty in
+
     { z3_asserts = mk_and (List.concat [guard_asserts; rf_asserts; co_asserts])
     ; ret = ret
 
@@ -2153,7 +2164,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; witness = witness
     ; exdd    = execution_derived_data
 
-    ; race_free = true (* TODO *)
+    ; race_free = race_free
+
     (*race_free = (List.length data_race = 0) && (List.length unseq_race =
       0)*)
     ; loc_pprinting = loc_pprinting
