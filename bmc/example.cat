@@ -2,7 +2,8 @@
 
 let sb = po | I * (M \ I)
 let rfstar = rf*
-let rs = [W] ; (sb & loc)? ; [W & ~NA] ; rfstar
+let rs_prime = [W]; (sb & loc)? ; [W & ~NA]
+let rs = rs_prime ; rfstar
 
 //let sw = [REL | ACQ_REL | SC] ; ([F] ; sb)? ; rs ; rf ; [R & ~NA] ; (sb ; [F])? ; [ACQ | ACQ_REL | SC]
 

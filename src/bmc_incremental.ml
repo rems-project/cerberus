@@ -4838,7 +4838,7 @@ module BmcConcActions = struct
               @ (List.concat globs_po) @ fn_po in
     get_assertions >>= fun assertions ->
     mk_preexec actions po fn_deps >>= fun preexec ->
-    print_endline (pp_preexec preexec);
+    (*print_endline (pp_preexec preexec);*)
     (* Debug: iterate through taint map *)
     (*print_taint_table >>*)
 
@@ -4863,7 +4863,8 @@ module BmcConcActions = struct
         let metadata_list = Pmap.bindings_list metadata in
         let meta_asserts = BmcMemCommon.metadata_assertions metadata_list in
         let provenance_asserts =
-          List.concat (List.map (fun x -> BmcMemCommon.provenance_assertions x metadata file)prov_syms) in
+          List.concat (List.map (fun x ->
+                BmcMemCommon.provenance_assertions x metadata file) prov_syms) in
         meta_asserts @ provenance_asserts
       end else
         []
