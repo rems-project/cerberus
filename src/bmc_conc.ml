@@ -782,9 +782,10 @@ module MemoryModelCommon = struct
     print_endline (output_str);
     let dots = List.fold_left (fun acc exec ->
       if (List.length exec.preexec.actions > 0) then
-          pp_dot () (ppmode_default_web,
+        Kevin.pp_dot exec.loc_pprinting (exec.preexec, exec.witness, exec.exdd) :: acc
+         (* pp_dot () (ppmode_default_web,
                      (exec.preexec, Some exec.witness,
-                      Some (exec.exdd)), Some exec.loc_pprinting) :: acc
+                      Some (exec.exdd)), Some exec.loc_pprinting) :: acc*)
       else acc
       ) [] executions in
     (* TODO: we probably don't want this anymore: *)
