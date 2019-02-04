@@ -184,7 +184,7 @@ export class BMC extends SvgGraph {
       if (!this.prev.hasClass('disabled')) {
         ee.once(s => {
           this.currentExecution -= 1
-          this.setSVG(s.bmc_executions[this.currentExecution])
+          this.setSVG(s.bmc_executions[this.currentExecution], 'neato')
           this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.next.removeClass('disabled')
           if (this.currentExecution == 0)
