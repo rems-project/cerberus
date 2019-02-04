@@ -1,6 +1,6 @@
 # We need ocamlfind
 ifeq (, $(shell which ocamlfind))
-$(warning "ocamlfind is required to build the executable part of Cerberus")
+$(error "ocamlfind is required to build the executable part of Cerberus")
 endif
 
 # Deal with Z3 package installed by opam
@@ -153,8 +153,8 @@ ocaml_native:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild src/cerberus_cstubs.o; \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native; \
+	  ocamlbuild src/cerberus_cstubs.o && \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native && \
 	  cp -L main_.native cerberus; \
 	fi
 
@@ -166,8 +166,8 @@ ocaml_profiling:
 	else \
 	  echo $(BOLD)OCAMLBUILD$(RESET) main.native; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml > src/main_.ml; \
-	  ocamlbuild src/cerberus_cstubs.o; \
-	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,yojson,${Z3} -libs str main_.native; \
+	  ocamlbuild src/cerberus_cstubs.o && \
+	  BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs unix,lem,cmdliner,pprint,yojson,${Z3} -libs str main_.native && \
 	  cp -L main_.native cerberus-prof; \
 	fi
 
@@ -181,9 +181,11 @@ instance: src/instance.ml
 	ocamlbuild src/cerberus_cstubs.o;
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
 	cp -L instance.native cerb.concrete 
-	sed -i"" 's/ref \`MemConcrete/ref \`MemSymbolic/' src/prelude.ml
+	sed 's/ref \`MemConcrete/ref \`MemSymbolic/' src/prelude.ml > src/prelude.ml.aux
+	cp src/prelude.ml.aux src/prelude.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
-	sed -i"" 's/ref \`MemSymbolic/ref \`MemConcrete/' src/prelude.ml
+	sed 's/ref \`MemSymbolic/ref \`MemConcrete/' src/prelude.ml > src/prelude.ml.aux
+	cp src/prelude.ml.aux src/prelude.ml
 	cp -L instance.native cerb.symbolic
 
 web: src/web.ml
