@@ -29,7 +29,10 @@ let proper-deps = ctrl
 let local = proper-deps
 let non-transitive = rfe?;local
 
-let pairs_inner = ((po_asw?;(rfe & (LinuxRelease * LinuxAcquire));po_asw?) | (po_asw?;(rfe & ctrl); ctrl))+
+let tmp_1 = (po_asw?;(rfe & (LinuxRelease * LinuxAcquire));po_asw?) 
+let tmp_2 = (po_asw?;(rfe & ctrl); ctrl)
+let pairs_inner = tmp_1 | tmp_2
+//let pairs_inner = ((po_asw?;(rfe & (LinuxRelease * LinuxAcquire));po_asw?) | (po_asw?;(rfe & ctrl); ctrl))+
 let pairs = pairs_inner+
 
 //let parirs =((po?;(rfe & (LinuxRelease * LinuxAcquire));po?) | (po?;(rfe & ctrl); ctrl))+
