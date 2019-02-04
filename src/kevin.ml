@@ -11,8 +11,6 @@ let option_map f xs =
     g l' xs in
   g [] xs
 
-let (|>) x f = f x
-
 module Ord_pair (X : Set.OrderedType) (Y : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t = struct
   type t = X.t * Y.t
   let compare ((x1, x2) : t) (y1, y2) =
@@ -143,78 +141,6 @@ module Rational = struct
 end
 
 module Cerberus = Bmc_types
-(*
-module Cerberus = struct
-type aid = int
-type tid = int
-
-type memory_order =
-   NA
- | Seq_cst
- | Relaxed
- | Release
- | Acquire
- | Consume
- | Acq_rel
-
-type memory_order0 =
-   Once
- | Acquire0
- | Release0
- | Rmb
- | Wmb
- | Mb
- | RbDep
- | RcuLock
- | RcuUnlock
- | SyncRcu
-
-type memory_order2 =
- | C_mem_order of memory_order
- | Linux_mem_order of memory_order0
-
-type z3_location = string
-
-type z3_value = int
-
-type action =
- | Load  of aid * tid * memory_order2 * z3_location * z3_value
- | Store of aid * tid * memory_order2 * z3_location * z3_value
- | RMW   of aid * tid * memory_order2 * z3_location * z3_value * z3_value
- | Fence of aid * tid * memory_order2
-
-type location_kind =
- | Non_Atomic
- | Atomic
- | Mutex
-
-type action_rel = (action * action) list
-
-type preexec2 =
- { actions : action list
- ; threads : tid list
- ; sb      : action_rel
- ; asw     : action_rel
- }
-
-type witness =
- { rf : action_rel
- ; mo : action_rel
- ; sc : action_rel
- }
-
-type fault =
-   One of action list
- | Two of action_rel
-
-type execution_derived_data = {
- derived_relations : (string * action_rel) list;
- undefined_behaviour : (string * fault) list;
-}
-
-type execution = (preexec2 * witness * execution_derived_data)
-end
-*)
 
 module Dot = struct
 
@@ -932,7 +858,8 @@ let default_display_info = {
       ("mo", ED_show (RM_no_reduction, "blue"));
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
-      ("hb", ED_show (RM_no_reduction, "red"))
+      ("hb", ED_show (RM_transitive_reduction, "forestgreen"));
+      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"))
       ] in
     match String_map_of_list.of_list l with | None -> assert false | Some m -> m);
   layout = L_frac;
@@ -1094,7 +1021,7 @@ let transitive_reduction_over_left s link =
     (fun (s_src, s_tgt) ->
       not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
         s_tgt = s'_tgt &&
-        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_tgt) link) s))
+        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_src) link) s))
     s
 
 let transitive_reduction_over s link =
@@ -1183,36 +1110,3 @@ end
 
 let pp_dot loc_map exec =
   Dot.string_of_digraph (Display.digraph_of_execution loc_map Layout.default_display_info exec)
-
-(*
-let example_execution_candidate =
-  let a = Cerberus.Store (0, 0, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let b = Cerberus.Load (1, 1, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let c = Cerberus.Load (2, 1, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let d = Cerberus.Load (3, 1, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let e = Cerberus.Load (4, 1, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let f = Cerberus.Load (5, 1, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let g = Cerberus.Load (6, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let h = Cerberus.Load (7, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let i = Cerberus.Load (8, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let j = Cerberus.Load (9, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let k = Cerberus.Load (10, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let l = Cerberus.Load (11, 2, (Cerberus.C_mem_order Cerberus.Relaxed), "x", 1) in
-  let ex = { Cerberus.actions = [a; b; c; d; e; f; g; h; i; j; k; l];
-  threads = [0; 1; 2; 3];
-  sb = [(b, c); (c, f); (b, d); (d, e); (e, f)]
-    @ [(g, h); (h, i); (h, j); (g, k); (k, l)];
-  asw = [(a, b); (a, g)]
-     @ [(l, f)]; } in
-  let ew = { Cerberus.rf = [];
-   mo = [];
-   sc = []; } in
-  let d = { Cerberus.derived_relations = [];
-    Cerberus.undefined_behaviour = [] } in
-  (ex, ew, d)
-
-let main () =
-  print_string (Dot.string_of_digraph (Display.digraph_of_execution Layout.default_display_info example_execution_candidate))
-
-let _ = main ()
-*)
