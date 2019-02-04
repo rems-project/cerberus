@@ -1823,6 +1823,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_SC      -> get_memorder a = C_mem_order Seq_cst
     | BaseSet_Rmb      -> get_memorder a = Linux_mem_order Rmb
     | BaseSet_Wmb      -> get_memorder a = Linux_mem_order Wmb
+    | BaseSet_Mb      -> get_memorder a = Linux_mem_order Mb
+    | BaseSet_RbDep   -> get_memorder a = Linux_mem_order RbDep
     | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order Acquire0
     | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order Release0
 

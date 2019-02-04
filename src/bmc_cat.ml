@@ -19,8 +19,11 @@ module CatFile = struct
     | BaseSet_ACQ
     | BaseSet_ACQ_REL
     | BaseSet_SC
+    (* === Linux stuff ==== *)
     | BaseSet_Wmb
     | BaseSet_Rmb
+    | BaseSet_Mb
+    | BaseSet_RbDep
     | BaseSet_LinuxAcquire
     | BaseSet_LinuxRelease
 
@@ -94,6 +97,8 @@ module CatFile = struct
   let mk_set_SC = Set_base BaseSet_SC
   let mk_set_Wmb = Set_base BaseSet_Wmb
   let mk_set_Rmb = Set_base BaseSet_Rmb
+  let mk_set_Mb = Set_base BaseSet_Mb
+  let mk_set_RbDep = Set_base BaseSet_RbDep
   let mk_set_LinuxAcquire = Set_base BaseSet_LinuxAcquire
   let mk_set_LinuxRelease = Set_base BaseSet_LinuxRelease
 
@@ -105,7 +110,6 @@ module CatFile = struct
     Set_intersection (x,y)
   let mk_set_not (x: set) =
     Set_not x
-
 
 
   let mk_po = Eid (BaseId BaseId_po)
@@ -211,6 +215,8 @@ module CatFile = struct
     | BaseSet_SC      -> "SC"
     | BaseSet_Rmb     -> "Rmb"
     | BaseSet_Wmb     -> "Wmb"
+    | BaseSet_Mb      -> "Mb"
+    | BaseSet_RbDep   -> "RbDep"
     | BaseSet_LinuxAcquire -> "LinuxAcquire"
     | BaseSet_LinuxRelease -> "LinuxRelease"
 
@@ -399,6 +405,9 @@ module CatParser = struct
           ;token (string "LinuxRelease") *> return mk_set_LinuxRelease
           ;token (string "Wmb")     *> return mk_set_Wmb
           ;token (string "Rmb")     *> return mk_set_Rmb
+          ;token (string "Mb")      *> return mk_set_Mb
+          ;token (string "RbDep")   *> return mk_set_RbDep
+
           ;token (string "SC")      *> return mk_set_SC
           ;token (string "U")       *> return mk_set_U
           ;token (string "R")       *> return mk_set_R

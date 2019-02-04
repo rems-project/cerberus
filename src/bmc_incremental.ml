@@ -1433,6 +1433,7 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
+        assert (g_memory_mode = MemoryMode_Linux);
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
@@ -1451,6 +1452,7 @@ module BmcZ3 = struct
     | LinuxLoad _ ->
         assert false
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        assert (g_memory_mode = MemoryMode_Linux);
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
