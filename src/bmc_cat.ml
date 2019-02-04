@@ -554,7 +554,32 @@ module CatParser = struct
     | Esimple simple_expr ->
         get_domain_range_simple_expr simple_expr
     | _ ->
-       (mk_set_U, mk_set_U)
+        (mk_set_U, mk_set_U)
+
+
+  (* If sequence of expressions ending in a set, we can replace with
+   * domain/range restrictions *)
+  let rec strip_hd_set (expr: CatFile.simple_expr) : CatFile.simple_expr =
+    match expr with
+    | Esequence(Eset s, e2) ->
+        e2
+    | Esequence(e1, e2) ->
+        Esequence (strip_hd_set e1, e2)
+    | _ -> expr
+
+  let rec strip_tl_set (expr: CatFile.simple_expr) : CatFile.simple_expr =
+    match expr with
+    | Esequence(e1, Eset s) ->
+        e1
+    | Esequence(e1, e2) ->
+        Esequence(e1, strip_tl_set e2)
+    | _ -> expr
+
+  let simplify_sequenced_exprs (expr: CatFile.expr) : CatFile.expr =
+    match expr with
+    | Esimple simple_expr ->
+        Esimple (strip_tl_set (strip_hd_set simple_expr))
+    | _ -> expr
 
   let load_file filename =
     let lines = read_file filename in
@@ -568,7 +593,9 @@ module CatParser = struct
             | Binding (s, expr) ->
                 (* TODO: domain and range *)
                 let (domain, range) = get_domain_range_expr expr in
-                ((s, (domain, range),expr)::binding, constraints, output)
+                let simplified_expr = simplify_sequenced_exprs expr in
+                print_endline (CatFile.pprint_expr simplified_expr);
+                ((s, (domain, range),simplified_expr)::binding, constraints, output)
             | Constraint (s_opt, expr) ->
                 (binding, (s_opt, expr)::constraints, output)
             | Output s ->
