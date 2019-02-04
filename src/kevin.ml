@@ -140,9 +140,6 @@ module Rational = struct
     float_of_int n /. float_of_int d
 end
 
-(* TODO: rename *)
-module Cerberus = Bmc_types
-
 module Dot = struct
 
 type node_attr =
@@ -318,53 +315,53 @@ let pair_compare f1 f2 (a1, b1) (a2, b2) =
   | v -> v
 
 module Aid = struct
-  type t = Cerberus.aid
+  type t = Bmc_types.aid
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
 module Tid = struct
-  type t = Cerberus.tid
+  type t = Bmc_types.tid
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
 module Memory_order2 = struct
-  type t = Cerberus.memory_order
+  type t = Bmc_types.memory_order
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
 module Z3_location = struct
-  type t = Cerberus.z3_location
+  type t = Bmc_types.z3_location
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
 module Z3_value = struct
-  type t = Cerberus.z3_value
+  type t = Bmc_types.z3_value
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
 module Action = struct
   let action_rank = function
-  | Cerberus.Load _ -> 0
-  | Cerberus.Store _ -> 1
-  | Cerberus.RMW _ -> 2
-  | Cerberus.Fence _ -> 3
+  | Bmc_types.Load _ -> 0
+  | Bmc_types.Store _ -> 1
+  | Bmc_types.RMW _ -> 2
+  | Bmc_types.Fence _ -> 3
 
-  type t = Cerberus.action
+  type t = Bmc_types.action
   (* TODO: do we care about types at this point? *)
   let compare (x : t) y =
     match x, y with
-    | Cerberus.Load (a1, t1, m1, l1, v1, ty1), Cerberus.Load (a2, t2, m2, l2, v2, ty2) ->
+    | Bmc_types.Load (a1, t1, m1, l1, v1, ty1), Bmc_types.Load (a2, t2, m2, l2, v2, ty2) ->
       pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare Z3_value.compare)))  (a1, (t1, (m1, (l1, v1)))) (a2, (t2, (m2, (l2, v2))))
-    | Cerberus.Store (a1, t1, m1, l1, v1, ty1), Cerberus.Store (a2, t2, m2, l2, v2, ty2) ->
+    | Bmc_types.Store (a1, t1, m1, l1, v1, ty1), Bmc_types.Store (a2, t2, m2, l2, v2, ty2) ->
       pair_compare Aid.compare (pair_compare Aid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare Z3_value.compare)))  (a1, (t1, (m1, (l1, v1)))) (a2, (t2, (m2, (l2, v2))))
-    | Cerberus.RMW (a1, t1, m1, l1, v11, v21, ty1), Cerberus.RMW (a2, t2, m2, l2, v12, v22, ty2) ->
+    | Bmc_types.RMW (a1, t1, m1, l1, v11, v21, ty1), Bmc_types.RMW (a2, t2, m2, l2, v12, v22, ty2) ->
       pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare (pair_compare Z3_value.compare Z3_value.compare))))  (a1, (t1, (m1, (l1, (v11, v21))))) (a2, (t2, (m2, (l2, (v12, v22)))))
-    | Cerberus.Fence (a1, t1, m1), Cerberus.Fence (a2, t2, m2) ->
+    | Bmc_types.Fence (a1, t1, m1), Bmc_types.Fence (a2, t2, m2) ->
       pair_compare Aid.compare (pair_compare Tid.compare Memory_order2.compare)  (a1, (t1, m1)) (a2, (t2, m2))
     | _, _ -> Pervasives.compare (action_rank x) (action_rank y)
 end
@@ -389,16 +386,16 @@ module Action_times_pos = Ord_pair(Action)(Pos)
 module Action_times_pos_set = Set.Make(Action_times_pos)
 
 let tid_of_action = function
-| Cerberus.Load (_, t, _, _, _, _) -> t
-| Cerberus.Store (_, t, _, _, _, _) -> t
-| Cerberus.RMW (_, t, _, _, _, _, _) -> t
-| Cerberus.Fence (_, t, _) -> t
+| Bmc_types.Load (_, t, _, _, _, _) -> t
+| Bmc_types.Store (_, t, _, _, _, _) -> t
+| Bmc_types.RMW (_, t, _, _, _, _, _) -> t
+| Bmc_types.Fence (_, t, _) -> t
 
 let aid_of_action = function
-| Cerberus.Load (a, _, _, _, _, _) -> a
-| Cerberus.Store (a, _, _, _, _, _) -> a
-| Cerberus.RMW (a, _, _, _, _, _, _) -> a
-| Cerberus.Fence (a, _, _) -> a
+| Bmc_types.Load (a, _, _, _, _, _) -> a
+| Bmc_types.Store (a, _, _, _, _, _) -> a
+| Bmc_types.RMW (a, _, _, _, _, _, _) -> a
+| Bmc_types.Fence (a, _, _) -> a
 
 let string_of_c_memory_order = function
 | Cmm_csem.NA -> "na"
@@ -422,8 +419,8 @@ let string_of_linux_memory_order = function
 | Linux.SyncRcu -> "syncrcu"
 
 let string_of_memory_order = function
-| Cerberus.C_mem_order mo -> string_of_c_memory_order mo
-| Cerberus.Linux_mem_order mo -> string_of_linux_memory_order mo
+| Bmc_types.C_mem_order mo -> string_of_c_memory_order mo
+| Bmc_types.Linux_mem_order mo -> string_of_linux_memory_order mo
 
 (* TODO: change? *)
 let string_of_location loc_map loc =
@@ -468,10 +465,10 @@ let string_of_aid a =
   String.make 1 (Char.chr ((Char.code 'a') + a))
 
 let string_of_action loc_map = function
-| Cerberus.Load (a, t, mo, x, v, ty) -> string_of_aid a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
-| Cerberus.Store (a, t, mo, x, v, ty) -> string_of_aid a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
-| Cerberus.RMW (a, t, mo, x, v1, v2, ty) -> string_of_aid a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
-| Cerberus.Fence (a, t, mo) -> string_of_aid a ^ ":F" ^ string_of_memory_order mo
+| Bmc_types.Load (a, t, mo, x, v, ty) -> string_of_aid a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
+| Bmc_types.Store (a, t, mo, x, v, ty) -> string_of_aid a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
+| Bmc_types.RMW (a, t, mo, x, v1, v2, ty) -> string_of_aid a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
+| Bmc_types.Fence (a, t, mo) -> string_of_aid a ^ ":F" ^ string_of_memory_order mo
 
 let aid_times_aid_set_of_rel rel =
   Aid_times_aid_set.of_list (List.map (fun (a, a') -> (aid_of_action a, aid_of_action a')) rel)
@@ -574,7 +571,7 @@ let columns_of sb acts =
   (non_singleton_columns, columns_map)
 
 type formula =
-  | F_var of Cerberus.aid
+  | F_var of Bmc_types.aid
   | F_const of rational
   | F_plus of formula list
   | F_minus of formula * formula
@@ -998,18 +995,18 @@ end
 module Collect_tid = Collect_in_map(Int_map)(Action_set)
 
 let collect_threads ex =
-  Collect_tid.collect (tid_of_action) (Action_set.of_list ex.Cerberus.actions)
+  Collect_tid.collect (tid_of_action) (Action_set.of_list ex.Bmc_types.actions)
 
 (* TODO: space threads out depending on width *)
 let layout_threads display_info loc_map ex =
   let thread_map = collect_threads ex in
-  let sb' = aid_times_aid_set_of_rel ex.Cerberus.sb in
+  let sb' = aid_times_aid_set_of_rel ex.Bmc_types.sb in
   let ths =
     List.map
       (fun (tid, acts) -> layout_thread display_info loc_map sb' acts)
       (Int_map.bindings thread_map) in
   let actposs = juxtapose_threads display_info ths in
-  asw_surgery sb' (aid_times_aid_set_of_rel ex.Cerberus.asw) actposs
+  asw_surgery sb' (aid_times_aid_set_of_rel ex.Bmc_types.asw) actposs
 
 end
 
@@ -1053,11 +1050,11 @@ let make_edges display_info ex ew d =
         | Some l -> Aid_times_aid_map.add (src, tgt) (l @ [(name, col)]) edges)
       edges
       (Aid_times_aid_set.elements rel) in
-  let sb' = transitive_reduction @@ aid_times_aid_set_of_rel ex.Cerberus.sb in
-  let asw' = aid_times_aid_set_of_rel ex.Cerberus.asw in
-  let rf' = aid_times_aid_set_of_rel ew.Cerberus.rf in
-  let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Cerberus.rf) in
-  let sc = aid_times_aid_set_of_rel ew.Cerberus.sc in
+  let sb' = transitive_reduction @@ aid_times_aid_set_of_rel ex.Bmc_types.sb in
+  let asw' = aid_times_aid_set_of_rel ex.Bmc_types.asw in
+  let rf' = aid_times_aid_set_of_rel ew.Bmc_types.rf in
+  let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.rf) in
+  let sc = aid_times_aid_set_of_rel ew.Bmc_types.sc in
   let transform rm edges =
     match rm with
     | Layout.RM_no_reduction -> edges
@@ -1076,15 +1073,15 @@ let make_edges display_info ex ew d =
     add_edges_mask display_info.Layout.mask "rf" rf' |>
     add_edges_mask display_info.Layout.mask "mo" mo' |>
     add_edges_mask display_info.Layout.mask "sc" sc in
-  let edges_with_derived = List.fold_left (fun edges (name, rel) -> add_edges_mask2 display_info.Layout.mask name rel edges) base_edges d.Cerberus.derived_relations in
+  let edges_with_derived = List.fold_left (fun edges (name, rel) -> add_edges_mask2 display_info.Layout.mask name rel edges) base_edges d.Bmc_types.derived_relations in
   let all_edges =
     List.fold_left
       (fun edges (name, fault) ->
         match fault with
-        | Cerberus.One x -> edges
-        | Cerberus.Two rel -> add_edges "undef" "darkorange" (aid_times_aid_set_of_rel rel) edges)
+        | Bmc_types.One x -> edges
+        | Bmc_types.Two rel -> add_edges "undef" "darkorange" (aid_times_aid_set_of_rel rel) edges)
       edges_with_derived
-      d.Cerberus.undefined_behaviour in
+      d.Bmc_types.undefined_behaviour in
   all_edges
 
 let dot_of_edge attrs (n1, n2) =
@@ -1094,14 +1091,14 @@ let display_nodes loc_map display_info d g =
   List.map
     (fun (act, (x, y)) ->
       let aid = aid_of_action act in
-      (* TODO: maybe not the best way? *)
+      (* TODO: is this the best way to display undef? *)
       let undefs =
         if List.exists
           (fun (name, fault) ->
             match fault with
-              Cerberus.One set -> List.mem act set
-            | Cerberus.Two _ -> false)
-          d.Cerberus.undefined_behaviour then [Dot.NColor "orange"]
+              Bmc_types.One set -> List.mem act set
+            | Bmc_types.Two _ -> false)
+          d.Bmc_types.undefined_behaviour then [Dot.NColor "orange"]
         else [] in
       Dot.Node { Dot.nname = repr aid; Dot.nattrs = [Dot.NLabel (string_of_action loc_map act); Dot.NPos (Rational.float_of_rat (Rational.mult display_info.Layout.x_factor x), -. Rational.float_of_rat (Rational.mult (y, 1) display_info.Layout.y_factor)); Dot.NShape "none";] @ undefs })
     (Action_times_pos_set.elements g)
