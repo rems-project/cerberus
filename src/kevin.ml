@@ -647,15 +647,18 @@ let rec derivative x = function
 
 let f_square f = F_times (f, f)
 
-let repulse repulsion_factor a_rep a'_rep =
-  F_div (F_const repulsion_factor, f_square (F_minus (F_var a_rep, F_var a'_rep)))
+let width_of_action loc_map act =
+  String.length (string_of_action loc_map act)
+
+let repulse repulsion_factor a_rep a'_rep width =
+  F_times (F_div (F_const repulsion_factor, f_square (F_minus (F_var a_rep, F_var a'_rep))), F_const (width, 7))
 
 let attract a a' =
   f_square (F_minus (F_var a, F_var a'))
 
 module Real_map_aid_times_aid_to_formula_set = Option_set_bind(Aid_times_aid_set)(Formula_set)
 
-let equation_of_act display_info sb columns_map line act =
+let equation_of_act display_info loc_map sb columns_map line act =
   (* TODO: should take label size into account *)
   let trans a =
     match Aid_map.find_opt a columns_map with
@@ -663,15 +666,17 @@ let equation_of_act display_info sb columns_map line act =
     | Some v -> v in
   let a = aid_of_action act in
   let (a_top, a_bot) = trans a in
+  let a_w = width_of_action loc_map act in
   assert (a = a_top);
   let repulsion =
     option_map
       (fun act' ->
         let a' = aid_of_action act' in
+        let a'_w = width_of_action loc_map act' in
         if a' = a then None
         else
           let a'_rep = fst (trans a') in
-          Some (repulse display_info.repulsion_factor a_top a'_rep))
+          Some (repulse display_info.repulsion_factor a_top a'_rep (a_w + a'_w)))
       (Action_set.elements line) in
   let attraction_up =
     Real_map_aid_times_aid_to_formula_set.bind
@@ -699,7 +704,7 @@ let rec evaluate map x = function
 
 module Aid_map_of_list = Map_of_list(Aid_map)
 
-let equations_map_of repulsion_factor sb columns_map lines =
+let equations_map_of display_info loc_map sb columns_map lines =
   let x =
     Aid_map_of_list.of_list
       (List.concat
@@ -711,7 +716,7 @@ let equations_map_of repulsion_factor sb columns_map lines =
                 let (aid', _) = Aid_map.find aid columns_map in
                 if Aid.compare aid aid' <> 0 then None
                 else
-                  let eqn = equation_of_act repulsion_factor sb columns_map line act in
+                  let eqn = equation_of_act display_info loc_map sb columns_map line act in
                   Some (aid, eqn))
                 (Action_set.elements line))
           lines)) in
@@ -870,13 +875,13 @@ let default_display_info = {
   y_factor = (1, 1);
 }
 
-let layout_thread display_info sb acts =
+let layout_thread display_info loc_map sb acts =
   let lines = vertical_layout sb acts in
   let (columns, columns_map) = columns_of sb acts in
   match display_info.layout with
   | L_naive -> init_var_map_naive sb columns lines
   | L_frac ->
-     let eqns = equations_map_of display_info sb columns_map lines in
+     let eqns = equations_map_of display_info loc_map sb columns_map lines in
     iterate display_info columns_map eqns (init_var_map_frac sb (columns, columns_map) lines)
 
 (* TODO: take label size into account *)
@@ -986,12 +991,13 @@ module Collect_tid = Collect_in_map(Int_map)(Action_set)
 let collect_threads ex =
   Collect_tid.collect (tid_of_action) (Action_set.of_list ex.Cerberus.actions)
 
-let layout_threads display_info ex =
+(* TODO: space threads out depending on width *)
+let layout_threads display_info loc_map ex =
   let thread_map = collect_threads ex in
   let sb' = aid_times_aid_set_of_rel ex.Cerberus.sb in
   let ths =
     List.map
-      (fun (tid, acts) -> layout_thread display_info sb' acts)
+      (fun (tid, acts) -> layout_thread display_info loc_map sb' acts)
       (Int_map.bindings thread_map) in
   let actposs = juxtapose_threads display_info ths in
   asw_surgery sb' (aid_times_aid_set_of_rel ex.Cerberus.asw) actposs
@@ -1103,7 +1109,7 @@ let digraph_of_execution_aux loc_map display_info (ex, ew, d) g =
   [Dot.Graph_attr (Dot.Overlap false); Dot.Graph_attr (Dot.Splines true)] @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
 
 let digraph_of_execution loc_map display_info (ex, ew, d) =
-  let ths = Layout.layout_threads display_info ex in
+  let ths = Layout.layout_threads display_info loc_map ex in
   digraph_of_execution_aux loc_map display_info (ex, ew, d) ths
 
 end
