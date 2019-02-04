@@ -1,12 +1,14 @@
-"Linux model"
+//"Linux model"
 
 //include "cos.cat"
 
-let po-loc = po & loc
+let po_asw = po | asw
+
+let po_asw-loc = po_asw & loc
 let fr = (rf_inv ; co) \ id
 let com = rf | co | fr
 
-let sc-order = (po-loc | com)
+let sc-order = (po_asw-loc | com)
 acyclic sc-order
 
 //procedure sc-per-location() =
@@ -27,7 +29,7 @@ let proper-deps = ctrl
 let local = proper-deps
 let non-transitive = rfe?;local
 
-let pairs_inner = ((po?;(rfe & (LinuxRelease * LinuxAcquire));po?) | (po?;(rfe & ctrl); ctrl))+
+let pairs_inner = ((po_asw?;(rfe & (LinuxRelease * LinuxAcquire));po_asw?) | (po_asw?;(rfe & ctrl); ctrl))+
 let pairs = pairs_inner+
 
 //let parirs =((po?;(rfe & (LinuxRelease * LinuxAcquire));po?) | (po?;(rfe & ctrl); ctrl))+
