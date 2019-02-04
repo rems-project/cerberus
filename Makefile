@@ -1,6 +1,6 @@
 # We need ocamlfind
 ifeq (, $(shell which ocamlfind))
-$(warning "ocamlfind is required to build the executable part of Cerberus")
+$(error "ocamlfind is required to build the executable part of Cerberus")
 endif
 
 # Deal with Z3 package installed by opam
