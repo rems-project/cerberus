@@ -140,6 +140,7 @@ module Rational = struct
     float_of_int n /. float_of_int d
 end
 
+(* TODO: rename *)
 module Cerberus = Bmc_types
 
 module Dot = struct
@@ -350,16 +351,21 @@ module Action = struct
   let action_rank = function
   | Cerberus.Load _ -> 0
   | Cerberus.Store _ -> 1
-  | _ -> failwith "victor"
+  | Cerberus.RMW _ -> 2
+  | Cerberus.Fence _ -> 3
 
   type t = Cerberus.action
+  (* TODO: do we care about types at this point? *)
   let compare (x : t) y =
     match x, y with
     | Cerberus.Load (a1, t1, m1, l1, v1, ty1), Cerberus.Load (a2, t2, m2, l2, v2, ty2) ->
       pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare Z3_value.compare)))  (a1, (t1, (m1, (l1, v1)))) (a2, (t2, (m2, (l2, v2))))
     | Cerberus.Store (a1, t1, m1, l1, v1, ty1), Cerberus.Store (a2, t2, m2, l2, v2, ty2) ->
       pair_compare Aid.compare (pair_compare Aid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare Z3_value.compare)))  (a1, (t1, (m1, (l1, v1)))) (a2, (t2, (m2, (l2, v2))))
-    (* victor *)
+    | Cerberus.RMW (a1, t1, m1, l1, v11, v21, ty1), Cerberus.RMW (a2, t2, m2, l2, v12, v22, ty2) ->
+      pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare (pair_compare Z3_value.compare Z3_value.compare))))  (a1, (t1, (m1, (l1, (v11, v21))))) (a2, (t2, (m2, (l2, (v12, v22)))))
+    | Cerberus.Fence (a1, t1, m1), Cerberus.Fence (a2, t2, m2) ->
+      pair_compare Aid.compare (pair_compare Tid.compare Memory_order2.compare)  (a1, (t1, m1)) (a2, (t2, m2))
     | _, _ -> Pervasives.compare (action_rank x) (action_rank y)
 end
 
@@ -385,12 +391,14 @@ module Action_times_pos_set = Set.Make(Action_times_pos)
 let tid_of_action = function
 | Cerberus.Load (_, t, _, _, _, _) -> t
 | Cerberus.Store (_, t, _, _, _, _) -> t
-| _ -> failwith "victor"
+| Cerberus.RMW (_, t, _, _, _, _, _) -> t
+| Cerberus.Fence (_, t, _) -> t
 
 let aid_of_action = function
 | Cerberus.Load (a, _, _, _, _, _) -> a
 | Cerberus.Store (a, _, _, _, _, _) -> a
-| _ -> failwith "victor"
+| Cerberus.RMW (a, _, _, _, _, _, _) -> a
+| Cerberus.Fence (a, _, _) -> a
 
 let string_of_c_memory_order = function
 | Cmm_csem.NA -> "na"
@@ -462,7 +470,8 @@ let string_of_aid a =
 let string_of_action loc_map = function
 | Cerberus.Load (a, t, mo, x, v, ty) -> string_of_aid a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
 | Cerberus.Store (a, t, mo, x, v, ty) -> string_of_aid a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
-| _ -> failwith "victor"
+| Cerberus.RMW (a, t, mo, x, v1, v2, ty) -> string_of_aid a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
+| Cerberus.Fence (a, t, mo) -> string_of_aid a ^ ":F" ^ string_of_memory_order mo
 
 let aid_times_aid_set_of_rel rel =
   Aid_times_aid_set.of_list (List.map (fun (a, a') -> (aid_of_action a, aid_of_action a')) rel)
