@@ -858,7 +858,8 @@ let default_display_info = {
       ("mo", ED_show (RM_no_reduction, "blue"));
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
-      ("hb", ED_show (RM_no_reduction, "red"))
+      ("hb", ED_show (RM_transitive_reduction, "forestgreen"));
+      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"))
       ] in
     match String_map_of_list.of_list l with | None -> assert false | Some m -> m);
   layout = L_frac;
