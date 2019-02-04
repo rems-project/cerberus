@@ -307,19 +307,21 @@ let bmc_file (file              : unit typed_file)
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
-  bmc_debug_print 5 "====BINDINGS";
-  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
-            (Option.get final_state.bindings);
-  bmc_debug_print 5 "====VCS";
-  List.iter (fun (e, _) -> bmc_debug_print 5 (Expr.to_string e))
-            (Option.get final_state.vcs);
-  bmc_debug_print 5 "====MEM_BINDINGS";
-  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
-            (Option.get final_state.mem_bindings);
-  bmc_debug_print 5 "====RET_BINDINGS";
-  List.iter (fun e -> bmc_debug_print 5 (Expr.to_string e))
-            (Option.get final_state.ret_bindings);
 
+  if !!bmc_conf.debug_lvl >= 5 then begin
+    print_endline "====BINDINGS";
+    List.iter (fun e -> print_endline (Expr.to_string e))
+              (Option.get final_state.bindings);
+    print_endline "====VCS";
+    List.iter (fun (e, _) -> print_endline (Expr.to_string e))
+              (Option.get final_state.vcs);
+    print_endline "====MEM_BINDINGS";
+    List.iter (fun e -> print_endline (Expr.to_string e))
+              (Option.get final_state.mem_bindings);
+    print_endline "====RET_BINDINGS";
+    List.iter (fun e -> print_endline (Expr.to_string e))
+              (Option.get final_state.ret_bindings);
+  end;
   (* TODO: Output this in the dot graph *)
   if !!bmc_conf.debug_lvl >= 3 then
   ( print_endline "====ALLOCATION PREFIXES";
@@ -328,6 +330,7 @@ let bmc_file (file              : unit typed_file)
       (Option.get final_state.alloc_meta)
   );
 
+  bmc_debug_print 1 "ADDING BINDINGS";
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
   Solver.add g_solver (Option.get final_state.ret_bindings);
