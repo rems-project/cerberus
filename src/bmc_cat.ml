@@ -77,6 +77,7 @@ module CatFile = struct
   type constraint_expr =
     | Irreflexive of simple_expr
     | Acyclic of simple_expr
+    | Empty of simple_expr
 
   let mk_set_U = Set_base BaseSet_U
   let mk_set_R = Set_base BaseSet_R
@@ -159,6 +160,15 @@ module CatFile = struct
 
   let mk_simple (es: simple_expr) =
     Esimple es
+
+  let mk_irreflexive (e: simple_expr) =
+    Irreflexive e
+
+  let mk_acyclic (e: simple_expr) =
+    Acyclic e
+
+  let mk_empty (e: simple_expr) =
+    Empty e
 
   (* ====== pprinters ======== *)
   let wrap s =
@@ -256,6 +266,8 @@ module type CatModel = sig
                     * CatFile.expr) list
   val constraints : (string option * CatFile.constraint_expr) list
 
+  val undefs      : (string option * CatFile.constraint_expr) list
+
   val to_output : string list (* TODO: should be id? *)
 end
 
@@ -299,6 +311,8 @@ module Partial_RC11Model : CatModel = struct
     ; (Some "sb|rf", Acyclic ((mk_union (mk_id "sb", mk_rf))))
     ]
 
+  let undefs = []
+
   let to_output = ["sw"]
 end
 
@@ -309,20 +323,31 @@ module CatParser = struct
   type instruction =
     | Binding of string * CatFile.expr
     | Constraint of string option * CatFile.constraint_expr
+    | Undefined_unless of string option * CatFile.constraint_expr
     | Output of string
     | Skip of string
+
+  let pprint_constraint (s_opt: string option) (constr : CatFile.constraint_expr) =
+    let name =
+        (if is_some s_opt then " as " ^ (Option.get s_opt) else "") in
+    match constr with
+    | Irreflexive se ->
+        sprintf "irreflexive (%s)%s"
+          (CatFile.pprint_simple_expr se) name
+    | Acyclic se ->
+        sprintf "acyclic (%s)%s"
+          (CatFile.pprint_simple_expr se) name
+    | Empty se ->
+        sprintf "empty (%s)%s"
+          (CatFile.pprint_simple_expr se) name
 
   let pprint_instruction = function
     | Binding (s, expr) ->
         sprintf "let %s = %s" s (CatFile.pprint_expr expr)
-    | Constraint (s_opt, Irreflexive se) ->
-        sprintf "irreflexive (%s)%s"
-          (CatFile.pprint_simple_expr se)
-          (if is_some s_opt then " as " ^ (Option.get s_opt) else "")
-    | Constraint (s_opt, Acyclic se) ->
-        sprintf "acyclic (%s)%s"
-          (CatFile.pprint_simple_expr se)
-          (if is_some s_opt then " as " ^ (Option.get s_opt) else "")
+    | Constraint (s_opt, constr) ->
+        pprint_constraint s_opt constr
+    | Undefined_unless (s_opt, constr) ->
+        sprintf "undefined_unless %s" (pprint_constraint s_opt constr)
     | Output s ->
         sprintf "output %s" s
     | Skip s ->
@@ -460,7 +485,30 @@ module CatParser = struct
     end_of_input         *>
     return (Binding (id, e))
 
-  let acyclic_expr =
+  let check =
+    choice[token (string "acyclic") *> return mk_acyclic
+          ;token (string "irreflexive") *> return mk_irreflexive
+          ;token (string "empty") *> return mk_empty
+          ]
+
+  let constraint_expr =
+    token check >>= fun constr_fn ->
+    token simple_expr >>= fun e ->
+    ((token (string "as") *> token lowers >>= fun s -> return (Some s))
+    <|> return None) >>= fun s_opt ->
+    return (Constraint(s_opt, constr_fn e))
+
+  let undefined_expr =
+    token (string "undefined_unless") *>
+    token check >>= fun constr_fn ->
+    token simple_expr >>= fun e ->
+    ((token (string "as") *> token lowers >>= fun s -> return (Some s))
+    <|> return None) >>= fun s_opt ->
+    return (Undefined_unless(s_opt, constr_fn e))
+
+
+
+  (*let acyclic_expr =
     token (string "acyclic") *>
     token simple_expr     >>= fun e ->
     ((token (string "as") *> token lowers >>= fun s -> return (Some s))
@@ -473,6 +521,24 @@ module CatParser = struct
     ((token (string "as") *> token lowers >>= fun s -> return (Some s))
     <|> return None) >>= fun s_opt ->
     return (Constraint (s_opt, Irreflexive e))
+
+  let empty_expr =
+    token (string "empty") *>
+    token simple_expr            >>= fun e ->
+    ((token (string "as") *> token lowers >>= fun s -> return (Some s))
+    <|> return None) >>= fun s_opt ->
+    return (Constraint (s_opt, Empty e))
+*)
+
+  (*let undefined_expr =
+    token (string "undefined_unless") *>
+    choice [token (string "acyclic")
+           ]
+    choice [token acyclic_expr >>= fun s_opt ->
+           ;token irreflexive_expr >>= fun s_opt ->
+           ;token empty_expr >>= fun s_opt
+           ]
+*)
 
   let output =
     token (string "output") *>
@@ -489,8 +555,8 @@ module CatParser = struct
     return (Skip ("//" ^ s))
 
   let instruction =
-    choice [irreflexive_expr
-           ;acyclic_expr
+    choice [constraint_expr
+           ;undefined_expr
            ;binding
            ;output
            ;comment
@@ -583,8 +649,8 @@ module CatParser = struct
 
   let load_file filename =
     let lines = read_file filename in
-    let (bindings, constraints, outputs) =
-      List.fold_left (fun (binding, constraints, output) s ->
+    let (bindings, constraints, undefs, outputs) =
+      List.fold_left (fun (binding, constraints, undefs, output) s ->
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
@@ -595,20 +661,23 @@ module CatParser = struct
                 let (domain, range) = get_domain_range_expr expr in
                 let simplified_expr = simplify_sequenced_exprs expr in
                 print_endline (CatFile.pprint_expr simplified_expr);
-                ((s, (domain, range),simplified_expr)::binding, constraints, output)
+                ((s, (domain, range),simplified_expr)::binding, constraints, undefs, output)
             | Constraint (s_opt, expr) ->
-                (binding, (s_opt, expr)::constraints, output)
+                (binding, (s_opt, expr)::constraints, undefs, output)
+            | Undefined_unless (s_opt, expr) ->
+                (binding, constraints, (s_opt, expr)::undefs, output)
             | Output s ->
-                (binding, constraints, s::output)
-            | Skip _ -> (binding, constraints, output)
+                (binding, constraints, undefs, s::output)
+            | Skip _ -> (binding, constraints, undefs, output)
             end
         | Result.Error msg ->
             printf "ERROR: %s (input: '%s')\n" msg s;
-            (binding, constraints, output)
-      ) ([],[], []) lines in
+            (binding, constraints, undefs, output)
+      ) ([],[], [], []) lines in
     (module struct
       let bindings = bindings
       let constraints = constraints
+      let undefs = undefs
       let to_output = outputs
      end : CatModel)
 end
