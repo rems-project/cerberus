@@ -1053,7 +1053,7 @@ let make_edges display_info ex ew d =
   let sb' = transitive_reduction @@ aid_times_aid_set_of_rel ex.Bmc_types.sb in
   let asw' = aid_times_aid_set_of_rel ex.Bmc_types.asw in
   let rf' = aid_times_aid_set_of_rel ew.Bmc_types.rf in
-  let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.rf) in
+  let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.mo) in
   let sc = aid_times_aid_set_of_rel ew.Bmc_types.sc in
   let transform rm edges =
     match rm with
