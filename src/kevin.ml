@@ -1094,7 +1094,7 @@ let transitive_reduction_over_left s link =
     (fun (s_src, s_tgt) ->
       not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
         s_tgt = s'_tgt &&
-        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_tgt) link) s))
+        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_src) link) s))
     s
 
 let transitive_reduction_over s link =
