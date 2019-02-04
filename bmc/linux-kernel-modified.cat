@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: GPL-2.0+
+//(*
+// * Copyright (C) 2015 Jade Alglave <j.alglave@ucl.ac.uk>,
+// * Copyright (C) 2016 Luc Maranget <luc.maranget@inria.fr> for Inria
+// * Copyright (C) 2017 Alan Stern <stern@rowland.harvard.edu>,
+// *                    Andrea Parri <parri.andrea@gmail.com>
+// *
+// * An earlier version of this file appeared in the companion webpage for
+// * "Frightening small children and disconcerting grown-ups: Concurrency
+// * in the Linux kernel" by Alglave, Maranget, McKenney, Parri, and Stern,
+// * which appeared in ASPLOS 2018.
+// *)
+
+//"Linux-kernel memory consistency model"
+//
+//(*
+// * File "lock.cat" handles locks and is experimental.
+// * It can be replaced by include "cos.cat" for tests that do not use locks.
+// *)
+
+//include "lock.cat"
+
+//(*******************)
+//(* Basic relations *)
+//(*******************)
+
+//(* Fences *)
+//let fencerel(S) = (po & (_ * S)); po
+
+let po_asw = po | asw
+let po_asw_loc = po_asw & loc
+
+//let rmb = [R \ Noreturn] ; fencerel(Rmb) ; [R \ Noreturn]
+let rmb = [R] ; (po_asw & (U * Rmb)) ; po_asw  ; [R]
+let wmb = [W] ; (po_asw & (U * Wmb)) ; po_asw ; [W]
+let mb = ([M] ; (po_asw & (U * Mb)) ; po_asw; [M]) 
+//	([M] ; fencerel(Before-atomic) ; [RMW] ; po_asw? ; [M]) |
+//	([M] ; po_asw? ; [RMW] ; fencerel(After-atomic) ; [M]) |
+//	([M] ; po_asw? ; [LKW] ; fencerel(After-spinlock) ; [M]) |
+//	([M] ; po_asw ; [UL] ; (co | po_asw) ; [LKW] ;
+//		fencerel(After-unlock-lock) ; [M])
+//let gp = po_asw ; [Sync-rcu | Sync-srcu] ; po_asw?
+
+//let strong-fence = mb | gp
+
+let strong-fence = mb
+
+//(* Release Acquire *)
+let acq-po_asw = [LinuxAcquire] ; po_asw ; [M]
+let po_asw-rel = [M] ; po_asw ; [LinuxRelease]
+//let po_asw-unlock-rf-lock-po_asw = po_asw ; [UL] ; rf ; [LKR] ; po_asw
+
+//(**********************************)
+//(* Fundamental coherence ordering *)
+//(**********************************)
+
+//(* Sequential Consistency Per Variable *)
+let fr = (rf_inv ; co) \ id
+let com = rf | co | fr
+
+let coh_expr = po_asw_loc | com
+acyclic coh_expr as coherence
+
+//acyclic po_asw-loc | com as coherence
+
+//(* Atomic Read-Modify-Write *)
+//empty rmw & (fre ; coe) as atomic
+
+//(**********************************)
+//(* Instruction execution ordering *)
+//(**********************************)
+
+//(* Preserved Program Order *)
+let dep = addr | data
+let rwdep = (dep | ctrl) ; [W]
+let overwrite = co | fr
+let to-w = rwdep | (overwrite & int)
+let to-r = addr | (dep ; rfi)
+let fence = strong-fence | wmb | po_asw-rel | rmb | acq-po_asw
+//let ppo_asw = to-r | to-w | fence | (po_asw-unlock-rf-lock-po_asw & int)
+let ppo_asw = to-r | to-w | fence 
+
+//(* Propagation: Ordering from release operations and strong fences. *)
+//let A-cumul(r) = rfe? ; r
+//let cumul-fence = A-cumul(strong-fence | po_asw-rel) | wmb | po_asw-unlock-rf-lock-po_asw
+
+let cumul-fence-inner = strong-fence | po_asw-rel
+
+let cumul-fence = (rfe ? ; cumul-fence-inner) | wmb
+let cumul-fence-star = cumul-fence*
+let prop = (overwrite & ext)? ; cumul-fence-star ; rfe?
+
+//(*
+// * Happens Before: Ordering from the passage of time.
+// * No fences needed here for prop because relation confined to one process.
+// *)
+let hb = ppo_asw | rfe | ((prop \ id) & int)
+acyclic hb as happens-before
+
+//(****************************************)
+//(* Write and fence propagation ordering *)
+//(****************************************)
+
+//(* Propagation: Each non-rf link needs a strong fence. *)
+let hb_star = hb*
+let pb = prop ; strong-fence ; hb_star
+acyclic pb as propagation
+
+output mb
