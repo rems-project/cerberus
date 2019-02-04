@@ -25,13 +25,13 @@ let g_pnvi = true
 
 (*let g_model_file = "bmc/simple.cat"*)
 let g_model_file = "bmc/example.cat"
-let g_parse_from_model = true
+let g_parse_from_model = false
 
 type memory_mode =
   | MemoryMode_C
   | MemoryMode_Linux
 
-let g_memory_mode = MemoryMode_Linux
+let g_memory_mode = MemoryMode_C
 
 type bmc_conf = {
   max_run_depth       : int;
