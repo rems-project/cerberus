@@ -925,12 +925,15 @@ module String_map_of_list = Map_of_list(String_map)
 let default_display_info = {
   repulsion_factor = (1, 1);
   mask =
-    (let l =
-      [("rf", ED_show (RM_no_reduction, "red"));
+    (let l = [
+      ("rf", ED_show (RM_no_reduction, "red"));
       ("sb", ED_show (RM_no_reduction, "black"));
       ("asw", ED_show (RM_transitive_reduction_over_sb, "deeppink4"));
       ("mo", ED_show (RM_no_reduction, "blue"));
-      ("sc", ED_show (RM_no_reduction, "orange"))] in
+      ("sc", ED_show (RM_no_reduction, "orange"));
+      ("sw", ED_show (RM_no_reduction, "deeppink4"));
+      ("hb", ED_show (RM_no_reduction, "red"))
+      ] in
     match String_map_of_list.of_list l with | None -> assert false | Some m -> m);
   layout = L_frac;
   step_div = 10;
@@ -1078,13 +1081,24 @@ let transitive_reduction s =
         Aid_times_aid_set.exists (fun (n3, n4) -> n2 = n3 && n4 = n'') s) s))
     s
 
-let transitive_reduction_over s link =
+let transitive_reduction_over_right s link =
   Aid_times_aid_set.filter
-    (fun (n, n'') ->
-      not (Aid_times_aid_set.exists (fun (n1, n2) ->
-        n = n1 &&
-        Aid_times_aid_set.exists (fun (n3, n4) -> n2 = n3 && n4 = n'') link) s))
+    (fun (s_src, s_tgt) ->
+      not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
+        s_src = s'_src &&
+        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_tgt = l_src && l_tgt = s_tgt) link) s))
     s
+
+let transitive_reduction_over_left s link =
+  Aid_times_aid_set.filter
+    (fun (s_src, s_tgt) ->
+      not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
+        s_tgt = s'_tgt &&
+        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_tgt) link) s))
+    s
+
+let transitive_reduction_over s link =
+  transitive_reduction_over_left (transitive_reduction_over_right s link) link
 
 let repr n = "n" ^ string_of_int n
 
