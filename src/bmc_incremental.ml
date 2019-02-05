@@ -1433,11 +1433,11 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
-        assert (g_memory_mode = MemoryMode_Linux);
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
-        assert (g_memory_mode = MemoryMode_Linux);
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
         assert (!!bmc_conf.concurrent_mode);
         get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
@@ -1452,7 +1452,7 @@ module BmcZ3 = struct
     | LinuxLoad _ ->
         assert false
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
-        assert (g_memory_mode = MemoryMode_Linux);
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -2471,7 +2471,7 @@ module BmcVC = struct
                              Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure) ->
         assert (!!bmc_conf.concurrent_mode);
-        assert (g_memory_mode = MemoryMode_C);
+        assert (!!bmc_conf.memory_mode = MemoryMode_C);
         (* Check valid memory orders:
          * mo_failure must not be RELEASE or ACQ_REL
          * mo_failure must be no stronger than mo_success
@@ -4004,8 +4004,8 @@ module BmcConcActions = struct
 
   (* TODO: the sort of Loaded needs to include struct stuff *)
   let mk_memory_module (file: unit typed_file) =
-    if g_parse_from_model then
-      let cat_model = Bmc_cat.CatParser.load_file g_model_file in
+    if !!bmc_conf.parse_from_model then
+      let cat_model = Bmc_cat.CatParser.load_file !!bmc_conf.model_file in
       (module GenericModel (val cat_model) : MemoryModel)
     else
       (module C11MemoryModel : MemoryModel)

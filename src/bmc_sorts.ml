@@ -576,7 +576,7 @@ module PointerSortPNVI : PointerSortAPI = struct
           then (string_of_int (Integer.get_int prov))
           else Expr.to_string prov in
         let pp_addr = AddressSortPNVI.pp addr in
-        sprintf "ptr(@%s, %s)" pp_prov pp_addr
+        sprintf (*"ptr(@%s, %s)"*) "(@%s, %s)" pp_prov pp_addr
     | _ -> Expr.to_string expr
 
   (* TODO: Do this properly with signatures *)

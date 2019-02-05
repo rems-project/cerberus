@@ -169,6 +169,7 @@ export class BMC extends SvgGraph {
   status: JQuery<HTMLElement>
   prev: JQuery<HTMLElement>
   next: JQuery<HTMLElement>
+  updateBtn: JQuery<HTMLElement>
 
   constructor(ee: EventEmitter) {
     super('BMC Executions', ee)
@@ -177,9 +178,11 @@ export class BMC extends SvgGraph {
     this.prev = $('<div class="menu-item btn inline">Prev</div>')
     this.prev.addClass('disabled')
     this.next = $('<div class="menu-item btn inline">Next</div>')
+    this.updateBtn = $('<div class="menu-item btn inline">Update</div>')
     controls.append(this.status)
     controls.append(this.prev)
     controls.append(this.next)
+    controls.append(this.updateBtn)
     this.prev.on('click', () => {
       if (!this.prev.hasClass('disabled')) {
         ee.once(s => {
@@ -205,27 +208,37 @@ export class BMC extends SvgGraph {
       }
     })
     this.container.before(controls)
+    this.updateBtn.on('click', () => {
+      if (!this.updateBtn.hasClass('disabled')) UI.bmc()
+    })
     ee.on('updateBMC', this, (s: State) => this.updateGraph(s))
+    ee.on('update', this, (s: State) => this.updateGraph(s))
+    ee.on('dirty', this, () => this.updateBtn.removeClass('disabled'))
   }
 
   private updateGraph (state: Readonly<State>) {
-    this.currentExecution = 0
-    this.setSVG(state.bmc_executions[0], 'neato')
-    this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
-    this.prev.addClass('disabled')
-    if (state.bmc_executions.length > 1)
-      this.next.removeClass('disabled')
-    else
-      this.next.addClass('disabled')
-    // Check if needs to span down
-    const svgHeight = this.svg.height()
-    const containerHeight = this.container.height()
-    if (svgHeight && containerHeight) {
-      const delta = containerHeight / 2 - svgHeight
-      if (delta < 0) {
-        // @ts-ignore
-        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+    if (state.bmc_executions.length > 0) {
+      this.currentExecution = 0
+      this.setSVG(state.bmc_executions[0], 'neato')
+      this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
+      this.prev.addClass('disabled')
+      if (state.bmc_executions.length > 1)
+        this.next.removeClass('disabled')
+      else
+        this.next.addClass('disabled')
+      this.updateBtn.addClass('disabled')
+      // Check if needs to span down
+      const svgHeight = this.svg.height()
+      const containerHeight = this.container.height()
+      if (svgHeight && containerHeight) {
+        const delta = containerHeight / 2 - svgHeight
+        if (delta < 0) {
+          // @ts-ignore
+          this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+        }
       }
+    } else {
+      this.container.empty()
     }
   }
 }
