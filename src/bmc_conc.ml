@@ -372,6 +372,9 @@ module MemoryModelCommon = struct
   let linux_wmb_memord = List.nth (Enumeration.get_consts mk_memord_type) 10
   let linux_mb_memord = List.nth (Enumeration.get_consts mk_memord_type) 11
   let linux_rbdep_memord = List.nth (Enumeration.get_consts mk_memord_type) 12
+  let linux_rculock_memord = List.nth (Enumeration.get_consts mk_memord_type) 13
+  let linux_rcuunlock_memord = List.nth (Enumeration.get_consts mk_memord_type) 14
+  let linux_syncrcu_memord = List.nth (Enumeration.get_consts mk_memord_type) 15
 
   let action_to_memord (BmcAction(_,_,a): bmc_action) : Expr.expr =
     match memorder_of_action a with
@@ -394,7 +397,9 @@ module MemoryModelCommon = struct
         | Wmb      -> linux_wmb_memord
         | Mb       -> linux_mb_memord
         | RbDep    -> linux_rbdep_memord
-        | _        -> assert false
+        | RcuLock -> linux_rculock_memord
+        | RcuUnlock -> linux_rcuunlock_memord
+        | SyncRcu -> linux_syncrcu_memord
         end)
 
   (* BUILT IN DECLARATIONS *)

@@ -180,7 +180,7 @@ let pp_memory_order = function
       | RbDep     -> "rbdep"
       | RcuLock   -> "rculock"
       | RcuUnlock -> "rcuunlock"
-      | SyncRcu -> assert false) mo
+      | SyncRcu -> "syncrcu") mo
 
 
 let pp_memory_order_enum2 = fun () -> pp_memory_order
