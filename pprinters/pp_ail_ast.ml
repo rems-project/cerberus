@@ -342,6 +342,8 @@ let dtree_of_expression pp_annot expr =
       | AilEbmc_assume e ->
           Dnode ( pp_stmt_ctor "AilEbmc_assume"
                 , (*add_std_annot*) [self e] )
+      | AilEreg_load r ->
+          Dleaf ( pp_stmt_ctor "AilEreg_load" ^^^ !^("r" ^ string_of_int r))
       | AilEprint_type e ->
           Dnode ( pp_stmt_ctor "AilEprint_type", (*add_std_annot*) [self e])
       | AilErvalue e ->
@@ -417,6 +419,9 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
     | AilSpar ss ->
         Dnode (pp_stmt_ctor "AilSpar"
                , List.map (fun s -> dtree_of_statement s) ss)
+    | AilSreg_store (r, e) ->
+        Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
+              , [dtree_of_expression e])
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
   let param_dtrees =

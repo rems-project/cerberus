@@ -86,7 +86,6 @@ dependencies:
 
 
 lem: copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
-	echo $(INTERACTIVE)
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 	@ulimit -n 7168
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
