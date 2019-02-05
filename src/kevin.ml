@@ -89,6 +89,30 @@ module Map_of_list (X : Map.S) = struct
       l
 end
 
+module Collect_in_map (X : Map.S) (Y : Set.S) = struct
+  let collect index_of set =
+    Y.fold
+      (fun a m ->
+        let ix = index_of a in
+        match X.find_opt ix m with
+        | None -> X.add ix (Y.singleton a) m
+        | Some s -> X.add ix (Y.add a s) m)
+      set
+      X.empty
+end
+
+module Collect_in_map_fun (X : Map.S) (Y : Set.S) (Z : Set.S) = struct
+  let set_map_of f s =
+    Y.fold
+      (fun x map ->
+        let (k, v) = f x in
+        match X.find_opt k map with
+        | None -> X.add k (Z.singleton v) map
+        | Some acts -> X.add k (Z.add v acts) map)
+      s
+      X.empty
+end
+
 type rational = int * int
 
 let rec gcd a b = if b = 0 then a else gcd b (a mod b)
@@ -770,16 +794,10 @@ module Real_map_action_times_int_set_to_action_times_pos = Real_map(Action_times
 
 module Action_times_pos_set_union = Union(Action_times_pos_set)
 
+module Collect_actions = Collect_in_map_fun(Rational_map)(Action_times_pos_set)(Action_times_int_set)
+
 let make_unit_spacing actposs =
-  let act_map =
-    Action_times_pos_set.fold
-      (fun (act, (x, y)) act_map ->
-        (* TODO: functorise! *)
-        match Rational_map.find_opt x act_map with
-        | None -> Rational_map.add x (Action_times_int_set.singleton (act, y)) act_map
-        | Some acts -> Rational_map.add x (Action_times_int_set.add (act, y) acts) act_map)
-      actposs
-      Rational_map.empty in
+  let act_map = Collect_actions.set_map_of (fun (act, (x, y)) -> (x, (act, y))) actposs in
   let actss =
     List.mapi
       (fun x (_, acts) ->
@@ -979,18 +997,6 @@ let juxtapose_threads display_info ths =
       (Action_times_pos_set.empty, (0, 1))
       ths in
   actposs
-
-module Collect_in_map (X : Map.S) (Y : Set.S) = struct
-  let collect index_of set =
-    Y.fold
-      (fun a m ->
-        let ix = index_of a in
-        match X.find_opt ix m with
-        | None -> X.add ix (Y.singleton a) m
-        | Some s -> X.add ix (Y.add a s) m)
-      set
-      X.empty
-end
 
 module Collect_tid = Collect_in_map(Int_map)(Action_set)
 
