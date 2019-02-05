@@ -486,6 +486,9 @@ module MemoryModelCommon = struct
     po_loc     : Expr.expr * Expr.expr -> Expr.expr;
     asw        : Expr.expr * Expr.expr -> Expr.expr;
 
+    atomicloc    : Expr.expr -> Expr.expr;
+    nonatomicloc : Expr.expr -> Expr.expr;
+
     addr_dep   : Expr.expr * Expr.expr -> Expr.expr;
     data_dep   : Expr.expr * Expr.expr -> Expr.expr;
     ctrl_dep   : Expr.expr * Expr.expr -> Expr.expr;
@@ -528,6 +531,9 @@ module MemoryModelCommon = struct
     let po_loc = (fun (e1,e2) -> mk_and [po (e1,e2)
                                         ;same_loc (e1,e2)]) in
 
+    let atomicloc = (fun e -> PointerSort.mk_is_atomic (getAddr e)) in
+    let nonatomicloc = (fun e -> mk_not (atomicloc e)) in
+
     { getAid     = getAid
     ; getTid     = getTid
     ; getGuard   = getGuard
@@ -560,6 +566,9 @@ module MemoryModelCommon = struct
     ; po        = po
     ; po_loc    = po_loc
     ; asw       = (fun (e1,e2) -> apply decls.asw [e1;e2])
+
+    ; atomicloc    = atomicloc
+    ; nonatomicloc = nonatomicloc
 
     ; addr_dep  = (fun (e1,e2) -> apply decls.addr_dep [e1;e2])
     ; data_dep  = (fun (e1,e2) -> apply decls.data_dep [e1;e2])
@@ -1875,6 +1884,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_rfi    -> model.builtin_fns.rfi (ea,eb)
         | BaseId_rfe    -> model.builtin_fns.rfe (ea,eb)
         | BaseId_po_loc -> model.builtin_fns.po_loc (ea,eb)
+        | BaseId_atomicloc    -> mk_and [mk_eq ea eb
+                                        ;model.builtin_fns.atomicloc ea]
+        | BaseId_nonatomicloc -> mk_and [mk_eq ea eb
+                                        ;model.builtin_fns.nonatomicloc ea]
         | BaseId_addr_dep -> model.builtin_fns.addr_dep (ea,eb)
         | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
