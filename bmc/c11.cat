@@ -109,7 +109,9 @@ let cnf = ((W * U) | (U * W)) & loc
 let dr = ext & (((cnf \ hb) \ (hb^-1)) \ (A * A))
 
 //(* unsequenced_races *)
-//let ur = int((W * M) | (M * W)) &
+let ur = (((((W * M) | (M * W)) & int & loc) \ sb) \ sb^-1) \ id
+
+//int((W * M) | (M * W)) &
 //         loc & ~[_] & ~(sb+) & ~((sb+)^-1)
 
 //(* locks_only_good_mutex_use,
@@ -132,6 +134,6 @@ let dr = ext & (((cnf \ hb) \ (hb^-1)) \ (A * A))
 //irreflexive (S ; fsb ; fr ; sbf) as S7
 
 undefined_unless empty dr as dr_ub
-//undefined_unless empty ur as unsequencedRace
+undefined_unless empty ur as unsequenced_race
 //undefined_unless empty bl as badLock
 //undefined_unless empty lu as badUnlock

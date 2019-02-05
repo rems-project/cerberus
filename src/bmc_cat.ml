@@ -219,7 +219,7 @@ module CatFile = struct
     | BaseSet_RbDep   -> "RbDep"
     | BaseSet_RcuLock -> "RcuLock"
     | BaseSet_RcuUnlock -> "RcuUnlock"
-    | BaseSet_SyncRcu   -> "SyncRcu"
+    | BaseSet_SyncRcu   -> "Sync-rcu"
     | BaseSet_LinuxAcquire -> "LinuxAcquire"
     | BaseSet_LinuxRelease -> "LinuxRelease"
 
