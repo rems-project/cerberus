@@ -909,8 +909,7 @@ module MemoryModelCommon = struct
 
 end
 
-
-module C11MemoryModel : MemoryModel = struct
+module RC11MemoryModel : MemoryModel = struct
   open MemoryModelCommon
 
   type func_decl_ty = string * Sort.sort list * Sort.sort
