@@ -67,6 +67,13 @@ export namespace AllocModel {
   export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)
 }
 
+export namespace BmcModel {
+  const opts = flags(['bmc_c11', 'bmc_rc11', 'bmc_linux'])
+  export type t = keyof typeof opts
+  export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
+  export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)
+}
+
 export type Options = {[key in Option.t]: boolean}
 
 export interface Model {
@@ -102,6 +109,7 @@ export interface State {
   interactiveMode: InteractiveMode
   interactive?: Interactive
   options: Options,
+  bmc_model: BmcModel.t,
   bmc_executions: string[],
 }
 

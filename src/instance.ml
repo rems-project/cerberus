@@ -132,7 +132,7 @@ let result_of_elaboration (_, _, cabs, ail, core) =
       result= "success";
     }
 
-let bmc ~conf ~filename () =
+let bmc ~conf ~bmc_model ~filename () =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   Debug.print 7 ("Running BMC...");
@@ -140,7 +140,19 @@ let bmc ~conf ~filename () =
     elaborate ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     Tags.set_tagDefs core.tagDefs;
-    Bmc_globals.set 3 true true "main" 0 true false;
+    let (cat_file_opt, mem_model) =
+      match bmc_model with
+      | `C11 ->
+        Debug.print 7 ("BMC model: C11");
+        (None, Bmc_globals.MemoryMode_C)
+      | `RC11 ->
+        Debug.print 7 ("BMC model: RC11");
+        (Some "bmc/example.cat", Bmc_globals.MemoryMode_C)
+      | `Linux ->
+        Debug.print 7 ("BMC model: Linux");
+        (Some "bmc/linux-kernel-modified.cat", Bmc_globals.MemoryMode_Linux)
+    in
+    Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
     return @@ Bmc3.bmc core (Some ail);
   with
   | e ->
@@ -164,7 +176,7 @@ let execute ~conf ~filename (mode: exec_mode) =
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
-    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
+    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->
@@ -527,8 +539,8 @@ let instance debug_level =
     | `Step (conf, filename, name, active) ->
       step ~conf:(setup conf) ~filename active
       |> respond filename name id
-    | `BMC (conf, filename, name) ->
-      bmc ~conf:(setup conf) ~filename ()
+    | `BMC (conf, bmc_model, filename, name) ->
+      bmc ~conf:(setup conf) ~bmc_model ~filename ()
       |> respond filename name (fun res -> BMC res)
 
   in

@@ -204,6 +204,7 @@ export default class View {
         show_mem_order: false,
         align_allocs: false,
       },
+      bmc_model: 'bmc_c11',
       bmc_executions: []
     }
   }
