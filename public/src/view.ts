@@ -209,6 +209,24 @@ export default class View {
     }
   }
 
+  private clearState() {
+    this.state = {
+      title: () => this.title,
+      source: () => this.source.getValue(),
+      dirty: true,
+      pp: { cabs: '', ail:  '', core: '' },
+      ast: { cabs: '', ail:  '', core: '' },
+      locs: [],
+      console: '',
+      model: this.state.model,
+      interactiveMode: InteractiveMode.Memory,
+      interactive: undefined,
+      options: this.state.options,
+      bmc_model: this.state.bmc_model,
+      bmc_executions: []
+    }
+  }
+
   findTab(title: string) {
     for (let i = 0; i < this.tabs.length; i++) {
       if (Tabs.instanceOf(this.tabs[i], title)) {
@@ -818,7 +836,7 @@ export default class View {
         this.emit('updateBMC')
         break;
       case 'failure':
-        this.setStateEmpty()
+        this.clearState()
         this.state.console = res.console
         this.state.bmc_executions = []
         this.getConsole().setActive()
