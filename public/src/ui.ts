@@ -227,6 +227,7 @@ export class CerberusUI {
       view.state.bmc_model = m
       $('#r_bmc_c11').prop('checked', m === 'bmc_c11')
       $('#r_bmc_rc11').prop('checked', m === 'bmc_rc11')
+      $('#r_bmc_rc11_hardcoded').prop('checked', m === 'bmc_rc11_hardcoded')
       $('#r_bmc_linux').prop('checked', m === 'bmc_linux')
       this.updateUI(view.state)
     })
