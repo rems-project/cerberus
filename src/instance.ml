@@ -132,7 +132,7 @@ let result_of_elaboration (_, _, cabs, ail, core) =
       result= "success";
     }
 
-let bmc ~conf ~bmc_model ~filename () =
+let bmc ~conf ~bmc_model:bmc_model ~filename () =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   Debug.print 7 ("Running BMC...");
@@ -144,6 +144,9 @@ let bmc ~conf ~bmc_model ~filename () =
       match bmc_model with
       | `C11 ->
         Debug.print 7 ("BMC model: C11");
+        (Some "bmc/c11.cat", Bmc_globals.MemoryMode_C)
+      | `RC11_Hardcoded ->
+        Debug.print 7 ("BMC model: RC11 (hardcoded)");
         (None, Bmc_globals.MemoryMode_C)
       | `RC11 ->
         Debug.print 7 ("BMC model: RC11");
