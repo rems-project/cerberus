@@ -246,6 +246,7 @@ let parse_incoming_msg content =
   let bmc_mode_from_string = function
     | "bmc_c11"   -> `C11
     | "bmc_rc11"  -> `RC11
+    | "bmc_rc11_hardcoded"  -> `RC11_Hardcoded
     | "bmc_linux" -> `Linux
     | s -> failwith ("unknown BMC model " ^ s)
   in
