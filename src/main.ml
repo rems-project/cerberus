@@ -111,7 +111,7 @@ let cerberus debug_level progress core_obj
              sequentialise_core rewrite_core typecheck_core defacto
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
-             fs_dump fs
+             fs_dump fs trace
              ocaml ocaml_corestd
              output_name
              files args_opt =
@@ -228,7 +228,7 @@ let cerberus debug_level progress core_obj
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in
-          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
+          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
         else
           match output_name with
@@ -424,6 +424,11 @@ let fs_dump =
   let doc = "dump the file system at the end of the execution" in
   Arg.(value & flag & info["fs-dump"] ~doc)
 
+let trace =
+  let doc = "trace memory actions" in
+  Arg.(value & flag & info["trace"] ~doc)
+
+
 (* TODO: this is not being used
 let default_impl =
   let doc = "run cerberus with a default implementation choice" in
@@ -497,7 +502,7 @@ let () =
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
-                         fs_dump $ fs $
+                         fs_dump $ fs $ trace $
                          ocaml $ ocaml_corestd $
                          output_file $
                          files $ args) in

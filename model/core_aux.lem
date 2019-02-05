@@ -156,6 +156,8 @@ let rec memValueFromValue ty cval =
         Just (Mem.integer_value_mval ity ival)
     | (Basic (AilTypes.Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
         Just (Mem.floating_value_mval fty fval)
+    | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) -> (* TODO: not sure about this *)
+        Just (Mem.pointer_mval ref_ty ptr_val)
     | (Pointer _ ref_ty, Vloaded (LVspecified (OVpointer ptr_val))) ->
         Just (Mem.pointer_mval ref_ty ptr_val)
     | (Array elem_ty _, Vloaded (LVspecified (OVarray lvals))) ->
@@ -181,6 +183,8 @@ let rec memValueFromValue ty cval =
         else
           Nothing
     | _ ->
+        let () = Debug.print_debug 5 [] (fun () -> "memValueFromValue("
+                 ^ Pp.stringFromCore_ctype ty ^ ", " ^  Pp.stringFromCore_value cval ^ ")") in
         Nothing
   end
 

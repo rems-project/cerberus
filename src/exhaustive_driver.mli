@@ -4,6 +4,7 @@ type driver_conf = {
   concurrency: bool;
   experimental_unseq: bool;
   fs_dump: bool;
+  trace: bool;
 }
 
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
