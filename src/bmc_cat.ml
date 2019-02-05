@@ -24,6 +24,9 @@ module CatFile = struct
     | BaseSet_Rmb
     | BaseSet_Mb
     | BaseSet_RbDep
+    | BaseSet_RcuLock
+    | BaseSet_RcuUnlock
+    | BaseSet_SyncRcu
     | BaseSet_LinuxAcquire
     | BaseSet_LinuxRelease
 
@@ -93,6 +96,9 @@ module CatFile = struct
   let mk_set_Rmb = Set_base BaseSet_Rmb
   let mk_set_Mb = Set_base BaseSet_Mb
   let mk_set_RbDep = Set_base BaseSet_RbDep
+  let mk_set_RcuLock = Set_base BaseSet_RcuLock
+  let mk_set_RcuUnlock = Set_base BaseSet_RcuUnlock
+  let mk_set_SyncRcu = Set_base BaseSet_SyncRcu
   let mk_set_LinuxAcquire = Set_base BaseSet_LinuxAcquire
   let mk_set_LinuxRelease = Set_base BaseSet_LinuxRelease
 
@@ -211,6 +217,9 @@ module CatFile = struct
     | BaseSet_Wmb     -> "Wmb"
     | BaseSet_Mb      -> "Mb"
     | BaseSet_RbDep   -> "RbDep"
+    | BaseSet_RcuLock -> "RcuLock"
+    | BaseSet_RcuUnlock -> "RcuUnlock"
+    | BaseSet_SyncRcu   -> "SyncRcu"
     | BaseSet_LinuxAcquire -> "LinuxAcquire"
     | BaseSet_LinuxRelease -> "LinuxRelease"
 
@@ -401,7 +410,9 @@ module CatParser = struct
           ;token (string "Rmb")     *> return mk_set_Rmb
           ;token (string "Mb")      *> return mk_set_Mb
           ;token (string "RbDep")   *> return mk_set_RbDep
-
+          ;token (string "RcuLock")   *> return mk_set_RcuLock
+          ;token (string "RcuUnlock") *> return mk_set_RcuUnlock
+          ;token (string "Sync-rcu")   *> return mk_set_SyncRcu
           ;token (string "SC")      *> return mk_set_SC
           ;token (string "U")       *> return mk_set_U
           ;token (string "R")       *> return mk_set_R
