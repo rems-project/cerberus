@@ -4010,7 +4010,7 @@ module BmcConcActions = struct
       let cat_model = Bmc_cat.CatParser.load_file !!bmc_conf.model_file in
       (module GenericModel (val cat_model) : MemoryModel)
     else
-      (module C11MemoryModel : MemoryModel)
+      (module RC11MemoryModel : MemoryModel)
 
   let get_memory_module =
     get >>= fun st ->
