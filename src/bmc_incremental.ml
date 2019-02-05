@@ -2773,7 +2773,7 @@ module BmcRet = struct
     | Eproc _       -> assert false
     | Eunseq elist ->
         mapM do_e elist >>= fun ret_elist ->
-        return [mk_or (List.concat ret_elist)]
+        return [mk_or (List.map mk_and ret_elist)]
     | Ewseq (pat, e1, e2) (* fall through *)
     | Esseq (pat, e1, e2) ->
         do_e e1 >>= fun ret_e1 ->
