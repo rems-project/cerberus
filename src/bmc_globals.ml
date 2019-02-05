@@ -24,20 +24,23 @@ let g_max_addr = 2147483648
 let g_pnvi = true
 
 (*let g_model_file = "bmc/simple.cat"*)
-let g_model_file = "bmc/example.cat"
-let g_parse_from_model = false
+(*let g_model_file = "bmc/example.cat" *)
+(* let g_parse_from_model = false *)
 
 type memory_mode =
   | MemoryMode_C
   | MemoryMode_Linux
 
-let g_memory_mode = MemoryMode_C
+(*let g_memory_mode = MemoryMode_C*)
 
 type bmc_conf = {
   max_run_depth       : int;
   max_core_call_depth : int;
   sequentialise   : bool;
   concurrent_mode : bool;
+  memory_mode     : memory_mode;
+  model_file      : string;
+  parse_from_model : bool;
 
   fn_to_check     : string;
   find_all_execs  : bool;
@@ -52,14 +55,24 @@ let bmc_conf : (unit -> bmc_conf) ref =
   ref (fun () -> failwith "bmc_conf is undefined")
 
 let set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug bmc_all_execs
-        bmc_output_model =
-  bmc_conf := fun () ->
-  { max_run_depth   = bmc_max_depth;
+        bmc_output_model model_file_opt memory_mode =
+  let (model_file, parse_from_model) =
+    match model_file_opt with
+    | Some model_file -> (model_file, true)
+    | None -> ("bmc/example.c", false)
+  in
+  let conf = {
+    max_run_depth   = bmc_max_depth;
     max_core_call_depth = if bmc_max_depth > 10 then bmc_max_depth else 10;
     sequentialise   = bmc_seq;
     concurrent_mode = bmc_conc;
+    memory_mode     = memory_mode;
+    model_file      = model_file;
+    parse_from_model= parse_from_model;
     fn_to_check     = bmc_fn;
     find_all_execs  = bmc_all_execs;
     debug_lvl       = bmc_debug;
     output_model    = bmc_output_model;
-  }
+  } in
+  bmc_conf := fun () -> conf
+

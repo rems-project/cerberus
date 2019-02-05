@@ -1,6 +1,6 @@
 import $ from 'jquery'
 import _ from 'lodash'
-import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt, ExecOpt } from './common'
+import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt, ExecOpt, BmcModel } from './common'
 import * as util from './util'
 import View from './view'
 import Widget from './widget';
@@ -215,6 +215,19 @@ export class CerberusUI {
       model.alloc_model = am
       $('#r_concrete').prop('checked', model.alloc_model === 'concrete')
       $('#r_symbolic').prop('checked', model.alloc_model === 'symbolic')
+      this.updateUI(view.state)
+    })
+
+    $('.bmc-model').on('click', (e) => {
+      if (e.currentTarget.classList.contains('disabled')) return
+      const m = e.currentTarget.id
+      if (!BmcModel.is(m)) throw BmcModel.Err(m)
+      const view = this.getView()
+      view.emit('dirty')
+      view.state.bmc_model = m
+      $('#r_bmc_c11').prop('checked', m === 'bmc_c11')
+      $('#r_bmc_rc11').prop('checked', m === 'bmc_rc11')
+      $('#r_bmc_linux').prop('checked', m === 'bmc_linux')
       this.updateUI(view.state)
     })
 
@@ -449,7 +462,7 @@ export class CerberusUI {
     })
   }
 
-  private bmc () {
+  public bmc () {
     this.request('bmc', (res: ResultRequest) => {
       const view = this.getView()
       const cons = view.getConsole()
@@ -537,6 +550,7 @@ export class CerberusUI {
         'sequentialise': model.core_options.sequentialise,
         'libc': model.exec_options.libc,
         'model': model.alloc_model,
+        'bmc_model': view.state.bmc_model,
         'switches': view.state.model.switches,
         'interactive': interactive
       },
