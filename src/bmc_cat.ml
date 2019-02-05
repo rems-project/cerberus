@@ -43,6 +43,8 @@ module CatFile = struct
     | BaseId_rfi
     | BaseId_rfe
     | BaseId_po_loc
+    | BaseId_atomicloc    (* TODO: should be BaseSet *)
+    | BaseId_nonatomicloc (* TODO: should be BaseSet *)
     | BaseId_addr_dep
     | BaseId_data_dep
     | BaseId_ctrl_dep
@@ -121,6 +123,8 @@ module CatFile = struct
   let mk_rfi = Eid (BaseId BaseId_rfi)
   let mk_rfe = Eid (BaseId BaseId_rfe)
   let mk_po_loc = Eid (BaseId BaseId_po_loc)
+  let mk_atomicloc = Eid (BaseId BaseId_atomicloc)
+  let mk_nonatomicloc = Eid (BaseId BaseId_nonatomicloc)
   let mk_addr_dep = Eid (BaseId BaseId_addr_dep)
   let mk_ctrl_dep = Eid (BaseId BaseId_ctrl_dep)
   let mk_data_dep = Eid (BaseId BaseId_data_dep)
@@ -191,6 +195,8 @@ module CatFile = struct
     | BaseId_rfi -> "rfi"
     | BaseId_rfe -> "rfe"
     | BaseId_po_loc -> "po-loc"
+    | BaseId_atomicloc    -> "atomicloc"
+    | BaseId_nonatomicloc -> "nonatomicloc"
     | BaseId_addr_dep -> "addr"
     | BaseId_ctrl_dep -> "ctrl"
     | BaseId_data_dep -> "data"
@@ -380,21 +386,23 @@ module CatParser = struct
   let id =
     token lowers >>= fun s ->
     let ret =
-           if s = "id"     then mk_identity
-      else if s = "asw"    then mk_asw
-      else if s = "po"     then mk_po
-      else if s = "loc"    then mk_loc
-      else if s = "rf"     then mk_rf
-      else if s = "rf_inv" then mk_rf_inv
-      else if s = "co"     then mk_co
-      else if s = "int"    then mk_internal
-      else if s = "ext"    then mk_external
-      else if s = "rfi"    then mk_rfi
-      else if s = "rfe"    then mk_rfe
-      else if s = "po-loc" then mk_po_loc
-      else if s = "addr"   then mk_addr_dep
-      else if s = "ctrl"   then mk_ctrl_dep
-      else if s = "data"   then mk_data_dep
+           if s = "id"           then mk_identity
+      else if s = "asw"          then mk_asw
+      else if s = "po"           then mk_po
+      else if s = "loc"          then mk_loc
+      else if s = "rf"           then mk_rf
+      else if s = "rf_inv"       then mk_rf_inv
+      else if s = "co"           then mk_co
+      else if s = "int"          then mk_internal
+      else if s = "ext"          then mk_external
+      else if s = "rfi"          then mk_rfi
+      else if s = "rfe"          then mk_rfe
+      else if s = "po-loc"       then mk_po_loc
+      else if s = "atomicloc"    then mk_atomicloc
+      else if s = "nonatomicloc" then mk_nonatomicloc
+      else if s = "addr"         then mk_addr_dep
+      else if s = "ctrl"         then mk_ctrl_dep
+      else if s = "data"         then mk_data_dep
       else mk_id s
     in return ret
 
@@ -560,6 +568,8 @@ module CatParser = struct
     | BaseId_rfi    -> (mk_set_W, mk_set_R)
     | BaseId_rfe    -> (mk_set_W, mk_set_R)
     | BaseId_po_loc -> (mk_set_M, mk_set_M)
+    | BaseId_atomicloc    -> (mk_set_M, mk_set_M)
+    | BaseId_nonatomicloc -> (mk_set_M, mk_set_M)
     | BaseId_addr_dep -> (mk_set_R, mk_set_M)
     | BaseId_data_dep -> (mk_set_R, mk_set_M)
     | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)

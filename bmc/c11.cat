@@ -1,6 +1,6 @@
 // Modified from:
 // https://github.com/herd/herdtools/tree/master/cats/c11/popl2016
-// C11.cat w/o locks, SC, consume, UR
+// C11.cat w/o locks, SC, consume
 
 let sb = po | I * (M \ I)
 let mo = co
@@ -90,7 +90,7 @@ irreflexive rf_prime as rf_irreflexive
 //(* consistent_non_atomic_rf  *)
 //empty ((rf ; [nonatomicloc]) \ vis) as NaRf
 
-let narf_prime = (rf ; [NA]) \ vis
+let narf_prime = (rf ; nonatomicloc) \ vis
 empty narf_prime as nrf_empty
 
 let rmw_prime = rf | (mo ; mo ; rf_inv) | (mo ; rf)
