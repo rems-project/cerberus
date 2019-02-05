@@ -100,7 +100,7 @@ irreflexive rmw_prime as rmw_irreflexive
 //(* data_races *)
 //let cnf = ((W * _) | (_ * W)) & loc
 let cnf = ((W * U) | (U * W)) & loc
-let dr = ext & (cnf \ hb \ (hb^-1) \ (A * A))
+let dr = ext & (((cnf \ hb) \ (hb^-1)) \ (A * A))
 
 //(* unsequenced_races *)
 //let ur = int((W * M) | (M * W)) &
