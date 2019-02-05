@@ -1,3 +1,5 @@
+// Modified from:
+// https://github.com/herd/herdtools/tree/master/cats/c11/popl2016
 // C11.cat w/o locks, SC, consume, UR
 
 let sb = po | I * (M \ I)
