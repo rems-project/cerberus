@@ -2927,6 +2927,8 @@ else (* is_pointer *)
                    Caux.mk_pure_e (Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe)) ]
             )
 
+      | A.AilEreg_load r ->
+          error "TODO: victor"
 
       
       | A.AilErvalue e ->
@@ -3039,6 +3041,8 @@ let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
     | A.AilSpar ss ->
         (* TODO: check *)
         St.mapM_ collect_cases_ ss
+    | A.AilSreg_store _ _ ->
+        St.return ()
   end
 let collect_cases s =
   snd $ St.runStateM (collect_cases_ s) <| found_default= false; case_csts= [] |>
@@ -3130,6 +3134,8 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         St.return stmt_
     | A.AilSpar ss ->
         A.AilSpar <$> St.mapM erase_loop_control_aux ss
+    | A.AilSreg_store _ _ ->
+        St.return stmt_
   end
 
 
@@ -3193,6 +3199,8 @@ let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
     | A.AilSpar ss ->
         (* TODO: check *)
         St.mapM_ collect_visibles_ ss
+    | A.AilSreg_store _ _ ->
+        St.return ()
   end
 
 val collect_visibles: A.statement GenTypes.genTypeCategory -> collect_visibles_state
@@ -3668,6 +3676,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
               (C.Expr [] (C.Epar core_ss))
               Caux.mk_skip_e
           end
+
+    | A.AilSreg_store _ _ ->
+        error "TODO: victor"
   end
 
 

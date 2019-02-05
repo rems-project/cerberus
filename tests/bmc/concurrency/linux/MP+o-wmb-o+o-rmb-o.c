@@ -12,5 +12,6 @@ int main() {
         r2 = READ_ONCE(x); 
       }
   }-}
+  // 2 (r1 == 0 && r2 == 1) forbidden
   return r1 + 2 * r2;
 }

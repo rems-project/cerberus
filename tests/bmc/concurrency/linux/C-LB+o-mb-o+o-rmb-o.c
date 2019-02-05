@@ -14,5 +14,5 @@ int main() {
   }-}
   //exists(0:r1=1 /\ 1:r3=1)
   //allowed
-  return (r1 + 2* r3);
+  return r1 + 2* r3;
 }

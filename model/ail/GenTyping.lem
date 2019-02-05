@@ -1348,6 +1348,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEbmc_assume e ->
         annotate_rvalue e >>= fun (e', gty) ->
         E.return (AilEbmc_assume e', GenRValueType GenVoid)
+    | AilEreg_load r ->
+        E.return (AilEreg_load r, GenRValueType (GenBasic (GenInteger (Concrete (Signed Int_))))) (* NOTE: assuming registers are always of type int *)
     | AilErvalue _ ->
         (* This should be impossible because the desugaring doesn't emit any AilErvalue *)
         error "annotate_expression(AilErvalue)"
@@ -1868,6 +1870,9 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
     | AilSpar ss ->
         E.mapM annotate_statement ss >>= fun ss' ->
         E.return (AilSpar ss')
+    | AilSreg_store r e ->
+        annotate_rvalue e >>= fun (e', _) ->
+        E.return (AilSreg_store r e')
   end
 
 and annotate_statement sigm gamm ty (AnnotatedStatement loc stmt) =
