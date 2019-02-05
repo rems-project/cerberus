@@ -20,6 +20,7 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 
 
 let precedence = function
+  | AilEreg_load _
   | AilEunary (PostfixIncr, _)
   | AilEunary (PostfixDecr, _)
   | AilEcall _
@@ -521,6 +522,10 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             pp e1 ^^^ pp_binaryOperator o ^^^ pp e2
         | AilEassign (e1, e2) ->
             pp e1 ^^^ P.equals ^^^ pp e2
+        | AilEreg_load r ->
+            !^("r" ^ string_of_int r)
+        | AilEbmc_assume e ->
+            !^ "__bmc_assume" ^^ P.parens (pp e)
         | AilEcompoundAssign (e1, o, e2) ->
             pp e1 ^^^ pp_arithmeticOperator o ^^ P.equals ^^^ pp e2
         | AilEcond (e1, e2, e3) ->
@@ -679,6 +684,8 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         P.lbrace ^^ P.lbrace ^^ P.lbrace ^^ P.nest 2 (
           P.break 1 ^^ P.separate_map (P.break 1 ^^ !^ "|||" ^^ P.break 1) pp_statement ss
         ) ^/^ P.rbrace ^^ P.rbrace ^^ P.rbrace
+    | AilSreg_store (r, e) ->
+        !^("r" ^ string_of_int r) ^^^ P.equals ^^^ pp_expression_aux pp_annot e ^^ P.semi
 
 
 let pp_static_assertion pp_annot (e, lit) =
