@@ -67,7 +67,11 @@ let hbl = hb & loc
 
 //irreflexive ((rf^-1)? ; mo ; rf? ; hb) as Coh
 
-let coh_prime = rf_inv? ; mo ; rf ? ; hb
+let coh_prime_head = rf_inv? ; mo
+let coh_prime_tail = rf ? ; hb
+let coh_prime = coh_prime_head ; coh_prime_tail
+
+//let coh_prime = rf_inv? ; mo ; rf ? ; hb
 //irreflexive ((rf_inv)? ; mo ; rf? ; hb) as Coh
 irreflexive coh_prime as coh_irreflexive
 
