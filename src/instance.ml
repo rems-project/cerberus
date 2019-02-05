@@ -164,7 +164,7 @@ let execute ~conf ~filename (mode: exec_mode) =
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
-    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false;} in
+    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->

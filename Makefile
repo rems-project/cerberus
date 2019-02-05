@@ -10,23 +10,24 @@ else
 Z3="z3"
 endif
 
-LD_LIBRARY_PATH=$(shell ocamlfind query z3)
+Z3_PATH   := $(shell ocamlfind query z3)
+CERB_PATH ?= $(shell pwd)
+DYLD_LIBRARY_PATH = ${Z3_PATH}
+LD_LIBRARY_PATH   = ${Z3_PATH}
 
-BOLD="\033[1m"
-RED="\033[31m"
-YELLOW="\033[33m"
-RESET="\033[0m"
+BOLD   := "\033[1m"
+RED    := "\033[31m"
+YELLOW := "\033[33m"
+RESET  := "\033[0m"
 
 # Looking for Lem
-ifndef LEM_PATH
-LEM_PATH=~/bitbucket/lem
-endif
+LEM_PATH ?= ~/bitbucket/lem
 
-LEM0=lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
+LEM0 = lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
 	-only_changed_output
  #       -report_default_instance_invocation -only_changed_output 
 
-LEM=$(LEM0) -outdir $(BUILD_DIR) # -add_loc_annots
+LEM = $(LEM0) -outdir $(BUILD_DIR) # -add_loc_annots
 
 
 # C11 related stuff
@@ -45,13 +46,6 @@ LINUX_MODEL_LEM =\
 include Makefile-source
 
 all: lem ocaml_native libc
-
-.PHONY: check-cerb-path
-check-cerb-path:
-ifndef CERB_PATH
-	$(error CERB_PATH is undefined. Please set it to point to the location of \
-		Cerberus.)
-endif
 
 # Where and how ocamlbuild will be called
 BUILD_DIR=ocaml_generated
@@ -91,7 +85,8 @@ dependencies:
 	cd dependencies; make -f ../Makefile.dependencies
 
 
-lem: check-cerb-path copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
+lem: copy_cmm copy_cmm_exec copy_linux_model copy_cerberus sibylfs
+	echo $(INTERACTIVE)
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 	@ulimit -n 7168
 	@OCAMLRUNPARAM=b ./tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem)
@@ -189,7 +184,7 @@ instance: src/instance.ml
 	cp -L instance.native cerb.symbolic
 
 web: src/web.ml
-	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip -libs str web.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip -libs str -tag thread web.native
 
 web_profiling: src/web.ml
 	BISECT_COVERAGE=YES ocamlbuild -j 4 -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' -pkgs cmdliner,lem,pprint,lwt,cohttp,cohttp.lwt,yojson,base64,ezgzip web.native
