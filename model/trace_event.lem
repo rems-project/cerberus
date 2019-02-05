@@ -1,0 +1,61 @@
+open import Pervasives Mem
+import Core_ctype
+
+type trace_event =
+  | ME_function_call of
+      Symbol.sym * list mem_value
+
+  | ME_function_return of
+      Symbol.sym * maybe mem_value
+
+  | ME_allocate_static of
+      Core_ctype.thread_id   (* the allocating thread *)
+       * Symbol.prefix      (* symbols coming from the Core/C program, 
+                             * for debugging purpose *)
+       * integer_value      (* alignment constraint *)
+       * Core_ctype.ctype   (* type of the allocation *)
+       * maybe mem_value    (* optional initialisation value
+                             * if provided the allocation is made read-only *)
+       * pointer_value
+
+  | ME_allocate_dynamic of
+      Core_ctype.thread_id   (* the allocating thread *)
+       * Symbol.prefix       (* symbols coming from the Core/C program,
+                              * for debugging purpose *)
+       * integer_value       (* alignment constraint *)
+       * integer_value       (* size *)
+       * pointer_value
+
+  | ME_kill of
+      Loc.t
+       * bool
+       * pointer_value
+
+  | ME_load of
+      Loc.t
+       * Core_ctype.ctype
+       * pointer_value
+       * mem_value
+
+  | ME_store of
+      Loc.t
+       * Core_ctype.ctype
+       * (*is_locking *) bool
+       * pointer_value
+       * mem_value
+
+  | ME_eff_array_shift_ptrval of
+      pointer_value
+       * Core_ctype.ctype
+       * integer_value
+       * pointer_value
+
+(*
+  | ME_realloc of
+      Core_ctype.thread_id
+       * integer_value
+       * pointer_value
+       * integer_value
+       * pointer_value
+*)
+

@@ -58,7 +58,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files =
-  let libc_dirs = [cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
+  let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   String.concat " " begin
     cpp_cmd ::
@@ -111,7 +111,7 @@ let cerberus debug_level progress core_obj
              sequentialise_core rewrite_core typecheck_core defacto
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
-             fs_dump fs
+             fs_dump fs trace
              ocaml ocaml_corestd
              output_name
              files args_opt =
@@ -124,16 +124,12 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
+  (* TODO: add bmc flags *)
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
-                bmc_all_execs bmc_output_model;
+                bmc_all_execs bmc_output_model None Bmc_globals.MemoryMode_C;
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
-(*
-
-    (*Bmc.bmc rewritten_core_file sym_supply ail_opt;*)
-*)
-
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
@@ -228,7 +224,7 @@ let cerberus debug_level progress core_obj
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in
-          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump;} in
+          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf
         else
           match output_name with
@@ -424,6 +420,11 @@ let fs_dump =
   let doc = "dump the file system at the end of the execution" in
   Arg.(value & flag & info["fs-dump"] ~doc)
 
+let trace =
+  let doc = "trace memory actions" in
+  Arg.(value & flag & info["trace"] ~doc)
+
+
 (* TODO: this is not being used
 let default_impl =
   let doc = "run cerberus with a default implementation choice" in
@@ -497,7 +498,7 @@ let () =
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
-                         fs_dump $ fs $
+                         fs_dump $ fs $ trace $
                          ocaml $ ocaml_corestd $
                          output_file $
                          files $ args) in

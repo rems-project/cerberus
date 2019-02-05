@@ -17,34 +17,6 @@ export type NodeInfo =
   | { kind: "branch" }
   | { kind: "step", step_kind: StepKind }
   | { kind: "unsat" }
-  /*
-  // Stop steps
-  | 'action request'
-  | 'memop request'
-  // Finish steps
-  | 'done'
-  | 'thread_done'
-  // Skip steps
-  | 'tau'
-  | 'eval'
-  | 'memory'
-  | 'concurrency'
-  | 'drive_core_thread'
-  | 'constrained'
-  | 'driver'
-  | 'blocked'
-  | 'spawn_threads'
-  | 'fs_step'
-  | 'bound'
-
-export interface NodeInfo {
-  kind: DriverStepKind // Next step kind
-  debug: string
-  //file?: string
-  error_loc?: Range
-}
-*/
-
 
 export interface Node {
   id: number

@@ -245,10 +245,15 @@ type fs_oper =
   | FS_VPRINTF of integer (* fd *) * list char (* fmt *) * integer (* va_list *)
   | FS_VSNPRINTF of Mem.pointer_value * Mem.integer_value * list char * integer (* NOTE: this is arguably not a fs operation *)
 
+type core_tau_step_kind =
+  | TSK_Ccall of Symbol.sym * list Mem.mem_value
+  | TSK_Return of Symbol.sym * maybe Mem.mem_value
+  | TSK_Misc
+
 type core_step =
   | Step_action_request of string * core_runM action_request
   | Step_memop_request of Mem_common.memop * list Core.value * thread_id * (Core.value -> thread_state)
-  | Step_tau of string * core_runM thread_state
+  | Step_tau of string * core_tau_step_kind * core_runM thread_state
   | Step_eval of string * core_runM thread_state
   | Step_thread_done of thread_id * Core.value
 (*  | Step_nd of string * list core_step *)
@@ -766,7 +771,7 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
     | (Eskip, Stack_cons current_proc_opt cont sk') ->
 (* -----------------------------------------
    <skip, κ.κs, Λ> --τ--> <κ(unit), ɛ.κs, Λ> *)
-        one $ Step_tau "Eskip" (
+        one $ Step_tau "Eskip" TSK_Misc (
           E.return <| th_st with
             arena= apply_continuation cont (Expr arena_annots (Epure (Pexpr [] () (PEval Vunit))));
             stack= Stack_cons current_proc_opt [] sk'
@@ -787,7 +792,7 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
           | Pexpr [] () (PEval cval) ->
               match select_case subst_sym_expr cval pat_es with
                 | Just e' ->
-                    Step_tau "Ecase" (
+                    Step_tau "Ecase" TSK_Misc (
                       E.return <| th_st with arena= e' |>
                     )
                 | Nothing ->
@@ -867,7 +872,7 @@ BEFORE EVAL_PEXPR2
                 ) xs 
               )
           | PEval Vtrue ->
-              Step_tau "Eif (then)" (
+              Step_tau "Eif (then)" TSK_Misc (
                 (* TODO: should this labeled_conts be used somewhere? *)
                 (* let labeled_conts =
                   Map.map (fun (sym_tys, e) ->
@@ -876,7 +881,7 @@ BEFORE EVAL_PEXPR2
                 E.return <| th_st with arena= e2 |>
               )
           | PEval Vfalse ->
-              Step_tau "Eif (else)" (
+              Step_tau "Eif (else)" TSK_Misc (
                 (* TODO: should this labeled_conts be used somewhere? *)
                 (* let labeled_conts =
                   Map.map (fun (sym_tys, e) ->
@@ -912,7 +917,18 @@ BEFORE EVAL_PEXPR2
               let case_funptrval psym =
                 match valueFromPexprs pes with
                   | Just cvals ->
-                      Step_tau "Eccall" (
+                      let mem_values =
+                        match Map.lookup psym file.funinfo with
+                          | Just (_, param_tys, _, _) ->
+                            List.map (fun (ty, cval) ->
+                              match Core_aux.memValueFromValue (Core_ctype.Pointer AilTypes.no_qualifiers ty) cval with
+                                | Just mval -> mval
+                                | Nothing -> error "Eccall memvalue"
+                              end) $ List.zip param_tys cvals
+                          | Nothing ->
+                              error $ "Eccall : function " ^ show psym ^ " not found"
+                        end in
+                      Step_tau "Eccall" (TSK_Ccall psym mem_values) (
                         SEU.runEU (
                           Exception.bind (call_proc core_extern file psym cvals)
                             EU.return
@@ -985,7 +1001,7 @@ BEFORE EVAL_PEXPR2
               end in
               match nm with
                 | Sym psym ->
-                    Step_tau "Eproc" (
+                    Step_tau "Eproc" TSK_Misc (
                       SEU.runEU (
                         Exception.bind (call_proc core_extern file psym cvals)
                           EU.return
@@ -1055,7 +1071,7 @@ BEFORE EVAL_PEXPR2
                 | Impl (BuiltinFunction "errno") ->
                   match cvals with
                     | [] ->
-                      Step_tau "Ecase" (
+                      Step_tau "Ecase" TSK_Misc (
                         E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVpointer th_st.errno))))) |>
                       )
                     | _ ->
@@ -1305,7 +1321,7 @@ BEFORE EVAL_PEXPR2
     | (Eunseq es, Stack_cons current_proc_opt cont sk) ->
         match to_pures es with
           | Just pes ->
-              one $ Step_tau "Eunseq pure" (
+              one $ Step_tau "Eunseq pure" TSK_Misc (
                 E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_tuple_pe pes)) |>
               )
           | Nothing ->
@@ -1323,7 +1339,7 @@ BEFORE EVAL_PEXPR2
                 else begin
                   let xs = 
                     List.map (fun (es1, ej, es2) ->
-                      Step_tau "Eunseq" (
+                      Step_tau "Eunseq" TSK_Misc (
                         E.return <| th_st with arena= ej; stack= Stack_cons current_proc_opt (Kunseq arena_annots es1 es2 :: cont) sk |>
                       )
                     ) (pickWith (fun e -> to_pure e = Nothing && not (is_wait e)) es) in
@@ -1367,7 +1383,7 @@ BEFORE EVAL_PEXPR2
               )
           | _ ->
               (* focus the execution on the first operand *)
-              Step_tau "Ewseq" (
+              Step_tau "Ewseq" TSK_Misc (
                 E.return <| th_st with
                   arena= e1;
                   stack= Stack_cons current_proc_opt (Kwseq arena_annots pat e2 :: cont) sk
@@ -1409,7 +1425,7 @@ BEFORE EVAL_PEXPR2
               )
           | _ ->
               (* focus the execution on the first operand *)
-              Step_tau "Esseq" (
+              Step_tau "Esseq" TSK_Misc (
                 E.return <| th_st with
                   arena= e1;
                   stack= Stack_cons current_proc_opt (Ksseq arena_annots pat e2 :: cont) sk
@@ -1436,7 +1452,7 @@ BEFORE EVAL_PEXPR2
         error "found a Erun outside of a procedure"
     
     | (Erun annots sym pes, Stack_cons (Just current_proc) cont sk) ->
-        one $ Step_tau "Erun" begin
+        one $ Step_tau "Erun" TSK_Misc begin
           SEU.read (fun st ->
               let proc_sym = match Map.lookup current_proc core_extern with
                 | Just proc_sym -> proc_sym
@@ -1497,9 +1513,23 @@ BEFORE EVAL_PEXPR2
                           (* this was the startup thread *)
                           Step_done cval
                     end
-                | Stack_cons _ [] (Stack_cons parent_proc_opt cont sk') ->
+                | Stack_cons current_proc_opt [] (Stack_cons parent_proc_opt cont sk') ->
                     (* reached the end of the execution of a procedure. *)
-                    Step_tau "end of procedure" (
+                    let tsk =
+                      match current_proc_opt with
+                        | Just psym ->
+                            let mval =
+                              match Map.lookup psym file.funinfo with
+                                | Just (ret_ty, _, _, _) ->
+                                    Core_aux.memValueFromValue ret_ty cval
+                                | Nothing ->
+                                    error $ "Epure : function " ^ show psym ^ " not found"
+                              end in
+                            TSK_Return psym mval
+                        | Nothing ->
+                            TSK_Misc
+                      end in
+                    Step_tau "end of procedure" tsk (
                       SEU.update (fun st ->
                         match st.env with
                           | [] ->
@@ -1514,7 +1544,7 @@ BEFORE EVAL_PEXPR2
                       |>
                     )
                 | Stack_cons current_proc_opt cont sk' ->
-                    Step_tau "Epure" (
+                    Step_tau "Epure" TSK_Misc (
                       E.return <| th_st with
                         arena= apply_continuation cont (Expr arena_annots (Epure (Caux.mk_value_pe cval)));
                         stack= Stack_cons current_proc_opt [] sk';
@@ -1536,7 +1566,7 @@ BEFORE EVAL_PEXPR2
         (* -------------------------------------------
            <nd(e1, ..., eN), κs, Λ> --τ--> <ej, κs, Λ>    j ∈ {1, ..., N} *)
         List.map (fun e ->
-          Step_tau "End" (E.return <| th_st with arena= e |>)
+          Step_tau "End" TSK_Misc (E.return <| th_st with arena= e |>)
        ) es
     
     | (Epar es, _) ->

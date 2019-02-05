@@ -150,6 +150,7 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
 let create_conf w =
   let cpp_cmd () =
     "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
+    ^ w.cerb_path ^ "/bmc -I "
     ^ w.cerb_path ^ "/libc/include -I "
     ^ w.cerb_path ^ "/libc/include/posix"
   in
@@ -207,6 +208,7 @@ type incoming_msg =
     source:  string;
     name:    string;  (* name of the file in the UI *)
     model:   string;
+    bmc_model: bmc_model;
     rewrite: bool;
     sequentialise: bool;
     libc: bool;
@@ -219,6 +221,7 @@ let parse_incoming_msg content =
                 source=         "";
                 name=           "<unknown>";
                 model=          "concrete";
+                bmc_model=      `C11;
                 rewrite=        false;
                 sequentialise=  false;
                 libc=           false;
@@ -240,6 +243,12 @@ let parse_incoming_msg content =
     | "bmc"        -> `BMC
     | s -> failwith ("unknown action " ^ s)
   in
+  let bmc_mode_from_string = function
+    | "bmc_c11"   -> `C11
+    | "bmc_rc11"  -> `RC11
+    | "bmc_linux" -> `Linux
+    | s -> failwith ("unknown BMC model " ^ s)
+  in
   let parse_bool = function
     | "true" -> true
     | "false" -> false
@@ -255,6 +264,7 @@ let parse_incoming_msg content =
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
     | ("libc", [b])          -> { msg with libc= parse_bool b; }
     | ("model", [model])     -> { msg with model= model; }
+    | ("bmc_model", [model]) -> { msg with bmc_model= bmc_mode_from_string model; }
     | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
     | ("interactive[lastId]", [v]) ->
       { msg with interactive=
@@ -569,7 +579,7 @@ let cerberus ~rheader ~conf ~flow content =
                   }
   in
   let timeout   = float_of_int conf.timeout in
-  let request req : result Lwt.t =
+  let request (req: request) : result Lwt.t =
     let instance = "./cerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
@@ -590,7 +600,7 @@ let cerberus ~rheader ~conf ~flow content =
     | `Random -> request @@ `Execute (conf, filename, msg.name, Random)
     | `Exhaustive -> request @@ `Execute (conf, filename, msg.name, Exhaustive)
     | `Step -> request @@ `Step (conf, filename, msg.name, msg.interactive)
-    | `BMC -> request @@ `BMC (conf, filename, msg.name)
+    | `BMC -> request @@ `BMC (conf, msg.bmc_model,filename, msg.name)
   in
   Debug.print 9 ("Time: " ^ now ());
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);

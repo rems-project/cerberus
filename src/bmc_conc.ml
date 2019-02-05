@@ -586,7 +586,7 @@ module MemoryModelCommon = struct
       @ ret.well_formed_co
       @ ret.co_init
       @ ret.assertions in
-    if g_parse_from_model then
+    if !!bmc_conf.parse_from_model then
         ret.addr_assert
       @ ret.data_assert
       @ ret.ctrl_assert
@@ -892,8 +892,10 @@ module MemoryModelCommon = struct
               (addr_min <= addr && addr <= addr_max)
             ) ranges) with
           | Some (alloc, Some (min, max), prefix) ->
+              prefix_to_string_short prefix
+              (*
               sprintf "%s{%d}"  (prefix_to_string_short prefix)
-                                (addr - min)
+                                (addr - min) *)
           | _ -> Expr.to_string loc
         else Expr.to_string loc
     | _ ->

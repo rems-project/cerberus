@@ -20,6 +20,7 @@ type driver_conf = {
   concurrency: bool;
   experimental_unseq: bool;
   fs_dump: bool;
+  trace: bool;
 }
 
 type execution_result = (Core.value list, Errors.error) Exception.exceptM
@@ -181,10 +182,14 @@ else
         if conf.fs_dump then begin
           print_endline "File System:";
           print_endline @@ Sexplib.Sexp.to_string_hum @@ Sibylfs.sexp_of_fs_state st.Driver.fs_state
-        end
+        end;
+        if conf.trace then
+          PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace);
 
-      | (ND.Killed (ND.Undef0 (loc, ubs)), _, _) ->
-          prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))))
+      | (ND.Killed (ND.Undef0 (loc, ubs)), _, st) ->
+          prerr_endline (Pp_errors.to_string (loc, Errors.(DRIVER (Driver_UB ubs))));
+          if conf.trace then
+            PPrint.ToChannel.pretty 1.0 80 stdout (Pp_trace.pp_trace @@ List.rev st.trace)
 
      (*
           let str_v = Location_ocaml.location_to_string loc ^

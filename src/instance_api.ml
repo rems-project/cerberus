@@ -32,12 +32,17 @@ type active_node =
 
 type filename = string
 
+type bmc_model =
+  [ `C11
+  | `RC11
+  | `Linux ]
+
 (* input: request *)
 type request =
   [ `Elaborate of conf * filename * string
   | `Execute of conf * filename * string * exec_mode
   | `Step of conf * filename * string * active_node option 
-  | `BMC of conf * filename * string ]
+  | `BMC of conf * bmc_model * filename * string ]
 
 type point = int * int
 type range = point * point
