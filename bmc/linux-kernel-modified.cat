@@ -106,4 +106,4 @@ let hb_star = hb*
 let pb = prop ; strong-fence ; hb_star
 acyclic pb as propagation
 
-output mb
+//output mb

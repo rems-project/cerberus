@@ -891,6 +891,7 @@ module type LoadedSig = sig
   val get_ith_in_loaded_2  : Expr.expr -> Expr.expr -> Expr.expr
 end
 
+(*module Loaded (M: sig val user_defd_sorts : (module LoadedSortTy) list end)*)
 module Loaded : LoadedSig = struct
   open Z3.Datatype
 

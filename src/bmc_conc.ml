@@ -597,7 +597,8 @@ module MemoryModelCommon = struct
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
     bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
-    List.iter (fun a -> bmc_debug_print 5 (pp_bmcaction a)) all_actions;
+    if !!bmc_conf.debug_lvl > 5 then
+      List.iter (fun a -> print_endline (pp_bmcaction a)) all_actions;
 
     let event_sort = mk_event_sort all_actions in
     let all_events = Enumeration.get_consts event_sort in
@@ -1657,8 +1658,8 @@ module C11MemoryModel : MemoryModel = struct
 
     (* ==== Derived data ==== *)
     (* TODO: fix output/definition of sw *)
-    let sw = List.filter (get_relation fns.sw) prod in
-    let hb = List.filter (get_relation fns.hb) prod in
+    (*let sw = List.filter (get_relation fns.sw) prod in*)
+    (*let hb = List.filter (get_relation fns.hb) prod in*)
     (*let rs = List.filter (get_relation fns.rs) prod in*)
 
     let data_race = List.filter (fun ((a1,e1),(a2,e2)) ->
@@ -1690,7 +1691,7 @@ module C11MemoryModel : MemoryModel = struct
     let execution_derived_data =
       { derived_relations = [(*("sw", List.map proj_fst sw)*)
                             (*;("rs", List.map proj_fst rs)*)
-                             ("hb", remove_initial (List.map proj_fst hb))
+                             (*("hb", remove_initial (List.map proj_fst hb))*)
                             ]
       ; undefined_behaviour =
             [("dr",Two (List.map (fun (e1,e2) -> (fst e1, fst e2)) data_race))

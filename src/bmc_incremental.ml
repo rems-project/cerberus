@@ -368,7 +368,7 @@ module BmcInline = struct
     ) >>= fun inlined_action ->
     return (Paction(p, Action(loc, a, inlined_action)))
 
-  let rec inline_e (Expr(annots, e_) as expr) : (unit typed_expr) eff =
+  let rec inline_e (Expr(annots, e_)) : (unit typed_expr) eff =
     get_fresh_id >>= fun id ->
     (match e_ with
     | Epure pe ->
@@ -1568,10 +1568,10 @@ module BmcZ3 = struct
     | Ememop (PtrWellAligned,[ctype_pe;ptr]) ->
         assert (g_pnvi);
         (* We only support this with byte-wise mode *)
-        failwith "Ptr type-casting not supported";
+        failwith "Ptr type-casting not supported"
         (* address of ptr % align of ctype is 0 *)
         (* TODO: what if NULL? *)
-        let ctype = ctype_from_pexpr ctype_pe in
+        (*let ctype = ctype_from_pexpr ctype_pe in
         z3_pe ctype_pe >>= fun _ ->
         z3_pe ptr      >>= fun z3d_ptr ->
         get_file       >>= fun file ->
@@ -1579,7 +1579,7 @@ module BmcZ3 = struct
         let alignment = int_to_z3 (alignof_type ctype file) in
         return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
                       (int_to_z3 0)
-               )
+               )*)
     | Ememop _ -> assert false
     | Eaction action ->
         z3_action action uid
@@ -2069,6 +2069,8 @@ module BmcBind = struct
         bind_pe pe2 >>= fun bound_pe2 ->
         return (bound_pe1 @ bound_pe2)
     | PEbmc_assume pe ->
+        (*let loc = Annot.get_loc annots in
+        assert (is_some loc);*)
         bind_pe pe >>= fun bound_pe ->
         (* TODO: move this to a separate phase for easier debugging *)
         get_expr (get_id_pexpr pe) >>= fun z3_pe ->
