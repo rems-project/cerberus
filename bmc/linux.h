@@ -32,5 +32,9 @@ typedef enum linux_memory_order {
 #define READ_ONCE(object) __cerbvar_linux_read(&(object),linux_memory_order_once)
 #define WRITE_ONCE(object,desired) __cerbvar_linux_write(&(object),(desired),linux_memory_order_once)
 
+#define rcu_read_lock() __cerbvar_linux_fence(linux_memory_order_rculock)
+#define rcu_read_unlock() __cerbvar_linux_fence(linux_memory_order_rcuunlock)
+#define synchronize_rcu() __cerbvar_linux_fence(linux_memory_order_syncrcu)
+
 
 #endif
