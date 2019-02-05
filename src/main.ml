@@ -111,6 +111,7 @@ let cerberus debug_level progress core_obj
              sequentialise_core rewrite_core typecheck_core defacto
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
+             bmc_mode bmc_cat
              fs_dump fs trace
              ocaml ocaml_corestd
              output_name
@@ -126,7 +127,7 @@ let cerberus debug_level progress core_obj
   (* set global configuration *)
   (* TODO: add bmc flags *)
   Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
-                bmc_all_execs bmc_output_model None Bmc_globals.MemoryMode_C;
+      bmc_all_execs bmc_output_model bmc_cat bmc_mode;
   set_cerb_conf exec exec_mode concurrency QuoteStd defacto bmc;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
@@ -485,6 +486,15 @@ let bmc_output_model =
   let doc = "Output model if UB is detected when model checking." in
   Arg.(value & opt bool false & info["bmc_output_model"] ~doc)
 
+let bmc_mode =
+  let open Bmc_globals in
+  let doc = "BMC memory mode" in
+  Arg.(value & opt (enum ["c", MemoryMode_C; "linux", MemoryMode_Linux]) MemoryMode_C & info["bmc-mode"] ~doc)
+
+let bmc_cat =
+  let doc = "Name of the BMC concurrent model to use" in
+  Arg.(value & opt (some string) None & info["bmc-cat"] ~doc)
+
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
@@ -498,6 +508,7 @@ let () =
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
+                         bmc_mode $ bmc_cat $
                          fs_dump $ fs $ trace $
                          ocaml $ ocaml_corestd $
                          output_file $
