@@ -19,7 +19,7 @@ let g_bv_precision = 33
 
 (* ==== Experimental options ===== *)
 (* TODO: get value from somewhere else *)
-let g_ptr_size = 8 (* Ocaml_implementation*)
+(*let g_ptr_size = 8*) (* Ocaml_implementation*)
 let g_max_addr = 2147483648
 let g_pnvi = true
 

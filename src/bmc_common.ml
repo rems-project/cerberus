@@ -142,23 +142,23 @@ let ctor_to_z3 (ctor  : typed_ctor)
       (* Handled as special case in bmc_pexpr *)
       assert false
   | CivAND,[ctype;e1;e2] -> (* bitwise AND *)
-      assert false;
-      if (not g_bv) then failwith "CivAND is supported only with bitvectors";
+      assert false
+      (*if (not g_bv) then failwith "CivAND is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivAND";
-      BitVector.mk_and g_ctx e1 e2
+      BitVector.mk_and g_ctx e1 e2*)
   | CivOR,[ctype;e1;e2] -> (* bitwise OR *)
-      assert false;
-      if (not g_bv) then failwith "CivOR is supported only with bitvectors";
+      assert false
+      (*if (not g_bv) then failwith "CivOR is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivOR";
-      BitVector.mk_or g_ctx e1 e2
+      BitVector.mk_or g_ctx e1 e2*)
   | CivXOR,[ctype;e1;e2] -> (* bitwise XOR *)
-      assert false;
-      if (not g_bv) then failwith "CivXOR is supported only with bitvectors";
+      assert false
+      (*if (not g_bv) then failwith "CivXOR is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivXOR";
-      BitVector.mk_xor g_ctx e1 e2
+      BitVector.mk_xor g_ctx e1 e2*)
   | Cspecified,[e] ->
       assert (is_some bTy);
       if (Option.get bTy = BTy_loaded OTy_integer) then

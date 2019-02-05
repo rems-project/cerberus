@@ -27,12 +27,6 @@ module CatFile = struct
     | BaseSet_LinuxAcquire
     | BaseSet_LinuxRelease
 
-    (*
-    | BaseRel_addr_dep
-    | BaseRel_data_dep
-    | BaseRel_ctrl_dep
-    *)
-
   type base_identifier =
     | BaseId_rf
     | BaseId_rf_inv
@@ -631,13 +625,13 @@ module CatParser = struct
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
-            bmc_debug_print 3 (pprint_instruction v);
+            bmc_debug_print 5 (pprint_instruction v);
             begin match v with
             | Binding (s, expr) ->
                 (* TODO: domain and range *)
                 let (domain, range) = get_domain_range_expr expr in
                 let simplified_expr = simplify_sequenced_exprs expr in
-                bmc_debug_print 3 (CatFile.pprint_expr simplified_expr);
+                bmc_debug_print 5 (CatFile.pprint_expr simplified_expr);
                 ((s, (domain, range),simplified_expr)::binding, constraints, undefs_unless_empty, output)
             | Constraint (s_opt, expr) ->
                 (binding, (s_opt, expr)::constraints, undefs_unless_empty, output)
