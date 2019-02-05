@@ -3,304 +3,7 @@
 (* call "neato" on the output *)
 (* this assumes 'asw' is pretty simple *)
 
-let option_map f xs =
-  let rec g l = function
-  | [] -> List.rev l
-  | x :: xs ->
-    let l' = (match f x with None -> l | Some y -> y :: l) in
-    g l' xs in
-  g [] xs
-
-module Ord_pair (X : Set.OrderedType) (Y : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t = struct
-  type t = X.t * Y.t
-  let compare ((x1, x2) : t) (y1, y2) =
-    match X.compare x1 y1 with
-    | 0 -> Y.compare x2 y2
-    | v -> v
-end
-
-module Ord_triple (X : Set.OrderedType) (Y : Set.OrderedType) (Z : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t * Z.t = struct
-  type t = X.t * Y.t * Z.t
-  let compare ((x1, x2, x3) : t) (y1, y2, y3) =
-    match X.compare x1 y1 with
-    | 0 ->
-      (match Y.compare x2 y2 with
-      | 0 -> Z.compare x3 y3
-      | v -> v)
-    | v -> v
-end
-
-let rec list_compare f xs ys =
-  match (xs, ys) with
-  | [], [] -> 0
-  | [], _ :: _ -> -1
-  | _ :: _, [] -> 1
-  | x :: xs', y :: ys' ->
-    (match f x y with
-    | 0 -> list_compare f xs' ys'
-    | v -> v)
-
-module Ord_list (X : Set.OrderedType) : Set.OrderedType with type t = X.t list = struct
-  type t = X.t list
-  let rec compare (xs : t) (ys) =
-    list_compare X.compare xs ys
-end
-
-
-module Real_map (X : Set.S) (Y : Set.S) = struct
-  let map (f : X.elt -> Y.elt) (s : X.t) =
-    X.fold (fun x s' -> Y.add (f x) s') s Y.empty
-end
-
-module Set_union (X : Set.S) = struct
-  let union (xs : X.t list) =
-    List.fold_left X.union X.empty xs
-end
-
-module Union (Y : Set.S) = struct
-  let union (xs : Y.t list) =
-    List.fold_left Y.union Y.empty xs
-end
-
-module Powerset_bind (X : Set.S) (Y : Set.S) : sig val bind : (X.elt -> Y.t) -> X.t -> Y.t end = struct
-  module U = Union(Y)
-
-  let bind (f : X.elt -> Y.t) (s : X.t) =
-    U.union (List.map f (X.elements s))
-end
-
-module Option_set_bind (X : Set.S) (Y : Set.S) = struct
-
-  let bind (f : X.elt -> Y.elt option) (s : X.t) =
-    Y.of_list (option_map f (X.elements s))
-end
-
-module Map_of_list (X : Map.S) = struct
-  let of_list (l : 'a) =
-    List.fold_left
-      (fun mo (x, v) ->
-        match mo with
-        | None -> None
-        | Some m ->
-          (match X.find_opt x m with
-          | None -> Some (X.add x v m)
-          | Some _ -> None))
-      (Some X.empty)
-      l
-end
-
-type rational = int * int
-
-let rec gcd a b = if b = 0 then a else gcd b (a mod b)
-
-module Rational = struct
-  type t = rational
-
-  let simplify (n, d) =
-    let n = n * (d / abs d) in
-    let d = abs d in
-    let g = abs (gcd n d) in
-    (n / g, d / g)
-
-  let compare (x : t) y =
-    let (n1, d1) = simplify x in
-    let (n2, d2) = simplify y in
-    Pervasives.compare (n1 * d2) (n2 * d1)
-
-  let max (n1, d1) (n2, d2) =
-    if n1 * d2 < d1 * n2 then (n2, d2) else (n1, d1)
-
-  let min (n1, d1) (n2, d2) =
-     if n1 * d2 < d1 * n2 then (n1, d1) else (n2, d2)
-
-  let add (n1, d1) (n2, d2) =
-    simplify (n1 * d2 + d1 * n2, d1 * d2)
-
-  let addn rs =
-    List.fold_left
-      add
-      (0, 1)
-      rs
-
-  let sub x (n2, d2) =
-    add x (- n2, d2)
-
-  let mult (n1, d1) (n2, d2) =
-    simplify (n1 * n2, d1 * d2)
-
-  let div (n1, d1) (n2, d2) =
-    simplify (n1 * d2, d1 * n2)
-
-  let div_int (n, d) k = simplify (n, d * k)
-
-  let string_of_rational (n, d) =
-    string_of_int n ^ "/" ^ string_of_int d
-
-  let float_of_rat (n, d) =
-    float_of_int n /. float_of_int d
-end
-
-module Dot = struct
-
-type node_attr =
-  | NColor of string
-  | NLabel of string
-  | NShape of string
-  | NHtmlLabel of string
-  | NMargin of string
-  | NPos of float * float
-
-type node_info = {
-  nname : string;
-  nattrs: node_attr list;
-}
-
-(* start of stolen from Batteries *)
-let explode s =
-  let rec loop i l =
-    if i < 0 then
-      l
-    else
-      (* i >= 0 && i < length s *)
-      loop (i - 1) (String.get s i :: l)
-  in
-  loop (String.length s - 1) []
-
-let implode l =
-  let res = Bytes.create (List.length l) in
-  let rec imp i = function
-    | [] -> ()
-    | c :: l -> Bytes.set res i c; imp (i + 1) l in
-  imp 0 l;
-  Bytes.unsafe_to_string res
-(* end of Batteries *)
-
-(* TODO: should escape value *)
-let escape s : string =
-  implode
-    (List.concat
-      (List.map
-        (function
-        | '"' -> ['\\'; '"']
-        | '\\' -> ['\\'; '\\']
-        | c -> [c])
-        (explode s)))
-
-let string_of_str_attr name value =
-  name ^ "=\"" ^ escape value ^ "\""
-
-let string_of_nattr = function
-  | NColor c -> string_of_str_attr "color" c
-  | NLabel l -> string_of_str_attr "label" l
-  | NShape s -> string_of_str_attr "shape" s
-  | NHtmlLabel l -> "label=<" ^ l ^ ">"
-  | NMargin s -> string_of_str_attr "margin" s
-  | NPos (x, y) -> string_of_str_attr "pos" (string_of_float x ^ "," ^ string_of_float y ^ "!")
-
-let string_of_node (n : node_info) =
-  n.nname
-  ^ match n.nattrs with
-    | [] -> ";"
-    | _ ->
-      " ["
-      ^ String.concat "," (List.map string_of_nattr n.nattrs)
-      ^ "];"
-
-type edge_attr =
-  | ELabel of string
-  | EColor of string
-  | Lhead of string
-  | Ltail of string
-  | EStyle of string
-
-type edge_info = {
-  src : string;
-  tgt: string;
-  eattrs: edge_attr list;
-}
-
-let string_of_eattr coloro = function
-  | EColor _ ->
-    begin match coloro with
-      | Some c -> string_of_str_attr "color" c
-      | None -> assert false
-    end
-  | ELabel l -> "label=<" ^ l ^ ">"
-  | Lhead n -> string_of_str_attr "lhead" n
-  | Ltail n -> string_of_str_attr "ltail" n
-  | EStyle s -> string_of_str_attr "style" s
-
-let string_of_edge e =
-  let coloro =
-    match option_map (function EColor s -> Some s | _ -> None) e.eattrs with
-      | [] -> None
-      | [c] -> Some c
-      | cs ->
-        prerr_string "multiple colours for edge; took last\n";
-        Some (List.hd (List.rev cs)) in
-  e.src ^ " -> " ^ e.tgt
-  ^ (match e.eattrs with
-    | [] -> ""
-    | _ ->
-      " ["
-      ^ String.concat ","
-        (List.map
-           (string_of_eattr coloro)
-           e.eattrs)
-      ^ "];")
-
-type rankdir =
-  | TB
-  | LR
-
-type graph_attr =
-  | Compound
-  | GLabel of string
-  | Rankdir of rankdir
-  | Splines of bool
-  | Overlap of bool
-
-let string_of_bool b =
-  if b then "true" else "false"
-
-let string_of_graph_attr = function
-  | Compound -> string_of_str_attr "compound" "true" ^ ";"
-  | GLabel s ->
-    string_of_str_attr "label" s ^ ";\n"
-    ^ "labelloc=top;\n"
-    ^ "labeljust=left;"
-  | Rankdir TB -> "rankdir=TB;";
-  | Rankdir LR -> "rankdir=LR;"
-  | Splines b -> "splines=" ^ string_of_bool b ^ ";"
-  | Overlap b -> "overlap=" ^ string_of_bool b ^ ";"
-
-type graph_element =
-  | Node of node_info
-  | Edge of edge_info
-  | Graph_attr of graph_attr
-  | Subgraph of string * graph_element list
-
-type graph = graph_element list
-
-let indent indentlvl s =
-  String.make (2 * indentlvl) ' ' ^ s
-
-let rec string_of_cluster_element indentlvl = function
-  | Node ni -> indent indentlvl (string_of_node ni)
-  | Edge ei -> indent indentlvl (string_of_edge ei)
-  | Graph_attr ca -> indent indentlvl (string_of_graph_attr ca)
-  | Subgraph (name, ces) ->
-    indent indentlvl ("subgraph " ^ name ^ " {\n")
-    ^ String.concat "" (List.map (fun x -> string_of_cluster_element (indentlvl + 1) x ^ "\n") ces)
-    ^ indent indentlvl ("}\n")
-
-let string_of_digraph s =
-  "digraph G {\n"
-  ^ String.concat "" (List.map (fun x -> string_of_cluster_element 1 x ^ "\n") s)
-  ^ "}\n"
-
-end
-
+(* thanks to Stella Lau for a bug fix *)
 
 module Int = struct
   type t = int
@@ -309,15 +12,12 @@ end
 
 module Int_map = Map.Make(Int)
 
-let pair_compare f1 f2 (a1, b1) (a2, b2) =
-  match f1 a1 a2 with
-  | 0 -> f2 b1 b2
-  | v -> v
-
 module Aid = struct
   type t = Bmc_types.aid
   let compare (x : t) y =
     Pervasives.compare x y
+  let string_of (a : t) =
+    String.make 1 (Char.chr ((Char.code 'a') + a))
 end
 
 module Tid = struct
@@ -354,6 +54,7 @@ module Action = struct
   type t = Bmc_types.action
   (* TODO: do we care about types at this point? *)
   let compare (x : t) y =
+    Functors.(
     match x, y with
     | Bmc_types.Load (a1, t1, m1, l1, v1, ty1), Bmc_types.Load (a2, t2, m2, l2, v2, ty2) ->
       pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare Z3_value.compare)))  (a1, (t1, (m1, (l1, v1)))) (a2, (t2, (m2, (l2, v2))))
@@ -363,7 +64,7 @@ module Action = struct
       pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memory_order2.compare (pair_compare Z3_location.compare (pair_compare Z3_value.compare Z3_value.compare))))  (a1, (t1, (m1, (l1, (v11, v21))))) (a2, (t2, (m2, (l2, (v12, v22)))))
     | Bmc_types.Fence (a1, t1, m1), Bmc_types.Fence (a2, t2, m2) ->
       pair_compare Aid.compare (pair_compare Tid.compare Memory_order2.compare)  (a1, (t1, m1)) (a2, (t2, m2))
-    | _, _ -> Pervasives.compare (action_rank x) (action_rank y)
+    | _, _ -> Pervasives.compare (action_rank x) (action_rank y))
 end
 
 module Action_set = Set.Make(Action)
@@ -371,17 +72,17 @@ module Action_set = Set.Make(Action)
 module Aid_set = Set.Make(Aid)
 module String_map = Map.Make(String)
 
-module Aid_times_aid = Ord_pair(Aid)(Aid)
+module Aid_times_aid = Functors.Ord_pair(Aid)(Aid)
 module Aid_times_aid_set = Set.Make(Aid_times_aid)
 module Aid_times_aid_map = Map.Make(Aid_times_aid)
 
 module Pos = struct
-  type t = rational * int
+  type t = Rational_ml.t * int
   let compare (x : t) y =
     Pervasives.compare x y
 end
 
-module Action_times_pos = Ord_pair(Action)(Pos)
+module Action_times_pos = Functors.Ord_pair(Action)(Pos)
 
 module Action_times_pos_set = Set.Make(Action_times_pos)
 
@@ -396,6 +97,8 @@ let aid_of_action = function
 | Bmc_types.Store (a, _, _, _, _, _) -> a
 | Bmc_types.RMW (a, _, _, _, _, _, _) -> a
 | Bmc_types.Fence (a, _, _) -> a
+
+module Bmc_types_pp = struct
 
 let string_of_c_memory_order = function
 | Cmm_csem.NA -> "na"
@@ -461,14 +164,13 @@ let string_of_value expr =
   else
     Expr.to_string arg
 
-let string_of_aid a =
-  String.make 1 (Char.chr ((Char.code 'a') + a))
-
 let string_of_action loc_map = function
-| Bmc_types.Load (a, t, mo, x, v, ty) -> string_of_aid a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
-| Bmc_types.Store (a, t, mo, x, v, ty) -> string_of_aid a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
-| Bmc_types.RMW (a, t, mo, x, v1, v2, ty) -> string_of_aid a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
-| Bmc_types.Fence (a, t, mo) -> string_of_aid a ^ ":F" ^ string_of_memory_order mo
+| Bmc_types.Load (a, t, mo, x, v, ty) -> Aid.string_of a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
+| Bmc_types.Store (a, t, mo, x, v, ty) -> Aid.string_of a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
+| Bmc_types.RMW (a, t, mo, x, v1, v2, ty) -> Aid.string_of a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
+| Bmc_types.Fence (a, t, mo) -> Aid.string_of a ^ ":F" ^ string_of_memory_order mo
+
+end
 
 let aid_times_aid_set_of_rel rel =
   Aid_times_aid_set.of_list (List.map (fun (a, a') -> (aid_of_action a, aid_of_action a')) rel)
@@ -494,17 +196,17 @@ let vertical_layout sb acts =
 
 module Aid_map = Map.Make(Aid)
 
-module Aid_list = Ord_list(Aid)
+module Aid_list = Functors.Ord_list(Aid)
 
 module Aid_list_set = Set.Make(Aid_list)
 
-module Real_map_action_set_aid_list_set = Real_map(Action_set)(Aid_list_set)
+module Real_map_action_set_aid_list_set = Functors.Real_map(Action_set)(Aid_list_set)
 
-module Aid_times_aid_list = Ord_pair(Aid)(Aid_list)
+module Aid_times_aid_list = Functors.Ord_pair(Aid)(Aid_list)
 
 module Aid_times_aid_list_set = Set.Make(Aid_times_aid_list)
 
-module Option_bind_aid_list_set_aid_times_aid_list_set = Option_set_bind(Aid_list_set)(Aid_times_aid_list_set)
+module Option_bind_aid_list_set_aid_times_aid_list_set = Functors.Option_set_bind(Aid_list_set)(Aid_times_aid_list_set)
 
 type reduction_mode =
 | RM_no_reduction
@@ -522,14 +224,14 @@ type layout =
 | L_frac
 
 type display_info = {
-  repulsion_factor : rational;
+  repulsion_factor : Rational_ml.t;
   mask : edge_display_mode String_map.t;
   layout : layout;
   step_div : int;
   iterations : int;
-  margin : rational;
-  x_factor : rational;
-  y_factor : rational;
+  margin : Rational_ml.t;
+  x_factor : Rational_ml.t;
+  y_factor : Rational_ml.t;
 }
 
 let rec last = function
@@ -570,102 +272,22 @@ let columns_of sb acts =
       (Aid_list_set.elements columns) in
   (non_singleton_columns, columns_map)
 
-type formula =
-  | F_var of Bmc_types.aid
-  | F_const of rational
-  | F_plus of formula list
-  | F_minus of formula * formula
-  | F_times of formula * formula
-  | F_div of formula * formula
-
-module Formula = struct
-  type t = formula
-  let compare (x : t) y = Pervasives.compare x y
-
-  let rec string_of_formula_aux = function
-  | F_var aid -> (string_of_aid aid, true)
-  | F_const r -> (Rational.string_of_rational r, true)
-  | F_plus fs ->
-    (match fs with
-    | [] -> ("0", true)
-    | [f] -> string_of_formula_aux f
-    | _ -> (String.concat " + " (List.map string_of_formula_protected fs), false))
-  | F_minus (f1, f2) ->
-     (string_of_formula_protected f1 ^ " - " ^ string_of_formula_protected f2 , false)
-  | F_times (f1, f2) ->
-    (string_of_formula_protected f1 ^ " * " ^ string_of_formula_protected f2 , false)
-  | F_div (f1, f2) ->
-    (string_of_formula_protected f1 ^ " / " ^ string_of_formula_protected f2 , false)
-  and string_of_formula_protected f =
-    let (s, str) = string_of_formula_aux f in
-    if str then s else "(" ^ s ^ ")"
-  let string_of_formula f =
-    let (s, _) = string_of_formula_aux f in s
-end
+module Formula = Rational_function.Make(Aid)
 
 module Formula_set = Set.Make(Formula)
 
-let rec simplify_formula = function
-| F_var x -> F_var x
-| F_const (n, d) -> if n = 0 then F_const (0, 1) else F_const (n, d)
-| F_plus fs ->
-  let fs = List.map simplify_formula fs in
-  let const_part = Rational.addn (option_map (function F_const (n, d) -> Some (n, d) | _ -> None) fs) in
-  let non_consts = option_map (function F_const _ -> None | f -> Some f) fs in
-  (match const_part with
-  | (0, _) -> (match non_consts with [] -> F_const (0, 1) | [f] -> f | _ -> F_plus non_consts)
-  | _ ->
-    let f = F_const const_part in
-    (match non_consts with [] -> f | _ -> F_plus (non_consts @ [f])))
-| F_minus (f1, f2) ->
-  let f1 = simplify_formula f1 in
-  let f2 = simplify_formula f2 in
-  if Formula.compare f1 f2 = 0 then F_const (0, 1)
-  else
-    (match f1, f2 with
-    | _, F_const (0, _) -> f1
-    | F_const r1, F_const r2 -> F_const (Rational.sub r1 r2)
-    | _ -> F_minus (f1, f2))
-| F_times (f1, f2) ->
-  let f1 = simplify_formula f1 in
-  let f2 = simplify_formula f2 in
-  (match f1, f2 with
-  | F_const (0, _), _ -> F_const (0, 1)
-  | _, F_const (0, _) -> F_const (0, 1)
-  | F_const (1, _), _ -> f2
-  | _, F_const (1, _) -> f1
-  | _, _ -> F_times (f1, f2))
-| F_div (f1, f2) ->
-  let f1 = simplify_formula f1 in
-  let f2 = simplify_formula f2 in
-  (match f1, f2 with
-  | F_const (0, _), _ -> F_const (0, 1)
-  | _, F_const (1, _) -> f1
-  | _, _ -> F_div (f1, f2))
-
-let rec derivative x = function
-| F_var y -> if x = y then F_const (1, 1) else F_const (0, 1)
-| F_const _ -> F_const (0, 1)
-| F_plus fs -> F_plus (List.map (derivative x) fs)
-| F_minus (f1, f2) -> F_minus (derivative x f1, derivative x f2)
-| F_times (f1, f2) -> F_plus [F_times (derivative x f1, f2); F_times (f1, derivative x f2)]
-| F_div (f1, f2) -> F_div (F_minus (F_times (derivative x f1, f2), F_times (f1, derivative x f2)), F_times (f2, f2))
-
-let f_square f = F_times (f, f)
-
 let width_of_action loc_map act =
-  String.length (string_of_action loc_map act)
+  String.length (Bmc_types_pp.string_of_action loc_map act)
 
 let repulse repulsion_factor a_rep a'_rep width =
-  F_times (F_div (F_const repulsion_factor, f_square (F_minus (F_var a_rep, F_var a'_rep))), F_const (width, 7))
+  Formula.(F_times (F_div (F_const repulsion_factor, f_square (F_minus (F_var a_rep, F_var a'_rep))), F_const (width, 7)))
 
 let attract a a' =
-  f_square (F_minus (F_var a, F_var a'))
+  Formula.f_square (F_minus (F_var a, F_var a'))
 
-module Real_map_aid_times_aid_to_formula_set = Option_set_bind(Aid_times_aid_set)(Formula_set)
+module Real_map_aid_times_aid_to_formula_set = Functors.Option_set_bind(Aid_times_aid_set)(Formula_set)
 
 let equation_of_act display_info loc_map sb columns_map line act =
-  (* TODO: should take label size into account *)
   let trans a =
     match Aid_map.find_opt a columns_map with
     | None -> assert false
@@ -675,7 +297,7 @@ let equation_of_act display_info loc_map sb columns_map line act =
   let a_w = width_of_action loc_map act in
   assert (a = a_top);
   let repulsion =
-    option_map
+    Functors.option_map
       (fun act' ->
         let a' = aid_of_action act' in
         let a'_w = width_of_action loc_map act' in
@@ -693,22 +315,11 @@ let equation_of_act display_info loc_map sb columns_map line act =
       (fun (a1, a2) -> if a1 = a_bot then Some (attract a_bot a2) else None)
       sb in
   let attraction = (Formula_set.elements attraction_up) @ (Formula_set.elements attraction_down) in
-  (* prerr_string ("|attractions " ^ string_of_aid a ^ "| = " ^ string_of_int (List.length attraction) ^ "\n"); *)
-  let f = F_plus (repulsion @ attraction) in
-  let f' = simplify_formula (derivative a_top f) in
-  (*prerr_string ("f(" ^ string_of_aid a ^ ") = " ^ Formula.string_of_formula f ^ "\n"); flush stderr;
-  prerr_string ("f'(" ^ string_of_aid a ^ ") = " ^ Formula.string_of_formula f' ^ "\n"); flush stderr;*)
-  simplify_formula (F_minus (F_const (0, 1), f'))
+  let f = Formula.F_plus (repulsion @ attraction) in
+  let f' = Formula.simplify_formula (Formula.derivative a_top f) in
+  Formula.simplify_formula Formula.(F_minus (F_const (0, 1), f'))
 
-let rec evaluate map x = function
-| F_var x -> Aid_map.find x map
-| F_const c -> c
-| F_plus fs -> Rational.addn (List.map (evaluate map x) fs)
-| F_minus (f1, f2) -> Rational.sub (evaluate map x f1) (evaluate map x f2)
-| F_times (f1, f2) -> Rational.mult (evaluate map x f1) (evaluate map x f2)
-| F_div (f1, f2) -> Rational.div (evaluate map x f1) (evaluate map x f2)
-
-module Aid_map_of_list = Map_of_list(Aid_map)
+module Aid_map_of_list = Functors.Map_of_list(Aid_map)
 
 let equations_map_of display_info loc_map sb columns_map lines =
   let x =
@@ -716,7 +327,7 @@ let equations_map_of display_info loc_map sb columns_map lines =
       (List.concat
         (List.map
           (fun line ->
-            option_map
+            Functors.option_map
               (fun act ->
                 let aid = aid_of_action act in
                 let (aid', _) = Aid_map.find aid columns_map in
@@ -730,11 +341,11 @@ let equations_map_of display_info loc_map sb columns_map lines =
   | None -> assert false
   | Some map -> map
 
-module Aid_times_pos = Ord_pair(Aid)(Pos)
+module Aid_times_pos = Functors.Ord_pair(Aid)(Pos)
 
 module Aid_times_pos_set = Set.Make(Aid_times_pos)
 
-module Real_map_action_times_pos_set_to_aid_times_pos_set = Real_map(Action_times_pos_set)(Aid_times_pos_set)
+module Real_map_action_times_pos_set_to_aid_times_pos_set = Functors.Real_map(Action_times_pos_set)(Aid_times_pos_set)
 
 let obstruction_set_of actposs columns =
   let aidposs0 = Real_map_action_times_pos_set_to_aid_times_pos_set.map (fun (act, pos) -> (aid_of_action act, pos)) actposs in
@@ -760,31 +371,25 @@ let obstruction obstruction_set pos =
   | None -> None
   | Some (aid, _) -> Some aid
 
-module Rational_map = Map.Make(Rational)
+module Rational_ml_map = Map.Make(Rational_ml)
 
-module Action_times_int = Ord_pair(Action)(Int)
+module Action_times_int = Functors.Ord_pair(Action)(Int)
 
 module Action_times_int_set = Set.Make(Action_times_int)
 
-module Real_map_action_times_int_set_to_action_times_pos = Real_map(Action_times_int_set)(Action_times_pos_set)
+module Real_map_action_times_int_set_to_action_times_pos = Functors.Real_map(Action_times_int_set)(Action_times_pos_set)
 
-module Action_times_pos_set_union = Union(Action_times_pos_set)
+module Action_times_pos_set_union = Functors.Union(Action_times_pos_set)
+
+module Collect_actions = Functors.Collect_in_map_fun(Rational_ml_map)(Action_times_pos_set)(Action_times_int_set)
 
 let make_unit_spacing actposs =
-  let act_map =
-    Action_times_pos_set.fold
-      (fun (act, (x, y)) act_map ->
-        (* TODO: functorise! *)
-        match Rational_map.find_opt x act_map with
-        | None -> Rational_map.add x (Action_times_int_set.singleton (act, y)) act_map
-        | Some acts -> Rational_map.add x (Action_times_int_set.add (act, y) acts) act_map)
-      actposs
-      Rational_map.empty in
+  let act_map = Collect_actions.set_map_of (fun (act, (x, y)) -> (x, (act, y))) actposs in
   let actss =
     List.mapi
       (fun x (_, acts) ->
         Real_map_action_times_int_set_to_action_times_pos.map (fun (act, y) -> (act, ((x, 1), y))) acts)
-      (Rational_map.bindings act_map) in
+      (Rational_ml_map.bindings act_map) in
   Action_times_pos_set_union.union actss
 
 let init_var_map_frac sb (columns, columns_map) lines =
@@ -794,7 +399,7 @@ let init_var_map_frac sb (columns, columns_map) lines =
       List.fold_left
         (fun (actposs, x) act ->
           let aid = aid_of_action act in
-          let x' = Rational.add (1, 1) x in
+          let x' = Rational_ml.add (1, 1) x in
           match obstruction obstruction_set (x', y) with
           | None ->
             (match Aid_map.find_opt aid columns_map with
@@ -807,7 +412,7 @@ let init_var_map_frac sb (columns, columns_map) lines =
           | Some aid ->
             if (aid = aid_of_action act) then (Action_times_pos_set.add (act, (x', y)) actposs, x')
             else
-              let x'' = Rational.div_int (Rational.add x x') 2 in
+              let x'' = Rational_ml.div_int (Rational_ml.add x x') 2 in
               (Action_times_pos_set.add (act, (x'', y)) actposs, x''))
           (actposs, (0, 1))
           (Action_set.elements line) in
@@ -833,10 +438,11 @@ let init_var_map_naive sb columns lines =
       lines in
   actposs
 
+module Formula_evaluator = Rational_function.Make_evaluator(Formula)(Aid_map)
+
 let step_aux display_info map eqn x =
-  let deltax = Rational.div_int (evaluate map x eqn) display_info.step_div in
-  (*prerr_string (Rat.string_of_rat deltax ^ "\n"); flush stderr;*)
-  Rational.add x deltax
+  let deltax = Rational_ml.div_int (Formula_evaluator.evaluate map x eqn) display_info.step_div in
+  Rational_ml.add x deltax
 
 let step display_info columns_map eqns var_map =
   let map =
@@ -857,7 +463,7 @@ let iterate display_info columns_map eqns init_var_map =
     else f (step display_info columns_map eqns init_var_map) (n - 1) in
   f init_var_map display_info.iterations
 
-module String_map_of_list = Map_of_list(String_map)
+module String_map_of_list = Functors.Map_of_list(String_map)
 
 let default_display_info = {
   repulsion_factor = (1, 1);
@@ -896,18 +502,18 @@ let bounds_of acts =
   | [] -> ((0, 1), (0, 1))
   | (_, (xpos, _)) :: acts' ->
     List.fold_left
-      (fun (min, max) (_, (xpos, _)) -> (Rational.min min xpos, Rational.max max xpos))
+      (fun (min, max) (_, (xpos, _)) -> (Rational_ml.min min xpos, Rational_ml.max max xpos))
       (xpos, xpos)
       acts'
 
 let shift offset acts =
   Action_times_pos_set.map
-    (fun (act, (x, y)) -> (act, (Rational.add x offset, y)))
+    (fun (act, (x, y)) -> (act, (Rational_ml.add x offset, y)))
     acts
 
-module Powerset_bind_aid_set_aid_set = Powerset_bind(Aid_set)(Aid_set)
+module Powerset_bind_aid_set_aid_set = Functors.Powerset_bind(Aid_set)(Aid_set)
 
-module Aid_times_aid_set_to_aid_set_map = Real_map(Aid_times_aid_set)(Aid_set)
+module Aid_times_aid_set_to_aid_set_map = Functors.Real_map(Aid_times_aid_set)(Aid_set)
 
 let down_closure rel n =
   let next s =
@@ -975,24 +581,12 @@ let juxtapose_threads display_info ths =
     List.fold_left
       (fun (actposs, offset) th ->
         let (min, max) = bounds_of th in
-        (Action_times_pos_set.union actposs (shift (Rational.sub offset min) th), Rational.add offset (Rational.add (Rational.sub max min) display_info.margin) ))
+        (Action_times_pos_set.union actposs (shift (Rational_ml.sub offset min) th), Rational_ml.add offset (Rational_ml.add (Rational_ml.sub max min) display_info.margin) ))
       (Action_times_pos_set.empty, (0, 1))
       ths in
   actposs
 
-module Collect_in_map (X : Map.S) (Y : Set.S) = struct
-  let collect index_of set =
-    Y.fold
-      (fun a m ->
-        let ix = index_of a in
-        match X.find_opt ix m with
-        | None -> X.add ix (Y.singleton a) m
-        | Some s -> X.add ix (Y.add a s) m)
-      set
-      X.empty
-end
-
-module Collect_tid = Collect_in_map(Int_map)(Action_set)
+module Collect_tid = Functors.Collect_in_map(Int_map)(Action_set)
 
 let collect_threads ex =
   Collect_tid.collect (tid_of_action) (Action_set.of_list ex.Bmc_types.actions)
@@ -1100,7 +694,7 @@ let display_nodes loc_map display_info d g =
             | Bmc_types.Two _ -> false)
           d.Bmc_types.undefined_behaviour then [Dot.NColor "orange"]
         else [] in
-      Dot.Node { Dot.nname = repr aid; Dot.nattrs = [Dot.NLabel (string_of_action loc_map act); Dot.NPos (Rational.float_of_rat (Rational.mult display_info.Layout.x_factor x), -. Rational.float_of_rat (Rational.mult (y, 1) display_info.Layout.y_factor)); Dot.NShape "none";] @ undefs })
+      Dot.Node { Dot.nname = repr aid; Dot.nattrs = [Dot.NLabel (Bmc_types_pp.string_of_action loc_map act); Dot.NPos (Rational_ml.float_of (Rational_ml.mult display_info.Layout.x_factor x), -. Rational_ml.float_of (Rational_ml.mult (y, 1) display_info.Layout.y_factor)); Dot.NShape "none";] @ undefs })
     (Action_times_pos_set.elements g)
 
 let display_edges display_info ex ew d =
