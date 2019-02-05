@@ -35,6 +35,7 @@ type filename = string
 type bmc_model =
   [ `C11
   | `RC11
+  | `RC11_Hardcoded
   | `Linux ]
 
 (* input: request *)
