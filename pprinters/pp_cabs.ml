@@ -55,6 +55,7 @@ let precedence = function
   | CabsEcond _ -> Some 13
   | CabsEassign _ -> Some 14
   | CabsEcomma _ -> Some 15
+  | CabsEbmc_assume _ -> None
 
 let lt_precedence p1 p2 =
   match p1, p2 with
@@ -240,6 +241,8 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode (pp_stmt_ctor "CabsEva_arg" ^^^ pp_location loc, [dtree_of_cabs_expression e] )
     | CabsEprint_type e ->
         Dnode (pp_stmt_ctor "CabsEprint_type" ^^^ pp_location loc, [dtree_of_cabs_expression e])
+    | CabsEbmc_assume e ->
+        Dnode (pp_stmt_ctor "CabsEbmc_assume" ^^^ pp_location loc, [dtree_of_cabs_expression e])
 
 and dtree_of_cabs_generic_association = function
   | GA_type (tyname, e) ->
