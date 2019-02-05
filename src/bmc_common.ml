@@ -298,7 +298,7 @@ let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
           let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
           let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
           Loaded_tuple_sort.mk_sort
-          (*)
+          (*
           let sortlist =
             List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
           (* TODO: Does Z3 allow tuples to contain tuples? *)
