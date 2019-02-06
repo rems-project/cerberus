@@ -149,6 +149,13 @@ let rcu-link_gp = rcu-link ; gp
 let rcu-fence = gp | (gp_rcu-link ; rscs) | (rscs_rcu-link ; gp) | (gp_rcu-link ; rcu-fence ; rcu-link_rscs) | (rscs_rcu-link ; rcu-fence ; rcu-link_gp) | (rcu-fence ; rcu-link; rcu-fence)
 
 //(* rb orders instructions just as pb does *)
-let rb = prop ; rcu-fence ; hb_star ; pb_star
+let rb_head = prop ; rcu-fence
+let rb_tail = hb_star ; pb_star
+//let rb = prop ; rcu-fence ; hb_star ; pb_star
+let rb = rb_head ; rb_tail
 
 irreflexive rb as rcu
+
+// TODO: oops output only works for user-def'd relations right now
+let crit_prime = crit
+output crit_prime
