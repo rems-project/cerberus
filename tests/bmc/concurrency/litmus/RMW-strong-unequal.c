@@ -10,8 +10,8 @@ int main(void) {
   int y = 1;
 
   int r1 = atomic_compare_exchange_strong_explicit(
-                &x,&y,1,memory_order_seq_cst,memory_order_seq_cst);
+                &x, &y, 1, memory_order_seq_cst, memory_order_seq_cst);
 
   int a = atomic_load_explicit(&x, memory_order_relaxed);
-  return a + 3*y + 9*r1;
+  return a + 3 * y + 9 * r1;
 }

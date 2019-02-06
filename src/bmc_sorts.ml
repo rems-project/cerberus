@@ -894,6 +894,10 @@ module type LoadedSig = sig
   val mk_sort : Sort.sort
   val mk_expr : Expr.expr -> Expr.expr
 
+  val get_loaded_int : Expr.expr -> Expr.expr
+
+  val is_specified   : Expr.expr -> Expr.expr
+  val is_unspecified : Expr.expr -> Expr.expr
   val get_ith_in_loaded_2  : Expr.expr -> Expr.expr -> Expr.expr
 end
 
@@ -931,23 +935,47 @@ module Loaded : LoadedSig = struct
     let recognizer = List.nth (get_recognizers mk_sort) 0 in
     Expr.mk_app g_ctx recognizer [expr]
 
+  let get_loaded_int (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 0) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
   let is_loaded_ptr (expr: Expr.expr) =
     let recognizer = List.nth (get_recognizers mk_sort) 1 in
     Expr.mk_app g_ctx recognizer [expr]
+
+  let get_loaded_ptr (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 1) in
+    Expr.mk_app g_ctx get_value [ expr ]
 
   let is_loaded_int_array (expr: Expr.expr) =
     let recognizer = List.nth (get_recognizers mk_sort) 2 in
     Expr.mk_app g_ctx recognizer [expr]
 
-  let get_int_array (expr: Expr.expr) =
+  let get_loaded_intarray (expr: Expr.expr) =
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 2) in
     Expr.mk_app g_ctx get_value [ expr ]
 
+  let is_specified (expr: Expr.expr) =
+     mk_ite (is_loaded_int expr) (LoadedInteger.is_specified (get_loaded_int expr))
+    (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_specified (get_loaded_ptr expr))
+      (* Else *) (LoadedIntArray.is_specified (get_loaded_intarray expr))
+    )
+
+  let is_unspecified (expr: Expr.expr) =
+     mk_ite (is_loaded_int expr) (LoadedInteger.is_unspecified (get_loaded_int expr))
+    (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_unspecified (get_loaded_ptr expr))
+      (* Else *) (LoadedIntArray.is_unspecified (get_loaded_intarray expr))
+    )
+
+
   (* TODO: pretty bad code *)
   let get_ith_in_loaded_2 (i: Expr.expr) (loaded: Expr.expr) : Expr.expr =
     assert (Sort.equal (Expr.get_sort loaded) mk_sort);
-    let spec_int_array = LoadedIntArray.get_specified_value (get_int_array loaded) in
+    let spec_int_array =
+      LoadedIntArray.get_specified_value (get_loaded_intarray loaded) in
     mk_ite (mk_or [is_loaded_int loaded; is_loaded_ptr loaded])
            loaded
            (* Else: must be (specified?) int array in currently supported C fragment *)

@@ -1,19 +1,18 @@
 #include "linux.h"
 int main() {
-  int x = 0, y = 0, z = 0;
+  _Atomic(int) x = 0, y = 0;
   int r1, r2, r3;
   {-{ {
     WRITE_ONCE(x, 1);
-    smp_mb();
-    r1 = READ_ONCE(y);
   } ||| {
+    r1 = READ_ONCE(x);
+    smp_wmb();
     WRITE_ONCE(y, 1);
-    smp_store_release(&z, 1);
   } ||| {
-    r2 = smp_load_acquire(&z);
+    r2 = smp_load_acquire(&y);
     smp_mb();
     r3 = READ_ONCE(x);
   } }-}
-  assert (!(r1 == 0 && r2 == 1 && r3 == 0));
+  __BMC_ASSUME(r1 == 1 && r2 == 1 && r3 == 0);
   return r1 + 2 * r2 + 4 * r3;
 }
