@@ -309,7 +309,7 @@ let bmc_file (file              : unit typed_file)
     ) >>
 
     BmcM.get_file >>= fun file ->
-    if !!bmc_conf.debug_lvl >= 3 then pp_file file;
+    if !!bmc_conf.debug_lvl > 3 then pp_file file;
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
@@ -329,7 +329,7 @@ let bmc_file (file              : unit typed_file)
               (Option.get final_state.ret_bindings);
   end;
   (* TODO: Output this in the dot graph *)
-  if !!bmc_conf.debug_lvl >= 3 then
+  if !!bmc_conf.debug_lvl > 3 then
   ( print_endline "====ALLOCATION PREFIXES";
     Pmap.iter (fun alloc meta ->
       printf "%d: %s\n" alloc (prefix_to_string (get_metadata_prefix meta)))
@@ -500,7 +500,7 @@ let bmc (core_file  : unit file)
             Core_sequentialise.sequentialise_file typed_core
           else
             typed_core in
-        if !!bmc_conf.debug_lvl >= 2 then
+        if !!bmc_conf.debug_lvl > 3 then
           pp_file core_to_check;
 
         bmc_debug_print 1 "START: model checking";
