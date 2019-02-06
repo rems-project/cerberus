@@ -429,6 +429,7 @@ module MemoryModelCommon = struct
     addr_dep : FuncDecl.func_decl;
     data_dep : FuncDecl.func_decl;
     ctrl_dep : FuncDecl.func_decl;
+    crit     : FuncDecl.func_decl;
 
   }
 
@@ -459,6 +460,7 @@ module MemoryModelCommon = struct
     ; addr_dep = mk_decl "addr_dep" [events;events] boolean_sort
     ; data_dep = mk_decl "data_dep" [events;events] boolean_sort
     ; ctrl_dep = mk_decl "ctrl_dep" [events;events] boolean_sort
+    ; crit     = mk_decl "crit"     [events;events] boolean_sort
     }
 
   type builtin_fnapps = {
@@ -501,6 +503,7 @@ module MemoryModelCommon = struct
     addr_dep   : Expr.expr * Expr.expr -> Expr.expr;
     data_dep   : Expr.expr * Expr.expr -> Expr.expr;
     ctrl_dep   : Expr.expr * Expr.expr -> Expr.expr;
+    crit       : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -592,6 +595,7 @@ module MemoryModelCommon = struct
     ; addr_dep  = (fun (e1,e2) -> apply decls.addr_dep [e1;e2])
     ; data_dep  = (fun (e1,e2) -> apply decls.data_dep [e1;e2])
     ; ctrl_dep  = (fun (e1,e2) -> apply decls.ctrl_dep [e1;e2])
+    ; crit      = (fun (e1,e2) -> apply decls.crit     [e1;e2])
     }
 
   type ret =
@@ -1923,6 +1927,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_addr_dep -> model.builtin_fns.addr_dep (ea,eb)
         | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
+        | BaseId_crit     -> model.builtin_fns.crit (ea,eb)
         end
 
   (* === Expr -> boolean *)
