@@ -894,6 +894,8 @@ module type LoadedSig = sig
   val mk_sort : Sort.sort
   val mk_expr : Expr.expr -> Expr.expr
 
+  val get_loaded_int : Expr.expr -> Expr.expr
+
   val is_specified   : Expr.expr -> Expr.expr
   val is_unspecified : Expr.expr -> Expr.expr
   val get_ith_in_loaded_2  : Expr.expr -> Expr.expr -> Expr.expr

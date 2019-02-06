@@ -2915,19 +2915,14 @@ module BmcMemCommon = struct
       Option.get ret
     end
 
-  let mk_initial_value (ctype: ctype) (name: string) =
+  let mk_initial_value (ctype: ctype) (const: string) =
     match ctype with
     | Void0 ->
         (UnitSort.mk_unit, [])
     | Basic0 (Integer ity) ->
         let const = mk_fresh_const name integer_sort in
-        let ge_ivmin =
-            binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
-        let le_ivmax =
-            binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
-        (const, [ge_ivmin;le_ivmax])
+        (const, assert_initial_range ctype const)
     | _ -> assert false
-
 
   let mk_initial_loaded_value (sort: Sort.sort) (name: string)
                               (ctype: ctype) (specified: bool)
