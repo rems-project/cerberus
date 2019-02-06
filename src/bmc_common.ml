@@ -508,6 +508,21 @@ module ImplFunctions = struct
                     @ is_unsigned_asserts
 end
 
+(* Assert const is in range of ctype *)
+let assert_initial_range (ctype: Core_ctype.ctype0) (const: Expr.expr)
+                         : Expr.expr list =
+  match ctype with
+  | Void0 ->
+      []
+  | Basic0 (Integer ity) ->
+      let ge_ivmin =
+          binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
+      let le_ivmax =
+          binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
+      [ge_ivmin;le_ivmax]
+  | _ ->
+      bmc_debug_print 8 (sprintf "TODO: assert_initial_range of non-int type");
+      []
 
 (* TODO: big hack for function calls...
  * let weak (p': loaded pointer, (...)) =
@@ -515,6 +530,7 @@ end
  *     (p, cfunction(p))
  * in...
  *)
+
 
 let is_ptr_pat (pat: typed_pattern) : bool =
   match pat with
