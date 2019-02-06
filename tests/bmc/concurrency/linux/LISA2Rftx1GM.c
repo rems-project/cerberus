@@ -22,7 +22,7 @@ int main() {
     r2 = READ_ONCE(x2);
     smp_mb();
     r1 = READ_ONCE(x1);
-  | }-}
+  } }-}
   assert(!(r0 == 1 && r3 == 0 && r2 == 1 && r1 == 0));
   return r0 + 2 * (r3 + 2 * (r2 + 2 * r1));
 }
