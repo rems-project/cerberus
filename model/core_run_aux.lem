@@ -30,6 +30,7 @@ type thread_state = <|
   arena:  expr core_run_annotation;
   stack:  stack core_run_annotation;
   errno:  Mem.pointer_value;
+  env: list (map Symbol.sym value); (* Scoped environment for the Core symbols *)
   
   (* NON-SEMANTIC stuff *)
   exec_loc: exec_location;
@@ -55,8 +56,6 @@ type core_run_state = <|
   tid_supply:    Core_ctype.thread_id;
   aid_supply:    Cmm_csem.aid;
   
-  (* Scoped environment for the Core symbols *)
-  env: list (map Symbol.sym value);
   (* Pre-calculated map of labeled continuations (aka. save()).
      the map is over procedure symbols (NOTE: read-only) *)
   labeled: map Symbol.sym (labeled_continuations core_run_annotation);
@@ -92,7 +91,7 @@ let initial_core_run_state xs = <|
   tid_supply=    0;
   aid_supply=    0;
   
-  env=     [Map.empty];
+  (*env=     [Map.empty];*)
   labeled= xs;
 |>
 

@@ -755,17 +755,33 @@ module MemoryModelCommon = struct
       let indexed_wval =
           Loaded.get_ith_in_loaded_2 index (fns.getWval write) in
 
-      (* NOTE: Semantics: if reading from an noninitial write with unspecified wval,
-       * then rval is an unconstrained specified value.  else, wval = rval.
-       * This prevents unspecified OOTA values.
+      (* NOTE: Semantics: if reading from an noninitial write with unspecified
+       * wval, then rval is a specified value with range constrained based on
+       * the read ctype.  else, wval = rval.  This prevents unspecified OOTA
+       * values.
+       *
+       * TODO: the range is only constrained for loaded integer types.
+       * Bad things happen with pointers/int arrays right now.
         *)
+      let range_assertions =
+        begin match ctype_of_bmcaction action with
+        | Basic0 (Integer _) ->
+            assert_initial_range
+                (ctype_of_bmcaction action)
+                (LoadedInteger.get_specified_value
+                      (Loaded.get_loaded_int (fns.getRval read)))
+        | _ -> []
+        end in
+
       let read_from_noninitial_unspec_write =
         mk_and [mk_not (fns.isInitial write)
                ;Loaded.is_unspecified indexed_wval
                ] in
       let rval_wval_constraint =
         mk_ite read_from_noninitial_unspec_write
-               (Loaded.is_specified (fns.getRval read))
+               (mk_and ((Loaded.is_specified (fns.getRval read))
+                        :: range_assertions)
+               )
                (mk_eq (fns.getRval read) indexed_wval) in
 
       mk_implies (fns.getGuard read)
