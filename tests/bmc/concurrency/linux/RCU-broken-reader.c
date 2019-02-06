@@ -1,4 +1,4 @@
-/* RCU-deferred-free */
+/* RCU-deferred-free with a broken reader */
 #include "linux.h"
 int main() {
   int x = 0, y = 0;
@@ -8,11 +8,9 @@ int main() {
     synchronize_rcu();
     WRITE_ONCE(y, 1);
   } ||| {
-    rcu_read_lock();
     r1 = READ_ONCE(x);
     r2 = READ_ONCE(y);
-    rcu_read_unlock();
   } }-}
-  assert(!(r1 == 0 && r2 == 1));
+  __BMC_ASSUME(r1 == 0 && r2 == 1);
   return r1 + 2 * r2;
 }
