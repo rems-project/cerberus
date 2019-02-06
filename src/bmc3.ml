@@ -506,7 +506,7 @@ let bmc (core_file  : unit file)
         bmc_debug_print 1 "START: model checking";
         let fn_sym = find_function !!bmc_conf.fn_to_check core_to_check.funs in
         let ret = bmc_file core_to_check fn_sym ail_opt in
-        bmc_debug_print 1 (sprintf "BMC execution time: %fs\n"
+        bmc_debug_print 1 (sprintf "BMC execution time: %fs"
                                    (Sys.time() -. t));
         ret
     end
