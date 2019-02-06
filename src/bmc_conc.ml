@@ -93,6 +93,8 @@ let is_fence_action (BmcAction(_,_,a): bmc_action) =
 let bmcaction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
   compare (aid_of_action a1) (aid_of_action a2)
 
+
+
 (* ===== PREEXECS ===== *)
 
 type bmcaction_rel = bmc_action * bmc_action
@@ -224,6 +226,67 @@ let filter_asw (asw: bmcaction_rel list)
     ) asw
   ) asw
 *)
+(* ========== UGLY CODE TO COMPUTE LINUX RCULOCK/UNLOCK PAIRS =========== *)
+let top_sort (graph: (bmc_action * (bmc_action list)) list)
+             : bmc_action list =
+  let dfs graph visited node =
+    let rec search hist visited node  =
+      if List.mem node hist then (failwith "Cycle when computing crit") else
+      if List.mem node visited then visited else
+        let new_hist = node :: hist in
+        let edges = match List.assoc_opt node graph with
+                    | Some es -> es
+                    | None -> [] in
+        let visited = List.fold_left (search new_hist) visited edges in
+        node :: visited
+    in search [] visited node
+  in
+  List.fold_left (fun visited (node,_) -> dfs graph visited node) [] graph
+
+(* Only return the outer most lock/unlock pairs *)
+let compute_outer_lock_unlock_pairs (events: bmc_action list) =
+  let is_lock action = get_memorder action = Linux_mem_order RcuLock in
+  let rec helper open_locks rest pairs =
+    match rest with
+    | [] -> if open_locks = [] then pairs
+            else failwith "Unmatched RcuLock when computing crit"
+    | x :: xs ->
+        if is_lock x then helper (x :: open_locks) xs pairs
+        else begin match open_locks with
+        | [] -> failwith "Unmatched RcuUnlock when computing crit"
+        | [h] -> helper [] xs ((h,x) :: pairs)
+        | h :: tl -> helper tl xs pairs (* Not outermost pair *)
+        end
+  in
+  helper [] events []
+
+let compute_crit (po : (bmc_action * bmc_action) list) =
+  let add_to_pmap key value pmap =
+    match Pmap.lookup key pmap with
+    | Some values -> Pmap.add key (value::values) pmap
+    | None        -> Pmap.add key [value] pmap
+  in
+  let is_rcu_lock_or_unlock action =
+    get_memorder action = Linux_mem_order RcuLock ||
+    get_memorder action = Linux_mem_order RcuUnlock in
+  let edge_lists =
+    List.fold_left (fun acc (a1,a2) ->
+        assert (tid_of_bmcaction a1 = tid_of_bmcaction a2);
+        if (is_rcu_lock_or_unlock a1 && is_rcu_lock_or_unlock a2)
+        then add_to_pmap a1 a2 acc
+        else acc
+    ) (Pmap.empty bmcaction_cmp) po in
+  let tid_to_edge_list_map =
+    Pmap.fold (fun key value tid_map ->
+      add_to_pmap (tid_of_bmcaction key) (key, value) tid_map)
+      edge_lists (Pmap.empty Pervasives.compare) in
+  let top_sorted =
+    List.map (fun (_, edge_list) -> top_sort edge_list)
+             (Pmap.bindings_list tid_to_edge_list_map) in
+  let crit = List.map (fun edges -> compute_outer_lock_unlock_pairs edges)
+                       top_sorted in
+  List.concat crit
+
 (* ===== PPRINTERS ===== *)
 let string_of_memory_order = function
   | C_mem_order mo ->
@@ -433,7 +496,6 @@ module MemoryModelCommon = struct
     data_dep : FuncDecl.func_decl;
     ctrl_dep : FuncDecl.func_decl;
     crit     : FuncDecl.func_decl;
-
   }
 
   let apply = FuncDecl.apply
@@ -762,7 +824,7 @@ module MemoryModelCommon = struct
        *
        * TODO: the range is only constrained for loaded integer types.
        * Bad things happen with pointers/int arrays right now.
-        *)
+       *)
       let range_assertions =
         begin match ctype_of_bmcaction action with
         | Basic0 (Integer _) ->
@@ -853,7 +915,14 @@ module MemoryModelCommon = struct
         (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_true) exec.asw)
       @ (List.map (fun (a,b) -> mk_eq (mk_asw (a,b)) mk_false) not_asw) in*)
 
-
+    (* ==== crit assert for Linux ====
+     * crit is the outermost pair of RcuLock/Unlocks
+     * We assume crit is in the same thread and thus related by po
+     * We also assume that all lock/unlock actions are executed (no branching)
+     * and pairs are well matched.
+     *)
+    let crit = compute_crit exec.po in
+    let crit_asserts = asserts_from_relation crit fns.crit in
 
     { event_sort = event_sort
     ; event_map  = event_map
@@ -871,6 +940,7 @@ module MemoryModelCommon = struct
                    @ wval_asserts
                    @ same_loc_asserts
                    @ well_formed_sc_clk
+                   @ crit_asserts
 
     ; po_assert      = po_asserts
     ; asw_assert     = asw_asserts
@@ -1961,7 +2031,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                                         ;model.builtin_fns.atomicloc ea]
         | BaseId_nonatomicloc -> mk_and [mk_eq ea eb
                                         ;model.builtin_fns.nonatomicloc ea]
-        | BaseId_sc_clk -> model.builtin_fns.sc_rel (ea,eb)
+        | BaseId_sc_clk   -> model.builtin_fns.sc_rel (ea,eb)
         | BaseId_addr_dep -> model.builtin_fns.addr_dep (ea,eb)
         | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
