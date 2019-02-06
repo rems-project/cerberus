@@ -1,5 +1,6 @@
 // LISA2Rtxf1GM
 // https://github.com/paulmckrcu/litmus/blob/master/manual/rcu/LISA2Rtxf1GM.litmus
+#include "linux.h"
 int main() {
   int x0 = 0, x1 = 1, x2 = 1, x3 = 0;
   int r0, r1, r2, r3;

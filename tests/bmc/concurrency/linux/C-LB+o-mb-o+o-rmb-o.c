@@ -1,5 +1,4 @@
 #include "linux.h"
-
 int main() {
   int x = 0, y = 0;
   int r1, r3;
