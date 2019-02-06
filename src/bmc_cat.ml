@@ -411,10 +411,7 @@ module CatParser = struct
       else if s = "addr"         then mk_addr_dep
       else if s = "ctrl"         then mk_ctrl_dep
       else if s = "data"         then mk_data_dep
-      else if s = "crit"         then begin
-        print_endline "TODO: crit not implemented";
-        mk_crit
-      end
+      else if s = "crit"         then mk_crit
       else mk_id s
     in return ret
 
@@ -586,7 +583,7 @@ module CatParser = struct
     | BaseId_addr_dep -> (mk_set_R, mk_set_M)
     | BaseId_data_dep -> (mk_set_R, mk_set_M)
     | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
-    | BaseId_crit     -> (mk_set_F, mk_set_F)
+    | BaseId_crit     -> (mk_set_RcuLock, mk_set_RcuUnlock)
 
   let rec get_domain_range_simple_expr (expr: CatFile.simple_expr)
                                        : set * set  =
@@ -660,7 +657,7 @@ module CatParser = struct
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
-            bmc_debug_print 4 (pprint_instruction v);
+            bmc_debug_print 6 (pprint_instruction v);
             begin match v with
             | Binding (s, expr) ->
                 (* TODO: domain and range *)
