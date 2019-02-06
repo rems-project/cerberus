@@ -476,7 +476,7 @@ let bmc_fn =
 
 let bmc_debug =
   let doc = "Debug level for the bounded model checker" in
-  Arg.(value & opt int 5 & info["bmc_debug"] ~doc)
+  Arg.(value & opt int 3 & info["bmc_debug"] ~doc)
 
 let bmc_all_execs =
   let doc = "Find all executions when model checking. Concurrency model only" in
