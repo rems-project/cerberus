@@ -4892,7 +4892,10 @@ module BmcConcActions = struct
               @ (List.concat globs_po) @ fn_po in
     get_assertions >>= fun assertions ->
     mk_preexec actions po fn_deps >>= fun preexec ->
-    (*print_endline (pp_preexec preexec);*)
+    bmc_debug_print 6 (pp_preexec preexec);
+
+    (* TODO *)
+    (*compute_crit preexec.po;*)
     (* Debug: iterate through taint map *)
     (*print_taint_table >>*)
 
