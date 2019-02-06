@@ -861,7 +861,6 @@ module MemoryModelCommon = struct
       (ret_value: Expr.expr)
       (metadata_opt : (alloc, allocation_metadata) Pmap.map option)
       : string * string list * bool =
-
     Solver.push solver;
     let rec aux ret =
       if Solver.check solver [] = SATISFIABLE then
