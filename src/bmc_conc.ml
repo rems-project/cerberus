@@ -325,6 +325,9 @@ module MemoryModelCommon = struct
                         ; mk_sym "RMW"
                         ; mk_sym "Fence"
                         ]
+
+  let mk_z3_numeral = Integer.mk_numeral_i g_ctx
+
   let load_etype  = List.nth (Enumeration.get_consts mk_event_type) 0
   let store_etype = List.nth (Enumeration.get_consts mk_event_type) 1
   let rmw_etype   = List.nth (Enumeration.get_consts mk_event_type) 2
@@ -476,6 +479,7 @@ module MemoryModelCommon = struct
 
     isRead     : Expr.expr -> Expr.expr;
     isWrite    : Expr.expr -> Expr.expr;
+    isInitial  : Expr.expr -> Expr.expr;
     same_loc   : Expr.expr * Expr.expr -> Expr.expr;
 
     internal   : Expr.expr * Expr.expr -> Expr.expr;
@@ -520,6 +524,7 @@ module MemoryModelCommon = struct
                                      ;mk_eq (getEtype e) rmw_etype]) in
     let isWrite    = (fun e -> mk_or [mk_eq (getEtype e) store_etype
                                      ;mk_eq (getEtype e) rmw_etype]) in
+    let isInitial  = (fun e -> mk_eq (getTid e) (mk_z3_numeral initial_tid)) in
     (* TODO: hack. Ensure load address \subseteq store address *)
     (* TODO: dangerous. not an equivalence relation *)
     let same_loc   = (fun (e1,e2) -> apply decls.same_loc [e1;e2]) in
@@ -565,6 +570,7 @@ module MemoryModelCommon = struct
 
     ; isRead    = isRead
     ; isWrite   = isWrite
+    ; isInitial = isInitial
     ; same_loc  = same_loc
 
     ; internal  = internal
@@ -653,12 +659,12 @@ module MemoryModelCommon = struct
 
     let aid_asserts = List.map (fun action ->
       mk_eq (fns.getAid (z3action action))
-            (Integer.mk_numeral_i g_ctx (aid_of_bmcaction action))
+            (mk_z3_numeral (aid_of_bmcaction action))
       ) all_actions in
 
     let tid_asserts = List.map (fun action ->
       mk_eq (fns.getTid (z3action action))
-            (Integer.mk_numeral_i g_ctx (tid_of_bmcaction action))
+            (mk_z3_numeral (tid_of_bmcaction action))
       ) all_actions in
 
     let guard_asserts = List.map (fun action ->
@@ -738,21 +744,37 @@ module MemoryModelCommon = struct
     (* TODO: value equality; we assume e is a read with a single addr \subseteq
      * write *)
     let well_formed_rf = List.map (fun action ->
-      let e = z3action action in
+      let read = z3action action in
+      let write = fns.rf_inv read in
       let read_addr = PointerSort.get_index_from_addr (addr_of_bmcaction action) in
-      let write_base = PointerSort.get_index_from_addr (fns.getAddr (fns.rf_inv e)) in
+      let write_base = PointerSort.get_index_from_addr (fns.getAddr write) in
       let diff = binop_to_z3 OpSub read_addr write_base in
       let sizeof_read = size_of_bmcaction action file in
       let index = binop_to_z3 OpDiv diff (int_to_z3 sizeof_read) in
 
       let indexed_wval =
-          Loaded.get_ith_in_loaded_2 index (fns.getWval (fns.rf_inv e)) in
-      mk_implies (fns.getGuard e)
-                 (mk_and [fns.isWrite (fns.rf_inv e)
-                         ;fns.same_loc (e, fns.rf_inv e)
+          Loaded.get_ith_in_loaded_2 index (fns.getWval write) in
+
+      (* NOTE: Semantics: if reading from an noninitial write with unspecified wval,
+       * then rval is an unconstrained specified value.  else, wval = rval.
+       * This prevents unspecified OOTA values.
+        *)
+      let read_from_noninitial_unspec_write =
+        mk_and [mk_not (fns.isInitial write)
+               ;Loaded.is_unspecified indexed_wval
+               ] in
+      let rval_wval_constraint =
+        mk_ite read_from_noninitial_unspec_write
+               (Loaded.is_specified (fns.getRval read))
+               (mk_eq (fns.getRval read) indexed_wval) in
+
+      mk_implies (fns.getGuard read)
+                 (mk_and [fns.isWrite write
+                         ;fns.same_loc (read, write)
                          (*;mk_eq (fns.getRval e) (fns.getWval (fns.rf_inv e))*)
-                         ;mk_eq (fns.getRval e) indexed_wval
-                         ;fns.getGuard (fns.rf_inv e)
+                         (*;mk_eq (fns.getRval read) indexed_wval*)
+                         ;rval_wval_constraint
+                         ;fns.getGuard write
                          ])
       ) reads in
 
@@ -769,10 +791,10 @@ module MemoryModelCommon = struct
 
     let co_init =
       List.map (fun e ->
-        mk_eq (fns.co_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
+        mk_eq (fns.co_clk (z3action e)) (mk_z3_numeral 0))
       exec.initial_actions
       @ List.map (fun e ->
-          mk_gt g_ctx (fns.co_clk (z3action e)) (Integer.mk_numeral_i g_ctx 0))
+          mk_gt g_ctx (fns.co_clk (z3action e)) (mk_z3_numeral 0))
         exec.actions
     in
 
