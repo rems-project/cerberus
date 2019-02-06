@@ -161,6 +161,8 @@ module CtypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 3) [big_num_to_z3 n]
     | Struct0 (Symbol (_, n, _))->
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
+    | Atomic0 ty ->
+        assert false
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
@@ -464,6 +466,8 @@ module type PointerSortAPI = sig
   val mk_addr_sort : Sort.sort
   val addr_subset : Expr.expr -> Expr.expr -> Expr.expr -> Expr.expr
   val mk_from_alloc_index  : (int * int) -> Expr.expr
+  val mk_is_atomic : Expr.expr -> Expr.expr
+  val mk_is_atomic : Expr.expr -> Expr.expr
   val assert_is_atomic : Expr.expr -> Expr.expr -> Expr.expr
 
   val pp : Expr.expr -> string
@@ -594,6 +598,7 @@ module PointerSortPNVI : PointerSortAPI = struct
   let mk_addr_sort = AddrModule.mk_sort
   let addr_subset = AddrModule.addr_subset
   let mk_from_alloc_index = AddrModule.mk_from_addr
+  let mk_is_atomic = AddrModule.mk_is_atomic
   let assert_is_atomic = AddrModule.assert_is_atomic
 end
 
@@ -684,6 +689,7 @@ module PointerSortConcrete : PointerSortAPI = struct
   let mk_addr_sort = AddrModule.mk_sort
   let addr_subset = AddrModule.addr_subset
   let mk_from_alloc_index = AddrModule.mk_from_addr
+  let mk_is_atomic = AddrModule.mk_is_atomic
   let assert_is_atomic = AddrModule.assert_is_atomic
 end
 

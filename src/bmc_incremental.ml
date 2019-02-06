@@ -1903,6 +1903,19 @@ module BmcBind = struct
                                 alloc_id)
     | Some data -> return data
 
+  type binding =
+  | BindLet of Expr.expr (* Normal let binding *)
+  | BindAssume of Location_ocaml.t option * Expr.expr
+
+  (*let is_bind_let = function
+    | BindLet _ -> true
+    | _ -> false
+
+  let is_bind_assume = function
+    | BindAssume _ -> true
+    | _ -> false
+  *)
+
   (* let bindings *)
   let mk_let_binding (maybe_sym: sym_ty option)
                      (expr: Expr.expr)
@@ -1920,14 +1933,14 @@ module BmcBind = struct
         else
           return (mk_eq sym_expr expr) *)
 
-  let rec mk_let_bindings (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
-                          : Expr.expr eff =
-    match pat with
+  let rec mk_let_bindings_raw (Pattern(_,pat): typed_pattern) (expr: Expr.expr)
+                              : Expr.expr eff =
+    (match pat with
     | CaseBase(sym, _) ->
         mk_let_binding sym expr
     | CaseCtor (Ctuple, patlist) ->
         assert (Expr.get_num_args expr = List.length patlist);
-        mapM (fun (pat, e) -> mk_let_bindings pat e)
+        mapM (fun (pat, e) -> mk_let_bindings_raw pat e)
              (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
         return (mk_and bindings)
   | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
@@ -1965,18 +1978,30 @@ module BmcBind = struct
   | CaseCtor(Ccons, [hd;tl]) ->
       assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
       let is_cons = CtypeListSort.is_cons expr in
-      mk_let_bindings hd (CtypeListSort.get_head expr) >>= fun eq_head ->
-      mk_let_bindings tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
+      mk_let_bindings_raw hd (CtypeListSort.get_head expr) >>= fun eq_head ->
+      mk_let_bindings_raw tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
       return (mk_and [is_cons; eq_head; eq_tail])
   | CaseCtor(_, _) ->
       assert false
+  )
+
+  let mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
+                      : binding eff =
+    mk_let_bindings_raw pat expr >>= fun binding ->
+    return (BindLet binding)
 
   (* TODO: check if removing guard here is significantly faster *)
-  let guard_assert (guard: Expr.expr) =
-    mk_implies guard
+  let guard_assert (guard: Expr.expr) binding =
+    match binding with
+    | BindLet expr  ->
+        BindLet (mk_implies guard expr)
+    | BindAssume (loc, expr) ->
+        BindAssume(loc, mk_implies guard expr)
+
+  (* Quick hack to distinguish BMC_ASSUME *)
 
   (* SMT stuff *)
-  let rec bind_pe (Pexpr(annots, bTy, pe_) as pexpr) : (Expr.expr list) eff =
+  let rec bind_pe (Pexpr(annots, bTy, pe_) as pexpr) : (binding list) eff =
     let uid = get_id_pexpr pexpr in
     (match pe_ with
     | PEsym _ ->
@@ -1998,7 +2023,7 @@ module BmcBind = struct
         mapM (fun pe -> get_expr (get_id_pexpr pe)) pes >>= fun z3_pes ->
         assert (Sort.equal (Expr.get_sort z3_array_expr) IntArray.mk_sort);
         let array_bindings = List.mapi (fun i expr ->
-            mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr
+            BindLet (mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr)
           ) z3_pes in
         mapM bind_pe pes >>= fun bound_pes ->
         return (array_bindings @ (List.concat bound_pes))
@@ -2016,7 +2041,7 @@ module BmcBind = struct
 
         (* Guard the bindings *)
         get_case_guards uid               >>= fun guards ->
-        let case_bindings = List.map2 mk_implies guards bindings in
+        let case_bindings = List.map2 guard_assert guards bindings in
         let guarded_bound_cases = List.concat (List.map2
           (fun guard case_binds -> List.map (guard_assert guard) case_binds)
           guards bound_cases) in
@@ -2069,18 +2094,20 @@ module BmcBind = struct
         bind_pe pe2 >>= fun bound_pe2 ->
         return (bound_pe1 @ bound_pe2)
     | PEbmc_assume pe ->
-        (*let loc = Annot.get_loc annots in
-        assert (is_some loc);*)
+        let loc = Annot.get_loc annots in
+        (*assert (is_some loc);
+        print_endline ((Location_ocaml.location_to_string (Option.get loc)));*)
+
         bind_pe pe >>= fun bound_pe ->
         (* TODO: move this to a separate phase for easier debugging *)
         get_expr (get_id_pexpr pe) >>= fun z3_pe ->
-        return (z3_pe :: bound_pe)
+        return (BindAssume (loc, z3_pe) :: bound_pe)
     )
 
   (* TODO TODO TODO TODO *)
   let bind_action (Paction(p, Action(loc, a, action_))) uid
-                  : (Expr.expr list) eff =
-    match action_ with
+                  : (binding list) eff =
+   (match action_ with
     | Create (pe1, pe2, pref) ->
         get_action uid >>= fun action ->
         let alloc_id = (
@@ -2095,12 +2122,12 @@ module BmcBind = struct
                             (int_to_z3 (get_metadata_size metadata)) in
 
         (* Assert alloc_size(alloc_id) = allocation_size *)
-        return [mk_eq (Expr.mk_app g_ctx PointerSort.alloc_min_decl
+        return [BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_min_decl
+                                                 [int_to_z3 alloc_id])
+                        (PointerSort.get_index_from_addr base_addr))
+               ;BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_max_decl
                                          [int_to_z3 alloc_id])
-                      (PointerSort.get_index_from_addr base_addr)
-               ;mk_eq (Expr.mk_app g_ctx PointerSort.alloc_max_decl
-                                         [int_to_z3 alloc_id])
-                      max_addr
+                         max_addr)
               ]
           (*mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
                                          [int_to_z3 alloc_id])
@@ -2147,9 +2174,10 @@ module BmcBind = struct
         bind_pe pe2 >>= fun bound_pe2 ->
         bind_pe pe3 >>= fun bound_pe3 ->
         return (bound_pe1 @ bound_pe2 @ bound_pe3)
+    )
 
   let rec bind_e (Expr(annots, expr_) as expr: unit typed_expr)
-                 : (Expr.expr list) eff =
+                 : (binding list) eff =
     let uid = get_id_expr expr in
     (match expr_ with
     | Epure pe ->
@@ -2182,7 +2210,7 @@ module BmcBind = struct
 
         (* Guard the bindings *)
         get_case_guards uid               >>= fun guards ->
-        let case_bindings = List.map2 mk_implies guards bindings in
+        let case_bindings = List.map2 guard_assert guards bindings in
         let guarded_bound_cases = List.concat (List.map2
           (fun guard case_binds -> List.map (guard_assert guard) case_binds)
           guards bound_cases) in
@@ -2231,7 +2259,7 @@ module BmcBind = struct
         let guarded_asserts = List.concat (List.map2
           (fun guard bindings -> List.map (guard_assert guard) bindings)
           guards bound_elist) in
-        return ((List.fold_left mk_xor mk_false guards) :: guarded_asserts)
+        return (BindLet (List.fold_left mk_xor mk_false guards) :: guarded_asserts)
     | Esave _ ->
         get_inline_expr uid >>= fun inlined_expr ->
         bind_e inlined_expr
@@ -2244,18 +2272,18 @@ module BmcBind = struct
     | Ewait _       -> assert false
     )
 
-    let bind_globs(gname, glb) : (Expr.expr list) eff =
+    let bind_globs(gname, glb) : (binding list) eff =
       match glb with
       | GlobalDef (_, e) ->
           bind_e e                 >>= fun bound_e ->
           get_expr (get_id_expr e) >>= fun z3d_e ->
           mk_let_binding (Some gname) z3d_e >>= fun let_binding ->
-          return (let_binding :: bound_e)
+          return (BindLet let_binding :: bound_e)
       | GlobalDecl _ ->
           return []
 
     let bind_file (file: unit typed_file) (fn_to_check: sym_ty)
-                  : (Expr.expr list) eff =
+                  : (Expr.expr list * (Location_ocaml.t option * Expr.expr) list) eff =
       mapM bind_globs file.globs >>= fun bound_globs ->
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, bTy, params, e)) ->
@@ -2264,7 +2292,12 @@ module BmcBind = struct
           bind_pe pe
       | _ -> assert false
       ) >>= fun bound_expr ->
-      return ((List.concat bound_globs) @ bound_expr)
+      let all = List.concat bound_globs @ bound_expr in
+      return (List.fold_left (fun (lets, assumes) binding ->
+        match binding with
+        | BindLet expr -> (expr::lets, assumes)
+        | BindAssume (loc, expr) -> (lets, (loc,expr)::assumes)
+      ) ([],[]) all)
 end
 
 (* ======= Compute verification conditions ======= *)
@@ -2773,7 +2806,7 @@ module BmcRet = struct
     | Eproc _       -> assert false
     | Eunseq elist ->
         mapM do_e elist >>= fun ret_elist ->
-        return [mk_or (List.concat ret_elist)]
+        return [mk_or (List.map mk_and ret_elist)]
     | Ewseq (pat, e1, e2) (* fall through *)
     | Esseq (pat, e1, e2) ->
         do_e e1 >>= fun ret_e1 ->
@@ -4010,7 +4043,7 @@ module BmcConcActions = struct
       let cat_model = Bmc_cat.CatParser.load_file !!bmc_conf.model_file in
       (module GenericModel (val cat_model) : MemoryModel)
     else
-      (module C11MemoryModel : MemoryModel)
+      (module RC11MemoryModel : MemoryModel)
 
   let get_memory_module =
     get >>= fun st ->
