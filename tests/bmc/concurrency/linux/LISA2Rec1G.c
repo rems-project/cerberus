@@ -20,5 +20,6 @@ int main() {
     WRITE_ONCE(x0, 1);
     rcu_read_unlock();
   } }-};
-  return 0;
+  assert(!((r1 == 1 && r2 == 1 && r2 == 1) || (r1 == 1 && r3 == 0)));
+  return r1 + 2 * (r2 + 2 * r3);
 }
