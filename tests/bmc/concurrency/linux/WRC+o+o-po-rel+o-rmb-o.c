@@ -6,7 +6,7 @@ int main() {
   {-{ WRITE_ONCE(x, 1);
   ||| {
         r1 = READ_ONCE(x);
-        smp_store_release(y, 1);
+        smp_store_release(&y, 1);
       }
   ||| { r2 = READ_ONCE(y);
         smp_rmb();

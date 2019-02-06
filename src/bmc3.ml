@@ -380,7 +380,7 @@ let bmc_file (file              : unit typed_file)
               String.sub e_str (l+1) (r - l - 1)
           | _ -> e_str
         ) unsat_core in
-        let error_msg = (sprintf "The __BMC_ASSUMEs at [%s] can not be true."
+        let error_msg = (sprintf "The __BMC_ASSUMEs at [%s] cannot be true."
                                  (String.concat "," unsat_locations)) in
         print_endline error_msg;
         Some (`Unknown error_msg)
@@ -417,7 +417,7 @@ let bmc_file (file              : unit typed_file)
       begin
       (* We can skip the VC check; races are UB *)
       (* TODO: give more informative output *)
-      print_endline "Output: satisfiable";
+      print_endline "Error(s) found:";
       let output = "UB found: race exists" in
       print_endline output;
       `Satisfiable(output, dots)
@@ -433,7 +433,7 @@ let bmc_file (file              : unit typed_file)
       begin match Solver.check g_solver [] with
       | SATISFIABLE ->
         begin
-          print_endline "OUTPUT: satisfiable";
+          print_endline "Error(s) found:";
           let model = Option.get (Solver.get_model g_solver) in
           let str_model = Model.to_string model in
           let satisfied_vcs =
@@ -454,7 +454,7 @@ let bmc_file (file              : unit typed_file)
         `Satisfiable (output, dots)
         end
       | UNSATISFIABLE ->
-          print_endline "OUTPUT: unsatisfiable! No errors found. :)";
+          print_endline "No errors found. :)";
           assert (is_some ret_value);
           (* TODO: there could be multiple return values ... *)
           let str_ret_value =

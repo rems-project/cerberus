@@ -332,11 +332,7 @@ export default class View {
     if (!mem) return
     const pvi = _.includes(this.state.model.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
-      if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
-        if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
-          return ''
-      }
-      if (_.startsWith(alloc.prefix.name, '__'))
+      if (alloc.prefix.kind === 'string literal' && !this.state.options.show_string_literals)
         return ''
       const box = (n:number, ischar=false) =>
         `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
@@ -348,8 +344,6 @@ export default class View {
         const p = alloc.prefix
         if (alloc.dyn)
           return `malloc'd`
-        if (p.kind === 'other')
-          return p.name
         switch (Memory.unique(p, mem.map)) {
           case 'unique':
             return p.name
@@ -415,8 +409,6 @@ export default class View {
       invalid: boolean
     }
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
-      if (alloc.prefix.kind === 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) return []
-      //if (_.startsWith(alloc.prefix.name, 'arg')) return []
       return alloc.values.reduce((acc: Pointer[], row) => {
         if (Memory.isfunptr(row))
           return acc
@@ -454,10 +446,7 @@ export default class View {
         return 'solid'
       }
       const invisible = (target: Memory.Allocation) => {
-        if (target.prefix.kind == 'other' && !target.dyn) {
-          return (!(this.state.options.show_string_literals && target.prefix.name === 'string literal'))
-        }
-        return false
+        return !(this.state.options.show_string_literals && target.prefix.kind === 'string literal')
       }
       return _.reduce(ps, (acc, p) => {
         // points in bounds to an allocation
@@ -484,10 +473,10 @@ export default class View {
     const forceOrder = () => {
       let init = true
       const order = _.reduce(mem.map, (ns, alloc) => {
-        if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
-          if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
-            return ns
-        }
+        /*if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
+        }*/
+        if (!(this.state.options.show_string_literals && alloc.prefix.kind === 'string literal'))
+          return ns
         if (_.startsWith(alloc.prefix.name, '__'))
           return ns
         if (init) {

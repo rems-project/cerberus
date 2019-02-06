@@ -50,6 +50,11 @@ type trace_event =
        * integer_value
        * pointer_value
 
+  | ME_member_shift of
+      pointer_value
+       * string
+       * pointer_value
+
 (*
   | ME_realloc of
       Core_ctype.thread_id

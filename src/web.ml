@@ -671,9 +671,15 @@ let post ~conf ~rheader ~flow uri path content =
       Debug.warn ("Unknown post action " ^ path);
       Debug.warn ("Fallback to GET");
       get ~rheader ~flow uri path
-  in catch try_with begin fun e ->
-    Debug.error_exception "POST" e;
-    forbidden path
+  in catch try_with begin function
+    | Lwt_io.Channel_closed msg ->
+      Debug.warn @@ "Lwt channel closed: " ^ msg;
+      respond_json ~time:None ~rheader
+      @@ json_of_result
+      @@ Failure "Error: timeout!"
+    | e ->
+      Debug.error_exception "POST" e;
+      forbidden path
   end
 
 (* Main *)
