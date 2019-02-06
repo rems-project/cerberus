@@ -17,9 +17,12 @@ export type Value = {
   bytes: Byte [] | null
 }
 
-export type Prefix =
-  { kind: 'source', name: string, scope: string | null, loc: Range | null } |
-  { kind: 'other', name: string }
+export type Prefix = {
+  kind: 'source' | 'string literal',
+  name: string,
+  scope: string | null,
+  loc: Range | null
+}
 
 export type Allocation = {
   id: number        // allocation id (provenance)
@@ -119,16 +122,11 @@ export function string_of_value (v: Value, track_prov: boolean): string {
 }
 
 export function unique (v: Prefix, m: Map):  'unique' |'unique-in-scope' | 'non-unique'  {
-  switch (v.kind) {
-    case 'other':
-      return 'non-unique'
-    case 'source':
-      const pres = _.map(m, a => a.prefix)
-                    .filter(p => p.kind === 'source' && p.name === v.name)
-      if (pres.length == 1)
-        return 'unique'
-      if (pres.filter(p => p.kind === 'source' && p.scope === v.scope).length == 1)
-        return 'unique-in-scope'
-      return 'non-unique'
-  }
+  const pres = _.map(m, a => a.prefix)
+                .filter(p => p.kind === 'source' && p.name === v.name)
+  if (pres.length == 1)
+    return 'unique'
+  if (pres.filter(p => p.kind === 'source' && p.scope === v.scope).length == 1)
+    return 'unique-in-scope'
+  return 'non-unique'
 }

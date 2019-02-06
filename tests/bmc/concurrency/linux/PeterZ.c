@@ -10,14 +10,14 @@ int main() {
       }
   ||| {
         WRITE_ONCE(y, 1);
-        smp_store_release(z, 1); 
+        smp_store_release(&z, 1);
       }
   ||| {
-        r2 = smp_load_acquire(z); 
+        r2 = smp_load_acquire(&z);
         smp_mb();
         r3 = READ_ONCE(x); 
       }
   }-}
-  // 2 (r1 == 0 && r2 == 1 && r3 == 0) forbidden
+  assert (!(r1 == 0 && r2 == 1 && r3 == 0));
   return r1 + 2 * r2 + 4 * r3;
 }

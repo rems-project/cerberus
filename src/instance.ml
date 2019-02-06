@@ -150,10 +150,10 @@ let bmc ~conf ~bmc_model:bmc_model ~filename () =
         (None, Bmc_globals.MemoryMode_C)
       | `RC11 ->
         Debug.print 7 ("BMC model: RC11");
-        (Some "bmc/example.cat", Bmc_globals.MemoryMode_C)
+        (Some "bmc/rc11.cat", Bmc_globals.MemoryMode_C)
       | `Linux ->
         Debug.print 7 ("BMC model: Linux");
-        (Some "bmc/linux-kernel-modified.cat", Bmc_globals.MemoryMode_Linux)
+        (Some "bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
     in
     Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
     return @@ Bmc3.bmc core (Some ail);

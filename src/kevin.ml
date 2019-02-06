@@ -472,6 +472,8 @@ let default_display_info = {
       ("rf", ED_show (RM_no_reduction, "red"));
       ("sb", ED_show (RM_no_reduction, "black"));
       ("asw", ED_show (RM_transitive_reduction_over_sb, "deeppink4"));
+      ("dd", ED_show (RM_no_reduction, "magenta"));
+      ("cd", ED_show (RM_no_reduction, "magenta"));
       ("mo", ED_show (RM_no_reduction, "blue"));
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
@@ -645,6 +647,7 @@ let make_edges display_info ex ew d =
       edges
       (Aid_times_aid_set.elements rel) in
   let sb' = transitive_reduction @@ aid_times_aid_set_of_rel ex.Bmc_types.sb in
+  (* TODO: add 'dd' and 'cd' once they exist in BMC *)
   let asw' = aid_times_aid_set_of_rel ex.Bmc_types.asw in
   let rf' = aid_times_aid_set_of_rel ew.Bmc_types.rf in
   let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.mo) in

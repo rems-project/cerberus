@@ -115,6 +115,7 @@ let show_raw (Symbol d n str_opt) =
 (* Location prefix *)
 type prefix =
   | PrefSource of Loc.t * list sym
+  | PrefStringLiteral of Loc.t * sym
   | PrefOther of string
 
 val fresh_int: unit -> nat
