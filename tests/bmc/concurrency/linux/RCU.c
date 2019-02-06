@@ -1,3 +1,4 @@
+/* RCU-deferred-free */
 #include "linux.h"
 int main() {
   int x = 0, y = 0;
@@ -8,10 +9,10 @@ int main() {
     WRITE_ONCE(y, 1);
   } ||| {
     rcu_read_lock();
-    r1 = READ_ONCE(y);
-    r2 = READ_ONCE(x);
+    r1 = READ_ONCE(x);
+    r2 = READ_ONCE(y);
     rcu_read_unlock();
   } }-}
-  assert (!(r1 == 1 && r2 == 0));
+  assert (!(r1 == 0 && r2 == 1));
   return r1 + 2 * r2;
 }
