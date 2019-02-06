@@ -12,7 +12,7 @@ import Core_typing
 
 import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import GenTypes
-import Core Core_aux Undefined Builtins
+import Core Core_aux Undefined Builtins Annot
 
 import Linux
 
@@ -2908,7 +2908,7 @@ if AilTypesAux.is_arithmetic (ctype_of e) then
               Caux.mk_pure_e (
                 Caux.mk_case_pe e_sym_pe
                   [ (Caux.mk_specified_pat obj_sym_pat,
-                     (C.Pexpr [] () (C.PEbmc_assume (Caux.mk_not_pe
+                     (C.Pexpr [Annot.Aloc loc] () (C.PEbmc_assume (Caux.mk_not_pe
                           (Caux.mk_op_pe C.OpEq obj_sym_pe zero_pe)))))
                   ; (Caux.mk_empty_pat (C.BTy_loaded oTy),
                      Caux.mk_error_pe "__bmc_assume() unspecified" Caux.mk_unit_pe) ]

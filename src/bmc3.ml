@@ -41,6 +41,7 @@ module BmcM = struct
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
     bindings         : (Expr.expr list) option;
+    assumes          : ((Location_ocaml.t option * Expr.expr) list) option;
     vcs              : (BmcVC.vc list) option;
 
     ret_expr         : Expr.expr option;
@@ -74,6 +75,7 @@ module BmcM = struct
     ; prov_syms        = None
     ; drop_cont_map    = None
     ; bindings         = None
+    ; assumes          = None
     ; vcs              = None
     ; ret_expr         = None
     ; ret_bindings     = None
@@ -158,14 +160,18 @@ module BmcM = struct
                          (Option.get st.expr_map)
                          (Option.get st.action_map)
                          (Option.get st.alloc_meta) in
-    let (bindings, _) =
+    let ((bindings, assumes), _) =
       BmcBind.run initial_state
                   (BmcBind.bind_file st.file st.fn_to_check) in
     let simplified_bindings =
       List.map (fun e -> Expr.simplify e None) bindings in
+    let simplified_assumes =
+      List.map (fun (loc,e) -> (loc, Expr.simplify e None)) assumes in
 
     bmc_debug_print 7 "Done BmcBind phase";
-    put { st with bindings = Some simplified_bindings }
+    put { st with bindings = Some simplified_bindings;
+                  assumes  = Some simplified_assumes;
+        }
 
   (* Compute verification conditions *)
   let do_vcs : unit eff =
@@ -303,7 +309,7 @@ let bmc_file (file              : unit typed_file)
     ) >>
 
     BmcM.get_file >>= fun file ->
-    if !!bmc_conf.debug_lvl >= 3 then pp_file file;
+    if !!bmc_conf.debug_lvl > 3 then pp_file file;
     BmcM.return () in
   let (_, final_state) = BmcM.run initial_state all_phases in
   (* Print bindings *)
@@ -323,7 +329,7 @@ let bmc_file (file              : unit typed_file)
               (Option.get final_state.ret_bindings);
   end;
   (* TODO: Output this in the dot graph *)
-  if !!bmc_conf.debug_lvl >= 3 then
+  if !!bmc_conf.debug_lvl > 3 then
   ( print_endline "====ALLOCATION PREFIXES";
     Pmap.iter (fun alloc meta ->
       printf "%d: %s\n" alloc (prefix_to_string (get_metadata_prefix meta)))
@@ -336,96 +342,136 @@ let bmc_file (file              : unit typed_file)
   Solver.add g_solver (Option.get final_state.ret_bindings);
   Solver.add g_solver (Option.get final_state.mem_bindings);
   bmc_debug_print 3 "START FIRST CHECK";
-  let ret_value =
+  begin match Solver.check g_solver [] with
+  | SATISFIABLE ->
+      bmc_debug_print 1 "Checkpoint passed: bindings are SAT"
+  | UNSATISFIABLE ->
+      failwith ("ERROR: Bindings unsatisfiable. Should always be sat.")
+  | UNKNOWN ->
+      failwith (sprintf "ERROR: status unknown. Reason: %s"
+                        (Solver.get_reason_unknown g_solver))
+  end;
+  (* Add __BMC_ASSUMES *)
+  let (constraints, bool_constants) =
+    let assumes = Option.get final_state.assumes in
+    (List.map snd assumes
+    ,List.map (fun (loc_opt,_) ->
+        let loc_string = match loc_opt with
+                         | Some loc -> Location_ocaml.location_to_string loc
+                         | None -> "unknown_location"  in
+        mk_fresh_const loc_string boolean_sort) assumes
+    ) in
+  Solver.assert_and_track_l g_solver constraints bool_constants;
+
+  let error_opt =
     begin match Solver.check g_solver [] with
     | SATISFIABLE ->
-        print_endline "Checkpoint passed: bindings are SAT";
-        let model = Option.get (Solver.get_model g_solver) in
-        (if (!!bmc_conf.debug_lvl >= 7) then
-          begin
-            print_endline "BINDING MODEL:";
-            print_endline (Model.to_string model)
-          end);
-        Model.eval model (Option.get final_state.ret_expr) false
+        bmc_debug_print 1 "Checkpoint passed: assumes are SAT";
+        None
     | UNSATISFIABLE ->
-        (*let assertions = Solver.get_assertions g_solver in
-        List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
-        failwith ("ERROR: Bindings unsatisfiable. Should always be sat. "
-                  ^ "This can also be caused by an invalid __BMC_ASSUME.")
+        let unsat_core = Solver.get_unsat_core g_solver in
+        (* TODO: Lazy hack to pretty print strings *)
+        let unsat_locations = List.map (fun e ->
+          let e_str = Expr.to_string e in
+          let r_index = String.rindex_opt e_str '!' in
+          let l_index = String.index_opt e_str '|' in
+          match (l_index, r_index) with
+          | Some l, Some r ->
+              String.sub e_str (l+1) (r - l - 1)
+          | _ -> e_str
+        ) unsat_core in
+        let error_msg = (sprintf "The __BMC_ASSUMEs at [%s] can not be true."
+                                 (String.concat "," unsat_locations)) in
+        print_endline error_msg;
+        Some (`Unknown error_msg)
     | UNKNOWN ->
-        failwith (sprintf "ERROR: status unknown. Reason: %s"
-                          (Solver.get_reason_unknown g_solver))
-    end in
-
-  let (exec_output_str, dots, race_free) =
-    (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
-        (is_some final_state.extract_executions) then
-      (Option.get final_state.extract_executions) (*g_solver
-                                (Option.get final_state.memory_model)*)
-                                (Option.get final_state.ret_expr)
-                                (final_state.alloc_meta)
-     else
-      ("",[], true))
-  in
-
-  if not race_free then
-    begin
-    (* We can skip the VC check; races are UB *)
-    (* TODO: give more informative output *)
-    print_endline "Output: satisfiable";
-    let output = "UB found: race exists" in
-    print_endline output;
-    `Satisfiable(output, dots)
+        let error_msg = sprintf "ERROR: status unknown. Reason %s"
+                        (Solver.get_reason_unknown g_solver) in
+        Some (`Unknown error_msg)
     end
+  in
+  (* TODO: Do this in a nicer way (option monad!) *)
+  if is_some error_opt then
+    Option.get error_opt (* Exit cleanly *)
   else begin
-    (* Actually check for VCS *)
-    let vcs = List.map fst (Option.get final_state.vcs) in
-    Solver.assert_and_track
-      g_solver
-      (Expr.simplify (mk_not (mk_and vcs)) None)
-      (Expr.mk_fresh_const g_ctx "negated_vcs" boolean_sort);
-    bmc_debug_print 1 "==== Checking VCS";
-    begin match Solver.check g_solver [] with
-    | SATISFIABLE ->
+    let model = Option.get (Solver.get_model g_solver) in
+    (if (!!bmc_conf.debug_lvl >= 7) then
       begin
-        print_endline "OUTPUT: satisfiable";
-        let model = Option.get (Solver.get_model g_solver) in
-        let str_model = Model.to_string model in
-        let satisfied_vcs =
-          BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
-
-        let vc_str = String.concat "\n"
-            (List.map (fun (expr, dbg) -> BmcVC.vc_debug_to_str dbg)
-                      satisfied_vcs) in
-        print_endline vc_str;
-
-        if !!bmc_conf.output_model then
-          begin
-          print_endline str_model;
-          (* TODO: print this out independently of --bmc_output_model*)
-          end;
-      let output = sprintf "UB found:\n%s\n\n%s\n\nModel:\n%s" vc_str exec_output_str str_model in
-
-      `Satisfiable (output, dots)
+        print_endline "BINDING MODEL:";
+        print_endline (Model.to_string model)
+      end);
+    let ret_value = Model.eval model (Option.get final_state.ret_expr) false in
+    (* Extract executions *)
+    let (exec_output_str, dots, race_free) =
+      (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
+          (is_some final_state.extract_executions) then
+        (Option.get final_state.extract_executions) (*g_solver
+                                  (Option.get final_state.memory_model)*)
+                                  (Option.get final_state.ret_expr)
+                                  (final_state.alloc_meta)
+       else
+        ("",[], true))
+    in
+    (* Check for races *)
+    if not race_free then
+      begin
+      (* We can skip the VC check; races are UB *)
+      (* TODO: give more informative output *)
+      print_endline "Output: satisfiable";
+      let output = "UB found: race exists" in
+      print_endline output;
+      `Satisfiable(output, dots)
       end
-    | UNSATISFIABLE ->
-        print_endline "OUTPUT: unsatisfiable! No errors found. :)";
-        assert (is_some ret_value);
-        (* TODO: there could be multiple return values ... *)
-        let str_ret_value =
-          if (List.length dots > 0) then
-            exec_output_str
-          else
-            (let ret = sprintf "Possible return value: %s\n" (Expr.to_string (Option.get ret_value)) in
-             print_endline ret; ret) in
+    else begin
+      (* Actually check for VCS *)
+      let vcs = List.map fst (Option.get final_state.vcs) in
+      Solver.assert_and_track
+        g_solver
+        (Expr.simplify (mk_not (mk_and vcs)) None)
+        (Expr.mk_fresh_const g_ctx "negated_vcs" boolean_sort);
+      bmc_debug_print 1 "==== Checking VCS";
+      begin match Solver.check g_solver [] with
+      | SATISFIABLE ->
+        begin
+          print_endline "OUTPUT: satisfiable";
+          let model = Option.get (Solver.get_model g_solver) in
+          let str_model = Model.to_string model in
+          let satisfied_vcs =
+            BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
 
-        (*let str_ret_value = Expr.to_string (Option.get ret_value) in
-        printf "Possible return value: %s\n" str_ret_value;*)
-        `Unsatisfiable (str_ret_value, dots)
-    | UNKNOWN ->
-        let str_error = Solver.get_reason_unknown g_solver in
-        printf "OUTPUT: unknown. Reason: %s\n" str_error;
-        `Unknown str_error
+          let vc_str = String.concat "\n"
+              (List.map (fun (expr, dbg) -> BmcVC.vc_debug_to_str dbg)
+                        satisfied_vcs) in
+          print_endline vc_str;
+
+          if !!bmc_conf.output_model then
+            begin
+            print_endline str_model;
+            (* TODO: print this out independently of --bmc_output_model*)
+            end;
+        let output = sprintf "UB found:\n%s\n\n%s\n\nModel:\n%s" vc_str exec_output_str str_model in
+
+        `Satisfiable (output, dots)
+        end
+      | UNSATISFIABLE ->
+          print_endline "OUTPUT: unsatisfiable! No errors found. :)";
+          assert (is_some ret_value);
+          (* TODO: there could be multiple return values ... *)
+          let str_ret_value =
+            if (List.length dots > 0) then
+              exec_output_str
+            else
+              (let ret = sprintf "Possible return value: %s\n" (Expr.to_string (Option.get ret_value)) in
+               print_endline ret; ret) in
+
+          (*let str_ret_value = Expr.to_string (Option.get ret_value) in
+          printf "Possible return value: %s\n" str_ret_value;*)
+          `Unsatisfiable (str_ret_value, dots)
+      | UNKNOWN ->
+          let str_error = Solver.get_reason_unknown g_solver in
+          printf "OUTPUT: unknown. Reason: %s\n" str_error;
+          `Unknown str_error
+      end
     end
   end
 
@@ -454,7 +500,7 @@ let bmc (core_file  : unit file)
             Core_sequentialise.sequentialise_file typed_core
           else
             typed_core in
-        if !!bmc_conf.debug_lvl >= 2 then
+        if !!bmc_conf.debug_lvl > 3 then
           pp_file core_to_check;
 
         bmc_debug_print 1 "START: model checking";
