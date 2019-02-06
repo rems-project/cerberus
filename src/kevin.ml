@@ -472,8 +472,9 @@ let default_display_info = {
       ("rf", ED_show (RM_no_reduction, "red"));
       ("sb", ED_show (RM_no_reduction, "black"));
       ("asw", ED_show (RM_transitive_reduction_over_sb, "deeppink4"));
-      ("dd", ED_show (RM_no_reduction, "magenta"));
-      ("cd", ED_show (RM_no_reduction, "magenta"));
+      ("addr", ED_show (RM_no_reduction, "magenta"));
+      ("data", ED_show (RM_no_reduction, "magenta"));
+      ("ctrl", ED_show (RM_no_reduction, "magenta"));
       ("mo", ED_show (RM_no_reduction, "blue"));
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
@@ -659,7 +660,7 @@ let make_edges display_info ex ew d =
     | Layout.RM_transitive_reduction_over_sb -> transitive_reduction_over edges sb' in
   let add_edges_mask mask name rel edges =
     match String_map.find_opt name mask with
-    | None -> edges
+    | None -> add_edges name "darkblue" rel edges
     | Some Layout.ED_hide -> edges
     | Some (Layout.ED_show (rm, col)) -> add_edges name col (transform rm rel) edges in
   let add_edges_mask2 mask name rel edges = add_edges_mask mask name (aid_times_aid_set_of_rel rel) edges in
