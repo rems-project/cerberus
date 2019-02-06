@@ -8,8 +8,7 @@ int main() {
         WRITE_ONCE(y, 1);
       }
   ||| { r1 = READ_ONCE(y); 
-        int * zz = &z;
-        r3 = smp_load_acquire(zz);
+        r3 = smp_load_acquire(&z + r1 - r1);
         r2 = READ_ONCE(x); 
       }
   }-}

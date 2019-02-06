@@ -10,10 +10,10 @@ int main() {
       }
   ||| {
         WRITE_ONCE(y, 1);
-        smp_store_release(z, 1); 
+        smp_store_release(&z, 1);
       }
   ||| {
-        r2 = smp_load_acquire(z); 
+        r2 = smp_load_acquire(&z);
         smp_mb();
         r3 = READ_ONCE(x); 
       }
