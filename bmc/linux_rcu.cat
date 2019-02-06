@@ -146,7 +146,8 @@ let rcu-link_gp = rcu-link ; gp
 //	(gp ; rcu-link ; rcu-fence ; rcu-link ; rscs) |
 //	(rscs ; rcu-link ; rcu-fence ; rcu-link ; gp) |
 //	(rcu-fence ; rcu-link ; rcu-fence)
-let rcu-fence = gp | (gp_rcu-link ; rscs) | (rscs_rcu-link ; gp) | (gp_rcu-link ; rcu-fence ; rcu-link_rscs) | (rscs_rcu-link ; rcu-fence ; rcu-link_gp) | (rcu-fence ; rcu-link; rcu-fence)
+let rcu-fence-base = gp | (gp_rcu-link ; rscs) | (rscs_rcu-link ; gp)
+let rcu-fence = rcu-fence-base | (gp_rcu-link ; rcu-fence ; rcu-link_rscs) | (rscs_rcu-link ; rcu-fence ; rcu-link_gp) | (rcu-fence ; rcu-link; rcu-fence)
 
 //(* rb orders instructions just as pb does *)
 let rb_head = prop ; rcu-fence

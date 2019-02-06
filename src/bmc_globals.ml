@@ -6,6 +6,7 @@ open Z3
 (* Z3 context config *)
 let g_z3_ctx_cfg = [ ("model", "true")  (* Generate model *)
                    ; ("proof", "false") (* Disable proof generation *)
+                   ; ("auto_config", "true")
                    ]
 let g_ctx = mk_context g_z3_ctx_cfg
 
