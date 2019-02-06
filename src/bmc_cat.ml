@@ -50,6 +50,7 @@ module CatFile = struct
     | BaseId_addr_dep
     | BaseId_data_dep
     | BaseId_ctrl_dep
+    | BaseId_crit   (* TODO: NOT IMPLEMENTED *)
 
   type id =
     | Id of string (* TODO: only relations allowed currently *)
@@ -131,6 +132,7 @@ module CatFile = struct
   let mk_addr_dep = Eid (BaseId BaseId_addr_dep)
   let mk_ctrl_dep = Eid (BaseId BaseId_ctrl_dep)
   let mk_data_dep = Eid (BaseId BaseId_data_dep)
+  let mk_crit     = Eid (BaseId BaseId_crit)
 
   let mk_prod (x: set) (y: set) =
     Eprod(x,y)
@@ -204,6 +206,7 @@ module CatFile = struct
     | BaseId_addr_dep -> "addr"
     | BaseId_ctrl_dep -> "ctrl"
     | BaseId_data_dep -> "data"
+    | BaseId_crit     -> "crit"
 
   let pprint_id = function
     | Id s -> "|" ^ s ^ "|"
@@ -408,6 +411,10 @@ module CatParser = struct
       else if s = "addr"         then mk_addr_dep
       else if s = "ctrl"         then mk_ctrl_dep
       else if s = "data"         then mk_data_dep
+      else if s = "crit"         then begin
+        print_endline "TODO: crit not implemented";
+        mk_crit
+      end
       else mk_id s
     in return ret
 
@@ -579,6 +586,7 @@ module CatParser = struct
     | BaseId_addr_dep -> (mk_set_R, mk_set_M)
     | BaseId_data_dep -> (mk_set_R, mk_set_M)
     | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
+    | BaseId_crit     -> (mk_set_F, mk_set_F)
 
   let rec get_domain_range_simple_expr (expr: CatFile.simple_expr)
                                        : set * set  =
@@ -652,7 +660,7 @@ module CatParser = struct
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
-            bmc_debug_print 5 (pprint_instruction v);
+            bmc_debug_print 4 (pprint_instruction v);
             begin match v with
             | Binding (s, expr) ->
                 (* TODO: domain and range *)
@@ -669,8 +677,8 @@ module CatParser = struct
             | Skip _ -> (binding, constraints, undefs_unless_empty, output)
             end
         | Result.Error msg ->
-            printf "ERROR: %s (input: '%s')\n" msg s;
-            (binding, constraints, undefs_unless_empty, output)
+            failwith (sprintf "Error parsing .cat file: %s (input: '%s')\n" msg s)
+            (*(binding, constraints, undefs_unless_empty, output)*)
       ) ([],[], [], []) lines in
     (module struct
       let bindings = bindings
