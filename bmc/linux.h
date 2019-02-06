@@ -20,8 +20,8 @@ typedef enum linux_memory_order {
 #define smp_wmb() __cerbvar_linux_fence(linux_memory_order_wmb)
 #define smp_mb()  __cerbvar_linux_fence(linux_memory_order_mb)
 #define smp_read_barrier_depends() __cerbvar_linux_fence(linux_memory_order_rbdep)
-#define smp_load_acquire(object) __cerbvar_linux_read(&(object),linux_memory_order_acquire)
-#define smp_store_release(object,desired) __cerbvar_linux_write(&(object),(desired),linux_memory_order_release)
+#define smp_load_acquire(object) __cerbvar_linux_read(object,linux_memory_order_acquire)
+#define smp_store_release(object,desired) __cerbvar_linux_write(object,(desired),linux_memory_order_release)
 
 // TODO: not the best api
 //#define xchg_relaxed(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_once)
