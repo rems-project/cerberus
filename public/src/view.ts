@@ -332,12 +332,15 @@ export default class View {
     if (!mem) return
     const pvi = _.includes(this.state.model.switches, 'integer_provenance')
     const createNode = (alloc: Memory.Allocation): string => {
+      if (alloc.prefix.kind === 'string literal' && !this.state.options.show_string_literals)
+        return ''
+      if (alloc.prefix.kind === 'other')
+        return ''
+        /*
       if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
         if (!(this.state.options.show_string_literals && alloc.prefix.name === 'string literal'))
           return ''
-      }
-      if (_.startsWith(alloc.prefix.name, '__'))
-        return ''
+      } */
       const box = (n:number, ischar=false) =>
         `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
           <font point-size="1">&nbsp;</font>
