@@ -349,6 +349,12 @@ module BmcInline = struct
         inline_pe pe3 >>= fun inlined_pe3 ->
         inline_pe pe4 >>= fun inlined_pe4 ->
         return (CompareExchangeStrong(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
+    | CompareExchangeWeak(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        inline_pe pe1 >>= fun inlined_pe1 ->
+        inline_pe pe2 >>= fun inlined_pe2 ->
+        inline_pe pe3 >>= fun inlined_pe3 ->
+        inline_pe pe4 >>= fun inlined_pe4 ->
+        return (CompareExchangeWeak(inlined_pe1, inlined_pe2, inlined_pe3, inlined_pe4, mo1, mo2))
     | LinuxFence (mo) ->
         return (LinuxFence(mo))
     | LinuxLoad (pe1, pe2, mo) ->
@@ -898,6 +904,12 @@ module BmcSSA = struct
         ssa_pe pe3 >>= fun ssad_pe3 ->
         ssa_pe pe4 >>= fun ssad_pe4 ->
         return (CompareExchangeStrong(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
+    | CompareExchangeWeak(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        ssa_pe pe1 >>= fun ssad_pe1 ->
+        ssa_pe pe2 >>= fun ssad_pe2 ->
+        ssa_pe pe3 >>= fun ssad_pe3 ->
+        ssa_pe pe4 >>= fun ssad_pe4 ->
+        return (CompareExchangeWeak(ssad_pe1, ssad_pe2, ssad_pe3, ssad_pe4, mo1, mo2))
     | LinuxFence (mo) ->
         return (LinuxFence(mo))
     | LinuxLoad (pe1, pe2, mo) ->
@@ -1429,6 +1441,8 @@ module BmcZ3 = struct
                   mo_success, mo_failure))
     | CompareExchangeStrong _ ->
         assert false
+    | CompareExchangeWeak _ ->
+        failwith "TODO: z3_action CompareExchangeWeak"
     | Fence0 mo ->
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
@@ -2158,6 +2172,12 @@ module BmcBind = struct
         bind_pe pe3 >>= fun bound_pe3 ->
         bind_pe pe4 >>= fun bound_pe4 ->
         return (bound_pe1 @ bound_pe2 @ bound_pe3 @ bound_pe4)
+    | CompareExchangeWeak(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        bind_pe pe1 >>= fun bound_pe1 ->
+        bind_pe pe2 >>= fun bound_pe2 ->
+        bind_pe pe3 >>= fun bound_pe3 ->
+        bind_pe pe4 >>= fun bound_pe4 ->
+        return (bound_pe1 @ bound_pe2 @ bound_pe3 @ bound_pe4)
     | LinuxFence mo ->
         return []
     | LinuxLoad (pe1, pe2, mo) ->
@@ -2530,6 +2550,8 @@ module BmcVC = struct
         return [(valid_memorder,
                  VcDebugStr(string_of_int uid ^ "_CompareExchangeStrong_memorder"))]
     | CompareExchangeStrong _ -> assert false
+    | CompareExchangeWeak _ ->
+      failwith "TODO: vcs_paction CompareExchangeWeak"
     | LinuxFence _ -> return []
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->

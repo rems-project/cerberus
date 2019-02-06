@@ -143,6 +143,8 @@ let free_paction acc (Paction _ (Action _ _ act)) =
       acc
  | CompareExchangeStrong _ _ _ _ _ _ ->
       error "free_paction: CompareExchangeStrong"
+ | CompareExchangeWeak _ _ _ _ _ _ ->
+      error "free_paction: CompareExchangeWeak"
  | LinuxFence _ ->
       error "free_paction: LinuxFence"
  | LinuxLoad _ _ _ ->

@@ -719,6 +719,12 @@ and symbolify_action_ = function
      symbolify_pexpr _pe3 >>= fun pe3 ->
      symbolify_pexpr _pe4 >>= fun pe4 ->
      Eff.return (CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2))
+ | CompareExchangeWeak (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     symbolify_pexpr _pe3 >>= fun pe3 ->
+     symbolify_pexpr _pe4 >>= fun pe4 ->
+     Eff.return (CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2))
  | LinuxFence mo ->
      Eff.return (LinuxFence mo)
  | LinuxStore (_pe1, _pe2, _pe3, mo) ->
@@ -1067,7 +1073,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE COMPARE_EXCHANGE_STRONG
+%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1617,8 +1623,10 @@ action:
     { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN
     { Fence0 mo }
+(*
 | COMPARE_EXCHANGE_STRONG LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
     { CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
+*)
 ;
 
 paction:

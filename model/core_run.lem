@@ -727,6 +727,8 @@ KKK
     (* TODO: CompareExchangeStrong *)
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
         error "WIP: CompareExchangeStrong"
+    | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP: CompareExchangeWeak"
     | LinuxFence mo ->
         error "WIP: LinuxFence"
     | LinuxStore pe1 pe2 pe3 mo ->

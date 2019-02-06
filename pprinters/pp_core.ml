@@ -673,6 +673,11 @@ and pp_action act =
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_weak" ^^
+        P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
+                  pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
     | LinuxFence mo ->
         pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
     | LinuxStore (ty, e1, e2, mo) ->
