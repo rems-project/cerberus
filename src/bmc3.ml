@@ -41,6 +41,7 @@ module BmcM = struct
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 
     bindings         : (Expr.expr list) option;
+    assumes          : ((Location_ocaml.t option * Expr.expr) list) option;
     vcs              : (BmcVC.vc list) option;
 
     ret_expr         : Expr.expr option;
@@ -74,6 +75,7 @@ module BmcM = struct
     ; prov_syms        = None
     ; drop_cont_map    = None
     ; bindings         = None
+    ; assumes          = None
     ; vcs              = None
     ; ret_expr         = None
     ; ret_bindings     = None
@@ -158,14 +160,18 @@ module BmcM = struct
                          (Option.get st.expr_map)
                          (Option.get st.action_map)
                          (Option.get st.alloc_meta) in
-    let (bindings, _) =
+    let ((bindings, assumes), _) =
       BmcBind.run initial_state
                   (BmcBind.bind_file st.file st.fn_to_check) in
     let simplified_bindings =
       List.map (fun e -> Expr.simplify e None) bindings in
+    let simplified_assumes =
+      List.map (fun (loc,e) -> (loc, Expr.simplify e None)) assumes in
 
     bmc_debug_print 7 "Done BmcBind phase";
-    put { st with bindings = Some simplified_bindings }
+    put { st with bindings = Some simplified_bindings;
+                  assumes  = Some simplified_assumes;
+        }
 
   (* Compute verification conditions *)
   let do_vcs : unit eff =
@@ -336,10 +342,31 @@ let bmc_file (file              : unit typed_file)
   Solver.add g_solver (Option.get final_state.ret_bindings);
   Solver.add g_solver (Option.get final_state.mem_bindings);
   bmc_debug_print 3 "START FIRST CHECK";
+  begin match Solver.check g_solver [] with
+  | SATISFIABLE ->
+      bmc_debug_print 1 "Checkpoint passed: bindings are SAT"
+  | UNSATISFIABLE ->
+      failwith ("ERROR: Bindings unsatisfiable. Should always be sat.")
+  | UNKNOWN ->
+      failwith (sprintf "ERROR: status unknown. Reason: %s"
+                        (Solver.get_reason_unknown g_solver))
+  end;
+  (* Add __BMC_ASSUMES *)
+  let (constraints, bool_constants) =
+    let assumes = Option.get final_state.assumes in
+    (List.map snd assumes
+    ,List.map (fun (loc_opt,_) ->
+        let loc_string = match loc_opt with
+                         | Some loc -> Location_ocaml.location_to_string loc
+                         | None -> "unknown_location"  in
+        mk_fresh_const loc_string boolean_sort) assumes
+    ) in
+  Solver.assert_and_track_l g_solver constraints bool_constants;
+
   let ret_value =
     begin match Solver.check g_solver [] with
     | SATISFIABLE ->
-        print_endline "Checkpoint passed: bindings are SAT";
+        bmc_debug_print 1 "Checkpoint passed: assumes are SAT";
         let model = Option.get (Solver.get_model g_solver) in
         (if (!!bmc_conf.debug_lvl >= 7) then
           begin
@@ -348,10 +375,19 @@ let bmc_file (file              : unit typed_file)
           end);
         Model.eval model (Option.get final_state.ret_expr) false
     | UNSATISFIABLE ->
-        (*let assertions = Solver.get_assertions g_solver in
-        List.iter (fun e -> print_endline (Expr.to_string e)) assertions;*)
-        failwith ("ERROR: Bindings unsatisfiable. Should always be sat. "
-                  ^ "This can also be caused by an invalid __BMC_ASSUME.")
+        let unsat_core = Solver.get_unsat_core g_solver in
+        (* TODO: Lazy hack to pretty print strings *)
+        let unsat_locations = List.map (fun e ->
+          let e_str = Expr.to_string e in
+          let r_index = String.rindex_opt e_str '!' in
+          let l_index = String.index_opt e_str '|' in
+          match (l_index, r_index) with
+          | Some l, Some r ->
+              String.sub e_str l (r - l)
+          | _ -> e_str
+        ) unsat_core in
+        failwith (sprintf "The __BMC_ASSUMEs at [%s] can not be true"
+                          (String.concat "," unsat_locations))
     | UNKNOWN ->
         failwith (sprintf "ERROR: status unknown. Reason: %s"
                           (Solver.get_reason_unknown g_solver))
