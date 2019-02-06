@@ -19,6 +19,7 @@ export type Value = {
 
 export type Prefix =
   { kind: 'source', name: string, scope: string | null, loc: Range | null } |
+  { kind: 'string literal', name: string, scope: string, loc: Range | null } |
   { kind: 'other', name: string }
 
 export type Allocation = {
@@ -123,6 +124,7 @@ export function unique (v: Prefix, m: Map):  'unique' |'unique-in-scope' | 'non-
     case 'other':
       return 'non-unique'
     case 'source':
+    case 'string literal':
       const pres = _.map(m, a => a.prefix)
                     .filter(p => p.kind === 'source' && p.name === v.name)
       if (pres.length == 1)

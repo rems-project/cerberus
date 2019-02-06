@@ -3915,7 +3915,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
         (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
         (Caux.mk_ctype_pe ty)
         e_init
-        (Symbol.PrefOther "string literal")
+        (Symbol.PrefStringLiteral loc sym)
 (*
       Caux.mk_sseq_e (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
         (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe sym_lit) e_init Cmm.NA)

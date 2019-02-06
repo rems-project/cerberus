@@ -2034,6 +2034,11 @@ let combine_prov prov1 prov2 =
   let serialise_prefix = function
     | Symbol.PrefOther s ->
       `Assoc [("kind", `String "other"); ("name", `String s)]
+    | Symbol.PrefStringLiteral (loc, sym) ->
+      `Assoc [("kind", `String "string literal");
+              ("scope", `Null);
+              ("name", `String (Pp_symbol.to_string_pretty sym));
+              ("loc", Location_ocaml.to_json loc)]
     | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
     | Symbol.PrefSource (loc, [name]) ->
@@ -2075,6 +2080,7 @@ let combine_prov prov1 prov2 =
     let allocs = IntMap.filter (fun _ (alloc : allocation) ->
         match alloc.prefix with
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
+        | Symbol.PrefStringLiteral (_, Symbol.Symbol (hash, _, _)) -> hash = dig
         | _ -> false
       ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);

@@ -28,3 +28,5 @@ let rec pp_prefix = function
       P.braces (P.separate_map P.dot (fun sym -> !^ (to_string_pretty sym)) syms)
   | PrefOther str ->
       P.braces (!^ str)
+  | PrefStringLiteral _ ->
+      P.braces (!^ "string literal")

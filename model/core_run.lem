@@ -335,14 +335,6 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
         end
     
     | CreateReadOnly pe1 pe2 pe3 pref ->
-        let is_lit = match pref with
-          | Symbol.PrefOther "string literal" ->
-              true
-          | _ ->
-              false
-        end in
-      (*let tag_str str =
-        if is_lit then "STRING LITERAL: " ^ tag_str str else tag_str str in*)
       match pe1 with
         | Pexpr [] () (PEconstrained xs1) ->
             error "CreateReadOnly PEconstrained 1"
