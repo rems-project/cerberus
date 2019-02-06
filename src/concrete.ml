@@ -2033,11 +2033,12 @@ let combine_prov prov1 prov2 =
 
   let serialise_prefix = function
     | Symbol.PrefOther s ->
+      (* TODO: this should not be possible anymore *)
       `Assoc [("kind", `String "other"); ("name", `String s)]
     | Symbol.PrefStringLiteral (loc, sym) ->
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
-              ("name", `String (Pp_symbol.to_string_pretty sym));
+              ("name", `String "literal");
               ("loc", Location_ocaml.to_json loc)]
     | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
