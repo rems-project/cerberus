@@ -150,6 +150,12 @@ let liftConc =
     (fun err_str -> SK_misc ["concurrency"; err_str])
     (fun str -> DErr_concurrency str)
 
+val get_thread_states: driverM (list (Core_ctype.thread_id * (maybe Core_ctype.thread_id * Core_run.thread_state)))
+let get_thread_states =
+  ND.get >>= fun dr_st ->
+  ND.return dr_st.core_state.Core_run.thread_states
+
+
 
 let add_to_concur_sym_map sym oval concur_sym_map =
   match oval with
@@ -159,16 +165,16 @@ let add_to_concur_sym_map sym oval concur_sym_map =
         Map.insert sym oval concur_sym_map
   end
 
-val     print_eval_conv_aux: driver_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
-let rec print_eval_conv_aux dr_st pe =
-  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_extern dr_st.core_run_state.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
+val     print_eval_conv_aux: driver_state -> Core_run.thread_state -> Core.pexpr -> Mem.memM (either Errors.error (Undefined.t Core.value))
+let rec print_eval_conv_aux dr_st th_st pe =
+  match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_extern th_st.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
   | Exception.Result (Undefined.Defined (Left (Core.Pexpr [] () (Core.PEconstrained xs)))) ->
       ND.msum "printf_eval_conv" begin
         List.map (fun (cs, pe) ->
             ( "printf_eval_conv_pe_constrained"
-            , ND.addConstraints "printf_eval_conv" cs >> print_eval_conv_aux dr_st pe
+            , ND.addConstraints "printf_eval_conv" cs >> print_eval_conv_aux dr_st th_st pe
             )) xs
         end
   | Exception.Result (Undefined.Defined _) ->
@@ -181,11 +187,11 @@ let rec print_eval_conv_aux dr_st pe =
       ND.return (Left (Loc.other "Driver.print_eval_conv_aux", Errors.CORE_RUN err))
 end
 
-val printf_eval_conv: driver_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
-let printf_eval_conv dr_st cty mval =
+val printf_eval_conv: driver_state -> Core_run.thread_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
+let printf_eval_conv dr_st th_st cty mval =
   let () = Debug.print_debug 4 [] (fun () -> "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
-  print_eval_conv_aux dr_st $
+  print_eval_conv_aux dr_st th_st $
     Translation_aux.mk_stdcall dr_st.core_file.Core.stdlib "conv_loaded_int"
     [ Caux.mk_ctype_pe cty; Core.Pexpr [] () (Core.PEval cval)]
 
@@ -527,7 +533,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     | Core_run.FS_CLOSEDIR dir ->
       return $ Fs.fs_closedir dr_st.fs_state dir
     | Core_run.FS_PRINTF fmt args ->
-      liftMem (Output.printf (printf_eval_conv dr_st) fmt args) >>= function
+      liftMem (Output.printf (printf_eval_conv dr_st th_st) fmt args) >>= function
         | Left err ->
           error "TODO: printf error"
         | Right (Undefined.Defined buf) ->
@@ -538,7 +544,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VPRINTF fd fmt ap ->
-      liftMem (Output.vprintf (printf_eval_conv dr_st) fmt ap) >>= function
+      liftMem (Output.vprintf (printf_eval_conv dr_st th_st) fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined buf) ->
@@ -559,7 +565,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
           ND.kill (ND.Undef loc ubs)
       end
     | Core_run.FS_VSNPRINTF ptr size fmt ap ->
-      liftMem (Output.vsnprintf (printf_eval_conv dr_st) ptr size fmt ap) >>= function
+      liftMem (Output.vsnprintf (printf_eval_conv dr_st th_st) ptr size fmt ap) >>= function
         | Left err ->
           error "TODO: vprintf error"
         | Right (Undefined.Defined n) ->
@@ -685,11 +691,17 @@ let rec drive_core_thread tid =
     (* NOTE: it clears the stack and add the value to the arena *)
     | Core_run.Step_done cval ->
         ( SK_done
-        , ND.update (fun dr_st ->
+        , get_thread_states >>= fun th_sts ->
+          let th_st = match lookup tid th_sts with
+            | Just (_, th_st) -> th_st
+            | Nothing -> error "WIP: Step_done"
+          end in
+          ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
               <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
                  Core_run_aux.stack= Core.Stack_empty;
                  Core_run_aux.errno= Mem.null_ptrval Core_ctype.signed_int;
+                 Core_run_aux.env= th_st.Core_run_aux.env;
                 (* Dummy locations *)
                  Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
                  Core_run_aux.current_loc= Loc.unknown;
@@ -1246,7 +1258,7 @@ val finalize: string -> driver_state -> driver_result (* (string * (bool * Cmm_o
 let finalize debug_str dr_st =
   match dr_st.core_state.Core_run.thread_states with
     | [(tid, (_, th_st))] ->
-        let cval = hack dr_st.core_extern dr_st.core_run_state.Core_run.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
+        let cval = hack dr_st.core_extern th_st.Core_run.env dr_st.layout_state dr_st.core_file dr_st.symbolic_assoc
             match Core_aux.to_pure th_st.Core_run.arena with
 (*
               | Just (Core.PEval (Core.Vinteger ival)) ->
@@ -1344,12 +1356,6 @@ let driver_update_thread_state tid th_st =
   )
 let inline update_thread_state = driver_update_thread_state
 
-val get_thread_states: driverM (list (Core_ctype.thread_id * (maybe Core_ctype.thread_id * Core_run.thread_state)))
-let get_thread_states =
-  ND.get >>= fun dr_st ->
-  ND.return dr_st.core_state.Core_run.thread_states
-
-
 val driver_globals: bool -> Core.file Core_run.core_run_annotation -> driverM Core_ctype.thread_id
 let driver_globals with_concurrency file =
   (* spawning a thread for the initialisation of globals, and later the execution of main *)
@@ -1358,6 +1364,7 @@ let driver_globals with_concurrency file =
     Core_run.arena=  Core.Expr [] Core.Eskip;
     Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
     Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
+    Core_run.env= [Map.empty];
     Core_run.current_loc= Loc.unknown;
     Core_run.exec_loc= Core_run.ELoc_globals;
   |> >>= fun tid0 ->
@@ -1376,16 +1383,22 @@ let driver_globals with_concurrency file =
       "Starting the evaluation of global `" ^ show glob_sym ^ "'"  (* DEBUG *)
     ) in                                                           (* DEBUG *)
     (* setting up the initialisation of the current global in thread 0 *)
-    update_thread_state tid0 <|
-      (* the previously evaluated globals are substituted in the body of the
-         global we are about to evaluate *)
-      Core_run.arena= expr;
-      Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
-(*      Core_run.labels= Map.empty; *)
-      Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
-      Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
-      Core_run.exec_loc= Core_run.ELoc_globals;
-    |> >>= fun () ->
+    get_thread_states >>= function
+      | [(_, (_, th_st))] ->
+        update_thread_state tid0 <|
+          (* the previously evaluated globals are substituted in the body of the
+             global we are about to evaluate *)
+          Core_run.arena= expr;
+          Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
+          Core_run.env= th_st.Core_run.env;
+    (*      Core_run.labels= Map.empty; *)
+          Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
+          Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
+          Core_run.exec_loc= Core_run.ELoc_globals;
+        |>
+      | _ ->
+          error "ERROR (in Driver, global init didn't evaluate to value)"
+    end >>= fun () ->
     
     (* evaluation of the initialisation *)
     driver with_concurrency >>= fun () ->
@@ -1399,12 +1412,18 @@ let driver_globals with_concurrency file =
                   | Nothing ->
                       error "WIP: driver_globals"
                   | Just cval ->
+                      update_thread_state tid0
+                        <| th_st with
+                            Core_run.env = Core_aux.update_env (Core.Pattern [] (Core.CaseBase (Just (glob_sym), glob_bTy))) cval th_st.Core_run.env
+                        |>
+                        (*
+
                       ND.update (fun dr_st ->
                         <| dr_st with
                           core_run_state=
                             <| dr_st.core_run_state with Core_run.env= Core_aux.update_env (Core.Pattern [] (Core.CaseBase (Just (glob_sym), glob_bTy))) cval dr_st.core_run_state.Core_run.env |>
                         |>
-                     )
+                     ) *)
                 end
             | Nothing ->
                 error "TODO(msg): Driver.driver_globals, the end of the evaluation of a glob didn't produce a value"
@@ -1574,17 +1593,22 @@ TODO: this should be removable, since we already set it in Translation
                 ))))
               ) >>= fun argv_ptr_val ->
               (* Adding the values of argc and argv to the Core symbol environment *)
-              liftCore_run begin
-                SEU.update (fun st ->
-                  <| st with Core_run.env= match st.Core_run.env with
-                      | [] ->
-                          [Map.fromList [ (argc_sym ,Core.Vobject (Core.OVpointer argc_ptr_val))
-                                        ; (argv_sym, Core.Vobject (Core.OVpointer argv_ptr_val)) ]]
-                      | (xs :: xs') ->
-                          (Map.insert argc_sym (Core.Vobject (Core.OVpointer argc_ptr_val))
-                            (Map.insert argv_sym (Core.Vobject (Core.OVpointer argv_ptr_val)) xs)) :: xs'
-                    end |>
-                )
+              get_thread_states >>= function
+                | [(_, (_, th_st))] ->
+                  update_thread_state tid0
+                    <| th_st with
+                        Core_run.env =
+                          match th_st.Core_run.env with
+                            | [] ->
+                                [Map.fromList [ (argc_sym ,Core.Vobject (Core.OVpointer argc_ptr_val))
+                                              ; (argv_sym, Core.Vobject (Core.OVpointer argv_ptr_val)) ]]
+                            | (xs :: xs') ->
+                                (Map.insert argc_sym (Core.Vobject (Core.OVpointer argc_ptr_val))
+                                  (Map.insert argv_sym (Core.Vobject (Core.OVpointer argv_ptr_val)) xs)) :: xs'
+                          end
+                   |>
+                | _ ->
+                    error "ERROR (in Driver 1)"
               end >>= fun () ->
               ND.return expr
           | _ ->
@@ -1601,13 +1625,19 @@ TODO: this should be removable, since we already set it in Translation
           )
         ) >>= fun errno_ptr_val ->
         
-        update_thread_state tid0 <|
-          Core_run.arena= expr;
-          Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
-          Core_run.errno= errno_ptr_val;
-          Core_run.current_loc= Loc.other "Driver.drive";
-          Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
-        |> >>
+        get_thread_states >>= function
+          | [(_, (_, th_st))] ->
+              update_thread_state tid0 <|
+                Core_run.arena= expr;
+                Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
+                Core_run.errno= errno_ptr_val;
+                Core_run.current_loc= Loc.other "Driver.drive";
+                Core_run.exec_loc= Core_run.ELoc_normal [main_sym];
+                Core_run.env = th_st.Core_run.env;
+              |>
+          | _ ->
+              error "ERROR (in Driver 2)"
+        end >>
         driver with_concurrency >>
         
         if with_concurrency then
