@@ -422,6 +422,10 @@ module MemoryModelCommon = struct
     po       : FuncDecl.func_decl;
     asw      : FuncDecl.func_decl;
 
+    (* Just for the C11 model. Relates [SC] events based on sc_clk
+     * sc_clk is unconstrained by default. Need to write acyclic sc_rel *)
+    sc_clk   : FuncDecl.func_decl;
+
     addr_dep : FuncDecl.func_decl;
     data_dep : FuncDecl.func_decl;
     ctrl_dep : FuncDecl.func_decl;
@@ -446,9 +450,11 @@ module MemoryModelCommon = struct
     ; same_loc = mk_decl "same_loc" [events; events] boolean_sort
 
     ; co_clk   = mk_decl "co_clk"   [events] (Integer.mk_sort g_ctx)
+    ; sc_clk   = mk_decl "sc_clk"   [events] (Integer.mk_sort g_ctx)
 
     ; po       = mk_decl "po"       [events;events] boolean_sort
     ; asw      = mk_decl "asw"      [events;events] boolean_sort
+
 
     ; addr_dep = mk_decl "addr_dep" [events;events] boolean_sort
     ; data_dep = mk_decl "data_dep" [events;events] boolean_sort
@@ -486,13 +492,15 @@ module MemoryModelCommon = struct
     po_loc     : Expr.expr * Expr.expr -> Expr.expr;
     asw        : Expr.expr * Expr.expr -> Expr.expr;
 
+    sc_clk     : Expr.expr -> Expr.expr;
+    sc_rel     : Expr.expr * Expr.expr -> Expr.expr;
+
     atomicloc    : Expr.expr -> Expr.expr;
     nonatomicloc : Expr.expr -> Expr.expr;
 
     addr_dep   : Expr.expr * Expr.expr -> Expr.expr;
     data_dep   : Expr.expr * Expr.expr -> Expr.expr;
     ctrl_dep   : Expr.expr * Expr.expr -> Expr.expr;
-
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -526,6 +534,12 @@ module MemoryModelCommon = struct
                                         ;ext (e1,e2)]) in
 
     let co_clk = (fun e -> apply decls.co_clk [e]) in
+    let sc_clk = (fun e -> apply decls.sc_clk [e]) in
+    let sc_rel = (fun (e1,e2) -> mk_and [mk_lt g_ctx (sc_clk e1) (sc_clk e2)
+                                        ;mk_eq (getMemord e1) sc_memord
+                                        ;mk_eq (getMemord e2) sc_memord
+                                        ]
+                 ) in
 
     let po     = (fun (e1,e2) -> apply decls.po [e1;e2]) in
     let po_loc = (fun (e1,e2) -> mk_and [po (e1,e2)
@@ -533,6 +547,8 @@ module MemoryModelCommon = struct
 
     let atomicloc = (fun e -> PointerSort.mk_is_atomic (getAddr e)) in
     let nonatomicloc = (fun e -> mk_not (atomicloc e)) in
+
+
 
     { getAid     = getAid
     ; getTid     = getTid
@@ -566,6 +582,9 @@ module MemoryModelCommon = struct
     ; po        = po
     ; po_loc    = po_loc
     ; asw       = (fun (e1,e2) -> apply decls.asw [e1;e2])
+
+    ; sc_clk    = sc_clk
+    ; sc_rel    = sc_rel
 
     ; atomicloc    = atomicloc
     ; nonatomicloc = nonatomicloc
@@ -753,6 +772,18 @@ module MemoryModelCommon = struct
         exec.actions
     in
 
+    let well_formed_sc_clk =
+      let sc_actions = List.filter (fun a ->
+        get_memorder a = C_mem_order Seq_cst) all_actions in
+      List.map (fun (a,b) ->
+        let (e1,e2) = (z3action a, z3action b) in
+        mk_implies (mk_and [fns.getGuard e1
+                           ;fns.getGuard e2
+                           ;mk_not (mk_eq e1 e2)
+                           ])
+                   (mk_not (mk_eq (fns.sc_clk e1) (fns.sc_clk e2)))
+      ) (cartesian_product sc_actions sc_actions) in
+
     let asserts_from_relation rel fn =
       let mk_rel = (fun (a,b) -> fn (z3action a, z3action b)) in
       let not_rel = not_related rel prod_actions find_rel in
@@ -797,6 +828,7 @@ module MemoryModelCommon = struct
                    @ rval_asserts
                    @ wval_asserts
                    @ same_loc_asserts
+                   @ well_formed_sc_clk
 
     ; po_assert      = po_asserts
     ; asw_assert     = asw_asserts
@@ -1888,6 +1920,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                                         ;model.builtin_fns.atomicloc ea]
         | BaseId_nonatomicloc -> mk_and [mk_eq ea eb
                                         ;model.builtin_fns.nonatomicloc ea]
+        | BaseId_sc_clk -> model.builtin_fns.sc_rel (ea,eb)
         | BaseId_addr_dep -> model.builtin_fns.addr_dep (ea,eb)
         | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)

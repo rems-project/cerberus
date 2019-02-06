@@ -163,6 +163,7 @@ module CtypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | Atomic0 ty ->
         assert false
+    | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
     match ctype with
