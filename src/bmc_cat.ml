@@ -45,6 +45,8 @@ module CatFile = struct
     | BaseId_po_loc
     | BaseId_atomicloc    (* TODO: should be BaseSet *)
     | BaseId_nonatomicloc (* TODO: should be BaseSet *)
+    (* === C11 S strict total order on SC events *)
+    | BaseId_sc_clk
     | BaseId_addr_dep
     | BaseId_data_dep
     | BaseId_ctrl_dep
@@ -125,6 +127,7 @@ module CatFile = struct
   let mk_po_loc = Eid (BaseId BaseId_po_loc)
   let mk_atomicloc = Eid (BaseId BaseId_atomicloc)
   let mk_nonatomicloc = Eid (BaseId BaseId_nonatomicloc)
+  let mk_sc_clk = Eid (BaseId BaseId_sc_clk)
   let mk_addr_dep = Eid (BaseId BaseId_addr_dep)
   let mk_ctrl_dep = Eid (BaseId BaseId_ctrl_dep)
   let mk_data_dep = Eid (BaseId BaseId_data_dep)
@@ -197,6 +200,7 @@ module CatFile = struct
     | BaseId_po_loc -> "po-loc"
     | BaseId_atomicloc    -> "atomicloc"
     | BaseId_nonatomicloc -> "nonatomicloc"
+    | BaseId_sc_clk -> "sc_clk"
     | BaseId_addr_dep -> "addr"
     | BaseId_ctrl_dep -> "ctrl"
     | BaseId_data_dep -> "data"
@@ -400,6 +404,7 @@ module CatParser = struct
       else if s = "po-loc"       then mk_po_loc
       else if s = "atomicloc"    then mk_atomicloc
       else if s = "nonatomicloc" then mk_nonatomicloc
+      else if s = "sc_clk"       then mk_sc_clk
       else if s = "addr"         then mk_addr_dep
       else if s = "ctrl"         then mk_ctrl_dep
       else if s = "data"         then mk_data_dep
@@ -570,6 +575,7 @@ module CatParser = struct
     | BaseId_po_loc -> (mk_set_M, mk_set_M)
     | BaseId_atomicloc    -> (mk_set_M, mk_set_M)
     | BaseId_nonatomicloc -> (mk_set_M, mk_set_M)
+    | BaseId_sc_clk -> (mk_set_SC, mk_set_SC)
     | BaseId_addr_dep -> (mk_set_R, mk_set_M)
     | BaseId_data_dep -> (mk_set_R, mk_set_M)
     | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
