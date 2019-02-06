@@ -24,10 +24,10 @@ typedef enum linux_memory_order {
 #define smp_store_release(object,desired) __cerbvar_linux_write(object,(desired),linux_memory_order_release)
 
 // TODO: not the best api
-//#define xchg_relaxed(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_once)
-//#define xchg_acquire(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_acquire)
-//#define xchg_release(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_release)
-//#define xchg(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_mb)
+#define xchg_relaxed(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_once)
+#define xchg_acquire(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_acquire)
+#define xchg_release(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_release)
+#define xchg(ptr,desired) __cerbvar_linux_rmw((ptr),(desired),linux_memory_order_mb)
 
 #define READ_ONCE(object) __cerbvar_linux_read(&(object),linux_memory_order_once)
 #define WRITE_ONCE(object,desired) __cerbvar_linux_write(&(object),(desired),linux_memory_order_once)
