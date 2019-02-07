@@ -1,3 +1,4 @@
+// SB+sc-sc+sc-sc.c
 #include <stdatomic.h>
 int main() {
   _Atomic(int) x = 0, y = 0;

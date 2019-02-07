@@ -44,6 +44,18 @@ let setup conf =
        instance= conf;
       }
 
+let add_bmc_macro ~bmc_model conf =
+  let macro_model =
+    match bmc_model with
+      | `C11 -> " -D__memory_model_c11__"
+      | `RC11 -> " -D__memory_model_rc11__"
+      | `RC11_Hardcoded -> " -D__memory_model_rc11__"
+      | `Linux -> " -D__memory_model_linux__"
+      | _ -> ""
+  in
+  let cpp_cmd = conf.pipeline.cpp_cmd ^ " -D__bmc_cerb__" ^ macro_model in
+  { conf with pipeline = { conf.pipeline with cpp_cmd } }
+
 (* It would be nice if Smt2 could use polymorphic variant *)
 let to_smt2_mode = function
   | Random -> Smt2.Random
@@ -288,8 +300,7 @@ let encode s = Marshal.to_string s [Marshal.Closures]
 let decode s = Marshal.from_string s 0
 
 let get_state_details st =
-  let string_of_env st =
-    let env = st.Driver.core_run_state.env in
+  let string_of_env env =
     let f e = Pmap.fold (fun (s:Symbol.sym) (v:Core.value) acc ->
         Pp_symbol.to_string_pretty s ^ "= " ^ String_core.string_of_value v ^ "\n" ^ acc
       ) e "" in
@@ -304,7 +315,7 @@ let get_state_details st =
     let Core.Expr (arena_annots, _) = ts.arena in
     let maybe_uid = Annot.get_uid arena_annots in
     let loc = Option.case id (fun _ -> ts.Core_run.current_loc) @@ Annot.get_loc arena_annots in
-    (loc, maybe_uid, arena, string_of_env st, stdout, stderr)
+    (loc, maybe_uid, arena, string_of_env ts.env, stdout, stderr)
   | _ ->
     (Location_ocaml.unknown, None, "", "", stdout, stderr)
 
@@ -543,7 +554,7 @@ let instance debug_level =
       step ~conf:(setup conf) ~filename active
       |> respond filename name id
     | `BMC (conf, bmc_model, filename, name) ->
-      bmc ~conf:(setup conf) ~bmc_model ~filename ()
+      bmc ~conf:(add_bmc_macro ~bmc_model @@ setup conf) ~bmc_model ~filename ()
       |> respond filename name (fun res -> BMC res)
 
   in

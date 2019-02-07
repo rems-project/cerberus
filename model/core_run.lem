@@ -1505,14 +1505,12 @@ BEFORE EVAL_PEXPR2
                     let tsk =
                       match current_proc_opt with
                         | Just psym ->
-                            let mval =
-                              match Map.lookup psym file.funinfo with
-                                | Just (ret_ty, _, _, _) ->
-                                    Core_aux.memValueFromValue ret_ty cval
-                                | Nothing ->
-                                    error $ "Epure : function " ^ show psym ^ " not found"
-                              end in
-                            TSK_Return psym mval
+                            match Map.lookup psym file.funinfo with
+                              | Just (ret_ty, _, _, _) ->
+                                  TSK_Return psym $ Core_aux.memValueFromValue ret_ty cval
+                              | Nothing ->
+                                  TSK_Misc
+                            end
                         | Nothing ->
                             TSK_Misc
                       end in

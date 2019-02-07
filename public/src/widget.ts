@@ -38,7 +38,7 @@ export abstract class Widget {
 
 export class Defacto extends Widget {
   constructor () {
-    super('Load defacto tests...')
+    super('Load defacto tests')
     util.get('defacto_tests.json', (data: any) => {
       for (let i = 0; i < data.length; i++) {
         const questions = $('<div class="questions"></div>')
@@ -64,7 +64,7 @@ export class Defacto extends Widget {
 
 export class POPL19 extends Widget {
   constructor () {
-    super('Load POPL 2019 pointer provenace tests...')
+    super('Load POPL 2019 pointer provenace tests')
     util.get('popl19_tests.json', (data: any) => {
       for (let i = 0; i < data.length; i++) {
         const tests = $('<ul class="tests"></ul>')
@@ -84,10 +84,50 @@ export class POPL19 extends Widget {
   }
 }
 
+export class CAV19 extends Widget {
+  constructor () {
+    super('Load CAV 2019 tests')
+    util.get('cav19_tests.json', (data: any) => {
+      const litmus = data[0].tests
+      this.body.append($('<h2>'+data[0].name+'</h2>'))
+      for (let i = 0; i < litmus.length; i++) {
+        const tests = $('<ul class="tests"></ul>')
+        for (let k = 0; litmus[i].tests && k < litmus[i].tests.length; k++) {
+          const name = litmus[i].tests[k]
+          const link = $(`<a href="#">${name}</a>`)
+          link.on('click', () => this.fetch_test('litmus', name))
+          const test = $('<li>')
+          test.append(link)
+          tests.append(test)
+        }
+        this.body.append($('<h3>'+litmus[i].section+'</h3>'))
+        this.body.append(tests)
+      }
+      const layout = data[1].tests
+      this.body.append($('<h2>'+data[1].name+'</h2>'))
+      for (let i = 0; i < layout.length; i++) {
+        const tests = $('<ul class="tests"></ul>')
+        for (let k = 0; layout[i].tests && k < layout[i].tests.length; k++) {
+          const name = layout[i].tests[k]
+          const link = $(`<a href="#">${name}</a>`)
+          link.on('click', () => this.fetch_test('defacto', name))
+          const test = $('<li>')
+          test.append(link)
+          tests.append(test)
+        }
+        this.body.append($('<h3>'+layout[i].section+'</h3>'))
+        this.body.append(tests)
+      }
+      this.show()
+    })
+  }
+}
+
+
 
 export class GCC2018 extends Widget {
   constructor() {
-    super('Load GCC Cauldron 2018 demo tests...')
+    super('Load GCC Cauldron 2018 demo tests')
     this.body.append($(`
       <h3>GCC Tools Cauldron 2018</h3>
       <h4>Original versions</h2>
