@@ -1306,7 +1306,6 @@ module BmcZ3 = struct
             ) member_indices in
             (match shift_opt with
             | Some (shift, _) ->
-                printf "%s %d\n" (pp_to_string (Pp_core.Basic.pp_pexpr pexpr)) shift;
                 return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift))
             | None -> assert false
             )
