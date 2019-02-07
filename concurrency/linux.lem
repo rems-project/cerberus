@@ -1,7 +1,7 @@
-type memory_order =
+type linux_memory_order =
   | Once
-  | Acquire
-  | Release
+  | LAcquire
+  | LRelease
   | Rmb
   | Wmb
   | Mb
