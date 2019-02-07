@@ -118,7 +118,7 @@ smt:
 	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str smt.native
 
 test:
-	./tools/colours.sh ocamlbuild -no-plugin -j 4 -use-ocamlfind -pkgs cmdliner,pprint,zarith,${Z3} -libs unix,str test.native
+	ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str test.native
 
 
 new_main:
