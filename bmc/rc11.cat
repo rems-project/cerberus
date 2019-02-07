@@ -40,3 +40,4 @@ undefined_unless empty race as racy
 //output race
 
 //output sw
+output id

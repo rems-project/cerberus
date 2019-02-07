@@ -1069,9 +1069,13 @@ module BmcZ3 = struct
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
-        (* TODO: type *)
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
+        (* If succeed, do a rmw *) aid * ctype *
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+    | ICompareExchangeWeak of
+        (* Loaded expected *) aid *
+        (* If fail, do a load of obj and then a store *) aid * aid *
         (* If succeed, do a rmw *) aid * ctype *
         ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
@@ -1411,7 +1415,12 @@ module BmcZ3 = struct
     | CompareExchangeStrong(Pexpr(_,_,PEval (Vctype ty)),
                             Pexpr(_,_,PEsym obj),
                             Pexpr(_,_,PEsym expected),
+                            desired, mo_success, mo_failure) (* fall through *)
+    | CompareExchangeWeak  (Pexpr(_,_,PEval (Vctype ty)),
+                            Pexpr(_,_,PEsym obj),
+                            Pexpr(_,_,PEsym expected),
                             desired, mo_success, mo_failure) ->
+
         get_fresh_aid  >>= fun aid_load ->
         get_fresh_aid  >>= fun aid_fail_load ->
         get_fresh_aid  >>= fun aid_fail_store ->
@@ -1430,19 +1439,41 @@ module BmcZ3 = struct
         lookup_sym expected >>= fun expected_expr ->
         z3_pe desired       >>= fun z3d_desired ->
 
-        let success_guard = mk_eq rval_expected rval_object in
-        (* TODO *)
-        return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
-                                     (LoadedInteger.mk_specified (int_to_z3 0)),
-                ICompareExchangeStrong (
-                  aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw, ty,
-                  flat_sortlist, obj_expr, expected_expr,
-                  z3d_desired, rval_expected, rval_object,
-                  mo_success, mo_failure))
+        begin match action_ with
+        | CompareExchangeStrong _ ->
+          let success_guard = mk_eq rval_expected rval_object in
+          add_guards uid [success_guard] >>
+          (* TODO *)
+          return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
+                                       (LoadedInteger.mk_specified (int_to_z3 0)),
+                  ICompareExchangeStrong (
+                    aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw, ty,
+                    flat_sortlist, obj_expr, expected_expr,
+                    z3d_desired, rval_expected, rval_object,
+                    mo_success, mo_failure))
+        | CompareExchangeWeak _ ->
+            (* ComparExchangeWeak may fail spuriously; we implement this by
+             * creating a fresh Boolean constant representing spuriuos failure
+             *)
+          let spurious_fail =
+            mk_fresh_const "cmpxcgweak_spurious_fail" boolean_sort in
+          let success_guard = mk_and [mk_eq rval_expected rval_object
+                                     ;mk_not spurious_fail] in
+          add_guards uid [success_guard] >>
+          return (mk_ite success_guard (LoadedInteger.mk_specified (int_to_z3 1))
+                                       (LoadedInteger.mk_specified (int_to_z3 0)),
+                  ICompareExchangeWeak (
+                    aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw, ty,
+                    flat_sortlist, obj_expr, expected_expr,
+                    z3d_desired, rval_expected, rval_object,
+                    mo_success, mo_failure))
+        | _ -> assert false
+        end
+
     | CompareExchangeStrong _ ->
         assert false
     | CompareExchangeWeak _ ->
-        failwith "TODO: z3_action CompareExchangeWeak"
+        assert false
     | Fence0 mo ->
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
@@ -2524,6 +2555,10 @@ module BmcVC = struct
     | CompareExchangeStrong (Pexpr(_,_,PEval (Vctype ty)),
                              Pexpr(_,_,PEsym obj),
                              Pexpr(_,_,PEsym expected),
+                             desired, mo_success, mo_failure)  (* fall through *)
+    | CompareExchangeWeak   (Pexpr(_,_,PEval (Vctype ty)),
+                             Pexpr(_,_,PEsym obj),
+                             Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure) ->
         assert (!!bmc_conf.concurrent_mode);
         assert (!!bmc_conf.memory_mode = MemoryMode_C);
@@ -2540,18 +2575,17 @@ module BmcVC = struct
           mk_bool (not (invalid_mo_failure || mo_failure_stronger)) in
         if invalid_mo_failure then
           bmc_debug_print 3
-            "`failure' memory order of CompareExchangeStrong` must not be
+            "`failure' memory order of CompareExchange` must not be
              release or acq_rel"
         else if mo_failure_stronger then
           bmc_debug_print 3
-            "'failure' memory order of CompareExchangeStrong' must not be
+            "'failure' memory order of CompareExchange' must not be
              stronger than the success argument"
         ;
         return [(valid_memorder,
-                 VcDebugStr(string_of_int uid ^ "_CompareExchangeStrong_memorder"))]
+                 VcDebugStr(string_of_int uid ^ "_CompareExchange_memorder"))]
     | CompareExchangeStrong _ -> assert false
-    | CompareExchangeWeak _ ->
-      failwith "TODO: vcs_paction CompareExchangeWeak"
+    | CompareExchangeWeak _ -> assert false
     | LinuxFence _ -> return []
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->
@@ -3831,6 +3865,8 @@ module BmcSeqMem = struct
                }
     | ICompareExchangeStrong _ ->
         failwith "Error: CompareExchangeStrong only supported with --bmc_conc"
+    | ICompareExchangeWeak _ ->
+        failwith "Error: CompareExchangeWeak only supported with --bmc_conc"
     | IFence (aid, mo) ->
        assert false
     | ILinuxLoad(aid, _, type_list, ptr, rval, mo) ->
@@ -4265,6 +4301,7 @@ module BmcConcActions = struct
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
+                                  (uid : int)
                                   : (bmc_action list) eff =
     (match action with
     | ICreate(aid, ctype, _, sortlist, alloc_id) ->
@@ -4283,9 +4320,18 @@ module BmcConcActions = struct
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
                               ctype,_, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,
+                              mo_success, mo_failure) (* fall through *)
+    | ICompareExchangeWeak   (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
+                              ctype,_, ptr_obj, ptr_exp,
+                              desired, rval_expected, rval_object,
                               mo_success, mo_failure) ->
+
         get_tid >>= fun tid ->
-        let success_guard = mk_eq rval_expected rval_object in
+        get_case_guards uid >>= fun guards ->
+        assert (List.length guards = 1);
+
+        (*let success_guard = mk_eq rval_expected rval_object in*)
+        let success_guard = List.hd guards in
         (* TODO: need to change this type *)
         return [
           (* NA load of ptr_exp -> rval_expected *)
@@ -4329,7 +4375,7 @@ module BmcConcActions = struct
         return []
     | Eaction (Paction(pol, action)) ->
         get_action uid >>= fun interm_action ->
-        intermediate_to_bmc_actions interm_action pol
+        intermediate_to_bmc_actions interm_action pol uid
     | Ecase (pe, cases) ->
         mapM do_actions_e (List.map snd cases) >>= fun case_actions ->
         get_case_guards uid            >>= fun case_guards ->
@@ -4449,6 +4495,9 @@ module BmcConcActions = struct
         get_action uid >>= fun interm_action ->
         begin match interm_action with
         | ICompareExchangeStrong
+              (aid_load, aid_fail_load, aid_fail_store, aid_success_rmw,
+               _,_, _, _, _, _, _, _, _) (* fall through *)
+        | ICompareExchangeWeak
               (aid_load, aid_fail_load, aid_fail_store, aid_success_rmw,
                _,_, _, _, _, _, _, _, _) ->
             return [(aid_load, aid_fail_load)
@@ -4688,7 +4737,12 @@ module BmcConcActions = struct
     | Fence0 mo ->
         return (Pset.empty Pervasives.compare, empty_deps)
     | CompareExchangeStrong(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        (* TODO: We only do taint analysis for linux at the moment;
+         * CompareExchangeStrong for C only*)
         bmc_debug_print 7 "TODO: Taint CompareExchangeStrong";
+        return (Pset.empty Pervasives.compare, empty_deps)
+    | CompareExchangeWeak(pe1, pe2, pe3, pe4, mo1, mo2) ->
+        bmc_debug_print 7 "TODO: Taint CompareExchangeWeak";
         return (Pset.empty Pervasives.compare, empty_deps)
     | LinuxFence mo ->
         return (Pset.empty Pervasives.compare, empty_deps)
@@ -4856,7 +4910,7 @@ module BmcConcActions = struct
     ; asw = List.filter
               (fun (a,b) -> is_related (tid_of_bmcaction a) (tid_of_bmcaction b))
               po_actions
-    ; rmw = []
+    (*; rmw = []*)
     ; addr = List.filter in_po addr
     ; data = List.filter in_po data
     ; ctrl = List.filter in_po ctrl

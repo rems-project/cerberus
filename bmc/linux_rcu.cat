@@ -157,6 +157,6 @@ let rb = rb_head ; rb_tail
 
 irreflexive rb as rcu
 
-// TODO: oops output only works for user-def'd relations right now
-let crit_prime = crit
-output crit_prime
+output crit
+//output rcu-fence
+//output rcu-link

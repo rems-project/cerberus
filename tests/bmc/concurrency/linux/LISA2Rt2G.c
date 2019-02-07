@@ -2,7 +2,7 @@
 // https://github.com/paulmckrcu/litmus/blob/master/manual/rcu/LISA2Rt2G.litmus
 #include "linux.h"
 int main() {
-  int x0 = 0, x1 = 0, x2 = 0, x3 = 0;
+  int x0 = 0, x1 = 0, x2 = 0, x3 = 0, x4 = 0;
   int r1, r2, r3, r4;
   {-{ {
     rcu_read_lock();
