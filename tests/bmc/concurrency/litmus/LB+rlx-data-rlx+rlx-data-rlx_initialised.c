@@ -15,5 +15,5 @@ int main() {
 #elif __memory_model_rc11__
   assert(!(r1 == 1 && r2 == 1));
 #endif
-  return r1 + (2 * r2);
+  // return r1 + (2 * r2);
 }

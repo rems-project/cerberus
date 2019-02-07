@@ -15,5 +15,5 @@ int main() {
     mtx_unlock(&m);
   } }-};
   assert(!(r1 == 1));
-  return r1;
+  // return r1;
 }

@@ -29,6 +29,7 @@
         - RMW-strong-unequal.c
         - RMW-weak-equal.c
         - RMW-weak-unequal.c
+        - MP+na-rmw_rel+acq-na.c
 - name: Memory Layout Tests
   tests:
     - section: Basic provenance semantics for pointer values

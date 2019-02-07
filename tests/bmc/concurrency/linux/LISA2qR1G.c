@@ -20,5 +20,5 @@ int main() {
     rcu_read_unlock();
   } }-};
   assert(!(r1 == 1 && t2_r2 == 1 && t0_r2 == 1));
-  return r1 + 2 * (t2_r2 + 2 * t0_r2);
+  // return r1 + 2 * (t2_r2 + 2 * t0_r2);
 }

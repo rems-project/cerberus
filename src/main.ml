@@ -192,7 +192,7 @@ let cerberus debug_level progress core_obj
             prelude >>= fun core_std ->
             c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             core_passes (conf, io) ~filename core >>= fun core ->
-            ignore @@ Bmc3.bmc core ail_opt;
+            ignore @@ Bmc.bmc core ail_opt;
             return success
           | _ ->
             Pp_errors.fatal "bmc mode accepts only one file"

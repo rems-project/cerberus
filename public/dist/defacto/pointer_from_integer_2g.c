@@ -8,6 +8,7 @@ void f() {
 }
 int main() {
   int j=5;
+  __BMC_ASSUME((uintptr_t)&j == ADDRESS_PFI_2G);
   if ((uintptr_t)&j == ADDRESS_PFI_2G)
     f();
   printf("j=%d &j=%p\n",j,(void*)&j); 
