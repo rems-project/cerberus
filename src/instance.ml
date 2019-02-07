@@ -168,7 +168,7 @@ let bmc ~conf ~bmc_model:bmc_model ~filename () =
         (Some "bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
     in
     Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
-    return @@ Bmc3.bmc core (Some ail);
+    return @@ Bmc.bmc core (Some ail);
   with
   | e ->
     Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
