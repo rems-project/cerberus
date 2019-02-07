@@ -1,5 +1,6 @@
 // LISAq3R1G
 // https://github.com/paulmckrcu/litmus/blob/master/manual/rcu/LISAq3R1G.litmus
+#include "linux.h"
 int main() {
   int x0 = 0, x1 = 0, x2 = 0, x3 = 0;
   {-{ {

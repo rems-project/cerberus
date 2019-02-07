@@ -14,7 +14,7 @@ int main() {
     WRITE_ONCE(x3, 1);
     WRITE_ONCE(x2, 1);
     rcu_read_unlock();
-  | ||| {
+  } ||| {
     r0 = READ_ONCE(x0);
     synchronize_rcu();
     r3 = READ_ONCE(x3);
@@ -22,7 +22,7 @@ int main() {
     r2 = READ_ONCE(x2);
     smp_mb();
     r1 = READ_ONCE(x1);
-  | }-}
+  } }-}
   assert(!(r0 == 1 && r3 == 0 && r2 == 1 && r1 == 0));
   return r0 + 2 * (r3 + 2 * (r2 + 2 * r1));
 }
