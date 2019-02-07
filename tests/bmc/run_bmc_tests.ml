@@ -58,7 +58,7 @@ let run_test cfg model opts filename =
   let log_file = dir ^ "log.txt" in
   let cmd = "DYLD_LIBRARY_PATH=`ocamlfind query z3` ../../cerberus " ^ opts ^ filename ^ " > " ^ log_file ^ " 2>&1" in
   write_to_file cmd cmd_file ();
-  if cfg.only_write_command then ()
+  if cfg.only_write_command then (print_string (" WRITTEN\n"); flush Pervasives.stdout)
   else
     let r = Unix.system cmd in
     match r with
