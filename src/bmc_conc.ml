@@ -817,7 +817,7 @@ module MemoryModelCommon = struct
       let indexed_wval =
           Loaded.get_ith_in_loaded_2 index (fns.getWval write) in
 
-      (* NOTE: Semantics: if reading from an noninitial write with unspecified
+      (* NOTE: Semantics: if reading from an write with unspecified
        * wval, then rval is a specified value with range constrained based on
        * the read ctype.  else, wval = rval.  This prevents unspecified OOTA
        * values.
@@ -835,12 +835,12 @@ module MemoryModelCommon = struct
         | _ -> []
         end in
 
-      let read_from_noninitial_unspec_write =
-        mk_and [mk_not (fns.isInitial write)
+      let read_from_unspec_write = Loaded.is_unspecified indexed_wval in
+        (*mk_and [mk_not (fns.isInitial write)
                ;Loaded.is_unspecified indexed_wval
-               ] in
+               ] in*)
       let rval_wval_constraint =
-        mk_ite read_from_noninitial_unspec_write
+        mk_ite read_from_unspec_write
                (mk_and ((Loaded.is_specified (fns.getRval read))
                         :: range_assertions)
                )
