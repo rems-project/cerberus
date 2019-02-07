@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h> 
 int x=1, y=2;
 void f(int* p, int* q) {
   _Bool b = (p==q);
   // can this be false even with identical addresses?
+  __BMC_ASSUME ((intptr_t)p == (intptr_t)q && p!=q);
   printf("(p==q) = %s\n", b?"true":"false");
   return;
 }

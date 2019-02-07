@@ -12,6 +12,7 @@ int main() {
   int *q = &y;
   printf("Addresses: &x=%p p=%p &y=%"PRIxPTR\
          "\n",(void*)&x,(void*)p,uy);
+  __BMC_ASSUME ((intptr_t)p == (intptr_t)q);
   if ((intptr_t)p == (intptr_t)q) {
     *p = 11; // does this have undefined behaviour?
     printf("x=%d  y=%d  *p=%d  *q=%d\n",x,y,*p,*q); 

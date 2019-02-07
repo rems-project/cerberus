@@ -3,6 +3,7 @@
 #include "charon_address_guesses.h"
 void f(int *p) {
   int j=5;
+  __BMC_ASSUME ((intptr_t)p == (intptr_t)&j);
   if (p==&j) 
     *p=7;
   printf("j=%d &j=%p\n",j,(void*)&j); 
