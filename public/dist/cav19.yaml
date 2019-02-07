@@ -1,0 +1,30 @@
+- section: message passing
+  tests:
+    - MP+rlx-rlx+rlx-rlx.c
+    - MP+na-rel+acq-na.c
+- section: load buffering
+  tests:
+    - LB+rlx-rlx+rlx-rlx.c
+    - LB+rlx-data-rlx+rlx-data-rlx.c
+    - LB+rlx-ctrl-rlx+rlx-ctrl-rlx.c
+    - LB+acq-rel+acq-rel.c
+    - LB+Rsc-Wsc+Rsc-Wsc.c
+- section: store buffering
+  tests:
+    - SB+rel_acq+rel_acq.c
+    - SB+Wsc_Rsc+Wsc_Rsc.c
+  tests:
+- section: write-to-read causality
+  tests:
+    - WRC+rlx+rlx-rlx+rlx-rlx.c
+    - WRC+rlx+acq-rel+acq-acq.c
+- section: independent reads of independent writes
+  tests:
+    - IRIW+rel+rel+acq_acq+acq_acq.c
+    - IRIW+Wsc+Wsc+Rsc_Rsc+Rsc_Rsc.c
+- section: read-modify-writes
+  tests:
+    - RMW-strong-equal.c
+    - RMW-strong-unequal.c
+    - RMW-weak-equal.c
+    - RMW-weak-unequal.c
