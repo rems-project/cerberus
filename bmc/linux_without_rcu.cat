@@ -27,7 +27,7 @@
 //(* Fences *)
 //let fencerel(S) = (po & (_ * S)); po
 
-let po_asw = po | asw | I * (M \ I)
+let po_asw = po | asw
 let po_asw_loc = po_asw & loc
 
 //let rmb = [R \ Noreturn] ; fencerel(Rmb) ; [R \ Noreturn]
@@ -41,11 +41,9 @@ let mb = ([M] ; (po_asw & (U * Mb)) ; po_asw; [M])
 //		fencerel(After-unlock-lock) ; [M])
 //let gp = po_asw ; [Sync-rcu | Sync-srcu] ; po_asw?
 
-let gp = po_asw ; [Sync-rcu ] ; po_asw?
+//let strong-fence = mb | gp
 
-let strong-fence = mb | gp
-
-//let strong-fence = mb
+let strong-fence = mb
 
 //(* Release Acquire *)
 let acq-po_asw = [LinuxAcquire] ; po_asw ; [M]
@@ -109,54 +107,3 @@ let pb = prop ; strong-fence ; hb_star
 acyclic pb as propagation
 
 //output mb
-
-
-//(*******)
-//(* RCU *)
-//(*******)
-
-//(*
-// * Effect of read-side critical section proceeds from the rcu_read_lock()
-// * onward on the one hand and from the rcu_read_unlock() backwards on the
-// * other hand.
-// *)
-let rscs = po ; crit^-1 ; po?
-
-//(*
-// * The synchronize_rcu() strong fence is special in that it can order not
-// * one but two non-rf relations, but only in conjunction with an RCU
-// * read-side critical section.
-// *)
-let pb_star = pb*
-let rcu-link = hb_star ; pb_star ; prop
-
-//(*
-// * Any sequence containing at least as many grace periods as RCU read-side
-// * critical sections (joined by rcu-link) acts as a generalized strong fence.
-// *)
-
-let gp_rcu-link = gp ; rcu-link
-let rcu-link_rscs = rcu-link ; rscs
-let rscs_rcu-link = rscs ; rcu-link
-let rcu-link_gp = rcu-link ; gp
-
-//let rcu-fence = gp |
-//	(gp ; rcu-link ; rscs) |
-//	(rscs ; rcu-link ; gp) |
-//	(gp ; rcu-link ; rcu-fence ; rcu-link ; rscs) |
-//	(rscs ; rcu-link ; rcu-fence ; rcu-link ; gp) |
-//	(rcu-fence ; rcu-link ; rcu-fence)
-let rcu-fence-base = gp | (gp_rcu-link ; rscs) | (rscs_rcu-link ; gp)
-let rcu-fence = rcu-fence-base | (gp_rcu-link ; rcu-fence ; rcu-link_rscs) | (rscs_rcu-link ; rcu-fence ; rcu-link_gp) | (rcu-fence ; rcu-link; rcu-fence)
-
-//(* rb orders instructions just as pb does *)
-let rb_head = prop ; rcu-fence
-let rb_tail = hb_star ; pb_star
-//let rb = prop ; rcu-fence ; hb_star ; pb_star
-let rb = rb_head ; rb_tail
-
-irreflexive rb as rcu
-
-output crit
-//output rcu-fence
-//output rcu-link

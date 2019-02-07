@@ -225,6 +225,20 @@ let rec explode_expr env (Expr annot expr_ as expr) =
   let self e = explode_expr env e in
   let wrap z = Expr annot z in
   match expr_ with
+    | Eaction (Paction pol (Action loc a (Kill is_dynamic ptr_pe))) ->
+        match explode_ptr_pexpr env ptr_pe with
+          | Nothing ->
+              expr
+          | Just xs ->
+              begin
+                List.foldl (fun acc (_, pe') ->
+                  Expr [] (Esseq (Pattern [] (CaseBase (Nothing, BTy_unit)))
+                                 (Expr [] (Eaction (Paction pol (Action loc a (Kill is_dynamic pe')))))
+                                 acc)
+                ) (Expr [] Eskip) xs
+              end
+        end
+    
     | Esseq (Pattern pat_annot (CaseBase (Just sym, BTy_object OTy_pointer)) as pat) (Expr annot1 (Eaction pact) as e1) e2 ->
         match explode_paction env pact with
           | Nothing ->

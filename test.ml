@@ -2,6 +2,32 @@ open Pipeline
 let (>>=)  = Exception.except_bind
 let return = Exception.except_return
 
+(*
+let untype (file : 'a Core.typed_file) : 'a Core.file =
+  { main=    file.main
+  ; tagDefs= file.tagDefs
+  ; stdlib=  file.stdlib
+  ; impl=    
+  ; globs=   
+  ; funs=    
+  ; extern=  
+  ; funinfo= }
+*)
+
+(*
+  main    :  Symbol.sym option;
+  tagDefs : core_tag_definitions;
+  stdlib  : ('bty, 'a) generic_fun_map;
+  impl    : 'bty generic_impl;
+  globs   : (Symbol.sym * ('a, 'bty) generic_globs) list;
+  funs    : ('bty, 'a) generic_fun_map;
+  extern  : extern_map;
+  funinfo : (Symbol.sym, (ctype0 * ctype0 list * bool * bool)) Pmap.map;
+*)
+
+
+
+
 
 let impl_file =
   "gcc_4.9.0_x86_64-apple-darwin10.8.0"
@@ -31,6 +57,7 @@ let io =  {
 
 
 let () =
+  Global_ocaml.(set_cerb_conf false Smt2.Random false Basic false false);
   let act =
     load_core_stdlib ()                  >>= fun core_stdlib ->
     load_core_impl core_stdlib impl_file >>= fun core_impl   ->
@@ -43,6 +70,12 @@ let () =
         end;
         print_endline "============================================================================================";
         let file' = Core_unstruct.explode_file file in
+        begin match Core_typing.typecheck_program file' with
+          | Exception.Exception err ->
+              Printf.printf "TYPING FAILED ==> %s\n" (Pp_errors.to_string err)
+          | Exception.Result _ ->
+              ()
+        end;
         print_endline begin
           Pp_utils.to_plain_pretty_string (Pp_core.Basic.pp_file file')
         end

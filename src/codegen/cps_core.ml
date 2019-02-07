@@ -192,7 +192,7 @@ let cps_transform_expr globs bvs core_expr =
     | Epar   _ -> raise (Unsupported "Concurrent operation `par` not supported.")
     | Ewait  _ -> raise (Unsupported "Concurrent operation `wait` not supported.")
   in
-  let ret_sym = Symbol.fresh0 () in
+  let ret_sym = Symbol.fresh () in
   (* TODO: type check/annotate this symbol *)
   let ret_pat = Core.Pattern ([], Core.CaseBase (Some ret_sym, Core.BTy_unit)) in
   tr_right [] None [] (Some ret_pat) (CpsCont ret_sym) core_expr

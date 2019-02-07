@@ -1,4 +1,4 @@
-// IRIW with release/acquire
+// IRIW+rel+rel+acq-acq+acq-acq
 // The reading threads do not have to see the writes to x and y in the same order.
 #include <stdatomic.h>
 int main() {
@@ -16,6 +16,6 @@ int main() {
     r4 = atomic_load_explicit(&x, memory_order_acquire);
   } }-};
   __BMC_ASSUME(r1 == 1 && r2 == 0 && r3 == 1 && r4 == 0);
-  return (r1 + 2 * (r2 + 2 * (r3 + 2 * r4)));
+  return r1 + 2 * (r2 + 2 * (r3 + 2 * r4));
 }
 

@@ -25,7 +25,7 @@ let inline (<$>)      = E.fmap
 let inline (<*>)      = E.app
 
 
-val     infer_pattern: pattern -> E.eff (typing_env * inferred * inferred_pattern)
+(*val     infer_pattern: pattern -> E.eff (typing_env * inferred * inferred_pattern) *)
 let rec infer_pattern (Pattern annots pat) =
   let loc = Annot.get_loc_ annots in
   match pat with
@@ -35,10 +35,10 @@ let rec infer_pattern (Pattern annots pat) =
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), toInferred bTy, Pattern annots (CaseBase (Just sym, bTy)))
   | CaseCtor ctor pats ->
       match (ctor, pats) with
-        | (Cnil (), []) ->
+        | (Cnil _, []) ->
             let infer = InferredType_list InferredUnknown in
             E.return (empty_env, infer, Pattern annots (CaseCtor (Cnil infer) []))
-        | (Cnil (), _) ->
+        | (Cnil _, _) ->
             error "infer_pattern: Cnil: wrong number of arguments"
         | (Ccons, [pat1; pat2]) ->
             infer_pattern pat1 >>= fun (env1, infer1, tpat1) ->
@@ -156,11 +156,11 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), Pattern annots (CaseBase (Just sym, bTy)))
   | CaseCtor ctor pats ->
       match (ctor, expected_bTy, pats) with
-        | (Cnil (), BTy_list elem_bTy, []) ->
+        | (Cnil _, BTy_list elem_bTy, []) ->
             E.return (empty_env, Pattern annots (CaseCtor (Cnil (toInferred elem_bTy)) []))
-        | (Cnil (), _, []) ->
+        | (Cnil _, _, []) ->
             E.fail loc (MismatchExpected "Cnil" expected_bTy "list")
-        | (Cnil (), _, _) ->
+        | (Cnil _, _, _) ->
             error "typecheck_pattern: Cnil: wrong number of arguments"
 
         | (Ccons, BTy_list elem_bTy, [pat1; pat2]) ->
@@ -293,7 +293,7 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
 end
 
 
-val     typeof_object_value: Loc.t -> typing_env -> object_value -> E.eff core_object_type
+(*val     typeof_object_value: Loc.t -> typing_env -> object_value -> E.eff core_object_type *)
 let rec typeof_object_value loc env oval =
   match oval with
    | OVinteger _ ->
@@ -339,7 +339,7 @@ and typeof_loaded_value loc env (lval: loaded_value) : E.eff core_object_type =
 
 
 
-val     typeof_value: Loc.t -> typing_env -> Core.value -> E.eff core_base_type
+(*val     typeof_value: Loc.t -> typing_env -> Core.value -> E.eff core_base_type *)
 let rec typeof_value loc env cval =
   match cval with
     | Vobject oval ->
@@ -376,8 +376,8 @@ let rec typeof_value loc env cval =
   end
 
 
-val     infer_pexpr: core_tag_definitions -> typing_env -> pexpr -> E.eff inferred_pexpr
-let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
+(*val     infer_pexpr: foral 'bty. core_tag_definitions -> typing_env -> generic_pexpr 'bty Symbol.sym -> E.eff inferred_pexpr *)
+let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr 'bty Symbol.sym) =
   let loc = Annot.get_loc_ annot in
   match pexpr_ with
     | PEsym sym ->
@@ -408,7 +408,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
     | PEctor ctor pes ->
         let ret_ctor bTy ctor pes = E.return (Pexpr annot bTy (PEctor ctor pes)) in
         match (ctor, pes) with
-          | (Cnil (), []) ->
+          | (Cnil _, []) ->
               E.return (Pexpr annot InferredUnknown (PEctor (Cnil InferredUnknown) []))
           | (Cnil _, _) ->
               error "infer_pexpr: Cnil: wrong number of arguments"
@@ -516,7 +516,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
               end
           | (Cspecified, _) ->
               error "infer_pexpr: Cspecified: wrong number of arguments"
-          | (Cunspecified, [Pexpr _ () (PEval (Vctype ty))]) ->
+          | (Cunspecified, [Pexpr _ _ (PEval (Vctype ty))]) ->
               let pe' = Pexpr annot InferredType_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just oTy ->
@@ -529,7 +529,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
           | (Cunspecified, _) ->
               error "infer_pexpr: Cunspecified: wrong number of arguments"
           | _ ->
-              error ("WIP: infer_pexpr, " ^ Pp.stringFromCore_pexpr (Pexpr annot () pexpr_))
+              error ("WIP: infer_pexpr, " ^ Pp.stringFromCore_pexpr pexpr)
         end
     | PEcase pe cases ->
         infer_pexpr tagDefs env pe >>= fun (Pexpr _ infer _ as pe') ->
@@ -698,7 +698,7 @@ let rec infer_pexpr tagDefs env (Pexpr annot () pexpr_) =
           | Just _ ->
               E.fail loc (CoreTyping_TODO "PEcall, the name wasn't a function")
           | Nothing ->
-              E.fail loc (CoreTyping_TODO ("PEcall, couldn't resolve the name: " ^ Pp.stringFromCore_pexpr (Pexpr annot () pexpr_)))
+              E.fail loc (CoreTyping_TODO ("PEcall, couldn't resolve the name: " ^ Pp.stringFromCore_pexpr pexpr))
         end
     | PElet pat pe1 pe2 ->
         infer_pattern pat >>= fun (pat_env, pat_infer, pat') ->
@@ -761,7 +761,7 @@ tagDefs env BTy_boolean pe)
 (*
 val     typecheck_pexpr: typing_env -> core_base_type -> pexpr -> E.eff
 typed_pexpr*)
-and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot () pexpr_) : E.eff inferred_pexpr =
+and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot _ pexpr_ as pexpr) : E.eff inferred_pexpr =
   let loc = Annot.get_loc_ annot in
   Pexpr annot (toInferred bTy) <$> match pexpr_ with
     | PEsym sym ->
@@ -798,7 +798,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEctor ctor pes ->
         let ret_ctor ctor pe = PEctor ctor [pe] in
         match (ctor, bTy, pes) with
-          | (Cnil (), BTy_list elem_bTy, []) ->
+          | (Cnil _, BTy_list elem_bTy, []) ->
               E.return (PEctor (Cnil (toInferred elem_bTy)) [])
           | (Cnil _, _, _) ->
               E.fail loc (MismatchExpected "Cnil" bTy "list")
@@ -1038,9 +1038,9 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
             (PEcall nm <$> E.mapM (fun (bTy, pe) ->
               typecheck_pexpr tagDefs env bTy pe) (List.zip bTys pes))
           | Just _ ->
-              E.fail loc (CoreTyping_TODO ("illtyped a fun/proc symbolic ==> " ^ Pp.stringFromCore_pexpr (Pexpr [] () (PEcall nm pes))))
+              E.fail loc (CoreTyping_TODO ("illtyped a fun/proc symbolic ==> " ^ Pp.stringFromCore_pexpr pexpr))
           | Nothing ->
-              E.fail loc (CoreTyping_TODO ("unresolved PEcall ==> " ^ Pp.stringFromCore_pexpr (Pexpr [] () pexpr_)))
+              E.fail loc (CoreTyping_TODO ("unresolved PEcall ==> " ^ Pp.stringFromCore_pexpr pexpr))
         end
     | PElet pat pe1 pe2 ->
         infer_pattern pat >>= fun (pat_env, pat_infer, pat') ->
@@ -1085,12 +1085,12 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
   end
 
 
-val typecheck_export_pexpr: core_tag_definitions -> typing_env -> core_base_type -> Core.pexpr -> E.eff typed_pexpr
+(*val typecheck_export_pexpr: forall 'bty. core_tag_definitions -> typing_env -> core_base_type -> Core.generic_pexpr 'bty Symbol.sym -> E.eff typed_pexpr *)
 let typecheck_export_pexpr tagDefs env bTy pe =
   typecheck_pexpr tagDefs env bTy pe >>= export_pexpr
 
 
-val infer_action: core_tag_definitions -> typing_env -> action unit -> E.eff (core_base_type * typed_action unit)
+(*val infer_action: foral 'a 'bty. core_tag_definitions -> typing_env -> generic_action 'a 'bty -> E.eff (core_base_type * typed_action 'a) *)
 let rec infer_action tagDefs env (Action loc annot act_) =
   match act_ with
     | Create pe1 pe2 pref ->
@@ -1100,7 +1100,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
     | CreateReadOnly pe1 pe2 pe3 pref ->
         typecheck_export_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
         match pe2 with
-          | Pexpr _ () (PEval (Vctype ty)) ->
+          | Pexpr _ _ (PEval (Vctype ty)) ->
               let tpe2 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1121,7 +1121,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         E.return (BTy_unit, Kill b tpe)
     | Store b pe1 pe2 pe3 mo ->
         match pe1 with
-          | Pexpr _ () (PEval (Vctype ty)) ->
+          | Pexpr _ _ (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1143,7 +1143,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         end
     | Load pe1 pe2 mo ->
         match pe1 with
-          | Pexpr _ () (PEval (Vctype ty)) ->
+          | Pexpr _ _ (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1167,7 +1167,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         E.return (BTy_unit, LinuxFence mo)
     | LinuxStore pe1 pe2 pe3 mo ->
         match pe1 with
-          | Pexpr [] () (PEval (Vctype ty)) ->
+          | Pexpr [] _ (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1182,7 +1182,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         end
     | LinuxLoad pe1 pe2 mo ->
         match pe1 with
-          | Pexpr [] () (PEval (Vctype ty)) ->
+          | Pexpr [] _ (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1196,7 +1196,7 @@ let rec infer_action tagDefs env (Action loc annot act_) =
         end
     | LinuxRMW pe1 pe2 pe3 mo ->
         match pe1 with
-          | Pexpr [] () (PEval (Vctype ty)) ->
+          | Pexpr [] _ (PEval (Vctype ty)) ->
               let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
               match core_object_type_of_ctype ty with
                 | Just lvalue_oTy ->
@@ -1214,7 +1214,8 @@ let rec infer_action tagDefs env (Action loc annot act_) =
   E.return (bTy, Action loc annot act_')
 
 
-val typecheck_action: core_tag_definitions -> typing_env -> core_base_type -> action unit -> E.eff (typed_action unit)
+val typecheck_action:
+  forall 'a 'bty. core_tag_definitions -> typing_env -> core_base_type -> generic_action 'a 'bty Symbol.sym -> E.eff (typed_action 'a)
 let typecheck_action tagDefs env bTy (Action loc annot act_) =
   Action loc annot <$> match act_ with
   | Create pe1 pe2 pref ->
@@ -1226,7 +1227,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       guard_match loc "create_readonly()" bTy (BTy_object OTy_pointer) >>
       typecheck_export_pexpr tagDefs env (BTy_object OTy_integer) pe1 >>= fun tpe1 ->
       match pe2 with
-        | Pexpr _ () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe2 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1250,7 +1251,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | Store b pe1 pe2 pe3 mo ->
       guard_match loc "store()" bTy BTy_unit >>
       match pe1 with
-        | Pexpr _ () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1272,7 +1273,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       end
   | Load pe1 pe2 mo ->
       match pe1 with
-        | Pexpr _ () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1293,7 +1294,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
       guard_match loc "compareExchangeStrong()" bTy (BTy_loaded OTy_integer) >>
       match pe1 with
-      | Pexpr [] () (PEval (Vctype ty)) ->
+      | Pexpr [] _ (PEval (Vctype ty)) ->
         let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
         match core_object_type_of_ctype ty with
           | Just lvalue_oTy ->
@@ -1310,7 +1311,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
       guard_match loc "compareExchangeWeak()" bTy (BTy_loaded OTy_integer) >>
       match pe1 with
-      | Pexpr [] () (PEval (Vctype ty)) ->
+      | Pexpr _ _ (PEval (Vctype ty)) ->
         let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
         match core_object_type_of_ctype ty with
           | Just lvalue_oTy ->
@@ -1330,7 +1331,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
   | LinuxStore pe1 pe2 pe3 mo ->
       guard_match loc "store()" bTy BTy_unit >>
       match pe1 with
-        | Pexpr [] () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1345,7 +1346,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       end
   | LinuxLoad pe1 pe2 mo ->
       match pe1 with
-        | Pexpr [] () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1360,7 +1361,7 @@ let typecheck_action tagDefs env bTy (Action loc annot act_) =
       end
   | LinuxRMW pe1 pe2 pe3 mo ->
       match pe1 with
-        | Pexpr [] () (PEval (Vctype ty)) ->
+        | Pexpr _ _ (PEval (Vctype ty)) ->
             let tpe1 = Pexpr [] BTy_ctype (PEval (Vctype ty)) in
             match core_object_type_of_ctype ty with
               | Just lvalue_oTy ->
@@ -1423,7 +1424,7 @@ let memop_signature = function
 end
 
 
-val     collect_labels: typing_env -> expr unit -> E.eff typing_env
+val     collect_labels: forall 'bty 'a. typing_env -> Core.generic_expr 'a 'bty Symbol.sym -> E.eff typing_env
 let rec collect_labels env (Expr _ expr_) =
   match expr_ with
     | Epure _ ->
@@ -1529,7 +1530,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
     | Eskip ->
         E.guard (expected_bTy = BTy_unit) loc (Mismatch "skip" expected_bTy BTy_unit) >>
         E.return Eskip
-    | Eccall () pe_ty pe pes ->
+    | Eccall annot pe_ty pe pes ->
         infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
         infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
         match (pe_ty, bTy) with
@@ -1555,18 +1556,18 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
               end >>= fun pes' ->
               let ret_oTy_opt = Core_aux.core_object_type_of_ctype ty in
               guard_match loc "ccall" expected_bTy (maybe BTy_unit BTy_loaded ret_oTy_opt) >>
-              E.return (Eccall () pe_ty' pe' pes')
+              E.return (Eccall annot pe_ty' pe' pes')
           | (_, _) ->
               E.fail loc (CoreTyping_TODO "the first operand of ccall() should have a C function type")
         end
-    | Eproc () nm pes ->
+    | Eproc annot nm pes ->
         match Map.lookup nm env.decls with
           | Just (TDproc ret_bTy bTys) ->
               E.mapM (fun (bTy, pe) ->
                 typecheck_export_pexpr tagDefs env bTy pe
               ) (List.zip bTys pes) >>= fun pes' ->
               guard_match loc "proc" expected_bTy ret_bTy >>
-              E.return (Eproc () nm pes')
+              E.return (Eproc annot nm pes')
           | Just _ ->
           (* TODO: clean *)
               E.fail loc (CoreTyping_TODO ("in Eproc(), found a def in a cfunction value: " (*^
@@ -1634,12 +1635,12 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         ) sym_bTy_pes >>= fun sym_bTy_pes' ->
         let env' = <| decls= Map.fromList (List.map (fun (sym, (bTy, _)) -> (Sym sym, TDsym bTy)) sym_bTy_pes'); labs= Map.empty |> in
         Esave sym_bTy sym_bTy_pes' <$> typecheck_expr tagDefs (env_union env env') expected_bTy e
-    | Erun () sym pes ->
+    | Erun annot sym pes ->
         match Map.lookup sym env.labs with
           | Just (bTy, bTys) ->
 (*            guard_match loc "run" expected_bTy bTy >> *) (* TODO check *)
               begin
-                Erun () sym <$> E.mapM (fun (bTy, pe) ->
+                Erun annot sym <$> E.mapM (fun (bTy, pe) ->
                   typecheck_pexpr tagDefs env bTy pe
                     >>= export_pexpr >>= fun pe' ->
                   E.return pe'
@@ -1663,7 +1664,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
 
 
 (* TODO: add a check for the existence of main *)
-val typecheck_program: Core.file unit -> Exception.exceptM (Core.typed_file unit) Errors.error
+val typecheck_program: forall 'bty 'a. Core.generic_file 'bty 'a -> Exception.exceptM (Core.typed_file 'a) Errors.error
 let typecheck_program file =
   let aux =
     (* The startup function/procedure must be defined *)
