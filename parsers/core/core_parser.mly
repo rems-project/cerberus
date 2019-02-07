@@ -1353,8 +1353,8 @@ cabs_id:
 memory_order:
 | SEQ_CST { Cmm.Seq_cst }
 | RELAXED { Cmm.Relaxed }
-| RELEASE { Cmm.Release }
-| ACQUIRE { Cmm.Acquire }
+| RELEASE { Cmm.Release0 }
+| ACQUIRE { Cmm.Acquire0 }
 | CONSUME { Cmm.Consume }
 | ACQ_REL { Cmm.Acq_rel }
 ;
