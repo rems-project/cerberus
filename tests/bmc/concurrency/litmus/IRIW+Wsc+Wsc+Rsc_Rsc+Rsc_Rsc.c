@@ -16,5 +16,6 @@ int main() {
     r4 = atomic_load_explicit(&x, memory_order_seq_cst);
   } }-};
   assert(!(r1 == 1 && r2 == 0 && r3 == 1 && r3 == 0));
-  return (r1 + 2 * (r2 + 2 * (r3 + 2 * r4))); }
+  return r1 + 2 * (r2 + 2 * (r3 + 2 * r4));
+}
 
