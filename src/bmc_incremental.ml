@@ -1299,12 +1299,17 @@ module BmcZ3 = struct
         | Some (StructDef memlist) ->
             let (size, index_list) =
               PointerSort.struct_member_index_list sym file in
-
-            (*let member_indices = List.zip index_list memlist in
+            let member_indices = zip index_list memlist in
             let shift_opt = List.find_opt (fun (shift, (mem, _)) ->
-
-            )*)
-            assert false
+              if cabsid_cmp mem member = 0 then true
+              else false
+            ) member_indices in
+            (match shift_opt with
+            | Some (shift, _) ->
+                printf "%s %d\n" (pp_to_string (Pp_core.Basic.pp_pexpr pexpr)) shift;
+                return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift))
+            | None -> assert false
+            )
 
 
             (*let memsizes = List.map (fun (cid, cbt) ->
@@ -4337,26 +4342,24 @@ module BmcConcActions = struct
         begin
         assert (List.length aids = List.length sortlist);
         let (size, index_list) = PointerSort.struct_member_index_list tag file in
-        printf "Struct sym: %s; size: %d\n" (symbol_to_string tag) size;
-
-
-        assert false;
-        mapMi (fun i (ctype,sort) ->
-          let index = List.fold_left
-              (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
-              0 (list_take i sortlist) in
-          let target_addr =
-            PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
-          let aid = List.nth aids i in
-          let (initial_value, assumptions) =
-            BmcMemCommon.mk_initial_loaded_value sort
+        if (List.length index_list <> List.length sortlist) then
+          failwith "Structs with non-basic types not supported"
+        else begin
+          let indexed_sorts = zip index_list sortlist in
+          mapMi (fun i (index, (ty, sort)) ->
+            let target_addr =
+              PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
+            let aid = List.nth aids i in
+            let (initial_value, assumptions) =
+              BmcMemCommon.mk_initial_loaded_value sort
                 (sprintf "init_%d[struct.%d]" alloc_id i)
                 ctype initialise file in
-          mapM add_assertion assumptions >>= fun _ ->
-          let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
-          return (mk_store pol mk_true aid initial_tid
-                           (C_mem_order Cmm_csem.NA) ptr initial_value ctype)
-        ) sortlist
+            mapM add_assertion assumptions >>
+            let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
+            return (mk_store pol mk_true aid initial_tid
+                             (C_mem_order Cmm_csem.NA) ptr initial_value ty)
+          ) indexed_sorts
+          end
         end
     | _ ->
       begin
@@ -5039,6 +5042,7 @@ module BmcConcActions = struct
     mk_preexec actions po fn_deps >>= fun preexec ->
     bmc_debug_print 6 (pp_preexec preexec);
 
+
     (* TODO *)
     (*compute_crit preexec.po;*)
     (* Debug: iterate through taint map *)
@@ -5072,7 +5076,7 @@ module BmcConcActions = struct
         []
     in
     return (preexec,
-            assertions @ mem_assertions @ pnvi_asserts,
+            assertions @ mem_assertions @  pnvi_asserts,
             if is_some memory_model then
               Some (BmcMem.extract_executions g_solver (Option.get memory_model))
             else None
