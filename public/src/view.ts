@@ -43,6 +43,7 @@ export default class View {
     this.on('dirty', this, () => {
       if (!this.dirty) {
         delete this.state.interactive
+        this.state.bmc_executions = []
         this.emit('clear')
         this.emit('updateArena')
         this.emit('updateMemory')
@@ -112,9 +113,9 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
-              component('Stdout'),
+              /*component('Stdout'),
               component('Stderr'),
-              component('Memory')
+              component('Memory')*/
             ]}
           ]}, {
             type: 'stack',

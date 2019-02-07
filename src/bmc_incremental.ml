@@ -1064,7 +1064,8 @@ module BmcZ3 = struct
 
   (* Massive TODO *)
   type intermediate_action =
-    | ICreate of aid * ctype  (* align ty *) * ctype * ctype_sort list * alloc
+    (* TODO: aid list for ICreate as a hack for structs *)
+    | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | IKill of aid
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
@@ -1291,6 +1292,7 @@ module BmcZ3 = struct
         *)
         return (PointerSort.shift_by_n z3d_ptr shift_size)
     | PEmember_shift (ptr, sym, member) ->
+        (* TODO: padding/alignment *)
         z3_pe ptr >>= fun z3d_ptr ->
         get_file  >>= fun file ->
         begin match Pmap.lookup sym file.tagDefs with
@@ -1360,7 +1362,13 @@ module BmcZ3 = struct
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-    get_fresh_aid >>= fun aid ->
+
+    (* TODO: special case creates for structs *)
+    (match ctype with
+     | Struct0 _ -> mapMi (fun i _ -> get_fresh_aid) flat_sortlist
+     | _         -> get_fresh_aid >>= fun aid -> return [aid]
+    ) >>= fun aids ->
+    (*get_fresh_aid >>= fun aid ->*)
     (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
     let base_addr = PointerSort.mk_nd_addr alloc_id in
 
@@ -1370,7 +1378,7 @@ module BmcZ3 = struct
                            base_addr,
                            ReadWrite, pref) >>
     return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
-            ICreate (aid, ctype, align_ty, flat_sortlist, alloc_id))
+            ICreate (aids, ctype, align_ty, flat_sortlist, alloc_id))
 
   let z3_action (Paction(p, Action(loc, a, action_)) ) uid =
     (match action_ with
@@ -1479,11 +1487,11 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         assert (!!bmc_conf.concurrent_mode);
         get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
@@ -1498,7 +1506,7 @@ module BmcZ3 = struct
     | LinuxLoad _ ->
         assert false
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -1510,7 +1518,7 @@ module BmcZ3 = struct
     | LinuxStore _ ->
         assert false
     | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -2573,7 +2581,7 @@ module BmcVC = struct
                              Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure) ->
         assert (!!bmc_conf.concurrent_mode);
-        assert (!!bmc_conf.memory_mode = MemoryMode_C);
+        assert_memory_mode_c ();
         (* Check valid memory orders:
          * mo_failure must not be RELEASE or ACQ_REL
          * mo_failure must be no stronger than mo_success
@@ -2601,7 +2609,7 @@ module BmcVC = struct
     | LinuxFence _ -> return []
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
 
@@ -2612,7 +2620,7 @@ module BmcVC = struct
     | LinuxStore _ -> assert false
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), memorder) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         lookup_sym sym >>= fun ptr_z3 ->
         return [(PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
@@ -2620,7 +2628,7 @@ module BmcVC = struct
     | LinuxLoad _  -> assert false
     | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         assert (!!bmc_conf.concurrent_mode);
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         vcs_pe wval >>= fun vcs_wval ->
         lookup_sym sym >>= fun ptr_z3 ->
         return ((PointerSort.valid_ptr ptr_z3,
@@ -3718,7 +3726,7 @@ module BmcSeqMem = struct
     let base_addr = get_metadata_base metadata in
     mapMi (fun i (ctype,sort) ->
       let index = List.fold_left
-          (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
+          (fun acc (ty, _) -> acc + (PointerSort.type_size ty file))
           0 (list_take i sortlist) in
       let addr = SeqMem.mk_shift alloc_id index base_addr in
 
@@ -3743,7 +3751,7 @@ module BmcSeqMem = struct
                  : ret_ty eff =
     get_action uid >>= fun action ->
     match action with
-    | ICreate(aid, ctype, _, sortlist, alloc_id) ->
+    | ICreate(_, ctype, _, sortlist, alloc_id) ->
         do_create ctype sortlist alloc_id false
     | IKill(_) ->
         return empty_ret
@@ -4028,7 +4036,7 @@ module BmcSeqMem = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return empty_ret
-    | Some (ICreate(aid, ctype, _, sortlist, alloc_id)) ->
+    | Some (ICreate(_, ctype, _, sortlist, alloc_id)) ->
         do_create (*aid*) ctype sortlist alloc_id true >>= fun ret ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
@@ -4288,12 +4296,13 @@ module BmcConcActions = struct
 
   (* TODO: allocation size assertions *)
   (* Make a single create *)
-  let do_create (aid: aid)
+  let do_create (aids: aid list)
                 (ctype: ctype)
                 (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
                 (pol: polarity)
-                (initialise: bool) =
+                (initialise: bool)
+                : bmc_action list eff =
     get_file >>= fun file ->
     let sort = ctype_to_z3_sort ctype file in
     let is_atomic_fn = (function ctype -> match ctype with
@@ -4302,7 +4311,7 @@ module BmcConcActions = struct
     get_meta alloc_id >>= fun metadata ->
     let base_addr = get_metadata_base metadata in
 
-    mapMi_ (fun i (cype,sort) ->
+    mapMi_ (fun i (ctype,sort) ->
       let index = List.fold_left
           (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
           0 (list_take i sortlist) in
@@ -4311,25 +4320,53 @@ module BmcConcActions = struct
       let is_atomic =
         PointerSort.assert_is_atomic target_addr (is_atomic_fn ctype) in
       add_assertion is_atomic
-    ) sortlist >>
-    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
-                                   (*(AddressSort.mk_from_addr (alloc_id,0)) in*)
+    ) sortlist >>= fun _ ->
+    (match ctype with
+    | Struct0 _ -> (* Hack for structs *)
+        begin
+        assert (List.length aids = List.length sortlist);
+        mapMi (fun i (ctype,sort) ->
+          let index = List.fold_left
+              (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
+              0 (list_take i sortlist) in
+          let target_addr =
+            PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
+          let aid = List.nth aids i in
+          let (initial_value, assumptions) =
+            BmcMemCommon.mk_initial_loaded_value sort
+                (sprintf "init_%d[struct.%d]" alloc_id i)
+                ctype initialise file in
+          mapM add_assertion assumptions >>= fun _ ->
+          let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
+          return (mk_store pol mk_true aid initial_tid
+                           (C_mem_order Cmm_csem.NA) ptr initial_value ctype)
+        ) sortlist
+        end
+    | _ ->
+      begin
+      assert (List.length aids = 1);
+      let aid = List.hd aids in
+      let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
+                                     (*(AddressSort.mk_from_addr (alloc_id,0)) in*)
+      let (initial_value, assumptions) =
+        BmcMemCommon.mk_initial_loaded_value sort
+            (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+            ctype initialise file in
+      mapM add_assertion assumptions >>= fun _ ->
+      return [mk_store pol mk_true aid initial_tid
+                       (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
+      end
+    )
 
-    let (initial_value, assumptions) =
-      BmcMemCommon.mk_initial_loaded_value sort
-          (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
-          ctype initialise file in
-    mapM add_assertion assumptions >>
-    return [mk_store pol mk_true aid initial_tid
-                     (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
+
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
                                   (pol : polarity)
                                   (uid : int)
                                   : (bmc_action list) eff =
     (match action with
-    | ICreate(aid, ctype, _, sortlist, alloc_id) ->
-        do_create aid ctype sortlist alloc_id pol false
+    | ICreate(aids, ctype, _, sortlist, alloc_id) ->
+        do_create aids ctype sortlist alloc_id pol false
     | IKill aid ->
         (* TODO *)
         return []
@@ -4481,9 +4518,9 @@ module BmcConcActions = struct
         (* Param is not a pointer; nothing to be done *)
         assert (not (is_core_ptr_bty cbt));
         return []
-    | Some (ICreate(aid, ctype, _, sortlist, alloc_id)) ->
+    | Some (ICreate(aids, ctype, _, sortlist, alloc_id)) ->
         (* Polarity is irrelevant? *)
-        do_create aid ctype sortlist alloc_id Pos true >>= fun actions ->
+        do_create aids ctype sortlist alloc_id Pos true >>= fun actions ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
         get_meta alloc_id >>= fun metadata ->

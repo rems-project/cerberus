@@ -180,7 +180,7 @@ instance: src/instance.ml
 	cp src/prelude.ml.aux src/prelude.ml
 	ocamlbuild -j 4 -use-ocamlfind -pkgs pprint,lem,yojson,${Z3},cmdliner,sha,sexplib,ppx_sexp_conv,angstrom -libs str instance.native
 	sed 's/ref \`MemSymbolic/ref \`MemConcrete/' src/prelude.ml > src/prelude.ml.aux
-	cp src/prelude.ml.aux src/prelude.ml
+	mv src/prelude.ml.aux src/prelude.ml
 	cp -L instance.native cerb.symbolic
 
 web: src/web.ml

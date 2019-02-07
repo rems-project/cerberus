@@ -9,6 +9,14 @@ open Printf
 open Util
 open Z3
 
+let assert_memory_mode_linux () =
+  if !!bmc_conf.memory_mode <> MemoryMode_Linux then
+    failwith "Error: Linux memory model only, please change model."
+
+let assert_memory_mode_c () =
+  if !!bmc_conf.memory_mode <> MemoryMode_C then
+    failwith "Error: C memory model only, please change model."
+
 let is_integer_type (ctype: Core_ctype.ctype0) =
   match ctype with
   | Basic0 (Integer _) -> true
@@ -30,13 +38,15 @@ let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
 let object_value_to_z3 (oval: object_value) : Expr.expr =
   match oval with
   | OVinteger ival -> integer_value_to_z3 ival
-  | OVfloating _ -> assert false
+  | OVfloating _ ->
+        failwith "Floats are not supported."
   | OVpointer pv ->
       assert (is_null pv);
       PointerSort.mk_null
   | OVarray _
   | OVstruct _
-  | OVunion _
+  | OVunion _ ->
+    failwith "Error: unions are not supported."
   | OVcomposite _ ->
       assert false
 
@@ -83,13 +93,14 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   match cot with
   | OTy_integer     -> integer_sort
   | OTy_pointer     -> PointerSort.mk_sort
-  | OTy_floating
+  | OTy_floating ->
+      failwith "Floats are not supported."
   | OTy_array _
   | OTy_struct _ ->
       assert false
   (*| OTy_cfunction _ -> CFunctionSort.mk_sort (* TODO *)*)
   | OTy_union _ ->
-      assert false
+    failwith "Error: unions are not supported."
 
 let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   match cbt with
@@ -309,7 +320,8 @@ let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
           *)
       | _ -> assert false
       end
-  | Union0 _
+  | Union0 _ ->
+    failwith "Error: unions are not supported."
   | Builtin0 _ -> assert false
 and
 struct_to_sort (sym, memlist_def) file  =
@@ -332,7 +344,8 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
   | Void0     -> assert false
   | Basic0(Integer i) ->
       CaseSortBase (ty, LoadedInteger.mk_sort)
-  | Basic0 _ -> assert false
+  | Basic0(Floating _) ->
+      failwith "Error: floats are not supported."
   | Array0(ty2, Some n) ->
       let sort = ctype_to_bmcz3sort ty2 file in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
@@ -357,8 +370,10 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                                  memlist)
       | _ -> assert false
       end
-  | Union0 _
-  | Builtin0 _ -> assert false
+  | Union0 _ ->
+    failwith "Error: unions are not supported."
+  | Builtin0 _ ->
+    assert false
 
 let size_of_ctype (ty: Core_ctype.ctype0)
                   (file: unit typed_file) =
