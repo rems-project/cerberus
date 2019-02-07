@@ -1081,6 +1081,7 @@ module BmcZ3 = struct
     | IFence of aid * Cmm_csem.memory_order
     | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
     | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
+    | ILinuxRmw of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
     | ILinuxFence of aid * Linux.memory_order0
 
   (*type permission_flag =
@@ -1508,8 +1509,19 @@ module BmcZ3 = struct
                 ILinuxStore (aid, ty, flat_sortlist, sym_expr, z3d_wval, mo))
     | LinuxStore _ ->
         assert false
-    | LinuxRMW (pe1, pe2, pe3, mo) ->
-        assert false
+    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        get_fresh_aid  >>= fun aid ->
+        lookup_sym sym >>= fun sym_expr ->
+        z3_pe wval     >>= fun z3d_wval ->
+        get_file       >>= fun file ->
+        let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ty file) in
+        assert (List.length flat_sortlist = 1);
+        let (ctype, sort) = List.hd flat_sortlist in
+        let rval_expr = mk_fresh_const ("load_" ^ (symbol_to_string sym)) sort in
+        return (rval_expr,
+                ILinuxRmw (aid, ty, flat_sortlist, sym_expr, z3d_wval, rval_expr, mo))
+    | _ -> assert false
     ) >>= fun (z3d_action, intermediate_action) ->
     add_action uid intermediate_action >>
     return z3d_action
@@ -2589,6 +2601,7 @@ module BmcVC = struct
     | LinuxFence _ -> return []
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
 
@@ -2599,11 +2612,20 @@ module BmcVC = struct
     | LinuxStore _ -> assert false
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), memorder) ->
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
         lookup_sym sym >>= fun ptr_z3 ->
         return [(PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
                ]
     | LinuxLoad _  -> assert false
+    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        assert (!!bmc_conf.concurrent_mode);
+        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        vcs_pe wval >>= fun vcs_wval ->
+        lookup_sym sym >>= fun ptr_z3 ->
+        return ((PointerSort.valid_ptr ptr_z3,
+                 VcDebugStr (string_of_int uid ^ "_RMW_invalid_ptr"))
+                 :: vcs_wval)
     | LinuxRMW _ -> assert false
 
   let rec vcs_e (Expr(annots, expr_) as expr)
@@ -3873,6 +3895,8 @@ module BmcSeqMem = struct
        assert false
     | ILinuxStore(aid, _, type_list, ptr, wval, mo) ->
        assert false
+    | ILinuxRmw _->
+       assert false
     | ILinuxFence(aid, mo) ->
        assert false
 
@@ -4356,6 +4380,9 @@ module BmcConcActions = struct
     | ILinuxStore(aid, ctype, _, ptr, wval, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Store(aid, tid, Linux_mem_order mo, ptr, wval, ctype))]
+    | ILinuxRmw(aid, ctype, _, ptr, wval, rval, mo) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, RMW(aid, tid, Linux_mem_order mo, ptr, rval, wval, ctype))]
     | ILinuxFence(aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid, tid, Linux_mem_order mo))]
@@ -4773,9 +4800,20 @@ module BmcConcActions = struct
                  })
         | _ -> assert false
         end
-    | LinuxRMW (pe1, pe2, pe3, mo) ->
-        bmc_debug_print 7 "TODO: Linux RMW";
-        return (Pset.empty Pervasives.compare, empty_deps)
+    | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
+        get_action uid   >>= fun interm_action ->
+        do_taint_pe wval >>= fun taint_wval ->
+        get_taint sym >>= fun taint_ptr ->
+        (* TODO: Check if this is correct *)
+        begin match interm_action with
+        | ILinuxRmw(aid, _, _, _, _,_,_) ->
+            return (Pset.add aid (Pset.empty Pervasives.compare),
+                   { addr = cartesian_product (Pset.elements taint_ptr) [aid]
+                   ; data = cartesian_product (Pset.elements taint_wval) [aid]
+                   ; ctrl = []
+                   })
+        | _ -> assert false
+        end
     | _ -> assert false
 
   let rec do_taint_e (Expr(annots, expr_) as expr)
