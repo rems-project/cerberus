@@ -124,7 +124,8 @@ module BasicTypeSort = struct
     match btype with
     | Integer ity ->
         Expr.mk_app g_ctx (List.nth fdecls 0) [IntegerTypeSort.mk_expr ity]
-    | _ -> assert false
+    | Floating _ ->
+        failwith "Floats are not supported."
 end
 
 module CtypeSort = struct
@@ -314,7 +315,8 @@ module AddressSortPNVI = struct
     assert (Sort.equal (Expr.get_sort expr) mk_sort);
     match Expr.get_args expr with
     | [a] ->
-        if Arithmetic.is_int a then (string_of_int (Integer.get_int a))
+        if Arithmetic.is_int a then
+          sprintf "0x%x" (Integer.get_int a)
         else Expr.to_string expr
     | _ -> Expr.to_string expr
 

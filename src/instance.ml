@@ -144,7 +144,7 @@ let result_of_elaboration (_, _, cabs, ail, core) =
       result= "success";
     }
 
-let bmc ~conf ~bmc_model:bmc_model ~filename () =
+let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   Debug.print 7 ("Running BMC...");
@@ -168,7 +168,10 @@ let bmc ~conf ~bmc_model:bmc_model ~filename () =
         (Some "bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
     in
     Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
-    return @@ Bmc.bmc core (Some ail);
+    return @@ match Bmc.bmc core (Some ail) with
+    | `Satisfiable (out, dots) -> `Satisfiable (Str.replace_first (Str.regexp_string filename) name out, dots)
+    | `Unknown out -> `Unknown (Str.replace_first (Str.regexp_string filename) name out)
+    | `Unsatisfiable (out, dots) -> `Unsatisfiable (Str.replace_first (Str.regexp_string filename) name out, dots)
   with
   | e ->
     Debug.warn ("Exception raised during execution: " ^ Printexc.to_string e);
@@ -554,9 +557,11 @@ let instance debug_level =
       step ~conf:(setup conf) ~filename active
       |> respond filename name id
     | `BMC (conf, bmc_model, filename, name) ->
-      bmc ~conf:(add_bmc_macro ~bmc_model @@ setup conf) ~bmc_model ~filename ()
-      |> respond filename name (fun res -> BMC res)
-
+      try
+        bmc ~filename ~name ~conf:(add_bmc_macro ~bmc_model @@ setup conf) ~bmc_model ~filename ()
+        |> respond filename name (fun res -> BMC res)
+      with Failure msg ->
+        Failure (Str.replace_first (Str.regexp_string filename) name msg)
   in
   let redirect () =
     (* NOTE: redirect stdout to stderr copying stdout file descriptor

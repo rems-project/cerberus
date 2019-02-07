@@ -8,6 +8,7 @@ int main() {
   int *q = &y;
   ptrdiff_t offset = q - p;
   int *r = p + offset;
+  __BMC_ASSUME ((intptr_t)r == (intptr_t)q);
   if ((intptr_t)r == (intptr_t)q) {
     *r = 11; // is this free of UB?
     printf("y=%d *q=%d *r=%d\n",y,*q,*r); 
