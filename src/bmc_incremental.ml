@@ -1066,23 +1066,23 @@ module BmcZ3 = struct
   type intermediate_action =
     | ICreate of aid * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | IKill of aid
-    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
-    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
+    | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order0
+    | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order0
     | ICompareExchangeStrong of
         (* Load expected value *) aid *
         (* If fail, do a load of obj then a store *) aid * aid *
         (* If succeed, do a rmw *) aid * ctype *
-        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order0 * Cmm_csem.memory_order0
     | ICompareExchangeWeak of
         (* Loaded expected *) aid *
         (* If fail, do a load of obj and then a store *) aid * aid *
         (* If succeed, do a rmw *) aid * ctype *
-        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
-    | IFence of aid * Cmm_csem.memory_order
-    | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
-    | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order0
-    | ILinuxRmw of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order0
-    | ILinuxFence of aid * Linux.memory_order0
+        ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order0 * Cmm_csem.memory_order0
+    | IFence of aid * Cmm_csem.memory_order0
+    | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order
+    | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.memory_order
+    | ILinuxRmw of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * (* rval *) Expr.expr * Linux.memory_order
+    | ILinuxFence of aid * Linux.memory_order
 
   (*type permission_flag =
     | ReadWrite
@@ -2544,7 +2544,7 @@ module BmcVC = struct
                  (Pexpr(_,_,PEsym sym)), wval, memorder) ->
         (* TODO: Where should we check whether the ptr is valid? *)
         let valid_memorder =
-          mk_bool (not (memorder = Acquire || memorder = Acq_rel)) in
+          mk_bool (not (memorder = Acquire0 || memorder = Acq_rel)) in
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
         return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
@@ -2555,7 +2555,7 @@ module BmcVC = struct
     | Load0 (Pexpr(_,_,PEval (Vctype ty)),
              (Pexpr(_,_,PEsym sym)), memorder) ->
         let valid_memorder =
-              mk_bool (not (memorder = Release || memorder = Acq_rel)) in
+              mk_bool (not (memorder = Release0 || memorder = Acq_rel)) in
         lookup_sym sym >>= fun ptr_z3 ->
         return [(valid_memorder, VcDebugStr (string_of_int uid ^ "_Load_memorder"))
                ;(PointerSort.valid_ptr ptr_z3,
@@ -2579,10 +2579,10 @@ module BmcVC = struct
          * mo_failure must be no stronger than mo_success
          *)
         let invalid_mo_failure =
-          (mo_failure = Release || mo_failure = Acq_rel) in
+          (mo_failure = Release0 || mo_failure = Acq_rel) in
         let mo_failure_stronger =
           (mo_failure = Seq_cst && mo_success <> Seq_cst) ||
-          (mo_failure = Acquire && mo_success = Relaxed) in
+          (mo_failure = Acquire0 && mo_success = Relaxed) in
         let valid_memorder =
           mk_bool (not (invalid_mo_failure || mo_failure_stronger)) in
         if invalid_mo_failure then

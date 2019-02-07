@@ -294,16 +294,16 @@ let string_of_memory_order = function
        | Cmm_csem.NA      -> "NA"
        | Cmm_csem.Seq_cst -> "seq_cst"
        | Cmm_csem.Relaxed -> "relaxed"
-       | Cmm_csem.Release -> "release"
-       | Cmm_csem.Acquire -> "acquire"
+       | Cmm_csem.Release0 -> "release"
+       | Cmm_csem.Acquire0 -> "acquire"
        | Cmm_csem.Consume -> assert false
        | Cmm_csem.Acq_rel -> "acq_rel"
       )
   | Linux_mem_order mo ->
       (match mo with
        | Linux.Once      -> "once"
-       | Linux.Acquire0  -> "linux_acquire"
-       | Linux.Release0  -> "linux_release"
+       | Linux.Acquire  -> "linux_acquire"
+       | Linux.Release  -> "linux_release"
        | Linux.Rmb       -> "rmb"
        | Linux.Wmb       -> "wmb"
        | Linux.Mb        -> "mb"
@@ -449,16 +449,16 @@ module MemoryModelCommon = struct
       | NA      -> na_memord
       | Seq_cst -> sc_memord
       | Relaxed -> rlx_memord
-      | Release -> rel_memord
-      | Acquire -> acq_memord
+      | Release0-> rel_memord
+      | Acquire0-> acq_memord
       | Acq_rel -> acq_rel_memord
       | Consume -> assert false
       end
     | Linux_mem_order mo ->
         Linux.(begin match mo with
         | Once     -> linux_once_memord
-        | Acquire0 -> linux_acquire_memord
-        | Release0 -> linux_release_memord
+        | Acquire  -> linux_acquire_memord
+        | Release  -> linux_release_memord
         | Rmb      -> linux_rmb_memord
         | Wmb      -> linux_wmb_memord
         | Mb       -> linux_mb_memord
@@ -1449,14 +1449,14 @@ module RC11MemoryModel : MemoryModel = struct
       let candidate_heads =
         let sync_write_order = (fun action ->
           let mo = get_memorder action in
-          (mo = C_mem_order Release ||
+          (mo = C_mem_order Release0 ||
            mo = C_mem_order Acq_rel ||
            mo = C_mem_order Seq_cst)) in
         List.filter sync_write_order (fences @ writes) in
       let candidate_tails =
         let sync_read_order = (fun action ->
           let mo = get_memorder action in
-          (mo = C_mem_order Acquire ||
+          (mo = C_mem_order Acquire0 ||
            mo = C_mem_order Acq_rel ||
            mo = C_mem_order Seq_cst)) in
         List.filter sync_read_order (fences @ reads) in
@@ -1976,8 +1976,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_F -> is_fence_action a
     | BaseSet_NA  -> get_memorder a = C_mem_order NA
     | BaseSet_RLX -> get_memorder a = C_mem_order Relaxed
-    | BaseSet_REL -> get_memorder a = C_mem_order Release
-    | BaseSet_ACQ -> get_memorder a = C_mem_order Acquire
+    | BaseSet_REL -> get_memorder a = C_mem_order Release0
+    | BaseSet_ACQ -> get_memorder a = C_mem_order Acquire0
     | BaseSet_ACQ_REL -> get_memorder a = C_mem_order Acq_rel
     | BaseSet_SC      -> get_memorder a = C_mem_order Seq_cst
     | BaseSet_Rmb      -> get_memorder a = Linux_mem_order Rmb
@@ -1987,8 +1987,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_RcuLock   -> get_memorder a = Linux_mem_order RcuLock
     | BaseSet_RcuUnlock -> get_memorder a = Linux_mem_order RcuUnlock
     | BaseSet_SyncRcu   -> get_memorder a = Linux_mem_order SyncRcu
-    | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order Acquire0
-    | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order Release0
+    | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order Acquire
+    | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order Release
 
 
   (* TODO: rename all this... *)
