@@ -205,14 +205,14 @@ let translate_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
         error ("Translation.translate_memory_order: " ^ Pp.stringFromAil_expression a_expr)
   end
 
-val translate_linux_memory_order: A.expression GenTypes.genTypeCategory -> Linux.memory_order
+val translate_linux_memory_order: A.expression GenTypes.genTypeCategory -> Linux.linux_memory_order
 let translate_linux_memory_order (A.AnnotatedExpression _ _ _ expr as a_expr) =
   match expr with
     | A.AilEconst (A.ConstantInteger (A.IConstant n _ _)) ->
         match natFromInteger n with
           | 0 -> Linux.Once
-          | 1 -> Linux.Acquire
-          | 2 -> Linux.Release
+          | 1 -> Linux.LAcquire
+          | 2 -> Linux.LRelease
           | 3 -> Linux.Rmb
           | 4 -> Linux.Wmb
           | 5 -> Linux.Mb

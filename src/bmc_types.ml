@@ -58,8 +58,8 @@ type z3_value    = Expr.expr
 type guard       = Expr.expr
 
 type memory_order =
-  | C_mem_order of Cmm_csem.memory_order0
-  | Linux_mem_order of Linux.memory_order
+  | C_mem_order of Cmm_csem.memory_order
+  | Linux_mem_order of Linux.linux_memory_order
 
 type action =
   | Load  of aid * tid * memory_order * z3_location * z3_value * ctype
@@ -165,15 +165,15 @@ let pp_memory_order = function
       | NA -> "na"
       | Seq_cst -> "sc"
       | Relaxed -> "rlx"
-      | Release0 -> "rel"
-      | Acquire0 -> "acq"
+      | Release -> "rel"
+      | Acquire -> "acq"
       | Consume -> "con"
       | Acq_rel -> "a/r") mo
   | Linux_mem_order mo ->
       Linux.(function
       | Once      -> "once"
-      | Acquire   -> "acq"
-      | Release   -> "rel"
+      | LAcquire   -> "acq"
+      | LRelease   -> "rel"
       | Rmb       -> "rmb"
       | Wmb       -> "wmb"
       | Mb        -> "mb"
