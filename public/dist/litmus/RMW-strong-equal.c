@@ -1,3 +1,4 @@
+// RMW-strong-equal
 /* The strong compare_exchange will always succeed if the compared
 values are equal. Hence, the value of x will be 1 at the end of the
 execution and the value of y still 0. An exhaustive execution will
