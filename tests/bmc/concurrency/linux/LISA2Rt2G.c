@@ -23,5 +23,5 @@ int main() {
     r4 = READ_ONCE(x4);
   } }-};
   assert(!(r1 == 1 && r2 == 0 && r3 == 1 && r4 == 0));
-  return r1 + 2 * (r2 + 2 * (r3 + 2 * r4));
+  // return r1 + 2 * (r2 + 2 * (r3 + 2 * r4));
 }

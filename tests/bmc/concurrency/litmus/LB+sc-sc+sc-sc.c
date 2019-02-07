@@ -11,6 +11,6 @@ int main() {
     atomic_store_explicit(&x, 1, memory_order_seq_cst);
   } }-};
   assert(!(r1 == 1 && r2 == 1));
-  return r1 + (2 * r2);
+  // return r1 + (2 * r2);
 }
 

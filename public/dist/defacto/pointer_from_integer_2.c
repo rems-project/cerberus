@@ -8,6 +8,7 @@ void f() {
 }
 int main() {
   int j=5;
+  __BMC_ASSUME((uintptr_t)&j == ADDRESS_PFI_2);
   f();
   printf("j=%d\n",j); 
 }

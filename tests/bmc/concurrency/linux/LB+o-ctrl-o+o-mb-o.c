@@ -13,5 +13,5 @@ int main() {
     WRITE_ONCE(x, 1);
   } }-}
   assert(!(r1 == 1 && r2 == 1));
-  return r1 + 2 * r2;
+  // return r1 + 2 * r2;
 }

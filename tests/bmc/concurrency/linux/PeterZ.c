@@ -15,5 +15,5 @@ int main() {
     r3 = READ_ONCE(x);
   } }-}
   assert (!(r1 == 0 && r2 == 1 && r3 == 0));
-  return r1 + 2 * r2 + 4 * r3;
+  // return r1 + 2 * r2 + 4 * r3;
 }

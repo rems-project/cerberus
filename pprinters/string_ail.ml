@@ -1,5 +1,8 @@
 open Pp_ail
 
+let string_of_integerType ity =
+  Pp_utils.to_plain_string (Pp_ail.pp_integerType ity)
+
 let string_of_integerType_raw ity =
   Pp_utils.to_plain_string (Pp_ail_raw.pp_integerType_raw ity)
 

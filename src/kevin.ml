@@ -479,7 +479,9 @@ let default_display_info = {
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
       ("hb", ED_show (RM_transitive_reduction, "forestgreen"));
-      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"))
+      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"));
+      ("crit", ED_show (RM_no_reduction, "orange"));
+      ("id", ED_hide);
       ] in
     match String_map_of_list.of_list l with | None -> assert false | Some m -> m);
   layout = L_frac;
@@ -660,7 +662,7 @@ let make_edges display_info ex ew d =
     | Layout.RM_transitive_reduction_over_sb -> transitive_reduction_over edges sb' in
   let add_edges_mask mask name rel edges =
     match String_map.find_opt name mask with
-    | None -> add_edges name "darkblue" rel edges
+    | None -> add_edges name "green" rel edges
     | Some Layout.ED_hide -> edges
     | Some (Layout.ED_show (rm, col)) -> add_edges name col (transform rm rel) edges in
   let add_edges_mask2 mask name rel edges = add_edges_mask mask name (aid_times_aid_set_of_rel rel) edges in
@@ -706,11 +708,14 @@ let display_edges display_info ex ew d =
     (fun ((src, tgt), info) ->
       dot_of_edge
         [Dot.EColor (String.concat ":" (List.map snd info));
-          Dot.ELabel (String.concat "," (List.map (fun (name, col) -> "<font color=\"" ^ col ^ "\">" ^ name ^ "</font>") info))] (src, tgt))
+          Dot.ELabel (String.concat "," (List.map (fun (name, col) -> "<font color=\"" ^ col ^ "\">" ^ " " ^ name ^ " " ^ "</font>") info))] (src, tgt))
     (Aid_times_aid_map.bindings (make_edges display_info ex ew d))
 
 let digraph_of_execution_aux loc_map display_info (ex, ew, d) g =
-  [Dot.Graph_attr (Dot.Overlap false); Dot.Graph_attr (Dot.Splines true)] @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
+  [Dot.Graph_attr (Dot.All_nodes [Dot.NFontname "Sans serif" (*; Dot.NFontsize 20*)])]
+  @ [Dot.Graph_attr (Dot.All_edges [Dot.EFontname "Sans serif" (*; Dot.EFontsize 20*)])]
+  @ [Dot.Graph_attr (Dot.Overlap false); Dot.Graph_attr (Dot.Splines true); Dot.Graph_attr (Dot.Scale (1.0, 0.8))]
+  @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
 
 let digraph_of_execution loc_map display_info (ex, ew, d) =
   let ths = Layout.layout_threads display_info loc_map ex in

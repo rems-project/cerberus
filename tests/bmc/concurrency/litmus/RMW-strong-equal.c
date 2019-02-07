@@ -11,5 +11,6 @@ int main(void) {
   r1 = atomic_compare_exchange_strong_explicit(
     &x, &y, 1, memory_order_seq_cst, memory_order_seq_cst);
   a = atomic_load_explicit(&x, memory_order_relaxed);
-  return a + 2 * y + 4 * r1;
+  assert(x == 1 && y == 0 && r1 == 1);
+  // return a + 2 * y + 4 * r1;
 }

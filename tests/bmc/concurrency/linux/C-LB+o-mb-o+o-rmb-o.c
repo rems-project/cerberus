@@ -13,5 +13,5 @@ int main() {
     WRITE_ONCE(x, 1);
   } }-}
   __BMC_ASSUME(r1 == 1 && r3 == 1);
-  return r1 + 2 * r3;
+  // return r1 + 2 * r3;
 }
