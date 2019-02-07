@@ -1,3 +1,4 @@
+// trylock
 #include <threads.h>
 int main() {
   mtx_t m;
