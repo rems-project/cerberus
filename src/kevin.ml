@@ -479,7 +479,8 @@ let default_display_info = {
       ("sc", ED_show (RM_no_reduction, "orange"));
       ("sw", ED_show (RM_no_reduction, "deeppink4"));
       ("hb", ED_show (RM_transitive_reduction, "forestgreen"));
-      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"))
+      ("ithb", ED_show (RM_transitive_reduction, "forestgreen"));
+      ("crit", ED_show (RM_no_reduction, "orange"));
       ] in
     match String_map_of_list.of_list l with | None -> assert false | Some m -> m);
   layout = L_frac;
@@ -660,7 +661,7 @@ let make_edges display_info ex ew d =
     | Layout.RM_transitive_reduction_over_sb -> transitive_reduction_over edges sb' in
   let add_edges_mask mask name rel edges =
     match String_map.find_opt name mask with
-    | None -> add_edges name "darkblue" rel edges
+    | None -> add_edges name "green" rel edges
     | Some Layout.ED_hide -> edges
     | Some (Layout.ED_show (rm, col)) -> add_edges name col (transform rm rel) edges in
   let add_edges_mask2 mask name rel edges = add_edges_mask mask name (aid_times_aid_set_of_rel rel) edges in
