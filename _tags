@@ -17,6 +17,7 @@ true: debug
 # Non-exhaustive patterns raise an error for Lem generated modules
 "ocaml_generated/cmm_op.ml": warn(-8)
 "ocaml_generated/cmm_csem.ml": warn(-8)
+"ocaml_generated/core_unstruct.ml": warn(-8)
 <ocaml_generated/*.ml>: warn(@8)
 true: warn(+8)
 
@@ -39,3 +40,5 @@ true: warn(+8)
 
 
 <src/*.native> : link_cstubs
+
+<test.native> : link_cstubs
