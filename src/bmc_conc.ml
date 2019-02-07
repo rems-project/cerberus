@@ -701,7 +701,7 @@ module MemoryModelCommon = struct
   let initialise (exec: preexec) (file: unit typed_file) =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
-    bmc_debug_print 4 (sprintf "# actions: %d" (List.length all_actions));
+    bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
     if !!bmc_conf.debug_lvl > 5 then
       List.iter (fun a -> print_endline (pp_bmcaction a)) all_actions;
 
