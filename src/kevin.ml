@@ -712,7 +712,7 @@ let display_edges display_info ex ew d =
     (Aid_times_aid_map.bindings (make_edges display_info ex ew d))
 
 let digraph_of_execution_aux loc_map display_info (ex, ew, d) g =
-  [Dot.Graph_attr (Dot.All_nodes [Dot.NFontname "beramono"; Dot.NFontsize 20]); Dot.Graph_attr (Dot.All_edges [Dot.EFontname "beramono"; Dot.EFontsize 20])]
+  [Dot.Graph_attr (Dot.All_nodes [Dot.NFontname "Sans serif"; Dot.NFontsize 20]); Dot.Graph_attr (Dot.All_edges [Dot.EFontname "Sans serif"; Dot.EFontsize 20])]
   @ [Dot.Graph_attr (Dot.Overlap false); Dot.Graph_attr (Dot.Splines true); Dot.Graph_attr (Dot.Scale (1.0, 0.8))]
   @ display_nodes loc_map display_info d g @ display_edges display_info ex ew d
 
