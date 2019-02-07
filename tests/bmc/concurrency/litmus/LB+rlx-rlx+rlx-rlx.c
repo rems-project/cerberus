@@ -9,7 +9,7 @@ int main() {
     r2 = atomic_load_explicit(&y, memory_order_relaxed);
     atomic_store_explicit(&x, 1, memory_order_relaxed);
   } }-};
-  _BMC_ASSUME(r1 == 1 && r2 == 1);
+  __BMC_ASSUME(r1 == 1 && r2 == 1);
   return r1 + (2 * r2);
 }
 

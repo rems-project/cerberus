@@ -9,7 +9,7 @@ int main() {
     r2 = atomic_load_explicit(&y, memory_order_seq_cst);
     atomic_store_explicit(&x, 1, memory_order_seq_cst);
   } }-};
-  assert(!(r1 == 1 && r2 == 1);
-  return z1 + (2 * z2);
+  assert(!(r1 == 1 && r2 == 1));
+  return r1 + (2 * r2);
 }
 
