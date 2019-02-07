@@ -19,7 +19,7 @@ type preexec = {
 
   po              : (bmc_action * bmc_action) list;
   asw             : (bmc_action * bmc_action) list;
-  rmw             : (bmc_action * bmc_action) list;
+  (*rmw             : (bmc_action * bmc_action) list;*)
 
   (* dependencies *)
   addr            : (bmc_action * bmc_action) list;
@@ -105,7 +105,7 @@ let mk_initial_preexec : preexec =
   ; initial_actions = []
   ; po              = []
   ; asw             = []
-  ; rmw             = []
+  (*; rmw             = []*)
   ; addr            = []
   ; data            = []
   ; ctrl            = []
@@ -302,8 +302,8 @@ let string_of_memory_order = function
   | Linux_mem_order mo ->
       (match mo with
        | Linux.Once      -> "once"
-       | Linux.Acquire0  -> "linux_acquire"
-       | Linux.Release0  -> "linux_release"
+       | Linux.LAcquire  -> "linux_acquire"
+       | Linux.LRelease  -> "linux_release"
        | Linux.Rmb       -> "rmb"
        | Linux.Wmb       -> "wmb"
        | Linux.Mb        -> "mb"
@@ -457,8 +457,8 @@ module MemoryModelCommon = struct
     | Linux_mem_order mo ->
         Linux.(begin match mo with
         | Once     -> linux_once_memord
-        | Acquire0 -> linux_acquire_memord
-        | Release0 -> linux_release_memord
+        | LAcquire -> linux_acquire_memord
+        | LRelease -> linux_release_memord
         | Rmb      -> linux_rmb_memord
         | Wmb      -> linux_wmb_memord
         | Mb       -> linux_mb_memord
@@ -1987,8 +1987,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_RcuLock   -> get_memorder a = Linux_mem_order RcuLock
     | BaseSet_RcuUnlock -> get_memorder a = Linux_mem_order RcuUnlock
     | BaseSet_SyncRcu   -> get_memorder a = Linux_mem_order SyncRcu
-    | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order Acquire0
-    | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order Release0
+    | BaseSet_LinuxAcquire -> get_memorder a = Linux_mem_order LAcquire
+    | BaseSet_LinuxRelease -> get_memorder a = Linux_mem_order LRelease
 
 
   (* TODO: rename all this... *)

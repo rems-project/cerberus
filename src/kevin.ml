@@ -111,8 +111,8 @@ let string_of_c_memory_order = function
 
 let string_of_linux_memory_order = function
 | Linux.Once -> "once"
-| Linux.Acquire0 -> "acq"
-| Linux.Release0 -> "rel"
+| Linux.LAcquire -> "acq"
+| Linux.LRelease -> "rel"
 | Linux.Rmb -> "rmb"
 | Linux.Wmb -> "wmb"
 | Linux.Mb -> "mb"
