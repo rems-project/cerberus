@@ -290,7 +290,7 @@ module type CatModel = sig
 
   val undefs_unless_empty :  string list (* TODO: support generic UBs *)
 
-  val to_output : string list (* TODO: should be id? *)
+  val to_output : CatFile.id list (* TODO: should be id? *)
 end
 
 module Partial_RC11Model : CatModel = struct
@@ -335,7 +335,7 @@ module Partial_RC11Model : CatModel = struct
 
   let undefs_unless_empty = []
 
-  let to_output = ["sw"]
+  let to_output = []
 end
 
 module CatParser = struct
@@ -346,7 +346,7 @@ module CatParser = struct
     | Binding of string * CatFile.expr
     | Constraint of string option * CatFile.constraint_expr
     | Undefined_unless_empty of string (* TODO: support Undefined_unless acyclic/irreflexive *)
-    | Output of string
+    | Output of CatFile.id
     | Skip of string
 
   let pprint_constraint (s_opt: string option) (constr : CatFile.constraint_expr) =
@@ -370,8 +370,8 @@ module CatParser = struct
         pprint_constraint s_opt constr
     | Undefined_unless_empty s ->
         sprintf "undefined_unless empty %s" (s)
-    | Output s ->
-        sprintf "output %s" s
+    | Output id ->
+        sprintf "output %s" (CatFile.pprint_id id)
     | Skip s ->
         sprintf "skip: %s" s
 
@@ -541,8 +541,10 @@ module CatParser = struct
 
   let output =
     token (string "output") *>
-    token lowers >>= fun s ->
-    return (Output s)
+    (* TODO: make token id just return an id and not Eid *)
+    token id >>= fun eid ->
+    let output_id = (match eid with | Eid x -> x | _ -> assert false) in
+    return (Output output_id)
 
   let empty_string =
     spaces >>= fun s ->
@@ -669,8 +671,8 @@ module CatParser = struct
                 (binding, (s_opt, expr)::constraints, undefs_unless_empty, output)
             | Undefined_unless_empty s ->
                 (binding, constraints, s::undefs_unless_empty, output)
-            | Output s ->
-                (binding, constraints, undefs_unless_empty, s::output)
+            | Output id ->
+                (binding, constraints, undefs_unless_empty, id::output)
             | Skip _ -> (binding, constraints, undefs_unless_empty, output)
             end
         | Result.Error msg ->

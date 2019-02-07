@@ -2004,11 +2004,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | Set_not s ->
         not (set_to_filter s a)
 
-  let id_to_z3 (model: z3_memory_model)
-               (id: CatFile.id)
-               ((a,b) : bmc_action * bmc_action)
-               : Expr.expr =
-    let (ea,eb) = (model.z3action a, model.z3action b) in
+  let id_to_z3_raw (model: z3_memory_model)
+                   (id: CatFile.id)
+                   ((ea,eb) : Expr.expr * Expr.expr)
+                   : Expr.expr =
     match id with
     | Id s ->
         (lookup_id id model.fns) (ea,eb)
@@ -2037,6 +2036,13 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
         | BaseId_crit     -> model.builtin_fns.crit (ea,eb)
         end
+
+  let id_to_z3 (model: z3_memory_model)
+               (id: CatFile.id)
+               ((a,b) : bmc_action * bmc_action)
+               : Expr.expr =
+    let (ea,eb) = (model.z3action a, model.z3action b) in
+    id_to_z3_raw model id (ea,eb)
 
   (* === Expr -> boolean *)
   let rec simple_expr_to_z3 (model: z3_memory_model)
@@ -2294,10 +2300,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       } in
 
     let derived_relations =
-      List.map (fun s ->
-        let fn = lookup_id (CatFile.Id s) mem.fns in
+      List.map (fun id ->
+        let fn = id_to_z3_raw mem id in
         let rel = List.filter (get_relation fn) prod in
-        (s, remove_initial (List.map proj_fst rel))
+        (CatFile.pprint_id id, remove_initial (List.map proj_fst rel))
       ) M.to_output in
 
     let ubs_unless_empty =
