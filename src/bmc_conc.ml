@@ -19,7 +19,7 @@ type preexec = {
 
   po              : (bmc_action * bmc_action) list;
   asw             : (bmc_action * bmc_action) list;
-  rmw             : (bmc_action * bmc_action) list;
+  (*rmw             : (bmc_action * bmc_action) list;*)
 
   (* dependencies *)
   addr            : (bmc_action * bmc_action) list;
@@ -105,7 +105,7 @@ let mk_initial_preexec : preexec =
   ; initial_actions = []
   ; po              = []
   ; asw             = []
-  ; rmw             = []
+  (*; rmw             = []*)
   ; addr            = []
   ; data            = []
   ; ctrl            = []
