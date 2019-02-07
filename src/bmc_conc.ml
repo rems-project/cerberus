@@ -701,7 +701,7 @@ module MemoryModelCommon = struct
   let initialise (exec: preexec) (file: unit typed_file) =
     let all_actions = exec.initial_actions @ exec.actions in
     let prod_actions = cartesian_product all_actions all_actions in
-    bmc_debug_print 4 (sprintf "# actions: %d" (List.length all_actions));
+    bmc_debug_print 3 (sprintf "# actions: %d" (List.length all_actions));
     if !!bmc_conf.debug_lvl > 5 then
       List.iter (fun a -> print_endline (pp_bmcaction a)) all_actions;
 
@@ -817,7 +817,7 @@ module MemoryModelCommon = struct
       let indexed_wval =
           Loaded.get_ith_in_loaded_2 index (fns.getWval write) in
 
-      (* NOTE: Semantics: if reading from an noninitial write with unspecified
+      (* NOTE: Semantics: if reading from an write with unspecified
        * wval, then rval is a specified value with range constrained based on
        * the read ctype.  else, wval = rval.  This prevents unspecified OOTA
        * values.
@@ -835,12 +835,12 @@ module MemoryModelCommon = struct
         | _ -> []
         end in
 
-      let read_from_noninitial_unspec_write =
-        mk_and [mk_not (fns.isInitial write)
+      let read_from_unspec_write = Loaded.is_unspecified indexed_wval in
+        (*mk_and [mk_not (fns.isInitial write)
                ;Loaded.is_unspecified indexed_wval
-               ] in
+               ] in*)
       let rval_wval_constraint =
-        mk_ite read_from_noninitial_unspec_write
+        mk_ite read_from_unspec_write
                (mk_and ((Loaded.is_specified (fns.getRval read))
                         :: range_assertions)
                )
