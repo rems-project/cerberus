@@ -83,6 +83,13 @@ export class CerberusUI {
       else
         popl19.show()
     })
+    let cav19: Widget.CAV19 | undefined
+    $('#load_cav19').on('click', () => {
+      if (cav19 === undefined)
+        cav19 = new Widget.CAV19()
+      else
+        cav19.show()
+    })
 
     // BMC
     $('#bmc').on('click', () => this.bmc ())
