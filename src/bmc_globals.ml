@@ -24,6 +24,9 @@ let g_bv_precision = 33
 let g_max_addr = 2147483648
 let g_pnvi = true
 
+(* If false, checks memory bindings at the same time as __BMC_ASSUMES *)
+let g_incremental_smt = true
+
 type memory_mode =
   | MemoryMode_C
   | MemoryMode_Linux
