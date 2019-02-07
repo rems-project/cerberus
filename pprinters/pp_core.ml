@@ -46,22 +46,22 @@ let rec precedence = function
   | PEop (OpDiv, _, _)
   | PEop (OpRem_t, _, _)
   | PEop (OpRem_f, _, _) -> Some 2
-  
+
   | PEop (OpAdd, _, _)
   | PEop (OpSub, _, _) -> Some 3
-  
+
   | PEop (OpLt,  _, _)
   | PEop (OpLe,  _, _) -> Some 4
-  
+
   | PEop (OpGt,  _, _)
   | PEop (OpGe,  _, _) -> Some 4
-  
+
   | PEop (OpEq,  _, _) -> Some 5
-  
+
   | PEop (OpAnd, _, _) -> Some 6
-  
+
   | PEop (OpOr,  _, _) -> Some 7
-  
+
   | PEundef _
   | PEerror _
   | PEval _
@@ -221,8 +221,8 @@ let pp_memory_order = function
 
 let pp_linux_memory_order = function
   | Linux.Once      -> pp_keyword "once"
-  | Linux.Acquire0  -> pp_keyword "acquire"
-  | Linux.Release0  -> pp_keyword "release"
+  | Linux.LAcquire  -> pp_keyword "acquire"
+  | Linux.LRelease  -> pp_keyword "release"
   | Linux.Rmb       -> pp_keyword "rmb"
   | Linux.Wmb       -> pp_keyword "wmb"
   | Linux.Mb        -> pp_keyword "mb"
@@ -287,7 +287,7 @@ let rec pp_object_value = function
   | OVstruct (tag_sym, xs) ->
       P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) -> 
+        comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) ->
           P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
         ) xs
       )
@@ -299,7 +299,7 @@ let rec pp_object_value = function
   (*| OVcfunction nm ->
       !^ "Cfunction" ^^ P.parens (pp_name nm) *)
   | OVcomposite _ ->
-      !^ "TODO(OVcomposite)" 
+      !^ "TODO(OVcomposite)"
 
 and pp_loaded_value = function
   | LVspecified oval ->
@@ -442,7 +442,7 @@ let pp_pexpr pe =
               P.prefix 4 1
                 (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
                 (pp pe)
-            ) pat_pes 
+            ) pat_pes
           ) ^^ P.break 1 ^^ pp_keyword "end"
 
 (*
@@ -455,7 +455,7 @@ let pp_pexpr pe =
                     (pp pe)
                     (P.nest 2 (P.break 0 ^^ pp pe))
                 )
-              ) pat_pes 
+              ) pat_pes
             ) ^^ P.break 1 ^^ pp_keyword "end"
 *)
         | PEarray_shift (pe1, ty, pe2) ->
@@ -477,7 +477,7 @@ let pp_pexpr pe =
         | PEstruct (tag_sym, xs) ->
             P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
             P.braces (
-              comma_list (fun (Cabs.CabsIdentifier (_, ident), pe) -> 
+              comma_list (fun (Cabs.CabsIdentifier (_, ident), pe) ->
                 P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
               ) xs
             )
@@ -527,7 +527,7 @@ let rec pp_expr expr =
     let prec' = precedence_expr e in
     let pp_ z = pp true prec' z in  (* TODO: this is sad *)
     let pp  z = pp false prec' z in
-    
+
     begin
       fun doc ->
         List.fold_left (fun acc annot_elem ->
@@ -576,7 +576,7 @@ let rec pp_expr expr =
                 P.prefix 4 1
                   (P.bar ^^^ pp_pattern cpat ^^^ P.equals ^^ P.rangle)
                   (pp e)
-              ) pat_es 
+              ) pat_es
             ) ^^ P.break 1 ^^ pp_keyword "end"
         | Elet (pat, pe1, e2) ->
             P.group (
@@ -777,7 +777,7 @@ let pp_impl impl =
       | Def (bty, pe) ->
           pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
           P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
-          
+
       | IFun (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
@@ -816,10 +816,10 @@ let pp_file file =
   let show_aggregate = not @@ Pmap.is_empty file.tagDefs in
   let show_globs = file.globs != [] in
   let guard b doc = if b then doc else P.empty in
-  
+
   begin
     if Debug_ocaml.get_debug_level () > 1 then
-      fun z -> 
+      fun z ->
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
         pp_fun_map file.stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
@@ -829,24 +829,24 @@ let pp_file file =
     else
       id
   end
-  
+
   begin
     guard show_aggregate begin
       !^ "-- Aggregates" ^^ P.break 1 ^^
       pp_tagDefinitions file.tagDefs ^^
       P.break 1 ^^ P.break 1
     end ^^
-    
+
     guard (show_include || Debug_ocaml.get_debug_level () > 1) begin
       !^ "-- C function types" ^^ P.break 1 ^^
       pp_funinfo file.funinfo
     end ^^
-    
+
     guard show_globs begin
       !^ "-- Globals" ^^ P.break 1 ^^
       pp_globs file.globs
     end ^^
-    
+
     guard (show_aggregate || show_globs) begin
       !^ "-- Fun map" ^^ P.break 1
     end ^^
