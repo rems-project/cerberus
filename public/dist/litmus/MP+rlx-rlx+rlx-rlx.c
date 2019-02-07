@@ -9,7 +9,7 @@ int main() {
   } ||| {
     r1 = atomic_load_explicit(&y, memory_order_relaxed);
     if (r1 == 1)
-      r2 = atomic_load_explicit(&y, memory_order_relaxed);
+      r2 = atomic_load_explicit(&x, memory_order_relaxed);
     else
       r2 = 2;
   } }-};
