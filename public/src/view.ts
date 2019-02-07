@@ -112,9 +112,9 @@ export default class View {
             type: 'stack',
             content: [
               component('Console'),
-              component('Stdout'),
+              /*component('Stdout'),
               component('Stderr'),
-              component('Memory')
+              component('Memory')*/
             ]}
           ]}, {
             type: 'stack',
