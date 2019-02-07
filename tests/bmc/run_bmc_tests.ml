@@ -49,9 +49,9 @@ type config = {
   produce_graphs : bool;
 }
 
-let run_test cfg opts filename =
-  print_string filename;
-  let dir = (Filename.chop_suffix filename ".c") ^ "/" in
+let run_test cfg model opts filename =
+  print_string (model ^ " " ^ filename);
+  let dir = (Filename.chop_suffix filename ".c") ^ "-" ^ model ^ "/" in
   let _ = Unix.system ("mkdir -p " ^ dir) in
   flush Pervasives.stdout;
   let cmd_file = dir ^ "cmd.sh" in
@@ -70,9 +70,9 @@ let run_test cfg opts filename =
     | WEXITED _ -> print_string (" " ^ start_red ^ "!!!ERROR!!!" ^ reset_colour ^ "\n"); flush Pervasives.stdout
     | _ -> failwith "TODO run_typing_tests"
 
-let run_tests cfg h opts filenames =
+let run_tests cfg model opts filenames =
   let opts = if opts = "" then "" else opts ^ " " in
-  iter_on_c_files (fun filename -> run_test cfg opts filename) filenames
+  iter_on_c_files (fun filename -> run_test cfg model opts filename) filenames
 
 let find_flags () =
   let flag_only_cmd = ref false in
@@ -80,7 +80,7 @@ let find_flags () =
   let flag_no_graphs = ref false in
   let speclist = [
     ("--only-cmd", Arg.Set flag_only_cmd, "Only produces the command files");
-    ("--only-c11", Arg.Set flag_only_c11, "Only run C11 tests");
+    ("--only-c11", Arg.Set flag_only_c11, "Only run C11 and RC11 tests, but not Linux tests");
     ("--no-graphs", Arg.Set flag_no_graphs, "Do not produce graphs")
   ] in
   let usage_msg = "run_bmc_tests:"
@@ -91,8 +91,9 @@ let main () =
   let cfg = find_flags () in
   let graph_opt = (if cfg.produce_graphs then " --bmc_output_model=true" else "") in
   (if cfg.only_c11 then ()
-  else run_tests cfg () ("--bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux.cat" ^ graph_opt) (my_readdir2 "concurrency/linux"));
-  run_tests cfg () ("--bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus")
+  else run_tests cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux.cat" ^ graph_opt) (my_readdir2 "concurrency/linux"));
+  run_tests cfg "c11" ("-D__memory_model_c11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus");
+  run_tests cfg "rc11" ("-D__memory_model_rc11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/rc11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus")
   (* TODO: do some magic for RC11 *)
 
 let _ = main ()

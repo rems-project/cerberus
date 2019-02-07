@@ -9,7 +9,13 @@ int main() {
     r2 = atomic_load_explicit(&y, memory_order_relaxed);
     atomic_store_explicit(&x, 1, memory_order_relaxed);
   } }-};
+#if __memory_model_c11__
   __BMC_ASSUME(r1 == 1 && r2 == 1);
-  return r1 + (2 * r2);
+#elif __memory_model_rc11__
+  assert(!(r1 == 1 && r2 == 1));
+#else
+  #error "set __memory_model_c11__ or __memory_model_rc11__"
+#endif
+  return r1 + 2 * r2;
 }
 
