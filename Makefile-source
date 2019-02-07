@@ -74,7 +74,8 @@ SOURCE_cabs_to_ail=\
 SOURCE_core_to_core=\
   core_sequentialise.lem \
   core_indet.lem \
-  core_rewrite.lem 
+  core_rewrite.lem \
+  core_unstruct.lem
 
 SOURCE_core_dynamics=\
   core_run_aux.lem \

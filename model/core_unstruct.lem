@@ -1,0 +1,334 @@
+open import Pervasives Utils
+open import Core Core_ctype Core_ctype_aux
+import Symbol State Core_aux
+
+import Core_typing Core_typing_effect Core_typing_aux
+
+
+module ATy = AilTypes
+module Caux = Core_aux
+
+type explodeM 'a =
+  State.stateM 'a (map Symbol.sym (list (Cabs.cabs_identifier * Symbol.sym)))
+
+
+let insupported str =
+  error ("Core_unstruct: unsupported ==> " ^ str)
+
+
+val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Cabs.cabs_identifier * ctype)))
+let extract_ctype_pe (Pexpr _ _ pexpr_) =
+  match pexpr_ with
+    | PEval (Vctype ty) ->
+        Just match ty with
+          | Atomic (Struct _) ->
+              insupported "atomic struct"
+          | Atomic (Union _) ->
+              insupported "atomic union"
+          | Struct tag_sym ->
+              Right (tag_sym, get_structDef tag_sym)
+          | Union tag_sym ->
+              let xs = get_unionDef tag_sym in
+              insupported "(non atomic) union"
+          | _ ->
+              Left ty
+        end
+    | _ ->
+        Nothing
+  end
+
+val extract_alignement_type: typed_pexpr -> maybe ctype
+let extract_alignement_type (Pexpr _ _ pexpr_) =
+  match pexpr_ with
+    | PEctor Civalignof [Pexpr _ _ (PEval (Vctype ty))] ->
+        Just ty
+    | _ ->
+        Nothing
+  end
+
+
+val type_pexpr: pexpr -> typed_pexpr
+let type_pexpr pexpr =
+  let tagDefs = Core_ctype_aux.tagDefs () in
+  let m =
+    Core_typing_effect.bind
+      (Core_typing.infer_pexpr tagDefs Core_typing_aux.empty_env pexpr)
+      Core_typing_aux.export_pexpr in
+  match Core_typing_effect.runM m with
+    | Exception.Result pexpr' ->
+        pexpr'
+    | _ ->
+        error "Core_unstruct.type_pexpr: failed to type"
+  end
+
+
+val typeof_pexpr: typed_pexpr -> core_base_type
+let typeof_pexpr (Pexpr _ bTy _) =
+  bTy
+
+
+val is_pointer_type: core_base_type -> bool
+let is_pointer_type = function
+  | BTy_object OTy_pointer ->
+      true
+  | _ ->
+      false
+end
+
+
+type explode_env =
+  map Symbol.sym (list (Cabs.cabs_identifier * Symbol.sym))
+
+
+
+(* If the given expression is a pointer to a struct, explode it to pointers to the members *)
+val explode_ptr_pexpr: explode_env -> typed_pexpr -> maybe (list (Cabs.cabs_identifier * typed_pexpr))
+let explode_ptr_pexpr env (Pexpr annot bTy pexpr_ as pexpr) =
+  match pexpr_ with
+    | PEsym ptr_sym ->
+        match Map.lookup ptr_sym env with
+          | Just xs ->
+              Just begin
+                List.map (fun (ident, sym) ->
+                  (ident, Pexpr annot bTy (PEsym sym))
+                ) xs
+              end
+          | Nothing ->
+              Nothing
+        end
+    
+    | _ ->
+        Nothing (* TODO: check *)
+  end
+
+
+(*val explode_paction: explode_env -> typed_paction unit -> list (typed_expr_ unit) *)
+let explode_paction env (Paction pol (Action loc a act_) as pact) =
+  let wrap z =
+    Eaction (Paction pol (Action loc a z)) in
+  match act_ with
+    | Create al_pe1 ty_pe2 pref ->
+        match (extract_alignement_type al_pe1, extract_ctype_pe ty_pe2) with
+          | (_, Just (Left _)) ->
+              (* this is not allocating a struct, so no need to explode *)
+              Nothing
+          | (Just al_ty, Just (Right (tag_sym, xs))) ->
+              if al_ty <> Struct tag_sym then
+                insupported "create with non-trivial alignement constraint"
+              else
+                Just begin
+                  List.map (fun (ident, ty) ->
+                    let ty_pe = Caux.mk_ctype_pe ty in
+                    (ident, wrap (Create (type_pexpr (Caux.mk_alignof_pe ty_pe)) (type_pexpr ty_pe) pref))
+                  ) xs
+                end
+        end
+(*
+    | CreateReadOnly pe1 pe2 pe3 pref ->
+        error "WIP"
+    | Alloc e1 e2 pref ->
+        error "WIP"
+*)
+    | Kill is_dynamic ptr_pe ->
+        match explode_ptr_pexpr env ptr_pe with
+          | Nothing ->
+              Nothing
+          | Just xs ->
+              Just begin
+                List.map (fun (ident, pe') ->
+                  (ident, wrap (Kill is_dynamic pe'))
+                ) xs
+              end
+        end
+(*
+    | Store is_locking pe1 pe2 pe3 mo ->
+        error "WIP"
+    | Load pe1 pe2 mo ->
+        match extract_ctype_pe pe1 with
+          | Nothing ->
+              [Eaction pact]
+        end
+    | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP"
+    | Fence mo ->
+        error "WIP"
+    | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
+        error "WIP"
+    | LinuxFence mo ->
+        error "WIP"
+    | LinuxLoad pe1 pe2 mo ->
+        error "WIP"
+    | LinuxStore pe1 pe2 pe3 mo ->
+        error "WIP"
+    | LinuxRMW pe1 pe2 pe3 mo ->
+        error "WIP"
+*)
+    | _ ->
+        Nothing
+  end
+  
+
+(*val     foo: forall 'a. typed_expr 'a ->  *)
+let rec fetch_types (Expr annot expr_) =
+  match expr_ with
+(*
+    | Epure pe ->
+        [typeof_pexpr pe]
+    | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
+    | Eaction of (generic_paction 'a 'bty 'sym) (* memory action *)
+    | Ecase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym)) (* pattern matching *)
+    | Elet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core let *)
+    | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* Core if *)
+    | Eskip (* skip *)
+    | Eccall of 'a * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* Core cfunction call *)
+    | Eproc of 'a * generic_name 'sym * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
+    | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
+*)
+(*
+    | Ewseq pat e1 e2 ->
+*)
+
+    | Esseq pat e1 e2 ->
+        match e1 with
+          | Expr _ (Eaction pact) ->
+              error "WIP"
+        end
+
+(*
+    | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
+    | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
+    | Ebound of nat * (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
+    | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
+          (* the pexpr associated to the symbols are their value when the control flows throught the Esave (i.e. when
+             doesn't come from a Erun) *)
+    | Esave of ('sym * core_base_type) * list ('sym * (core_base_type * generic_pexpr 'bty 'sym)) * generic_expr 'a 'bty 'sym
+    | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym)
+    | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem thread creation *)
+    | Ewait of thread_id (* wait for thread termination *)
+*)
+  end
+
+
+val mk_ptr_tuple_pe: list typed_pexpr -> typed_pexpr
+let mk_ptr_tuple_pe pes =
+  let n = List.length pes in
+  let bTy = BTy_tuple (replicate_list (BTy_object OTy_pointer) n) in
+  Pexpr [] bTy (PEctor Ctuple pes)
+
+val mk_ptr_sym_pe: Symbol.sym -> typed_pexpr
+let mk_ptr_sym_pe sym =
+  Pexpr [] (BTy_object OTy_pointer) (PEsym sym)
+
+
+val     explode_expr: explode_env -> typed_expr unit -> typed_expr unit
+let rec explode_expr env (Expr annot expr_ as expr) =
+  let self e = explode_expr env e in
+  let wrap z = Expr annot z in
+  match expr_ with
+    | Esseq (Pattern pat_annot (CaseBase (Just sym, BTy_object OTy_pointer)) as pat) (Expr annot1 (Eaction pact) as e1) e2 ->
+        match explode_paction env pact with
+          | Nothing ->
+              wrap (Esseq pat e1 (explode_expr env e2))
+          | Just xs ->
+              let (syms, rev_xs) =
+                List.foldl (fun (acc1, acc2) (ident, e_) ->
+                  let sym' = Symbol.fresh () in
+                  ((ident, sym') :: acc1, (sym', e_) :: acc2)
+                ) ([], []) xs in
+              let env' : explode_env = Map.insert sym syms env in
+              List.foldl (fun acc (sym', e_) ->
+                Expr [] (Esseq (Pattern [] (CaseBase (Just sym', BTy_object OTy_pointer))) (Expr annot1 e_) acc)
+              ) (explode_expr env' e2) rev_xs
+        end
+    
+    | Esseq (Pattern pat_annot (CaseBase (Just pat_sym, BTy_object OTy_pointer)) as pat)
+            (Expr annot1 (Epure (Pexpr pe_annot pe_bTy (PEsym sym1))) as e1) e2 ->
+        match Map.lookup sym1 env with
+          | Nothing ->
+              wrap (Esseq pat e1 (explode_expr env e2))
+          | Just xs ->
+              let e1' = Expr annot1 (Epure (mk_ptr_tuple_pe (List.map (fun (_, z) -> mk_ptr_sym_pe z) xs))) in
+              
+              let ys =
+                List.map (fun (ident, _) -> (ident, Symbol.fresh ())) xs in
+              
+              let pat' =
+                Pattern pat_annot (CaseCtor Ctuple (List.map (fun (_, z) ->
+                  Pattern [] (CaseBase (Just z, BTy_object OTy_pointer))
+                ) ys)) in
+              
+              wrap (Esseq pat' e1' (explode_expr (Map.insert pat_sym ys env) e2))
+        end
+    
+    | Epure (Pexpr _ _ (PEmember_shift (Pexpr _ _ (PEsym ptr_sym)) _ ident)) ->
+        match Maybe.bind (Map.lookup ptr_sym env) (List.lookup ident) with
+          | Nothing ->
+              let () = Debug.print_debug 0 [] (fun () -> show (Map.lookup ptr_sym env)) in
+              expr (* error "Core_unstruct.explode_expr: Epure PEmember_shift -- lookup failed" *)
+          | Just sym ->
+              wrap (Epure (mk_ptr_sym_pe sym))
+        end
+    | Epure pe ->
+        if is_pointer_type (typeof_pexpr pe) then
+          match explode_ptr_pexpr env pe with
+            | Nothing ->
+                expr
+            | Just xs ->
+                wrap (Epure (mk_ptr_tuple_pe (List.map snd xs)))
+          end
+        else
+          expr
+    | Ememop _ _ ->
+        expr
+    | Eaction _ ->
+        expr
+    | Ecase pe xs ->
+        wrap (Ecase pe (List.map (fun (pat, e) -> (pat, self e)) xs))
+    | Elet pat pe e ->
+        wrap (Elet pat pe (self e))
+    | Eif pe e1 e2 ->
+        wrap (Eif pe (self e1) (self e2))
+    | Eskip ->
+        expr
+    | Eccall _ _ _ _ ->
+        expr
+    | Eproc _ _ _ ->
+        expr
+    | Eunseq es ->
+        wrap (Eunseq (List.map self es))
+    | Ewseq pat e1 e2 ->
+        wrap (Ewseq pat (self e1) (self e2))
+    | Esseq pat e1 e2 ->
+        wrap (Esseq pat (self e1) (self e2))
+    | Easeq _ _ _ ->
+        expr
+    | Eindet n e ->
+        wrap (Eindet n (self e))
+    | Ebound n e ->
+        wrap (Ebound n (self e))
+    | End es ->
+        wrap (End (List.map self es))
+    | Esave _ _ _ ->
+        expr
+    | Erun _ _ _ ->
+        expr
+    | Epar es ->
+        wrap (Epar (List.map self es))
+  end
+
+
+
+val explode_fun_map: typed_fun_map unit -> typed_fun_map unit
+let explode_fun_map funs =
+  Map.map (function
+    | Proc loc bTy xs e ->
+        Proc loc bTy xs (explode_expr Map.empty e)
+    | z ->
+        z
+  end) funs
+
+
+val explode_file: typed_file unit -> typed_file unit
+let explode_file file =
+  <| file with
+       funs= explode_fun_map file.funs |>
