@@ -38,7 +38,7 @@ export abstract class Widget {
 
 export class Defacto extends Widget {
   constructor () {
-    super('Load defacto tests...')
+    super('Load defacto tests')
     util.get('defacto_tests.json', (data: any) => {
       for (let i = 0; i < data.length; i++) {
         const questions = $('<div class="questions"></div>')
@@ -64,7 +64,7 @@ export class Defacto extends Widget {
 
 export class POPL19 extends Widget {
   constructor () {
-    super('Load POPL 2019 pointer provenace tests...')
+    super('Load POPL 2019 pointer provenace tests')
     util.get('popl19_tests.json', (data: any) => {
       for (let i = 0; i < data.length; i++) {
         const tests = $('<ul class="tests"></ul>')
@@ -86,7 +86,7 @@ export class POPL19 extends Widget {
 
 export class CAV19 extends Widget {
   constructor () {
-    super('Load CAV 2019 tests...')
+    super('Load CAV 2019 tests')
     util.get('cav19_tests.json', (data: any) => {
       const litmus = data[0].tests
       this.body.append($('<h2>'+data[0].name+'</h2>'))
@@ -127,7 +127,7 @@ export class CAV19 extends Widget {
 
 export class GCC2018 extends Widget {
   constructor() {
-    super('Load GCC Cauldron 2018 demo tests...')
+    super('Load GCC Cauldron 2018 demo tests')
     this.body.append($(`
       <h3>GCC Tools Cauldron 2018</h3>
       <h4>Original versions</h2>
