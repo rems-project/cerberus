@@ -679,7 +679,7 @@ let make_edges display_info ex ew d =
       (fun edges (name, fault) ->
         match fault with
         | Bmc_types.One x -> edges
-        | Bmc_types.Two rel -> add_edges "undef" "darkorange" (aid_times_aid_set_of_rel rel) edges)
+        | Bmc_types.Two rel -> add_edges name "darkorange" (aid_times_aid_set_of_rel rel) edges)
       edges_with_derived
       d.Bmc_types.undefined_behaviour in
   all_edges
@@ -708,7 +708,7 @@ let display_edges display_info ex ew d =
     (fun ((src, tgt), info) ->
       dot_of_edge
         [Dot.EColor (String.concat ":" (List.map snd info));
-          Dot.ELabel (String.concat "," (List.map (fun (name, col) -> "<font color=\"" ^ col ^ "\">" ^ " " ^ name ^ " " ^ "</font>") info))] (src, tgt))
+          Dot.ELabel (" " ^ String.concat "," (List.map (fun (name, col) -> "<font color=\"" ^ col ^ "\">" ^ name ^ "</font>") info) ^ " ")] (src, tgt))
     (Aid_times_aid_map.bindings (make_edges display_info ex ew d))
 
 let digraph_of_execution_aux loc_map display_info (ex, ew, d) g =
