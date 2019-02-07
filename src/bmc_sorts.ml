@@ -124,7 +124,8 @@ module BasicTypeSort = struct
     match btype with
     | Integer ity ->
         Expr.mk_app g_ctx (List.nth fdecls 0) [IntegerTypeSort.mk_expr ity]
-    | _ -> assert false
+    | Floating _ ->
+        failwith "Floats are not supported."
 end
 
 module CtypeSort = struct

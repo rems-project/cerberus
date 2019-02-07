@@ -1487,11 +1487,11 @@ module BmcZ3 = struct
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, IFence (aid, mo))
     | LinuxFence mo ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         return (UnitSort.mk_unit, ILinuxFence (aid, mo))
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         assert (!!bmc_conf.concurrent_mode);
         get_fresh_aid  >>= fun aid ->
         get_file >>= fun file ->
@@ -1506,7 +1506,7 @@ module BmcZ3 = struct
     | LinuxLoad _ ->
         assert false
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -1518,7 +1518,7 @@ module BmcZ3 = struct
     | LinuxStore _ ->
         assert false
     | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
         z3_pe wval     >>= fun z3d_wval ->
@@ -2581,7 +2581,7 @@ module BmcVC = struct
                              Pexpr(_,_,PEsym expected),
                              desired, mo_success, mo_failure) ->
         assert (!!bmc_conf.concurrent_mode);
-        assert (!!bmc_conf.memory_mode = MemoryMode_C);
+        assert_memory_mode_c ();
         (* Check valid memory orders:
          * mo_failure must not be RELEASE or ACQ_REL
          * mo_failure must be no stronger than mo_success
@@ -2609,7 +2609,7 @@ module BmcVC = struct
     | LinuxFence _ -> return []
     | LinuxStore (Pexpr(_,_,PEval (Vctype ty)),
                   (Pexpr(_,_,PEsym sym)), wval, memorder) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         vcs_pe wval                     >>= fun vcs_wval ->
         lookup_sym sym                  >>= fun ptr_z3 ->
 
@@ -2620,7 +2620,7 @@ module BmcVC = struct
     | LinuxStore _ -> assert false
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), memorder) ->
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         lookup_sym sym >>= fun ptr_z3 ->
         return [(PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
@@ -2628,7 +2628,7 @@ module BmcVC = struct
     | LinuxLoad _  -> assert false
     | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         assert (!!bmc_conf.concurrent_mode);
-        assert (!!bmc_conf.memory_mode = MemoryMode_Linux);
+        assert_memory_mode_linux ();
         vcs_pe wval >>= fun vcs_wval ->
         lookup_sym sym >>= fun ptr_z3 ->
         return ((PointerSort.valid_ptr ptr_z3,
