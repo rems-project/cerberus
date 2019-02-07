@@ -17,6 +17,8 @@ type node_attr =
   | NHtmlLabel of string
   | NMargin of string
   | NPos of float * float
+  | NFontname of string
+  | NFontsize of int
 
 type node_info = {
   nname : string;
@@ -64,6 +66,11 @@ let string_of_nattr = function
   | NHtmlLabel l -> "label=<" ^ l ^ ">"
   | NMargin s -> string_of_str_attr "margin" s
   | NPos (x, y) -> string_of_str_attr "pos" (string_of_float x ^ "," ^ string_of_float y ^ "!")
+  | NFontname s -> string_of_str_attr "fontname" s
+  | NFontsize sz -> string_of_str_attr "fontsize" (string_of_int sz)
+
+let string_of_node_attrs nattrs =
+  String.concat "," (List.map string_of_nattr nattrs)
 
 let string_of_node (n : node_info) =
   n.nname
@@ -71,7 +78,7 @@ let string_of_node (n : node_info) =
     | [] -> ";"
     | _ ->
       " ["
-      ^ String.concat "," (List.map string_of_nattr n.nattrs)
+      ^ string_of_node_attrs n.nattrs
       ^ "];"
 
 type edge_attr =
@@ -80,6 +87,8 @@ type edge_attr =
   | Lhead of string
   | Ltail of string
   | EStyle of string
+  | EFontname of string
+  | EFontsize of int
 
 type edge_info = {
   src : string;
@@ -97,6 +106,11 @@ let string_of_eattr coloro = function
   | Lhead n -> string_of_str_attr "lhead" n
   | Ltail n -> string_of_str_attr "ltail" n
   | EStyle s -> string_of_str_attr "style" s
+  | EFontname s -> string_of_str_attr "fontname" s
+  | EFontsize sz -> string_of_str_attr "fontsize" (string_of_int sz)
+
+let string_of_edge_attrs coloro eattrs =
+  String.concat "," (List.map (string_of_eattr coloro) eattrs)
 
 let string_of_edge e =
   let coloro =
@@ -109,13 +123,7 @@ let string_of_edge e =
   e.src ^ " -> " ^ e.tgt
   ^ (match e.eattrs with
     | [] -> ""
-    | _ ->
-      " ["
-      ^ String.concat ","
-        (List.map
-           (string_of_eattr coloro)
-           e.eattrs)
-      ^ "];")
+    | _ -> " [" ^ string_of_edge_attrs coloro e.eattrs ^ "];")
 
 type rankdir =
   | TB
@@ -127,6 +135,9 @@ type graph_attr =
   | Rankdir of rankdir
   | Splines of bool
   | Overlap of bool
+  | Scale of float * float
+  | All_nodes of node_attr list
+  | All_edges of edge_attr list
 
 let string_of_bool b =
   if b then "true" else "false"
@@ -141,6 +152,10 @@ let string_of_graph_attr = function
   | Rankdir LR -> "rankdir=LR;"
   | Splines b -> "splines=" ^ string_of_bool b ^ ";"
   | Overlap b -> "overlap=" ^ string_of_bool b ^ ";"
+  | Scale (x, y) -> "scale=\"" ^ string_of_float x ^ "," ^ string_of_float y ^ "\";"
+  | All_nodes ns -> "node [" ^ string_of_node_attrs ns ^ "];"
+  | All_edges es -> "edge [" ^ string_of_edge_attrs None es ^ "];"
+
 
 type graph_element =
   | Node of node_info
