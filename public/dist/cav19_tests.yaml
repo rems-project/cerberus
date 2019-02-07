@@ -10,19 +10,19 @@
         - LB+rlx-data-rlx+rlx-data-rlx.c
         - LB+rlx-ctrl-rlx+rlx-ctrl-rlx.c
         - LB+acq-rel+acq-rel.c
-        - LB+Rsc-Wsc+Rsc-Wsc.c
+        - LB+sc-sc+sc-sc.c
     - section: Store buffering
       tests:
-        - SB+rel_acq+rel_acq.c
-        - SB+Wsc_Rsc+Wsc_Rsc.c
+        - SB+rel-acq+rel-acq.c
+        - SB+sc-sc+sc-sc.c
     - section: Write-to-read causality
       tests:
         - WRC+rlx+rlx-rlx+rlx-rlx.c
         - WRC+rlx+acq-rel+acq-acq.c
     - section: Independent reads of independent writes
       tests:
-        - IRIW+rel+rel+acq_acq+acq_acq.c
-        - IRIW+Wsc+Wsc+Rsc_Rsc+Rsc_Rsc.c
+        - IRIW+rel+rel+acq-acq+acq-acq.c
+        - IRIW+sc+sc+sc-sc+sc-rsc.c
     - section: Read-modify-writes
       tests:
         - RMW-strong-equal.c

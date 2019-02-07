@@ -1,6 +1,6 @@
-// SB+rel_acq+rel_acq
+// SB+rel-acq+rel-acq
 // Store Buffering (or Dekker's), with release-acquire pairs
-// The reads can both see 0 in the same execution. 
+// The reads can both see 0 in the same execution.
 // An exhaustive execution of this program should therefore return the values 0, 1, 2, 3.
 #include <stdatomic.h>
 int main() {
