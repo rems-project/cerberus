@@ -18,6 +18,6 @@ int main() {
       r2 = 2;
   } }-};
   assert(!(r1 == 1 && r2 == 0));
-  return r1 + 2 * r2;
+  // return r1 + 2 * r2;
 }
 
