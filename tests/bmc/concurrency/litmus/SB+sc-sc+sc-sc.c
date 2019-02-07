@@ -11,5 +11,5 @@ int main() {
     r2 = atomic_load_explicit(&y, memory_order_seq_cst);
   } }-};
   assert(!(r1 == 0 && r2 == 0));
-  return r1 + (2 * r2);
+  // return r1 + (2 * r2);
 }

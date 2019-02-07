@@ -12,5 +12,5 @@ int main() {
     r2 = READ_ONCE(y);
   } }-}
   __BMC_ASSUME(r1 == 0 && r2 == 1);
-  return r1 + 2 * r2;
+  // return r1 + 2 * r2;
 }
