@@ -260,10 +260,10 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | Fence of Cmm_csem.memory_order
  | CompareExchangeStrong of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
  | CompareExchangeWeak of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
- | LinuxFence of Linux.memory_order
- | LinuxLoad of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
- | LinuxStore of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
- | LinuxRMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.memory_order
+ | LinuxFence of Linux.linux_memory_order
+ | LinuxLoad of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.linux_memory_order
+ | LinuxStore of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.linux_memory_order
+ | LinuxRMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Linux.linux_memory_order
 (* | MtxInit of (generic_pexpr 'bty 'sym)*)
 
 
