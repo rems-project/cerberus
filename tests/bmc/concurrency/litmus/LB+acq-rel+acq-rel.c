@@ -1,4 +1,4 @@
-// LB+acq_rel+acq_rel
+// LB+acq-rel+acq-rel
 // Load Buffering, with acquire/release pairs
 // The values of z1 and z2 cannot both be 1. They can be both 0, or one of them can be 1.
 // An exhaustive execution of this program should therefore return the values 0, 1 and 2.

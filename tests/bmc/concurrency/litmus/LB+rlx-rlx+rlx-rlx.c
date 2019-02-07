@@ -1,3 +1,4 @@
+// LB+rlx-rlx+rlx-rlx
 #include <stdatomic.h>
 int main() {
   _Atomic(int) x = 0, y = 0;
@@ -13,8 +14,6 @@ int main() {
   __BMC_ASSUME(r1 == 1 && r2 == 1);
 #elif __memory_model_rc11__
   assert(!(r1 == 1 && r2 == 1));
-#else
-  #error "set __memory_model_c11__ or __memory_model_rc11__"
 #endif
   return r1 + 2 * r2;
 }

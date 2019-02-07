@@ -1,4 +1,4 @@
-// IRIW with release/acquire
+// IRIW+rel+rel+acq-acq+acq-acq
 // The reading threads do not have to see the writes to x and y in the same order.
 #include <stdatomic.h>
 int main() {
