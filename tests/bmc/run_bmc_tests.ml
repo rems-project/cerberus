@@ -94,6 +94,5 @@ let main () =
   else run_tests cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux.cat" ^ graph_opt) (my_readdir2 "concurrency/linux"));
   run_tests cfg "c11" ("-D__memory_model_c11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus");
   run_tests cfg "rc11" ("-D__memory_model_rc11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/rc11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus")
-  (* TODO: do some magic for RC11 *)
 
 let _ = main ()
