@@ -238,6 +238,9 @@ export class BMC extends SvgGraph {
         }
       }
     } else {
+      this.status.text('Execution 0 of 0')
+      this.prev.addClass('disabled')
+      this.next.addClass('disabled')
       this.container.empty()
     }
   }

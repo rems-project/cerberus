@@ -43,6 +43,7 @@ export default class View {
     this.on('dirty', this, () => {
       if (!this.dirty) {
         delete this.state.interactive
+        this.state.bmc_executions = []
         this.emit('clear')
         this.emit('updateArena')
         this.emit('updateMemory')
