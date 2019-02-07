@@ -1297,7 +1297,17 @@ module BmcZ3 = struct
         get_file  >>= fun file ->
         begin match Pmap.lookup sym file.tagDefs with
         | Some (StructDef memlist) ->
-            let memsizes = List.map (fun (cid, cbt) ->
+            let (size, index_list) =
+              PointerSort.struct_member_index_list sym file in
+
+            (*let member_indices = List.zip index_list memlist in
+            let shift_opt = List.find_opt (fun (shift, (mem, _)) ->
+
+            )*)
+            assert false
+
+
+            (*let memsizes = List.map (fun (cid, cbt) ->
                 (cid, bmcz3sort_size (ctype_to_bmcz3sort cbt file))
               ) memlist in
             let (shift_size, _) = List.fold_left (
@@ -1306,6 +1316,7 @@ module BmcZ3 = struct
                   else (acc + n, false)
             ) (0, false) memsizes in
             return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift_size))
+            *)
             (*
             let addr = PointerSort.get_addr z3d_ptr in
             let new_addr =
@@ -4322,9 +4333,14 @@ module BmcConcActions = struct
       add_assertion is_atomic
     ) sortlist >>= fun _ ->
     (match ctype with
-    | Struct0 _ -> (* Hack for structs *)
+    | Struct0 tag -> (* Hack for structs *)
         begin
         assert (List.length aids = List.length sortlist);
+        let (size, index_list) = PointerSort.struct_member_index_list tag file in
+        printf "Struct sym: %s; size: %d\n" (symbol_to_string tag) size;
+
+
+        assert false;
         mapMi (fun i (ctype,sort) ->
           let index = List.fold_left
               (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
