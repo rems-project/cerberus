@@ -14,7 +14,7 @@ int main() {
     WRITE_ONCE(x3, 1);
     WRITE_ONCE(x2, 1);
     rcu_read_unlock();
-  | ||| {
+  } ||| {
     r0 = READ_ONCE(x0);
     synchronize_rcu();
     r3 = READ_ONCE(x3);
