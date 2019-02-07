@@ -352,16 +352,18 @@ let bmc_file (file              : unit typed_file)
                         (Solver.get_reason_unknown g_solver))
   end;
   Solver.add g_solver (Option.get final_state.mem_bindings);
-  bmc_debug_print 3 "START FIRST CHECK WITH MEMORY ACTIONS";
-  begin match Solver.check g_solver [] with
-  | SATISFIABLE ->
-      bmc_debug_print 1 "Checkpoint passed: bindings are SAT"
-  | UNSATISFIABLE ->
-      failwith ("ERROR: Bindings unsatisfiable. Should always be sat.")
-  | UNKNOWN ->
-      failwith (sprintf "ERROR: status unknown. Reason: %s"
-                        (Solver.get_reason_unknown g_solver))
-  end;
+  (if g_incremental_smt then
+    begin
+    bmc_debug_print 3 "START FIRST CHECK WITH MEMORY ACTIONS";
+    match Solver.check g_solver [] with
+    | SATISFIABLE ->
+        bmc_debug_print 1 "Checkpoint passed: bindings are SAT"
+    | UNSATISFIABLE ->
+        failwith ("ERROR: Bindings unsatisfiable. Should always be sat.")
+    | UNKNOWN ->
+        failwith (sprintf "ERROR: status unknown. Reason: %s"
+                          (Solver.get_reason_unknown g_solver))
+    end);
   (* Add __BMC_ASSUMES *)
   let (constraints, bool_constants) =
     let assumes = Option.get final_state.assumes in
@@ -415,11 +417,18 @@ let bmc_file (file              : unit typed_file)
     (* Extract executions *)
     let (exec_output_str, dots, race_free) =
       (if !!bmc_conf.concurrent_mode && !!bmc_conf.find_all_execs &&
-          (is_some final_state.extract_executions) then
+          (is_some final_state.extract_executions) then begin
+
+        bmc_debug_print 3 "Extracting executions";
+        let ret =
         (Option.get final_state.extract_executions) (*g_solver
                                   (Option.get final_state.memory_model)*)
                                   (Option.get final_state.ret_expr)
                                   (final_state.alloc_meta)
+        in
+        bmc_debug_print 3 "Done extracting executions";
+        ret
+        end
        else
         ("",[], true))
     in

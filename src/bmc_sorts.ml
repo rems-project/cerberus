@@ -283,6 +283,8 @@ module AddressSortPNVI = struct
     | Atomic0 (Pointer0 _ as _ty) ->
         type_size _ty file
     | Struct0 tag ->
+        fst (struct_member_index_list tag file)
+        (*
         begin match Pmap.lookup tag file.tagDefs with
         | Some (StructDef members) ->
             let sizes = List.map (fun (_, ty) -> type_size ty file) members in
@@ -292,7 +294,33 @@ module AddressSortPNVI = struct
             ) 0 sizes
         | _ -> assert false
         end
+        *)
     | _ -> assert false
+  and struct_member_index_list tag (file: unit typed_file) =
+    (* Compute offset of member from base addr *)
+    begin match Pmap.lookup tag file.tagDefs with
+    | Some (StructDef members) ->
+        let rec helper rest total_size acc : int * (int list) =
+          begin match rest with
+          | [] -> (total_size, acc)
+          | (_, ty) :: tl ->
+            let ty_size = type_size ty file in
+            let align = alignof_type ty file in
+            (* Add padding to total size *)
+            let padding = (align - (total_size mod align)) mod align in
+            helper tl (total_size + padding + ty_size) ((total_size+padding)::acc)
+          end
+        in
+        let (total_size, rev_indices) = helper members 0 [] in
+        (* TODO: Padding at the end to the largest member (alignment?) *)
+        let largest_align = List.fold_left (fun acc (_, ty) ->
+          max acc (alignof_type ty file)
+        ) 0 members in
+        let last_padding =
+          (largest_align - (total_size mod largest_align)) mod largest_align in
+        (total_size + last_padding, List.rev rev_indices)
+    | _ -> assert false
+    end
 
   let get_provenance (ival_min: Expr.expr)
                      (ival_max: Expr.expr)
@@ -455,6 +483,8 @@ module type PointerSortAPI = sig
   val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
 
   val type_size : ctype -> unit typed_file -> int
+  val struct_member_index_list : sym_ty -> unit typed_file -> int * int list
+
   val mk_nd_addr : int -> Expr.expr
   val get_index_from_addr : Expr.expr -> Expr.expr
   val get_addr_index : Expr.expr -> Expr.expr
@@ -587,6 +617,7 @@ module PointerSortPNVI : PointerSortAPI = struct
 
   (* TODO: Do this properly with signatures *)
   let type_size = AddrModule.type_size
+  let struct_member_index_list = AddrModule.struct_member_index_list
   let mk_nd_addr = AddrModule.mk_nd_addr
   let get_index_from_addr addr =
     AddrModule.get_index addr
@@ -679,6 +710,7 @@ module PointerSortConcrete : PointerSortAPI = struct
 
   (* TODO: Do this properly with signatures *)
   let type_size = AddrModule.type_size
+  let struct_member_index_list tag file = assert false(* easy TODO *)
   let mk_nd_addr = AddrModule.mk_nd_addr
   let get_index_from_addr addr =
     AddrModule.get_index addr
