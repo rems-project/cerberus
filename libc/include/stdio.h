@@ -59,6 +59,10 @@ int fscanf(FILE * restrict stream, const char * restrict fmt, ...);
 int printf(const char * restrict fmt, ...);
 int scanf(const char * restrict fmt, ...);
 
+#if __bmc_cerb__
+#define printf(...)
+#endif
+
 int snprintf(char * restrict s, size_t n, const char * restrict fmt, ...);
 int sprintf(char * restrict s, const char * restrict fmt, ...);
 int sscanf(const char * restrict s, const char * restrict fmt, ...);
