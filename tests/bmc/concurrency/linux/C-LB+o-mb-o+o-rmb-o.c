@@ -1,3 +1,4 @@
+//  C-LB+o-mb-o+o-rmb-o.c
 #include "linux.h"
 int main() {
   int x = 0, y = 0;
@@ -11,7 +12,6 @@ int main() {
         WRITE_ONCE(x, 1); 
       }
   }-}
-  //exists(0:r1=1 /\ 1:r3=1)
-  //allowed
-  return r1 + 2* r3;
+  __BMC_ASSUME(r1 == 1 && r3 == 1);
+  return r1 + 2 * r3;
 }
