@@ -11,7 +11,7 @@ int main(void) {
   r1 = atomic_compare_exchange_weak_explicit(
     &x, &y, 1, memory_order_seq_cst, memory_order_seq_cst);
   r2 = atomic_load_explicit(&x, memory_order_relaxed);
-  assert((r1 == 0 && y == 0 && r2 == 0) || (r1 == 0 && y == 0 && r2 == 1));
+  assert((r1 == 0 && y == 0 && r2 == 0) || (r1 == 1 && y == 0 && r2 == 1));
   // return r1 + 2 * (y + 2 * r2);
 }
 
