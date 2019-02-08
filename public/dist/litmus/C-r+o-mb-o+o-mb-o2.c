@@ -14,5 +14,5 @@ T0_r2 = READ_ONCE(x); }
 smp_mb();
 WRITE_ONCE(y,1); }
 }-};
- __BMC_ASSUME (y == 2 && T0_r2 == 0);
+ assert(!(y == 2 && T0_r2 == 0));
 }
