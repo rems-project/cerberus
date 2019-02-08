@@ -45,7 +45,7 @@ let run_test validator cfg model opts filename =
   flush Pervasives.stdout;
   let cmd_file = dir ^ "cmd.sh" in
   let log_file = dir ^ "log.txt" in
-  let cmd = "DYLD_LIBRARY_PATH=`ocamlfind query z3` ../../cerberus " ^ opts ^ filename ^ " > " ^ log_file ^ " 2>&1" in
+  let cmd = "LD_LIBRARY_PATH=`ocamlfind query z3` DYLD_LIBRARY_PATH=`ocamlfind query z3` CERB_PATH=../.. ../../cerberus " ^ opts ^ filename ^ " > " ^ log_file ^ " 2>&1" in
   write_to_file cmd cmd_file ();
   if cfg.only_write_command then (print_string (" WRITTEN\n"); flush Pervasives.stdout)
   else
