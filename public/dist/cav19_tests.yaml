@@ -30,6 +30,17 @@
         - RMW-weak-equal.c
         - RMW-weak-unequal.c
         - MP+na-rmw_rel+acq-na.c
+    - section: Linux (no-RCU)
+      tests:
+        - C-LB+o-mb-o+o-rmb-o.c
+        - MP+o-wmb-o+o-addr-acq-o.c
+        - PeterZ.c
+        - SB+o-mb-o+o-mb-o.c
+        - WRC+o+o-wmb-o+acq-o.c
+        - LB+o-ctrl-o+o-mb-o.c
+        - MP+o-wmb-o+o-rmb-o.c
+        - RWC+o+o-mb-o+o-mb-o.c
+        - WRC+o+o-po-rel+o-rmb-o.c 
     - section: lwn573436
       tests:
         - C-2+2w+o-mb-o+o-mb-o.c
