@@ -1,4 +1,4 @@
-// RC11 .cat file without fences or SC
+// RC11 .cat file without fences
 
 let sb = po | I * (M \ I)
 let rfstar = rf*
@@ -27,17 +27,10 @@ let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr
 let psc_base =  ([SC] | fhb) ; scb ; ([SC] | hbf)
 let psc_f =  [F & SC] ; (hb | hb; eco; hb) ; [F & SC]
 let psc =  psc_base | psc_f
-//let psc = scb
 acyclic psc as sc
 
 acyclic (sb | rf) as sb_rf
 let conflict = (((W * U) | (U * W)) & loc)
 let race = ext & (((conflict \ hb) \ (hb^-1)) \ (A * A))
 
-//undefined_unless empty race as racy
 undefined_unless empty race as racy
-
-//output race
-
-//output sw
-//output id
