@@ -12,4 +12,6 @@ int main() {
     r2 = atomic_load_explicit(&y, memory_order_relaxed);
     atomic_store_explicit(&x, r2, memory_order_relaxed);
   } }-};
+  // UB with C11
+  // no UB with RC11
 }
