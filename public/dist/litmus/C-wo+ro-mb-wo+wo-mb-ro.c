@@ -17,5 +17,5 @@ WRITE_ONCE(y,1); }
 smp_mb();
 T2_r4 = READ_ONCE(x); }
 }-};
- __BMC_ASSUME (y == 2 && T1_r1 == 1 && T2_r4 == 0);
+ assert(!(y == 2 && T1_r1 == 1 && T2_r4 == 0));
 }

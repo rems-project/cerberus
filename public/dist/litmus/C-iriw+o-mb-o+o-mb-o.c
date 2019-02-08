@@ -22,5 +22,5 @@ T1_r4 = READ_ONCE(x); }
 |||
 { WRITE_ONCE(y,1); }
 }-};
- __BMC_ASSUME (T0_r1 == 1 && T0_r2 == 0 && T1_r3 == 1 && T1_r4 == 0);
+assert(!(T0_r1 == 1 && T0_r2 == 0 && T1_r3 == 1 && T1_r4 == 0));
 }

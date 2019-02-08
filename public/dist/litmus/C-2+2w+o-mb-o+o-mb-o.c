@@ -14,5 +14,5 @@ WRITE_ONCE(y,2); }
 smp_mb();
 WRITE_ONCE(x,2); }
 }-};
- __BMC_ASSUME (x == 1 && y == 1);
+ assert(!(x == 1 && y == 1));
 }
