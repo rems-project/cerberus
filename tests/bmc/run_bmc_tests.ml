@@ -112,17 +112,18 @@ let ub_validator log_file () = validator_of_line_validator ub_line_validator log
 let main () =
   let cfg = find_flags () in
   let graph_opt = (if cfg.produce_graphs then " --bmc_output_model=true" else "") in
-  (match cfg.skip with
-  | Skip_all_linux -> ()
-  | Skip_nothing | Skip_only_rcu ->
-    run_tests smiley_validator cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux_without_rcu.cat" ^ graph_opt) (my_readdir2 "concurrency/linux-no-rcu"));
-  (match cfg.skip with
-  | Skip_all_linux | Skip_only_rcu -> ()
-  | Skip_nothing ->
-    run_tests smiley_validator cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux.cat" ^ graph_opt) (my_readdir2 "concurrency/linux-rcu"));
   run_tests smiley_validator cfg "c11" ("-D__memory_model_c11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus");
   run_tests ub_validator cfg "c11" ("-D__memory_model_c11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus-ub");
   run_tests smiley_validator cfg "rc11" ("-D__memory_model_rc11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/rc11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus");
-  run_tests ub_validator cfg "rc11" ("-D__memory_model_rc11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/rc11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus-ub")
+  run_tests ub_validator cfg "rc11" ("-D__memory_model_rc11__ --bmc --bmc_conc --bmc-mode=c --bmc-cat=$CERB_PATH/bmc/rc11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus-ub");
+  (match cfg.skip with
+  | Skip_all_linux -> ()
+  | Skip_nothing | Skip_only_rcu ->
+    run_tests smiley_validator cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux_without_rcu.cat" ^ graph_opt) (my_readdir2 "concurrency/linux-no-rcu");
+    run_tests smiley_validator cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux_without_rcu.cat" ^ graph_opt) (my_readdir2 "concurrency/linux-no-rcu/lwn573436"));
+  (match cfg.skip with
+  | Skip_all_linux | Skip_only_rcu -> ()
+  | Skip_nothing ->
+    run_tests smiley_validator cfg "linux" ("-D__memory_model_linux__ --bmc --bmc_conc --bmc-mode=linux --bmc-cat=$CERB_PATH/bmc/linux.cat" ^ graph_opt) (my_readdir2 "concurrency/linux-rcu"))
 
 let _ = main ()
