@@ -1,4 +1,4 @@
-// RC11 .cat file without fences
+// RC11 .cat file without fences or SC
 
 let sb = po | I * (M \ I)
 let rfstar = rf*
@@ -20,14 +20,14 @@ irreflexive (hb ; eco) as coh
 irreflexive eco as atomic1
 irreflexive (fr ; mo) as atomic2
 
-//let fhb = [F & SC] ; hb?
-//let hbf = hb? ; [F & SC]
+let fhb = [F & SC] ; hb?
+let hbf = hb? ; [F & SC]
 let sb_neq_loc = sb \ loc
 let scb =  sb | sb_neq_loc ; hb ; sb_neq_loc | hb & loc | mo | fr
-//let psc_base =  ([SC] | fhb) ; scb ; ([SC] | hbf)
-//let psc_f =  [F & SC] ; (hb | hb; eco; hb) ; [F & SC]
-//let psc =  psc_base | psc_f
-let psc = scb
+let psc_base =  ([SC] | fhb) ; scb ; ([SC] | hbf)
+let psc_f =  [F & SC] ; (hb | hb; eco; hb) ; [F & SC]
+let psc =  psc_base | psc_f
+//let psc = scb
 acyclic psc as sc
 
 acyclic (sb | rf) as sb_rf
@@ -40,4 +40,4 @@ undefined_unless empty race as racy
 //output race
 
 //output sw
-output id
+//output id
