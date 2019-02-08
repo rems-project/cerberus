@@ -30,8 +30,53 @@
         - RMW-weak-equal.c
         - RMW-weak-unequal.c
         - MP+na-rmw_rel+acq-na.c
+    - section: lwn573436
+      tests:
+        - C-2+2w+o-mb-o+o-mb-o.c
+        - C-2+2w+o-mb-o+o-wb-o.c
+        - C-2+2w+o-wb-o+o-mb-o.c
+        - C-2+2w+o-wb-o+o-wb-o.c
+        - C-3+2w+o-wb-o+o-wb-o+o-wb-o.c
+        - C-iriw+o-mb-o+o-mb-o.c
+        - C-iriw+o-mb-o+o-rmb-o.c
+        - C-iriw+o-rmb-o+o-mb-o.c
+        - C-lb+o-mb-o+o-mb-o.c
+        - C-lb+o-mb-o+o-rmb-o.c
+        - C-mp+o-mb-o+o-mb-o.c
+        - C-mp+o-mb-o+o-mb-o2.c
+        - C-mp+o-mb-o+o-rb-o.c
+        - C-mp+o-mb-o+o-rb-o2.c
+        - C-mp+o-mb-o+o-wmb-o.c
+        - C-mp+o-rmb-o+o-mb-o.c
+        - C-mp+o-wb-o+o-mb-o.c
+        - C-mp+o-wb-o+o-mb-o2.c
+        - C-mp+o-wb-o+o-rb-o.c
+        - C-mp+o-wb-o+o-rb-o2.c
+        - C-r+o-mb-o+o-mb-o.c
+        - C-r+o-mb-o+o-mb-o2.c
+        - C-r+o-mb-o+o-rmb-o2.c
+        - C-r+o-mb-o+o-wb-o.c
+        - C-r+o-mb-o+o-wb-o2.c
+        - C-r+o-wmb-o+o-mb-o2.c
+        - C-r+o-wmb-o+o-rmb-o2.c
+        - C-s+o-mb-o+o-mb-o.c
+        - C-s+o-mb-o+o-mb-o2.c
+        - C-s+o-wb-o+o-mb-o.c
+        - C-s+o-wb-o+o-mb-o2.c
+        - C-sb+o-mb-o+o-mb-o.c
+        - C-wo+ro-mb-ro+wo-mb-ro.c
+        - C-wo+ro-mb-wo+wo-mb-ro.c
+        - C-wo+ro-mb-wo+wo-mb-ro2.c
+        - C-wrc+o-mb-o+o-mb-o.c
+        - C-wrc+o-mb-o+o-mb-o2.c
+        - C-wrc+o-mb-o+o-rb-o.c
+        - C-wrc+o-mb-o+o-rb-o2.c
+        - C-wrc+o-mb-o+o-rmb-o.c
 - name: Memory Layout Tests
   tests:
+    - section: Unsequenced race
+      tests:
+        - unsequenced-race.c
     - section: Basic provenance semantics for pointer values
       tests:
         - provenance_basic_global_xy_intptr_t.c
