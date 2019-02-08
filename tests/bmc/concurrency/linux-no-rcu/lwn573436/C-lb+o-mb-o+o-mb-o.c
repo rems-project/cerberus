@@ -14,5 +14,5 @@ WRITE_ONCE(y,1); }
 smp_mb();
 WRITE_ONCE(x,1); }
 }-};
- __BMC_ASSUME (T0_r1 == 1 && T1_r3 == 1);
+ assert(!(T0_r1 == 1 && T1_r3 == 1));
 }
