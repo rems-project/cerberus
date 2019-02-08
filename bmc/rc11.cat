@@ -1,4 +1,6 @@
 // RC11 .cat file without fences
+output addr
+output data
 
 let sb = po | I * (M \ I)
 let rfstar = rf*
