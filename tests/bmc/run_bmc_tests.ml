@@ -65,22 +65,22 @@ let run_tests validator cfg model opts filenames =
 
 let find_flags () =
   let flag_only_write_command = ref false in
-  let flag_skip_rcu = ref false in
+  let flag_check_rcu = ref false in
   let flag_skip_linux = ref false in
   let flag_no_graphs = ref false in
   let speclist = [
     ("--only-cmd", Arg.Set flag_only_write_command, "Only produces the command files");
-    ("--skip-rcu", Arg.Set flag_skip_rcu, "Skip RCU tests");
+    ("--check-rcu", Arg.Set flag_check_rcu, "Check RCU tests");
     ("--skip-linux", Arg.Set flag_skip_linux, "Skip Linux tests");
     ("--no-graphs", Arg.Set flag_no_graphs, "Do not produce graphs")
   ] in
   let usage_msg = "run_bmc_tests:"
   in Arg.parse speclist print_endline usage_msg;
   let skip =
-    if !flag_skip_rcu && !flag_skip_linux then (prerr_string "use at most one of --skip-rcu and --skip-linux"; exit 1)
-    else if !flag_skip_rcu then Skip_only_rcu
+    if !flag_check_rcu && !flag_skip_linux then (prerr_string "use at most one of --check-rcu and --skip-linux"; exit 1)
+    else if !flag_check_rcu then Skip_nothing
     else if !flag_skip_linux then Skip_all_linux
-    else Skip_nothing in
+    else Skip_only_rcu in
   { only_write_command = !flag_only_write_command; skip = skip; produce_graphs = not (!flag_no_graphs) }
 
 let validator_of_line_validator line_validator log_file () =
@@ -111,6 +111,10 @@ let ub_validator log_file () = validator_of_line_validator ub_line_validator log
 
 let main () =
   let cfg = find_flags () in
+  (match cfg.skip with
+  | Skip_nothing -> print_string "checking all tests - this is very slow\n"
+  | Skip_all_linux -> print_string "skipping all Linux tests\n"
+  | Skip_only_rcu -> print_string "skipping RCU tests; use --check-rcu to check them\n");
   let bmc_base_opts = "--bmc=true --bmc_conc=true" in
   let graph_opt = (if cfg.produce_graphs then " --bmc_output_model=true" else "") in
   run_tests smiley_validator cfg "c11" ("-D__memory_model_c11__ " ^ bmc_base_opts ^ " --bmc-cat=$CERB_PATH/bmc/c11.cat" ^ graph_opt) (my_readdir2 "concurrency/litmus");
