@@ -1,6 +1,8 @@
 // Modified from:
 // https://github.com/herd/herdtools/tree/master/cats/c11/popl2016
 // C11.cat w/o locks, consume
+output addr
+output data
 
 let sb = po | I * (M \ I)
 let mo = co
