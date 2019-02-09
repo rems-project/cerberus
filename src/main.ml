@@ -456,7 +456,7 @@ let args =
 (* bmc flags *)
 let bmc =
   let doc = "Run bounded model checker" in
-  Arg.(value & opt bool true & info["bmc"] ~doc)
+  Arg.(value & opt bool false & info["bmc"] ~doc)
 
 let bmc_max_depth =
   let doc = "Maximum depth of function calls and loops in the bounded model checker" in
