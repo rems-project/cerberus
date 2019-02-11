@@ -122,6 +122,7 @@ let prefix_to_string (prefix: Sym.prefix) =
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
+  | PrefMalloc -> "malloc"
 
 
 let prefix_to_string_short (prefix: Sym.prefix) =
@@ -130,6 +131,7 @@ let prefix_to_string_short (prefix: Sym.prefix) =
   | PrefOther s -> s
   | PrefStringLiteral _ -> "string literal"
   | PrefFunArg (_, _, n) -> "arg" ^ string_of_int n
+  | PrefMalloc -> "malloc"
 
 let name_cmp = fun nm1 nm2 ->
   match (nm1, nm2) with

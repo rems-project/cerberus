@@ -32,3 +32,5 @@ let rec pp_prefix = function
       P.braces (!^ "string literal")
   | PrefFunArg (_, _, n) ->
       P.braces (!^ ("arg" ^ string_of_int n))
+  | PrefMalloc ->
+      P.braces (!^ "malloc'd")
