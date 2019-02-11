@@ -12,6 +12,10 @@ let pp_mem_value_opt = function
   | Some mval -> pp_mem_value mval
   | None -> P.empty
 
+let pp_string_opt = function
+    | None -> P.empty
+    | Some s -> !^s
+
 let pp_trace_event = function
   | ME_function_call (f, mvs) ->
     !^ "function_call" ^^^ pp_symbol f
@@ -41,14 +45,16 @@ let pp_trace_event = function
               ^^^ !^(string_of_bool is_dyn)
               ^^^ pp_pointer_value ptrval
 
-  | ME_load (loc, cty, ptrval, mval) ->
+  | ME_load (loc, pref, cty, ptrval, mval) ->
     !^ "load" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+              ^^^ P.parens (pp_string_opt pref)
               ^^^ P.parens (pp_ctype cty)
               ^^^ P.parens (pp_pointer_value ptrval)
               ^^^ P.parens (pp_mem_value mval)
 
-  | ME_store (loc, cty, is_locking, ptrval, mval) ->
+  | ME_store (loc, pref, cty, is_locking, ptrval, mval) ->
     !^ "store" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+               ^^^ P.parens (pp_string_opt pref)
                ^^^ P.parens (pp_ctype cty)
                ^^^ !^(string_of_bool is_locking)
                ^^^ P.parens (pp_pointer_value ptrval)
