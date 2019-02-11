@@ -580,6 +580,7 @@ let gt_ptrval = Defacto_memory.impl_gt_ptrval
 let le_ptrval = Defacto_memory.impl_le_ptrval
 let ge_ptrval = Defacto_memory.impl_ge_ptrval
 let diff_ptrval = Defacto_memory.impl_diff_ptrval
+let prefix_of_pointer _ = return None
 let validForDeref_ptrval = Defacto_memory.impl_validForDeref_ptrval
 let isWellAligned_ptrval = Defacto_memory.impl_isWellAligned_ptrval
 let ptrcast_ival = Defacto_memory.impl_ptrcast_ival

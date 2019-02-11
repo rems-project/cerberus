@@ -949,6 +949,60 @@ module Concrete : Memory = struct
               } )
     end
   
+  let prefix_of_pointer (PV (prov, pv)) : string option memM =
+    let open String_symbol in
+    let rec aux addr alloc = function
+      | None
+      | Some Void0
+      | Some (Function0 _) ->
+          None
+      | Some (Basic0 _)
+      | Some (Builtin0 _)
+      | Some (Union0 _)
+      | Some (Pointer0 _) ->
+          let offset = N.sub addr alloc.base in
+          Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
+      | Some (Struct0 tag_sym) -> (* TODO: nested structs *)
+          let offset = N.to_int @@ N.sub addr alloc.base in
+          let (offs, _) = offsetsof tag_sym in
+          let rec find = function
+            | [] ->
+              None
+            | (Cabs.CabsIdentifier (_, memb), _, off) :: offs ->
+              if offset = off then
+                Some (string_of_prefix alloc.prefix ^ "." ^ memb)
+              else
+                find offs
+          in find offs
+      | Some (Array0 (ty, _)) ->
+          let offset = N.sub addr alloc.base in
+          if N.less offset alloc.size then
+            let n = (N.to_int offset) / sizeof ty in
+            Some (string_of_prefix alloc.prefix ^ "[" ^ string_of_int n ^ "]")
+          else
+            None
+      | Some (Atomic0 ty) ->
+          aux addr alloc @@ Some ty
+    in
+    match prov with
+    | Prov_some alloc_id ->
+      get_allocation alloc_id >>= fun alloc ->
+      begin match pv with
+        | PVconcrete addr ->
+          if addr = alloc.base then
+            return @@ Some (string_of_prefix alloc.prefix)
+          else
+            return @@ aux addr alloc alloc.ty
+        | PVnull ty ->
+          if Some ty = alloc.ty then
+            return @@ Some (string_of_prefix alloc.prefix)
+          else
+            return None
+        | _ ->
+          return None
+      end
+    | _ ->
+      return None
 
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
     modify (fun st ->

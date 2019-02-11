@@ -948,10 +948,11 @@ let action_request_sequential = function
   | Core_run.LoadRequest loc sb_edges dd_edges asw_edges aid tid mo lvalue_ty ptr_val _ mk_th_st' ->
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
       liftMem (Mem.load loc lvalue_ty ptr_val) >>= fun (fp, mval) ->
+      liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid (mk_th_st' mval) dr_st.core_state;
-          trace= ME_load loc lvalue_ty ptr_val mval :: dr_st.trace
+          trace= ME_load loc pref lvalue_ty ptr_val mval :: dr_st.trace
         |>
       )
   
@@ -960,10 +961,11 @@ let action_request_sequential = function
       (* TODO: need to make memory layout detect unsequenced races (use to make
          the concurency to the check even in the sequential mode) *)
       liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp ->
+      liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
       ND.update (fun dr_st ->
         <| dr_st with
           core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
-          trace= ME_store loc lvalue_ty is_locking ptr_val mem_val :: dr_st.trace
+          trace= ME_store loc pref lvalue_ty is_locking ptr_val mem_val :: dr_st.trace
         |>
       )
   

@@ -3814,7 +3814,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
                        Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                          (* TODO: proper memory order *)
-                         (Caux.pstore (Loc.other "global init with value") core_ty (Caux.mk_sym_pe sym_global)
+                         (Caux.pstore loc core_ty (Caux.mk_sym_pe sym_global)
                             core_init_e Cmm.NA)
                          (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                       )) in

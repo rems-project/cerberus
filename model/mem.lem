@@ -110,6 +110,9 @@ declare ocaml target_rep function le_ptrval = `Ocaml_mem.le_ptrval`
 declare ocaml target_rep function ge_ptrval = `Ocaml_mem.ge_ptrval`
 declare ocaml target_rep function diff_ptrval = `Ocaml_mem.diff_ptrval`
 
+val prefix_of_pointer: pointer_value -> memM (maybe string)
+declare ocaml target_rep function prefix_of_pointer = `Ocaml_mem.prefix_of_pointer`
+
 val validForDeref_ptrval: Core_ctype.ctype -> pointer_value -> memM bool
 declare ocaml target_rep function validForDeref_ptrval = `Ocaml_mem.validForDeref_ptrval`
 
