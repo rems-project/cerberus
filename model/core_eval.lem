@@ -731,7 +731,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                   | Just (ret, params, is_variadic, has_proto) ->
                       let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
                       EU.return (PEval (Vtuple [Vctype ret;
-                                                Vlist BTy_ctype (List.map Vctype params);
+                                                Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);
                                                 if is_variadic then Vtrue else Vfalse;
                                                 if has_proto then Vtrue else Vfalse; ]))
                   | _ ->

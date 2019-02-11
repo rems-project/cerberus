@@ -345,6 +345,8 @@ export default class View {
         const p = alloc.prefix
         if (alloc.dyn)
           return `malloc'd`
+        if (p.kind == 'arg')
+          return p.name
         switch (Memory.unique(p, mem.map)) {
           case 'unique':
             return p.name

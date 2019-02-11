@@ -30,3 +30,5 @@ let rec pp_prefix = function
       P.braces (!^ str)
   | PrefStringLiteral _ ->
       P.braces (!^ "string literal")
+  | PrefFunArg (_, _, n) ->
+      P.braces (!^ ("arg" ^ string_of_int n))

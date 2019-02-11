@@ -620,6 +620,21 @@ let rec drive_core_thread tid =
           let () = Boot.begin_timing ("tau: " ^ debug_str) in (* DEBUG, PROFILING *)
           match tsk with
             | Core_run.TSK_Ccall sym mvals ->
+                ND.get >>= fun dr_st ->
+                match Map.lookup sym dr_st.core_file.Core.funinfo with
+                  | Just (_, param_sym_tys, _, _) ->
+                      let param_syms = List.map fst param_sym_tys in
+                      ND.foldlM (fun () (sym_opt, mval) ->
+                        match sym_opt with
+                          | Just sym ->
+                              liftMem (Mem.update_prefix (Symbol.PrefSource Loc.unknown [sym], mval))
+                          | Nothing ->
+                              ND.return ()
+                        end
+                      ) () $ List.zip param_syms mvals
+                  | Nothing ->
+                      ND.return ()
+                end >>= fun () ->
                 ND.update $ fun dr_st ->
                 <| dr_st with
                   trace= ME_function_call sym mvals :: dr_st.trace
