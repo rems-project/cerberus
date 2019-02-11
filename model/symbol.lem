@@ -117,6 +117,7 @@ type prefix =
   | PrefSource of Loc.t * list sym
   | PrefFunArg of Loc.t * digest * int
   | PrefStringLiteral of Loc.t * digest
+  | PrefMalloc
   | PrefOther of string
 
 val fresh_int: unit -> nat

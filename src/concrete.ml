@@ -1025,7 +1025,7 @@ module Concrete : Memory = struct
       let alloc_id = st.next_alloc_id in
       let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
       Debug_ocaml.print_debug 1 [] (fun () ->
-        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
         " --> alloc_id= " ^ N.to_string alloc_id ^
         ", size= " ^ N.to_string size_n ^
         ", addr= " ^ N.to_string addr
@@ -1033,7 +1033,7 @@ module Concrete : Memory = struct
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n;
             last_used= Some st.next_alloc_id;
             dynamic_addrs= addr :: st.dynamic_addrs })
@@ -2105,6 +2105,11 @@ let combine_prov prov1 prov2 =
     | Symbol.PrefOther s ->
       (* TODO: this should not be possible anymore *)
       `Assoc [("kind", `String "other"); ("name", `String s)]
+    | Symbol.PrefMalloc ->
+      `Assoc [("kind", `String "malloc");
+              ("scope", `Null);
+              ("name", `String "malloc'd");
+              ("loc", `Null)]
     | Symbol.PrefStringLiteral (loc, _) ->
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
@@ -2158,6 +2163,7 @@ let combine_prov prov1 prov2 =
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
         | Symbol.PrefStringLiteral (_, hash) -> hash = dig
         | Symbol.PrefFunArg (_, hash, _) -> hash = dig
+        | Symbol.PrefMalloc -> true
         | _ -> false
       ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);
