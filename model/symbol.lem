@@ -115,11 +115,15 @@ let show_raw (Symbol d n str_opt) =
 (* Location prefix *)
 type prefix =
   | PrefSource of Loc.t * list sym
-  | PrefStringLiteral of Loc.t * sym
+  | PrefFunArg of Loc.t * digest * int
+  | PrefStringLiteral of Loc.t * digest
   | PrefOther of string
 
 val fresh_int: unit -> nat
 declare ocaml target_rep function fresh_int = `Fresh.int`
+
+val digest_of_sym: sym -> digest
+let digest_of_sym (Symbol dig _ _) = dig
 
 val fresh: unit -> sym
 let fresh () =

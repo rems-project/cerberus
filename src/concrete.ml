@@ -948,6 +948,22 @@ module Concrete : Memory = struct
                   funptrmap= funptrmap;
               } )
     end
+
+  
+  let update_prefix (pref, mval) =
+    match mval with
+    | MVpointer (_, PV (Prov_some alloc_id, _)) ->
+        let upd_alloc = function
+          | Some alloc ->
+              Some { alloc with prefix = pref }
+          | None ->
+              Debug_ocaml.warn [] (fun () -> "update_prefix: allocation does not exist");
+              None
+        in
+        update (fun st -> { st with allocations= IntMap.update alloc_id upd_alloc st.allocations })
+    | _ ->
+        Debug_ocaml.warn [] (fun () -> "update_prefix: wrong arguments");
+        return ()
   
   let prefix_of_pointer (PV (prov, pv)) : string option memM =
     let open String_symbol in
@@ -2089,10 +2105,15 @@ let combine_prov prov1 prov2 =
     | Symbol.PrefOther s ->
       (* TODO: this should not be possible anymore *)
       `Assoc [("kind", `String "other"); ("name", `String s)]
-    | Symbol.PrefStringLiteral (loc, sym) ->
+    | Symbol.PrefStringLiteral (loc, _) ->
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
+              ("loc", Location_ocaml.to_json loc)]
+    | Symbol.PrefFunArg (loc, _, n) ->
+      `Assoc [("kind", `String "arg");
+              ("scope", `Null);
+              ("name", `String ("arg" ^ string_of_int n));
               ("loc", Location_ocaml.to_json loc)]
     | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
@@ -2135,7 +2156,8 @@ let combine_prov prov1 prov2 =
     let allocs = IntMap.filter (fun _ (alloc : allocation) ->
         match alloc.prefix with
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
-        | Symbol.PrefStringLiteral (_, Symbol.Symbol (hash, _, _)) -> hash = dig
+        | Symbol.PrefStringLiteral (_, hash) -> hash = dig
+        | Symbol.PrefFunArg (_, hash, _) -> hash = dig
         | _ -> false
       ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);

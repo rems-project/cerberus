@@ -332,7 +332,7 @@ type 'a core_dump =
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Cabs.cabs_identifier * (Symbol.sym list * Core.linking_kind)) list;
-    dump_funinfo: (Symbol.sym * (Core_ctype.ctype0 * Core_ctype.ctype0 list * bool * bool)) list;
+    dump_funinfo: (Symbol.sym * (Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool)) list;
   }
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =

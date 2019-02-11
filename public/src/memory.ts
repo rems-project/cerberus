@@ -18,7 +18,7 @@ export type Value = {
 }
 
 export type Prefix = {
-  kind: 'source' | 'string literal',
+  kind: 'source' | 'string literal' | 'arg',
   name: string,
   scope: string | null,
   loc: Range | null
