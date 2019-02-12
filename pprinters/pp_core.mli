@@ -23,7 +23,7 @@ sig
   val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
   val pp_file: ('a, 'b) generic_file -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * Core_ctype.ctype0 list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document

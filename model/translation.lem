@@ -2373,7 +2373,7 @@ TODO: #9
                         arg_sym_pe in
                     (Caux.add_std "§6.5.2.2#7, sentence 1"
                       (Caux.mk_wseq_e arg_ptr_sym_pat
-                        (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_sym_pe) param_ty_sym_pe (Symbol.PrefOther ("arg" ^ show n)))
+                        (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_sym_pe) param_ty_sym_pe (Symbol.PrefFunArg loc (Symbol.digest ()) (intFromInteger n)))
                         (Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
                           (Caux.pstore loc param_ty_sym_pe arg_ptr_sym_pe conv_value Cmm.NA)
                           (Caux.mk_pure_e arg_ptr_sym_pe)
@@ -3814,7 +3814,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
                        Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                          (* TODO: proper memory order *)
-                         (Caux.pstore (Loc.other "global init with value") core_ty (Caux.mk_sym_pe sym_global)
+                         (Caux.pstore loc core_ty (Caux.mk_sym_pe sym_global)
                             core_init_e Cmm.NA)
                          (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                       )) in
@@ -3830,15 +3830,16 @@ let translate_program stdlib (startup_sym_opt, sigm) =
               C.BTy_unit
             else
               C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype return_ty)) in
-          let finfo =
-            (Caux.proj_ctype return_ty
-            (* TODO: check if we need qualifiers too *)
-            , List.map (fun (_, ty, _) -> Caux.proj_ctype ty) params
-            , is_variadic, has_proto) in
+
           match Context.lookup (=) sigm.A.function_definitions sym with
             | Nothing ->
                 (* if the function has no definition,
                    we create Core procedure declaration *)
+                let finfo =
+                  (Caux.proj_ctype return_ty
+                  (* TODO: check if we need qualifiers too *)
+                  , List.map (fun (_, ty, _) -> (Nothing, Caux.proj_ctype ty)) params
+                  , is_variadic, has_proto) in
                 E.return
                   ( gacc
                   , Map.insert sym (C.ProcDecl loc ret_bTy (List.map (fun _ -> C.BTy_object C.OTy_pointer) params)) facc
@@ -3855,7 +3856,12 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             | Just (loc, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
-
+                (* TODO: variadic!! *)
+                let finfo =
+                  (Caux.proj_ctype return_ty
+                  (* TODO: check if we need qualifiers too *)
+                  , List.map (fun (sym, (_, ty, _)) -> (Just sym, Caux.proj_ctype ty)) (List.zip param_syms params)
+                  , is_variadic, has_proto) in
                 let ret_label = Symbol.fresh_pretty_with_id (fun x -> "ret_" ^ show x) in
                 let ret_sym = Symbol.fresh () in
                 let stmt = erase_loop_control stmt in
@@ -3968,7 +3974,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
         (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))
         (Caux.mk_ctype_pe ty)
         e_init
-        (Symbol.PrefStringLiteral loc sym)
+        (Symbol.PrefStringLiteral loc (Symbol.digest_of_sym sym))
 (*
       Caux.mk_sseq_e (Caux.mk_sym_pat sym_lit (C.BTy_object C.OTy_pointer)) (Caux.pcreate loc (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty)) (Caux.mk_ctype_pe ty) (Symbol.PrefOther "string literal"))
         (Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc (Caux.mk_ctype_pe ty) (Caux.mk_sym_pe sym_lit) e_init Cmm.NA)

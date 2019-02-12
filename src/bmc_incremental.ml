@@ -537,7 +537,7 @@ module BmcInline = struct
               ;(mk_sym_pat (cfun_info.ret_ty) BTy_ctype,
                 mk_ctype_pe ret_ty)
               ;(mk_sym_pat (cfun_info.arg_tys) (BTy_list BTy_ctype),
-                mk_list_pe (List.map mk_ctype_pe args_ty))
+                mk_list_pe (List.map mk_ctype_pe @@ List.map snd args_ty))
               ;(mk_sym_pat (cfun_info.bool1) BTy_boolean,
                 mk_boolean_pe b1)
               ;(mk_sym_pat (cfun_info.bool2) BTy_boolean,
@@ -1759,7 +1759,7 @@ module BmcZ3 = struct
       | None -> failwith (sprintf "BmcZ3 z3_params: %s not found"
                                   (symbol_to_string fn_to_check))
       | Some (_, param_tys, _, _) ->
-          mapM2 (fun p ty -> z3_param p ty fn_to_check) params param_tys
+          mapM2 (fun p ty -> z3_param p ty fn_to_check) params @@ List.map snd param_tys
 
     let z3_file (file: unit typed_file) (fn_to_check: sym_ty)
                 : (unit typed_file) eff =
