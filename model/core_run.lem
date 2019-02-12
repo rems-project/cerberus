@@ -911,7 +911,7 @@ BEFORE EVAL_PEXPR2
                               match Core_aux.memValueFromValue (Core_ctype.Pointer AilTypes.no_qualifiers ty) cval with
                                 | Just mval -> mval
                                 | Nothing -> error "Eccall memvalue"
-                              end) $ List.zip param_tys cvals
+                              end) $ List.zip (List.map snd param_tys) cvals
                           | Nothing ->
                               error $ "Eccall : function " ^ show psym ^ " not found"
                         end in

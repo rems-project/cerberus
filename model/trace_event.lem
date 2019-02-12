@@ -33,12 +33,14 @@ type trace_event =
 
   | ME_load of
       Loc.t
+       * maybe string (* prefix *)
        * Core_ctype.ctype
        * pointer_value
        * mem_value
 
   | ME_store of
       Loc.t
+       * maybe string (* prefix *)
        * Core_ctype.ctype
        * (*is_locking *) bool
        * pointer_value

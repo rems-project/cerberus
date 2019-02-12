@@ -345,6 +345,8 @@ export default class View {
         const p = alloc.prefix
         if (alloc.dyn)
           return `malloc'd`
+        if (p.kind == 'arg' || p.kind == 'malloc')
+          return p.name
         switch (Memory.unique(p, mem.map)) {
           case 'unique':
             return p.name
@@ -447,7 +449,7 @@ export default class View {
         return 'solid'
       }
       const invisible = (target: Memory.Allocation) => {
-        return !(this.state.options.show_string_literals && target.prefix.kind === 'string literal')
+        return target.prefix.kind === 'string literal' && !this.state.options.show_string_literals
       }
       return _.reduce(ps, (acc, p) => {
         // points in bounds to an allocation
@@ -474,11 +476,7 @@ export default class View {
     const forceOrder = () => {
       let init = true
       const order = _.reduce(mem.map, (ns, alloc) => {
-        /*if (alloc.prefix.kind == 'other' && !alloc.dyn && !_.startsWith(alloc.prefix.name, 'arg')) {
-        }*/
         if (!(this.state.options.show_string_literals && alloc.prefix.kind === 'string literal'))
-          return ns
-        if (_.startsWith(alloc.prefix.name, '__'))
           return ns
         if (init) {
           init = false

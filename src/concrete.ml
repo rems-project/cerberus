@@ -948,14 +948,84 @@ module Concrete : Memory = struct
                   funptrmap= funptrmap;
               } )
     end
+
   
+  let update_prefix (pref, mval) =
+    match mval with
+    | MVpointer (_, PV (Prov_some alloc_id, _)) ->
+        let upd_alloc = function
+          | Some alloc ->
+              Some { alloc with prefix = pref }
+          | None ->
+              Debug_ocaml.warn [] (fun () -> "update_prefix: allocation does not exist");
+              None
+        in
+        update (fun st -> { st with allocations= IntMap.update alloc_id upd_alloc st.allocations })
+    | _ ->
+        Debug_ocaml.warn [] (fun () -> "update_prefix: wrong arguments");
+        return ()
+  
+  let prefix_of_pointer (PV (prov, pv)) : string option memM =
+    let open String_symbol in
+    let rec aux addr alloc = function
+      | None
+      | Some Void0
+      | Some (Function0 _) ->
+          None
+      | Some (Basic0 _)
+      | Some (Builtin0 _)
+      | Some (Union0 _)
+      | Some (Pointer0 _) ->
+          let offset = N.sub addr alloc.base in
+          Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
+      | Some (Struct0 tag_sym) -> (* TODO: nested structs *)
+          let offset = N.to_int @@ N.sub addr alloc.base in
+          let (offs, _) = offsetsof tag_sym in
+          let rec find = function
+            | [] ->
+              None
+            | (Cabs.CabsIdentifier (_, memb), _, off) :: offs ->
+              if offset = off then
+                Some (string_of_prefix alloc.prefix ^ "." ^ memb)
+              else
+                find offs
+          in find offs
+      | Some (Array0 (ty, _)) ->
+          let offset = N.sub addr alloc.base in
+          if N.less offset alloc.size then
+            let n = (N.to_int offset) / sizeof ty in
+            Some (string_of_prefix alloc.prefix ^ "[" ^ string_of_int n ^ "]")
+          else
+            None
+      | Some (Atomic0 ty) ->
+          aux addr alloc @@ Some ty
+    in
+    match prov with
+    | Prov_some alloc_id ->
+      get_allocation alloc_id >>= fun alloc ->
+      begin match pv with
+        | PVconcrete addr ->
+          if addr = alloc.base then
+            return @@ Some (string_of_prefix alloc.prefix)
+          else
+            return @@ aux addr alloc alloc.ty
+        | PVnull ty ->
+          if Some ty = alloc.ty then
+            return @@ Some (string_of_prefix alloc.prefix)
+          else
+            return None
+        | _ ->
+          return None
+      end
+    | _ ->
+      return None
 
   let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
     modify (fun st ->
       let alloc_id = st.next_alloc_id in
       let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
       Debug_ocaml.print_debug 1 [] (fun () ->
-        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
         " --> alloc_id= " ^ N.to_string alloc_id ^
         ", size= " ^ N.to_string size_n ^
         ", addr= " ^ N.to_string addr
@@ -963,7 +1033,7 @@ module Concrete : Memory = struct
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
             next_address= Nat_big_num.add addr size_n;
             last_used= Some st.next_alloc_id;
             dynamic_addrs= addr :: st.dynamic_addrs })
@@ -2035,10 +2105,20 @@ let combine_prov prov1 prov2 =
     | Symbol.PrefOther s ->
       (* TODO: this should not be possible anymore *)
       `Assoc [("kind", `String "other"); ("name", `String s)]
-    | Symbol.PrefStringLiteral (loc, sym) ->
+    | Symbol.PrefMalloc ->
+      `Assoc [("kind", `String "malloc");
+              ("scope", `Null);
+              ("name", `String "malloc'd");
+              ("loc", `Null)]
+    | Symbol.PrefStringLiteral (loc, _) ->
       `Assoc [("kind", `String "string literal");
               ("scope", `Null);
               ("name", `String "literal");
+              ("loc", Location_ocaml.to_json loc)]
+    | Symbol.PrefFunArg (loc, _, n) ->
+      `Assoc [("kind", `String "arg");
+              ("scope", `Null);
+              ("name", `String ("arg" ^ string_of_int n));
               ("loc", Location_ocaml.to_json loc)]
     | Symbol.PrefSource (_, []) ->
       failwith "serialise_prefix: PrefSource with an empty list"
@@ -2081,7 +2161,9 @@ let combine_prov prov1 prov2 =
     let allocs = IntMap.filter (fun _ (alloc : allocation) ->
         match alloc.prefix with
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
-        | Symbol.PrefStringLiteral (_, Symbol.Symbol (hash, _, _)) -> hash = dig
+        | Symbol.PrefStringLiteral (_, hash) -> hash = dig
+        | Symbol.PrefFunArg (_, hash, _) -> hash = dig
+        | Symbol.PrefMalloc -> true
         | _ -> false
       ) st.allocations in
     `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);

@@ -28,7 +28,7 @@ sig
   val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
   val pp_file: ('a, 'b) generic_file -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * Core_ctype.ctype0 list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
@@ -796,10 +796,10 @@ let mk_comment doc =
   )
 
 let pp_funinfo finfos =
-  let mk_pair ty = (AilTypes.no_qualifiers, ty) in
+  let mk_pair (_, ty) = (AilTypes.no_qualifiers, ty) in
   Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
-        ^^^ pp_ctype (Core_ctype.Function0 (mk_pair ret_ty, List.map mk_pair params, is_variadic))
+        ^^^ pp_ctype (Core_ctype.Function0 ((AilTypes.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic))
         ^^ P.hardline) finfos P.empty
 
 let pp_globs globs =
