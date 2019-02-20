@@ -213,7 +213,7 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
 val step_eval_peop:
   Loc.t -> maybe Mem.mem_state -> (Core.pexpr -> EU.t Core.pexpr core_run_cause) ->
   Core.binop -> Core.pexpr -> Core.pexpr  ->
-  EU.t (Core.pexpr_ unit Symbol.sym) core_run_cause
+  EU.t (Core.generic_pexpr_ unit Symbol.sym) core_run_cause
 
 let step_eval_peop loc mem_st_opt self binop pe1 pe2 =
   self pe1 >>= fun pe1' ->

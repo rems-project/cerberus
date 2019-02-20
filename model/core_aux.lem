@@ -12,7 +12,7 @@ import Nondeterminism
 module ND = Nondeterminism
 
 
-val strip: forall 'ty 'sym. generic_pexpr 'ty 'sym -> pexpr_ 'ty 'sym
+val strip: forall 'ty 'sym. generic_pexpr 'ty 'sym -> generic_pexpr_ 'ty 'sym
 let strip (Pexpr _ _ pexpr_) =
   pexpr_
 
@@ -2016,7 +2016,7 @@ let rec has_sseqs expr =
 
 
 
-val     match_pattern: pattern -> value -> maybe (list (sym * value))
+val     match_pattern: pattern -> value -> maybe (list (Symbol.sym * value))
 let rec match_pattern (Pattern _ pat) cval =
   match (pat, cval) with
     | (CaseBase (Nothing, _), _) ->
