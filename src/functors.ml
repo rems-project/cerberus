@@ -69,13 +69,8 @@ module Set_union (X : Set.S) = struct
     List.fold_left X.union X.empty xs
 end
 
-module Union (Y : Set.S) = struct
-  let union (xs : Y.t list) =
-    List.fold_left Y.union Y.empty xs
-end
-
 module Powerset_bind (X : Set.S) (Y : Set.S) : sig val bind : (X.elt -> Y.t) -> X.t -> Y.t end = struct
-  module U = Union(Y)
+  module U = Set_union(Y)
 
   let bind (f : X.elt -> Y.t) (s : X.t) =
     U.union (List.map f (X.elements s))
