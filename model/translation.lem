@@ -3307,9 +3307,9 @@ type translate_stmt_env = <|
   variadic_sym_opt: maybe Symbol.sym;
   last_arg_sym_opt: maybe Symbol.sym;
 
-  return_lab  : C.ksym;
-  default_lab : maybe C.ksym;
-  case_labs   : list (A.integerConstant * C.ksym);
+  return_lab  : Symbol.sym;
+  default_lab : maybe Symbol.sym;
+  case_labs   : list (A.integerConstant * Symbol.sym);
   
   (* The lists are the objects visible from the loop and break labels *)
   loop:  maybe (

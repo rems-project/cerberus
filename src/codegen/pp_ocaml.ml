@@ -460,7 +460,6 @@ let rec print_object_value globs = function
   | OVfloating fv       -> print_float_value fv
   | OVpointer pv        -> print_pointer_value pv
   | OVarray lvs         -> print_list (print_loaded_value globs) lvs
-  | OVcomposite _       -> raise (Unsupported "OVcomposite")
 
 and print_loaded_value globs = function
   | LVspecified v ->
