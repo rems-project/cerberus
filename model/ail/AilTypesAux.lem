@@ -59,8 +59,8 @@ let rec is_signed_ity ity =
         true
     | Unsigned _ ->
         false
-    | IBuiltin _ ->
-        error "TODO: AilTypesAux.is_signed_ity, IBuiltin"
+    | IBuiltin s ->
+        error ("TODO: AilTypesAux.is_signed_ity, IBuiltin: " ^ show s)
     | Enum tag_sym ->
         is_signed_ity (Implementation_.typeof_enum tag_sym)
     | Size_t ->
