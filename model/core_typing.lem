@@ -323,8 +323,10 @@ let rec typeof_object_value loc env oval =
        E.return (OTy_struct tag_sym)
    | OVunion tag_sym _ _ ->
        E.return (OTy_union tag_sym)
+(*
    | OVcomposite _ _ _ ->
        E.return OTy_integer
+*)
   end
 
 (* val     typeof_loaded_value: Loc.t -> typing_env -> loaded_value -> E.eff core_object_type *)

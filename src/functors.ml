@@ -69,13 +69,8 @@ module Set_union (X : Set.S) = struct
     List.fold_left X.union X.empty xs
 end
 
-module Union (Y : Set.S) = struct
-  let union (xs : Y.t list) =
-    List.fold_left Y.union Y.empty xs
-end
-
 module Powerset_bind (X : Set.S) (Y : Set.S) : sig val bind : (X.elt -> Y.t) -> X.t -> Y.t end = struct
-  module U = Union(Y)
+  module U = Set_union(Y)
 
   let bind (f : X.elt -> Y.t) (s : X.t) =
     U.union (List.map f (X.elements s))
@@ -123,4 +118,33 @@ module Collect_in_map_fun (X : Map.S) (Y : Set.S) (Z : Set.S) = struct
         | Some acts -> X.add k (Z.add v acts) map)
       s
       X.empty
+end
+
+module Transitive_reduction (X : Set.OrderedType) (S : Set.S with type elt := X.t * X.t) = struct
+let transitive_reduction s =
+  S.filter
+    (fun (n, n'') ->
+      not (S.exists (fun (n1, n2) ->
+        X.compare n n1 = 0 &&
+        S.exists (fun (n3, n4) -> X.compare n2 n3 = 0 && X.compare n4 n'' = 0) s) s))
+    s
+
+let transitive_reduction_over_right s link =
+  S.filter
+    (fun (s_src, s_tgt) ->
+      not (S.exists (fun (s'_src, s'_tgt) ->
+        X.compare s_src s'_src = 0 &&
+        S.exists (fun (l_src, l_tgt) -> X.compare s'_tgt l_src = 0 && X.compare l_tgt s_tgt = 0) link) s))
+    s
+
+let transitive_reduction_over_left s link =
+  S.filter
+    (fun (s_src, s_tgt) ->
+      not (S.exists (fun (s'_src, s'_tgt) ->
+        X.compare s_tgt s'_tgt = 0 &&
+        S.exists (fun (l_src, l_tgt) -> X.compare s'_src l_tgt = 0 && X.compare l_src s_src = 0) link) s))
+    s
+
+let transitive_reduction_over s link =
+  transitive_reduction_over_left (transitive_reduction_over_right s link) link
 end

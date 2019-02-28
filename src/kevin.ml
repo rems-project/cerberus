@@ -75,6 +75,7 @@ module String_map = Map.Make(String)
 module Aid_times_aid = Functors.Ord_pair(Aid)(Aid)
 module Aid_times_aid_set = Set.Make(Aid_times_aid)
 module Aid_times_aid_map = Map.Make(Aid_times_aid)
+module Transitive_reduction_aid = Functors.Transitive_reduction(Aid)(Aid_times_aid_set)
 
 module Pos = struct
   type t = Rational_ml.t * int
@@ -599,7 +600,7 @@ let collect_threads ex =
 (* TODO: space threads out depending on width *)
 let layout_threads display_info loc_map ex =
   let thread_map = collect_threads ex in
-  let sb' = aid_times_aid_set_of_rel ex.Bmc_types.sb in
+  let sb' = Transitive_reduction_aid.transitive_reduction (aid_times_aid_set_of_rel ex.Bmc_types.sb) in
   let ths =
     List.map
       (fun (tid, acts) -> layout_thread display_info loc_map sb' acts)
@@ -610,33 +611,6 @@ let layout_threads display_info loc_map ex =
 end
 
 module Display = struct
-
-let transitive_reduction s =
-  Aid_times_aid_set.filter
-    (fun (n, n'') ->
-      not (Aid_times_aid_set.exists (fun (n1, n2) ->
-        n = n1 &&
-        Aid_times_aid_set.exists (fun (n3, n4) -> n2 = n3 && n4 = n'') s) s))
-    s
-
-let transitive_reduction_over_right s link =
-  Aid_times_aid_set.filter
-    (fun (s_src, s_tgt) ->
-      not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
-        s_src = s'_src &&
-        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_tgt = l_src && l_tgt = s_tgt) link) s))
-    s
-
-let transitive_reduction_over_left s link =
-  Aid_times_aid_set.filter
-    (fun (s_src, s_tgt) ->
-      not (Aid_times_aid_set.exists (fun (s'_src, s'_tgt) ->
-        s_tgt = s'_tgt &&
-        Aid_times_aid_set.exists (fun (l_src, l_tgt) -> s'_src = l_tgt && l_src = s_src) link) s))
-    s
-
-let transitive_reduction_over s link =
-  transitive_reduction_over_left (transitive_reduction_over_right s link) link
 
 let repr n = "n" ^ string_of_int n
 
@@ -649,17 +623,17 @@ let make_edges display_info ex ew d =
         | Some l -> Aid_times_aid_map.add (src, tgt) (l @ [(name, col)]) edges)
       edges
       (Aid_times_aid_set.elements rel) in
-  let sb' = transitive_reduction @@ aid_times_aid_set_of_rel ex.Bmc_types.sb in
+  let sb' = Transitive_reduction_aid.transitive_reduction @@ aid_times_aid_set_of_rel ex.Bmc_types.sb in
   (* TODO: add 'dd' and 'cd' once they exist in BMC *)
   let asw' = aid_times_aid_set_of_rel ex.Bmc_types.asw in
   let rf' = aid_times_aid_set_of_rel ew.Bmc_types.rf in
-  let mo' = transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.mo) in
+  let mo' = Transitive_reduction_aid.transitive_reduction (aid_times_aid_set_of_rel ew.Bmc_types.mo) in
   let sc = aid_times_aid_set_of_rel ew.Bmc_types.sc in
   let transform rm edges =
     match rm with
     | Layout.RM_no_reduction -> edges
-    | Layout.RM_transitive_reduction -> transitive_reduction edges
-    | Layout.RM_transitive_reduction_over_sb -> transitive_reduction_over edges sb' in
+    | Layout.RM_transitive_reduction -> Transitive_reduction_aid.transitive_reduction edges
+    | Layout.RM_transitive_reduction_over_sb -> Transitive_reduction_aid.transitive_reduction_over edges sb' in
   let add_edges_mask mask name rel edges =
     match String_map.find_opt name mask with
     | None -> add_edges name "green" rel edges

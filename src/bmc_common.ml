@@ -47,8 +47,6 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
   | OVstruct _
   | OVunion _ ->
     failwith "Error: unions are not supported."
-  | OVcomposite _ ->
-      assert false
 
 (* TODO: HACK; need some function like this *)
 let is_fun_ptr (p: Ocaml_mem.pointer_value) : bool =
