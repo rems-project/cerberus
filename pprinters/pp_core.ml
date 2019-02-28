@@ -298,8 +298,6 @@ let rec pp_object_value = function
       )
   (*| OVcfunction nm ->
       !^ "Cfunction" ^^ P.parens (pp_name nm) *)
-  | OVcomposite _ ->
-      !^ "TODO(OVcomposite)"
 
 and pp_loaded_value = function
   | LVspecified oval ->
