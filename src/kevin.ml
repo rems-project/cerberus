@@ -380,7 +380,7 @@ module Action_times_int_set = Set.Make(Action_times_int)
 
 module Real_map_action_times_int_set_to_action_times_pos = Functors.Real_map(Action_times_int_set)(Action_times_pos_set)
 
-module Action_times_pos_set_union = Functors.Union(Action_times_pos_set)
+module Action_times_pos_set_union = Functors.Set_union(Action_times_pos_set)
 
 module Collect_actions = Functors.Collect_in_map_fun(Rational_ml_map)(Action_times_pos_set)(Action_times_int_set)
 
