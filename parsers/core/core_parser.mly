@@ -1467,7 +1467,7 @@ pexpr:
 | _pe= delimited(LPAREN, pexpr, RPAREN)
     { _pe }
 | UNDEF LPAREN ub= UB RPAREN
-    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEundef (Location_ocaml.other "Core parser", ub)) }
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEundef (Location_ocaml.region ($startpos, $endpos) None, ub)) }
 | ERROR LPAREN str= STRING COMMA _pe= pexpr RPAREN
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEerror (str, _pe))  }
 | _cval= value

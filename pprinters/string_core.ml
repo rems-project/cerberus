@@ -7,6 +7,8 @@ let string_of_core_base_type bTy =
   Pp_utils.to_plain_string (pp_core_base_type bTy)
 let string_of_value cval =
   Pp_utils.to_plain_string (pp_value cval)
+let string_of_action act =
+  Pp_utils.to_plain_string (pp_action act)
 let string_of_pexpr pe =
   Pp_utils.to_plain_string (pp_pexpr pe)
 let string_of_expr e =

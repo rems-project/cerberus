@@ -109,6 +109,7 @@ let cerberus debug_level progress core_obj
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
+             cfg (*absint*)
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
              bmc_mode bmc_cat
@@ -197,6 +198,21 @@ let cerberus debug_level progress core_obj
           | _ ->
             Pp_errors.fatal "bmc mode accepts only one file"
         end
+      (* Run abstract interpretation *)
+      (*
+      else if absint then
+        begin match files with
+          | [filename] ->
+            prelude >>= fun core_std ->
+            c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
+            typed_core_passes (conf, io) core >>= fun (core, _) ->
+            (*Absint.run core; *)
+            ignore (Wip.mk_cfg core);
+            return success
+          | _ ->
+            Pp_errors.fatal "absint mode accepts only one file"
+        end
+      *)
       (* Run only CPP *)
       else if cpp_only then
         Exception.foldlM (fun () file ->
@@ -217,11 +233,12 @@ let cerberus debug_level progress core_obj
         return success
       (* Link and execute *)
       else
-        prelude >>= main >>= Core_linking.link >>= fun core_file ->
-        (*Pipeline.run_pp None (Pp_core.All.pp_file core_file);*)
-        (*Pipeline.run_pp None (Pp_core.All.pp_funinfo core_file.funinfo);
-        Pipeline.run_pp None (Pp_core.All.pp_extern_symmap (Core_linking.create_extern_symmap core_file));
-          *)
+        prelude >>= main >>= begin function
+          | [] -> assert false
+          | f::fs ->
+            if cfg then Cfg.mk_dot ~sequentialise:sequentialise_core f;
+            Core_linking.link (f::fs)
+        end >>= fun core_file ->
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in
@@ -425,6 +442,16 @@ let trace =
   let doc = "trace memory actions" in
   Arg.(value & flag & info["trace"] ~doc)
 
+let cfg =
+  let doc = "outputs a dot file with the control flow graph for core" in
+  Arg.(value & flag & info["cfg"] ~doc)
+
+(*
+let absint =
+  let doc = "run abstract interpretation" in
+  Arg.(value & flag & info["absint"] ~doc)
+*)
+
 
 (* TODO: this is not being used
 let default_impl =
@@ -506,6 +533,7 @@ let () =
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
+                         cfg $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
                          bmc_mode $ bmc_cat $
