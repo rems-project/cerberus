@@ -570,7 +570,7 @@ code {
   border: 0;
   padding: 0;
   vertical-align: middle;
-  width: calc(100% - 258px);
+  width: calc(100% - 300px);
 }
 
 /* ast-dump style */
