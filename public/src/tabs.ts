@@ -253,8 +253,25 @@ class Memory extends SvgGraph {
   constructor(ee: EventEmitter) {
     super('Memory', ee)
     this.fit = $('<div class="btn menu-item inline clicked">Fit</div>')
-    this.dom.find('.reset').before(this.fit)
+    const dot = $('<div class="btn menu-item inline">DOT</div>')
+    const reset = this.dom.find('.reset')
+    reset.before(this.fit)
+    reset.after(dot)
     this.fit.on('click', () => this.toggleFitMode())
+    dot.on('click', () => {
+      ee.once((s => {
+        if (!s.interactive) return
+        const data = s.interactive.mem
+        if (!data) return
+        const e = document.createElement('a')
+        e.setAttribute('href', 'data:text/plain;charset=utf-8,'+encodeURIComponent(data))
+        e.setAttribute('download', 'memory.dot')
+        e.style.display = 'none'
+        document.body.appendChild(e)
+        e.click()
+        document.body.removeChild(e)
+      }))
+    })
     ee.on('updateMemory', this, s => this.updateMemory(s))
     this.svgPos = { x: 0, y: 0, scale: 1}
    }
