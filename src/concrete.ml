@@ -906,7 +906,7 @@ module Concrete : Memory = struct
 *)
   (* END DEBUG *)
   
-  let allocate_static tid pref (IV (_, align)) ty init_opt : pointer_value memM =
+  let allocate_object tid pref (IV (_, align)) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
     modify begin fun st ->
@@ -1020,7 +1020,7 @@ module Concrete : Memory = struct
     | _ ->
       return None
 
-  let allocate_dynamic tid pref (IV (_, align_n)) (IV (_, size_n)) =
+  let allocate_region tid pref (IV (_, align_n)) (IV (_, size_n)) =
     modify (fun st ->
       let alloc_id = st.next_alloc_id in
       let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
@@ -1921,7 +1921,7 @@ let combine_prov prov1 prov2 =
   let realloc tid align ptr size : pointer_value memM =
     match ptr with
     | PV (Prov_none, PVnull _) ->
-      allocate_dynamic tid (Symbol.PrefOther "realloc") align size
+      allocate_region tid (Symbol.PrefOther "realloc") align size
     | PV (Prov_none, _) ->
       fail (MerrWIP "realloc no provenance")
     | PV (Prov_some alloc_id, PVconcrete addr) ->
@@ -1931,7 +1931,7 @@ let combine_prov prov1 prov2 =
         | true ->
             get_allocation alloc_id >>= fun alloc ->
             if alloc.base = addr then
-              allocate_dynamic tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
+              allocate_region tid (Symbol.PrefOther "realloc") align size >>= fun new_ptr ->
               memcpy new_ptr ptr (IV (Prov_none, alloc.size)) >>= fun _ ->
               kill (Location_ocaml.other "realloc") true ptr >>= fun () ->
               return new_ptr

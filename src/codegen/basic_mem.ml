@@ -207,13 +207,13 @@ let fresh_num s =
   in atry ()
 
 (* integer -> prefix -> int -> ctype -> (pointer) memM *)
-let impl_allocate_static _ _ al c =
+let impl_allocate_object _ _ al c =
   MemM (fun s ->
       let n = fresh_num s in
       ((c, Some n), Pmap.add n (Integer al) s))
 
 (* integer -> prefix -> int -> int -> (pointer) memM *)
-let impl_allocate_dynamic _ _ al _ =
+let impl_allocate_region _ _ al _ =
   MemM (fun s ->
       let n = fresh_num s in
       ((Void0, Some n), Pmap.add n (Integer al) s))

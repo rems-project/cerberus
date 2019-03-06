@@ -562,9 +562,9 @@ type 'a memM =
   ('a, string, Mem_common.mem_error, integer_value Mem_common.mem_constraint, mem_state) Nondeterminism.ndM
 let return = Defacto_memory.impl_return
 let bind = Nondeterminism.nd_bind
-let allocate_static = Defacto_memory.impl_allocate_static
+let allocate_object = Defacto_memory.impl_allocate_object
 
-let allocate_dynamic = Defacto_memory.impl_allocate_dynamic
+let allocate_region = Defacto_memory.impl_allocate_region
 let kill = Defacto_memory.impl_kill
 let load = Defacto_memory.impl_load
 let store = Defacto_memory.impl_store
