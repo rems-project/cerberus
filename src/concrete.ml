@@ -636,14 +636,14 @@ module Concrete : Memory = struct
 
   
   
-  (* INTERNAL combine_bytes: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
+  (* INTERNAL abst: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
   (* ASSUMES: has_size ty /\ |bs| >= sizeof ty*)
   (* property that should hold:
        forall ty bs bs' mval.
-         has_size ty -> |bs| >= sizeof ty -> combine_bytes ty bs = (mval, bs') ->
+         has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
          |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
-  let rec combine_bytes find_overlaping funptrmap ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
-    let self = combine_bytes find_overlaping funptrmap in
+  let rec abst find_overlaping funptrmap ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+    let self = abst find_overlaping funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
         match acc_opt, c_opt with
@@ -656,7 +656,7 @@ module Concrete : Memory = struct
       ) (Some []) (List.rev xs) in
     
     if List.length bs < sizeof ty then
-      failwith "combine_bytes, |bs| < sizeof(ty)";
+      failwith "abst, |bs| < sizeof(ty)";
     
     match ty with
       | Void0
@@ -750,9 +750,9 @@ module Concrete : Memory = struct
           (* TODO: check that bs' = last padding of the struct *)
           (MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
-          failwith "TODO: combine_bytes, Union (as value)"
+          failwith "TODO: abst, Union (as value)"
       | Builtin0 str ->
-          failwith "TODO: combine_bytes, Builtin"
+          failwith "TODO: abst, Builtin"
   
   
   (* INTERNAL bytes_of_int *)
@@ -798,8 +798,8 @@ module Concrete : Memory = struct
       | MVunion (tag_sym, _, _) ->
           Union0 tag_sym
   
-  (* INTERNAL explode_bytes *)
-  let rec explode_bytes funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
+  (* INTERNAL repr *)
+  let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
     let ret bs = (funptrmap, bs) in
     match mval with
       | MVunspecified ty ->
@@ -847,7 +847,7 @@ module Concrete : Memory = struct
       | MVarray mvals ->
           let (funptrmap, bs_s) =
             List.fold_left begin fun (funptrmap, bs) mval ->
-              let (funptrmap, bs') = explode_bytes funptrmap mval in
+              let (funptrmap, bs') = repr funptrmap mval in
               (funptrmap, bs' :: bs)
             end (funptrmap, []) mvals in
           (* TODO: use a fold? *)
@@ -859,14 +859,14 @@ module Concrete : Memory = struct
           (* TODO: rewrite now that offsetsof returns the paddings *)
           let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
               let pad = off - last_off in
-              let (funptrmap, bs) = explode_bytes funptrmap mval in
+              let (funptrmap, bs) = repr funptrmap mval in
               (funptrmap, off + sizeof ty, acc @ List.init pad padding_byte @ bs)
             end (funptrmap, 0, []) offs xs
           in
           (funptrmap, bs @ List.init final_pad padding_byte)
       | MVunion (tag_sym, memb_ident, mval) ->
           let size = sizeof (Core_ctype.Union0 tag_sym) in
-          let (funptrmap', bs) = explode_bytes funptrmap mval in
+          let (funptrmap', bs) = repr funptrmap mval in
           (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
   
   
@@ -875,7 +875,7 @@ module Concrete : Memory = struct
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
       let Some ty = alloc.ty in
-      let (mval, bs') = combine_bytes (find_overlaping st) st.funptrmap ty bs in
+      let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
       mval
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
@@ -1050,7 +1050,7 @@ module Concrete : Memory = struct
               (* TODO: zapping doesn't work yet for dynamically allocated pointers *)
               acc
           | Some ty ->
-              begin match combine_bytes (find_overlaping st) st.funptrmap ty bs with
+              begin match abst (find_overlaping st) st.funptrmap ty bs with
                 | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
                     let bs' = List.init (N.to_int alloc.size) (fun i ->
                       (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
@@ -1190,7 +1190,7 @@ module Concrete : Memory = struct
     end else
       let do_store alloc_id_opt addr =
         update begin fun st ->
-          let (funptrmap, pre_bs) = explode_bytes st.funptrmap mval in
+          let (funptrmap, pre_bs) = repr st.funptrmap mval in
           let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
           { st with last_used= alloc_id_opt;
                     bytemap=
@@ -2076,7 +2076,7 @@ let combine_prov prov1 prov2 =
           fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
-            let (mval, acc_bs'') = combine_bytes (find_overlaping st) st.funptrmap memb_ty acc_bs' in
+            let (mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
@@ -2091,7 +2091,7 @@ let combine_prov prov1 prov2 =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), Some alloc.size) in
     let size = N.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
-    let (mval, _) = combine_bytes (find_overlaping st) st.funptrmap ty bs in
+    let (mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
     { id = id;
       base = N.to_int alloc.base;
       prefix = alloc.prefix;
