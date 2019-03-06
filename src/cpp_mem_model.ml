@@ -347,7 +347,7 @@ module CppMemModel : Memory = struct
 
 
   (* Memory actions *)
-  let allocate_static _ _ align ty init_opt =
+  let allocate_object _ _ align ty init_opt =
     Eff.modify begin fun st ->
       let size = sizeof ty in
       let block = { size = size;
@@ -393,7 +393,7 @@ module CppMemModel : Memory = struct
   (* 23.10.12#4: [... newly written code is strongly encouraged to treat memory
    * allocated with these functions as though it were allocated with operator
    * new.] *)
-  let allocate_dynamic _ _ align iv_size =
+  let allocate_region _ _ align iv_size =
     let size = Nat_big_num.to_int iv_size in
     Eff.modify begin fun st ->
       let block = { size = size;
