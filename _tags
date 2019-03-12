@@ -19,6 +19,7 @@ true: debug
 "ocaml_generated/cmm_csem.ml": warn(-8)
 "ocaml_generated/core_unstruct.ml": warn(-8)
 <ocaml_generated/*.ml>: warn(@8)
+"src/concrete.ml": warn(@8)
 true: warn(+8)
 
 <parsers/c/*>: external_tokens(Tokens), explain, warn(@8)
