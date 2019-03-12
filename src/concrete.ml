@@ -45,7 +45,6 @@ module Eff : sig
     ('a, string, 'err, 'cs, 'st) Nondeterminism.ndM
   val return: 'a -> ('a, 'err, 'cs, 'st) eff
   val (>>=): ('a, 'err, 'cs, 'st) eff -> ('a -> ('b, 'err, 'cs, 'st) eff) -> ('b, 'err, 'cs, 'st) eff
-(*  val (>>): ('a, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff -> ('b, 'err, 'cs, 'st) eff *)
   val read: ('st -> 'a) -> ('a, 'err, 'cs, 'st) eff
   val update: ('st -> 'st) -> (unit, 'err, 'cs, 'st) eff
   val modify: ('st -> 'a * 'st) -> ('a, 'err, 'cs, 'st) eff
@@ -236,12 +235,19 @@ and alignof = function
 
 module Concrete : Memory = struct
   let name = "I am the concrete memory model"
-
+  
+  (* INTERNAL: only for PNVI-ae-udi (this is iota) *)
+  type symbolic_storage_instance_id = N.num
+  
+  (* INTERNAL: storage_instance_id *)
+  type storage_instance_id = N.num
+  
+  (* INTERNAL: provenance *)
   type provenance =
     | Prov_none
-    | Prov_some of Nat_big_num.num
+    | Prov_some of storage_instance_id
+    | Prov_symbolic of symbolic_storage_instance_id (* only for PNVI-ae-udi *)
     | Prov_device
-    | Prov_wildcard
   
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
@@ -316,8 +322,6 @@ module Concrete : Memory = struct
   
   open Eff
   
-  (* INTERNAL: allocation_id *)
-  type allocation_id = N.num
   
   (* INTERNAL: address *)
   type address = N.num
@@ -329,6 +333,7 @@ module Concrete : Memory = struct
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
     ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
     is_readonly: bool;
+    taint: [ `Unexposed | `Exposed ]; (* NOTE: PNVI-ae, PNVI-ae-udi *)
   }
   
   (* INTERNAL: Abstract bytes *)
@@ -375,22 +380,27 @@ module Concrete : Memory = struct
   end
   
   type mem_state = {
-    next_alloc_id: allocation_id;
-    allocations: allocation IntMap.t;
+    next_alloc_id: storage_instance_id;
+    next_iota: symbolic_storage_instance_id;
     next_address: address;
+    allocations: allocation IntMap.t;
+    (* this is only for PNVI-ae-udi *)
+    iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
     funptrmap: (Digest.t * string) IntMap.t;
     varargs: (int * (Core_ctype.ctype0 * pointer_value) list) IntMap.t;
     next_varargs_id: N.num;
     bytemap: AbsByte.t IntMap.t;
     
-    dead_allocations: allocation_id list;
+    dead_allocations: storage_instance_id list;
     dynamic_addrs: address list;
-    last_used: allocation_id option;
+    last_used: storage_instance_id option;
   }
   
   let initial_mem_state = {
     next_alloc_id= Nat_big_num.zero;
+    next_iota= N.zero;
     allocations= IntMap.empty;
+    iota_map= IntMap.empty;
     next_address= Nat_big_num.(succ zero);
     funptrmap = IntMap.empty;
     varargs = IntMap.empty;
@@ -440,13 +450,14 @@ module Concrete : Memory = struct
   
   
   let string_of_provenance = function
-    | Prov_none -> ""
+    | Prov_none ->
+        "@empty"
     | Prov_some alloc_id ->
-        N.to_string alloc_id
+        "@" ^ N.to_string alloc_id
+    | Prov_symbolic iota ->
+        "@iota(" ^ N.to_string iota ^ ")"
     | Prov_device ->
-        "dev"
-    | Prov_wildcard ->
-        "wildcard"
+        "@device"
   
   (* pretty printing *)
   open PPrint
@@ -505,15 +516,16 @@ module Concrete : Memory = struct
     ; (N.of_int64 0xABCL, N.of_int64 0XAC0L) ]
   
   
-  (* NOTE: since we are fusing PVI and PVNI together any creation of an integer_value should
-     be done through this function to unsure we always use Prov_none in PVNI *)
   let is_PNVI () =
-    match Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) with
+(*    match Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) with *)
+    match Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) with
       | None ->
           false
       | Some _ ->
           true
   
+  (* NOTE: since we are fusing PVI and PVNI together any creation of an integer_value should
+     be done through this function to unsure we always use Prov_none in PVNI *)
   let mk_ival prov n =
     if is_PNVI () then
       IV (Prov_none, n)
@@ -620,20 +632,107 @@ module Concrete : Memory = struct
           aux init cs
   
   (* TODO: maybe move somewhere else *)
-  let find_overlaping st addr : allocation_id option =
+  let find_overlaping st addr : [ `NoAlloc
+                                | `SingleAlloc of storage_instance_id
+                                | `DoubleAlloc of storage_instance_id * storage_instance_id ] =
+    let (require_exposed, allow_one_past) =
+      match Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) with
+        | Some (Switches.SW_PNVI variant) ->
+            begin match variant with
+              | `PLAIN ->
+                  (false, false)
+              | `AE ->
+                  (true, false)
+              | `AE_UDI ->
+                  (true, true)
+            end
+        | Some _ ->
+            assert false
+        | None ->
+            (false, false) in
     IntMap.fold (fun alloc_id alloc acc ->
       match acc with
-        | Some _ ->
-            acc
-        | None ->
+        | `NoAlloc ->
             if    not (List.mem alloc_id st.dead_allocations)
                && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
-              Some alloc_id
+              (* PNVI-ae, PNVI-ae-udi *)
+              if require_exposed && alloc.taint <> `Exposed then
+                `NoAlloc
+              else
+                `SingleAlloc alloc_id
+            else if allow_one_past then
+              (* PNVI-ae-udi *)
+              if N.equal addr (N.add alloc.base alloc.size) then
+                match
+                  IntMap.fold (fun alloc_id' alloc' acc' ->
+                    match acc' with
+                      | Some _ ->
+                          acc'
+                      | None ->
+                          if addr = alloc'.base then
+                            Some alloc_id'
+                          else
+                            None
+                  ) st.allocations None
+                with
+                  | None ->
+                      `SingleAlloc alloc_id
+                  | Some alloc_id' ->
+                      `DoubleAlloc (alloc_id, alloc_id')
+              else
+                `NoAlloc
             else
-              None
-    ) st.allocations None
-
-
+              `NoAlloc
+        | _ ->
+            acc
+    ) st.allocations `NoAlloc
+  
+  (* PNVI-ae *)
+  let expose_allocation alloc_id =
+    update begin fun st ->
+      {st with allocations=
+       IntMap.update alloc_id (function
+         | Some alloc ->
+             Some {alloc with taint= `Exposed}
+         | None ->
+             None) st.allocations }
+    end
+  
+  (* PNVI-ae-udi *)
+  let add_iota alloc_ids =
+    get >>= fun st ->
+    let iota = st.next_iota in
+    put {st with next_iota= N.succ st.next_iota;
+                 iota_map= IntMap.add iota (`Double alloc_ids) st.iota_map } >>= fun () ->
+    return iota
+  
+  (* PNVI-ae-udi *)
+  let lookup_iota iota =
+    get >>= fun st ->
+    return (IntMap.find iota st.iota_map)
+  
+  (* PNVI-ae-udi *)
+  let resolve_iota precond iota =
+    lookup_iota iota >>= begin function
+      | `Single alloc_id ->
+          return alloc_id
+      | `Double (alloc_id1, alloc_id2) ->
+          begin precond alloc_id1 >>= function
+            | `OK ->
+                return alloc_id1
+            | `FAIL _ ->
+                begin precond alloc_id2 >>= function
+                  | `OK ->
+                      return alloc_id2
+                  | `FAIL err ->
+                      fail err
+                end
+          end
+    end >>= fun alloc_id ->
+    update begin fun st ->
+      {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
+    end >>= fun () ->
+    return alloc_id
   
   
   (* INTERNAL abst: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
@@ -723,10 +822,12 @@ module Concrete : Memory = struct
                             match prov_status with
                               | `NotValidPtrProv ->
                                   begin match find_overlaping n with
-                                    | None ->
+                                    | `NoAlloc ->
                                         Prov_none
-                                    | Some alloc_id ->
+                                    | `SingleAlloc alloc_id ->
                                         Prov_some alloc_id
+                                    | `DoubleAlloc (alloc_id1, alloc_id2) ->
+                                        failwith "TODO(iota): abst => make a iota?"
                                   end
                               | `ValidPtrProv ->
                                   prov
@@ -874,9 +975,12 @@ module Concrete : Memory = struct
   let dot_of_mem_state st =
     let get_value alloc =
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
-      let Some ty = alloc.ty in
-      let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
-      mval
+      match alloc.ty with
+        | Some ty ->
+            let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
+            mval
+        | None ->
+            failwith "Concrete.dot_of_mem_state: alloc.ty = None"
     in
     let xs = IntMap.fold (fun alloc_id alloc acc ->
       Printf.sprintf "alloc%s [shape=\"record\", label=\"{ addr: %s | sz: %s | %s }\"];"
@@ -898,7 +1002,7 @@ module Concrete : Memory = struct
   }
   
   type mem_state = {
-    next_alloc_id: allocation_id;
+    next_alloc_id: storage_instance_id;
     allocations: allocation IntMap.t;
     next_address: address;
     bytemap: (provenance * char option) IntMap.t;
@@ -925,20 +1029,22 @@ module Concrete : Memory = struct
       
       match init_opt with
         | None ->
+            let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false; taint= `Unexposed} in
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false} st.allocations;
+                  allocations= IntMap.add alloc_id alloc st.allocations;
                   last_used= Some st.next_alloc_id;
                   next_address= Nat_big_num.add addr size } )
         | Some mval ->
+            let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
             (* TODO: factorise this with do_store inside Concrete.store *)
-            let (funptrmap, pre_bs) = explode_bytes st.funptrmap mval in
+            let (funptrmap, pre_bs) = repr st.funptrmap mval in
             let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
             ( PV (Prov_some alloc_id, PVconcrete addr)
             , { st with
                   next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true} st.allocations;
+                  allocations= IntMap.add alloc_id alloc st.allocations;
                   next_address= Nat_big_num.add addr size;
                   last_used= Some st.next_alloc_id;
                   bytemap=
@@ -1030,10 +1136,11 @@ module Concrete : Memory = struct
         ", size= " ^ N.to_string size_n ^
         ", addr= " ^ N.to_string addr
       );
+      let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false; taint= `Unexposed} in
       ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
       , { st with
             next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false} st.allocations;
+            allocations= IntMap.add alloc_id alloc st.allocations;
             next_address= Nat_big_num.add addr size_n;
             last_used= Some st.next_alloc_id;
             dynamic_addrs= addr :: st.dynamic_addrs })
@@ -1079,6 +1186,44 @@ module Concrete : Memory = struct
     | PV (Prov_device, PVconcrete _) ->
         (* TODO: should that be an error ?? *)
         return ()
+    
+    (* PNVI-ae-udi *)
+    | PV (Prov_symbolic iota, PVconcrete addr) ->
+        let precondition z =
+          is_dead z >>= function
+            | true ->
+                return (`FAIL (MerrUndefinedFree (loc, Free_static_allocation)))
+            | false ->
+                get_allocation z >>= fun alloc ->
+                if N.equal addr alloc.base then
+                  return `OK
+                else
+                  return (`FAIL (MerrUndefinedFree (loc, Free_out_of_bound))) in
+        begin if is_dyn then
+          (* this kill is dynamic one (i.e. free() or friends) *)
+          is_dynamic addr >>= begin function
+            | false ->
+                fail (MerrUndefinedFree (loc, Free_static_allocation))
+            | true ->
+                return ()
+          end
+        else
+          return ()
+        end >>= fun () ->
+        resolve_iota precondition iota >>= fun alloc_id ->
+        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+           PNVI-ae-udi stuff separated to avoid polluting the
+           vanilla PNVI code) *)
+        update begin fun st ->
+          {st with dead_allocations= alloc_id :: st.dead_allocations;
+                   last_used= Some alloc_id;
+                   allocations= IntMap.remove alloc_id st.allocations}
+        end >>= fun () ->
+        if Switches.(has_switch SW_zap_dead_pointers) then
+          zap_pointers alloc_id
+        else
+          return ()
+    
     | PV (Prov_some alloc_id, PVconcrete addr) ->
         begin if is_dyn then
           (* this kill is dynamic one (i.e. free() or friends) *)
@@ -1115,15 +1260,12 @@ module Concrete : Memory = struct
               end else
                 fail (MerrUndefinedFree (loc, Free_out_of_bound))
         end
-    | PV (Prov_wildcard, _) ->
-        failwith "TODO: Concrete.kill ==> Prov_wildcard"
   
   let load loc ty (PV (prov, ptrval_)) =
-(*    print_bytemap "ENTERING LOAD" >>= fun () -> *)
     let do_load alloc_id_opt addr =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr (sizeof ty) in
-      let (mval, bs') = combine_bytes (find_overlaping st) st.funptrmap ty bs in
+      let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
       begin match bs' with
         | [] ->
@@ -1152,6 +1294,27 @@ module Concrete : Memory = struct
             | true ->
                 do_load None addr
           end
+      
+      (* PNVI-ae-udi *)
+      | (Prov_symbolic iota, PVconcrete addr) ->
+        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+           PNVI-ae-udi stuff separated to avoid polluting the
+           vanilla PNVI code) *)
+          let precondition z =
+            is_dead z >>= begin function
+              | true ->
+                  return (`FAIL (MerrAccess (loc, LoadAccess, DeadPtr)))
+              | false ->
+                  begin is_within_bound z ty addr >>= function
+                    | false ->
+                        return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
+                    | true ->
+                        return `OK
+                  end
+            end in
+          resolve_iota precondition iota >>= fun alloc_id ->
+          do_load (Some alloc_id) addr
+      
       | (Prov_some alloc_id, PVconcrete addr) ->
           is_dead alloc_id >>= begin function
             | true ->
@@ -1168,8 +1331,6 @@ module Concrete : Memory = struct
             | true ->
                 do_load (Some alloc_id) addr
           end
-      | (Prov_wildcard, _) ->
-          failwith "TODO: Concrete.load ==> Prov_wildcard"
   
   
   let store loc ty is_locking (PV (prov, ptrval_)) mval =
@@ -1215,6 +1376,37 @@ module Concrete : Memory = struct
               | true ->
                   do_store None addr
             end
+        
+      (* PNVI-ae-udi *)
+      | (Prov_symbolic iota, PVconcrete addr) ->
+        (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+           PNVI-ae-udi stuff separated to avoid polluting the
+           vanilla PNVI code) *)
+          let precondition z =
+            is_within_bound z ty addr >>= function
+              | false ->
+                  return (`FAIL (MerrAccess (loc, StoreAccess, OutOfBoundPtr)))
+              | true ->
+                  get_allocation z >>= fun alloc ->
+                  if alloc.is_readonly then
+                    return (`FAIL (MerrWriteOnReadOnly loc))
+                  else
+                    return `OK in
+          resolve_iota precondition iota >>= fun alloc_id ->
+          do_store (Some alloc_id) addr >>= fun fp ->
+          begin if is_locking then
+            Eff.update (fun st ->
+              { st with allocations=
+                  IntMap.update alloc_id (function
+                    | Some alloc -> Some { alloc with is_readonly= true }
+                    | None       -> None
+                  ) st.allocations }
+            )
+          else
+            return ()
+          end >>= fun () ->
+          return fp
+        
         | (Prov_some alloc_id, PVconcrete addr) ->
             begin is_within_bound alloc_id ty addr >>= function
               | false ->
@@ -1237,8 +1429,6 @@ module Concrete : Memory = struct
                     else
                       return fp
             end
-        | (Prov_wildcard, _) ->
-            failwith "TODO: Concrete.store ==> Prov_wildcard"
 
 (*
   (* TODO: DEBUG: *)
@@ -1374,11 +1564,11 @@ module Concrete : Memory = struct
   let diff_ptrval diff_ty ptrval1 ptrval2 =
     (* TODO: check that this is correct for arrays of arrays ... *)
     (* TODO: if not, sync with symbolic defacto *)
-    let diff_ty' = match diff_ty with
+(*    let diff_ty' = match diff_ty with
       | Core_ctype.Array0 (elem_ty, _) ->
           elem_ty
       | _ ->
-          diff_ty in
+          diff_ty in *)
     match ptrval1, ptrval2 with
       | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2))
         when N.equal alloc_id1 alloc_id2 ->
@@ -1401,29 +1591,25 @@ module Concrete : Memory = struct
             return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
           else
             fail MerrPtrdiff
-(*
-      | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
-          if N.equal alloc_id1 alloc_id2 then
-            get_allocation alloc_id1 >>= fun alloc ->
-            (* NOTE: this is not like "is_within_bound" because it allows one-past pointers *)
-            if    N.less_equal alloc.base addr1
-               && N.less_equal addr1 (N.add alloc.base alloc.size)
-               && N.less_equal alloc.base addr2
-               && N.less_equal addr2 (N.add alloc.base alloc.size) then
-              (* NOTE: the result of subtraction of two pointer values is an integer value with
-                 empty provenance, irrespective of the operand provenances *)
-              return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
-            else
-              fail MerrPtrdiff
-          else
-            get_allocation alloc_id1 >>= fun alloc1 ->
-            get_allocation alloc_id2 >>= fun alloc2 ->
-              if    N.equal addr1 (N.add alloc2.base alloc2.size)
-                 || N.equal addr2 (N.add alloc1.base alloc1.size) then
-                return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
-              else
-                fail MerrPtrdiff
-*)
+      
+      (* PNVI-ae-udi *)
+      | PV (Prov_symbolic iota, PVconcrete addr1), PV (Prov_some alloc_id2, PVconcrete addr2) ->
+          (* if A(iota) = {i1, i2} then
+               alloc_id2 = (i1 or i2) AND precond valid AND iota collapses
+             else
+               UB *)
+          failwith "TODO(iota): diff_ptrval iota1"
+      | PV (Prov_some alloc_id1, PVconcrete addr1), PV (Prov_symbolic iota, PVconcrete addr2) ->
+          (* if A(iota) = {i1, i2} then
+               alloc_id1 = (i1 or i2) AND precond valid AND iota collapses
+             else
+               UB *)
+          failwith "TODO(iota): diff_ptrval iota2"
+      | PV (Prov_symbolic iota1, PVconcrete addr1), PV (Prov_symbolic iota2, PVconcrete addr2) ->
+          (* IF A(iota1) INTER A(iota2) = { i } AND precond valid THEN collapse iota1 and iota2 to i *)
+          (* IF A(iota1) INTER A(iota2) = { i1, i2 } AND (precond valid for i1 AND i2) THEN NO collapse *)
+          failwith "TODO(iota): diff_ptrval iota3"
+      
       | _ ->
           fail MerrPtrdiff
   
@@ -1454,6 +1640,11 @@ module Concrete : Memory = struct
         return false
     | PV (Prov_device, PVconcrete _) as ptrval ->
         isWellAligned_ptrval ref_ty ptrval
+    
+    (* PNVI-ae-udi *)
+    | PV (Prov_symbolic iota, PVconcrete addr) ->
+        failwith "TODO(iota): validForDeref iota"
+
     | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
         is_dead alloc_id >>= begin function
           | true ->
@@ -1472,8 +1663,6 @@ module Concrete : Memory = struct
         end
     | PV (Prov_none, _) ->
         return false
-    | PV (Prov_wildcard, _) ->
-        failwith "TODO: Concrete.validForDeref ==> Prov_wildcard"
 
   
   let ptrcast_ival _ ref_ty (IV (prov, n)) =
@@ -1483,7 +1672,7 @@ module Concrete : Memory = struct
         "implementation defined cast from integer to pointer"
       );
     let sw_opt =
-      Switches.(has_switch_pred (function SW_no_integer_provenance _ -> true | _ -> false)) in
+      Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) in
     
     let n =
       let (min, max) = match Impl.sizeof_pointer with
@@ -1500,6 +1689,23 @@ module Concrete : Memory = struct
       else
         N.sub r dlt in
     match sw_opt with
+      | Some (Switches.SW_PNVI variant) ->
+          (* TODO: device memory? *)
+          if N.equal n N.zero then
+            return (PV (Prov_none, PVnull ref_ty))
+          else
+            get >>= fun st ->
+            begin match find_overlaping st n with
+              | `NoAlloc ->
+                  return Prov_none
+              | `SingleAlloc alloc_id ->
+                  return (Prov_some alloc_id)
+              | `DoubleAlloc alloc_ids ->
+                  add_iota alloc_ids >>= fun iota ->
+                  return (Prov_symbolic iota)
+            end >>= fun prov ->
+            return (PV (prov, PVconcrete n))
+(*
       | Some (Switches.SW_no_integer_provenance variant) ->
           (* TODO: device memory? *)
           if N.equal n N.zero then
@@ -1514,10 +1720,11 @@ module Concrete : Memory = struct
                     fail MerrPtrFromInt
                   else
                     (* TODO: assuming variant = 4 *)
-                    return Prov_wildcard
+                    failwith "Concrete pnvi variant 4: return Prov_wildcard"
               | Some alloc_id ->
                   return (Prov_some alloc_id)) >>= fun prov ->
             return (PV (prov, PVconcrete n))
+*)
       | Some _ ->
           assert false
       | None ->
@@ -1546,15 +1753,20 @@ module Concrete : Memory = struct
   
   let array_shift_ptrval (PV (prov, ptrval_)) ty (IV (_, ival)) =
     let offset = (Nat_big_num.(mul (of_int (sizeof ty)) ival)) in
-    PV (prov, match ptrval_ with
-      | PVnull _ ->
-          (* TODO: this seems to be undefined in ISO C *)
-          (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
-          failwith "TODO(shift a null pointer should be undefined behaviour)"
-      | PVfunction _ ->
-          failwith "Concrete.array_shift_ptrval, PVfunction"
-      | PVconcrete addr ->
-          PVconcrete (N.add addr offset))
+    match prov with
+      (* PNVI-ae-udi *)
+      | Prov_symbolic iota ->
+          failwith "Concrete.array_shift_ptrval found a Prov_symbolic"
+      | _ ->
+          PV (prov, match ptrval_ with
+          | PVnull _ ->
+              (* TODO: this seems to be undefined in ISO C *)
+              (* NOTE: in C++, if offset = 0, this is defined and returns a PVnull *)
+              failwith "TODO(shift a null pointer should be undefined behaviour)"
+          | PVfunction _ ->
+              failwith "Concrete.array_shift_ptrval, PVfunction"
+          | PVconcrete addr ->
+              PVconcrete (N.add addr offset))
   
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
     let IV (_, offset) = offsetof_ival tag_sym memb_ident in
@@ -1580,6 +1792,72 @@ module Concrete : Memory = struct
           failwith "TODO(shift a null pointer should be undefined behaviour)"
       | PV (_, PVfunction _) ->
           failwith "Concrete.eff_array_shift_ptrval, PVfunction"
+      
+      (* PNVI-ae-udi *)
+      | PV (Prov_symbolic iota as prov, PVconcrete addr) ->
+          (* TODO: this is duplicated code from the Prov_some case (I'm keeping
+             PNVI-ae-udi stuff separated to avoid polluting the
+             vanilla PNVI code) *)
+          let precond z =
+            let addr' = N.add addr offset in
+            (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
+            if Switches.(has_switch SW_strict_pointer_arith) then
+              get_allocation z >>= fun alloc ->
+              if    N.less_equal alloc.base addr'
+                 && N.less_equal (N.add addr' (N.of_int (sizeof ty)))
+                                 (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
+                return true
+              else
+                return false
+            else
+              return true in
+          lookup_iota iota >>= begin function
+            | `Double (alloc_id1, alloc_id2) ->
+                if not (N.equal ival N.zero) then
+                  (* TODO: this is yucky *)
+                  precond alloc_id1 >>= begin function
+                    | true ->
+                        precond alloc_id2 >>= begin function
+                          | true ->
+                              fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
+                          | false ->
+                              return alloc_id1
+                        end
+                    | false ->
+                        precond alloc_id2 >>= begin function
+                          | true ->
+                              return alloc_id2
+                          | false ->
+                              fail (MerrOther "out-of-bound pointer arithmetic")
+                        end
+                  end >>= fun alloc_id ->
+                  update begin fun st ->
+                    {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
+                  end >>= fun () ->
+                  return (PV (prov, PVconcrete (N.add addr offset)))
+                else
+                  (* TODO: this is yucky *)
+                  precond alloc_id1 >>= begin function
+                    | true ->
+                        return ()
+                    | false ->
+                        precond alloc_id2 >>= begin function
+                          | true ->
+                              return ()
+                          | false ->
+                              fail (MerrOther "out-of-bound pointer arithmetic")
+                        end
+                  end >>= fun () ->
+                  return (PV (prov, PVconcrete (N.add addr offset)))
+            | `Single alloc_id ->
+                precond alloc_id >>= begin function
+                  | true ->
+                      return (PV (prov, PVconcrete (N.add addr offset)))
+                  | false ->
+                      fail (MerrOther "out-of-bound pointer arithmetic")
+                end
+          end
+      
       | PV (Prov_some alloc_id, PVconcrete addr) ->
           (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
           let addr' = N.add addr offset in
@@ -1674,6 +1952,16 @@ module Concrete : Memory = struct
       | PVfunction (Symbol.Symbol (_, n, _)) ->
           return (mk_ival prov (Nat_big_num.of_int n))
       | PVconcrete addr ->
+          begin if Switches.(has_switch (SW_PNVI `AE) && has_switch (SW_PNVI `AE_UDI)) then
+            (* PNVI-ae, PNVI-ae-udi *)
+            match prov with
+              | Prov_some alloc_id ->
+                  expose_allocation alloc_id
+              | _ ->
+                  return ()
+          else
+            return ()
+          end >>= fun () ->
           let IV (_, ity_max) = max_ival ity in
           let IV (_, ity_min) = min_ival ity in
           if N.(less addr ity_min || less ity_max addr) then
@@ -1687,8 +1975,6 @@ let combine_prov prov1 prov2 =
         Prov_none
     | (Prov_none, Prov_some id) ->
         Prov_some id
-    | (Prov_none, Prov_wildcard) ->
-        Prov_wildcard
     | (Prov_none, Prov_device) ->
         Prov_device
     | (Prov_some id, Prov_none) ->
@@ -1698,8 +1984,6 @@ let combine_prov prov1 prov2 =
           Prov_some id1
         else
           Prov_none
-    | (Prov_some _, Prov_wildcard) ->
-        Prov_wildcard
     | (Prov_some _, Prov_device) ->
         Prov_device
     | (Prov_device, Prov_none) ->
@@ -1708,10 +1992,13 @@ let combine_prov prov1 prov2 =
         Prov_device
     | (Prov_device, Prov_device) ->
         Prov_device
-    | (Prov_device, Prov_wildcard) ->
-        Prov_wildcard
-    | (Prov_wildcard, _) ->
-        Prov_wildcard
+    
+    (* PNVI-ae-udi *)
+    (* TODO: this is improvised, need to check with P *)
+    | (Prov_symbolic _, _) ->
+        prov1
+    | (_, Prov_symbolic _) ->
+        failwith "Concrete.combine_prov: found a Prov_symbolic"
 
 
   let op_ival iop (IV (prov1, n1)) (IV (prov2, n2)) =
@@ -1809,7 +2096,11 @@ let combine_prov prov1 prov2 =
       | Bool ->
           IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
       | _ ->
-          let Some nbytes = Impl.sizeof_ity ity in
+          let nbytes = match Impl.sizeof_ity ity with
+            | None ->
+                assert false
+            | Some z ->
+                z in
           let nbits = 8 * nbytes in
           let is_signed = AilTypesAux.is_signed_ity ity in
           let (min, max) =
