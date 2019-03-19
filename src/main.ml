@@ -109,7 +109,7 @@ let cerberus debug_level progress core_obj
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
-             cfg (*absint*)
+             absint cfg
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
              bmc_mode bmc_cat
@@ -199,20 +199,17 @@ let cerberus debug_level progress core_obj
             Pp_errors.fatal "bmc mode accepts only one file"
         end
       (* Run abstract interpretation *)
-      (*
       else if absint then
         begin match files with
           | [filename] ->
             prelude >>= fun core_std ->
             c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
-            (*Absint.run core; *)
-            ignore (Wip.mk_cfg core);
+            ignore (Solve_fixpoint.solve core);
             return success
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
         end
-      *)
       (* Run only CPP *)
       else if cpp_only then
         Exception.foldlM (fun () file ->
@@ -446,11 +443,9 @@ let cfg =
   let doc = "outputs a dot file with the control flow graph for core" in
   Arg.(value & flag & info["cfg"] ~doc)
 
-(*
 let absint =
   let doc = "run abstract interpretation" in
   Arg.(value & flag & info["absint"] ~doc)
-*)
 
 
 (* TODO: this is not being used
@@ -533,7 +528,7 @@ let () =
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
-                         cfg $
+                         absint $ cfg $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
                          bmc_mode $ bmc_cat $

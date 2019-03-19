@@ -31,11 +31,13 @@ end
 
 module Graph: sig
 
-  type vertex
+  type vertex = int
   type 'a t
 
   val empty: 'a t
   val is_root: vertex -> 'a t -> bool
+
+  val compare_vertex: vertex -> vertex -> int
 
   val add_vertex: 'a t -> vertex * 'a t
   val add_edge: vertex * vertex -> 'a -> 'a t -> 'a t
@@ -45,6 +47,8 @@ module Graph: sig
   (* TODO: this is not great *)
   val add_label: Symbol.sym -> (Symbol.sym list * vertex) -> 'a t -> 'a t
   val get_label: Symbol.sym -> 'a t -> (Symbol.sym list * vertex) option
+
+  val fold: 'a t -> (vertex -> vertex -> 'a -> 'b -> 'b) -> 'b -> 'b
 
   val iter_vertices: 'a t -> (vertex -> unit) -> unit
   val iter_edges: 'a t -> (vertex -> vertex -> 'a -> unit) -> unit
@@ -67,6 +71,8 @@ end = struct
       labels = SMap.empty;
       vcount = 0;
     }
+
+  let compare_vertex = compare
 
   let has_parents g =
     List.concat
@@ -120,6 +126,13 @@ end = struct
 
   let iter_edges g f =
     IMap.iter (fun v1 vs -> List.iter (fun (v2, d) -> f v1 v2 d) vs) g.graph
+
+  let fold g f =
+    IMap.fold (fun v1 vs acc ->
+        List.fold_left (fun acc (v2, d) ->
+            f v1 v2 d acc
+          ) acc vs
+      ) g.graph
 
   let string_of_vertex v = "v" ^ string_of_int v
 
@@ -223,8 +236,6 @@ type ('a, 'bty) texpr =
   | TEcfunction of ('a, 'bty) texpr
   | TEmemberof of Symbol.sym * Cabs.cabs_identifier * ('a, 'bty) texpr
   | TEcall of Symbol.sym generic_name * ('a, 'bty) texpr list
-  | TEccall of ('a, 'bty) texpr * ('a, 'bty) texpr list
-  | TEproc of Symbol.sym generic_name * ('a, 'bty) texpr list
   | TEis_scalar of ('a, 'bty) texpr
   | TEis_integer of ('a, 'bty) texpr
   | TEis_signed of ('a, 'bty) texpr
@@ -243,10 +254,13 @@ type ('a, 'bty) cond =
   | Cis_unsigned of ('a, 'bty) texpr
   | Care_compatible of ('a, 'bty) texpr * ('a, 'bty) texpr
 
+(* Transfer functions *)
 type ('a, 'bty) transfer =
   | Tskip
   | Tcond of ('a, 'bty) cond
   | Tassign of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
+  | Tcall of ('a, Symbol.sym) generic_pattern
+             * ('a, 'bty) texpr * ('a, 'bty) texpr list
 
 let show_ctor = function
   | Cnil _ -> "Nil"
@@ -386,10 +400,6 @@ let rec show_texpr te =
     "memberof" ^ parens (Sym.show x ^ ", " ^ memb ^ ", " ^ self te)
   | TEcall (nm, tes) ->
     show_name nm ^ parens (comma_list self tes)
-  | TEccall (te, tes) ->
-    self te ^ parens (comma_list self tes)
-  | TEproc (nm, tes) ->
-    show_name nm ^ parens (comma_list self tes)
   | TEis_scalar te ->
     "is_scalar" ^ parens (self te)
   | TEis_integer te ->
@@ -421,9 +431,15 @@ let show_transfer =
       s
   in
   function
-  | Tskip -> ""
-  | Tcond c -> cut @@ show_cond c
-  | Tassign (pat, te) -> cut @@ show_pattern pat ^ " = " ^ show_texpr te
+  | Tskip ->
+    ""
+  | Tcond c ->
+    cut @@ show_cond c
+  | Tassign (pat, te) ->
+    cut @@ show_pattern pat ^ " = " ^ show_texpr te
+  | Tcall (pat, te_f, tes) ->
+    cut @@ show_pattern pat ^ " = CALL " ^
+           show_texpr te_f  ^ parens (comma_list show_texpr tes)
 
 (* Try to convert a Core pure expression in transfer node expressions
  * It fails if it contains a control flow branch *)
@@ -692,10 +708,15 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       self (in_v, mid_v) pat1 pe1 >>= fun _ ->
       self (mid_v, out_v) in_pat pe2
     | PEif (pe1, pe2, pe3) ->
-      let cond = match cond_of_pexpr pe1 with
-        | Some cond -> cond
-        | None -> assert false (* TODO *)
-      in
+      begin match cond_of_pexpr pe1 with
+        | Some cond ->
+          return (in_v, cond)
+        | None ->
+          let (sym, pat) = new_symbol () in
+          new_vertex >>= fun pe_v ->
+          add_pe (in_v, pe_v) pat pe1 >>= fun _ ->
+          return (pe_v, Csym sym)
+      end >>= fun (in_v, cond) ->
       new_vertex >>= fun true_v ->
       add (in_v, true_v) (Tcond cond) >>= fun _ ->
       self (true_v, out_v) in_pat pe2 >>= fun _ ->
@@ -777,10 +798,15 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     add_pe (in_v, mid_v) pat1 pe1 >>= fun _ ->
     self (mid_v, out_v) in_pat e2
   | Eif (pe1, e2, e3) ->
-    let cond = match cond_of_pexpr pe1 with
-      | Some cond -> cond
-      | None -> assert false (* TODO *)
-    in
+    begin match cond_of_pexpr pe1 with
+      | Some cond ->
+        return (in_v, cond)
+      | None ->
+        let (sym, pat) = new_symbol () in
+        new_vertex >>= fun pe_v ->
+        add_pe (in_v, pe_v) pat pe1 >>= fun _ ->
+        return (pe_v, Csym sym)
+    end >>= fun (in_v, cond) ->
     new_vertex >>= fun true_v ->
     add (in_v, true_v) (Tcond cond) >>= fun _ ->
     self (true_v, out_v) in_pat e2 >>= fun _ ->
@@ -803,8 +829,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
         return (sym:: syms, out_v)
       ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
     let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
-    let te  = TEccall (te_f, tes) in
-    add (in_v, out_v) (Tassign (in_pat, te))
+    add (in_v, out_v) (Tcall (in_pat, te_f, tes))
   | Eproc (_, name, pes) ->
     List.fold_left (fun acc pe ->
         let (sym, pat) = new_symbol () in
@@ -814,7 +839,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
         return (sym::syms, out_v)
       ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
     let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
-    let te  = TEproc (name, tes) in
+    let te  = TEcall (name, tes) in
     add (in_v, out_v) (Tassign (in_pat, te))
   | Eunseq es ->
     let pats =
@@ -934,7 +959,7 @@ let dot_of_proc nm g =
   let pre = Sym.show nm in
   Graph.iter_vertices g (fun v ->
       if Graph.is_root v g then
-        print_endline @@ pre ^ Graph.string_of_vertex v ^ "[label=\"" ^ pre ^ "\"]"
+        print_endline @@ pre ^ Graph.string_of_vertex v ^ "[label=\"" ^ pre ^ Graph.string_of_vertex v ^ "\"]"
       else
         print_endline @@ pre ^ Graph.string_of_vertex v ^ "[shape=point]"
     );
@@ -943,6 +968,19 @@ let dot_of_proc nm g =
       pre ^ Graph.string_of_vertex v1 ^ " -> " ^ pre ^ Graph.string_of_vertex v2
       ^ "[label=\"" ^ show_transfer tf ^ "\"]"
     )
+
+(* TODO: this is to test main for the moment *)
+let mk_main ?(sequentialise=false) core =
+  let main =
+    match core.main with
+    | Some main -> main
+    | None -> assert false
+  in
+  match Pmap.lookup main core.funs with
+  | Some (Proc (_, _, _, e)) ->
+    mk_cfg_e ~sequentialise e
+  | _ ->
+    assert false
 
 let mk_dot ?(sequentialise=false) core =
   print_endline "digraph G {";
