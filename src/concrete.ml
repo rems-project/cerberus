@@ -195,17 +195,6 @@ and alignof = function
             List.fold_left (fun acc (_, ty) ->
               max (alignof ty) acc
             ) 0 membrs
-(*
-            (* TODO: remove the pattern matching, this is dumb ... *)
-            begin match membrs with
-              | [] ->
-                  assert false
-              | (_, ty0) :: xs ->
-                  List.fold_left (fun acc (_, ty) ->
-                    let n = alignof ty in if n > acc then n else acc
-                                 ) (alignof ty0) xs
-            end
-*)
       end
   | Union0 tag_sym ->
       begin match Pmap.find tag_sym (Tags.tagDefs ()) with
@@ -217,17 +206,6 @@ and alignof = function
             List.fold_left (fun acc (_, ty) ->
               max (alignof ty) acc
             ) 0 membrs
-(*
-            (* TODO: remove the pattern matching, this is dumb ... *)
-            begin match membrs with
-              | [] ->
-                  assert false
-              | (_, ty0) :: xs ->
-                  List.fold_left (fun acc (_, ty) ->
-                    let n = alignof ty in if n > acc then n else acc
-                  ) (alignof ty0) xs
-            end
-*)
       end
   | Builtin0 str ->
      failwith ("TODO: alignof Builtin ==> " ^ str)
@@ -377,6 +355,25 @@ module Concrete : Memory = struct
           ( (match _prov with `INVALID -> Prov_none | `VALID z -> z)
           , (match offset_status with `OtherBytes -> `NotValidPtrProv | _ -> `ValidPtrProv)
           , List.rev rev_values )
+    
+    (* PNVI-ae-udi *)
+    let provs_of_bytes bs =
+      let xs = List.fold_left (fun acc b ->
+        match b.prov with
+          | Prov_none ->
+              acc
+          | Prov_some alloc_id ->
+              alloc_id :: acc
+          | Prov_symbolic iota -> (* of symbolic_storage_instance_id (* only for PNVI-ae-udi *) *)
+              acc (* TODO(iota) *)
+          | Prov_device ->
+              acc
+      ) [] bs in
+      match xs with
+        | [] ->
+            `NoTaint
+        | _ ->
+            `NewTaint xs
   end
   
   type mem_state = {
@@ -697,6 +694,21 @@ module Concrete : Memory = struct
          | None ->
              None) st.allocations }
     end
+  (* PNVI-ae *)
+  let expose_allocations = function
+    | `NoTaint ->
+        return ()
+    | `NewTaint xs ->
+        update begin fun st ->
+          {st with allocations=
+           List.fold_left (fun acc alloc_id ->
+             IntMap.update alloc_id (function
+               | Some alloc ->
+                   Some {alloc with taint= `Exposed}
+               | None ->
+                   None) acc
+           ) st.allocations xs }
+        end
   
   (* PNVI-ae-udi *)
   let add_iota alloc_ids =
@@ -735,13 +747,13 @@ module Concrete : Memory = struct
     return alloc_id
   
   
-  (* INTERNAL abst: ctype -> AbsByte.t list -> mem_value * AbsByte.t list *)
+  (* INTERNAL abst: ctype -> AbsByte.t list -> [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list *)
   (* ASSUMES: has_size ty /\ |bs| >= sizeof ty*)
   (* property that should hold:
        forall ty bs bs' mval.
          has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
          |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
-  let rec abst find_overlaping funptrmap ty (bs : AbsByte.t list) : mem_value * AbsByte.t list =
+  let rec abst find_overlaping funptrmap ty (bs : AbsByte.t list) : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
     let self = abst find_overlaping funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
@@ -757,6 +769,16 @@ module Concrete : Memory = struct
     if List.length bs < sizeof ty then
       failwith "abst, |bs| < sizeof(ty)";
     
+    let merge_taint x y =
+      match x, y with
+        | `NoTaint, `NoTaint ->
+            `NoTaint
+        | `NoTaint, `NewTaint xs
+        | `NewTaint xs, `NoTaint ->
+            `NewTaint xs
+        | `NewTaint xs, `NewTaint ys ->
+            `NewTaint (xs @ ys) in
+    
     match ty with
       | Void0
       | Array0 (_, None)
@@ -766,90 +788,94 @@ module Concrete : Memory = struct
       | Basic0 (Integer ity) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           let (prov, _, bs1') = AbsByte.split_bytes bs1 in
-          (begin match extract_unspec bs1' with
-            | Some cs ->
-                MVinteger ( ity
-                          , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
-            | None ->
-                MVunspecified ty
-          end , bs2)
+            (* PNVI-ae-udi *)
+          ( AbsByte.provs_of_bytes bs1
+          , begin match extract_unspec bs1' with
+              | Some cs ->
+                  MVinteger ( ity
+                            , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
+              | None ->
+                  MVunspecified ty
+            end , bs2)
       | Basic0 (Floating fty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           (* we don't care about provenances for floats *)
           let (_, _, bs1') = AbsByte.split_bytes bs1 in
-          (begin match extract_unspec bs1' with
-            | Some cs ->
-                MVfloating ( fty
-                           , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
-            | None ->
-                MVunspecified ty
-          end, bs2)
+          ( `NoTaint
+          , begin match extract_unspec bs1' with
+              | Some cs ->
+                  MVfloating ( fty
+                             , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
+              | None ->
+                  MVunspecified ty
+            end, bs2)
       | Array0 (elem_ty, Some n) ->
-          let rec aux n acc cs =
+          let rec aux n (taint_acc, mval_acc) cs =
             if n <= 0 then
-              (MVarray (List.rev acc), cs)
+              (taint_acc, MVarray (List.rev mval_acc), cs)
             else
-              let (mval, cs') = self elem_ty cs in
-              aux (n-1) (mval :: acc) cs'
+              let (taint, mval, cs') = self elem_ty cs in
+              aux (n-1) (merge_taint taint taint_acc, mval :: mval_acc) cs'
           in
-          aux (Nat_big_num.to_int n) [] bs
+          aux (Nat_big_num.to_int n) (`NoTaint, []) bs
       | Pointer0 (_, ref_ty) ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
-          (begin match extract_unspec bs1' with
-            | Some cs ->
-                let n = int_of_bytes false cs in
-                begin match ref_ty with
-                  | Function0 _ ->
-                      if N.equal n N.zero then
-                        (* TODO: check *)
-                        MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                      else
-                        (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
-                        begin match IntMap.find_opt n funptrmap with
-                          | Some (file_dig, name) ->
-                              MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
-                          | None -> failwith ("unknown function pointer: " ^ N.to_string n)
-                        end
-                  | _ ->
-                      if N.equal n N.zero then
-                        (* TODO: check *)
-                        MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
-                      else
-                        let prov =
-                          if is_PNVI () then
-                            match prov_status with
-                              | `NotValidPtrProv ->
-                                  begin match find_overlaping n with
-                                    | `NoAlloc ->
-                                        Prov_none
-                                    | `SingleAlloc alloc_id ->
-                                        Prov_some alloc_id
-                                    | `DoubleAlloc (alloc_id1, alloc_id2) ->
-                                        failwith "TODO(iota): abst => make a iota?"
-                                  end
-                              | `ValidPtrProv ->
-                                  prov
-                          else
-                            prov in
-                        MVpointer (ref_ty, PV (prov, PVconcrete n))
-                end
-            | None ->
-                MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
-          end, bs2)
+          ( `NoTaint (* PNVI-ae-udi *)
+          , begin match extract_unspec bs1' with
+              | Some cs ->
+                  let n = int_of_bytes false cs in
+                  begin match ref_ty with
+                    | Function0 _ ->
+                        if N.equal n N.zero then
+                          (* TODO: check *)
+                          MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                        else
+                          (* FIXME: This is wrong. A function pointer with the same id in different files might exist. *)
+                          begin match IntMap.find_opt n funptrmap with
+                            | Some (file_dig, name) ->
+                                MVpointer (ref_ty, PV(prov, PVfunction (Symbol.Symbol (file_dig, N.to_int n, Some name))))
+                            | None -> failwith ("unknown function pointer: " ^ N.to_string n)
+                          end
+                    | _ ->
+                        if N.equal n N.zero then
+                          (* TODO: check *)
+                          MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
+                        else
+                          let prov =
+                            if is_PNVI () then
+                              match prov_status with
+                                | `NotValidPtrProv ->
+                                    begin match find_overlaping n with
+                                      | `NoAlloc ->
+                                          Prov_none
+                                      | `SingleAlloc alloc_id ->
+                                          Prov_some alloc_id
+                                      | `DoubleAlloc (alloc_id1, alloc_id2) ->
+                                          failwith "TODO(iota): abst => make a iota?"
+                                    end
+                                | `ValidPtrProv ->
+                                    prov
+                            else
+                              prov in
+                          MVpointer (ref_ty, PV (prov, PVconcrete n))
+                  end
+              | None ->
+                  MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
+            end, bs2)
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           self atom_ty bs
       | Struct0 tag_sym ->
           let (bs1, bs2) = L.split_at (sizeof ty) bs in
-          let (rev_xs, _, bs') = List.fold_left (fun (acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
+          let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
-            let (mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
-            ((memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
-          ) ([], 0, bs1) (fst (offsetsof tag_sym)) in
+            let (taint, mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
+            (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
+          ) (`NoTaint, [], 0, bs1) (fst (offsetsof tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
-          (MVstruct (tag_sym, List.rev rev_xs), bs2)
+          (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
           failwith "TODO: abst, Union (as value)"
       | Builtin0 str ->
@@ -977,7 +1003,7 @@ module Concrete : Memory = struct
       let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
       match alloc.ty with
         | Some ty ->
-            let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
+            let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
             mval
         | None ->
             failwith "Concrete.dot_of_mem_state: alloc.ty = None"
@@ -992,22 +1018,6 @@ module Concrete : Memory = struct
     prerr_endline "digraph G{";
     List.iter prerr_endline xs;
     prerr_endline "}"
-(*
-  let dot_of_mem_state st =
-  type allocation = {
-    base: address;
-    size: N.num; (*TODO: this is probably unnecessary once we have the type *)
-    ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
-    is_readonly: bool;
-  }
-  
-  type mem_state = {
-    next_alloc_id: storage_instance_id;
-    allocations: allocation IntMap.t;
-    next_address: address;
-    bytemap: (provenance * char option) IntMap.t;
-  }
-*)
   (* END DEBUG *)
   
   let allocate_object tid pref (IV (_, align)) ty init_opt : pointer_value memM =
@@ -1158,7 +1168,7 @@ module Concrete : Memory = struct
               acc
           | Some ty ->
               begin match abst (find_overlaping st) st.funptrmap ty bs with
-                | (MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
+                | (_, MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
                     let bs' = List.init (N.to_int alloc.size) (fun i ->
                       (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
                     ) in
@@ -1265,7 +1275,13 @@ module Concrete : Memory = struct
     let do_load alloc_id_opt addr =
       get >>= fun st ->
       let bs = fetch_bytes st.bytemap addr (sizeof ty) in
-      let (mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
+      let (taint, mval, bs') = abst (find_overlaping st) st.funptrmap ty bs in
+      (* PNVI-ae-udi *)
+      begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
+        expose_allocations taint
+      else
+        return ()
+      end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
       begin match bs' with
         | [] ->
@@ -1482,12 +1498,41 @@ module Concrete : Memory = struct
       | (_, PVfunction _) ->
           return false
       | (PVconcrete addr1, PVconcrete addr2) ->
+          begin match (prov1, prov2) with
+            | (Prov_none, Prov_none) ->
+                return true
+            | (Prov_some alloc_id1, Prov_some alloc_id2) ->
+                return (N.equal alloc_id1 alloc_id2)
+            | (Prov_device, Prov_device) ->
+                return true
+            | (Prov_symbolic iota1, Prov_symbolic iota2) ->
+                (* PNVI-ae-udi *)
+                lookup_iota iota1 >>= fun ids1 ->
+                lookup_iota iota2 >>= fun ids2 ->
+                begin match (ids1, ids2) with
+                  | (`Single alloc_id1, `Single alloc_id2) ->
+                      return (N.equal alloc_id1 alloc_id2)
+                  | _ ->
+                      return false
+                end
+            | _ ->
+                return false
+          end >>= begin function
+            | true ->
+                return (Nat_big_num.equal addr1 addr2)
+            | false ->
+                Eff.msum "pointer equality"
+                  [ ("using provenance", return false)
+                  ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
+          end
+(*
           if prov1 = prov2 then
             return (Nat_big_num.equal addr1 addr2)
           else
             Eff.msum "pointer equality"
               [ ("using provenance", return false)
               ; ("ignoring provenance", return (Nat_big_num.equal addr1 addr2)) ]
+*)
   
   let ne_ptrval ptrval1 ptrval2 =
     eq_ptrval ptrval1 ptrval2 >>= fun b ->
@@ -1562,56 +1607,109 @@ module Concrete : Memory = struct
   
   
   let diff_ptrval diff_ty ptrval1 ptrval2 =
-    (* TODO: check that this is correct for arrays of arrays ... *)
-    (* TODO: if not, sync with symbolic defacto *)
-(*    let diff_ty' = match diff_ty with
-      | Core_ctype.Array0 (elem_ty, _) ->
-          elem_ty
-      | _ ->
-          diff_ty in *)
+    let precond alloc addr1 addr2 =
+         N.less_equal alloc.base addr1
+      && N.less_equal addr1 (N.add alloc.base alloc.size)
+      && N.less_equal alloc.base addr2
+      && N.less_equal addr2 (N.add alloc.base alloc.size) in
+    
+    let valid_postcond addr1 addr2 =
+      let diff_ty' = match diff_ty with
+        | Core_ctype.Array0 (elem_ty, _) ->
+            elem_ty
+        | _ ->
+            diff_ty in
+      return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty')))) in
+    let error_postcond =
+      fail MerrPtrdiff in
     match ptrval1, ptrval2 with
-      | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2))
-        when N.equal alloc_id1 alloc_id2 ->
-          get_allocation alloc_id1 >>= fun alloc ->
-          (* NOTE: this is not like "is_within_bound" because it allows one-past pointers *)
-          if   N.less_equal alloc.base addr1
-             && N.less_equal addr1 (N.add alloc.base alloc.size)
-             && N.less_equal alloc.base addr2
-             && N.less_equal addr2 (N.add alloc.base alloc.size) then
-            (* NOTE: the result of subtraction of two pointer values is an integer value with
-               empty provenance, irrespective of the operand provenances *)
-            (* TODO: check that this is correct for arrays of arrays ... *)
-            (* TODO: if not, sync with symbolic defacto *)
-            let diff_ty' = match diff_ty with
-              | Core_ctype.Array0 (elem_ty, _) ->
-                  elem_ty
-              | _ ->
-                  diff_ty
-              in
-            return (IV (Prov_none, N.div (N.sub addr1 addr2) (N.of_int (sizeof diff_ty'))))
+      | PV (Prov_some alloc_id1, (PVconcrete addr1)), PV (Prov_some alloc_id2, (PVconcrete addr2)) ->
+          if N.equal alloc_id1 alloc_id2 then
+            get_allocation alloc_id1 >>= fun alloc ->
+            if precond alloc addr1 addr2 then
+              valid_postcond addr1 addr2
+            else
+              error_postcond
           else
-            fail MerrPtrdiff
+            error_postcond
       
       (* PNVI-ae-udi *)
-      | PV (Prov_symbolic iota, PVconcrete addr1), PV (Prov_some alloc_id2, PVconcrete addr2) ->
+      | PV (Prov_symbolic iota, PVconcrete addr1), PV (Prov_some alloc_id', PVconcrete addr2)
+      | PV (Prov_some alloc_id', PVconcrete addr1), PV (Prov_symbolic iota, PVconcrete addr2) ->
           (* if A(iota) = {i1, i2} then
-               alloc_id2 = (i1 or i2) AND precond valid AND iota collapses
+               alloc_id' = (i1 or i2) AND precond valid AND iota collapses
              else
                UB *)
-          failwith "TODO(iota): diff_ptrval iota1"
-      | PV (Prov_some alloc_id1, PVconcrete addr1), PV (Prov_symbolic iota, PVconcrete addr2) ->
-          (* if A(iota) = {i1, i2} then
-               alloc_id1 = (i1 or i2) AND precond valid AND iota collapses
-             else
-               UB *)
-          failwith "TODO(iota): diff_ptrval iota2"
+          lookup_iota iota >>= begin function
+            | `Single alloc_id ->
+                if N.equal alloc_id alloc_id' then
+                  get_allocation alloc_id >>= fun alloc ->
+                  if precond alloc addr1 addr2 then
+                    valid_postcond addr1 addr2
+                  else
+                    error_postcond
+                else
+                  error_postcond
+            | `Double (alloc_id1, alloc_id2) ->
+                if N.equal alloc_id1 alloc_id' || N.equal alloc_id2 alloc_id' then
+                  get_allocation alloc_id' >>= fun alloc ->
+                  if precond alloc addr1 addr2 then
+                    update begin fun st ->
+                      {st with iota_map= IntMap.add iota (`Single alloc_id') st.iota_map }
+                    end >>= fun () ->
+                    valid_postcond addr1 addr2
+                  else
+                    error_postcond
+                else
+                  error_postcond
+          end
+      
+      (* PNVI-ae-udi *)
       | PV (Prov_symbolic iota1, PVconcrete addr1), PV (Prov_symbolic iota2, PVconcrete addr2) ->
           (* IF A(iota1) INTER A(iota2) = { i } AND precond valid THEN collapse iota1 and iota2 to i *)
           (* IF A(iota1) INTER A(iota2) = { i1, i2 } AND (precond valid for i1 AND i2) THEN NO collapse *)
-          failwith "TODO(iota): diff_ptrval iota3"
-      
+          lookup_iota iota1 >>= fun ids1 ->
+          lookup_iota iota2 >>= fun ids2 ->
+          let inter_ids =
+            match ids1, ids2 with
+              | `Single x, `Single y ->
+                  if N.equal x y then
+                    `Single x
+                  else
+                    `None
+              | `Single x, `Double (y, z)
+              | `Double (y, z), `Single x ->
+                  if N.equal x y || N.equal x z then
+                    `Single x
+                  else
+                    `None
+              | `Double (x1, x2), `Double (y1, y2) ->
+                  if N.equal x1 y1 then
+                    if N.equal x2 y2 then
+                      `Double (x1, x2)
+                    else
+                      `Single x1
+                  else if N.equal x2 y2 then
+                    `Single x2
+                  else
+                    `None in
+          begin match inter_ids with
+            | `None ->
+                error_postcond
+            | `Single alloc_id' ->
+                update begin fun st ->
+                  {st with iota_map= IntMap.add iota1 (`Single alloc_id')
+                                       (IntMap.add iota2 (`Single alloc_id') st.iota_map) }
+                end >>= fun () ->
+                valid_postcond addr1 addr2
+            | `Double (alloc_id1, alloc_id2) ->
+                if N.equal addr1 addr2 then
+                  valid_postcond addr1 addr2 (* zero *)
+                else
+                  fail (MerrOther "in `diff_ptrval` invariant of PNVI-ae-udi failed: ambiguous iotas with addr1 <> addr2")
+          end
       | _ ->
-          fail MerrPtrdiff
+          error_postcond
   
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
@@ -1952,7 +2050,7 @@ module Concrete : Memory = struct
       | PVfunction (Symbol.Symbol (_, n, _)) ->
           return (mk_ival prov (Nat_big_num.of_int n))
       | PVconcrete addr ->
-          begin if Switches.(has_switch (SW_PNVI `AE) && has_switch (SW_PNVI `AE_UDI)) then
+          begin if Switches.(has_switch (SW_PNVI `AE) || has_switch (SW_PNVI `AE_UDI)) then
             (* PNVI-ae, PNVI-ae-udi *)
             match prov with
               | Prov_some alloc_id ->
@@ -1995,8 +2093,7 @@ let combine_prov prov1 prov2 =
     
     (* PNVI-ae-udi *)
     (* TODO: this is improvised, need to check with P *)
-    | (Prov_symbolic _, _) ->
-        prov1
+    | (Prov_symbolic _, _)
     | (_, Prov_symbolic _) ->
         failwith "Concrete.combine_prov: found a Prov_symbolic"
 
@@ -2367,7 +2464,7 @@ let combine_prov prov1 prov2 =
           fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
-            let (mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
+            let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
             let rows = mk_ui_values acc_bs' memb_ty mval in
             let rows' = List.map (add_path memb) rows in
             (* TODO: set padding value here *)
@@ -2382,7 +2479,7 @@ let combine_prov prov1 prov2 =
     let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), Some alloc.size) in
     let size = N.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
-    let (mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
+    let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
     { id = id;
       base = N.to_int alloc.base;
       prefix = alloc.prefix;
