@@ -11,7 +11,18 @@ type cerb_switch =
   | SW_strict_pointer_relationals
   
     (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
-  | SW_no_integer_provenance of int
+(*  | SW_no_integer_provenance of int *)
+  
+  | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+
+
+let are_incompatible = function
+  | (SW_PNVI x, SW_PNVI y) ->
+      x <> y
+  | _ ->
+      false
+
+
 
 (*
 UB when reading uninitialised memory
@@ -47,12 +58,20 @@ let set strs =
     | "strict_pointer_relationals" ->
         Some SW_strict_pointer_relationals
 
+(*
     | "no_integer_provenance" ->
         Some (SW_no_integer_provenance 0)
     | "no_integer_provenance_v1" ->
         Some (SW_no_integer_provenance 1)
     | "no_integer_provenance_v4" ->
         Some (SW_no_integer_provenance 4)
+*)
+    | "PNVI" ->
+        Some (SW_PNVI `PLAIN)
+    | "PNVI_ae" ->
+        Some (SW_PNVI `AE)
+    | "PNVI_ae_udi" ->
+        Some (SW_PNVI `AE_UDI)
     | _ ->
         None in
   List.iter (fun str ->

@@ -25,16 +25,16 @@ let pp_trace_event = function
     !^ "function_return" ^^^ pp_symbol f
                          ^^^ P.parens (pp_mem_value_opt mval_opt)
 
-  | ME_allocate_static (tid, pre, align_ival, cty, mval_opt, ptrval) ->
-    !^ "allocate_static" ^^^ !^(string_of_int tid)
+  | ME_allocate_object (tid, pre, align_ival, cty, mval_opt, ptrval) ->
+    !^ "allocate_object" ^^^ !^(string_of_int tid)
                          ^^^ P.parens (pp_prefix pre)
                          ^^^ P.parens (pp_integer_value align_ival)
                          ^^^ P.parens (pp_ctype cty)
                          ^^^ P.parens (pp_mem_value_opt mval_opt)
                          ^^^ P.parens (pp_pointer_value ptrval)
 
-  | ME_allocate_dynamic (tid, pre, align_ival, size_ival, ptrval) ->
-    !^ "allocate_dynamic" ^^^ !^(string_of_int tid)
+  | ME_allocate_region (tid, pre, align_ival, size_ival, ptrval) ->
+    !^ "allocate_region" ^^^ !^(string_of_int tid)
                          ^^^ P.parens (pp_prefix pre)
                          ^^^ P.parens (pp_integer_value align_ival)
                          ^^^ P.parens (pp_integer_value size_ival)

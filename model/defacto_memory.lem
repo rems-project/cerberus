@@ -513,7 +513,7 @@ let register_address_constraints pref alloc_id size_ival_ align_ival_ =
 
 
 (* TODO: readonly case *)
-let impl_allocate_static tid pref (IV _ align_ival_) ty init_opt =
+let impl_allocate_object tid pref (IV _ align_ival_) ty init_opt =
   fresh_allocation_id >>= fun alloc_id ->
   register_address_constraints pref alloc_id (IVsizeof ty) (align_ival_) >>
   register_allocation alloc_id (Storage_static pref ty Nothing) >>
@@ -540,7 +540,7 @@ let impl_allocate_static tid pref (IV _ align_ival_) ty init_opt =
 *)
 
 
-let impl_allocate_dynamic tid pref (IV _ align_ival_) ((IV _ size_ival_) as size_ival) =
+let impl_allocate_region tid pref (IV _ align_ival_) ((IV _ size_ival_) as size_ival) =
   fresh_allocation_id >>= fun alloc_id ->
   register_address_constraints pref alloc_id size_ival_ (align_ival_) >>
   register_allocation alloc_id (Storage_dynamic pref size_ival_ []) >>

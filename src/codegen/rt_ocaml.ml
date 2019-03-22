@@ -211,13 +211,13 @@ let ptr_well_aligned = M.isWellAligned_ptrval
 
 let create pre al ty x_opt =
   last_memop := Create;
-  M.allocate_static 0 pre al ty
+  M.allocate_object 0 pre al ty
     (Option.case (fun x -> Some (case_loaded_mval id x))
        (fun () -> None) x_opt)
 
 let alloc pre al n =
   last_memop := Alloc;
-  M.allocate_dynamic 0 pre al n
+  M.allocate_region 0 pre al n
 
 let load cty ret e =
   last_memop := Load;
