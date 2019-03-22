@@ -10,9 +10,13 @@ type cerb_switch =
     (* make the relational operators UB when relating distinct objects (ISO) *)
   | SW_strict_pointer_relationals
   
+(*
+theses are deprecated, use SW_PNVI instead
     (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
   | SW_no_integer_provenance of int
-
+*)
+  
+  | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
 
 val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool

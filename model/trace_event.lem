@@ -8,7 +8,7 @@ type trace_event =
   | ME_function_return of
       Symbol.sym * maybe mem_value
 
-  | ME_allocate_static of
+  | ME_allocate_object of
       Core_ctype.thread_id   (* the allocating thread *)
        * Symbol.prefix      (* symbols coming from the Core/C program, 
                              * for debugging purpose *)
@@ -18,7 +18,7 @@ type trace_event =
                              * if provided the allocation is made read-only *)
        * pointer_value
 
-  | ME_allocate_dynamic of
+  | ME_allocate_region of
       Core_ctype.thread_id   (* the allocating thread *)
        * Symbol.prefix       (* symbols coming from the Core/C program,
                               * for debugging purpose *)

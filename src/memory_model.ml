@@ -41,7 +41,7 @@ module type Memory = sig
   val bind: 'a memM -> ('a -> 'b memM) -> 'b memM
   
   (* Memory actions *)
-  val allocate_static:
+  val allocate_object:
        Core_ctype.thread_id  (* the allocating thread *)
     -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value      (* alignment constraint *)
@@ -49,7 +49,7 @@ module type Memory = sig
     -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM
   
-  val allocate_dynamic:
+  val allocate_region:
        Core_ctype.thread_id (* the allocating thread *)
     -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
     -> integer_value     (* alignment constraint *)

@@ -652,11 +652,11 @@ let rec explode_bytes mval : (meta * char option) list =
     else
       add_alloc false addr
 
-  let allocate_static _ _ (align) ty init_opt : pointer_value memM =
+  let allocate_object _ _ (align) ty init_opt : pointer_value memM =
     let size = N.of_int (sizeof ty) in
     allocate align size (Some ty) init_opt
 
-  let allocate_dynamic _ _ (align) (size) =
+  let allocate_region _ _ (align) (size) =
     allocate align size None None
 
   let realloc _ _ _ =

@@ -871,11 +871,11 @@ module Twin : Memory = struct
         } >>= fun () ->
     return (PV (Prov_some alloc_id, PVtwin (addr, twin_addr)))
 
-  let allocate_static _ _ (IV align) ty init_opt : pointer_value memM =
+  let allocate_object _ _ (IV align) ty init_opt : pointer_value memM =
     let size = N.of_int (sizeof ty) in
     allocate align size (Some ty) init_opt
 
-  let allocate_dynamic _ _ (IV align) (IV size) =
+  let allocate_region _ _ (IV align) (IV size) =
     allocate align size None None
 
   let kill p : unit memM =
