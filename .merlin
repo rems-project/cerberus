@@ -14,4 +14,4 @@ B _build/parsers/c
 B _build/parsers/core
 B _build/sandbox
 
-PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64 ezgzip ppx_sexp_conv sexplib ocamlbuild bisect_ppx bisect_ppx-ocamlbuild fixpoint
+PKG lem cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64 ezgzip ppx_sexp_conv sexplib ocamlbuild bisect_ppx bisect_ppx-ocamlbuild fixpoint apron

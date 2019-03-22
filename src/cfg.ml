@@ -248,6 +248,7 @@ type ('a, 'bty) cond =
   | Cval of Symbol.sym generic_value
   | Cop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
   | Cnot of ('a, 'bty) cond
+  | Cmatch of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
   | Cis_scalar of ('a, 'bty) texpr
   | Cis_integer of ('a, 'bty) texpr
   | Cis_signed of ('a, 'bty) texpr
@@ -416,6 +417,7 @@ let rec show_cond = function
   | Cval v -> String_core.string_of_value v
   | Cop (bop, te1, te2) -> show_texpr te1 ^ show_binop bop ^ show_texpr te2
   | Cnot c -> "not " ^ parens (show_cond c)
+  | Cmatch (pat, te) -> "match " ^ show_texpr te ^ " with " ^ show_pattern pat
   | Cis_scalar te -> "is_scalar " ^ parens (show_texpr te)
   | Cis_integer te -> "is_integer " ^ parens (show_texpr te)
   | Cis_signed te -> "is_signed " ^ parens (show_texpr te)
@@ -626,12 +628,31 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
       add (in_v, out_v) (Tassign (in_pat, TEctor (ctor, tes)))
     | PEcase (pe, pat_pes) ->
+      let te = match texpr_of_pexpr pe with
+        | Some te -> te
+        | None -> assert false
+      in
+      List.fold_left (fun acc (pat, pe_body) ->
+          let cond = Cmatch (pat, te) in
+          acc >>= fun in_v ->
+          new_vertex >>= fun yes_v ->
+          add (in_v, yes_v) (Tcond cond) >>= fun _ ->
+          new_vertex >>= fun mid_v ->
+          self (yes_v, mid_v) pat pe >>= fun _ ->
+          self (mid_v, out_v) in_pat pe_body >>= fun _ ->
+          new_vertex >>= fun no_v ->
+          add (in_v, no_v) (Tcond (Cnot cond)) >>= fun _ ->
+          return no_v
+        ) (return in_v) pat_pes >>= fun _ ->
+      return `OK
+      (*
       mapM (fun (pat, pe_body) ->
           new_vertex >>= fun mid_v ->
           self (in_v, mid_v) pat pe >>= fun _ ->
           self (mid_v, out_v) in_pat pe_body
         ) pat_pes >>= fun _ ->
       return `OK
+      *)
     | PEarray_shift (pe1, cty, pe2) ->
       let (sym1, pat1) = new_symbol () in
       let (sym2, pat2) = new_symbol () in
@@ -787,12 +808,31 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
   | Eaction pact ->
     add (in_v, out_v) (Tassign (in_pat, TEaction pact))
   | Ecase (pe, pat_es) ->
+    let te = match texpr_of_pexpr pe with
+      | Some te -> te
+      | None -> assert false
+    in
+    List.fold_left (fun acc (pat, e_body) ->
+        let cond = Cmatch (pat, te) in
+        acc >>= fun in_v ->
+        new_vertex >>= fun yes_v ->
+        add (in_v, yes_v) (Tcond cond) >>= fun _ ->
+        new_vertex >>= fun mid_v ->
+        add_pe (yes_v, mid_v) pat pe >>= fun _ ->
+        self (mid_v, out_v) in_pat e_body >>= fun _ ->
+        new_vertex >>= fun no_v ->
+        add (in_v, no_v) (Tcond (Cnot cond)) >>= fun _ ->
+        return no_v
+      ) (return in_v) pat_es >>= fun _ ->
+    return `OK
+        (*
     mapM (fun (pat, e) ->
         new_vertex >>= fun mid_v ->
         add_pe (in_v, mid_v) pat pe >>= fun _ ->
         self (mid_v, out_v) in_pat e
       ) pat_es >>= fun _ ->
     return `OK
+           *)
   | Elet (pat1, pe1, e2) ->
     new_vertex >>= fun mid_v ->
     add_pe (in_v, mid_v) pat1 pe1 >>= fun _ ->

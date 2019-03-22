@@ -1,43 +1,195 @@
 open Cfg
+open Core
 
-type absstate =
-  | Bot | Top
-  | S of (*Symbol.sym Core.generic_value*) int SMap.t
+module N = Nat_big_num
+
+type info =
+  { mutable counter: int;
+  }
+
+
+
+(* TODO: we fix box (intervals) at the moment *)
+let man = Box.manager_alloc ()
+
+type absterm =
+  | ATunit
+  | ATtrue
+  | ATfalse
+  | ATctype of Core_ctype.ctype0 (* C type as value *)
+  | ATtuple of absterm list
+        (*
+  | ATint of Ocaml_mem.integer_value
+  | ATsym of Symbol.sym
+           *)
+  | ATexpr of Apron.Texpr1.t
+  | ATunspec
+  | ATtop
+
+type env =
+  { env_scalar: Box.t Apron.Abstract1.t; (* pointer, integers and floats *)
+    env_term: absterm SMap.t;
+  }
+
+let show_abs env =
+    Apron.Abstract1.print Format.str_formatter env;
+    Format.flush_str_formatter ()
+
+type absstate = env option
 
 let is_leq s1 s2 =
+  print_endline "is_leq";
   match s1, s2 with
-  | Bot, _ -> true
-  | _, Bot -> false
-  | _, Top -> true
-  | Top, _ -> false
-  | S m1, S m2 ->
-    (* TODO: this is not correct *)
-    SMap.fold (fun k v1 acc ->
-        match SMap.find_opt k m2 with
-        | Some v2 -> acc && v1 <= v2 (* TODO *)
-        | None -> false
-      ) m1 true
+  | _, None -> true
+  | None, _ -> false
+  | Some env1, Some env2 ->
+    (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
+    (*
+    print_endline "leq";
+    print_string "1: ";
+    print_endline @@ show_abs env1.env_scalar;
+    print_string "2: ";
+    print_endline @@ show_abs env2.env_scalar;
+       *)
+    let abs_env =
+      match Apron.Environment.compare (Apron.Abstract1.env env1.env_scalar)
+              (Apron.Abstract1.env env2.env_scalar) with
+      | -2 -> assert false
+      | -1 -> Apron.Abstract1.env env2.env_scalar
+      | 0
+      | 1 -> Apron.Abstract1.env env1.env_scalar
+      | _ -> assert false
+    in
+    let env_scalar1
+      = Apron.Abstract1.change_environment man env1.env_scalar abs_env true in
+    let env_scalar2
+      = Apron.Abstract1.change_environment man env2.env_scalar abs_env true in
+    Apron.Abstract1.is_leq man env_scalar1 env_scalar2
 
 let join s1 s2 =
+  print_endline "join";
   match s1, s2 with
-  | Bot, s -> s
-  | s, Bot -> s
-  | _, Top
-  | Top, _ -> print_endline "joined to top"; Top
-  | S m1, S m2 ->
-    (* TODO: this is not correct *)
-    S (SMap.fold SMap.add m1 m2)
+  | _, None | None, _ -> None
+  | Some env1, Some env2 ->
+    (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
+    let abs_env =
+      match Apron.Environment.compare (Apron.Abstract1.env env1.env_scalar)
+              (Apron.Abstract1.env env2.env_scalar) with
+      | -2 -> assert false
+      | -1 -> Apron.Abstract1.env env2.env_scalar
+      | 0
+      | 1 -> Apron.Abstract1.env env1.env_scalar
+      | _ -> assert false
+    in
+    let env_scalar1
+      = Apron.Abstract1.change_environment man env1.env_scalar abs_env true in
+    let env_scalar2
+      = Apron.Abstract1.change_environment man env2.env_scalar abs_env true in
+    let env =
+      { env_scalar = Apron.Abstract1.join man env_scalar1 env_scalar2;
+        env_term = env1.env_term;
+      }
+    in Some env
 
+let bot () =
+  let env0 = Apron.Environment.make [||] [||] in
+  let env =
+    { env_scalar = Apron.Abstract1.bottom man env0;
+      env_term = SMap.empty;
+    }
+  in Some env
+
+let top =
+  None
 
 let show_absstate = function
-  | Top -> "top"
-  | Bot -> "bot"
-  | S m ->
-    SMap.fold (fun k v acc ->
-        acc ^ Sym.show k ^ ": " ^ (*String_core.string_of_value*) string_of_int v ^ "\n"
-      ) m ""
+  | None -> "top"
+  | Some env ->
+    (* TODO/NOTE: ignoring non scalar terms *)
+    show_abs env.env_scalar
 
-let test = ref 0
+let absterm_of_action env = function
+  | Create _ ->
+    assert false
+  | Store0 (_, _, p_pe, v_pe, _) ->
+    assert false
+  | Kill _ ->
+    (* TODO *)
+    ATunit
+  | _ -> assert false
+
+let rec absterm_of_texpr env = function
+  | TEsym x ->
+    let var = Apron.Var.of_string (Sym.show x) in
+    ATexpr (Apron.Texpr1.var env var)
+  | TEval v ->
+    begin match v with
+      | Vobject (OVinteger i)
+      | Vloaded (LVspecified (OVinteger i)) ->
+        let n = Ocaml_mem.case_integer_value i
+          (fun n -> Apron.Coeff.s_of_int (N.to_int n))
+          (fun _ -> assert false)
+        in
+        ATexpr (Apron.Texpr1.cst env n)
+      | _ ->
+        assert false
+    end
+  | TEcall (Sym (Symbol.Symbol (_, _, Some "catch_exceptional_condition")), [_; te])
+  | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
+  | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
+    ->
+    absterm_of_texpr env te
+  | TEcall (Sym sym, _) ->
+    print_endline @@ Sym.show sym;
+    assert false
+  | TEcall _ ->
+    assert false
+  | TEundef _ ->
+    assert false
+  | TEctor (ctor, tes) ->
+    begin match ctor, tes with
+      | Ctuple, _ ->
+        ATtuple (List.map (absterm_of_texpr env) tes)
+      | Cspecified, [te] ->
+        absterm_of_texpr env te
+      | _ ->
+        assert false
+    end
+  | TEop (bop, te1, te2) ->
+    let t1 = absterm_of_texpr env te1 in
+    let t2 = absterm_of_texpr env te2 in
+    begin match t1, t2 with
+    | ATexpr e1, ATexpr e2 ->
+      let bop = match bop with
+        | OpAdd -> Apron.Texpr1.Add
+        | OpSub -> Apron.Texpr1.Sub
+        | OpMul -> Apron.Texpr1.Mul
+        | OpDiv -> Apron.Texpr1.Div
+        | OpRem_t -> Apron.Texpr1.Mod
+        | OpRem_f -> Apron.Texpr1.Mod (* TODO *)
+        | _ -> assert false
+      in
+      ATexpr (Apron.Texpr1.binop bop e1 e2 Apron.Texpr1.Int Apron.Texpr1.Rnd)
+    end
+  | TEaction (Paction (_, Action (_, _, act))) ->
+    absterm_of_action env act
+  | _ ->
+    assert false
+
+let rec match_pattern pat te =
+  match pat, te with
+  | Pattern (_, CaseBase (None, _)), _
+  | Pattern (_, CaseBase (Some _, _)), _ ->
+    true
+  | Pattern (_, CaseCtor (Cspecified, [pat])), te ->
+    match_pattern pat te
+  | Pattern (_, CaseCtor (Ctuple, pats)), TEctor (Ctuple, tes) ->
+    if List.length pats = List.length tes then
+      List.for_all (fun (pat, te) -> match_pattern pat te)
+        @@ List.combine pats tes
+    else
+      false
+  | _ -> false
 
 let apply psh he st_arr =
   print_endline "APPLYING";
@@ -47,50 +199,91 @@ let apply psh he st_arr =
   match tr with
   | Tskip -> abs
   | Tcond c ->
-    print_endline "TODO: cond";
-    abs
+    let rec aux = function
+      | Cmatch (pat, te) -> match_pattern pat te
+      | Cnot c -> not @@ aux c
+      | _ ->
+        print_endline "TODO: cond";
+        assert false
+    in
+    if aux c then
+      abs
+    else
+      bot ()
   | Tcall _ ->
     print_endline "TODO: call";
     abs
   | Tassign (pat, te) ->
     (* TODO: evaluate te *)
     (* HACK: pat *)
-    let open Core in
-    match pat with
-    | Pattern (_, CaseBase (None, _)) -> abs
-    | Pattern (_, CaseBase (Some sym, _)) ->
-      incr test;
-      begin match abs with
-        | Bot -> S (SMap.add sym !test SMap.empty)
-        | S m -> S (SMap.add sym !test m)
-        | _ -> print_endline "returned top in apply"; Top
-      end
-    | _ -> print_endline "TODO"; abs
-
-
-(*
-  (*| Tskip -> print_endline "skip"; ((), Top) (*st_arr.(0)) *) *)
-  | _ -> incr test; ((), S !test)
-   *)
+    let rec aux env = function
+      | Pattern (_, CaseBase (None, _)), _ -> env
+      | Pattern (_, CaseBase (Some sym, _)), e ->
+        let env0 = Apron.Abstract1.env env.env_scalar in
+        begin match e with
+          | ATexpr e ->
+            (* TODO: this is poor *)
+            (* TODO: I dont' know how to deal with the apron env *)
+            let var = Apron.Var.of_string (Sym.show sym) in
+            print_endline @@ "adding var: " ^ Sym.show sym;
+            print_endline @@ show_abs env.env_scalar;
+            let env1 = Apron.Environment.add env0 [| var |] [||] in
+            (* TODO: add dest *)
+            let env_scalar =
+              Apron.Abstract1.change_environment man env.env_scalar env1
+                true in
+            let env_scalar =
+              Apron.Abstract1.assign_texpr man env_scalar var e None
+            in { env with env_scalar }
+          | _ ->
+            assert false
+        end
+      | Pattern (_, CaseCtor (Cspecified, [pat])), e ->
+        aux env (pat, e)
+      | Pattern (_, CaseCtor (Ctuple, pats)), ATtuple es ->
+        List.fold_left aux env @@ List.combine pats es
+      | _, _ -> print_endline "TODO"; env
+    in
+    begin match abs with
+      | None ->
+        print_endline "returned top in apply"; None
+      | Some env ->
+        let env0 = Apron.Abstract1.env env.env_scalar in
+        begin match te with
+          | TEundef _ -> top
+          | _ ->
+            let e = absterm_of_texpr env0 te in
+            Some (aux env (pat, e))
+        end
+    end
 
 let make_fpmanager psh =
   let open Fixpoint in
-  { bottom = (fun vtx -> print_endline "checking bot"; print_endline ("vtx: " ^ string_of_int vtx); Bot);
+  (* let info = PSHGraph.info psh in
+  let env_map = create_env_map psh in *)
+  { bottom = (fun vtx ->
+        bot ());
     canonical = (fun vtx abs -> ());
     is_bottom = (fun vtx abs ->
-        print_endline "is bottom";
-        abs = Bot);
-    is_leq = (fun vtx abs1 abs2 ->
-        print_endline "is_leq"; 
-        match abs1, abs2 with
-        | Bot, _ -> true
-        | S n, S m -> n <= m
-        | _, _ -> false);
-    join = (fun vst abs1 abs2 -> join abs1 abs2);
-    join_list = (fun vtx abs_s -> List.fold_left join Bot abs_s);
+        match abs with
+        | Some env ->
+          Apron.Abstract1.is_bottom man env.env_scalar
+        | None ->
+          false
+      );
+    is_leq = (fun vtx -> is_leq);
+    join = (fun vst -> join);
+    join_list = (fun vtx abs_s -> List.fold_left join (bot ()) abs_s);
     widening = (fun vtx abs1 abs2 -> assert false);
     odiff = None;
-    abstract_init = (fun vtx -> Bot);
+    abstract_init = (fun vtx ->
+      let env0 = Apron.Environment.make [||] [||] in
+      let env =
+        { env_scalar = Apron.Abstract1.top man env0;
+          env_term = SMap.empty;
+        }
+      in Some env
+      );
     arc_init = (fun edge -> ());
     apply = (fun he st_arr -> ((), apply psh he st_arr));
     print_vertex = (fun _ _ -> ());
@@ -110,10 +303,6 @@ let make_fpmanager psh =
     dot_hedge = (fun _ _ -> ());
     dot_attrvertex = (fun _ _ -> ());
     dot_attrhedge = (fun _ _ -> ());
-  }
-
-type info =
-  { mutable counter: int;
   }
 
 let add_vertex (graph) (torg) (transfer) (dest) : unit =
@@ -156,6 +345,7 @@ let convert_graph g =
   psh
 
 let solve core =
+  try (
   let cfg = Cfg.mk_main ~sequentialise:true core in
   let psh = convert_graph cfg in
   let fpman = make_fpmanager psh in
@@ -170,3 +360,7 @@ let solve core =
     (fun fmt _ tf -> ())
     Format.err_formatter
     fp
+  ) with
+    | Apron.Manager.Error e ->
+      print_endline e.Apron.Manager.msg;
+      assert false
