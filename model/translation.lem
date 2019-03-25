@@ -1519,6 +1519,7 @@ else
             let ptr_obj_sym_pe     = Caux.mk_sym_pe ptr_obj_sym     in
             let integer_sym_pe     = Caux.mk_sym_pe integer_sym     in
             let integer_obj_sym_pe = Caux.mk_sym_pe integer_obj_sym in
+            E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (res_sym, res_sym_pat, res_sym_pe) ->
             E.return $
               C.Expr [Annot.Astd "§6.5.6"] (
                 C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat ptr_sym     (C.BTy_loaded C.OTy_pointer)
@@ -1535,6 +1536,7 @@ if Global.has_switch Global.SW_strict_pointer_arith || Global.has_switch_pnvi_ae
 else
                         Caux.mk_pure_e $ Caux.mk_specified_pe (
                           Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_neg_pe integer_obj_sym_pe)
+                        ) )
 (* end if *)
                         ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
                           , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (sub)")) ) ]
