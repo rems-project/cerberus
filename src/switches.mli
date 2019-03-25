@@ -22,3 +22,7 @@ val get_switches: unit -> cerb_switch list
 val has_switch: cerb_switch -> bool
 val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
 val set: string list -> unit
+
+
+(* TODO: this is because of Lem (see model/Global.lem) *)
+val has_switch_pnvi_ae_udi: unit -> bool

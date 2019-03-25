@@ -648,8 +648,35 @@ module Concrete : Memory = struct
         | None ->
             (false, false) in
     IntMap.fold (fun alloc_id alloc acc ->
-      match acc with
-        | `NoAlloc ->
+      let new_opt =
+        if    not (List.mem alloc_id st.dead_allocations)
+           && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+          (* PNVI-ae, PNVI-ae-udi *)
+          if require_exposed && alloc.taint <> `Exposed then
+            None
+          else
+            Some alloc_id
+        else if allow_one_past then
+          (* PNVI-ae-udi *)
+          if    N.equal addr (N.add alloc.base alloc.size)
+             && not (require_exposed && alloc.taint <> `Exposed) then
+            Some alloc_id
+          else
+            None
+        else
+          None in
+      match acc, new_opt with
+        | _, None ->
+            acc
+        | `NoAlloc, Some alloc_id ->
+            `SingleAlloc alloc_id
+        | `SingleAlloc alloc_id1, Some alloc_id2 ->
+            `DoubleAlloc (alloc_id1, alloc_id2)
+        | `DoubleAlloc _, Some _ ->
+            (* TODO: I guess there is an invariant that the new_alloc
+               is either of the `DoubleAlloc *)
+            acc
+(*
             if    not (List.mem alloc_id st.dead_allocations)
                && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
               (* PNVI-ae, PNVI-ae-udi *)
@@ -680,8 +707,7 @@ module Concrete : Memory = struct
                 `NoAlloc
             else
               `NoAlloc
-        | _ ->
-            acc
+*)
     ) st.allocations `NoAlloc
   
   (* PNVI-ae *)
