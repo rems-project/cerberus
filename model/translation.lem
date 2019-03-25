@@ -1405,13 +1405,14 @@ else
                     [ ( Caux.mk_tuple_pat [ Caux.mk_specified_pat (Caux.mk_sym_pat ptr_obj_sym (C.BTy_object C.OTy_pointer))
                                           ; Caux.mk_specified_pat (Caux.mk_sym_pat integer_obj_sym (C.BTy_object C.OTy_integer)) ]
                       , (* Both operand are specified *)
-if Global.has_switch Global.SW_strict_pointer_arith then
+if Global.has_switch Global.SW_strict_pointer_arith || Global.has_switch_pnvi_ae_udi () then
                         Caux.mk_wseq_e res_sym_pat
                           (C.Expr [] (C.Ememop Mem_common.PtrArrayShift [ptr_obj_sym_pe; Caux.mk_ail_ctype_pe ref_ty; integer_obj_sym_pe]))
                           (Caux.mk_pure_e (Caux.mk_specified_pe res_sym_pe))
 else
                         Caux.mk_pure_e $ Caux.mk_specified_pe (
                           Caux.mk_std_pe "§6.5.6#8, sentences 2-3" $ Caux.mk_array_shift ptr_obj_sym_pe (Caux.proj_ctype ref_ty) integer_obj_sym_pe
+(* end if *)
                         ) )
                     ; ( Caux.mk_empty_pat (C.BTy_tuple [C.BTy_loaded C.OTy_pointer; C.BTy_loaded C.OTy_integer])
                       , Caux.mk_pure_e (Caux.mk_undef_pe loc (Undefined.DUMMY "unspecified array_shift (addr)")) ) ]
