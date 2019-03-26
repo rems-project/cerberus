@@ -152,6 +152,7 @@ ocaml_native:
 	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native && \
 	  cp -L main_.native cerberus; \
 	fi
+# ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha,camllib,apron,apron.boxD,apron,apron.octD -libs str main_.native && \
 
 ocaml: ocaml_native libc
 
