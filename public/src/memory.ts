@@ -2,8 +2,13 @@ import _ from 'lodash'
 import { Range } from './location'
 import * as u from './util'
 
+export type Provenance =
+  { kind: 'prov', value: number } |
+  { kind: 'iota', value: number } |
+  { kind: 'empty' }
+
 export type Byte = {
-  prov: number | null
+  prov: Provenance
   offset: number | null
   value: number | null
 }
@@ -12,7 +17,7 @@ export type Value = {
   size: number
   path: string[]      // access path in case of struct/unions
   value: string
-  prov: number | null
+  prov: Provenance
   type: string | null // if no type, then it is padding
   bytes: Byte [] | null
 }
@@ -32,6 +37,7 @@ export type Allocation = {
   size: number      // type size
   dyn: boolean      // is dynamic memory (created by malloc)
   values: Value[]   // INV: this should be a singleton in scalar types
+  exposed: boolean  // exposed mechanism
 }
 
 export type Map = {[key:string]: Allocation}
@@ -68,11 +74,10 @@ export function ispadding (v: Value) {
 
 export function isInvalidPointer(pvi: boolean, v: Value) {
   if (v.bytes == null) return false
-  if (pvi) return v.prov == null
+  if (pvi) return v.prov.kind == 'empty'
   return !_.reduce(v.bytes, (acc, b, i) => acc && b.offset != null && b.offset == i, true)
 
 }
-
 function char_code (s:string) {
   const x = parseInt(s)
   // printable characters
@@ -96,9 +101,20 @@ export function mk_string (values: Value []): string {
   return `"${values.reduce((acc, v) => acc + char_code(v.value), '')}"`
 }
 
+export function string_of_provenance (p: Provenance): string {
+  const idOf = (i: number): string => {
+    return (i >= 26 ? idOf((i / 26 >> 0) - 1) : '') + 'abcdefghijklmnopqrstuvwxyz'[i % 26 >> 0];
+  }
+  switch (p.kind) {
+    case 'prov': return `@${p.value}`
+    case 'iota': return `@${idOf(p.value)} = ?`
+    case 'empty': return '@empty'
+  }
+}
+
 /** string of memory value  */
 export function string_of_value (v: Value, track_prov: boolean): string {
-  const with_prov = () => v.prov != undefined ? `@${v.prov}, ` : `@empty, `
+  const with_prov = () => string_of_provenance(v.prov) + ', '
   const value = (x:string) => track_prov ? with_prov() + x : x
   if (v.value === 'unspecified')
     return v.value
