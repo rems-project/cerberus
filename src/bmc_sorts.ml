@@ -130,22 +130,30 @@ end
 
 module CtypeSort = struct
   open Z3.Datatype
-  let mk_sort : Sort.sort = mk_sort_s g_ctx "Ctype"
-    [ mk_ctor "void_ty"
-    ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
-        [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
-        [] [] []
-        (* TODO: recursive data types can not be nested in other types
-         * such as tuple  *)
-        (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
-    ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
-        [mk_sym "_array_ty_n"]
-        [Some integer_sort] [0]
-    ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
-        [mk_sym "_struct_ty"]
-        [Some integer_sort] [0]
+  let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
+    [ "Ctype" ]
+    [[ mk_ctor "void_ty"
+     ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
+         [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
+     ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
+         [] [] []
+         (* TODO (deprecated): recursive data types can not be nested in other types
+          * such as tuple
+          * TODO: define as recursive type!*)
+         (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
+     ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
+         [mk_sym "_array_ty_n"]
+         [Some integer_sort] [0]
+     ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
+         [mk_sym "_struct_ty"]
+         [Some integer_sort] [0]
+     ; mk_constructor_s g_ctx "atomic_ty" (mk_sym "is_atomic_ty")
+         [mk_sym "_atomic_ty"]
+         [None] [0]
+     ]
     ]
+
+  let mk_sort = List.nth mk_sort_helper 0
 
   let rec mk_expr (ctype: ctype) : Expr.expr =
     let fdecls = get_constructors mk_sort in
@@ -163,7 +171,7 @@ module CtypeSort = struct
     | Struct0 (Symbol (_, n, _))->
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | Atomic0 ty ->
-        assert false
+        Expr.mk_app g_ctx (List.nth fdecls 5) [mk_expr ty]
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =

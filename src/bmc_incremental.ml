@@ -1230,6 +1230,8 @@ module BmcZ3 = struct
   (* SMT stuff *)
   let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
     let uid = get_id_pexpr pexpr in
+    pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
+    print_endline"";
     (match pe_ with
     | PEsym sym ->
         lookup_sym sym
@@ -1248,24 +1250,28 @@ module BmcZ3 = struct
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
     | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* TODO: Get rid of ImplFunctions *)
-        assert (is_integer_type ctype);
-        return (Pmap.find ctype ImplFunctions.ivmin_map)
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
+        return (Pmap.find raw_ctype ImplFunctions.ivmin_map)
     | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        assert (is_integer_type ctype);
-        return (Pmap.find ctype ImplFunctions.ivmax_map)
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
+        return (Pmap.find raw_ctype ImplFunctions.ivmax_map)
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        if is_pointer_type ctype then
+        let raw_ctype = strip_atomic ctype in
+        if is_pointer_type raw_ctype then
           return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
         else begin
-          assert (is_integer_type ctype);
-          return (Pmap.find ctype ImplFunctions.sizeof_map)
+          assert (is_integer_type raw_ctype);
+          return (Pmap.find raw_ctype ImplFunctions.sizeof_map)
         end
     | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* We can just directly compute the values rather than do it in the
          * roundabout way as in the above *)
-        assert (is_integer_type ctype);
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
         get_file >>= fun file ->
-        return (int_to_z3 (alignof_type ctype file));
+        return (int_to_z3 (alignof_type raw_ctype file));
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -1357,7 +1363,8 @@ module BmcZ3 = struct
     | PEis_integer _ -> assert false
     | PEis_signed _  -> assert false
     | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
-        return (Pmap.find ctype ImplFunctions.is_unsigned_map)
+        let raw_ctype = strip_atomic ctype in
+        return (Pmap.find raw_ctype ImplFunctions.is_unsigned_map)
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
         bmc_debug_print 7 "TODO: PEare_compatible";
@@ -1551,6 +1558,8 @@ module BmcZ3 = struct
 
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
+    pp_to_stdout (Pp_core.Basic.pp_expr expr);
+    print_endline"";
 
     (match expr_ with
     | Epure pe ->
