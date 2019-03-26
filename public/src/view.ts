@@ -191,7 +191,7 @@ export default class View {
         exec_options: {
           libc: true
         },
-        switches: ['no_integer_provenance']
+        switches: ['PNVI']
       },
       interactiveMode: InteractiveMode.Memory,
       interactive: undefined,
@@ -295,7 +295,7 @@ export default class View {
   updateExecutionGraph() {
     if (!this.state.interactive) return
     const graph = this.state.interactive.steps
-    const dotHead = 'digraph Memory { node [shape=box, fontsize=12]; edge [fontsize=10];'
+    const dotHead = 'digraph G { node [shape=box, fontsize=12]; edge [fontsize=10];'
     const nodes = this.state.options.hide_tau
                 ? _.filter(graph.nodes, n => !n.isTau && n.isVisible)
                 : _.filter(graph.nodes, n => n.isVisible)
@@ -362,7 +362,7 @@ export default class View {
       const title =
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
-          <td border="0" colspan="${maxcols}"><b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
+          <td ${alloc.exposed ? 'bgcolor="burlywood1"': ''} border="0" colspan="${maxcols}"><b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
          </tr>`
       let index = 0
       const body = alloc.values.reduce((acc, row) => {
@@ -373,12 +373,12 @@ export default class View {
         const ptr_as_bytes = Memory.ispointer(row) && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
         let value
         if (ptr_as_bytes && row.bytes != null) {
-          const with_prov = (i: number) => row.bytes != null && row.bytes[i].prov != null ? `@${row.bytes[i].prov}` : `@empty`
+          const with_prov = (i: number) => row.bytes != null ? Memory.string_of_provenance(row.bytes[i].prov) : '@empty'
           const with_offset = (i: number) => row.bytes != null && row.bytes[i].offset != null ? `${row.bytes[i].offset}` : '-'
           value = `<table cellpadding="0" cellspacing="0" border="0">`
           value += `<tr border="1"><td align="left">${pvi ? `${with_prov(0)}, ${toHex(row.bytes[0].value as number)}`
                                              : `${with_offset(0)}: ${toHex(row.bytes[0].value as number)} ${with_prov(0)}`}</td>
-                  <td align="center" rowspan="${row.bytes.length}">${(row.prov != undefined ? `@${row.prov}, ` : `@empty, `) + toHex(parseInt(row.value))}</td></tr>`
+                  <td align="center" rowspan="${row.bytes.length}">${Memory.string_of_provenance(row.prov)}, ${toHex(parseInt(row.value))}</td></tr>`
             for (let j = 1; j < row.bytes.length; j++) {
               value += `<tr><td align="left" border="1" sides="t">${pvi ? `${with_prov(j)}, ${toHex(row.bytes[j].value)}`
                                                            : ` ${with_offset(j)}: ${toHex(row.bytes[j].value)} ${with_prov(j)}`}</td></tr>`
@@ -421,7 +421,7 @@ export default class View {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
           const p: Pointer = {
             from: from,
-            to: row.prov,
+            to: (row.prov.kind === 'prov' ? row.prov.value : null),
             addr: parseInt(row.value),
             intptr: Memory.isintptr(row),
             invalid: Memory.isInvalidPointer(pvi, row)
