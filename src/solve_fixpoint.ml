@@ -1,136 +1,220 @@
 open Cfg
 open Core
 
+open Apron
+
 module N = Nat_big_num
 
+module type STATE_MONAD =
+sig
+  type state
+  type 'a t
+  val return: 'a -> 'a t
+  val bind: 'a t -> ('a -> 'b t) -> 'b t
+  val (>>=): 'a t -> ('a -> 'b t) -> 'b t
+  val run: 'a t -> state -> 'a * state
+  val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
+  val get: state t
+  val put: state -> unit t
+  val update: (state -> state) -> unit t
+  val modify: (state -> 'a * state) -> 'a t
+end
+
+module MakeStateMonad(S: sig type t end): STATE_MONAD with type state = S.t =
+struct
+  type state = S.t
+  type 'a t = state -> 'a * state
+  let return x = fun s -> (x, s)
+  let bind m f = fun s ->
+    let (x, s') = m s in f x s'
+  let (>>=) = bind
+  let run m = m
+  let sequence ms =
+    let m =
+      List.fold_left (fun acc m ->
+          m   >>= fun x ->
+          acc >>= fun xs ->
+          return (x::xs)
+        ) (return []) ms
+    in fun s ->
+      let (xs, s') = m s in
+      (List.rev xs, s')
+  let mapM f xs = sequence (List.map f xs)
+  let get = fun s -> (s, s)
+  let put s = fun _ -> ((), s)
+  let update f = fun s -> ((), f s)
+  let modify f = fun s -> f s
+end
+
+(* TODO: delete this later *)
 type info =
   { mutable counter: int;
   }
 
+let empty_env = Environment.make [||] [||]
 
-
-(* TODO: we fix box (intervals) at the moment *)
-let man = Box.manager_alloc ()
-
-type absterm =
+type absvalue =
   | ATunit
   | ATtrue
   | ATfalse
   | ATctype of Core_ctype.ctype0 (* C type as value *)
-  | ATtuple of absterm list
-        (*
-  | ATint of Ocaml_mem.integer_value
+  | ATtuple of absvalue list
+  | ATexpr of Texpr1.t
+  | ATpointer of int (* TODO: naive pointer at the moment *)
   | ATsym of Symbol.sym
-           *)
-  | ATexpr of Apron.Texpr1.t
   | ATunspec
   | ATtop
 
-type env =
-  { env_scalar: Box.t Apron.Abstract1.t; (* pointer, integers and floats *)
-    env_term: absterm SMap.t;
+type absstate =
+  { abs_scalar: Box.t Abstract1.t; (* integers and floats *)
+    abs_term: absvalue SMap.t;
+    mem_counter: int;
+    man: Box.t Manager.t;
   }
 
-let show_abs env =
-    Apron.Abstract1.print Format.str_formatter env;
-    Format.flush_str_formatter ()
+module StateMonad = MakeStateMonad(struct type t = absstate option end)
+open StateMonad
 
-type absstate = env option
+let get_env = get >>= function
+  | None -> assert false
+  | Some s -> return @@ Abstract1.env s.abs_scalar
 
-let is_leq s1 s2 =
-  print_endline "is_leq";
+let add_env man sym e = update @@ function
+  | None -> None
+  | Some s ->
+    let var = Var.of_string (Sym.show sym) in
+    let env0 = Abstract1.env s.abs_scalar in
+    let env =
+      if Environment.mem_var env0 var then env0
+      else Environment.add env0 [| var |] [||]
+    in
+    let abs_scalar =
+      Abstract1.assign_texpr man
+        (Abstract1.change_environment man s.abs_scalar env true)
+        var e None
+    in Some { s with abs_scalar }
+
+let add_env_pointed man n e = update @@ function
+  | None -> None
+  | Some s ->
+    let var = Var.of_string ("@" ^ string_of_int n) in
+    let env0 = Abstract1.env s.abs_scalar in
+    let env =
+      if Environment.mem_var env0 var then env0
+      else Environment.add env0 [| var |] [||]
+    in
+    let abs_scalar =
+      Abstract1.assign_texpr man
+        (Abstract1.change_environment man s.abs_scalar env true)
+        var e None
+    in Some { s with abs_scalar }
+
+
+let show_abs_scalar st =
+  Abstract1.print Format.str_formatter st;
+  Format.flush_str_formatter ()
+
+let show_absstate = function
+  | None -> "top"
+  | Some s ->
+    (* TODO/NOTE: ignoring non scalar terms *)
+    show_abs_scalar s.abs_scalar
+    (*
+    SMap.fold (fun k v acc -> 
+        acc ^ Sym.show k ^ "; \n")
+      s.abs_term
+      (show_abs_scalar s.abs_scalar)
+       *)
+
+(* Lift states to a common environment *)
+let lift_common_env man (s1, s2) =
+  let env1 = Abstract1.env s1.abs_scalar in
+  let env2 = Abstract1.env s2.abs_scalar in
+  match Environment.compare env1 env2 with
+  | -2 -> (* incomparable environments *)
+    assert false
+  | -1 ->
+    let abs_scalar = Abstract1.change_environment man s1.abs_scalar env2 true
+    in ({ s1 with abs_scalar }, s2)
+  | 0 -> (* equal *)
+    (s1, s2)
+  | 1 ->
+    let abs_scalar = Abstract1.change_environment man s2.abs_scalar env1 true
+    in (s1, { s2 with abs_scalar })
+  | _ ->
+    assert false
+
+let is_leq man s1 s2 =
   match s1, s2 with
   | _, None -> true
   | None, _ -> false
-  | Some env1, Some env2 ->
+  | Some s1, Some s2 ->
     (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
-    (*
-    print_endline "leq";
-    print_string "1: ";
-    print_endline @@ show_abs env1.env_scalar;
-    print_string "2: ";
-    print_endline @@ show_abs env2.env_scalar;
-       *)
-    let abs_env =
-      match Apron.Environment.compare (Apron.Abstract1.env env1.env_scalar)
-              (Apron.Abstract1.env env2.env_scalar) with
-      | -2 -> assert false
-      | -1 -> Apron.Abstract1.env env2.env_scalar
-      | 0
-      | 1 -> Apron.Abstract1.env env1.env_scalar
-      | _ -> assert false
-    in
-    let env_scalar1
-      = Apron.Abstract1.change_environment man env1.env_scalar abs_env true in
-    let env_scalar2
-      = Apron.Abstract1.change_environment man env2.env_scalar abs_env true in
-    Apron.Abstract1.is_leq man env_scalar1 env_scalar2
+    let (s1, s2) = lift_common_env man (s1, s2) in
+    Abstract1.is_leq man s1.abs_scalar s2.abs_scalar
 
-let join s1 s2 =
-  print_endline "join";
+let join man s1 s2 =
   match s1, s2 with
   | _, None | None, _ -> None
-  | Some env1, Some env2 ->
+  | Some s1, Some s2 ->
     (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
-    let abs_env =
-      match Apron.Environment.compare (Apron.Abstract1.env env1.env_scalar)
-              (Apron.Abstract1.env env2.env_scalar) with
-      | -2 -> assert false
-      | -1 -> Apron.Abstract1.env env2.env_scalar
-      | 0
-      | 1 -> Apron.Abstract1.env env1.env_scalar
-      | _ -> assert false
-    in
-    let env_scalar1
-      = Apron.Abstract1.change_environment man env1.env_scalar abs_env true in
-    let env_scalar2
-      = Apron.Abstract1.change_environment man env2.env_scalar abs_env true in
-    let env =
-      { env_scalar = Apron.Abstract1.join man env_scalar1 env_scalar2;
-        env_term = env1.env_term;
+    let (s1, s2) = lift_common_env man (s1, s2) in
+    Some { abs_scalar = Abstract1.join man s1.abs_scalar s2.abs_scalar;
+           abs_term =
+             SMap.union (fun k v _ -> Some v) (* TODO *)
+               s1.abs_term s2.abs_term;
+           mem_counter = max s1.mem_counter s2.mem_counter;
+           man = s1.man;
       }
-    in Some env
 
-let bot () =
-  let env0 = Apron.Environment.make [||] [||] in
-  let env =
-    { env_scalar = Apron.Abstract1.bottom man env0;
-      env_term = SMap.empty;
-    }
-  in Some env
+let bot man =
+  Some { abs_scalar = Abstract1.bottom man empty_env;
+         abs_term = SMap.empty;
+         mem_counter = 0;
+         man;
+       }
 
 let top =
   None
 
-let show_absstate = function
-  | None -> "top"
-  | Some env ->
-    (* TODO/NOTE: ignoring non scalar terms *)
-    show_abs env.env_scalar
+let init_state man =
+  Some { abs_scalar = Abstract1.top man empty_env;
+         abs_term = SMap.empty;
+         mem_counter = 0;
+         man;
+       }
 
-let absterm_of_action env = function
-  | Create _ ->
-    assert false
-  | Store0 (_, _, p_pe, v_pe, _) ->
-    assert false
-  | Kill _ ->
-    (* TODO *)
-    ATunit
-  | _ -> assert false
+let is_bottom man = function
+  | Some s -> Abstract1.is_bottom man s.abs_scalar
+  | None -> false
 
-let rec absterm_of_texpr env = function
+
+let rec absvalue_of_texpr = function
   | TEsym x ->
-    let var = Apron.Var.of_string (Sym.show x) in
-    ATexpr (Apron.Texpr1.var env var)
+    get >>= (function
+        | None -> assert false
+        | Some s ->
+          if SMap.is_empty s.abs_term then print_endline "is_empty";
+          begin match SMap.find_opt x s.abs_term with
+            | Some _ ->
+              return @@ ATsym x
+            | None ->
+              let env = Abstract1.env s.abs_scalar in
+              let var = Var.of_string (Sym.show x) in
+              return @@ ATexpr (Texpr1.var env var)
+          end)
   | TEval v ->
+    get_env >>= fun env ->
     begin match v with
       | Vobject (OVinteger i)
       | Vloaded (LVspecified (OVinteger i)) ->
         let n = Ocaml_mem.case_integer_value i
-          (fun n -> Apron.Coeff.s_of_int (N.to_int n))
+          (fun n -> Coeff.s_of_int (N.to_int n))
           (fun _ -> assert false)
         in
-        ATexpr (Apron.Texpr1.cst env n)
+        return @@ ATexpr (Texpr1.cst env n)
+      | Vunit ->
+        return @@ ATunit
       | _ ->
         assert false
     end
@@ -138,7 +222,7 @@ let rec absterm_of_texpr env = function
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
     ->
-    absterm_of_texpr env te
+    absvalue_of_texpr te
   | TEcall (Sym sym, _) ->
     print_endline @@ Sym.show sym;
     assert false
@@ -149,32 +233,101 @@ let rec absterm_of_texpr env = function
   | TEctor (ctor, tes) ->
     begin match ctor, tes with
       | Ctuple, _ ->
-        ATtuple (List.map (absterm_of_texpr env) tes)
+        mapM absvalue_of_texpr tes >>= fun tes' ->
+        return @@ ATtuple tes'
       | Cspecified, [te] ->
-        absterm_of_texpr env te
+        absvalue_of_texpr te
       | _ ->
         assert false
     end
   | TEop (bop, te1, te2) ->
-    let t1 = absterm_of_texpr env te1 in
-    let t2 = absterm_of_texpr env te2 in
+    absvalue_of_texpr te1 >>= fun t1 ->
+    absvalue_of_texpr te2 >>= fun t2 ->
     begin match t1, t2 with
     | ATexpr e1, ATexpr e2 ->
       let bop = match bop with
-        | OpAdd -> Apron.Texpr1.Add
-        | OpSub -> Apron.Texpr1.Sub
-        | OpMul -> Apron.Texpr1.Mul
-        | OpDiv -> Apron.Texpr1.Div
-        | OpRem_t -> Apron.Texpr1.Mod
-        | OpRem_f -> Apron.Texpr1.Mod (* TODO *)
+        | OpAdd -> Texpr1.Add
+        | OpSub -> Texpr1.Sub
+        | OpMul -> Texpr1.Mul
+        | OpDiv -> Texpr1.Div
+        | OpRem_t -> Texpr1.Mod
+        | OpRem_f -> Texpr1.Mod (* TODO *)
         | _ -> assert false
       in
-      ATexpr (Apron.Texpr1.binop bop e1 e2 Apron.Texpr1.Int Apron.Texpr1.Rnd)
+      return @@ ATexpr (Texpr1.binop bop e1 e2 Texpr1.Int Texpr1.Rnd)
     end
-  | TEaction (Paction (_, Action (_, _, act))) ->
-    absterm_of_action env act
+  | TEaction act ->
+    absvalue_of_action act
   | _ ->
     assert false
+
+and absvalue_of_action = function
+  | TAcreate ->
+    modify (function
+        | None ->
+          (ATpointer 0, None)
+        | Some s ->
+          (ATpointer s.mem_counter,
+           Some { s with mem_counter = s.mem_counter + 1 })
+      )
+  | TAalloc ->
+    assert false
+  | TAstore (te_p, te_v) ->
+    absvalue_of_texpr te_p >>= fun av_p ->
+    absvalue_of_texpr te_v >>= fun av_v ->
+    begin match av_p with
+      | ATsym sym ->
+        let rec aux sym =
+          get >>= function
+          | None -> assert false
+          | Some s ->
+            match SMap.find_opt sym s.abs_term with
+            | None -> assert false
+            | Some (ATpointer p) ->
+              begin match av_v with
+                | ATexpr e ->
+                  add_env_pointed s.man p e >>= fun () ->
+                  return @@ ATunit
+                | _ ->
+                  assert false
+              end
+            | Some (ATsym sym) ->
+              aux sym
+            | _ -> assert false
+        in aux sym
+      | ATpointer p ->
+        assert false
+      | _ ->
+        assert false
+    end
+  | TAload te_p ->
+    absvalue_of_texpr te_p >>= fun av_p ->
+    get >>= begin function
+      | None -> assert false
+      | Some s ->
+        match av_p with
+        | ATsym sym ->
+          let rec aux sym =
+            match SMap.find_opt sym s.abs_term with
+            | None -> assert false
+            | Some (ATpointer p) ->
+              let env = Abstract1.env s.abs_scalar in
+              let var = Var.of_string ("@" ^ string_of_int p) in
+              return @@ ATexpr (Texpr1.var env var)
+            | Some (ATsym sym) ->
+              aux sym
+            | _ -> assert false
+          in aux sym
+        | ATpointer p ->
+          let env = Abstract1.env s.abs_scalar in
+          let var = Var.of_string ("@" ^ string_of_int p) in
+          return @@ ATexpr (Texpr1.var env var)
+        | _ ->
+          assert false
+    end
+  | TAkill p ->
+    (* TODO *)
+    return ATunit
 
 let rec match_pattern pat te =
   match pat, te with
@@ -191,13 +344,49 @@ let rec match_pattern pat te =
       false
   | _ -> false
 
-let apply psh he st_arr =
-  print_endline "APPLYING";
+let assign man pat te =
+  let rec aux v = function
+    | Pattern (_, CaseBase (None, _)) ->
+      return ()
+    | Pattern (_, CaseBase (Some sym, _)) ->
+      begin match v with
+        | ATexpr e -> add_env man sym e
+        | _ ->
+          print_endline @@ "adding term: " ^ Sym.show sym;
+          update (function
+            | None -> None
+            | Some s ->
+              print_endline "ok";
+              Some { s with abs_term = SMap.add sym v s.abs_term }
+          )
+      end
+    | Pattern (_, CaseCtor (Cspecified, [pat])) ->
+      aux v pat
+    | Pattern (_, CaseCtor (Ctuple, pats)) ->
+      begin match v with
+        | ATtuple es ->
+          List.fold_left (fun acc (e, pat) ->
+              acc >>= fun () ->
+              aux e pat
+            ) (return ()) (List.combine es pats) >>= fun _ ->
+          return ()
+        | _ ->
+          assert false
+      end
+    | _ -> assert false
+  in match te with
+  | TEundef _ -> update (fun _ -> top)
+  | _ ->
+    absvalue_of_texpr te >>= fun v ->
+    aux v pat
+
+let apply man psh he st_arr =
   let tr = PSHGraph.attrhedge psh he in
-  let abs = st_arr.(0) in
+  let st_opt = st_arr.(0) in
   print_endline @@ Cfg.show_transfer tr;
+  print_endline @@ show_absstate st_opt;
   match tr with
-  | Tskip -> abs
+  | Tskip -> st_opt
   | Tcond c ->
     let rec aux = function
       | Cmatch (pat, te) -> match_pattern pat te
@@ -206,86 +395,32 @@ let apply psh he st_arr =
         print_endline "TODO: cond";
         assert false
     in
-    if aux c then
-      abs
-    else
-      bot ()
+    if aux c then st_opt else bot man
   | Tcall _ ->
     print_endline "TODO: call";
-    abs
+    st_opt
   | Tassign (pat, te) ->
-    (* TODO: evaluate te *)
-    (* HACK: pat *)
-    let rec aux env = function
-      | Pattern (_, CaseBase (None, _)), _ -> env
-      | Pattern (_, CaseBase (Some sym, _)), e ->
-        let env0 = Apron.Abstract1.env env.env_scalar in
-        begin match e with
-          | ATexpr e ->
-            (* TODO: this is poor *)
-            (* TODO: I dont' know how to deal with the apron env *)
-            let var = Apron.Var.of_string (Sym.show sym) in
-            print_endline @@ "adding var: " ^ Sym.show sym;
-            print_endline @@ show_abs env.env_scalar;
-            let env1 = Apron.Environment.add env0 [| var |] [||] in
-            (* TODO: add dest *)
-            let env_scalar =
-              Apron.Abstract1.change_environment man env.env_scalar env1
-                true in
-            let env_scalar =
-              Apron.Abstract1.assign_texpr man env_scalar var e None
-            in { env with env_scalar }
-          | _ ->
-            assert false
-        end
-      | Pattern (_, CaseCtor (Cspecified, [pat])), e ->
-        aux env (pat, e)
-      | Pattern (_, CaseCtor (Ctuple, pats)), ATtuple es ->
-        List.fold_left aux env @@ List.combine pats es
-      | _, _ -> print_endline "TODO"; env
-    in
-    begin match abs with
-      | None ->
-        print_endline "returned top in apply"; None
-      | Some env ->
-        let env0 = Apron.Abstract1.env env.env_scalar in
-        begin match te with
-          | TEundef _ -> top
-          | _ ->
-            let e = absterm_of_texpr env0 te in
-            Some (aux env (pat, e))
-        end
+    let s = snd @@ run (assign man pat te) st_opt in
+    begin match s with
+      | None -> assert false
+      | Some s ->
+        (if SMap.is_empty s.abs_term then print_endline "empty" else
+           print_endline "non_empty"); Some s
     end
 
-let make_fpmanager psh =
+let make_fpmanager man psh =
   let open Fixpoint in
-  (* let info = PSHGraph.info psh in
-  let env_map = create_env_map psh in *)
-  { bottom = (fun vtx ->
-        bot ());
+  { bottom = (fun vtx -> bot man);
     canonical = (fun vtx abs -> ());
-    is_bottom = (fun vtx abs ->
-        match abs with
-        | Some env ->
-          Apron.Abstract1.is_bottom man env.env_scalar
-        | None ->
-          false
-      );
-    is_leq = (fun vtx -> is_leq);
-    join = (fun vst -> join);
-    join_list = (fun vtx abs_s -> List.fold_left join (bot ()) abs_s);
+    is_bottom = (fun vtx -> is_bottom man);
+    is_leq = (fun vtx -> is_leq man);
+    join = (fun vst -> join man);
+    join_list = (fun vtx abs_s -> List.fold_left (join man) (bot man) abs_s);
     widening = (fun vtx abs1 abs2 -> assert false);
     odiff = None;
-    abstract_init = (fun vtx ->
-      let env0 = Apron.Environment.make [||] [||] in
-      let env =
-        { env_scalar = Apron.Abstract1.top man env0;
-          env_term = SMap.empty;
-        }
-      in Some env
-      );
+    abstract_init = (fun vtx -> init_state man);
     arc_init = (fun edge -> ());
-    apply = (fun he st_arr -> ((), apply psh he st_arr));
+    apply = (fun he st_arr -> ((), apply man psh he st_arr));
     print_vertex = (fun _ _ -> ());
     print_hedge = (fun _ _ -> ());
     print_abstract = (fun _ _ -> ());
@@ -304,6 +439,8 @@ let make_fpmanager psh =
     dot_attrvertex = (fun _ _ -> ());
     dot_attrhedge = (fun _ _ -> ());
   }
+
+(* TODO: this should be gone when I eliminate PSH stuff *)
 
 let add_vertex (graph) (torg) (transfer) (dest) : unit =
   Array.iter
@@ -346,10 +483,12 @@ let convert_graph g =
 
 let solve core =
   try (
+  (* TODO: we fix box (intervals) at the moment *)
+  let man = Box.manager_alloc () in
   let cfg = Cfg.mk_main ~sequentialise:true core in
   let psh = convert_graph cfg in
-  let fpman = make_fpmanager psh in
-  let init = PSette.singleton (Cfg.Graph.compare_vertex) 1 in
+  let fpman = make_fpmanager man psh in
+  let init = Pset.singleton (Cfg.Graph.compare_vertex) 1 in
   let fp_strategy = Fixpoint.make_strategy_default ~vertex_dummy:(-1) ~hedge_dummy:(-1) psh init in
   let fp = Fixpoint.analysis_std fpman psh init fp_strategy in
   let open Format in
@@ -361,6 +500,6 @@ let solve core =
     Format.err_formatter
     fp
   ) with
-    | Apron.Manager.Error e ->
-      print_endline e.Apron.Manager.msg;
+    | Manager.Error e ->
+      print_endline e.Manager.msg;
       assert false

@@ -220,7 +220,7 @@ let rec all_sequences = function
 type ('a, 'bty) texpr =
   | TEsym of Symbol.sym
   | TEval of Symbol.sym generic_value
-  | TEaction of ('a, 'bty, Symbol.sym) generic_paction
+  | TEaction of ('a, 'bty) taction
   | TEmemop of Mem_common.memop * ('a, 'bty) texpr list
   | TEimpl of Implementation_.implementation_constant
   | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
@@ -241,6 +241,13 @@ type ('a, 'bty) texpr =
   | TEis_signed of ('a, 'bty) texpr
   | TEis_unsigned of ('a, 'bty) texpr
   | TEare_compatible of ('a, 'bty) texpr * ('a, 'bty) texpr
+
+and ('a, 'bty) taction =
+  | TAcreate
+  | TAalloc
+  | TAkill of ('a, 'bty) texpr
+  | TAstore of ('a, 'bty) texpr * ('a, 'bty) texpr
+  | TAload of ('a, 'bty) texpr
 
 (* Conditionals guards *)
 type ('a, 'bty) cond =
@@ -350,8 +357,8 @@ let rec show_texpr te =
     Sym.show x
   | TEval v ->
     String_core.string_of_value v
-  | TEaction (Paction (p, (Action (_, bs, act)))) ->
-    polarity p (String_core.string_of_action act)
+  | TEaction act ->
+    show_taction act
   | TEmemop (memop, tes) ->
     "memop" ^ parens (show_memop memop ^ ", " ^ comma_list self tes)
   | TEimpl i ->
@@ -411,6 +418,13 @@ let rec show_texpr te =
     "is_unsigned" ^ parens (self te)
   | TEare_compatible (te1, te2) ->
     "are_compatible" ^ parens (self te1 ^ ", " ^ self te2)
+
+and show_taction = function
+  | TAcreate -> "create"
+  | TAalloc -> "alloc"
+  | TAstore (p, v) -> "store" ^ parens (show_texpr p ^ ", " ^ show_texpr v)
+  | TAload p -> "load" ^ parens (show_texpr p)
+  | TAkill p -> "kill" ^ parens (show_texpr p)
 
 let rec show_cond = function
   | Csym x -> Sym.show x
@@ -780,6 +794,36 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       let te = TEare_compatible (TEsym sym1, TEsym sym2) in
       add (v2, out_v) (Tassign (in_pat, te))
 
+let add_action (in_v, out_v) in_pat (Action (_, _, act_)) =
+  let open GraphM in
+  let add (v1, v2) t = add_edge (v1, v2) t >>= fun () -> return `OK in
+  match act_ with
+  | Create _ ->
+    add (in_v, out_v) (Tassign (in_pat, TEaction TAcreate))
+  | CreateReadOnly _ ->
+    add (in_v, out_v) (Tassign (in_pat, TEaction TAcreate))
+  | Alloc0 _ ->
+    add (in_v, out_v) (Tassign (in_pat, TEaction TAalloc))
+  | Kill (_, pe) ->
+    let te = match texpr_of_pexpr pe with
+      | Some te -> te
+      | None -> assert false
+    in
+    add (in_v, out_v) (Tassign (in_pat, TEaction (TAkill te)))
+  | Store0 (_, _, pe_p, pe_v, _) ->
+    let te_p, te_v = match texpr_of_pexpr pe_p, texpr_of_pexpr pe_v with
+      | Some te_p, Some te_v -> te_p, te_v
+      | _ -> assert false
+    in
+    add (in_v, out_v) (Tassign (in_pat, TEaction (TAstore (te_p, te_v))))
+  | Load0 (_, pe, _) ->
+    let te = match texpr_of_pexpr pe with
+      | Some te -> te
+      | None -> assert false
+    in
+    add (in_v, out_v) (Tassign (in_pat, TEaction (TAload te)))
+  | _ -> assert false (* unsupported *)
+
 
 (* It adds an expression to the control flow graph
  * in_v = the input vertex
@@ -805,8 +849,8 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     let tes = List.map (fun sym -> TEsym sym) @@ List.rev rev_syms in
     let te  = TEmemop (memop, tes) in
     add (in_v, out_v) (Tassign (in_pat, te))
-  | Eaction pact ->
-    add (in_v, out_v) (Tassign (in_pat, TEaction pact))
+  | Eaction (Paction (_, act)) ->
+    add_action (in_v, out_v) in_pat act
   | Ecase (pe, pat_es) ->
     let te = match texpr_of_pexpr pe with
       | Some te -> te

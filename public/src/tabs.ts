@@ -86,23 +86,23 @@ class SvgGraph extends Tab {
     super (name, ee)
     const controls = $('<ul class="toolbar menu"></ul>')
     //const zoomIn = $('<li class="menu-item btn inline">Zoom In</li>')
-    const zoomIn = $(`<li class="menu-item btn inline" style="padding:0;">
+    const zoomIn = $(`<li title="Zoom in" class="menu-item btn inline" style="padding:0;">
     <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
     width="20" height="20"
     viewBox="0 0 192 192"
     style=" fill:#000000;"><g fill="none" fill-rule="nonzero" stroke="none" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10" stroke-dasharray="" stroke-dashoffset="0" font-family="none" font-weight="none" font-size="none" text-anchor="none" style="mix-blend-mode: normal"><path d="M0,192v-192h192v192z" fill="none"></path><g fill="#ecf0f1"><path d="M83.2,19.2c-35.27042,0 -64,28.72958 -64,64c0,35.27042 28.72958,64 64,64c15.33765,0 29.42326,-5.44649 40.4625,-14.4875l38.2125,38.2125c1.60523,1.67194 3.98891,2.34544 6.23174,1.76076c2.24283,-0.58468 3.99434,-2.33619 4.57902,-4.57902c0.58468,-2.24283 -0.08882,-4.62651 -1.76076,-6.23174l-38.2125,-38.2125c9.04101,-11.03924 14.4875,-25.12485 14.4875,-40.4625c0,-35.27042 -28.72958,-64 -64,-64zM83.2,32c28.35279,0 51.2,22.84722 51.2,51.2c0,28.35279 -22.84721,51.2 -51.2,51.2c-28.35278,0 -51.2,-22.84721 -51.2,-51.2c0,-28.35278 22.84722,-51.2 51.2,-51.2zM83.1,51.1125c-3.5297,0.05517 -6.34834,2.9577 -6.3,6.4875v19.2h-19.2c-2.30807,-0.03264 -4.45492,1.18 -5.61848,3.17359c-1.16356,1.99358 -1.16356,4.45924 0,6.45283c1.16356,1.99358 3.31041,3.20623 5.61848,3.17359h19.2v19.2c-0.03264,2.30807 1.18,4.45492 3.17359,5.61848c1.99358,1.16356 4.45924,1.16356 6.45283,0c1.99358,-1.16356 3.20623,-3.31041 3.17359,-5.61848v-19.2h19.2c2.30807,0.03264 4.45492,-1.18 5.61848,-3.17359c1.16356,-1.99358 1.16356,-4.45924 0,-6.45283c-1.16356,-1.99358 -3.31041,-3.20623 -5.61848,-3.17359h-19.2v-19.2c0.02369,-1.72992 -0.65393,-3.39575 -1.87846,-4.61793c-1.22453,-1.22218 -2.89166,-1.89659 -4.62154,-1.86957z"></path></g></g></svg>
     </li>`)
-    const zoomOut = $(`<li class="menu-item btn inline" style="padding:0;">
+    const zoomOut = $(`<li title="Zoom out" class="menu-item btn inline" style="padding:0;">
     <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
     width="20" height="20"
     viewBox="0 0 192 192"
     style=" fill:#000000;"><g fill="none" fill-rule="nonzero" stroke="none" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10" stroke-dasharray="" stroke-dashoffset="0" font-family="none" font-weight="none" font-size="none" text-anchor="none" style="mix-blend-mode: normal"><path d="M0,192v-192h192v192z" fill="none"></path><g fill="#ecf0f1"><path d="M83.2,19.2c-35.27042,0 -64,28.72958 -64,64c0,35.27042 28.72958,64 64,64c15.33765,0 29.42326,-5.44649 40.4625,-14.4875l38.2125,38.2125c1.60523,1.67194 3.98891,2.34544 6.23174,1.76076c2.24283,-0.58468 3.99434,-2.33619 4.57902,-4.57902c0.58468,-2.24283 -0.08882,-4.62651 -1.76076,-6.23174l-38.2125,-38.2125c9.04101,-11.03924 14.4875,-25.12485 14.4875,-40.4625c0,-35.27042 -28.72958,-64 -64,-64zM83.2,32c28.35279,0 51.2,22.84722 51.2,51.2c0,28.35279 -22.84721,51.2 -51.2,51.2c-28.35278,0 -51.2,-22.84721 -51.2,-51.2c0,-28.35278 22.84722,-51.2 51.2,-51.2zM57.6,76.8c-2.30807,-0.03264 -4.45492,1.18 -5.61848,3.17359c-1.16356,1.99358 -1.16356,4.45924 0,6.45283c1.16356,1.99358 3.31041,3.20623 5.61848,3.17359h51.2c2.30807,0.03264 4.45492,-1.18 5.61848,-3.17359c1.16356,-1.99358 1.16356,-4.45924 0,-6.45283c-1.16356,-1.99358 -3.31041,-3.20623 -5.61848,-3.17359z"></path></g></g></svg>
     </li>`)
-    const range = $('<input class="range" type="range" step="0.05" min="0.1" max="2">')
+    const range = $('<input title="Zoom" class="range" type="range" step="0.05" min="0.1" max="2">')
     const range_wrapper = $('<li style="width: calc(100% - 300px) class="menu-item inline"</li>')
     range_wrapper.append(range)
     //const reset = $('<div class="menu-item reset btn inline">Reset</div>')
-    const reset = $(`<li class="menu-item reset btn" style="padding:0;">
+    const reset = $(`<li title="Reset position" class="menu-item reset btn" style="padding:0;">
     <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
     width="20" height="20"
     viewBox="0 0 192 192"
@@ -272,7 +272,7 @@ class Memory extends SvgGraph {
   constructor(ee: EventEmitter) {
     super('Memory', ee)
     //this.fit = $('<div class="btn menu-item inline clicked">Fit</div>')
-    this.fit = $(`<li class="btn menu-item inline clicked" style="padding:0;">
+    this.fit = $(`<li title="Fit in the container" class="btn menu-item inline clicked" style="padding:0;">
     <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
     width="20" height="20"
     viewBox="0 0 192 192"
@@ -287,7 +287,7 @@ class Memory extends SvgGraph {
     download_options.append(html)
     download_options.append(ps)
     download_options.append(svg)
-    const download_btn = $(`<li class="btn menu-item inline contain-subitems-no-arrow" style="padding:0;">
+    const download_btn = $(`<li title="Download" class="btn menu-item inline contain-subitems-no-arrow" style="padding:0;">
     <svg class="menu-icon" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px"
     width="20" height="20"
     viewBox="0 0 192 192"
