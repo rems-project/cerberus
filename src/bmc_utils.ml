@@ -161,6 +161,13 @@ let is_core_ptr_bty (bTy: core_base_type) =
   | BTy_object OTy_pointer | BTy_loaded OTy_pointer -> true
   | _ -> false
 
+(* TODO: mini-hack to strip atomic *)
+let strip_atomic = function ctype ->
+  match ctype with
+  | Core_ctype.Atomic0 ty -> ty
+  | ty -> ty
+
+
 (* ========== HELPER FUNCTIONS ============= *)
 let rec list_take k l =
   if k > 0 then
