@@ -2558,9 +2558,13 @@ let combine_prov prov1 prov2 =
       `Assoc [("kind", `String "iota");
               ("value", `Int (N.to_int i));
               ("iota", match IntMap.find_opt i st.iota_map with
-                | None -> `Null (* it should be impossible *)
-                | Some (`Single n) -> `String (N.to_string n)
-                | Some (`Double (n1, n2)) -> `String (N.to_string n1 ^ ", " ^ N.to_string n2))]
+                | None ->
+                  `Null (* it should be impossible *)
+                | Some (`Single n) ->
+                  `List [`Int (N.to_int n)]
+                | Some (`Double (n1, n2)) ->
+                  `List [`Int (N.to_int n1);
+                         `Int (N.to_int n2)])]
     | _ ->
       `Assoc [("kind", `String "empty")]
 

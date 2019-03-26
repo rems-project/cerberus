@@ -4,7 +4,7 @@ import * as u from './util'
 
 export type Provenance =
   { kind: 'prov', value: number } |
-  { kind: 'iota', value: number, iota: string } |
+  { kind: 'iota', value: number, iota: number[] } |
   { kind: 'empty' }
 
 export type Byte = {

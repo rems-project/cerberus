@@ -408,20 +408,30 @@ export default class View {
     }
     type Pointer = {
       from: string /*id path*/,
-      to: number | null /*prov*/,
+      to: number[] /*prov*/,
       addr: number /*pointer*/,
       intptr: boolean,
       invalid: boolean
     }
     const getPointersInAlloc = (alloc: Memory.Allocation) => {
       return alloc.values.reduce((acc: Pointer[], row) => {
+        const provs = (p: Memory.Provenance) => {
+          switch (p.kind) {
+            case 'prov':
+              return [p.value]
+            case 'iota':
+              return p.iota
+            case 'empty':
+              return []
+          }
+        }
         if (Memory.isfunptr(row))
           return acc
         if (Memory.pointsto(row) && Memory.pointsto(row) && row.value != 'unspecified') {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
           const p: Pointer = {
             from: from,
-            to: (row.prov.kind === 'prov' ? row.prov.value : null),
+            to: provs (row.prov),
             addr: parseInt(row.value),
             intptr: Memory.isintptr(row),
             invalid: Memory.isInvalidPointer(pvi, row)
@@ -435,7 +445,7 @@ export default class View {
     const createEdges = (ps: Pointer[], mem: Memory.State) => {
       const color = (p: Pointer, target: Memory.Allocation) => {
         // correct provenance
-        if (target.id == p.to) 
+        if (_.includes(p.to, target.id))
           return 'black'
         // intptr in PNVI
         if (!pvi && p.intptr) 
