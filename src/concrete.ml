@@ -1773,35 +1773,37 @@ module Concrete : Memory = struct
           end
   
   (* Following §6.5.3.3, footnote 102) *)
-  let validForDeref_ptrval ref_ty = function
-    | PV (_, PVnull _)
-    | PV (_, PVfunction _) ->
-        return false
-    | PV (Prov_device, PVconcrete _) as ptrval ->
-        isWellAligned_ptrval ref_ty ptrval
-    
-    (* PNVI-ae-udi *)
-    | PV (Prov_symbolic iota, PVconcrete addr) ->
-        failwith "TODO(iota): validForDeref iota"
-
-    | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
-        is_dead alloc_id >>= begin function
-          | true ->
-              return false
-          | false ->
-              isWellAligned_ptrval ref_ty ptrval
-(*
-              get_allocation alloc_id >>= fun alloc ->
-              begin match alloc.ty with
-                | Some ty ->
-                    isWellAligned_ptrval ty ptrval
-                | None ->
-                    return true
-              end
-*)
-        end
-    | PV (Prov_none, _) ->
-        return false
+  let validForDeref_ptrval ref_ty ptrval =
+    let do_test alloc_id =
+      is_dead alloc_id >>= function
+        | true ->
+            return false
+        | false ->
+            isWellAligned_ptrval ref_ty ptrval in
+    match ptrval with
+      | PV (_, PVnull _)
+      | PV (_, PVfunction _) ->
+          return false
+      | PV (Prov_device, PVconcrete _) as ptrval ->
+          isWellAligned_ptrval ref_ty ptrval
+      
+      (* PNVI-ae-udi *)
+      | PV (Prov_symbolic iota, PVconcrete addr) ->
+          lookup_iota iota >>= begin function
+            | `Single alloc_id ->
+                do_test alloc_id
+            | `Double (alloc_id1, alloc_id2) ->
+                do_test alloc_id1 >>= begin function
+                  | false ->
+                      do_test alloc_id2
+                  | true ->
+                      return true
+                end
+          end
+      | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
+          do_test alloc_id
+      | PV (Prov_none, _) ->
+          return false
 
   
   let ptrcast_ival _ ref_ty (IV (prov, n)) =
