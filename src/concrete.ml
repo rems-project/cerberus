@@ -379,7 +379,7 @@ module Concrete : Memory = struct
   type mem_state = {
     next_alloc_id: storage_instance_id;
     next_iota: symbolic_storage_instance_id;
-    next_address: address;
+    last_address: address;
     allocations: allocation IntMap.t;
     (* this is only for PNVI-ae-udi *)
     iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
@@ -398,7 +398,7 @@ module Concrete : Memory = struct
     next_iota= N.zero;
     allocations= IntMap.empty;
     iota_map= IntMap.empty;
-    next_address= Nat_big_num.(succ zero);
+    last_address= N.of_int 0xFFFFFFFF; (* TODO: this is a random impl-def choice *)
     funptrmap = IntMap.empty;
     varargs = IntMap.empty;
     next_varargs_id = N.zero;
@@ -648,8 +648,35 @@ module Concrete : Memory = struct
         | None ->
             (false, false) in
     IntMap.fold (fun alloc_id alloc acc ->
-      match acc with
-        | `NoAlloc ->
+      let new_opt =
+        if    not (List.mem alloc_id st.dead_allocations)
+           && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
+          (* PNVI-ae, PNVI-ae-udi *)
+          if require_exposed && alloc.taint <> `Exposed then
+            None
+          else
+            Some alloc_id
+        else if allow_one_past then
+          (* PNVI-ae-udi *)
+          if    N.equal addr (N.add alloc.base alloc.size)
+             && not (require_exposed && alloc.taint <> `Exposed) then
+            Some alloc_id
+          else
+            None
+        else
+          None in
+      match acc, new_opt with
+        | _, None ->
+            acc
+        | `NoAlloc, Some alloc_id ->
+            `SingleAlloc alloc_id
+        | `SingleAlloc alloc_id1, Some alloc_id2 ->
+            `DoubleAlloc (alloc_id1, alloc_id2)
+        | `DoubleAlloc _, Some _ ->
+            (* TODO: I guess there is an invariant that the new_alloc
+               is either of the `DoubleAlloc *)
+            acc
+(*
             if    not (List.mem alloc_id st.dead_allocations)
                && N.less_equal alloc.base addr && N.less addr (N.add alloc.base alloc.size) then
               (* PNVI-ae, PNVI-ae-udi *)
@@ -680,8 +707,7 @@ module Concrete : Memory = struct
                 `NoAlloc
             else
               `NoAlloc
-        | _ ->
-            acc
+*)
     ) st.allocations `NoAlloc
   
   (* PNVI-ae *)
@@ -1020,51 +1046,61 @@ module Concrete : Memory = struct
     prerr_endline "}"
   (* END DEBUG *)
   
+  
+  (* TODO: this module should be made parametric in this function (i.e. the allocator should be impl-def) *)
+  let allocator (size: N.num) (align: N.num) : (storage_instance_id * address) memM =
+    get >>= fun st ->
+    let alloc_id = st.next_alloc_id in
+    begin
+      let open N in
+      let z = sub st.last_address size in
+      let (q,m) = quomod z align in
+      let z' = sub z (if less q zero then negate m else m) in
+      if less_equal z' zero then
+        fail (MerrOther "Concrete.allocator: failed (out of memory)")
+      else
+        return z'
+    end >>= fun addr ->
+    put { st with
+      next_alloc_id= Nat_big_num.succ alloc_id;
+      last_used= Some alloc_id;
+      last_address= addr
+    } >>= fun () ->
+    return (alloc_id, addr)
+  
+  
   let allocate_object tid pref (IV (_, align)) ty init_opt : pointer_value memM =
 (*    print_bytemap "ENTERING ALLOC_STATIC" >>= fun () -> *)
     let size = N.of_int (sizeof ty) in
-    modify begin fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(
-        let m = modulus st.next_address align in
-        if equal m zero then st.next_address else add st.next_address (sub align m)
-      ) in
-      
-      Debug_ocaml.print_debug 1 [] (fun () ->
-        "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
-        " --> alloc_id= " ^ N.to_string alloc_id ^
-        ", size= " ^ N.to_string size ^
-        ", addr= " ^ N.to_string addr
-      );
-      
-      match init_opt with
-        | None ->
-            let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false; taint= `Unexposed} in
-            ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { st with
-                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id alloc st.allocations;
-                  last_used= Some st.next_alloc_id;
-                  next_address= Nat_big_num.add addr size } )
-        | Some mval ->
-            let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
-            (* TODO: factorise this with do_store inside Concrete.store *)
+    allocator size align >>= fun (alloc_id, addr) ->
+    Debug_ocaml.print_debug 1 [] (fun () ->
+      "STATIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^
+      " --> alloc_id= " ^ N.to_string alloc_id ^
+      ", size= " ^ N.to_string size ^
+      ", addr= " ^ N.to_string addr
+    );
+    begin match init_opt with
+      | None ->
+          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= false; taint= `Unexposed} in
+          update (fun st ->
+            { st with allocations= IntMap.add alloc_id alloc st.allocations; }
+          )
+      | Some mval ->
+          let alloc = {prefix= pref; base= addr; size= size; ty= Some ty; is_readonly= true; taint= `Unexposed} in
+          (* TODO: factorise this with do_store inside Concrete.store *)
+          update (fun st ->
             let (funptrmap, pre_bs) = repr st.funptrmap mval in
             let bs = List.mapi (fun i b -> (Nat_big_num.add addr (Nat_big_num.of_int i), b)) pre_bs in
-            ( PV (Prov_some alloc_id, PVconcrete addr)
-            , { st with
-                  next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-                  allocations= IntMap.add alloc_id alloc st.allocations;
-                  next_address= Nat_big_num.add addr size;
-                  last_used= Some st.next_alloc_id;
-                  bytemap=
-                    List.fold_left (fun acc (addr, b) ->
-                      IntMap.add addr b acc
-                    ) st.bytemap bs;
-                  funptrmap= funptrmap;
-              } )
-    end
-
+            { st with
+                allocations= IntMap.add alloc_id alloc st.allocations;
+                bytemap=
+                  List.fold_left (fun acc (addr, b) ->
+                    IntMap.add addr b acc
+                  ) st.bytemap bs;
+                funptrmap= funptrmap; }
+          )
+    end >>= fun () ->
+    return (PV (Prov_some alloc_id, PVconcrete addr))
   
   let update_prefix (pref, mval) =
     match mval with
@@ -1137,24 +1173,21 @@ module Concrete : Memory = struct
       return None
 
   let allocate_region tid pref (IV (_, align_n)) (IV (_, size_n)) =
-    modify (fun st ->
-      let alloc_id = st.next_alloc_id in
-      let addr = Nat_big_num.(add st.next_address (sub align_n (modulus st.next_address align_n))) in
-      Debug_ocaml.print_debug 1 [] (fun () ->
-        "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
-        " --> alloc_id= " ^ N.to_string alloc_id ^
-        ", size= " ^ N.to_string size_n ^
-        ", addr= " ^ N.to_string addr
-      );
-      let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false; taint= `Unexposed} in
-      ( PV (Prov_some st.next_alloc_id, PVconcrete addr)
-      , { st with
-            next_alloc_id= Nat_big_num.succ st.next_alloc_id;
-            allocations= IntMap.add alloc_id alloc st.allocations;
-            next_address= Nat_big_num.add addr size_n;
-            last_used= Some st.next_alloc_id;
-            dynamic_addrs= addr :: st.dynamic_addrs })
-    )
+    allocator size_n align_n >>= fun (alloc_id, addr) ->
+    Debug_ocaml.print_debug 1 [] (fun () ->
+      "DYNAMIC ALLOC - pref: " ^ String_symbol.string_of_prefix pref ^ (* pref will always be Core *)
+      " --> alloc_id= " ^ N.to_string alloc_id ^
+      ", size= " ^ N.to_string size_n ^
+      ", addr= " ^ N.to_string addr
+    );
+    (* TODO: why aren't we using the argument pref? *)
+    let alloc = {prefix= Symbol.PrefMalloc; base= addr; size= size_n; ty= None; is_readonly= false; taint= `Unexposed} in
+    update (fun st ->
+      { st with
+          allocations= IntMap.add alloc_id alloc st.allocations;
+          dynamic_addrs= addr :: st.dynamic_addrs }
+    ) >>= fun () ->
+    return (PV (Prov_some alloc_id, PVconcrete addr))
   
   (* zap (make unspecified) any pointer in the memory with provenance matching a
      given allocation id *)

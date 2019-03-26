@@ -82,3 +82,8 @@ let set strs =
       | None ->
           prerr_endline ("failed to parse switch `" ^ String.escaped str ^ "' --> ignoring.")
   ) strs
+
+
+(* TODO: this is because of Lem (see model/Global.lem) *)
+let has_switch_pnvi_ae_udi () =
+  List.mem (SW_PNVI `AE_UDI) !internal_ref
