@@ -2548,31 +2548,40 @@ let combine_prov prov1 prov2 =
     | Symbol.PrefSource (_, _) ->
       failwith "serialise_prefix: PrefSource with more than one scope"
 
-  let serialise_prov = function
-    | Prov_some n -> `Assoc [("kind", `String "prov"); ("value", `Int (N.to_int n))]
-    | Prov_symbolic i -> `Assoc [("kind", `String "iota"); ("value", `Int (N.to_int i))]
-    | _ -> `Assoc [("kind", `String "empty")]
+  let serialise_prov st = function
+    | Prov_some n ->
+      `Assoc [("kind", `String "prov");
+              ("value", `Int (N.to_int n))]
+    | Prov_symbolic i ->
+      `Assoc [("kind", `String "iota");
+              ("value", `Int (N.to_int i));
+              ("iota", match IntMap.find_opt i st.iota_map with
+                | None -> `Null (* it should be impossible *)
+                | Some (`Single n) -> `String (N.to_string n)
+                | Some (`Double (n1, n2)) -> `String (N.to_string n1 ^ ", " ^ N.to_string n2))]
+    | _ ->
+      `Assoc [("kind", `String "empty")]
 
   let serialise_map f m : Json.json =
     let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_ui_values (v:ui_value) : Json.json =
+  let serialise_ui_values st (v:ui_value) : Json.json =
     `Assoc [("size", `Int v.size);
             ("path", `List (List.map Json.of_string v.path));
             ("value", `String v.value);
-            ("prov", serialise_prov v.prov);
+            ("prov", serialise_prov st v.prov);
             ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
             ("bytes", Json.of_option (fun bs -> `List (List.map AbsByte.to_json bs)) v.bytes); ]
 
-  let serialise_ui_alloc (a:ui_alloc) : Json.json =
+  let serialise_ui_alloc st (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
             ("base", `Int a.base);
             ("prefix", serialise_prefix a.prefix);
             ("dyn", `Bool a.dyn);
             ("type", `String (String_core_ctype.string_of_ctype a.typ));
             ("size", `Int a.size);
-            ("values", `List (List.map serialise_ui_values a.values));
+            ("values", `List (List.map (serialise_ui_values st) a.values));
             ("exposed", `Bool a.exposed);
            ]
 
@@ -2585,7 +2594,7 @@ let combine_prov prov1 prov2 =
         | Symbol.PrefMalloc -> true
         | _ -> false
       ) st.allocations in
-    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);
+    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc st @@ mk_ui_alloc st id alloc) allocs);
             ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
 
 end

@@ -4,7 +4,7 @@ import * as u from './util'
 
 export type Provenance =
   { kind: 'prov', value: number } |
-  { kind: 'iota', value: number } |
+  { kind: 'iota', value: number, iota: string } |
   { kind: 'empty' }
 
 export type Byte = {
@@ -107,7 +107,7 @@ export function string_of_provenance (p: Provenance): string {
   }
   switch (p.kind) {
     case 'prov': return `@${p.value}`
-    case 'iota': return `@${idOf(p.value)} = ?`
+    case 'iota': return `@${idOf(p.value)}={${p.iota}}`
     case 'empty': return '@empty'
   }
 }
