@@ -341,7 +341,15 @@ module Concrete : Memory = struct
               let prov_acc' = match prov_acc, b.prov with
                 | `VALID (Prov_some alloc_id1), Prov_some alloc_id2 when alloc_id1 <> alloc_id2 ->
                     `INVALID
+                | `VALID (Prov_symbolic iota1), Prov_symbolic iota2 when iota1 <> iota2 ->
+                    `INVALID
+                | `VALID (Prov_symbolic iota1), Prov_some alloc_id' ->
+                    failwith "TODO(iota) split_bytes 1"
+                | `VALID (Prov_some alloc_id), Prov_symbolic iota ->
+                    failwith "TODO(iota) split_bytes 2"
                 | `VALID Prov_none, (Prov_some _ as new_prov) ->
+                    `VALID new_prov
+                | `VALID Prov_none, (Prov_symbolic _ as new_prov) ->
                     `VALID new_prov
                 | prev_acc, _ ->
                     prev_acc in
@@ -468,7 +476,7 @@ module Concrete : Memory = struct
           (* !^ ("<funptr:" ^ Symbol.instance_Show_Show_Symbol_sym_dict.show_method sym ^ ">") *)
       | PVconcrete n ->
           (* TODO: remove this idiotic hack when Lem's nat_big_num library expose "format" *)
-          P.parens (!^ ("@" ^ string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n))))
+          P.parens (!^ (string_of_provenance prov) ^^ P.comma ^^^ !^ ("0x" ^ Z.format "%x" (Z.of_string (Nat_big_num.to_string n))))
   
   let pp_integer_value (IV (prov, n)) =
     if !Debug_ocaml.debug_level >= 3 then
@@ -1819,58 +1827,34 @@ module Concrete : Memory = struct
         r
       else
         N.sub r dlt in
-    match sw_opt with
-      | Some (Switches.SW_PNVI variant) ->
-          (* TODO: device memory? *)
-          if N.equal n N.zero then
-            return (PV (Prov_none, PVnull ref_ty))
-          else
-            get >>= fun st ->
-            begin match find_overlaping st n with
-              | `NoAlloc ->
-                  return Prov_none
-              | `SingleAlloc alloc_id ->
-                  return (Prov_some alloc_id)
-              | `DoubleAlloc alloc_ids ->
-                  add_iota alloc_ids >>= fun iota ->
-                  return (Prov_symbolic iota)
-            end >>= fun prov ->
+    if is_PNVI () then
+      (* TODO: device memory? *)
+      if N.equal n N.zero then
+        return (PV (Prov_none, PVnull ref_ty))
+      else
+        get >>= fun st ->
+        begin match find_overlaping st n with
+          | `NoAlloc ->
+              return Prov_none
+          | `SingleAlloc alloc_id ->
+              return (Prov_some alloc_id)
+          | `DoubleAlloc alloc_ids ->
+              add_iota alloc_ids >>= fun iota ->
+              return (Prov_symbolic iota)
+        end >>= fun prov ->
+        return (PV (prov, PVconcrete n))
+    else
+      match prov with
+        | Prov_none ->
+            (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
+            if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
+              return (PV (Prov_device, PVconcrete n))
+            else if N.equal n N.zero then
+              return (PV (Prov_none, PVnull ref_ty))
+            else
+              return (PV (Prov_none, PVconcrete n))
+        | _ ->
             return (PV (prov, PVconcrete n))
-(*
-      | Some (Switches.SW_no_integer_provenance variant) ->
-          (* TODO: device memory? *)
-          if N.equal n N.zero then
-            return (PV (Prov_none, PVnull ref_ty))
-          else
-            get >>= fun st ->
-            (match find_overlaping st n with
-              | None ->
-                  if variant = 0 then
-                    return Prov_none
-                  else if variant = 1 then
-                    fail MerrPtrFromInt
-                  else
-                    (* TODO: assuming variant = 4 *)
-                    failwith "Concrete pnvi variant 4: return Prov_wildcard"
-              | Some alloc_id ->
-                  return (Prov_some alloc_id)) >>= fun prov ->
-            return (PV (prov, PVconcrete n))
-*)
-      | Some _ ->
-          assert false
-      | None ->
-          begin match prov with
-            | Prov_none ->
-                (* TODO: check (in particular is that ok to only allow device pointers when there is no provenance? *)
-                if List.exists (fun (min, max) -> N.less_equal min n && N.less_equal n max) device_ranges then
-                  return (PV (Prov_device, PVconcrete n))
-                else if N.equal n N.zero then
-                  return (PV (Prov_none, PVnull ref_ty))
-                else
-                  return (PV (Prov_none, PVconcrete n))
-            | _ ->
-                return (PV (prov, PVconcrete n))
-          end
   
   let offsetof_ival tag_sym memb_ident =
     let (xs, _) = offsetsof tag_sym in
@@ -1929,13 +1913,13 @@ module Concrete : Memory = struct
           (* TODO: this is duplicated code from the Prov_some case (I'm keeping
              PNVI-ae-udi stuff separated to avoid polluting the
              vanilla PNVI code) *)
+          let shifted_addr = N.add addr offset in
           let precond z =
-            let addr' = N.add addr offset in
             (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
-            if Switches.(has_switch SW_strict_pointer_arith) then
+            if Switches.(has_switch SW_strict_pointer_arith) || is_PNVI () then
               get_allocation z >>= fun alloc ->
-              if    N.less_equal alloc.base addr'
-                 && N.less_equal (N.add addr' (N.of_int (sizeof ty)))
+              if    N.less_equal alloc.base shifted_addr
+                 && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
                                  (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
                 return true
               else
@@ -1950,6 +1934,9 @@ module Concrete : Memory = struct
                     | true ->
                         precond alloc_id2 >>= begin function
                           | true ->
+                              Printf.printf "id1= %s, id2= %s ==> addr= %s\n"
+                                (N.to_string alloc_id1) (N.to_string alloc_id2)
+                                (N.to_string shifted_addr);
                               fail (MerrOther "(PNVI-ae-uid) ambiguous non-zero array shift")
                           | false ->
                               return alloc_id1
@@ -1965,7 +1952,7 @@ module Concrete : Memory = struct
                   update begin fun st ->
                     {st with iota_map= IntMap.add iota (`Single alloc_id) st.iota_map }
                   end >>= fun () ->
-                  return (PV (prov, PVconcrete (N.add addr offset)))
+                  return (PV (prov, PVconcrete shifted_addr))
                 else
                   (* TODO: this is yucky *)
                   precond alloc_id1 >>= begin function
@@ -1979,11 +1966,11 @@ module Concrete : Memory = struct
                               fail (MerrOther "out-of-bound pointer arithmetic")
                         end
                   end >>= fun () ->
-                  return (PV (prov, PVconcrete (N.add addr offset)))
+                  return (PV (prov, PVconcrete shifted_addr))
             | `Single alloc_id ->
                 precond alloc_id >>= begin function
                   | true ->
-                      return (PV (prov, PVconcrete (N.add addr offset)))
+                      return (PV (prov, PVconcrete shifted_addr))
                   | false ->
                       fail (MerrOther "out-of-bound pointer arithmetic")
                 end
@@ -1991,21 +1978,26 @@ module Concrete : Memory = struct
       
       | PV (Prov_some alloc_id, PVconcrete addr) ->
           (* TODO: is it correct to use the "ty" as the lvalue_ty? *)
-          let addr' = N.add addr offset in
-          if Switches.(has_switch SW_strict_pointer_arith) then
+          let shifted_addr = N.add addr offset in
+          if Switches.(has_switch SW_strict_pointer_arith) || is_PNVI () then
             get_allocation alloc_id >>= fun alloc ->
 (*            Printf.printf "addr: %s, (base: %s,  base+size: %s, |ty|: %s" (N.to_string addr); *)
-            if    N.less_equal alloc.base addr'
-               && N.less_equal (N.add addr' (N.of_int (sizeof ty)))
+            if    N.less_equal alloc.base shifted_addr
+               && N.less_equal (N.add shifted_addr (N.of_int (sizeof ty)))
                                (N.add (N.add alloc.base alloc.size) (N.of_int (sizeof ty))) then
-              return (PV (Prov_some alloc_id, PVconcrete addr'))
+              return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
             else
               fail (MerrOther "out-of-bound pointer arithmetic")
           else
-            return (PV (Prov_some alloc_id, PVconcrete addr'))
-      | PV (prov, PVconcrete addr) ->
+            return (PV (Prov_some alloc_id, PVconcrete shifted_addr))
+      | PV (Prov_none, PVconcrete addr) ->
+          if Switches.(has_switch SW_strict_pointer_arith) || is_PNVI () then
+            fail (MerrOther "out-of-bound pointer arithmetic (Prov_none)")
+          else
+            return (PV (Prov_none, PVconcrete (N.add addr offset)))
+      | PV (Prov_device, PVconcrete addr) ->
           (* TODO: check *)
-          return (PV (prov, PVconcrete (N.add addr offset)))
+          return (PV (Prov_device, PVconcrete (N.add addr offset)))
   
   let concurRead_ival ity sym =
     failwith "TODO: concurRead_ival"

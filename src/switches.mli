@@ -24,5 +24,4 @@ val has_switch_pred: (cerb_switch -> bool) -> cerb_switch option
 val set: string list -> unit
 
 
-(* TODO: this is because of Lem (see model/Global.lem) *)
-val has_switch_pnvi_ae_udi: unit -> bool
+val is_PNVI: unit -> bool

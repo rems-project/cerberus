@@ -84,6 +84,5 @@ let set strs =
   ) strs
 
 
-(* TODO: this is because of Lem (see model/Global.lem) *)
-let has_switch_pnvi_ae_udi () =
-  List.mem (SW_PNVI `AE_UDI) !internal_ref
+let is_PNVI () =
+  List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref
