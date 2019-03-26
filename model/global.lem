@@ -48,9 +48,8 @@ declare ocaml target_rep function SW_zap_dead_pointers = `Switches.SW_zap_dead_p
 declare ocaml target_rep function SW_no_integer_provenance = `Switches.SW_no_integer_provenance`
 
 
-(* TODO: the Lem syntax prevents the mapping of polymorphic variant, hence this indirection ... *)
-val has_switch_pnvi_ae_udi: unit -> bool
-declare ocaml target_rep function has_switch_pnvi_ae_udi = `Switches.has_switch_pnvi_ae_udi`
+val is_PNVI: unit -> bool
+declare ocaml target_rep function is_PNVI = `Switches.is_PNVI`
 
 
 val has_switch: cerb_switch -> bool
