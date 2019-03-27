@@ -189,9 +189,9 @@ export default class View {
           sequentialise: true
         },
         exec_options: {
-          libc: true
+          libc: false
         },
-        switches: ['PNVI']
+        switches: ['PNVI_ae_udi']
       },
       interactiveMode: InteractiveMode.Memory,
       interactive: undefined,

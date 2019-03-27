@@ -90,6 +90,13 @@ export class CerberusUI {
       else
         cav19.show()
     })
+    let pnvi_ae_udi_examples: Widget.PNVI_AE_UDI_EXAMPLES | undefined
+    $('#load_pnvi_ae_udi_examples').on('click', () => {
+      if (pnvi_ae_udi_examples === undefined)
+        pnvi_ae_udi_examples = new Widget.PNVI_AE_UDI_EXAMPLES()
+      else
+        pnvi_ae_udi_examples.show()
+    })
 
     // BMC
     $('#bmc').on('click', () => this.bmc ())
