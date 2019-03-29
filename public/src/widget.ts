@@ -123,6 +123,27 @@ export class CAV19 extends Widget {
   }
 }
 
+export class PNVI_AE_UDI_EXAMPLES extends Widget {
+  constructor () {
+    super('Load PNVI-ae-udi examples')
+    util.get('pnvi_ae_udi_examples.json', (data: any) => {
+      const layout = data[0].tests
+      this.body.append($('<h2>'+data[0].name+'</h2>'))
+      for (let i = 0; i < layout.length; i++) {
+        const tests = $('<ul class="tests"></ul>')
+        const link = $(`<a href="#">${layout[i]}</a>`)
+        link.on('click', () => this.fetch_test('defacto', layout[i]))
+        const test = $('<li>')
+        test.append(link)
+        tests.append(test)
+        this.body.append(tests)
+      }
+      this.show()
+    })
+  }
+}
+
+
 
 
 export class GCC2018 extends Widget {

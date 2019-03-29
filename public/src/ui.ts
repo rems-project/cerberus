@@ -90,6 +90,13 @@ export class CerberusUI {
       else
         cav19.show()
     })
+    let pnvi_ae_udi_examples: Widget.PNVI_AE_UDI_EXAMPLES | undefined
+    $('#load_pnvi_ae_udi_examples').on('click', () => {
+      if (pnvi_ae_udi_examples === undefined)
+        pnvi_ae_udi_examples = new Widget.PNVI_AE_UDI_EXAMPLES()
+      else
+        pnvi_ae_udi_examples.show()
+    })
 
     // BMC
     $('#bmc').on('click', () => this.bmc ())
@@ -203,9 +210,7 @@ export class CerberusUI {
       if (e.currentTarget.classList.contains('disabled')) return
       const sw = e.currentTarget.id
       const view = this.getView()
-      _.pull(view.state.model.switches, 'integer_provenance',
-             'no_integer_provenance', 'no_integer_provenance_v1',
-             'no_integer_provenance_v4')
+      _.pull(view.state.model.switches, 'PVI', 'PNVI', 'PNVI_ae', 'PNVI_ae_udi')
       view.state.model.switches.push(sw)
       $('.prov-switch input').prop('checked', false)
       $('#cb_'+sw).prop('checked', true)
