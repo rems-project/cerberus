@@ -2479,7 +2479,7 @@ let combine_prov prov1 prov2 =
     { size: int; (* number of square on the left size of the row *)
       path: string list; (* tag list *)
       value: string;
-      prov: int option;
+      prov: provenance;
       bytes: AbsByte.t list option;
       typ: Core_ctype.ctype0 option;
     }
@@ -2492,6 +2492,7 @@ let combine_prov prov1 prov2 =
       typ: Core_ctype.ctype0;
       size: int;
       values: ui_value list;
+      exposed: bool;
     }
 
   let rec mk_ui_values st bs ty mval : ui_value list =
@@ -2501,25 +2502,23 @@ let combine_prov prov1 prov2 =
          prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
       { size = n; typ = None; path = []; value = v;
-        prov = None; bytes = None } in
+        prov = Prov_none; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified" None None
+      mk_scalar "unspecified" Prov_none None
     | MVinteger (_, IV(prov, n)) ->
-      let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-      mk_scalar (N.to_string n) p None
+      mk_scalar (N.to_string n) prov None
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) None None
+      mk_scalar (string_of_float f) Prov_none None
     | MVpointer (_, PV(prov, pv)) ->
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" None None
+          mk_scalar "NULL" Prov_none None
         | PVconcrete n ->
-          let p = match prov with Prov_some n -> Some (N.to_int n) | _ -> None in
-          mk_scalar (N.to_string n) p (Some bs)
+          mk_scalar (N.to_string n) prov (Some bs)
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) None None
+          mk_scalar (Pp_symbol.to_string_pretty sym) Prov_none None
       end
     | MVarray mvals ->
       begin match ty with
@@ -2563,6 +2562,7 @@ let combine_prov prov1 prov2 =
       typ = ty;
       size = size;
       values = mk_ui_values st bs ty mval;
+      exposed = (alloc.taint = `Exposed);
     }
 
   let serialise_prefix = function
@@ -2599,26 +2599,45 @@ let combine_prov prov1 prov2 =
     | Symbol.PrefSource (_, _) ->
       failwith "serialise_prefix: PrefSource with more than one scope"
 
+  let serialise_prov st = function
+    | Prov_some n ->
+      `Assoc [("kind", `String "prov");
+              ("value", `Int (N.to_int n))]
+    | Prov_symbolic i ->
+      `Assoc [("kind", `String "iota");
+              ("value", `Int (N.to_int i));
+              ("iota", match IntMap.find_opt i st.iota_map with
+                | None ->
+                  `Null (* it should be impossible *)
+                | Some (`Single n) ->
+                  `List [`Int (N.to_int n)]
+                | Some (`Double (n1, n2)) ->
+                  `List [`Int (N.to_int n1);
+                         `Int (N.to_int n2)])]
+    | _ ->
+      `Assoc [("kind", `String "empty")]
+
   let serialise_map f m : Json.json =
     let serialise_entry (k, v) = (N.to_string k, f (N.to_int k) v)
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
-  let serialise_ui_values (v:ui_value) : Json.json =
+  let serialise_ui_values st (v:ui_value) : Json.json =
     `Assoc [("size", `Int v.size);
             ("path", `List (List.map Json.of_string v.path));
             ("value", `String v.value);
-            ("prov", Json.of_option Json.of_int v.prov);
+            ("prov", serialise_prov st v.prov);
             ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
             ("bytes", Json.of_option (fun bs -> `List (List.map AbsByte.to_json bs)) v.bytes); ]
 
-  let serialise_ui_alloc (a:ui_alloc) : Json.json =
+  let serialise_ui_alloc st (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
             ("base", `Int a.base);
             ("prefix", serialise_prefix a.prefix);
             ("dyn", `Bool a.dyn);
             ("type", `String (String_core_ctype.string_of_ctype a.typ));
             ("size", `Int a.size);
-            ("values", `List (List.map serialise_ui_values a.values));
+            ("values", `List (List.map (serialise_ui_values st) a.values));
+            ("exposed", `Bool a.exposed);
            ]
 
   let serialise_mem_state dig (st: mem_state) : Json.json =
@@ -2630,7 +2649,7 @@ let combine_prov prov1 prov2 =
         | Symbol.PrefMalloc -> true
         | _ -> false
       ) st.allocations in
-    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc @@ mk_ui_alloc st id alloc) allocs);
+    `Assoc [("map", serialise_map (fun id alloc -> serialise_ui_alloc st @@ mk_ui_alloc st id alloc) allocs);
             ("last_used", Json.of_option (fun v -> `Int (N.to_int v)) st.last_used);]
 
 end
