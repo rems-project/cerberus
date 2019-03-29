@@ -1,19 +1,24 @@
 type cerb_switch =
-    (* makes the creation of out-of-bound pointer values, Undefined (ISO) *)
-  | SW_strict_pointer_arith
-    (* makes reading from uinitialised memory, Undefined (ISO) *)
+  (* `PERMISSIVE allows out-of-bound pointer values. This the default behaviour
+     for PNVI, whereas `STRICT (making out-of-bound pointer values creations
+     UB, as in ISO) is the default for all variant of PNVI *)
+  | SW_pointer_arith of [ `PERMISSIVE | `STRICT ]
+  
+    (* makes reading from uinitialised memory, Undefined *)
   | SW_strict_reads
+  
     (* makes it an error to free a NULL pointer (stricter than ISO) *)
   | SW_forbid_nullptr_free
   | SW_zap_dead_pointers
   
+    (* make the equality operators strictly base on the numerical value of pointers *)
+  | SW_strict_pointer_equality
+  
     (* make the relational operators UB when relating distinct objects (ISO) *)
   | SW_strict_pointer_relationals
   
-    (* n=0 => basic proposal, other versions supported for now: n= 1, 4 *)
-(*  | SW_no_integer_provenance of int *)
-  
   | SW_PNVI of [ `PLAIN | `AE | `AE_UDI ]
+
 
 
 let are_incompatible = function
@@ -48,24 +53,19 @@ let has_switch_pred pred =
 let set strs =
   let read_switch = function
     | "strict_pointer_arith" ->
-        Some SW_strict_pointer_arith
+        Some (SW_pointer_arith `STRICT)
+    | "permissive_pointer_arith" ->
+        Some (SW_pointer_arith `PERMISSIVE)
     | "strict_reads" ->
         Some SW_strict_reads
     | "forbid_nullptr_free" ->
         Some SW_forbid_nullptr_free
     | "zap_dead_pointers" ->
         Some SW_zap_dead_pointers
+    | "strict_pointer_equality" ->
+        Some SW_strict_pointer_equality
     | "strict_pointer_relationals" ->
         Some SW_strict_pointer_relationals
-
-(*
-    | "no_integer_provenance" ->
-        Some (SW_no_integer_provenance 0)
-    | "no_integer_provenance_v1" ->
-        Some (SW_no_integer_provenance 1)
-    | "no_integer_provenance_v4" ->
-        Some (SW_no_integer_provenance 4)
-*)
     | "PNVI" ->
         Some (SW_PNVI `PLAIN)
     | "PNVI_ae" ->
@@ -86,3 +86,6 @@ let set strs =
 
 let is_PNVI () =
   List.exists (function SW_PNVI _ -> true | _ -> false) !internal_ref
+
+let has_strict_pointer_arith () =
+  has_switch (SW_pointer_arith `STRICT)
