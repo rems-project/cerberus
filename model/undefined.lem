@@ -147,8 +147,7 @@ type undefined_behaviour =
   | UB045c_quotient_not_representable
   (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
      produces a result that does not point into, or just beyond, the same array object (6.5.6). *)
-  | UB046a_array_pointer_addition_outside
-  | UB046b_array_pointer_subtraction_outside
+  | UB046_array_pointer_outside
   (* Addition or subtraction of a pointer into, or just beyond, an array object and an integer type
      produces a result that points just beyond the array object and is used as the operand of a
      unary * operator that is evaluated (6.5.6). *)
@@ -815,8 +814,7 @@ let ub_str_bimap =
     ; (UB045a_division_by_zero, "UB045a_division_by_zero")
     ; (UB045b_modulo_by_zero, "UB045b_modulo_by_zero")
     ; (UB045c_quotient_not_representable, "UB045c_quotient_not_representable")
-    ; (UB046a_array_pointer_addition_outside, "UB046a_array_pointer_addition_outside")
-    ; (UB046b_array_pointer_subtraction_outside, "UB046b_array_pointer_subtraction_outside")
+    ; (UB046_array_pointer_outside, "UB046_array_pointer_outside")
     ; (UB047a_array_pointer_addition_beyond_indirection, "UB047a_array_pointer_addition_beyond_indirection")
     ; (UB047b_array_pointer_subtraction_beyond_indirection, "UB047b_array_pointer_subtraction_beyond_indirection")
     ; (UB048_disjoint_array_pointers_subtraction, "UB048_disjoint_array_pointers_subtraction")
@@ -1045,6 +1043,8 @@ let ub_short_string = function
       "block scoped function identifier with illegal storage class"
   | UB061_no_named_members ->
       "a structure or union is defined without any named members"
+  | UB046_array_pointer_outside ->
+      "the result of some pointer arithmetic operator was out of bound"
   | UB066_qualified_function_specification ->
       "the specification of a function type should include any type qualifiers"
   | UB078_modified_void_parameter ->
@@ -1133,14 +1133,10 @@ let pretty_string_of_undefined_behaviour = function
       "(§6.5.5#5) the value of the second operand of a % operator is zero."
   | UB045c_quotient_not_representable ->
       "(§6.5.5#6) the quotient a/b is not representable."
-  | UB046a_array_pointer_addition_outside ->
-      "(§6.5.6#8) found the addition of a pointer into, or just beyond, and array object and an \
-                  integer type procuding a result that does not point into, or just beyond, the \
-                  same array object."
-  | UB046b_array_pointer_subtraction_outside ->
-      "(§6.5.6#8) found the subtraction of a pointer into, or just beyond, and array object and \
-                  an integer type procuding a result that does not point into, or just beyond, the \
-                  same array object."
+  | UB046_array_pointer_outside ->
+      "(§6.5.6#8) found the addition/subtraction of a pointer into, or just beyond, and array \
+                  object and an integer type procuding a result that does not point into, or \
+                  just beyond, the same array object."
   | UB047a_array_pointer_addition_beyond_indirection ->
       "(§6.5.6#8) found the addition of a pointer into, or just beyond, an array object and an \
                   integer type procuding a result that points just beyond the array object and is \

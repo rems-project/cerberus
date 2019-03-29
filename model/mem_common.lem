@@ -63,6 +63,8 @@ type mem_error =
   
   | MerrPtrComparison
   
+  | MerrArrayShift
+  
   | MerrWIP of string
 
 instance (Show mem_error)
@@ -96,6 +98,8 @@ instance (Show mem_error)
         "MerrPtrFromInt"
     | MerrPtrComparison ->
         "MerrPtrComparison"
+    | MerrArrayShift ->
+        "MerrArrayShift"
   end
 end
 
@@ -116,6 +120,9 @@ let undefinedFromMem_error = function
   
   | MerrPtrComparison ->
       Just [Undefined.UB053_distinct_aggregate_union_pointer_comparison]
+  | MerrArrayShift ->
+      Just [Undefined.UB046_array_pointer_outside]
+
   
   (* TODO do better *)
   | MerrAccess _ LoadAccess OutOfBoundPtr ->

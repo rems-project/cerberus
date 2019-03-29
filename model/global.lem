@@ -35,13 +35,11 @@ declare ocaml target_rep function isDefacto = `Global_ocaml.isDefacto`
 
 
 type cerb_switch =
-  | SW_strict_pointer_arith
   | SW_strict_reads
   | SW_forbid_nullptr_free
   | SW_zap_dead_pointers
   | SW_no_integer_provenance
 
-declare ocaml target_rep function SW_strict_pointer_arith = `Switches.SW_strict_pointer_arith`
 declare ocaml target_rep function SW_strict_reads = `Switches.SW_strict_reads`
 declare ocaml target_rep function SW_forbid_nullptr_free = `Switches.SW_forbid_nullptr_free`
 declare ocaml target_rep function SW_zap_dead_pointers = `Switches.SW_zap_dead_pointers`
@@ -50,6 +48,9 @@ declare ocaml target_rep function SW_no_integer_provenance = `Switches.SW_no_int
 
 val is_PNVI: unit -> bool
 declare ocaml target_rep function is_PNVI = `Switches.is_PNVI`
+
+val has_strict_pointer_arith: unit -> bool
+declare ocaml target_rep function has_strict_pointer_arith = `Switches.has_strict_pointer_arith`
 
 
 val has_switch: cerb_switch -> bool
