@@ -32,7 +32,7 @@
             <div id="new" class="menu-item btn">New empty file</div>
             <div id="load" class="menu-item btn">Load from file</div>
             <div class="menu-section border-top">Examples library</div>
-            <div id="load_pnvi_ae_udi_examples" class="menu-item btn">PNVI-ae-udi examples</div>
+            <div id="load_pnvi_n2263" class="menu-item btn">PNVI-* N2263 examples</div>
             <div id="load_cav19" class="menu-item btn">CAV 2019</div>
             <div id="load_popl19" class="menu-item btn">POPL 2019: pointer provenance</div>
             <div id="load_defacto" class="menu-item btn">C defacto standard</div>
@@ -74,23 +74,27 @@
             <div class="menu-section border-top">Further options</div>
             <div id="strict_pointer_arith" class="menu-item btn switch conc"
               title="Forbid (non-one-past) out-of-bounds pointer construction">
-              <input id="cb_strict_pointer_arith" type="checkbox">Forbid (non-one-past) out-of-bounds pointer construction
+              <input id="cb_strict_pointer_arith" type="checkbox">Forbid (non-one-past) out-of-bounds pointer construction (strict_pointer_arith)
             </div>
             <div id="strict_reads" class="menu-item btn switch conc"
               title="This switch makes undefined behaviour to read from uninitialised memory.">
-              <input id="cb_strict_reads" type="checkbox">Forbid uninitialised memory read
+              <input id="cb_strict_reads" type="checkbox">Forbid uninitialised memory read (strict_reads)
             </div>
             <div id="forbid_nullptr_free" class="menu-item btn switch conc"
               title="This switch makes undefined behaviour to free a NULL pointer (this is stricter than ISO C11).">
-              <input id="cb_forbid_nullptr_free" type="checkbox">Forbid free null pointers
+              <input id="cb_forbid_nullptr_free" type="checkbox">Forbid free null pointers (forbid_nullptr_free)
             </div>
             <div id="zap_dead_pointers" class="menu-item btn switch conc"
               title="This switch forbits the use of pointer passed its lifetime.">
-              <input id="cb_zap_dead_pointers" type="checkbox">Forbid use of pointers passed their lifetime
+              <input id="cb_zap_dead_pointers" type="checkbox" checked>Forbid use of pointers passed their lifetime (zap_dead_pointers)
+            </div>
+            <div id="strict_pointer_equality" class="menu-item btn switch conc"
+              title="This switch makes the equality operator strictly based on the address value of pointers.">
+              <input id="cb_strict_pointer_equality" type="checkbox">Equality operator depends only on the address value of pointers (strict_pointer_equality)
             </div>
             <div id="strict_pointer_relationals" class="menu-item btn switch conc"
               title="This switch makes relational operators UB when relating different objects.">
-              <input id="cb_strict_pointer_relationals" type="checkbox">Forbid use of relational operators for objects in different allocations
+              <input id="cb_strict_pointer_relationals" type="checkbox" checked>Forbid use of relational operators for objects in different allocations (strict_pointer_relationals)
             </div>
           </div>
         </li>
@@ -111,9 +115,15 @@
             <div id="open-stderr" class="menu-item btn">Stderr</div>
           </div>
         </li>
-        <li class="menu-item">Step: <span id="step-counter">0</span></li>
-        <li id="step-forward" class="menu-item btn active conc"><span>Forward</span></li>
-        <li id="step-forward-left" class="menu-item btn active invisible conc"><span>Left</span></li>
+        <li id="step-forward" class="menu-item btn active conc">
+          <span>Step: <span class="step-counter">0</span><span>
+          <span style="margin-left:15px;">Forward</span>
+        </li>
+        <!--<li id="step-forward" class="menu-item btn active conc"><span>Forward</span></li>-->
+        <li id="step-forward-left" class="menu-item btn active invisible conc">
+          <span>Step: <span class="step-counter">0</span><span>
+          <span style="margin-left:15px;">Left</span>
+        </li>
         <li id="step-forward-middle" class="menu-item btn active invisible conc"><span>Middle</span></li>
         <li id="step-forward-right" class="menu-item btn active invisible conc"><span>Right</span></li>
         <li id="step-back" class="menu-item btn active conc"><span>Back</span></li>

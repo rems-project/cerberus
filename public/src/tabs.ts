@@ -127,7 +127,7 @@ class SvgGraph extends Tab {
     this.svg = $('<span>No data...</span>')
   }
 
-  setSVG(data: string, engine?: string) {
+  setSVG(data: string, callback: () => void, engine?: string){
     this.container.empty()
     // @ts-ignore
     const viz = new Viz({ Module, render })
@@ -147,6 +147,7 @@ class SvgGraph extends Tab {
         // @ts-ignore
         this.svg.panzoom('zoom', zoomOut, { increment: 0.01, animate: false, focal: e })
       })
+      callback()
     })
   }
 }
@@ -162,17 +163,18 @@ export class Interactive extends SvgGraph {
       this.container.empty()
       return
     }
-    this.setSVG(state.interactive.exec)
-    // Check if needs to span down
-    const svgHeight = this.svg.height()
-    const containerHeight = this.container.height()
-    if (svgHeight && containerHeight) {
-      const delta = containerHeight / 2 - svgHeight
-      if (delta < 0) {
-        // @ts-ignore
-        this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+    this.setSVG(state.interactive.exec, () => {
+      // Check if needs to span down
+      const svgHeight = this.svg.height()
+      const containerHeight = this.container.height()
+      if (svgHeight && containerHeight) {
+        const delta = containerHeight / 2 - svgHeight
+        if (delta < 0) {
+          // @ts-ignore
+          this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+        }
       }
-    }
+    })
   }
 
   initial(s: Readonly<State>) {
@@ -206,7 +208,7 @@ export class BMC extends SvgGraph {
       if (!this.prev.hasClass('disabled')) {
         ee.once(s => {
           this.currentExecution -= 1
-          this.setSVG(s.bmc_executions[this.currentExecution], 'neato')
+          this.setSVG(s.bmc_executions[this.currentExecution], () => {}, 'neato')
           this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.next.removeClass('disabled')
           if (this.currentExecution == 0)
@@ -218,7 +220,7 @@ export class BMC extends SvgGraph {
       if (!this.next.hasClass('disabled')) {
         ee.once(s => {
           this.currentExecution += 1
-          this.setSVG(s.bmc_executions[this.currentExecution], 'neato')
+          this.setSVG(s.bmc_executions[this.currentExecution], () => {}, 'neato')
           this.status.text(`Execution ${this.currentExecution+1} of ${s.bmc_executions.length}`)
           this.prev.removeClass('disabled')
           if (this.currentExecution == s.bmc_executions.length - 1)
@@ -238,24 +240,25 @@ export class BMC extends SvgGraph {
   private updateGraph (state: Readonly<State>) {
     if (state.bmc_executions.length > 0) {
       this.currentExecution = 0
-      this.setSVG(state.bmc_executions[0], 'neato')
-      this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
-      this.prev.addClass('disabled')
-      if (state.bmc_executions.length > 1)
-        this.next.removeClass('disabled')
-      else
-        this.next.addClass('disabled')
-      this.updateBtn.addClass('disabled')
-      // Check if needs to span down
-      const svgHeight = this.svg.height()
-      const containerHeight = this.container.height()
-      if (svgHeight && containerHeight) {
-        const delta = containerHeight / 2 - svgHeight
-        if (delta < 0) {
-          // @ts-ignore
-          this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+      this.setSVG(state.bmc_executions[0], () => {
+        this.status.text(`Execution ${this.currentExecution+1} of ${state.bmc_executions.length}`)
+        this.prev.addClass('disabled')
+        if (state.bmc_executions.length > 1)
+          this.next.removeClass('disabled')
+        else
+          this.next.addClass('disabled')
+        this.updateBtn.addClass('disabled')
+        // Check if needs to span down
+        const svgHeight = this.svg.height()
+        const containerHeight = this.container.height()
+        if (svgHeight && containerHeight) {
+          const delta = containerHeight / 2 - svgHeight
+          if (delta < 0) {
+            // @ts-ignore
+            this.svg.panzoom('pan', 0, delta, '{ relative: true }')
+          }
         }
-      }
+      }, 'neato')
     } else {
       this.status.text('Execution 0 of 0')
       this.prev.addClass('disabled')
@@ -385,29 +388,31 @@ class Memory extends SvgGraph {
       this.container.empty()
       return
     }
-    this.setSVG(s.interactive.mem)
-    this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
-      this.svgPos.scale = scale
-      this.disableFitMode()
-    })
-    this.svg.on('panzoompan', (elem, panzoom, x, y) => {
-      this.svgPos.x = x
-      this.svgPos.y = y
-    })
-    this.svg.on('panzoomreset', () => {
-      this.svgPos = { x: 0, y: 0, scale: 1}
-    })
-    if (this.inFitMode()) {
-      this.fitSVG()
-    } else {
-      // @ts-ignore
-      this.svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
-      // @ts-ignore
-      this.svg.panzoom('zoom', this.svgPos.scale)
-    }
-    this.ee.on('layoutChanged', this, () => {
-      if (this.inFitMode())
+    this.setSVG(s.interactive.mem, () => {
+      this.svg.on('panzoomzoom', (elem, panzoom, scale) => {
+        this.svgPos.scale = scale
+        this.disableFitMode()
+      })
+      this.svg.on('panzoompan', (elem, panzoom, x, y) => {
+        this.svgPos.x = x
+        this.svgPos.y = y
+      })
+      this.svg.on('panzoomreset', () => {
+        this.svgPos = { x: 0, y: 0, scale: 1}
+      })
+      if (this.inFitMode()) {
+        // @ts-ignore
         this.fitSVG()
+      } else {
+        // @ts-ignore
+        this.svg.panzoom('pan', this.svgPos.x, this.svgPos.y)
+        // @ts-ignore
+        this.svg.panzoom('zoom', this.svgPos.scale)
+      }
+      this.ee.on('layoutChanged', this, () => {
+        if (this.inFitMode())
+          this.fitSVG()
+      })
     })
   }
 

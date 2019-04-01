@@ -1,4 +1,4 @@
-- name: PNVI-ae-udi examples
+- name: PNVI-* N2263 examples
   tests:
     - provenance_basic_global_xy.c
     - provenance_basic_global_yx.c

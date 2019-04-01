@@ -90,12 +90,12 @@ export class CerberusUI {
       else
         cav19.show()
     })
-    let pnvi_ae_udi_examples: Widget.PNVI_AE_UDI_EXAMPLES | undefined
-    $('#load_pnvi_ae_udi_examples').on('click', () => {
-      if (pnvi_ae_udi_examples === undefined)
-        pnvi_ae_udi_examples = new Widget.PNVI_AE_UDI_EXAMPLES()
+    let pnvi_n2263: Widget.PNVI_N2263_EXAMPLES | undefined
+    $('#load_pnvi_n2263').on('click', () => {
+      if (pnvi_n2263 === undefined)
+        pnvi_n2263 = new Widget.PNVI_N2263_EXAMPLES()
       else
-        pnvi_ae_udi_examples.show()
+        pnvi_n2263.show()
     })
 
     // BMC
@@ -122,7 +122,7 @@ export class CerberusUI {
     stepForwardMiddle.on('click', (e) => this.getView().stepForwardMiddle())
     const stepForwardRight = $('#step-forward-right')
     stepForwardRight.on('click', (e) => this.getView().stepForwardRight())
-    const stepCounter = $('#step-counter')
+    const stepCounter = $('.step-counter')
     $('#restart').on('click', () => this.getView().restartInteractive())
 
     // Interactive Options
@@ -505,6 +505,9 @@ export class CerberusUI {
   addView(title: string, source: string, config?: any) {
     this.add(new View(title, source, config))
     this.refresh()
+  }
+
+  public checkExperimentalTab(title: string) {
     // Check Charon2 experimental data
     $.ajax({
       url: `experimental/${title}.html`,

@@ -62,7 +62,7 @@ export default class View {
     this.dom = $('<div class="view"></div>')
     $('#views').append(this.dom)
     this.initLayout(config)
-    this.getTab('Core').setActive()
+    //this.getTab('Core').setActive()
   }
 
   private initLayout(config?: GoldenLayout.Config) {
@@ -120,9 +120,12 @@ export default class View {
           ]}, {
             type: 'stack',
             content: [
+              /*
               component('Cabs'),
               component('Ail_AST'),
               component('Core')
+              */
+             component('Memory')
             ]
           }
         ]}]
@@ -191,7 +194,7 @@ export default class View {
         exec_options: {
           libc: false
         },
-        switches: ['PNVI_ae_udi']
+        switches: ['PNVI_ae_udi', 'strict_pointer_relationals', 'zap_dead_pointers']
       },
       interactiveMode: InteractiveMode.Memory,
       interactive: undefined,
@@ -362,7 +365,9 @@ export default class View {
       const title =
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
-          <td ${alloc.exposed ? 'bgcolor="burlywood1"': ''} border="0" colspan="${maxcols}"><b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}, ${toHex(alloc.base)}]</td>
+          <td ${alloc.exposed ? 'bgcolor="burlywood1"': ''} border="0" colspan="${maxcols}">
+              <b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}${alloc.exposed ? ' exp' : ''}, ${toHex(alloc.base)}]
+          </td>
          </tr>`
       let index = 0
       const body = alloc.values.reduce((acc, row) => {
