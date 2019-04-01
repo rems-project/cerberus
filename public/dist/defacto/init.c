@@ -9,4 +9,4 @@ struct T {
 
 struct T arr1[3] =
   { 1, {{2,3,40,50}, 6,
-    {"foo"}}, [2].st.z= 7};
+    "foo"}, [2].st.z= 7};

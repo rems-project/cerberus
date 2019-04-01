@@ -48,7 +48,10 @@ export class Defacto extends Widget {
           for (let k = 0; q.tests && k < q.tests.length; k++) {
             const name = q.tests[k]
             const test = $('<li><a href="#">'+name+'</a></li>')
-            test.on('click', () => this.fetch_test('defacto', name))
+            test.on('click', () => {
+              this.fetch_test('defacto', name)
+              UI.checkExperimentalTab(name)
+            })
             tests.append(test)
           }
           questions.append(q.question)
@@ -71,7 +74,10 @@ export class POPL19 extends Widget {
         for (let k = 0; data[i].tests && k < data[i].tests.length; k++) {
           const name = data[i].tests[k]
           const link = $(`<a href="#">${name}</a>`)
-          link.on('click', () => this.fetch_test('defacto', name))
+          link.on('click', () => {
+            this.fetch_test('defacto', name)
+            UI.checkExperimentalTab(name)
+          })
           const test = $('<li>')
           test.append(link)
           tests.append(test)
@@ -123,16 +129,16 @@ export class CAV19 extends Widget {
   }
 }
 
-export class PNVI_AE_UDI_EXAMPLES extends Widget {
+export class PNVI_N2263_EXAMPLES extends Widget {
   constructor () {
-    super('Load PNVI-ae-udi examples')
-    util.get('pnvi_ae_udi_examples.json', (data: any) => {
+    super('Load PNVI-* N2263 examples')
+    util.get('pnvi_n2263.json', (data: any) => {
       const layout = data[0].tests
       this.body.append($('<h2>'+data[0].name+'</h2>'))
       for (let i = 0; i < layout.length; i++) {
         const tests = $('<ul class="tests"></ul>')
         const link = $(`<a href="#">${layout[i]}</a>`)
-        link.on('click', () => this.fetch_test('defacto', layout[i]))
+        link.on('click', () => this.fetch_test('n2263', layout[i]))
         const test = $('<li>')
         test.append(link)
         tests.append(test)
@@ -142,9 +148,6 @@ export class PNVI_AE_UDI_EXAMPLES extends Widget {
     })
   }
 }
-
-
-
 
 export class GCC2018 extends Widget {
   constructor() {
