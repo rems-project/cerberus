@@ -1,19 +1,17 @@
-module Int = struct
-  type t = int
-  let compare = compare
-end
+module IMap = Map.Make(struct
+    type t = int
+    let compare = compare
+  end)
 
-module IMap = Map.Make(Int)
+type vertex_id = int
 
-type vertex = int
+type edge_id = int
 
-type edge = int
-
-type ('a, 'b) t =
+type ('a, 'b) graph =
   { vtx_map: 'a IMap.t;
-    edge_map: (int * int * 'b) IMap.t;
-    succ: (edge * vertex) list IMap.t;
-    pred: (edge * vertex) list IMap.t;
+    edge_map: (int * 'b * int) IMap.t;
+    succ: (edge_id * vertex_id) list IMap.t;
+    pred: (edge_id * vertex_id) list IMap.t;
     vtx_counter: int;
     edge_counter: int;
   }
@@ -44,7 +42,7 @@ let add_vertex attr g =
 let add_edge v1 v2 attr g =
   match IMap.find_opt v1 g.vtx_map, IMap.find_opt v2 g.vtx_map with
   | Some _, Some _ ->
-    let g' = { g with edge_map = IMap.add g.edge_counter (v1, v2, attr) g.edge_map;
+    let g' = { g with edge_map = IMap.add g.edge_counter (v1, attr, v2) g.edge_map;
                       edge_counter = g.edge_counter + 1;
                       succ = add_in_list g.edge_counter v1 v2 g.succ;
                       pred = add_in_list g.edge_counter v2 v1 g.pred;
@@ -56,10 +54,18 @@ let add_edge v1 v2 attr g =
   | _, None ->
     failwith @@ "vertex " ^ string_of_int v2 ^ " not in graph"
 
+let update_vertex v f g =
+  let opt_map = function None -> None | Some x -> Some (f x) in
+  { g with vtx_map = IMap.update v opt_map g.vtx_map }
+
+let update_edge e f g =
+  let opt_map = function None -> None | Some (v1, x, v2) -> Some (v1, f x, v2) in
+  { g with edge_map = IMap.update e opt_map g.edge_map }
+
 let remove_vertex v g =
   let filter = fun (_, v') -> v <> v' in
   { g with vtx_map = IMap.remove v g.vtx_map;
-           edge_map = IMap.filter (fun _ (v1, v2, _) -> v <> v1 && v <> v2)
+           edge_map = IMap.filter (fun _ (v1, _, v2) -> v <> v1 && v <> v2)
                g.edge_map;
            succ = IMap.map (fun vs -> List.filter filter vs) g.succ;
            pred = IMap.map (fun vs -> List.filter filter vs) g.pred;
@@ -76,29 +82,17 @@ let remove_edge e g =
   in
   match IMap.find_opt e g.edge_map with
   | None -> g
-  | Some (v1, v2, _) ->
+  | Some (v1,_,v2) ->
     { g with edge_map = IMap.remove e g.edge_map;
              succ = remove_in_list v1 g.succ;
              pred = remove_in_list v2 g.pred;
     }
 
-let vertex_attr v g =
+let vertex v g =
   IMap.find_opt v g.vtx_map
 
-let edge_from e g =
-  match IMap.find_opt e g.edge_map with
-  | Some (v, _, _) -> Some v
-  | None -> None
-
-let edge_to e g =
-  match IMap.find_opt e g.edge_map with
-  | Some (_, v, _) -> Some v
-  | None -> None
-
-let edge_attr e g =
-  match IMap.find_opt e g.edge_map with
-  | Some (_, _, attr) -> Some attr
-  | None -> None
+let edge e g =
+  IMap.find_opt e g.edge_map
 
 let succ v g =
   match IMap.find_opt v g.succ with
@@ -109,6 +103,13 @@ let pred v g =
   match IMap.find_opt v g.pred with
   | Some vs -> vs
   | None -> []
+
+let remove_isolated_vertices g =
+  IMap.fold (fun v _ g ->
+      match succ v g, pred v g with
+      | [], [] -> remove_vertex v g
+      | _, _ -> g
+    ) g.vtx_map g
 
 let iter_vertex f g =
   IMap.iter f g.vtx_map
@@ -133,13 +134,19 @@ let fold_edge f g =
 
 let fold = fold_edge
 
+let map fv fe g =
+  { g with vtx_map = IMap.mapi fv g.vtx_map;
+           edge_map = IMap.mapi (fun e (v1, attr, v2) ->
+               (v1, fe e attr, v2)) g.edge_map; }
+
+
 let print oc string_of_vtx string_of_edge g =
   let open Printf in
   fprintf oc "digraph G {\n";
   iter_vertex (fun v attr ->
       fprintf oc "  v%d [label=\"%s\"]\n" v (string_of_vtx v attr)
     ) g;
-  iter_edge (fun e (v1, v2, attr) ->
+  iter_edge (fun e (v1, attr, v2) ->
       fprintf oc "  v%d -> v%d [label=\"%s\"]\n" v1 v2 (string_of_edge e attr)
     ) g;
   fprintf oc "}\n"
@@ -151,11 +158,17 @@ let transpose g =
   }
 
 let vertices g =
-  Pset.from_list compare @@ List.map fst @@ IMap.bindings g.vtx_map
+  List.map fst @@ IMap.bindings g.vtx_map
+
+let edges g =
+  List.map fst @@ IMap.bindings g.edge_map
 
 let roots g =
   let no_roots = Pset.from_list compare @@ List.map fst @@ IMap.bindings g.pred in
-  Pset.diff (vertices g) no_roots
+  Pset.diff (Pset.from_list compare @@ vertices g) no_roots
+
+let is_root v g =
+  Pset.mem v (roots g)
 
 (* topological sort *)
 
@@ -220,7 +233,7 @@ let transitive_closure g =
         ) g.vtx_map edge_matrix
   in
   let g = { g with edge_map =
-                     IMap.map (fun (v1, v2, a) -> (v1, v2, Some a)) g.edge_map
+                     IMap.map (fun (v1, a, v2) -> (v1, Some a, v2)) g.edge_map
           } in
   M.fold (fun (v1, v2) _ g ->
       let succsv1 = List.map snd @@ succ v1 g in
@@ -277,5 +290,64 @@ let scc g =
 
 (* connected sub? Components *)
 
+(* weak topological ordering *)
+(* Francois Bourdoncle 1993 *)
 
-
+let wto g root =
+  let open Nested_list in
+  let num = ref 0 in
+  let dfa = Hashtbl.create 20 in
+  let stack = Stack.create () in
+  let rec component v =
+    let part = List.fold_left (fun part (_, v_succ) ->
+        match Hashtbl.find_opt dfa v_succ with
+        | Some (Some n) when n = 0 ->
+          snd @@ visit part v_succ
+        | _ ->
+          part
+      ) [] @@ succ v g
+    in (Atom v) :: part
+  and visit part v =
+    Stack.push v stack;
+    num := !num + 1;
+    Hashtbl.add dfa v (Some !num);
+    let head = ref (Some !num) in
+    let loop = ref false in
+    let part =
+      List.fold_left (fun part (_, v_succ) ->
+          let (min, part) =
+            match Hashtbl.find_opt dfa v_succ with
+            | Some (Some n) when n = 0 ->
+              visit part v_succ
+            | Some n_opt ->
+              (n_opt, part)
+            | None ->
+              assert false
+          in
+          match min, !head with
+          | Some m, Some h when m <= h ->
+            head := min;
+            loop := true;
+            part
+          | _ ->
+            part
+        ) part @@ succ v g
+    in
+    match Hashtbl.find_opt dfa v with
+    | Some n_opt when !head = n_opt ->
+      Hashtbl.add dfa v None;
+      let elem = ref (Stack.pop stack) in
+      if !loop then begin
+        while !elem <> v do
+          Hashtbl.add dfa !elem (Some 0);
+          elem := Stack.pop stack
+        done;
+        (!head, (List (component v)) :: part)
+      end else begin
+        (!head, (Atom v) :: part)
+      end
+    | _ ->
+      (!head, part)
+  in
+  IMap.iter (fun v _ -> Hashtbl.add dfa v (Some 0)) g.vtx_map;
+  snd @@ visit [] root

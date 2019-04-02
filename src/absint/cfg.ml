@@ -20,124 +20,6 @@ module IMap = Map.Make(Int)
 
 module SMap = Map.Make(Sym)
 
-module OptionM = struct
-  let return x = Some x
-  let bind m f =
-    match m with
-    | Some x -> f x
-    | None -> None
-  let (>>=) = bind
-end
-
-module Graph: sig
-
-  type vertex = int
-  type 'a t
-
-  val empty: 'a t
-  val is_root: vertex -> 'a t -> bool
-
-  val compare_vertex: vertex -> vertex -> int
-
-  val add_vertex: 'a t -> vertex * 'a t
-  val add_edge: vertex * vertex -> 'a -> 'a t -> 'a t
-
-  val remove_isolated_vertices: 'a t -> 'a t
-
-  (* TODO: this is not great *)
-  val add_label: Symbol.sym -> (Symbol.sym list * vertex) -> 'a t -> 'a t
-  val get_label: Symbol.sym -> 'a t -> (Symbol.sym list * vertex) option
-
-  val fold: 'a t -> (vertex -> vertex -> 'a -> 'b -> 'b) -> 'b -> 'b
-
-  val iter_vertices: 'a t -> (vertex -> unit) -> unit
-  val iter_edges: 'a t -> (vertex -> vertex -> 'a -> unit) -> unit
-
-  val string_of_vertex: vertex -> string
-
-end = struct
-
-  type vertex = int
-  type edge = int
-
-  type 'a t = {
-    graph: (vertex * 'a) list IMap.t;
-    labels: (Symbol.sym list * int) SMap.t;
-    vcount: int;
-  }
-
-  let empty =
-    { graph = IMap.empty;
-      labels = SMap.empty;
-      vcount = 0;
-    }
-
-  let compare_vertex = compare
-
-  let has_parents g =
-    List.concat
-    @@ List.map (fun (_, xs) -> List.map fst xs)
-    @@ IMap.bindings g.graph
-
-  let roots g =
-    let hp = has_parents g in
-    let vs = List.map fst @@ IMap.bindings g.graph in
-    List.filter (fun v -> not (List.mem v hp)) vs
-
-  (* NOTE: this is expensive *)
-  let is_root v g =
-    not @@ List.mem v @@ has_parents g
-
-  let add_vertex (g: 'a t) : vertex * 'a t =
-    (g.vcount, { g with graph = IMap.add g.vcount [] g.graph;
-                        vcount = g.vcount + 1})
-
-  let add_edge (v1, v2) data g =
-    let es =
-      match IMap.find_opt v1 g.graph with
-      | Some es -> es
-      | None -> []
-    in
-    { g with graph = IMap.add v1 ((v2, data) :: es) g.graph }
-
-  (* NOTE: this is expensive *)
-  let remove_isolated_vertices g =
-    let hps = has_parents g in
-    let graph =
-      IMap.fold (fun v cs acc ->
-          match cs with
-          | [] ->
-            if List.mem v hps then
-              acc
-            else
-              IMap.remove v acc
-          | _ -> acc
-        ) g.graph g.graph
-    in { g with graph = graph }
-
-  let add_label lab (xs, v) g =
-    { g with labels = SMap.add lab (xs, v) g.labels }
-
-  let get_label lab g =
-    SMap.find_opt lab g.labels
-
-  let iter_vertices g f =
-    IMap.iter (fun v vs -> f v) g.graph
-
-  let iter_edges g f =
-    IMap.iter (fun v1 vs -> List.iter (fun (v2, d) -> f v1 v2 d) vs) g.graph
-
-  let fold g f =
-    IMap.fold (fun v1 vs acc ->
-        List.fold_left (fun acc (v2, d) ->
-            f v1 v2 d acc
-          ) acc vs
-      ) g.graph
-
-  let string_of_vertex v = "v" ^ string_of_int v
-
-end
-
 module GraphM: sig
   type ('a, 'b) t
 
@@ -146,20 +28,28 @@ module GraphM: sig
   val (>>=): ('a, 'c) t -> ('a -> ('b, 'c) t) -> ('b, 'c) t
   val mapM: ('a -> ('b, 'c) t) -> 'a list -> ('b list, 'c) t
 
-  val new_vertex: (Graph.vertex, 'a) t
+  val new_vertex: (Pgraph.vertex_id, 'a) t
 
   val remove_isolated_vertices: (unit, 'a) t
 
-  val add_edge: Graph.vertex * Graph.vertex -> 'a -> (unit, 'a) t
+  val add_edge: Pgraph.vertex_id * Pgraph.vertex_id -> 'a -> (unit, 'a) t
 
-  val add_label: Symbol.sym -> Symbol.sym list * Graph.vertex -> (unit, 'a) t
-  val get_label: Symbol.sym -> ((Symbol.sym list * Graph.vertex) option, 'a) t
+  val add_label: Symbol.sym -> Symbol.sym list * Pgraph.vertex_id -> (unit, 'a) t
+  val get_label: Symbol.sym -> ((Symbol.sym list * Pgraph.vertex_id) option, 'a) t
 
-  val run: ('a, 'b) t -> 'b Graph.t
+  val set_init_vertex: Pgraph.vertex_id -> (unit, 'b) t
+
+  val run: ('a, 'b) t -> Pgraph.vertex_id * (unit, 'b) Pgraph.graph
 
 end = struct
 
-  type ('a, 'b) t = 'b Graph.t -> 'a * 'b Graph.t
+  type 'b state =
+    { graph: (unit, 'b) Pgraph.graph;
+      labels: (Symbol.sym list * int) SMap.t;
+      vinit: Pgraph.vertex_id;
+    }
+
+  type ('a, 'b) t = 'b state -> 'a * 'b state
 
   let return x = fun g -> (x, g)
   let bind m f = fun g ->
@@ -179,23 +69,28 @@ end = struct
       (List.rev xs, s')
   let mapM f xs = sequence (List.map f xs)
 
-  let new_vertex =
-    Graph.add_vertex
+  let new_vertex = fun st ->
+    let (v, graph) = Pgraph.add_vertex () st.graph in
+    (v, { st with graph })
 
-  let remove_isolated_vertices = fun g ->
-    ((), Graph.remove_isolated_vertices g)
+  let remove_isolated_vertices = fun st ->
+    ((), { st with graph = Pgraph.remove_isolated_vertices st.graph })
 
-  let add_edge (v1, v2) l = fun g ->
-    ((), Graph.add_edge (v1, v2) l g)
+  let add_edge (v1, v2) l = fun st ->
+    ((), { st with graph = snd @@ Pgraph.add_edge v1 v2 l st.graph })
 
-  let add_label x lab = fun g ->
-    ((), Graph.add_label x lab g)
+  let add_label lab (xs, v) = fun st ->
+    ((), { st with labels = SMap.add lab (xs, v) st.labels })
 
-  let get_label lab = fun g ->
-    (Graph.get_label lab g, g)
+  let get_label lab = fun st ->
+    (SMap.find_opt lab st.labels, st)
 
-  let run m =
-    snd (m Graph.empty)
+  let set_init_vertex vinit = fun st ->
+    ((), { st with vinit })
+
+  let run (m: ('a, 'b) t) =
+    let (_, st) = m { graph = Pgraph.empty; labels = SMap.empty; vinit = 0 } in
+    (st.vinit, st.graph)
 
 end
 
@@ -460,7 +355,7 @@ let show_transfer =
 (* Try to convert a Core pure expression in transfer node expressions
  * It fails if it contains a control flow branch *)
 let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
-  let open OptionM in
+  let open Monad.Option in
   let self = texpr_of_pexpr in
   let selfs pes =
     List.fold_left (fun acc pe ->
@@ -547,7 +442,7 @@ let rec texpr_of_pexpr (Pexpr (_, _, pe_)) =
 
 (* Try to convert a Core pure expression in a conditional *)
 let rec cond_of_pexpr (Pexpr (_, _, pe_)) =
-  let open OptionM in
+  let open Monad.Option in
   match pe_ with
   | PEsym x ->
     return @@ Csym x
@@ -1036,22 +931,20 @@ let mk_cfg_e ~sequentialise e =
   run (collect_saves e >>= fun _ ->
        new_vertex >>= fun in_v ->
        new_vertex >>= fun out_v ->
+       set_init_vertex in_v >>= fun _ ->
        add_e ~sequentialise (in_v, out_v) empty_pat e >>= fun _ ->
        remove_isolated_vertices)
 
 let dot_of_proc nm g =
   let pre = Sym.show nm in
-  Graph.iter_vertices g (fun v ->
-      if Graph.is_root v g then
-        print_endline @@ pre ^ Graph.string_of_vertex v ^ "[label=\"" ^ pre ^ Graph.string_of_vertex v ^ "\"]"
-      else
-        print_endline @@ pre ^ Graph.string_of_vertex v ^ "[shape=point]"
-    );
-  Graph.iter_edges g (fun v1 v2 tf ->
+  Pgraph.iter_vertex (fun v _ ->
+        print_endline @@ pre ^ string_of_int v ^ "[label=\"" ^ string_of_int v ^ "\"]"
+    ) g;
+  Pgraph.iter_edge (fun _ (v1, tf, v2) ->
       print_endline @@
-      pre ^ Graph.string_of_vertex v1 ^ " -> " ^ pre ^ Graph.string_of_vertex v2
+      pre ^ string_of_int v1 ^ " -> " ^ pre ^ string_of_int v2
       ^ "[label=\"" ^ show_transfer tf ^ "\"]"
-    )
+    ) g
 
 (* TODO: this is to test main for the moment *)
 let mk_main ?(sequentialise=false) core =
@@ -1071,7 +964,7 @@ let mk_dot ?(sequentialise=false) core =
   Pmap.iter (fun nm f ->
       match f with
       | Proc (_, _, _, e) ->
-        dot_of_proc nm @@ mk_cfg_e ~sequentialise e
+        dot_of_proc nm @@ snd @@ mk_cfg_e ~sequentialise e
       | _ -> ()
     ) core.funs;
   print_endline "}"

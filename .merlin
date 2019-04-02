@@ -1,5 +1,6 @@
 S ocaml_generated
 S src
+S src/absint
 S src/codegen
 S pprinters
 S parsers/c
@@ -8,6 +9,7 @@ S sandbox
 
 B _build/ocaml_generated
 B _build/src
+B _build/src/absint
 B _build/src/codegen
 B _build/pprinters
 B _build/parsers/c

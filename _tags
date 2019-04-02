@@ -6,6 +6,7 @@ true: debug
 "src": include
 "src/codegen": include
 "src/web": include
+"src/absint": include
 "ocaml_generated": include
 "pprinters": include
 "parsers": include
