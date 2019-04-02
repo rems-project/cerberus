@@ -202,14 +202,11 @@ let cerberus debug_level progress core_obj
       else if absint then
         begin match files with
           | [filename] ->
-            assert false
-              (*
             prelude >>= fun core_std ->
             c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
-            ignore (Solve_fixpoint.solve core);
+            ignore (Absint.solve core);
             return success
-              *)
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
         end

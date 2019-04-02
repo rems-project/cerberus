@@ -149,10 +149,9 @@ ocaml_native:
 	  echo "(* Do not edit: automatically generated file *)" > src/main_.ml; \
 	  sed s/"<<GIT-HEAD>>"/"`git rev-parse --short HEAD` -- `date "+%d\/%m\/%Y@%H:%M"`"/ src/main.ml >> src/main_.ml; \
 	  ocamlbuild src/cerberus_cstubs.o && \
-	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha -libs str main_.native && \
+	  ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha,camllib,apron,apron.boxD,apron,apron.octD -libs str main_.native && \
 	  cp -L main_.native cerberus; \
 	fi
-# ocamlbuild -j 4 -use-ocamlfind -pkgs unix,lem,cmdliner,pprint,yojson,angstrom,${Z3},ppx_sexp_conv,sexplib,sha,camllib,apron,apron.boxD,apron,apron.octD -libs str main_.native && \
 
 ocaml: ocaml_native libc
 

@@ -5,52 +5,6 @@ open Apron
 
 module N = Nat_big_num
 
-module type STATE_MONAD =
-sig
-  type state
-  type 'a t
-  val return: 'a -> 'a t
-  val bind: 'a t -> ('a -> 'b t) -> 'b t
-  val (>>=): 'a t -> ('a -> 'b t) -> 'b t
-  val run: 'a t -> state -> 'a * state
-  val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
-  val get: state t
-  val put: state -> unit t
-  val update: (state -> state) -> unit t
-  val modify: (state -> 'a * state) -> 'a t
-end
-
-module MakeStateMonad(S: sig type t end): STATE_MONAD with type state = S.t =
-struct
-  type state = S.t
-  type 'a t = state -> 'a * state
-  let return x = fun s -> (x, s)
-  let bind m f = fun s ->
-    let (x, s') = m s in f x s'
-  let (>>=) = bind
-  let run m = m
-  let sequence ms =
-    let m =
-      List.fold_left (fun acc m ->
-          m   >>= fun x ->
-          acc >>= fun xs ->
-          return (x::xs)
-        ) (return []) ms
-    in fun s ->
-      let (xs, s') = m s in
-      (List.rev xs, s')
-  let mapM f xs = sequence (List.map f xs)
-  let get = fun s -> (s, s)
-  let put s = fun _ -> ((), s)
-  let update f = fun s -> ((), f s)
-  let modify f = fun s -> f s
-end
-
-(* TODO: delete this later *)
-type info =
-  { mutable counter: int;
-  }
-
 let empty_env = Environment.make [||] [||]
 
 type absvalue =
@@ -72,7 +26,7 @@ type absstate =
     man: Box.t Manager.t;
   }
 
-module StateMonad = MakeStateMonad(struct type t = absstate option end)
+module StateMonad = Monad.Make(struct type t = absstate option end)
 open StateMonad
 
 let get_env = get >>= function
@@ -167,6 +121,20 @@ let join man s1 s2 =
            man = s1.man;
       }
 
+let widening man s1 s2 =
+  match s1, s2 with
+  | _, None | None, _ -> None
+  | Some s1, Some s2 ->
+    (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
+    let (s1, s2) = lift_common_env man (s1, s2) in
+    Some { abs_scalar = Abstract1.widening man s1.abs_scalar s2.abs_scalar;
+           abs_term =
+             SMap.union (fun k v _ -> Some v) (* TODO *)
+               s1.abs_term s2.abs_term;
+           mem_counter = max s1.mem_counter s2.mem_counter;
+           man = s1.man;
+      }
+
 let bot man =
   Some { abs_scalar = Abstract1.bottom man empty_env;
          abs_term = SMap.empty;
@@ -177,7 +145,7 @@ let bot man =
 let top =
   None
 
-let init_state man =
+let init_absstate man =
   Some { abs_scalar = Abstract1.top man empty_env;
          abs_term = SMap.empty;
          mem_counter = 0;
@@ -380,9 +348,11 @@ let assign man pat te =
     absvalue_of_texpr te >>= fun v ->
     aux v pat
 
-let apply man psh he st_arr =
-  let tr = PSHGraph.attrhedge psh he in
-  let st_opt = st_arr.(0) in
+let apply man psh he st_opt =
+  let tr = match Pgraph.edge he psh with
+    | Some (_, tr, _) -> tr
+    | None -> assert false
+  in
   print_endline @@ Cfg.show_transfer tr;
   print_endline @@ show_absstate st_opt;
   match tr with
@@ -408,98 +378,39 @@ let apply man psh he st_arr =
            print_endline "non_empty"); Some s
     end
 
+module F = Fixpoint.Make (struct type t = absstate option end)
+
 let make_fpmanager man psh =
-  let open Fixpoint in
+  let open F in
   { bottom = (fun vtx -> bot man);
-    canonical = (fun vtx abs -> ());
     is_bottom = (fun vtx -> is_bottom man);
     is_leq = (fun vtx -> is_leq man);
     join = (fun vst -> join man);
-    join_list = (fun vtx abs_s -> List.fold_left (join man) (bot man) abs_s);
-    widening = (fun vtx abs1 abs2 -> assert false);
-    odiff = None;
-    abstract_init = (fun vtx -> init_state man);
-    arc_init = (fun edge -> ());
-    apply = (fun he st_arr -> ((), apply man psh he st_arr));
-    print_vertex = (fun _ _ -> ());
-    print_hedge = (fun _ _ -> ());
-    print_abstract = (fun _ _ -> ());
-    print_arc = (fun _ _ -> ());
-    accumulate = false;
-    print_fmt = Format.err_formatter;
-    print_analysis = false;
-    print_component = false;
-    print_step = false;
-    print_state = false;
-    print_postpre = false;
-    print_workingsets = false;
-    dot_fmt = None;
-    dot_vertex = (fun _ _ -> ());
-    dot_hedge = (fun _ _ -> ());
-    dot_attrvertex = (fun _ _ -> ());
-    dot_attrhedge = (fun _ _ -> ());
+    join_list = (fun vtx abs_s ->
+        Debug_ocaml.print_debug 1 [] (fun _ -> "Joining...");
+        List.iter (fun s ->
+            Debug_ocaml.print_debug 1 [] (fun _ -> show_absstate s)
+          ) abs_s;
+        Debug_ocaml.print_debug 1 [] (fun _ -> "Result:");
+        let a = List.fold_left (join man) (bot man) abs_s in
+            Debug_ocaml.print_debug 1 [] (fun _ -> show_absstate a);
+        a
+      );
+    widening = (fun vtx abs1 abs2 -> widening man abs1 abs2);
+    init = (fun vtx -> init_absstate man);
+    apply = (fun he st ->
+        Debug_ocaml.print_debug 1 [] (fun _ -> "Applying edge " ^ string_of_int he);
+        apply man psh he st
+      )
+  ;
   }
 
-(* TODO: this should be gone when I eliminate PSH stuff *)
-
-let add_vertex (graph) (torg) (transfer) (dest) : unit =
-  Array.iter
-    (begin fun var ->
-      if not (PSHGraph.is_vertex graph var) then PSHGraph.add_vertex graph var ()
-    end)
-    torg;
-  if not (PSHGraph.is_vertex graph dest) then PSHGraph.add_vertex graph dest ();
-  let info = PSHGraph.info graph in
-  PSHGraph.add_hedge graph info.counter transfer ~pred:torg ~succ:[|dest|];
-  info.counter <- info.counter + 1
-
-let gcompare = {
-  PSHGraph.hashv = {
-    Hashhe.hash = (fun x -> abs x);
-    Hashhe.equal = (=);
-  };
-  PSHGraph.hashh = {
-    Hashhe.hash = (fun x -> abs x);
-    Hashhe.equal = (==)
-  };
-  PSHGraph.comparev = Cfg.Graph.compare_vertex;
-  PSHGraph.compareh = compare
-}
-
-let convert_graph g =
-  let psh = PSHGraph.create gcompare 20 { counter = 0 } in
-  Cfg.Graph.iter_edges g (fun v1 v2 d ->
-      add_vertex psh [|v1|] d v2
-    );
-  let open Format in
-  PSHGraph.print_dot
-    (fun fmt v -> pp_print_text fmt @@ Cfg.Graph.string_of_vertex v)
-    (fun fmt e -> pp_print_text fmt @@ string_of_int e)
-    (fun fmt v _ -> pp_print_text fmt @@ Cfg.Graph.string_of_vertex v)
-    (fun fmt _ tf -> pp_print_text fmt @@ Cfg.show_transfer tf)
-    (Format.formatter_of_out_channel (open_out "c.dot"))
-    psh;
-  psh
-
 let solve core =
-  try (
   (* TODO: we fix box (intervals) at the moment *)
   let man = Box.manager_alloc () in
-  let cfg = Cfg.mk_main ~sequentialise:true core in
-  let psh = convert_graph cfg in
-  let fpman = make_fpmanager man psh in
-  let init = Pset.singleton (Cfg.Graph.compare_vertex) 1 in
-  let fp_strategy = Fixpoint.make_strategy_default ~vertex_dummy:(-1) ~hedge_dummy:(-1) psh init in
-  let fp = Fixpoint.analysis_std fpman psh init fp_strategy in
-  let open Format in
-  PSHGraph.print_dot
-    (fun fmt v -> pp_print_text fmt @@ Cfg.Graph.string_of_vertex v)
-    (fun fmt e -> pp_print_text fmt @@ string_of_int e)
-    (fun fmt _ s -> pp_print_text fmt @@ show_absstate s)
-    (fun fmt _ tf -> ())
-    Format.err_formatter
-    fp
-  ) with
-    | Manager.Error e ->
-      print_endline e.Manager.msg;
-      assert false
+  let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
+  let fpman = make_fpmanager man cfg in
+  let fp = F.run fpman cfg v0 in
+  Pgraph.print stderr (fun v s -> string_of_int v ^ ": " ^ show_absstate s)
+    (fun _ _ -> "") fp
+
