@@ -5,6 +5,8 @@ open Apron
 
 module N = Nat_big_num
 
+let debug msg = Debug_ocaml.print_debug 5 [] (fun _ -> msg)
+
 let empty_env = Environment.make [||] [||]
 
 type absvalue =
@@ -15,7 +17,7 @@ type absvalue =
   | ATtuple of absvalue list
   | ATexpr of Texpr1.t
   | ATpointer of int (* TODO: naive pointer at the moment *)
-  | ATsym of Symbol.sym
+(*  | ATsym of Symbol.sym *)
   | ATunspec
   | ATtop
 
@@ -63,10 +65,26 @@ let add_env_pointed man n e = update @@ function
         var e None
     in Some { s with abs_scalar }
 
+let rec show_absvalue = function
+  | ATunit -> "unit"
+  | ATtrue -> "true"
+  | ATfalse -> "false"
+  | ATctype cty -> String_core_ctype.string_of_ctype cty
+  | ATtuple vs -> "[" ^ String.concat ";" (List.map show_absvalue vs) ^ "]"
+  | ATexpr te -> "te"
+  | ATpointer n -> "@" ^ string_of_int n
+(*  | ATsym sym -> Sym.show sym *)
+  | ATunspec -> "unspec"
+  | ATtop -> "top"
 
 let show_abs_scalar st =
   Abstract1.print Format.str_formatter st;
   Format.flush_str_formatter ()
+
+let show_abs_term st =
+  SMap.fold (fun k v acc ->
+      acc ^ Sym.show k ^ " -> " ^ show_absvalue v ^ "; \n"
+    ) st.abs_term ""
 
 let show_absstate = function
   | None -> "top"
@@ -164,8 +182,9 @@ let rec absvalue_of_texpr = function
         | Some s ->
           if SMap.is_empty s.abs_term then print_endline "is_empty";
           begin match SMap.find_opt x s.abs_term with
-            | Some _ ->
-              return @@ ATsym x
+            | Some v ->
+              return v
+              (* return @@ ATsym x *)
             | None ->
               let env = Abstract1.env s.abs_scalar in
               let var = Var.of_string (Sym.show x) in
@@ -244,6 +263,7 @@ and absvalue_of_action = function
     absvalue_of_texpr te_p >>= fun av_p ->
     absvalue_of_texpr te_v >>= fun av_v ->
     begin match av_p with
+      (*
       | ATsym sym ->
         let rec aux sym =
           get >>= function
@@ -263,17 +283,29 @@ and absvalue_of_action = function
               aux sym
             | _ -> assert false
         in aux sym
+          *)
       | ATpointer p ->
-        assert false
+        get >>= begin function
+          | Some s ->
+              begin match av_v with
+                | ATexpr e ->
+                  add_env_pointed s.man p e >>= fun () ->
+                  return @@ ATunit
+                | _ ->
+                  assert false
+              end
+        end
       | _ ->
         assert false
     end
   | TAload te_p ->
+    debug "taload";
     absvalue_of_texpr te_p >>= fun av_p ->
     get >>= begin function
       | None -> assert false
       | Some s ->
         match av_p with
+        (*
         | ATsym sym ->
           let rec aux sym =
             match SMap.find_opt sym s.abs_term with
@@ -283,16 +315,22 @@ and absvalue_of_action = function
               let var = Var.of_string ("@" ^ string_of_int p) in
               return @@ ATexpr (Texpr1.var env var)
             | Some (ATsym sym) ->
+              debug (show_abs_term s);
+              flush_all ();
+              assert false;
               aux sym
             | _ -> assert false
           in aux sym
+           *)
         | ATpointer p ->
           let env = Abstract1.env s.abs_scalar in
           let var = Var.of_string ("@" ^ string_of_int p) in
           return @@ ATexpr (Texpr1.var env var)
         | _ ->
           assert false
-    end
+    end >>= fun t ->
+    debug "taload done";
+    return t
   | TAkill p ->
     (* TODO *)
     return ATunit
@@ -315,8 +353,10 @@ let rec match_pattern pat te =
 let assign man pat te =
   let rec aux v = function
     | Pattern (_, CaseBase (None, _)) ->
+      debug "assign aux: 1";
       return ()
     | Pattern (_, CaseBase (Some sym, _)) ->
+      debug "assign aux: 2";
       begin match v with
         | ATexpr e -> add_env man sym e
         | _ ->
@@ -329,8 +369,10 @@ let assign man pat te =
           )
       end
     | Pattern (_, CaseCtor (Cspecified, [pat])) ->
+      debug "assign aux: 3";
       aux v pat
     | Pattern (_, CaseCtor (Ctuple, pats)) ->
+      debug "assign aux: 4";
       begin match v with
         | ATtuple es ->
           List.fold_left (fun acc (e, pat) ->
@@ -346,6 +388,7 @@ let assign man pat te =
   | TEundef _ -> update (fun _ -> top)
   | _ ->
     absvalue_of_texpr te >>= fun v ->
+    debug "after absvalue";
     aux v pat
 
 let apply man psh he st_opt =
@@ -370,6 +413,7 @@ let apply man psh he st_opt =
     print_endline "TODO: call";
     st_opt
   | Tassign (pat, te) ->
+    debug "assign";
     let s = snd @@ run (assign man pat te) st_opt in
     begin match s with
       | None -> assert false
@@ -400,7 +444,9 @@ let make_fpmanager man psh =
     init = (fun vtx -> init_absstate man);
     apply = (fun he st ->
         Debug_ocaml.print_debug 1 [] (fun _ -> "Applying edge " ^ string_of_int he);
-        apply man psh he st
+        let res = apply man psh he st in
+        Debug_ocaml.print_debug 1 [] (fun _ -> "Finished applying edge " ^ string_of_int he);
+        res
       )
   ;
   }
@@ -412,5 +458,5 @@ let solve core =
   let fpman = make_fpmanager man cfg in
   let fp = F.run fpman cfg v0 in
   Pgraph.print stderr (fun v s -> string_of_int v ^ ": " ^ show_absstate s)
-    (fun _ _ -> "") fp
+    (fun e _ -> string_of_int e) fp
 

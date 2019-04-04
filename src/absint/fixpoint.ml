@@ -14,6 +14,7 @@ module type FIXPOINT = sig
       join: vertex_id -> absstate -> absstate -> absstate;
       join_list: vertex_id -> absstate list -> absstate;
       widening: vertex_id -> absstate -> absstate -> absstate;
+      (* INVARIANT: apply must be strict: apply v bot = bot *)
       apply: edge_id -> absstate -> absstate;
     }
 
@@ -38,28 +39,28 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
 
   (* state attached to vertices *)
   type vertex_attr =
-    { abstract: S.t;
-      is_empty: bool; (* empty state *)
+    { abstract: S.t; (* abstract state *)
+      is_bot: bool; (* quick way to bot, since functions are strict *)
     }
 
   (* whether or not is coming from a bot state *)
   type edge_attr = bool
 
-  (* strategy node state *)
-  type strategy_node =
+  (* strategy point state *)
+  type point =
     { vertex: vertex_id;
       edges: (edge_id * vertex_id) list;
       widen: bool;
     }
 
-  type strategy = strategy_node Nested_list.nlist
+  type strategy = point Nested_list.nlist
 
   (* internal state *)
   type state =
     { graph: (vertex_attr, edge_attr) graph;
       opers: t;
       vinit: vertex_id;
-      widening_start: int;
+      widening_start: int;          (* iterations until start widening *)
       widening_descend: int;
       workset: vertex_id Pset.set;
     }
@@ -79,7 +80,7 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
         ) st.workset @@ Pgraph.succ v0 st.graph
     in
     debug @@ "New work set: " ^ String.concat ", "
-    @@ List.map string_of_int @@ Pset.elements workset;
+      @@ List.map string_of_int @@ Pset.elements workset;
     { st with workset; }
 
   let remove_workset v =
@@ -125,9 +126,10 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
     get >>= fun st ->
     return @@ st.opers.apply v abs
 
-  let is_empty v =
+  (* Quick version since functions are strict *)
+  let is_bottom_vertex v =
     attr_of_vertex v >>= fun attr ->
-    return attr.is_empty
+    return attr.is_bot
 
   let is_bottom v abs =
     get >>= fun st ->
@@ -135,7 +137,7 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
 
   let update_vertex v abstract =
     update @@ fun st ->
-    let attr = { abstract; is_empty = st.opers.is_bottom v abstract } in
+    let attr = { abstract; is_bot = st.opers.is_bottom v abstract } in
     { st with graph = Pgraph.update_vertex v (fun _ -> attr) st.graph }
 
   let update_edge e is_empty =
@@ -157,7 +159,7 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
       return @@ st.opers.join_list v lpost
 
   let widening v old_abs =
-    debug ("Widening vertex");
+    debug ("Widening v" ^ string_of_int v);
     abstract_of_vertex v >>= fun new_abs ->
     get >>= fun st ->
     update_vertex v @@
@@ -167,25 +169,28 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
     get >>= fun st ->
     return @@ st.opers.is_leq v abs1 abs2
 
+  (* It is (strictly) growing if it is not the case that new <= old *)
   let is_growing v old_attr =
     attr_of_vertex v >>= fun attr ->
     is_leq v attr.abstract old_attr.abstract >>= fun b ->
     return @@ not b
 
+  (* It is (strictly) reducing if it is not the case that old <= new *)
   let is_reducing v old_attr =
     attr_of_vertex v >>= fun attr ->
     is_leq v old_attr.abstract attr.abstract >>= fun b ->
     return @@ not b
 
-  let propagate_vertex ~descend n =
+  (* Propagate joined abstract states from incoming points *)
+  let propagate ~descend n =
     remove_workset n.vertex >>
-    init_post_list n.vertex >>= fun lpost ->
+    init_post_list n.vertex >>= fun lpost0 ->
     List.fold_left (fun lpostM (e, v) ->
         debug ("Propagating edge" ^ string_of_int e ^ " to v" ^ string_of_int v);
         lpostM >>= fun lpost ->
-        attr_of_edge e >>= fun aempty ->
-        is_empty v >>= fun is_empty ->
-        if not (descend && aempty) && not is_empty then
+        attr_of_edge e >>= fun coming_from_bot ->
+        is_bottom_vertex v >>= fun is_bot ->
+        if not (descend && coming_from_bot) && not is_bot then
           abstract_of_vertex v >>= fun abs ->
           apply e abs >>= fun post ->
           is_bottom v abs >>= function
@@ -198,29 +203,14 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
         else
           update_edge e true >>
           return lpost
-      ) (return lpost) n.edges >>= fun lpost ->
+      ) (return lpost0) n.edges >>= fun lpost ->
     join_post_list n.vertex lpost >>= update_vertex n.vertex
-
-  let process_vertex ~widen n =
-    let should_widen n =
-      is_empty n.vertex >>= fun is_empty ->
-      return (widen && n.widen && not is_empty)
-    in
-    debug ("Processing vertex: " ^ string_of_int n.vertex);
-    attr_of_vertex n.vertex >>= fun old_attr ->
-    propagate_vertex ~descend:false n >>
-    checkM (is_growing n.vertex old_attr) begin fun () ->
-      update_workset n.vertex >>
-      whenM (should_widen n)
-            (fun () -> widening n.vertex old_attr.abstract) >>
-      return true
-    end
 
   let descend_strategy stgy =
     let process n =
       checkM (mem_workset n.vertex) begin fun () ->
         attr_of_vertex n.vertex >>= fun old_attr ->
-        propagate_vertex ~descend:true n >>
+        propagate ~descend:true n >>
         whenM (is_reducing n.vertex old_attr)
               (fun () -> update_workset n.vertex) >>
         return true
@@ -250,7 +240,7 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
       Nested_list.fold (fun n wsM ->
           wsM >>= fun ws ->
           attr_of_vertex n.vertex >>= fun attr ->
-          if not attr.is_empty then
+          if not attr.is_bot then
             return @@ Pset.add n.vertex ws
           else
             return ws
@@ -262,27 +252,41 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
       return (card > 0)
     end
 
-  let rec process_strategy ~depth stgy =
+  (* Run strategy point. *)
+  let run_point ~widen p =
+    debug ("Processing v: " ^ string_of_int p.vertex);
+    attr_of_vertex p.vertex >>= fun old_attr ->
+    propagate ~descend:false p >>
+    checkM (is_growing p.vertex old_attr) begin fun () ->
+      update_workset p.vertex >>= fun () ->
+      whenM (return (widen && p.widen && not old_attr.is_bot))
+            (fun () -> widening p.vertex old_attr.abstract) >>
+      return true
+    end
+
+  (* Run strategy point list. *)
+  let rec run_list ~depth stgy =
     assert (depth >= 2);
     let aux ~widen = function
       | Atom n ->
-        checkM (mem_workset n.vertex) (fun () -> process_vertex ~widen n)
+        checkM (mem_workset n.vertex) (fun () -> run_point ~widen n)
       | List stgy ->
-        process_strategy ~depth:(depth+1) stgy
+        run_list ~depth:(depth+1) stgy
     in
-    let rec iterate (growing, looping) ~widen = function
+    let rec iterate growing ~widen = function
       | [] ->
-        return (growing, looping)
+        return growing
       | x::xs ->
         aux ~widen x >>= fun res ->
-        iterate (growing || res, looping || res) ~widen xs
+        iterate (growing || res) ~widen xs
     in
-    let rec loop (growing, counter) =
+    (* iterate until stabilization *)
+    let rec loop (acc_growing, counter) =
       let counter = counter + 1 in
       widening_start () >>= fun ws ->
       let widen = (counter >= ws) in
-      iterate (growing, false) ~widen stgy >>= fun (growing, looping) ->
-      begin if not looping && depth >= 3 then
+      iterate false ~widen stgy >>= fun growing ->
+      begin if growing (*&& depth >= 3*) then
         Nested_list.fold (fun n repeatM ->
             ifM repeatM
               (fun _ -> return true)
@@ -291,19 +295,23 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
         else
           return false
       end >>= function
-      | true -> loop (growing, counter)
-      | false -> return growing
+      | true ->
+        loop (acc_growing || growing, counter)
+      | false ->
+        return (acc_growing || growing)
     in loop (false, 0)
 
-  let process stgy =
+  (* Run top strategy *)
+  (* NOTE: No need to stabilize. *)
+  let run_top_strategy stgy =
     let aux = function
-      | Atom n ->
-        checkM (mem_workset n.vertex) (fun () -> process_vertex ~widen:false n)
-        >>= fun grow -> return (grow, false)
+      | Atom p ->
+        checkM (mem_workset p.vertex) (fun () -> run_point ~widen:false p)
+        >>= fun growing -> return (growing, false)
       | List stgy ->
-        process_strategy ~depth:2 stgy >>= fun grow ->
-        checkM (return grow) (fun () -> descend stgy) >>= fun red ->
-        return (grow, red)
+        run_list ~depth:2 stgy >>= fun growing ->
+        checkM (return growing) (fun () -> descend stgy) >>= fun reducing ->
+        return (growing, reducing)
     in
     let rec loop (ggrow, gred) = function
       | [] ->
@@ -313,24 +321,22 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
         loop (ggrow || grow, gred || red) xs
     in loop (false, false) stgy
 
-  (* creates the internal repr and initialize the working sets *)
-  (* initialise state *)
+  (* Creates the internal state *)
   let init_state l g v0 =
     let add_attr v _ =
-      let (is_empty, abstract) =
-        if v = v0 then (false, l.init v)
-        else (true, l.bottom v)
-      in { is_empty; abstract; }
+      if v = v0 then { is_bot = false; abstract = l.init v }
+      else { is_bot = true; abstract = l.bottom v }
     in
-    (* add attributes to the edges *)
     let graph = Pgraph.map add_attr (fun _ _ -> true) g in
     { graph; vinit = v0;
       opers = l;
       widening_start = 0;
       widening_descend = 1;
       workset = Pset.empty compare;
-      }
+    }
 
+  (* Calculate an efficient chaotic iteration strategy
+   * Francois Bourdoncle (1993) *)
   let init_strategy g v0 =
     let wto = Pgraph.wto g v0 in
     debug @@ "Strategy: " ^ Nested_list.string_of_nested_list string_of_int wto;
@@ -341,8 +347,8 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
     Nested_list.map_aux init_vertex wto
 
   let run l g v0 =
-    let state = init_state l g v0 in
-    let strategy = init_strategy g v0 in
-    let (_, st) = run (update_workset v0 >> process strategy) state in
+    let st   = init_state l g v0 in
+    let stgy = init_strategy g v0 in
+    let (_, st) = run (update_workset v0 >> run_top_strategy stgy) st in
     Pgraph.map (fun _ attr -> attr.abstract) (fun _ _ -> ()) st.graph
 end
