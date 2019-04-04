@@ -20,17 +20,16 @@ type absvalue =
   | ATunspec
   | ATtop
 
-type absstate =
-  { abs_scalar: Box.t Abstract1.t; (* integers and floats *)
+type 'a absstate =
+  { abs_scalar: 'a Abstract1.t; (* integers and floats *)
     abs_term: absvalue SMap.t;
     mem_counter: int;
-    man: Box.t Manager.t;
   }
 
-module StateMonad = Monad.Make(struct type t = absstate end)
+module StateMonad = Monad.Make(struct type 'a t = 'a absstate end)
 open StateMonad
 
-let get_env = get >>= fun s ->
+let get_env () = get >>= fun s ->
   return @@ Abstract1.env s.abs_scalar
 
 let add_env man sym e = update @@ fun s ->
@@ -67,7 +66,6 @@ let rec show_absvalue = function
   | ATtuple vs -> "[" ^ String.concat ";" (List.map show_absvalue vs) ^ "]"
   | ATexpr te -> "te"
   | ATpointer n -> "@" ^ string_of_int n
-(*  | ATsym sym -> Sym.show sym *)
   | ATunspec -> "unspec"
   | ATtop -> "top"
 
@@ -121,7 +119,6 @@ let join man s1 s2 =
       SMap.union (fun k v _ -> Some v) (* TODO *)
         s1.abs_term s2.abs_term;
     mem_counter = max s1.mem_counter s2.mem_counter;
-    man = s1.man;
   }
 
 let widening man s1 s2 =
@@ -132,14 +129,12 @@ let widening man s1 s2 =
       SMap.union (fun k v _ -> Some v) (* TODO *)
         s1.abs_term s2.abs_term;
     mem_counter = max s1.mem_counter s2.mem_counter;
-    man = s1.man;
   }
 
 let bot man =
   { abs_scalar = Abstract1.bottom man empty_env;
     abs_term = SMap.empty;
     mem_counter = 0;
-    man;
   }
 
 (* TODO: top is incorrect *)
@@ -147,7 +142,6 @@ let top man =
   { abs_scalar = Abstract1.top man empty_env;
     abs_term = SMap.empty;
     mem_counter = 0;
-    man;
   }
 
 let init_absstate = top
@@ -155,7 +149,7 @@ let init_absstate = top
 let is_bottom man = fun s ->
   Abstract1.is_bottom man s.abs_scalar
 
-let rec absvalue_of_texpr = function
+let rec absvalue_of_texpr man = function
   | TEsym x ->
     get >>= (fun s ->
           if SMap.is_empty s.abs_term then print_endline "is_empty";
@@ -169,7 +163,7 @@ let rec absvalue_of_texpr = function
               return @@ ATexpr (Texpr1.var env var)
           end)
   | TEval v ->
-    get_env >>= fun env ->
+    get_env () >>= fun env ->
     begin match v with
       | Vobject (OVinteger i)
       | Vloaded (LVspecified (OVinteger i)) ->
@@ -192,7 +186,7 @@ let rec absvalue_of_texpr = function
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
     ->
-    absvalue_of_texpr te
+    absvalue_of_texpr man te
   | TEcall (Sym sym, _) ->
     print_endline @@ Sym.show sym;
     assert false
@@ -203,16 +197,16 @@ let rec absvalue_of_texpr = function
   | TEctor (ctor, tes) ->
     begin match ctor, tes with
       | Ctuple, _ ->
-        mapM absvalue_of_texpr tes >>= fun tes' ->
+        mapM (absvalue_of_texpr man) tes >>= fun tes' ->
         return @@ ATtuple tes'
       | Cspecified, [te] ->
-        absvalue_of_texpr te
+        absvalue_of_texpr man te
       | _ ->
         assert false
     end
   | TEop (bop, te1, te2) ->
-    absvalue_of_texpr te1 >>= fun t1 ->
-    absvalue_of_texpr te2 >>= fun t2 ->
+    absvalue_of_texpr man te1 >>= fun t1 ->
+    absvalue_of_texpr man te2 >>= fun t2 ->
     begin match t1, t2 with
     | ATexpr e1, ATexpr e2 ->
       let bop = match bop with
@@ -227,11 +221,11 @@ let rec absvalue_of_texpr = function
       return @@ ATexpr (Texpr1.binop bop e1 e2 Texpr1.Int Texpr1.Rnd)
     end
   | TEaction act ->
-    absvalue_of_action act
+    absvalue_of_action man act
   | _ ->
     assert false
 
-and absvalue_of_action = function
+and absvalue_of_action man = function
   | TAcreate ->
     modify (fun s ->
           (ATpointer s.mem_counter,
@@ -240,8 +234,8 @@ and absvalue_of_action = function
   | TAalloc ->
     assert false
   | TAstore (te_p, te_v) ->
-    absvalue_of_texpr te_p >>= fun av_p ->
-    absvalue_of_texpr te_v >>= fun av_v ->
+    absvalue_of_texpr man te_p >>= fun av_p ->
+    absvalue_of_texpr man te_v >>= fun av_v ->
     begin match av_p with
       (*
       | ATsym sym ->
@@ -268,7 +262,7 @@ and absvalue_of_action = function
         get >>= begin fun s ->
               begin match av_v with
                 | ATexpr e ->
-                  add_env_pointed s.man p e >>= fun () ->
+                  add_env_pointed man p e >>= fun () ->
                   return @@ ATunit
                 | _ ->
                   assert false
@@ -279,7 +273,7 @@ and absvalue_of_action = function
     end
   | TAload te_p ->
     debug "taload";
-    absvalue_of_texpr te_p >>= fun av_p ->
+    absvalue_of_texpr man te_p >>= fun av_p ->
     get >>= begin fun s ->
         match av_p with
         (*
@@ -363,7 +357,7 @@ let assign man pat te =
   in match te with
   | TEundef _ -> update (fun _ -> top man)
   | _ ->
-    absvalue_of_texpr te >>= fun v ->
+    absvalue_of_texpr man te >>= fun v ->
     debug "after absvalue";
     aux v pat
 
@@ -414,8 +408,8 @@ let rec guard man g st = function
   | Cop (bop, te1, te2) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr te1 >>= fun v1 ->
-      absvalue_of_texpr te2 >>= fun v2 ->
+      absvalue_of_texpr man te1 >>= fun v1 ->
+      absvalue_of_texpr man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -433,8 +427,8 @@ let rec guard man g st = function
   | Cnot (Cop (bop, te1, te2)) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr te1 >>= fun v1 ->
-      absvalue_of_texpr te2 >>= fun v2 ->
+      absvalue_of_texpr man te1 >>= fun v1 ->
+      absvalue_of_texpr man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -510,41 +504,31 @@ let apply man g e st =
        print_endline "non_empty");
     s
 
-module F = Fixpoint.Make (struct type t = absstate end)
+module F = Fixpoint.Make (struct type 'a t = 'a absstate end)
+open F
 
-let make_fpmanager man psh =
-  let open F in
+let make_lattice man g =
   { bottom = (fun vtx -> bot man);
     is_bottom = (fun vtx -> is_bottom man);
     is_leq = (fun vtx -> is_leq man);
     join = (fun vst -> join man);
-    join_list = (fun vtx abs_s ->
-        Debug_ocaml.print_debug 1 [] (fun _ -> "Joining...");
-        List.iter (fun s ->
-            Debug_ocaml.print_debug 1 [] (fun _ -> show_absstate s)
-          ) abs_s;
-        Debug_ocaml.print_debug 1 [] (fun _ -> "Result:");
-        let a = List.fold_left (join man) (bot man) abs_s in
-            Debug_ocaml.print_debug 1 [] (fun _ -> show_absstate a);
-        a
-      );
+    join_list = (fun vtx abs_s -> List.fold_left (join man) (bot man) abs_s);
     widening = (fun vtx abs1 abs2 -> widening man abs1 abs2);
     init = (fun vtx -> init_absstate man);
-    apply = (fun he st ->
-        Debug_ocaml.print_debug 1 [] (fun _ -> "Applying edge " ^ string_of_int he);
-        let res = apply man psh he st in
-        Debug_ocaml.print_debug 1 [] (fun _ -> "Finished applying edge " ^ string_of_int he);
-        res
-      )
-  ;
+    apply = (fun e st -> apply man g e st);
   }
 
-let solve core =
-  (* TODO: we fix box (intervals) at the moment *)
-  let man = Box.manager_alloc () in
-  let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
-  let fpman = make_fpmanager man cfg in
-  let fp = F.run fpman cfg v0 in
-  Pgraph.print stderr (fun v s -> string_of_int v ^ ": " ^ show_absstate s)
-    (fun e _ -> string_of_int e) fp
-
+let solve typ core =
+  let aux man =
+    let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
+    F.run (make_lattice man cfg) cfg v0
+    |> Pgraph.print stderr
+        (fun v s -> string_of_int v ^ ": " ^ show_absstate s)
+        (fun e _ -> string_of_int e)
+  in match typ with
+  | `Box -> aux @@ Box.manager_alloc ()
+  | `Oct -> aux @@ Oct.manager_alloc ()
+  | `PolkaLoose -> aux @@ Polka.manager_alloc_loose ()
+  | `PolkaStrict -> aux @@ Polka.manager_alloc_strict ()
+  | `PolkaEq -> aux @@ Polka.manager_alloc_equalities ()
+  | `Taylor1plus -> aux @@ T1p.manager_alloc ()

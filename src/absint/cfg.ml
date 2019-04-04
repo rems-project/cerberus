@@ -20,77 +20,63 @@ module IMap = Map.Make(Int)
 
 module SMap = Map.Make(Sym)
 
-module GraphM: sig
-  type ('a, 'b) t
+module GraphM : sig
+  include Monad.STATE_MONAD
 
-  val return: 'a -> ('a, 'b) t
-  val bind: ('a, 'c) t -> ('a -> ('b, 'c) t) -> ('b, 'c) t
-  val (>>=): ('a, 'c) t -> ('a -> ('b, 'c) t) -> ('b, 'c) t
-  val mapM: ('a -> ('b, 'c) t) -> 'a list -> ('b list, 'c) t
+  val new_vertex: unit -> ('a, Pgraph.vertex_id) t
 
-  val new_vertex: (Pgraph.vertex_id, 'a) t
+  val remove_isolated_vertices: unit -> ('a, unit) t
 
-  val remove_isolated_vertices: (unit, 'a) t
+  val add_edge: Pgraph.vertex_id * Pgraph.vertex_id -> 'a -> ('a, unit) t
 
-  val add_edge: Pgraph.vertex_id * Pgraph.vertex_id -> 'a -> (unit, 'a) t
+  val add_label: Symbol.sym -> Symbol.sym list * Pgraph.vertex_id -> ('a, unit) t
+  val get_label: Symbol.sym -> ('a, (Symbol.sym list * Pgraph.vertex_id) option) t
 
-  val add_label: Symbol.sym -> Symbol.sym list * Pgraph.vertex_id -> (unit, 'a) t
-  val get_label: Symbol.sym -> ((Symbol.sym list * Pgraph.vertex_id) option, 'a) t
+  val set_init_vertex: Pgraph.vertex_id -> ('a, unit) t
 
-  val set_init_vertex: Pgraph.vertex_id -> (unit, 'b) t
-
-  val run: ('a, 'b) t -> Pgraph.vertex_id * (unit, 'b) Pgraph.graph
+  val run: ('a, 'b) t -> Pgraph.vertex_id * (unit, 'a) Pgraph.graph
 
 end = struct
 
-  type 'b state =
-    { graph: (unit, 'b) Pgraph.graph;
+  type 'a graph_state =
+    { graph: (unit, 'a) Pgraph.graph;
       labels: (Symbol.sym list * int) SMap.t;
       vinit: Pgraph.vertex_id;
     }
 
-  type ('a, 'b) t = 'b state -> 'a * 'b state
+  module M = Monad.Make (struct type 'a t = 'a graph_state end)
+  include M
 
-  let return x = fun g -> (x, g)
-  let bind m f = fun g ->
-    let (x, g') = m g in
-    f x g'
-  let (>>=) = bind
-
-  let sequence ms =
-    let m =
-      List.fold_left (fun acc m ->
-          m   >>= fun x ->
-          acc >>= fun xs ->
-          return (x::xs)
-        ) (return []) ms
-    in fun s ->
-      let (xs, s') = m s in
-      (List.rev xs, s')
-  let mapM f xs = sequence (List.map f xs)
-
-  let new_vertex = fun st ->
+  let new_vertex () =
+    modify @@ fun st ->
     let (v, graph) = Pgraph.add_vertex () st.graph in
     (v, { st with graph })
 
-  let remove_isolated_vertices = fun st ->
-    ((), { st with graph = Pgraph.remove_isolated_vertices st.graph })
+  let remove_isolated_vertices () =
+    update @@ fun st ->
+    { st with graph = Pgraph.remove_isolated_vertices st.graph }
 
-  let add_edge (v1, v2) l = fun st ->
-    ((), { st with graph = snd @@ Pgraph.add_edge v1 v2 l st.graph })
+  let add_edge (v1, v2) l =
+    update @@ fun st ->
+    { st with graph = snd @@ Pgraph.add_edge v1 v2 l st.graph }
 
-  let add_label lab (xs, v) = fun st ->
-    ((), { st with labels = SMap.add lab (xs, v) st.labels })
+  let add_label lab (xs, v) =
+    update @@ fun st ->
+    { st with labels = SMap.add lab (xs, v) st.labels }
 
-  let get_label lab = fun st ->
-    (SMap.find_opt lab st.labels, st)
+  let get_label lab =
+    get >>= fun st ->
+    return @@ SMap.find_opt lab st.labels
 
-  let set_init_vertex vinit = fun st ->
-    ((), { st with vinit })
+  let set_init_vertex vinit =
+    update @@ fun st ->
+    { st with vinit }
 
   let run (m: ('a, 'b) t) =
-    let (_, st) = m { graph = Pgraph.empty; labels = SMap.empty; vinit = 0 } in
-    (st.vinit, st.graph)
+    let (_, st) = run m { graph = Pgraph.empty;
+                          labels = SMap.empty;
+                          vinit = 0 }
+    in (st.vinit, st.graph)
 
 end
 
@@ -513,7 +499,7 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       List.fold_left (fun acc pe ->
           let (sym, pat) = new_symbol () in
           acc >>= fun (syms, in_v) ->
-          new_vertex >>= fun out_v ->
+          new_vertex () >>= fun out_v ->
           self (in_v, out_v) pat pe >>= fun _ ->
           return (sym::syms, out_v)
         ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -523,14 +509,14 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       assert false
     | PEerror (str, pe) ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       add (mid_v, out_v) (Tassign (in_pat, TEerror (str, TEsym sym)))
     | PEctor (ctor, pes) ->
       List.fold_left (fun acc pe ->
           let (sym, pat) = new_symbol () in
           acc >>= fun (syms, in_v) ->
-          new_vertex >>= fun out_v ->
+          new_vertex () >>= fun out_v ->
           self (in_v, out_v) pat pe >>= fun _ ->
           return (sym::syms, out_v)
         ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -544,19 +530,19 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       List.fold_left (fun acc (pat, pe_body) ->
           let cond = Cmatch (pat, te) in
           acc >>= fun in_v ->
-          new_vertex >>= fun yes_v ->
+          new_vertex () >>= fun yes_v ->
           add (in_v, yes_v) (Tcond cond) >>= fun _ ->
-          new_vertex >>= fun mid_v ->
+          new_vertex () >>= fun mid_v ->
           self (yes_v, mid_v) pat pe >>= fun _ ->
           self (mid_v, out_v) in_pat pe_body >>= fun _ ->
-          new_vertex >>= fun no_v ->
+          new_vertex () >>= fun no_v ->
           add (in_v, no_v) (Tcond (Cnot cond)) >>= fun _ ->
           return no_v
         ) (return in_v) pat_pes >>= fun _ ->
       return `OK
       (*
       mapM (fun (pat, pe_body) ->
-          new_vertex >>= fun mid_v ->
+          new_vertex () >>= fun mid_v ->
           self (in_v, mid_v) pat pe >>= fun _ ->
           self (mid_v, out_v) in_pat pe_body
         ) pat_pes >>= fun _ ->
@@ -565,29 +551,29 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
     | PEarray_shift (pe1, cty, pe2) ->
       let (sym1, pat1) = new_symbol () in
       let (sym2, pat2) = new_symbol () in
-      new_vertex >>= fun v1 ->
-      new_vertex >>= fun v2 ->
+      new_vertex () >>= fun v1 ->
+      new_vertex () >>= fun v2 ->
       self (in_v, v1) pat1 pe1 >>= fun _ ->
       self (v1, v2) pat2 pe2 >>= fun _ ->
       let te = TEarray_shift (TEsym sym1, cty, TEsym sym2) in
       add (v2, out_v) (Tassign (in_pat, te))
     | PEmember_shift (pe, x, cid) ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEmember_shift (TEsym sym, x, cid) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEnot pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEnot (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEop (bop, pe1, pe2) ->
       let (sym1, pat1) = new_symbol () in
       let (sym2, pat2) = new_symbol () in
-      new_vertex >>= fun v1 ->
-      new_vertex >>= fun v2 ->
+      new_vertex () >>= fun v1 ->
+      new_vertex () >>= fun v2 ->
       self (in_v, v1) pat1 pe1 >>= fun _ ->
       self (v1, v2) pat2 pe2 >>= fun _ ->
       let te = TEop (bop, TEsym sym1, TEsym sym2) in
@@ -597,7 +583,7 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       List.fold_left (fun acc pe ->
           let (sym, pat) = new_symbol () in
           acc >>= fun (syms, in_v) ->
-          new_vertex >>= fun out_v ->
+          new_vertex () >>= fun out_v ->
           self (in_v, out_v) pat pe >>= fun _ ->
           return (sym:: syms, out_v)
         ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -606,19 +592,19 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       add (in_v, out_v) (Tassign (in_pat, te))
     | PEunion (x, cid, pe) ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEunion (x, cid, TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEcfunction pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEcfunction (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEmemberof (x, cid, pe) ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEmemberof (x, cid, TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
@@ -626,7 +612,7 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       List.fold_left (fun acc pe ->
           let (sym, pat) = new_symbol () in
           acc >>= fun (syms, in_v) ->
-          new_vertex >>= fun out_v ->
+          new_vertex () >>= fun out_v ->
           self (in_v, out_v) pat pe >>= fun _ ->
           return (sym:: syms, out_v)
         ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -634,7 +620,7 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
       let te  = TEcall (name, tes) in
       add (in_v, out_v) (Tassign (in_pat, te))
     | PElet (pat1, pe1, pe2) ->
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat1 pe1 >>= fun _ ->
       self (mid_v, out_v) in_pat pe2
     | PEif (pe1, pe2, pe3) ->
@@ -643,37 +629,37 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
           return (in_v, cond)
         | None ->
           let (sym, pat) = new_symbol () in
-          new_vertex >>= fun pe_v ->
+          new_vertex () >>= fun pe_v ->
           add_pe (in_v, pe_v) pat pe1 >>= fun _ ->
           return (pe_v, Csym sym)
       end >>= fun (in_v, cond) ->
-      new_vertex >>= fun true_v ->
+      new_vertex () >>= fun true_v ->
       add (in_v, true_v) (Tcond cond) >>= fun _ ->
       self (true_v, out_v) in_pat pe2 >>= fun _ ->
-      new_vertex >>= fun false_v ->
+      new_vertex () >>= fun false_v ->
       add (in_v, false_v) (Tcond (Cnot cond)) >>= fun _ ->
       self (false_v, out_v) in_pat pe3
     | PEis_scalar pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEis_scalar (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEis_integer pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEis_integer (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEis_signed pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEis_signed (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
     | PEis_unsigned pe ->
       let (sym, pat) = new_symbol () in
-      new_vertex >>= fun mid_v ->
+      new_vertex () >>= fun mid_v ->
       self (in_v, mid_v) pat pe >>= fun _ ->
       let te = TEis_unsigned (TEsym sym) in
       add (mid_v, out_v) (Tassign (in_pat, te))
@@ -682,8 +668,8 @@ let rec add_pe (in_v, out_v) in_pat (Pexpr (_, _, pe_) as pe) =
     | PEare_compatible (pe1, pe2) ->
       let (sym1, pat1) = new_symbol () in
       let (sym2, pat2) = new_symbol () in
-      new_vertex >>= fun v1 ->
-      new_vertex >>= fun v2 ->
+      new_vertex () >>= fun v1 ->
+      new_vertex () >>= fun v2 ->
       self (in_v, v1) pat1 pe1 >>= fun _ ->
       self (v1, v2) pat2 pe2 >>= fun _ ->
       let te = TEare_compatible (TEsym sym1, TEsym sym2) in
@@ -712,8 +698,8 @@ let add_action (in_v, out_v) in_pat (Action (_, _, act_)) =
       | _, _ ->
         let (sym_p, pat_p) = new_symbol () in
         let (sym_v, pat_v) = new_symbol () in
-        new_vertex >>= fun v_p ->
-        new_vertex >>= fun v_v ->
+        new_vertex () >>= fun v_p ->
+        new_vertex () >>= fun v_v ->
         add_pe (in_v, v_p) pat_p pe_p >>= fun _ ->
         add_pe (v_p, v_v) pat_v pe_v >>= fun _ ->
         add (v_v, out_v) (Tassign (in_pat,
@@ -745,7 +731,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     List.fold_left (fun acc pe ->
         let (sym, pat) = new_symbol () in
         acc >>= fun (syms, in_v) ->
-        new_vertex >>= fun out_v ->
+        new_vertex () >>= fun out_v ->
         add_pe (in_v, out_v) pat pe >>= fun _ ->
         return (sym:: syms, out_v)
       ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -762,26 +748,26 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     List.fold_left (fun acc (pat, e_body) ->
         let cond = Cmatch (pat, te) in
         acc >>= fun in_v ->
-        new_vertex >>= fun yes_v ->
+        new_vertex () >>= fun yes_v ->
         add (in_v, yes_v) (Tcond cond) >>= fun _ ->
-        new_vertex >>= fun mid_v ->
+        new_vertex () >>= fun mid_v ->
         add_pe (yes_v, mid_v) pat pe >>= fun _ ->
         self (mid_v, out_v) in_pat e_body >>= fun _ ->
-        new_vertex >>= fun no_v ->
+        new_vertex () >>= fun no_v ->
         add (in_v, no_v) (Tcond (Cnot cond)) >>= fun _ ->
         return no_v
       ) (return in_v) pat_es >>= fun _ ->
     return `OK
         (*
     mapM (fun (pat, e) ->
-        new_vertex >>= fun mid_v ->
+        new_vertex () >>= fun mid_v ->
         add_pe (in_v, mid_v) pat pe >>= fun _ ->
         self (mid_v, out_v) in_pat e
       ) pat_es >>= fun _ ->
     return `OK
            *)
   | Elet (pat1, pe1, e2) ->
-    new_vertex >>= fun mid_v ->
+    new_vertex () >>= fun mid_v ->
     add_pe (in_v, mid_v) pat1 pe1 >>= fun _ ->
     self (mid_v, out_v) in_pat e2
   | Eif (pe1, e2, e3) ->
@@ -790,14 +776,14 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
         return (in_v, cond)
       | None ->
         let (sym, pat) = new_symbol () in
-        new_vertex >>= fun pe_v ->
+        new_vertex () >>= fun pe_v ->
         add_pe (in_v, pe_v) pat pe1 >>= fun _ ->
         return (pe_v, Csym sym)
     end >>= fun (in_v, cond) ->
-    new_vertex >>= fun true_v ->
+    new_vertex () >>= fun true_v ->
     add (in_v, true_v) (Tcond cond) >>= fun _ ->
     self (true_v, out_v) in_pat e2 >>= fun _ ->
-    new_vertex >>= fun false_v ->
+    new_vertex () >>= fun false_v ->
     add (in_v, false_v) (Tcond (Cnot cond)) >>= fun _ ->
     self (false_v, out_v) in_pat e3
   | Eskip ->
@@ -811,7 +797,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     List.fold_left (fun acc pe ->
         let (sym, pat) = new_symbol () in
         acc >>= fun (syms, in_v) ->
-        new_vertex >>= fun out_v ->
+        new_vertex () >>= fun out_v ->
         add_pe (in_v, out_v) pat pe >>= fun _ ->
         return (sym:: syms, out_v)
       ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -821,7 +807,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     List.fold_left (fun acc pe ->
         let (sym, pat) = new_symbol () in
         acc >>= fun (syms, in_v) ->
-        new_vertex >>= fun out_v ->
+        new_vertex () >>= fun out_v ->
         add_pe (in_v, out_v) pat pe >>= fun _ ->
         return (sym::syms, out_v)
       ) (return ([], in_v)) pes >>= fun (rev_syms, in_v) ->
@@ -838,7 +824,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     mapM (fun pat_es ->
         List.fold_left (fun acc (pat, e) ->
             acc >>= fun in_v ->
-            new_vertex >>= fun out_v ->
+            new_vertex () >>= fun out_v ->
             self (in_v, out_v) pat e >>= fun _ ->
             return out_v
           ) (return in_v) pat_es >>= fun mid_v ->
@@ -847,7 +833,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
     return `OK
   | Ewseq (pat1, e1, e2)
   | Esseq (pat1, e1, e2) ->
-    new_vertex >>= fun mid_v ->
+    new_vertex () >>= fun mid_v ->
     self (in_v, mid_v) pat1 e1 >>= begin function
       | `OK -> self (mid_v, out_v) in_pat e2
       | `NoOut -> return `NoOut
@@ -868,7 +854,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
         (* NOTE: type in pattern is ignored *)
         let pat = Pattern ([], CaseBase (Some sym, BTy_unit)) in
         acc >>= fun (syms, in_v) ->
-        new_vertex >>= fun out_v ->
+        new_vertex () >>= fun out_v ->
         add_pe (in_v, out_v) pat pe >>= fun _ ->
         return (sym::syms, out_v)
       ) (return ([], in_v)) params >>= fun (rev_syms, mid_v) ->
@@ -883,7 +869,7 @@ let rec add_e ~sequentialise (in_v, out_v) in_pat (Expr (_, e_)) =
         (* NOTE: type in pattern is ignored *)
         let pat = Pattern ([], CaseBase (Some sym, BTy_unit)) in
         acc >>= fun in_v ->
-        new_vertex >>= fun out_v ->
+        new_vertex () >>= fun out_v ->
         add_pe (in_v, out_v) pat pe >>= fun _ ->
         return out_v
       ) (return in_v) @@ List.combine syms pes >>= fun mid_v ->
@@ -923,7 +909,7 @@ let rec collect_saves (Expr (_, e_)) =
     self e
   | Esave ((lab, _), params, e) ->
     self e >>= fun _ ->
-    new_vertex >>= fun lab_v ->
+    new_vertex () >>= fun lab_v ->
     add_label lab (List.map fst params, lab_v)
   | Erun _ ->
     return ()
@@ -937,11 +923,11 @@ let mk_cfg_e ~sequentialise e =
   let open GraphM in
   let empty_pat = Pattern ([], CaseBase (None, BTy_unit)) in
   run (collect_saves e >>= fun _ ->
-       new_vertex >>= fun in_v ->
-       new_vertex >>= fun out_v ->
+       new_vertex () >>= fun in_v ->
+       new_vertex () >>= fun out_v ->
        set_init_vertex in_v >>= fun _ ->
        add_e ~sequentialise (in_v, out_v) empty_pat e >>= fun _ ->
-       remove_isolated_vertices)
+       remove_isolated_vertices ())
 
 let dot_of_proc nm g =
   let pre = Sym.show nm in
