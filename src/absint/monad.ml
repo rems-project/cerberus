@@ -1,26 +1,27 @@
 module type MONAD = sig
-  type 'a t
-  val return: 'a -> 'a t
-  val bind: 'a t -> ('a -> 'b t) -> 'b t
-  val (>>=): 'a t -> ('a -> 'b t) -> 'b t
-  val (>>): 'a t -> 'b t -> 'b t
+  type ('a, 'b) t
+  val return: 'b -> ('a, 'b) t
+  val bind: ('a, 'b) t -> ('b -> ('a, 'c) t) -> ('a, 'c) t
+  val (>>=): ('a, 'b) t -> ('b -> ('a, 'c) t) -> ('a, 'c) t
+  val (>>): ('a, 'b) t -> ('a, 'c) t -> ('a, 'c) t
 end
 
 module type STATE_MONAD = sig
-  type state
+  type 'a state
   include MONAD
-  val run: 'a t -> state -> 'a * state
-  val mapM: ('a -> 'b t) -> 'a list -> ('b list) t
-  val get: state t
-  val put: state -> unit t
-  val update: (state -> state) -> unit t
-  val modify: (state -> 'a * state) -> 'a t
-  val whenM: bool t -> (unit -> unit t) -> unit t
-  val ifM: bool t -> (unit -> 'a t) -> (unit -> 'a t) -> 'a t
+  val run: ('a, 'b) t -> 'a state -> 'b * 'a state
+  val mapM: ('b -> ('a, 'c) t) -> 'b list -> ('a, 'c list) t
+  val get: ('a, 'a state) t
+  val put: 'a state -> ('a, unit) t
+  val update: ('a state -> 'a state) -> ('a, unit) t
+  val modify: ('a state -> 'b * 'a state) -> ('a, 'b) t
+  val whenM: ('a, bool) t -> (unit -> ('a, unit) t) -> ('a, unit) t
+  val ifM: ('a, bool) t -> (unit -> ('a, 'b) t) -> (unit -> ('a, 'b) t) ->
+    ('a, 'b) t
 end
 
-module Option: MONAD with type 'a t = 'a option = struct
-  type 'a t = 'a option
+module Option: MONAD with type ('a, 'b) t = 'b option = struct
+  type ('a, 'b) t = 'b option
   let return x = Some x
   let bind m f =
     match m with
@@ -30,9 +31,10 @@ module Option: MONAD with type 'a t = 'a option = struct
   let (>>) m1 m2 = m1 >>= fun _ -> m2
 end
 
-module Make(S: sig type t end): STATE_MONAD with type state = S.t = struct
-  type state = S.t
-  type 'a t = state -> 'a * state
+module Make(S: sig type 'a t end): STATE_MONAD with type 'a state = 'a S.t =
+struct
+  type 'a state = 'a S.t
+  type ('a, 'b) t = 'a state -> 'b * 'a state
   let return x = fun s -> (x, s)
   let bind m f = fun s ->
     let (x, s') = m s in f x s'

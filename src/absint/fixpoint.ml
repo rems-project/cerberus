@@ -4,42 +4,43 @@ open Nested_list
 let debug msg = Debug_ocaml.print_debug 5 [] (fun _ -> msg)
 
 module type FIXPOINT = sig
-  type absstate
+  type 'a absstate
 
-  type t =
-    { bottom: vertex_id -> absstate;
-      init: vertex_id -> absstate;
-      is_bottom: vertex_id -> absstate -> bool;
-      is_leq: vertex_id -> absstate -> absstate -> bool;
-      join: vertex_id -> absstate -> absstate -> absstate;
-      join_list: vertex_id -> absstate list -> absstate;
-      widening: vertex_id -> absstate -> absstate -> absstate;
+  type 'a t =
+    { bottom: vertex_id -> 'a absstate;
+      init: vertex_id -> 'a absstate;
+      is_bottom: vertex_id -> 'a absstate -> bool;
+      is_leq: vertex_id -> 'a absstate -> 'a absstate -> bool;
+      join: vertex_id -> 'a absstate -> 'a absstate -> 'a absstate;
+      join_list: vertex_id -> 'a absstate list -> 'a absstate;
+      widening: vertex_id -> 'a absstate -> 'a absstate -> 'a absstate;
       (* INVARIANT: apply must be strict: apply v bot = bot *)
-      apply: edge_id -> absstate -> absstate;
+      apply: edge_id -> 'a absstate -> 'a absstate;
     }
 
-  val run: t -> ('a, 'b) Pgraph.graph ->
+  val run: 'a t -> ('b, 'c) Pgraph.graph ->
            Pgraph.vertex_id ->
-           (absstate, unit) Pgraph.graph
+           ('a absstate, unit) Pgraph.graph
 end
 
-module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
-  type absstate = S.t
+module Make(S: sig type 'a t end): (FIXPOINT with type 'a absstate = 'a S.t) =
+struct
+  type 'a absstate = 'a S.t
 
-  type t =
-    { bottom: vertex_id -> S.t;
-      init: vertex_id -> S.t;
-      is_bottom: vertex_id -> S.t -> bool;
-      is_leq: vertex_id -> S.t -> S.t -> bool;
-      join: vertex_id -> S.t -> S.t -> S.t;
-      join_list: vertex_id -> S.t list -> S.t;
-      widening: vertex_id -> S.t -> S.t -> S.t;
-      apply: edge_id -> S.t -> S.t;
+  type 'a t =
+    { bottom: vertex_id -> 'a S.t;
+      init: vertex_id -> 'a S.t;
+      is_bottom: vertex_id -> 'a S.t -> bool;
+      is_leq: vertex_id -> 'a S.t -> 'a S.t -> bool;
+      join: vertex_id -> 'a S.t -> 'a S.t -> 'a S.t;
+      join_list: vertex_id -> 'a S.t list -> 'a S.t;
+      widening: vertex_id -> 'a S.t -> 'a S.t -> 'a S.t;
+      apply: edge_id -> 'a S.t -> 'a S.t;
     }
 
   (* state attached to vertices *)
-  type vertex_attr =
-    { abstract: S.t; (* abstract state *)
+  type 'a vertex_attr =
+    { abstract: 'a S.t; (* abstract state *)
       is_bot: bool; (* quick way to bot, since functions are strict *)
     }
 
@@ -56,16 +57,16 @@ module Make(S: sig type t end): (FIXPOINT with type absstate = S.t) = struct
   type strategy = point Nested_list.nlist
 
   (* internal state *)
-  type state =
-    { graph: (vertex_attr, edge_attr) graph;
-      opers: t;
+  type 'a state =
+    { graph: ('a vertex_attr, edge_attr) graph;
+      opers: 'a t;
       vinit: vertex_id;
       widening_start: int;          (* iterations until start widening *)
       widening_descend: int;
       workset: vertex_id Pset.set;
     }
 
-  module StateMonad = Monad.Make(struct type t = state end)
+  module StateMonad = Monad.Make(struct type 'a t = 'a state end)
   open StateMonad
 
   (* check b do f () if true otherwise returns false *)

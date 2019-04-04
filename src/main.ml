@@ -205,7 +205,7 @@ let cerberus debug_level progress core_obj
             prelude >>= fun core_std ->
             c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
-            ignore (Absint.solve core);
+            ignore (Absint.solve `Box core);
             return success
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
