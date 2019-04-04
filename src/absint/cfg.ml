@@ -706,11 +706,19 @@ let add_action (in_v, out_v) in_pat (Action (_, _, act_)) =
     in
     add (in_v, out_v) (Tassign (in_pat, TEaction (TAkill te)))
   | Store0 (_, _, pe_p, pe_v, _) ->
-    let te_p, te_v = match texpr_of_pexpr pe_p, texpr_of_pexpr pe_v with
-      | Some te_p, Some te_v -> te_p, te_v
-      | _ -> assert false
-    in
-    add (in_v, out_v) (Tassign (in_pat, TEaction (TAstore (te_p, te_v))))
+    begin match texpr_of_pexpr pe_p, texpr_of_pexpr pe_v with
+      | Some te_p, Some te_v ->
+        add (in_v, out_v) (Tassign (in_pat, TEaction (TAstore (te_p, te_v))))
+      | _, _ ->
+        let (sym_p, pat_p) = new_symbol () in
+        let (sym_v, pat_v) = new_symbol () in
+        new_vertex >>= fun v_p ->
+        new_vertex >>= fun v_v ->
+        add_pe (in_v, v_p) pat_p pe_p >>= fun _ ->
+        add_pe (v_p, v_v) pat_v pe_v >>= fun _ ->
+        add (v_v, out_v) (Tassign (in_pat,
+                                   TEaction (TAstore (TEsym sym_p, TEsym sym_v))))
+    end
   | Load0 (_, pe, _) ->
     let te = match texpr_of_pexpr pe with
       | Some te -> te
