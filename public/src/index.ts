@@ -1,4 +1,5 @@
 import $ from 'jquery'
+import _ from 'lodash'
 import './css/scheme.css'
 import './css/goldenlayout-base.css'
 import './css/goldenlayout-light-theme.css'
@@ -69,7 +70,7 @@ export function onLoad() {
     case 'fixedlink':
       get(mode.file, (source: string) => {
         const explode = mode.file.split('/')
-        const name = explode[explode.length-1]
+        const name = _.startsWith(mode.file, 'short/') ? 'example.c' : explode[explode.length-1]
         UI.addView(name, source)
       }, () => {
         console.log(`Error when trying to download ${mode.file}`)

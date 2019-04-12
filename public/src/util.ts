@@ -2,8 +2,6 @@ import $ from "jquery"
 import { State } from "./common"
 import { Range } from './location'
 
-const gapikey = 'AIzaSyDYrDNMlaTvfLxNX_cJ8EH_qrLq7aKeFJc'
-
 export function option(x: any, y: any) {
   if (x) return x
   return y
@@ -13,27 +11,6 @@ export function toHex(n: number | null): string {
   if (n == null)
     return '' // TODO: not sure of this!
   return "0x" + ("00" + n.toString(16)).substr(2)
-}
-
-export function shortURL(url: string, f: (_:string) => void) {
-  $.ajax({
-    type: 'POST',
-    url: 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapikey,
-    contentType: 'application/json',
-    data: JSON.stringify ({longUrl: url}),
-    success: (data) => f (data.id)
-  })
-}
-
-export function longURL(url: string) {
-  $.ajax({
-    type: 'GET',
-    url: 'https://www.googleapis.com/urlshortener/v1/url?key=' + gapikey
-          +'&shortUrl=http://goo.gl/' + url,
-    success: (data) => {
-      console.log(data)
-    }
-  })
 }
 
 export namespace Cursor {

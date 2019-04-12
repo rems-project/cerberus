@@ -11,11 +11,12 @@ let empty_env = Environment.make [||] [||]
 
 type absvalue =
   | ATunit
-  | ATtrue
-  | ATfalse
+  (*| ATtrue => 1
+  | ATfalse => 0 *) 
   | ATctype of Core_ctype.ctype0 (* C type as value *)
   | ATtuple of absvalue list
   | ATexpr of Texpr1.t
+  | ATcons of Tcons1.t
   | ATpointer of int (* TODO: naive pointer at the moment *)
   | ATunspec
   | ATtop
@@ -32,6 +33,7 @@ open StateMonad
 let get_env () = get >>= fun s ->
   return @@ Abstract1.env s.abs_scalar
 
+(*
 let add_env man sym e = update @@ fun s ->
   let var = Var.of_string (Sym.show sym) in
   let env0 = Abstract1.env s.abs_scalar in
@@ -43,6 +45,31 @@ let add_env man sym e = update @@ fun s ->
     Abstract1.assign_texpr man
       (Abstract1.change_environment man s.abs_scalar env true)
       var e None
+  in { s with abs_scalar }
+*)
+
+let add_env man sym e = update @@ fun s ->
+  let var = Var.of_string (Sym.show sym) in
+  let env0 = Abstract1.env s.abs_scalar in
+  let env =
+    if Environment.mem_var env0 var then env0
+    else Environment.add env0 [| var |] [||]
+  in
+  (* add as assign *)
+  let abs_scalar =
+    Abstract1.assign_texpr man
+      (Abstract1.change_environment man s.abs_scalar env true)
+      var e None
+  in
+  (* and as constraint *)
+  let e = Texpr1.of_expr env @@ Texpr1.to_expr e in
+ (* let e = { e with Texpr1.env = env } in *)
+  let te = Texpr1.binop Texpr1.Sub (Texpr1.var env var) e 
+      Texpr1.Real Texpr1.Rnd in
+  let cons = Tcons1.make te Tcons1.EQ in
+  let ear = Tcons1.array_make env 1 in
+  Tcons1.array_set ear 0 cons;
+  let abs_scalar = Abstract1.meet_tcons_array man abs_scalar ear
   in { s with abs_scalar }
 
 let add_env_pointed man n e = update @@ fun s ->
@@ -60,8 +87,8 @@ let add_env_pointed man n e = update @@ fun s ->
 
 let rec show_absvalue = function
   | ATunit -> "unit"
-  | ATtrue -> "true"
-  | ATfalse -> "false"
+  (*| ATtrue -> "true"
+  | ATfalse -> "false"*)
   | ATctype cty -> String_core_ctype.string_of_ctype cty
   | ATtuple vs -> "[" ^ String.concat ";" (List.map show_absvalue vs) ^ "]"
   | ATexpr te -> "te"
@@ -69,18 +96,28 @@ let rec show_absvalue = function
   | ATunspec -> "unspec"
   | ATtop -> "top"
 
-let show_abs_scalar st =
+let show_abs_scalar man st =
+  let box = Abstract1.to_box man st in
+  Array.iteri (fun i b ->
+    Var.print Format.str_formatter @@ Environment.var_of_dim box.Abstract1.box1_env i;
+    Format.pp_print_text Format.str_formatter " = ";
+    Interval.print Format.str_formatter b;
+    Format.pp_print_text Format.str_formatter "; "
+  ) box.Abstract1.interval_array;
+  Format.flush_str_formatter ()
+    (*
   Abstract1.print Format.str_formatter st;
   Format.flush_str_formatter ()
+     *)
 
 let show_abs_term st =
   SMap.fold (fun k v acc ->
       acc ^ Sym.show k ^ " -> " ^ show_absvalue v ^ "; \n"
     ) st.abs_term ""
 
-let show_absstate = fun s ->
+let show_absstate man = fun s ->
     (* TODO/NOTE: ignoring non scalar terms *)
-    show_abs_scalar s.abs_scalar
+    show_abs_scalar man s.abs_scalar
     (*
     SMap.fold (fun k v acc -> 
         acc ^ Sym.show k ^ "; \n")
@@ -103,8 +140,13 @@ let lift_common_env man (s1, s2) =
   | 1 ->
     let abs_scalar = Abstract1.change_environment man s2.abs_scalar env1 true
     in (s1, { s2 with abs_scalar })
-  | _ ->
-    assert false
+  | 2 ->
+    let env = Environment.lce env1 env2 in
+    let abs_scalar1 = Abstract1.change_environment man s1.abs_scalar env true in
+    let abs_scalar2 = Abstract1.change_environment man s2.abs_scalar env true in
+    ( { s1 with abs_scalar = abs_scalar1 } , { s2 with abs_scalar = abs_scalar2 } )
+  | n ->
+    failwith ("lift_common_env: " ^ string_of_int n)
 
 let is_leq man s1 s2 =
   (* TODO/NOTE: this is wrong, it ignores non scalar terms *)
@@ -149,11 +191,19 @@ let init_absstate = top
 let is_bottom man = fun s ->
   Abstract1.is_bottom man s.abs_scalar
 
-let rec absvalue_of_texpr man = function
+let rec absvalue_of_texpr ~with_sym man = function
   | TEsym x ->
     get >>= (fun s ->
           if SMap.is_empty s.abs_term then print_endline "is_empty";
           begin match SMap.find_opt x s.abs_term with
+            | Some (ATpointer p) when with_sym ->
+              let env0 = Abstract1.env s.abs_scalar in
+              let var = Var.of_string ("@" ^ string_of_int p) in
+              let env =
+                if Environment.mem_var env0 var then env0
+                else Environment.add env0 [| var |] [||]
+              in
+              return @@ ATexpr (Texpr1.var env var)
             | Some v ->
               return v
               (* return @@ ATsym x *)
@@ -175,9 +225,9 @@ let rec absvalue_of_texpr man = function
       | Vunit ->
         return @@ ATunit
       | Vtrue ->
-        return @@ ATtrue
+        return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 1))
       | Vfalse ->
-        return @@ ATfalse
+        return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 0))
       | v ->
         debug @@ String_core.string_of_value v;
         assert false
@@ -186,7 +236,7 @@ let rec absvalue_of_texpr man = function
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
     ->
-    absvalue_of_texpr man te
+    absvalue_of_texpr ~with_sym man te
   | TEcall (Sym sym, _) ->
     print_endline @@ Sym.show sym;
     assert false
@@ -197,16 +247,16 @@ let rec absvalue_of_texpr man = function
   | TEctor (ctor, tes) ->
     begin match ctor, tes with
       | Ctuple, _ ->
-        mapM (absvalue_of_texpr man) tes >>= fun tes' ->
+        mapM (absvalue_of_texpr ~with_sym man) tes >>= fun tes' ->
         return @@ ATtuple tes'
       | Cspecified, [te] ->
-        absvalue_of_texpr man te
+        absvalue_of_texpr ~with_sym man te
       | _ ->
         assert false
     end
   | TEop (bop, te1, te2) ->
-    absvalue_of_texpr man te1 >>= fun t1 ->
-    absvalue_of_texpr man te2 >>= fun t2 ->
+    absvalue_of_texpr ~with_sym man te1 >>= fun t1 ->
+    absvalue_of_texpr ~with_sym man te2 >>= fun t2 ->
     begin match t1, t2 with
     | ATexpr e1, ATexpr e2 ->
       let bop = match bop with
@@ -221,11 +271,13 @@ let rec absvalue_of_texpr man = function
       return @@ ATexpr (Texpr1.binop bop e1 e2 Texpr1.Int Texpr1.Rnd)
     end
   | TEaction act ->
-    absvalue_of_action man act
+    absvalue_of_action ~with_sym man act
+  | TEnot _ ->
+    assert false
   | _ ->
     assert false
 
-and absvalue_of_action man = function
+and absvalue_of_action ~with_sym man = function
   | TAcreate ->
     modify (fun s ->
           (ATpointer s.mem_counter,
@@ -234,8 +286,8 @@ and absvalue_of_action man = function
   | TAalloc ->
     assert false
   | TAstore (te_p, te_v) ->
-    absvalue_of_texpr man te_p >>= fun av_p ->
-    absvalue_of_texpr man te_v >>= fun av_v ->
+    absvalue_of_texpr ~with_sym man te_p >>= fun av_p ->
+    absvalue_of_texpr ~with_sym man te_v >>= fun av_v ->
     begin match av_p with
       (*
       | ATsym sym ->
@@ -273,7 +325,7 @@ and absvalue_of_action man = function
     end
   | TAload te_p ->
     debug "taload";
-    absvalue_of_texpr man te_p >>= fun av_p ->
+    absvalue_of_texpr ~with_sym man te_p >>= fun av_p ->
     get >>= begin fun s ->
         match av_p with
         (*
@@ -357,7 +409,7 @@ let assign man pat te =
   in match te with
   | TEundef _ -> update (fun _ -> top man)
   | _ ->
-    absvalue_of_texpr man te >>= fun v ->
+    absvalue_of_texpr ~with_sym:false man te >>= fun v ->
     debug "after absvalue";
     aux v pat
 
@@ -408,8 +460,8 @@ let rec guard man g st = function
   | Cop (bop, te1, te2) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr man te1 >>= fun v1 ->
-      absvalue_of_texpr man te2 >>= fun v2 ->
+      absvalue_of_texpr ~with_sym:true man te1 >>= fun v1 ->
+      absvalue_of_texpr ~with_sym:true man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -427,8 +479,8 @@ let rec guard man g st = function
   | Cnot (Cop (bop, te1, te2)) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr man te1 >>= fun v1 ->
-      absvalue_of_texpr man te2 >>= fun v2 ->
+      absvalue_of_texpr ~with_sym:true man te1 >>= fun v1 ->
+      absvalue_of_texpr ~with_sym:true man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -446,6 +498,23 @@ let rec guard man g st = function
   | Cnot (Cnot c) ->
     guard man g st c
   | Csym x ->
+    let var = Var.of_string (Sym.show x) in
+    let env0 = Abstract1.env st.abs_scalar in
+    let env =
+      if Environment.mem_var env0 var then env0
+      else Environment.add env0 [| var |] [||]
+    in
+    let abs_scalar =
+      Abstract1.change_environment man st.abs_scalar env true
+    in
+    let te = Texpr1.binop Texpr1.Sub (Texpr1.var env var) (Texpr1.cst env (Coeff.s_of_int 1))
+        Texpr1.Real Texpr1.Rnd in
+    let cons = Tcons1.make te Tcons1.EQ in
+    let ear = Tcons1.array_make env 1 in
+    Tcons1.array_set ear 0 cons;
+    let abs_scalar = Abstract1.meet_tcons_array man abs_scalar ear in
+    (false, { st with abs_scalar })
+    (*
     begin match SMap.find_opt x st.abs_term with
       | Some ATtrue ->
         (* TODO: THIS IS WRONG *)
@@ -456,7 +525,25 @@ let rec guard man g st = function
       | _ ->
         assert false
     end
+       *)
   | Cnot (Csym x) ->
+    let var = Var.of_string (Sym.show x) in
+    let env0 = Abstract1.env st.abs_scalar in
+    let env =
+      if Environment.mem_var env0 var then env0
+      else Environment.add env0 [| var |] [||]
+    in
+    let abs_scalar =
+      Abstract1.change_environment man st.abs_scalar env true
+    in
+    let te = Texpr1.binop Texpr1.Sub (Texpr1.var env var) (Texpr1.cst env (Coeff.s_of_int 0))
+        Texpr1.Real Texpr1.Rnd in
+    let cons = Tcons1.make te Tcons1.EQ in
+    let ear = Tcons1.array_make env 1 in
+    Tcons1.array_set ear 0 cons;
+    let abs_scalar = Abstract1.meet_tcons_array man abs_scalar ear in
+    (false, { st with abs_scalar })
+    (*
     begin match SMap.find_opt x st.abs_term with
       | Some ATtrue ->
         debug @@ "SYMBOL: " ^ Sym.show x;
@@ -468,6 +555,7 @@ let rec guard man g st = function
       | _ ->
         assert false
     end
+       *)
   | Cnot c -> (* TODO: this might be wrong *)
     let (is_bot, st) = guard man g st c in
     (not is_bot, st)
@@ -487,12 +575,26 @@ let apply man g e st =
     | Some (_, tr, _) -> tr
     | None -> assert false
   in
+  print_endline @@ "Edge " ^ string_of_int e;
   print_endline @@ Cfg.show_transfer tr;
-  print_endline @@ show_absstate st;
+  print_endline @@ show_absstate man st;
+  (*
+  Abstract1.fdump man st.abs_scalar;
+  Abstract0.print string_of_int Format.std_formatter @@ Abstract1.abstract0 st.abs_scalar;
+     *)
   match tr with
   | Tskip -> st
   | Tcond c ->
+    print_endline "GUARD";
+    print_endline @@ show_cond c;
+    Abstract1.fdump man st.abs_scalar;
+    print_endline "GUARD BEFORE";
+    Abstract0.print string_of_int Format.std_formatter @@ Abstract1.abstract0 st.abs_scalar;
+    print_newline();
     let (is_bot, st) = guard man g st c in
+    print_endline "GUARD AFTER";
+    Abstract0.print string_of_int Format.std_formatter @@ Abstract1.abstract0 st.abs_scalar;
+    print_newline();
     if is_bot then bot man else st
   | Tcall _ ->
     print_endline "TODO: call";
@@ -523,7 +625,7 @@ let solve typ core =
     let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
     F.run (make_lattice man cfg) cfg v0
     |> Pgraph.print stderr
-        (fun v s -> string_of_int v ^ ": " ^ show_absstate s)
+        (fun v s -> string_of_int v ^ ": " ^ show_absstate man s)
         (fun e _ -> string_of_int e)
   in match typ with
   | `Box -> aux @@ Box.manager_alloc ()
