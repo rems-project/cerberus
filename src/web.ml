@@ -585,10 +585,14 @@ let shorten source =
     let digest_len = String.length digest in
     let path = docroot ^ "short/" in
     let write_file hash =
-      Lwt_io.open_file Lwt_io.Output (path ^ hash) >>= fun oc ->
-      Lwt_io.write_from_string oc source 0 (String.length source) >>= fun _ ->
-      Lwt_io.close oc >>= fun () ->
-      return @@ Shorten hash
+      let len = String.length source in
+      if len > 1000000 then (* max: 1MB *)
+        return @@ Failure "File is too large."
+      else
+        Lwt_io.open_file Lwt_io.Output (path ^ hash) >>= fun oc ->
+        Lwt_io.write_from_string oc source 0 (String.length source) >>= fun _ ->
+        Lwt_io.close oc >>= fun () ->
+        return @@ Shorten hash
     in
     let rec aux n =
       if n >= digest_len then begin
@@ -605,7 +609,6 @@ let shorten source =
         | false ->
           write_file hash
     in aux 6
-
 
 let cerberus ~rheader ~conf ~flow content =
   let start_time = Sys.time () in
