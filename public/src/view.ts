@@ -334,7 +334,7 @@ export default class View {
     if (!this.state.interactive) return
     const mem = this.state.interactive.current.mem
     if (!mem) return
-    const pvi = _.includes(this.state.model.switches, 'integer_provenance')
+    const pvi = _.includes(this.state.model.switches, 'PVI')
     const createNode = (alloc: Memory.Allocation): string => {
       if (alloc.prefix.kind === 'string literal' && !this.state.options.show_string_literals)
         return ''

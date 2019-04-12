@@ -53,6 +53,7 @@ public/include
 public/node_modules
 public/dist/*.bundle.*
 public/dist/src/*
+public/dist/short/*
 request.log
 config.json
 cpp_error

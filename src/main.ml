@@ -109,7 +109,7 @@ let cerberus debug_level progress core_obj
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
-             absint cfg
+             absint cfg absdomain
              bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
              bmc_debug bmc_all_execs bmc_output_model
              bmc_mode bmc_cat
@@ -205,7 +205,7 @@ let cerberus debug_level progress core_obj
             prelude >>= fun core_std ->
             c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
             typed_core_passes (conf, io) core >>= fun (core, _) ->
-            ignore (Absint.solve `Box core);
+            ignore (Absint.solve absdomain core);
             return success
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
@@ -371,6 +371,15 @@ let astprints =
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
+let absdomain =
+  let doc = "Choose abstract domain (ranging over {box, oct, polka_loose (default), polka_strict, polka_eq})." in
+  Arg.(value & opt (enum [("box", `Box);
+                          ("oct", `Oct);
+                          ("polka_loose", `PolkaLoose);
+                          ("polka_strict", `PolkaStrict);
+                          ("polka_eq", `PolkaEq)])
+         `PolkaLoose & info ["absdomain"] ~doc)
+
 let fs =
   let doc = "Initialise the internal file system with the contents of the\
              directory DIR" in
@@ -528,7 +537,7 @@ let () =
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
-                         absint $ cfg $
+                         absint $ cfg $ absdomain $
                          bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
                          bmc_debug $ bmc_all_execs $ bmc_output_model $
                          bmc_mode $ bmc_cat $

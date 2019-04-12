@@ -235,6 +235,7 @@ struct
     in loop (false, 0)
 
   let descend stgy =
+    debug "Descending...";
     widening_descend () >>= fun wd ->
     checkM (return (wd > 0)) begin fun () ->
       get_workset () >>= fun old_ws ->

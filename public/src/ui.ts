@@ -7,7 +7,7 @@ import Widget from './widget';
 
 /** Possible actions to request to the server */
 type ExecutionMode = 'random' | 'exhaustive'
-type Action = 'elaborate' | 'random' | 'exhaustive' | 'step' | 'bmc'
+type Action = 'elaborate' | 'random' | 'exhaustive' | 'step' | 'bmc' | 'shorten'
 
 export class CerberusUI {
   /** List of existing views */
@@ -157,7 +157,7 @@ export class CerberusUI {
       const url = 'https://cerberus.cl.cam.ac.uk/#'
                 + this.currentView.getEncodedState()
       if (this.short_share)
-        util.shortURL(url, (url: string) => $('#sharelink').val(url))
+        this.shortURL((url: string) => $('#sharelink').val(url))
       else
         $('#sharelink').val(url)
     }
@@ -546,6 +546,17 @@ export class CerberusUI {
 
   public execGraphNodeClick(i: number) {
     this.getView().execGraphNodeClick(i)
+  }
+
+  shortURL(onSuccess: Function) {
+    this.request('shorten', (data: ResultRequest) => {
+      if (data.status == 'shorten')
+        onSuccess("https://cerberus.cam.ac.uk/?short/" + data.url)
+      else if (data.status == 'failure')
+        alert (data.console)
+      else
+        throw new Error("Unknown response for shorten: " + data)
+    })
   }
 
   request (action: Action, onSuccess: Function, interactive?: InteractiveRequest) {

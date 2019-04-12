@@ -193,7 +193,8 @@ type action =
   | `Random
   | `Exhaustive
   | `Step
-  | `BMC ]
+  | `BMC
+  | `Shorten ]
 
 let string_of_action = function
   | `Nop        -> "Nop"
@@ -202,6 +203,7 @@ let string_of_action = function
   | `Exhaustive -> "Exhaustive"
   | `Step       -> "Step"
   | `BMC        -> "BMC"
+  | `Shorten    -> "Shorten"
 
 type incoming_msg =
   { action:  action;
@@ -241,6 +243,7 @@ let parse_incoming_msg content =
     | "exhaustive" -> `Exhaustive
     | "step"       -> `Step
     | "bmc"        -> `BMC
+    | "shorten"    -> `Shorten
     | s -> failwith ("unknown action " ^ s)
   in
   let bmc_mode_from_string = function
@@ -401,6 +404,11 @@ let json_of_result = function
       ("status", `String "failure");
       ("console", `String err);
       ("result", `String "");
+    ]
+  | Shorten url ->
+    `Assoc [
+      ("status", `String "shorten");
+      ("url", `String url);
     ]
   | Failure err ->
     `Assoc [
@@ -568,6 +576,36 @@ let log_request msg flow =
     close_out oc
   | _ -> ()
 
+let shorten source =
+  if source = "" then
+    return @@ Failure "Empty source!"
+  else
+    let docroot = (!webconf()).docroot in
+    let digest = Digest.to_hex @@ Digest.string source in
+    let digest_len = String.length digest in
+    let path = docroot ^ "short/" in
+    let write_file hash =
+      Lwt_io.open_file Lwt_io.Output (path ^ hash) >>= fun oc ->
+      Lwt_io.write_from_string oc source 0 (String.length source) >>= fun _ ->
+      Lwt_io.close oc >>= fun () ->
+      return @@ Shorten hash
+    in
+    let rec aux n =
+      if n >= digest_len then begin
+        Debug.warn @@ "Numerous file conflict: " ^ digest ^ ".";
+        write_file digest
+      end else
+        let hash = String.sub digest 0 n in
+        Lwt_unix.file_exists (path ^ hash) >>= function
+        | true ->
+          if Digest.to_hex @@ Digest.file (path ^ hash) = digest then
+            return @@ Shorten hash (* same file *)
+          else
+            aux (n+1)
+        | false ->
+          write_file hash
+    in aux 6
+
 
 let cerberus ~rheader ~conf ~flow content =
   let start_time = Sys.time () in
@@ -602,6 +640,7 @@ let cerberus ~rheader ~conf ~flow content =
     | `Exhaustive -> request @@ `Execute (conf, filename, msg.name, Exhaustive)
     | `Step -> request @@ `Step (conf, filename, msg.name, msg.interactive)
     | `BMC -> request @@ `BMC (conf, msg.bmc_model,filename, msg.name)
+    | `Shorten -> shorten msg.source
   in
   Debug.print 9 ("Time: " ^ now ());
   Debug.print 7 ("Executing action " ^ string_of_action msg.action);

@@ -119,7 +119,8 @@ export type ResultRequest =
   { status: 'interactive', tagDefs: string, ranges: any, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'stepping', result: string, activeId: number, steps: {nodes: Node [], edges: Edge[]}} |
   { status: 'failure', console: string, result: string } |
-  { status: 'bmc', result: string, executions: string[] }
+  { status: 'bmc', result: string, executions: string[] } |
+  { status: 'shorten', url: string }
 
 export type Event =
   'update' |                // Update tab values

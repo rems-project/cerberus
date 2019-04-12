@@ -105,4 +105,5 @@ type result =
   | Interactive of string * (string * PPrint.range) list * exec_tree (* tagDefs * range list * execution tree *)
   | Step of string option * int * exec_tree (* maybe result * active node id * execution tree *)
   | BMC of [ `Satisfiable of (string * string list) | `Unsatisfiable of (string * string list) | `Unknown of string ]
+  | Shorten of string
   | Failure of string
