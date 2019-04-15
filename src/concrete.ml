@@ -325,8 +325,8 @@ module Concrete : Memory = struct
     let v prov ?(copy_offset = None) value =
       { prov; copy_offset; value }
 
-    let to_json b =
-      `Assoc [("prov", match b.prov with Prov_some n -> `Int (N.to_int n) | _ -> `Null);
+    let to_json json_of_prov b =
+      `Assoc [("prov", json_of_prov b. prov);
               ("offset", Json.of_option Json.of_int b.copy_offset);
               ("value", Json.of_option Json.of_char b.value);]
     
@@ -2627,7 +2627,7 @@ let combine_prov prov1 prov2 =
             ("value", `String v.value);
             ("prov", serialise_prov st v.prov);
             ("type", Json.of_option (fun ty -> `String (String_core_ctype.string_of_ctype ty)) v.typ);
-            ("bytes", Json.of_option (fun bs -> `List (List.map AbsByte.to_json bs)) v.bytes); ]
+            ("bytes", Json.of_option (fun bs -> `List (List.map (AbsByte.to_json (serialise_prov st)) bs)) v.bytes); ]
 
   let serialise_ui_alloc st (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
