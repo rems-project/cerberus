@@ -551,7 +551,7 @@ export class CerberusUI {
   shortURL(onSuccess: Function) {
     this.request('shorten', (data: ResultRequest) => {
       if (data.status == 'shorten')
-        onSuccess("https://cerberus.cam.ac.uk/?short/" + data.url)
+        onSuccess("https://cerberus.cl.cam.ac.uk/?short/" + data.url)
       else if (data.status == 'failure')
         alert (data.console)
       else
