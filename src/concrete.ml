@@ -908,7 +908,9 @@ module Concrete : Memory = struct
                                       | `SingleAlloc alloc_id ->
                                           Prov_some alloc_id
                                       | `DoubleAlloc (alloc_id1, alloc_id2) ->
-                                          failwith "TODO(iota): abst => make a iota?"
+                                          (* FIXME/HACK(VICTOR): This is wrong, but when serialising the memory in the UI, I get this failwith. *)
+                                          Prov_some alloc_id1
+                                          (* failwith "TODO(iota): abst => make a iota?" *)
                                     end
                                 | `ValidPtrProv ->
                                     (* KKK print_endline ("ValidPtrProv ==> " ^ string_of_provenance prov); *)
