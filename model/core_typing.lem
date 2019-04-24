@@ -1737,7 +1737,7 @@ let typecheck_program file =
             E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc', (sym, GlobalDef bTy te) :: acc)
         | GlobalDecl bTy ->
             E.return (insert_tdecl (Sym sym) (TDsym bTy) env_acc, (sym, GlobalDecl bTy) :: acc)
-      end) (env, []) file.globs >>= fun (env, globs') ->
+      end) (env, []) file.globs >>= fun (env, rev_globs') ->
     
     (* Registering the program functions *)
     let env = Map_extra.fold (fun sym decl acc ->
@@ -1776,7 +1776,7 @@ let typecheck_program file =
       tagDefs= file.tagDefs;
       stdlib= stdlib';
       impl= impl';
-      globs= globs';
+      globs= List.reverse rev_globs';
       funs= funs';
       extern= file.extern;
       funinfo= file.funinfo;
