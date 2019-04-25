@@ -405,10 +405,11 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
         Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
 
 and dtree_of_struct_declaration = function
-  | Struct_declaration (specs, qs, s_decls) ->
+  | Struct_declaration (specs, qs, align_specs, s_decls) ->
       Dnode (pp_ctor "Struct_declaration", filter_opt_list [
         node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs  ;
         leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs     ;
+        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
         node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ])
   | Struct_assert sa_decl ->
       Dnode (pp_ctor "Struct_assert", [dtree_of_static_assert_declaration sa_decl])
@@ -507,14 +508,17 @@ and dtree_of_parameter_declaration = function
               , [dtree_of_specifiers specifs; dtree_of_abstract_declarator abs_decltor] )
 
 and dtree_of_type_name = function
-  | Type_name (specs, qs, None) ->
+  | Type_name (specs, qs, align_specs, None) ->
       Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
         node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
-        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs   ] )
-  | Type_name (specs, qs, Some a_decltor) ->
+        leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs;
+        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
+      ] )
+  | Type_name (specs, qs, align_specs, Some a_decltor) ->
       Dnode ( pp_decl_ctor "Type_name", filter_opt_list [
         node_opt_list "Type_specifiers" dtree_of_cabs_type_specifier specs;
         leaf_opt_list "Type_qualifiers" pp_cabs_type_qualifier       qs   ;
+        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
         Some (dtree_of_abstract_declarator a_decltor)] )
 
 and dtree_of_abstract_declarator = function
