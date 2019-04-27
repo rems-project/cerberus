@@ -2508,7 +2508,7 @@ let combine_prov prov1 prov2 =
     let add_path p r = { r with path = p :: r.path } in
     match mval with
     | MVunspecified _ ->
-      mk_scalar "unspecified" Prov_none None
+      mk_scalar "unspecified" Prov_none (Some bs)
     | MVinteger (_, IV(prov, n)) ->
       mk_scalar (N.to_string n) prov None
     | MVfloating (_, f) ->
