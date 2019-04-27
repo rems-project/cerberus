@@ -29,10 +29,10 @@ let mem eq_A a C =
   | Nothing -> false
   end
 
-let fresh (eq_A : 'A -> 'A -> bool) a (C: context 'A 'B) = not (mem eq_A a C)
+let fresh_binding (eq_A : 'A -> 'A -> bool) a (C: context 'A 'B) = not (mem eq_A a C)
 
 val fresh_bindings : forall 'A 'B1 'B2. ('A -> 'A -> bool) -> list ('A * 'B2) -> context 'A 'B1 -> bool
-let fresh_bindings eq_A bs C = List.all (fun b -> fresh eq_A (fst b) C) bs
+let fresh_bindings eq_A bs C = List.all (fun b -> fresh_binding eq_A (fst b) C) bs
 
 val remove_var : forall 'A 'B. ('A -> 'A -> bool) -> 'A -> context 'A 'B -> context 'A 'B
 let rec remove_var eq_A a C =
