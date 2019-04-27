@@ -76,8 +76,13 @@ export function isInvalidPointer(pvi: boolean, v: Value) {
   if (v.bytes == null) return false
   if (pvi) return v.prov.kind == 'empty'
   return !_.reduce(v.bytes, (acc, b, i) => acc && b.offset != null && b.offset == i, true)
-
 }
+
+export function isUnspecWithSpecBytes(v: Value) {
+  if (v.value != 'unspecified') return false
+  return _.reduce(v.bytes, (acc, b) => acc || (b != null && b.value != null), false)
+}
+
 function char_code (s:string) {
   const x = parseInt(s)
   // printable characters

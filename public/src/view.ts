@@ -375,28 +375,37 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
-        const ptr_as_bytes = Memory.ispointer(row) && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
+        const has_spec_bytes = Memory.isUnspecWithSpecBytes(row) 
+        const ptr_as_bytes = Memory.ispointer(row) && (row.value != "unspecified") && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
         let value
         if (ptr_as_bytes && row.bytes != null) {
           const with_prov = (i: number) => row.bytes != null ? Memory.string_of_provenance(row.bytes[i].prov) : '@empty'
           const with_offset = (i: number) => row.bytes != null && row.bytes[i].offset != null ? `${row.bytes[i].offset}` : '-'
           value = `<table cellpadding="0" cellspacing="0" border="0">`
-          value += `<tr border="1"><td align="left">${pvi ? `${with_prov(0)}, ${toHex(row.bytes[0].value as number)}`
-                                             : `${with_offset(0)}: ${toHex(row.bytes[0].value as number)} ${with_prov(0)}`}</td>
-                  <td align="center" rowspan="${row.bytes.length}">${Memory.string_of_provenance(row.prov)}, ${toHex(parseInt(row.value))}</td></tr>`
+          value += `<tr border="1"><td align="left">${pvi ? `${with_prov(0)}, ${row.bytes[0].value != null ? toHex(row.bytes[0].value as number) : "unspecified"}`
+                                             : `${with_offset(0)}: ${row.bytes[0].value != null ? toHex(row.bytes[0].value as number) : "unspecified"} ${with_prov(0)}`}</td>
+                  <td align="center" rowspan="${row.bytes.length}">${Memory.string_of_provenance(row.prov)}, ${!isNaN(parseInt(row.value)) ? toHex(parseInt(row.value)) : "unspecified"}</td></tr>`
             for (let j = 1; j < row.bytes.length; j++) {
-              value += `<tr><td align="left" border="1" sides="t">${pvi ? `${with_prov(j)}, ${toHex(row.bytes[j].value)}`
-                                                           : ` ${with_offset(j)}: ${toHex(row.bytes[j].value)} ${with_prov(j)}`}</td></tr>`
+              value += `<tr><td align="left" border="1" sides="t">${pvi ? `${with_prov(j)}, ${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"}`
+                                                           : ` ${with_offset(j)}: ${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"} ${with_prov(j)}`}</td></tr>`
+            }
+          value += `</table>`
+        } else if (has_spec_bytes && row.bytes != null) {
+          value = `<table cellpadding="0" cellspacing="0" border="0">`
+          value += `<tr border="1"><td align="left">${row.bytes[0].value != null ? toHex(row.bytes[0].value) : "unspecified"}</td>
+                  <td align="center" rowspan="${row.bytes.length}">unspecified</td></tr>`
+            for (let j = 1; j < row.bytes.length; j++) {
+              value += `<tr><td align="left" border="1" sides="t">${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"}</td></tr>`
             }
           value += `</table>`
         } else {
           value = Memory.string_of_value(row, pvi && this.state.options.show_integer_provenances)
         }
         const body    = `<td port="${spath}v" rowspan="${row.size}" colspan="${colspan}" ${bgcolor}>${value}</td>`
-        acc += `<tr>${box(index, row.size == 1 || (ptr_as_bytes && row.bytes != null))}${head}${body}</tr>`
+        acc += `<tr>${box(index, row.size == 1 || ((ptr_as_bytes || has_spec_bytes) && row.bytes != null))}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
-          acc += `<tr>${box(index, ptr_as_bytes && row.bytes != null)}</tr>`
+          acc += `<tr>${box(index, (ptr_as_bytes || has_spec_bytes) && row.bytes != null)}</tr>`
         return acc
       }, '')
       const lastrow =

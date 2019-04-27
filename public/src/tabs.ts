@@ -314,26 +314,36 @@ class Memory extends SvgGraph {
     dot.on('click', () => {
       ee.once((s => {
         if (!s.interactive) return
-        download (s.interactive.mem, 'memory.dot')
+        const filename = `memory_${s.title().replace(/\.[^/.]+$/, "")}_step_${s.interactive.counter}.dot` 
+        download (s.interactive.mem, filename)
       }))
     })
     html.on('click', () => {
-      download(this.container.html(), 'memory.html')
+      ee.once((s => {
+        if (!s.interactive) return
+        const filename = `memory_${s.title().replace(/\.[^/.]+$/, "")}_step_${s.interactive.counter}.html` 
+        download(this.container.html(), filename)
+      }))
     })
     ps.on('click', () => {
       ee.once((s => {
         if (!s.interactive) return
         if (!s.interactive.mem) return
+        const filename = `memory_${s.title().replace(/\.[^/.]+$/, "")}_step_${s.interactive.counter}.ps` 
         // @ts-ignore
         const viz = new Viz({ Module, render })
         // @ts-ignore: Viz.js is loaded later
         viz.renderString(s.interactive.mem, {format: "ps2"}).then(result => {
-          download(result, 'memory.ps')
+          download(result, filename)
         })
       }))
     })
     svg.on('click', () => {
-      download(this.container.html(), 'memory.svg')
+      ee.once((s => {
+        if (!s.interactive) return
+        const filename = `memory_${s.title().replace(/\.[^/.]+$/, "")}_step_${s.interactive.counter}.svg` 
+        download(this.container.html(), filename)
+      }))
     })
     ee.on('updateMemory', this, s => this.updateMemory(s))
     this.svgPos = { x: 0, y: 0, scale: 1}
