@@ -2449,7 +2449,8 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
 
 and desugar_struct_declaration struct_decl =
   match struct_decl with
-    | Struct_declaration specs tquals sdecltors ->
+    | Struct_declaration specs tquals align_specs sdecltors ->
+        (* TODO: align_specs is ignored here *)
         desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
         if List.null sdecltors then
@@ -2546,7 +2547,8 @@ and desugar_alignment_specifier align_spec =
 
 
 (*  desugar_type_name: type_name -> E.desugM (ATypes.qualifiers * ATypes.ctype) *)
-and desugar_type_name (Type_name specs tquals abs_decltor_opt) =
+and desugar_type_name (Type_name specs tquals align_specs abs_decltor_opt) =
+  (* TODO: align_specs is ignored here *)
   desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
   maybe (E.return (fun qs ty -> (qs, ty)))
     (desugar_abstract_declarator NotUnderArray) abs_decltor_opt >>= fun mk_qs_ctype ->

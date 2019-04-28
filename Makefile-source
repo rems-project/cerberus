@@ -11,7 +11,8 @@ SOURCE_prelude=\
   symbol.lem \
   exception.lem \
   product.lem \
-  float.lem
+  float.lem \
+  any.lem
 
 SOURCE_cabs=\
   cabs.lem \

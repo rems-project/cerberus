@@ -147,7 +147,7 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 %type<Cabs.struct_declaration>
   struct_declaration
 
-%type<Cabs.cabs_type_specifier list * Cabs.cabs_type_qualifier list>
+%type<Cabs.cabs_type_specifier list * Cabs.cabs_type_qualifier list * Cabs.alignment_specifier list>
   specifier_qualifier_list
 
 %type<Cabs.struct_declarator list>
@@ -281,9 +281,36 @@ list_eq1_ge1(A, B, C):
 | c=C rest=list_eq1_ge1(A, B, C)
     { let (ax, bs, cs) = rest in (ax, bs, c::cs) }
 
+(* Pair of lists *)
+list_pair(A, B):
+|
+  { ([], []) }
+| a=A rest=list_pair(A, B)
+  { let (ax, bx) = rest in (a::ax, bx) }
+| b=B rest=list_pair(A, B)
+  { let (ax, bx) = rest in (ax, b::bx) }
+
+(* A record of lists of exactly one A *)
+list_tuple3_eq1(A, B, C):
+| a=A rest=list_pair(B, C)
+  { let (bx, cx) = rest in ([a], bx, cx) }
+| b=B rest=list_tuple3_eq1(A, B, C)
+  { let (ax, bx, cx) = rest in (ax, b::bx, cx) }
+| c=C rest=list_tuple3_eq1(A, B, C)
+  { let (ax, bx, cx) = rest in (ax, bx, c::cx) }
+
+(* A record of lists of at least one A *)
+list_tuple3_ge1(A, B, C):
+| a=A rest=list_pair(B, C)
+  { let (bx, cx) = rest in ([a], bx, cx) }
+| a=A rest=list_tuple3_ge1(A, B, C)
+  { let (ax, bx, cx) = rest in (a::ax, bx, cx) }
+| b=B rest=list_tuple3_ge1(A, B, C)
+  { let (ax, bx, cx) = rest in (ax, b::bx, cx) }
+| c=C rest=list_tuple3_ge1(A, B, C)
+  { let (ax, bx, cx) = rest in (ax, bx, c::cx) }
 
 (* Identifiers and lexer feedback contexts *)
-
 typedef_name:
 | n= NAME TYPE
     { n }
@@ -763,15 +790,15 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 struct_declaration:
 | tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
-    { let (tspecs, tquals) = tspecs_tquals in
-      Struct_declaration (tspecs, tquals, option [] List.rev rev_sdeclrs_opt) }
+    { let (tspecs, tquals, align_specs) = tspecs_tquals in
+      Struct_declaration (tspecs, tquals, align_specs, option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
 
 specifier_qualifier_list:
-| tspecs_tquals= list_eq1 (type_specifier_unique, type_qualifier)
+| tspecs_tquals= list_tuple3_eq1 (type_specifier_unique, type_qualifier, alignment_specifier)
   { tspecs_tquals }
-| tspecs_tquals= list_ge1 (type_specifier_nonunique, type_qualifier)
+| tspecs_tquals= list_tuple3_ge1 (type_specifier_nonunique, type_qualifier, alignment_specifier)
   { tspecs_tquals }
 
 struct_declarator_list: (* NOTE: the list is in reverse *)
@@ -918,8 +945,8 @@ parameter_declaration:
 (* §6.7.7 Type names *)
 type_name:
 | tspecs_tquals= specifier_qualifier_list abs_declr_opt= abstract_declarator?
-    { let (tspecs, tquals) = tspecs_tquals in
-      Type_name (tspecs, tquals, abs_declr_opt) }
+    { let (tspecs, tquals, align_specs) = tspecs_tquals in
+      Type_name (tspecs, tquals, align_specs, abs_declr_opt) }
 
 abstract_declarator:
 | ptr_decltor= pointer

@@ -236,7 +236,7 @@ and cabs_type_specifier =
 
 (* §6.7.2.1 Structure and union specifiers, Syntax *)
 and struct_declaration =
-  | Struct_declaration of list cabs_type_specifier * list cabs_type_qualifier * list struct_declarator
+  | Struct_declaration of list cabs_type_specifier * list cabs_type_qualifier * list alignment_specifier * list struct_declarator
   | Struct_assert      of static_assert_declaration
 
 and struct_declarator =
@@ -292,7 +292,7 @@ and parameter_declaration =
 
 (* §6.7.7 Type names, Syntax *)
 and type_name =
-  | Type_name of list cabs_type_specifier * list cabs_type_qualifier * maybe abstract_declarator
+  | Type_name of list cabs_type_specifier * list cabs_type_qualifier * list alignment_specifier * maybe abstract_declarator
 
 and abstract_declarator =
   | AbsDecl_pointer of pointer_declarator
