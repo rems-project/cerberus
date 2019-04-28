@@ -152,6 +152,30 @@ module TestSort = struct
 end
 *)
 
+(* The Z3 tuple doesn't cooperate well with recursive datatypes for some reason.
+ * It throws a Z3Error("Invalid argument") when calling, e.g., Tuple.get_mk_decl
+ * sort, where sort is created from Tuple.mk_sort *)
+module CustomTuple = struct
+  open Z3.Datatype
+
+  let mk_sort (tuple_name: string)
+              (arg_names: Symbol.symbol list)
+              (sorts: Sort.sort list) : Sort.sort =
+    mk_sort_s g_ctx tuple_name
+    [mk_constructor_s g_ctx
+      (sprintf "tuple_%s" tuple_name)
+      (mk_sym (sprintf "is_%s" tuple_name))
+      arg_names
+      (List.map (fun sort -> Some sort) sorts)
+      (List.map (fun _ -> 0) arg_names)
+    ]
+
+  let mk_tuple (sort: Sort.sort) (exprs: Expr.expr list) : Expr.expr =
+    let constructors = get_constructors sort in
+    Expr.mk_app g_ctx (List.hd constructors) exprs
+
+end
+
 module CtypeSort = struct
   open Z3.Datatype
   let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
