@@ -432,8 +432,8 @@ let bmc_file (file              : unit typed_file)
        else
         ("",[], true))
     in
-    print_endline "====SOLVER";
-    print_endline (Solver.to_string g_solver);
+    (*print_endline "====SOLVER";
+    print_endline (Solver.to_string g_solver);*)
     (* Check for races *)
     if not race_free then
       begin

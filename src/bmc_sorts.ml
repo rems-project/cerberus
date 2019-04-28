@@ -128,6 +128,30 @@ module BasicTypeSort = struct
         failwith "Floats are not supported."
 end
 
+(* Testing recursive sorts; not compatible with tuples for some reason *)
+(*
+module TestSort = struct
+  open Z3.Datatype
+  let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
+    [ "listy" ]
+    [ [mk_ctor "nil"
+      ; mk_constructor_s g_ctx "cons_ty" (mk_sym "is_cons_ty")
+        [mk_sym "x"; mk_sym "xs"] [Some integer_sort; None] [0; 0]
+      ]
+    ]
+
+  let mk_sort = List.nth mk_sort_helper 0
+
+  let mk_nil =
+    let fdecls = get_constructors mk_sort in
+    Expr.mk_app g_ctx (List.nth fdecls 0) []
+
+  let mk_cons (x: Expr.expr) (xs: Expr.expr) : Expr.expr =
+    let fdecls = get_constructors mk_sort in
+    Expr.mk_app g_ctx (List.nth fdecls 1) [x; xs]
+end
+*)
+
 module CtypeSort = struct
   open Z3.Datatype
   let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
@@ -352,7 +376,7 @@ module AddressSortPNVI = struct
     match Expr.get_args expr with
     | [a] ->
         if Arithmetic.is_int a then
-          sprintf "0x%x" (Integer.get_int a)
+          sprintf "0x%x" (Big_int.int_of_big_int (Integer.get_big_int a))
         else Expr.to_string expr
     | _ -> Expr.to_string expr
 
@@ -617,7 +641,7 @@ module PointerSortPNVI : PointerSortAPI = struct
     | [prov;addr] ->
         let pp_prov =
           if Arithmetic.is_int prov
-          then (string_of_int (Integer.get_int prov))
+          then (Big_int.string_of_big_int (Integer.get_big_int prov))
           else Expr.to_string prov in
         let pp_addr = AddressSortPNVI.pp addr in
         sprintf (*"ptr(@%s, %s)"*) "(@%s, %s)" pp_prov pp_addr

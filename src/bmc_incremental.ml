@@ -1230,8 +1230,6 @@ module BmcZ3 = struct
   (* SMT stuff *)
   let rec z3_pe (Pexpr(annots, bTy, pe_) as pexpr) : Expr.expr eff =
     let uid = get_id_pexpr pexpr in
-    pp_to_stdout (Pp_core.Basic.pp_pexpr pexpr);
-    print_endline"";
     (match pe_ with
     | PEsym sym ->
         lookup_sym sym
@@ -1558,8 +1556,6 @@ module BmcZ3 = struct
 
   let rec z3_e (Expr(annots, expr_) as expr: unit typed_expr) : Expr.expr eff =
     let uid = get_id_expr expr in
-    pp_to_stdout (Pp_core.Basic.pp_expr expr);
-    print_endline"";
 
     (match expr_ with
     | Epure pe ->
