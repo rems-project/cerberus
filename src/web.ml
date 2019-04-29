@@ -626,8 +626,8 @@ let cerberus ~rheader ~conf ~flow content =
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
                 "CERB_PATH="^(!webconf()).cerb_path;
-                "LD_LIBRARY_PATH="^(!webconf()).z3_path;
-                "DYLD_LIBRARY_PATH="^(!webconf()).z3_path|]
+                "LD_LIBRARY_PATH=/usr/local/lib:"^(!webconf()).z3_path;
+                "DYLD_LIBRARY_PATH=/usr/local/lib:"^(!webconf()).z3_path|]
     in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
