@@ -633,6 +633,7 @@ let cerberus ~rheader ~conf ~flow content =
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
     Lwt_io.read_value proc#stdout >>= fun data ->
     proc#close >>= fun _ ->
+    proc#terminate;  (* NOTE: force process to terminate, the server was leaking before *)
     return data
   in
   log_request msg flow;
