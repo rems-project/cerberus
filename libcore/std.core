@@ -228,6 +228,22 @@ proc create_and_store (ty: ctype, x: storable) : eff pointer :=
   let weak _: unit = store(ty, p, x) in
   pure(p)
 
+------------------------------------------------------------------------------
+-- RANDOM
+------------------------------------------------------------------------------
+
+builtin any_bounded_int(integer, integer): eff loaded integer
+
+-- int __any_bounded_int (int min, int max)
+proc [ailname = "__any_bounded_int"] bounded_int (min_ptr: pointer, max_ptr: pointer): eff loaded integer :=
+  let strong min_ptr_: loaded integer = load('signed int', min_ptr) in
+  let strong max_ptr_: loaded integer = load('signed int', max_ptr) in
+  case (min_ptr_, max_ptr_) of
+    | (Specified (min: integer), Specified (max: integer)) =>
+      pcall(<builtin_any_bounded_int>, min, max)
+    | _: (loaded integer, loaded integer) =>
+      pure (undef(<<DUMMY(any_bounded_int)>>))
+  end
 
 ------------------------------------------------------------------------------
 -- LIBC
