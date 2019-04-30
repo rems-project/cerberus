@@ -2478,7 +2478,9 @@ let combine_prov prov1 prov2 =
   (* JSON serialisation: Memory layout for UI *)
 
   type ui_value =
-    { size: int; (* number of square on the left size of the row *)
+    { kind: [ `Unspec | `Basic | `Char | `Pointer | `Unspecptr
+            | `Funptr | `Intptr | `Padding ];
+      size: int; (* number of square on the left size of the row *)
       path: string list; (* tag list *)
       value: string;
       prov: provenance;
@@ -2488,7 +2490,7 @@ let combine_prov prov1 prov2 =
 
   type ui_alloc =
     { id: int;
-      base: int;
+      base: string;
       prefix: Symbol.prefix;
       dyn: bool; (* dynamic memory *)
       typ: Core_ctype.ctype0;
@@ -2499,28 +2501,37 @@ let combine_prov prov1 prov2 =
 
   let rec mk_ui_values st bs ty mval : ui_value list =
     let mk_ui_values = mk_ui_values st in
-    let mk_scalar v p bs_opt =
-      [{ size = sizeof ty; path = []; value = v;
+    let mk_scalar kind v p bs_opt =
+      [{ kind; size = sizeof ty; path = []; value = v;
          prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
-      { size = n; typ = None; path = []; value = v;
+      { kind = `Padding; size = n; typ = None; path = []; value = v;
         prov = Prov_none; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
+    | MVunspecified (Pointer0 _) ->
+      mk_scalar `Unspecptr "unspecified" Prov_none (Some bs)
     | MVunspecified _ ->
-      mk_scalar "unspecified" Prov_none (Some bs)
-    | MVinteger (_, IV(prov, n)) ->
-      mk_scalar (N.to_string n) prov None
+      mk_scalar `Unspec "unspecified" Prov_none (Some bs)
+    | MVinteger (cty, IV(prov, n)) ->
+      begin match cty with
+        | Char | Signed Ichar | Unsigned Ichar ->
+          mk_scalar `Char (N.to_string n) prov None
+        | Ptrdiff_t | Signed Intptr_t | Unsigned Intptr_t ->
+          mk_scalar `Intptr (N.to_string n) prov None
+        | _ ->
+          mk_scalar `Basic (N.to_string n) prov None
+      end
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) Prov_none None
+      mk_scalar `Basic (string_of_float f) Prov_none None
     | MVpointer (_, PV(prov, pv)) ->
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" Prov_none None
+          mk_scalar `Pointer "NULL" Prov_none None
         | PVconcrete n ->
-          mk_scalar (N.to_string n) prov (Some bs)
+          mk_scalar `Pointer (N.to_string n) prov (Some bs)
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) Prov_none None
+          mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
       end
     | MVarray mvals ->
       begin match ty with
@@ -2558,7 +2569,7 @@ let combine_prov prov1 prov2 =
     let bs = fetch_bytes st.bytemap alloc.base size in
     let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
     { id = id;
-      base = N.to_int alloc.base;
+      base = N.to_string alloc.base;
       prefix = alloc.prefix;
       dyn = List.mem alloc.base st.dynamic_addrs;
       typ = ty;
@@ -2624,7 +2635,18 @@ let combine_prov prov1 prov2 =
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
   let serialise_ui_values st (v:ui_value) : Json.json =
-    `Assoc [("size", `Int v.size);
+    let string_of_kind = function
+      | `Unspec -> "unspecified"
+      | `Basic -> "basic"
+      | `Pointer -> "pointer"
+      | `Funptr -> "funptr"
+      | `Intptr -> "intptr"
+      | `Unspecptr -> "unspecptr"
+      | `Char -> "char"
+      | `Padding -> "padding"
+    in
+    `Assoc [("kind"), `String (string_of_kind v.kind);
+            ("size", `Int v.size);
             ("path", `List (List.map Json.of_string v.path));
             ("value", `String v.value);
             ("prov", serialise_prov st v.prov);
@@ -2633,7 +2655,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_ui_alloc st (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
-            ("base", `Int a.base);
+            ("base", `String a.base);
             ("prefix", serialise_prefix a.prefix);
             ("dyn", `Bool a.dyn);
             ("type", `String (String_core_ctype.string_of_ctype a.typ));

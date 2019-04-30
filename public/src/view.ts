@@ -4,10 +4,11 @@ import GoldenLayout from "golden-layout"
 import { Range } from "./location"
 import { Node, Graph, GraphFragment } from "./graph"
 import Tabs from "./tabs"
-import { triggerClick, toHex } from "./util"
+import { triggerClick } from "./util"
 import * as Memory from './memory'
 import { State, Event, EventEmitter, InteractiveMode, ResultRequest } from './common'
 import UI from './ui'
+import bigInt from 'big-integer'
 
 export default class View {
   title: string
@@ -338,8 +339,8 @@ export default class View {
     const createNode = (alloc: Memory.Allocation): string => {
       if (alloc.prefix.kind === 'string literal' && !this.state.options.show_string_literals)
         return ''
-      const box = (n:number, ischar=false) =>
-        `<td width="7" height="${ischar?'20':'7'}" fixedsize="true" port="${String(n)}">
+      const box = (n:number, charsize=false) =>
+        `<td width="7" height="${charsize?'20':'7'}" fixedsize="true" port="${String(n)}">
           <font point-size="1">&nbsp;</font>
          </td>`
       const maxcols = alloc.values.reduce((acc, row) => Math.max(acc, row.path.length), 0)+1
@@ -366,7 +367,7 @@ export default class View {
         `<tr>
           <td height="7" width="7" fixedsize="true" border="0">&nbsp;</td>
           <td ${alloc.exposed ? 'bgcolor="burlywood1"': ''} border="0" colspan="${maxcols}">
-              <b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}${alloc.exposed ? ' exp' : ''}, ${toHex(alloc.base)}]
+              <b>${name()}</b>: ${alloc.type}&nbsp;[@${alloc.id}${alloc.exposed ? ' exp' : ''}, 0x${bigInt(alloc.base).toString(16)}]
           </td>
          </tr>`
       let index = 0
@@ -375,37 +376,12 @@ export default class View {
         const spath   = row.path.reduce((acc, tag) => acc + '_' + tag, '')
         const colspan = String(maxcols-row.path.length)
         const bgcolor = Memory.ispadding(row) ? ' bgcolor="grey"' : (mem.last_used != null && mem.last_used === alloc.id ? 'bgcolor="lightcyan"' : '')
-        const has_spec_bytes = Memory.isUnspecWithSpecBytes(row) 
-        const ptr_as_bytes = Memory.ispointer(row) && (row.value != "unspecified") && (this.state.options.show_pointer_bytes || Memory.isInvalidPointer(pvi, row))
-        let value
-        if (ptr_as_bytes && row.bytes != null) {
-          const with_prov = (i: number) => row.bytes != null ? Memory.string_of_provenance(row.bytes[i].prov) : '@empty'
-          const with_offset = (i: number) => row.bytes != null && row.bytes[i].offset != null ? `${row.bytes[i].offset}` : '-'
-          value = `<table cellpadding="0" cellspacing="0" border="0">`
-          value += `<tr border="1"><td align="left">${pvi ? `${with_prov(0)}, ${row.bytes[0].value != null ? toHex(row.bytes[0].value as number) : "unspecified"}`
-                                             : `${with_offset(0)}: ${row.bytes[0].value != null ? toHex(row.bytes[0].value as number) : "unspecified"} ${with_prov(0)}`}</td>
-                  <td align="center" rowspan="${row.bytes.length}">${Memory.string_of_provenance(row.prov)}, ${!isNaN(parseInt(row.value)) ? toHex(parseInt(row.value)) : "unspecified"}</td></tr>`
-            for (let j = 1; j < row.bytes.length; j++) {
-              value += `<tr><td align="left" border="1" sides="t">${pvi ? `${with_prov(j)}, ${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"}`
-                                                           : ` ${with_offset(j)}: ${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"} ${with_prov(j)}`}</td></tr>`
-            }
-          value += `</table>`
-        } else if (has_spec_bytes && row.bytes != null) {
-          value = `<table cellpadding="0" cellspacing="0" border="0">`
-          value += `<tr border="1"><td align="left">${row.bytes[0].value != null ? toHex(row.bytes[0].value) : "unspecified"}</td>
-                  <td align="center" rowspan="${row.bytes.length}">unspecified</td></tr>`
-            for (let j = 1; j < row.bytes.length; j++) {
-              value += `<tr><td align="left" border="1" sides="t">${row.bytes[j].value != null ? toHex(row.bytes[j].value) : "unspecified"}</td></tr>`
-            }
-          value += `</table>`
-        } else {
-          value = Memory.string_of_value(row, pvi && this.state.options.show_integer_provenances)
-        }
+        const [value, multirow] = Memory.string_of_value(row, pvi && this.state.options.show_integer_provenances, this.state.options.show_pointer_bytes)
         const body    = `<td port="${spath}v" rowspan="${row.size}" colspan="${colspan}" ${bgcolor}>${value}</td>`
-        acc += `<tr>${box(index, row.size == 1 || ((ptr_as_bytes || has_spec_bytes) && row.bytes != null))}${head}${body}</tr>`
+        acc += `<tr>${box(index, row.size == 1 || multirow)}${head}${body}</tr>`
         index++
         for (let j = 1; j < row.size; j++, index++)
-          acc += `<tr>${box(index, (ptr_as_bytes || has_spec_bytes) && row.bytes != null)}</tr>`
+          acc += `<tr>${box(index, multirow)}</tr>`
         return acc
       }, '')
       const lastrow =
@@ -423,7 +399,7 @@ export default class View {
     type Pointer = {
       from: string /*id path*/,
       to: number[] /*prov*/,
-      addr: number /*pointer*/,
+      addr: bigInt.BigInteger /*pointer*/,
       intptr: boolean,
       invalid: boolean
     }
@@ -439,15 +415,13 @@ export default class View {
               return []
           }
         }
-        if (Memory.isfunptr(row))
-          return acc
-        if (Memory.pointsto(row) && Memory.pointsto(row) && row.value != 'unspecified') {
+        if (Memory.pointsto(row) && row.value != 'unspecified') {
           const from = row.path.reduce((acc, tag) => acc + '_' + tag, `n${alloc.id}:`)
           const p: Pointer = {
             from: from,
             to: provs (row.prov),
-            addr: parseInt(row.value),
-            intptr: Memory.isintptr(row),
+            addr: bigInt(row.value),//parseInt(row.value),
+            intptr: row.kind == 'intptr',
             invalid: Memory.isInvalidPointer(pvi, row)
           }
           return _.concat(acc, [p])
@@ -479,23 +453,28 @@ export default class View {
       }
       return _.reduce(ps, (acc, p) => {
         // points in bounds to an allocation
-        const target = _.find(mem.map, alloc => alloc.base <= p.addr && p.addr < alloc.base + alloc.size)
+        const target = _.find(mem.map, alloc => {
+          const base = bigInt(alloc.base)
+          const size = bigInt(alloc.size)
+          return base <= p.addr && p.addr < base.plus(size)
+        })
         const single_column = this.state.options.align_allocs ? ',constraint=false' : ''
         if (target) {
           if (invisible(target)) return acc
-          const offset = p.addr - target.base
+          const base = bigInt(target.base)
+          const offset = p.addr.minus(base)
           acc += `${p.from}v->n${target.id}:${offset}[style="${style(p)}",color="${color(p, target)}"${single_column}];`
           return acc
         } 
         // points to a past one of an allocation
-        const pastone = _.find(mem.map, alloc => p.addr === alloc.base + alloc.size)
+        const pastone = _.find(mem.map, alloc => p.addr.equals(bigInt(alloc.base).plus(alloc.size)))
         if (pastone) {
           if (invisible(pastone)) return acc
           acc += `${p.from}v->n${pastone.id}:${pastone.size}[style="${style(p)}",color="red"${single_column}];`
           return acc
         }
         // dangling pointer
-        acc += `dang${p.addr}[label="${toHex(p.addr)}",color="red"];${p.from}v->dang${p.addr}[style="${style(p)}",color="red"${single_column}];`
+        acc += `dang${p.addr.toString()}[label="0x${p.addr.toString(16)}",color="red"];${p.from}v->dang${p.addr.toString()}[style="${style(p)}",color="red"${single_column}];`
         return acc;
       }, '')
     }
