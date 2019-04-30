@@ -4,6 +4,7 @@ import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax AilTypes AilTypesAux
+import Builtins
 
 open import Implementation_ Decode
 
@@ -1268,6 +1269,18 @@ BEFORE EVAL_PEXPR2
                         Step_fs th_st $ FS_LSEEK fd off whence
                       | _ -> error "lseek"
                     end
+                (* NOTE: some GCC builtins needed by Hafnium *)
+                | Impl (BuiltinFunction "ctz") ->
+                    match cvals with
+                      | [Vobject (OVinteger n_ival)] ->
+                          let n' = Builtins.gcc_builtin_ctz (forceIntegerFromIntegerValue "ctz" n_ival) in
+                          Step_tau "Eproc __builtin_ctz" TSK_Misc (
+                            E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_integer_pe n'))) |>
+                          )
+                      | _ -> error "ctz"
+                    end
+
+
                 (* unknown *)
                 | _ ->
                     error ("WIP: Eproc ==> " ^ Pp.stringFromCore_expr th_st.arena)
