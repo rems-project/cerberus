@@ -36,7 +36,9 @@ let setup conf =
       typecheck_core=     false;
       rewrite_core=       conf.rewrite_core;
       sequentialise_core= conf.sequentialise_core;
-      cpp_cmd=            conf.cpp_cmd;
+      cpp_cmd=            (if conf.link_libc
+                           then conf.cpp_cmd ^ " -DCERB_WITH_LIB"
+                           else conf.cpp_cmd);
       cpp_stderr=         false;
     }
   in { pipeline= pipeline_conf;

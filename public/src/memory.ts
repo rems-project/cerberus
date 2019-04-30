@@ -115,6 +115,7 @@ export function string_of_provenance (p: Provenance): string {
 export function string_of_value (v: Value, pvi: boolean, show_pointer_bytes: boolean): [string, boolean] /* value * multirow */ {
   const with_prov = () => string_of_provenance(v.prov) + ', '
   const value = (x:string) => pvi ? with_prov() + x : x
+  const hex_of_value = (n: string) => n == 'unspecified' ? 'unspecified' : '0x'+bigInt(n).toString(16)
   function multirow_pointer(): [string, boolean] {
     const mk_value = (i: number) => {
       if (v.bytes == null || v.bytes[i] == null)
@@ -130,7 +131,7 @@ export function string_of_value (v: Value, pvi: boolean, show_pointer_bytes: boo
     value = `<table cellpadding="0" cellspacing="0" border="0">
                 <tr border="1">
                   <td align="left">${mk_value(0)}</td>
-                  <td align="center" vspan="${v.bytes.length}">${string_of_provenance(v.prov)}, 0x${bigInt(v.value).toString(16)}</td>
+                  <td align="center" vspan="${v.bytes.length}">${string_of_provenance(v.prov)}, ${hex_of_value(v.value)}</td>
                 </tr>`
     for (let j = 1; j < v.bytes.length; j++) {
       value += `<tr><td align="left" border="1" sides="t">${mk_value(j)}</td></tr>`
