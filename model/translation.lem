@@ -2548,7 +2548,7 @@ else (* is_pointer *)
           end in
           E.return $
             Caux.mk_pure_e (C.Pexpr [] () (C.PEval (C.Vloaded
-              (C.LVspecified (C.OVinteger (Mem.offsetof_ival tag_sym membr_ident))))))
+              (C.LVspecified (C.OVinteger (Mem.offsetof_ival tagDefs tag_sym membr_ident))))))
       
       | A.AilEgeneric _ _ ->
           error ((Loc.stringFromLocation (Loc.locOf a_expr)) ^ ": C11 generics not yet supported")
