@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Symbol Cabs
+import Symbol Cabs AilTypes AilTypesAux
 open import Utils Core_ctype
 
 open import {hol} `tagsTheory`
@@ -50,3 +50,122 @@ let get_unionDef tag_sym =
 
 val reset_tagDefs: unit -> unit
 declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
+
+
+
+
+val     are_compatible: (AilTypes.qualifiers * Core_ctype.ctype) -> (AilTypes.qualifiers * Core_ctype.ctype) -> bool
+let rec are_compatible (qs1, ty1) (qs2, ty2) =
+  (* qualifiers need to be equal (see §6.7.3#10) *)
+  qs1 = qs2 && match (ty1, ty2) with
+    | (Void, Void) ->
+        true
+    | (Basic bty1, Basic bty2) ->
+        AilTypesAux.are_compatible (qs1, AilTypes.Ctype [] (AilTypes.Basic bty1)) (qs2, AilTypes.Ctype [] (AilTypes.Basic bty2))
+    | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
+        (* STD §6.7.6.2#6 *)
+           are_compatible (AilTypes.no_qualifiers, elem_ty1) (AilTypes.no_qualifiers, elem_ty2)
+        && match (n1_opt, n1_opt) with
+             | (Just n1, Just n2) -> n1 = n2
+             | (Just _ , Nothing) -> true
+             | (Nothing, Just _ ) -> true
+             | (Nothing, Nothing) -> true
+           end
+    | (Function (ret_qs1, ret_ty1) params1 isVariadic1, Function (ret_qs2, ret_ty2) params2 isVariadic2) ->
+        (* STD §6.7.6.3#15 *)
+        (* TODO: when the two types do not both have a param list *)
+           are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
+        && are_compatible_params params1 params2
+        && isVariadic1 = isVariadic2
+    | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
+        (* STD §6.7.6.1#2 *)
+        are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
+    | (Struct tag1, Struct tag2) ->
+        (* STD §6.2.7#1 *)
+        (* TODO: being conservative here (aka STD compliant) *)
+        if Symbol.from_same_translation_unit tag1 tag2 then
+          tag1 = tag2
+        else
+          (* TODO: temporary hack *)
+          let Symbol.Symbol _ _ str_opt1 = tag1 in
+          let Symbol.Symbol _ _ str_opt2 = tag2 in
+          if str_opt1 = str_opt2 then
+            match (get_membersDefs tag1, get_membersDefs tag2) with
+              | (StructDef xs1, StructDef xs2) ->
+                  if List.length xs1 <> List.length xs2 then
+                    false
+                  else
+                    List.all (fun ((ident1, ty1), (ident2, ty2)) ->
+                      ident1 = ident2 && are_compatible (AilTypes.no_qualifiers, ty1) (AilTypes.no_qualifiers, ty2)
+                    ) (List.zip xs1 xs2)
+
+              | _ ->
+                  error "TODO(msg): impossible"
+            end
+          else
+            false
+    | (Union tag1, Union tag2) ->
+        (* STD §6.2.7#1 *)
+        (* TODO: being conservative here (aka STD compliant) *)
+        tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
+    | (Builtin str1, Builtin str2) ->
+        str1 = str2
+    | (Atomic atom_ty1, Atomic atom_ty2) ->
+        are_compatible (AilTypes.no_qualifiers, atom_ty1) (AilTypes.no_qualifiers, atom_ty2)
+    | _ ->
+        (* TODO: we can't see Enum types here and there is some impl-def stuff *)
+        false
+  end
+
+and are_compatible_params_aux acc = function
+  | ([], []) ->
+      acc
+  | (((qs1, ty1) :: params1), ((qs2, ty2) :: params2)) ->
+      are_compatible_params_aux (
+        (* NOTE(unsure): but as far as I can tell the twos parameters can differ
+           on whether they have the register storage-class *)
+        acc && are_compatible (qs1, ty1) (qs2, ty2)
+      ) (params1, params2)
+  | _ ->
+      (* the list of params must have the same length to be compatible *)
+      false
+end
+
+and are_compatible_params params1 params2 =
+  are_compatible_params_aux true (params1, params2)
+
+
+(*
+val tags_are_compatible: Symbol.sym -> Symbol.sym -> bool
+let tags_are_compatible tag_sym1 tag_sym2 =
+  let members_are_compatibles xs1 xs2 =
+    if List.length xs1 <> List.length xs2 then
+      false
+    else
+      List.all (fun ((ident1, ty1), (ident2, ty2)) ->
+        ident1 = ident2 && 
+      ) (List.combine xs1)
+  
+  if from_same_translation_unit tag_sym1 tag_sym2 then
+    tag_sym1 = tag_sym2
+  else
+    (* TODO: temporary hack *)
+    let Symbol.Symbol _ _ str_opt1 = tag_sym1 in
+    let Symbol.Symbol _ _ str_opt2 = tag_sym2 in
+    if str_opt1 = str_opt2 then
+      match (get_membersDefs tag_sym1, get_membersDefs tag_sym2) with
+        | (StructDef xs1, StructDef xs2) ->
+            members_are_compatibles xs1 x2
+        | (UnionDef xs1, UnionDef xs2) ->
+            members_are_compatibles xs1 xs2
+        | _ ->
+            false
+      end
+    else
+      false
+*)
+
+(*
+  | StructDef of list (Cabs.cabs_identifier * ctype)
+  | UnionDef of list (Cabs.cabs_identifier * ctype)
+*)
