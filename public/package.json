@@ -29,6 +29,8 @@
     "webpack-cli": "^3.1.0"
   },
   "dependencies": {
+    "@types/big-integer": "0.0.31",
+    "big-integer": "^1.6.43",
     "codemirror": "^5.40.0",
     "golden-layout": "^1.5.9",
     "jquery": "^3.3.1",

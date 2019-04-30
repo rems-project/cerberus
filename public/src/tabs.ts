@@ -464,7 +464,7 @@ export class SimpleMemory extends Tab {
         if (Mem.ispadding(v)) {
           return `${acc}<tr class="padding">${head}<td colspan="${colspan}"></td></tr>`
         } else {
-          return `${acc}<tr>${head}<td colspan="${colspan}">${Mem.string_of_value(v, false)}</td></tr>`
+          return `${acc}<tr>${head}<td colspan="${colspan}">${Mem.string_of_value(v, false, false)}</td></tr>`
         }
       }, '<table>')
       return val + '</table>'
@@ -473,7 +473,7 @@ export class SimpleMemory extends Tab {
       `<table><tr><td>${Mem.mk_string(values)}</td></tr></table>`
     _.map(mem.map, alloc => {
       mkValue(alloc.values)
-      table.append(mkRow(alloc.id, util.toHex(alloc.base), alloc.type, alloc.prefix.name,
+      table.append(mkRow(alloc.id, /*util.toHex(*/alloc.base/*)*/, alloc.type, alloc.prefix.name,
         alloc.prefix.name === 'string literal' ? mkString(alloc.values) : mkValue(alloc.values)))
     })
     this.container.append(table)
