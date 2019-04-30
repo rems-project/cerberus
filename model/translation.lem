@@ -891,6 +891,7 @@ else
             translate_function_designator ctx variadic_env stdlib tagDefs e
       
       (* TODO: promotion? + atomicity *)
+      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
           (* STD §6.5.2.4 *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
@@ -951,6 +952,7 @@ end
       
       (* TODO: promotion? + atomicity *)
       (* TODO: factorise with PostfixIncr !!! *)
+      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
       | A.AilEunary A.PostfixDecr e ->
           (* STD §6.5.2.4 *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
@@ -1807,6 +1809,13 @@ end
               mk_stored_pe (Caux.mk_sym_pe e2_sym)
             ) in
           
+          let mo =
+            if AilTypesAux.is_atomic (ctype_of e1) then
+              (* STD §6.2.6.1#9 *)
+              Cmm.Seq_cst
+            else
+              Cmm.NA in
+          
           E.return $
             C.Expr [Annot.Astd "§6.5.16#3, sentence 4"] (
               C.Ewseq (Caux.mk_tuple_pat [ e1_sym_pat
@@ -1814,7 +1823,7 @@ end
                 (C.Expr [Annot.Astd "§6.5.16#3, sentence 5"] (C.Eunseq [core_e1; core_e2])) (
                 Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
                    (C.Expr [Annot.Astd "§6.5.16.1#2, store"] (
-                     C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) core_ty_pe1 object_pe stored_pe Cmm.NA)))
+                     C.Eaction (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *) core_ty_pe1 object_pe stored_pe mo)))
                    ))
                    (Caux.mk_pure_e stored_pe)
               )
@@ -1837,8 +1846,10 @@ end
 
 
       | A.AilEcompoundAssign e1 aop e2 ->
+          (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
+          (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
           let () = Debug.print_debug 1 [] (fun () ->
-            "HACK!!!! => AilEcompoundAssign is WIP and only doing +="
+            "HACK!!!! => AilEcompoundAssign is WIP and only doing +=  ==>  memory order is also wrong"
           ) in
           (* TODO: check sequencing with respect to indet function calls *)
           self e1 >>= fun core_e1 ->
@@ -2377,11 +2388,17 @@ TODO: #9
                         Caux.mk_specified_pe (Caux.mk_nullptr_pe (Caux.proj_ctype expect_param_ty))
                       else
                         arg_sym_pe in
+                  let mo =
+                    if AilTypesAux.is_atomic expect_param_ty then
+                      (* STD §6.2.6.1#9 *)
+                      Cmm.Seq_cst
+                    else
+                      Cmm.NA in
                     (Caux.add_std "§6.5.2.2#7, sentence 1"
                       (Caux.mk_wseq_e arg_ptr_sym_pat
                         (Caux.pcreate loc (Caux.mk_alignof_pe param_ty_sym_pe) param_ty_sym_pe (Symbol.PrefFunArg loc (Symbol.digest ()) (intFromInteger n)))
                         (Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit)
-                          (Caux.pstore loc param_ty_sym_pe arg_ptr_sym_pe conv_value Cmm.NA)
+                          (Caux.pstore loc param_ty_sym_pe arg_ptr_sym_pe conv_value mo)
                           (Caux.mk_pure_e arg_ptr_sym_pe)
                         )
                       )
