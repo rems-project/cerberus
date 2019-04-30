@@ -760,7 +760,7 @@ proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_
 
 -- Some GCC builtins
 
-builtin ctz (): eff loaded pointer
+builtin ctz (): eff loaded integer
 
 proc [ailname = "__builtin_ctz"] ctz_proxy (n_ptr: pointer): eff loaded integer :=
   let strong n_loaded: loaded integer = load('unsigned int', n_ptr) in
