@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core Core_ctype Annot Map Map_extra
-import AilSyntax AilTypes
+import AilSyntax AilTypes Core_ctype_aux
 import Product Exception Mem Mem_aux
 
 open import Errors
@@ -173,7 +173,7 @@ let rec memValueFromValue ty cval =
           ) (Just []) lvals
     | (Struct tag_sym1, Vloaded (LVspecified (OVstruct tag_sym2 xs))) ->
         let () = Debug.print_debug 1 [] (fun () -> "Comparing struct tag symbols: " ^ Symbol.show_raw tag_sym1 ^ " = " ^ Symbol.show_raw tag_sym2) in
-        if tag_sym1 = tag_sym2 then
+        if Core_ctype_aux.are_compatible (AilTypes.no_qualifiers, Struct tag_sym1) (AilTypes.no_qualifiers, Struct tag_sym2) then
           Just (Mem.struct_mval tag_sym1 xs)
         else
           Nothing
