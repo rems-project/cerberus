@@ -91,8 +91,8 @@ let optfailwith str = function
 
 (* TODO: memoise this, it's stupid to recompute this every time... *)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
-let rec offsetsof tag_sym =
-  match Pmap.find tag_sym (Tags.tagDefs ()) with
+let rec offsetsof tagDefs tag_sym =
+  match Pmap.find tag_sym tagDefs with
   | Tags.StructDef membrs ->
     let (xs, maxoffset) =
       List.fold_left (fun (xs, last_offset) (membr, ty) ->
@@ -126,7 +126,7 @@ and sizeof ty =
   | Atomic0 atom_ty ->
     sizeof atom_ty
   | Struct0 tag_sym as ty ->
-    let (_, max_offset) = offsetsof tag_sym in
+    let (_, max_offset) = offsetsof (Tags.tagDefs ()) tag_sym in
     let align = alignof ty in
     let x = max_offset mod align in
     if x = 0 then max_offset else max_offset + (align - x)
@@ -518,7 +518,7 @@ module Twin : Memory = struct
         combine_bytes memb_ty (L.drop pad acc_bs) >>= fun (mval, acc_bs') ->
         return ((memb_ident, memb_ty, mval)::acc_xs, prev_offset+sizeof memb_ty, acc_bs')
       in
-      foldlM f ([], 0, bs1) (fst (offsetsof tag_sym)) >>= fun (rev_xs, _, bs') ->
+      foldlM f ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) >>= fun (rev_xs, _, bs') ->
       return (MVstruct (tag_sym, List.rev rev_xs), bs2)
     | Union0 tag_sym ->
       failwith "TODO: combine_bytes, Union (as value)"
@@ -588,7 +588,7 @@ let rec explode_bytes mval : (meta * char option) list =
     end
   | MVarray mvals -> L.concat (List.map explode_bytes mvals)
   | MVstruct (tag_sym, xs) ->
-    let (offs, last_off) = offsetsof tag_sym in
+    let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
     let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
     snd begin
       (* TODO: rewrite now that offsetsof returns the paddings *)
@@ -940,8 +940,8 @@ let rec explode_bytes mval : (meta * char option) list =
       get_provenance n >>= fun prov ->
       return (PV (prov, PVconcrete n))
 
-  let offsetof_ival tag_sym memb_ident =
-    let (xs, _) = offsetsof tag_sym in
+  let offsetof_ival tagDefs tag_sym memb_ident =
+    let (xs, _) = offsetsof (Tags.tagDefs ()) tagDefs tag_sym in
     let pred (ident, _, _) = cabs_ident_equal ident memb_ident in
     match List.find_opt pred xs with
     | Some (_, _, offset) ->
@@ -962,7 +962,7 @@ let rec explode_bytes mval : (meta * char option) list =
       PVconcrete (N.add addr offset))
 
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let offset = offsetof_ival tag_sym memb_ident in
+    let offset = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
     PV (prov, match ptrval_ with
     | PVnull _ -> PVconcrete offset
     | PVfunction _ -> failwith "Twin.member_shift_ptrval, PVfunction"
