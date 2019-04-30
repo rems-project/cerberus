@@ -1,7 +1,7 @@
 Z3_PATH   := $(shell ocamlfind query z3)
 CERB_PATH ?= ..
 DYLD_LIBRARY_PATH = ${Z3_PATH}
-LD_LIBRARY_PATH   = ${Z3_PATH}
+LD_LIBRARY_PATH   = /usr/local/lib:${Z3_PATH}
 
 SRC_C=src/ctype.c \
 		src/stdio.c \

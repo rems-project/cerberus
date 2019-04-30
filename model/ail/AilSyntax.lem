@@ -985,7 +985,7 @@ let sigma_fresh a S =
 
 val sigma_fresh_bindings: forall 'a. bindings -> sigma 'a -> bool
 let sigma_fresh_bindings bs S =
-  List.all (fun (ident, _) -> Context.fresh identifierEqual ident S.declarations) bs
+  List.all (fun (ident, _) -> Context.fresh_binding identifierEqual ident S.declarations) bs
 
 
 

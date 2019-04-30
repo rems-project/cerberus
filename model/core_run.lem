@@ -1,4 +1,4 @@
-open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot
+open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot Any
 import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
@@ -1001,6 +1001,22 @@ BEFORE EVAL_PEXPR2
                         env= proc_env :: th_st.env
                       |>
                     )
+                (* ----------------------------------------------------------- *)
+                (* Cerberus headers <any.h> *)
+                (* ----------------------------------------------------------- *)
+                | Impl (BuiltinFunction "any_bounded_int") ->
+                    match cvals with
+                    | [Vobject (OVinteger min_ival); Vobject (OVinteger max_ival)] ->
+                        let min = forceIntegerFromIntegerValue "any_bounded_int" min_ival in
+                        let max = forceIntegerFromIntegerValue "any_bounded_int" max_ival in
+                        let any_ival = Mem.integer_ival (Any.bounded_integer min max) in
+                        Step_tau "any_bounded_int" TSK_Misc (
+                              E.return <| th_st with arena= Expr arena_annots (Epure (Caux.mk_specified_pe (Caux.mk_value_pe (Vobject (OVinteger any_ival))))) |>
+                            )
+                    | _ ->
+                      error ("Core_run, builtin any_bounded_int arguments ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                    end
+
                 (* ----------------------------------------------------------- *)
                 (* 7.21 Input/output <stdio.h> *)
                 (* ----------------------------------------------------------- *)
