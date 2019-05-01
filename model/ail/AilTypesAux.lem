@@ -424,12 +424,24 @@ let in_min_integer_range n ity =
   Range.mem n (Implementation.min_integer_range ity)
 
 
+val normalise_integerType: integerType -> integerType
+let normalise_integerType ity =
+  match ity with
+   | Enum tag_sym ->
+       Implementation_.typeof_enum tag_sym
+   | IBuiltin str ->
+       (* TODO: probably will need to do something about this *)
+       IBuiltin str
+   | _ ->
+       ity
+  end
+
 val le_integer_range: Implementation.implementation -> integerType -> integerType -> bool
 let le_integer_range impl ity1 ity2 =
   if ity1 = ity2 then
     (* reflexive cases *)
     true
-  else match (ity1, ity2) with
+  else match (normalise_integerType ity1, normalise_integerType ity2) with
     | (Char, Signed Ichar) ->
         Implementation_.char_is_signed
     | (Char, Signed ibty) ->
@@ -520,7 +532,8 @@ let le_integer_range impl ity1 ity2 =
   | (Size_t, Size_t) -> true
   | (Ptrdiff_t, Ptrdiff_t) -> true
   | (Enum _, Enum _) ->
-      error "WIP le_integer_range: Enum, Enum"
+      (* impossible *)
+      error "le_integer_range: Enum, Enum"
   
   | (Char, Size_t) ->
       error "WIP le_integer_range: Char, Size_t"
@@ -534,21 +547,24 @@ let le_integer_range impl ity1 ity2 =
   | (Bool, Ptrdiff_t) ->
       error "WIP le_integer_range: Bool, Ptrdiff_t"
   | (Bool, Enum _) ->
-      error "WIP le_integer_range: Bool, Enum"
+      (* impossible *)
+      error "le_integer_range: Bool, Enum"
   
   | (Signed _, Size_t) ->
       error "WIP le_integer_range: Signed, Size_t"
   | (Signed _, Ptrdiff_t) ->
       error "WIP le_integer_range: Signed, Ptrdiff_t"
   | (Signed _, Enum _) ->
-      error "WIP le_integer_range: Signed, Enum"
+      (* impossible *)
+      error "le_integer_range: Signed, Enum"
   
   | (Unsigned _, Size_t) ->
       error "WIP le_integer_range: Unsigned, Size_t"
   | (Unsigned _, Ptrdiff_t) ->
       error "WIP le_integer_range: Unsigned, Ptrdiff_t"
   | (Unsigned _, Enum _) ->
-      error "WIP le_integer_range: Unsigned, Enum"
+      (* impossible *)
+      error "le_integer_range: Unsigned, Enum"
   
   | (Ptrdiff_t, Char) ->
       error "WIP le_integer_range: Ptrdiff_t, Char"
@@ -559,7 +575,8 @@ let le_integer_range impl ity1 ity2 =
   | (Ptrdiff_t, Unsigned _) ->
       error "WIP le_integer_range: Ptrdiff_t, Unsigned"
   | (Ptrdiff_t, Enum _) ->
-      error "WIP le_integer_range: Ptrdiff_t, Enum"
+      (* impossible *)
+      error "le_integer_range: Ptrdiff_t, Enum"
   | (Ptrdiff_t, Size_t) ->
       error "WIP le_integer_range: Ptrdiff_t, Size_t"
   
@@ -572,22 +589,29 @@ let le_integer_range impl ity1 ity2 =
   | (Size_t, Unsigned _) ->
       error "WIP le_integer_range: Size_t, Unsigned"
   | (Size_t, Enum _) ->
-      error "WIP le_integer_range: Size_t, Enum"
+      (* impossible *)
+      error "le_integer_range: Size_t, Enum"
   | (Size_t, Ptrdiff_t) ->
       error "WIP le_integer_range: Size_t, Ptrdiff_t"
   
   | (Enum _, Char) ->
-      error "WIP le_integer_range: Enum, Char"
+      (* impossible *)
+      error "le_integer_range: Enum, Char"
   | (Enum _, Bool) ->
-      error "WIP le_integer_range: Enum, Bool"
+      (* impossible *)
+      error "le_integer_range: Enum, Bool"
   | (Enum _, Signed _) ->
-      error "WIP le_integer_range: Enum, Signed"
+      (* impossible *)
+      error "le_integer_range: Enum, Signed"
   | (Enum _, Unsigned _) ->
-      error "WIP le_integer_range: Enum, Unsigned"
+      (* impossible *)
+      error "le_integer_range: Enum, Unsigned"
   | (Enum _, Size_t) ->
-      error "WIP le_integer_range: Enum, Size_t"
+      (* impossible *)
+      error "le_integer_range: Enum, Size_t"
   | (Enum _, Ptrdiff_t) ->
-      error "WIP le_integer_range: Enum, Ptrdiff_t"
+      (* impossible *)
+      error "le_integer_range: Enum, Ptrdiff_t"
   end
 
 

@@ -757,3 +757,20 @@ proc [ailname = "lseek"] lseek_proxy (fd_ptr: pointer, off_ptr: pointer, whence_
       pure (undef(<<DUMMY(lseek_proxy)>>))
   end
 
+
+-- Some GCC builtins
+
+builtin ctz (): eff loaded integer
+
+proc [ailname = "__builtin_ctz"] ctz_proxy (n_ptr: pointer): eff loaded integer :=
+  let strong n_loaded: loaded integer = load('unsigned int', n_ptr) in
+  case n_loaded of
+    | Specified (n: integer) =>
+        if n = 0 then
+          pure(undef(<<DUMMY(__builtin_ctz)>>))
+        else
+          pcall(<builtin_ctz>, n)
+    | _: loaded integer =>
+        pure (undef(<<DUMMY(ctz_proxy)>>))
+  end
+

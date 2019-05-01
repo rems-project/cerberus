@@ -90,13 +90,13 @@ end)
 
 (* TODO: memoise this, it's stupid to recompute this every time... *)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
-let rec offsetsof tag_sym =
-  match Pmap.find tag_sym (Tags.tagDefs ()) with
+let rec offsetsof tagDefs tag_sym =
+  match Pmap.find tag_sym tagDefs with
     | Tags.StructDef membrs ->
         let (xs, maxoffset) =
           List.fold_left (fun (xs, last_offset) (membr, ty) ->
-            let size = sizeof ty in
-            let align = alignof ty in
+            let size = sizeof ~tagDefs ty in
+            let align = alignof ~tagDefs ty in
             let x = last_offset mod align in
             let pad = if x = 0 then 0 else align - x in
             ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
@@ -105,7 +105,7 @@ let rec offsetsof tag_sym =
     | Tags.UnionDef membrs ->
         (List.map (fun (ident, ty) -> (ident, ty, 0)) membrs, 0)
 
-and sizeof = function
+and sizeof ?(tagDefs= Tags.tagDefs ()) = function
   | Void0 | Array0 (_, None) | Function0 _ ->
       assert false
   | Basic0 (Integer ity) as ty ->
@@ -124,7 +124,7 @@ and sizeof = function
       end
   | Array0 (elem_ty, Some n) ->
       (* TODO: what if too big? *)
-      Nat_big_num.to_int n * sizeof elem_ty
+      Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
   | Pointer0 _ ->
       begin match Impl.sizeof_pointer with
         | Some n ->
@@ -133,10 +133,10 @@ and sizeof = function
             failwith "the concrete memory model requires a complete implementation sizeof POINTER"
       end
   | Atomic0 atom_ty ->
-      sizeof atom_ty
+      sizeof ~tagDefs atom_ty
   | Struct0 tag_sym as ty ->
-      let (_, max_offset) = offsetsof tag_sym in
-      let align = alignof ty in
+      let (_, max_offset) = offsetsof tagDefs tag_sym in
+      let align = alignof ~tagDefs ty in
       let x = max_offset mod align in
       if x = 0 then max_offset else max_offset + (align - x)
   | Union0 tag_sym ->
@@ -146,7 +146,7 @@ and sizeof = function
         | Tags.UnionDef membrs ->
             let (max_size, max_align) =
               List.fold_left (fun (acc_size, acc_align) (_, ty) ->
-                (max acc_size (sizeof ty), max acc_align (alignof ty))
+                (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
               ) (0, 0) membrs in
             (* NOTE: adding padding at the end to satisfy the alignment constraints *)
             let x = max_size mod max_align in
@@ -155,7 +155,7 @@ and sizeof = function
   | Builtin0 str ->
      failwith ("TODO: sizeof Builtin ==> " ^ str)
 
-and alignof = function
+and alignof ?(tagDefs= Tags.tagDefs ()) = function
   | Void0 ->
       assert false
   | Basic0 (Integer ity) as ty ->
@@ -173,7 +173,7 @@ and alignof = function
             failwith "the concrete memory model requires a complete implementation alignof FLOATING"
       end
   | Array0 (elem_ty, _) ->
-      alignof elem_ty
+      alignof ~tagDefs elem_ty
   | Function0 _ ->
       assert false
   | Pointer0 _ ->
@@ -184,16 +184,16 @@ and alignof = function
             failwith "the concrete memory model requires a complete implementation alignof POINTER"
       end
   | Atomic0 atom_ty ->
-      alignof atom_ty
+      alignof ~tagDefs atom_ty
   | Struct0 tag_sym ->
-      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+      begin match Pmap.find tag_sym tagDefs with
         | Tags.UnionDef _ ->
             assert false
         | Tags.StructDef membrs  ->
             (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                of any of their components. *)
             List.fold_left (fun acc (_, ty) ->
-              max (alignof ty) acc
+              max (alignof ~tagDefs ty) acc
             ) 0 membrs
       end
   | Union0 tag_sym ->
@@ -204,7 +204,7 @@ and alignof = function
             (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                of any of their components. *)
             List.fold_left (fun acc (_, ty) ->
-              max (alignof ty) acc
+              max (alignof ~tagDefs ty) acc
             ) 0 membrs
       end
   | Builtin0 str ->
@@ -931,7 +931,7 @@ module Concrete : Memory = struct
             let pad = memb_offset - previous_offset in
             let (taint, mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
             (merge_taint taint taint_acc, (memb_ident, memb_ty, mval)::acc_xs, memb_offset + sizeof memb_ty, acc_bs')
-          ) (`NoTaint, [], 0, bs1) (fst (offsetsof tag_sym)) in
+          ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
@@ -1039,7 +1039,7 @@ module Concrete : Memory = struct
           (funptrmap, L.concat @@ List.rev bs_s)
       | MVstruct (tag_sym, xs) ->
           let padding_byte _ = AbsByte.v Prov_none None in
-          let (offs, last_off) = offsetsof tag_sym in
+          let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
           let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
           (* TODO: rewrite now that offsetsof returns the paddings *)
           let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
@@ -1164,7 +1164,7 @@ module Concrete : Memory = struct
           Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
       | Some (Struct0 tag_sym) -> (* TODO: nested structs *)
           let offset = N.to_int @@ N.sub addr alloc.base in
-          let (offs, _) = offsetsof tag_sym in
+          let (offs, _) = offsetsof (Tags.tagDefs ()) tag_sym in
           let rec find = function
             | [] ->
               None
@@ -1897,8 +1897,8 @@ module Concrete : Memory = struct
         | _ ->
             return (PV (prov, PVconcrete n))
   
-  let offsetof_ival tag_sym memb_ident =
-    let (xs, _) = offsetsof tag_sym in
+  let offsetof_ival tagDefs tag_sym memb_ident =
+    let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =
       cabs_ident_equal ident memb_ident in
     match List.find_opt pred xs with
@@ -1925,7 +1925,7 @@ module Concrete : Memory = struct
               PVconcrete (N.add addr offset))
   
   let member_shift_ptrval (PV (prov, ptrval_)) tag_sym memb_ident =
-    let IV (_, offset) = offsetof_ival tag_sym memb_ident in
+    let IV (_, offset) = offsetof_ival (Tags.tagDefs ()) tag_sym memb_ident in
     PV (prov, match ptrval_ with
       | PVnull ty ->
           (* TODO: unsure, this might just be undefined (gcc-torture assumes the
@@ -2478,7 +2478,9 @@ let combine_prov prov1 prov2 =
   (* JSON serialisation: Memory layout for UI *)
 
   type ui_value =
-    { size: int; (* number of square on the left size of the row *)
+    { kind: [ `Unspec | `Basic | `Char | `Pointer | `Unspecptr
+            | `Funptr | `Intptr | `Padding ];
+      size: int; (* number of square on the left size of the row *)
       path: string list; (* tag list *)
       value: string;
       prov: provenance;
@@ -2488,7 +2490,7 @@ let combine_prov prov1 prov2 =
 
   type ui_alloc =
     { id: int;
-      base: int;
+      base: string;
       prefix: Symbol.prefix;
       dyn: bool; (* dynamic memory *)
       typ: Core_ctype.ctype0;
@@ -2499,28 +2501,37 @@ let combine_prov prov1 prov2 =
 
   let rec mk_ui_values st bs ty mval : ui_value list =
     let mk_ui_values = mk_ui_values st in
-    let mk_scalar v p bs_opt =
-      [{ size = sizeof ty; path = []; value = v;
+    let mk_scalar kind v p bs_opt =
+      [{ kind; size = sizeof ty; path = []; value = v;
          prov = p; typ = Some ty; bytes = bs_opt }] in
     let mk_pad n v =
-      { size = n; typ = None; path = []; value = v;
+      { kind = `Padding; size = n; typ = None; path = []; value = v;
         prov = Prov_none; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
+    | MVunspecified (Pointer0 _) ->
+      mk_scalar `Unspecptr "unspecified" Prov_none (Some bs)
     | MVunspecified _ ->
-      mk_scalar "unspecified" Prov_none (Some bs)
-    | MVinteger (_, IV(prov, n)) ->
-      mk_scalar (N.to_string n) prov None
+      mk_scalar `Unspec "unspecified" Prov_none (Some bs)
+    | MVinteger (cty, IV(prov, n)) ->
+      begin match cty with
+        | Char | Signed Ichar | Unsigned Ichar ->
+          mk_scalar `Char (N.to_string n) prov None
+        | Ptrdiff_t | Signed Intptr_t | Unsigned Intptr_t ->
+          mk_scalar `Intptr (N.to_string n) prov None
+        | _ ->
+          mk_scalar `Basic (N.to_string n) prov None
+      end
     | MVfloating (_, f) ->
-      mk_scalar (string_of_float f) Prov_none None
+      mk_scalar `Basic (string_of_float f) Prov_none None
     | MVpointer (_, PV(prov, pv)) ->
       begin match pv with
         | PVnull _ ->
-          mk_scalar "NULL" Prov_none None
+          mk_scalar `Pointer "NULL" Prov_none None
         | PVconcrete n ->
-          mk_scalar (N.to_string n) prov (Some bs)
+          mk_scalar `Pointer (N.to_string n) prov (Some bs)
         | PVfunction sym ->
-          mk_scalar (Pp_symbol.to_string_pretty sym) Prov_none None
+          mk_scalar `Funptr (Pp_symbol.to_string_pretty sym) Prov_none None
       end
     | MVarray mvals ->
       begin match ty with
@@ -2547,7 +2558,7 @@ let combine_prov prov1 prov2 =
             (* TODO: set padding value here *)
             let rows'' = if pad = 0 then rows' else mk_pad pad "" :: rows' in
             (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
-        end ([], 0, bs1) (fst (offsetsof tag_sym))
+        end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
       in List.concat (List.rev rev_rowss)
     | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
@@ -2558,7 +2569,7 @@ let combine_prov prov1 prov2 =
     let bs = fetch_bytes st.bytemap alloc.base size in
     let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in
     { id = id;
-      base = N.to_int alloc.base;
+      base = N.to_string alloc.base;
       prefix = alloc.prefix;
       dyn = List.mem alloc.base st.dynamic_addrs;
       typ = ty;
@@ -2624,7 +2635,18 @@ let combine_prov prov1 prov2 =
     in `Assoc (List.map serialise_entry (IntMap.bindings m))
 
   let serialise_ui_values st (v:ui_value) : Json.json =
-    `Assoc [("size", `Int v.size);
+    let string_of_kind = function
+      | `Unspec -> "unspecified"
+      | `Basic -> "basic"
+      | `Pointer -> "pointer"
+      | `Funptr -> "funptr"
+      | `Intptr -> "intptr"
+      | `Unspecptr -> "unspecptr"
+      | `Char -> "char"
+      | `Padding -> "padding"
+    in
+    `Assoc [("kind"), `String (string_of_kind v.kind);
+            ("size", `Int v.size);
             ("path", `List (List.map Json.of_string v.path));
             ("value", `String v.value);
             ("prov", serialise_prov st v.prov);
@@ -2633,7 +2655,7 @@ let combine_prov prov1 prov2 =
 
   let serialise_ui_alloc st (a:ui_alloc) : Json.json =
     `Assoc [("id", `Int a.id);
-            ("base", `Int a.base);
+            ("base", `String a.base);
             ("prefix", serialise_prefix a.prefix);
             ("dyn", `Bool a.dyn);
             ("type", `String (String_core_ctype.string_of_ctype a.typ));
