@@ -449,7 +449,7 @@ let impl_eval_integer_value (IV _ ival_) =
   eval_integer_value_base ival_
 
 
-let impl_offsetof_ival tag_sym memb_ident =
+let impl_offsetof_ival tagDefs tag_sym memb_ident =
 (*  IV Prov_none (lifted_simplify_integer_value_base (IVoffsetof tag_sym membr_ident)) *)
   IV Prov_none (mk_offsetof_ival_ (IVconcrete 0) tag_sym memb_ident)
 

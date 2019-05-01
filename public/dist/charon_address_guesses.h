@@ -34,13 +34,23 @@ ADDR_PLE_1     provenance_lost_escape_1.c
 
 
 #ifdef __cerb__
-  #define ADDRESS_PFI_1I  0x20
-  #define ADDRESS_PFI_1IG 0x28
-  #define ADDRESS_PFI_1PG 0x30
-  #define ADDRESS_PFI_1P  0x28
-  #define ADDRESS_PFI_2   0x10
-  #define ADDRESS_PFI_2G  0x14
-  #define ADDR_PLE_1      0x3c
+  #if defined CERB_WITH_LIB
+    #define ADDRESS_PFI_1I  0xffffedf4 // 0x20
+    #define ADDRESS_PFI_1IG 0xffffedec // 0x28
+    #define ADDRESS_PFI_1PG 0xffffede4 // 0x30
+    #define ADDRESS_PFI_1P  0xffffede4 // 0x28
+    #define ADDRESS_PFI_2   0xffffee00 // 0x10
+    #define ADDRESS_PFI_2G  0xffffedf8 // 0x14
+    #define ADDR_PLE_1      0xffffee0c // 0x3c
+  #else
+    #define ADDRESS_PFI_1I  0xffffffdc // 0x20
+    #define ADDRESS_PFI_1IG 0xffffffd4 // 0x28
+    #define ADDRESS_PFI_1PG 0xffffffcc // 0x30
+    #define ADDRESS_PFI_1P  0xffffffd4 // 0x28
+    #define ADDRESS_PFI_2   0xfffffff0 // 0x10
+    #define ADDRESS_PFI_2G  0xffffffe8 // 0x14
+    #define ADDR_PLE_1      0xffffffd8 // 0x3c
+  #endif
 
 #elif defined __COMPCERT__
   #if !defined OPT

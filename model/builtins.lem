@@ -1155,3 +1155,16 @@ let ctype_of_builtin_varname = function
   | _ ->
       Nothing
 end
+
+
+(* Some GCC builtins *)
+val gcc_builtin_ctz: integer -> integer
+declare ocaml target_rep function gcc_builtin_ctz = `Ocaml_gcc_builtins.ctz`
+
+val gcc_builtin_bswap16: integer -> integer
+val gcc_builtin_bswap32: integer -> integer
+val gcc_builtin_bswap64: integer -> integer
+
+declare ocaml target_rep function gcc_builtin_bswap16 = `Ocaml_gcc_builtins.bswap16`
+declare ocaml target_rep function gcc_builtin_bswap32 = `Ocaml_gcc_builtins.bswap32`
+declare ocaml target_rep function gcc_builtin_bswap64 = `Ocaml_gcc_builtins.bswap64`

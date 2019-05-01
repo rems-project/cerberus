@@ -626,13 +626,14 @@ let cerberus ~rheader ~conf ~flow content =
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
                 "CERB_PATH="^(!webconf()).cerb_path;
-                "LD_LIBRARY_PATH="^(!webconf()).z3_path;
-                "DYLD_LIBRARY_PATH="^(!webconf()).z3_path|]
+                "LD_LIBRARY_PATH=/usr/local/lib:"^(!webconf()).z3_path;
+                "DYLD_LIBRARY_PATH=/usr/local/lib:"^(!webconf()).z3_path|]
     in
     let proc = Lwt_process.open_process ~env ~timeout cmd in
     Lwt_io.write_value proc#stdin ~flags:[Marshal.Closures] req >>= fun () ->
     Lwt_io.read_value proc#stdout >>= fun data ->
     proc#close >>= fun _ ->
+    proc#terminate;  (* NOTE: force process to terminate, the server was leaking before *)
     return data
   in
   log_request msg flow;

@@ -144,3 +144,8 @@ let fresh_fancy = function
   | Just str -> fresh_pretty str
   | Nothing  -> fresh ()
 end
+
+
+val from_same_translation_unit: sym -> sym -> bool
+let from_same_translation_unit sym1 sym2 =
+  0 = digest_compare (digest_of_sym sym1) (digest_of_sym sym2)

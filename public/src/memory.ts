@@ -1,6 +1,7 @@
 import _ from 'lodash'
 import { Range } from './location'
 import * as u from './util'
+import bigInt from 'big-integer'
 
 export type Provenance =
   { kind: 'prov', value: number } |
@@ -14,6 +15,14 @@ export type Byte = {
 }
 
 export type Value = {
+  kind: 'unspecified'
+      | 'basic'
+      | 'pointer'
+      | 'intptr'
+      | 'funptr'
+      | 'unspecptr'
+      | 'char'
+      | 'padding'
   size: number
   path: string[]      // access path in case of struct/unions
   value: string
@@ -29,9 +38,10 @@ export type Prefix = {
   loc: Range | null
 }
 
+
 export type Allocation = {
   id: number        // allocation id (provenance)
-  base: number      // base address
+  base: string      // base address (bigint)
   prefix: Prefix    // source name with scope order
   type: string      // pretty core ctype
   size: number      // type size
@@ -47,29 +57,13 @@ export type State = {
   last_used: number | null
 }
 
-export function ispointer (v: Value): boolean {
-  return v.type != null && _.endsWith(v.type, '*')
-}
-
-export function isfunptr (v:Value): boolean {
-  return isNaN (parseInt(v.value))
-}
-
-export function isintptr (v: Value) {
-  return v.type != null && (v.type == 'intptr_t' || v.type == 'uintptr_t' || v.type == 'ptrdiff_t')
-}
-
-export function ischar (v: Value): boolean {
-  return v.type != null && (v.type == 'char' || v.type == 'signed char' || v.type == 'unsigned char')
-}
-
 /** Value points to some place in the memory */
 export function pointsto (v: Value): boolean {
-  return ispointer(v) || isintptr(v)
+  return v.value != 'NULL' && (v.kind == 'pointer' || v.kind == 'intptr')
 }
 
 export function ispadding (v: Value) {
-  return v.type == null
+  return v.kind == 'padding'
 }
 
 export function isInvalidPointer(pvi: boolean, v: Value) {
@@ -78,8 +72,8 @@ export function isInvalidPointer(pvi: boolean, v: Value) {
   return !_.reduce(v.bytes, (acc, b, i) => acc && b.offset != null && b.offset == i, true)
 }
 
-export function isUnspecWithSpecBytes(v: Value) {
-  if (v.value != 'unspecified') return false
+function hasSpecifiedBytes(v: Value) {
+  if (v.bytes == null) return false
   return _.reduce(v.bytes, (acc, b) => acc || (b != null && b.value != null), false)
 }
 
@@ -118,28 +112,77 @@ export function string_of_provenance (p: Provenance): string {
 }
 
 /** string of memory value  */
-export function string_of_value (v: Value, track_prov: boolean): string {
+export function string_of_value (v: Value, pvi: boolean, show_pointer_bytes: boolean): [string, boolean] /* value * multirow */ {
   const with_prov = () => string_of_provenance(v.prov) + ', '
-  const value = (x:string) => track_prov ? with_prov() + x : x
-  if (v.value === 'unspecified')
-    return v.value
-  if (ispointer(v) && v.value != 'NULL') {
-    let i = parseInt(v.value)
-    if (isNaN(i))
-      return v.value // function pointers
-    return with_prov() + u.toHex(i)  
-  }
-  if (isintptr(v))
-    return value(u.toHex(parseInt(v.value)))
-  if (ischar(v)) {
-    const char = (s: string) => {
-      const c = char_code(s)
-      if (c === '') return ''
-      return ` '${c}'`
+  const value = (x:string) => pvi ? with_prov() + x : x
+  const hex_of_value = (n: string) => n == 'unspecified' ? 'unspecified' : '0x'+bigInt(n).toString(16)
+  function multirow_pointer(): [string, boolean] {
+    const mk_value = (i: number) => {
+      if (v.bytes == null || v.bytes[i] == null)
+        return 'unspecified'
+      else if (pvi)
+        return string_of_provenance(v.bytes[i].prov) + ', ' + v.bytes[i].value == null ? "unspecified" : u.toHex(v.bytes[i].value)
+      else
+        return (v.bytes[i].offset != null ? v.bytes[i].offset : '-') + ': ' + u.toHex(v.bytes[i].value) + string_of_provenance(v.bytes[i].prov)
     }
-    return u.toHex(parseInt(v.value)) + char(v.value)
+    if (v.bytes == null)
+      return [v.value, false]
+    let value
+    value = `<table cellpadding="0" cellspacing="0" border="0">
+                <tr border="1">
+                  <td align="left">${mk_value(0)}</td>
+                  <td align="center" vspan="${v.bytes.length}">${string_of_provenance(v.prov)}, ${hex_of_value(v.value)}</td>
+                </tr>`
+    for (let j = 1; j < v.bytes.length; j++) {
+      value += `<tr><td align="left" border="1" sides="t">${mk_value(j)}</td></tr>`
+    }
+    value += '</table>'
+    return [value, true]
   }
-  return v.value
+  switch(v.kind) {
+    case 'unspecified':
+      if (v.bytes != null && hasSpecifiedBytes(v)) {
+        let value;
+        value = `<table cellpadding="0" cellspacing="0" border="0">
+                   <tr border="1">
+                    <td align="left">${v.bytes[0].value != null ? v.bytes[0].value : "unspecified"}</td>
+                    <td align="center" rowspan="${v.bytes.length}">unspecified</td>
+                   </tr>`
+        for (let j = 1; j < v.bytes.length; j++)
+          value += `<tr><td align="left" border="1" sides="t">${v.bytes[j].value != null ? v.bytes[j].value : "unspecified"}</td></tr>`
+        value += '</table>'
+        return [value, true]
+      } else {
+        return ['unspecified', false]
+      }
+    case 'basic':
+      return [v.value, false]
+    case 'pointer':
+      if (v.value == 'NULL')
+        return ['NULL', false]
+      else if (show_pointer_bytes || isInvalidPointer(pvi, v))
+        return multirow_pointer()
+      else
+      return [with_prov() + "0x"+bigInt(v.value).toString(16), false]
+    case 'funptr':
+      return [v.value, false]
+    case 'intptr':
+      return [value("0x"+bigInt(v.value).toString(16)), false]
+    case 'unspecptr':
+      if (hasSpecifiedBytes(v))
+        return multirow_pointer ()
+      else
+        return [v.value, false]
+    case 'char':
+      const char = (s: string) => {
+        const c = char_code(s)
+        if (c === '') return ''
+        return ` '${c}'`
+      }
+      return [v.value + char(v.value), false]
+    case 'padding':
+      return ["", false] // TODO: should I show something for paddings?
+  }
 }
 
 export function unique (v: Prefix, m: Map):  'unique' |'unique-in-scope' | 'non-unique'  {

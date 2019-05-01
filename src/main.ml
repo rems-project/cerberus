@@ -57,9 +57,10 @@ let frontend (conf, io) filename core_std =
     Exception.fail (Location_ocaml.unknown, Errors.UNSUPPORTED
                       "The file extention is not supported")
 
-let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files =
+let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
   let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
+  let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
     cpp_cmd ::
     List.map (function
@@ -119,7 +120,7 @@ let cerberus debug_level progress core_obj
              files args_opt =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
-    create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files
+    create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   let args = match args_opt with
     | None -> []
