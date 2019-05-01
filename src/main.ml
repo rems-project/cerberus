@@ -496,7 +496,7 @@ let bmc_max_depth =
 
 let bmc_seq =
   let doc = "Replace all unseq() with left to right wseq in the bounded model checker" in
-  Arg.(value & opt bool true & info["bmc_seq"] ~doc)
+  Arg.(value & opt bool false & info["bmc_seq"] ~doc)
 
 let bmc_conc =
   let doc = "Run bounded model checker in concurrent mode" in
