@@ -128,30 +128,6 @@ module BasicTypeSort = struct
         failwith "Floats are not supported."
 end
 
-(* Testing recursive sorts; not compatible with tuples for some reason *)
-(*
-module TestSort = struct
-  open Z3.Datatype
-  let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
-    [ "listy" ]
-    [ [mk_ctor "nil"
-      ; mk_constructor_s g_ctx "cons_ty" (mk_sym "is_cons_ty")
-        [mk_sym "x"; mk_sym "xs"] [Some integer_sort; None] [0; 0]
-      ]
-    ]
-
-  let mk_sort = List.nth mk_sort_helper 0
-
-  let mk_nil =
-    let fdecls = get_constructors mk_sort in
-    Expr.mk_app g_ctx (List.nth fdecls 0) []
-
-  let mk_cons (x: Expr.expr) (xs: Expr.expr) : Expr.expr =
-    let fdecls = get_constructors mk_sort in
-    Expr.mk_app g_ctx (List.nth fdecls 1) [x; xs]
-end
-*)
-
 (* The Z3 tuple doesn't cooperate well with recursive datatypes for some reason.
  * It throws a Z3Error("Invalid argument") when calling, e.g., Tuple.get_mk_decl
  * sort, where sort is created from Tuple.mk_sort *)
@@ -184,11 +160,7 @@ module CtypeSort = struct
      ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
          [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
      ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
-         [] [] []
-         (* TODO (deprecated): recursive data types can not be nested in other types
-          * such as tuple
-          * TODO: define as recursive type!*)
-         (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
+         [mk_sym "_ptr_ty"] [None] [0]
      ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
          [mk_sym "_array_ty_n"]
          [Some integer_sort] [0]
@@ -211,7 +183,7 @@ module CtypeSort = struct
     | Basic0 bty ->
         Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
     | Pointer0 (_, ty) ->
-        Expr.mk_app g_ctx (List.nth fdecls 2) []
+        Expr.mk_app g_ctx (List.nth fdecls 2) [mk_expr ty]
     | Array0(cty, Some n) ->
         (* TODO: cty ignored b/c recursive types and tuples *)
         (* Sort of assumed it's always integer for now... *)
