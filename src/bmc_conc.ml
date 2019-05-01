@@ -10,6 +10,9 @@ open Util
 open Z3
 open Z3.Arithmetic
 
+(* TODO: polarity is not a static property of bmc_action
+ * and can be "changed" by let strong.
+ * We should track this elsewhere. *)
 type bmc_action =
   | BmcAction of polarity * guard * action
 
