@@ -220,6 +220,9 @@ let s_char =
 (* Whitespaces *)
 let whitespace_char = [' ' '\t' (*'\n'*) '\012' '\r']
 
+let lbrack_lbrack = '[' whitespace_char* '['
+let rbrack_rbrack = ']' whitespace_char* ']'
+
 (* ========================================================================== *)
 
 rule s_char_sequence = parse
@@ -361,6 +364,7 @@ and initial = parse
   | "&&"  { AMPERSAND_AMPERSAND }
   | "||"  { PIPE_PIPE           }
   | '?'   { QUESTION            }
+  | "::"  { COLON_COLON         }
   | ':'   { COLON               }
   | ';'   { SEMICOLON           }
   | "..." { ELLIPSIS            }
@@ -376,6 +380,8 @@ and initial = parse
   | "^="  { CARET_EQ            }
   | "|="  { PIPE_EQ             }
   | ','   { COMMA               }
+  | lbrack_lbrack { LBRACK_LBRACK }
+  | rbrack_rbrack { RBRACK_RBRACK }
 (*  | '#'  *)
 (*  | "##" *)
 
