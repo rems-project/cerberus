@@ -93,6 +93,7 @@ type token =
   | QUESTION
   | COLON
   | SEMICOLON
+  | COLON_COLON
   | ELLIPSIS
   | EQ
   | STAR_EQ
@@ -106,6 +107,8 @@ type token =
   | CARET_EQ
   | PIPE_EQ
   | COMMA
+  | LBRACK_LBRACK
+  | RBRACK_RBRACK
 
   (* NON-STD *)
   | ASSERT
@@ -172,6 +175,8 @@ let string_of_token = function
   | STRING_LITERAL _ -> "STRING_LITERAL"
   | LBRACK -> "LBRACK"
   | RBRACK -> "RBRACK"
+  | LBRACK_LBRACK -> "LBRACK_LBRACK"
+  | RBRACK_RBRACK -> "RBRACK_RBRACK"
   | LPAREN -> "LPAREN"
   | RPAREN -> "RPAREN"
   | LBRACE -> "LBRACE"
@@ -202,6 +207,7 @@ let string_of_token = function
   | PIPE_PIPE -> "PIPE_PIE"
   | QUESTION -> "QUESTION"
   | COLON -> "COLON"
+  | COLON_COLON -> "COLON_COLON"
   | SEMICOLON -> "SEMICOLON"
   | ELLIPSIS -> "ELLIPSIS"
   | EQ -> "EQ"
