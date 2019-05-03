@@ -42,7 +42,8 @@ let z3num_to_int (expr: Expr.expr) =
     int_of_string (BitVector.numeral_to_string expr)
   else
     (assert (Arithmetic.is_int_numeral expr);
-     Integer.get_int expr)
+      (* TODO: switch types to big int *)
+     Big_int.int_of_big_int (Integer.get_big_int expr))
 
 let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
                 : Expr.expr =
@@ -55,11 +56,15 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpRem_t -> assert false (*BitVector.mk_srem g_ctx arg1 arg2*)
     | OpRem_f -> BitVector.mk_smod g_ctx arg1 arg2
     | OpExp   ->
+        (* TODO: BitVector.get_int is not in the new Z3 api *)
+        assert false
+        (*
         if (Expr.is_numeral arg1 && (BitVector.get_int arg1 = 2)) then
           let one = BitVector.mk_numeral g_ctx "1" g_bv_precision in
           BitVector.mk_shl g_ctx one arg2
       else
         assert false
+        *)
     | OpEq    -> mk_eq arg1 arg2
     | OpLt    -> BitVector.mk_slt g_ctx arg1 arg2
     | OpLe    -> BitVector.mk_sle g_ctx arg1 arg2
@@ -160,6 +165,13 @@ let is_core_ptr_bty (bTy: core_base_type) =
   match bTy with
   | BTy_object OTy_pointer | BTy_loaded OTy_pointer -> true
   | _ -> false
+
+(* TODO: mini-hack to strip atomic *)
+let strip_atomic = function ctype ->
+  match ctype with
+  | Core_ctype.Atomic0 ty -> ty
+  | ty -> ty
+
 
 (* ========== HELPER FUNCTIONS ============= *)
 let rec list_take k l =

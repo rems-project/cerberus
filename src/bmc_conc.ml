@@ -10,6 +10,9 @@ open Util
 open Z3
 open Z3.Arithmetic
 
+(* TODO: polarity is not a static property of bmc_action
+ * and can be "changed" by let strong.
+ * We should track this elsewhere. *)
 type bmc_action =
   | BmcAction of polarity * guard * action
 
@@ -1030,7 +1033,7 @@ module MemoryModelCommon = struct
       match (interp addr_min, interp addr_max) with
       | Some min , Some max ->
           if (Arithmetic.is_int min && Arithmetic.is_int max) then
-            (alloc,Some (Integer.get_int min, Integer.get_int max),prefix)
+            (alloc,Some (Big_int.int_of_big_int (Integer.get_big_int min), Big_int.int_of_big_int(Integer.get_big_int max)),prefix)
           else
             (alloc,None, prefix)
       | _ -> (alloc,None, prefix)
@@ -1042,7 +1045,7 @@ module MemoryModelCommon = struct
     match Expr.get_args loc with
     | [a1] ->
         if (Arithmetic.is_int a1) then
-          let addr = Integer.get_int a1 in
+          let addr = Big_int.int_of_big_int (Integer.get_big_int a1) in
           match (List.find_opt (fun (alloc, range_opt, prefix) ->
             if range_opt = None then false
             else

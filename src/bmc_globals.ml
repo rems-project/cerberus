@@ -4,10 +4,24 @@ open Z3
 (* TODO: move to bmc_conf *)
 
 (* Z3 context config *)
-let g_z3_ctx_cfg = [ ("model", "true")  (* Generate model *)
-                   ; ("proof", "false") (* Disable proof generation *)
-                   ; ("auto_config", "true")
-                   ]
+let g_z3_ctx_cfg =
+  let base_cfg = [ ("model", "true")  (* Generate model *)
+                 ; ("proof", "false") (* Disable proof generation *)
+                 ; ("auto_config", "true")
+                 (*; ("model_compress", "false")*)
+                 ] in
+  (* For versions >= 4.8, we disable model_compress in order to
+   * be able to easily query the model
+   * (e.g. when generating graphs or returning the model to the user).
+   *
+   * This parameter did not exist before 4.8; setting model_compress to
+   * false essentially reverts to the before-4.8 behaviour.
+   *)
+  if Z3.Version.major > 4 ||
+     (Z3.Version.major = 4 && Z3.Version.minor >= 8) then
+       ("model_compress", "false") :: base_cfg
+  else base_cfg
+
 let g_ctx = mk_context g_z3_ctx_cfg
 
 let g_z3_solver_logic_opt = None        (* Logic used by the solver *)

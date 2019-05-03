@@ -128,24 +128,52 @@ module BasicTypeSort = struct
         failwith "Floats are not supported."
 end
 
+(* The Z3 tuple doesn't cooperate well with recursive datatypes for some reason.
+ * It throws a Z3Error("Invalid argument") when calling, e.g., Tuple.get_mk_decl
+ * sort, where sort is created from Tuple.mk_sort *)
+module CustomTuple = struct
+  open Z3.Datatype
+
+  let mk_sort (tuple_name: string)
+              (arg_names: Symbol.symbol list)
+              (sorts: Sort.sort list) : Sort.sort =
+    mk_sort_s g_ctx tuple_name
+    [mk_constructor_s g_ctx
+      (sprintf "tuple_%s" tuple_name)
+      (mk_sym (sprintf "is_%s" tuple_name))
+      arg_names
+      (List.map (fun sort -> Some sort) sorts)
+      (List.map (fun _ -> 0) arg_names)
+    ]
+
+  let mk_tuple (sort: Sort.sort) (exprs: Expr.expr list) : Expr.expr =
+    let constructors = get_constructors sort in
+    Expr.mk_app g_ctx (List.hd constructors) exprs
+
+end
+
 module CtypeSort = struct
   open Z3.Datatype
-  let mk_sort : Sort.sort = mk_sort_s g_ctx "Ctype"
-    [ mk_ctor "void_ty"
-    ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
-        [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
-    ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
-        [] [] []
-        (* TODO: recursive data types can not be nested in other types
-         * such as tuple  *)
-        (*[mk_sym g_ctx "_ptr_ty"] [None] [0] *)
-    ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
-        [mk_sym "_array_ty_n"]
-        [Some integer_sort] [0]
-    ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
-        [mk_sym "_struct_ty"]
-        [Some integer_sort] [0]
+  let mk_sort_helper : Sort.sort list = mk_sorts_s g_ctx
+    [ "Ctype" ]
+    [[ mk_ctor "void_ty"
+     ; mk_constructor_s g_ctx "basic_ty" (mk_sym "is_basic_ty")
+         [mk_sym "_basic_ty"] [Some BasicTypeSort.mk_sort] [0]
+     ; mk_constructor_s g_ctx "ptr_ty" (mk_sym "is_ptr_ty")
+         [mk_sym "_ptr_ty"] [None] [0]
+     ; mk_constructor_s g_ctx "array_ty" (mk_sym "is_array_ty")
+         [mk_sym "_array_ty_n"]
+         [Some integer_sort] [0]
+     ; mk_constructor_s g_ctx "struct_ty" (mk_sym "is_struct_ty")
+         [mk_sym "_struct_ty"]
+         [Some integer_sort] [0]
+     ; mk_constructor_s g_ctx "atomic_ty" (mk_sym "is_atomic_ty")
+         [mk_sym "_atomic_ty"]
+         [None] [0]
+     ]
     ]
+
+  let mk_sort = List.nth mk_sort_helper 0
 
   let rec mk_expr (ctype: ctype) : Expr.expr =
     let fdecls = get_constructors mk_sort in
@@ -155,7 +183,7 @@ module CtypeSort = struct
     | Basic0 bty ->
         Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
     | Pointer0 (_, ty) ->
-        Expr.mk_app g_ctx (List.nth fdecls 2) []
+        Expr.mk_app g_ctx (List.nth fdecls 2) [mk_expr ty]
     | Array0(cty, Some n) ->
         (* TODO: cty ignored b/c recursive types and tuples *)
         (* Sort of assumed it's always integer for now... *)
@@ -163,7 +191,7 @@ module CtypeSort = struct
     | Struct0 (Symbol (_, n, _))->
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | Atomic0 ty ->
-        assert false
+        Expr.mk_app g_ctx (List.nth fdecls 5) [mk_expr ty]
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
@@ -344,7 +372,7 @@ module AddressSortPNVI = struct
     match Expr.get_args expr with
     | [a] ->
         if Arithmetic.is_int a then
-          sprintf "0x%x" (Integer.get_int a)
+          sprintf "0x%x" (Big_int.int_of_big_int (Integer.get_big_int a))
         else Expr.to_string expr
     | _ -> Expr.to_string expr
 
@@ -609,7 +637,7 @@ module PointerSortPNVI : PointerSortAPI = struct
     | [prov;addr] ->
         let pp_prov =
           if Arithmetic.is_int prov
-          then (string_of_int (Integer.get_int prov))
+          then (Big_int.string_of_big_int (Integer.get_big_int prov))
           else Expr.to_string prov in
         let pp_addr = AddressSortPNVI.pp addr in
         sprintf (*"ptr(@%s, %s)"*) "(@%s, %s)" pp_prov pp_addr

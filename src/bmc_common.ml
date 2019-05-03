@@ -121,7 +121,8 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
     "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
   let arg_list = List.mapi
     (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
-  Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts
+  CustomTuple.mk_sort tuple_name arg_list sorts
+  (*Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts*)
 
 let ctype_from_pexpr (ctype_pe: typed_pexpr) =
   match ctype_pe with
@@ -136,8 +137,10 @@ let ctor_to_z3 (ctor  : typed_ctor)
   match ctor,exprs with
   | Ctuple,exprs ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
-      let mk_decl = Tuple.get_mk_decl sort in
-      FuncDecl.apply mk_decl exprs
+      (*print_endline ((string_of_int (Tuple.get_num_fields sort)));*)
+      (*let mk_decl = Tuple.get_mk_decl sort in
+      FuncDecl.apply mk_decl exprs *)
+      CustomTuple.mk_tuple sort exprs
   | Civmax,_ ->
       (* Handled as special case in bmc_pexpr *)
       assert false

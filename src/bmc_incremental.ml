@@ -1248,24 +1248,28 @@ module BmcZ3 = struct
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
     | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* TODO: Get rid of ImplFunctions *)
-        assert (is_integer_type ctype);
-        return (Pmap.find ctype ImplFunctions.ivmin_map)
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
+        return (Pmap.find raw_ctype ImplFunctions.ivmin_map)
     | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        assert (is_integer_type ctype);
-        return (Pmap.find ctype ImplFunctions.ivmax_map)
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
+        return (Pmap.find raw_ctype ImplFunctions.ivmax_map)
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        if is_pointer_type ctype then
+        let raw_ctype = strip_atomic ctype in
+        if is_pointer_type raw_ctype then
           return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
         else begin
-          assert (is_integer_type ctype);
-          return (Pmap.find ctype ImplFunctions.sizeof_map)
+          assert (is_integer_type raw_ctype);
+          return (Pmap.find raw_ctype ImplFunctions.sizeof_map)
         end
     | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* We can just directly compute the values rather than do it in the
          * roundabout way as in the above *)
-        assert (is_integer_type ctype);
+        let raw_ctype = strip_atomic ctype in
+        assert (is_integer_type raw_ctype);
         get_file >>= fun file ->
-        return (int_to_z3 (alignof_type ctype file));
+        return (int_to_z3 (alignof_type raw_ctype file));
     | PEctor (ctor, pes) ->
         mapM z3_pe pes >>= fun z3d_pes ->
         return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
@@ -1357,7 +1361,8 @@ module BmcZ3 = struct
     | PEis_integer _ -> assert false
     | PEis_signed _  -> assert false
     | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
-        return (Pmap.find ctype ImplFunctions.is_unsigned_map)
+        let raw_ctype = strip_atomic ctype in
+        return (Pmap.find raw_ctype ImplFunctions.is_unsigned_map)
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
         bmc_debug_print 7 "TODO: PEare_compatible";
@@ -4485,11 +4490,10 @@ module BmcConcActions = struct
     | Eunseq es ->
         mapM do_actions_e es >>= fun es_actions ->
         return (List.concat es_actions)
-    | Ewseq (pat, e1, e2)
+    | Ewseq (pat, e1, e2) (* fall through *)
     | Esseq (pat, e1, e2) ->
         do_actions_e e1 >>= fun e1_actions ->
         do_actions_e e2 >>= fun e2_actions ->
-
         get_drop_cont (get_id_expr e1) >>= fun e1_drop_cont ->
         let e2_guard = mk_not e1_drop_cont in
         return (e1_actions @ (List.map (guard_action e2_guard) e2_actions))
@@ -4619,6 +4623,20 @@ module BmcConcActions = struct
         do_po_e e2 >>= fun po_e2 ->
         get_actions_from_uid (get_id_expr e1) >>= fun actions_e1 ->
         get_actions_from_uid (get_id_expr e2) >>= fun actions_e2 ->
+
+        (* TODO (hacky):
+         * For all actions in e1, make them have positive polarity from now on.
+         * This is hacky/bad b/c we're modifying bmc_action_map in the wrong phase.
+         * Polarity is not a static property of bmc_action and should be tracked
+         * elsewhere.
+         *)
+        let pos_actions_e1 =
+          List.map (fun (BmcAction(_, guard, action)) -> BmcAction(Pos, guard, action))
+                   actions_e1 in
+        mapM_ (fun action -> add_action_to_bmc_action_map
+                                  (aid_of_bmcaction action) action)
+              pos_actions_e1 >>
+
         return ((List.map aid_of_bmcaction_rel (cartesian_product actions_e1 actions_e2))
                 @ po_e1 @ po_e2)
     | Easeq _       -> assert false
