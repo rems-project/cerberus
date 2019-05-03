@@ -3831,14 +3831,15 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                   else
                     (* TODO: check, might need some pointer to pointer conversion *)
                     Caux.mk_sym_pe e_sym in
+                let mk_store =
+                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
                 let core_e =
                   Caux.add_loc (locOf core_e) $
                     Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
                       Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e (
                        Caux.mk_sseq_e (Caux.mk_empty_pat C.BTy_unit)
                          (* TODO: proper memory order *)
-                         (Caux.pstore loc core_ty (Caux.mk_sym_pe sym_global)
-                            core_init_e Cmm.NA)
+                         (mk_store loc core_ty (Caux.mk_sym_pe sym_global) core_init_e Cmm.NA)
                          (Caux.mk_pure_e (Caux.mk_sym_pe sym_global))
                       )) in
                 E.return
