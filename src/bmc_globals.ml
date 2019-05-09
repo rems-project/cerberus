@@ -41,6 +41,8 @@ let g_pnvi = true
 (* If false, checks memory bindings at the same time as __BMC_ASSUMES *)
 let g_incremental_smt = true
 
+let g_dbg_print_raw_loc = false
+
 type memory_mode =
   | MemoryMode_C
   | MemoryMode_Linux

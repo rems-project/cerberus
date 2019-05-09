@@ -774,6 +774,66 @@ module type LoadedSortTy = sig
   val get_specified_value : Expr.expr -> Expr.expr
   val get_unspecified_value : Expr.expr -> Expr.expr
 end
+
+(* NOTE: not a functor anymore because I don't want to deal with module
+ * packing and unpacking everywhere
+ *)
+module TODO_LoadedSort = struct
+  open Z3.Datatype
+  let mk_sort (obj_sort: Sort.sort) =
+    let obj_name = Sort.to_string obj_sort in
+    mk_sort_s g_ctx ("Loaded_" ^ obj_name)
+             [ mk_constructor_s g_ctx
+                                ("specified_" ^ obj_name)
+                                (mk_sym ("is_specified_" ^ obj_name))
+                                [mk_sym ("get_" ^ obj_name)]
+                                [Some obj_sort] [0]
+             ;  mk_constructor_s g_ctx
+                                ("unspecified_" ^ obj_name)
+                                (mk_sym ("is_unspecified_" ^ obj_name))
+                                [mk_sym ("get_" ^ obj_name)]
+                                [Some CtypeSort.mk_sort] [0]
+             ]
+
+  let mk_specified (obj_sort: Sort.sort) (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) obj_sort);
+    let ctors = get_constructors (mk_sort obj_sort) in
+    let loaded_ctor = List.nth ctors 0 in
+    Expr.mk_app g_ctx loaded_ctor [expr]
+
+  let mk_unspecified (obj_sort: Sort.sort) (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) CtypeSort.mk_sort);
+    let ctors = get_constructors (mk_sort obj_sort) in
+    let unspec_ctor = List.nth ctors 1 in
+    Expr.mk_app g_ctx unspec_ctor [expr]
+
+  let is_specified (obj_sort: Sort.sort) (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) (mk_sort obj_sort));
+    let recognizers = get_recognizers (mk_sort obj_sort) in
+    let is_spec = List.nth recognizers 0 in
+    Expr.mk_app g_ctx is_spec [ expr ]
+
+  let is_unspecified (obj_sort: Sort.sort) (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) (mk_sort obj_sort));
+    let recognizers = get_recognizers (mk_sort obj_sort) in
+    let is_unspec = List.nth recognizers 1 in
+    Expr.mk_app g_ctx is_unspec [ expr ]
+
+  let get_specified_value (expr: Expr.expr) =
+    let accessors = get_accessors (Expr.get_sort expr) in
+    let get_value = List.hd (List.nth accessors 0) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_unspecified_value (obj_sort: Sort.sort) (expr: Expr.expr) =
+    assert (Sort.equal (Expr.get_sort expr) (mk_sort obj_sort));
+    let accessors = get_accessors (mk_sort obj_sort) in
+    let get_value = List.hd (List.nth accessors 1) in
+    Expr.mk_app g_ctx get_value [ expr ]
+end
+
+
+
+(* Hack for now to access the value associated with the first constructor *)
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
 module LoadedSort (M : sig val obj_sort : Sort.sort end) : LoadedSortTy = struct
@@ -830,6 +890,7 @@ module LoadedSort (M : sig val obj_sort : Sort.sort end) : LoadedSortTy = struct
     Expr.mk_app g_ctx get_value [ expr ]
 
 end
+
 
 module LoadedInteger =
   LoadedSort (struct let obj_sort = integer_sort end)
@@ -923,7 +984,6 @@ module PNVIByteArray = struct
     Z3Array.mk_store g_ctx array index value
 end
 
-
 module IntArray = struct
   let default_value = LoadedInteger.mk_specified (int_to_z3 0)
 
@@ -935,6 +995,7 @@ module IntArray = struct
   (*let mk_const_array =
     Z3Array.mk_const_array g_ctx mk_sort default_value *)
 
+  (* TODO: deprecate this *)
   let mk_select (array: Expr.expr) (index: Expr.expr) =
     Z3Array.mk_select g_ctx array index
 
@@ -945,12 +1006,50 @@ module IntArray = struct
     let indexed_values = List.mapi (fun i value -> (i,value)) values in
     List.fold_left (fun array (i,value) -> mk_store array (int_to_z3 i) value)
                    mk_const_array indexed_values *)
-
 end
 
+(* TODO: switch this to use GenericArrays *)
 module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
+
+(* TODO: special case for now *)
+module LoadedIntArrayArray = struct
+  include LoadedSort (
+    struct
+      let obj_sort = Z3Array.mk_sort g_ctx integer_sort (LoadedIntArray.mk_sort)
+    end)
+end
+
+(* Testing a module to construct sorts for OTy_array types
+ * argument of this type must be wrapped in loaded
+ * E.g. for BTy_loaded (OTy_array OTy_array OTy_integer),
+ * we really want Loaded (Array (Loaded Array (Loaded Integer)))
+ * to correspond with Core types.
+ *)
+(*
+module GenericArrays = struct
+  let rec mk_array_sort (cot: core_object_type) : Sort.sort =
+    match cot with
+    | OTy_integer -> (* Loaded Integer *)
+        Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort)
+    | OTy_pointer ->
+        failwith "TODO: arrays of pointers"
+    | OTy_floating ->
+        failwith "Error: floats are not supported."
+    | OTy_array OTy_integer ->
+        (* TODO: special case for now. *)
+        failwith "TODO: arrays of arrays"
+    | OTy_array cot' ->
+        failwith "TODO: arrays of arrays"
+    | OTy_struct _ ->
+        failwith "TODO: arrays of structs"
+    | OTy_union _ ->
+        failwith "Error: unions are not supported."
+end
+*)
+
+
 
 module type LoadedSig = sig
   val mk_sort : Sort.sort
@@ -978,6 +1077,12 @@ module Loaded : LoadedSig = struct
       ; mk_constructor_s g_ctx "loaded_int[]" (mk_sym "is_loaded_int[]")
                          [mk_sym "_loaded_int[]"]
                          [Some LoadedIntArray.mk_sort] [0]
+      (* For easy indexing, we don't have multi-dimensional arrays in
+       * the underlying representation. *)
+      (*; mk_constructor_s g_ctx "loaded_int[][]" (mk_sym "is_loaded_int[][]")
+                         [mk_sym "_loaded_int[][]"]
+                         [Some LoadedIntArrayArray.mk_sort] [0]
+      *)
       ]
 
   let mk_expr (expr: Expr.expr) =
@@ -988,10 +1093,10 @@ module Loaded : LoadedSig = struct
       Expr.mk_app g_ctx (List.nth ctors 1) [expr]
     else if (Sort.equal LoadedIntArray.mk_sort (Expr.get_sort expr)) then
       Expr.mk_app g_ctx (List.nth ctors 2) [expr]
-    else begin
-      print_endline (Expr.to_string expr);
+    (*else if (Sort.equal LoadedIntArrayArray.mk_sort (Expr.get_sort expr)) then
+      Expr.mk_app g_ctx (List.nth ctors 3) [expr]*)
+    else
       assert false
-    end
 
   let is_loaded_int (expr: Expr.expr) =
     let recognizer = List.nth (get_recognizers mk_sort) 0 in
@@ -1020,27 +1125,45 @@ module Loaded : LoadedSig = struct
     let get_value = List.hd (List.nth accessors 2) in
     Expr.mk_app g_ctx get_value [ expr ]
 
+  (*let is_loaded_int_array_array (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 3 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let get_loaded_intarrayarray (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 3) in
+    Expr.mk_app g_ctx get_value [ expr ]
+  *)
+
+  (* TODO: do this not as a big ite *)
   let is_specified (expr: Expr.expr) =
      mk_ite (is_loaded_int expr) (LoadedInteger.is_specified (get_loaded_int expr))
     (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_specified (get_loaded_ptr expr))
-      (* Else *) (LoadedIntArray.is_specified (get_loaded_intarray expr))
-    )
+    (* else *) (LoadedIntArray.is_specified (get_loaded_intarray expr)))
+    (*
+    (mk_ite (is_loaded_int_array expr) (LoadedIntArray.is_specified (get_loaded_intarray expr))
+    (* else *) (LoadedIntArrayArray.is_specified(get_loaded_intarrayarray expr))
+    ))
+    *)
 
   let is_unspecified (expr: Expr.expr) =
      mk_ite (is_loaded_int expr) (LoadedInteger.is_unspecified (get_loaded_int expr))
     (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_unspecified (get_loaded_ptr expr))
-      (* Else *) (LoadedIntArray.is_unspecified (get_loaded_intarray expr))
-    )
-
+    (* else *) (LoadedIntArray.is_specified (get_loaded_intarray expr)))
+    (*
+    (mk_ite (is_loaded_int_array expr) (LoadedIntArray.is_specified (get_loaded_intarray expr))
+    (* else *) (LoadedIntArrayArray.is_unspecified (get_loaded_intarrayarray expr))))
+    *)
 
   (* TODO: pretty bad code *)
   let get_ith_in_loaded_2 (i: Expr.expr) (loaded: Expr.expr) : Expr.expr =
     assert (Sort.equal (Expr.get_sort loaded) mk_sort);
+
     let spec_int_array =
       LoadedIntArray.get_specified_value (get_loaded_intarray loaded) in
     mk_ite (mk_or [is_loaded_int loaded; is_loaded_ptr loaded])
            loaded
-           (* Else: must be (specified?) int array in currently supported C fragment *)
+    (* Else: must be (specified?) int array in currently supported C fragment *)
            (mk_expr (IntArray.mk_select spec_int_array i))
 
 end
