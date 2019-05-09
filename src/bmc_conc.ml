@@ -1774,7 +1774,10 @@ module RC11MemoryModel : MemoryModel = struct
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
       | RMW(_,_,_,loc,_,_,_) ->
-          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+          if g_dbg_print_raw_loc then
+            Pmap.add loc (Expr.to_string loc) base
+          else
+            Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       | Fence _ ->
           base
       ) (Pmap.empty Expr.compare) (action_events) in

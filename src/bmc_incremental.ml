@@ -2106,10 +2106,10 @@ module BmcBind = struct
         (* Need to bind array values to constant symbol *)
         get_expr uid >>= fun z3_array_expr ->
         mapM (fun pe -> get_expr (get_id_pexpr pe)) pes >>= fun z3_pes ->
-        assert (Sort.equal (Expr.get_sort z3_array_expr) IntArray.mk_sort);
+
+        assert (Z3Array.is_array z3_array_expr);
         let array_bindings = List.mapi (fun i expr ->
-            BindLet (mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr)
-          ) z3_pes in
+            BindLet (mk_eq (Z3Array.mk_select g_ctx z3_array_expr (int_to_z3 i)) expr)) z3_pes in
         mapM bind_pe pes >>= fun bound_pes ->
         return (array_bindings @ (List.concat bound_pes))
     | PEctor (ctor, pes) ->
@@ -2982,6 +2982,8 @@ module BmcMemCommon = struct
       LoadedPointer.mk_unspecified ctype
     else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
       LoadedIntArray.mk_unspecified ctype
+    else if (Sort.equal (LoadedIntArrayArray.mk_sort) sort) then
+      LoadedIntArrayArray.mk_unspecified ctype
     else begin
       (* TODO: Pretty bad... *)
       let ret = List.fold_left (fun acc (sym, memlist) ->
@@ -3014,8 +3016,10 @@ module BmcMemCommon = struct
                               : Expr.expr * (Expr.expr list) =
     if specified then begin
       let (initial_value, assertions) = mk_initial_value ctype name in
-      assert (Sort.equal (LoadedInteger.mk_sort) sort);
-      (LoadedInteger.mk_specified initial_value, assertions)
+      if Sort.equal (LoadedInteger.mk_sort) sort then
+        (LoadedInteger.mk_specified initial_value, assertions)
+      else
+        failwith "TODO: initial values of non-basic types"
     end else
       (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) file, [])
 
@@ -4303,7 +4307,65 @@ module BmcConcActions = struct
   let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
     BmcAction(pol, mk_and [guard;g], action)
 
-  let mk_store (pol: polarity)
+  (* Given a ctype and a wval with sort corresponding to ctype_to_z3_sort ctype:
+   * if the ctype is a multidimensional array, we create a new wval' with sort
+   * LoadedIntArray.mk_sort and size corresponding to the flattened ctype. We
+   * then generate the relevant equalities for wval' to wval.
+   * If the ctype is not a multidimensional array, do nothing.
+   *
+   * Note: this is essentially a hack to simplify indexing into complex types in Z3.
+   * TODO: make this work nicely with unspecified subarrays too. Currently we assume   * array types are specified.
+   *)
+  let flatten_multid_arrays (ctype: Core_ctype.ctype0)
+                            (file: unit typed_file)
+                            (value: Expr.expr)
+                            : Expr.expr * (Expr.expr list) =
+    assert (Sort.equal (Expr.get_sort value) (ctype_to_z3_sort ctype file));
+
+    let rec aux (global_array: Expr.expr)
+                (ctype: Core_ctype.ctype0)
+                (value: Expr.expr)
+                (base_index: int)
+                : Expr.expr list =
+      match ctype with
+      | Basic0 (Integer _) ->
+          [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
+                 value
+          ]
+      | Basic0 _ ->
+          failwith "TODO: multid-arrays of non-integer ctype"
+      | Array0 (ctype', Some n) ->
+          let size_of_bmcz3sort_ctype' : int =
+            bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in
+          (* TODO: Need to rewrite loaded sorts.
+           * No guarantee value was created in this manner.
+           *)
+          let loaded_value = TODO_LoadedSort.get_specified_value value in
+
+          let assertions =
+            List.init (Nat_big_num.to_int n) (fun i ->
+              let new_base = base_index + (i * size_of_bmcz3sort_ctype') in
+              let subobj = Z3Array.mk_select g_ctx loaded_value (int_to_z3 i) in
+              aux global_array ctype' subobj new_base
+            ) in
+          List.concat assertions
+      | _ ->
+          failwith (sprintf "TODO: multid arrays with ctype %s"
+                            (pp_to_string (Pp_core_ctype.pp_ctype ctype)))
+   in
+
+    match ctype with
+    | Array0(Array0 (_, _), Some _) ->
+        let new_array =
+            IntArray.mk_const_s (sprintf "flattened_%s" (Expr.to_string value)) in
+        (* We are dealing with loaded values *)
+        let loaded_new_array = LoadedIntArray.mk_specified new_array in
+        let assertions = aux new_array ctype value 0 in
+        (loaded_new_array, assertions)
+    | _ -> (value, [])
+
+
+  (*let mk_store (pol: polarity)
                (guard: Expr.expr)
                (aid: aid)
                (tid: tid)
@@ -4313,6 +4375,21 @@ module BmcConcActions = struct
                (ctype: ctype)
                : bmc_action =
     BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval, ctype))
+  *)
+
+  let mk_store_and_flatten_multid_arrays (pol: polarity)
+                                         (guard: Expr.expr)
+                                         (aid: aid)
+                                         (tid: tid)
+                                         (memorder: memory_order)
+                                         (ptr: Expr.expr)
+                                         (wval: Expr.expr)
+                                         (ctype: ctype)
+                                         : bmc_action eff =
+    get_file >>= fun file ->
+    let (new_wval, assertions) = flatten_multid_arrays ctype file wval in
+    mapM_ add_assertion assertions >>
+    return (BmcAction(pol, guard, Store(aid, tid, memorder, ptr, new_wval, ctype)))
 
   (* TODO: allocation size assertions *)
   (* Make a single create *)
@@ -4358,9 +4435,10 @@ module BmcConcActions = struct
               BmcMemCommon.mk_initial_loaded_value sort
                 (sprintf "init_%d[struct.%d]" alloc_id i)
                 ctype initialise file in
-            mapM add_assertion assumptions >>
+            mapM_ add_assertion assumptions >>
             let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
-            return (mk_store pol mk_true aid initial_tid
+            (mk_store_and_flatten_multid_arrays
+                             pol mk_true aid initial_tid
                              (C_mem_order Cmm_csem.NA) ptr initial_value ty)
           ) indexed_sorts
           end
@@ -4376,11 +4454,13 @@ module BmcConcActions = struct
             (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
             ctype initialise file in
       mapM add_assertion assumptions >>= fun _ ->
-      return [mk_store pol mk_true aid initial_tid
-                       (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
+      mk_store_and_flatten_multid_arrays
+                pol mk_true aid initial_tid
+                (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
+          >>= fun store ->
+      return [store]
       end
     )
-
 
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
@@ -4400,7 +4480,11 @@ module BmcConcActions = struct
     (*| IStore(aid, (ctype, sort), ptr, wval, mo) ->*)
     | IStore (aid,ctype,_,ptr,wval,mo) ->
         get_tid >>= fun tid ->
-        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval ctype]
+        mk_store_and_flatten_multid_arrays
+                pol mk_true aid tid (C_mem_order mo) ptr wval ctype
+            >>= fun store ->
+        return [store]
+
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
                               ctype,_, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,

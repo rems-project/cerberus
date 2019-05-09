@@ -92,7 +92,7 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   | OTy_integer     -> integer_sort
   | OTy_pointer     -> PointerSort.mk_sort
   | OTy_floating ->
-      failwith "Floats are not supported."
+      failwith "Error: floats are not supported."
   | OTy_array _
   | OTy_struct _ ->
       assert false
@@ -109,12 +109,28 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
   | BTy_list _              -> assert false
   | BTy_tuple cbt_list      -> assert false
   | BTy_object obj_type     -> cot_to_z3 obj_type
-  | BTy_loaded OTy_integer  -> LoadedInteger.mk_sort
+  | BTy_loaded OTy_integer  ->
+      (* Experimenting with modules
+       * let module X = struct let obj_sort = integer_sort end in
+       * let module T = (val (module LoadedSort (X) : LoadedSortTy)) in
+       *)
+      LoadedInteger.mk_sort
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
+  (*| BTy_loaded (OTy_array OTy_integer) ->
+      LoadedIntArray.mk_sort*)
   | BTy_loaded (OTy_array OTy_integer) ->
       LoadedIntArray.mk_sort
-  | BTy_loaded _            -> assert false
-  | BTy_storable            -> assert false
+  | BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
+      (* TODO: experiment by hard-coding 2D array type.
+       * Generalize later.
+       *)
+      LoadedIntArrayArray.mk_sort
+  | BTy_loaded (OTy_array _ ) ->
+      failwith "TODO: support for general array types"
+  | BTy_loaded _            ->
+      failwith "TODO: support for general loaded types"
+  | BTy_storable            ->
+      failwith "TODO: support for BTy_storable"
 
 let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
   let tuple_name =
@@ -154,33 +170,39 @@ let ctor_to_z3 (ctor  : typed_ctor)
       (* Handled as special case in bmc_pexpr *)
       assert false
   | CivAND,[ctype;e1;e2] -> (* bitwise AND *)
-      assert false
+      failwith "TODO: CivAND"
       (*if (not g_bv) then failwith "CivAND is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivAND";
       BitVector.mk_and g_ctx e1 e2*)
   | CivOR,[ctype;e1;e2] -> (* bitwise OR *)
-      assert false
+      failwith "TODO: CivOR"
       (*if (not g_bv) then failwith "CivOR is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivOR";
       BitVector.mk_or g_ctx e1 e2*)
   | CivXOR,[ctype;e1;e2] -> (* bitwise XOR *)
-      assert false
+      failwith "TODO: CivXOR"
       (*if (not g_bv) then failwith "CivXOR is supported only with bitvectors";
       assert (g_bv);
       bmc_debug_print 7 "TODO: ctype ignored in CivXOR";
       BitVector.mk_xor g_ctx e1 e2*)
   | Cspecified,[e] ->
       assert (is_some bTy);
-      if (Option.get bTy = BTy_loaded OTy_integer) then
-        LoadedInteger.mk_specified e
-      else if (Option.get bTy = BTy_loaded OTy_pointer) then
-        LoadedPointer.mk_specified e
-      else if (Option.get bTy = BTy_loaded (OTy_array OTy_integer)) then
-        LoadedIntArray.mk_specified e
-      else
-        assert false
+      begin
+      match Option.get bTy with
+      | BTy_loaded OTy_integer ->
+          LoadedInteger.mk_specified e
+      | BTy_loaded OTy_pointer ->
+          LoadedPointer.mk_specified e
+      | BTy_loaded (OTy_array OTy_integer) ->
+          LoadedIntArray.mk_specified e
+      | BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
+          LoadedIntArrayArray.mk_specified e
+      | ty ->
+          failwith (sprintf "TODO: support Cspecified %s"
+                            (pp_to_string (Pp_core.Basic.pp_core_base_type ty)))
+      end
   | Cunspecified, [e] ->
       assert (is_some bTy);
       if (Option.get bTy = BTy_loaded OTy_integer) then
@@ -188,7 +210,8 @@ let ctor_to_z3 (ctor  : typed_ctor)
       else if (Option.get bTy = BTy_loaded OTy_pointer) then
         LoadedPointer.mk_unspecified e
       else
-        assert false
+        failwith (sprintf "TODO: support Cspecified %s"
+                          (pp_to_string (Pp_core.Basic.pp_core_base_type (Option.get bTy))))
   | Ccons,[hd;tl] ->
       CtypeListSort.mk_cons hd tl
   | Cnil BTy_ctype, [] ->
@@ -198,7 +221,10 @@ let ctor_to_z3 (ctor  : typed_ctor)
       | BTy_object (OTy_array OTy_integer) ->
           (* Just create a new array; need to bind values to Z3 though *)
           IntArray.mk_const_s (sprintf "array_%d" uid)
-      | _ -> assert false
+      | BTy_object (OTy_array (OTy_array OTy_integer)) ->
+          Z3Array.mk_const_s g_ctx (sprintf "array_array_%d" uid)
+                             integer_sort (LoadedIntArray.mk_sort)
+      | _ -> failwith "TODO: support arbitrary Carrays"
       end
   | _ ->
       assert false
@@ -286,6 +312,15 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Union v ->  Union0 v
   | Builtin v -> Builtin0 v
 
+(* NOTE: we actually kind of have two functions from ctype -> z3 sort that
+ * differ for multi-dimensional arrays currently. The first, below, gives the
+ * Z3 Sort through recursing through the array subtypes and is used in the
+ * intermediate representation. E.g. int[][] maps to LoadedIntArrayArray
+ *
+ * The second just treats multi-dimensional arrays as a flat array and is
+ * currently used for the memory model representation for simplicity. E.g.
+ * int[][] maps to LoadedIntArray
+ *)
 let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
                          (file: unit typed_file)
                          : Sort.sort =
@@ -295,8 +330,11 @@ let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
   | Basic0 _ -> assert false
   | Array0(Basic0 (Integer i), Some n) ->
       LoadedIntArray.mk_sort
+  | Array0(Array0(_, _), Some n) ->
+      (* TODO *)
+      LoadedIntArrayArray.mk_sort
   | Array0(_, _) ->
-      assert false
+      failwith "TODO: generic arrays"
   | Function0 _ -> assert false
   | Pointer0 _ -> LoadedPointer.mk_sort
   | Atomic0 (Basic0 _ as _ty) (* fall through *)
@@ -348,6 +386,7 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
   | Basic0(Floating _) ->
       failwith "Error: floats are not supported."
   | Array0(ty2, Some n) ->
+      (* TODO *)
       let sort = ctype_to_bmcz3sort ty2 file in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
   | Array0(_, None) ->
