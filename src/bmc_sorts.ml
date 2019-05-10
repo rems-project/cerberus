@@ -1047,6 +1047,11 @@ module LoadedIntArray = struct
   include LoadedSort (struct let obj_sort = IntArray.mk_sort end)
 end
 
+module LoadedPointerArray = struct
+  include LoadedSort (struct
+    let obj_sort = Z3Array.mk_sort g_ctx integer_sort LoadedPointer.mk_sort end)
+end
+
 (*
 (* TODO: special case for now *)
 module LoadedIntArrayArray = struct
@@ -1070,7 +1075,8 @@ module GenericArrays = struct
         let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
         TODO_LoadedSort.mk_sort sort
     | OTy_pointer ->
-        failwith "TODO: arrays of pointers"
+        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
+        TODO_LoadedSort.mk_sort sort
     | OTy_floating ->
         failwith "Error: floats are not supported."
     | OTy_array cot' ->
@@ -1088,6 +1094,9 @@ module GenericArrays = struct
     | Void0 -> failwith "TODO: void arrays"
     | Basic0 (Integer i) ->
         let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
+        TODO_LoadedSort.mk_sort sort
+    | Pointer0 _ ->
+        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
         TODO_LoadedSort.mk_sort sort
     | Array0(ty', _) ->
         let inner_sort = mk_array_sort_from_ctype ty' in
@@ -1126,6 +1135,10 @@ module Loaded : LoadedSig = struct
       ; mk_constructor_s g_ctx "loaded_int[]" (mk_sym "is_loaded_int[]")
                          [mk_sym "_loaded_int[]"]
                          [Some LoadedIntArray.mk_sort] [0]
+      ; mk_constructor_s g_ctx "loaded_ptr[]" (mk_sym "is_loaded_ptr[]")
+                         [mk_sym "_loaded_ptr[]"]
+                         [Some LoadedPointerArray.mk_sort] [0]
+
       ]
 
   let mk_expr (expr: Expr.expr) =
@@ -1136,6 +1149,8 @@ module Loaded : LoadedSig = struct
       Expr.mk_app g_ctx (List.nth ctors 1) [expr]
     else if (Sort.equal LoadedIntArray.mk_sort (Expr.get_sort expr)) then
       Expr.mk_app g_ctx (List.nth ctors 2) [expr]
+    else if (Sort.equal LoadedPointerArray.mk_sort (Expr.get_sort expr)) then
+      Expr.mk_app g_ctx (List.nth ctors 3) [expr]
     else
       assert false
 
@@ -1166,16 +1181,28 @@ module Loaded : LoadedSig = struct
     let get_value = List.hd (List.nth accessors 2) in
     Expr.mk_app g_ctx get_value [ expr ]
 
+  let is_loaded_ptr_array (expr: Expr.expr) =
+    let recognizer = List.nth (get_recognizers mk_sort) 3 in
+    Expr.mk_app g_ctx recognizer [expr]
+
+  let get_loaded_ptrarray (expr: Expr.expr) =
+    let accessors = get_accessors mk_sort in
+    let get_value = List.hd (List.nth accessors 3) in
+    Expr.mk_app g_ctx get_value [ expr ]
+
+
   (* TODO: do this not as a big ite *)
   let is_specified (expr: Expr.expr) =
      mk_ite (is_loaded_int expr) (LoadedInteger.is_specified (get_loaded_int expr))
     (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_specified (get_loaded_ptr expr))
-    (* else *) (LoadedIntArray.is_specified (get_loaded_intarray expr)))
+    (mk_ite (is_loaded_int_array expr) (LoadedIntArray.is_specified (get_loaded_intarray expr))
+    (* else *) (LoadedPointerArray.is_specified (get_loaded_ptrarray expr))))
 
   let is_unspecified (expr: Expr.expr) =
      mk_ite (is_loaded_int expr) (LoadedInteger.is_unspecified (get_loaded_int expr))
     (mk_ite (is_loaded_ptr expr) (LoadedPointer.is_unspecified (get_loaded_ptr expr))
-    (* else *) (LoadedIntArray.is_specified (get_loaded_intarray expr)))
+    (mk_ite (is_loaded_int_array expr) (LoadedIntArray.is_specified (get_loaded_intarray expr))
+    (* else *) (LoadedPointerArray.is_specified (get_loaded_ptrarray expr))))
 
   (* TODO: pretty bad code *)
   let get_ith_in_loaded_2 (i: Expr.expr) (loaded: Expr.expr) : Expr.expr =
@@ -1183,9 +1210,14 @@ module Loaded : LoadedSig = struct
 
     let spec_int_array =
       LoadedIntArray.get_specified_value (get_loaded_intarray loaded) in
+    let spec_ptr_array =
+      LoadedPointerArray.get_specified_value (get_loaded_ptrarray loaded) in
     mk_ite (mk_or [is_loaded_int loaded; is_loaded_ptr loaded])
            loaded
-           (mk_expr (IntArray.mk_select spec_int_array i))
+    (mk_ite (is_loaded_int_array loaded)
+            (mk_expr (Z3Array.mk_select g_ctx spec_int_array i))
+            (* else pointer array *)
+            (mk_expr (Z3Array.mk_select g_ctx spec_ptr_array i)))
 
 end
 
@@ -1201,7 +1233,12 @@ let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
     (* TODO: What if unspecified? *)
     begin
       let spec_value = LoadedIntArray.get_specified_value loaded in
-      IntArray.mk_select spec_value (int_to_z3 i)
+      Z3Array.mk_select g_ctx spec_value (int_to_z3 i)
+    end
+  else if (Sort.equal (Expr.get_sort loaded) (LoadedPointerArray.mk_sort)) then
+    begin
+      let spec_value = LoadedPointerArray.get_specified_value loaded in
+      Z3Array.mk_select g_ctx spec_value (int_to_z3 i)
     end
   else
     assert false
