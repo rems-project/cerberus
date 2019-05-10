@@ -234,10 +234,14 @@ let ctor_to_z3 (ctor  : typed_ctor)
   | Cnil BTy_ctype, [] ->
       CtypeListSort.mk_nil
   | Carray,_ ->
+      (* TODO: move this to GenericArrays or some other function? *)
       begin match Option.get bTy with
       | BTy_object (OTy_array OTy_integer) ->
-          (* Just create a new array; need to bind values to Z3 though *)
-          IntArray.mk_const_s (sprintf "array_%d" uid)
+          Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
+                             integer_sort LoadedInteger.mk_sort
+      | BTy_object (OTy_array OTy_pointer) ->
+          Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
+                             integer_sort LoadedPointer.mk_sort
       | BTy_object (OTy_array (OTy_array cot)) ->
           let sort = GenericArrays.mk_array_sort cot in
           Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
