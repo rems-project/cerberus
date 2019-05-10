@@ -120,13 +120,17 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
       LoadedIntArray.mk_sort*)
   | BTy_loaded (OTy_array OTy_integer) ->
       LoadedIntArray.mk_sort
-  | BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
+
+  (*| BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
       (* TODO: experiment by hard-coding 2D array type.
        * Generalize later.
        *)
       LoadedIntArrayArray.mk_sort
-  | BTy_loaded (OTy_array _ ) ->
-      failwith "TODO: support for general array types"
+  *)
+  | BTy_loaded (OTy_array cot) ->
+      GenericArrays.mk_array_sort cot
+
+      (*failwith "TODO: support for general array types"*)
   | BTy_loaded _            ->
       failwith "TODO: support for general loaded types"
   | BTy_storable            ->
@@ -191,10 +195,23 @@ let ctor_to_z3 (ctor  : typed_ctor)
       assert (is_some bTy);
       begin
       match Option.get bTy with
+      | BTy_loaded OTy_integer (* fall through *)
+      | BTy_loaded OTy_pointer (* fall through *)
+      | BTy_loaded (OTy_array _) ->
+          TODO_LoadedSort.mk_specified e
+
+      | ty ->
+          failwith (sprintf "TODO: support Cspecified %s"
+                            (pp_to_string (Pp_core.Basic.pp_core_base_type ty)))
+      end
+      (*
       | BTy_loaded OTy_integer ->
           LoadedInteger.mk_specified e
       | BTy_loaded OTy_pointer ->
           LoadedPointer.mk_specified e
+      | BTy_loaded (OTy_array cot) ->
+          let sort =
+
       | BTy_loaded (OTy_array OTy_integer) ->
           LoadedIntArray.mk_specified e
       | BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
@@ -202,7 +219,7 @@ let ctor_to_z3 (ctor  : typed_ctor)
       | ty ->
           failwith (sprintf "TODO: support Cspecified %s"
                             (pp_to_string (Pp_core.Basic.pp_core_base_type ty)))
-      end
+        *)
   | Cunspecified, [e] ->
       assert (is_some bTy);
       if (Option.get bTy = BTy_loaded OTy_integer) then
@@ -328,13 +345,15 @@ let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
   | Void0     -> assert false
   | Basic0(Integer i) -> LoadedInteger.mk_sort
   | Basic0 _ -> assert false
-  | Array0(Basic0 (Integer i), Some n) ->
+  (*| Array0(Basic0 (Integer i), Some n) ->
       LoadedIntArray.mk_sort
   | Array0(Array0(_, _), Some n) ->
+      GenericArrays.mk_sort
       (* TODO *)
       LoadedIntArrayArray.mk_sort
-  | Array0(_, _) ->
-      failwith "TODO: generic arrays"
+  *)
+  | Array0(ty', _) ->
+      GenericArrays.mk_array_sort_from_ctype ty'
   | Function0 _ -> assert false
   | Pointer0 _ -> LoadedPointer.mk_sort
   | Atomic0 (Basic0 _ as _ty) (* fall through *)

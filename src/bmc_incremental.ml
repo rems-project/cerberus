@@ -2973,18 +2973,36 @@ end
 module BmcMemCommon = struct
   (* TODO: move to separate file *)
   let mk_unspecified_expr (sort: Sort.sort)
-                          (ctype: Expr.expr)
+                          (raw_ctype: ctype)
                           (file: unit typed_file)
                           : Expr.expr =
-    if (Sort.equal (LoadedInteger.mk_sort) sort) then
+    let ctype = CtypeSort.mk_nonatomic_expr raw_ctype in
+    let rec aux raw_ctype =
+      match raw_ctype with
+      | Core_ctype.Basic0 (Integer _) (* fall through *)
+      | Pointer0 _ (* fall through *)
+      | Array0 _ (* fall through *)
+      | Struct0 _ ->
+          let obj_sort = TODO_LoadedSort.extract_obj_sort sort in
+          TODO_LoadedSort.mk_unspecified obj_sort ctype
+      | Atomic0 ty' -> aux ty'
+      | ty -> failwith
+                (sprintf "TODO: ctype %s"
+                         (pp_to_string (Pp_core_ctype.pp_ctype ty)))
+    in aux raw_ctype
+    (*if (Sort.equal (LoadedInteger.mk_sort) sort) then
       LoadedInteger.mk_unspecified ctype
     else if (Sort.equal (LoadedPointer.mk_sort) sort) then
       LoadedPointer.mk_unspecified ctype
     else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
       LoadedIntArray.mk_unspecified ctype
+
     else if (Sort.equal (LoadedIntArrayArray.mk_sort) sort) then
       LoadedIntArrayArray.mk_unspecified ctype
     else begin
+      *)
+      (*
+      begin
       (* TODO: Pretty bad... *)
       let ret = List.fold_left (fun acc (sym, memlist) ->
         if is_some acc then acc
@@ -2999,7 +3017,7 @@ module BmcMemCommon = struct
       ) None (Pmap.bindings_list file.tagDefs) in
       assert (is_some ret);
       Option.get ret
-    end
+    end*)
 
   let mk_initial_value (ctype: ctype) (const: string) =
     match ctype with
@@ -3021,7 +3039,7 @@ module BmcMemCommon = struct
       else
         failwith "TODO: initial values of non-basic types"
     end else
-      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) file, [])
+      (mk_unspecified_expr sort ctype file, [])
 
   (* ==== PNVI STUFF ==== *)
   let provenance_constraint (sym: Expr.expr)
