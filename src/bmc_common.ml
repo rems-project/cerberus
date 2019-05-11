@@ -131,7 +131,9 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
       GenericArrays.mk_array_sort cot
 
       (*failwith "TODO: support for general array types"*)
-  | BTy_loaded _            ->
+  | BTy_loaded (OTy_struct sym) ->
+      failwith "TODO: support for structs as values"
+  | BTy_loaded _  ->
       failwith "TODO: support for general loaded types"
   | BTy_storable            ->
       failwith "TODO: support for BTy_storable"

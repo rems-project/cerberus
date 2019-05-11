@@ -26,6 +26,7 @@ module Caux = Core_aux
  * - BmcVC
  * - BmcRet
  * - BmcSeqMem
+ * - BmcConcActions
  *)
 
 (* TODO: factor out all the repeated state *)
@@ -229,7 +230,11 @@ module BmcInline = struct
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         return (PEop(bop, inlined_pe1, inlined_pe2))
-    | PEstruct _ -> assert false
+    | PEstruct (sym, pexprs) ->
+        mapM (fun (cab_id, pe) ->
+          inline_pe pe >>= fun inlined_pe ->
+          return (cab_id, inlined_pe)) pexprs >>= fun inlined_pexprs ->
+        return (PEstruct(sym, inlined_pexprs))
     | PEunion _  -> assert false
     | PEcfunction _ ->
         assert false
@@ -806,7 +811,11 @@ module BmcSSA = struct
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
         return (PEop(binop, ssad_pe1, ssad_pe2))
-    | PEstruct _ -> assert false
+    | PEstruct (sym, pexprs) ->
+       mapM (fun (cab_id, pe) ->
+          ssa_pe pe >>= fun ssad_pe ->
+          return (cab_id, ssad_pe)) pexprs >>= fun ssad_pexprs ->
+        return (PEstruct(sym, ssad_pexprs))
     | PEunion _  -> assert false
     | PEcfunction _ -> assert false
         (*get_inline_pexpr uid >>= fun inlined_pe ->
@@ -1339,7 +1348,8 @@ module BmcZ3 = struct
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
-    | PEstruct _    -> assert false
+    | PEstruct _    ->
+        assert false
     | PEunion _     -> assert false
     | PEcfunction _ ->
         (*get_inline_pexpr uid >>= fun inline_pe ->
