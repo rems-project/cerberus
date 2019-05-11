@@ -24,7 +24,11 @@ let get_metadata_size (sz,_,_,_,_,_) : int = sz
 let get_metadata_base (_,_,_,base,_,_) : Expr.expr = base
 let get_metadata_ctype (_,ctype,_,_,_,_) : ctype option = ctype
 let get_metadata_align (_,_,align,_,_,_) : int = align
+let get_metadata_permission (_,_,_,_,perm,_) : permission_flag = perm
 let get_metadata_prefix (_,_,_,_,_,pref) : Sym.prefix = pref
+
+
+
 let print_metadata (size, cty, align, expr, _, pref) =
   sprintf "Size: %d, Base: %s, Align %d, prefix: %s"
               size (Expr.to_string expr) align
@@ -526,7 +530,6 @@ module type PointerSortAPI = sig
   val mk_addr_sort : Sort.sort
   val addr_subset : Expr.expr -> Expr.expr -> Expr.expr -> Expr.expr
   val mk_from_alloc_index  : (int * int) -> Expr.expr
-  val mk_is_atomic : Expr.expr -> Expr.expr
   val mk_is_atomic : Expr.expr -> Expr.expr
   val assert_is_atomic : Expr.expr -> Expr.expr -> Expr.expr
 
