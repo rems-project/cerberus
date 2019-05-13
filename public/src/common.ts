@@ -68,7 +68,7 @@ export namespace AllocModel {
 }
 
 export namespace BmcModel {
-  const opts = flags(['bmc_c11', 'bmc_rc11', 'bmc_rc11_hardcoded', 'bmc_linux'])
+  const opts = flags(['bmc_c11', 'bmc_rc11', 'bmc_rc11_hardcoded', 'bmc_linux', 'bmc_custom'])
   export type t = keyof typeof opts
   export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
   export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)
@@ -110,6 +110,7 @@ export interface State {
   interactive?: Interactive
   options: Options,
   bmc_model: BmcModel.t,
+  bmc_herd_file?: string;
   bmc_executions: string[],
 }
 
@@ -136,7 +137,8 @@ export type Event =
   'updateMemory' |          // Update memory graph (calls VIZ)
   'markInteractive' |       // Mark source locations when in interactive mode
   'layoutChanged' |         // GoldenLayout has been updated
-  'updateBMC'
+  'updateBMC' |
+  'updateHerdFile'
 
 export interface EventEmitter {
   on (eventName: 'clear', self: any, f: (locs: Locations) => void): void

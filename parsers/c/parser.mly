@@ -1012,14 +1012,16 @@ direct_declarator:
 | decl= array_declarator ioption(attribute_specifier_sequence)
 | decl= function_declarator ioption(attribute_specifier_sequence)
     { decl }
-| ddecltor= direct_declarator LPAREN ctxt=save_context
-  ioption(identifier_list) RPAREN
+| ddecltor= direct_declarator LPAREN ctxt=save_context RPAREN
     { LF.fun_decl (Params ([], false)) ctxt ddecltor }
+| ddecltor= direct_declarator LPAREN ctxt=save_context
+  rev_ids= identifier_list RPAREN
+    { LF.fun_ids_decl (List.rev rev_ids) ctxt ddecltor }
 ;
 
 array_declarator:
 | ddecltor= direct_declarator LBRACK tquals_opt= type_qualifier_list?
-  expr_opt= assignment_expression? RBRACK 
+  expr_opt= assignment_expression? RBRACK
     { LF.array_decl (ADecl (Location_ocaml.region ($startpos, $endpos) None,
         option [] List.rev tquals_opt, false,
         map_option (fun x -> ADeclSize_expression x) expr_opt)) ddecltor }
@@ -1044,10 +1046,11 @@ function_declarator:
     { let (ptys, ctxt) = ptys_ctxt in LF.fun_decl ptys ctxt ddecltor }
 ;
 
-identifier_list:
-| var_name
-| identifier_list COMMA var_name
-    {}
+identifier_list: (* NOTE: the list is in reverse *)
+| id= var_name
+    { [ CabsIdentifier (Location_ocaml.point $startpos, id) ] }
+| ids= identifier_list COMMA id= var_name
+    { CabsIdentifier (Location_ocaml.point $startpos, id) :: ids }
 ;
 
 pointer:
@@ -1318,20 +1321,19 @@ function_definition1:
 ;
 
 function_definition:
-| specifs_decltor_ctxt= function_definition1 declaration_list?
+| specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
   stmt= compound_statement
-    { let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
+    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+      let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
       LF.restore_context ctxt;
-      (* NOTE: when dugaring to Ail we add to following location the marker for
-         the function identifier *)
-      FunDef ( Location_ocaml.region ($startpos, $endpos) None
-             , specifs, LF.cabs_of_declarator decltor, stmt) }
+      LF.create_function_definition loc specifs decltor stmt rev_decl_opt }
 ;
 
-declaration_list:
-| no_leading_attribute_declaration
-| declaration_list no_leading_attribute_declaration
-    {}
+declaration_list: (* NOTE: the list is in reverse *)
+| decl= no_leading_attribute_declaration
+    { [decl] }
+| decls= declaration_list decl= no_leading_attribute_declaration
+    { decl :: decls }
 ;
 
 (* (N2335) §6.7.11: Attributes  *)

@@ -21,5 +21,9 @@ val identifier_decl: Cabs.cabs_identifier -> declarator
 val declarator_decl: declarator -> declarator
 val array_decl: Cabs.array_declarator -> declarator -> declarator
 val fun_decl: Cabs.parameter_type_list -> context -> declarator -> declarator
+val fun_ids_decl: Cabs.cabs_identifier list -> context -> declarator -> declarator
 
 val reinstall_function_context: declarator -> unit
+val create_function_definition: Location_ocaml.t -> Cabs.specifiers ->
+  declarator -> Cabs.cabs_statement -> Cabs.declaration list option ->
+  Cabs.function_definition

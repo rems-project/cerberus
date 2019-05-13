@@ -4,6 +4,7 @@ import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveReq
 import * as util from './util'
 import View from './view'
 import Widget from './widget';
+import Tabs from './tabs';
 
 /** Possible actions to request to the server */
 type ExecutionMode = 'random' | 'exhaustive'
@@ -26,6 +27,7 @@ export class CerberusUI {
   compilers?: Compiler []
   /** Step buttons */
   private updateUI: (s: State) => void
+  private updateBMC_UI: (s: State) => void
 
   constructor () {
     this.views = []          
@@ -237,11 +239,7 @@ export class CerberusUI {
       const view = this.getView()
       view.emit('dirty')
       view.state.bmc_model = m
-      $('#r_bmc_c11').prop('checked', m === 'bmc_c11')
-      $('#r_bmc_rc11').prop('checked', m === 'bmc_rc11')
-      $('#r_bmc_rc11_hardcoded').prop('checked', m === 'bmc_rc11_hardcoded')
-      $('#r_bmc_linux').prop('checked', m === 'bmc_linux')
-      this.updateUI(view.state)
+      this.updateBMC_UI(view.state)
     })
 
     $('.core-opt').on('click', (e) => {
@@ -309,7 +307,30 @@ export class CerberusUI {
         $('#cb_'+k).prop('checked', v)
       })
 
+    this.updateBMC_UI = (s: State) => {
+      const view = this.getView()
+      const m = s.bmc_model
+      $('#r_bmc_c11').prop('checked', m === 'bmc_c11')
+      $('#r_bmc_rc11').prop('checked', m === 'bmc_rc11')
+      $('#r_bmc_rc11_hardcoded').prop('checked', m === 'bmc_rc11_hardcoded')
+      $('#r_bmc_linux').prop('checked', m === 'bmc_linux')
+      $('#r_bmc_custom').prop('checked', m === 'bmc_custom')
+      if (m === 'bmc_custom') {
+        let custom = view.getTab('Herd', 'Custom herd file', true)
+        if (custom) custom.setActive()
+      } else {
+        let tab = view.findTab('Herd') as Tabs.Herd
+        if (tab) {
+          view.state.bmc_herd_file = tab.getValue()
+          tab.close()
+        }
+      }
+    } 
+
     this.updateUI = (s: State) => {
+      //@ts-ignore
+      if (window.isBMC)
+        this.updateBMC_UI(s)
       // Options
       updateCheckBoxes(s.options)
       // Core options
@@ -476,8 +497,11 @@ export class CerberusUI {
   }
 
   public bmc () {
+    const view = this.getView()
+    let tab = view.findTab('Herd') as Tabs.Herd
+    if (tab)
+      view.state.bmc_herd_file = tab.getValue()
     this.request('bmc', (res: ResultRequest) => {
-      const view = this.getView()
       const cons = view.getConsole()
       if (cons) cons.setActive()
       view.updateState(res)
@@ -579,7 +603,8 @@ export class CerberusUI {
         'model': model.alloc_model,
         'bmc_model': view.state.bmc_model,
         'switches': view.state.model.switches,
-        'interactive': interactive
+        'interactive': interactive,
+        'bmc_herd_file': view.state.bmc_herd_file,
       },
       dataType: 'json'
     }).done((data, status, query) => {
@@ -588,6 +613,18 @@ export class CerberusUI {
       alert('Failed request!' + status)
     }).always(() => {
       util.Cursor.done()
+    })
+  }
+
+  public getDefaultHerdFile() {
+    util.get('default.cat', (herd: string) => {
+      const view = this.getView()
+      if (!view.state.bmc_herd_file) {
+        view.state.bmc_herd_file = herd
+        view.emit('updateHerdFile')
+      }
+    }, () => {
+      console.log('Error when trying to download "default.cat"... Using an empty file.')
     })
   }
 

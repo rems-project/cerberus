@@ -247,10 +247,11 @@ let parse_incoming_msg content =
     | s -> failwith ("unknown action " ^ s)
   in
   let bmc_mode_from_string = function
-    | "bmc_c11"   -> `C11
-    | "bmc_rc11"  -> `RC11
-    | "bmc_rc11_hardcoded"  -> `RC11_Hardcoded
-    | "bmc_linux" -> `Linux
+    | "bmc_c11"   -> Some `C11
+    | "bmc_rc11"  -> Some `RC11
+    | "bmc_rc11_hardcoded"  -> Some `RC11_Hardcoded
+    | "bmc_linux" -> Some `Linux
+    | "bmc_custom" -> None
     | s -> failwith ("unknown BMC model " ^ s)
   in
   let parse_bool = function
@@ -268,7 +269,12 @@ let parse_incoming_msg content =
     | ("sequentialise", [b]) -> { msg with sequentialise= parse_bool b; }
     | ("libc", [b])          -> { msg with libc= parse_bool b; }
     | ("model", [model])     -> { msg with model= model; }
-    | ("bmc_model", [model]) -> { msg with bmc_model= bmc_mode_from_string model; }
+    | ("bmc_model", [model]) ->
+      begin match bmc_mode_from_string model with
+        | Some bmc_model -> { msg with bmc_model }
+        | None -> msg
+      end
+    | ("bmc_herd_file", [herd]) -> { msg with bmc_model= `Custom herd }
     | ("switches[]", [sw])   -> { msg with ui_switches= sw::msg.ui_switches }
     | ("interactive[lastId]", [v]) ->
       { msg with interactive=
