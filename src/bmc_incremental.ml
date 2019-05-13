@@ -1076,7 +1076,7 @@ module BmcZ3 = struct
     (* TODO: aid list for ICreate as a hack for structs *)
     | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | ICreateReadOnly of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc * Expr.expr (* initial_value *)
-    | IKill of aid
+    | IKill of aid * Expr.expr (* ptr *)
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
@@ -1441,9 +1441,13 @@ module BmcZ3 = struct
         assert false
     | Kill (b, pe) ->
         get_fresh_aid >>= fun aid ->
+        (* TODO: bool for free dynamic ignored *)
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
-        return (UnitSort.mk_unit, IKill aid)
+        if b then
+          failwith "TODO: Dynamic kills"
+        else
+          return (UnitSort.mk_unit, IKill (aid, z3d_pe))
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
@@ -2600,7 +2604,6 @@ module BmcVC = struct
     | CreateReadOnly _  -> assert false
     | Alloc0 _          -> assert false
     | Kill (_, pe) ->
-        (* TODO: Kill ignored *)
         vcs_pe pe
     | Store0 (_, Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), wval, memorder) ->
@@ -3833,7 +3836,8 @@ module BmcSeqMem = struct
     | ICreateReadOnly _ ->
         failwith "TODO: CreateReadOnly in sequential mode"
     | IKill(_) ->
-        return empty_ret
+        failwith "TODO: implement Kills in sequential mode"
+        (*return empty_ret*)
     | ILoad(_, ctype, type_list, ptr, rval, mo) ->
         assert (List.length type_list = 1);
 
@@ -4563,9 +4567,9 @@ module BmcConcActions = struct
         add_read_only_alloc alloc_id >>
         do_create aids ctype sortlist alloc_id pol
           (CreateMode_InitialValue initial_value)
-    | IKill aid ->
-        (* TODO *)
-        return []
+    | IKill (aid,ptr) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Kill(aid, tid, ptr))]
     (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
     | ILoad (aid, ctype, _, ptr, rval, mo) ->
         get_tid >>= fun tid ->
@@ -4976,6 +4980,7 @@ module BmcConcActions = struct
     | Alloc0 _ -> assert false
     | Kill(_, pe) ->
         do_taint_pe pe >>= fun taint_pe ->
+        (* TODO: ignored *)
         return (taint_pe, empty_deps)
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid >>= fun interm_action ->
@@ -5266,7 +5271,6 @@ module BmcConcActions = struct
     get_assertions >>= fun assertions ->
     mk_preexec actions po fn_deps >>= fun preexec ->
     bmc_debug_print 6 (pp_preexec preexec);
-
 
     (* TODO *)
     (*compute_crit preexec.po;*)
