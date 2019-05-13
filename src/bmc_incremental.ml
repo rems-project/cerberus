@@ -26,6 +26,7 @@ module Caux = Core_aux
  * - BmcVC
  * - BmcRet
  * - BmcSeqMem
+ * - BmcConcActions
  *)
 
 (* TODO: factor out all the repeated state *)
@@ -229,7 +230,11 @@ module BmcInline = struct
         inline_pe pe1 >>= fun inlined_pe1 ->
         inline_pe pe2 >>= fun inlined_pe2 ->
         return (PEop(bop, inlined_pe1, inlined_pe2))
-    | PEstruct _ -> assert false
+    | PEstruct (sym, pexprs) ->
+        mapM (fun (cab_id, pe) ->
+          inline_pe pe >>= fun inlined_pe ->
+          return (cab_id, inlined_pe)) pexprs >>= fun inlined_pexprs ->
+        return (PEstruct(sym, inlined_pexprs))
     | PEunion _  -> assert false
     | PEcfunction _ ->
         assert false
@@ -806,7 +811,11 @@ module BmcSSA = struct
         ssa_pe pe1 >>= fun ssad_pe1 ->
         ssa_pe pe2 >>= fun ssad_pe2 ->
         return (PEop(binop, ssad_pe1, ssad_pe2))
-    | PEstruct _ -> assert false
+    | PEstruct (sym, pexprs) ->
+       mapM (fun (cab_id, pe) ->
+          ssa_pe pe >>= fun ssad_pe ->
+          return (cab_id, ssad_pe)) pexprs >>= fun ssad_pexprs ->
+        return (PEstruct(sym, ssad_pexprs))
     | PEunion _  -> assert false
     | PEcfunction _ -> assert false
         (*get_inline_pexpr uid >>= fun inlined_pe ->
@@ -1066,6 +1075,7 @@ module BmcZ3 = struct
   type intermediate_action =
     (* TODO: aid list for ICreate as a hack for structs *)
     | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
+    | ICreateReadOnly of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc * Expr.expr (* initial_value *)
     | IKill of aid
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
@@ -1339,7 +1349,8 @@ module BmcZ3 = struct
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
-    | PEstruct _    -> assert false
+    | PEstruct _    ->
+        assert false
     | PEunion _     -> assert false
     | PEcfunction _ ->
         (*get_inline_pexpr uid >>= fun inline_pe ->
@@ -1377,26 +1388,40 @@ module BmcZ3 = struct
     add_expr uid z3d_pexpr >>
     return z3d_pexpr
 
-  let mk_create ctype align_ty (pref: Sym.prefix) =
+  let mk_create_aux ctype align_ty (pref: Sym.prefix)
+                    (permission: permission_flag) =
     get_file >>= fun file ->
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-
     (* TODO: special case creates for structs *)
     (match ctype with
      | Struct0 _ -> mapMi (fun i _ -> get_fresh_aid) flat_sortlist
      | _         -> get_fresh_aid >>= fun aid -> return [aid]
     ) >>= fun aids ->
-    (*get_fresh_aid >>= fun aid ->*)
-    (*mapMi (fun i _ -> get_fresh_aid) flat_sortlist >>= fun aid_list ->*)
     let base_addr = PointerSort.mk_nd_addr alloc_id in
-
     add_metadata alloc_id (PointerSort.type_size ctype file,
                            Some ctype,
                            alignof_type align_ty file,
                            base_addr,
-                           ReadWrite, pref) >>
+                           permission, pref) >>
+
+    return (alloc_id,flat_sortlist, aids, base_addr)
+
+
+  let mk_create_read_only ctype align_ty (pref: Sym.prefix)
+                          (initial_value: Expr.expr) =
+    get_file >>= fun file ->
+    mk_create_aux ctype align_ty pref ReadOnly
+        >>= fun (alloc_id, flat_sortlist, aids, base_addr) ->
+    return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
+            ICreateReadOnly (aids, ctype, align_ty, flat_sortlist,
+                             alloc_id, initial_value))
+
+  let mk_create ctype align_ty (pref: Sym.prefix) =
+    get_file >>= fun file ->
+    mk_create_aux ctype align_ty pref ReadWrite
+        >>= fun (alloc_id, flat_sortlist, aids, base_addr) ->
     return (PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr,
             ICreate (aids, ctype, align_ty, flat_sortlist, alloc_id))
 
@@ -1407,8 +1432,11 @@ module BmcZ3 = struct
         mk_create ctype align prefix
     | Create _ ->
         assert false
-    | CreateReadOnly _ ->
-        assert false
+    | CreateReadOnly (Pexpr(_, _, PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype align))])),
+              Pexpr(_, BTy_ctype, PEval (Vctype ctype)),
+              initial_value, prefix) ->
+        z3_pe initial_value >>= fun z3d_initial_value ->
+        mk_create_read_only ctype align prefix z3d_initial_value
     | Alloc0 _ ->
         assert false
     | Kill (b, pe) ->
@@ -2106,10 +2134,10 @@ module BmcBind = struct
         (* Need to bind array values to constant symbol *)
         get_expr uid >>= fun z3_array_expr ->
         mapM (fun pe -> get_expr (get_id_pexpr pe)) pes >>= fun z3_pes ->
-        assert (Sort.equal (Expr.get_sort z3_array_expr) IntArray.mk_sort);
+
+        assert (Z3Array.is_array z3_array_expr);
         let array_bindings = List.mapi (fun i expr ->
-            BindLet (mk_eq (IntArray.mk_select z3_array_expr (int_to_z3 i)) expr)
-          ) z3_pes in
+            BindLet (mk_eq (Z3Array.mk_select g_ctx z3_array_expr (int_to_z3 i)) expr)) z3_pes in
         mapM bind_pe pes >>= fun bound_pes ->
         return (array_bindings @ (List.concat bound_pes))
     | PEctor (ctor, pes) ->
@@ -2189,35 +2217,38 @@ module BmcBind = struct
         return (BindAssume (loc, z3_pe) :: bound_pe)
     )
 
+  let bind_create_helper uid =
+      get_action uid >>= fun action ->
+      let alloc_id = (
+        match action with
+        | ICreate(_,_,_,_, alloc_id) -> alloc_id
+        | ICreateReadOnly(_,_,_,_, alloc_id,_) -> alloc_id
+        | _ -> assert false
+        ) in
+      get_meta alloc_id >>= fun metadata ->
+      let base_addr = get_metadata_base metadata in
+      let max_addr =
+        binop_to_z3 OpAdd (PointerSort.get_index_from_addr base_addr)
+                          (int_to_z3 (get_metadata_size metadata)) in
+
+      (* Assert alloc_size(alloc_id) = allocation_size *)
+      (* TODO: why is this here and not later when dealing with memory?... *)
+      return [BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_min_decl
+                                               [int_to_z3 alloc_id])
+                      (PointerSort.get_index_from_addr base_addr))
+             ;BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_max_decl
+                                       [int_to_z3 alloc_id])
+                       max_addr)
+             ]
+
   (* TODO TODO TODO TODO *)
   let bind_action (Paction(p, Action(loc, a, action_))) uid
                   : (binding list) eff =
    (match action_ with
     | Create (pe1, pe2, pref) ->
-        get_action uid >>= fun action ->
-        let alloc_id = (
-          match action with
-          | ICreate(_,_,_,_, alloc_id) -> alloc_id
-          | _ -> assert false
-          ) in
-        get_meta alloc_id >>= fun metadata ->
-        let base_addr = get_metadata_base metadata in
-        let max_addr =
-          binop_to_z3 OpAdd (PointerSort.get_index_from_addr base_addr)
-                            (int_to_z3 (get_metadata_size metadata)) in
-
-        (* Assert alloc_size(alloc_id) = allocation_size *)
-        return [BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_min_decl
-                                                 [int_to_z3 alloc_id])
-                        (PointerSort.get_index_from_addr base_addr))
-               ;BindLet (mk_eq (Expr.mk_app g_ctx PointerSort.alloc_max_decl
-                                         [int_to_z3 alloc_id])
-                         max_addr)
-              ]
-          (*mk_eq (Expr.mk_app g_ctx AddressSort.alloc_size_decl
-                                         [int_to_z3 alloc_id])
-                      (int_to_z3 alloc_size)]*)
-    | CreateReadOnly _ -> assert false
+        bind_create_helper uid
+    | CreateReadOnly _ ->
+        bind_create_helper uid
     | Alloc0 _ -> assert false
     | Kill (_, pe) ->
         bind_pe pe
@@ -2563,6 +2594,9 @@ module BmcVC = struct
     | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
         return []
     | Create _ -> assert false
+    | CreateReadOnly (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), initial_value, prefix) ->
+        vcs_pe initial_value >>= fun vcs_initial_value ->
+        return vcs_initial_value
     | CreateReadOnly _  -> assert false
     | Alloc0 _          -> assert false
     | Kill (_, pe) ->
@@ -2973,16 +3007,36 @@ end
 module BmcMemCommon = struct
   (* TODO: move to separate file *)
   let mk_unspecified_expr (sort: Sort.sort)
-                          (ctype: Expr.expr)
+                          (raw_ctype: ctype)
                           (file: unit typed_file)
                           : Expr.expr =
-    if (Sort.equal (LoadedInteger.mk_sort) sort) then
+    let ctype = CtypeSort.mk_nonatomic_expr raw_ctype in
+    let rec aux raw_ctype =
+      match raw_ctype with
+      | Core_ctype.Basic0 (Integer _) (* fall through *)
+      | Pointer0 _ (* fall through *)
+      | Array0 _ (* fall through *)
+      | Struct0 _ ->
+          let obj_sort = TODO_LoadedSort.extract_obj_sort sort in
+          TODO_LoadedSort.mk_unspecified obj_sort ctype
+      | Atomic0 ty' -> aux ty'
+      | ty -> failwith
+                (sprintf "TODO: ctype %s"
+                         (pp_to_string (Pp_core_ctype.pp_ctype ty)))
+    in aux raw_ctype
+    (*if (Sort.equal (LoadedInteger.mk_sort) sort) then
       LoadedInteger.mk_unspecified ctype
     else if (Sort.equal (LoadedPointer.mk_sort) sort) then
       LoadedPointer.mk_unspecified ctype
     else if (Sort.equal (LoadedIntArray.mk_sort) sort) then
       LoadedIntArray.mk_unspecified ctype
+
+    else if (Sort.equal (LoadedIntArrayArray.mk_sort) sort) then
+      LoadedIntArrayArray.mk_unspecified ctype
     else begin
+      *)
+      (*
+      begin
       (* TODO: Pretty bad... *)
       let ret = List.fold_left (fun acc (sym, memlist) ->
         if is_some acc then acc
@@ -2997,7 +3051,7 @@ module BmcMemCommon = struct
       ) None (Pmap.bindings_list file.tagDefs) in
       assert (is_some ret);
       Option.get ret
-    end
+    end*)
 
   let mk_initial_value (ctype: ctype) (const: string) =
     match ctype with
@@ -3014,10 +3068,12 @@ module BmcMemCommon = struct
                               : Expr.expr * (Expr.expr list) =
     if specified then begin
       let (initial_value, assertions) = mk_initial_value ctype name in
-      assert (Sort.equal (LoadedInteger.mk_sort) sort);
-      (LoadedInteger.mk_specified initial_value, assertions)
+      if Sort.equal (LoadedInteger.mk_sort) sort then
+        (LoadedInteger.mk_specified initial_value, assertions)
+      else
+        failwith "TODO: initial values of non-basic types"
     end else
-      (mk_unspecified_expr sort (CtypeSort.mk_nonatomic_expr ctype) file, [])
+      (mk_unspecified_expr sort ctype file, [])
 
   (* ==== PNVI STUFF ==== *)
   let provenance_constraint (sym: Expr.expr)
@@ -3075,6 +3131,7 @@ module BmcMemCommon = struct
      * - Addresses < some max value
      * - the allocations are disjoint
      * - Somehow create a function expressing whether an address is valid for pointers
+     * - TODO: track permission
      * - Eventually the provenance
      *)
     let metadata_assertions (data: (int * allocation_metadata) list)
@@ -3085,12 +3142,12 @@ module BmcMemCommon = struct
       let disjoint_asserts = List.concat
         (List.map (fun (d1,d2) -> disjoint_assertions d1 d2)
                   (cartesian_product data data)) in
-
         (alignment_asserts @
          addr_lt_max_asserts @
          disjoint_asserts)
 
-(*j TODO: this is probably the wrong place to do it *)
+
+    (*TODO: this is probably the wrong place to do it *)
     (* Constrain provenances from cast_ival_to_ptrval *)
     let provenance_assertions ((sym,(ival, ctype)) : Expr.expr * (Expr.expr * ctype))
                               (data: (int, allocation_metadata) Pmap.map)
@@ -3773,6 +3830,8 @@ module BmcSeqMem = struct
     match action with
     | ICreate(_, ctype, _, sortlist, alloc_id) ->
         do_create ctype sortlist alloc_id false
+    | ICreateReadOnly _ ->
+        failwith "TODO: CreateReadOnly in sequential mode"
     | IKill(_) ->
         return empty_ret
     | ILoad(_, ctype, type_list, ptr, rval, mo) ->
@@ -4134,6 +4193,7 @@ module BmcConcActions = struct
     tid_supply     : tid;
     parent_tids    : (tid, tid) Pmap.map;
     assertions     : Expr.expr list;
+    read_only_allocs : int list;
 
     mem_module     : (module MemoryModel);
 
@@ -4183,6 +4243,7 @@ module BmcConcActions = struct
     tid_supply       = 1;
     parent_tids      = Pmap.empty Pervasives.compare;
     assertions       = [];
+    read_only_allocs = [];
 
     taint_table      = Pmap.empty Pervasives.compare;
     mem_module       = mk_memory_module file;
@@ -4303,7 +4364,73 @@ module BmcConcActions = struct
   let guard_action (guard: Expr.expr) (BmcAction(pol, g, action): bmc_action) =
     BmcAction(pol, mk_and [guard;g], action)
 
-  let mk_store (pol: polarity)
+  let add_read_only_alloc (alloc_id: int) : unit eff =
+    get >>= fun st ->
+    put {st with read_only_allocs = alloc_id :: st.read_only_allocs}
+
+  let get_read_only_allocs : int list eff =
+    get >>= fun st ->
+    return st.read_only_allocs
+
+  (* Given a ctype and a wval with sort corresponding to ctype_to_z3_sort ctype:
+   * if the ctype is a multidimensional array, we create a new wval' with sort
+   * LoadedIntArray.mk_sort and size corresponding to the flattened ctype. We
+   * then generate the relevant equalities for wval' to wval.
+   * If the ctype is not a multidimensional array, do nothing.
+   *
+   * Note: this is essentially a hack to simplify indexing into complex types in Z3.
+   * TODO: make this work nicely with unspecified subarrays too. Currently we assume   * array types are specified.
+   *)
+  let flatten_multid_arrays (ctype: Core_ctype.ctype0)
+                            (file: unit typed_file)
+                            (value: Expr.expr)
+                            : Expr.expr * (Expr.expr list) =
+    assert (Sort.equal (Expr.get_sort value) (ctype_to_z3_sort ctype file));
+
+    let rec aux (global_array: Expr.expr)
+                (ctype: Core_ctype.ctype0)
+                (value: Expr.expr)
+                (base_index: int)
+                : Expr.expr list =
+      match ctype with
+      | Basic0 (Integer _) ->
+          [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
+                 value
+          ]
+      | Basic0 _ ->
+          failwith "TODO: multid-arrays of non-integer ctype"
+      | Array0 (ctype', Some n) ->
+          let size_of_bmcz3sort_ctype' : int =
+            bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in
+          (* TODO: Need to rewrite loaded sorts.
+           * No guarantee value was created in this manner.
+           *)
+          let loaded_value = TODO_LoadedSort.get_specified_value value in
+
+          let assertions =
+            List.init (Nat_big_num.to_int n) (fun i ->
+              let new_base = base_index + (i * size_of_bmcz3sort_ctype') in
+              let subobj = Z3Array.mk_select g_ctx loaded_value (int_to_z3 i) in
+              aux global_array ctype' subobj new_base
+            ) in
+          List.concat assertions
+      | _ ->
+          failwith (sprintf "TODO: multid arrays with ctype %s"
+                            (pp_to_string (Pp_core_ctype.pp_ctype ctype)))
+   in
+
+    match ctype with
+    | Array0(Array0 (_, _), Some _) ->
+        let new_array =
+            IntArray.mk_const_s (sprintf "flattened_%s" (Expr.to_string value)) in
+        (* We are dealing with loaded values *)
+        let loaded_new_array = LoadedIntArray.mk_specified new_array in
+        let assertions = aux new_array ctype value 0 in
+        (loaded_new_array, assertions)
+    | _ -> (value, [])
+
+
+  (*let mk_store (pol: polarity)
                (guard: Expr.expr)
                (aid: aid)
                (tid: tid)
@@ -4313,6 +4440,27 @@ module BmcConcActions = struct
                (ctype: ctype)
                : bmc_action =
     BmcAction(pol, guard, Store(aid, tid, memorder, ptr, wval, ctype))
+  *)
+
+  let mk_store_and_flatten_multid_arrays (pol: polarity)
+                                         (guard: Expr.expr)
+                                         (aid: aid)
+                                         (tid: tid)
+                                         (memorder: memory_order)
+                                         (ptr: Expr.expr)
+                                         (wval: Expr.expr)
+                                         (ctype: ctype)
+                                         : bmc_action eff =
+    get_file >>= fun file ->
+    let (new_wval, assertions) = flatten_multid_arrays ctype file wval in
+    mapM_ add_assertion assertions >>
+    return (BmcAction(pol, guard, Store(aid, tid, memorder, ptr, new_wval, ctype)))
+
+  type create_mode =
+    | CreateMode_Specified
+    | CreateMode_Unspecified
+    | CreateMode_InitialValue of Expr.expr
+
 
   (* TODO: allocation size assertions *)
   (* Make a single create *)
@@ -4321,7 +4469,7 @@ module BmcConcActions = struct
                 (sortlist: BmcZ3.ctype_sort list)
                 (alloc_id: BmcZ3.alloc)
                 (pol: polarity)
-                (initialise: bool)
+                (create_mode: create_mode)
                 : bmc_action list eff =
     get_file >>= fun file ->
     let sort = ctype_to_z3_sort ctype file in
@@ -4354,13 +4502,21 @@ module BmcConcActions = struct
             let target_addr =
               PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
             let aid = List.nth aids i in
+            let initialise =
+              begin match create_mode with
+              | CreateMode_Specified -> true
+              | CreateMode_Unspecified -> false
+              | CreateMode_InitialValue _ ->
+                  failwith "TODO: Read only structs"
+              end in
             let (initial_value, assumptions) =
               BmcMemCommon.mk_initial_loaded_value sort
                 (sprintf "init_%d[struct.%d]" alloc_id i)
                 ctype initialise file in
-            mapM add_assertion assumptions >>
+            mapM_ add_assertion assumptions >>
             let ptr = PointerSort.mk_ptr (int_to_z3 alloc_id) target_addr in
-            return (mk_store pol mk_true aid initial_tid
+            (mk_store_and_flatten_multid_arrays
+                             pol mk_true aid initial_tid
                              (C_mem_order Cmm_csem.NA) ptr initial_value ty)
           ) indexed_sorts
           end
@@ -4370,17 +4526,30 @@ module BmcConcActions = struct
       assert (List.length aids = 1);
       let aid = List.hd aids in
       let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
-                                     (*(AddressSort.mk_from_addr (alloc_id,0)) in*)
+
       let (initial_value, assumptions) =
-        BmcMemCommon.mk_initial_loaded_value sort
-            (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
-            ctype initialise file in
+        begin
+        match create_mode with
+        | CreateMode_Specified ->
+            BmcMemCommon.mk_initial_loaded_value sort
+                (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+                ctype true file
+        | CreateMode_Unspecified ->
+            BmcMemCommon.mk_initial_loaded_value sort
+                (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+                ctype false file
+        | CreateMode_InitialValue iv ->
+            (iv, [])
+        end in
+
       mapM add_assertion assumptions >>= fun _ ->
-      return [mk_store pol mk_true aid initial_tid
-                       (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype]
+      mk_store_and_flatten_multid_arrays
+                pol mk_true aid initial_tid
+                (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
+          >>= fun store ->
+      return [store]
       end
     )
-
 
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
@@ -4389,7 +4558,11 @@ module BmcConcActions = struct
                                   : (bmc_action list) eff =
     (match action with
     | ICreate(aids, ctype, _, sortlist, alloc_id) ->
-        do_create aids ctype sortlist alloc_id pol false
+        do_create aids ctype sortlist alloc_id pol CreateMode_Unspecified
+    | ICreateReadOnly(aids, ctype, _, sortlist, alloc_id, initial_value) ->
+        add_read_only_alloc alloc_id >>
+        do_create aids ctype sortlist alloc_id pol
+          (CreateMode_InitialValue initial_value)
     | IKill aid ->
         (* TODO *)
         return []
@@ -4400,7 +4573,11 @@ module BmcConcActions = struct
     (*| IStore(aid, (ctype, sort), ptr, wval, mo) ->*)
     | IStore (aid,ctype,_,ptr,wval,mo) ->
         get_tid >>= fun tid ->
-        return [mk_store pol mk_true aid tid (C_mem_order mo) ptr wval ctype]
+        mk_store_and_flatten_multid_arrays
+                pol mk_true aid tid (C_mem_order mo) ptr wval ctype
+            >>= fun store ->
+        return [store]
+
     | ICompareExchangeStrong (aid_load, aid_fail_load, aid_fail_store, aid_succeed_rmw,
                               ctype,_, ptr_obj, ptr_exp,
                               desired, rval_expected, rval_object,
@@ -4542,7 +4719,7 @@ module BmcConcActions = struct
         return []
     | Some (ICreate(aids, ctype, _, sortlist, alloc_id)) ->
         (* Polarity is irrelevant? *)
-        do_create aids ctype sortlist alloc_id Pos true >>= fun actions ->
+        do_create aids ctype sortlist alloc_id Pos CreateMode_Specified >>= fun actions ->
         (* Make let binding *)
         get_sym_expr sym >>= fun sym_expr ->
         get_meta alloc_id >>= fun metadata ->
@@ -5032,9 +5209,40 @@ module BmcConcActions = struct
                  : aid_rel list =
     List.map aid_of_bmcaction_rel (cartesian_product xs ys)
 
+  let do_read_only_vcs () : BmcVC.vc list eff =
+    get_read_only_allocs >>= fun read_only_allocs ->
+    get_bmc_action_map   >>= fun bmc_action_map ->
+
+    let vcs = Pmap.fold (fun _ (BmcAction(_, guard, action)) acc ->
+      match action with
+      | Store (_, tid, _, loc, _, _) (* fall through *)
+      | RMW (_,tid,_,loc,_,_,_) ->
+          if tid = initial_tid then
+            (* Initial action; do nothing *)
+            acc
+          else begin
+            let index = PointerSort.get_addr_index loc in
+
+            let inner_vcs = List.map (fun alloc ->
+              let alloc_min = Expr.mk_app g_ctx
+                  PointerSort.alloc_min_decl [int_to_z3 alloc] in
+              let alloc_max = Expr.mk_app g_ctx
+                  PointerSort.alloc_max_decl [int_to_z3 alloc] in
+              let vc_expr =
+                mk_not (mk_and [binop_to_z3 OpGe index alloc_min
+                               ;binop_to_z3 OpLt index alloc_max]) in
+              let guarded_vc = mk_implies guard vc_expr in
+              (guarded_vc, BmcVC.VcDebugStr "writing read only memory")
+            ) read_only_allocs in
+            inner_vcs @ acc
+          end
+      | _ -> acc
+    ) bmc_action_map [] in
+
+    return vcs
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (preexec * Expr.expr list * 't option) eff =
+              : (preexec * Expr.expr list * BmcVC.vc list * 't option) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->
     mapM do_taint_globs file.globs   >>
@@ -5092,8 +5300,12 @@ module BmcConcActions = struct
       end else
         []
     in
+
+    do_read_only_vcs () >>= fun read_only_vcs ->
+
     return (preexec,
             assertions @ mem_assertions @  pnvi_asserts,
+            read_only_vcs,
             if is_some memory_model then
               Some (BmcMem.extract_executions g_solver (Option.get memory_model))
             else None

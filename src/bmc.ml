@@ -49,6 +49,7 @@ module BmcM = struct
 
     (* Memory stuff *)
     mem_bindings     : (Expr.expr list) option;
+    mem_vcs          : (BmcVC.vc list) option; (* For CreateReadOnly *)
 
     (* Concurrency only *)
     preexec            : preexec option;
@@ -80,6 +81,7 @@ module BmcM = struct
     ; ret_expr         = None
     ; ret_bindings     = None
     ; mem_bindings     = None
+    ; mem_vcs          = None
     ; preexec          = None
     (*; memory_module    = None*)
     ; extract_executions = None
@@ -251,13 +253,14 @@ module BmcM = struct
                                 (Option.get st.alloc_meta)
                                 (Option.get st.prov_syms)
                                 (*memory_module*) in
-    let ((preexec, assertions, extract_executions), _) =
+    let ((preexec, assertions, vcs, extract_executions), _) =
       BmcConcActions.run initial_state
                          (BmcConcActions.do_file st.file st.fn_to_check) in
 
     bmc_debug_print 7 "Done BmcConcActions phase";
     put { st with mem_bindings  = Some assertions;
                   preexec       = Some preexec;
+                  mem_vcs       = Some vcs;
                   (*memory_module = Some memory_module;*)
                   extract_executions = extract_executions;
         }
@@ -448,7 +451,8 @@ let bmc_file (file              : unit typed_file)
       end
     else begin
       (* Actually check for VCS *)
-      let vcs = List.map fst (Option.get final_state.vcs) in
+      let vcs = List.map fst
+        ((Option.get final_state.vcs) @ (Option.get final_state.mem_vcs)) in
       Solver.assert_and_track
         g_solver
         (Expr.simplify (mk_not (mk_and vcs)) None)
