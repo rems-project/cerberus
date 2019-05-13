@@ -38,6 +38,9 @@ let has_addr (BmcAction(_, _, a): bmc_action) = match a with
   | Store _
   | RMW _ -> true
   | _ -> false
+  (* We only care about the provenance of Kill's location...
+   * TODO: check this
+   *)
 
 let has_rval (BmcAction(_, _, a): bmc_action) =
   is_read a
@@ -337,6 +340,9 @@ let pp_action (a: action) =
   | Fence(aid,tid,memorder) ->
       sprintf "F(%d,%d,%s)"
               aid tid (string_of_memory_order memorder)
+  | Kill (aid, tid, loc) ->
+      sprintf "Kill(%d,%d,%s)"
+              aid tid (Expr.to_string loc)
 
 let pp_bmcaction (BmcAction(pol, guard, action): bmc_action) =
   sprintf "Action(%s,%s,%s)"
@@ -390,6 +396,7 @@ module MemoryModelCommon = struct
                         ; mk_sym "Store"
                         ; mk_sym "RMW"
                         ; mk_sym "Fence"
+                        ; mk_sym "Kill"
                         ]
 
   let mk_z3_numeral = Integer.mk_numeral_i g_ctx
@@ -398,6 +405,7 @@ module MemoryModelCommon = struct
   let store_etype = List.nth (Enumeration.get_consts mk_event_type) 1
   let rmw_etype   = List.nth (Enumeration.get_consts mk_event_type) 2
   let fence_etype = List.nth (Enumeration.get_consts mk_event_type) 3
+  let kill_etype  = List.nth (Enumeration.get_consts mk_event_type) 4
 
   let action_to_event_type (BmcAction(_,_,a): bmc_action) : Expr.expr =
     match a with
@@ -405,6 +413,7 @@ module MemoryModelCommon = struct
     | Store _ -> store_etype
     | RMW   _ -> rmw_etype
     | Fence _ -> fence_etype
+    | Kill _  -> kill_etype
 
   (* MEMORY ORDER TYPE *)
   let mk_memord_type =
@@ -978,11 +987,12 @@ module MemoryModelCommon = struct
       : string * string list * bool =
     Solver.push solver;
     let rec aux ret =
-      if Solver.check solver [] = SATISFIABLE then
+      if Solver.check solver [] = SATISFIABLE then begin
         let model = Option.get (Solver.get_model solver) in
         let execution = extract_execution model mem ret_value metadata_opt in
         Solver.add solver [mk_not execution.z3_asserts];
         aux (execution :: ret)
+        end
       else
         ret
     in
@@ -1765,6 +1775,12 @@ module RC11MemoryModel : MemoryModel = struct
               RMW(aid,tid,memorder,loc,rval,wval,ctype)
           | Fence _ ->
               action
+          | Kill (aid, tid, loc) ->
+              (* TODO: done differently than with Load/Store/RMW b/c
+               * fns.getAddr is currently not specified for kills
+               *)
+              let loc = interp (PointerSort.get_addr loc) in
+              Kill(aid, tid, loc)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
@@ -1780,6 +1796,11 @@ module RC11MemoryModel : MemoryModel = struct
             Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       | Fence _ ->
           base
+      | Kill (aid, tid, loc) ->
+          if g_dbg_print_raw_loc then
+            Pmap.add loc (Expr.to_string loc) base
+          else
+            Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       ) (Pmap.empty Expr.compare) (action_events) in
 
     let not_initial action = (tid_of_action action <> initial_tid) in
@@ -2260,6 +2281,12 @@ module GenericModel (M: CatModel) : MemoryModel = struct
               RMW(aid,tid,memorder,loc,rval,wval,ctype)
           | Fence _ ->
               action
+          | Kill (aid, tid, loc) ->
+              (* TODO: done differently than with Load/Store/RMW b/c
+               * fns.getAddr is currently not specified for kills
+               *)
+              let loc = interp (PointerSort.get_addr loc) in
+              Kill(aid, tid, loc)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
@@ -2272,6 +2299,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
           Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       | Fence _ ->
           base
+      | Kill (aid,tid,loc) ->
+          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       ) (Pmap.empty Expr.compare) (action_events) in
 
     let not_initial action = (tid_of_action action <> initial_tid) in

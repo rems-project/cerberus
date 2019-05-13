@@ -66,6 +66,7 @@ type action =
   | Store of aid * tid * memory_order * z3_location * z3_value * ctype
   | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value * ctype
   | Fence of aid * tid * memory_order
+  | Kill  of aid * tid * z3_location
 
 type location_kind =
   | Non_Atomic
@@ -103,14 +104,16 @@ let aid_of_action (a: action) = match a with
   | Load  (aid, _, _, _, _, _)
   | Store (aid, _, _, _, _,_)
   | RMW   (aid, _, _, _, _, _,_)
-  | Fence (aid, _, _) ->
+  | Fence (aid, _, _)
+  | Kill  (aid, _, _) ->
       aid
 
 let tid_of_action (a: action) = match a with
   | Load  (_, tid, _, _, _,_)
   | Store (_, tid, _, _, _,_)
   | RMW   (_, tid, _, _, _, _,_)
-  | Fence (_, tid, _) ->
+  | Fence (_, tid, _)
+  | Kill  (_, tid, _) ->
       tid
 
 let memorder_of_action (a: action) = match a with
@@ -119,12 +122,18 @@ let memorder_of_action (a: action) = match a with
   | RMW   (_,_,m,_,_,_,_)
   | Fence (_,_,m) ->
       m
+  | Kill (_,_,_) ->
+      (* TODO: this function return an option memorder.
+       * But we just return C_mem_order NA for now... *)
+      C_mem_order NA
+
 
 let addr_of_action (a: action) = match a with
   | Load  (_, _, _, l, _,_)
   | Store (_, _, _, l, _,_)
   | RMW   (_, _, _, l, _, _,_) -> l
   | Fence (_, _, _) -> assert false
+  | Kill  (_, _, l) -> l
 
 let rval_of_action (a: action) = match a with
   | Load (_, _, _, _, v,_)
@@ -157,6 +166,11 @@ let is_atomic (a: action) = match memorder_of_action a with
 let is_fence (a: action) = match a with
   | Fence _ -> true
   | _       -> false
+
+let is_kill (a: action) = match a with
+  | Kill _ -> true
+  | _       -> false
+
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = function
@@ -397,6 +411,8 @@ let rec pp_action rl () a = match a with
       assert false*)
   | Fence (aid,tid,mo) ->
       assert false
+  | Kill _ ->
+      assert false
 
 and pp_action_id () aid = string_of_int aid
 
@@ -439,6 +455,8 @@ and pp_action' m rl pp_loc_opt () = function a -> match a with
       let fmt =
         if m.texmode then format_of_string "\\\\FA{%a}{%a}" else format_of_string "%a:F%a" in
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo
+  | Kill _ ->
+      assert false
 
 and pp_column_head rl () = function
   | CH_tid tid -> sprintf "%a" (pp_thread_id' rl) tid
