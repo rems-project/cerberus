@@ -126,7 +126,9 @@ export default class View {
               component('Ail_AST'),
               component('Core')
               */
-             component('Memory')
+             // HACK used to initialised a different componenet for BMC
+             // @ts-ignore
+             window.isBMC ? component('BMC') : component('Memory')
             ]
           }
         ]}]
@@ -171,6 +173,7 @@ export default class View {
         let tab = (header.contentItem as ContentItem).content
         header.element.on('mousedown', () => tab.refresh())
         tab.setActive = () => triggerClick(header.element[0])
+        tab.close = () => header.contentItem.remove()
       }
     })
     this.layout.on('stateChanged', () => this.emit('layoutChanged'))
@@ -241,11 +244,12 @@ export default class View {
     return null
   }
 
-  newTab(tab: string, title?: string, ...args: any []) {
+  newTab(tab: string, title?: string, notClosable?: boolean, ...args: any []) {
     if (title === undefined) title = tab;
     this.layout.root.contentItems[0].addChild({
       type: 'component',
       componentName: 'tab',
+      isClosable: !notClosable,
       title: title,
       componentState: { tab: tab, args: args }
     })
@@ -766,11 +770,11 @@ export default class View {
   }
 
   // Return this first instance (or create a new one)
-  getTab(title: string) {
-    let tab = this.findTab(title)
+  getTab(tab_name: string, title?: string, notClosable?: boolean) {
+    let tab = this.findTab(tab_name)
     if (tab == null) {
-      this.newTab(title)
-      tab = <Tabs.Tab>this.findTab(title)
+      this.newTab(tab_name, title, notClosable)
+      tab = <Tabs.Tab>this.findTab(tab_name)
     }
     return tab
   }

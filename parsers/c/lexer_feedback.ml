@@ -65,6 +65,7 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
+  | DeclFunIds of context * Cabs.cabs_identifier list
   | DeclPtr of Cabs.pointer_declarator
   | DeclOther
 and declarator =
@@ -109,7 +110,58 @@ let fun_decl ptys ctxt d =
            sort=   DeclFun ctxt;
   }
 
+let fun_ids_decl ids_opt ctxt d =
+  { d with direct= Cabs.DDecl_function (d.direct, Params ([], false));
+           sort=   DeclFunIds (ctxt, ids_opt);
+  }
+
 let reinstall_function_context d =
   match d.sort with
   | DeclFun ctxt -> restore_context ctxt; declare_varname d.id
   | _ -> ()
+
+let create_function_definition loc specifs d stmt rev_dlist_opt =
+  match d.sort, rev_dlist_opt with
+  | DeclFun _, None ->
+    Cabs.FunDef (loc, specifs, cabs_of_declarator d, stmt)
+  | DeclFun _, _ ->
+    assert false
+  | DeclFunIds (_, ids), None ->
+    let open Cabs in
+    let signed_int_specifiers =
+      { storage_classes= [];
+        type_specifiers= [TSpec (Location_ocaml.unknown, TSpec_int)];
+        type_qualifiers= [];
+        function_specifiers= [];
+        alignment_specifiers= [];
+      } in
+    let params = List.map (fun id ->
+        PDeclaration_decl (signed_int_specifiers,
+                           Declarator (None,  DDecl_identifier id))
+      ) ids in
+    let direct_declarator =
+      match d.direct with
+      | DDecl_function (ddecl, _) -> DDecl_function (ddecl, Params (params, false))
+      | _ -> assert false in
+    let decl = Cabs.Declarator (None, direct_declarator) in
+    Cabs.FunDef (loc, specifs, decl, stmt)
+  | DeclFunIds (_, ids), Some rev_dlist ->
+    assert false
+  | _, _ ->
+    assert false
+
+
+(*
+    { match rev_decl_opt with
+      | Some rev_decl ->
+        assert false
+      | None ->
+        let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
+        LF.restore_context ctxt;
+        (* NOTE: when dugaring to Ail we add to following location the marker
+         * for the function identifier *)
+        FunDef ( Location_ocaml.region ($startpos, $endpos) None
+               , specifs, LF.cabs_of_declarator decltor, stmt) }
+
+  | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
+   *)

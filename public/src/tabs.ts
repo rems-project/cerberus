@@ -16,19 +16,14 @@ namespace Tabs {
 
 /* Generic  */
 export abstract class Tab {
-  title: string | undefined
+  title: string
   dom: JQuery<HTMLElement>
   ee: EventEmitter
 
   constructor(title: string, ee: EventEmitter) {
     this.dom = $('<div class="tab-content"></div>')
     this.ee = ee
-    this.setTitle(title)
-  }
-
-  setTitle (title: string): void {
-    this.title = title
-    this.dom.children('.title').text(title)
+    this.title = title;
   }
 
   /** Called when size or visibility of HTML changes */
@@ -42,6 +37,8 @@ export abstract class Tab {
   
   /** Implemented by GoldenLayout when tab content is attached to it */
   setActive () {}
+
+  close() {}
 }
 
 export class Help extends Tab {
@@ -978,7 +975,7 @@ class Ail extends ReadOnly {
 class Ail_AST extends Ail {
   constructor(ee:EventEmitter) {
     super(ee)
-    this.setTitle('Ail (AST)')
+    this.title = 'Ail (AST)'
     ee.on('update', this, this.update)
   }
 
@@ -1113,6 +1110,33 @@ export class Arena extends ReadOnly {
   update(s: Readonly<State>) {
     if (s.interactive)
       this.setValue(s.interactive.arena)
+  }
+}
+
+
+
+/*  Herd */
+export class Herd extends Editor {
+  constructor (ee: EventEmitter) {
+    super('Custom herd model', '', ee)
+    ee.once(s => {
+      if (!s.bmc_herd_file)
+        UI.getDefaultHerdFile();
+      else
+        this.setValue(s.bmc_herd_file)
+    })
+    this.editor.on('change', () => {
+      ee.emit('dirty')
+      ee.emit('clear')
+    })
+    ee.on('updateHerdFile', this, this.update);
+    this.editor.setOption('mode', 'text/x-herd')
+    this.editor.setOption('placeholder', '<Empty herd file...>')
+  }
+
+  update(s: Readonly<State>) {
+    if (s.bmc_herd_file)
+      this.setValue(s.bmc_herd_file)
   }
 }
 
@@ -1277,7 +1301,7 @@ class Asm extends ReadOnly {
 
 /* Concrete Tabs Factory */
 const Tabs: any = {
-  Source, Cabs, Ail, Core, Ail_AST, BMC,
+  Source, Cabs, Ail, Core, Ail_AST, BMC, Herd,
   Console, Stdout, Stderr, Arena, Asm,
   Interactive, Memory, SimpleMemory,
   Experimental, Implementation, Library, Help

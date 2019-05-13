@@ -53,6 +53,7 @@ let add_bmc_macro ~bmc_model conf =
       | `RC11 -> " -D__memory_model_rc11__"
       | `RC11_Hardcoded -> " -D__memory_model_rc11__"
       | `Linux -> " -D__memory_model_linux__"
+      | `Custom _ -> " -D__memory_model_custom__"
       | _ -> ""
   in
   let cpp_cmd = conf.pipeline.cpp_cmd ^ " -D__bmc_cerb__" ^ macro_model in
@@ -146,6 +147,19 @@ let result_of_elaboration (_, _, cabs, ail, core) =
       result= "success";
     }
 
+
+let write_tmp_file content =
+  try
+    let tmp = Filename.temp_file "herd" ".cat" in
+    let oc  = open_out tmp in
+    output_string oc content;
+    close_out oc;
+    Debug.print 8 ("Contents written at: " ^ tmp);
+    tmp
+  with _ ->
+    Debug.warn "Error when writing the contents in disk.";
+    failwith "write_tmp_file"
+
 let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
@@ -168,6 +182,10 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
       | `Linux ->
         Debug.print 7 ("BMC model: Linux");
         (Some "bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
+      | `Custom content ->
+        Debug.print 7 ("BMC model: Custom");
+        let filename = write_tmp_file content in
+        (Some filename, Bmc_globals.MemoryMode_C)
     in
     Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
     return @@ match Bmc.bmc core (Some ail) with
