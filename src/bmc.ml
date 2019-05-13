@@ -42,14 +42,14 @@ module BmcM = struct
 
     bindings         : (Expr.expr list) option;
     assumes          : ((Location_ocaml.t option * Expr.expr) list) option;
-    vcs              : (BmcVC.vc list) option;
+    vcs              : (bmc_vc list) option;
 
     ret_expr         : Expr.expr option;
     ret_bindings     : (Expr.expr list) option;
 
     (* Memory stuff *)
     mem_bindings     : (Expr.expr list) option;
-    mem_vcs          : (BmcVC.vc list) option; (* For CreateReadOnly *)
+    mem_vcs          : (bmc_vc list) option; (* For CreateReadOnly *)
 
     (* Concurrency only *)
     preexec            : preexec option;
@@ -271,8 +271,8 @@ module BmcM = struct
     return st.file
 
   (* ===== Extract stuff from model *)
-  let find_satisfied_vcs (model: Model.model) (vcs: BmcVC.vc list)
-                         : BmcVC.vc list =
+  let find_satisfied_vcs (model: Model.model) (vcs: bmc_vc list)
+                         : bmc_vc list =
     List.filter (fun (expr, dbg) ->
       match Model.eval model expr false with
       | Some b -> Boolean.is_false b
@@ -465,10 +465,12 @@ let bmc_file (file              : unit typed_file)
           let model = Option.get (Solver.get_model g_solver) in
           let str_model = Model.to_string model in
           let satisfied_vcs =
-            BmcM.find_satisfied_vcs model (Option.get final_state.vcs) in
+            BmcM.find_satisfied_vcs model
+              ((Option.get final_state.vcs) @ (Option.get final_state.mem_vcs))
+          in
 
           let vc_str = String.concat "\n"
-              (List.map (fun (expr, dbg) -> BmcVC.vc_debug_to_str dbg)
+              (List.map (fun (expr, dbg) -> vc_debug_to_str dbg)
                         satisfied_vcs) in
           print_endline vc_str;
 
