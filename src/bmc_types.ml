@@ -127,7 +127,6 @@ let memorder_of_action (a: action) = match a with
        * But we just return C_mem_order NA for now... *)
       C_mem_order NA
 
-
 let addr_of_action (a: action) = match a with
   | Load  (_, _, _, l, _,_)
   | Store (_, _, _, l, _,_)

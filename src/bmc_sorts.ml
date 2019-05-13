@@ -502,6 +502,7 @@ module type PointerSortAPI = sig
 
   val is_null : Expr.expr -> Expr.expr
   val get_addr : Expr.expr -> Expr.expr
+  val get_prov : Expr.expr -> Expr.expr (* TODO: only for PNVI *)
 
   val shift_by_n : Expr.expr -> Expr.expr -> Expr.expr
   val provenance_of_decl : FuncDecl.func_decl
@@ -712,6 +713,9 @@ module PointerSortConcrete : PointerSortAPI = struct
     let accessors = get_accessors mk_sort in
     let get_value = List.hd (List.nth accessors 0) in
     Expr.mk_app g_ctx get_value [ expr ]
+
+  let get_prov (expr: Expr.expr) : Expr.expr =
+    AddressSortConcrete.get_alloc (get_addr expr)
 
   let shift_by_n (ptr: Expr.expr) (n: Expr.expr) =
     let addr = get_addr ptr in

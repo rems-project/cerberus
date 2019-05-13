@@ -67,6 +67,9 @@ let aid_of_bmcaction (bmcaction: bmc_action) =
 let addr_of_bmcaction (bmcaction: bmc_action) =
   PointerSort.get_addr (addr_of_action (get_action bmcaction))
 
+let prov_of_bmcaction (bmcaction: bmc_action) =
+  PointerSort.get_prov (addr_of_action (get_action bmcaction))
+
 let ctype_of_bmcaction(bmcaction: bmc_action) : ctype =
   ctype_of_action (get_action bmcaction)
 
@@ -375,6 +378,7 @@ module type MemoryModel = sig
   type z3_memory_model
   val add_assertions : Solver.solver -> z3_memory_model -> unit
   val get_assertions : z3_memory_model -> Expr.expr list
+  val get_vcs        : z3_memory_model -> bmc_vc list
 
   val compute_executions : preexec -> (unit typed_file) -> z3_memory_model
   val extract_executions : Solver.solver -> z3_memory_model -> Expr.expr
@@ -1199,12 +1203,15 @@ module RC11MemoryModel : MemoryModel = struct
     decls      : decls;
     fns        : fn_apps;
     assertions : Expr.expr list;
+    vcs        : bmc_vc list;
   }
 
   let add_assertions solver model =
     Solver.add solver model.assertions
 
   let get_assertions model = model.assertions
+
+  let get_vcs model = model.vcs
 
   (* ==== Helper aliases ==== *)
 
@@ -1687,6 +1694,25 @@ module RC11MemoryModel : MemoryModel = struct
                  (mk_lt g_ctx (fns.sbrf_clk e1) (fns.sbrf_clk e2))
     ) prod_events in
 
+    (* VC: assert that a kill does not hb another action with the same
+     * allocation id *)
+    let vcs =
+      let kills =
+        List.filter (fun a -> is_kill (get_action a)) exec.actions in
+      let candidate_tails =
+          List.filter (fun a -> has_addr a || is_kill (get_action a))
+                      exec.actions in
+      let candidates = cartesian_product kills candidate_tails in
+      List.map (fun (a1,a2) ->
+        let (e1,e2) = (z3action a1, z3action a2) in
+        (mk_not (mk_and [fns.getGuard e1
+                       ;fns.getGuard e2
+                       ;mk_not (mk_eq e1 e2)
+                       ;fns.hb(e1,e2)
+                       ;mk_eq (prov_of_bmcaction a1) (prov_of_bmcaction a2)
+                       ]),
+         VcDebugStr ("Indirection invalid value; access after kill"))
+      ) candidates in
 
     { event_sort = event_sort
     ; event_type = event_type
@@ -1699,6 +1725,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; decls      = decls
     ; fns        = fns
 
+    ; vcs        = vcs
     ; assertions = accessor_assertions
                   (*aid_asserts
                  @ guard_asserts
@@ -1784,6 +1811,10 @@ module RC11MemoryModel : MemoryModel = struct
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
+
+    let action_events =
+      if g_display_kills then action_events
+      else (List.filter (fun (a,ev) -> not (is_kill a)) action_events) in
 
     let loc_pprinting = List.fold_left (fun base (action,_) ->
       match action with
@@ -1971,6 +2002,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     ; fns           : fn_map
     ; decls         : decl_map
     ; assertions    : (Expr.expr list) option
+    ; vcs           : bmc_vc list
     (*; undefs        : (string option * (Expr.expr list)) list*)
     (* TODO *)
     }
@@ -1984,6 +2016,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     match model.assertions with
     | Some assertions -> assertions
     | None -> assert false
+
+  let get_vcs model = model.vcs
 
   let lookup_id (id: CatFile.id) (fns: fn_map) =
     match Pmap.lookup id fns with
@@ -2223,6 +2257,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       ; decls         = decls
       ; fns           = fns
       ; assertions    = None
+      ; vcs           = []
       (*; undefs        = []*)
       } in
     let assertions =
@@ -2238,7 +2273,8 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     {model with assertions = Some assertions;
                 (*undefs     = M.undefs*)}
 
-  (* TODO: code duplication here with C11MemoryModel *)
+  (* TODO: code duplication here with C11MemoryModel
+   * !!!! deduplicate!!!! *)
   let extract_execution (model: Model.model)
                         (mem: z3_memory_model)
                         (ret_value: Expr.expr)
@@ -2290,6 +2326,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
+
+    let action_events =
+      if g_display_kills then action_events
+      else (List.filter (fun (a,ev) -> not (is_kill a)) action_events) in
 
     let loc_pprinting = List.fold_left (fun base (action,_) ->
       match action with
