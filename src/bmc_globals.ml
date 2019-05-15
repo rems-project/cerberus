@@ -41,7 +41,12 @@ let g_pnvi = true
 (* If false, checks memory bindings at the same time as __BMC_ASSUMES *)
 let g_incremental_smt = true
 
+(* If true, prints raw location in Z3 (prov, addr) style.
+ * Else, attempts to pretty print variable name. *)
 let g_dbg_print_raw_loc = false
+
+(* If true, displays Kill memory actions in the .do *)
+let g_display_kills = false
 
 type memory_mode =
   | MemoryMode_C

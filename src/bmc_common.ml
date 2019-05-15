@@ -9,6 +9,8 @@ open Printf
 open Util
 open Z3
 
+(* =========== <> =========== *)
+
 let assert_memory_mode_linux () =
   if !!bmc_conf.memory_mode <> MemoryMode_Linux then
     failwith "Error: Linux memory model only, please change model."

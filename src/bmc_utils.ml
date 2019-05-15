@@ -7,9 +7,15 @@ open Z3
 open Z3.Arithmetic
 
 
-(* ========== TYPE ALIASES ============= *)
+(* ========== TYPE ALIASES / DEFINITIONS ============= *)
 
 type sym_ty = Sym.sym
+
+type vc_debug =
+| VcDebugUndef of Location_ocaml.t * Undefined.undefined_behaviour
+| VcDebugStr of string
+
+type bmc_vc = Expr.expr * vc_debug
 
 
 (* ========== Z3 ALIASES ============= *)
@@ -271,6 +277,14 @@ let read_file filename =
     close_in chan;
     List.rev !lines ;;
 
+let vc_debug_to_str (dbg: vc_debug) =
+  match dbg with
+  | VcDebugUndef (loc, ub) ->
+      Printf.sprintf "(%s,%s)" (Location_ocaml.location_to_string loc)
+                               (Undefined.stringFromUndefined_behaviour ub)
+  | VcDebugStr str -> str
+
+
 (* ========== SET UIDs ============ *)
 let rec set_uid_pe uid n (Pexpr( annots1, bty, pe_)) =
  (let uid' = (uid ^ string_of_int n) in
@@ -394,3 +408,5 @@ let get_id_pexpr (Pexpr(annots, _, _)) : int =
 
 let get_id_expr (Expr(annots, _)) : int =
   get_id_or_fail annots
+
+
