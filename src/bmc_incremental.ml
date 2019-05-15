@@ -1076,7 +1076,7 @@ module BmcZ3 = struct
     (* TODO: aid list for ICreate as a hack for structs *)
     | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | ICreateReadOnly of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc * Expr.expr (* initial_value *)
-    | IKill of aid
+    | IKill of aid * Expr.expr (* ptr *)
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
@@ -1441,9 +1441,13 @@ module BmcZ3 = struct
         assert false
     | Kill (b, pe) ->
         get_fresh_aid >>= fun aid ->
+        (* TODO: bool for free dynamic ignored *)
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
-        return (UnitSort.mk_unit, IKill aid)
+        if b then
+          failwith "TODO: Dynamic kills"
+        else
+          return (UnitSort.mk_unit, IKill (aid, z3d_pe))
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
@@ -1591,6 +1595,7 @@ module BmcZ3 = struct
     | Ememop (PtrValidForDeref, [ctype;ptr]) ->
         (* TODO: includes type *)
         bmc_debug_print 7 "TODO: PtrValidForDeref: check type";
+        bmc_debug_print 7 "TODO: PtrValidForDeref: check object lifetime";
         z3_pe ctype >>= fun _ ->
         z3_pe ptr >>= fun z3d_ptr ->
         (*let addr = PointerSort.get_addr z3d_ptr in
@@ -1598,6 +1603,9 @@ module BmcZ3 = struct
         return (mk_and [mk_not (PointerSort.is_null z3d_ptr)
                        ;range_assert])
         *)
+        (* TODO: This should really include a check for object lifetime
+         * but doing so requires potentially creating a memory event.
+         *)
         return (mk_and [PointerSort.valid_ptr z3d_ptr
                        ;PointerSort.ptr_in_range z3d_ptr])
     | Ememop (PtrEq, [p1;p2]) ->
@@ -2498,28 +2506,15 @@ module BmcVC = struct
     | Some expr -> return expr
 
   (* ==== VC definitions ==== *)
-  type vc_debug =
-  | VcDebugUndef of Location_ocaml.t * Undefined.undefined_behaviour
-  | VcDebugStr of string
 
-  let vc_debug_to_str (dbg: vc_debug) =
-    match dbg with
-    | VcDebugUndef (loc, ub) ->
-        sprintf "(%s,%s)" (Location_ocaml.location_to_string loc)
-                          (Undefined.stringFromUndefined_behaviour ub)
-    | VcDebugStr str -> str
-
-
-  type vc = Expr.expr * vc_debug
-
-  let guard_vc (guard: Expr.expr) ((vc_expr, dbg): vc) : vc =
+  let guard_vc (guard: Expr.expr) ((vc_expr, dbg): bmc_vc) : bmc_vc =
     (mk_implies guard vc_expr, dbg)
 
   let map2_inner (f: 'x->'y->'z) (xs: 'x list) (yss: ('y list) list) : 'z list =
     List.concat (List.map2 (fun x ys -> List.map (f x) ys) xs yss)
 
   let rec vcs_pe (Pexpr (annots, bTy, pe_) as pexpr)
-                 : (vc list) eff =
+                 : (bmc_vc list) eff =
     let uid = get_id_pexpr pexpr in
     match pe_ with
     | PEsym _           -> return []
@@ -2589,7 +2584,7 @@ module BmcVC = struct
   (* TODO!!! *)
   let vcs_paction (Paction (p, Action(loc, a, action_)) : unit typed_paction)
                       uid
-                      : (vc list) eff =
+                      : (bmc_vc list) eff =
     match action_ with
     | Create (align, Pexpr(_, BTy_ctype, PEval (Vctype ctype)), prefix) ->
         return []
@@ -2600,7 +2595,6 @@ module BmcVC = struct
     | CreateReadOnly _  -> assert false
     | Alloc0 _          -> assert false
     | Kill (_, pe) ->
-        (* TODO: Kill ignored *)
         vcs_pe pe
     | Store0 (_, Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), wval, memorder) ->
@@ -2691,7 +2685,7 @@ module BmcVC = struct
     | LinuxRMW _ -> assert false
 
   let rec vcs_e (Expr(annots, expr_) as expr)
-                   : (vc list) eff =
+                   : (bmc_vc list) eff =
     let uid = get_id_expr expr in
     match expr_ with
     | Epure pe      -> vcs_pe pe
@@ -2791,13 +2785,13 @@ module BmcVC = struct
         return (List.concat vcss_es)
     | Ewait _       -> assert false
 
-    let vcs_globs(_, glb) : (vc list) eff =
+    let vcs_globs(_, glb) : (bmc_vc list) eff =
       match glb with
       | GlobalDef(_, e) -> vcs_e e
       | GlobalDecl _ -> return []
 
     let vcs_file (file: unit typed_file) (fn_to_check: sym_ty)
-                  : (vc list) eff =
+                  : (bmc_vc list) eff =
       mapM vcs_globs file.globs >>= fun vcs_globs ->
       (match Pmap.lookup fn_to_check file.funs with
       | Some (Proc(annot, bTy, params, e)) ->
@@ -3833,7 +3827,8 @@ module BmcSeqMem = struct
     | ICreateReadOnly _ ->
         failwith "TODO: CreateReadOnly in sequential mode"
     | IKill(_) ->
-        return empty_ret
+        failwith "TODO: implement Kills in sequential mode"
+        (*return empty_ret*)
     | ILoad(_, ctype, type_list, ptr, rval, mo) ->
         assert (List.length type_list = 1);
 
@@ -4563,9 +4558,9 @@ module BmcConcActions = struct
         add_read_only_alloc alloc_id >>
         do_create aids ctype sortlist alloc_id pol
           (CreateMode_InitialValue initial_value)
-    | IKill aid ->
-        (* TODO *)
-        return []
+    | IKill (aid,ptr) ->
+        get_tid >>= fun tid ->
+        return [BmcAction(pol, mk_true, Kill(aid, tid, ptr))]
     (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
     | ILoad (aid, ctype, _, ptr, rval, mo) ->
         get_tid >>= fun tid ->
@@ -4976,6 +4971,7 @@ module BmcConcActions = struct
     | Alloc0 _ -> assert false
     | Kill(_, pe) ->
         do_taint_pe pe >>= fun taint_pe ->
+        (* TODO: ignored *)
         return (taint_pe, empty_deps)
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid >>= fun interm_action ->
@@ -5209,7 +5205,7 @@ module BmcConcActions = struct
                  : aid_rel list =
     List.map aid_of_bmcaction_rel (cartesian_product xs ys)
 
-  let do_read_only_vcs () : BmcVC.vc list eff =
+  let do_read_only_vcs () : bmc_vc list eff =
     get_read_only_allocs >>= fun read_only_allocs ->
     get_bmc_action_map   >>= fun bmc_action_map ->
 
@@ -5232,7 +5228,7 @@ module BmcConcActions = struct
                 mk_not (mk_and [binop_to_z3 OpGe index alloc_min
                                ;binop_to_z3 OpLt index alloc_max]) in
               let guarded_vc = mk_implies guard vc_expr in
-              (guarded_vc, BmcVC.VcDebugStr "writing read only memory")
+              (guarded_vc, VcDebugStr "writing read only memory")
             ) read_only_allocs in
             inner_vcs @ acc
           end
@@ -5242,7 +5238,7 @@ module BmcConcActions = struct
     return vcs
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
-              : (preexec * Expr.expr list * BmcVC.vc list * 't option) eff =
+              : (preexec * Expr.expr list * bmc_vc list * 't option) eff =
     mapM do_actions_globs file.globs >>= fun globs_actions ->
     mapM do_po_globs file.globs      >>= fun globs_po ->
     mapM do_taint_globs file.globs   >>
@@ -5267,7 +5263,6 @@ module BmcConcActions = struct
     mk_preexec actions po fn_deps >>= fun preexec ->
     bmc_debug_print 6 (pp_preexec preexec);
 
-
     (* TODO *)
     (*compute_crit preexec.po;*)
     (* Debug: iterate through taint map *)
@@ -5279,12 +5274,12 @@ module BmcConcActions = struct
     get_memory_module >>= fun memory_module ->
     let module BmcMem = (val memory_module : MemoryModel) in
 
-    let (mem_assertions, memory_model) =
+    let (mem_assertions, mem_vcs, memory_model) =
       if (List.length actions > 0) then
          let model = BmcMem.compute_executions preexec file in
-         (BmcMem.get_assertions model, Some model)
+         (BmcMem.get_assertions model, BmcMem.get_vcs model, Some model)
       else
-        ([], None) in
+        ([], [], None) in
 
     get_meta_map >>= fun metadata ->
     get_prov_syms >>= fun prov_syms ->
@@ -5305,7 +5300,8 @@ module BmcConcActions = struct
 
     return (preexec,
             assertions @ mem_assertions @  pnvi_asserts,
-            read_only_vcs,
+            (* TODO: should races be here instead? *)
+            read_only_vcs @ mem_vcs,
             if is_some memory_model then
               Some (BmcMem.extract_executions g_solver (Option.get memory_model))
             else None
