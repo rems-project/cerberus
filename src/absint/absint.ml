@@ -9,15 +9,19 @@ let debug msg = Debug_ocaml.print_debug 2 [] (fun _ -> msg)
 
 let empty_env = Environment.make [||] [||]
 
+type abspointer =
+  | APfunction of Symbol.sym
+  | APconcrete of int (* TODO: naive pointer at the moment *)
+
 type absvalue =
   | ATunit
   (*| ATtrue => 1
-  | ATfalse => 0 *) 
+  | ATfalse => 0 *)
   | ATctype of Core_ctype.ctype0 (* C type as value *)
   | ATtuple of absvalue list
   | ATexpr of Texpr1.t
   | ATcons of Tcons1.t
-  | ATpointer of int (* TODO: naive pointer at the moment *)
+  | ATpointer of abspointer
   | ATunspec
   | ATtop
 
@@ -85,6 +89,10 @@ let add_env_pointed man n e = update @@ fun s ->
       var e None
   in { s with abs_scalar }
 
+let show_abspointer = function
+  | APfunction sym -> Sym.show sym
+  | APconcrete n -> "@" ^ string_of_int n
+
 let rec show_absvalue = function
   | ATunit -> "unit"
   (*| ATtrue -> "true"
@@ -92,7 +100,7 @@ let rec show_absvalue = function
   | ATctype cty -> String_core_ctype.string_of_ctype cty
   | ATtuple vs -> "[" ^ String.concat ";" (List.map show_absvalue vs) ^ "]"
   | ATexpr te -> "te"
-  | ATpointer n -> "@" ^ string_of_int n
+  | ATpointer p -> show_abspointer p
   | ATunspec -> "unspec"
   | ATtop -> "top"
 
@@ -191,12 +199,12 @@ let init_absstate = top
 let is_bottom man = fun s ->
   Abstract1.is_bottom man s.abs_scalar
 
-let rec absvalue_of_texpr ~with_sym man = function
+let rec absvalue_of_texpr ~with_sym core man = function
   | TEsym x ->
     get >>= (fun s ->
           if SMap.is_empty s.abs_term then print_endline "is_empty";
           begin match SMap.find_opt x s.abs_term with
-            | Some (ATpointer p) when with_sym ->
+            | Some (ATpointer (APconcrete p)) when with_sym ->
               let env0 = Abstract1.env s.abs_scalar in
               let var = Var.of_string ("@" ^ string_of_int p) in
               let env =
@@ -222,6 +230,12 @@ let rec absvalue_of_texpr ~with_sym man = function
           (fun _ -> assert false)
         in
         return @@ ATexpr (Texpr1.cst env n)
+      | Vloaded (LVspecified (OVpointer p)) ->
+        Ocaml_mem.case_ptrval p
+          (fun _ -> assert false (* null pointer *))
+          (fun sym -> return @@ ATpointer (APfunction sym) (* function *))
+          (fun prov addr -> assert false)
+          (fun () -> assert false (* unspecified *))
       | Vunit ->
         return @@ ATunit
       | Vtrue ->
@@ -236,7 +250,23 @@ let rec absvalue_of_texpr ~with_sym man = function
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_int")), [_; te])
   | TEcall (Sym (Symbol.Symbol (_, _, Some "conv_loaded_int")), [_; te])
     ->
-    absvalue_of_texpr ~with_sym man te
+    absvalue_of_texpr ~with_sym core man te
+  | TEcall (Sym (Symbol.Symbol (_, _, Some "params_length")), [te]) ->
+    absvalue_of_texpr ~with_sym core man te >>= begin function
+      | ATtuple xs ->
+        get_env () >>= fun env ->
+        return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int (List.length xs)))
+      | _ -> assert false
+    end
+  | TEcall (Sym (Symbol.Symbol (_, _, Some "params_nth")), [te_xs; te_n]) ->
+    absvalue_of_texpr ~with_sym core man te_xs >>= fun xs ->
+    absvalue_of_texpr ~with_sym core man te_n >>= fun n ->
+    (* TODO/FIXME: this is choosing the first params always *)
+    begin match xs with
+      | ATtuple (x::_) ->
+        return x
+      | _ -> assert false
+    end
   | TEcall (Sym sym, _) ->
     print_endline @@ Sym.show sym;
     assert false
@@ -247,16 +277,16 @@ let rec absvalue_of_texpr ~with_sym man = function
   | TEctor (ctor, tes) ->
     begin match ctor, tes with
       | Ctuple, _ ->
-        mapM (absvalue_of_texpr ~with_sym man) tes >>= fun tes' ->
+        mapM (absvalue_of_texpr ~with_sym core man) tes >>= fun tes' ->
         return @@ ATtuple tes'
       | Cspecified, [te] ->
-        absvalue_of_texpr ~with_sym man te
+        absvalue_of_texpr ~with_sym core man te
       | _ ->
         assert false
     end
   | TEop (bop, te1, te2) ->
-    absvalue_of_texpr ~with_sym man te1 >>= fun t1 ->
-    absvalue_of_texpr ~with_sym man te2 >>= fun t2 ->
+    absvalue_of_texpr ~with_sym core man te1 >>= fun t1 ->
+    absvalue_of_texpr ~with_sym core man te2 >>= fun t2 ->
     begin match t1, t2 with
     | ATexpr e1, ATexpr e2 ->
       let bop = match bop with
@@ -271,23 +301,60 @@ let rec absvalue_of_texpr ~with_sym man = function
       return @@ ATexpr (Texpr1.binop bop e1 e2 Texpr1.Int Texpr1.Rnd)
     end
   | TEaction act ->
-    absvalue_of_action ~with_sym man act
-  | TEnot _ ->
-    assert false
-  | _ ->
+    absvalue_of_action ~with_sym core man act
+  | TEnot te ->
+    (* TODO: this is probably wrong *)
+    absvalue_of_texpr ~with_sym core man te >>= begin function
+      | ATexpr te1 ->
+        begin match Texpr1.to_expr te1 with
+          | Texpr1.Cst c ->
+            get_env () >>= fun env ->
+            let toint b =
+              ATexpr (Texpr1.cst env (Coeff.s_of_int (if b then 1 else 0)))
+            in
+            return @@ toint (Coeff.is_zero c)
+          | _ -> assert false
+        end
+      | _ -> assert false
+    end
+  | TEcfunction te ->
+    absvalue_of_texpr ~with_sym core man te >>= begin function
+      | ATpointer (APfunction sym) ->
+          begin match Pmap.lookup sym core.funinfo with
+            | Some (ret, params, is_variadic, has_proto) ->
+              get_env () >>= fun env ->
+              let toint b =
+                ATexpr (Texpr1.cst env (Coeff.s_of_int (if b then 1 else 0)))
+              in
+              return @@ ATtuple [ ATctype ret;
+                                  ATtuple (List.map (fun (_, ty) -> ATctype ty) params);
+                                  toint is_variadic;
+                                  toint has_proto;]
+            | None ->
+              assert false
+          end
+      | _ ->
+        assert false
+    end
+    (*return @@ ATpointer (APfunction sym)*)
+  | TEare_compatible _ ->
+    get_env () >>= fun env ->
+    return @@ ATexpr (Texpr1.cst env (Coeff.s_of_int 1))
+  | te ->
+    debug @@ show_texpr te;
     assert false
 
-and absvalue_of_action ~with_sym man = function
+and absvalue_of_action ~with_sym core man = function
   | TAcreate ->
     modify (fun s ->
-          (ATpointer s.mem_counter,
+          (ATpointer (APconcrete s.mem_counter),
            { s with mem_counter = s.mem_counter + 1 })
       )
   | TAalloc ->
     assert false
   | TAstore (te_p, te_v) ->
-    absvalue_of_texpr ~with_sym man te_p >>= fun av_p ->
-    absvalue_of_texpr ~with_sym man te_v >>= fun av_v ->
+    absvalue_of_texpr ~with_sym core man te_p >>= fun av_p ->
+    absvalue_of_texpr ~with_sym core man te_v >>= fun av_v ->
     begin match av_p with
       (*
       | ATsym sym ->
@@ -310,7 +377,7 @@ and absvalue_of_action ~with_sym man = function
             | _ -> assert false
         in aux sym
           *)
-      | ATpointer p ->
+      | ATpointer (APconcrete p) ->
         get >>= begin fun s ->
               begin match av_v with
                 | ATexpr e ->
@@ -325,7 +392,7 @@ and absvalue_of_action ~with_sym man = function
     end
   | TAload te_p ->
     debug "taload";
-    absvalue_of_texpr ~with_sym man te_p >>= fun av_p ->
+    absvalue_of_texpr ~with_sym core man te_p >>= fun av_p ->
     get >>= begin fun s ->
         match av_p with
         (*
@@ -345,7 +412,7 @@ and absvalue_of_action ~with_sym man = function
             | _ -> assert false
           in aux sym
            *)
-        | ATpointer p ->
+        | ATpointer (APconcrete p) ->
           let env = Abstract1.env s.abs_scalar in
           let var = Var.of_string ("@" ^ string_of_int p) in
           return @@ ATexpr (Texpr1.var env var)
@@ -373,7 +440,7 @@ let rec match_pattern pat te =
       false
   | _ -> false
 
-let assign man pat te =
+let assign core man pat te =
   let rec aux v = function
     | Pattern (_, CaseBase (None, _)) ->
       debug "assign aux: 1";
@@ -409,7 +476,7 @@ let assign man pat te =
   in match te with
   | TEundef _ -> update (fun _ -> top man)
   | _ ->
-    absvalue_of_texpr ~with_sym:false man te >>= fun v ->
+    absvalue_of_texpr ~with_sym:false core man te >>= fun v ->
     debug "after absvalue";
     aux v pat
 
@@ -447,12 +514,14 @@ let cons_aux_foo not_flag bop e1 e2 =
     else
       (Tcons1.SUPEQ,
        Texpr1.binop Texpr1.Sub e2 e1 Texpr1.Real Texpr1.Rnd)
-  | OpAnd   | OpOr -> assert false
+  | OpAnd   | OpOr ->
+    (* TODO/FIXME *) (Tcons1.EQ, Texpr1.cst (Texpr1.get_env e1) (Coeff.s_of_int 0))
+    (* assert false *)
   | OpAdd   | OpSub   | OpMul | OpDiv
   | OpRem_t | OpRem_f | OpExp -> assert false
 
 
-let rec guard man g st = function
+let rec guard core man g st = function
   | Cmatch (pat, te) ->
     (not (match_pattern pat te), st)
   | Cnot (Cmatch (pat, te)) ->
@@ -460,8 +529,8 @@ let rec guard man g st = function
   | Cop (bop, te1, te2) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr ~with_sym:true man te1 >>= fun v1 ->
-      absvalue_of_texpr ~with_sym:true man te2 >>= fun v2 ->
+      absvalue_of_texpr ~with_sym:true core man te1 >>= fun v1 ->
+      absvalue_of_texpr ~with_sym:true core man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -479,8 +548,8 @@ let rec guard man g st = function
   | Cnot (Cop (bop, te1, te2)) ->
     let open Tcons1 in
     let m =
-      absvalue_of_texpr ~with_sym:true man te1 >>= fun v1 ->
-      absvalue_of_texpr ~with_sym:true man te2 >>= fun v2 ->
+      absvalue_of_texpr ~with_sym:true core man te1 >>= fun v1 ->
+      absvalue_of_texpr ~with_sym:true core man te2 >>= fun v2 ->
       return (v1, v2)
     in
     begin match run m st with
@@ -496,7 +565,7 @@ let rec guard man g st = function
         assert false
     end
   | Cnot (Cnot c) ->
-    guard man g st c
+    guard core man g st c
   | Csym x ->
     let var = Var.of_string (Sym.show x) in
     let env0 = Abstract1.env st.abs_scalar in
@@ -557,7 +626,7 @@ let rec guard man g st = function
     end
        *)
   | Cnot c -> (* TODO: this might be wrong *)
-    let (is_bot, st) = guard man g st c in
+    let (is_bot, st) = guard core man g st c in
     (not is_bot, st)
   | Cval Vtrue ->
     (true, st)
@@ -566,11 +635,14 @@ let rec guard man g st = function
   | Cval v ->
     debug @@ String_core.string_of_value v;
     assert false
+  | Care_compatible (te1, te2) ->
+    (* TODO *)
+    (true, st)
   | c ->
     debug @@ show_cond c;
     assert false
 
-let apply man g e st =
+let apply core man g e st =
   let tr = match Pgraph.edge e g with
     | Some (_, tr, _) -> tr
     | None -> assert false
@@ -591,7 +663,7 @@ let apply man g e st =
     print_endline "GUARD BEFORE";
     Abstract0.print string_of_int Format.std_formatter @@ Abstract1.abstract0 st.abs_scalar;
     print_newline();
-    let (is_bot, st) = guard man g st c in
+    let (is_bot, st) = guard core man g st c in
     print_endline "GUARD AFTER";
     Abstract0.print string_of_int Format.std_formatter @@ Abstract1.abstract0 st.abs_scalar;
     print_newline();
@@ -601,7 +673,7 @@ let apply man g e st =
     st
   | Tassign (pat, te) ->
     debug "assign";
-    let s = snd @@ run (assign man pat te) st in
+    let s = snd @@ run (assign core man pat te) st in
     (if SMap.is_empty s.abs_term then print_endline "empty" else
        print_endline "non_empty");
     s
@@ -609,7 +681,7 @@ let apply man g e st =
 module F = Fixpoint.Make (struct type 'a t = 'a absstate end)
 open F
 
-let make_lattice man g =
+let make_lattice core man g =
   { bottom = (fun vtx -> bot man);
     is_bottom = (fun vtx -> is_bottom man);
     is_leq = (fun vtx -> is_leq man);
@@ -617,13 +689,13 @@ let make_lattice man g =
     join_list = (fun vtx abs_s -> List.fold_left (join man) (bot man) abs_s);
     widening = (fun vtx abs1 abs2 -> widening man abs1 abs2);
     init = (fun vtx -> init_absstate man);
-    apply = (fun e st -> apply man g e st);
+    apply = (fun e st -> apply core man g e st);
   }
 
 let solve typ core =
   let aux man =
     let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
-    F.run (make_lattice man cfg) cfg v0
+    F.run (make_lattice core man cfg) cfg v0
     |> Pgraph.print stderr
         (fun v s -> string_of_int v ^ ": " ^ show_absstate man s)
         (fun e _ -> string_of_int e)

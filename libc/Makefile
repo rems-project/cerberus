@@ -21,10 +21,10 @@ SRC_M=src/math.c
 all: libc.co libm.co
 
 libc.co: $(SRC_C)
-	CERB_PATH=$(CERB_PATH) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) ../cerberus --nolibc -I include -I include/posix --rewrite $^ -o $@
+	OCAMLRUNPARAM=b CERB_PATH=$(CERB_PATH) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) ../cerberus --nolibc -I include -I include/posix --rewrite $^ -o $@
 
 libm.co: $(SRC_M)
-	CERB_PATH=$(CERB_PATH) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) ../cerberus --nolibc -I include -I include/posix --rewrite $^ -o $@
+	OCAMLRUNPARAM=b CERB_PATH=$(CERB_PATH) LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) DYLD_LIBRARY_PATH=$(DYLD_LIBRARY_PATH) ../cerberus --nolibc -I include -I include/posix --rewrite $^ -o $@
 
 clean:
 	rm -rf libc.co libm.co

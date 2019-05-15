@@ -12,7 +12,8 @@ let parse lexbuf =
     prerr_endline "CPARSER_DRIVER (Failure)";
     failwith msg
   | _ ->
-    failwith "CPARSER_DRIVER"
+    let loc = Location_ocaml.point @@ Lexing.lexeme_start_p lexbuf in
+    failwith @@ "CPARSER_DRIVER(" ^ Location_ocaml.location_to_string loc ^ ")"
 
 let parse_from_channel input =
   let read f input =

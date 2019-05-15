@@ -75,7 +75,7 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
   AMPERSAND_AMPERSAND PIPE_PIPE
   QUESTION COLON SEMICOLON ELLIPSIS EQ STAR_EQ SLASH_EQ PERCENT_EQ COLON_COLON
   PLUS_EQ MINUS_EQ LT_LT_EQ GT_GT_EQ AMPERSAND_EQ CARET_EQ PIPE_EQ COMMA
-  LBRACK_LBRACK RBRACK_RBRACK
+  LBRACK_LBRACK (*RBRACK_RBRACK*)
 
 (* NON-STD: *)
   ASSERT OFFSETOF
@@ -1100,7 +1100,7 @@ type_name:
 abstract_declarator:
 | ptr_decltor= pointer
     { AbsDecl_pointer ptr_decltor }
-| ptr_decltor_opt= ioption(pointer) dabs_decltor= array_abstract_declarator
+| ptr_decltor_opt= ioption(pointer) dabs_decltor= direct_abstract_declarator
     { AbsDecl_direct (ptr_decltor_opt, dabs_decltor) }
 ;
 
@@ -1350,7 +1350,7 @@ attribute_specifier_sequence:  (* NOTE: the list is in reverse *)
 ;
 
 attribute_specifier:
-| attrs= delimited(LBRACK_LBRACK, attribute_list, RBRACK_RBRACK)
+| LBRACK_LBRACK attrs= attribute_list RBRACK RBRACK
     { List.rev attrs }
 ;
 

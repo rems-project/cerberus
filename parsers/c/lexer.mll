@@ -221,7 +221,7 @@ let s_char =
 let whitespace_char = [' ' '\t' (*'\n'*) '\012' '\r']
 
 let lbrack_lbrack = '[' whitespace_char* '['
-let rbrack_rbrack = ']' whitespace_char* ']'
+(*let rbrack_rbrack = ']' whitespace_char* ']'*)
 
 (* ========================================================================== *)
 
@@ -381,7 +381,7 @@ and initial = parse
   | "|="  { PIPE_EQ             }
   | ','   { COMMA               }
   | lbrack_lbrack { LBRACK_LBRACK }
-  | rbrack_rbrack { RBRACK_RBRACK }
+(*  | rbrack_rbrack { RBRACK_RBRACK } *)
 (*  | '#'  *)
 (*  | "##" *)
 

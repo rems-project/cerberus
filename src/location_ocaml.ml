@@ -305,6 +305,10 @@ let string_at_line fname lnum cpos =
   try
     if Sys.file_exists fname then
       let ic = open_in fname in
+      let sub l start n =
+        if start + n < String.length l then String.sub l start n
+        else "(?error: Location_ocaml.string_at_line)"
+      in
       let l =
         let l_ = get_line lnum ic in
         match terminal_size () with
@@ -318,13 +322,13 @@ let string_at_line fname lnum cpos =
                 let n = String.length l_ - start in
                 ( Some (cpos - start + 5)
                 , if n + 5 <= term_col then
-                    "  ..." ^ String.sub l_ start n
+                    "  ..." ^ sub l_ start n
                   else
                   "  ..." ^ String.sub l_ start (term_col - 5 - 3) ^ "..." )
               end else if String.length l_ > term_col then
                 (* The cursor is within the terminal width, but the line needs
                    to be truncated *)
-                (None, String.sub l_ 0 (term_col - 3) ^ "...")
+                (None, sub l_ 0 (term_col - 3) ^ "...")
               else
                 (None, l_) in
       close_in ic;
