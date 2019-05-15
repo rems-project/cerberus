@@ -122,10 +122,6 @@ let reinstall_function_context d =
 
 let create_function_definition loc specifs d stmt rev_dlist_opt =
   match d.sort, rev_dlist_opt with
-  | DeclFun _, None ->
-    Cabs.FunDef (loc, specifs, cabs_of_declarator d, stmt)
-  | DeclFun _, _ ->
-    assert false
   | DeclFunIds (_, ids), None ->
     let open Cabs in
     let signed_int_specifiers =
@@ -148,20 +144,5 @@ let create_function_definition loc specifs d stmt rev_dlist_opt =
   | DeclFunIds (_, ids), Some rev_dlist ->
     assert false
   | _, _ ->
-    assert false
+    Cabs.FunDef (loc, specifs, cabs_of_declarator d, stmt)
 
-
-(*
-    { match rev_decl_opt with
-      | Some rev_decl ->
-        assert false
-      | None ->
-        let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
-        LF.restore_context ctxt;
-        (* NOTE: when dugaring to Ail we add to following location the marker
-         * for the function identifier *)
-        FunDef ( Location_ocaml.region ($startpos, $endpos) None
-               , specifs, LF.cabs_of_declarator decltor, stmt) }
-
-  | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
-   *)

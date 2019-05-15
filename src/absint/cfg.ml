@@ -151,6 +151,22 @@ type ('a, 'bty) transfer =
   | Tcall of ('a, Symbol.sym) generic_pattern
              * ('a, 'bty) texpr * ('a, 'bty) texpr list
 
+type 'a fun_map_decl =
+  | Tgraph of Symbol.sym list * int * (unit, ('a, 'a) transfer) Pgraph.graph
+  | Tdecl
+  | Tbuiltin
+
+type 'a cfg_file =
+  { main: Symbol.sym option;
+    tagDefs : Core.core_tag_definitions;
+    stdlib: (Symbol.sym, 'a fun_map_decl) Pmap.map;
+    impl: unit; (* TODO *)
+    globs: int * (unit, ('a, 'a) transfer) Pgraph.graph;
+    funs: (Symbol.sym, 'a fun_map_decl) Pmap.map;
+    funinfo: (Symbol.sym, (Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool)) Pmap.map
+  }
+
+
 let show_ctor = function
   | Cnil _ -> "Nil"
   | Ccons -> "Cons"
@@ -919,6 +935,14 @@ let rec collect_saves (Expr (_, e_)) =
   | Ewait _ ->
     return ()
 
+let mk_cfg_pe pe =
+  let open GraphM in
+  let empty_pat = Pattern ([], CaseBase (None, BTy_unit)) in
+  run (new_vertex () >>= fun in_v ->
+       new_vertex () >>= fun out_v ->
+       set_init_vertex in_v >>= fun _ ->
+       add_pe (in_v, out_v) empty_pat pe)
+
 let mk_cfg_e ~sequentialise e =
   let open GraphM in
   let empty_pat = Pattern ([], CaseBase (None, BTy_unit)) in
@@ -928,6 +952,44 @@ let mk_cfg_e ~sequentialise e =
        set_init_vertex in_v >>= fun _ ->
        add_e ~sequentialise (in_v, out_v) empty_pat e >>= fun _ ->
        remove_isolated_vertices ())
+
+let mk_cfg_fun ~sequentialise = function
+  | Proc (_, _, params, e) ->
+    let (node_id, g) = mk_cfg_e ~sequentialise e in
+    Tgraph (List.map fst params, node_id, g)
+  | Fun (_, params, pe) ->
+    let (node_id, g) = mk_cfg_pe pe in
+    Tgraph (List.map fst params, node_id, g)
+  | ProcDecl _ -> Tdecl
+  | BuiltinDecl _ -> Tbuiltin
+
+
+let mk_cfg_globs ~sequentialise gs =
+  let open GraphM in
+  run ( new_vertex () >>= fun in_v ->
+        set_init_vertex in_v >>= fun _ ->
+        List.fold_left (fun accM (sym, g) ->
+            accM >>= fun in_v ->
+            match g with
+            | GlobalDef (_, e) ->
+              new_vertex () >>= fun out_v ->
+              (* NOTE: type in pattern is ignored *)
+              let in_pat = Pattern ([], CaseBase (Some sym, BTy_unit)) in
+              add_e ~sequentialise (in_v, out_v) in_pat e >>= fun _ ->
+              return out_v
+            | GlobalDecl _ ->
+              return in_v
+          ) (return in_v) gs )
+
+let mk_cfg ~sequentialise file =
+  { main = file.Core.main;
+    tagDefs = file.Core.tagDefs;
+    stdlib = Pmap.map (mk_cfg_fun ~sequentialise) file.Core.stdlib;
+    impl = () ;
+    globs = mk_cfg_globs ~sequentialise file.Core.globs;
+    funs = Pmap.map (mk_cfg_fun ~sequentialise) file.Core.funs;
+    funinfo = file.Core.funinfo;
+  }
 
 let dot_of_proc nm g =
   let pre = Sym.show nm in
@@ -941,9 +1003,10 @@ let dot_of_proc nm g =
     ) g
 
 (* TODO: this is to test main for the moment *)
+(* FIXME: to remove *)
 let mk_main ?(sequentialise=false) core =
   let main =
-    match core.main with
+    match core.Core.main with
     | Some main -> main
     | None -> assert false
   in
@@ -954,12 +1017,20 @@ let mk_main ?(sequentialise=false) core =
     assert false
 
 let mk_dot ?(sequentialise=false) core =
+  let cfg = mk_cfg ~sequentialise core in
   print_endline "digraph G {";
+  dot_of_proc (Symbol.Symbol ("", 0, Some "globs")) (snd cfg.globs);
   Pmap.iter (fun nm f ->
       match f with
-      | Proc (_, _, _, e) ->
-        dot_of_proc nm @@ snd @@ mk_cfg_e ~sequentialise e
+      | Tgraph (_, _, g) ->
+        dot_of_proc nm g
       | _ -> ()
-    ) core.funs;
+    ) cfg.stdlib;
+  Pmap.iter (fun nm f ->
+      match f with
+      | Tgraph (_, _, g) ->
+        dot_of_proc nm g
+      | _ -> ()
+    ) cfg.funs;
   print_endline "}"
 
