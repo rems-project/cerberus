@@ -283,6 +283,7 @@ end
 let initialise_solver (solver: Solver.solver) =
   bmc_debug_print 1 "Initialising solver.";
   Solver.add solver ImplFunctions.all_asserts;
+  Solver.add solver BinaryExponFunctions.all_asserts;
   let params = Params.mk_params g_ctx in
   Params.add_bool params (mk_sym "macro_finder") g_macro_finder;
   Solver.set_parameters solver params

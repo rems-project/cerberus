@@ -237,7 +237,7 @@ module BmcInline = struct
         return (PEstruct(sym, inlined_pexprs))
     | PEunion _  -> assert false
     | PEcfunction _ ->
-        assert false
+        failwith "TODO: Implement generic core C function call pattern"
     | PEmemberof (tag_sym, memb_ident, pe) ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEmemberof(tag_sym, memb_ident, inlined_pe))
@@ -441,7 +441,12 @@ module BmcInline = struct
               begin match Pmap.lookup fn_ptr_sym file.funs with
               | Some (Proc (_, fun_ty, fun_args, fun_expr)) ->
                   (fun_ty, fun_args, fun_expr)
-              | Some _ -> assert false
+              | Some (ProcDecl(_,_,_)) ->
+                  failwith (sprintf "Function %s not defined"
+                                    (name_to_string (Sym fn_ptr_sym)))
+              | Some _ ->
+                  failwith (sprintf "TODO: Eccall %s"
+                                    (name_to_string (Sym fn_ptr_sym)))
               | None -> assert false
               end
         in
@@ -1260,18 +1265,33 @@ module BmcZ3 = struct
         (* TODO: Get rid of ImplFunctions *)
         let raw_ctype = strip_atomic ctype in
         assert (is_integer_type raw_ctype);
-        return (Pmap.find raw_ctype ImplFunctions.ivmin_map)
+        begin match Pmap.lookup raw_ctype ImplFunctions.ivmin_map with
+        | Some expr -> return expr
+        | None ->
+           failwith (sprintf "Unsupported ctype: %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+        end
     | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         let raw_ctype = strip_atomic ctype in
         assert (is_integer_type raw_ctype);
-        return (Pmap.find raw_ctype ImplFunctions.ivmax_map)
+        begin match Pmap.lookup raw_ctype ImplFunctions.ivmax_map with
+        | Some expr -> return expr
+        | None ->
+           failwith (sprintf "Unsupported ctype: %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+        end
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         let raw_ctype = strip_atomic ctype in
         if is_pointer_type raw_ctype then
           return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
         else begin
           assert (is_integer_type raw_ctype);
-          return (Pmap.find raw_ctype ImplFunctions.sizeof_map)
+          begin match Pmap.lookup raw_ctype ImplFunctions.sizeof_map with
+          | Some expr -> return expr
+          | None ->
+             failwith (sprintf "Unsupported ctype: %s"
+                               (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+          end
         end
     | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* We can just directly compute the values rather than do it in the
@@ -1373,7 +1393,12 @@ module BmcZ3 = struct
     | PEis_signed _  -> assert false
     | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
         let raw_ctype = strip_atomic ctype in
-        return (Pmap.find raw_ctype ImplFunctions.is_unsigned_map)
+        begin match Pmap.lookup raw_ctype ImplFunctions.is_unsigned_map with
+        | Some expr -> return expr
+        | None ->
+           failwith (sprintf "Unsupported ctype: %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+        end
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
         bmc_debug_print 7 "TODO: PEare_compatible";

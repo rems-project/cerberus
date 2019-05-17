@@ -30,7 +30,10 @@ let g_solver              = Solver.mk_solver g_ctx g_z3_solver_logic_opt
 let g_macro_finder = true
 
 let g_bv = false
+(* Note: this might be used for implement << even in integer mode *)
 let g_bv_precision = 33
+
+let g_max_int_size = 32
 
 (* ==== Experimental options ===== *)
 (* TODO: get value from somewhere else *)
