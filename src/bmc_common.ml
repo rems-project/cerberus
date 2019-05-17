@@ -135,8 +135,9 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
       (*failwith "TODO: support for general array types"*)
   | BTy_loaded (OTy_struct sym) ->
       failwith "TODO: support for structs as values"
-  | BTy_loaded _  ->
-      failwith "TODO: support for general loaded types"
+  | BTy_loaded oty  ->
+      failwith (sprintf "TODO: support for loaded type: %s"
+                        (pp_to_string (Pp_core.Basic.pp_core_object_type oty)))
   | BTy_storable            ->
       failwith "TODO: support for BTy_storable"
 
@@ -492,7 +493,7 @@ module ImplFunctions = struct
      Nat_big_num.of_int 0,
      Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
                      (Nat_big_num.of_int 1)
-  let ibt_list = [Ichar; Short; Int_; Long; LongLong; Intptr_t]
+  let ibt_list = [Ichar; Short; Int_; Long; (*LongLong;*) Intptr_t]
   let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list
   let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list
 
@@ -590,6 +591,8 @@ module ImplFunctions = struct
                     @ sizeof_asserts
                     @ is_unsigned_asserts
 end
+
+
 
 (* Assert const is in range of ctype *)
 let assert_initial_range (ctype: Core_ctype.ctype0) (const: Expr.expr)

@@ -51,6 +51,35 @@ let z3num_to_int (expr: Expr.expr) =
       (* TODO: switch types to big int *)
      Big_int.int_of_big_int (Integer.get_big_int expr))
 
+(* =========== Z3 HELPER FUNCTIONS =========== *)
+let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
+  if g_bv then
+    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
+  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
+
+let int_to_z3 (i: int) : Expr.expr =
+  big_num_to_z3 (Nat_big_num.of_int i)
+
+(* ======= OpExpFunctions ======= *)
+(* Powers of two *)
+module BinaryExponFunctions = struct
+  (* TODO: switch to big ints where relevant *)
+  let max_size = g_max_int_size
+
+  (* TODO: fresh *)
+  let bin_exp_decl =
+    mk_fresh_func_decl "__bmc_builtin_bin_exp"
+                       [integer_sort] integer_sort
+
+  let all_asserts =
+    List.init (max_size+1)
+      (fun i -> mk_eq (Expr.mk_app g_ctx bin_exp_decl [int_to_z3 i])
+                      (int_to_z3 (1 lsl i))
+      )
+
+end
+
+
 let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
                 : Expr.expr =
   if g_bv then
@@ -85,9 +114,15 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
     | OpSub   -> Arithmetic.mk_sub g_ctx [arg1; arg2]
     | OpMul   -> Arithmetic.mk_mul g_ctx [arg1; arg2]
     | OpDiv   -> Arithmetic.mk_div g_ctx arg1 arg2
-    | OpRem_t -> assert false
+    | OpRem_t -> Integer.mk_mod g_ctx arg1 arg2
     | OpRem_f -> Integer.mk_mod g_ctx arg1 arg2 (* TODO: Rem_t vs Rem_f? *)
-    | OpExp   -> assert false
+    | OpExp   ->
+        if (Expr.is_numeral arg1 &&
+            (Big_int.int_of_big_int (Integer.get_big_int arg1) = 2))
+        then
+          Expr.mk_app g_ctx BinaryExponFunctions.bin_exp_decl [arg2]
+        else
+          failwith "TODO: OpExp"
     | OpEq    -> mk_eq arg1 arg2
     | OpLt    -> Arithmetic.mk_lt g_ctx arg1 arg2
     | OpLe    -> Arithmetic.mk_le g_ctx arg1 arg2
@@ -98,14 +133,6 @@ let binop_to_z3 (binop: binop) (arg1: Expr.expr) (arg2: Expr.expr)
   end
 
 
-(* =========== Z3 HELPER FUNCTIONS =========== *)
-let big_num_to_z3 (i: Nat_big_num.num) : Expr.expr =
-  if g_bv then
-    BitVector.mk_numeral g_ctx (Nat_big_num.to_string i) g_bv_precision
-  else Integer.mk_numeral_s g_ctx (Nat_big_num.to_string i)
-
-let int_to_z3 (i: int) : Expr.expr =
-  big_num_to_z3 (Nat_big_num.of_int i)
 
 (* ========== Core symbol functions ============= *)
 let sym_cmp = Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_pervasives.setElemCompare_method
