@@ -168,6 +168,8 @@ let s7_prime_tail = fr ; sbf
 let s7_prime = [SC]; s7_prime_head ; s7_prime_tail
 irreflexive s7_prime as s7
 
+let __bmc_hb = hb
+
 undefined_unless empty dr as dr_ub
 undefined_unless empty ur as unsequenced_race
 //undefined_unless empty bl as badLock

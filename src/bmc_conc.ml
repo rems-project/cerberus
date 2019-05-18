@@ -2204,6 +2204,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
         | BaseId_ctrl_dep -> model.builtin_fns.ctrl_dep (ea,eb)
         | BaseId_data_dep -> model.builtin_fns.data_dep (ea,eb)
         | BaseId_crit     -> model.builtin_fns.crit (ea,eb)
+        | BaseId_hb       -> model.builtin_fns.hb(ea,eb)
         end
 
   let id_to_z3 (model: z3_memory_model)
@@ -2271,9 +2272,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
            ;getGuard eb]
 
   (* TODO: clarify type of binding *)
-  let mk_assertion (s, (hd,tl), expr) (model: z3_memory_model) =
-    let id = CatFile.Id s in
-    let fn = lookup_id id model.fns in
+  let mk_assertion (id,fn) (hd,tl) expr (model: z3_memory_model) =
     let candidates =
       let candidate_heads = List.filter (set_to_filter hd) model.actions in
       let candidate_tails = List.filter (set_to_filter tl) model.actions in
@@ -2285,6 +2284,14 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                candidates
     @ List.map (fun (a,b) -> mk_eq (fn (z3action a,z3action b)) mk_false)
                not_rel
+
+  let mk_assertion_for_binding (s, (hd,tl), expr) (model: z3_memory_model) =
+    let id = CatFile.Id s in
+    let fn = lookup_id id model.fns in
+    mk_assertion (id,fn) (hd,tl) expr model
+
+
+
 
   let mk_constraint ((s_opt, constr): string option * CatFile.constraint_expr)
                     (model: z3_memory_model)
@@ -2368,12 +2375,17 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       ; vcs           = []
       (*; undefs        = []*)
       } in
+    let hb_assertion =
+      mk_assertion (CatFile.(BaseId BaseId_hb), model.builtin_fns.hb)
+                   (fst M.hb_binding) (snd M.hb_binding)
+                   model in
     let assertions =
       gen_all_assertions common
       @ List.concat (List.map
           (fun constr -> mk_constraint constr model) M.constraints)
       @ List.concat (List.map
-          (fun binding -> mk_assertion binding model) M.bindings)
+          (fun binding -> mk_assertion_for_binding binding model) M.bindings)
+      @ hb_assertion
     in
     (*let undefs =
       (List.map (fun constr -> mk_undef_unless constr model) M.undefs) in*)

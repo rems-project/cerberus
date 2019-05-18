@@ -35,4 +35,6 @@ acyclic (sb | rf) as sb_rf
 let conflict = (((W * U) | (U * W)) & loc)
 let race = ext & (((conflict \ hb) \ (hb^-1)) \ (A * A))
 
+let __bmc_hb = hb
+
 undefined_unless empty race as racy
