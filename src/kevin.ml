@@ -55,13 +55,16 @@ module Memop_action = struct
 
   let memop_rank = function
   | Bmc_types.Memop_PtrValidForDeref _ -> 0
+  | Bmc_types.Memop_PtrDiff _ -> 1
 
   let compare (x: t) y =
     Functors.(
     match x, y with
     | Bmc_types.Memop_PtrValidForDeref (l1,v1), Bmc_types.Memop_PtrValidForDeref(l2,v2) ->
         pair_compare Z3_location.compare Z3_value.compare (l1,v1) (l2,v2)
-    (*| _,_ -> Pervasives.compare (memop_rank x) (memop_rank y)*)
+    | Bmc_types.Memop_PtrDiff(l11,l12), Bmc_types.Memop_PtrDiff(l21,l22) ->
+        pair_compare Z3_location.compare Z3_location.compare (l11,l12) (l21,l22)
+    | _,_ -> Pervasives.compare (memop_rank x) (memop_rank y)
     )
 end
 
@@ -198,6 +201,7 @@ let string_of_value expr =
 
 let string_of_memop_action loc_map = function
   | Bmc_types.Memop_PtrValidForDeref (l1,v1) -> ":Pval" ^ " " ^ string_of_location loc_map l1
+  | Bmc_types.Memop_PtrDiff (l1,l2) -> ":Pdiff" ^ " " ^ string_of_location loc_map l1 ^ " " ^ string_of_location loc_map l2
 
 let string_of_action loc_map = function
 | Bmc_types.Load (a, t, mo, x, v, ty) -> Aid.string_of a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v

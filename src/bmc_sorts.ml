@@ -604,6 +604,8 @@ module PointerSortPNVI : PointerSortAPI = struct
    * Provenance of ptr is > 0
    * Not out of bounds
    * >>>Need to check alignment? No type-casting yet
+   * TODO: would be nice to check lifetime here using some interface function
+   * to concurrency model
    *)
   let valid_ptr (ptr: Expr.expr) =
     mk_and [mk_not (is_null ptr)
