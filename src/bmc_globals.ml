@@ -48,8 +48,8 @@ let g_incremental_smt = true
  * Else, attempts to pretty print variable name. *)
 let g_dbg_print_raw_loc = false
 
-(* If true, displays Kill memory actions in the .do *)
-let g_display_kills = false
+(* If true, displays memops and kills .dot *)
+let g_display_memops_and_kills = false
 
 type memory_mode =
   | MemoryMode_C

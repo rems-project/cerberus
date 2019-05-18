@@ -67,6 +67,9 @@ type action =
   | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value * ctype
   | Fence of aid * tid * memory_order
   | Kill  of aid * tid * z3_location
+  | MemopOne of aid * tid * Mem_common.memop * z3_location
+  | MemopTwo of aid * tid * Mem_common.memop * z3_location * z3_location
+  (* TODO: fold MemopOne and MemopTwo into single type *)
 
 type location_kind =
   | Non_Atomic
@@ -101,20 +104,24 @@ type execution_derived_data = {
 
 (* ===== ACCESSORS ===== *)
 let aid_of_action (a: action) = match a with
-  | Load  (aid, _, _, _, _, _)
-  | Store (aid, _, _, _, _,_)
-  | RMW   (aid, _, _, _, _, _,_)
-  | Fence (aid, _, _)
-  | Kill  (aid, _, _) ->
-      aid
+  | Load  (a, _, _, _, _, _)
+  | Store (a, _, _, _, _,_)
+  | RMW   (a, _, _, _, _, _,_)
+  | Fence (a, _, _)
+  | Kill  (a, _, _)
+  | MemopOne(a,_,_,_)
+  | MemopTwo(a,_,_,_,_) ->
+      a
 
 let tid_of_action (a: action) = match a with
-  | Load  (_, tid, _, _, _,_)
-  | Store (_, tid, _, _, _,_)
-  | RMW   (_, tid, _, _, _, _,_)
-  | Fence (_, tid, _)
-  | Kill  (_, tid, _) ->
-      tid
+  | Load  (_, t, _, _, _,_)
+  | Store (_, t, _, _, _,_)
+  | RMW   (_, t, _, _, _, _,_)
+  | Fence (_, t, _)
+  | Kill  (_, t, _)
+  | MemopOne(_,t,_,_)
+  | MemopTwo(_,t,_,_,_) ->
+      t
 
 let memorder_of_action (a: action) = match a with
   | Load  (_,_,m,_,_,_)
@@ -122,7 +129,10 @@ let memorder_of_action (a: action) = match a with
   | RMW   (_,_,m,_,_,_,_)
   | Fence (_,_,m) ->
       m
-  | Kill (_,_,_) ->
+  | Kill (_,_,_)
+  | MemopOne(_,_,_,_)
+  | MemopTwo(_,_,_,_,_) ->
+
       (* TODO: this function return an option memorder.
        * But we just return C_mem_order NA for now... *)
       C_mem_order NA
@@ -132,7 +142,9 @@ let addr_of_action (a: action) = match a with
   | Store (_, _, _, l, _,_)
   | RMW   (_, _, _, l, _, _,_) -> l
   | Fence (_, _, _) -> assert false
-  | Kill  (_, _, l) -> l
+  | Kill  (_, _, _) -> assert false
+  | MemopOne _ -> assert false
+  | MemopTwo _ -> assert false (* Handle separately *)
 
 let rval_of_action (a: action) = match a with
   | Load (_, _, _, _, v,_)
@@ -168,6 +180,19 @@ let is_fence (a: action) = match a with
 
 let is_kill (a: action) = match a with
   | Kill _ -> true
+  | _       -> false
+
+let is_memop (a: action) = match a with
+  | MemopOne _ -> true
+  | MemopTwo _ -> true
+  | _       -> false
+
+let is_memop_one (a: action) = match a with
+  | MemopOne _ -> true
+  | _       -> false
+
+let is_memop_two (a: action) = match a with
+  | MemopTwo _ -> true
   | _       -> false
 
 
@@ -412,6 +437,10 @@ let rec pp_action rl () a = match a with
       assert false
   | Kill _ ->
       assert false
+  | MemopOne _ ->
+      assert false
+  | MemopTwo _ ->
+      assert false
 
 and pp_action_id () aid = string_of_int aid
 
@@ -456,6 +485,11 @@ and pp_action' m rl pp_loc_opt () = function a -> match a with
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo
   | Kill _ ->
       assert false
+  | MemopOne _ ->
+      assert false
+  | MemopTwo _ ->
+      assert false
+
 
 and pp_column_head rl () = function
   | CH_tid tid -> sprintf "%a" (pp_thread_id' rl) tid
