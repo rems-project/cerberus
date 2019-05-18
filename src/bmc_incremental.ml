@@ -153,32 +153,6 @@ module BmcInline = struct
                         (symbol_to_string sym))
     | Some fn_sym -> return fn_sym
 
-  (* TODO: move this; really same as core_aux except typed. *)
-
-  let mk_sym_pat sym_opt bTy: typed_pattern =
-   (Pattern( [], (CaseBase (sym_opt, bTy))))
-
-  let mk_ctype_pe ty: typed_pexpr =
-   (Pexpr( [], BTy_ctype, (PEval (Vctype ty))))
-
-  let mk_boolean_pe b: typed_pexpr =
-   (Pexpr( [], BTy_boolean, (PEval (if b then Vtrue else Vfalse))))
-
-  let rec mk_list_pe pes : typed_pexpr =
-  (Pexpr( [], BTy_list BTy_ctype, (match pes with
-    | [] ->
-        PEctor( (Cnil BTy_ctype), [])
-    | pe :: pes' ->
-        PEctor( Ccons, [pe; mk_list_pe pes'])
-  )))
-
-  let mk_tuple_pe pes: typed_pexpr =
-    let cbts = List.map (fun (Pexpr(_, cbt, _)) -> cbt) pes in
-    (Pexpr( [], BTy_tuple cbts, (PEctor( Ctuple, pes))))
-
-  let mk_ewseq pat e1 e2 : unit typed_expr =
-    Expr([], Ewseq(pat, e1, e2))
-
   (* TODO: hack to compute function from pointer *)
   let get_function_from_ptr (ptr: Ocaml_mem.pointer_value): sym_ty eff =
     get_file >>= fun file ->
@@ -188,6 +162,32 @@ module BmcInline = struct
                          (Pp_symbol.to_string_pretty sym))
     ) (Pmap.bindings_list file.funinfo) in
     return fn_sym
+
+  (* TODO: move this; really same as core_aux except typed. *)
+
+  let mk_sym_pat sym_opt bTy: typed_pattern =
+    (Pattern( [], (CaseBase (sym_opt, bTy))))
+
+  let mk_ctype_pe ty: typed_pexpr =
+    (Pexpr( [], BTy_ctype, (PEval (Vctype ty))))
+
+  let mk_boolean_pe b: typed_pexpr =
+    (Pexpr( [], BTy_boolean, (PEval (if b then Vtrue else Vfalse))))
+
+  let rec mk_list_pe pes : typed_pexpr =
+    (Pexpr( [], BTy_list BTy_ctype, (match pes with
+      | [] ->
+          PEctor( (Cnil BTy_ctype), [])
+      | pe :: pes' ->
+          PEctor( Ccons, [pe; mk_list_pe pes'])
+    )))
+
+  let mk_tuple_pe pes: typed_pexpr =
+    let cbts = List.map (fun (Pexpr(_, cbt, _)) -> cbt) pes in
+    (Pexpr( [], BTy_tuple cbts, (PEctor( Ctuple, pes))))
+
+  let mk_ewseq pat e1 e2 : unit typed_expr =
+    Expr([], Ewseq(pat, e1, e2))
 
   (* ======== Inline functions ======= *)
   let rec inline_pe (Pexpr(annots, bTy, pe_)) : typed_pexpr eff =
@@ -236,8 +236,23 @@ module BmcInline = struct
           return (cab_id, inlined_pe)) pexprs >>= fun inlined_pexprs ->
         return (PEstruct(sym, inlined_pexprs))
     | PEunion _  -> assert false
+    | PEcfunction (Pexpr(_,_,PEsym sym)) ->
+        get_fn_ptr_sym sym >>= fun fn_sym ->
+        get_file >>= fun file ->
+        (* Rewrite as tuple *)
+        begin match Pmap.lookup fn_sym file.funinfo with
+        | Some (ret_ty, args_ty, b1, b2) ->
+            let pes =
+              [mk_ctype_pe ret_ty
+              ;mk_list_pe (List.map mk_ctype_pe @@ List.map snd args_ty)
+              ;mk_boolean_pe b1
+              ;mk_boolean_pe b2] in
+            mapM inline_pe pes >>= fun inlined_pes ->
+            return (PEctor(Ctuple, inlined_pes))
+        | _ -> failwith "TODO: support generic core C functions"
+        end
     | PEcfunction _ ->
-        failwith "TODO: Implement generic core C function call pattern"
+        failwith "TODO: implement generic core C function call pattern"
     | PEmemberof (tag_sym, memb_ident, pe) ->
         inline_pe pe >>= fun inlined_pe ->
         return (PEmemberof(tag_sym, memb_ident, inlined_pe))
@@ -531,51 +546,25 @@ module BmcInline = struct
         return (Eunseq(inlined_es))
     | Ewseq (pat, e1, e2) (* fall through *)
     | Esseq (pat, e1, e2) ->
-        (* TODO: Hacky rewrite b/c Z3 dislikes tuples with any interesting type
-         * Flatten structure to avoid tuply listy stuff. *)
         let cfun_opt = extract_cfun_if_cfun_call pat e1 e2 in
-        if is_some cfun_opt then
-          begin
+        (if is_some cfun_opt then
           let cfun_info = Option.get cfun_opt in
           get_function_from_ptr cfun_info.ptr >>= fun fn_sym ->
-          get_file >>= fun file ->
-          let to_seq_list =
-            begin match Pmap.lookup fn_sym file.funinfo with
-            | Some (ret_ty, args_ty, b1, b2) ->
-              [(mk_sym_pat (Some cfun_info.fn_ptr) (BTy_loaded OTy_pointer),
-                cfun_info.core_ptr_pexpr)
-              ;(mk_sym_pat (cfun_info.ret_ty) BTy_ctype,
-                mk_ctype_pe ret_ty)
-              ;(mk_sym_pat (cfun_info.arg_tys) (BTy_list BTy_ctype),
-                mk_list_pe (List.map mk_ctype_pe @@ List.map snd args_ty))
-              ;(mk_sym_pat (cfun_info.bool1) BTy_boolean,
-                mk_boolean_pe b1)
-              ;(mk_sym_pat (cfun_info.bool2) BTy_boolean,
-                mk_boolean_pe b2)
-              ]
-            | _ -> assert false
-            end in
-            add_to_fn_ptr_map cfun_info.fn_ptr fn_sym >>
-
-            begin
-            match List.fold_right (fun (pat, pe) erest ->
-                Expr([], Elet(pat, pe, erest))
-              ) to_seq_list cfun_info.continuation  with
-            | Expr([], Elet(new_pat, new_pe1, new_e2)) ->
-                inline_pe new_pe1 >>= fun inlined_new_pe1 ->
-                inline_e new_e2   >>= fun inlined_new_e2 ->
-                bmc_debug_print 7 "TODO: fn_call hack";
-                return (Elet(new_pat, inlined_new_pe1, inlined_new_e2))
-            | _ -> assert false
-            end
-          end
-        else begin
-          inline_e e1 >>= fun inlined_e1 ->
-          inline_e e2 >>= fun inlined_e2 ->
-          match e_ with
-          | Ewseq _ -> return (Ewseq(pat, inlined_e1, inlined_e2))
-          | Esseq _ -> return (Esseq(pat, inlined_e1, inlined_e2))
-          | _ -> assert false
+          add_to_fn_ptr_map cfun_info.fn_ptr fn_sym >>
+          (if is_some cfun_info.fn_ptr_inner then
+             add_to_fn_ptr_map (Option.get cfun_info.fn_ptr_inner) fn_sym
+           else
+             return ()
+          )
+        else
+          return ()
+        ) >>
+        inline_e e1 >>= fun inlined_e1 ->
+        inline_e e2 >>= fun inlined_e2 ->
+        begin match e_ with
+        | Ewseq _ -> return (Ewseq(pat, inlined_e1, inlined_e2))
+        | Esseq _ -> return (Esseq(pat, inlined_e1, inlined_e2))
+        | _ -> assert false
         end
     | Easeq _ -> assert false
     | Eindet (n, e) ->
@@ -822,7 +811,9 @@ module BmcSSA = struct
           return (cab_id, ssad_pe)) pexprs >>= fun ssad_pexprs ->
         return (PEstruct(sym, ssad_pexprs))
     | PEunion _  -> assert false
-    | PEcfunction _ -> assert false
+    | PEcfunction _ ->
+        assert false
+
         (*get_inline_pexpr uid >>= fun inlined_pe ->
         ssa_pe inlined_pe >>= fun ssad_inlined_pe ->
         update_inline_pexpr uid ssad_inlined_pe >>
@@ -2098,47 +2089,47 @@ module BmcBind = struct
         mapM (fun (pat, e) -> mk_let_bindings_raw pat e)
              (List.combine patlist (Expr.get_args expr)) >>= fun bindings ->
         return (mk_and bindings)
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
-      let is_specified = LoadedInteger.is_specified expr in
-      let specified_value = LoadedInteger.get_specified_value expr in
-      mk_let_binding sym specified_value >>= fun is_eq_value ->
-      return (mk_and [is_specified; is_eq_value])
-  | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
-      let is_specified = LoadedPointer.is_specified expr in
-      let specified_value = LoadedPointer.get_specified_value expr in
-      mk_let_binding sym specified_value >>= fun is_eq_value ->
-      return (mk_and [is_specified; is_eq_value])
-  | CaseCtor(Cspecified, _) ->
-      assert false
-  | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
-      let (is_unspecified, unspecified_value) =
-        if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
-          let is_unspecified = LoadedInteger.is_unspecified expr in
-          let unspecified_value = LoadedInteger.get_unspecified_value expr in
-          (is_unspecified, unspecified_value)
-        else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
-          let is_unspecified = LoadedPointer.is_unspecified expr in
-          let unspecified_value = LoadedPointer.get_unspecified_value expr in
-          (is_unspecified, unspecified_value)
-        else
-          assert false
-      in
-      mk_let_binding sym unspecified_value >>= fun is_eq_value ->
-      return (mk_and [is_unspecified; is_eq_value])
-  | CaseCtor(Cunspecified, _) ->
-      assert false
-  | CaseCtor(Cnil BTy_ctype, []) ->
-      assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
-      return mk_true
-  | CaseCtor(Ccons, [hd;tl]) ->
-      assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
-      let is_cons = CtypeListSort.is_cons expr in
-      mk_let_bindings_raw hd (CtypeListSort.get_head expr) >>= fun eq_head ->
-      mk_let_bindings_raw tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
-      return (mk_and [is_cons; eq_head; eq_tail])
-  | CaseCtor(_, _) ->
-      assert false
-  )
+    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_integer))]) ->
+        let is_specified = LoadedInteger.is_specified expr in
+        let specified_value = LoadedInteger.get_specified_value expr in
+        mk_let_binding sym specified_value >>= fun is_eq_value ->
+        return (mk_and [is_specified; is_eq_value])
+    | CaseCtor(Cspecified, [Pattern(_,CaseBase(sym, BTy_object OTy_pointer))]) ->
+        let is_specified = LoadedPointer.is_specified expr in
+        let specified_value = LoadedPointer.get_specified_value expr in
+        mk_let_binding sym specified_value >>= fun is_eq_value ->
+        return (mk_and [is_specified; is_eq_value])
+    | CaseCtor(Cspecified, _) ->
+        assert false
+    | CaseCtor(Cunspecified, [Pattern(_,CaseBase(sym, BTy_ctype))]) ->
+        let (is_unspecified, unspecified_value) =
+          if (Sort.equal (Expr.get_sort expr) (LoadedInteger.mk_sort)) then
+            let is_unspecified = LoadedInteger.is_unspecified expr in
+            let unspecified_value = LoadedInteger.get_unspecified_value expr in
+            (is_unspecified, unspecified_value)
+          else if (Sort.equal (Expr.get_sort expr) (LoadedPointer.mk_sort)) then
+            let is_unspecified = LoadedPointer.is_unspecified expr in
+            let unspecified_value = LoadedPointer.get_unspecified_value expr in
+            (is_unspecified, unspecified_value)
+          else
+            assert false
+        in
+        mk_let_binding sym unspecified_value >>= fun is_eq_value ->
+        return (mk_and [is_unspecified; is_eq_value])
+    | CaseCtor(Cunspecified, _) ->
+        assert false
+    | CaseCtor(Cnil BTy_ctype, []) ->
+        assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
+        return mk_true
+    | CaseCtor(Ccons, [hd;tl]) ->
+        assert (Sort.equal (Expr.get_sort expr) (CtypeListSort.mk_sort));
+        let is_cons = CtypeListSort.is_cons expr in
+        mk_let_bindings_raw hd (CtypeListSort.get_head expr) >>= fun eq_head ->
+        mk_let_bindings_raw tl (CtypeListSort.get_tail expr) >>= fun eq_tail ->
+        return (mk_and [is_cons; eq_head; eq_tail])
+    | CaseCtor(_, _) ->
+        assert false
+    )
 
   let mk_let_bindings (pat: typed_pattern) (expr: Expr.expr)
                       : binding eff =

@@ -644,20 +644,12 @@ let get_ptr_from_loaded_ptr_expr (expr: unit typed_expr)
 
 type cfun_call_symbols = {
   fn_ptr  : sym_ty;
-  (*fn_ptr_inner : sym_ty;*)
-  ret_ty  : sym_ty option;
-  arg_tys : sym_ty option;
-  bool1   : sym_ty option; (* TODO: no idea what these are *)
-  bool2   : sym_ty option;
+  fn_ptr_inner : sym_ty option;
   ptr     : Ocaml_mem.pointer_value;
-  core_ptr_pexpr: typed_pexpr;
-  continuation  : unit typed_expr;
 }
 
-(* TODO: big hack for function calls...
- *
- *)
 
+(* Return ptr sym and rewritten expr *)
 let extract_cfun_if_cfun_call (pat: typed_pattern)
                               (e1: unit typed_expr)
                               (e2: unit typed_expr)
@@ -678,20 +670,10 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
       if (is_ptr_pat ptr_pat1 && is_ptr_pat ptr_pat2 &&
           is_loaded_ptr_expr loaded_ptr_expr)
       then begin
-        pp_to_stdout (Pp_core.Basic.pp_expr e1);
-        pp_to_stdout (Pp_core.Basic.pp_expr e2);
-
-        let tuple_syms  = List.map get_sym_from_base_pattern tuple in
-        assert (List.length tuple_syms = 4);
+        assert (List.length tuple = 4);
         Some { fn_ptr       = Option.get (get_sym_from_base_pattern ptr_pat1);
-               (*fn_ptr_inner = get_sym_from_base_pattern ptr_pat2;*)
-               ret_ty       = List.nth tuple_syms 0;
-               arg_tys      = List.nth tuple_syms 1;
-               bool1 = List.nth tuple_syms 2; (* TODO: No idea what these are *)
-               bool2 = List.nth tuple_syms 3;
+               fn_ptr_inner = (get_sym_from_base_pattern ptr_pat2);
                ptr   = get_ptr_from_loaded_ptr_expr loaded_ptr_expr;
-               core_ptr_pexpr = loaded_ptr_pexpr;
-               continuation   = e2;
              }
       end else
         None
@@ -712,15 +694,38 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
         let tuple_syms  = List.map get_sym_from_base_pattern tuple in
         assert (List.length tuple_syms = 4);
         Some { fn_ptr       = Option.get(get_sym_from_base_pattern pat);
-               (*fn_ptr_inner = get_sym_from_base_pattern ptr_pat2;*)
-               ret_ty       = List.nth tuple_syms 0;
-               arg_tys      = List.nth tuple_syms 1;
-               bool1 = List.nth tuple_syms 2; (* TODO: No idea what these are *)
-               bool2 = List.nth tuple_syms 3;
+               fn_ptr_inner = None;
                ptr   = get_ptr_from_loaded_ptr_expr e1;
-               core_ptr_pexpr = loaded_ptr_pexpr;
-               continuation   = continuation;
              }
       end else
         None
+  | (Pattern(_, (CaseCtor(Ctuple, [tuple1;tuple2]))),
+     Expr(_, (Eunseq [sub_e1; sub_e2])),_) ->
+      (* Unseq pattern:
+       *  let weak ((p, (...)), _) =
+       *  unseq(let strong inner = pure(Specified(Cfunction(f))) in
+       *        pure((inner, cfunction(inner))),
+       *)
+      begin match tuple1,sub_e1 with
+      | (Pattern(_, (CaseCtor(Ctuple,
+              [ptr_pat1;Pattern(_, (CaseCtor(Ctuple, tuple)))])))),
+         Expr(_, (Esseq(
+           ptr_pat2,
+           ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),
+           Expr(_,(Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction _)]))))))))
+         ->
+           if (is_ptr_pat ptr_pat1 && is_ptr_pat ptr_pat2 &&
+               is_loaded_ptr_expr loaded_ptr_expr) then
+             begin
+             assert (List.length tuple = 4);
+             Some {fn_ptr = Option.get (get_sym_from_base_pattern ptr_pat1)
+                  ;fn_ptr_inner = (get_sym_from_base_pattern ptr_pat2)
+                  ;ptr = get_ptr_from_loaded_ptr_expr loaded_ptr_expr
+                  }
+             end
+           else None
+      | _ ->
+          None
+      end
   | _ -> None
+
