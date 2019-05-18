@@ -1095,6 +1095,7 @@ module BmcZ3 = struct
         (* If succeed, do a rmw *) aid * ctype *
         ctype_sort list * (* object *) Expr.expr * (*expected *) Expr.expr * (* desired *) Expr.expr * (* rval_expected *) Expr.expr * (* rval_object *) Expr.expr * Cmm_csem.memory_order * Cmm_csem.memory_order
     | IFence of aid * Cmm_csem.memory_order
+    | IMemop of aid * Mem_common.memop * Expr.expr list (* arguments *) * Expr.expr list (* values bound by Z3; only relevant for PtrValidForDeref *)
     | ILinuxLoad of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Linux.linux_memory_order
     | ILinuxStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Linux.linux_memory_order
     | ILinuxRmw of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * (* rval *) Expr.expr * Linux.linux_memory_order
@@ -1623,15 +1624,17 @@ module BmcZ3 = struct
         bmc_debug_print 7 "TODO: PtrValidForDeref: check object lifetime";
         z3_pe ctype >>= fun _ ->
         z3_pe ptr >>= fun z3d_ptr ->
-        (*let addr = PointerSort.get_addr z3d_ptr in
-        let range_assert = AddressSort.valid_index_range addr in
-        return (mk_and [mk_not (PointerSort.is_null z3d_ptr)
-                       ;range_assert])
-        *)
-        (* TODO: This should really include a check for object lifetime
-         * but doing so requires potentially creating a memory event.
-         *)
-        return (mk_and [PointerSort.valid_ptr z3d_ptr
+
+        get_fresh_aid >>= fun aid ->
+
+        let is_hb_before_kill =
+          mk_fresh_const ("ptrValidForDeref_" ^ (Expr.to_string z3d_ptr)) boolean_sort in
+        let intermediate_action =
+          (IMemop(aid, PtrValidForDeref, [z3d_ptr], [is_hb_before_kill])) in
+
+        add_action uid intermediate_action >>
+        return (mk_and [is_hb_before_kill
+                       ;PointerSort.valid_ptr z3d_ptr
                        ;PointerSort.ptr_in_range z3d_ptr])
     | Ememop (PtrEq, [p1;p2]) ->
         z3_pe p1 >>= fun z3d_p1 ->
@@ -3996,6 +3999,8 @@ module BmcSeqMem = struct
         failwith "Error: CompareExchangeStrong only supported with --bmc_conc"
     | ICompareExchangeWeak _ ->
         failwith "Error: CompareExchangeWeak only supported with --bmc_conc"
+    | IMemop(_) ->
+        failwith "TODO: implement Memop in sequential mode"
     | IFence (aid, mo) ->
        assert false
     | ILinuxLoad(aid, _, type_list, ptr, rval, mo) ->
@@ -4631,6 +4636,18 @@ module BmcConcActions = struct
     | IFence (aid, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Fence(aid,tid,C_mem_order mo))]
+    | IMemop(aid, memop, args, rets) ->
+       get_tid >>= fun tid ->
+       begin match memop, args, rets with
+       | PtrValidForDeref, [ptr], [ret] ->
+          return [BmcAction(pol, mk_true,
+                            Memop(aid, tid, (Memop_PtrValidForDeref(ptr, ret))))]
+       | PtrValidForDeref, _, _ ->
+          assert false
+       | _,_,_ -> failwith
+            (sprintf "TODO: Do concurrency model implementation of %s"
+                       (pp_to_string (Pp_mem.pp_memop memop)))
+       end
     | ILinuxLoad(aid, ctype, _, ptr, rval, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, Load(aid, tid, Linux_mem_order mo, ptr, rval, ctype))]
@@ -4655,6 +4672,9 @@ module BmcConcActions = struct
     (match expr_ with
     | Epure pe ->
         return []
+    | Ememop(PtrValidForDeref, _) ->
+        get_action uid >>= fun interm_action ->
+        intermediate_to_bmc_actions interm_action Pos uid
     | Ememop (memop, pes) ->
         return []
     | Eaction (Paction(pol, action)) ->

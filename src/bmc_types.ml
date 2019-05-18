@@ -61,15 +61,16 @@ type memory_order =
   | C_mem_order of Cmm_csem.memory_order
   | Linux_mem_order of Linux.linux_memory_order
 
+type memop_action =
+  | Memop_PtrValidForDeref of z3_location * z3_value
+
 type action =
   | Load  of aid * tid * memory_order * z3_location * z3_value * ctype
   | Store of aid * tid * memory_order * z3_location * z3_value * ctype
   | RMW   of aid * tid * memory_order * z3_location * z3_value * z3_value * ctype
   | Fence of aid * tid * memory_order
   | Kill  of aid * tid * z3_location
-  | MemopOne of aid * tid * Mem_common.memop * z3_location
-  | MemopTwo of aid * tid * Mem_common.memop * z3_location * z3_location
-  (* TODO: fold MemopOne and MemopTwo into single type *)
+  | Memop of aid * tid * memop_action
 
 type location_kind =
   | Non_Atomic
@@ -109,8 +110,7 @@ let aid_of_action (a: action) = match a with
   | RMW   (a, _, _, _, _, _,_)
   | Fence (a, _, _)
   | Kill  (a, _, _)
-  | MemopOne(a,_,_,_)
-  | MemopTwo(a,_,_,_,_) ->
+  | Memop (a, _, _) ->
       a
 
 let tid_of_action (a: action) = match a with
@@ -119,8 +119,7 @@ let tid_of_action (a: action) = match a with
   | RMW   (_, t, _, _, _, _,_)
   | Fence (_, t, _)
   | Kill  (_, t, _)
-  | MemopOne(_,t,_,_)
-  | MemopTwo(_,t,_,_,_) ->
+  | Memop (_, t, _) ->
       t
 
 let memorder_of_action (a: action) = match a with
@@ -130,9 +129,7 @@ let memorder_of_action (a: action) = match a with
   | Fence (_,_,m) ->
       m
   | Kill (_,_,_)
-  | MemopOne(_,_,_,_)
-  | MemopTwo(_,_,_,_,_) ->
-
+  | Memop _ ->
       (* TODO: this function return an option memorder.
        * But we just return C_mem_order NA for now... *)
       C_mem_order NA
@@ -143,8 +140,7 @@ let addr_of_action (a: action) = match a with
   | RMW   (_, _, _, l, _, _,_) -> l
   | Fence (_, _, _) -> assert false
   | Kill  (_, _, _) -> assert false
-  | MemopOne _ -> assert false
-  | MemopTwo _ -> assert false (* Handle separately *)
+  | Memop _ -> assert false
 
 let rval_of_action (a: action) = match a with
   | Load (_, _, _, _, v,_)
@@ -183,18 +179,12 @@ let is_kill (a: action) = match a with
   | _       -> false
 
 let is_memop (a: action) = match a with
-  | MemopOne _ -> true
-  | MemopTwo _ -> true
-  | _       -> false
+  | Memop _ -> true
+  | _ -> false
 
-let is_memop_one (a: action) = match a with
-  | MemopOne _ -> true
-  | _       -> false
-
-let is_memop_two (a: action) = match a with
-  | MemopTwo _ -> true
-  | _       -> false
-
+let is_ptr_valid_for_deref (a: action) = match a with
+  | Memop(_,_,Memop_PtrValidForDeref _) -> true
+  | _ -> false
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)
 let pp_memory_order = function
@@ -437,10 +427,7 @@ let rec pp_action rl () a = match a with
       assert false
   | Kill _ ->
       assert false
-  | MemopOne _ ->
-      assert false
-  | MemopTwo _ ->
-      assert false
+  | Memop _ -> assert false
 
 and pp_action_id () aid = string_of_int aid
 
@@ -485,9 +472,7 @@ and pp_action' m rl pp_loc_opt () = function a -> match a with
      sprintf fmt (pp_action_thread_id' m rl) (aid,tid)  (pp_memory_order_enum3 m) mo
   | Kill _ ->
       assert false
-  | MemopOne _ ->
-      assert false
-  | MemopTwo _ ->
+  | Memop _ ->
       assert false
 
 
