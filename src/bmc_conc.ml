@@ -67,9 +67,6 @@ let aid_of_bmcaction (bmcaction: bmc_action) =
 let addr_of_bmcaction (bmcaction: bmc_action) =
   PointerSort.get_addr (addr_of_action (get_action bmcaction))
 
-let prov_of_bmcaction (bmcaction: bmc_action) =
-  PointerSort.get_prov (addr_of_action (get_action bmcaction))
-
 let ctype_of_bmcaction(bmcaction: bmc_action) : ctype =
   ctype_of_action (get_action bmcaction)
 
@@ -102,7 +99,27 @@ let is_fence_action (BmcAction(_,_,a): bmc_action) =
 let bmcaction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
   compare (aid_of_action a1) (aid_of_action a2)
 
+(* ======= Provenance stuff ======= *)
+let provs_of_bmcaction (bmcaction: bmc_action) : Expr.expr list =
+  match get_action bmcaction with
+  | Load  (_, _, _, l, _,_)
+  | Store (_, _, _, l, _,_)
+  | RMW   (_, _, _, l, _, _,_) ->
+      [PointerSort.get_prov l]
+  | Fence (_, _, _) -> assert false
+  | Kill(_,_,l) (* fall through *)
+  | MemopOne(_,_,_,l) ->
+      [PointerSort.get_prov l]
+  | MemopTwo (_,_,_,l1,l2)->
+      [PointerSort.get_prov l1; PointerSort.get_prov l2]
 
+(* True if interaction of provenances is non-empty *)
+let compare_provs (a1: bmc_action) (a2: bmc_action) : Expr.expr =
+  let provs1 = provs_of_bmcaction a1 in
+  let provs2 = provs_of_bmcaction a2 in
+  mk_or (List.concat
+    (List.map (fun p1 -> List.map (fun p2 -> mk_eq p1 p2) provs2)
+              provs1))
 
 (* ===== PREEXECS ===== *)
 
@@ -346,6 +363,16 @@ let pp_action (a: action) =
   | Kill (aid, tid, loc) ->
       sprintf "Kill(%d,%d,%s)"
               aid tid (Expr.to_string loc)
+  | MemopOne (aid, tid, memop, loc) ->
+      sprintf "Memop(%d,%d,%s,%s)"
+              aid tid (pp_to_string (Pp_mem.pp_memop memop))
+                      (Expr.to_string loc)
+  | MemopTwo (aid, tid, memop, loc1, loc2) ->
+      sprintf "Memop(%d,%d,%s,%s,%s)"
+              aid tid (pp_to_string (Pp_mem.pp_memop memop))
+                      (Expr.to_string loc1)
+                      (Expr.to_string loc2)
+
 
 let pp_bmcaction (BmcAction(pol, guard, action): bmc_action) =
   sprintf "Action(%s,%s,%s)"
@@ -401,6 +428,7 @@ module MemoryModelCommon = struct
                         ; mk_sym "RMW"
                         ; mk_sym "Fence"
                         ; mk_sym "Kill"
+                        ; mk_sym "Memop"
                         ]
 
   let mk_z3_numeral = Integer.mk_numeral_i g_ctx
@@ -410,6 +438,7 @@ module MemoryModelCommon = struct
   let rmw_etype   = List.nth (Enumeration.get_consts mk_event_type) 2
   let fence_etype = List.nth (Enumeration.get_consts mk_event_type) 3
   let kill_etype  = List.nth (Enumeration.get_consts mk_event_type) 4
+  let memop_etype  = List.nth (Enumeration.get_consts mk_event_type) 5
 
   let action_to_event_type (BmcAction(_,_,a): bmc_action) : Expr.expr =
     match a with
@@ -418,6 +447,8 @@ module MemoryModelCommon = struct
     | RMW   _ -> rmw_etype
     | Fence _ -> fence_etype
     | Kill _  -> kill_etype
+    | MemopOne _ -> memop_etype
+    | MemopTwo _ -> memop_etype
 
   (* MEMORY ORDER TYPE *)
   let mk_memord_type =
@@ -1706,11 +1737,11 @@ module RC11MemoryModel : MemoryModel = struct
       List.map (fun (a1,a2) ->
         let (e1,e2) = (z3action a1, z3action a2) in
         (mk_not (mk_and [fns.getGuard e1
-                       ;fns.getGuard e2
-                       ;mk_not (mk_eq e1 e2)
-                       ;fns.hb(e1,e2)
-                       ;mk_eq (prov_of_bmcaction a1) (prov_of_bmcaction a2)
-                       ]),
+                        ;fns.getGuard e2
+                        ;mk_not (mk_eq e1 e2)
+                        ;fns.hb(e1,e2)
+                        ;compare_provs a1 a2
+                        ]),
          VcDebugStr ("Indirection invalid value; access after kill"))
       ) candidates in
 
@@ -1808,30 +1839,43 @@ module RC11MemoryModel : MemoryModel = struct
                *)
               let loc = interp (PointerSort.get_addr loc) in
               Kill(aid, tid, loc)
+          | MemopOne(aid, tid, memop, loc) ->
+              let loc = interp (PointerSort.get_addr loc) in
+              MemopOne(aid, tid, memop, loc)
+          | MemopTwo(aid, tid, memop, loc1, loc2) ->
+              let loc1 = interp (PointerSort.get_addr loc1) in
+              let loc2 = interp (PointerSort.get_addr loc2) in
+              MemopTwo(aid, tid, memop, loc1, loc2)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
 
     let action_events =
-      if g_display_kills then action_events
+      if g_display_memops_and_kills then action_events
+      (* TODO: !!! *)
       else (List.filter (fun (a,ev) -> not (is_kill a)) action_events) in
 
     let loc_pprinting = List.fold_left (fun base (action,_) ->
       match action with
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
-      | RMW(_,_,_,loc,_,_,_) ->
+      | RMW(_,_,_,loc,_,_,_) (* fall through *)
+      | Kill(_,_,loc)        (* fall through *)
+      | MemopOne(_,_,_,loc) ->
           if g_dbg_print_raw_loc then
             Pmap.add loc (Expr.to_string loc) base
           else
             Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+      | MemopTwo(_, _, _, loc1, loc2) ->
+          if g_dbg_print_raw_loc then
+            Pmap.add loc1 (Expr.to_string loc1)
+                     (Pmap.add loc2 (Expr.to_string loc2) base)
+          else
+            Pmap.add loc1 (MemoryModelCommon.loc_to_string loc1 ranges)
+                     (Pmap.add loc2 (MemoryModelCommon.loc_to_string loc2 ranges) base)
       | Fence _ ->
           base
-      | Kill (aid, tid, loc) ->
-          if g_dbg_print_raw_loc then
-            Pmap.add loc (Expr.to_string loc) base
-          else
-            Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+
       ) (Pmap.empty Expr.compare) (action_events) in
 
     let not_initial action = (tid_of_action action <> initial_tid) in
@@ -2323,24 +2367,42 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                *)
               let loc = interp (PointerSort.get_addr loc) in
               Kill(aid, tid, loc)
+          | MemopOne(aid, tid, memop, loc) ->
+              let loc = interp (PointerSort.get_addr loc) in
+              MemopOne(aid, tid, memop, loc)
+          | MemopTwo(aid, tid, memop, loc1, loc2) ->
+              let loc1 = interp (PointerSort.get_addr loc1) in
+              let loc2 = interp (PointerSort.get_addr loc2) in
+              MemopTwo(aid, tid, memop, loc1, loc2)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
 
     let action_events =
-      if g_display_kills then action_events
+      if g_display_memops_and_kills then action_events
+      (* TODO:!!! *)
       else (List.filter (fun (a,ev) -> not (is_kill a)) action_events) in
 
     let loc_pprinting = List.fold_left (fun base (action,_) ->
       match action with
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
-      | RMW(_,_,_,loc,_,_,_) ->
-          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+      | RMW(_,_,_,loc,_,_,_) (* fall through *)
+      | Kill(_,_,loc)        (* fall through *)
+      | MemopOne(_,_,_,loc) ->
+          if g_dbg_print_raw_loc then
+            Pmap.add loc (Expr.to_string loc) base
+          else
+            Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+      | MemopTwo(_, _, _, loc1, loc2) ->
+          if g_dbg_print_raw_loc then
+            Pmap.add loc1 (Expr.to_string loc1)
+                     (Pmap.add loc2 (Expr.to_string loc2) base)
+          else
+            Pmap.add loc1 (MemoryModelCommon.loc_to_string loc1 ranges)
+                     (Pmap.add loc2 (MemoryModelCommon.loc_to_string loc2 ranges) base)
       | Fence _ ->
           base
-      | Kill (aid,tid,loc) ->
-          Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
       ) (Pmap.empty Expr.compare) (action_events) in
 
     let not_initial action = (tid_of_action action <> initial_tid) in
