@@ -63,6 +63,7 @@ type memory_order =
 
 type memop_action =
   | Memop_PtrValidForDeref of z3_location * z3_value
+  | Memop_PtrDiff of z3_location * z3_location
 
 type action =
   | Load  of aid * tid * memory_order * z3_location * z3_value * ctype
@@ -184,6 +185,10 @@ let is_memop (a: action) = match a with
 
 let is_ptr_valid_for_deref (a: action) = match a with
   | Memop(_,_,Memop_PtrValidForDeref _) -> true
+  | _ -> false
+
+let is_ptr_diff_memop (a: action) = match a with
+  | Memop(_,_,Memop_PtrDiff _) -> true
   | _ -> false
 
 (* ======== PPRINTERS. TODO: MOVE THIS ========= *)

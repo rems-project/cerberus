@@ -1671,6 +1671,12 @@ module BmcZ3 = struct
         z3_pe p1 >>= fun z3d_p1 ->
         z3_pe p2 >>= fun z3d_p2 ->
         get_file >>= fun file ->
+
+        get_fresh_aid >>= fun aid ->
+        let intermediate_action =
+          (IMemop(aid, Ptrdiff, [z3d_p1;z3d_p2], [])) in
+        add_action uid intermediate_action >>
+
         (* TODO: assert PNVI model *)
         let raw_ptr_diff = PointerSort.ptr_diff_raw z3d_p1 z3d_p2 in
         let type_size = PointerSort.type_size ctype file in
@@ -4643,7 +4649,12 @@ module BmcConcActions = struct
           return [BmcAction(pol, mk_true,
                             Memop(aid, tid, (Memop_PtrValidForDeref(ptr, ret))))]
        | PtrValidForDeref, _, _ ->
-          assert false
+           assert false
+       | Ptrdiff, [p1;p2],[] ->
+          return [BmcAction(pol, mk_true,
+                            Memop(aid, tid, (Memop_PtrDiff(p1, p2))))]
+       | Ptrdiff, _, _ ->
+           assert false
        | _,_,_ -> failwith
             (sprintf "TODO: Do concurrency model implementation of %s"
                        (pp_to_string (Pp_mem.pp_memop memop)))
@@ -4673,6 +4684,9 @@ module BmcConcActions = struct
     | Epure pe ->
         return []
     | Ememop(PtrValidForDeref, _) ->
+        get_action uid >>= fun interm_action ->
+        intermediate_to_bmc_actions interm_action Pos uid
+    | Ememop(Ptrdiff, _) ->
         get_action uid >>= fun interm_action ->
         intermediate_to_bmc_actions interm_action Pos uid
     | Ememop (memop, pes) ->
