@@ -100,6 +100,11 @@ let bmcaction_cmp (BmcAction(_, _, a1)) (BmcAction(_, _, a2)) =
   compare (aid_of_action a1) (aid_of_action a2)
 
 (* ======= Provenance stuff ======= *)
+let provs_of_memop_action (memop: memop_action) : Expr.expr list =
+  match memop with
+  | Memop_PtrValidForDeref (l, _) ->
+      [PointerSort.get_prov l]
+
 let provs_of_bmcaction (bmcaction: bmc_action) : Expr.expr list =
   match get_action bmcaction with
   | Load  (_, _, _, l, _,_)
@@ -107,11 +112,10 @@ let provs_of_bmcaction (bmcaction: bmc_action) : Expr.expr list =
   | RMW   (_, _, _, l, _, _,_) ->
       [PointerSort.get_prov l]
   | Fence (_, _, _) -> assert false
-  | Kill(_,_,l) (* fall through *)
-  | MemopOne(_,_,_,l) ->
+  | Kill(_,_,l) ->
       [PointerSort.get_prov l]
-  | MemopTwo (_,_,_,l1,l2)->
-      [PointerSort.get_prov l1; PointerSort.get_prov l2]
+  | Memop(_,_,m) ->
+      provs_of_memop_action m
 
 (* True if interaction of provenances is non-empty *)
 let compare_provs (a1: bmc_action) (a2: bmc_action) : Expr.expr =
@@ -343,6 +347,11 @@ let string_of_polarity = function
   | Pos -> "+"
   | Neg -> "-"
 
+let string_of_memop_action = function
+  | Memop_PtrValidForDeref (loc, z3val) ->
+      sprintf "PtrValidForDeref(%s,%s)"
+              (Expr.to_string loc) (Expr.to_string z3val)
+
 let pp_action (a: action) =
   match a with
   | Load(aid,tid,memorder,loc,rval,_) ->
@@ -363,15 +372,9 @@ let pp_action (a: action) =
   | Kill (aid, tid, loc) ->
       sprintf "Kill(%d,%d,%s)"
               aid tid (Expr.to_string loc)
-  | MemopOne (aid, tid, memop, loc) ->
-      sprintf "Memop(%d,%d,%s,%s)"
-              aid tid (pp_to_string (Pp_mem.pp_memop memop))
-                      (Expr.to_string loc)
-  | MemopTwo (aid, tid, memop, loc1, loc2) ->
-      sprintf "Memop(%d,%d,%s,%s,%s)"
-              aid tid (pp_to_string (Pp_mem.pp_memop memop))
-                      (Expr.to_string loc1)
-                      (Expr.to_string loc2)
+  | Memop(aid, tid, memop) ->
+      sprintf "Memop(%d,%d,%s)"
+              aid tid (string_of_memop_action memop)
 
 
 let pp_bmcaction (BmcAction(pol, guard, action): bmc_action) =
@@ -447,8 +450,7 @@ module MemoryModelCommon = struct
     | RMW   _ -> rmw_etype
     | Fence _ -> fence_etype
     | Kill _  -> kill_etype
-    | MemopOne _ -> memop_etype
-    | MemopTwo _ -> memop_etype
+    | Memop _ -> memop_etype
 
   (* MEMORY ORDER TYPE *)
   let mk_memord_type =
@@ -543,6 +545,11 @@ module MemoryModelCommon = struct
     data_dep : FuncDecl.func_decl;
     ctrl_dep : FuncDecl.func_decl;
     crit     : FuncDecl.func_decl;
+
+    (* We make hb a built in that must be defined by the .cat model
+     * so that we can make the appropriate lifetime assertions.
+     *)
+    hb       : FuncDecl.func_decl;
   }
 
   let apply = FuncDecl.apply
@@ -573,6 +580,8 @@ module MemoryModelCommon = struct
     ; data_dep = mk_decl "data_dep" [events;events] boolean_sort
     ; ctrl_dep = mk_decl "ctrl_dep" [events;events] boolean_sort
     ; crit     = mk_decl "crit"     [events;events] boolean_sort
+
+    ; hb       = mk_decl "hb"       [events;events] boolean_sort
     }
 
   type builtin_fnapps = {
@@ -617,6 +626,8 @@ module MemoryModelCommon = struct
     data_dep   : Expr.expr * Expr.expr -> Expr.expr;
     ctrl_dep   : Expr.expr * Expr.expr -> Expr.expr;
     crit       : Expr.expr * Expr.expr -> Expr.expr;
+
+    hb         : Expr.expr * Expr.expr -> Expr.expr;
   }
 
   let mk_fn_apps (decls: builtin_decls) : builtin_fnapps =
@@ -711,6 +722,8 @@ module MemoryModelCommon = struct
     ; data_dep  = (fun (e1,e2) -> apply decls.data_dep [e1;e2])
     ; ctrl_dep  = (fun (e1,e2) -> apply decls.ctrl_dep [e1;e2])
     ; crit      = (fun (e1,e2) -> apply decls.crit     [e1;e2])
+
+    ; hb        = (fun (e1,e2) -> apply decls.hb       [e1;e2])
     }
 
   type ret =
@@ -728,6 +741,8 @@ module MemoryModelCommon = struct
     ; well_formed_rf  : Expr.expr list
     ; well_formed_co  : Expr.expr list
     ; co_init         : Expr.expr list
+
+    ; memop_asserts   : Expr.expr list
     }
 
   let gen_all_assertions (ret: ret) =
@@ -737,6 +752,7 @@ module MemoryModelCommon = struct
       @ ret.well_formed_rf
       @ ret.well_formed_co
       @ ret.co_init
+      @ ret.memop_asserts
       @ ret.assertions in
     if !!bmc_conf.parse_from_model then
         ret.addr_assert
@@ -971,6 +987,32 @@ module MemoryModelCommon = struct
     let crit = compute_crit exec.po in
     let crit_asserts = asserts_from_relation crit fns.crit in
 
+    (* ======= Memop assertions ======= *)
+    let ptr_valid_for_deref_asserts =
+      let kills =
+        List.filter (fun a -> is_kill (get_action a)) exec.actions in
+      let ptr_valid_for_derefs =
+        List.filter (fun a -> is_ptr_valid_for_deref (get_action a)) exec.actions in
+      List.map (fun memop ->
+        let (loc, z3_value_to_be_bound) =
+          match get_action memop with
+          | Memop(_,_,Memop_PtrValidForDeref(loc,z3val)) -> (loc,z3val)
+          | _ -> assert false
+        in
+        let invalid = List.map (fun kill ->
+          let (e1,e2) = (z3action memop, z3action kill) in
+          mk_and [fns.getGuard e1
+                 ;fns.getGuard e2
+                 ;mk_not(mk_eq e1 e2)
+                 ;mk_not(fns.hb(e1,e2)) (* not hb related *)
+                 ;compare_provs memop kill]
+          ) kills in
+        mk_eq z3_value_to_be_bound
+              (mk_not (mk_or invalid))
+      ) ptr_valid_for_derefs in
+
+    let memop_asserts = ptr_valid_for_deref_asserts in
+
     { event_sort = event_sort
     ; event_map  = event_map
     ; decls      = decls
@@ -988,6 +1030,7 @@ module MemoryModelCommon = struct
                    @ same_loc_asserts
                    @ well_formed_sc_clk
                    @ crit_asserts
+                   @ memop_asserts
 
     ; po_assert      = po_asserts
     ; asw_assert     = asw_asserts
@@ -997,6 +1040,7 @@ module MemoryModelCommon = struct
     ; well_formed_rf = well_formed_rf
     ; well_formed_co = well_formed_co
     ; co_init        = co_init
+    ; memop_asserts  = memop_asserts
     }
 
   type execution = {
@@ -1261,6 +1305,8 @@ module RC11MemoryModel : MemoryModel = struct
     ; rval     = builtin.rval
     ; wval     = builtin.wval
 
+    ; hb       = builtin.hb
+
     ; rf_inv   = builtin.rf_inv
 
     ; sb       = mk_decl "sb"       [events;events] boolean_sort
@@ -1269,7 +1315,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; rs       = mk_decl "rs"       [events;events] boolean_sort
     ; rf_dag   = mk_decl "rf_dag"   [events;events] boolean_sort
     ; sw       = mk_decl "sw"       [events;events] boolean_sort
-    ; hb       = mk_decl "hb"       [events;events] boolean_sort
+    (*; hb       = mk_decl "hb"       [events;events] boolean_sort*)
 
     ; sc_clk   = mk_decl "sc_clk"   [events]        (Integer.mk_sort g_ctx)
     ; sc       = mk_decl "sc"       [events;events] boolean_sort
@@ -1356,7 +1402,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; fr        = fr
     ; eco       = eco
     ; sw        = sw
-    ; hb        = (fun (e1,e2) -> apply decls.hb [e1;e2])
+    ; hb        = builtin.hb
     ; sc_clk    = sc_clk
     ; sc        = sc
     ; psc_base  = psc_base
@@ -1727,11 +1773,20 @@ module RC11MemoryModel : MemoryModel = struct
 
     (* VC: assert that a kill does not hb another action with the same
      * allocation id *)
+    (* NOTE: We might not need this for valid Core programs generated
+     * from C. Two cases:
+     * - load/store correspond to a C identifier lvalue: check is redundant
+     * - otherwise, there will be a validForDeref memop
+     *)
+    (*
     let vcs =
       let kills =
         List.filter (fun a -> is_kill (get_action a)) exec.actions in
       let candidate_tails =
-          List.filter (fun a -> has_addr a || is_kill (get_action a))
+          List.filter (fun a -> has_addr a
+                       || is_kill (get_action a)
+                       || is_memop (get_action a)
+                      )
                       exec.actions in
       let candidates = cartesian_product kills candidate_tails in
       List.map (fun (a1,a2) ->
@@ -1744,6 +1799,9 @@ module RC11MemoryModel : MemoryModel = struct
                         ]),
          VcDebugStr ("Indirection invalid value; access after kill"))
       ) candidates in
+    *)
+
+    let vcs = [] in
 
     { event_sort = event_sort
     ; event_type = event_type
@@ -1786,6 +1844,8 @@ module RC11MemoryModel : MemoryModel = struct
                  @ atomic2
 
                  @ sbrf_clk
+
+                 @ initialised.memop_asserts
     }
 
   let extract_execution (model    : Model.model)
@@ -1839,13 +1899,14 @@ module RC11MemoryModel : MemoryModel = struct
                *)
               let loc = interp (PointerSort.get_addr loc) in
               Kill(aid, tid, loc)
-          | MemopOne(aid, tid, memop, loc) ->
-              let loc = interp (PointerSort.get_addr loc) in
-              MemopOne(aid, tid, memop, loc)
-          | MemopTwo(aid, tid, memop, loc1, loc2) ->
-              let loc1 = interp (PointerSort.get_addr loc1) in
-              let loc2 = interp (PointerSort.get_addr loc2) in
-              MemopTwo(aid, tid, memop, loc1, loc2)
+          | Memop(aid,tid,memop) ->
+              let memop =
+                begin match memop with
+                | Memop_PtrValidForDeref (loc, z3val) ->
+                    let loc = interp (PointerSort.get_addr loc) in
+                    Memop_PtrValidForDeref(loc, z3val)
+                end in
+              Memop(aid,tid,memop)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
@@ -1860,19 +1921,22 @@ module RC11MemoryModel : MemoryModel = struct
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
       | RMW(_,_,_,loc,_,_,_) (* fall through *)
-      | Kill(_,_,loc)        (* fall through *)
-      | MemopOne(_,_,_,loc) ->
+      | Kill(_,_,loc) ->
           if g_dbg_print_raw_loc then
             Pmap.add loc (Expr.to_string loc) base
           else
             Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
-      | MemopTwo(_, _, _, loc1, loc2) ->
-          if g_dbg_print_raw_loc then
-            Pmap.add loc1 (Expr.to_string loc1)
-                     (Pmap.add loc2 (Expr.to_string loc2) base)
-          else
-            Pmap.add loc1 (MemoryModelCommon.loc_to_string loc1 ranges)
-                     (Pmap.add loc2 (MemoryModelCommon.loc_to_string loc2 ranges) base)
+      | Memop(_,_,memop) ->
+          let locs =
+            begin match memop with
+            | Memop_PtrValidForDeref (loc, _) -> [loc]
+            end in
+          List.fold_left (fun acc loc ->
+            if g_dbg_print_raw_loc then
+              Pmap.add loc (Expr.to_string loc) base
+            else
+              Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+            ) base locs
       | Fence _ ->
           base
 
@@ -2367,13 +2431,14 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                *)
               let loc = interp (PointerSort.get_addr loc) in
               Kill(aid, tid, loc)
-          | MemopOne(aid, tid, memop, loc) ->
-              let loc = interp (PointerSort.get_addr loc) in
-              MemopOne(aid, tid, memop, loc)
-          | MemopTwo(aid, tid, memop, loc1, loc2) ->
-              let loc1 = interp (PointerSort.get_addr loc1) in
-              let loc2 = interp (PointerSort.get_addr loc2) in
-              MemopTwo(aid, tid, memop, loc1, loc2)
+          | Memop(aid,tid,memop) ->
+              let memop =
+                begin match memop with
+                | Memop_PtrValidForDeref (loc, z3val) ->
+                    let loc = interp (PointerSort.get_addr loc) in
+                    Memop_PtrValidForDeref(loc, z3val)
+                end in
+              Memop(aid,tid,memop)
         in (new_action, event) :: acc
       else acc
     ) [] (Pmap.bindings_list mem.action_map) in
@@ -2388,19 +2453,22 @@ module GenericModel (M: CatModel) : MemoryModel = struct
       | Load (_,_,_,loc,_,_) (* fall through *)
       | Store(_,_,_,loc,_,_) (* fall through *)
       | RMW(_,_,_,loc,_,_,_) (* fall through *)
-      | Kill(_,_,loc)        (* fall through *)
-      | MemopOne(_,_,_,loc) ->
+      | Kill(_,_,loc) ->
           if g_dbg_print_raw_loc then
             Pmap.add loc (Expr.to_string loc) base
           else
             Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
-      | MemopTwo(_, _, _, loc1, loc2) ->
-          if g_dbg_print_raw_loc then
-            Pmap.add loc1 (Expr.to_string loc1)
-                     (Pmap.add loc2 (Expr.to_string loc2) base)
-          else
-            Pmap.add loc1 (MemoryModelCommon.loc_to_string loc1 ranges)
-                     (Pmap.add loc2 (MemoryModelCommon.loc_to_string loc2 ranges) base)
+      | Memop(_,_,memop) ->
+          let locs =
+            begin match memop with
+            | Memop_PtrValidForDeref (loc, _) -> [loc]
+            end in
+          List.fold_left (fun acc loc ->
+            if g_dbg_print_raw_loc then
+              Pmap.add loc (Expr.to_string loc) base
+            else
+              Pmap.add loc (MemoryModelCommon.loc_to_string loc ranges) base
+            ) base locs
       | Fence _ ->
           base
       ) (Pmap.empty Expr.compare) (action_events) in

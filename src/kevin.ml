@@ -50,6 +50,21 @@ module Memop = struct
     Pervasives.compare x y
 end
 
+module Memop_action = struct
+  type t = Bmc_types.memop_action
+
+  let memop_rank = function
+  | Bmc_types.Memop_PtrValidForDeref _ -> 0
+
+  let compare (x: t) y =
+    Functors.(
+    match x, y with
+    | Bmc_types.Memop_PtrValidForDeref (l1,v1), Bmc_types.Memop_PtrValidForDeref(l2,v2) ->
+        pair_compare Z3_location.compare Z3_value.compare (l1,v1) (l2,v2)
+    (*| _,_ -> Pervasives.compare (memop_rank x) (memop_rank y)*)
+    )
+end
+
 module Action = struct
   let action_rank = function
   | Bmc_types.Load _ -> 0
@@ -57,8 +72,7 @@ module Action = struct
   | Bmc_types.RMW _ -> 2
   | Bmc_types.Fence _ -> 3
   | Bmc_types.Kill _ -> 4
-  | Bmc_types.MemopOne _ -> 5
-  | Bmc_types.MemopTwo _ -> 6
+  | Bmc_types.Memop _ -> 5
 
   type t = Bmc_types.action
   (* TODO: do we care about types at this point? *)
@@ -75,10 +89,8 @@ module Action = struct
       pair_compare Aid.compare (pair_compare Tid.compare Memory_order2.compare)  (a1, (t1, m1)) (a2, (t2, m2))
     | Bmc_types.Kill(a1, t1, l1), Bmc_types.Kill (a2, t2, l2) ->
       pair_compare Aid.compare (pair_compare Tid.compare Z3_location.compare)  (a1, (t1,l1)) (a2, (t2, l2))
-    | Bmc_types.MemopOne(a1, t1, m1, l1), Bmc_types.MemopOne(a2, t2, m2, l2) ->
-      pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memop.compare Z3_location.compare)) (a1, (t1, (m1, l1))) (a2, (t2, (m2, l2)))
-    | Bmc_types.MemopTwo(a1, t1, m1, l11, l12), Bmc_types.MemopTwo(a2, t2, m2, l21, l22) ->
-      pair_compare Aid.compare (pair_compare Tid.compare (pair_compare Memop.compare (pair_compare Z3_location.compare Z3_location.compare))) (a1, (t1, (m1, (l11, l12)))) (a2, (t2, (m2, (l21, l22))))
+    | Bmc_types.Memop(a1, t1, m1), Bmc_types.Memop(a2,t2,m2) ->
+      pair_compare Aid.compare (pair_compare Tid.compare Memop_action.compare) (a1, (t1, m1)) (a2, (t2, m2))
     | _, _ -> Pervasives.compare (action_rank x) (action_rank y))
 end
 
@@ -108,8 +120,7 @@ let tid_of_action = function
 | Bmc_types.RMW (_, t, _, _, _, _, _) -> t
 | Bmc_types.Fence (_, t, _) -> t
 | Bmc_types.Kill (_, t, _) -> t
-| Bmc_types.MemopOne (_, t, _, _) -> t
-| Bmc_types.MemopTwo (_, t, _, _, _) -> t
+| Bmc_types.Memop (_, t, _) -> t
 
 let aid_of_action = function
 | Bmc_types.Load (a, _, _, _, _, _) -> a
@@ -117,8 +128,7 @@ let aid_of_action = function
 | Bmc_types.RMW (a, _, _, _, _, _, _) -> a
 | Bmc_types.Fence (a, _, _) -> a
 | Bmc_types.Kill (a, _, _) -> a
-| Bmc_types.MemopOne (a, _, _, _) -> a
-| Bmc_types.MemopTwo (a, _, _, _, _) -> a
+| Bmc_types.Memop (a, _, _) -> a
 
 module Bmc_types_pp = struct
 
@@ -186,16 +196,16 @@ let string_of_value expr =
   else
     Expr.to_string arg
 
-(* TODO: Print the actual memory operation *)
+let string_of_memop_action loc_map = function
+  | Bmc_types.Memop_PtrValidForDeref (l1,v1) -> ":Pval" ^ " " ^ string_of_location loc_map l1
+
 let string_of_action loc_map = function
 | Bmc_types.Load (a, t, mo, x, v, ty) -> Aid.string_of a ^ ":R" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
 | Bmc_types.Store (a, t, mo, x, v, ty) -> Aid.string_of a ^ ":W" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ "=" ^ string_of_value v
 | Bmc_types.RMW (a, t, mo, x, v1, v2, ty) -> Aid.string_of a ^ ":RMW" ^ string_of_memory_order mo ^ " " ^ string_of_location loc_map x ^ " " ^ string_of_value v1 ^ "->" ^ string_of_value v2
 | Bmc_types.Fence (a, t, mo) -> Aid.string_of a ^ ":F" ^ string_of_memory_order mo
 | Bmc_types.Kill(a, t, x) -> Aid.string_of a ^ ":Kill" ^ " " ^ string_of_location loc_map x
-| Bmc_types.MemopOne(a, t, m, l1) -> Aid.string_of a ^ ":Mem" ^ " " ^ string_of_location loc_map l1
-| Bmc_types.MemopTwo(a, t, m, l1, l2) -> Aid.string_of a ^ ":Mem" ^ " " ^ string_of_location loc_map l1 ^ " " ^ string_of_location loc_map l2
-
+| Bmc_types.Memop(a, t, m) -> Aid.string_of a ^ string_of_memop_action loc_map m
 end
 
 let aid_times_aid_set_of_rel rel =
