@@ -51,6 +51,8 @@ module CatFile = struct
     | BaseId_data_dep
     | BaseId_ctrl_dep
     | BaseId_crit   (* TODO: NOT IMPLEMENTED *)
+    (* We force hb to be built-in so we can reason about kills *)
+    | BaseId_hb
 
   type id =
     | Id of string (* TODO: only relations allowed currently *)
@@ -134,6 +136,8 @@ module CatFile = struct
   let mk_data_dep = Eid (BaseId BaseId_data_dep)
   let mk_crit     = Eid (BaseId BaseId_crit)
 
+  let mk_hb = Eid(BaseId BaseId_hb)
+
   let mk_prod (x: set) (y: set) =
     Eprod(x,y)
 
@@ -207,6 +211,7 @@ module CatFile = struct
     | BaseId_ctrl_dep -> "ctrl"
     | BaseId_data_dep -> "data"
     | BaseId_crit     -> "crit"
+    | BaseId_hb -> "hb"
 
   let pprint_id = function
     | Id s -> "|" ^ s ^ "|"
@@ -291,51 +296,8 @@ module type CatModel = sig
   val undefs_unless_empty :  string list (* TODO: support generic UBs *)
 
   val to_output : CatFile.id list (* TODO: should be id? *)
-end
 
-module Partial_RC11Model : CatModel = struct
-  open CatFile
-  let bindings =
-    [ ("sb", (mk_set_U, mk_set_U),
-             mk_simple (mk_union
-              (mk_po,mk_prod mk_set_I (mk_set_diff mk_set_M mk_set_I))))
-    ; ("rf_star", (mk_set_W, mk_set_U),
-             mk_star mk_rf)
-    (*
-    ; ("rs", (mk_set_W, mk_set_U),
-             mk_sequence (mk_optional (mk_intersection (mk_id "sb") mk_loc))
-             (mk_sequence (mk_id "rs")
-             (mk_sequence mk_rf
-             (mk_sequence () ()))))
-    *)
-    ; ("sw", (mk_set_U, mk_set_U),
-             mk_simple mk_asw)
-    ; ("hb", (mk_set_U, mk_set_U),
-             mk_plus (mk_union (mk_id "sb", mk_id "sw"))) (* TODO: sw, asw *)
-    ; ("mo", (mk_set_W, mk_set_W),
-             mk_simple mk_co)
-    ; ("fr", (mk_set_R, mk_set_W),
-             mk_simple
-               (mk_diff (mk_sequence mk_rf_inv (mk_id "mo")) mk_identity))
-    ; ("eco", (mk_set_U, mk_set_U),
-              mk_simple (
-                mk_union (mk_rf,
-                mk_union (mk_id "mo",
-                mk_union (mk_id "fr",
-                mk_union (mk_sequence (mk_id "mo") mk_rf,
-                          mk_sequence (mk_id "fr") mk_rf))))))
-    ]
-
-  let constraints =
-    [ (Some "coh", Irreflexive ((mk_sequence (mk_id "hb") (mk_id "eco"))))
-    ; (Some "atomic1", Irreflexive (mk_id "eco"))
-    ; (Some "atomic2", Irreflexive (mk_sequence (mk_id "fr") (mk_id "mo")))
-    ; (Some "sb|rf", Acyclic ((mk_union (mk_id "sb", mk_rf))))
-    ]
-
-  let undefs_unless_empty = []
-
-  let to_output = []
+  val hb_binding : (CatFile.set * CatFile.set) * CatFile.expr
 end
 
 module CatParser = struct
@@ -412,6 +374,7 @@ module CatParser = struct
       else if s = "ctrl"         then mk_ctrl_dep
       else if s = "data"         then mk_data_dep
       else if s = "crit"         then mk_crit
+      else if s = "__bmc_hb"     then mk_hb
       else mk_id s
     in return ret
 
@@ -586,6 +549,7 @@ module CatParser = struct
     | BaseId_data_dep -> (mk_set_R, mk_set_M)
     | BaseId_ctrl_dep -> (mk_set_R, mk_set_M)
     | BaseId_crit     -> (mk_set_RcuLock, mk_set_RcuUnlock)
+    | BaseId_hb -> (mk_set_U, mk_set_U)
 
   let rec get_domain_range_simple_expr (expr: CatFile.simple_expr)
                                        : set * set  =
@@ -652,38 +616,51 @@ module CatParser = struct
         Esimple (strip_tl_set (strip_hd_set simple_expr))
     | _ -> expr
 
+  (* TODO: add check that hb is defined *)
   let load_file filename =
     let lines = read_file filename in
-    let (bindings, constraints, undefs_unless_empty, outputs) =
-      List.fold_left (fun (binding, constraints, undefs_unless_empty, output) s ->
+    let (bindings, constraints, undefs_unless_empty, outputs, hb_opt) =
+      List.fold_left (fun (binding, constraints, undefs_unless_empty, output, opt_hb) s ->
         let result = parse_string instruction s in
         match result with
         | Result.Ok v ->
             bmc_debug_print 6 (pprint_instruction v);
             begin match v with
             | Binding (s, expr) ->
-                (* TODO: domain and range *)
                 let (domain, range) = get_domain_range_expr expr in
                 let simplified_expr = simplify_sequenced_exprs expr in
                 bmc_debug_print 5 (CatFile.pprint_expr simplified_expr);
-                ((s, (domain, range),simplified_expr)::binding, constraints, undefs_unless_empty, output)
-            | Constraint (s_opt, expr) ->
-                (binding, (s_opt, expr)::constraints, undefs_unless_empty, output)
+                if s = "__bmc_hb" then begin
+                  match opt_hb with
+                  | None ->
+                      (binding, constraints, undefs_unless_empty, output,
+                       Some ((domain,range),simplified_expr))
+                  | _ -> failwith "Error parsing .cat file: multiple bindings of hb"
+                end else
+                  ((s, (domain, range),simplified_expr)::binding, constraints, undefs_unless_empty, output, opt_hb)
+              | Constraint (s_opt, expr) ->
+                (binding, (s_opt, expr)::constraints, undefs_unless_empty, output, opt_hb)
             | Undefined_unless_empty s ->
-                (binding, constraints, s::undefs_unless_empty, output)
+                (binding, constraints, s::undefs_unless_empty, output, opt_hb)
             | Output id ->
-                (binding, constraints, undefs_unless_empty, id::output)
-            | Skip _ -> (binding, constraints, undefs_unless_empty, output)
+                (binding, constraints, undefs_unless_empty, id::output, opt_hb)
+            | Skip _ -> (binding, constraints, undefs_unless_empty, output, opt_hb)
             end
         | Result.Error msg ->
             failwith (sprintf "Error parsing .cat file: %s (input: '%s')\n" msg s)
             (*(binding, constraints, undefs_unless_empty, output)*)
-      ) ([],[], [], []) lines in
+      ) ([],[], [], [], None) lines in
+    let hb_binding =
+      match hb_opt with
+      | None -> failwith "Invalid .cat file: __bmc_hb must be defined"
+      | Some binding -> binding
+    in
     (module struct
       let bindings = bindings
       let constraints = constraints
       let undefs_unless_empty = undefs_unless_empty
       let to_output = outputs
+      let hb_binding = hb_binding
      end : CatModel)
 end
 
