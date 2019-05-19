@@ -1072,7 +1072,7 @@ module BmcZ3 = struct
     (* TODO: aid list for ICreate as a hack for structs *)
     | ICreate of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc
     | ICreateReadOnly of aid list * ctype  (* align ty *) * ctype * ctype_sort list * alloc * Expr.expr (* initial_value *)
-    | IKill of aid * Expr.expr (* ptr *)
+    | IKill of aid * Expr.expr (* ptr *) * bool (* is dynamic *)
     | ILoad of aid * ctype * (* TODO: list *) ctype_sort list * (* ptr *) Expr.expr * (* rval *) Expr.expr * Cmm_csem.memory_order
     | IStore of aid * ctype * ctype_sort list * (* ptr *) Expr.expr * (* wval *) Expr.expr * Cmm_csem.memory_order
     | ICompareExchangeStrong of
@@ -1461,10 +1461,7 @@ module BmcZ3 = struct
         (* TODO: bool for free dynamic ignored *)
         bmc_debug_print 7 "TODO: kill ignored";
         z3_pe pe >>= fun z3d_pe ->
-        if b then
-          failwith "TODO: Dynamic kills"
-        else
-          return (UnitSort.mk_unit, IKill (aid, z3d_pe))
+        return (UnitSort.mk_unit, IKill (aid, z3d_pe,b))
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_fresh_aid  >>= fun aid ->
         lookup_sym sym >>= fun sym_expr ->
@@ -2944,15 +2941,22 @@ module BmcRet = struct
         get_ret_const >>= fun old_ret ->
         get_fn_call uid >>= fun fn_sym ->
         get_file >>= fun file ->
-        let new_ret_const =
+
+        let ret_ty =
           begin match Pmap.lookup fn_sym file.funs with
-          | Some Proc(_, ret_ty, _, _) ->
-              mk_fresh_const (sprintf "ret_%s_%s"
-                                      (Pp_symbol.to_string fn_sym)
-                                      (string_of_int uid))
-                             (cbt_to_z3 ret_ty)
-          | _ -> assert false
+          | Some Proc(_, ret_ty, _, _) -> ret_ty
+          | _ ->
+              begin match Pmap.lookup fn_sym file.stdlib with
+              | Some Proc(_, ret_ty, _,_) -> ret_ty
+              | _ ->
+                failwith (sprintf "Unknown ccall: %s" (symbol_to_string fn_sym))
+              end
           end in
+        let new_ret_const =
+            mk_fresh_const (sprintf "ret_%s_%s"
+                                    (Pp_symbol.to_string fn_sym)
+                                    (string_of_int uid))
+                           (cbt_to_z3 ret_ty) in
         set_ret_const new_ret_const >>
 
         get_inline_expr uid >>= fun inline_expr ->
@@ -4501,6 +4505,13 @@ module BmcConcActions = struct
     get_meta alloc_id >>= fun metadata ->
     let base_addr = get_metadata_base metadata in
 
+    let is_dynamic_assert =
+      mk_eq (Expr.mk_app g_ctx PointerSort.is_dynamic_alloc_decl
+                               [int_to_z3 alloc_id])
+            mk_false in
+    add_assertion is_dynamic_assert >>
+
+
     mapMi_ (fun i (ctype,sort) ->
       let index = List.fold_left
           (fun acc (ty, _) -> acc + (PointerSort.type_size ctype file))
@@ -4585,8 +4596,12 @@ module BmcConcActions = struct
         add_read_only_alloc alloc_id >>
         do_create aids ctype sortlist alloc_id pol
           (CreateMode_InitialValue initial_value)
-    | IKill (aid,ptr) ->
+    | IKill (aid,ptr, b) ->
         get_tid >>= fun tid ->
+        let dynamic_kill_assertion =
+          mk_eq (Expr.mk_app g_ctx is_dynamic_kill_decl [int_to_z3 aid])
+                (Boolean.mk_val g_ctx b) in
+        add_assertion dynamic_kill_assertion >>
         return [BmcAction(pol, mk_true, Kill(aid, tid, ptr))]
     (*| ILoad (aid, (ctype, sort), ptr, rval, mo) ->*)
     | ILoad (aid, ctype, _, ptr, rval, mo) ->

@@ -107,7 +107,6 @@ let provs_of_memop_action (memop: memop_action) : Expr.expr list =
   | Memop_PtrDiff (l1, l2) ->
       [PointerSort.get_prov l1; PointerSort.get_prov l2]
 
-
 let provs_of_bmcaction (bmcaction: bmc_action) : Expr.expr list =
   match get_action bmcaction with
   | Load  (_, _, _, l, _,_)
@@ -127,6 +126,11 @@ let compare_provs (a1: bmc_action) (a2: bmc_action) : Expr.expr =
   mk_or (List.concat
     (List.map (fun p1 -> List.map (fun p2 -> mk_eq p1 p2) provs2)
               provs1))
+
+(* TODO: find appropriate place *)
+(* ===== DECLS? ===== *)
+let is_dynamic_kill_decl =
+    mk_fresh_func_decl "__is_dynamic_kill_decl" [integer_sort] boolean_sort
 
 (* ===== PREEXECS ===== *)
 
@@ -790,6 +794,7 @@ module MemoryModelCommon = struct
 
     let writes = List.filter has_wval all_actions in
     let reads = List.filter has_rval all_actions in
+    let kills = List.filter (fun a -> is_kill (get_action a)) all_actions in
 
     let aid_asserts = List.map (fun action ->
       mk_eq (fns.getAid (z3action action))
@@ -998,8 +1003,6 @@ module MemoryModelCommon = struct
 
     (* ======= Memop assertions ======= *)
     let ptr_valid_for_deref_asserts =
-      let kills =
-        List.filter (fun a -> is_kill (get_action a)) exec.actions in
       let ptr_valid_for_derefs =
         List.filter (fun a -> is_ptr_valid_for_deref (get_action a)) exec.actions in
       List.map (fun memop ->
@@ -1023,8 +1026,6 @@ module MemoryModelCommon = struct
     let memop_asserts = ptr_valid_for_deref_asserts in
 
     let memop_vcs =
-      let kills =
-        List.filter (fun a -> is_kill (get_action a)) exec.actions in
       let candidate_heads =
           List.filter (fun a ->
                           has_addr a
@@ -1043,6 +1044,20 @@ module MemoryModelCommon = struct
                         ]),
          VcDebugStr ("UB: outside lifetime"))
       ) candidates in
+
+    let free_of_nondynamic_alloc_vcs =
+      List.map (fun a ->
+        let e = z3action a in
+        match provs_of_bmcaction a with
+        | [prov] ->
+          (mk_not (mk_and [fns.getGuard e
+                          ;mk_not (Expr.mk_app g_ctx PointerSort.is_dynamic_alloc_decl [prov])
+                          ;Expr.mk_app g_ctx is_dynamic_kill_decl [fns.getAid e]
+                          ]
+                  ),
+           VcDebugStr ("UB: free of static allocation"))
+        | _ -> assert false
+      ) kills in
 
     { event_sort = event_sort
     ; event_map  = event_map
@@ -1072,7 +1087,7 @@ module MemoryModelCommon = struct
     ; well_formed_co = well_formed_co
     ; co_init        = co_init
     ; memop_asserts  = memop_asserts
-    ; vcs            = memop_vcs
+    ; vcs            = memop_vcs @ free_of_nondynamic_alloc_vcs
     }
 
   type execution = {
