@@ -264,10 +264,10 @@ module AddressSortPNVI = struct
   (* ======== *)
   (* Map from address to provenance *)
   let alloc_min_decl =
-    mk_fresh_func_decl g_ctx "alloc_min" [integer_sort] integer_sort
+    mk_fresh_func_decl g_ctx "__alloc_min" [integer_sort] integer_sort
 
   let alloc_max_decl =
-    mk_fresh_func_decl g_ctx "alloc_max" [integer_sort] integer_sort
+    mk_fresh_func_decl g_ctx "__alloc_max" [integer_sort] integer_sort
 
   let valid_index_range (alloc: Expr.expr) (addr: Expr.expr) : Expr.expr =
     let index = get_index addr in
@@ -506,6 +506,7 @@ module type PointerSortAPI = sig
 
   val shift_by_n : Expr.expr -> Expr.expr -> Expr.expr
   val provenance_of_decl : FuncDecl.func_decl
+  val is_dynamic_alloc_decl : FuncDecl.func_decl
 
   val valid_ptr : Expr.expr -> Expr.expr
 
@@ -599,6 +600,9 @@ module PointerSortPNVI : PointerSortAPI = struct
 
   let has_provenance (ptr: Expr.expr) : Expr.expr =
     binop_to_z3 OpGt (get_prov ptr) (int_to_z3 0)
+
+  let is_dynamic_alloc_decl =
+    mk_fresh_func_decl g_ctx "is_dynamic_alloc" [integer_sort] boolean_sort
 
   (* Not null
    * Provenance of ptr is > 0
@@ -742,6 +746,9 @@ module PointerSortConcrete : PointerSortAPI = struct
   (* TODO: should not exist *)
   let provenance_of_decl =
     mk_fresh_func_decl g_ctx "prov_of" [integer_sort] integer_sort
+
+  let is_dynamic_alloc_decl =
+    mk_fresh_func_decl g_ctx "is_dynamic_alloc" [integer_sort] boolean_sort
 
   let pp expr = Expr.to_string expr
 
