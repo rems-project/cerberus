@@ -705,11 +705,13 @@ module BmcSSA = struct
 
   let put_sym_expr (sym: sym_ty) (ty: core_base_type) : unit eff =
     get_sym_expr_table >>= fun table ->
+    get >>= fun st ->
     match Pmap.lookup sym table with
     | Some _ -> failwith (sprintf "BmcSSA error: sym %s exists in sym_expr_table"
                                   (symbol_to_string sym))
     | None ->
-        let expr = mk_fresh_const (symbol_to_string sym) (cbt_to_z3 ty) in
+        let expr = mk_fresh_const (symbol_to_string sym)
+                                  (cbt_to_z3 ty st.file) in
         put_sym_expr_table (Pmap.add sym expr table)
 
   let get_fresh_sym (str: string option) : sym_ty eff =
@@ -1248,10 +1250,12 @@ module BmcZ3 = struct
        return (value_to_z3 cval file)
     | PEconstrained _ -> assert false
     | PEundef _ ->
-        let sort = cbt_to_z3 bTy in
+        get_file >>= fun file ->
+        let sort = cbt_to_z3 bTy file in
         return (mk_fresh_const (sprintf "undef_%d" uid) sort)
     | PEerror _ ->
-        let sort = cbt_to_z3 bTy in
+        get_file >>= fun file ->
+        let sort = cbt_to_z3 bTy file in
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
     | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* TODO: Get rid of ImplFunctions *)
@@ -1361,8 +1365,12 @@ module BmcZ3 = struct
         z3_pe pe1 >>= fun z3d_pe1 ->
         z3_pe pe2 >>= fun z3d_pe2 ->
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
-    | PEstruct _    ->
-        assert false
+    | PEstruct (sym, pes) ->
+        get_file >>= fun file ->
+        let struct_sort = struct_sym_to_z3_sort sym file in
+        (* TODO: assume pes are in order *)
+        mapM (fun (_, pe) -> z3_pe pe) pes >>= fun z3d_pes ->
+        return (CustomTuple.mk_tuple struct_sort z3d_pes)
     | PEunion _     -> assert false
     | PEcfunction _ ->
         (*get_inline_pexpr uid >>= fun inline_pe ->
@@ -2201,7 +2209,9 @@ module BmcBind = struct
         bind_pe pe1 >>= fun bound_pe1 ->
         bind_pe pe2 >>= fun bound_pe2 ->
         return (bound_pe1 @ bound_pe2)
-    | PEstruct _    -> assert false
+    | PEstruct (_, pes) ->
+        mapM bind_pe @@ List.map snd pes >>= fun bound_pes ->
+        return (List.concat bound_pes)
     | PEunion _     -> assert false
     | PEcfunction _ -> assert false
     | PEmemberof _  -> assert false
@@ -2576,7 +2586,9 @@ module BmcVC = struct
         vcs_pe    pe1 >>= fun vc1s ->
         vcs_pe    pe2 >>= fun vc2s ->
         return (vc1s @ vc2s)
-    | PEstruct _       -> assert false
+    | PEstruct (_, pes) ->
+        mapM vcs_pe @@ List.map snd pes >>= fun vcs ->
+        return (List.concat vcs)
     | PEunion _        -> assert false
     | PEcfunction _    -> assert false
     | PEmemberof _     -> assert false
@@ -2956,7 +2968,7 @@ module BmcRet = struct
             mk_fresh_const (sprintf "ret_%s_%s"
                                     (Pp_symbol.to_string fn_sym)
                                     (string_of_int uid))
-                           (cbt_to_z3 ret_ty) in
+                           (cbt_to_z3 ret_ty file) in
         set_ret_const new_ret_const >>
 
         get_inline_expr uid >>= fun inline_expr ->
@@ -3009,7 +3021,7 @@ module BmcRet = struct
         let uid = get_id_expr e in
         let expr = mk_fresh_const
             (sprintf "ret_%s{%d}" (symbol_to_string fn_to_check) uid)
-            (cbt_to_z3 bTy) in
+            (cbt_to_z3 bTy file) in
         set_ret_const expr >>
         do_e e >>= fun bindings ->
 
@@ -4995,7 +5007,9 @@ module BmcConcActions = struct
         do_taint_pe pe1 >>= fun taint_pe1 ->
         do_taint_pe pe2 >>= fun taint_pe2 ->
         return (Pset.union taint_pe1 taint_pe2)
-    | PEstruct _    -> assert false
+    | PEstruct (_,pes) ->
+        mapM do_taint_pe @@ List.map snd pes >>= fun taint_pes ->
+        return (union_taints taint_pes)
     | PEunion _     -> assert false
     | PEcfunction _ -> assert false
     | PEmemberof _  -> assert false

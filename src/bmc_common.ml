@@ -29,6 +29,179 @@ let is_pointer_type (ctype: Core_ctype.ctype0) =
   | Pointer0 (_,Basic0 (Integer _)) -> true
   | _ -> false
 
+
+let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
+  let tuple_name =
+    "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
+  let arg_list = List.mapi
+    (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
+  CustomTuple.mk_sort tuple_name arg_list sorts
+  (*Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts*)
+
+(* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
+type bmcz3sort =
+  | CaseSortBase of Core_ctype.ctype0 * Sort.sort
+  | CaseSortList of bmcz3sort list
+
+let rec bmcz3sort_size (sort: bmcz3sort) =
+  match sort with
+  | CaseSortBase _        -> 1
+  | CaseSortList sortlist ->
+      List.fold_left (fun x y -> x + (bmcz3sort_size y)) 0 sortlist
+
+let rec flatten_bmcz3sort (l: bmcz3sort): (Core_ctype.ctype0 * Sort.sort) list =
+  match l with
+  | CaseSortBase (expr, sort) -> [(expr, sort)]
+  | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
+
+let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
+                          : Core_ctype.ctype0 =
+  match ty with
+  | Void -> Void0
+  | Basic bty -> Basic0 bty
+  | Array (cty, n) -> Array0 (ailctype_to_ctype cty, n)
+  | Function (_, (q,ty1), args, variadic) ->
+      Function0 ((q, ailctype_to_ctype ty1),
+                 List.map (fun (q,ty1,_) -> (q, ailctype_to_ctype ty1)) args,
+                 variadic)
+  | Pointer (v1,v2) -> Pointer0 (v1,ailctype_to_ctype v2)
+  | Atomic cty -> Atomic0 (ailctype_to_ctype cty)
+  | Struct v -> Struct0 v
+  | Union v ->  Union0 v
+  | Builtin v -> Builtin0 v
+
+
+let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
+                           (file: unit typed_file)
+                           : bmcz3sort =
+  match ty with
+  | Void0     -> assert false
+  | Basic0(Integer i) ->
+      CaseSortBase (ty, LoadedInteger.mk_sort)
+  | Basic0(Floating _) ->
+      failwith "Error: floats are not supported."
+  | Array0(ty2, Some n) ->
+      (* TODO *)
+      let sort = ctype_to_bmcz3sort ty2 file in
+      CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
+  | Array0(_, None) ->
+      assert false
+  | Function0 _ -> assert false
+  | Pointer0 _ ->
+      CaseSortBase (ty, LoadedPointer.mk_sort)
+  | Atomic0 (Basic0 _ as _ty) (* fall through *)
+  | Atomic0 (Pointer0 _ as _ty) ->
+      begin
+      match ctype_to_bmcz3sort _ty file with
+      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 _ty, sort)
+      | _ -> assert false
+      end
+  | Atomic0 _ ->
+      assert false
+  | Struct0 sym ->
+      begin match Pmap.lookup sym file.tagDefs with
+      | Some (StructDef memlist) ->
+          CaseSortList (List.map (fun (_, ty) -> ctype_to_bmcz3sort ty file)
+                                 memlist)
+      | _ -> assert false
+      end
+  | Union0 _ ->
+    failwith "Error: unions are not supported."
+  | Builtin0 _ ->
+    assert false
+
+
+(* NOTE: we actually kind of have two functions from ctype -> z3 sort that
+ * differ for multi-dimensional arrays currently. The first, below, gives the
+ * Z3 Sort through recursing through the array subtypes and is used in the
+ * intermediate representation. E.g. int[][] maps to LoadedIntArrayArray
+ *
+ * The second just treats multi-dimensional arrays as a flat array and is
+ * currently used for the memory model representation for simplicity. E.g.
+ * int[][] maps to LoadedIntArray
+ *)
+let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+                         (file: unit typed_file)
+                         : Sort.sort =
+   match ty with
+  | Void0     -> assert false
+  | Basic0(Integer i) -> LoadedInteger.mk_sort
+  | Basic0 _ -> assert false
+  (*| Array0(Basic0 (Integer i), Some n) ->
+      LoadedIntArray.mk_sort
+  | Array0(Array0(_, _), Some n) ->
+      GenericArrays.mk_sort
+      (* TODO *)
+      LoadedIntArrayArray.mk_sort
+  *)
+  | Array0(ty', _) ->
+      GenericArrays.mk_array_sort_from_ctype ty'
+  | Function0 _ -> assert false
+  | Pointer0 _ -> LoadedPointer.mk_sort
+  | Atomic0 (Basic0 _ as _ty) (* fall through *)
+  | Atomic0 (Pointer0 _ as _ty) ->
+      ctype_to_z3_sort _ty file
+  | Atomic0 _ ->
+      assert false
+  | Struct0 tagdef ->
+      struct_sym_to_z3_sort tagdef file
+      (*
+      begin match Pmap.lookup tagdef file.tagDefs with
+      | Some (StructDef memlist) ->
+          let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
+          let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
+          Loaded_tuple_sort.mk_sort
+          (*
+          let sortlist =
+            List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
+          (* TODO: Does Z3 allow tuples to contain tuples? *)
+          let tuple_sort = sorts_to_tuple sortlist in
+          let module Loaded_tuple_sort =
+            LoadedSort(struct let obj_sort = tuple_sort end) in
+          Loaded_tuple_sort.mk_sort
+          *)
+      | _ -> assert false
+      end
+      *)
+  | Union0 _ ->
+    failwith "Error: unions are not supported."
+  | Builtin0 _ -> assert false
+and struct_sym_to_z3_sort (struct_sym: sym_ty)
+                              (file: unit typed_file)
+                              : Sort.sort =
+  match Pmap.lookup struct_sym file.tagDefs with
+  | Some (StructDef memlist) ->
+      let sortlist =
+          List.map (fun (_,ctype) -> ctype_to_z3_sort ctype file)
+                   memlist in
+      sorts_to_tuple sortlist
+  | _ ->
+    failwith (sprintf "Struct %s not found" (symbol_to_string struct_sym))
+
+
+
+  (*
+and
+struct_to_sort (sym, memlist_def) file  =
+  match memlist_def with
+  | StructDef  memlist ->
+    let sortlist =
+        List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
+      (* TODO: Does Z3 allow tuples to contain tuples? *)
+    let tuple_sort = sorts_to_tuple sortlist in
+    (module LoadedSort(struct let obj_sort = tuple_sort end) : LoadedSortTy)
+  | _ -> assert false
+  *)
+
+
+
+
+let size_of_ctype (ty: Core_ctype.ctype0)
+                  (file: unit typed_file) =
+  bmcz3sort_size (ctype_to_bmcz3sort ty file)
+
+
+
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 
 let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
@@ -102,7 +275,8 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   | OTy_union _ ->
     failwith "Error: unions are not supported."
 
-let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
+let rec cbt_to_z3 (cbt: core_base_type)
+                  (file: unit typed_file): Sort.sort =
   match cbt with
   | BTy_unit                -> UnitSort.mk_sort
   | BTy_boolean             -> boolean_sort
@@ -118,36 +292,22 @@ let rec cbt_to_z3 (cbt: core_base_type) : Sort.sort =
        *)
       LoadedInteger.mk_sort
   | BTy_loaded OTy_pointer  -> LoadedPointer.mk_sort
-  (*| BTy_loaded (OTy_array OTy_integer) ->
-      LoadedIntArray.mk_sort*)
   | BTy_loaded (OTy_array OTy_integer) ->
       LoadedIntArray.mk_sort
-
-  (*| BTy_loaded (OTy_array (OTy_array OTy_integer)) ->
-      (* TODO: experiment by hard-coding 2D array type.
-       * Generalize later.
-       *)
-      LoadedIntArrayArray.mk_sort
-  *)
   | BTy_loaded (OTy_array cot) ->
       GenericArrays.mk_array_sort cot
 
       (*failwith "TODO: support for general array types"*)
   | BTy_loaded (OTy_struct sym) ->
-      failwith "TODO: support for structs as values"
+      failwith "TODO: structs as values"
+      (*let struct_sort = struct_sym_to_z3_sort sym file in
+        TODO_LoadedSort.mk_sort struct_sort*)
   | BTy_loaded oty  ->
       failwith (sprintf "TODO: support for loaded type: %s"
                         (pp_to_string (Pp_core.Basic.pp_core_object_type oty)))
   | BTy_storable            ->
       failwith "TODO: support for BTy_storable"
 
-let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
-  let tuple_name =
-    "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
-  let arg_list = List.mapi
-    (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
-  CustomTuple.mk_sort tuple_name arg_list sorts
-  (*Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts*)
 
 let ctype_from_pexpr (ctype_pe: typed_pexpr) =
   match ctype_pe with
@@ -202,9 +362,9 @@ let ctor_to_z3 (ctor  : typed_ctor)
       match Option.get bTy with
       | BTy_loaded OTy_integer (* fall through *)
       | BTy_loaded OTy_pointer (* fall through *)
-      | BTy_loaded (OTy_array _) ->
+      | BTy_loaded (OTy_array _) (* fall through *)
+      | BTy_loaded (OTy_struct _) ->
           TODO_LoadedSort.mk_specified e
-
       | ty ->
           failwith (sprintf "TODO: support Cspecified %s"
                             (pp_to_string (Pp_core.Basic.pp_core_base_type ty)))
@@ -306,147 +466,6 @@ let mk_guarded_ite (exprs : Expr.expr list)
                          last_case_expr
                          (List.tl rev_guards)
                          (List.tl rev_exprs)
-
-(* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
-type bmcz3sort =
-  | CaseSortBase of Core_ctype.ctype0 * Sort.sort
-  | CaseSortList of bmcz3sort list
-
-let rec bmcz3sort_size (sort: bmcz3sort) =
-  match sort with
-  | CaseSortBase _        -> 1
-  | CaseSortList sortlist ->
-      List.fold_left (fun x y -> x + (bmcz3sort_size y)) 0 sortlist
-
-let rec flatten_bmcz3sort (l: bmcz3sort): (Core_ctype.ctype0 * Sort.sort) list =
-  match l with
-  | CaseSortBase (expr, sort) -> [(expr, sort)]
-  | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
-
-let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
-                          : Core_ctype.ctype0 =
-  match ty with
-  | Void -> Void0
-  | Basic bty -> Basic0 bty
-  | Array (cty, n) -> Array0 (ailctype_to_ctype cty, n)
-  | Function (_, (q,ty1), args, variadic) ->
-      Function0 ((q, ailctype_to_ctype ty1),
-                 List.map (fun (q,ty1,_) -> (q, ailctype_to_ctype ty1)) args,
-                 variadic)
-  | Pointer (v1,v2) -> Pointer0 (v1,ailctype_to_ctype v2)
-  | Atomic cty -> Atomic0 (ailctype_to_ctype cty)
-  | Struct v -> Struct0 v
-  | Union v ->  Union0 v
-  | Builtin v -> Builtin0 v
-
-(* NOTE: we actually kind of have two functions from ctype -> z3 sort that
- * differ for multi-dimensional arrays currently. The first, below, gives the
- * Z3 Sort through recursing through the array subtypes and is used in the
- * intermediate representation. E.g. int[][] maps to LoadedIntArrayArray
- *
- * The second just treats multi-dimensional arrays as a flat array and is
- * currently used for the memory model representation for simplicity. E.g.
- * int[][] maps to LoadedIntArray
- *)
-let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
-                         (file: unit typed_file)
-                         : Sort.sort =
-   match ty with
-  | Void0     -> assert false
-  | Basic0(Integer i) -> LoadedInteger.mk_sort
-  | Basic0 _ -> assert false
-  (*| Array0(Basic0 (Integer i), Some n) ->
-      LoadedIntArray.mk_sort
-  | Array0(Array0(_, _), Some n) ->
-      GenericArrays.mk_sort
-      (* TODO *)
-      LoadedIntArrayArray.mk_sort
-  *)
-  | Array0(ty', _) ->
-      GenericArrays.mk_array_sort_from_ctype ty'
-  | Function0 _ -> assert false
-  | Pointer0 _ -> LoadedPointer.mk_sort
-  | Atomic0 (Basic0 _ as _ty) (* fall through *)
-  | Atomic0 (Pointer0 _ as _ty) ->
-      ctype_to_z3_sort _ty file
-  | Atomic0 _ ->
-      assert false
-  | Struct0 tagdef ->
-      begin match Pmap.lookup tagdef file.tagDefs with
-      | Some (StructDef memlist) ->
-          let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
-          let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
-          Loaded_tuple_sort.mk_sort
-          (*
-          let sortlist =
-            List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
-          (* TODO: Does Z3 allow tuples to contain tuples? *)
-          let tuple_sort = sorts_to_tuple sortlist in
-          let module Loaded_tuple_sort =
-            LoadedSort(struct let obj_sort = tuple_sort end) in
-          Loaded_tuple_sort.mk_sort
-          *)
-      | _ -> assert false
-      end
-  | Union0 _ ->
-    failwith "Error: unions are not supported."
-  | Builtin0 _ -> assert false
-and
-struct_to_sort (sym, memlist_def) file  =
-  match memlist_def with
-  | StructDef  memlist ->
-    let sortlist =
-        List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
-      (* TODO: Does Z3 allow tuples to contain tuples? *)
-    let tuple_sort = sorts_to_tuple sortlist in
-    (module LoadedSort(struct let obj_sort = tuple_sort end) : LoadedSortTy)
-  | _ -> assert false
-
-
-
-
-let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
-                           (file: unit typed_file)
-                           : bmcz3sort =
-  match ty with
-  | Void0     -> assert false
-  | Basic0(Integer i) ->
-      CaseSortBase (ty, LoadedInteger.mk_sort)
-  | Basic0(Floating _) ->
-      failwith "Error: floats are not supported."
-  | Array0(ty2, Some n) ->
-      (* TODO *)
-      let sort = ctype_to_bmcz3sort ty2 file in
-      CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
-  | Array0(_, None) ->
-      assert false
-  | Function0 _ -> assert false
-  | Pointer0 _ ->
-      CaseSortBase (ty, LoadedPointer.mk_sort)
-  | Atomic0 (Basic0 _ as _ty) (* fall through *)
-  | Atomic0 (Pointer0 _ as _ty) ->
-      begin
-      match ctype_to_bmcz3sort _ty file with
-      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 _ty, sort)
-      | _ -> assert false
-      end
-  | Atomic0 _ ->
-      assert false
-  | Struct0 sym ->
-      begin match Pmap.lookup sym file.tagDefs with
-      | Some (StructDef memlist) ->
-          CaseSortList (List.map (fun (_, ty) -> ctype_to_bmcz3sort ty file)
-                                 memlist)
-      | _ -> assert false
-      end
-  | Union0 _ ->
-    failwith "Error: unions are not supported."
-  | Builtin0 _ ->
-    assert false
-
-let size_of_ctype (ty: Core_ctype.ctype0)
-                  (file: unit typed_file) =
-  bmcz3sort_size (ctype_to_bmcz3sort ty file)
 
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
