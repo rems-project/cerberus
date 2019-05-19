@@ -1281,7 +1281,9 @@ module BmcZ3 = struct
         if is_pointer_type raw_ctype then
           return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
         else begin
-          assert (is_integer_type raw_ctype);
+          (if not (is_integer_type raw_ctype) then
+            failwith "TODO: sizeof non-integer types"
+          );
           begin match Pmap.lookup raw_ctype ImplFunctions.sizeof_map with
           | Some expr -> return expr
           | None ->
@@ -1339,23 +1341,6 @@ module BmcZ3 = struct
                 return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift))
             | None -> assert false
             )
-
-
-            (*let memsizes = List.map (fun (cid, cbt) ->
-                (cid, bmcz3sort_size (ctype_to_bmcz3sort cbt file))
-              ) memlist in
-            let (shift_size, _) = List.fold_left (
-                fun (acc, skip) (cid, n) ->
-                  if cabsid_cmp cid member = 0 || skip then (acc, true)
-                  else (acc + n, false)
-            ) (0, false) memsizes in
-            return (PointerSort.shift_by_n z3d_ptr (int_to_z3 shift_size))
-            *)
-            (*
-            let addr = PointerSort.get_addr z3d_ptr in
-            let new_addr =
-              AddressSort.shift_index_by_n addr (int_to_z3 shift_size) in
-            return (PointerSort.mk_ptr new_addr)*)
         | _ -> assert false
         end
     | PEnot pe ->
@@ -1463,7 +1448,7 @@ module BmcZ3 = struct
         z3_pe initial_value >>= fun z3d_initial_value ->
         mk_create_read_only ctype align prefix z3d_initial_value
     | Alloc0 _ ->
-        assert false
+        failwith "TODO: dynamic allocation"
     | Kill (b, pe) ->
         get_fresh_aid >>= fun aid ->
         (* TODO: bool for free dynamic ignored *)
