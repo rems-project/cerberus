@@ -718,8 +718,8 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
              }
       end else
         None
-  | (Pattern(_, (CaseCtor(Ctuple, [tuple1;tuple2]))),
-     Expr(_, (Eunseq [sub_e1; sub_e2])),_) ->
+  | (Pattern(_, (CaseCtor(Ctuple, tuple1::_))),
+     Expr(_, (Eunseq (sub_e1 :: (sub_e2 :: _)))),_) ->
       (* Unseq pattern:
        *  let weak ((p, (...)), _) =
        *  unseq(let strong inner = pure(Specified(Cfunction(f))) in
@@ -733,6 +733,7 @@ let extract_cfun_if_cfun_call (pat: typed_pattern)
            ((Expr(_, (Epure(loaded_ptr_pexpr)))) as loaded_ptr_expr),
            Expr(_,(Epure(Pexpr(_,_,PEctor(Ctuple,[_;Pexpr(_,_,PEcfunction _)]))))))))
          ->
+
            if (is_ptr_pat ptr_pat1 && is_ptr_pat ptr_pat2 &&
                is_loaded_ptr_expr loaded_ptr_expr) then
              begin

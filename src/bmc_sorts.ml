@@ -196,6 +196,7 @@ module CtypeSort = struct
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
     | Atomic0 ty ->
         Expr.mk_app g_ctx (List.nth fdecls 5) [mk_expr ty]
+    | Union0 _ -> failwith "TODO: unions"
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
@@ -228,6 +229,7 @@ let rec alignof_type (ctype: ctype) (file: unit typed_file) : int =
           List.fold_left max (List.hd alignments) (List.tl alignments)
       | _ -> assert false
       end
+  | Union0 _ -> failwith "TODO: unions"
   | _ -> assert false
 
 
