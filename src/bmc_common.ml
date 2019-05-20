@@ -512,7 +512,7 @@ module ImplFunctions = struct
      Nat_big_num.of_int 0,
      Nat_big_num.sub (Nat_big_num.pow_int (Nat_big_num.of_int 2) prec)
                      (Nat_big_num.of_int 1)
-  let ibt_list = [Ichar; Short; Int_; Long; (*LongLong;*) Intptr_t]
+  let ibt_list = [Ichar; Short; Int_; Long; LongLong; Intptr_t]
   let signed_ibt_list = List.map (fun ty -> Signed ty) ibt_list
   let unsigned_ibt_list = List.map (fun ty -> Unsigned ty) ibt_list
 

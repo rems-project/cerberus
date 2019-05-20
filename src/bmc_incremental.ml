@@ -500,6 +500,7 @@ module BmcInline = struct
             update_proc_expr old_proc_expr >>
 
             add_inlined_expr id inlined_expr_to_check >>
+
             return (Eccall(a, pe_ty, pe_fn, pe_args))
           end
     | Eccall _ ->
@@ -1137,9 +1138,15 @@ module BmcZ3 = struct
     inline_pexpr_map: (int, typed_pexpr) Pmap.map;
     inline_expr_map : (int, unit typed_expr) Pmap.map;
     sym_table       : (sym_ty, Expr.expr) Pmap.map;
+    fn_call_map     : (int, sym_ty) Pmap.map;
   }
 
-  let mk_initial file inline_pexpr_map inline_expr_map sym_table: z3_state = {
+  let mk_initial file
+                 inline_pexpr_map
+                 inline_expr_map
+                 sym_table
+                 fn_call_map
+                 : z3_state = {
     expr_map       = Pmap.empty Pervasives.compare;
     case_guard_map = Pmap.empty Pervasives.compare;
     action_map     = Pmap.empty Pervasives.compare;
@@ -1155,6 +1162,7 @@ module BmcZ3 = struct
     inline_pexpr_map = inline_pexpr_map;
     inline_expr_map  = inline_expr_map;
     sym_table        = sym_table;
+    fn_call_map      = fn_call_map;
   }
 
   include EffMonad(struct type state = z3_state end)
@@ -1209,6 +1217,13 @@ module BmcZ3 = struct
     match Pmap.lookup uid st.inline_expr_map with
     | None -> failwith (sprintf "Error: BmcZ3 inline_expr not found %d" uid)
     | Some e -> return e
+
+  let get_fn_call (uid: int) : sym_ty eff =
+    get >>= fun st ->
+    match Pmap.lookup uid st.fn_call_map with
+    | None -> failwith (sprintf "Error: BmcZ3 fn_call not found %d"
+                                uid)
+    | Some sym -> return sym
 
   let set_param_actions (actions: (intermediate_action option) list)
                         : unit eff =
@@ -1739,7 +1754,26 @@ module BmcZ3 = struct
         return UnitSort.mk_unit
     | Eccall _ ->
         get_inline_expr uid >>= fun inlined_expr ->
-        z3_e inlined_expr
+        get_fn_call uid >>= fun fn_sym ->
+        get_file >>= fun file ->
+
+        let ret_ty =
+          begin match Pmap.lookup fn_sym file.funs with
+          | Some Proc(_, ret_ty, _, _) -> ret_ty
+          | _ ->
+              begin match Pmap.lookup fn_sym file.stdlib with
+              | Some Proc(_, ret_ty, _,_) -> ret_ty
+              | _ ->
+                failwith (sprintf "Unknown ccall: %s" (symbol_to_string fn_sym))
+              end
+          end in
+        let new_ret_const =
+            mk_fresh_const (sprintf "ret_%s_%s"
+                                    (Pp_symbol.to_string fn_sym)
+                                    (string_of_int uid))
+                           (cbt_to_z3 ret_ty file) in
+        z3_e inlined_expr >>= fun _ ->
+        return new_ret_const
     | Eproc _  -> assert false
     | Eunseq elist ->
         assert (not !!bmc_conf.sequentialise);
@@ -2828,7 +2862,6 @@ module BmcRet = struct
   type internal_state = {
     file            : unit typed_file;
     inline_expr_map : (int, unit typed_expr) Pmap.map;
-    fn_call_map     : (int, sym_ty) Pmap.map;
     expr_map        : (int, Expr.expr) Pmap.map;
     case_guard_map  : (int, Expr.expr list) Pmap.map;
     drop_cont_map   : (int, Expr.expr) Pmap.map;
@@ -2841,14 +2874,12 @@ module BmcRet = struct
 
   let mk_initial file
                  inline_expr_map
-                 fn_call_map
                  expr_map
                  case_guard_map
                  drop_cont_map
                  : state =
   { file             = file;
     inline_expr_map  = inline_expr_map;
-    fn_call_map      = fn_call_map;
     expr_map         = expr_map;
     case_guard_map   = case_guard_map;
     drop_cont_map    = drop_cont_map;
@@ -2867,13 +2898,6 @@ module BmcRet = struct
     | None -> failwith (sprintf "Error: BmcRet inline_expr not found %d"
                                 uid)
     | Some e -> return e
-
-  let get_fn_call (uid: int) : sym_ty eff =
-    get >>= fun st ->
-    match Pmap.lookup uid st.fn_call_map with
-    | None -> failwith (sprintf "Error: BmcRet fn_call not found %d"
-                                uid)
-    | Some sym -> return sym
 
   let get_expr (uid: int): Expr.expr eff =
     get >>= fun st ->
@@ -2936,37 +2960,19 @@ module BmcRet = struct
         return []
     | Eccall _ ->
         get_ret_const >>= fun old_ret ->
-        get_fn_call uid >>= fun fn_sym ->
-        get_file >>= fun file ->
 
-        let ret_ty =
-          begin match Pmap.lookup fn_sym file.funs with
-          | Some Proc(_, ret_ty, _, _) -> ret_ty
-          | _ ->
-              begin match Pmap.lookup fn_sym file.stdlib with
-              | Some Proc(_, ret_ty, _,_) -> ret_ty
-              | _ ->
-                failwith (sprintf "Unknown ccall: %s" (symbol_to_string fn_sym))
-              end
-          end in
-        let new_ret_const =
-            mk_fresh_const (sprintf "ret_%s_%s"
-                                    (Pp_symbol.to_string fn_sym)
-                                    (string_of_int uid))
-                           (cbt_to_z3 ret_ty file) in
-        set_ret_const new_ret_const >>
+        get_expr uid  >>= fun ccall_ret_const ->
+        set_ret_const ccall_ret_const >>
 
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr    >>= fun ret_expr ->
-        get_expr (get_id_expr inline_expr) >>= fun z3_expr ->
 
         set_ret_const old_ret >>
-
-        return ((mk_eq z3_expr new_ret_const) :: ret_expr)
+        return ret_expr
     | Eproc _       -> assert false
     | Eunseq elist ->
         mapM do_e elist >>= fun ret_elist ->
-        return [mk_or (List.map mk_and ret_elist)]
+        return (List.concat ret_elist)
     | Ewseq (pat, e1, e2) (* fall through *)
     | Esseq (pat, e1, e2) ->
         do_e e1 >>= fun ret_e1 ->
