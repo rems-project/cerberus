@@ -123,7 +123,8 @@ module BmcM = struct
       BmcZ3.mk_initial st.file
                       (Option.get st.inline_pexpr_map)
                       (Option.get st.inline_expr_map)
-                      (Option.get st.sym_expr_table) in
+                      (Option.get st.sym_expr_table)
+                      (Option.get st.fn_call_map) in
     let (file, final_state) =
       BmcZ3.run initial_state (BmcZ3.z3_file st.file st.fn_to_check) in
     bmc_debug_print 7 "Done BmcZ3 phase";
@@ -200,7 +201,6 @@ module BmcM = struct
     let initial_state =
       BmcRet.mk_initial st.file
                         (Option.get st.inline_expr_map)
-                        (Option.get st.fn_call_map)
                         (Option.get st.expr_map)
                         (Option.get st.case_guard_map)
                         (Option.get st.drop_cont_map) in
