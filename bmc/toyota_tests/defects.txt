@@ -1,20 +1,20 @@
-bit_shift_001 RESULT: SAT
+bit_shift_001 RESULT: SAT:  UB51b_shift_too_large
 bit_shift_002 RESULT: UNSAT
-bit_shift_003 RESULT: SAT
+bit_shift_003 RESULT: SAT:  UB51b_shift_too_large
 bit_shift_004 RESULT: UNSAT
-bit_shift_005 RESULT: SAT
-bit_shift_006 RESULT: SAT
-bit_shift_007 RESULT: SAT
-bit_shift_008 RESULT: SAT
+bit_shift_005 RESULT: SAT:  UB051a_negative_shift
+bit_shift_006 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_007 RESULT: SAT:  UB051a_negative_shift
+bit_shift_008 RESULT: SAT:  UB51b_shift_too_large
 bit_shift_009 ERROR: Function rand_471 not defined
-bit_shift_010 RESULT: SAT
-bit_shift_011 RESULT: SAT
-bit_shift_012 RESULT: SAT
-bit_shift_013 RESULT: SAT
-bit_shift_014 RESULT: SAT
-bit_shift_015 RESULT: SAT
-bit_shift_016 RESULT: SAT
-bit_shift_017 RESULT: SAT
+bit_shift_010 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_011 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_012 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_013 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_014 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_015 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_016 RESULT: SAT:  UB51b_shift_too_large
+bit_shift_017 RESULT: SAT:  UB51b_shift_too_large
 cmp_funcadr_001 RESULT: UNSAT
 cmp_funcadr_002 RESULT: UNSAT
 conflicting_cond_001 ERROR: Function rand_471 not defined
@@ -48,7 +48,7 @@ data_lost_018 RESULT: UNSAT
 data_lost_019 RESULT: UNSAT
 data_overflow_001 RESULT: UNSAT
 data_overflow_002 RESULT: UNSAT
-data_overflow_003 RESULT: SAT
+data_overflow_003 RESULT: SAT:  UB036_exceptional_condition
 data_overflow_004 RESULT: UNSAT
 data_overflow_005 RESULT: UNSAT
 data_overflow_006 RESULT: UNSAT
@@ -56,32 +56,32 @@ data_overflow_007 RESULT: UNSAT
 data_overflow_008 RESULT: UNSAT
 data_overflow_009 ERROR:  feature not yet supported: SDecl_bitfield
 data_overflow_010 ERROR:  feature not yet supported: SDecl_bitfield
-data_overflow_011 RESULT: SAT
-data_overflow_012 RESULT: SAT
-data_overflow_013 RESULT: SAT
-data_overflow_014 RESULT: SAT
+data_overflow_011 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_012 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_013 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_014 RESULT: SAT:  UB036_exceptional_condition
 data_overflow_015 ERROR: Function rand_471 not defined
-data_overflow_016 RESULT: SAT
-data_overflow_017 RESULT: SAT
-data_overflow_018 RESULT: SAT
-data_overflow_019 RESULT: SAT
-data_overflow_020 RESULT: SAT
-data_overflow_021 RESULT: SAT
-data_overflow_022 RESULT: SAT
-data_overflow_023 RESULT: SAT
+data_overflow_016 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_017 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_018 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_019 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_020 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_021 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_022 RESULT: SAT:  UB036_exceptional_condition
+data_overflow_023 RESULT: SAT:  UB036_exceptional_condition
 data_overflow_024 ERROR: TODO: support for loaded type: floating
 data_overflow_025 ERROR: TODO: support for loaded type: floating
-data_underflow_001 RESULT: SAT
+data_underflow_001 RESULT: SAT:  UB036_exceptional_condition
 data_underflow_002 RESULT: UNSAT
-data_underflow_003 RESULT: SAT
-data_underflow_004 RESULT: SAT
-data_underflow_005 RESULT: SAT
-data_underflow_006 RESULT: SAT
+data_underflow_003 RESULT: SAT:  UB036_exceptional_condition
+data_underflow_004 RESULT: SAT:  UB036_exceptional_condition
+data_underflow_005 RESULT: SAT:  UB036_exceptional_condition
+data_underflow_006 RESULT: SAT:  UB036_exceptional_condition
 data_underflow_007 ERROR: TODO: support for loaded type: floating
 data_underflow_008 ERROR: TODO: support for loaded type: floating
 data_underflow_009 RESULT: UNSAT
-data_underflow_010 RESULT: SAT
-data_underflow_011 RESULT: SAT
+data_underflow_010 RESULT: SAT:  UB036_exceptional_condition
+data_underflow_011 RESULT: SAT:  UB036_exceptional_condition
 data_underflow_012 RESULT: UNSAT
 dead_code_001 RESULT: UNSAT
 dead_code_002 RESULT: UNSAT
@@ -112,30 +112,30 @@ double_free_010 ERROR: TODO: dynamic allocation
 double_free_011 ERROR: TODO: dynamic allocation
 double_free_012 ERROR: TODO: dynamic allocation
 endless_loop_001 ERROR: (timeout)
-endless_loop_002 RESULT: SAT
-endless_loop_003 RESULT: SAT
-endless_loop_004 RESULT: SAT
-endless_loop_005 RESULT: SAT
-endless_loop_006 RESULT: SAT
-endless_loop_007 RESULT: SAT
+endless_loop_002 RESULT: SAT:  2607_Erun_depth_exceeded: while_592_592
+endless_loop_003 RESULT: SAT:  1682_Erun_depth_exceeded: while_591_591
+endless_loop_004 RESULT: SAT:  1799_Erun_depth_exceeded: while_592_592
+endless_loop_005 RESULT: SAT:  3238_Erun_depth_exceeded: while_592_592
+endless_loop_006 RESULT: SAT:  2568_Erun_depth_exceeded: while_607_607
+endless_loop_007 RESULT: SAT:  2515_Erun_depth_exceeded: while_592_592
 endless_loop_008 ERROR: (timeout)
-endless_loop_009 RESULT: SAT
-free_nondynamic_allocated_memory_001 RESULT: SAT
-free_nondynamic_allocated_memory_002 RESULT: SAT
-free_nondynamic_allocated_memory_003 RESULT: SAT
-free_nondynamic_allocated_memory_004 RESULT: SAT
+endless_loop_009 RESULT: SAT:  926_Erun_depth_exceeded: do_591_591
+free_nondynamic_allocated_memory_001 RESULT: SAT:  UB: free of static allocation
+free_nondynamic_allocated_memory_002 RESULT: SAT:  UB: free of static allocation
+free_nondynamic_allocated_memory_003 RESULT: SAT:  UB: free of static allocation
+free_nondynamic_allocated_memory_004 RESULT: SAT:  UB: outside lifetime
 free_nondynamic_allocated_memory_005 ERROR: Function calloc_479 not defined
 free_nondynamic_allocated_memory_006 ERROR: TODO: support for loaded type: floating
-free_nondynamic_allocated_memory_007 RESULT: SAT
-free_nondynamic_allocated_memory_008 RESULT: SAT
-free_nondynamic_allocated_memory_009 RESULT: SAT
-free_nondynamic_allocated_memory_010 RESULT: SAT
-free_nondynamic_allocated_memory_011 RESULT: SAT
+free_nondynamic_allocated_memory_007 RESULT: SAT:  4683_Erun_depth_exceeded: while_590_590
+free_nondynamic_allocated_memory_008 RESULT: SAT:  5633_Erun_depth_exceeded: while_592_592
+free_nondynamic_allocated_memory_009 RESULT: SAT:  5633_Erun_depth_exceeded: while_592_592
+free_nondynamic_allocated_memory_010 RESULT: SAT:  5869_Erun_depth_exceeded: while_591_591
+free_nondynamic_allocated_memory_011 RESULT: SAT:  5869_Erun_depth_exceeded: while_591_591
 free_nondynamic_allocated_memory_012 ERROR: (timeout)
 free_nondynamic_allocated_memory_013 ERROR:  unexpected token '='
 free_nondynamic_allocated_memory_014 ERROR:  unexpected token 'free_nondynamic_allocated_memory_st'
-free_nondynamic_allocated_memory_015 RESULT: SAT
-free_nondynamic_allocated_memory_016 RESULT: SAT
+free_nondynamic_allocated_memory_015 RESULT: SAT:  UB: free of static allocation
+free_nondynamic_allocated_memory_016 RESULT: SAT:  UB: free of static allocation
 func_pointer_001 ERROR: BmcInline: fn_sym ?_598 not found
 func_pointer_002 ERROR: BmcInline: fn_sym ?_592 not found
 func_pointer_003 ERROR: BmcInline: fn_sym ?_606 not found
@@ -151,7 +151,7 @@ func_pointer_012 ERROR:  use of undeclared identifier 'memcpy'
 func_pointer_013 ERROR: BmcInline: fn_sym ?_604 not found
 func_pointer_014 ERROR:  use of undeclared identifier 'func_gbl'
 func_pointer_015 ERROR:  use of undeclared identifier 'memset'
-function_return_value_unchecked_001 RESULT: SAT
+function_return_value_unchecked_001 RESULT: SAT:  UB036_exceptional_condition
 function_return_value_unchecked_002 ERROR: TODO: support for loaded type: floating
 function_return_value_unchecked_003 ERROR: (printf)
 function_return_value_unchecked_004 ERROR:  use of undeclared identifier 'strcpy'
@@ -172,7 +172,7 @@ improper_termination_of_block_002 ERROR: (printf)
 improper_termination_of_block_003 ERROR: (printf)
 improper_termination_of_block_004 ERROR: (printf)
 insign_code_001 ERROR: Function rand_471 not defined
-invalid_extern_001 RESULT: SAT
+invalid_extern_001 RESULT: SAT:  535_PEarray_shift_notNull
 invalid_extern_002 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_float'
 invalid_extern_003 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_var3'
 invalid_extern_004 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_var4'
@@ -219,75 +219,75 @@ not_return_001 ERROR: Function rand_471 not defined
 not_return_002 ERROR: Function rand_471 not defined
 not_return_003 ERROR: Function rand_471 not defined
 not_return_004 ERROR: Function rand_471 not defined
-null_pointer_001 RESULT: SAT
-null_pointer_002 RESULT: SAT
-null_pointer_003 RESULT: SAT
-null_pointer_004 RESULT: SAT
+null_pointer_001 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_002 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_003 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_004 RESULT: SAT:  541_PEmember_shift_notNull
 null_pointer_005 ERROR: (unknown)
 null_pointer_006 ERROR: Function rand_471 not defined
-null_pointer_007 RESULT: SAT
-null_pointer_008 RESULT: SAT
-null_pointer_009 RESULT: SAT
-null_pointer_010 RESULT: SAT
-null_pointer_011 RESULT: SAT
-null_pointer_012 RESULT: SAT
-null_pointer_013 RESULT: SAT
-null_pointer_014 RESULT: SAT
+null_pointer_007 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_008 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_009 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_010 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_011 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_012 RESULT: SAT:  546_PEarray_shift_notNull
+null_pointer_013 RESULT: SAT:  UB043_indirection_invalid_value
+null_pointer_014 RESULT: SAT:  UB043_indirection_invalid_value
 null_pointer_015 ERROR:  use of undeclared identifier 'a'
 null_pointer_016 ERROR: TODO: dynamic allocation
 null_pointer_017 ERROR:  use of undeclared identifier 'strcpy'
-overrun_st_001 RESULT: SAT
-overrun_st_002 RESULT: SAT
-overrun_st_003 RESULT: SAT
-overrun_st_004 RESULT: SAT
-overrun_st_005 RESULT: SAT
+overrun_st_001 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_002 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_003 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_004 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_005 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_006 ERROR: TODO: support for loaded type: floating
 overrun_st_007 ERROR: TODO: support for loaded type: floating
-overrun_st_008 RESULT: SAT
-overrun_st_009 RESULT: SAT
-overrun_st_010 RESULT: SAT
+overrun_st_008 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_009 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_010 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_011 ERROR: TODO: generic arrays
 overrun_st_012 ERROR: TODO: structs as values
-overrun_st_013 RESULT: SAT
+overrun_st_013 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_014 ERROR: Function rand_471 not defined
-overrun_st_015 RESULT: SAT
-overrun_st_016 RESULT: SAT
-overrun_st_017 RESULT: SAT
-overrun_st_018 RESULT: SAT
-overrun_st_019 RESULT: SAT
-overrun_st_020 RESULT: SAT
-overrun_st_021 RESULT: SAT
-overrun_st_022 RESULT: SAT
-overrun_st_023 RESULT: SAT
-overrun_st_024 RESULT: SAT
-overrun_st_025 RESULT: SAT
-overrun_st_026 RESULT: SAT
+overrun_st_015 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_016 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_017 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
+overrun_st_018 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_019 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_020 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_021 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_022 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_023 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_024 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_025 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_026 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_027 ERROR: TODO: support for loaded type: floating
 overrun_st_028 ERROR: TODO: support for loaded type: floating
-overrun_st_029 RESULT: SAT
-overrun_st_030 RESULT: SAT
-overrun_st_031 RESULT: SAT
-overrun_st_032 RESULT: SAT
+overrun_st_029 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_030 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_031 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_032 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_033 ERROR: Function rand_471 not defined
-overrun_st_034 RESULT: SAT
-overrun_st_035 RESULT: SAT
-overrun_st_036 RESULT: SAT
-overrun_st_037 RESULT: SAT
-overrun_st_038 RESULT: SAT
-overrun_st_039 RESULT: SAT
-overrun_st_040 RESULT: SAT
-overrun_st_041 RESULT: SAT
+overrun_st_034 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_035 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_036 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
+overrun_st_037 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_038 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_039 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_040 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_041 RESULT: SAT:  3434_Erun_depth_exceeded: while_593_593
 overrun_st_042 ERROR: (unknown)
 overrun_st_043 ERROR: (unknown)
 overrun_st_044 ERROR: (timeout)
-overrun_st_045 RESULT: SAT
-overrun_st_046 RESULT: SAT
-overrun_st_047 RESULT: SAT
-overrun_st_048 RESULT: SAT
-overrun_st_049 RESULT: SAT
-overrun_st_050 RESULT: SAT
-overrun_st_051 RESULT: SAT
-overrun_st_052 RESULT: SAT
+overrun_st_045 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_046 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_047 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_048 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_049 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_050 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_051 RESULT: SAT:  UB043_indirection_invalid_value
+overrun_st_052 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_053 ERROR: Ptr type-casting not supported
 overrun_st_054 ERROR: Ptr type-casting not supported
 ow_memcpy_001 RESULT: UNSAT
@@ -321,7 +321,7 @@ pow_related_errors_026 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_027 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_028 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_029 ERROR:  use of undeclared identifier 'pow'
-ptr_subtraction_001 RESULT: SAT
+ptr_subtraction_001 RESULT: SAT:  564_Ptrdiff
 ptr_subtraction_002 ERROR: Ptr type-casting not supported
 redundant_cond_001 ERROR: Function rand_471 not defined
 redundant_cond_002 ERROR: Function rand_471 not defined
@@ -337,8 +337,8 @@ redundant_cond_011 ERROR: Function rand_471 not defined
 redundant_cond_012 ERROR: Function rand_471 not defined
 redundant_cond_013 ERROR: Function rand_471 not defined
 redundant_cond_014 ERROR: Function rand_471 not defined
-return_local_001 RESULT: SAT
-return_local_002 RESULT: SAT
+return_local_001 RESULT: SAT:  UB043_indirection_invalid_value
+return_local_002 RESULT: SAT:  UB043_indirection_invalid_value
 sign_conv_001 RESULT: UNSAT
 sign_conv_002 RESULT: UNSAT
 sign_conv_003 RESULT: UNSAT
@@ -372,25 +372,25 @@ st_underrun_004 ERROR:  use of undeclared identifier 'strcpy'
 st_underrun_005 ERROR:  use of undeclared identifier 'strcpy'
 st_underrun_006 ERROR:  use of undeclared identifier 'strlen'
 st_underrun_007 ERROR:  use of undeclared identifier 'strlen'
-underrun_st_001 RESULT: SAT
-underrun_st_002 RESULT: SAT
-underrun_st_003 RESULT: SAT
-underrun_st_004 RESULT: SAT
-underrun_st_005 RESULT: SAT
-underrun_st_006 RESULT: SAT
-underrun_st_007 RESULT: SAT
-underrun_st_008 RESULT: SAT
-underrun_st_009 RESULT: SAT
-underrun_st_010 RESULT: SAT
-underrun_st_011 RESULT: SAT
-underrun_st_012 RESULT: SAT
-underrun_st_013 RESULT: SAT
-uninit_pointer_001 RESULT: SAT
-uninit_pointer_002 RESULT: SAT
-uninit_pointer_003 RESULT: SAT
+underrun_st_001 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_002 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_003 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_004 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_005 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_006 RESULT: SAT:  UB043_indirection_invalid_value
+underrun_st_007 RESULT: SAT:  5170_Erun_depth_exceeded: while_593_593
+underrun_st_008 RESULT: SAT:  3496_Erun_depth_exceeded: while_594_594
+underrun_st_009 RESULT: SAT:  5184_Erun_depth_exceeded: while_593_593
+underrun_st_010 RESULT: SAT:  3510_Erun_depth_exceeded: while_594_594
+underrun_st_011 RESULT: SAT:  5100_Erun_depth_exceeded: while_593_593
+underrun_st_012 RESULT: SAT:  5162_Erun_depth_exceeded: while_594_594
+underrun_st_013 RESULT: SAT:  6729_Erun_depth_exceeded: while_594_594
+uninit_pointer_001 RESULT: SAT:  UB043_indirection_invalid_value
+uninit_pointer_002 RESULT: SAT:  UB043_indirection_invalid_value
+uninit_pointer_003 RESULT: SAT:  UB043_indirection_invalid_value
 uninit_pointer_004 RESULT: UNSAT
-uninit_pointer_005 RESULT: SAT
-uninit_pointer_006 RESULT: SAT
+uninit_pointer_005 RESULT: SAT:  UB043_indirection_invalid_value
+uninit_pointer_006 RESULT: SAT:  UB043_indirection_invalid_value
 uninit_pointer_007 ERROR:  use of undeclared identifier 'strdup'
 uninit_pointer_008 RESULT: UNSAT
 uninit_pointer_009 ERROR:  use of undeclared identifier 'strcpy'
@@ -421,7 +421,7 @@ unused_var_002 RESULT: UNSAT
 unused_var_003 ERROR: Error: unions are not supported.
 unused_var_004 RESULT: UNSAT
 unused_var_005 RESULT: UNSAT
-unused_var_006 RESULT: SAT
+unused_var_006 RESULT: SAT:  1964_Store_invalid_ptr
 unused_var_007 ERROR: (unknown)
 wrong_arguments_func_pointer_001 ERROR: BmcInline: fn_sym ?_607 not found
 wrong_arguments_func_pointer_002 ERROR: BmcInline: fn_sym ?_642 not found
@@ -441,19 +441,19 @@ wrong_arguments_func_pointer_015 ERROR:  use of undeclared identifier 'strcpy'
 wrong_arguments_func_pointer_016 ERROR:  use of undeclared identifier 'strcpy'
 wrong_arguments_func_pointer_017 ERROR: BmcInline: fn_sym ?_605 not found
 wrong_arguments_func_pointer_018 ERROR:  use of undeclared identifier 'memset'
-zero_division_001 RESULT: SAT
-zero_division_002 RESULT: SAT
-zero_division_003 RESULT: SAT
-zero_division_004 RESULT: SAT
-zero_division_005 RESULT: SAT
-zero_division_006 RESULT: SAT
+zero_division_001 RESULT: SAT:  UB045a_division_by_zero
+zero_division_002 RESULT: SAT:  UB045a_division_by_zero
+zero_division_003 RESULT: SAT:  UB045b_modulo_by_zero
+zero_division_004 RESULT: SAT:  UB045b_modulo_by_zero
+zero_division_005 RESULT: SAT:  UB045a_division_by_zero
+zero_division_006 RESULT: SAT:  UB045a_division_by_zero
 zero_division_007 ERROR: TODO: structs as values
 zero_division_008 ERROR: TODO: support for loaded type: floating
-zero_division_009 RESULT: SAT
+zero_division_009 RESULT: SAT:  UB045a_division_by_zero
 zero_division_010 ERROR: Function rand_471 not defined
-zero_division_011 RESULT: SAT
-zero_division_012 RESULT: SAT
-zero_division_013 RESULT: SAT
-zero_division_014 RESULT: SAT
-zero_division_015 RESULT: SAT
+zero_division_011 RESULT: SAT:  UB045a_division_by_zero
+zero_division_012 RESULT: SAT:  UB045a_division_by_zero
+zero_division_013 RESULT: SAT:  UB045a_division_by_zero
+zero_division_014 RESULT: SAT:  UB045a_division_by_zero
+zero_division_015 RESULT: SAT:  UB045a_division_by_zero
 zero_division_016 ERROR: TODO: dynamic allocation

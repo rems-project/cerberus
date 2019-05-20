@@ -9,13 +9,13 @@ bit_shift_008 RESULT: UNSAT
 bit_shift_009 ERROR: Function rand_471 not defined
 bit_shift_010 RESULT: UNSAT
 bit_shift_011 RESULT: UNSAT
-bit_shift_012 RESULT: SAT
+bit_shift_012 RESULT: SAT:  UB51b_shift_too_large
 bit_shift_013 RESULT: UNSAT
 bit_shift_014 RESULT: UNSAT
 bit_shift_015 RESULT: UNSAT
 bit_shift_016 RESULT: UNSAT
 bit_shift_017 RESULT: UNSAT
-cmp_funcadr_001 RESULT: SAT
+cmp_funcadr_001 RESULT: SAT:  DUMMY(Elab. equality operator (ptr vs NULL) ==> output_02.wo_Defects/cmp_funcadr_001.c:15:7-51)
 cmp_funcadr_002 RESULT: UNSAT
 conflicting_cond_001 ERROR: Function rand_471 not defined
 conflicting_cond_002 ERROR: Function rand_471 not defined
@@ -63,7 +63,7 @@ data_overflow_014 RESULT: UNSAT
 data_overflow_015 ERROR: Function rand_471 not defined
 data_overflow_016 RESULT: UNSAT
 data_overflow_017 RESULT: UNSAT
-data_overflow_018 RESULT: SAT
+data_overflow_018 RESULT: SAT:  UB036_exceptional_condition
 data_overflow_019 RESULT: UNSAT
 data_overflow_020 RESULT: UNSAT
 data_overflow_021 RESULT: UNSAT
@@ -80,7 +80,7 @@ data_underflow_006 RESULT: UNSAT
 data_underflow_007 ERROR: TODO: support for loaded type: floating
 data_underflow_008 ERROR: TODO: support for loaded type: floating
 data_underflow_009 RESULT: UNSAT
-data_underflow_010 RESULT: SAT
+data_underflow_010 RESULT: SAT:  UB036_exceptional_condition
 data_underflow_011 RESULT: UNSAT
 data_underflow_012 RESULT: UNSAT
 dead_code_001 RESULT: UNSAT
@@ -112,14 +112,14 @@ double_free_010 ERROR: TODO: dynamic allocation
 double_free_011 ERROR: TODO: dynamic allocation
 double_free_012 ERROR: TODO: dynamic allocation
 endless_loop_001 ERROR: (timeout)
-endless_loop_002 RESULT: SAT
+endless_loop_002 RESULT: SAT:  2807_Erun_depth_exceeded: while_592_592
 endless_loop_003 ERROR: (timeout)
 endless_loop_004 ERROR: (timeout)
 endless_loop_005 ERROR: (timeout)
 endless_loop_006 ERROR: (timeout)
 endless_loop_007 ERROR: (timeout)
 endless_loop_008 ERROR: (timeout)
-endless_loop_009 RESULT: SAT
+endless_loop_009 RESULT: SAT:  4118_Erun_depth_exceeded: do_591_591
 func_pointer_001 ERROR: BmcInline: fn_sym ?_592 not found
 func_pointer_002 ERROR: BmcInline: fn_sym ?_638 not found
 func_pointer_003 ERROR: BmcInline: fn_sym ?_603 not found
@@ -135,7 +135,7 @@ func_pointer_012 ERROR:  use of undeclared identifier 'memcpy'
 func_pointer_013 ERROR: BmcInline: fn_sym ?_601 not found
 func_pointer_014 ERROR:  use of undeclared identifier 'func_gbl'
 func_pointer_015 ERROR:  use of undeclared identifier 'memset'
-function_return_value_unchecked_001 RESULT: SAT
+function_return_value_unchecked_001 RESULT: SAT:  UB036_exceptional_condition
 function_return_value_unchecked_002 ERROR: TODO: support for loaded type: floating
 function_return_value_unchecked_003 ERROR: (printf)
 function_return_value_unchecked_004 ERROR:  use of undeclared identifier 'strcpy'
@@ -156,7 +156,7 @@ improper_termination_of_block_002 ERROR: (printf)
 improper_termination_of_block_003 ERROR: (printf)
 improper_termination_of_block_004 ERROR: (printf)
 insign_code_001 ERROR: (printf)
-invalid_extern_001 RESULT: SAT
+invalid_extern_001 RESULT: SAT:  UB043_indirection_invalid_value
 invalid_extern_002 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_float'
 invalid_extern_003 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_var3'
 invalid_extern_004 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_var4'
@@ -210,13 +210,13 @@ null_pointer_004 RESULT: UNSAT
 null_pointer_005 ERROR: Error: unions are not supported.
 null_pointer_006 RESULT: UNSAT
 null_pointer_007 RESULT: UNSAT
-null_pointer_008 RESULT: SAT
+null_pointer_008 RESULT: SAT:  UB043_indirection_invalid_value
 null_pointer_009 RESULT: UNSAT
 null_pointer_010 RESULT: UNSAT
 null_pointer_011 RESULT: UNSAT
 null_pointer_012 RESULT: UNSAT
 null_pointer_013 ERROR:  use of undeclared identifier 'buf'
-null_pointer_014 RESULT: SAT
+null_pointer_014 RESULT: SAT:  UB043_indirection_invalid_value
 null_pointer_015 ERROR:  use of undeclared identifier 'a'
 null_pointer_016 ERROR: TODO: dynamic allocation
 null_pointer_017 ERROR:  use of undeclared identifier 'strcpy'
@@ -236,7 +236,7 @@ overrun_st_013 RESULT: UNSAT
 overrun_st_014 ERROR: Function rand_471 not defined
 overrun_st_015 RESULT: UNSAT
 overrun_st_016 RESULT: UNSAT
-overrun_st_017 RESULT: SAT
+overrun_st_017 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
 overrun_st_018 RESULT: UNSAT
 overrun_st_019 RESULT: UNSAT
 overrun_st_020 RESULT: UNSAT
@@ -255,15 +255,15 @@ overrun_st_032 RESULT: UNSAT
 overrun_st_033 ERROR: Function rand_471 not defined
 overrun_st_034 RESULT: UNSAT
 overrun_st_035 RESULT: UNSAT
-overrun_st_036 RESULT: SAT
+overrun_st_036 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
 overrun_st_037 RESULT: UNSAT
 overrun_st_038 RESULT: UNSAT
 overrun_st_039 RESULT: UNSAT
 overrun_st_040 RESULT: UNSAT
-overrun_st_041 RESULT: SAT
+overrun_st_041 RESULT: SAT:  3434_Erun_depth_exceeded: while_593_593
 overrun_st_042 ERROR: (unknown)
 overrun_st_043 ERROR: (unknown)
-overrun_st_044 RESULT: SAT
+overrun_st_044 RESULT: SAT:  3481_Erun_depth_exceeded: while_594_594
 overrun_st_045 RESULT: UNSAT
 overrun_st_046 RESULT: UNSAT
 overrun_st_047 RESULT: UNSAT
@@ -305,7 +305,7 @@ pow_related_errors_026 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_027 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_028 ERROR:  use of undeclared identifier 'pow'
 pow_related_errors_029 ERROR:  use of undeclared identifier 'pow'
-ptr_subtraction_001 RESULT: SAT
+ptr_subtraction_001 RESULT: SAT:  564_Ptrdiff
 ptr_subtraction_002 RESULT: UNSAT
 redundant_cond_001 ERROR: Function rand_471 not defined
 redundant_cond_002 ERROR: Function rand_471 not defined
@@ -314,15 +314,15 @@ redundant_cond_004 ERROR: Function rand_471 not defined
 redundant_cond_005 ERROR: Function rand_471 not defined
 redundant_cond_006 ERROR: Function rand_471 not defined
 redundant_cond_007 ERROR: Function rand_471 not defined
-redundant_cond_008 RESULT: SAT
+redundant_cond_008 RESULT: SAT:  6763_Erun_depth_exceeded: while_592_592
 redundant_cond_009 ERROR: Function rand_471 not defined
 redundant_cond_010 ERROR: Function rand_471 not defined
 redundant_cond_011 ERROR: Function rand_471 not defined
 redundant_cond_012 ERROR: Function rand_471 not defined
 redundant_cond_013 ERROR: Function rand_471 not defined
 redundant_cond_014 ERROR: Function rand_471 not defined
-return_local_001 RESULT: SAT
-return_local_002 RESULT: SAT
+return_local_001 RESULT: SAT:  824_PEarray_shift_notNull
+return_local_002 RESULT: SAT:  UB043_indirection_invalid_value
 sign_conv_001 RESULT: UNSAT
 sign_conv_002 RESULT: UNSAT
 sign_conv_003 RESULT: UNSAT
@@ -362,13 +362,13 @@ underrun_st_003 RESULT: UNSAT
 underrun_st_004 RESULT: UNSAT
 underrun_st_005 RESULT: UNSAT
 underrun_st_006 RESULT: UNSAT
-underrun_st_007 RESULT: SAT
-underrun_st_008 RESULT: SAT
-underrun_st_009 RESULT: SAT
-underrun_st_010 RESULT: SAT
-underrun_st_011 RESULT: SAT
-underrun_st_012 RESULT: SAT
-underrun_st_013 RESULT: SAT
+underrun_st_007 RESULT: SAT:  5170_Erun_depth_exceeded: while_593_593
+underrun_st_008 RESULT: SAT:  3496_Erun_depth_exceeded: while_594_594
+underrun_st_009 RESULT: SAT:  5184_Erun_depth_exceeded: while_593_593
+underrun_st_010 RESULT: SAT:  3510_Erun_depth_exceeded: while_594_594
+underrun_st_011 RESULT: SAT:  5100_Erun_depth_exceeded: while_593_593
+underrun_st_012 RESULT: SAT:  5162_Erun_depth_exceeded: while_594_594
+underrun_st_013 RESULT: SAT:  6729_Erun_depth_exceeded: while_594_594
 uninit_pointer_001 RESULT: UNSAT
 uninit_pointer_002 RESULT: UNSAT
 uninit_pointer_003 RESULT: UNSAT
@@ -437,7 +437,7 @@ zero_division_009 RESULT: UNSAT
 zero_division_010 ERROR: Function rand_471 not defined
 zero_division_011 RESULT: UNSAT
 zero_division_012 RESULT: UNSAT
-zero_division_013 RESULT: SAT
+zero_division_013 RESULT: SAT:  UB045a_division_by_zero
 zero_division_014 RESULT: UNSAT
 zero_division_015 RESULT: UNSAT
 zero_division_016 ERROR: TODO: dynamic allocation
