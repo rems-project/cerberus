@@ -111,14 +111,14 @@ double_free_009 ERROR: TODO: dynamic allocation
 double_free_010 ERROR: TODO: dynamic allocation
 double_free_011 ERROR: TODO: dynamic allocation
 double_free_012 ERROR: TODO: dynamic allocation
-endless_loop_001 ERROR: (timeout)
-endless_loop_002 RESULT: SAT:  2607_Erun_depth_exceeded: while_592_592
+endless_loop_001 RESULT: SAT:  2067_Erun_depth_exceeded: while_592_592
+endless_loop_002 ERROR: (timeout)
 endless_loop_003 RESULT: SAT:  1682_Erun_depth_exceeded: while_591_591
 endless_loop_004 RESULT: SAT:  1799_Erun_depth_exceeded: while_592_592
 endless_loop_005 RESULT: SAT:  3238_Erun_depth_exceeded: while_592_592
-endless_loop_006 RESULT: SAT:  2568_Erun_depth_exceeded: while_607_607
+endless_loop_006 ERROR: (timeout)
 endless_loop_007 RESULT: SAT:  2515_Erun_depth_exceeded: while_592_592
-endless_loop_008 ERROR: (timeout)
+endless_loop_008 RESULT: SAT:  2511_Erun_depth_exceeded: while_592_592
 endless_loop_009 RESULT: SAT:  926_Erun_depth_exceeded: do_591_591
 free_nondynamic_allocated_memory_001 RESULT: SAT:  UB: free of static allocation
 free_nondynamic_allocated_memory_002 RESULT: SAT:  UB: free of static allocation
@@ -136,41 +136,26 @@ free_nondynamic_allocated_memory_013 ERROR:  unexpected token '='
 free_nondynamic_allocated_memory_014 ERROR:  unexpected token 'free_nondynamic_allocated_memory_st'
 free_nondynamic_allocated_memory_015 RESULT: SAT:  UB: free of static allocation
 free_nondynamic_allocated_memory_016 RESULT: SAT:  UB: free of static allocation
-func_pointer_001 ERROR: BmcInline: fn_sym ?_598 not found
-func_pointer_002 ERROR: BmcInline: fn_sym ?_592 not found
-func_pointer_003 ERROR: BmcInline: fn_sym ?_606 not found
-func_pointer_004 ERROR:  use of undeclared identifier 'strlen'
-func_pointer_005 ERROR: BmcInline: fn_sym ?_644 not found
-func_pointer_006 ERROR:  use of undeclared identifier 'doubleptr'
-func_pointer_007 ERROR: BmcInline: fn_sym ?_643 not found
-func_pointer_008 ERROR:  use of undeclared identifier 'a'
-func_pointer_009 ERROR: BmcInline: fn_sym ?_610 not found
-func_pointer_010 ERROR:  use of undeclared identifier 'func_pointer_004_func_001'
-func_pointer_011 ERROR:  use of undeclared identifier 'strlen'
-func_pointer_012 ERROR:  use of undeclared identifier 'memcpy'
-func_pointer_013 ERROR: BmcInline: fn_sym ?_604 not found
-func_pointer_014 ERROR:  use of undeclared identifier 'func_gbl'
-func_pointer_015 ERROR:  use of undeclared identifier 'memset'
-function_return_value_unchecked_001 RESULT: SAT:  UB036_exceptional_condition
+function_return_value_unchecked_001 RESULT: UNSAT
 function_return_value_unchecked_002 ERROR: TODO: support for loaded type: floating
-function_return_value_unchecked_003 ERROR: (printf)
+function_return_value_unchecked_003 ERROR:  use of undeclared identifier 'printf'
 function_return_value_unchecked_004 ERROR:  use of undeclared identifier 'strcpy'
 function_return_value_unchecked_005 ERROR: TODO: support for loaded type: floating
 function_return_value_unchecked_006 ERROR:  use of undeclared identifier 'memset'
 function_return_value_unchecked_007 ERROR: TODO: support for loaded type: floating
 function_return_value_unchecked_008 ERROR: TODO: support for loaded type: floating
 function_return_value_unchecked_009 ERROR: TODO: support for loaded type: floating
-function_return_value_unchecked_010 ERROR: (printf)
-function_return_value_unchecked_011 ERROR: (printf)
+function_return_value_unchecked_010 ERROR:  use of undeclared identifier 'fprintf'
+function_return_value_unchecked_011 ERROR:  use of undeclared identifier 'snprintf'
 function_return_value_unchecked_012 ERROR:  use of undeclared identifier 'fputc'
 function_return_value_unchecked_013 ERROR:  use of undeclared identifier 'fputs'
 function_return_value_unchecked_014 ERROR:  use of undeclared identifier 'putchar'
 function_return_value_unchecked_015 ERROR:  use of undeclared identifier 'puts'
 function_return_value_unchecked_016 ERROR: TODO: support for loaded type: floating
-improper_termination_of_block_001 ERROR: (printf)
-improper_termination_of_block_002 ERROR: (printf)
-improper_termination_of_block_003 ERROR: (printf)
-improper_termination_of_block_004 ERROR: (printf)
+improper_termination_of_block_001 ERROR:  use of undeclared identifier 'printf'
+improper_termination_of_block_002 ERROR:  use of undeclared identifier 'printf'
+improper_termination_of_block_003 ERROR:  use of undeclared identifier 'printf'
+improper_termination_of_block_004 ERROR:  use of undeclared identifier 'printf'
 insign_code_001 ERROR: Function rand_471 not defined
 invalid_extern_001 RESULT: SAT:  535_PEarray_shift_notNull
 invalid_extern_002 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_float'
@@ -179,7 +164,7 @@ invalid_extern_004 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_
 invalid_extern_005 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_var5'
 invalid_extern_006 ERROR:  use of undeclared identifier 'invalid_extern_001_glb_006_str'
 invalid_memory_access_001 ERROR:  constraint violation: type mismatch in conditional expression ('signed int*' and 'signed int')
-invalid_memory_access_002 ERROR: (printf)
+invalid_memory_access_002 ERROR:  use of undeclared identifier 'printf'
 invalid_memory_access_003 ERROR:  use of undeclared identifier 'strcpy'
 invalid_memory_access_004 ERROR:  use of undeclared identifier 'staticflag1'
 invalid_memory_access_005 ERROR:  constraint violation: too few arguments to function call, expected 1, have 0
@@ -189,13 +174,13 @@ invalid_memory_access_008 ERROR:  use of undeclared identifier 'memcpy'
 invalid_memory_access_009 ERROR: TODO: sizeof non-integer types
 invalid_memory_access_010 ERROR:  use of undeclared identifier 'invalid_memory_access_func_010'
 invalid_memory_access_011 ERROR: TODO: dynamic allocation
-invalid_memory_access_012 ERROR: (printf)
-invalid_memory_access_013 ERROR: (printf)
+invalid_memory_access_012 ERROR:  use of undeclared identifier 'printf'
+invalid_memory_access_013 ERROR:  use of undeclared identifier 'printf'
 invalid_memory_access_014 ERROR:  constraint violation: too few arguments to function call, expected 1, have 0
 invalid_memory_access_015 ERROR:  use of undeclared identifier 'strlen'
 invalid_memory_access_016 ERROR:  use of undeclared identifier 'strcpy'
 invalid_memory_access_017 ERROR:  use of undeclared identifier 'strcpy'
-littlemem_st_001 ERROR: (printf)
+littlemem_st_001 ERROR:  use of undeclared identifier 'printf'
 littlemem_st_002 ERROR: Ptr type-casting not supported
 littlemem_st_003 ERROR: Ptr type-casting not supported
 littlemem_st_004 ERROR: Ptr type-casting not supported
@@ -252,7 +237,7 @@ overrun_st_013 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_014 ERROR: Function rand_471 not defined
 overrun_st_015 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_016 RESULT: SAT:  UB043_indirection_invalid_value
-overrun_st_017 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
+overrun_st_017 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_018 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_019 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_020 RESULT: SAT:  UB043_indirection_invalid_value
@@ -271,7 +256,7 @@ overrun_st_032 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_033 ERROR: Function rand_471 not defined
 overrun_st_034 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_035 RESULT: SAT:  UB043_indirection_invalid_value
-overrun_st_036 RESULT: SAT:  DUMMY(unspecified array_shift (addr))
+overrun_st_036 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_037 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_038 RESULT: SAT:  UB043_indirection_invalid_value
 overrun_st_039 RESULT: SAT:  UB043_indirection_invalid_value
@@ -421,7 +406,7 @@ unused_var_002 RESULT: UNSAT
 unused_var_003 ERROR: Error: unions are not supported.
 unused_var_004 RESULT: UNSAT
 unused_var_005 RESULT: UNSAT
-unused_var_006 RESULT: SAT:  1964_Store_invalid_ptr
+unused_var_006 RESULT: SAT: 
 unused_var_007 ERROR: (unknown)
 wrong_arguments_func_pointer_001 ERROR: BmcInline: fn_sym ?_607 not found
 wrong_arguments_func_pointer_002 ERROR: BmcInline: fn_sym ?_642 not found
