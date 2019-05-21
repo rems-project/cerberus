@@ -887,6 +887,7 @@ module MemoryModelCommon = struct
       let write = fns.rf_inv read in
       let read_addr = PointerSort.get_index_from_addr (addr_of_bmcaction action) in
       let write_base = PointerSort.get_index_from_addr (fns.getAddr write) in
+
       let diff = binop_to_z3 OpSub read_addr write_base in
       let sizeof_read = size_of_bmcaction action file in
       let index = binop_to_z3 OpDiv diff (int_to_z3 sizeof_read) in
@@ -1059,6 +1060,31 @@ module MemoryModelCommon = struct
         | _ -> assert false
       ) kills in
 
+    (* Fake VC due to unimplemented feature:
+     * We require that loads read from stores of the same ctype to not reveal
+     * byte-wise representations.  This should probably be done as a 'failwith'
+     * type error, but we want to check this holds for every execution
+     * regardless of whether or not we tell BMC to compute all executions.
+     *)
+    let todo_loads_read_from_stores_of_the_same_type =
+      List.concat (
+      List.map (fun (e_read, e_write) ->
+        let ctype_read = ctype_of_bmcaction e_read in
+        let ctype_write = ctype_of_bmcaction e_write in
+        let read = z3action e_read in
+        let write = z3action e_write in
+        if Pervasives.compare ctype_read ctype_write <> 0 then
+          [mk_not (mk_and [fns.getGuard read
+                          ;fns.getGuard write
+                          ;mk_eq (fns.rf_inv read) write
+                          ]
+                  ),
+                  VcDebugStr ("BMC TODO: support loads reading from stores of different ctypes")]
+        else
+          []
+      ) (cartesian_product reads writes)) in
+
+
     { event_sort = event_sort
     ; event_map  = event_map
     ; decls      = decls
@@ -1088,6 +1114,7 @@ module MemoryModelCommon = struct
     ; co_init        = co_init
     ; memop_asserts  = memop_asserts
     ; vcs            = memop_vcs @ free_of_nondynamic_alloc_vcs
+                       @ todo_loads_read_from_stores_of_the_same_type
     }
 
   type execution = {
