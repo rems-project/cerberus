@@ -271,9 +271,6 @@ module AddressSortPNVI = struct
   let alloc_max_decl =
     mk_fresh_func_decl g_ctx "__alloc_max" [integer_sort] integer_sort
 
-  let alloc_max_plus_one_decl =
-    mk_fresh_func_decl g_ctx "__alloc_max_plus_one" [integer_sort] integer_sort
-
   let valid_index_range (alloc: Expr.expr) (addr: Expr.expr) : Expr.expr =
     let index = get_index addr in
     let alloc_min = Expr.mk_app g_ctx alloc_min_decl [alloc] in
@@ -281,6 +278,15 @@ module AddressSortPNVI = struct
     mk_and [ binop_to_z3 OpGe index alloc_min
            ; binop_to_z3 OpLt index alloc_max
            ]
+
+  let valid_index_range_plus_one (alloc: Expr.expr) (addr: Expr.expr) : Expr.expr =
+    let index = get_index addr in
+    let alloc_min = Expr.mk_app g_ctx alloc_min_decl [alloc] in
+    let alloc_max = Expr.mk_app g_ctx alloc_max_decl [alloc] in
+    mk_and [ binop_to_z3 OpGe index alloc_min
+           ; binop_to_z3 OpLe index alloc_max
+           ]
+
 
   let shift_index_by_n (addr: Expr.expr) (n: Expr.expr) : Expr.expr =
     let index = get_index addr in
@@ -527,6 +533,7 @@ module type PointerSortAPI = sig
 
   val ptr_comparable : Expr.expr -> Expr.expr -> Expr.expr
   val ptr_in_range : Expr.expr -> Expr.expr
+  val ptr_in_range_plus_one : Expr.expr -> Expr.expr
 
   val ptr_eq : Expr.expr -> Expr.expr -> Expr.expr
   val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
@@ -637,6 +644,11 @@ module PointerSortPNVI : PointerSortAPI = struct
 
   let ptr_in_range (ptr: Expr.expr) =
     AddressSortPNVI.valid_index_range (get_prov ptr) (get_addr ptr)
+
+  let ptr_in_range_plus_one (ptr: Expr.expr) =
+    AddressSortPNVI.valid_index_range_plus_one (get_prov ptr) (get_addr ptr)
+
+
 
   (* PNVI semantics:
    * - if p1 = p2, true

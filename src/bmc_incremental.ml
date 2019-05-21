@@ -1629,6 +1629,10 @@ module BmcZ3 = struct
         let intermediate_action =
           (IMemop(aid, PtrValidForDeref, [z3d_ptr], [is_hb_before_kill])) in
 
+        (* PtrValidForDeref in Core isn't supposed to check range.
+         * However bad things happen right now if we generate memory
+         * bindings that are not satisfiable (e.g. there is nothing to
+         * read from; so we leave this in for now *)
         add_action uid intermediate_action >>
         return (mk_and [is_hb_before_kill
                        ;PointerSort.valid_ptr z3d_ptr
@@ -2688,6 +2692,8 @@ module BmcVC = struct
         return (  (valid_memorder, VcDebugStr (string_of_int uid ^ "_Store_memorder"))
                 ::(PointerSort.valid_ptr ptr_z3,
                    VcDebugStr (string_of_int uid ^ "_Store_invalid_ptr"))
+                ::(PointerSort.ptr_in_range ptr_z3,
+                   VcDebugStr ("out of bounds pointer at memory store"))
                 :: vcs_wval)
     | Store0 _          -> assert false
     | Load0 (Pexpr(_,_,PEval (Vctype ty)),
@@ -2698,6 +2704,8 @@ module BmcVC = struct
         return [(valid_memorder, VcDebugStr (string_of_int uid ^ "_Load_memorder"))
                ;(PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
+               ;(PointerSort.ptr_in_range ptr_z3,
+                   VcDebugStr ("out of bounds pointer at memory load"))
                ]
     | Load0 _ -> assert false
     | RMW0 _  -> assert false
@@ -2732,6 +2740,7 @@ module BmcVC = struct
             "'failure' memory order of CompareExchange' must not be
              stronger than the success argument"
         ;
+        bmc_debug_print 7 "TODO: assert ptr validity for CompareXchg";
         return [(valid_memorder,
                  VcDebugStr(string_of_int uid ^ "_CompareExchange_memorder"))]
     | CompareExchangeStrong _ -> assert false
@@ -2746,7 +2755,9 @@ module BmcVC = struct
         bmc_debug_print 7 "TODO: VCs of LinuxStore. Check memory order";
         return ((PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Store_invalid_ptr"))
-                 :: vcs_wval)
+                ::(PointerSort.ptr_in_range ptr_z3,
+                   VcDebugStr ("out of bounds pointer at memory store"))
+                :: vcs_wval)
     | LinuxStore _ -> assert false
     | LinuxLoad (Pexpr(_,_,PEval (Vctype ty)),
                  (Pexpr(_,_,PEsym sym)), memorder) ->
@@ -2754,6 +2765,8 @@ module BmcVC = struct
         lookup_sym sym >>= fun ptr_z3 ->
         return [(PointerSort.valid_ptr ptr_z3,
                  VcDebugStr (string_of_int uid ^ "_Load_valid_ptr"))
+               ;PointerSort.ptr_in_range ptr_z3,
+                   VcDebugStr ("out of bounds pointer at memory load")
                ]
     | LinuxLoad _  -> assert false
     | LinuxRMW (Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
@@ -2761,7 +2774,7 @@ module BmcVC = struct
         assert_memory_mode_linux ();
         vcs_pe wval >>= fun vcs_wval ->
         lookup_sym sym >>= fun ptr_z3 ->
-        return ((PointerSort.valid_ptr ptr_z3,
+          return ((mk_and [PointerSort.valid_ptr ptr_z3;PointerSort.ptr_in_range ptr_z3],
                  VcDebugStr (string_of_int uid ^ "_RMW_invalid_ptr"))
                  :: vcs_wval)
     | LinuxRMW _ -> assert false
@@ -2783,8 +2796,8 @@ module BmcVC = struct
         let valid_assert =
           mk_and [PointerSort.valid_ptr z3_pe1
                  ;PointerSort.valid_ptr z3_pe2
-                 ;PointerSort.ptr_in_range z3_pe1
-                 ;PointerSort.ptr_in_range z3_pe2
+                 ;PointerSort.ptr_in_range_plus_one z3_pe1
+                 ;PointerSort.ptr_in_range_plus_one z3_pe2
                  ;PointerSort.ptr_comparable z3_pe1 z3_pe2
                  ] in
         return ((valid_assert, dbg_valid_ptr)
@@ -2798,11 +2811,10 @@ module BmcVC = struct
 
         get_expr (get_id_pexpr ptr) >>= fun z3_ptr ->
 
-        (* TODO: switch to in_range_plus_one *)
         let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_PtrArrayShift validity") in
         let valid_assert =
           mk_and [PointerSort.valid_ptr z3_ptr
-                 ;PointerSort.ptr_in_range z3_ptr
+                 ;PointerSort.ptr_in_range_plus_one z3_ptr
                  ] in
 
         get_expr uid >>= fun shifted_ptr ->
@@ -2810,7 +2822,7 @@ module BmcVC = struct
           VcDebugStr("the result of some pointer arithmetic operator was out of bound") in
         let in_range_assert =
           mk_and [PointerSort.valid_ptr shifted_ptr
-                 ;PointerSort.ptr_in_range shifted_ptr
+                 ;PointerSort.ptr_in_range_plus_one shifted_ptr
                  ] in
         return ((valid_assert, dbg_valid_ptr)
                 :: (in_range_assert, dbg_arith_in_range)
