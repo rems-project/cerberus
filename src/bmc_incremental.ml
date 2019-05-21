@@ -3925,6 +3925,7 @@ module BmcSeqMem = struct
                ; mod_addr = AddrSet.empty
                }
     | IStore(aid, ctype, type_list, ptr, wval, mo) ->
+        failwith "TODO: sequential mode"
         (*get_memory >>= fun memory ->
         let ptr_addr = PointerSort.get_addr ptr in
         let ptr_not_null = mk_not (PointerSort.is_null ptr) in
@@ -3961,7 +3962,7 @@ module BmcSeqMem = struct
                ; mod_addr = AddrSet.of_list (List.map fst filtered)
                }
         *)
-          mapMi (fun i (ctype, sort) ->
+          (*mapMi (fun i (ctype, sort) ->
           let indexed_wval = get_ith_in_loaded i wval in
           get_memory >>= fun possible_addresses ->
           get_file >>= fun file ->
@@ -4002,6 +4003,7 @@ module BmcSeqMem = struct
         return { bindings = List.map snd filtered
                ; mod_addr = AddrSet.of_list (List.map fst filtered)
                }
+        *)
     | ICompareExchangeStrong _ ->
         failwith "Error: CompareExchangeStrong only supported with --bmc_conc"
     | ICompareExchangeWeak _ ->

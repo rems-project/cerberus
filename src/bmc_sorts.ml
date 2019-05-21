@@ -1316,6 +1316,7 @@ end
 (* Get ith index in loaded value *)
 (* TODO: This will change once we switch to byte representation *)
 (* TODO: duplicate from above right now for testing and assertion purposes *)
+(*
 let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
   if (Sort.equal (Expr.get_sort loaded) LoadedInteger.mk_sort) then
     (assert (i = 0); loaded)
@@ -1334,7 +1335,7 @@ let get_ith_in_loaded (i: int) (loaded: Expr.expr) : Expr.expr =
     end
   else
     assert false
-
+*)
 
 (* TODO: CFunctions are currently just identifiers *)
 module CFunctionSort = struct
