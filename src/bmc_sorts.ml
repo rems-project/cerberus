@@ -271,6 +271,9 @@ module AddressSortPNVI = struct
   let alloc_max_decl =
     mk_fresh_func_decl g_ctx "__alloc_max" [integer_sort] integer_sort
 
+  let alloc_max_plus_one_decl =
+    mk_fresh_func_decl g_ctx "__alloc_max_plus_one" [integer_sort] integer_sort
+
   let valid_index_range (alloc: Expr.expr) (addr: Expr.expr) : Expr.expr =
     let index = get_index addr in
     let alloc_min = Expr.mk_app g_ctx alloc_min_decl [alloc] in
@@ -393,6 +396,7 @@ module AddressSortPNVI = struct
 
 end
 
+(*
 module AddressSortConcrete = struct
   open Z3.Datatype
   open Z3.FuncDecl
@@ -490,7 +494,7 @@ module AddressSortConcrete = struct
 
   let get_provenance _ _ _ = None
 end
-
+*)
 (* PNVI ptr:
    | Null
    | Ptr of provenance * addr
@@ -685,6 +689,7 @@ module PointerSortPNVI : PointerSortAPI = struct
   let assert_is_atomic = AddrModule.assert_is_atomic
 end
 
+(*
 module PointerSortConcrete : PointerSortAPI = struct
   open Z3.Datatype
   open Z3.FuncDecl
@@ -782,12 +787,15 @@ module PointerSortConcrete : PointerSortAPI = struct
   let mk_is_atomic = AddrModule.mk_is_atomic
   let assert_is_atomic = AddrModule.assert_is_atomic
 end
+*)
 
 let pointer_sort =
   if g_pnvi then
     (module PointerSortPNVI : PointerSortAPI)
   else
-    (module PointerSortConcrete : PointerSortAPI)
+    failwith "TODO: Only PNVI mode supported"
+    (*(module PointerSortConcrete : PointerSortAPI)*)
+
 
 module PointerSort = (val pointer_sort : PointerSortAPI)
 (*module AddressSort = PointerSort.AddrModule*)
