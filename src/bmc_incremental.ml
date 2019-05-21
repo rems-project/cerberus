@@ -1732,7 +1732,32 @@ module BmcZ3 = struct
         return (mk_eq (Integer.mk_mod g_ctx addr_of_ptr alignment)
                       (int_to_z3 0)
                )*)
-    | Ememop _ -> assert false
+    | Ememop (PtrArrayShift,
+              [ptr;Pexpr(_, BTy_ctype, PEval (Vctype ctype));index]) ->
+        (* We treat this like a PEarray_shift;
+         * except in the memory model we add a check for pointer
+         * validity/lifetime
+         *)
+        assert (g_pnvi);
+        z3_pe ptr      >>= fun z3d_ptr ->
+        z3_pe index    >>= fun z3d_index ->
+        get_file >>= fun file ->
+        (* TODO: different w/ address type *)
+        let ty_size = PointerSort.type_size ctype file in
+        let shift_size = binop_to_z3 OpMul z3d_index (int_to_z3 ty_size) in
+        let ret_ptr = PointerSort.shift_by_n z3d_ptr shift_size in
+
+        (* Add intermediate action *)
+        (* ty and index not needed for lifetime check *)
+        get_fresh_aid >>= fun aid ->
+        let intermediate_action =
+          (IMemop(aid, PtrArrayShift, [z3d_ptr;ret_ptr], [])) in
+        add_action uid intermediate_action >>
+
+        return ret_ptr
+    | Ememop (memop,_ ) ->
+        failwith (sprintf "TODO: support %s"
+                          (pp_to_string (Pp_mem.pp_memop memop)))
     | Eaction action ->
         z3_action action uid
     | Ecase (pe, cases) ->
@@ -2376,7 +2401,8 @@ module BmcBind = struct
     | Ememop(Ptrdiff, args)          (* fall through *)
     | Ememop(IntFromPtr, args)       (* fall through *)
     | Ememop(PtrFromInt, args)       (* fall through *)
-    | Ememop(PtrWellAligned, args)       (* fall through *) ->
+    | Ememop(PtrWellAligned, args)   (* fall through *)
+    | Ememop(PtrArrayShift,args) ->  (* fall through *)
         mapM bind_pe args >>= fun bound_args ->
         return (List.concat bound_args)
     | Ememop _ ->
@@ -2753,7 +2779,7 @@ module BmcVC = struct
         get_expr (get_id_pexpr pe1) >>= fun z3_pe1 ->
         get_expr (get_id_pexpr pe2) >>= fun z3_pe2 ->
 
-        let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_Ptrdiff") in
+        let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_Ptrdiff validity") in
         let valid_assert =
           mk_and [PointerSort.valid_ptr z3_pe1
                  ;PointerSort.valid_ptr z3_pe2
@@ -2763,6 +2789,32 @@ module BmcVC = struct
                  ] in
         return ((valid_assert, dbg_valid_ptr)
                 :: (vcs_pe1 @ vcs_pe2))
+    | Ememop (PtrArrayShift,[ptr;ty;index]) ->
+        assert (g_pnvi);
+        (* TODO: do we need to check the resulting value? *)
+        vcs_pe ptr >>= fun vcs_ptr ->
+        vcs_pe ty  >>= fun vcs_ty ->
+        vcs_pe index >>= fun vcs_index ->
+
+        get_expr (get_id_pexpr ptr) >>= fun z3_ptr ->
+
+        (* TODO: switch to in_range_plus_one *)
+        let dbg_valid_ptr = VcDebugStr(string_of_int uid ^ "_PtrArrayShift validity") in
+        let valid_assert =
+          mk_and [PointerSort.valid_ptr z3_ptr
+                 ;PointerSort.ptr_in_range z3_ptr
+                 ] in
+
+        get_expr uid >>= fun shifted_ptr ->
+        let dbg_arith_in_range =
+          VcDebugStr("the result of some pointer arithmetic operator was out of bound") in
+        let in_range_assert =
+          mk_and [PointerSort.valid_ptr shifted_ptr
+                 ;PointerSort.ptr_in_range shifted_ptr
+                 ] in
+        return ((valid_assert, dbg_valid_ptr)
+                :: (in_range_assert, dbg_arith_in_range)
+                :: (vcs_ptr @ vcs_ty @ vcs_index))
     | Ememop(IntFromPtr, [ctype_src;ctype_dst;ptr]) ->
         (* assert ptr is null or ptr is (prov,a) and
          * a is in value_range (ctype_int) *)
@@ -4675,6 +4727,11 @@ module BmcConcActions = struct
                             Memop(aid, tid, (Memop_PtrDiff(p1, p2))))]
        | Ptrdiff, _, _ ->
            assert false
+       | PtrArrayShift, [p1;p2],[] ->
+          return [BmcAction(pol, mk_true,
+                            Memop(aid, tid, (Memop_PtrArrayShift(p1, p2))))]
+       | PtrArrayShift, _, _ ->
+          assert false
        | _,_,_ -> failwith
             (sprintf "TODO: Do concurrency model implementation of %s"
                        (pp_to_string (Pp_mem.pp_memop memop)))
@@ -4703,14 +4760,24 @@ module BmcConcActions = struct
     (match expr_ with
     | Epure pe ->
         return []
-    | Ememop(PtrValidForDeref, _) ->
+    | Ememop(PtrValidForDeref, _)  (* fall through *)
+    | Ememop(Ptrdiff, _)  (* fall through *)
+    | Ememop(PtrArrayShift, _) ->
         get_action uid >>= fun interm_action ->
         intermediate_to_bmc_actions interm_action Pos uid
-    | Ememop(Ptrdiff, _) ->
-        get_action uid >>= fun interm_action ->
-        intermediate_to_bmc_actions interm_action Pos uid
-    | Ememop (memop, pes) ->
+    | Ememop(PtrEq, args)            (* fall through *)
+    | Ememop(PtrNe, args)            (* fall through *)
+    | Ememop(PtrLt, args)            (* fall through *)
+    | Ememop(PtrGt, args)            (* fall through *)
+    | Ememop(PtrLe, args)            (* fall through *)
+    | Ememop(PtrGe, args)            (* fall through *)
+    | Ememop(IntFromPtr, args)       (* fall through *)
+    | Ememop(PtrFromInt, args)       (* fall through *)
+    | Ememop(PtrWellAligned, args) ->
         return []
+    | Ememop (memop, _) ->
+        failwith (sprintf "TODO: support %s"
+                          (pp_to_string (Pp_mem.pp_memop memop)))
     | Eaction (Paction(pol, action)) ->
         get_action uid >>= fun interm_action ->
         intermediate_to_bmc_actions interm_action pol uid

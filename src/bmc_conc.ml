@@ -106,6 +106,10 @@ let provs_of_memop_action (memop: memop_action) : Expr.expr list =
       [PointerSort.get_prov l]
   | Memop_PtrDiff (l1, l2) ->
       [PointerSort.get_prov l1; PointerSort.get_prov l2]
+  | Memop_PtrArrayShift (l1,_) ->
+      (* We only check l1? l2 should be derived from l1 *)
+      [PointerSort.get_prov l1]
+
 
 let provs_of_bmcaction (bmcaction: bmc_action) : Expr.expr list =
   match get_action bmcaction with
@@ -361,6 +365,10 @@ let string_of_memop_action = function
   | Memop_PtrDiff (loc1, loc2) ->
       sprintf "PtrValidForDeref(%s,%s)"
               (Expr.to_string loc1) (Expr.to_string loc2)
+  | Memop_PtrArrayShift(loc1,loc2) ->
+      sprintf "PtrArrayShift(%s,%s)"
+              (Expr.to_string loc1) (Expr.to_string loc2)
+
 
 
 let pp_action (a: action) =
@@ -1032,6 +1040,7 @@ module MemoryModelCommon = struct
                           has_addr a
                        || is_kill (get_action a)
                        || is_ptr_diff_memop (get_action a)
+                       || is_ptr_array_shift (get_action a)
                       )
                       exec.actions in
       let candidates = cartesian_product candidate_heads kills in
@@ -1065,7 +1074,10 @@ module MemoryModelCommon = struct
      * byte-wise representations.  This should probably be done as a 'failwith'
      * type error, but we want to check this holds for every execution
      * regardless of whether or not we tell BMC to compute all executions.
+     *
+     * - Doesn't work yet b/c arrays
      *)
+    (*
     let todo_loads_read_from_stores_of_the_same_type =
       List.concat (
       List.map (fun (e_read, e_write) ->
@@ -1079,10 +1091,11 @@ module MemoryModelCommon = struct
                           ;mk_eq (fns.rf_inv read) write
                           ]
                   ),
-                  VcDebugStr ("BMC TODO: support loads reading from stores of different ctypes")]
+                  VcDebugStr ("BMC_TODO: support loads reading from stores of different ctypes")]
         else
           []
       ) (cartesian_product reads writes)) in
+    *)
 
 
     { event_sort = event_sort
@@ -1114,7 +1127,7 @@ module MemoryModelCommon = struct
     ; co_init        = co_init
     ; memop_asserts  = memop_asserts
     ; vcs            = memop_vcs @ free_of_nondynamic_alloc_vcs
-                       @ todo_loads_read_from_stores_of_the_same_type
+                       (*@ todo_loads_read_from_stores_of_the_same_type*)
     }
 
   type execution = {
@@ -1982,6 +1995,10 @@ module RC11MemoryModel : MemoryModel = struct
                     let loc1 = interp (PointerSort.get_addr loc1) in
                     let loc2 = interp (PointerSort.get_addr loc2) in
                     Memop_PtrDiff(loc1, loc2)
+                | Memop_PtrArrayShift(loc1,loc2) ->
+                    let loc1 = interp (PointerSort.get_addr loc1) in
+                    let loc2 = interp (PointerSort.get_addr loc2) in
+                    Memop_PtrArrayShift(loc1,loc2)
                 end in
               Memop(aid,tid,memop)
         in (new_action, event) :: acc
@@ -2008,6 +2025,7 @@ module RC11MemoryModel : MemoryModel = struct
             begin match memop with
             | Memop_PtrValidForDeref (loc, _) -> [loc]
             | Memop_PtrDiff (loc1, loc2) -> [loc1;loc2]
+            | Memop_PtrArrayShift (loc1,loc2) -> [loc1;loc2]
             end in
           List.fold_left (fun acc loc ->
             if g_dbg_print_raw_loc then
@@ -2531,6 +2549,10 @@ module GenericModel (M: CatModel) : MemoryModel = struct
                     let loc1 = interp (PointerSort.get_addr loc1) in
                     let loc2 = interp (PointerSort.get_addr loc2) in
                     Memop_PtrDiff(loc1, loc2)
+                | Memop_PtrArrayShift (loc1,loc2) ->
+                    let loc1 = interp (PointerSort.get_addr loc1) in
+                    let loc2 = interp (PointerSort.get_addr loc2) in
+                    Memop_PtrArrayShift(loc1,loc2)
                 end in
               Memop(aid,tid,memop)
         in (new_action, event) :: acc
@@ -2557,6 +2579,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
             begin match memop with
             | Memop_PtrValidForDeref (loc, _) -> [loc]
             | Memop_PtrDiff (loc1, loc2) -> [loc1;loc2]
+            | Memop_PtrArrayShift(loc1, loc2) -> [loc1;loc2]
             end in
           List.fold_left (fun acc loc ->
             if g_dbg_print_raw_loc then
