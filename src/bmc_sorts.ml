@@ -318,41 +318,50 @@ module AddressSortPNVI = struct
         type_size _ty file
     | Struct0 tag ->
         fst (struct_member_index_list tag file)
-        (*
-        begin match Pmap.lookup tag file.tagDefs with
-        | Some (StructDef members) ->
-            let sizes = List.map (fun (_, ty) -> type_size ty file) members in
-            List.fold_left (fun acc sz ->
-              if acc mod sz = 0 then acc + sz
-              else acc + sz + (sz - (acc mod sz))
-            ) 0 sizes
-        | _ -> assert false
-        end
-        *)
     | _ -> assert false
   and struct_member_index_list tag (file: unit typed_file) =
     (* Compute offset of member from base addr *)
     begin match Pmap.lookup tag file.tagDefs with
     | Some (StructDef members) ->
-        let rec helper rest total_size acc : int * (int list) =
+        let rec helper rest total_size acc : int * ((int list) * int list) =
           begin match rest with
           | [] -> (total_size, acc)
           | (_, ty) :: tl ->
-            let ty_size = type_size ty file in
+            let (ty_size, flat_indices) =
+              match ty with
+              | Core_ctype.Struct0 tag_inner ->
+                let (ty_size, (_, flat_indices)) =
+                  struct_member_index_list tag_inner file in
+                (ty_size, flat_indices)
+              | _ ->
+                let ty_size = type_size ty file in
+                (ty_size, [0])
+              in
             let align = alignof_type ty file in
             (* Add padding to total size *)
             let padding = (align - (total_size mod align)) mod align in
-            helper tl (total_size + padding + ty_size) ((total_size+padding)::acc)
+            let start_index = total_size + padding in
+
+            (* Coarse: just gives start index *)
+            (* Fine: includes start index of subobjects *)
+            let (coarse,fine) = acc in
+            let adjusted = List.map (fun i -> i + start_index) flat_indices in
+            helper tl (start_index + ty_size)
+                      (start_index::coarse,
+                       (List.rev adjusted) @ fine
+                      )
+            (*((total_size+padding)::acc)*)
           end
         in
-        let (total_size, rev_indices) = helper members 0 [] in
+        let (total_size, (rev_indices, rev_flat_indices)) =
+          helper members 0 ([],[]) in
         (* TODO: Padding at the end to the largest member (alignment?) *)
         let largest_align = List.fold_left (fun acc (_, ty) ->
           max acc (alignof_type ty file)
         ) 0 members in
         let last_padding =
           (largest_align - (total_size mod largest_align)) mod largest_align in
-        (total_size + last_padding, List.rev rev_indices)
+        (total_size + last_padding, (List.rev rev_indices, List.rev rev_flat_indices))
     | _ -> assert false
     end
 
@@ -519,7 +528,8 @@ module type PointerSortAPI = sig
   val ptr_diff_raw : Expr.expr -> Expr.expr -> Expr.expr
 
   val type_size : ctype -> unit typed_file -> int
-  val struct_member_index_list : sym_ty -> unit typed_file -> int * int list
+  val struct_member_index_list : sym_ty -> unit typed_file ->
+    int * (int list * int list)
 
   val mk_nd_addr : int -> Expr.expr
   val get_index_from_addr : Expr.expr -> Expr.expr
@@ -1079,52 +1089,116 @@ module LoadedIntArrayArray = struct
     end)
 end
 *)
+let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
+  let tuple_name =
+    "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
+  let arg_list = List.mapi
+    (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
+  CustomTuple.mk_sort tuple_name arg_list sorts
+  (*Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts*)
 
-(* Testing a module to construct sorts for OTy_array types
- * argument of this type must be wrapped in loaded
- * E.g. for BTy_loaded (OTy_array OTy_array OTy_integer),
- * we really want Loaded (Array (Loaded Array (Loaded Integer)))
- * to correspond with Core types.
+(* NOTE: we actually kind of have two functions from ctype -> z3 sort that
+ * differ for multi-dimensional arrays currently. The first, below, gives the
+ * Z3 Sort through recursing through the array subtypes and is used in the
+ * intermediate representation. E.g. int[][] maps to LoadedIntArrayArray
+ *
+ * The second just treats multi-dimensional arrays as a flat array and is
+ * currently used for the memory model representation for simplicity. E.g.
+ * int[][] maps to LoadedIntArray
  *)
-module GenericArrays = struct
-  let rec mk_array_sort (cot: core_object_type) : Sort.sort =
-    match cot with
-    | OTy_integer -> (* Loaded Integer *)
-        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
-        TODO_LoadedSort.mk_sort sort
-    | OTy_pointer ->
-        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
-        TODO_LoadedSort.mk_sort sort
-    | OTy_floating ->
-        failwith "Error: floats are not supported."
-    | OTy_array cot' ->
-        let inner_sort = mk_array_sort cot' in
-        let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
-        TODO_LoadedSort.mk_sort sort
-    | OTy_struct _ ->
-        failwith "TODO: arrays of structs"
-    | OTy_union _ ->
-        failwith "Error: unions are not supported."
-
-  (* Basically the same as above except for ctypes... *)
-  let rec mk_array_sort_from_ctype (ty: Core_ctype.ctype0) : Sort.sort =
-    match ty with
-    | Void0 -> failwith "TODO: void arrays"
-    | Basic0 (Integer i) ->
-        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
-        TODO_LoadedSort.mk_sort sort
-    | Pointer0 _ ->
-        let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
-        TODO_LoadedSort.mk_sort sort
+module CtypeToZ3 = struct
+  let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+                           (file: unit typed_file)
+                           : Sort.sort =
+     match ty with
+    | Void0     -> assert false
+    | Basic0(Integer i) -> LoadedInteger.mk_sort
+    | Basic0 _ -> assert false
     | Array0(ty', _) ->
-        let inner_sort = mk_array_sort_from_ctype ty' in
-        let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
-        TODO_LoadedSort.mk_sort sort
+        mk_array_sort_from_ctype ty' file
+    | Function0 _ -> assert false
+    | Pointer0 _ -> LoadedPointer.mk_sort
+    | Atomic0 (Basic0 _ as _ty) (* fall through *)
+    | Atomic0 (Pointer0 _ as _ty) ->
+        ctype_to_z3_sort _ty file
+    | Atomic0 _ ->
+        assert false
+    | Struct0 tagdef ->
+        struct_sym_to_z3_sort tagdef file
+        (*
+        begin match Pmap.lookup tagdef file.tagDefs with
+        | Some (StructDef memlist) ->
+            let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
+            let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
+            Loaded_tuple_sort.mk_sort
+            (*
+            let sortlist =
+              List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
+            (* TODO: Does Z3 allow tuples to contain tuples? *)
+            let tuple_sort = sorts_to_tuple sortlist in
+            let module Loaded_tuple_sort =
+              LoadedSort(struct let obj_sort = tuple_sort end) in
+            Loaded_tuple_sort.mk_sort
+            *)
+        | _ -> assert false
+        end
+        *)
+    | Union0 _ ->
+      failwith "Error: unions are not supported."
+    | Builtin0 _ -> assert false
+  and struct_sym_to_z3_sort (struct_sym: sym_ty)
+                            (file: unit typed_file)
+                            : Sort.sort =
+    match Pmap.lookup struct_sym file.tagDefs with
+    | Some (StructDef memlist) ->
+        let sortlist =
+            List.map (fun (_,ctype) -> ctype_to_z3_sort ctype file)
+                     memlist in
+        sorts_to_tuple sortlist
     | _ ->
-        failwith "TODO: generic arrays"
-
+      failwith (sprintf "Struct %s not found" (symbol_to_string struct_sym))
+  and mk_array_sort (cot: core_object_type)
+                    (file: unit typed_file): Sort.sort =
+      match cot with
+      | OTy_integer -> (* Loaded Integer *)
+          let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
+          TODO_LoadedSort.mk_sort sort
+      | OTy_pointer ->
+          let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
+          TODO_LoadedSort.mk_sort sort
+      | OTy_floating ->
+          failwith "Error: floats are not supported."
+      | OTy_array cot' ->
+          let inner_sort = mk_array_sort cot' file in
+          let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
+          TODO_LoadedSort.mk_sort sort
+      | OTy_struct sym ->
+          let inner_sort = TODO_LoadedSort.mk_sort (struct_sym_to_z3_sort sym file) in
+          let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
+          TODO_LoadedSort.mk_sort sort
+      | OTy_union _ ->
+          failwith "Error: unions are not supported."
+  and mk_array_sort_from_ctype (ty: Core_ctype.ctype0)
+                               (file: unit typed_file): Sort.sort =
+      match ty with
+      | Void0 -> failwith "TODO: void arrays"
+      | Basic0 (Integer i) ->
+          let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
+          TODO_LoadedSort.mk_sort sort
+      | Pointer0 _ ->
+          let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
+          TODO_LoadedSort.mk_sort sort
+      | Array0(ty', _) ->
+          let inner_sort = mk_array_sort_from_ctype ty' file in
+          let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
+          TODO_LoadedSort.mk_sort sort
+      | Struct0 tag ->
+          let inner_sort = TODO_LoadedSort.mk_sort (struct_sym_to_z3_sort tag file) in
+          let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
+          TODO_LoadedSort.mk_sort sort
+      | _ ->
+          failwith "TODO: generic arrays"
 end
-
 
 
 module type LoadedSig = sig

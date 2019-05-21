@@ -1314,8 +1314,9 @@ module BmcZ3 = struct
         get_file >>= fun file ->
         return (int_to_z3 (alignof_type raw_ctype file));
     | PEctor (ctor, pes) ->
+        get_file >>= fun file ->
         mapM z3_pe pes >>= fun z3d_pes ->
-        return (ctor_to_z3 ctor z3d_pes (Some bTy) uid)
+        return (ctor_to_z3 ctor z3d_pes (Some bTy) uid file)
     | PEcase (pe, cases) ->
         assert (List.length cases > 0);
         z3_pe pe                              >>= fun z3d_pe ->
@@ -1344,7 +1345,7 @@ module BmcZ3 = struct
         get_file  >>= fun file ->
         begin match Pmap.lookup sym file.tagDefs with
         | Some (StructDef memlist) ->
-            let (size, index_list) =
+            let (size, (index_list, _)) =
               PointerSort.struct_member_index_list sym file in
             let member_indices = zip index_list memlist in
             let shift_opt = List.find_opt (fun (shift, (mem, _)) ->
@@ -1367,7 +1368,7 @@ module BmcZ3 = struct
         return (binop_to_z3 binop z3d_pe1 z3d_pe2)
     | PEstruct (sym, pes) ->
         get_file >>= fun file ->
-        let struct_sort = struct_sym_to_z3_sort sym file in
+        let struct_sort = CtypeToZ3.struct_sym_to_z3_sort sym file in
         (* TODO: assume pes are in order *)
         mapM (fun (_, pe) -> z3_pe pe) pes >>= fun z3d_pes ->
         return (CustomTuple.mk_tuple struct_sort z3d_pes)
@@ -1776,10 +1777,11 @@ module BmcZ3 = struct
         return new_ret_const
     | Eproc _  -> assert false
     | Eunseq elist ->
+        get_file >>= fun file ->
         assert (not !!bmc_conf.sequentialise);
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None uid)
+        return (ctor_to_z3 Ctuple z3d_elist None uid file)
     | Ewseq (pat, e1, e2) ->
         z3_e e1 >>= fun _ ->
         z3_e e2
@@ -1811,9 +1813,10 @@ module BmcZ3 = struct
         (* Need to save return value *)
         return (UnitSort.mk_unit)
     | Epar elist ->
+        get_file >>= fun file ->
         assert (!!bmc_conf.concurrent_mode);
         mapM z3_e elist >>= fun z3d_elist ->
-        return (ctor_to_z3 Ctuple z3d_elist None uid)
+        return (ctor_to_z3 Ctuple z3d_elist None uid file)
     | Ewait _  -> assert false
     ) >>= fun ret ->
     add_expr uid ret >>
@@ -4414,7 +4417,7 @@ module BmcConcActions = struct
                             (file: unit typed_file)
                             (value: Expr.expr)
                             : Expr.expr * (Expr.expr list) =
-    assert (Sort.equal (Expr.get_sort value) (ctype_to_z3_sort ctype file));
+    assert (Sort.equal (Expr.get_sort value) (CtypeToZ3.ctype_to_z3_sort ctype file));
 
     let rec aux (global_array: Expr.expr)
                 (ctype: Core_ctype.ctype0)
@@ -4501,7 +4504,7 @@ module BmcConcActions = struct
                 (create_mode: create_mode)
                 : bmc_action list eff =
     get_file >>= fun file ->
-    let sort = ctype_to_z3_sort ctype file in
+    let sort = CtypeToZ3.ctype_to_z3_sort ctype file in
     let is_atomic_fn = (function ctype -> match ctype with
                        | Core_ctype.Atomic0 _ -> mk_true
                        | _ -> mk_false) in
@@ -4513,7 +4516,6 @@ module BmcConcActions = struct
                                [int_to_z3 alloc_id])
             mk_false in
     add_assertion is_dynamic_assert >>
-
 
     mapMi_ (fun i (ctype,sort) ->
       let index = List.fold_left
@@ -4529,11 +4531,18 @@ module BmcConcActions = struct
     | Struct0 tag -> (* Hack for structs *)
         begin
         assert (List.length aids = List.length sortlist);
-        let (size, index_list) = PointerSort.struct_member_index_list tag file in
-        if (List.length index_list <> List.length sortlist) then
-          failwith "Structs with non-basic types not supported"
+        let (size, (_,flat_list)) = PointerSort.struct_member_index_list tag file in
+
+        (*List.iter (fun i -> printf "I: %d\n" i) flat_list;
+
+        List.iter (fun s -> printf "%s\n" (Sort.to_string (snd s))) sortlist;
+        *)
+
+        if (List.length flat_list <> List.length sortlist) then
+          failwith (sprintf "Complex struct %s not supported"
+                            (pp_to_string (Pp_core_ctype.pp_ctype ctype)))
         else begin
-          let indexed_sorts = zip index_list sortlist in
+          let indexed_sorts = zip flat_list sortlist in
           mapMi (fun i (index, (ty, sort)) ->
             let target_addr =
               PointerSort.shift_index_by_n base_addr (int_to_z3 index) in
