@@ -30,13 +30,6 @@ let is_pointer_type (ctype: Core_ctype.ctype0) =
   | _ -> false
 
 
-let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
-  let tuple_name =
-    "(" ^ (String.concat "," (List.map Sort.to_string sorts)) ^ ")" in
-  let arg_list = List.mapi
-    (fun i _ -> mk_sym ("#" ^ (string_of_int i))) sorts in
-  CustomTuple.mk_sort tuple_name arg_list sorts
-  (*Tuple.mk_sort g_ctx (mk_sym tuple_name) arg_list sorts*)
 
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
@@ -109,75 +102,6 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
     failwith "Error: unions are not supported."
   | Builtin0 _ ->
     assert false
-
-
-(* NOTE: we actually kind of have two functions from ctype -> z3 sort that
- * differ for multi-dimensional arrays currently. The first, below, gives the
- * Z3 Sort through recursing through the array subtypes and is used in the
- * intermediate representation. E.g. int[][] maps to LoadedIntArrayArray
- *
- * The second just treats multi-dimensional arrays as a flat array and is
- * currently used for the memory model representation for simplicity. E.g.
- * int[][] maps to LoadedIntArray
- *)
-let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
-                         (file: unit typed_file)
-                         : Sort.sort =
-   match ty with
-  | Void0     -> assert false
-  | Basic0(Integer i) -> LoadedInteger.mk_sort
-  | Basic0 _ -> assert false
-  (*| Array0(Basic0 (Integer i), Some n) ->
-      LoadedIntArray.mk_sort
-  | Array0(Array0(_, _), Some n) ->
-      GenericArrays.mk_sort
-      (* TODO *)
-      LoadedIntArrayArray.mk_sort
-  *)
-  | Array0(ty', _) ->
-      GenericArrays.mk_array_sort_from_ctype ty'
-  | Function0 _ -> assert false
-  | Pointer0 _ -> LoadedPointer.mk_sort
-  | Atomic0 (Basic0 _ as _ty) (* fall through *)
-  | Atomic0 (Pointer0 _ as _ty) ->
-      ctype_to_z3_sort _ty file
-  | Atomic0 _ ->
-      assert false
-  | Struct0 tagdef ->
-      struct_sym_to_z3_sort tagdef file
-      (*
-      begin match Pmap.lookup tagdef file.tagDefs with
-      | Some (StructDef memlist) ->
-          let tuple_sort = (struct_to_sort (tagdef, Tags.StructDef memlist) file) in
-          let module Loaded_tuple_sort = (val tuple_sort : LoadedSortTy) in
-          Loaded_tuple_sort.mk_sort
-          (*
-          let sortlist =
-            List.map (fun (_, mem_ty) -> ctype_to_z3_sort mem_ty file) memlist in
-          (* TODO: Does Z3 allow tuples to contain tuples? *)
-          let tuple_sort = sorts_to_tuple sortlist in
-          let module Loaded_tuple_sort =
-            LoadedSort(struct let obj_sort = tuple_sort end) in
-          Loaded_tuple_sort.mk_sort
-          *)
-      | _ -> assert false
-      end
-      *)
-  | Union0 _ ->
-    failwith "Error: unions are not supported."
-  | Builtin0 _ -> assert false
-and struct_sym_to_z3_sort (struct_sym: sym_ty)
-                              (file: unit typed_file)
-                              : Sort.sort =
-  match Pmap.lookup struct_sym file.tagDefs with
-  | Some (StructDef memlist) ->
-      let sortlist =
-          List.map (fun (_,ctype) -> ctype_to_z3_sort ctype file)
-                   memlist in
-      sorts_to_tuple sortlist
-  | _ ->
-    failwith (sprintf "Struct %s not found" (symbol_to_string struct_sym))
-
 
 
   (*
@@ -295,7 +219,7 @@ let rec cbt_to_z3 (cbt: core_base_type)
   | BTy_loaded (OTy_array OTy_integer) ->
       LoadedIntArray.mk_sort
   | BTy_loaded (OTy_array cot) ->
-      GenericArrays.mk_array_sort cot
+      CtypeToZ3.mk_array_sort cot file
 
       (*failwith "TODO: support for general array types"*)
   | BTy_loaded (OTy_struct sym) ->
@@ -318,7 +242,8 @@ let ctype_from_pexpr (ctype_pe: typed_pexpr) =
 let ctor_to_z3 (ctor  : typed_ctor)
                (exprs : Expr.expr list)
                (bTy   : core_base_type option)
-               (uid   : int) =
+               (uid   : int)
+               (file  : unit typed_file) =
   match ctor,exprs with
   | Ctuple,exprs ->
       let sort = sorts_to_tuple (List.map Expr.get_sort exprs) in
@@ -399,7 +324,7 @@ let ctor_to_z3 (ctor  : typed_ctor)
   | Cnil BTy_ctype, [] ->
       CtypeListSort.mk_nil
   | Carray,_ ->
-      (* TODO: move this to GenericArrays or some other function? *)
+      (* TODO: move this to CtypeToZ3 or some other function? *)
       begin match Option.get bTy with
       | BTy_object (OTy_array OTy_integer) ->
           Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
@@ -408,9 +333,16 @@ let ctor_to_z3 (ctor  : typed_ctor)
           Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
                              integer_sort LoadedPointer.mk_sort
       | BTy_object (OTy_array (OTy_array cot)) ->
-          let sort = GenericArrays.mk_array_sort cot in
+          let sort = CtypeToZ3.mk_array_sort cot file in
           Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
                              integer_sort sort
+      | BTy_object (OTy_array (OTy_struct tag)) ->
+          failwith "TODO: Arrays of structs"
+          (*
+          let sort = CtypeToZ3.struct_sym_to_z3_sort tag file in
+          Z3Array.mk_const_s g_ctx (sprintf "array_%d" uid)
+                             integer_sort (TODO_LoadedSort.mk_sort sort)
+          *)
       | _ -> failwith "TODO: support arbitrary Carrays"
       end
   | _ ->
