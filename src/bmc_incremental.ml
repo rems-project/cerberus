@@ -4484,6 +4484,7 @@ module BmcConcActions = struct
   let flatten_multid_arrays (ctype: Core_ctype.ctype0)
                             (file: unit typed_file)
                             (value: Expr.expr)
+                            (initial: bool)
                             : Expr.expr * (Expr.expr list) =
     assert (Sort.equal (Expr.get_sort value) (CtypeToZ3.ctype_to_z3_sort ctype file));
 
@@ -4526,7 +4527,9 @@ module BmcConcActions = struct
             Z3Array.mk_const_s g_ctx (sprintf "flattened_%s" (Expr.to_string value))
                                integer_sort (Loaded.base_sort) in
         let loaded_new_array = TODO_LoadedSort.mk_specified new_array in
-        let assertions = aux new_array ctype value 0 in
+        let assertions =
+          if initial then []
+          else aux new_array ctype value 0 in
         (loaded_new_array, assertions)
     | Struct0 _ ->
         (TODO_LoadedSort.mk_unspecified Loaded.raw_array_sort
@@ -4555,9 +4558,10 @@ module BmcConcActions = struct
                                          (ptr: Expr.expr)
                                          (wval: Expr.expr)
                                          (ctype: ctype)
+                                         (initial: bool)
                                          : bmc_action eff =
     get_file >>= fun file ->
-    let (new_wval, assertions) = flatten_multid_arrays ctype file wval in
+    let (new_wval, assertions) = flatten_multid_arrays ctype file wval initial in
     mapM_ add_assertion assertions >>
     return (BmcAction(pol, guard, Store(aid, tid, memorder, ptr, new_wval, ctype)))
 
@@ -4630,11 +4634,12 @@ module BmcConcActions = struct
       | CreateMode_InitialValue iv ->
           (iv, [])
       end in
-
+    let is_initial = (CreateMode_Unspecified = create_mode) in
     mapM add_assertion assumptions >>= fun _ ->
     mk_store_and_flatten_multid_arrays
               pol mk_true aid initial_tid
               (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
+              is_initial
         >>= fun store ->
     return [store]
 
@@ -4703,7 +4708,7 @@ module BmcConcActions = struct
     | IStore (aid,ctype,_,ptr,wval,mo) ->
         get_tid >>= fun tid ->
         mk_store_and_flatten_multid_arrays
-                pol mk_true aid tid (C_mem_order mo) ptr wval ctype
+                pol mk_true aid tid (C_mem_order mo) ptr wval ctype false
             >>= fun store ->
         return [store]
 
