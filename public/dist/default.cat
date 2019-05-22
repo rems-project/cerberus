@@ -91,3 +91,4 @@ irreflexive s7_prime as s7
 undefined_unless empty dr as dr_ub
 undefined_unless empty ur as unsequenced_race
 
+let __bmc_hb = hb
