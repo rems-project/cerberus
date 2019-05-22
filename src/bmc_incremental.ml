@@ -3077,7 +3077,7 @@ module BmcRet = struct
     | Epar es ->
         mapM do_e es >>= fun ret_es ->
         (* TODO: check this. Really want to assert can't jump out of par... *)
-        return [mk_or (List.map mk_and ret_es)]
+        return (List.concat ret_es)
     | Ewait _       -> assert false
 
   let do_file (file: unit typed_file) (fn_to_check: sym_ty)
