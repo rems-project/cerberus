@@ -1292,10 +1292,15 @@ module BmcZ3 = struct
                              (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
         end
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        let raw_ctype = strip_atomic ctype in
+        (*let raw_ctype = strip_atomic ctype in*)
+        get_file >>= fun file ->
+        let type_size = PointerSort.type_size ctype file in
+        return (int_to_z3 type_size)
+        (*
         if is_pointer_type raw_ctype then
           return (int_to_z3 (Option.get(ImplFunctions.sizeof_ptr)))
         else begin
+
           (if not (is_integer_type raw_ctype) then
             failwith "TODO: sizeof non-integer types"
           );
@@ -1306,11 +1311,11 @@ module BmcZ3 = struct
                                (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
           end
         end
+        *)
     | PEctor(Civalignof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (* We can just directly compute the values rather than do it in the
          * roundabout way as in the above *)
         let raw_ctype = strip_atomic ctype in
-        assert (is_integer_type raw_ctype);
         get_file >>= fun file ->
         return (int_to_z3 (alignof_type raw_ctype file));
     | PEctor (ctor, pes) ->
