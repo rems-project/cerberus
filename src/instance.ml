@@ -187,7 +187,7 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
         let filename = write_tmp_file content in
         (Some filename, Bmc_globals.MemoryMode_C)
     in
-    Bmc_globals.set 3 true true "main" 0 true false cat_file_opt mem_model;
+    Bmc_globals.set 3 conf.instance.sequentialise_core true "main" 0 true false cat_file_opt mem_model;
     return @@ match Bmc.bmc core (Some ail) with
     | `Satisfiable (out, dots) -> `Satisfiable (Str.replace_first (Str.regexp_string filename) name out, dots)
     | `Unknown out -> `Unknown (Str.replace_first (Str.regexp_string filename) name out)
