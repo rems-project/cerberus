@@ -897,11 +897,12 @@ module MemoryModelCommon = struct
       let write_base = PointerSort.get_index_from_addr (fns.getAddr write) in
 
       let diff = binop_to_z3 OpSub read_addr write_base in
-      let sizeof_read = size_of_bmcaction action file in
+      (*let sizeof_read = size_of_bmcaction action file in
       let index = binop_to_z3 OpDiv diff (int_to_z3 sizeof_read) in
+      *)
 
       let indexed_wval =
-          Loaded.get_ith_in_loaded_2 index (fns.getWval write) in
+          Loaded.get_ith_in_loaded diff (fns.getWval write) in
 
       (* NOTE: Semantics: if reading from an write with unspecified
        * wval, then rval is a specified value with range constrained based on
@@ -920,8 +921,10 @@ module MemoryModelCommon = struct
                       (Loaded.get_loaded_int (fns.getRval read)))
         | _ -> []
         end in
-
-      let read_from_unspec_write = Loaded.is_unspecified indexed_wval in
+      let read_from_unspec_write =
+         mk_or [Loaded.is_unspecified indexed_wval
+               ;Loaded.is_unspecified (fns.getWval write)
+               ] in
         (*mk_and [mk_not (fns.isInitial write)
                ;Loaded.is_unspecified indexed_wval
                ] in*)

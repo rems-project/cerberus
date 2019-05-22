@@ -1420,11 +1420,13 @@ module BmcZ3 = struct
     get_fresh_alloc >>= fun alloc_id ->
     (* TODO: we probably don't actually want to flatten the sort list *)
     let flat_sortlist = flatten_bmcz3sort (ctype_to_bmcz3sort ctype file) in
-    (* TODO: special case creates for structs *)
-    (match ctype with
+    (* TODO: replace aid list -> single aid *)
+    get_fresh_aid >>= fun aid ->
+    let aids = [aid] in
+    (*(match ctype with
      | Struct0 _ -> mapMi (fun i _ -> get_fresh_aid) flat_sortlist
      | _         -> get_fresh_aid >>= fun aid -> return [aid]
-    ) >>= fun aids ->
+    ) >>= fun aids ->*)
     let base_addr = PointerSort.mk_nd_addr alloc_id in
     add_metadata alloc_id (PointerSort.type_size ctype file,
                            Some ctype,
@@ -4493,13 +4495,14 @@ module BmcConcActions = struct
       match ctype with
       | Basic0 (Integer _) ->
           [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
-                 value
+                 (Loaded.mk_base_expr value)
           ]
       | Basic0 _ ->
           failwith "TODO: multid-arrays of non-integer ctype"
       | Array0 (ctype', Some n) ->
-          let size_of_bmcz3sort_ctype' : int =
-            bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in
+          (*let size_of_bmcz3sort_ctype' : int =
+            bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in*)
+          let size_of_ctype' : int = PointerSort.type_size ctype' file in
           (* TODO: Need to rewrite loaded sorts.
            * No guarantee value was created in this manner.
            *)
@@ -4507,7 +4510,8 @@ module BmcConcActions = struct
 
           let assertions =
             List.init (Nat_big_num.to_int n) (fun i ->
-              let new_base = base_index + (i * size_of_bmcz3sort_ctype') in
+              (*let new_base = base_index + (i * size_of_bmcz3sort_ctype') in*)
+              let new_base = base_index + (i * size_of_ctype') in
               let subobj = Z3Array.mk_select g_ctx loaded_value (int_to_z3 i) in
               aux global_array ctype' subobj new_base
             ) in
@@ -4516,16 +4520,19 @@ module BmcConcActions = struct
           failwith (sprintf "TODO: multid arrays with ctype %s"
                             (pp_to_string (Pp_core_ctype.pp_ctype ctype)))
    in
-
     match ctype with
-    | Array0(Array0 (_, _), Some _) ->
+    | Array0(_, _) ->
         let new_array =
-            IntArray.mk_const_s (sprintf "flattened_%s" (Expr.to_string value)) in
-        (* We are dealing with loaded values *)
-        let loaded_new_array = LoadedIntArray.mk_specified new_array in
+            Z3Array.mk_const_s g_ctx (sprintf "flattened_%s" (Expr.to_string value))
+                               integer_sort (Loaded.base_sort) in
+        let loaded_new_array = TODO_LoadedSort.mk_specified new_array in
         let assertions = aux new_array ctype value 0 in
         (loaded_new_array, assertions)
-    | _ -> (value, [])
+    | Struct0 _ ->
+        (TODO_LoadedSort.mk_unspecified Loaded.raw_array_sort
+             (CtypeSort.mk_expr ctype), [])
+    | _ ->
+        (value, [])
 
 
   (*let mk_store (pol: polarity)
@@ -4593,16 +4600,50 @@ module BmcConcActions = struct
         PointerSort.assert_is_atomic target_addr (is_atomic_fn ctype) in
       add_assertion is_atomic
     ) sortlist >>= fun _ ->
-    (match ctype with
-    | Struct0 tag -> (* Hack for structs *)
+    begin match ctype with
+    | Struct0 tag ->
+        begin match create_mode with
+        | CreateMode_Specified ->
+            failwith "TODO: initializing structs as values"
+        | CreateMode_Unspecified ->
+            ()
+        | CreateMode_InitialValue _ ->
+            failwith "TODO: Read only structs"
+        end
+    | _ -> ()
+    end;
+    assert (List.length aids = 1);
+    let aid = List.hd aids in
+    let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
+
+    let (initial_value, assumptions) =
+      begin
+      match create_mode with
+      | CreateMode_Specified ->
+          BmcMemCommon.mk_initial_loaded_value sort
+              (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+              ctype true file
+      | CreateMode_Unspecified ->
+          BmcMemCommon.mk_initial_loaded_value sort
+              (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
+              ctype false file
+      | CreateMode_InitialValue iv ->
+          (iv, [])
+      end in
+
+    mapM add_assertion assumptions >>= fun _ ->
+    mk_store_and_flatten_multid_arrays
+              pol mk_true aid initial_tid
+              (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
+        >>= fun store ->
+    return [store]
+
+
+        (* Unspecified structs only; convert to array const *)
+        (*
         begin
         assert (List.length aids = List.length sortlist);
         let (size, (_,flat_list)) = PointerSort.struct_member_index_list tag file in
-
-        (*List.iter (fun i -> printf "I: %d\n" i) flat_list;
-
-        List.iter (fun s -> printf "%s\n" (Sort.to_string (snd s))) sortlist;
-        *)
 
         if (List.length flat_list <> List.length sortlist) then
           failwith (sprintf "Complex struct %s not supported"
@@ -4615,7 +4656,8 @@ module BmcConcActions = struct
             let aid = List.nth aids i in
             let initialise =
               begin match create_mode with
-              | CreateMode_Specified -> true
+              | CreateMode_Specified ->
+                  failwith "TODO: initializing structs"
               | CreateMode_Unspecified -> false
               | CreateMode_InitialValue _ ->
                   failwith "TODO: Read only structs"
@@ -4632,35 +4674,7 @@ module BmcConcActions = struct
           ) indexed_sorts
           end
         end
-    | _ ->
-      begin
-      assert (List.length aids = 1);
-      let aid = List.hd aids in
-      let ptr_0 = PointerSort.mk_ptr (int_to_z3 alloc_id) base_addr in
-
-      let (initial_value, assumptions) =
-        begin
-        match create_mode with
-        | CreateMode_Specified ->
-            BmcMemCommon.mk_initial_loaded_value sort
-                (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
-                ctype true file
-        | CreateMode_Unspecified ->
-            BmcMemCommon.mk_initial_loaded_value sort
-                (sprintf "init_%d[0...%d]" alloc_id (List.length sortlist))
-                ctype false file
-        | CreateMode_InitialValue iv ->
-            (iv, [])
-        end in
-
-      mapM add_assertion assumptions >>= fun _ ->
-      mk_store_and_flatten_multid_arrays
-                pol mk_true aid initial_tid
-                (C_mem_order Cmm_csem.NA) ptr_0 initial_value ctype
-          >>= fun store ->
-      return [store]
-      end
-    )
+        *)
 
 
   let intermediate_to_bmc_actions (action: BmcZ3.intermediate_action)
