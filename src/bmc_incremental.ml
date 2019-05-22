@@ -235,7 +235,8 @@ module BmcInline = struct
           inline_pe pe >>= fun inlined_pe ->
           return (cab_id, inlined_pe)) pexprs >>= fun inlined_pexprs ->
         return (PEstruct(sym, inlined_pexprs))
-    | PEunion _  -> assert false
+    | PEunion _  ->
+        failwith "TODO: support union types"
     | PEcfunction (Pexpr(_,_,PEsym sym)) ->
         get_fn_ptr_sym sym >>= fun fn_sym ->
         get_file >>= fun file ->
