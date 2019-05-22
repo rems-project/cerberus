@@ -1078,9 +1078,8 @@ module MemoryModelCommon = struct
      * type error, but we want to check this holds for every execution
      * regardless of whether or not we tell BMC to compute all executions.
      *
-     * - Doesn't work yet b/c arrays
+     * - We allow different types only for initial actions
      *)
-    (*
     let todo_loads_read_from_stores_of_the_same_type =
       List.concat (
       List.map (fun (e_read, e_write) ->
@@ -1088,7 +1087,9 @@ module MemoryModelCommon = struct
         let ctype_write = ctype_of_bmcaction e_write in
         let read = z3action e_read in
         let write = z3action e_write in
-        if Pervasives.compare ctype_read ctype_write <> 0 then
+
+        if (Pervasives.compare ctype_read (base_ctype ctype_write) <> 0)
+           && ((tid_of_bmcaction e_write) <> initial_tid) then
           [mk_not (mk_and [fns.getGuard read
                           ;fns.getGuard write
                           ;mk_eq (fns.rf_inv read) write
@@ -1098,7 +1099,6 @@ module MemoryModelCommon = struct
         else
           []
       ) (cartesian_product reads writes)) in
-    *)
 
 
     { event_sort = event_sort
@@ -1130,7 +1130,7 @@ module MemoryModelCommon = struct
     ; co_init        = co_init
     ; memop_asserts  = memop_asserts
     ; vcs            = memop_vcs @ free_of_nondynamic_alloc_vcs
-                       (*@ todo_loads_read_from_stores_of_the_same_type*)
+                       @ todo_loads_read_from_stores_of_the_same_type
     }
 
   type execution = {

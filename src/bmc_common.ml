@@ -63,6 +63,21 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Union v ->  Union0 v
   | Builtin v -> Builtin0 v
 
+let rec base_ctype (ty: Core_ctype.ctype0) : Core_ctype.ctype0 =
+  match ty with
+  | Void0 -> assert false
+  | Basic0 _ -> ty
+  | Array0 (ty2, _) ->
+      base_ctype ty2
+  | Function0 _ -> assert false
+  | Pointer0 _ -> ty
+  | Atomic0 ty2 ->
+      base_ctype ty2
+  | Struct0 _ ->
+      ty
+  | Union0 _ ->
+      ty
+  | Builtin0 _ -> ty
 
 let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                            (file: unit typed_file)
