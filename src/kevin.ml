@@ -182,22 +182,28 @@ let string_of_value expr =
   let open Bmc_sorts in
   assert (Expr.get_num_args expr = 1);
   let arg = List.hd (Expr.get_args expr) in
-  if (Sort.equal (Expr.get_sort arg) (LoadedInteger.mk_sort)) then
+  if (Sort.equal (Expr.get_sort arg) Loaded.base_sort) then
     begin
-      if (Boolean.is_true
-        (Expr.simplify (LoadedInteger.is_unspecified arg) None)) then
-        "?"
+      let base_arg = List.hd (Expr.get_args arg) in
+      if (Sort.equal (Expr.get_sort base_arg) (LoadedInteger.mk_sort)) then
+        begin
+          if (Boolean.is_true
+            (Expr.simplify (LoadedInteger.is_unspecified base_arg) None)) then
+            "?"
+          else
+          Expr.to_string (List.hd (Expr.get_args base_arg))
+        end
+      else if (Sort.equal (Expr.get_sort base_arg) (LoadedPointer.mk_sort)) then
+        begin
+          if (Boolean.is_true
+            (Expr.simplify (LoadedPointer.is_unspecified base_arg) None)) then
+            "?"
+          else begin
+            PointerSort.pp (List.hd (Expr.get_args base_arg))
+          end
+        end
       else
-      Expr.to_string (List.hd (Expr.get_args arg))
-    end
-  else if (Sort.equal (Expr.get_sort arg) (LoadedPointer.mk_sort)) then
-    begin
-      if (Boolean.is_true
-        (Expr.simplify (LoadedPointer.is_unspecified arg) None)) then
-        "?"
-      else begin
-        PointerSort.pp (List.hd (Expr.get_args arg))
-      end
+        Expr.to_string base_arg
     end
   else
     Expr.to_string arg
