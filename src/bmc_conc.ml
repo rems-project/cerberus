@@ -1088,7 +1088,7 @@ module MemoryModelCommon = struct
         let read = z3action e_read in
         let write = z3action e_write in
 
-        if (Pervasives.compare ctype_read (base_ctype ctype_write) <> 0)
+        if (Pervasives.compare (base_ctype ctype_read) (base_ctype ctype_write) <> 0)
            && ((tid_of_bmcaction e_write) <> initial_tid) then
           [mk_not (mk_and [fns.getGuard read
                           ;fns.getGuard write
