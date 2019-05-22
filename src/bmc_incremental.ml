@@ -4500,6 +4500,10 @@ module BmcConcActions = struct
           ]
       | Basic0 _ ->
           failwith "TODO: multid-arrays of non-integer ctype"
+      | Pointer0 _ ->
+          [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
+                 (Loaded.mk_base_expr value)
+          ]
       | Array0 (ctype', Some n) ->
           (*let size_of_bmcz3sort_ctype' : int =
             bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in*)
