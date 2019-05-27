@@ -2242,6 +2242,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     | BaseSet_A -> is_atomic_bmcaction a
     | BaseSet_I -> is_initial_bmcaction a
     | BaseSet_F -> is_fence_action a
+    | BaseSet_Kill -> is_kill (get_action a)
     | BaseSet_NA  -> get_memorder a = C_mem_order NA
     | BaseSet_RLX -> get_memorder a = C_mem_order Relaxed
     | BaseSet_REL -> get_memorder a = C_mem_order Release

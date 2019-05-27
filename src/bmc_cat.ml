@@ -13,6 +13,7 @@ module CatFile = struct
     | BaseSet_A         (* atomic events *)
     | BaseSet_I         (* initial events *)
     | BaseSet_F
+    | BaseSet_Kill      (* kill events *)
     | BaseSet_NA
     | BaseSet_RLX
     | BaseSet_REL
@@ -93,6 +94,7 @@ module CatFile = struct
   let mk_set_A = Set_base BaseSet_A
   let mk_set_I = Set_base BaseSet_I
   let mk_set_F = Set_base BaseSet_F
+  let mk_set_Kill = Set_base BaseSet_Kill
   let mk_set_NA = Set_base BaseSet_NA
   let mk_set_REL = Set_base BaseSet_REL
   let mk_set_RLX = Set_base BaseSet_RLX
@@ -225,6 +227,7 @@ module CatFile = struct
     | BaseSet_A       -> "A"
     | BaseSet_I       -> "I"
     | BaseSet_F       -> "F"
+    | BaseSet_Kill    -> "Kill"
     | BaseSet_NA      -> "NA"
     | BaseSet_RLX     -> "RLX"
     | BaseSet_REL     -> "REL"
@@ -401,6 +404,7 @@ module CatParser = struct
           ;token (string "A")       *> return mk_set_A
           ;token (string "I")       *> return mk_set_I
           ;token (string "F")       *> return mk_set_F
+          ;token (string "Kill")    *> return mk_set_Kill
           ]
 
   let chainl1 e op =

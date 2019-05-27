@@ -5158,10 +5158,21 @@ module BmcConcActions = struct
         return (Pset.empty Pervasives.compare, empty_deps)
     | CreateReadOnly _ -> assert false
     | Alloc0 _ -> assert false
-    | Kill(_, pe) ->
-        do_taint_pe pe >>= fun taint_pe ->
-        (* TODO: ignored *)
-        return (taint_pe, empty_deps)
+    | Kill(_, Pexpr(_,_,PEsym sym)) ->
+        get_action uid >>= fun interm_action ->
+        get_taint sym >>= fun taint_ptr ->
+        begin match interm_action with
+        | IKill(aid, _,_) ->
+          return (Pset.empty Pervasives.compare,
+                 { addr = cartesian_product (Pset.elements taint_ptr) [aid]
+                 ; data = []
+                 ; ctrl = []
+                 })
+        | _ ->
+            assert false
+        end
+    | Kill _ ->
+        assert false
     | Store0 (b, Pexpr(_,_,PEval (Vctype ty)), Pexpr(_,_,PEsym sym), wval, mo) ->
         get_action uid >>= fun interm_action ->
         do_taint_pe wval >>= fun taint_wval ->
