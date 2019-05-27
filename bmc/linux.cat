@@ -157,8 +157,9 @@ let rb = rb_head ; rb_tail
 
 irreflexive rb as rcu
 
-let __bmc_hb = hb
-
 output crit
+let __hb_with_kills = hb | (po_asw ; [Kill]) | ([Kill]; po_asw)
+let __bmc_hb = __hb_with_kills*
+
 //output rcu-fence
 //output rcu-link
