@@ -344,6 +344,7 @@ let bmc_file (file              : unit typed_file)
   (* Add bindings *)
   Solver.add g_solver (Option.get final_state.bindings);
   Solver.add g_solver (Option.get final_state.ret_bindings);
+
   Solver.push g_solver;
   bmc_debug_print 3 "START FIRST CHECK WITHOUT MEMORY ACTIONS";
   begin match Solver.check g_solver [] with

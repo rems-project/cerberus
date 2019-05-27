@@ -3068,12 +3068,16 @@ module BmcRet = struct
     | Esave _ ->
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr
-    | Erun _ ->
+    | Erun (_, label, _) ->
         get_inline_expr uid >>= fun inline_expr ->
         do_e inline_expr    >>= fun ret_expr ->
         get_expr (get_id_expr inline_expr) >>= fun z3_expr ->
         get_ret_const       >>= fun ret_const ->
-        return ((mk_eq ret_const z3_expr) :: ret_expr)
+        let label_name = symbol_to_string_simple label in
+        if String.compare "ret_" (String.sub label_name 0 4) = 0 then
+          return ((mk_eq ret_const z3_expr) :: ret_expr)
+        else
+          return ret_expr
     | Epar es ->
         mapM do_e es >>= fun ret_es ->
         (* TODO: check this. Really want to assert can't jump out of par... *)
