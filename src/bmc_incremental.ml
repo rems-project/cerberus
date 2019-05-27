@@ -4782,7 +4782,10 @@ module BmcConcActions = struct
         return [BmcAction(pol, mk_true, Load(aid, tid, Linux_mem_order mo, ptr, rval, ctype))]
     | ILinuxStore(aid, ctype, _, ptr, wval, mo) ->
         get_tid >>= fun tid ->
-        return [BmcAction(pol, mk_true, Store(aid, tid, Linux_mem_order mo, ptr, wval, ctype))]
+        mk_store_and_flatten_multid_arrays
+                pol mk_true aid tid (Linux_mem_order mo) ptr wval ctype false
+            >>= fun store ->
+        return [store]
     | ILinuxRmw(aid, ctype, _, ptr, wval, rval, mo) ->
         get_tid >>= fun tid ->
         return [BmcAction(pol, mk_true, RMW(aid, tid, Linux_mem_order mo, ptr, rval, wval, ctype))]
