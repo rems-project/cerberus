@@ -32,7 +32,7 @@ export type Value = {
 }
 
 export type Prefix = {
-  kind: 'source' | 'string literal' | 'arg' | 'malloc',
+  kind: 'source' | 'string literal' | 'compound literal' | 'arg' | 'malloc',
   name: string,
   scope: string | null,
   loc: Range | null
@@ -186,6 +186,8 @@ export function string_of_value (v: Value, pvi: boolean, show_pointer_bytes: boo
 }
 
 export function unique (v: Prefix, m: Map):  'unique' |'unique-in-scope' | 'non-unique'  {
+  if (v.kind == 'compound literal')
+    return 'unique'
   const pres = _.map(m, a => a.prefix)
                 .filter(p => p.kind === 'source' && p.name === v.name)
   if (pres.length == 1)

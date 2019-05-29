@@ -2663,7 +2663,7 @@ else (* is_pointer *)
           let core_ty = Caux.mk_ail_ctype_pe ty in
           let oTy = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e)) in
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, obj_sym_pat, obj_sym_pe) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (_, e_sym_pat, e_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy) >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           self e >>= fun core_e ->
           let () = Debug.print_debug 1 [] (fun () ->
              "TODO!!!! the lifetime of block scoped AilEcompound ends with the block (right now there is no kill)"
@@ -2672,7 +2672,7 @@ else (* is_pointer *)
           E.return begin
             Caux.mk_wseq_e obj_sym_pat
               (* TODO: if qs has const, we must probably use a create_readonly *)
-              (Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefOther "compound literal")) begin
+              (Caux.pcreate loc (Caux.mk_alignof_pe core_ty) core_ty (Symbol.PrefCompoundLiteral (locOf e) (Symbol.digest_of_sym e_sym))) begin
             (* TODO: probably needs a conversion *)
             Caux.mk_wseq_e e_sym_pat core_e begin
             Caux.mk_wseq_e (Caux.mk_empty_pat C.BTy_unit) (Caux.pstore loc core_ty obj_sym_pe e_sym_pe Cmm.NA) begin
