@@ -2592,6 +2592,11 @@ let combine_prov prov1 prov2 =
               ("scope", `Null);
               ("name", `String "literal");
               ("loc", Location_ocaml.to_json loc)]
+    | Symbol.PrefCompoundLiteral (loc, _) ->
+      `Assoc [("kind", `String "compound literal");
+              ("scope", `Null);
+              ("name", `String "literal");
+              ("loc", Location_ocaml.to_json loc)]
     | Symbol.PrefFunArg (loc, _, n) ->
       `Assoc [("kind", `String "arg");
               ("scope", `Null);
@@ -2669,6 +2674,7 @@ let combine_prov prov1 prov2 =
         match alloc.prefix with
         | Symbol.PrefSource (_, syms) -> List.exists (fun (Symbol.Symbol (hash, _, _)) -> hash = dig) syms
         | Symbol.PrefStringLiteral (_, hash) -> hash = dig
+        | Symbol.PrefCompoundLiteral (_, hash) -> hash = dig
         | Symbol.PrefFunArg (_, hash, _) -> hash = dig
         | Symbol.PrefMalloc -> true
         | _ -> false
