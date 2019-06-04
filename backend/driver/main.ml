@@ -58,7 +58,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/libc/include"; cerb_path ^ "/libc/include/posix"] in
+  let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
@@ -73,7 +73,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
   end
 
 let core_libraries incl lib_paths libs =
-  let lib_paths = if incl then (cerb_path ^ "/libc") :: lib_paths else lib_paths in
+  let lib_paths = if incl then (cerb_path ^ "/runtime/libc") :: lib_paths else lib_paths in
   let libs = if incl then "c" :: libs else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
@@ -200,6 +200,7 @@ let cerberus debug_level progress core_obj
             Pp_errors.fatal "bmc mode accepts only one file"
         end
       (* Run abstract interpretation *)
+        (*
       else if absint then
         begin match files with
           | [filename] ->
@@ -211,6 +212,7 @@ let cerberus debug_level progress core_obj
           | _ ->
             Pp_errors.fatal "absint mode accepts only one file"
         end
+           *)
       (* Run only CPP *)
       else if cpp_only then
         Exception.foldlM (fun () file ->
@@ -234,7 +236,7 @@ let cerberus debug_level progress core_obj
         prelude >>= main >>= begin function
           | [] -> assert false
           | f::fs ->
-            if cfg then Cfg.mk_dot ~sequentialise:sequentialise_core f;
+            (*if cfg then Cfg.mk_dot ~sequentialise:sequentialise_core f;*)
             Core_linking.link (f::fs)
         end >>= fun core_file ->
         if exec then

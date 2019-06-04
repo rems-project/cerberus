@@ -1,0 +1,24 @@
+# We need ocamlfind
+ifeq (, $(shell which ocamlfind))
+$(error "ocamlfind is required to build Cerberus")
+endif
+
+BOLD   := "\033[1m"
+RED    := "\033[31m"
+YELLOW := "\033[33m"
+RESET  := "\033[0m"
+
+CERB_PATH ?= $(shell pwd)
+FRONTEND = $(CERB_PATH)/frontend
+
+# Ocamlbuild flags
+OB_FLAGS = -j 4 -use-ocamlfind
+
+# Looking for Lem
+LEM_PATH ?= ~/bitbucket/lem
+
+LEM = lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
+	-only_changed_output \
+	-outdir $(BUILD_DIR)
+
+

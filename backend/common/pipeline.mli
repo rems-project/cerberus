@@ -69,9 +69,11 @@ val interp_backend:
 (*  [`Interactive | `Exhaustive | `Random] -> *)
   ((string list, int) Either.either, Location_ocaml.t * Errors.cause) Exception.exceptM
 
+(*
 val ocaml_backend:
   (configuration * io_helpers) -> filename:string -> ocaml_corestd:bool -> unit Core.file ->
   (int, Location_ocaml.t * Errors.cause) Exception.exceptM
+   *)
 
 val read_core_object:
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->

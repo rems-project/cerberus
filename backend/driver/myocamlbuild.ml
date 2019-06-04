@@ -5,7 +5,7 @@ let () =
   dispatch begin function
   | After_rules ->
       flag_and_dep ["link"; "ocaml"; "link_cstubs"]
-        (A "src/cerberus_cstubs.o");
+        (A "common/cerberus_cstubs.o");
   | _ ->
       ()
 end

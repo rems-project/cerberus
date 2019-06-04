@@ -1,0 +1,4 @@
+true: warn(+8), bin_annot, color(always)
+true: package(lem), package(ppx_sexp_conv), package(sexplib)
+true: debug
+<generated>: include

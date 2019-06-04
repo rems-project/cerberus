@@ -1,0 +1,17 @@
+true: use_menhir, bin_annot, color(always)
+true: debug
+
+true: package(z3), package(angstrom)
+
+true: package(concrete)
+true: package(lem), package(pprint), package(yojson), package(ppx_sexp_conv), package(sexplib), package(sibylfs)
+true: package(cmdliner), package(str)
+
+<common>: include
+<parsers/c>: include
+<parsers/core>: include
+
+<parsers/c/*>: external_tokens(Tokens), explain, warn(@8)
+<parsers/core/*>: external_tokens(Core_parser_util), explain, warn(@8)
+
+<*.native> : link_cstubs

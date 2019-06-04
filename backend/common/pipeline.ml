@@ -29,7 +29,7 @@ let run_pp with_ext doc =
 
 (* The path to the Core standard library *)
 let core_stdlib_path =
-  Filename.concat Global_ocaml.cerb_path "libcore"
+  Filename.concat Global_ocaml.cerb_path "runtime/libcore"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
@@ -560,6 +560,7 @@ let write_core_object core_file fname =
 
 
 (* FIXME: this is not working *)
+(*
 let ocaml_backend (conf, io) ~filename ~ocaml_corestd core_file =
   (* the OCaml backend really needs things to have been sequentialised *)
   (fun (_, typed_core) ->
@@ -567,5 +568,6 @@ let ocaml_backend (conf, io) ~filename ~ocaml_corestd core_file =
      else Core_sequentialise.sequentialise_file typed_core)
   <$> typed_core_passes (conf, io) core_file
   >>= Codegen_ocaml.gen filename ocaml_corestd
+*)
 
 

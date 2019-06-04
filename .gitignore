@@ -4,13 +4,15 @@ ocaml_generated
 generated_doc
 sibylfs/generated
 
+lib
+
 core-ott/*.tex
 core-ott/*.aux
 core-ott/*.log
 core-ott/*.pdf
 core-ott/*.lem
 
-src/main_.ml
+main_.ml
 public/package-lock.json 
 tests/ci_results.xml
 tests/csmith/tools/ciValidate
@@ -40,15 +42,13 @@ trash/**
 cbuild
 clink
 cerberus
-twin
 cerberus-prof
 cerb.concrete
 cerb.symbolic
-cerb.twin
-libc/libc.co
-libc/libm.co
 
-web.byte
+runtime/libc/libc.co
+runtime/libc/libm.co
+
 public/include
 public/node_modules
 public/dist/*.bundle.*
