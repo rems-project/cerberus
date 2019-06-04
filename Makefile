@@ -1,11 +1,10 @@
 include Makefile.common
 
-.PHONY: all default sibylfs concrete symbolic clean clear \
-	cerberus cerberus-bmc bmc cerberus-symbolic
+.PHONY: all default sibylfs concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic
 
-default: cerberus libc
+cerberus: cerberus-concrete libc
 
-all: cerberus cerberus-symbolic cerberus-bmc
+all: cerberus-concrete cerberus-symbolic cerberus-bmc libc
 
 sibylfs:
 	@make -C sibylfs
@@ -34,7 +33,7 @@ lib/sibylfs/sibylfs.cmxa: lib sibylfs/_build/sibylfs.cmxa
 memory/concrete/_build/concrete.cmxa: concrete
 
 lib/concrete/concrete.cmxa: lib/sibylfs/sibylfs.cmxa memory/concrete/_build/concrete.cmxa
-	@echo $(BOLD)INSTALLING Concrete Memory Model$(RESET)
+	@echo $(BOLD)INSTALLING Concrete Memory Model in ./lib$(RESET)
 	@mkdir -p lib/concrete
 	@cp memory/concrete/META lib/concrete/
 	@cp memory/concrete/_build/src/concrete.{a,cma,cmxa} lib/concrete
@@ -46,7 +45,7 @@ lib/concrete/concrete.cmxa: lib/sibylfs/sibylfs.cmxa memory/concrete/_build/conc
 memory/symbolic/_build/symbolic.cmxa: symbolic
 
 lib/symbolic/symbolic.cmxa: lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/symbolic.cmxa
-	@echo $(BOLD)INSTALLING Symbolic Memory Model$(RESET)
+	@echo $(BOLD)INSTALLING Symbolic Memory Model in ./lib$(RESET)
 	@mkdir -p lib/symbolic
 	@cp memory/symbolic/META lib/symbolic/
 	@cp memory/symbolic/_build/src/symbolic.{a,cma,cmxa} lib/symbolic
@@ -55,19 +54,19 @@ lib/symbolic/symbolic.cmxa: lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/symb
 	@cp memory/symbolic/_build/frontend/pprinters/*.{cmi,cmx} lib/symbolic
 	@cp memory/symbolic/_build/frontend/common/*.{cmi,cmx} lib/symbolic
 
-cerberus-bmc: lib/concrete/concrete.cmxa
+cerberus-concrete: lib/concrete/concrete.cmxa
 	@make -C backend/driver
 	@cp backend/driver/cerberus cerberus
-
-bmc: cerberus-bmc
 
 cerberus-symbolic: lib/symbolic/symbolic.cmxa
 	@make -C backend/symbolic-driver
 	@cp backend/symbolic-driver/cerberus-symbolic cerberus-symbolic
 
-bmc: lib/concrete/concrete.cmxa
+cerberus-bmc: lib/concrete/concrete.cmxa
 	@make -C backend/bmc
 	@cp backend/bmc/cerberus-bmc cerberus-bmc
+
+bmc: cerberus-bmc
 
 clean:
 	@make -C sibylfs clean
