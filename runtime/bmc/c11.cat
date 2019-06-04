@@ -1,0 +1,176 @@
+// Modified from:
+// https://github.com/herd/herdtools/tree/master/cats/c11/popl2016
+// C11.cat w/o locks, consume
+output addr
+output data
+
+let sb = po | I * (M \ I)
+let mo = co
+
+//let cacq = acq | (sc & (R | F)) | acq_rel | (F & con)
+// no consume
+let cacq = [ACQ | (SC & (R | F)) | ACQ_REL]
+
+//let crel = rel | (sc & (W | F)) | acq_rel
+let crel = [REL | (SC & (W | F)) | ACQ_REL]
+
+//let ccon = R & con				   	   
+
+//let fr = rf^-1 ; mo
+let fr = rf_inv ; mo
+
+//let dd = (data | addr)+
+
+let fsb = [F] ; sb
+let sbf = sb ; [F]
+
+//(* release_acquire_fenced_synchronizes_with,
+//   hypothetical_release_sequence_set,
+//   release_sequence_set *)
+
+//(* OLD: let rs = [crel] ; fsb? ; [A & W] ;
+//	 (((mo ; [rmw]) | coi) & ~(coe ; [!rmw] ; mo))? *)
+
+//let rs_prime = int(_ * _) | (_ * (R & W))
+let rs_prime = int | (U * (R & W))
+let rs = mo & (rs_prime \ ((mo \ rs_prime) ; mo))
+		       
+//(* OLD: let swra = ext (rs ; rf ; [A] ; sbf? ; [cacq]) *)
+//let swra = ext ([crel] ; fsb? ; [A & W] ; rs? ; rf ; [R & A] ; sbf? ; [cacq])
+
+//let swra = (crel ; fsb ? ; [A & W] ; rs ? ; rf ; [R & A] ; sbf ? ; cacq) & ext
+
+let swra_head = crel ; fsb ? ; [A & W]
+let swra_mid = [A & W] ; rs ? ; rf ; [R & A]
+let swra_tail = [R & A] ; sbf ? ; cacq
+let swra = (swra_head ; swra_mid ; swra_tail) & ext
+
+//let swul = ext ([ul] ; lo ; [lk])
+let pp_asw = asw \ (asw ; sb)
+//let sw = pp_asw | swul | swra
+let sw = pp_asw | swra
+
+//(* with_consume_cad_set,
+//   dependency_ordered_before *)
+//let cad = ((rf & sb) | dd)+
+//let dob = (ext ([W & crel] ; fsb? ; [A & W] ; rs?; rf; [ccon])); cad?
+
+//(* happens_before,
+//   inter_thread_happens_before,
+//   consistent_hb *)
+//let ithbr = sw | dob | (sw ; sb)
+let ithbr = sw | (sw; sb)
+let ithb_prime = (ithbr | (sb ; ithbr))
+//let ithb = (ithbr | (sb ; ithbr))+
+let ithb = ithb_prime+
+let hb = sb | ithb
+acyclic hb as hb_acyclic
+
+//(* coherent_memory_use *)
+let hbl = hb & loc
+
+//irreflexive ((rf^-1)? ; mo ; rf? ; hb) as Coh
+
+let coh_prime_head = rf_inv? ; mo
+let coh_prime_tail = rf ? ; hb
+let coh_prime = coh_prime_head ; coh_prime_tail
+
+//let coh_prime = rf_inv? ; mo ; rf ? ; hb
+//irreflexive ((rf_inv)? ; mo ; rf? ; hb) as Coh
+irreflexive coh_prime as coh_irreflexive
+
+//(* visible_side_effect_set *)
+//let vis = ([W] ; hbl ; [R]) & ~(hbl; [W]; hbl)
+
+// TODO: is difference correct here
+let vis = ([W] ; hbl ; [R]) \ (hbl; [W]; hbl)
+
+//(* consistent_atomic_rf *) 
+let rf_prime = rf ; hb
+irreflexive rf_prime as rf_irreflexive
+	      
+//(* consistent_non_atomic_rf  *)
+//empty ((rf ; [nonatomicloc]) \ vis) as NaRf
+
+let narf_prime = (rf ; nonatomicloc) \ vis
+empty narf_prime as nrf_empty
+
+let rmw_prime = rf | (mo ; mo ; rf_inv) | (mo ; rf)
+irreflexive rmw_prime as rmw_irreflexive
+
+//(* locks_only_consistent_lo *)
+//irreflexive (lo ; hb) as Lo1
+
+//(* locks_only_consistent_locks *)
+//irreflexive ([ls] ; lo^-1 ; [ls] ;
+//  ~(lo ; [ul] ; lo)) as Lo2
+
+//(* data_races *)
+//let cnf = ((W * _) | (_ * W)) & loc
+let cnf = ((W * U) | (U * W)) & loc
+let dr = ext & (((cnf \ hb) \ (hb^-1)) \ (A * A))
+
+//(* unsequenced_races *)
+let ur = (((((W * M) | (M * W)) & int & loc) \ sb) \ sb^-1) \ id
+
+//int((W * M) | (M * W)) &
+//         loc & ~[_] & ~(sb+) & ~((sb+)^-1)
+
+//(* locks_only_good_mutex_use,
+//   locks_only_bad_mutexes *)
+//let bl = ([ls]; (sb & lo); [lk])
+//         & ~(lo; [ul]; lo)
+
+//let losbwoul = (sb & lo & ~(lo; [ul]; lo))
+//let lu = [ul] &
+//  ~([ul] ; losbwoul^-1 ; [ls] ; losbwoul ; [ul])
+
+//let ur = (((((W * M) | (M * W)) & int & loc) \ sb) \ sb^-1) \ id
+
+//let Simm = S \ (mo ; S)
+let sc_clk_imm = [SC] ; (sc_clk \ (mo ; sc_clk))
+//let sc = sc_clk
+//output sc
+
+//irreflexive (S ; hb) as S1
+let s1_prime = [SC]; sc_clk_imm ; hb
+irreflexive s1_prime as s1
+//output hb
+//output sw
+
+//irreflexive (S ; fsb? ; mo ; sbf?) as S2
+let s2_prime_head = [SC]; sc_clk ; fsb?
+let s2_prime_tail = mo ; sbf?
+let s2_prime = [SC]; s2_prime_head ; s2_prime_tail
+irreflexive s2_prime as s2
+
+//irreflexive (S ; rf^-1; [sc] ; mo) as S3
+let s3_prime_head = [SC]; sc_clk ; rf_inv ; [SC]
+let s3_prime_tail = [SC] ; mo
+let s3_prime = [SC]; s3_prime_head ; s3_prime_tail
+irreflexive s3_prime as s3
+
+//irreflexive (Simm ; rf^-1 ; hbl ; [W]) as S4
+let s4_prime = [SC]; sc_clk_imm ; rf_inv ; hbl ; [W]
+irreflexive s4_prime as s4
+
+//irreflexive (S ; fsb ; fr) as S5
+let s5_prime = [SC]; sc_clk ; fsb ; fr
+irreflexive s5_prime as s5
+
+//irreflexive (S ; fr ; sbf) as S6
+let s6_prime = [SC]; sc_clk ; fr ; sbf
+irreflexive s6_prime as s6
+
+//irreflexive (S ; fsb ; fr ; sbf) as S7
+let s7_prime_head = [SC]; sc_clk ; fsb
+let s7_prime_tail = fr ; sbf
+let s7_prime = [SC]; s7_prime_head ; s7_prime_tail
+irreflexive s7_prime as s7
+
+let __bmc_hb = hb
+
+undefined_unless empty dr as dr_ub
+undefined_unless empty ur as unsequenced_race
+//undefined_unless empty bl as badLock
+//undefined_unless empty lu as badUnlock

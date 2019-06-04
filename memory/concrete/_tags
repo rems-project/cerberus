@@ -4,6 +4,5 @@ true: debug
 
 <src>: include
 <ocaml_generated>: include
-<ocaml_generated/ail>: include
-<common>: include
+<frontend/common>: include
 <frontend/pprinters>: include
