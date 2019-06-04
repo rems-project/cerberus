@@ -1,0 +1,46 @@
+# true: -traverse, use_menhir, annot, bin_annot, debug, linkpkg, color(always)
+true: use_menhir, bin_annot, color(always)
+true: -traverse
+true: debug
+
+"src": include
+"src/codegen": include
+"src/web": include
+"src/absint": include
+"ocaml_generated": include
+"pprinters": include
+"parsers": include
+"parsers/c": include
+"parsers/core": include
+"dependencies/cmdliner-0.9.7/src": include
+"sandbox": include
+
+# Non-exhaustive patterns raise an error for Lem generated modules
+"ocaml_generated/cmm_op.ml": warn(-8)
+"ocaml_generated/cmm_csem.ml": warn(-8)
+"ocaml_generated/core_unstruct.ml": warn(-8)
+<ocaml_generated/*.ml>: warn(@8)
+"src/concrete.ml": warn(@8)
+true: warn(+8)
+
+<parsers/c/*>: external_tokens(Tokens), explain, warn(@8)
+<parsers/core/*>: external_tokens(Core_parser_util), explain, warn(@8)
+
+"cmdliner-0.9.7/_build/src": include
+"dependencies/pprint-20140424/src": include
+
+
+# "ocaml_generated/cabs_to_ail.ml": coverage
+# "ocaml_generated/cabs_to_ail_aux.ml": coverage
+# "ocaml_generated/cabs_to_ail_effect.ml": coverage
+# "ocaml_generated/translation.ml": coverage
+# "ocaml_generated/genTyping.ml": coverage
+# "ocaml_generated/core_run.ml": coverage
+# "ocaml_generated/driver.ml": coverage
+# <src/main_.native>: coverage
+# <src/*>: coverage
+
+
+<src/*.native> : link_cstubs
+
+<test.native> : link_cstubs

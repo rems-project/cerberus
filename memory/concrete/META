@@ -1,0 +1,5 @@
+requires = "sibylfs"
+description = "Cerberus with a concrete memory model."
+archive(byte) = "concrete.cma"
+archive(native) = "concrete.cmxa"
+version = "0.0.1"

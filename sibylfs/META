@@ -1,0 +1,5 @@
+requires = ""
+description = "SibylFS"
+archive(byte) = "sibylfs.cma"
+archive(native) = "sibylfs.cmxa"
+version = "0.0.1"
