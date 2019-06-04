@@ -1,0 +1,5 @@
+requires = "sibylfs"
+description = "Cerberus with a symbolic memory model."
+archive(byte) = "symbolic.cma"
+archive(native) = "symbolic.cmxa"
+version = "0.0.1"

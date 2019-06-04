@@ -16,4 +16,4 @@ cerberus:
 	@cp -L main_.native cerberus
 
 clean:
-	@rm -rf _build main_.ml
+	@rm -rf _build main_.ml main_.native cerberus

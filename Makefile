@@ -1,8 +1,11 @@
 include Makefile.common
 
-.PHONY: all sibylfs concrete symbolic clean cerberus
+.PHONY: all default sibylfs concrete symbolic clean clear \
+	cerberus cerberus-bmc bmc cerberus-symbolic
 
-all: cerberus libc
+default: cerberus libc
+
+all: cerberus cerberus-symbolic cerberus-bmc
 
 sibylfs:
 	@make -C sibylfs
@@ -28,24 +31,52 @@ lib/sibylfs/sibylfs.cmxa: lib sibylfs/_build/sibylfs.cmxa
 	@cp sibylfs/_build/sibylfs.{a,cma,cmxa} lib/sibylfs/
 	@cp sibylfs/_build/generated/*.{cmi,cmx} lib/sibylfs/
 
-concrete/_build/concrete.cmxa: concrete
+memory/concrete/_build/concrete.cmxa: concrete
 
-lib/concrete/concrete.cmxa: lib/sibylfs/sibylfs.cmxa concrete/_build/concrete.cmxa
-	@echo $(BOLD)INSTALLING Concrete memory model$(RESET)
+lib/concrete/concrete.cmxa: lib/sibylfs/sibylfs.cmxa memory/concrete/_build/concrete.cmxa
+	@echo $(BOLD)INSTALLING Concrete Memory Model$(RESET)
 	@mkdir -p lib/concrete
 	@cp memory/concrete/META lib/concrete/
-	@cp memory/concrete/_build/concrete.{a,cma,cmxa} lib/concrete
+	@cp memory/concrete/_build/src/concrete.{a,cma,cmxa} lib/concrete
+	@cp memory/concrete/_build/src/*.{cmi,cmx} lib/concrete
 	@cp memory/concrete/_build/ocaml_generated/*.{cmi,cmx} lib/concrete
 	@cp memory/concrete/_build/frontend/pprinters/*.{cmi,cmx} lib/concrete
-	@cp memory/concrete/_build/src/*.{cmi,cmx} lib/concrete
-	@cp memory/concrete/_build/common/*.{cmi,cmx} lib/concrete
+	@cp memory/concrete/_build/frontend/common/*.{cmi,cmx} lib/concrete
 
-cerberus: lib/concrete/concrete.cmxa
+memory/symbolic/_build/symbolic.cmxa: symbolic
+
+lib/symbolic/symbolic.cmxa: lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/symbolic.cmxa
+	@echo $(BOLD)INSTALLING Symbolic Memory Model$(RESET)
+	@mkdir -p lib/symbolic
+	@cp memory/symbolic/META lib/symbolic/
+	@cp memory/symbolic/_build/src/symbolic.{a,cma,cmxa} lib/symbolic
+	@cp memory/symbolic/_build/src/*.{cmi,cmx} lib/symbolic
+	@cp memory/symbolic/_build/ocaml_generated/*.{cmi,cmx} lib/symbolic
+	@cp memory/symbolic/_build/frontend/pprinters/*.{cmi,cmx} lib/symbolic
+	@cp memory/symbolic/_build/frontend/common/*.{cmi,cmx} lib/symbolic
+
+cerberus-bmc: lib/concrete/concrete.cmxa
 	@make -C backend/driver
 	@cp backend/driver/cerberus cerberus
+
+bmc: cerberus-bmc
+
+cerberus-symbolic: lib/symbolic/symbolic.cmxa
+	@make -C backend/symbolic-driver
+	@cp backend/symbolic-driver/cerberus-symbolic cerberus-symbolic
+
+bmc: lib/concrete/concrete.cmxa
+	@make -C backend/bmc
+	@cp backend/bmc/cerberus-bmc cerberus-bmc
 
 clean:
 	@make -C sibylfs clean
 	@make -C memory/concrete clean
+	@make -C memory/symbolic clean
 	@make -C backend/driver clean
+	@make -C backend/bmc clean
+	@make -C backend/symbolic-driver clean
 	@rm -rf lib
+
+clear: clean
+	@rm -rf cerberus cerberus-symbolic cerberus-bmc
