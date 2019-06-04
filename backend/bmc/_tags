@@ -1,12 +1,10 @@
 true: use_menhir, bin_annot, color(always)
 true: debug
 
-true: package(z3), package(angstrom)
-
-true: package(concrete)
-true: package(lem), package(pprint), package(yojson), package(ppx_sexp_conv), package(sexplib), package(sibylfs)
+true: package(lem), package(pprint), package(yojson), package(ppx_sexp_conv), package(sexplib), package(sibylfs), package(concrete), package(z3), package(angstrom)
 true: package(cmdliner), package(str)
 
+<src>: include
 <common>: include
 <parsers/c>: include
 <parsers/core>: include

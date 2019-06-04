@@ -58,7 +58,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
+  let libc_dirs = [cerb_path ^ "/runtime/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin

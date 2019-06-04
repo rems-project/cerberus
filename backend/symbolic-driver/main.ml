@@ -58,7 +58,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [cerb_path ^ "/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
+  let libc_dirs = [cerb_path ^ "/runtime/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
@@ -111,9 +111,6 @@ let cerberus debug_level progress core_obj
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              absint cfg absdomain
-             bmc bmc_max_depth bmc_seq bmc_conc bmc_fn
-             bmc_debug bmc_all_execs bmc_output_model
-             bmc_mode bmc_cat
              fs_dump fs trace
              ocaml ocaml_corestd
              output_name
@@ -127,10 +124,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  (* TODO: add bmc flags *)
-  Bmc_globals.set bmc_max_depth bmc_seq bmc_conc bmc_fn bmc_debug
-      bmc_all_execs bmc_output_model bmc_cat bmc_mode;
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto bmc;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -187,32 +181,6 @@ let cerberus debug_level progress core_obj
       (* Ocaml backend mode *)
       if ocaml then
         error "TODO: ocaml_backend"
-      (* BMC mode *)
-      else if bmc then
-        begin match files with
-          | [filename] ->
-            prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
-            core_passes (conf, io) ~filename core >>= fun core ->
-            ignore @@ Bmc.bmc core ail_opt;
-            return success
-          | _ ->
-            Pp_errors.fatal "bmc mode accepts only one file"
-        end
-      (* Run abstract interpretation *)
-        (*
-      else if absint then
-        begin match files with
-          | [filename] ->
-            prelude >>= fun core_std ->
-            c_frontend (conf, io) core_std filename >>= fun (_, ail_opt, core) ->
-            typed_core_passes (conf, io) core >>= fun (core, _) ->
-            ignore (Absint.solve absdomain core);
-            return success
-          | _ ->
-            Pp_errors.fatal "absint mode accepts only one file"
-        end
-           *)
       (* Run only CPP *)
       else if cpp_only then
         Exception.foldlM (fun () file ->
@@ -487,48 +455,6 @@ let args =
   let doc = "List of arguments for the C program" in
   Arg.(value & opt (some string) None & info ["args"] ~docv:"ARG1,..." ~doc)
 
-(* bmc flags *)
-let bmc =
-  let doc = "Run bounded model checker" in
-  Arg.(value & opt bool false & info["bmc"] ~doc)
-
-let bmc_max_depth =
-  let doc = "Maximum depth of function calls and loops in the bounded model checker" in
-  Arg.(value & opt int 3 & info["bmc_max_depth"] ~doc)
-
-let bmc_seq =
-  let doc = "Replace all unseq() with left to right wseq in the bounded model checker" in
-  Arg.(value & opt bool false & info["bmc_seq"] ~doc)
-
-let bmc_conc =
-  let doc = "Run bounded model checker in concurrent mode" in
-  Arg.(value & opt bool true & info["bmc_conc"] ~doc)
-
-let bmc_fn =
-  let doc = "Name of the function to model check" in
-  Arg.(value & opt string "main" & info["bmc_fn"] ~doc)
-
-let bmc_debug =
-  let doc = "Debug level for the bounded model checker" in
-  Arg.(value & opt int 3 & info["bmc_debug"] ~doc)
-
-let bmc_all_execs =
-  let doc = "Find all executions when model checking. Concurrency model only" in
-  Arg.(value & opt bool true & info["bmc_all_execs"] ~doc)
-
-let bmc_output_model =
-  let doc = "Output model if UB is detected when model checking." in
-  Arg.(value & opt bool false & info["bmc_output_model"] ~doc)
-
-let bmc_mode =
-  let open Bmc_globals in
-  let doc = "BMC memory mode" in
-  Arg.(value & opt (enum ["c", MemoryMode_C; "linux", MemoryMode_Linux]) MemoryMode_C & info["bmc-mode"] ~doc)
-
-let bmc_cat =
-  let doc = "Name of the BMC concurrent model to use" in
-  Arg.(value & opt (some string) None & info["bmc-cat"] ~doc)
-
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
@@ -541,9 +467,6 @@ let () =
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          absint $ cfg $ absdomain $
-                         bmc $ bmc_max_depth $ bmc_seq $ bmc_conc $ bmc_fn $
-                         bmc_debug $ bmc_all_execs $ bmc_output_model $
-                         bmc_mode $ bmc_cat $
                          fs_dump $ fs $ trace $
                          ocaml $ ocaml_corestd $
                          output_file $
