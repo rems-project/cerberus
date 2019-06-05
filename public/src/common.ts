@@ -68,7 +68,7 @@ export namespace AllocModel {
 }
 
 export namespace BmcModel {
-  const opts = flags(['bmc_c11', 'bmc_rc11', 'bmc_rc11_hardcoded', 'bmc_linux', 'bmc_custom'])
+  const opts = flags(['bmc_c11', 'bmc_rc11', 'bmc_rc11_hardcoded', 'bmc_linux', 'bmc_linux_no_rcu', 'bmc_custom'])
   export type t = keyof typeof opts
   export const is = (s: string): s is t => Object.keys(opts).indexOf(s) !== -1
   export const Err = (opt: string) => new Error (`Expecting an 'allocation model' type, got '${opt}'`)

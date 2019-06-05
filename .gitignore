@@ -4,7 +4,7 @@ ocaml_generated
 generated_doc
 sibylfs/generated
 
-lib
+_lib
 
 core-ott/*.tex
 core-ott/*.aux
@@ -42,6 +42,8 @@ trash/**
 cbuild
 clink
 cerberus
+cerberus-bmc
+cerberus-symbolic
 cerberus-prof
 cerb.concrete
 cerb.symbolic

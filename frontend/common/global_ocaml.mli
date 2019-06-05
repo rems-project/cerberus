@@ -41,3 +41,4 @@ val isDefacto: unit -> bool
 val verbose: unit -> error_verbosity
 val n1570: unit -> Yojson.Basic.json option
 
+val error: ?code:int -> string -> 'a

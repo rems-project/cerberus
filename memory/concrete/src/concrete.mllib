@@ -98,14 +98,12 @@ Cmm_op
 Mem
 Mem_common
 Mem_aux
-Ocaml_mem
-Concrete
+Impl_mem
 
 Smt2
 Tags
 Decode_ocaml
 Ocaml_implementation
-Prelude
 Ocaml_gcc_builtins
 Ocaml_any
 Nondeterminism

@@ -45,7 +45,7 @@ let batch_drive mode (file: 'a Core.file) args fs_state conf : string list =
   
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state file fs_state in
-  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in
+  let values = Smt2.runND conf.exec_mode Impl_mem.cs_module (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in
   let is_charon = match mode with
     | `Batch       -> false
     | `CharonBatch -> true in
@@ -104,7 +104,7 @@ let drive file args fs_state conf : execution_result =
   let file = Core_run_aux.convert_file file in
   (* computing the value (or values if exhaustive) *)
   let initial_dr_st = Driver.initial_driver_state file fs_state in
-  let values = Smt2.runND conf.exec_mode Ocaml_mem.cs_module
+  let values = Smt2.runND conf.exec_mode Impl_mem.cs_module
       (Driver.drive conf.concurrency conf.experimental_unseq file args) initial_dr_st in
   let n_actives = List.length (List.filter isActive values) in
   let n_execs   = List.length values                        in

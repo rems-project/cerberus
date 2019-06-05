@@ -188,10 +188,10 @@ let cabsid_cmp = fun ident1 ident2 ->
 
 
 (* ========== Core memory functions ============= *)
-let is_null (ptr: Ocaml_mem.pointer_value) : bool =
+let is_null (ptr: Impl_mem.pointer_value) : bool =
   let (Nondeterminism.ND f) =
-    Ocaml_mem.eq_ptrval ptr (Ocaml_mem.null_ptrval Void0) in
-  match f (Ocaml_mem.initial_mem_state) with
+    Impl_mem.eq_ptrval ptr (Impl_mem.null_ptrval Void0) in
+  match f (Impl_mem.initial_mem_state) with
   | (Nondeterminism.NDactive b,_) -> b
   | _ -> assert false
 

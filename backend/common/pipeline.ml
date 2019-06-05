@@ -1,4 +1,4 @@
-open Prelude
+open Global_ocaml
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
 

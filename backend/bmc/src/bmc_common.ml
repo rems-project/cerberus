@@ -4,7 +4,7 @@ open Bmc_utils
 
 open AilTypes
 open Core
-open Ocaml_mem
+open Impl_mem
 open Printf
 open Util
 open Z3
@@ -143,7 +143,7 @@ let size_of_ctype (ty: Core_ctype.ctype0)
 
 (* =========== CORE TYPES -> Z3 SORTS =========== *)
 
-let integer_value_to_z3 (ival: Ocaml_mem.integer_value) : Expr.expr =
+let integer_value_to_z3 (ival: Impl_mem.integer_value) : Expr.expr =
   (* TODO: check which is the correct ival->big num function *)
   match eval_integer_value ival with
   | None -> assert false
@@ -163,8 +163,8 @@ let object_value_to_z3 (oval: object_value) : Expr.expr =
     failwith "Error: unions are not supported."
 
 (* TODO: HACK; need some function like this *)
-let is_fun_ptr (p: Ocaml_mem.pointer_value) : bool =
-  let ptr_str = pp_to_string (Ocaml_mem.pp_pointer_value p) in
+let is_fun_ptr (p: Impl_mem.pointer_value) : bool =
+  let ptr_str = pp_to_string (Impl_mem.pp_pointer_value p) in
   let cfun_hdr = "Cfunction(" in
   if String.length ptr_str < String.length cfun_hdr then false
   else (String.sub ptr_str 0 (String.length cfun_hdr) = cfun_hdr)
@@ -601,7 +601,7 @@ let is_loaded_ptr_expr (expr: unit typed_expr) =
   | _ -> false
 
 let get_ptr_from_loaded_ptr_expr (expr: unit typed_expr)
-                                 : Ocaml_mem.pointer_value =
+                                 : Impl_mem.pointer_value =
   match expr with
   | Expr(_, (Epure(Pexpr(_,_,PEval(Vloaded (LVspecified (OVpointer p))))))) ->
       p
@@ -611,7 +611,7 @@ let get_ptr_from_loaded_ptr_expr (expr: unit typed_expr)
 type cfun_call_symbols = {
   fn_ptr  : sym_ty;
   fn_ptr_inner : sym_ty option;
-  ptr     : Ocaml_mem.pointer_value;
+  ptr     : Impl_mem.pointer_value;
 }
 
 
