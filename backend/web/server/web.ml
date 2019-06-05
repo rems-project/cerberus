@@ -628,7 +628,7 @@ let cerberus ~rheader ~conf ~flow content =
   in
   let timeout   = float_of_int conf.timeout in
   let request (req: request) : result Lwt.t =
-    let instance = "./cerb." ^ msg.model in
+    let instance = "./webcerb." ^ msg.model in
     let cmd = (instance, [| instance; "-d" ^ string_of_int !Debug.level|]) in
     let env = [|"PATH=/usr/bin";
                 "CERB_PATH="^(!webconf()).cerb_path;

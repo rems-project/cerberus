@@ -9,7 +9,7 @@ include $(CERB_PATH)/Makefile.common
 
 web:
 	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) common/cerberus_cstubs.o
-	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) web.native
+	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) -tag thread web.native
 
 clean:
 	@rm -rf _build
