@@ -9,7 +9,7 @@ open Bmc_utils
 
 open Core
 open Core_aux
-open Ocaml_mem
+open Impl_mem
 open Printf
 open Util
 open Z3
@@ -154,9 +154,9 @@ module BmcInline = struct
     | Some fn_sym -> return fn_sym
 
   (* TODO: hack to compute function from pointer *)
-  let get_function_from_ptr (ptr: Ocaml_mem.pointer_value): sym_ty eff =
+  let get_function_from_ptr (ptr: Impl_mem.pointer_value): sym_ty eff =
     get_file >>= fun file ->
-    let ptr_str = pp_to_string (Ocaml_mem.pp_pointer_value ptr) in
+    let ptr_str = pp_to_string (Impl_mem.pp_pointer_value ptr) in
     let (fn_sym, _) = List.find (fun (sym, _) ->
       ptr_str = (sprintf "Cfunction(%s)"
                          (Pp_symbol.to_string_pretty sym))

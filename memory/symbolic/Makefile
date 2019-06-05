@@ -19,7 +19,7 @@ include Makefile-source
 
 symbolic: $(BUILD_DIR)
 	@echo $(BOLD)BUILDING Symbolic Memory Model$(RESET)
-	@OCAMLPATH=$(CERB_PATH)/lib ocamlbuild $(OB_FLAGS) symbolic.cma symbolic.cmxa
+	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) symbolic.cma symbolic.cmxa
 
 $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@make clean

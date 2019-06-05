@@ -314,6 +314,7 @@ export class CerberusUI {
       $('#r_bmc_rc11').prop('checked', m === 'bmc_rc11')
       $('#r_bmc_rc11_hardcoded').prop('checked', m === 'bmc_rc11_hardcoded')
       $('#r_bmc_linux').prop('checked', m === 'bmc_linux')
+      $('#r_bmc_linux_no_rcu').prop('checked', m === 'bmc_linux_no_rcu')
       $('#r_bmc_custom').prop('checked', m === 'bmc_custom')
       if (m === 'bmc_custom') {
         let custom = view.getTab('Herd', 'Custom herd file', true)

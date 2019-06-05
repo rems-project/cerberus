@@ -13,7 +13,7 @@ open AilTypes
 open Annot
 open Core
 open Core_aux
-open Ocaml_mem
+open Impl_mem
 open Printf
 open Util
 

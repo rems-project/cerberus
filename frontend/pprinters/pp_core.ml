@@ -271,9 +271,9 @@ let pp_pointer_action = function
 
 let rec pp_object_value = function
   | OVinteger ival ->
-      Ocaml_mem.pp_integer_value_for_core ival
+      Impl_mem.pp_integer_value_for_core ival
   | OVfloating fval ->
-      Ocaml_mem.case_fval fval
+      Impl_mem.case_fval fval
         (fun () -> !^ "unspec(floating)")
         (fun fval -> !^(string_of_float fval))
 (*
@@ -281,20 +281,20 @@ let rec pp_object_value = function
       !^ "SYMB" ^^ P.parens (Pp_symbolic.pp_symbolic pp_object_value Pp_mem.pp_pointer_value symb)
 *)
   | OVpointer ptr_val ->
-      Ocaml_mem.pp_pointer_value ptr_val
+      Impl_mem.pp_pointer_value ptr_val
   | OVarray lvals ->
       pp_const "Array" ^^ P.parens (P.nest 1 (comma_list pp_loaded_value lvals))
   | OVstruct (tag_sym, xs) ->
       P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
         comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) ->
-          P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
+          P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
         ) xs
       )
   | OVunion (tag_sym, Cabs.CabsIdentifier (_, ident), mval) ->
       P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        P.dot ^^ !^ ident ^^ P.equals ^^^ Ocaml_mem.pp_mem_value mval
+        P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
       )
   (*| OVcfunction nm ->
       !^ "Cfunction" ^^ P.parens (pp_name nm) *)
@@ -398,7 +398,7 @@ let pp_pexpr pe =
         | PEconstrained xs ->
             pp_keyword "constrained" ^^ P.parens (
               comma_list (fun (cs, pe) ->
-                P.brackets (Pp_mem.pp_mem_constraint Ocaml_mem.pp_integer_value cs) ^^^
+                P.brackets (Pp_mem.pp_mem_constraint Impl_mem.pp_integer_value cs) ^^^
                 P.equals ^^ P.rangle ^^ pp pe
               ) xs
             )

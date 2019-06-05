@@ -99,8 +99,7 @@ Mem
 Mem_common
 Mem_aux
 Mem_simplify
-Ocaml_mem
-Ocaml_defacto
+Impl_mem
 Defacto_memory
 Defacto_memory_aux
 Floating
@@ -109,7 +108,6 @@ Smt2
 Tags
 Decode_ocaml
 Ocaml_implementation
-Prelude
 Ocaml_gcc_builtins
 Ocaml_any
 Nondeterminism
@@ -140,5 +138,3 @@ String_core_run
 String_mem
 String_symbol
 String_defacto_memory
-
-Concrete

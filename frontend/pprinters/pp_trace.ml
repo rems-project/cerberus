@@ -1,7 +1,7 @@
 open Colour
 open Pp_prelude
 open Trace_event
-open Ocaml_mem
+open Impl_mem
 open Pp_symbol
 open Pp_core_ctype
 

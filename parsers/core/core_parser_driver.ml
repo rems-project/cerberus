@@ -1,4 +1,3 @@
-open Prelude
 open Core_parser_util
 
 let genparse mode std filename =

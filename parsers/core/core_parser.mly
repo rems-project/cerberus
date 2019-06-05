@@ -341,7 +341,7 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
         (* TODO(V): CHANGING THE MEANING OF THIS KEYWORD *)
         symbolify_name _nm >>= (function
         | Sym sym ->
-          Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer (Ocaml_mem.fun_ptrval sym)))))
+          Eff.return (Pexpr (annot, (), PEval (Vobject (OVpointer (Impl_mem.fun_ptrval sym)))))
         | _ -> failwith "PANIC")
              *)
     | PEval Vunit ->
@@ -1433,9 +1433,9 @@ value:
   | Vunspecified of ctype
 *)
 | n= INT_CONST
-    { Vobject (OVinteger (Ocaml_mem.integer_ival n)) }
+    { Vobject (OVinteger (Impl_mem.integer_ival n)) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
-    { Vobject (OVpointer (Ocaml_mem.null_ptrval ty)) }
+    { Vobject (OVpointer (Impl_mem.null_ptrval ty)) }
     (*
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
   { Vobject (OVcfunction _nm) }
@@ -1493,7 +1493,7 @@ pexpr:
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)))], (), PEnot _pe) }
 | MINUS _pe= pexpr
     { let loc = Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)) in
-      Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Ocaml_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+      Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos(bop)))], (), PEop (bop, _pe1, _pe2)) }
 (*

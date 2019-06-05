@@ -19,7 +19,7 @@ include Makefile-source
 
 concrete: $(BUILD_DIR)
 	@echo $(BOLD)BUILDING Concrete memory model$(RESET)
-	@OCAMLPATH=$(CERB_PATH)/lib ocamlbuild $(OB_FLAGS) concrete.cma concrete.cmxa
+	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) concrete.cma concrete.cmxa
 
 $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@make clean
