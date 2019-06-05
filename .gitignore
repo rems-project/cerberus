@@ -45,8 +45,9 @@ cerberus
 cerberus-bmc
 cerberus-symbolic
 cerberus-prof
-cerb.concrete
-cerb.symbolic
+cerberus-webserver
+webcerb.concrete
+webcerb.symbolic
 
 runtime/libc/libc.co
 runtime/libc/libm.co

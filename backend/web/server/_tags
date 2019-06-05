@@ -1,6 +1,6 @@
 true: bin_annot, color(always)
 true: debug
-true: package(lwt), package(cohttp.lwt), package(lem), package(pprint), package(yojson), package(util), package(ezgzip), package(cmdliner)
+true: package(lwt), package(cohttp), package(base64), package(cohttp.lwt), package(lem), package(pprint), package(yojson), package(util), package(ezgzip), package(cmdliner)
 
 <src>: include
 <*.native>: link_cstubs
