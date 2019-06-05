@@ -1,6 +1,6 @@
 include Makefile.common
 
-.PHONY: all default sibylfs concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic
+.PHONY: all default sibylfs util concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic
 
 cerberus: cerberus-concrete libc
 
@@ -8,6 +8,9 @@ all: cerberus-concrete cerberus-symbolic cerberus-bmc libc
 
 sibylfs:
 	@make -C sibylfs
+
+util:
+	@make -C util
 
 concrete:
 	@make -C memory/concrete
@@ -30,9 +33,18 @@ _lib/sibylfs/sibylfs.cmxa: _lib sibylfs/_build/sibylfs.cmxa
 	@cp sibylfs/_build/sibylfs.{a,cma,cmxa} _lib/sibylfs/
 	@cp sibylfs/_build/generated/*.{cmi,cmx} _lib/sibylfs/
 
-memory/concrete/_build/concrete.cmxa: concrete
+util/_build/src/util.cmxa: util
 
-_lib/concrete/concrete.cmxa: _lib/sibylfs/sibylfs.cmxa memory/concrete/_build/concrete.cmxa
+_lib/util/util.cmxa: _lib util/_build/src/util.cmxa
+	@echo $(BOLD)INSTALLING Util in ./_lib$(RESET)
+	@mkdir -p _lib/util
+	@cp util/META _lib/util/
+	@cp util/_build/src/util.{a,cma,cmxa} _lib/util/
+	@cp util/_build/src/*.{cmi,cmx} _lib/util/
+
+memory/concrete/_build/src/concrete.cmxa: concrete
+
+_lib/concrete/concrete.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memory/concrete/_build/src/concrete.cmxa
 	@echo $(BOLD)INSTALLING Concrete Memory Model in ./_lib$(RESET)
 	@mkdir -p _lib/concrete
 	@cp memory/concrete/META _lib/concrete/
@@ -42,9 +54,9 @@ _lib/concrete/concrete.cmxa: _lib/sibylfs/sibylfs.cmxa memory/concrete/_build/co
 	@cp memory/concrete/_build/frontend/pprinters/*.{cmi,cmx} _lib/concrete
 	@cp memory/concrete/_build/frontend/common/*.{cmi,cmx} _lib/concrete
 
-memory/symbolic/_build/symbolic.cmxa: symbolic
+memory/symbolic/_build/src/symbolic.cmxa: symbolic
 
-_lib/symbolic/symbolic.cmxa: _lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/symbolic.cmxa
+_lib/symbolic/symbolic.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/src/symbolic.cmxa
 	@echo $(BOLD)INSTALLING Symbolic Memory Model in ./_lib$(RESET)
 	@mkdir -p _lib/symbolic
 	@cp memory/symbolic/META _lib/symbolic/
@@ -70,6 +82,7 @@ bmc: cerberus-bmc
 
 clean:
 	@make -C sibylfs clean
+	@make -C util clean
 	@make -C memory/concrete clean
 	@make -C memory/symbolic clean
 	@make -C backend/driver clean

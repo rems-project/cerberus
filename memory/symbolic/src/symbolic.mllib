@@ -14,13 +14,6 @@ Float
 Any
 Builtins
 
-Util
-Location_ocaml
-Debug_ocaml
-Logging
-Fresh
-Global_ocaml
-
 Cabs
 Undefined
 Constraint
@@ -75,7 +68,6 @@ Implementation_
 Output
 
 Switches
-Json
 
 Core_sequentialise
 Core_indet
@@ -102,17 +94,14 @@ Mem_simplify
 Impl_mem
 Defacto_memory
 Defacto_memory_aux
-Floating
 
 Smt2
 Tags
 Decode_ocaml
 Ocaml_implementation
 Ocaml_gcc_builtins
-Ocaml_any
 Nondeterminism
 
-Colour
 Ast_core
 Pp_utils
 Pp_ast
@@ -125,7 +114,6 @@ Pp_core_ctype
 Pp_errors
 Pp_run
 Pp_trace
-Pp_prelude
 Pp_symbol
 Pp_mem
 Pp_defacto_memory

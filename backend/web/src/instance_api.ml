@@ -1,9 +1,5 @@
 (* API between web server and a cerberus instance *)
-
-(* execution mode *)
-type exec_mode =
-  | Random
-  | Exhaustive
+open Global_ocaml
 
 let string_of_exec_mode = function
   | Random -> "random"
@@ -42,7 +38,7 @@ type bmc_model =
 (* input: request *)
 type request =
   [ `Elaborate of conf * filename * string
-  | `Execute of conf * filename * string * exec_mode
+  | `Execute of conf * filename * string * execution_mode
   | `Step of conf * filename * string * active_node option 
   | `BMC of conf * bmc_model * filename * string ]
 

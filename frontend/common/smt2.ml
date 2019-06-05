@@ -1,10 +1,6 @@
 open Nondeterminism
 open Memory_model
-
-(* TODO: we would be using poly variants if it weren't for Lem... *)
-type execution_mode =
-  | Exhaustive
-  | Random
+open Global_ocaml
 
 let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0: 'st) =
   Debug_ocaml.print_debug 1 [] (fun () ->
