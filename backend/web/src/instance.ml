@@ -59,16 +59,11 @@ let add_bmc_macro ~bmc_model conf =
   let cpp_cmd = conf.pipeline.cpp_cmd ^ " -D__bmc_cerb__" ^ macro_model in
   { conf with pipeline = { conf.pipeline with cpp_cmd } }
 
-(* It would be nice if Smt2 could use polymorphic variant *)
-let to_smt2_mode = function
-  | Random -> Smt2.Random
-  | Exhaustive -> Smt2.Exhaustive
-
 (* TODO: this hack is due to cerb_conf be undefined when running Cerberus *)
 let hack ~conf mode =
   let open Global_ocaml in
   let conf =
-   {  exec_mode_opt=    Some (to_smt2_mode mode);
+   {  exec_mode_opt=    Some (mode);
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
       defacto=          false;
@@ -198,7 +193,7 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
     raise e
 
 (* execution *)
-let execute ~conf ~filename (mode: exec_mode) =
+let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
   let return = Exception.except_return in
   let (>>=)  = Exception.except_bind in
   hack ~conf mode;
@@ -214,7 +209,7 @@ let execute ~conf ~filename (mode: exec_mode) =
     end >>= fun core ->
     Tags.set_tagDefs core.tagDefs;
     let open Exhaustive_driver in
-    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=(to_smt2_mode mode); fs_dump=false; trace=false; } in
+    let driver_conf = {concurrency=false; experimental_unseq=false; exec_mode=mode; fs_dump=false; trace=false; } in
     interp_backend dummy_io core ~args:[] ~batch:`Batch ~fs:None ~driver_conf
     >>= function
     | Either.Left res ->
@@ -370,12 +365,12 @@ let json_of_step_kind step =
 
 let create_node node_info st next_state =
   let node_id = new_id () in
-  let memory = Ocaml_mem.serialise_mem_state (get_file_hash st.Driver.core_file) st.Driver.layout_state in
+  let memory = Impl_mem.serialise_mem_state (get_file_hash st.Driver.core_file) st.Driver.layout_state in
   let (c_loc, core_uid, arena, env, stdout, stderr) = get_state_details st in
   { node_id; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr }
 
 let multiple_steps step_state (m, st) =
-  let module CS = (val Ocaml_mem.cs_module) in
+  let module CS = (val Impl_mem.cs_module) in
   let (>>=) = CS.bind in
   let create_branch node_info st (ns, es, previousNode) =
     let n = create_node node_info st None in
@@ -547,7 +542,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let (m, st)  = (Driver.drive false false core' [], st0) in
     last_node_id := 0;
     let node_info= `Init in
-    let memory = Ocaml_mem.serialise_mem_state (get_file_hash core) st.Driver.layout_state in
+    let memory = Impl_mem.serialise_mem_state (get_file_hash core) st.Driver.layout_state in
     let (c_loc, core_uid, arena, env, stdout, stderr) = get_state_details st in
     let next_state = Some (encode (m, st)) in
     let n = { node_id= 0; node_info; memory; c_loc; core_uid; arena; env; next_state; stdout; stderr } in
@@ -565,7 +560,6 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
 
 let instance debug_level =
   Debug.level := debug_level;
-  Debug.print 7 ("Using model: " ^ Prelude.string_of_mem_switch ());
   let do_action  : Instance_api.request -> Instance_api.result = function
     | `Elaborate (conf, filename, name) ->
       elaborate ~conf:(setup conf) ~filename

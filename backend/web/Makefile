@@ -1,0 +1,18 @@
+# We need CERB_PATH
+ifndef CERB_PATH
+$(error "Please set CERB_PATH.")
+endif
+
+include $(CERB_PATH)/Makefile.common
+
+.PHONY: all clean
+
+all:
+	make -C concrete
+	make -C symbolic
+	make -C server
+
+clean:
+	@make -C concrete clean
+	@make -C symbolic clean
+	@make -C server clean

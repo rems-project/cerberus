@@ -16,7 +16,7 @@ let isActive = function
 
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
-  exec_mode: Smt2.execution_mode;
+  exec_mode: execution_mode;
   concurrency: bool;
   experimental_unseq: bool;
   fs_dump: bool;

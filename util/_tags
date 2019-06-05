@@ -1,0 +1,6 @@
+true: warn(+8), bin_annot, color(always)
+true: debug
+
+true: package(lem), package(pprint), package(yojson)
+
+<src>: include

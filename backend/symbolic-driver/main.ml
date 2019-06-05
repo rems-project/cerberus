@@ -325,8 +325,8 @@ let exec =
 
 let exec_mode =
   let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["exhaustive", Smt2.Exhaustive; "random", Smt2.Random])
-         Smt2.Random & info ["mode"] ~docv:"MODE" ~doc)
+  Arg.(value & opt (enum ["exhaustive", Exhaustive; "random", Random])
+         Random & info ["mode"] ~docv:"MODE" ~doc)
 
 let pprints =
   let open Pipeline in

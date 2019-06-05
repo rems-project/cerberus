@@ -18,7 +18,7 @@ include Makefile-source
 .PHONY: concrete lem clean
 
 concrete: $(BUILD_DIR)
-	@echo $(BOLD)BUILDING Concrete memory model$(RESET)
+	@echo $(BOLD)BUILDING Concrete Memory Model$(RESET)
 	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) concrete.cma concrete.cmxa
 
 $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)

@@ -1,7 +1,7 @@
 true: use_menhir, bin_annot, color(always)
 true: debug
 
-true: package(lem), package(pprint), package(yojson), package(ppx_sexp_conv), package(sexplib), package(sibylfs), package(concrete), package(z3), package(angstrom)
+true: package(lem), package(pprint), package(yojson), package(unix), package(util), package(ppx_sexp_conv), package(sexplib), package(sibylfs), package(concrete), package(z3), package(angstrom)
 true: package(cmdliner), package(str)
 
 <src>: include
