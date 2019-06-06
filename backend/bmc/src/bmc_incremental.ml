@@ -291,7 +291,7 @@ module BmcInline = struct
               (fun (sym, _) pe table -> Pmap.add sym pe table)
               args inlined_pes (Pmap.empty sym_cmp) in
           (* Get the new function body to work with *)
-          let pexpr_to_call = substitute_pexpr sub_map fun_expr in
+          let pexpr_to_call = unsafe_substitute_pexpr sub_map fun_expr in
           increment_run_depth name >>
           inline_pe pexpr_to_call >>= fun inlined_pexpr_to_call ->
           decrement_run_depth name >>
@@ -423,7 +423,7 @@ module BmcInline = struct
         (* TODO: ugly hack. This changes the semantics and is just wrong. *)
         bmc_debug_print 7 "TODO: Elet hack for function calls";
         let sub_map = Pmap.add cty_sym pe_ty (Pmap.empty sym_cmp) in
-        let hacky_expr = substitute_expr sub_map e in
+        let hacky_expr = unsafe_substitute_expr sub_map e in
 
         inline_pe pe >>= fun inlined_pe ->
         inline_e hacky_expr >>= fun inlined_hacky_expr ->
@@ -486,7 +486,7 @@ module BmcInline = struct
             let sub_map = List.fold_right2
               (fun (sym,_) pe map -> Pmap.add sym pe map)
               fun_args inlined_pe_args (Pmap.empty sym_cmp) in
-            let expr_to_check = substitute_expr sub_map fun_expr in
+            let expr_to_check = unsafe_substitute_expr sub_map fun_expr in
 
             get_proc_expr >>= fun old_proc_expr ->
             get_fn_type  >>= fun old_fn_type ->
@@ -536,7 +536,7 @@ module BmcInline = struct
           let sub_map = List.fold_right2
             (fun (sym, _) pe table -> Pmap.add sym pe table)
             args inlined_pes (Pmap.empty sym_cmp) in
-          let expr_to_check = substitute_expr sub_map fun_expr in
+          let expr_to_check = unsafe_substitute_expr sub_map fun_expr in
           increment_run_depth name >>
           inline_e expr_to_check >>= fun inlined_expr_to_check ->
           decrement_run_depth name >>
@@ -581,7 +581,7 @@ module BmcInline = struct
     | Esave (name, varlist, e) ->
         let sub_map = List.fold_right (fun (sym, (cbt, pe)) map ->
           Pmap.add sym pe map) varlist (Pmap.empty sym_cmp) in
-        let to_check = substitute_expr sub_map e in
+        let to_check = unsafe_substitute_expr sub_map e in
         inline_e to_check >>= fun inlined_to_check ->
         add_inlined_expr id inlined_to_check >>
         return (Esave(name, varlist, e))
@@ -612,7 +612,7 @@ module BmcInline = struct
           let sub_map = List.fold_right2
               (fun sym pe map -> Pmap.add sym pe map)
               cont_syms pelist (Pmap.empty sym_cmp) in
-          let cont_to_check = substitute_expr sub_map cont_expr in
+          let cont_to_check = unsafe_substitute_expr sub_map cont_expr in
           increment_run_depth (Sym label) >>
           inline_e cont_to_check >>= fun inlined_cont_to_check ->
           decrement_run_depth (Sym label) >>
