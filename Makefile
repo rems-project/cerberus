@@ -1,6 +1,6 @@
 include Makefile.common
 
-.PHONY: all default sibylfs util concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic web
+.PHONY: all default sibylfs util concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic web ui
 
 cerberus: cerberus-concrete libc
 
@@ -79,12 +79,20 @@ cerberus-bmc: _lib/concrete/concrete.cmxa
 
 bmc: cerberus-bmc
 
-web: _lib/concrete/concrete.cmxa _lib/symbolic/symbolic.cmxa
+tmp:
+	@mkdir -p tmp
+
+config.json:
+	@cp $(CERB_PATH)/tools/config.json $(CERB_PATH)
+
+web: _lib/concrete/concrete.cmxa _lib/symbolic/symbolic.cmxa tmp config.json
 	@make -C backend/web
 	@cp -L backend/web/concrete/_build/src/instance.native webcerb.concrete
 	@cp -L backend/web/symbolic/_build/src/instance.native webcerb.symbolic
 	@cp -L backend/web/server/_build/web.native cerberus-webserver
 
+ui:
+	make -C public
 
 clean:
 	@make -C sibylfs clean
@@ -94,7 +102,8 @@ clean:
 	@make -C backend/driver clean
 	@make -C backend/bmc clean
 	@make -C backend/symbolic-driver clean
+	@make -C backend/web clean
 	@rm -rf _lib
 
 clear: clean
-	@rm -rf cerberus cerberus-*
+	@rm -rf cerberus cerberus-* webcerb.*
