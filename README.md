@@ -31,7 +31,7 @@ $ opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_sexp_conv sexp
 Install `lem`
 
 ```bash
-$ git clone https://bitbucket.org/Peter_Sewell/lem.git
+$ git clone https://github.com/rems-project/lem.git
 $ cd lem
 $ make
 $ cd ocaml-lib; sudo make install
