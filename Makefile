@@ -1,6 +1,6 @@
 include Makefile.common
 
-.PHONY: all default sibylfs util concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc bmc cerberus-symbolic web ui
+.PHONY: all default sibylfs util concrete symbolic clean clear cerberus cerberus-concrete cerberus-bmc cerberus-ocaml ocaml bmc cerberus-symbolic web ui
 
 cerberus: cerberus-concrete libc
 
@@ -70,14 +70,20 @@ cerberus-concrete: _lib/concrete/concrete.cmxa
 	@cp backend/driver/cerberus cerberus
 
 cerberus-symbolic: _lib/symbolic/symbolic.cmxa
-	@make -C backend/symbolic-driver
-	@cp backend/symbolic-driver/cerberus-symbolic cerberus-symbolic
+	@make -C backend/symbolic
+	@cp backend/symbolic/cerberus-symbolic cerberus-symbolic
 
 cerberus-bmc: _lib/concrete/concrete.cmxa
 	@make -C backend/bmc
 	@cp backend/bmc/cerberus-bmc cerberus-bmc
 
 bmc: cerberus-bmc
+
+cerberus-ocaml: _lib/concrete/concrete.cmxa
+	@make -C backend/ocaml
+	@cp backend/ocaml/cerberus-ocaml cerberus-ocaml
+
+ocaml: cerberus-ocaml
 
 tmp:
 	@mkdir -p tmp
@@ -101,8 +107,9 @@ clean:
 	@make -C memory/symbolic clean
 	@make -C backend/driver clean
 	@make -C backend/bmc clean
-	@make -C backend/symbolic-driver clean
+	@make -C backend/symbolic clean
 	@make -C backend/web clean
+	@make -C backend/ocaml clean
 	@rm -rf _lib
 
 clear: clean

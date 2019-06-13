@@ -11,6 +11,7 @@ open Core_ctype
 let ( ^//^ ) x y = x ^^ P.break 1 ^^ P.break 1 ^^ y
 let ( !> ) x = P.nest 2 (P.break 1 ^^ x)
 
+(* TODO: remove this *)
 (* Global information of the translation unit *)
 type globals = {
   interface: string;
@@ -127,14 +128,19 @@ let print_symbol_prefix = function
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
 
+(*
 let print_globs_prefix globs sym =
   if List.mem sym globs.statics then !^"!"
   else if List.mem sym globs.externs then !^(globs.interface)
   else P.empty
+*)
 
 (* Take out all '.' and add '_' as prefix *)
 let print_impl_name i =
-  !^("_" ^ (string_tr '.' '_' (Implementation_.string_of_implementation_constant i)))
+  let name = string_tr '.' '_' (Implementation_.string_of_implementation_constant i) in
+  if String.length name > 8 && String.compare (String.sub name 0 8) "builtin_" = 0 then
+    !^("B." ^ name)
+  else !^("_" ^ name)
 
 let print_cabs_id (Cabs.CabsIdentifier (loc, str)) =
   !^"RT.cabsid" ^^^ P.parens (Location_ocaml.print_location loc) ^^^ P.dquotes !^str
@@ -328,17 +334,17 @@ let rec print_ctype = function
 (* Memory types *)
 
 let print_integer_value iv =
-  Ocaml_mem.case_integer_value iv
+  Impl_mem.case_integer_value iv
     (fun n -> !^"RT.mk_int" ^^^ P.dquotes (!^(Nat_big_num.to_string n)))
     (fun _ -> raise (Unexpected "iv value"))
 
 let print_float_value fv =
-  Ocaml_mem.case_fval fv
+  Impl_mem.case_fval fv
     (fun _ -> raise (Unexpected "fv value"))
     (fun x -> !^"RT.mk_float" ^^^ P.dquotes (!^(string_of_float x)))
 
 let print_pointer_value pv =
-  Ocaml_mem.case_ptrval pv
+  Impl_mem.case_ptrval pv
     (fun _ -> !^"RT.mk_null_void")
     (fun _ -> failwith "ERROR")
     (fun opt_i addr -> !^"RT.mk_pointer"
@@ -561,7 +567,7 @@ let print_pure_expr globs pe =
       match pe with Pexpr (_, t, pe') ->
       match pe' with
       | PEsym sym ->
-        print_globs_prefix globs sym ^^ print_symbol sym
+        (*print_globs_prefix globs sym ^^*) print_symbol sym
       | PEimpl iCst -> print_impl_name iCst ^^^ P.parens P.space
       | PEval cval -> print_value globs cval
       | PEconstrained _ -> raise (Unexpected "Unexpected contrained expression.")

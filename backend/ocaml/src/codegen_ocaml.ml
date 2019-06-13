@@ -37,11 +37,8 @@ let print_foot tags globs main =
   match main with
   | Some main ->
     print_let !^"tags" (print_tags tags) ^//^
-    print_let !^"globals" (print_globals globs.statics) ^//^
-    print_let tunit (!^"RT.run tags (List.rev_append"
-                     ^^^ !^(globs.interface)
-                     ^^ !^"ext_globals globals)"
-                     ^^^ print_global_symbol main)
+    print_let !^"globals" (print_globals globs) ^//^
+    print_let tunit (!^"RT.run tags globals " ^^^ print_global_symbol main)
 (* TODO: generate globals for empty main *)
   | None -> P.empty
 
@@ -51,6 +48,7 @@ let opt_passes core =
   |> elim_skip
   |> elim_let
 
+(*
 let create_globs name core =
   {
     interface = String.capitalize_ascii name ^ "I.";
@@ -61,13 +59,15 @@ let create_globs name core =
            | _ -> es
         ) core.funs [];
   }
+   *)
 
 let gen filename corestd core =
   let fl = Filename.chop_extension filename in
-  let globs = create_globs fl core in
+  (*let globs = create_globs fl core in*)
+  let globs = List.map (fun (s, _) -> s) core.Core.globs in
   let cps_core = elim_proc_decls core
     |> run opt_passes
-    |> cps_transform globs.statics
+    |> cps_transform globs
   in
   let print_globals_init acc (sym, coreTy, bbs, bbody) =
     (if acc = P.empty then tletrec else acc ^//^ tand) ^^^
@@ -77,7 +77,7 @@ let gen filename corestd core =
   in
   if corestd then
     Codegen_corestd.gen globs cps_core.impl cps_core.stdlib;
-  Codegen_dep.gen fl globs.externs cps_core.funs globs.statics;
+  (*Codegen_dep.gen fl globs.externs cps_core.funs globs;*)
   let contents =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^//^

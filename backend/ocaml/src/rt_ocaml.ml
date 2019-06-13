@@ -1,7 +1,7 @@
 (* Created by Victor Gomes 2017-03-10 *)
 
 open Util
-module M = Ocaml_mem
+module M = Impl_mem
 module T = AilTypes
 module C = Core_ctype
 
@@ -40,7 +40,8 @@ let position fname lnum bol cnum = {
 
 let unknown = Location_ocaml.unknown
 
-let sym (n, s) = Symbol.Symbol (n, Some s)
+(* TODO: digest is wrong *)
+let sym (n, s) = Symbol.Symbol ("", n, Some s)
 let cabsid pos id =
   let mkloc x = x in
   Cabs.CabsIdentifier (mkloc pos, id)
@@ -349,11 +350,14 @@ let dummy_file =
     funs    = Pmap.empty cmp;
     impl    = Pmap.empty impl_cmp;
     funinfo = Pmap.empty cmp;
+    extern  = Pmap.empty compare;
   }
+
 let quit f =
   try
-    let initial_state = Driver.initial_driver_state (UniqueId.new_supply Symbol.instance_Enum_Enum_Symbol_sym_dict) dummy_file Sibylfs.fs_initial_drive_state in
-    match Smt2.runND Smt2.Random Ocaml_mem.cs_module (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
+    let initial_state = Driver.initial_driver_state dummy_file
+        Sibylfs.fs_initial_state in
+    match Smt2.runND Random Impl_mem.cs_module (Driver.liftMem (f (fun x -> raise (Exit x)) ())) initial_state with
     | _ -> raise (Error "continuation not raised")
   with
   | Exit x ->

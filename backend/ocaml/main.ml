@@ -107,22 +107,19 @@ let cerberus debug_level progress core_obj
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
-             exec exec_mode switches batch experimental_unseq concurrency
+             switches batch experimental_unseq
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
-             fs_dump fs trace
+             fs_dump fs
+             ocaml_corestd
              output_name
-             files args_opt =
+             files =
   Debug_ocaml.debug_level := debug_level;
   let cpp_cmd =
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
-  let args = match args_opt with
-    | None -> []
-    | Some args -> Str.split (Str.regexp "[ \t]+") args
-  in
   (* set global configuration *)
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false;
+  set_cerb_conf false Random false QuoteStd defacto false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -161,7 +158,10 @@ let cerberus debug_level progress core_obj
   in
   runM @@ match files with
     | [] ->
-      Pp_errors.fatal "no input file"
+      if ocaml_corestd then
+        error "TODO: ocaml_corestd"
+      else
+        Pp_errors.fatal "no input file"
     | [file] when core_obj ->
       prelude >>= frontend (conf, io) file >>= fun core_file ->
       begin match output_name with
@@ -193,11 +193,18 @@ let cerberus debug_level progress core_obj
         return success
       (* Link and execute *)
       else
-        prelude >>= main >>= begin function
+        prelude >>= fun core_std ->
+        main core_std >>= begin function
           | [] -> assert false
           | f::fs ->
             Core_linking.link (f::fs)
-        end >>= fun core_file ->
+        end >>= Core_typing.typecheck_program >>= fun typed_core_file ->
+        (* Ocaml backend mode *)
+        (* TODO: choose a better name *)
+        Codegen_ocaml.gen (List.hd files) true typed_core_file >>= fun _ ->
+        return success
+
+(*
         if exec then
           let open Exhaustive_driver in
           let () = Tags.set_tagDefs core_file.tagDefs in
@@ -214,6 +221,7 @@ let cerberus debug_level progress core_obj
                 (write_core_object core_file (out ^ ".co"); create_executable out);
               return success
             end
+   *)
 
 (* CLI stuff *)
 open Cmdliner
@@ -239,6 +247,17 @@ let macro_pair =
 let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+(*
+ * THIS SHOULD BE ALWAYS ON NOW
+let ocaml =
+  let doc = "Ocaml backend." in
+  Arg.(value & flag & info ["ocaml"] ~doc)
+   *)
+
+let ocaml_corestd =
+  let doc = "Generate coreStd.ml" in
+  Arg.(value & flag & info ["ocaml-corestd"] ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls\
@@ -302,15 +321,6 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
-let exec =
-  let doc = "Execute the Core program after the elaboration." in
-  Arg.(value & flag & info ["exec"] ~doc)
-
-let exec_mode =
-  let doc = "Set the Core evaluation mode (interactive | exhaustive | random)." in
-  Arg.(value & opt (enum ["exhaustive", Exhaustive; "random", Random])
-         Random & info ["mode"] ~docv:"MODE" ~doc)
-
 let pprints =
   let open Pipeline in
   let doc = "Pretty print the intermediate programs for the listed languages\
@@ -324,11 +334,6 @@ let astprints =
              (ranging over {cabs, ail, core})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
-
-let fs =
-  let doc = "Initialise the internal file system with the contents of the\
-             directory DIR" in
-  Arg.(value & opt (some string) None & info ["fs"] ~docv:"DIR" ~doc)
 
 let ppflags =
   let open Pipeline in
@@ -356,11 +361,6 @@ let sequentialise =
   let doc = "Replace all unseq() with left to right wseq(s)" in
   Arg.(value & flag & info["sequentialise"] ~doc)
 
-(* TODO: is this flag being used? *)
-let concurrency =
-  let doc = "Activate the C11 concurrency" in
-  Arg.(value & flag & info["concurrency"] ~doc)
-
 let batch =
   let doc = "makes the execution driver produce batch friendly output" in
   Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
@@ -371,6 +371,7 @@ let experimental_unseq =
   let doc = "use a new (experimental) semantics for unseq() in Core_run" in
   Arg.(value & flag & info["experimental-unseq"] ~doc)
 
+(* TODO: I might not need this, since it always typechecks *)
 let typecheck_core =
   let doc = "typecheck the elaborated Core program" in
   Arg.(value & flag & info["typecheck-core"] ~doc)
@@ -379,21 +380,18 @@ let defacto =
   let doc = "relax some of the ISO constraints (outside of the memory)" in
   Arg.(value & flag & info["defacto"] ~doc)
 
+let fs =
+  let doc = "Initialise the internal file system with the contents of the\
+             directory DIR" in
+  Arg.(value & opt (some string) None & info ["fs"] ~docv:"DIR" ~doc)
+
 let fs_dump =
   let doc = "dump the file system at the end of the execution" in
   Arg.(value & flag & info["fs-dump"] ~doc)
 
-let trace =
-  let doc = "trace memory actions" in
-  Arg.(value & flag & info["trace"] ~doc)
-
 let switches =
   let doc = "list of semantics switches to turn on (see documentation for the list)" in
   Arg.(value & opt (list string) [] & info ["switches"] ~docv:"SWITCH1,..." ~doc)
-
-let args =
-  let doc = "List of arguments for the C program" in
-  Arg.(value & opt (some string) None & info ["args"] ~docv:"ARG1,..." ~doc)
 
 (* entry point *)
 let () =
@@ -402,13 +400,14 @@ let () =
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
-                         exec $ exec_mode $ switches $ batch $
-                         experimental_unseq $ concurrency $
+                         switches $ batch $
+                         experimental_unseq $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
-                         fs_dump $ fs $ trace $
+                         fs_dump $ fs $
+                         ocaml_corestd $
                          output_file $
-                         files $ args) in
+                         files) in
   (* the version is "sed-out" by the Makefile *)
   let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)
