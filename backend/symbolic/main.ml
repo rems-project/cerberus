@@ -110,9 +110,7 @@ let cerberus debug_level progress core_obj
              exec exec_mode switches batch experimental_unseq concurrency
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
-             absint cfg absdomain
              fs_dump fs trace
-             ocaml ocaml_corestd
              output_name
              files args_opt =
   Debug_ocaml.debug_level := debug_level;
@@ -163,10 +161,7 @@ let cerberus debug_level progress core_obj
   in
   runM @@ match files with
     | [] ->
-      if ocaml_corestd then
-        error "TODO: ocaml_corestd"
-      else
-        Pp_errors.fatal "no input file"
+      Pp_errors.fatal "no input file"
     | [file] when core_obj ->
       prelude >>= frontend (conf, io) file >>= fun core_file ->
       begin match output_name with
@@ -178,11 +173,8 @@ let cerberus debug_level progress core_obj
       end;
       return success
     | files ->
-      (* Ocaml backend mode *)
-      if ocaml then
-        error "TODO: ocaml_backend"
       (* Run only CPP *)
-      else if cpp_only then
+      if cpp_only then
         Exception.foldlM (fun () file ->
             cpp (conf, io) file >>= fun processed_file ->
             print_file processed_file;
@@ -204,7 +196,6 @@ let cerberus debug_level progress core_obj
         prelude >>= main >>= begin function
           | [] -> assert false
           | f::fs ->
-            (*if cfg then Cfg.mk_dot ~sequentialise:sequentialise_core f;*)
             Core_linking.link (f::fs)
         end >>= fun core_file ->
         if exec then
@@ -248,14 +239,6 @@ let macro_pair =
 let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
-
-let ocaml =
-  let doc = "Ocaml backend." in
-  Arg.(value & flag & info ["ocaml"] ~doc)
-
-let ocaml_corestd =
-  let doc = "Generate coreStd.ml" in
-  Arg.(value & flag & info ["ocaml-corestd"] ~doc)
 
 let impl =
   let doc = "Set the C implementation file (to be found in CERB_COREPATH/impls\
@@ -342,15 +325,6 @@ let astprints =
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
-let absdomain =
-  let doc = "Choose abstract domain (ranging over {box, oct, polka_loose (default), polka_strict, polka_eq})." in
-  Arg.(value & opt (enum [("box", `Box);
-                          ("oct", `Oct);
-                          ("polka_loose", `PolkaLoose);
-                          ("polka_strict", `PolkaStrict);
-                          ("polka_eq", `PolkaEq)])
-         `PolkaLoose & info ["absdomain"] ~doc)
-
 let fs =
   let doc = "Initialise the internal file system with the contents of the\
              directory DIR" in
@@ -419,37 +393,9 @@ let trace =
   let doc = "trace memory actions" in
   Arg.(value & flag & info["trace"] ~doc)
 
-let cfg =
-  let doc = "outputs a dot file with the control flow graph for core" in
-  Arg.(value & flag & info["cfg"] ~doc)
-
-let absint =
-  let doc = "run abstract interpretation" in
-  Arg.(value & flag & info["absint"] ~doc)
-
-
-(* TODO: this is not being used
-let default_impl =
-  let doc = "run cerberus with a default implementation choice" in
-  Arg.(value & flag & info["defacto_impl"] ~doc)
-*)
-
-(* TODO: this is not being used
-let action_graph =
-  let doc = "create a (dot) graph with all the possible executions" in
-  Arg.(value & flag & info["graph"] ~doc)
-*)
-
 let switches =
   let doc = "list of semantics switches to turn on (see documentation for the list)" in
   Arg.(value & opt (list string) [] & info ["switches"] ~docv:"SWITCH1,..." ~doc)
-
-(* TODO: this is not being used
-let concurrency_tests =
-  let doc = "Runs the concurrency regression tests" in
-  Arg.(value & flag & info["regression-test"] ~doc)
-*)
-
 
 let args =
   let doc = "List of arguments for the C program" in
@@ -466,9 +412,7 @@ let () =
                          experimental_unseq $ concurrency $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
-                         absint $ cfg $ absdomain $
                          fs_dump $ fs $ trace $
-                         ocaml $ ocaml_corestd $
                          output_file $
                          files $ args) in
   (* the version is "sed-out" by the Makefile *)

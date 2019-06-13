@@ -203,14 +203,15 @@ type cps_fun =
   | CpsProc of core_base_type * (Symbol.sym * core_base_type) list
               * block list * block_body
 
-let cps_transform_fun globs = function
-  | Fun (bty, params, pe) -> CpsFun (bty, params, pe)
+let cps_transform_fun globs name f acc =
+  match f with
+  | Fun (bty, params, pe) ->
+    Pmap.add name (CpsFun (bty, params, pe)) acc
   | Proc (_, bty, params, e) ->
-    let (bbs, bbody) =
-      cps_transform_expr globs (List.map fst params) e
-    in CpsProc (bty, params, bbs, bbody)
-  | ProcDecl _ -> raise (Unsupported "Procedures declaration should be eliminated.")
-  | BuiltinDecl _ -> raise (Unsupported "Builtin procedures declaration should be eliminated.")
+    let (bbs, bbody) = cps_transform_expr globs (List.map fst params) e in
+    Pmap.add name (CpsProc (bty, params, bbs, bbody)) acc
+  | ProcDecl _
+  | BuiltinDecl _ -> acc
 
 type cps_file = {
   main   : Symbol.sym option;
@@ -238,9 +239,11 @@ let cps_transform globs_sym (core : unit typed_file) =
   in
   {
     main = core.main;
-    stdlib = Pmap.map (cps_transform_fun globs_sym') core.stdlib;
+    stdlib = Pmap.fold (cps_transform_fun globs_sym') core.stdlib
+              (Pmap.empty (Symbol.symbol_compare));
     impl = core.impl;
     globs = globs;
-    funs = Pmap.map (cps_transform_fun globs_sym') core.funs;
+    funs = Pmap.fold (cps_transform_fun globs_sym') core.funs
+              (Pmap.empty (Symbol.symbol_compare));
   }
 

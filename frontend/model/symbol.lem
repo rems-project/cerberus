@@ -55,6 +55,11 @@ let inline symbolEqual sym1 sym2 =
           false
   end
 
+val symbol_compare: sym -> sym -> ordering
+let symbol_compare (Symbol d1 n1 _) (Symbol d2 n2 _) =
+  if d1 = d2 then compare n1 n2
+  else compare d1 d2
+
 instance (Eq sym)
   let (=)            = symbolEqual
   let (<>) sym1 sym2 = not (symbolEqual sym1 sym2)
