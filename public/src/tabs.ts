@@ -41,6 +41,7 @@ export abstract class Tab {
   close() {}
 }
 
+/** Outputs help.html */
 export class Help extends Tab {
   constructor(ee: EventEmitter) {
     super('Help', ee)
@@ -53,6 +54,7 @@ export class Help extends Tab {
   }
 }
 
+/** Outputs charon2 experimental data */
 export class Experimental extends Tab {
   constructor(ee: EventEmitter) {
     super('Experimental Data', ee)
@@ -74,6 +76,7 @@ export class Experimental extends Tab {
   }
 }
 
+/** Generic tab with a SVG graph */
 class SvgGraph extends Tab {
   panzoomOptions: any
   container: JQuery<HTMLElement>
@@ -149,6 +152,7 @@ class SvgGraph extends Tab {
   }
 }
 
+/** Steps graph in interactive mode */
 export class Interactive extends SvgGraph {
   constructor(ee: EventEmitter) {
     super('Interactive', ee)
@@ -182,6 +186,7 @@ export class Interactive extends SvgGraph {
   }
 }
 
+/** BMC executionn graphs */
 export class BMC extends SvgGraph {
   currentExecution: number = 0;
   status: JQuery<HTMLElement>
@@ -265,6 +270,7 @@ export class BMC extends SvgGraph {
   }
 }
 
+/** Memory representation (interactive mode) */
 class Memory extends SvgGraph {
   fit: JQuery<HTMLElement>
   svgPos: { x: number, y: number, scale: number}
@@ -432,6 +438,7 @@ class Memory extends SvgGraph {
   
 }
 
+/** Simple memory representation (interactive mode) */
 export class SimpleMemory extends Tab {
   container: JQuery<HTMLElement>
   constructor(ee: EventEmitter) {
@@ -689,6 +696,7 @@ export abstract class ReadOnly extends Editor {
   }
 }
 
+/** Outputs ocaml_implementation.ml */
 export class Implementation extends ReadOnly {
   constructor (ee: EventEmitter) {
     super('Implementation Defined', '', ee)
@@ -702,6 +710,7 @@ export class Implementation extends ReadOnly {
   }
 }
 
+/** Outputs stdlib.c */
 export class Library extends ReadOnly {
   constructor (ee: EventEmitter) {
     super('C11 Library', '', ee)
@@ -787,8 +796,6 @@ class Stderr extends ReadOnly {
       this.setValue(s.interactive.current.stderr)
   }
 }
-
-
 
 class Console extends ReadOnly {
   constructor (ee: EventEmitter) {

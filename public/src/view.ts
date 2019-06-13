@@ -10,6 +10,8 @@ import { State, Event, EventEmitter, InteractiveMode, ResultRequest } from './co
 import UI from './ui'
 import bigInt from 'big-integer'
 
+/** A view contains the state of a C program.
+ * One can change a view in the dropdown in the top toolbar */
 export default class View {
   title: string
   dom: JQuery<HTMLElement>
@@ -28,7 +30,7 @@ export default class View {
   /** Events */
   private events: { [eventName:string]: [any, Function][]; }
 
-  /** Event Emitter */
+  /** Event emitter, the events are handled only for the current view */
   private ee: EventEmitter
 
   constructor (title: string, data: string, config?: GoldenLayout.Config) {
