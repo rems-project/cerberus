@@ -1,6 +1,7 @@
 import $ from 'jquery'
 import _ from 'lodash'
-import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest, AllocModel, CoreOpt, ExecOpt, BmcModel } from './common'
+import { Option, State, Compiler, InteractiveMode, ResultRequest, InteractiveRequest,
+         AllocModel, CoreOpt, ExecOpt, BmcModel } from './common'
 import * as util from './util'
 import View from './view'
 import Widget from './widget';
@@ -10,6 +11,8 @@ import Tabs from './tabs';
 type ExecutionMode = 'random' | 'exhaustive'
 type Action = 'elaborate' | 'random' | 'exhaustive' | 'step' | 'bmc' | 'shorten'
 
+/** Main Cerberus UI class
+ * It contains the global state and the main UI button handlers */
 export class CerberusUI {
   /** List of existing views */
   private views: View[]
@@ -584,6 +587,7 @@ export class CerberusUI {
     })
   }
 
+  /* Send an action request to the server */
   request (action: Action, onSuccess: Function, interactive?: InteractiveRequest) {
     const view = this.getView()
     const model = view.state.model
@@ -678,6 +682,6 @@ export class CerberusUI {
 const UI = new CerberusUI()
 export default UI
 
-// This is used to debug
+// This is used to debug, the singleton class UI is available in the web console
 //@ts-ignore
 window.UI = UI
