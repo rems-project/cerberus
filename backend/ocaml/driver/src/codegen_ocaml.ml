@@ -76,8 +76,7 @@ let gen filename corestd core =
     ^/^ tand ^^^ print_symbol sym ^^^ P.equals ^^^ print_ref !^"RT.mk_null_void"
   in
   if corestd then
-    Codegen_corestd.gen globs cps_core.impl cps_core.stdlib;
-  (*Codegen_dep.gen fl globs.externs cps_core.funs globs;*)
+    Codegen_corestd.gen cps_core.stdlib cps_core.impl;
   let contents =
     print_head filename ^//^
     List.fold_left print_globals_init P.empty cps_core.globs ^//^

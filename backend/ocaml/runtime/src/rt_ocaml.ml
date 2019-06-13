@@ -384,7 +384,7 @@ let init_globals glbs =
 let create_tag_defs_map defs =
   List.fold_left
     (fun m (s, xs) -> Pmap.add s xs m)
-    (Pmap.empty Core_fvs.sym_compare) defs
+    (Pmap.empty Symbol.symbol_compare) defs
 
 let run tags gls main =
   begin fun cont args ->

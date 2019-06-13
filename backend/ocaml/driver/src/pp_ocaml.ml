@@ -128,12 +128,9 @@ let print_symbol_prefix = function
   | Symbol.PrefOther str   ->
     !^"Symbol.PrefOther" ^^^ P.dquotes !^str
 
-(*
 let print_globs_prefix globs sym =
-  if List.mem sym globs.statics then !^"!"
-  else if List.mem sym globs.externs then !^(globs.interface)
+  if List.mem sym globs then !^"!"
   else P.empty
-*)
 
 (* Take out all '.' and add '_' as prefix *)
 let print_impl_name i =
@@ -567,7 +564,7 @@ let print_pure_expr globs pe =
       match pe with Pexpr (_, t, pe') ->
       match pe' with
       | PEsym sym ->
-        (*print_globs_prefix globs sym ^^*) print_symbol sym
+        print_globs_prefix globs sym ^^ print_symbol sym
       | PEimpl iCst -> print_impl_name iCst ^^^ P.parens P.space
       | PEval cval -> print_value globs cval
       | PEconstrained _ -> raise (Unexpected "Unexpected contrained expression.")

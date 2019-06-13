@@ -16,12 +16,27 @@ let print_head filename =
   !^"let (>>=) = M.bind" ^//^
   !^"let rec id = fun x -> x"
 
-let gen globs impl stdlib =
+let gen stdlib impl =
   let contents =
     print_head std_filename ^^
-    print_impls globs impl ^^
-    print_funs globs stdlib ~init:false
+    print_impls [] impl ^^
+    print_funs [] stdlib ~init:false
   in
   let oc = open_out std_filename in
   P.ToChannel.pretty 1. 80 oc contents;
   close_out oc
+
+let gen_standalone dummy_core =
+  let open Cps_core in
+  let open Core_opt in
+  let opt_passes core =
+    elim_wseq core
+    |> assoc_seq
+    |> elim_skip
+    |> elim_let
+  in
+  let cps_core = elim_proc_decls dummy_core
+    |> run opt_passes
+    |> cps_transform []
+  in
+  gen cps_core.stdlib cps_core.impl

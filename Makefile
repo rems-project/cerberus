@@ -81,7 +81,13 @@ bmc: cerberus-bmc
 
 cerberus-ocaml: _lib/concrete/concrete.cmxa
 	@make -C backend/ocaml
-	@cp backend/ocaml/cerberus-ocaml cerberus-ocaml
+	@cp backend/ocaml/driver/cerberus-ocaml cerberus-ocaml
+	@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
+	@mkdir -p _lib/rt-ocaml
+	@cp backend/ocaml/runtime/META _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/rt_ocaml.{a,cma,cmxa} _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/*.{cmi,cmx} _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/src/*.{cmi,cmx} _lib/rt-ocaml
 
 ocaml: cerberus-ocaml
 
