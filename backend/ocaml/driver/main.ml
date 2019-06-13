@@ -102,6 +102,18 @@ let create_executable out =
   close_out oc;
   Unix.chmod out 0o755
 
+let dummy_core_file stdlib impl =
+  let open Core in
+  { main=    None;
+    tagDefs= Pmap.empty compare;
+    stdlib=  snd stdlib;
+    impl=    impl;
+    globs=   [];
+    funs=    Pmap.empty compare;
+    extern=  Pmap.empty compare;
+    funinfo= Pmap.empty compare;
+  }
+
 let cerberus debug_level progress core_obj
              cpp_cmd nostdinc nolibc macros macros_undef
              incl_dirs incl_files cpp_only
@@ -109,7 +121,7 @@ let cerberus debug_level progress core_obj
              impl_name
              switches batch experimental_unseq
              astprints pprints ppflags
-             sequentialise_core rewrite_core typecheck_core defacto
+             rewrite_core
              fs_dump fs
              ocaml_corestd
              output_name
@@ -119,9 +131,9 @@ let cerberus debug_level progress core_obj
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   (* set global configuration *)
-  set_cerb_conf false Random false QuoteStd defacto false;
-  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
-               rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
+  set_cerb_conf false Random false QuoteStd false false;
+  let conf = { astprints; pprints; ppflags; debug_level; typecheck_core = false;
+               rewrite_core; sequentialise_core = true; cpp_cmd; cpp_stderr = true } in
   let prelude =
     (* Looking for and parsing the core standard library *)
     Switches.set switches;
@@ -159,7 +171,12 @@ let cerberus debug_level progress core_obj
   runM @@ match files with
     | [] ->
       if ocaml_corestd then
-        error "TODO: ocaml_corestd"
+        prelude >>= fun (core_stdlib, core_impl) ->
+        let dummy_core = dummy_core_file core_stdlib core_impl in
+        Core_typing.typecheck_program dummy_core >>= fun core_typed ->
+        let core_seq = Core_sequentialise.sequentialise_file core_typed in
+        Codegen_corestd.gen_standalone core_seq;
+        return success
       else
         Pp_errors.fatal "no input file"
     | [file] when core_obj ->
@@ -201,7 +218,7 @@ let cerberus debug_level progress core_obj
         end >>= Core_typing.typecheck_program >>= fun typed_core_file ->
         (* Ocaml backend mode *)
         (* TODO: choose a better name *)
-        Codegen_ocaml.gen (List.hd files) true typed_core_file >>= fun _ ->
+        Codegen_ocaml.gen (List.hd files) ocaml_corestd typed_core_file >>= fun _ ->
         return success
 
 (*
@@ -247,13 +264,6 @@ let macro_pair =
 let debug_level =
   let doc = "Set the debug message level to $(docv) (should range over [0-9])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
-
-(*
- * THIS SHOULD BE ALWAYS ON NOW
-let ocaml =
-  let doc = "Ocaml backend." in
-  Arg.(value & flag & info ["ocaml"] ~doc)
-   *)
 
 let ocaml_corestd =
   let doc = "Generate coreStd.ml" in
@@ -357,10 +367,6 @@ let rewrite =
   let doc = "Activate the Core to Core transformations" in
   Arg.(value & flag & info["rewrite"] ~doc)
 
-let sequentialise =
-  let doc = "Replace all unseq() with left to right wseq(s)" in
-  Arg.(value & flag & info["sequentialise"] ~doc)
-
 let batch =
   let doc = "makes the execution driver produce batch friendly output" in
   Arg.(value & vflag `NotBatch & [(`Batch, info["batch"] ~doc);
@@ -370,15 +376,6 @@ let batch =
 let experimental_unseq =
   let doc = "use a new (experimental) semantics for unseq() in Core_run" in
   Arg.(value & flag & info["experimental-unseq"] ~doc)
-
-(* TODO: I might not need this, since it always typechecks *)
-let typecheck_core =
-  let doc = "typecheck the elaborated Core program" in
-  Arg.(value & flag & info["typecheck-core"] ~doc)
-
-let defacto =
-  let doc = "relax some of the ISO constraints (outside of the memory)" in
-  Arg.(value & flag & info["defacto"] ~doc)
 
 let fs =
   let doc = "Initialise the internal file system with the contents of the\
@@ -403,7 +400,7 @@ let () =
                          switches $ batch $
                          experimental_unseq $
                          astprints $ pprints $ ppflags $
-                         sequentialise $ rewrite $ typecheck_core $ defacto $
+                         rewrite $
                          fs_dump $ fs $
                          ocaml_corestd $
                          output_file $

@@ -43,11 +43,14 @@ cbuild
 clink
 cerberus
 cerberus-bmc
+cerberus-ocaml
 cerberus-symbolic
 cerberus-prof
 cerberus-webserver
 webcerb.concrete
 webcerb.symbolic
+
+compile.sh
 
 runtime/libc/libc.co
 runtime/libc/libm.co

@@ -693,7 +693,7 @@ proc [ailname = "readlink"] readlink_proxy (path_ptr: pointer, buf_ptr: pointer,
     | (Specified (path: pointer), Specified (buf: pointer), Specified (size: integer)) =>
       let strong cs: [integer] = pcall(listFromStr, path) in
       pcall(<builtin_readlink>, cs, buf, size)
-    | (_: loaded pointer, _: loaded pointer) =>
+    | (_: loaded pointer, _: loaded pointer, _: loaded integer) =>
       pure (undef(<<DUMMY(readlink_proxy)>>))
   end
 
