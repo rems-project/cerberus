@@ -1,0 +1,6 @@
+true: use_menhir, bin_annot, color(always)
+true: debug
+
+true: package(lem), package(util), package(concrete)
+
+<src>: include

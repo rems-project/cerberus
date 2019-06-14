@@ -208,7 +208,6 @@ let cerberus debug_level progress core_obj
           return ()
           ) () files >>= fun () ->
         return success
-      (* Link and execute *)
       else
         prelude >>= fun core_std ->
         main core_std >>= begin function
@@ -217,28 +216,13 @@ let cerberus debug_level progress core_obj
             Core_linking.link (f::fs)
         end >>= Core_typing.typecheck_program >>= fun typed_core_file ->
         (* Ocaml backend mode *)
-        (* TODO: choose a better name *)
-        Codegen_ocaml.gen (List.hd files) ocaml_corestd typed_core_file >>= fun _ ->
-        return success
-
-(*
-        if exec then
-          let open Exhaustive_driver in
-          let () = Tags.set_tagDefs core_file.tagDefs in
-          let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump; trace} in
-          interp_backend io core_file ~args ~batch ~fs ~driver_conf
-        else
+        let name =
           match output_name with
-          | None ->
-            return success
-          | Some out -> begin
-              if Filename.check_suffix out ".co" || Filename.check_suffix out ".o" then
-                write_core_object core_file out
-              else
-                (write_core_object core_file (out ^ ".co"); create_executable out);
-              return success
-            end
-   *)
+          | None -> "a.ml"
+          | Some out -> out
+        in
+        Codegen_ocaml.gen name ocaml_corestd typed_core_file >>= fun _ ->
+        return success
 
 (* CLI stuff *)
 open Cmdliner
