@@ -1,0 +1,5 @@
+requires = ""
+description = "Ocaml Runtime for Cerberus"
+archive(byte) = "rt_ocaml.cma"
+archive(native) = "rt_ocaml.cmxa"
+version = "0.0.1"
