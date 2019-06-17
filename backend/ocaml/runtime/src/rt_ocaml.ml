@@ -314,12 +314,8 @@ let snprintf _ = failwith "No support for snprintf"
 
 exception Exit of (M.integer_value loaded)
 
-let print_exec i s =
-  Printf.printf "BEGIN EXEC[%d]\n%s\nEND EXEC[%d]\n" i s i
-
 let print_batch i res =
-  Printf.sprintf "Defined {value: \"%s\", stdout: \"%s\", blocked: \"false\"}" res !stdout
-  |> print_exec i
+  Printf.printf "Defined {value: \"%s\", stdout: \"%s\", stderr: \"\", blocked: \"false\"}\n" res !stdout
 
 let print_err_batch e =
   let err = match e with
@@ -331,7 +327,6 @@ let print_err_batch e =
     | _ -> "memory error"
   in
   Printf.sprintf "Killed {msg: memory layout error (%s seq) ==> %s}" (show_memop !last_memop) err
-  |> print_exec 0 
 
 let string_of_specified n =
   Printf.sprintf "Specified(%s)" (Nat_big_num.to_string n)
