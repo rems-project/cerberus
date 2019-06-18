@@ -5,6 +5,7 @@ export DEPPATH=$CERB_PATH/dependencies
 export BINPATH=$DEPPATH/bin
 export LEM_PATH=$DEPPATH/lem
 export OPAMROOT=$DEPPATH/.opam
+export LEMLIB=$LEMPATH/library
 
 export PATH=$LEM_PATH:$CERB_PATH:$BINPATH:$PATH
 
