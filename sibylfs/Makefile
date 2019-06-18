@@ -22,7 +22,9 @@ sibylfs: generated _build/sibylfs.cmxa
 generated: $(wildcard src/*.lem) $(wildcard src/*.ml) $(wildcard src/*.mli)
 	@echo $(BOLD)LEM SybilFS$(RESET)
 	@mkdir -p generated
-	@cp src/*.{ml,mli,lem} generated/
+	@cp src/*.ml generated/
+	@cp src/*.mli generated/
+	@cp src/*.lem generated/
 	@cp *.sed generated/
 	@cp Makefile generated/
 	@cp sibylfs.mllib generated/
