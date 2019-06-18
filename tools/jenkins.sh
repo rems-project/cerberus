@@ -8,8 +8,6 @@ export OPAMROOT=$DEPPATH/.opam
 
 export PATH=$LEM_PATH:$CERB_PATH:$BINPATH:$PATH
 
-mkdir -p $BINPATH DEPPATH
-
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
   mkdir -p $BINPATH

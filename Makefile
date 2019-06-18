@@ -29,8 +29,9 @@ _lib/sibylfs/sibylfs.cmxa: _lib sibylfs/_build/sibylfs.cmxa
 	@echo $(BOLD)INSTALLING SybilFS in ./_lib$(RESET)
 	@mkdir -p _lib/sibylfs
 	@cp sibylfs/META _lib/sibylfs/
-	@cp sibylfs/_build/sibylfs.{a,cma,cmxa} _lib/sibylfs/
-	@cp sibylfs/_build/generated/*.{cmi,cmx} _lib/sibylfs/
+	@cp sibylfs/_build/sibylfs.a sibylfs/_build/sibylfs.cma sibylfs/_build/sibylfs.cmxa _lib/sibylfs/
+	@cp sibylfs/_build/generated/*.cmi _lib/sibylfs/
+	@cp sibylfs/_build/generated/*.cmx _lib/sibylfs/
 
 util/_build/src/util.cmxa: util
 
@@ -38,8 +39,9 @@ _lib/util/util.cmxa: _lib util/_build/src/util.cmxa
 	@echo $(BOLD)INSTALLING Util in ./_lib$(RESET)
 	@mkdir -p _lib/util
 	@cp util/META _lib/util/
-	@cp util/_build/src/util.{a,cma,cmxa} _lib/util/
-	@cp util/_build/src/*.{cmi,cmx} _lib/util/
+	@cp util/_build/src/util.a util/_build/src/util.cma util/_build/src/util.cmxa _lib/util/
+	@cp util/_build/src/*.cmi _lib/util/
+	@cp util/_build/src/*.cmx _lib/util/
 
 memory/concrete/_build/src/concrete.cmxa: concrete
 
@@ -47,11 +49,15 @@ _lib/concrete/concrete.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memor
 	@echo $(BOLD)INSTALLING Concrete Memory Model in ./_lib$(RESET)
 	@mkdir -p _lib/concrete
 	@cp memory/concrete/META _lib/concrete/
-	@cp memory/concrete/_build/src/concrete.{a,cma,cmxa} _lib/concrete
-	@cp memory/concrete/_build/src/*.{cmi,cmx} _lib/concrete
-	@cp memory/concrete/_build/ocaml_generated/*.{cmi,cmx} _lib/concrete
-	@cp memory/concrete/_build/frontend/pprinters/*.{cmi,cmx} _lib/concrete
-	@cp memory/concrete/_build/frontend/common/*.{cmi,cmx} _lib/concrete
+	@cp memory/concrete/_build/src/concrete.a memory/concrete/_build/src/concrete.cma memory/concrete/_build/src/concrete.cmxa _lib/concrete
+	@cp memory/concrete/_build/src/*.cmi _lib/concrete
+	@cp memory/concrete/_build/src/*.cmx _lib/concrete
+	@cp memory/concrete/_build/ocaml_generated/*.cmi _lib/concrete
+	@cp memory/concrete/_build/ocaml_generated/*.cmx _lib/concrete
+	@cp memory/concrete/_build/frontend/pprinters/*.cmi _lib/concrete
+	@cp memory/concrete/_build/frontend/pprinters/*.cmx _lib/concrete
+	@cp memory/concrete/_build/frontend/common/*.cmi _lib/concrete
+	@cp memory/concrete/_build/frontend/common/*.cmx _lib/concrete
 
 memory/symbolic/_build/src/symbolic.cmxa: symbolic
 
@@ -59,11 +65,15 @@ _lib/symbolic/symbolic.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memor
 	@echo $(BOLD)INSTALLING Symbolic Memory Model in ./_lib$(RESET)
 	@mkdir -p _lib/symbolic
 	@cp memory/symbolic/META _lib/symbolic/
-	@cp memory/symbolic/_build/src/symbolic.{a,cma,cmxa} _lib/symbolic
-	@cp memory/symbolic/_build/src/*.{cmi,cmx} _lib/symbolic
-	@cp memory/symbolic/_build/ocaml_generated/*.{cmi,cmx} _lib/symbolic
-	@cp memory/symbolic/_build/frontend/pprinters/*.{cmi,cmx} _lib/symbolic
-	@cp memory/symbolic/_build/frontend/common/*.{cmi,cmx} _lib/symbolic
+	@cp memory/symbolic/_build/src/symbolic.a memory/symbolic/_build/src/symbolic.cma memory/symbolic/_build/src/symbolic.cmxa _lib/symbolic
+	@cp memory/symbolic/_build/src/*.cmi _lib/symbolic
+	@cp memory/symbolic/_build/src/*.cmx _lib/symbolic
+	@cp memory/symbolic/_build/ocaml_generated/*.cmi _lib/symbolic
+	@cp memory/symbolic/_build/ocaml_generated/*.cmx _lib/symbolic
+	@cp memory/symbolic/_build/frontend/pprinters/*.cmi _lib/symbolic
+	@cp memory/symbolic/_build/frontend/pprinters/*.cmx _lib/symbolic
+	@cp memory/symbolic/_build/frontend/common/*.cmi _lib/symbolic
+	@cp memory/symbolic/_build/frontend/common/*.cmx _lib/symbolic
 
 cerberus-concrete: _lib/concrete/concrete.cmxa
 	@make -C backend/driver
@@ -85,9 +95,11 @@ cerberus-ocaml: _lib/concrete/concrete.cmxa
 	@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
 	@mkdir -p _lib/rt-ocaml
 	@cp backend/ocaml/runtime/META _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/rt_ocaml.{a,cma,cmxa} _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/*.{cmi,cmx} _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/src/*.{cmi,cmx} _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/rt_ocaml.a backend/ocaml/runtime/_build/rt_ocaml.cma backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
+	@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
 
 ocaml: cerberus-ocaml
 
