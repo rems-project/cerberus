@@ -2,13 +2,13 @@
 
 export CERB_PATH=/local/jenkins/home/workspace/rems/cerberus
 export DEPPATH=$CERB_PATH/dependencies
-export LEMPATH=$DEPPATH/lem
-export OPAMROOT=$DEPPATH/.opam
 export BINPATH=$DEPPATH/bin
-export PATH=$LEMPATH:$CERB_PATH:$BINPATH:$PATH
-export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:`ocamlfind query z3`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`ocamlfind query z3`
-export LEMLIB=$LEMPATH/library
+export LEM_PATH=$DEPPATH/lem
+export OPAMROOT=$DEPPATH/.opam
+
+export PATH=$LEM_PATH:$CERB_PATH:$BINPATH:$PATH
+
+mkdir -p $BINPATH DEPPATH
 
 if ! hash opam 2> /dev/null; then
   echo "Installing OPAM!"
@@ -16,11 +16,8 @@ if ! hash opam 2> /dev/null; then
   wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s $BINPATH 4.06.0
   eval `opam config env`
   opam init
-  opam install ocamlfind cmdliner menhir pprint zarith yojson
-  opam install ppx_deriving ppx_sexp_conv sexplib sha
-  opam install z3
+  opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_sexp_conv sexplib
 fi
-
 
 if ! hash lem 2> /dev/null; then
   echo "Install LEM"
@@ -35,11 +32,6 @@ fi
 
 # Initialise OPAM
 . $OPAMROOT/opam-init/init.sh > /dev/null 2> /dev/null || true
-
-if ! (ocamlfind query angstrom > /dev/null 2>&1); then
-  echo "Install depedency: angstrom"
-  opam install angstrom
-fi
 
 # Clean and make Cerberus
 make clear
