@@ -106,7 +106,7 @@ ocaml: cerberus-ocaml
 cbuild: tools/cbuild.ml
 	@echo $(BOLD)BUILDING cbuild$(RESET)
 	@ocamlfind ocamlopt -o cbuild tools/cbuild.ml -linkpkg -package cmdliner,str,unix
-	@rm -rf tools/cbuild.{cmx,cmi,o}
+	@rm -rf tools/cbuild.cmx tools/cbuild.cmi tools/cbuild.o
 
 tmp:
 	@mkdir -p tmp
@@ -133,7 +133,7 @@ clean:
 	@make -C backend/symbolic clean
 	@make -C backend/web clean
 	@make -C backend/ocaml clean
-	@rm tools/*.cmi tools/*.cmx tools/*.o
+	@rm -rf tools/*.cmi tools/*.cmx tools/*.o
 	@rm -rf _lib
 
 clear: clean
