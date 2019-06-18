@@ -15,7 +15,7 @@ if ! hash opam 2> /dev/null; then
   wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s $BINPATH 4.06.0
   eval `opam config env`
   opam init
-  opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_sexp_conv sexplib
+  opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_deriving ppx_sexp_conv sexplib
 fi
 
 if ! hash lem 2> /dev/null; then
