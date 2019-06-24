@@ -12,7 +12,7 @@ import Core_typing
 
 import AilSyntax AilSyntaxAux AilTypes AilTypesAux
 import GenTypes
-import Core Core_aux Undefined Builtins Annot
+import Core Core_aux Undefined Builtins Annot Core_linking
 
 import Linux
 
@@ -4078,7 +4078,7 @@ let translate (ailnames, stdlib_fun_map) impl prog =
     C.tagDefs= core_tagDefs;
     C.stdlib= stdlib_fun_map;
     C.impl= impl;
-    C.globs= cglobs;
+    C.globs= Core_linking.merge_globs cglobs [] []; (* topological sort *)
     C.funs= cfuns;
     C.extern = translate_extern_map prog;
     C.funinfo= funinfo;

@@ -23,6 +23,7 @@ concrete: $(BUILD_DIR)
 
 $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@make clean
+	@make -C $(CERB_PATH) clean-non-mem
 	@echo $(BOLD)LEM Concrete$(RESET)
 	@mkdir -p $(BUILD_DIR)
 	@cp $(CONC_LEM) $(BUILD_DIR)
