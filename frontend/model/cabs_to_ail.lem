@@ -4264,7 +4264,8 @@ let desugar_and_register_external_declaration edecl =
                               else
                                 E.register_global_object_definition2 ident_loc sym link (E.Tentative ty (*mk_zeroInit tagDefs ty*))
                             else
-                              E.return ()                    end
+                              E.return ()
+                    end
               end
         end) xs
   
