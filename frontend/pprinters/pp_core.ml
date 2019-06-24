@@ -614,8 +614,8 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Easeq ((sym, _), act1, pact2) ->
-            pp_control "leta" ^^^ pp_symbol sym ^^^ P.equals ^^^
+        | Easeq ((sym, bTy), act1, pact2) ->
+            pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
             pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
         | Eindet (i, e) ->
             pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
