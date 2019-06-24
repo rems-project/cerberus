@@ -17,7 +17,7 @@ let pp_symbol  a = !^ (Pp_symbol.to_string_pretty a)
 let pp_integer_base_ctype ibty =
   let open AilTypes in
   !^ (match ibty with
-    | Ichar          -> "char"
+    | Ichar          -> "ichar"
     | Short          -> "short"
     | Int_           -> "int"
     | Long           -> "long"

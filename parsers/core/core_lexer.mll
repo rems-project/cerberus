@@ -159,6 +159,7 @@ let keywords =
       ("IntFromPtr",       T.MEMOP_OP Mem_common.IntFromPtr      );
       ("PtrFromInt",       T.MEMOP_OP Mem_common.PtrFromInt      );
       ("PtrValidForDeref", T.MEMOP_OP Mem_common.PtrValidForDeref);
+      ("PtrWellAligned",   T.MEMOP_OP Mem_common.PtrWellAligned);
       
       ("Memcpy", T.MEMOP_OP Mem_common.Memcpy);
       ("Memcmp", T.MEMOP_OP Mem_common.Memcmp);
@@ -220,7 +221,7 @@ let lex_comment remainder lexbuf =
 let error_name =
   "<<<" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ">>>"
 let ub_name =
-  "<<" ( ['A'-'Z' 'a'-'z' '_' '0'-'9']* | "DUMMY" "(" ['A'-'Z' 'a'-'z' '_' '0'-'9']* ")" )  ">>"
+  "<<" ( ['A'-'Z' 'a'-'z' '_' '0'-'9']* | "DUMMY" "(" ['A'-'Z' 'a'-'z' '_' ' ' '.' ':' '-' '=' '<' '>' '0'-'9' '(' ')']* ")" )  ">>"
 let impl_name =
   '<' ['A'-'Z' 'a'-'z' '_' '.']* '>'
 let symbolic_name =
@@ -266,6 +267,11 @@ and main = parse
       { let strs = cstring lexbuf in
         (* TODO: check this *)
         T.CSTRING (String.concat "" strs) }
+
+  | error_name { let str = Lexing.lexeme lexbuf in
+             T.STRING (String.sub str 3 (String.length str - 6))  }
+  | ub_name { scan_ub lexbuf }
+  | impl_name { scan_impl lexbuf }
   
   (* binary operators *)
   | '+'   { T.PLUS }
@@ -310,11 +316,6 @@ and main = parse
   
   | "=>" { T.EQ_GT }
   
-  | error_name { let str = Lexing.lexeme lexbuf in
-             T.STRING (String.sub str 3 (String.length str - 6))  }
-  
-  | ub_name { scan_ub lexbuf }
-  | impl_name { scan_impl lexbuf }
   | symbolic_name { scan_sym lexbuf }
   | '\n' {Lexing.new_line lexbuf; main lexbuf}
   | eof  {T.EOF}

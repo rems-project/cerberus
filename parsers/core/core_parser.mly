@@ -1030,7 +1030,7 @@ let mk_file decls =
 %token DEF GLOB FUN PROC
 
 (* Core types *)
-%token INTEGER FLOATING BOOLEAN POINTER CTYPE (* CFUNCTION *) UNIT EFF LOADED STORABLE
+%token INTEGER FLOATING BOOLEAN POINTER CTYPE CFUNCTION UNIT EFF LOADED STORABLE
 
 (* Core constant keywords *)
 %token NULL TRUE FALSE UNIT_VALUE
@@ -1085,7 +1085,7 @@ let mk_file decls =
 
 
 (* integer values *)
-%token IVMAX IVMIN IVSIZEOF IVALIGNOF (* CFUNCTION_VALUE *) ARRAYCTOR
+%token IVMAX IVMIN IVSIZEOF IVALIGNOF CFUNCTION_VALUE ARRAYCTOR
 %token IVCOMPL IVAND IVOR IVXOR
 %token ARRAY SPECIFIED UNSPECIFIED
 
@@ -1436,10 +1436,8 @@ value:
     { Vobject (OVinteger (Impl_mem.integer_ival n)) }
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Impl_mem.null_ptrval ty)) }
-    (*
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
-  { Vobject (OVcfunction _nm) }
-       *)
+  { (*TODO*) Vobject (OVpointer (Impl_mem.null_ptrval Void0)) }
 | UNIT_VALUE
     { Vunit }
 | TRUE
@@ -1494,6 +1492,8 @@ pexpr:
 | MINUS _pe= pexpr
     { let loc = Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)) in
       Pexpr ([Aloc loc], (), PEop (OpSub, Pexpr ([Aloc loc], (), PEval (Vobject (OVinteger (Impl_mem.integer_ival (Nat_big_num.of_int 0))))), _pe)) }
+| CFUNCTION _pe = delimited(LPAREN, pexpr, RPAREN)
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos($1)))], (), PEcfunction _pe) }
 | _pe1= pexpr bop= binary_operator _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) (Some $startpos(bop)))], (), PEop (bop, _pe1, _pe2)) }
 (*
@@ -1569,9 +1569,9 @@ expr:
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Esseq (_pat, _e1, _e2) ) }
-| LET ATOM _sym_bTy= pair(SYM, core_base_type) EQ _act1= action IN _pact2= paction
+| LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _pact2= paction
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
-           , Easeq (_sym_bTy, Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
+           , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
 | INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Location_ocaml.region ($startpos, $endpos) None)]
            , Eindet (Nat_big_num.to_int n, _e) ) }

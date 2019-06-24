@@ -105,7 +105,7 @@ void *memchr(const void *src, int c, size_t n)
   const unsigned char *s = src;
   c = (unsigned char)c;
   for (; n && *s != c; s++, n--);
-  return n ? (void *)s : 0;
+  return n ? (void *)s : (void*)0;
 }
 
 char *strchr(const char *s, int n)
@@ -141,7 +141,7 @@ size_t strcspn(const char *s, const char *c)
 char *strpbrk(const char *s, const char *b)
 {
   s += strcspn(s, b);
-  return *s ? (char *)s : 0;
+  return *s ? (char *)s : (char*)0;
 }
 
 char *strrchr(const char *s, int n)
@@ -176,7 +176,7 @@ static char *twobyte_strstr(const unsigned char *h, const unsigned char *n)
 {
   uint16_t nw = n[0]<<8 | n[1], hw = h[0]<<8 | h[1];
   for (h++; *h && hw != nw; hw = hw<<8 | *++h);
-  return *h ? (char *)h-1 : 0;
+  return *h ? (char *)h-1 : (char*)0;
 }
 
 static char *threebyte_strstr(const unsigned char *h, const unsigned char *n)
@@ -184,7 +184,7 @@ static char *threebyte_strstr(const unsigned char *h, const unsigned char *n)
   uint32_t nw = n[0]<<24 | n[1]<<16 | n[2]<<8;
   uint32_t hw = h[0]<<24 | h[1]<<16 | h[2]<<8;
   for (h+=2; *h && hw != nw; hw = (hw|*++h)<<8);
-  return *h ? (char *)h-2 : 0;
+  return *h ? (char *)h-2 : (char*)0;
 }
 
 static char *fourbyte_strstr(const unsigned char *h, const unsigned char *n)
@@ -192,7 +192,19 @@ static char *fourbyte_strstr(const unsigned char *h, const unsigned char *n)
   uint32_t nw = n[0]<<24 | n[1]<<16 | n[2]<<8 | n[3];
   uint32_t hw = h[0]<<24 | h[1]<<16 | h[2]<<8 | h[3];
   for (h+=3; *h && hw != nw; hw = hw<<8 | *++h);
-  return *h ? (char *)h-3 : 0;
+  return *h ? (char *)h-3 : (char*)0;
+}
+
+static char *strtok_p;
+char *strtok(char *restrict s, const char *restrict sep)
+{
+  if (!s && !(s = strtok_p)) return NULL;
+  s += strspn(s, sep);
+  if (!*s) return strtok_p = 0;
+  strtok_p = s + strcspn(s, sep);
+  if (*strtok_p) *strtok_p++ = 0;
+  else strtok_p = 0;
+  return s;
 }
 
 static char *twoway_strstr(const unsigned char *h, const unsigned char *n)
@@ -318,19 +330,6 @@ char *strstr(const char *h, const char *n)
   return twoway_strstr((void *)h, (void *)n);
 }
 
-static char *strtok_p;
-char *strtok(char *restrict s, const char *restrict sep)
-{
-  if (!s && !(s = strtok_p)) return NULL;
-  s += strspn(s, sep);
-  if (!*s) return strtok_p = 0;
-  strtok_p = s + strcspn(s, sep);
-  if (*strtok_p) *strtok_p++ = 0;
-  else strtok_p = 0;
-  return s;
-}
-
-
 /***************************************************************************
  * 7.24.6 Miscellaneous functions
  ***************************************************************************/
@@ -345,9 +344,9 @@ void* memset(void *s, int c, size_t n)
 
 char *strerror(int errnum)
 {
-  return "error";
-  //assert(0 && "not supported");
-  //_Exit(127);
+  assert(0 && "not supported");
+  _Exit(127);
+  return NULL;
 }
 
 size_t strlen(const char *s)
