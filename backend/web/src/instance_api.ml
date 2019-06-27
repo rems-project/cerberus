@@ -33,6 +33,7 @@ type bmc_model =
   | `RC11
   | `RC11_Hardcoded
   | `Linux
+  | `LinuxNoRCU
   | `Custom of string ]
 
 (* input: request *)
