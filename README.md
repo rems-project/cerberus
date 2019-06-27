@@ -152,6 +152,20 @@ Run and have fun!
 $ cerberus-server --help
 ```
 
+Cerberus Abstract Interpreter
+---
+
+Install the common dependencies and the APRON library (tested with 20160125).
+
+```bash
+$ opam install apron
+```
+
+Then run:
+
+```bash
+$ make absint
+```
 
 All targets
 ---

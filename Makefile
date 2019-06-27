@@ -1,10 +1,10 @@
 include Makefile.common
 
-.PHONY: all default sibylfs util concrete symbolic clean-non-mem clean clear cerberus cerberus-concrete cerberus-bmc cerberus-ocaml ocaml bmc cerberus-symbolic web ui
+.PHONY: all default sibylfs util concrete symbolic clean-non-mem clean clear cerberus cerberus-concrete cerberus-bmc cerberus-ocaml ocaml bmc cerberus-symbolic web ui cerberus-absint absint
 
 cerberus: cerberus-concrete libc
 
-all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web
+all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web absint
 
 sibylfs:
 	@make -C sibylfs
@@ -88,6 +88,12 @@ cerberus-bmc: _lib/concrete/concrete.cmxa
 	@cp backend/bmc/cerberus-bmc cerberus-bmc
 
 bmc: cerberus-bmc
+
+cerberus-absint: _lib/concrete/concrete.cmxa
+	@make -C backend/absint
+	@cp backend/absint/cerberus-absint cerberus-absint
+
+absint: cerberus-absint
 
 cerberus-ocaml: _lib/concrete/concrete.cmxa
 	@make -C backend/ocaml

@@ -225,13 +225,13 @@ let rec absvalue_of_texpr ~with_sym core man = function
     begin match v with
       | Vobject (OVinteger i)
       | Vloaded (LVspecified (OVinteger i)) ->
-        let n = Ocaml_mem.case_integer_value i
+        let n = Impl_mem.case_integer_value i
           (fun n -> Coeff.s_of_int (N.to_int n))
           (fun _ -> assert false)
         in
         return @@ ATexpr (Texpr1.cst env n)
       | Vloaded (LVspecified (OVpointer p)) ->
-        Ocaml_mem.case_ptrval p
+        Impl_mem.case_ptrval p
           (fun _ -> assert false (* null pointer *))
           (fun sym -> return @@ ATpointer (APfunction sym) (* function *))
           (fun prov addr -> assert false)
