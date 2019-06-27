@@ -1,0 +1,11 @@
+{
+  "log": {
+    "all": "tmp/all",
+    "index": "tmp/index",
+    "request": "tmp/request"
+  },
+  "tcp": {
+    "port": 80,
+    "redirect": false
+  }
+}
