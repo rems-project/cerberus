@@ -53,6 +53,7 @@ let add_bmc_macro ~bmc_model conf =
       | `RC11 -> " -D__memory_model_rc11__"
       | `RC11_Hardcoded -> " -D__memory_model_rc11__"
       | `Linux -> " -D__memory_model_linux__"
+      | `LinuxNoRCU -> " -D__memory_model_linux__"
       | `Custom _ -> " -D__memory_model_custom__"
       | _ -> ""
   in
@@ -167,16 +168,19 @@ let bmc ~filename ~name ~conf ~bmc_model:bmc_model ~filename () =
       match bmc_model with
       | `C11 ->
         Debug.print 7 ("BMC model: C11");
-        (Some "bmc/c11.cat", Bmc_globals.MemoryMode_C)
+        (Some "runtime/bmc/c11.cat", Bmc_globals.MemoryMode_C)
       | `RC11_Hardcoded ->
         Debug.print 7 ("BMC model: RC11 (hardcoded)");
         (None, Bmc_globals.MemoryMode_C)
       | `RC11 ->
         Debug.print 7 ("BMC model: RC11");
-        (Some "bmc/rc11.cat", Bmc_globals.MemoryMode_C)
+        (Some "runtime/bmc/rc11.cat", Bmc_globals.MemoryMode_C)
       | `Linux ->
         Debug.print 7 ("BMC model: Linux");
-        (Some "bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
+        (Some "runtime/bmc/linux.cat", Bmc_globals.MemoryMode_Linux)
+      | `LinuxNoRCU ->
+        Debug.print 7 ("BMC model: Linux");
+        (Some "runtime/bmc/linux_without_rcu.cat", Bmc_globals.MemoryMode_Linux)
       | `Custom content ->
         Debug.print 7 ("BMC model: Custom");
         let filename = write_tmp_file content in

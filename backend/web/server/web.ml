@@ -251,6 +251,7 @@ let parse_incoming_msg content =
     | "bmc_rc11"  -> Some `RC11
     | "bmc_rc11_hardcoded"  -> Some `RC11_Hardcoded
     | "bmc_linux" -> Some `Linux
+    | "bmc_linux_no_rcu" -> Some `LinuxNoRCU
     | "bmc_custom" -> None
     | s -> failwith ("unknown BMC model " ^ s)
   in
