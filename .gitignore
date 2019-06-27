@@ -47,6 +47,7 @@ cerberus-ocaml
 cerberus-symbolic
 cerberus-prof
 cerberus-webserver
+cerberus-absint
 webcerb.concrete
 webcerb.symbolic
 
