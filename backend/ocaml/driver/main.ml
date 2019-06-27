@@ -221,6 +221,7 @@ let cerberus debug_level progress core_obj
           | None -> "a.ml"
           | Some out -> out
         in
+        let () = Tags.set_tagDefs typed_core_file.tagDefs in
         Codegen_ocaml.gen name ocaml_corestd typed_core_file >>= fun _ ->
         return success
 

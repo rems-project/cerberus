@@ -25,7 +25,7 @@ let rec elim_wseq (Expr (annot, expr_) as expr) =
 
 (* Associate every sequential operation to the right. *)
 let rec assoc_seq = function
-  | Expr (annot, Esseq (pat2, Expr (annot', Esseq (pat1, e1, e2)), e3)) ->
+  | Expr (annot, Esseq (pat2, Expr (annot', Esseq (pat1, e1, e2)), e3)) (* (e1; e2); e3 = e1; (e2; e3) *) ->
       assoc_seq (Expr (annot', Esseq (pat1, e1, assoc_seq (Expr (annot, Esseq (pat2, e2, e3))))))
   | e -> core_expr_map assoc_seq e
 

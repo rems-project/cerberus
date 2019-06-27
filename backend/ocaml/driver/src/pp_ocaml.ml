@@ -343,7 +343,7 @@ let print_float_value fv =
 let print_pointer_value pv =
   Impl_mem.case_ptrval pv
     (fun _ -> !^"RT.mk_null_void")
-    (fun _ -> failwith "ERROR")
+    (fun _ -> !^ "print_pointer_value: ERROR")
     (fun opt_i addr -> !^"RT.mk_pointer"
                        ^^^ print_option (fun n -> P.dquotes (!^(Nat_big_num.to_string n))) opt_i
                        ^^^ P.dquotes (!^(Nat_big_num.to_string addr)))
@@ -606,8 +606,10 @@ let print_pure_expr globs pe =
       | PEis_integer pe -> print_is_expr "is_scalar" pp pe
       | PEis_signed pe -> print_is_expr "is_signed" pp pe
       | PEis_unsigned pe -> print_is_expr "is_unsigned" pp pe
-      | PEcfunction _
-      | PEare_compatible _ -> assert false
+      | PEcfunction pe ->
+        !^"RT.cfunction" ^^^ P.parens (pp pe)
+      | PEare_compatible (pe1, pe2) ->
+        !^"RT.are_compatible" ^^^ P.parens (pp pe1) ^^^ P.parens (pp pe2)
     end
   in pp None pe
 

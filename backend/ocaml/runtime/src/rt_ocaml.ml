@@ -67,6 +67,7 @@ let double_t = C.Basic0 (T.Floating (T.RealFloating T.Double))
 let longdouble_t = C.Basic0 (T.Floating (T.RealFloating T.LongDouble))
 
 
+let are_compatible _ _ = false
 
 (* Non deterministic choice *)
 
