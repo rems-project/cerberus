@@ -194,7 +194,7 @@ open Pp_prelude
 
 let print_location loc =
   let print_lex pos =
-    !^"A.position" ^^^ P.dquotes !^(pos.Lexing.pos_fname)
+    !^"RT.position" ^^^ P.dquotes !^(pos.Lexing.pos_fname)
     ^^^ !^(string_of_int pos.Lexing.pos_lnum)
     ^^^ !^(string_of_int pos.Lexing.pos_bol)
     ^^^ !^(string_of_int pos.Lexing.pos_cnum)
