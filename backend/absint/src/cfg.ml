@@ -991,15 +991,15 @@ let mk_cfg ~sequentialise file =
     funinfo = file.Core.funinfo;
   }
 
-let dot_of_proc nm g =
+let dot_of_proc oc nm g =
   let pre = Sym.show nm in
   Pgraph.iter_vertex (fun v _ ->
-        print_endline @@ pre ^ string_of_int v ^ "[label=\"" ^ string_of_int v ^ "\"]"
+        output_string oc @@ pre ^ string_of_int v ^ "[label=\"" ^ string_of_int v ^ "\"]\n"
     ) g;
   Pgraph.iter_edge (fun _ (v1, tf, v2) ->
-      print_endline @@
+      output_string oc @@
       pre ^ string_of_int v1 ^ " -> " ^ pre ^ string_of_int v2
-      ^ "[label=\"" ^ show_transfer tf ^ "\"]"
+      ^ "[label=\"" ^ show_transfer tf ^ "\"]\n"
     ) g
 
 (* TODO: this is to test main for the moment *)
@@ -1016,21 +1016,22 @@ let mk_main ?(sequentialise=false) core =
   | _ ->
     assert false
 
-let mk_dot ?(sequentialise=false) core =
+let mk_dot ?(sequentialise=false) output_filename core =
   let cfg = mk_cfg ~sequentialise core in
-  print_endline "digraph G {";
-  dot_of_proc (Symbol.Symbol ("", 0, Some "globs")) (snd cfg.globs);
+  let oc = open_out @@ output_filename ^ ".cfg" in
+  output_string oc "digraph G {\n";
+  dot_of_proc oc (Symbol.Symbol ("", 0, Some "globs")) (snd cfg.globs);
   Pmap.iter (fun nm f ->
       match f with
       | Tgraph (_, _, g) ->
-        dot_of_proc nm g
+        dot_of_proc oc nm g
       | _ -> ()
     ) cfg.stdlib;
   Pmap.iter (fun nm f ->
       match f with
       | Tgraph (_, _, g) ->
-        dot_of_proc nm g
+        dot_of_proc oc nm g
       | _ -> ()
     ) cfg.funs;
-  print_endline "}"
+  output_string oc "}\n"
 

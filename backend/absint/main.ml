@@ -108,6 +108,7 @@ let cerberus debug_level progress
              link_lib_path link_core_obj
              impl_name
              switches
+             cfg absdomain
              astprints pprints ppflags
              sequentialise_core rewrite_core typecheck_core defacto
              fs_dump fs
@@ -161,8 +162,13 @@ let cerberus debug_level progress
   runM @@ match files with
     | [] ->
       Pp_errors.fatal "no input file"
-    | files ->
+    | first_file::tail_files as files ->
       (* Run only CPP *)
+      let output_filename =
+        match output_name with
+        | Some name -> name
+        | None -> Filename.chop_extension first_file
+      in
       if cpp_only then
         Exception.foldlM (fun () file ->
             cpp (conf, io) file >>= fun processed_file ->
@@ -174,12 +180,12 @@ let cerberus debug_level progress
       else
         prelude >>= main >>= begin function
           | [] -> assert false
-          | f::fs ->
-            Core_linking.link (f::fs)
+          | f::fs -> Core_linking.link (f::fs)
         end >>= fun core ->
-        Cfg.mk_dot ~sequentialise:sequentialise_core core;
+        if cfg then
+          Cfg.mk_dot ~sequentialise:sequentialise_core output_filename core;
         typed_core_passes (conf, io) core >>= fun (core, _) ->
-        ignore (Absint.solve `Box core);
+        ignore (Absint.solve output_filename absdomain core);
         return success
 
 (* CLI stuff *)
@@ -330,6 +336,20 @@ let args =
   let doc = "List of arguments for the C program" in
   Arg.(value & opt (some string) None & info ["args"] ~docv:"ARG1,..." ~doc)
 
+let cfg =
+  let doc = "outputs a dot file with the control flow graph for core" in
+  Arg.(value & flag & info["cfg"] ~doc)
+
+let absdomain =
+  let doc = "Choose abstract domain (ranging over {box, oct, polka_loose (default), polka_strict, polka_eq})." in
+  Arg.(value & opt (enum [("box", `Box);
+                          ("oct", `Oct);
+                          ("polka_loose", `PolkaLoose);
+                          ("polka_strict", `PolkaStrict);
+                          ("polka_eq", `PolkaEq)])
+         `PolkaLoose & info ["absdomain"] ~doc)
+
+
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $
@@ -338,6 +358,7 @@ let () =
                          link_lib_path $ link_core_obj $
                          impl $
                          switches $
+                         cfg $ absdomain $
                          astprints $ pprints $ ppflags $
                          sequentialise $ rewrite $ typecheck_core $ defacto $
                          fs_dump $ fs $
