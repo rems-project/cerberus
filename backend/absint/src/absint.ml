@@ -692,11 +692,12 @@ let make_lattice core man g =
     apply = (fun e st -> apply core man g e st);
   }
 
-let solve typ core =
+let solve output_filename typ core =
+  let oc = open_out @@ output_filename ^ ".ai" in
   let aux man =
     let (v0, cfg) = Cfg.mk_main ~sequentialise:true core in
     F.run (make_lattice core man cfg) cfg v0
-    |> Pgraph.print stderr
+    |> Pgraph.print oc
         (fun v s -> string_of_int v ^ ": " ^ show_absstate man s)
         (fun e _ -> string_of_int e)
   in match typ with
