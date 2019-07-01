@@ -73,7 +73,7 @@ type tag_definition =
 
 declare ocaml target_rep type tag_definition = `Tags.tag_definition`
 
-(* TODO: need these otherwise Lem does some stupid renaming *)
+(* NOTE: need these otherwise Lem does some stupid renaming *)
 declare ocaml target_rep function StructDef = `Tags.StructDef`
 declare ocaml target_rep function UnionDef = `Tags.UnionDef`
 

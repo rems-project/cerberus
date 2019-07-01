@@ -38,10 +38,8 @@ let rec core_object_type_of_ctype ty =
              error "Core_aux.core_object_type_of_ctype: Array found a Nothing"
        end
    | Function (_, ret_ty) xs isVariadic ->
-       (* TODO: not sure about this *)
-       error "core_object_type_of_ctype: function"
+       error "core_object_type_of_ctype: not core function object"
    | Pointer _ _ ->
-       (* TODO: not sure about the case ref_ty is function type *)
        Just OTy_pointer
    | Atomic ty ->
        core_object_type_of_ctype ty
@@ -50,7 +48,7 @@ let rec core_object_type_of_ctype ty =
    | Union tag_sym ->
        Just (OTy_union tag_sym)
    | Builtin str ->
-       error ("TODO: Caux.object_type_of_ctype Builtin ==> " ^ str)
+       error ("TODO: Caux.core_object_type_of_ctype Builtin '" ^ str ^ "'")
   end
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type
