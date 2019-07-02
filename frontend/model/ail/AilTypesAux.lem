@@ -1,9 +1,5 @@
 open import Pervasives Common Utils AilSyntax AilTypes ErrorMonad TypingError Annot
-import Implementation_
-import Loc Debug
-
-import Implementation
-
+import Implementation_ Implementation Loc Debug
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
 let unatomic (Ctype _ ty) =
@@ -15,8 +11,7 @@ match ty with
 end
 
 
-
-(* == Function on qualifiers ==================================================================== *)
+(* == Function on qualifiers ================================================ *)
 val is_unqualified: qualifiers -> bool
 let is_unqualified = function
   | <|
@@ -46,8 +41,7 @@ let sub_qualifiers qs1 qs2 =
 (*  && (qs1.atomic   --> qs2.atomic) *)
 
 
-(* == predicates on integerTypes ================================================================= *)
-(* TODO: factorise is_signed_ity and is_unsigned_ity *)
+(* == predicates on integerTypes ============================================ *)
 val     is_signed_ity: integerType -> bool
 let rec is_signed_ity ity =
   match ity with
@@ -74,30 +68,10 @@ let rec is_signed_ity ity =
 (* STD §6.2.5#6, sentence 4 *)
 val     is_unsigned_ity: integerType -> bool
 let rec is_unsigned_ity ity =
-  match ity with
-    | Char ->
-        not (Implementation_.char_is_signed)
-    | Bool ->
-        true
-    | Signed _ ->
-        false
-    | Unsigned _ ->
-        true
-    | IBuiltin _ ->
-        error "TODO: AilTypesAux.is_unsigned_ity, IBuiltin"
-    | Enum tag_sym ->
-        is_unsigned_ity (Implementation_.typeof_enum tag_sym)
-    | Size_t ->
-        (* STD §7.19#2 *)
-        true
-    | Ptrdiff_t ->
-        (* STD §7.19#2 *)
-        false
-  end
+  not (is_signed_ity ity)
 
 
-
-(* == constructor predicates on ctypes =========================================================== *)
+(* == constructor predicates on ctypes ====================================== *)
 val is_integer: ctype -> bool
 let is_integer ty =
   (* TODO: check atomic *)
@@ -209,7 +183,6 @@ let is_array_unknown_size ty =
     | Array _ Nothing ->
         true
     | _ ->
-        (* TODO: check builtins *)
         false
   end
 
@@ -269,7 +242,8 @@ let has_flexible_array_member sigm ty =
           | Just (StructDef membersDefs) ->
               match List.dest_init membersDefs with
                 | Just (_, (_, (_, last_ty))) ->
-                    (* NOTE: this assumes membersDefs is wf (i.e. it has more than one element) *)
+                    (* NOTE: this assumes membersDefs is wf
+                       (i.e. it has more than one element) *)
                     is_array_unknown_size last_ty
                 | Nothing ->
                     false
@@ -283,7 +257,7 @@ end
 
 
 
-(* == generic predicates on ctypes ============================================================== *)
+(* == generic predicates on ctypes ========================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool
 let is_object ty =

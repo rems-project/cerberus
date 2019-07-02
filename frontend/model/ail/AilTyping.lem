@@ -1,6 +1,4 @@
-open import Pervasives Common Context AilTypes AilSyntax AilTypesAux AilSyntaxAux AilWf Utils
-
-open import ErrorMonad TypingError
+open import Pervasives Context AilTypes AilSyntax AilTypesAux AilWf Utils ErrorMonad TypingError
 import Implementation
 
 (* following the table from (§6.4.4.1#5) *)
@@ -96,9 +94,9 @@ end
 
 val well_formed_bindings: forall 'a. Loc.t -> sigma 'a -> bindings -> errorM unit
 let well_formed_bindings loc sigm bindings =
-  (* TODO: this is unreadable *)
-  mapM_ (comb (uncurry (wf_lvalue sigm)) (fun (_, (_, qs, ty)) -> (qs, ty))) bindings >>
+  mapM_ (fun (_, (_, qs, ty)) -> wf_lvalue sigm qs ty) bindings >>
   if not (disjoint_bindings identifierEqual bindings) then
     error "AilTyping.well_formed_bindings: found non disjoint bindings"
   else
     return ()
+

@@ -21,29 +21,17 @@ instance (SetType cabs_identifier)
     setElemCompare str1 str2
 end
 
-(*
-instance (MapKeyType cabs_identifier)
-  let mapKeyCompare ident1 ident2 =
-    let (CabsIdentifier _ str1) = ident1 in
-    let (CabsIdentifier _ str2) = ident2 in
-    mapKeyCompare str1 str2
-end
-*)
-
 instance (Located cabs_identifier)
   let locOf ident =
     let (CabsIdentifier loc _) = ident in
     loc
 end
 
-
 instance (Show cabs_identifier)
   let show ident =
     let CabsIdentifier _ str = ident in
     str
 end
-
-
 
 
 (* §6.4.4 Constants *)
@@ -71,7 +59,6 @@ type cabs_character_prefix =
 
 type cabs_character_constant =
   maybe cabs_character_prefix * string
-
 
 type cabs_constant =
   | CabsInteger_const     of cabs_integer_constant
@@ -121,7 +108,8 @@ type cabs_expression_ =
   | CabsEassign of cabs_assignment_operator * cabs_expression * cabs_expression
   (* §6.5.17 Comma operator, Syntax *)
   | CabsEcomma of cabs_expression * cabs_expression
-  (* NOTE: the following are suppose to be in the library, but need special treatment *)
+  (* NOTE: the following are suppose to be in the library, but need
+     special treatment *)
   | CabsEassert of cabs_expression
   | CabsEoffsetof of type_name * cabs_identifier
   | CabsEva_start of cabs_expression * cabs_identifier
@@ -283,7 +271,8 @@ and pointer_declarator =
   | PDecl of Loc.t * list cabs_type_qualifier * maybe pointer_declarator
 
 and parameter_type_list =
-  | Params of list parameter_declaration * bool (* the boolean indicate a variadic function *)
+  | Params of list parameter_declaration * bool (* the boolean indicate a
+                                                 * variadic function *)
 
 and parameter_declaration =
   | PDeclaration_decl     of specifiers * declarator
@@ -292,7 +281,8 @@ and parameter_declaration =
 
 (* §6.7.7 Type names, Syntax *)
 and type_name =
-  | Type_name of list cabs_type_specifier * list cabs_type_qualifier * list alignment_specifier * maybe abstract_declarator
+  | Type_name of list cabs_type_specifier * list cabs_type_qualifier
+               * list alignment_specifier * maybe abstract_declarator
 
 and abstract_declarator =
   | AbsDecl_pointer of pointer_declarator
@@ -449,8 +439,6 @@ instance (Eq storage_class_specifier)
   let (<>) = unsafe_structural_inequality
 end
 
-
-
 instance (SetType cabs_base_type_specifier)
   let setElemCompare bspecif1 bspecif2 =
     let ord = function
@@ -480,14 +468,13 @@ instance (SetType cabs_base_type_specifier)
     setElemCompare (ord bspecif1) (ord bspecif2)
 end
 
-
 instance (Eq cabs_type_qualifier)
   let (=)  = unsafe_structural_equality
   let (<>) = unsafe_structural_inequality
 end
 
-
 instance (Eq function_specifier)
   let (=)  = unsafe_structural_equality
   let (<>) = unsafe_structural_inequality
 end
+

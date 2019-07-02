@@ -1,13 +1,5 @@
-open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError
-open import GenTypes
-import AilTypesAux AilTyping Implementation
-
-open import Utils
-
-open import {hol} `utilTheory`
-
-import Debug
-
+open import Pervasives Common AilTypes AilSyntax Range ErrorMonad TypingError GenTypes Utils
+import AilTypesAux AilTyping Implementation Debug
 
 let unatomic = function
   | GenAtomic ty ->
@@ -16,7 +8,7 @@ let unatomic = function
       gty
 end
 
-(* == constructor predicates on ctypes =========================================================== *)
+(* == constructor predicates on ctypes ====================================== *)
 val is_array: genType -> bool
 let is_array = function
   | GenArray _ _ ->
@@ -94,8 +86,7 @@ val is_struct_or_union: genType -> bool
 let is_struct_or_union ty =
   is_struct ty || is_union ty
 
-(* == generic predicates on ctypes ============================================================== *)
-(* TODO: we be moved to Ctype.lem to be function working on all instanced of the class Ctype *)
+(* == generic predicates on ctypes ========================================== *)
 (* STD §6.2.5#18, sentence 1 *)
 val is_arithmetic: genType -> bool
 let is_arithmetic gty =
@@ -199,10 +190,9 @@ let composite_pointer gty1 gty2 =
       Nothing
   end
 
-(* Sound but not principal. *)
+(* FIXME: Sound but not principal. *)
 let integer_promotion git : genIntegerType =
   Promote git
-
 
 (* NOTE: must be called on a integer type *)
 val integer_promote: genType -> genType

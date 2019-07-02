@@ -1,6 +1,8 @@
 open import Pervasives
 import Map
 
+let inline (-|) f g x = f (g x)
+let inline (|-) g f x = f (g x)
 
 class (Default 'a)
   val default: 'a
@@ -9,7 +11,6 @@ end
 instance (Default unit)
   let default = ()
 end
-
 
 val error: forall 'a. string -> 'a
 declare ocaml target_rep function error = `Debug_ocaml.error`
@@ -36,7 +37,6 @@ let rec mkListFromTo_aux (i: integer) max acc =
 let mkListFromTo start max =
   mkListFromTo_aux start max []
 
-
 val     numerote_: forall 'a. nat -> list 'a -> list (nat * 'a)
 let rec numerote_ n l =
   match l with
@@ -45,64 +45,10 @@ let rec numerote_ n l =
   end
 let numerote l = numerote_ 1 l
 
-
-let inline (-|) f g x = f (g x)
-let inline (|-) g f x = f (g x)
-(* TODO: ask change in lem to be able to have
-         the traditional |> *)
-let inline (>|>) x f = f x
-let inline (>?>) x b f g = if b then f x else g x
-
-
-(* TODO: move into Lem's libary *)
-let rec nubBy' eq l acc =
-  match l with
-    | []    -> []
-    | x::xs -> if List.elemBy eq x acc then nubBy' eq xs acc
-                                  else x :: nubBy' eq xs (x::acc)
-  end
-val nubBy: forall 'a. ('a -> 'a -> bool) -> list 'a -> list 'a
-let nubBy eq l = nubBy' eq l []
-
-val nub: forall 'a. Eq 'a => list 'a -> list 'a
-let nub l =
-  nubBy (=) l
-
-
-let rec or_list l =
-  match l with
-    | []    -> false
-    | x::xs -> x || or_list xs
-  end
-
-
-(*
-TODO
-let list_diff eq = List.fold_left (fun x y -> delete eq y x)
-*)
-
-
-(* TODO: move into Lem's libary *)
-val     zip3: forall 'a 'b 'c. list 'a -> list 'b -> list 'c -> list ('a * 'b * 'c)
-let rec zip3 xs ys zs =
-  match (xs, ys, zs) with
-    | (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
-    | _                        -> []
-  end
-
-(* TODO: move into Lem's libary *)
-val     zip4: forall 'a 'b 'c 'd. list 'a -> list 'b -> list 'c -> list 'd -> list ('a * 'b * 'c * 'd)
-let rec zip4 xs ys zs us =
-  match (xs, ys, zs, us) with
-    | (x::xs', y::ys', z::zs', u::us') -> (x,y,z,u) :: zip4 xs' ys' zs' us'
-    | _                                -> []
-  end
-
 (* TODO: move into Lem's libary *)
 val unzip3: forall 'a 'b 'c. list ('a * 'b * 'c) -> (list 'a * list 'b * list 'c)
-let unzip3 xyzs = foldr (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) ([],[],[]) xyzs
-
-
+let unzip3 xyzs =
+  foldr (fun (x,y,z) (xs,ys,zs) -> (x :: xs, y :: ys, z :: zs)) ([],[],[]) xyzs
 
 (* TODO: move into Lem's libary *)
 val foldl2: forall 'a 'b 'c. ('a -> 'b -> 'c -> 'a) -> 'a -> list 'b -> list 'c -> 'a
@@ -115,7 +61,6 @@ let rec foldl2 f z xs ys =
     | _ ->
         error "[Global.foldl2] the twos weren't of same length"
   end
-
 
 (* TODO: get rid of this for the Coq backend *)
 val     map2: forall 'a 'b 'c. ('a -> 'b -> 'c) -> list 'a -> list 'b -> list 'c
@@ -151,8 +96,6 @@ let fromRight = function
       z
 end
 
-
-
 let rec filter_opt l = 
   match l with
     | [] -> []
@@ -167,7 +110,6 @@ let rec set_from_options xs =
     | Nothing :: xs' -> set_from_options xs'
 end
 
-
 (* 'optimised' implementation of [\f -> unzip . map f] *)
 val mapUnzip: forall 'a 'b 'c. ('a -> 'b * 'c) -> list 'a -> list 'b * list 'c
 let rec mapUnzip_ f (xs, ys) mylist =
@@ -178,8 +120,6 @@ let rec mapUnzip_ f (xs, ys) mylist =
 let mapUnzip f l =
   let (xs, ys) = mapUnzip_ f ([],[]) l in
   (reverse xs, reverse ys)
-
-
 
 (* BEGIN: stolen from cpp *)
 val     map_option: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> list 'b
@@ -246,14 +186,6 @@ val replicate_list: forall 'a. 'a -> nat -> list 'a
 let replicate_list x n =
   replicate_list_ x n []
 
-(*
-(*TODO: remove (now in Lem's library *)
-val uncurry: forall 'a 'b 'c. ('a -> 'b -> 'c) -> ('a * 'b -> 'c)
-let uncurry f =
-  fun (x, y) -> f x y
-*)
-
-
 val eq_pair: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('a * 'b -> 'a * 'b -> bool)
 let eq_pair eqA eqB = fun (a1, b1) (a2, b2) ->
   eqA a1 a2 && eqB b1 b2
@@ -261,8 +193,6 @@ let eq_pair eqA eqB = fun (a1, b1) (a2, b2) ->
 val eq_triple: forall 'a 'b 'c. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> ('c -> 'c -> bool) -> ('a * 'b * 'c -> 'a * 'b * 'c -> bool)
 let eq_triple eqA eqB eqC = fun (a1, b1, c1) (a2, b2, c2) ->
   eqA a1 a2 && eqB b1 b2 && eqC c1 c2
-
-
 
 (* insert in an association list *)
 val     assoc_insert: forall 'a 'b. Eq 'a => 'a -> 'b -> list ('a * 'b) -> list ('a * 'b)
@@ -276,7 +206,6 @@ let rec assoc_insert k v = function
         (k', v') :: assoc_insert k v xs
 end
 
-
 val     assoc_remove: forall 'a 'b. Eq 'a => 'a -> list ('a * 'b) -> list ('a * 'b)
 let rec assoc_remove k = function
   |  [] ->
@@ -287,7 +216,6 @@ let rec assoc_remove k = function
       else
         (k', v') :: assoc_remove k xs
 end
-
 
 val     assoc_adjust: forall 'a 'b. Eq 'a => ('b -> 'b) -> 'a -> list ('a * 'b) -> list ('a * 'b)
 let rec assoc_adjust f k = function
@@ -300,7 +228,6 @@ let rec assoc_adjust f k = function
         (k', v) :: assoc_adjust f k xs
 end
 
-
 (* insert the element to the list only if it isn't already there. O(n) *)
 val list_insert: forall 'a. Eq 'a => 'a -> list 'a -> list 'a
 let list_insert x xs =
@@ -309,7 +236,6 @@ let list_insert x xs =
   else
     x :: xs
 
-
 val first: forall 'a 'b 'c . ('a -> 'b) -> 'a * 'c -> 'b * 'c
 let first f (x, y) =
   (f x, y)
@@ -317,7 +243,6 @@ let first f (x, y) =
 val second: forall 'a 'b 'c . ('a -> 'b) -> 'c * 'a -> 'c * 'b
 let second f (x, y) =
   (x, f y)
-
 
 val     list_index_update: forall 'a. nat -> ('a -> 'a) -> list 'a -> list 'a
 let rec list_index_update n f = function
@@ -330,7 +255,6 @@ let rec list_index_update n f = function
         x :: (list_index_update (n-1) f xs)
 end
 
-
 val pickWith: forall 'a. ('a -> bool) -> list 'a -> list (list 'a * 'a * list 'a)
 let rec pickWith_ pred acc = function
   | [] ->
@@ -339,6 +263,7 @@ let rec pickWith_ pred acc = function
       (if pred x then fun z -> (reverse acc, x, xs) :: z else fun z -> z) $
         pickWith_ pred (x::acc) xs
 end
+
 let pickWith pred xs =
   pickWith_ pred [] xs
 
@@ -366,7 +291,6 @@ let rec list_unfoldr_aux acc ctor b0 =
 let list_unfoldr x = list_unfoldr_aux [] x
 
 
-
 val     maybe_mapM: forall 'a 'b. ('a -> maybe 'b) -> list 'a -> maybe (list 'b)
 let rec maybe_mapM_aux acc f = function
   | [] ->
@@ -386,3 +310,4 @@ let maybe_mapM f xs = maybe_mapM_aux [] f xs
 val product_list: forall 'a 'b. list 'a -> list 'b -> list ('a * 'b)
 let product_list xs ys =
   List.concatMap (fun x -> List.map (fun y -> (x,y)) ys) xs
+
