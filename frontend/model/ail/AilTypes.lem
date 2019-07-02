@@ -2,7 +2,7 @@ open import Pervasives Annot Loc
 import Symbol Cabs
 
 
-(** Types *************************************************************************************** *)
+(** Types ******************************************************************* *)
 type identifier = Symbol.sym
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
@@ -17,7 +17,6 @@ type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Int_fastN_t of nat
  | Intmax_t
  | Intptr_t
-(* | IBBuiltin of string *)
 
 
 (* STD §6.2.5#17, sentence 1 *)
@@ -53,7 +52,6 @@ type basicType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)bty[0-9]*'?$"] =
  | Integer of integerType
  | Floating of floatingType
 
-
 (* STD §6.2.5#26, sentence 1-2 *)
 type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
   const    : bool;
@@ -84,10 +82,6 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
  | Pointer of qualifiers * ctype
    (* STD §6.2.5#20, bullet 6 *)
  | Atomic of ctype
-(*
- | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
- | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
- *)
  | Struct of identifier
  | Union of identifier
  | Builtin of string
@@ -110,15 +104,12 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Automatic
  | Allocated
 
-
 type typeCategory [name = "tc*"] = 
  | LValueType of qualifiers * ctype * (* isRegister *) bool
  | RValueType of ctype
 
 
-
-
-(** Type-class instances ************************************************************************ *)
+(** Type-class instances **************************************************** *)
 let integerBaseTypeEqual ibty1 ibty2 =
   let ord = function
     | Ichar ->
@@ -131,10 +122,6 @@ let integerBaseTypeEqual ibty1 ibty2 =
         3
     | LongLong ->
         4
-(*
-    | IBBuiltin _ ->
-        5
-*)
     | IntN_t _ ->
         5
     | Int_leastN_t  _ ->
@@ -147,10 +134,6 @@ let integerBaseTypeEqual ibty1 ibty2 =
         9
   end in
   match (ibty1, ibty2) with
-(*
-    | (IBBuiltin str1, IBBuiltin str2) ->
-        str1 = str2
-*)
     | (IntN_t n1, IntN_t n2) ->
         n1 = n2
     | (Int_leastN_t n1, Int_leastN_t n2) ->
@@ -165,7 +148,6 @@ instance (Eq integerBaseType)
   let (=)  = integerBaseTypeEqual
   let (<>) = fun ibty1 ibty2 -> not (integerBaseTypeEqual ibty1 ibty2)
 end
-
 
 let integerTypeEqual ity1 ity2 =
   let ord = function
@@ -204,12 +186,10 @@ instance (Eq integerType)
   let (<>) = fun ity1 ity2 -> not (integerTypeEqual ity1 ity2)
 end
 
-
 instance (Eq realFloatingType)
   let (=)  = unsafe_structural_equality
   let (<>) = unsafe_structural_inequality
 end
-
 
 instance (Eq floatingType)
   let (=)  = unsafe_structural_equality
@@ -280,7 +260,8 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         bty1 = bty2
     | (Array ty1 n1_opt, Array ty2 n2_opt) ->
         ctypeEqual ty1 ty2 && n1_opt = n2_opt
-    | (Function has_proto1 (qs1, ty1) params1 b1, Function has_proto2 (qs2, ty2) params2 b2) ->
+    | (Function has_proto1 (qs1, ty1) params1 b1,
+       Function has_proto2 (qs2, ty2) params2 b2) ->
         has_proto1 = has_proto2 &&
         qualifiersEqual qs1 qs2 && ctypeEqual ty1 ty2 &&
         List.all (uncurry paramsEqual) (List.zip params1 params2) && b1 = b2
@@ -320,10 +301,6 @@ let ~{hol} setElemCompare_integerBaseType ibty1 ibty2 =
         3
     | LongLong ->
         4
-(*
-    | IBBuiltin _ ->
-        5
-*)
     | IntN_t _ ->
         5
     | Int_leastN_t _ ->
@@ -336,10 +313,6 @@ let ~{hol} setElemCompare_integerBaseType ibty1 ibty2 =
         9
   end in
   match (ibty1, ibty2) with
-(*
-    | (IBBuiltin str1, IBBuiltin str2) ->
-        setElemCompare str1 str2
-*)
     | (IntN_t n1, IntN_t n2) ->
         setElemCompare n1 n2
     | (Int_leastN_t n1, Int_leastN_t n2) ->
@@ -419,9 +392,7 @@ instance (SetType qualifiers)
 end
 
 
-
-
-(** Some useful functions *********************************************************************** *)
+(** Some useful functions *************************************************** *)
 val make_qualifiers: bool -> bool -> bool (*-> bool*) -> qualifiers
 let make_qualifiers c r v (*a*) = <|
   const    = c;
@@ -430,7 +401,6 @@ let make_qualifiers c r v (*a*) = <|
 (*  atomic   = a;*)
 |>
 
-
 val no_qualifiers: qualifiers
 let no_qualifiers = <|
   const    = false;
@@ -438,49 +408,6 @@ let no_qualifiers = <|
   volatile = false;
 (*  atomic   = false;*)
 |>
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-let rec paramsEqual_aux ctypeEqual p1 p2 : bool =
-  match (p1, p2) with
-  | ([]           , []           ) -> true
-  | ((qs1,ty1) :: p1, (qs2,ty2) :: p2) -> qs1 = qs2 && ty1 = ty2 && paramsEqual_aux ctypeEqual p1 p2
-  | (_            , _            ) -> false
-  end
-
-
-let paramsEqual = paramsEqual_aux ctypeEqual
-
-
-let typeCategoryEqual tc1 tc2 : bool =
-  match (tc1, tc2) with
-  | (LValueType qs1 ty1, LValueType qs2 ty2) -> ctypeEqual ty1 ty2 && qualifiersEqual qs1 qs2
-  | (RValueType    ty1, RValueType    ty2) -> ctypeEqual ty1 ty2
-  | (_               , _               ) -> false
-  end
-*)
-
-
-
-
-
-
-
-
-
-
-
-
 
 val char16_t: ctype
 let char16_t =

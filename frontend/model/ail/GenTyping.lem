@@ -1,24 +1,13 @@
-open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf TypingError
-open import GenTypes GenTypesAux Constraint
-open import Std Loc
-
-import Constraint Undefined
-import Builtins Debug Pp Cmm_csem
-
-import Global
-
-open import {hol} `utilTheory`
+open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc
+import Constraint Undefined Builtins Debug Pp Cmm_csem Global
 
 module AAux = AilTypesAux
 module GAux = GenTypesAux
-
-import ErrorMonad
 module E = ErrorMonad
 
 let inline (>>=) m f = E.bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = E.fmap
-
 
 val lookup_tag_definition: forall 'a. sigma 'a -> identifier -> maybe tag_definition
 let lookup_tag_definition s sym =
@@ -413,7 +402,7 @@ let rec typecheck_constant cst =
         E.return (GenTypes.GenStruct tag_sym)
     | ConstantUnion tag_sym memb_ident cst ->
           (* TODO: need to check that the members type match ... *)
-        typecheck_constant cst >>= fun membr_gty ->
+        typecheck_constant cst >>= fun gty_membr ->
         E.return (GenTypes.GenUnion tag_sym)
   end
 
@@ -456,7 +445,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else (fun z -> z) in
+            if is_integer gty then integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)
@@ -467,7 +456,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         annotate_rvalue e >>= fun (a_e, gty) ->
         if is_arithmetic gty then
           let mk_conversion =
-            if is_integer gty then integer_promote else (fun z -> z) in
+            if is_integer gty then integer_promote else id in
           E.return (AilEunary uop a_e, GenRValueType (mk_conversion gty))
         else
           E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryExpression gty)

@@ -1,8 +1,5 @@
 open import Pervasives Either
 
-
-
-
 val option_bool : forall 'a. maybe 'a -> ('a -> bool) -> bool
 let option_bool =
   fun o f ->
@@ -31,7 +28,6 @@ let eq_triple (eq_A : 'a -> 'a -> bool) (eq_B : 'b -> 'b -> bool) (eq_C : 'c -> 
     let (a2, b2, c2) = p2 in
     eq_A a1 a2 && eq_B b1 b2 && eq_C c1 c2
 
-
 let eq_option (eq_A : 'a -> 'a -> bool) : maybe 'a -> maybe 'a -> bool =
   fun o1 o2 -> 
     match (o1, o2) with
@@ -49,7 +45,6 @@ let equiv_option (equiv_A : 'a1 -> 'a2 -> bool) : maybe 'a1 -> maybe 'a2 -> bool
     | (Just _ , Nothing) -> false
     | (Nothing, Just _ ) -> false
 end
-
 
 val eq_either: forall 'a 'b. ('a -> 'a -> bool) -> ('b -> 'b -> bool) -> either 'a 'b -> either 'a 'b -> bool
 let eq_either eq_A eq_B e1 e2 =
@@ -72,16 +67,15 @@ let equiv_either equiv_A equiv_B e1 e2 =
     | (Right _ , Left _  ) -> false
   end
 
-
 let rec in_list (eq_A : 'a -> 'a -> bool) (a : 'a) (ls : list 'a) : bool =
   match ls with
   | []    -> false
   | x::xs -> eq_A x a || in_list eq_A a xs
   end
 
-
 let sub_list (eq_A : 'a -> 'a -> bool) l1 l2 =
   List.all (fun x -> in_list eq_A x l2) l1
 
 let equiv_list (eq_A : 'a -> 'a -> bool) l1 l2 =
   sub_list eq_A l1 l2 && sub_list eq_A l2 l1
+

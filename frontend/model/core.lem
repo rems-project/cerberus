@@ -296,7 +296,6 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
 and generic_expr 'a 'bty 'sym = 
  | Expr of list annot * (generic_expr_ 'a 'bty 'sym)
 
-(* TODO: don't we need any impl proc? *)
 type generic_impl_decl 'bty =
   | Def of core_base_type * generic_pexpr 'bty Symbol.sym
   | IFun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym

@@ -1,14 +1,12 @@
 open import Pervasives TypingError Utils
 import Loc Exception
 
-(* HACK: most of the inlines are only added to prevent Lem's renaming *)
+(* NOTE: most of the inlines are only added to prevent Lem's renaming *)
 
 type annots = list (list string)
 
 type errorM 'a =
   ErrorM of (annots -> either (Loc.t * typing_error) ('a * annots))
-
-(* type errorM 'a = either (Loc.t * typing_error) 'a *)
 
 val return: forall 'a. 'a -> errorM 'a
 let inline return z         =

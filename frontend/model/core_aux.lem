@@ -223,6 +223,7 @@ let rec proj_ctype (AilTypes.Ctype _ ty) =
           (List.map (fun (ident, ty) -> (ident, proj_ctype ty)) ident_tys)
 *)
     | AilTypes.Builtin str ->
+        let () = Debug.print_debug 0 [] (fun () -> "BUILTIN: " ^ str) in
         Core_ctype.Builtin str
   end
 

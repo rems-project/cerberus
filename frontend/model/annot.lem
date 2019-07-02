@@ -4,7 +4,7 @@ import Loc
 import Symbol
 
 type bmc_annot =
-  | Abmc_id of nat (* TODO: basically same as uid *)
+  | Abmc_id of nat (* NOTE: basically same as uid *)
 
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)

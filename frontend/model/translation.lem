@@ -3077,8 +3077,8 @@ type collect_cases_state = <|
 
 val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_cases_state
 let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
-  let register_case n =
-    St.update (fun s -> <| s with case_csts= n :: s.case_csts |>) in
+  let register_case ic_n =
+    St.update (fun s -> <| s with case_csts= ic_n :: s.case_csts |>) in
   let register_default =
     St.update (fun s -> <| s with found_default= true |>) in
   match stmt with
@@ -3104,8 +3104,8 @@ let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
         St.return ()
     | A.AilSswitch _ _ ->
         St.return ()
-    | A.AilScase n s ->
-        register_case n >> collect_cases_ s
+    | A.AilScase ic_n s ->
+        register_case ic_n >> collect_cases_ s
     | A.AilSdefault s ->
         register_default >> collect_cases_ s
     | A.AilSlabel _ s ->
