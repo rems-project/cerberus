@@ -53,12 +53,13 @@ let rec is_signed_ity ity =
         true
     | Unsigned _ ->
         false
-    | IBuiltin s ->
-        error ("TODO: AilTypesAux.is_signed_ity, IBuiltin: " ^ show s)
     | Enum tag_sym ->
         is_signed_ity (Implementation_.typeof_enum tag_sym)
     | Size_t ->
         (* STD §7.19#2 *)
+        false
+    | Wchar_t ->
+        (* TODO: this is implementation defined $7.20 *)
         false
     | Ptrdiff_t ->
         (* STD §7.19#2 *)
@@ -403,9 +404,6 @@ let normalise_integerType ity =
   match ity with
    | Enum tag_sym ->
        Implementation_.typeof_enum tag_sym
-   | IBuiltin str ->
-       (* TODO: probably will need to do something about this *)
-       IBuiltin str
    | _ ->
        ity
   end
@@ -493,17 +491,10 @@ let le_integer_range impl ity1 ity2 =
     | (Unsigned ibty1, Signed ibty2) ->
         (Implementation_.precision_ity (Unsigned ibty1)) < (Implementation_.precision_ity (Signed ibty2))
       
-    (* TODO: check *)
-    | (IBuiltin str1, IBuiltin str2) ->
-        str1 = str2
-  
- 
-  | (IBuiltin str, _) -> error ("WIP le_integer_range (left): " ^ str)
-  | (_, IBuiltin str) -> error ("WIP le_integer_range (right): " ^ str)
-
   | (Char, Char) -> true
   | (Bool, Bool) -> true
   | (Size_t, Size_t) -> true
+  | (Wchar_t, Wchar_t) -> true
   | (Ptrdiff_t, Ptrdiff_t) -> true
   | (Enum _, Enum _) ->
       (* impossible *)

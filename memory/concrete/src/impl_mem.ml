@@ -2076,6 +2076,7 @@ module Concrete : Memory = struct
                 (* TODO: not sure about this (maybe it should be 1 and not 255? *)
                 unsigned_max
             | Size_t
+            | Wchar_t (* TODO: it is implementation defined if unsigned *)
             | Unsigned _ ->
                 unsigned_max
             | Ptrdiff_t
@@ -2084,8 +2085,6 @@ module Concrete : Memory = struct
             | Enum _ ->
                 (* TODO: hack, assuming like int *)
                 sub (pow_int (of_int 2) (8*4-1)) (of_int 1)
-            | IBuiltin _ ->
-                failwith "TODO: max_ival: IBuiltin"
           end
       | None ->
           failwith "the concrete memory model requires a complete implementation MAX"
@@ -2101,6 +2100,7 @@ module Concrete : Memory = struct
             zero
       | Bool
       | Size_t
+      | Wchar_t (* TODO: it is implementation defined if unsigned *)
       | Unsigned _ ->
           (* all of these are unsigned *)
           zero
@@ -2116,8 +2116,6 @@ module Concrete : Memory = struct
       | Enum _ ->
           (* TODO: hack, assuming like int *)
           negate (pow_int (of_int 2) (8*4-1))
-      | IBuiltin _ -> 
-          failwith "TODO: min_ival: Builtin"
     end)
   
   (* TODO: conversion? *)

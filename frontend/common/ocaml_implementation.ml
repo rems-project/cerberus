@@ -53,13 +53,11 @@ module DefaultImpl: Implementation = struct
           | Intptr_t ->
               8
         end
-    | IBuiltin str ->
-        (* TODO *)
-        None
     | Enum ident ->
         (* TODO *)
         Some 4
     | Size_t
+    | Wchar_t
     | Ptrdiff_t ->
         Some 8
   
@@ -85,9 +83,6 @@ module DefaultImpl: Implementation = struct
           | None ->
               None
         end
-    | IBuiltin str ->
-        (* TODO *)
-        None
     | Enum ident ->
         (* TODO *)
         Some (8*4-1)
@@ -99,6 +94,8 @@ module DefaultImpl: Implementation = struct
           | None ->
               None
         end
+    | Wchar_t ->
+        Some 64 (* TODO *)
     | Ptrdiff_t ->
         begin match sizeof_ity Ptrdiff_t with
           | Some n ->
@@ -141,13 +138,11 @@ module DefaultImpl: Implementation = struct
           | Intptr_t ->
               8
         end
-    | IBuiltin str ->
-        (* TODO *)
-        None
     | Enum ident ->
         (* TODO *)
         Some 4
     | Size_t
+    | Wchar_t
     | Ptrdiff_t ->
         Some 8
   

@@ -515,19 +515,10 @@ let translate_builtin_typenames = function
       Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned ATypes.Intmax_t))
   | "__cerbty_uintptr_t" ->
       Just (AilTypesAux.mk_ctype_integer (ATypes.Unsigned ATypes.Intptr_t))
-  | "__cerbty_va_list" ->
-      Just (AilTypesAux.mk_ctype_builtin "va_list")
   | "__cerbty_wchar_t" ->
-      Just (AilTypesAux.mk_ctype_integer (ATypes.IBuiltin "wchar_t"))
+      Just (AilTypesAux.mk_ctype_integer ATypes.Wchar_t)
   | "__cerbty_time_t" ->
       Just (AilTypesAux.mk_ctype_builtin "time_t")
-
-
-  (* TODO: some POSIX stuff *)
-  | "__cerbty_ssize_t" ->
-      (* in sys/types.h *)
-      (* it's a signed integer type *)
-      Just (AilTypesAux.mk_ctype_integer (ATypes.IBuiltin "ssize_t"))
 
   | str ->
       (* TODO *)

@@ -47,12 +47,12 @@ let pp_integerType_raw = function
      pp_ctor "Signed" ^^ P.brackets (pp_integerBaseType_raw ibty)
  | Unsigned ibty ->
      pp_ctor "Unsigned" ^^ P.brackets (pp_integerBaseType_raw ibty)
- | IBuiltin str ->
-     pp_ctor str
  | Enum sym ->
      pp_ctor "enum" ^^^ pp_id sym
  | Size_t ->
      pp_ctor "Size_t"
+ | Wchar_t ->
+     pp_ctor "Wchar_t"
  | Ptrdiff_t ->
      pp_ctor "Ptrdiff_t"
 

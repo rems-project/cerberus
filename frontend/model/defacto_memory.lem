@@ -195,11 +195,11 @@ let defacto_integer_range = function
      (0, 2**64 - 1)
  | AilTypes.Unsigned AilTypes.Intptr_t ->
      (0, 2**64 - 1)
- | AilTypes.IBuiltin str ->
-     error ("WIP: Mem.integer_range, IBuiltin ==> " ^ str)
  | AilTypes.Enum sym ->
      error "WIP: Mem.integer_range, Enum"
  | AilTypes.Size_t ->
+     (0, 2**64-1)
+ | AilTypes.Wchar_t ->
      (0, 2**64-1)
  | AilTypes.Ptrdiff_t ->
      (0-2**63, 2**63-1)

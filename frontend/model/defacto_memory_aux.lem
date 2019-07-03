@@ -235,6 +235,9 @@ let rec simplify_integer_value_base ival_ =
             | Size_t ->
                 (* this type is unsigned *)
                 Left 0
+            | Wchar_t ->
+                (* TODO: it is implementation defined if signed *)
+                Left 0
             | Unsigned _ ->
                 Left 0
             | Ptrdiff_t ->
@@ -254,8 +257,6 @@ let rec simplify_integer_value_base ival_ =
                 end
             | Enum _ ->
                 error "IVmin Enum"
-            | IBuiltin _ ->
-                error "IVmin IBuiltin"
           end
       | IVmax ity ->
           match Implementation_.sizeof_ity ity with
@@ -273,6 +274,9 @@ let rec simplify_integer_value_base ival_ =
                       Left unsigned_max
                   | Size_t ->
                       Left unsigned_max
+                  | Wchar_t ->
+                      (* TODO: it is implementation defined if signed *)
+                      Left unsigned_max
                   | Unsigned _ ->
                       Left unsigned_max
                   | Ptrdiff_t ->
@@ -281,8 +285,6 @@ let rec simplify_integer_value_base ival_ =
                       Left signed_max
                   | Enum _ ->
                       error "IVmax Enum"
-                  | IBuiltin _ ->
-                      error "IVmax IBuiltin"
                 end
             | Nothing ->
                 Right ival_

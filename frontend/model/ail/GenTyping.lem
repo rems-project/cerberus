@@ -334,11 +334,11 @@ let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_
 val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
 let annotate_stringLiteral (pref_opt, strs) =
   let elem_ty = match pref_opt with
-                  | Nothing     -> AAux.mk_ctype_integer Char                 (* STD §6.4.5#6 sentence 3 *)
-                  | Just Enc_u8 -> AAux.mk_ctype_integer Char                 (* STD §6.4.5#6 sentence 4 *)
-                  | Just Enc_u  -> char16_t                                   (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_U  -> char32_t                                   (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_L  -> AAux.mk_ctype_integer (IBuiltin "wchar_t") (* STD §6.4.5#6 sentence 5 *)
+                  | Nothing     -> AAux.mk_ctype_integer Char    (* STD §6.4.5#6 sentence 3 *)
+                  | Just Enc_u8 -> AAux.mk_ctype_integer Char    (* STD §6.4.5#6 sentence 4 *)
+                  | Just Enc_u  -> char16_t                      (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_U  -> char32_t                      (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_L  -> AAux.mk_ctype_integer Wchar_t (* STD §6.4.5#6 sentence 5 *)
                 end in
 
   (* TODO: check the type *)
@@ -371,7 +371,7 @@ let rec typecheck_constant cst =
               E.return (GenBasic (GenInteger (Concrete (Signed Int_))))
           | Just Pref_L ->
               E.add "§6.4.4.4#11" >>
-              E.return (GenBasic (GenInteger (Concrete (IBuiltin "wchar_t"))))
+              E.return (GenBasic (GenInteger (Concrete (Wchar_t))))
           | Just Pref_u ->
               E.add "§6.4.4.4#11" >>
               E.return genChar16_t

@@ -40,9 +40,9 @@ let pp_integer_ctype ity =
         !^ "u" ^^ pp_integer_base_ctype ibty
     | Signed ibty      -> !^ "signed"   ^^^ pp_integer_base_ctype ibty
     | Unsigned ibty    -> !^ "unsigned" ^^^ pp_integer_base_ctype ibty
-    | IBuiltin str     -> !^ str
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
     | Size_t           -> !^ "size_t"
+    | Wchar_t          -> !^ "wchar_t"
     | Ptrdiff_t        -> !^ "ptrdiff_t"
 
 let pp_floating_ctype fty =
