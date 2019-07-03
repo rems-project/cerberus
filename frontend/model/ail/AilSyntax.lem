@@ -60,7 +60,7 @@ type arithmeticOperator [name = "aop.*"] =
 
 type constant [name = "c*"] =
  | ConstantIndeterminate of ctype
- | ConstantNull (* TODO: maybe temporary *)
+ | ConstantNull
  | ConstantInteger       of integerConstant
  | ConstantFloating      of floatingConstant
  | ConstantCharacter     of characterConstant
@@ -100,11 +100,9 @@ type expression_ 'a [name = "e*"] =
   | AilEassert of expression 'a
   | AilEoffsetof of ctype * Cabs.cabs_identifier
   | AilEgeneric of expression 'a * list (generic_association 'a)
-  
-  (* TODO: hackish? *)
-  (* TODO: these two don't exist in C (apart from in decl) *)
-  (* NOTE: the boolean says whether this array was created from a string literal
-     used to initialise a pointer to an array of character *)
+  (* NOTE: these don't exist in C (apart from in decl)
+   * the boolean says whether this array was created from a string literal
+   * used to initialise a pointer to an array of character *)
   | AilEarray of bool * ctype * list (maybe (expression 'a))
   | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
   | AilEunion of identifier * Cabs.cabs_identifier * maybe (expression 'a)

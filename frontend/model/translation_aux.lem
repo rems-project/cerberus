@@ -108,12 +108,12 @@ let tmp_implementation =
 	| Aty.Signed   _ -> true
         | Aty.Bool       -> false
 	| Aty.Unsigned _ -> false
-        | Aty.IBuiltin str ->
-            error ("WIP: Translation_aux.tmp_implementation (1), IBuiltin '" ^ str ^ "'")
         | Aty.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
         | Aty.Size_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Size_t"
+        | Aty.Wchar_t ->
+            error "WIP: Translation_aux.tmp_implementation (1), Wchar_t"
         | Aty.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Ptrdiff_t"
       end
@@ -151,12 +151,12 @@ let tmp_implementation =
         | Aty.Unsigned (Aty.Intptr_t) ->
             error "WIP: Translation_aux.tmp_implementation, Unsigned Intptr_T"
         
-        | Aty.IBuiltin str ->
-            error ("WIP: Translation_aux.tmp_implementation (2), IBuiltin '" ^ str ^ "'")
         | Aty.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
         | Aty.Size_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Size_t"
+        | Aty.Wchar_t ->
+            error "WIP: Translation_aux.tmp_implementation (2), Wchar_t"
         | Aty.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Ptrdiff_t"
       end

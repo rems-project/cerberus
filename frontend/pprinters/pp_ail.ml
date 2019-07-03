@@ -167,14 +167,14 @@ let pp_integerType = function
      pp_type_keyword ("u" ^ string_of_integerBaseType ibty)
  | Size_t ->
      pp_type_keyword "size_t"
+ | Wchar_t ->
+     pp_type_keyword "wchar_t"
  | Ptrdiff_t ->
      pp_type_keyword "ptrdiff_t"
  | Signed ibty ->
      pp_type_keyword "signed" ^^^ !^ (string_of_integerBaseType ibty)
  | Unsigned ibty ->
      pp_type_keyword "unsigned" ^^^ !^ (string_of_integerBaseType ibty)
- | IBuiltin str ->
-     pp_type_keyword str
  | Enum sym ->
      pp_type_keyword "enum" ^^^ pp_id sym
 
@@ -190,11 +190,10 @@ let macro_string_of_integerType = function
      "U" ^ macro_string_of_integerBaseType ibty
  | Size_t ->
      "SIZE"
+ | Wchar_t ->
+     "WCHAR"
  | Ptrdiff_t ->
      "PTRDIFF"
- | IBuiltin str ->
-     (* NOTE: this is hackish, these don't exists in C11 *)
-     String.capitalize_ascii str
  | Enum sym ->
      (* NOTE: this is hackish, these don't exists in C11 *)
      "ENUM_" ^ Pp_symbol.to_string_pretty sym

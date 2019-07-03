@@ -18,6 +18,9 @@ type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Intmax_t
  | Intptr_t
 
+type integerBuiltinType =
+  | IB_wchar_t
+  | IB_ssize_t (* POSIX *)
 
 (* STD §6.2.5#17, sentence 1 *)
 type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
@@ -25,16 +28,10 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Bool
  | Signed of integerBaseType
  | Unsigned of integerBaseType
- | IBuiltin of string
  | Enum of identifier
+ | Wchar_t
  | Size_t
  | Ptrdiff_t
-(*
- | Wchar_t (* TODO: merge into a IBuiltin variant ? *)
- | Char16_t (* TODO: merge into a IBuiltin variant ? *)
- | Char32_t (* TODO: merge into a IBuiltin variant ? *)
-*)
- (* | StdInt of string (\* integer types defined in stdint.h (§7.20) *\)  *)
 
 (* STD §6.2.5#10, sentence 1 *)
 type realFloatingType =
@@ -57,7 +54,7 @@ type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
   const    : bool;
   restrict : bool;
   volatile : bool;
-(*  atomic   : bool; *) (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
+  (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
 |>
 
 
@@ -159,11 +156,11 @@ let integerTypeEqual ity1 ity2 =
         2
     | Unsigned _ ->
         3
-    | IBuiltin _ ->
-        4
     | Enum _ ->
-        5
+        4
     | Size_t ->
+        5
+    | Wchar_t ->
         6
     | Ptrdiff_t ->
         7
@@ -173,8 +170,6 @@ let integerTypeEqual ity1 ity2 =
         ibty1 = ibty2
     | (Unsigned ibty1, Unsigned ibty2) ->
         ibty1 = ibty2
-    | (IBuiltin str1, IBuiltin str2) ->
-        str1 = str2
     | (Enum sym1, Enum sym2) ->
         sym1 = sym2
     | _ ->
@@ -338,11 +333,11 @@ let ~{hol} setElemCompare_integerType ity1 ity2 =
         2
     | Unsigned _ ->
         3
-    | IBuiltin _ ->
-        4
     | Enum _ ->
-        5
+        4
     | Size_t ->
+        5
+    | Wchar_t ->
         6
     | Ptrdiff_t ->
         7
@@ -352,8 +347,6 @@ let ~{hol} setElemCompare_integerType ity1 ity2 =
         setElemCompare ibty1 ibty2
     | (Unsigned ibty1, Unsigned ibty2) ->
         setElemCompare ibty1 ibty2
-    | (IBuiltin str1, IBuiltin str2) ->
-        setElemCompare str1 str2
     | (Enum sym1, Enum sym2) ->
         setElemCompare sym1 sym2
     | _ ->
