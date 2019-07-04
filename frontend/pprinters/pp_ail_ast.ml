@@ -60,9 +60,6 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
     | Union tag_sym ->
         prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id tag_sym
-    | Builtin str ->
-        prefix_pp_qs ^^ P.brackets (!^ "builtin") ^^ !^ str
-
 
 let rec pp_genIntegerType_raw = function
  | Concrete ity ->
@@ -111,9 +108,6 @@ let pp_genType = function
       !^ "GenUnion" ^^ Pp_ail.pp_id sym
   | GenAtomic ty ->
       !^ "GenAtomic" ^^ pp_ctype_human no_qualifiers ty
-  | GenBuiltin str ->
-      !^ "GenBuiltin" ^^ P.brackets (!^ str)
-
 
 
 let pp_ctype qs ty =

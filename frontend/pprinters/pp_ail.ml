@@ -225,8 +225,7 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
     | Basic _
     | Atomic _
     | Struct _
-    | Union _
-    | Builtin _ ->
+    | Union _ ->
         0
     | Array _ ->
         1
@@ -274,9 +273,6 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
       | Union sym ->
           fun k ->
             pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ k
-      | Builtin str ->
-          fun k ->
-            pp_qualifiers qs ^^ !^ str ^^ k
     end in
   (*let pp_ident =
     match pp_ident_opt with Some pp_ident -> pp_ident | None -> P.empty in*)
@@ -337,8 +333,6 @@ let rec pp_ctype_aux pp_ident_opt qs ty =
         pp_qualifiers qs ^^ pp_keyword "struct" ^^^ pp_id_type sym ^^ pp_spaced_ident
     | Union sym ->
         pp_qualifiers qs ^^ pp_keyword "union" ^^^ pp_id_type sym ^^ pp_spaced_ident
-    | Builtin str ->
-        pp_qualifiers qs ^^ !^ str ^^ pp_spaced_ident
 *)
 
 let pp_ctype qs ty =
@@ -383,8 +377,6 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ !^ "struct" ^^^ pp_id tag_sym
     | Union tag_sym ->
         prefix_pp_qs ^^ !^ "union" ^^^ pp_id tag_sym
-    | Builtin str ->
-        prefix_pp_qs ^^ !^ str
 
 (* -- EXPRESSIONS -- *)
 let pp_arithmeticOperator = function
@@ -847,8 +839,6 @@ let pp_genType = function
       !^ "union" ^^^ pp_id tag_sym
   | GenAtomic ty ->
       !^ "atomic" ^^ pp_ctype no_qualifiers ty
-  | GenBuiltin str ->
-      !^ str
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->

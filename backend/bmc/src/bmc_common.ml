@@ -61,7 +61,6 @@ let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
   | Atomic cty -> Atomic0 (ailctype_to_ctype cty)
   | Struct v -> Struct0 v
   | Union v ->  Union0 v
-  | Builtin v -> Builtin0 v
 
 let rec base_ctype (ty: Core_ctype.ctype0) : Core_ctype.ctype0 =
   match ty with
@@ -77,7 +76,7 @@ let rec base_ctype (ty: Core_ctype.ctype0) : Core_ctype.ctype0 =
       ty
   | Union0 _ ->
       ty
-  | Builtin0 _ -> ty
+  | Builtin _ -> ty
 
 let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
                            (file: unit typed_file)
@@ -115,7 +114,7 @@ let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
       end
   | Union0 _ ->
     failwith "Error: unions are not supported."
-  | Builtin0 _ ->
+  | Builtin _ ->
     assert false
 
 

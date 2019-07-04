@@ -22,7 +22,7 @@ let ctype_equal ty1 ty2 =
       | Basic0 _
       | Struct0 _
       | Union0 _
-      | Builtin0 _ ->
+      | Builtin _ ->
           ty
       | Function0 ((_, ret_ty), xs, b) ->
           Function0 (
@@ -152,7 +152,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) = function
             let x = max_size mod max_align in
             if x = 0 then max_size else max_size + (max_align - x)
       end
-  | Builtin0 str ->
+  | Builtin str ->
      failwith ("TODO: sizeof Builtin ==> " ^ str)
 
 and alignof ?(tagDefs= Tags.tagDefs ()) = function
@@ -207,7 +207,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) = function
               max (alignof ~tagDefs ty) acc
             ) 0 membrs
       end
-  | Builtin0 str ->
+  | Builtin str ->
      failwith ("TODO: alignof Builtin ==> " ^ str)
 
 
@@ -936,7 +936,7 @@ module Concrete : Memory = struct
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
       | Union0 tag_sym ->
           failwith "TODO: abst, Union (as value)"
-      | Builtin0 str ->
+      | Builtin str ->
           failwith "TODO: abst, Builtin"
   
   
@@ -1157,7 +1157,7 @@ module Concrete : Memory = struct
       | Some (Function0 _) ->
           None
       | Some (Basic0 _)
-      | Some (Builtin0 _)
+      | Some (Builtin _)
       | Some (Union0 _)
       | Some (Pointer0 _) ->
           let offset = N.sub addr alloc.base in

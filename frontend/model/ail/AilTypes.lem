@@ -18,10 +18,6 @@ type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Intmax_t
  | Intptr_t
 
-type integerBuiltinType =
-  | IB_wchar_t
-  | IB_ssize_t (* POSIX *)
-
 (* STD §6.2.5#17, sentence 1 *)
 type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Char
@@ -57,7 +53,6 @@ type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
   (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
 |>
 
-
 (* NOTE: we restrict qualifiers in the syntax to place that correspond to
          lvalues (to reflect STD §6.7.3#4) *)
 type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
@@ -81,7 +76,6 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
  | Atomic of ctype
  | Struct of identifier
  | Union of identifier
- | Builtin of string
 and ctype =
   Ctype of list annot * ctype_
 
@@ -245,8 +239,6 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         6
     | Union _ ->
         7
-    | Builtin _ ->
-        8
   end in
   let paramsEqual (qs1, ty1, b1) (qs2, ty2, b2) =
     qs1 = qs2 && ctypeEqual ty1 ty2 && b1 = b2 in
@@ -266,8 +258,6 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
         id1 = id2
     | (Union id1, Union id2) ->
         id1 = id2
-    | (Builtin str1, Builtin str2) ->
-        str1 = str2
     | _ ->
         ord ty1 = ord ty2
   end
@@ -411,6 +401,14 @@ val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
   Ctype [] (Basic (Integer (Unsigned (Int_leastN_t 32))))
+
+val wchar_t: ctype
+let wchar_t =
+  Ctype [] (Basic (Integer Wchar_t))
+
+val size_t: ctype
+let size_t =
+  Ctype [] (Basic (Integer Size_t))
 
 val ptrdiff_t: ctype
 let ptrdiff_t =

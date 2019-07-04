@@ -45,49 +45,49 @@ type encodingPrefix =
 type stringLiteral = maybe encodingPrefix * list string
 
 type arithmeticOperator [name = "aop.*"] =
- (* STD §6.5.5 Multiplicative operators *)
- | Mul | Div | Mod
- (* STD §6.5.6 Additive operators *)
- | Add | Sub
- (* STD §6.5.7 Bitwise shift operators *)
- | Shl | Shr
- (* STD §6.5.10 Bitwise AND operator *)
- | Band
- (* STD §6.5.11 Bitwise exclusive OR operator *)
- | Bxor
- (* STD §6.5.12 Bitwise inclusive OR operator *)
- | Bor
+  (* STD §6.5.5 Multiplicative operators *)
+  | Mul | Div | Mod
+  (* STD §6.5.6 Additive operators *)
+  | Add | Sub
+  (* STD §6.5.7 Bitwise shift operators *)
+  | Shl | Shr
+  (* STD §6.5.10 Bitwise AND operator *)
+  | Band
+  (* STD §6.5.11 Bitwise exclusive OR operator *)
+  | Bxor
+  (* STD §6.5.12 Bitwise inclusive OR operator *)
+  | Bor
 
 type constant [name = "c*"] =
- | ConstantIndeterminate of ctype
- | ConstantNull
- | ConstantInteger       of integerConstant
- | ConstantFloating      of floatingConstant
- | ConstantCharacter     of characterConstant
- | ConstantArray         of ctype * list constant
- | ConstantStruct        of identifier * list (Cabs.cabs_identifier * constant)
- | ConstantUnion         of identifier * Cabs.cabs_identifier * constant
+  | ConstantIndeterminate of ctype
+  | ConstantNull
+  | ConstantInteger       of integerConstant
+  | ConstantFloating      of floatingConstant
+  | ConstantCharacter     of characterConstant
+  | ConstantArray         of ctype * list constant
+  | ConstantStruct        of identifier * list (Cabs.cabs_identifier * constant)
+  | ConstantUnion         of identifier * Cabs.cabs_identifier * constant
 
 type unaryOperator = 
- | Plus
- | Minus
- | Bnot
- | Address
- | Indirection
- | PostfixIncr (*r Note: Appears prefix in concrete syntax. *)
- | PostfixDecr (*r Note: Appears prefix in concrete syntax. *)
+  | Plus
+  | Minus
+  | Bnot
+  | Address
+  | Indirection
+  | PostfixIncr (*r Note: Appears prefix in concrete syntax. *)
+  | PostfixDecr (*r Note: Appears prefix in concrete syntax. *)
 
 type binaryOperator [name = "bop*"] =  (*r Group of operators also used for assignments *)
- | Arithmetic of arithmeticOperator (*r 6.5.17 Comma operator *)
- | Comma (*r 6.5.13 Logical AND operator *)
- | And (*r 6.5.14 Logical OR operator *)
- | Or (*r 6.5.8 Relational operators *)
- | Lt
- | Gt
- | Le
- | Ge (*r 6.5.9 Equality operators *)
- | Eq
- | Ne
+  | Arithmetic of arithmeticOperator (*r 6.5.17 Comma operator *)
+  | Comma (*r 6.5.13 Logical AND operator *)
+  | And (*r 6.5.14 Logical OR operator *)
+  | Or (*r 6.5.8 Relational operators *)
+  | Lt
+  | Gt
+  | Le
+  | Ge (*r 6.5.9 Equality operators *)
+  | Eq
+  | Ne
 
 type expression_ 'a [name = "e*"] = 
   | AilEunary of unaryOperator * expression 'a

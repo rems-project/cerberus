@@ -277,8 +277,6 @@ let integerType_to_expr slvSt (ity: AilTypes.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 2) [integerBaseType_to_expr slvSt ibty]
     | Unsigned ibty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3) [integerBaseType_to_expr slvSt ibty]
-    | IBuiltin str ->
-        failwith ("TODO Smt.integerType_to_expr, IBuiltin " ^ str)
     | Enum _ ->
         failwith "TODO Smt.integerType_to_expr, Enum"
     | Size_t ->
@@ -323,7 +321,7 @@ let rec ctype_to_expr slvSt ty =
           failwith "TODO: Smt.ctype_to_expr, Struct"
       | Union0 _ ->
           failwith "TODO: Smt.ctype_to_expr, Union"
-      | Builtin0 _ ->
+      | Builtin _ ->
           failwith "TODO: Smt.ctype_to_expr, Builtin"
       
 (*
