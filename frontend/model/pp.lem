@@ -1,7 +1,7 @@
 open import Pervasives
 import Symbol
 import AilSyntax Ctype GenTypes
-import Core Core_ctype
+import Core
 import Cmm_op (* DEBUG *)
 
 val stringFromSymbol_prefix: Symbol.prefix -> string
@@ -43,7 +43,7 @@ val stringFromAil_human_ctype: Ctype.qualifiers -> Ctype.ctype -> string
 declare ocaml target_rep function stringFromAil_human_ctype = `String_ail.string_of_ctype_human`
 
 
-val stringFromCore_ctype:  Core_ctype.ctype -> string
+val stringFromCore_ctype:  Ctype.ctype -> string
 val stringFromCore_core_base_type:  Core.core_base_type -> string
 val stringFromCore_value:  Core.value -> string
 val stringFromCore_pexpr:  forall 'ty. Core.generic_pexpr 'ty Symbol.sym -> string

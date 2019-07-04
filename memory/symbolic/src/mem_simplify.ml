@@ -2,8 +2,7 @@ open Defacto_memory_types
 (* open Mem *)
 open Mem_common
 
-open Core_ctype
-open AilTypes
+open Ctype
 open Nat_big_num
 
 open Either
@@ -131,66 +130,66 @@ let rec simplify_integer_value_base ival_ =
               Right ival_
         end
 
-    | IVsizeof ty ->
+    | IVsizeof (Ctype (_, ty)) ->
         begin match ty with
-          | Void0 ->
+          | Void ->
               (* Ail type error *)
               assert false
-          | Basic0 (Integer ity) ->
+          | Basic (Integer ity) ->
               begin match Impl.sizeof_ity ity with
                 | Some n ->
                     Left (of_int n)
                 | None ->
-                    prerr_endline (String_core_ctype.string_of_ctype ty);
+                    prerr_endline (String_core_ctype.string_of_ctype (Ctype ([], ty)));
                     Right ival_
               end
-          | Basic0 (Floating fty) ->
+          | Basic (Floating fty) ->
               begin match Impl.sizeof_fty fty with
                 | Some n ->
                     Left (of_int n)
                 | None ->
                     Right ival_
               end
-          | Array0 (elem_ty, None) ->
+          | Array (elem_ty, None) ->
               (* Ail type error *)
               assert false
-          | Array0 (elem_ty, Some n) ->
+          | Array (elem_ty, Some n) ->
               simplify_integer_value_base (IVop (IntMul, [IVsizeof elem_ty; IVconcrete n]))
-          | Function0 _ ->
+          | Function _ ->
               (* Ail type error *)
               assert false
-          | Pointer0 (_, ref_ty) ->
+          | Pointer (_, ref_ty) ->
               Left (of_int 8)
-          | Atomic0 atom_ty ->
+          | Atomic atom_ty ->
               simplify_integer_value_base (IVsizeof atom_ty)
-          | Struct0 tag_sym ->
+          | Struct tag_sym ->
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | Tags.StructDef membrs -> membrs
+                | StructDef membrs -> membrs
                 | _ -> assert false
               in
               simplify_integer_value_base begin
-                List.fold_left (fun acc (ident, ty) ->
+                List.fold_left (fun acc (ident, (_, ty)) ->
                   IVop (IntAdd, [lifted_self (IVsizeof ty); IVop (IntAdd, [IVpadding (tag_sym, ident);  acc])])
                 ) (IVconcrete (of_int 0)) membrs
               end
-          | Union0 tag_sym ->
+          | Union tag_sym ->
               (* TODO: clean *)
               (* NOTE: the size of a union type is maximum size among its
                  members PLUS some padding to make it so that the address
                  just one past the union respect it's own alignment constraint
                  (i.e. we wan't to be able to have arrays of unions) *)
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | Tags.UnionDef membrs -> membrs
+                | UnionDef membrs -> membrs
                 | _ -> assert false
               in
               let align =
-                match simplify_integer_value_base (IValignof (Union0 tag_sym)) with
+                match simplify_integer_value_base (IValignof (Ctype ([], Union tag_sym))) with
                   | Left n ->
                       n
                   | Right _ ->
                       assert false
               in
-              begin match List.map (fun (memb_ident, ty) ->
+              begin match List.map (fun (memb_ident, (_, ty)) ->
                   match simplify_integer_value_base (IVsizeof ty) with
                     | Left n ->
                         n
@@ -205,47 +204,45 @@ let rec simplify_integer_value_base ival_ =
                 let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
                 Left (add max_size (sub align (integerRem_f max_size align)))
               end
-          | Builtin str ->
-              failwith "TODO simplify_integer_value: IVsizeof Builtin"
         end
-    | IValignof ty ->
+    | IValignof (Ctype (_, ty)) ->
         begin match ty with
-          | Void0 ->
+          | Void ->
               (* Ail type error *)
               assert false
-          | Basic0 (Integer ity) ->
+          | Basic (Integer ity) ->
               begin match Impl.alignof_ity ity with
                 | Some n ->
                     Left (of_int n)
                 | None ->
                     Right ival_
               end
-          | Basic0 (Floating fty) ->
+          | Basic (Floating fty) ->
               begin match Impl.alignof_fty fty with
                 | Some n ->
                     Left (of_int n)
                 | None ->
                     Right ival_
               end
-          | Array0 (elem_ty, _) ->
+          | Array (elem_ty, _) ->
               simplify_integer_value_base (IValignof elem_ty)
-          | Function0 _ ->
+          | Function _ ->
               (* Ail type error *)
               assert false
-          | Pointer0 (_, ref_ty) ->
+          | Pointer (_, ref_ty) ->
               Left (of_int 8)
-          | Atomic0 atom_ty ->
+          | Atomic atom_ty ->
               simplify_integer_value_base (IValignof atom_ty)
-          | Struct0 tag_sym ->
+          | Struct tag_sym ->
               (* This is done in Smt, because we need to actually generate constraints *)
               Right ival_
-          | Union0 tag_sym ->
+          | Union tag_sym ->
               (* NOTE: these two partial patterns are ok by typing of Ail *)
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | Tags.UnionDef membrs -> membrs
+                | UnionDef membrs -> membrs
                 | _ -> assert false
               in
-              begin match List.map (fun (memb_ident, ty) ->
+              begin match List.map (fun (memb_ident, (_, ty)) ->
                   match simplify_integer_value_base (IValignof ty) with
                     | Left n ->
                         n
@@ -261,8 +258,6 @@ let rec simplify_integer_value_base ival_ =
                      alignment constraint of any of its member *)
                   Left (List.fold_left (fun acc z -> max z acc) n ns)
               end
-          | Builtin str ->
-              failwith "TODO simplify_integer_value: IValignof Builtin"
         end
     | IVoffsetof (tag_sym, memb_ident) ->
         failwith "simplify_integer_value: IVoffsetof"

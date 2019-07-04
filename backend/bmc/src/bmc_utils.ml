@@ -190,7 +190,7 @@ let cabsid_cmp = fun ident1 ident2 ->
 (* ========== Core memory functions ============= *)
 let is_null (ptr: Impl_mem.pointer_value) : bool =
   let (Nondeterminism.ND f) =
-    Impl_mem.eq_ptrval ptr (Impl_mem.null_ptrval Void0) in
+    Impl_mem.eq_ptrval ptr (Impl_mem.null_ptrval Ctype.void) in
   match f (Impl_mem.initial_mem_state) with
   | (Nondeterminism.NDactive b,_) -> b
   | _ -> assert false
@@ -204,7 +204,7 @@ let is_core_ptr_bty (bTy: core_base_type) =
 (* TODO: mini-hack to strip atomic *)
 let strip_atomic = function ctype ->
   match ctype with
-  | Core_ctype.Atomic0 ty -> ty
+  | Ctype.Ctype (_, Ctype.Atomic ty) -> ty
   | ty -> ty
 
 
@@ -271,7 +271,7 @@ let pp_to_string (doc: PPrint.document) : string =
 let pp_file (core_file: ('a, 'b) generic_file) =
   pp_to_stdout (Pp_core.Basic.pp_file core_file)
 
-let pp_ctype (ctype: Core_ctype.ctype0) =
+let pp_ctype (ctype: Ctype.ctype) =
   pp_to_string (Pp_core_ctype.pp_ctype ctype)
 
 let pp_value value =

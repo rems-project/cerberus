@@ -1,4 +1,3 @@
-open Core_ctype
 open AilSyntax
 open Ctype
 
@@ -12,15 +11,15 @@ type formatting = {
 let ctype_of_specifier = function
   | "%d"
   | "%i" ->
-      ({basis= Some Decimal; use_upper= false}, Basic0 (Integer (Signed Int_)))
+      ({basis= Some Decimal; use_upper= false}, Basic (Integer (Signed Int_)))
   | "%o" ->
-      ({basis= Some Octal; use_upper= false}, Basic0 (Integer (Unsigned Int_)))
+      ({basis= Some Octal; use_upper= false}, Basic (Integer (Unsigned Int_)))
   | "%u" ->
-      ({basis= Some Decimal; use_upper= false}, Basic0 (Integer (Unsigned Int_)))
+      ({basis= Some Decimal; use_upper= false}, Basic (Integer (Unsigned Int_)))
   | "%x" ->
-      ({basis= Some Hexadecimal; use_upper= false}, Basic0 (Integer (Unsigned Int_)))
+      ({basis= Some Hexadecimal; use_upper= false}, Basic (Integer (Unsigned Int_)))
   | "%X" ->
-      ({basis= Some Hexadecimal; use_upper= true}, Basic0 (Integer (Unsigned Int_)))
+      ({basis= Some Hexadecimal; use_upper= true}, Basic (Integer (Unsigned Int_)))
   | "%f"
   | "%F"
   | "%e"
@@ -29,18 +28,18 @@ let ctype_of_specifier = function
   | "%G"
   | "%a"
   | "%A" ->
-      ({basis= None; use_upper= false}, Basic0 (Floating (RealFloating Double))) (* TODO: the formatting is wrong *)
+      ({basis= None; use_upper= false}, Basic (Floating (RealFloating Double))) (* TODO: the formatting is wrong *)
 (*  | "c" -> *)
 (*  | "s" -> *)
   | "%p" ->
-      ({basis= None; use_upper= false}, Pointer0 (no_qualifiers, Void0))
+      ({basis= None; use_upper= false}, Pointer (no_qualifiers, Ctype ([], Void)))
 (*  | "n" -> *)
   | "%llx" ->
-      ({basis= Some Hexadecimal; use_upper= false}, Basic0 (Integer (Unsigned LongLong)))
+      ({basis= Some Hexadecimal; use_upper= false}, Basic (Integer (Unsigned LongLong)))
   | "%llX" ->
-      ({basis= Some Hexadecimal; use_upper= true}, Basic0 (Integer (Unsigned LongLong)))
+      ({basis= Some Hexadecimal; use_upper= true}, Basic (Integer (Unsigned LongLong)))
   | "%s" ->
-      ({basis= None; use_upper= false}, Pointer0 (no_qualifiers, Core_ctype.char))
+      ({basis= None; use_upper= false}, Pointer (no_qualifiers, Ctype.char))
   | str ->
       failwith ("Boot_ocaml.ctype_of_specifier, TODO: " ^ str)
 
@@ -71,7 +70,7 @@ let recombiner (xs: string list ) : string list -> string =
 *)
   
 
-let pseudo_printf (frmt : string) : (formatting * Core_ctype.ctype0) list * (string list -> string) =
+let pseudo_printf (frmt : string) : (formatting * Ctype.ctype) list * (string list -> string) =
   let rexp = Str.regexp ("%\\(" ^ String.concat "\\|"
     ["d"; "i"; "o"; "u"; "x"; "X"; "f"; "F"; "e"; "E";
      "g"; "G"; "a"; "A"; "c"; "s"; "p"; "n"; "%"; "llx"] ^ "\\)") in
@@ -122,7 +121,7 @@ let pseudo_printf (frmt : string) : (formatting * Core_ctype.ctype0) list * (str
         frmt (* TODO: technically that should be invalid *)
   in
   let (format_tys, strs) = f frmt' ([], []) in
-  (format_tys, recombiner strs)
+  (List.map (fun (ft, ty) -> (ft, Ctype ([], ty))) format_tys, recombiner strs)
 
 
 

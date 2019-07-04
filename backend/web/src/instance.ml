@@ -553,7 +553,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let tagDefs  = encode @@ Tags.tagDefs () in
     return @@ Interactive (tagDefs, ranges, ([n], []))
   | Some n ->
-    let tagsMap : (Symbol.sym, Tags.tag_definition) Pmap.map = decode n.tagDefs in
+    let tagsMap : (Symbol.sym, Ctype.tag_definition) Pmap.map = decode n.tagDefs in
     Tags.set_tagDefs tagsMap;
     hack ~conf Random;
     Switches.set conf.instance.switches;

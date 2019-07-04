@@ -1,5 +1,5 @@
 open import Pervasives Utils
-import Core_ctype Ctype
+import Ctype
 
 
 

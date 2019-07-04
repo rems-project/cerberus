@@ -1,7 +1,5 @@
-open import Pervasives Utils
-open import Mem
-
-import Ctype Core_ctype
+open import Pervasives Utils Mem
+import Ctype
 
 
 val integerFromIntegerValue: integer_value -> maybe integer
@@ -69,7 +67,7 @@ let symbolicFromMemValue mval =
 
 
 
-val pointerValueFromMemValue: mem_value -> maybe (Core_ctype.ctype * pointer_value)
+val pointerValueFromMemValue: mem_value -> maybe (Ctype.ctype * pointer_value)
 let pointerValueFromMemValue mem_val =
   let () = Debug.print_debug 1 [] (fun () ->
     "pointerValueFromMemValue ==> " ^ Mem.stringFromMem_value mem_val

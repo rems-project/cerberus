@@ -12,7 +12,7 @@ type parsed_core_file =
   Symbol.sym (* main symbol *) *
   (Symbol.sym * Core.core_base_type * unit Core.expr) list (* globals *) *
   unit Core.fun_map (* fun map *) *
-  (Symbol.sym, Tags.tag_definition) Pmap.map (* tagDefs *)
+  (Symbol.sym, Ctype.tag_definition) Pmap.map (* tagDefs *)
 
 (* Type of Core parser outputs *)
 type result =

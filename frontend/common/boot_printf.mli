@@ -3,4 +3,4 @@ type formatting = {
   use_upper: bool;
 }
 
-val pseudo_printf: string -> (formatting * Core_ctype.ctype0) list * (string list -> string)
+val pseudo_printf: string -> (formatting * Ctype.ctype) list * (string list -> string)

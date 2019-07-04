@@ -178,8 +178,8 @@ module Constraints = struct
       (* FIXME VICTOR *)
       Pmap.iter (fun (Sym.Symbol (_, tag_sym_n, _)) tagDef ->
         let xs = match tagDef with
-          | Tags.StructDef z
-          | Tags.UnionDef z -> z in
+          | Ctype.StructDef z
+          | Ctype.UnionDef z -> z in
         List.iter (fun (Cabs.CabsIdentifier (_, membr_str), _) ->
           let padding_str = "padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in
           Solver.add slvSt.slv [
@@ -243,7 +243,7 @@ open Mem_common
 
 let integerBaseType_to_expr slvSt ibty =
   let fdecls = Datatype.get_constructors slvSt.integerBaseTypeSort in
-  AilTypes.(match ibty with
+  Ctype.(match ibty with
     | Ichar ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
     | Short ->
@@ -266,9 +266,9 @@ let integerBaseType_to_expr slvSt ibty =
         Expr.mk_app slvSt.ctx (List.nth fdecls 7) []
   )
 
-let integerType_to_expr slvSt (ity: AilTypes.integerType) =
+let integerType_to_expr slvSt (ity: Ctype.integerType) =
   let fdecls = Datatype.get_constructors slvSt.integerTypeSort in
-  AilTypes.(match ity with
+  Ctype.(match ity with
     | Char ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
     | Bool ->
@@ -285,9 +285,9 @@ let integerType_to_expr slvSt (ity: AilTypes.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
   )
 
-let basicType_to_expr slvSt (bty: AilTypes.basicType) =
+let basicType_to_expr slvSt (bty: Ctype.basicType) =
   let fdecls = Datatype.get_constructors slvSt.basicTypeSort in
-  AilTypes.(match bty with
+  Ctype.(match bty with
     | Integer ity ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) [integerType_to_expr slvSt ity]
     | Floating _ ->
@@ -296,34 +296,31 @@ let basicType_to_expr slvSt (bty: AilTypes.basicType) =
       (*  failwith "Smt.basicType_to_expr, Floating" *)
   )
 
-let rec ctype_to_expr slvSt ty =
+let rec ctype_to_expr slvSt (Ctype.Ctype (_, ty)) =
   let fdecls = Datatype.get_constructors slvSt.ctypeSort in
-  Core_ctype.(
+  Ctype.(
     match ty with
-      | Void0 ->
+      | Void ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 0) []
-      | Basic0 bty ->
+      | Basic bty ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 1) [basicType_to_expr slvSt bty]
-      | Array0 (_, None) ->
+      | Array (_, None) ->
           (* Ail type error *)
           assert false
-      | Array0 (elem_ty, Some n) ->
+      | Array (elem_ty, Some n) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 2)
             [ctype_to_expr slvSt elem_ty; Arithmetic.Integer.mk_numeral_i slvSt.ctx (Nat_big_num.to_int n)]
-      | Pointer0 (_, ref_ty) ->
+      | Pointer (_, ref_ty) ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 3)
             [ctype_to_expr slvSt ref_ty]
-      | Function0 _ ->
+      | Function _ ->
           failwith "TODO: Smt.ctype_to_expr, Function"
-      | Atomic0 _ ->
+      | Atomic _ ->
           failwith "TODO: Smt.ctype_to_expr, Atomic"
-      | Struct0 tag_sym ->
+      | Struct tag_sym ->
           failwith "TODO: Smt.ctype_to_expr, Struct"
-      | Union0 _ ->
+      | Union _ ->
           failwith "TODO: Smt.ctype_to_expr, Union"
-      | Builtin _ ->
-          failwith "TODO: Smt.ctype_to_expr, Builtin"
-      
 (*
       | _ ->
           failwith "TODO: Smt.ctype_to_expr"
@@ -392,7 +389,7 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivmaxDecl [integerType_to_expr slvSt ity]
     | Defacto_memory_types.IVsizeof ty ->
         Expr.mk_app slvSt.ctx slvSt.ivsizeofDecl [ctype_to_expr slvSt ty]
-    | Defacto_memory_types.IValignof (Core_ctype.Struct0 tag_sym) ->
+    | Defacto_memory_types.IValignof (Ctype.Ctype ([], Ctype.Struct tag_sym)) ->
         prerr_endline "BOGUS!!!!";
         Arithmetic.Integer.mk_numeral_s slvSt.ctx "8"
     | Defacto_memory_types.IValignof ty ->
@@ -409,7 +406,7 @@ let integer_value_base_to_expr slvSt ival_ =
         (* TODO: maybe have that conversion be done when the IVptrdiff is created? *)
         (* TODO: check that this is correct for arrays of arrays ... *)
         let diff_ty' = begin match diff_ty with
-          | Core_ctype.Array0 (elem_ty, _) ->
+          | Ctype.Ctype (_, Ctype.Array (elem_ty, _)) ->
               elem_ty
           | _ ->
               diff_ty

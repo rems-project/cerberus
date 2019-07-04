@@ -2326,9 +2326,9 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
             List.foldl (fun acc (ident, tagDef) ->
               match tagDef with
                 | Struct_definition _ xs ->
-                    (ident, StructDef xs) :: acc
+                    (ident, Ctype.StructDef xs) :: acc
                 | Union_definition _ xs ->
-                    (ident, UnionDef xs) :: acc
+                    (ident, Ctype.UnionDef xs) :: acc
                 | Enum_definition _ ->
                     acc
               end
@@ -3575,9 +3575,9 @@ let desugar_declaration_base specifs idecltors =
                       List.foldl (fun acc (ident, tagDef) ->
                         match tagDef with
                           | Struct_definition _ xs ->
-                              (ident, StructDef xs) :: acc
+                              (ident, Ctype.StructDef xs) :: acc
                           | Union_definition _ xs ->
-                              (ident, UnionDef xs) :: acc
+                              (ident, Ctype.UnionDef xs) :: acc
                           | Enum_definition _ ->
                               acc
                         end
@@ -4193,9 +4193,9 @@ let desugar_and_register_external_declaration edecl =
                           List.foldl (fun acc (ident, tagDef) ->
                             match tagDef with
                               | Struct_definition _ xs ->
-                                  (ident, StructDef xs) :: acc
+                                  (ident, Ctype.StructDef xs) :: acc
                               | Union_definition _ xs ->
-                                  (ident, UnionDef xs) :: acc
+                                  (ident, Ctype.UnionDef xs) :: acc
                               | Enum_definition _ ->
                                   acc
                             end

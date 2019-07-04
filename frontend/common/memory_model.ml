@@ -42,33 +42,33 @@ module type Memory = sig
   
   (* Memory actions *)
   val allocate_object:
-       Core_ctype.thread_id  (* the allocating thread *)
-    -> Symbol.prefix      (* symbols coming from the Core/C program, for debugging purpose *)
-    -> integer_value      (* alignment constraint *)
-    -> Core_ctype.ctype0  (* type of the allocation *)
+       Mem_common.thread_id      (* the allocating thread *)
+    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
+    -> integer_value  (* alignment constraint *)
+    -> Ctype.ctype    (* type of the allocation *)
     -> mem_value option   (* optional initialisation value (if provided the allocation is made read-only) *)
     -> pointer_value memM
   
   val allocate_region:
-       Core_ctype.thread_id (* the allocating thread *)
-    -> Symbol.prefix     (* symbols coming from the Core/C program, for debugging purpose *)
-    -> integer_value     (* alignment constraint *)
-    -> integer_value     (* size *)
+       Mem_common.thread_id      (* the allocating thread *)
+    -> Symbol.prefix  (* symbols coming from the Core/C program, for debugging purpose *)
+    -> integer_value  (* alignment constraint *)
+    -> integer_value  (* size *)
     -> pointer_value memM
   
   val kill: Location_ocaml.t -> bool -> pointer_value -> unit memM
   
-  val load: Location_ocaml.t -> Core_ctype.ctype0 -> pointer_value -> (footprint * mem_value) memM
-  val store: Location_ocaml.t -> Core_ctype.ctype0 -> (* is_locking *)bool -> pointer_value -> mem_value -> footprint memM
+  val load: Location_ocaml.t -> Ctype.ctype -> pointer_value -> (footprint * mem_value) memM
+  val store: Location_ocaml.t -> Ctype.ctype -> (* is_locking *)bool -> pointer_value -> mem_value -> footprint memM
   
   (* Pointer value constructors *)
-  val null_ptrval: Core_ctype.ctype0 -> pointer_value
+  val null_ptrval: Ctype.ctype -> pointer_value
   val fun_ptrval: Symbol.sym -> pointer_value
 
   (*TODO: revise that, just a hack for codegen*)
   val concrete_ptrval: Nat_big_num.num -> Nat_big_num.num -> pointer_value
   val case_ptrval: pointer_value ->
-   (* null pointer *) (Core_ctype.ctype0 -> 'a) ->
+   (* null pointer *) (Ctype.ctype -> 'a) ->
    (* function pointer *) (Symbol.sym -> 'a) ->
    (* concrete pointer *) (Nat_big_num.num option -> Nat_big_num.num -> 'a) ->
    (* unspecified value *) (unit -> 'a) -> 'a
@@ -81,35 +81,35 @@ module type Memory = sig
   val gt_ptrval: pointer_value -> pointer_value -> bool memM
   val le_ptrval: pointer_value -> pointer_value -> bool memM
   val ge_ptrval: pointer_value -> pointer_value -> bool memM
-  val diff_ptrval: Core_ctype.ctype0 -> pointer_value -> pointer_value -> integer_value memM
+  val diff_ptrval: Ctype.ctype -> pointer_value -> pointer_value -> integer_value memM
 
   val update_prefix: (Symbol.prefix * mem_value) -> unit memM
   val prefix_of_pointer: pointer_value -> string option memM
   
-  val validForDeref_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
-  val isWellAligned_ptrval: Core_ctype.ctype0 -> pointer_value -> bool memM
+  val validForDeref_ptrval: Ctype.ctype -> pointer_value -> bool memM
+  val isWellAligned_ptrval: Ctype.ctype -> pointer_value -> bool memM
   
   (* Casting operations *)
   (* the first ctype is the original integer type, the second is the target referenced type *)
-  val ptrcast_ival: Core_ctype.ctype0 -> Core_ctype.ctype0 -> integer_value -> pointer_value memM
+  val ptrcast_ival: Ctype.ctype -> Ctype.ctype -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intcast_ptrval: Core_ctype.ctype0 -> Ctype.integerType -> pointer_value -> integer_value memM
+  val intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> integer_value memM
   
   (* Pointer shifting constructors *)
-  val array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value
+  val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
   val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
   
-  val eff_array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value memM
+  val eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
   
   val memcpy: pointer_value -> pointer_value -> integer_value -> pointer_value memM
   val memcmp: pointer_value -> pointer_value -> integer_value -> integer_value memM
-  val realloc: Core_ctype.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
+  val realloc: Mem_common.thread_id -> integer_value -> pointer_value -> integer_value -> pointer_value memM
 
-  val va_start: (Core_ctype.ctype0 * pointer_value) list -> integer_value memM
+  val va_start: (Ctype.ctype * pointer_value) list -> integer_value memM
   val va_copy: integer_value -> integer_value memM
-  val va_arg: integer_value -> Core_ctype.ctype0 -> pointer_value memM
+  val va_arg: integer_value -> Ctype.ctype -> pointer_value memM
   val va_end: integer_value -> unit memM
-  val va_list: Nat_big_num.num -> ((Core_ctype.ctype0 * pointer_value) list) memM
+  val va_list: Nat_big_num.num -> ((Ctype.ctype * pointer_value) list) memM
 
   
   (* Integer value constructors *)
@@ -118,10 +118,10 @@ module type Memory = sig
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Tags.tag_definition) Pmap.map -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
+  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
   
-  val sizeof_ival: Core_ctype.ctype0 -> integer_value
-  val alignof_ival: Core_ctype.ctype0 -> integer_value
+  val sizeof_ival: Ctype.ctype -> integer_value
+  val alignof_ival: Ctype.ctype -> integer_value
   
   val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
   val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
@@ -165,24 +165,24 @@ module type Memory = sig
   
   (* Memory value constructors *)
   (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
-  val unspecified_mval: Core_ctype.ctype0 -> mem_value
+  val unspecified_mval: Ctype.ctype -> mem_value
   val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
   val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
-  val pointer_mval: Core_ctype.ctype0 -> pointer_value -> mem_value
+  val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
-  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> mem_value
+  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Ctype.ctype * mem_value) list -> mem_value
   val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
   
   (* Memory value destructor *)
   val case_mem_value:
     mem_value ->
-    (Core_ctype.ctype0 -> 'a) -> (* unspecified case *)
+    (Ctype.ctype -> 'a) -> (* unspecified case *)
     (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
     (Ctype.integerType -> integer_value -> 'a) ->
     (Ctype.floatingType -> floating_value -> 'a) ->
-    (Core_ctype.ctype0 -> pointer_value -> 'a) ->
+    (Ctype.ctype -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->
-    (Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> 'a) ->
+    (Symbol.sym -> (Cabs.cabs_identifier * Ctype.ctype * mem_value) list -> 'a) ->
     (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
     'a
   

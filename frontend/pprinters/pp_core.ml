@@ -28,7 +28,7 @@ sig
   val pp_expr: ('a, 'b, Symbol.sym) generic_expr -> PPrint.document
   val pp_file: ('a, 'b) generic_file -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: (Symbol.sym, Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
@@ -727,10 +727,10 @@ let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
   let pp (sym, tagDef) =
     let (ty, tags) = match tagDef with
-      | Tags.StructDef tags -> ("struct", tags)
-      | Tags.UnionDef tags -> ("union", tags)
+      | Ctype.StructDef tags -> ("struct", tags)
+      | Ctype.UnionDef tags -> ("union", tags)
     in
-    let pp_tag (Cabs.CabsIdentifier (_, name), ty) =
+    let pp_tag (Cabs.CabsIdentifier (_, name), (_, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty
     in
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
@@ -794,10 +794,10 @@ let mk_comment doc =
   )
 
 let pp_funinfo finfos =
-  let mk_pair (_, ty) = (Ctype.no_qualifiers, ty) in
+  let mk_pair (_, ty) = (Ctype.no_qualifiers, ty, false) in
   Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
-        ^^^ pp_ctype (Core_ctype.Function0 ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic))
+    ^^^ pp_ctype (Ctype ([], Function (false, (Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic)))
         ^^ P.hardline) finfos P.empty
 
 let pp_globs globs =

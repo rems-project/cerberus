@@ -511,11 +511,11 @@ let interp_backend io core_file ~args ~batch ~fs ~driver_conf =
  * program, with exactly the same compiled code. *)
 type 'a core_dump =
   { dump_main: Symbol.sym option;
-    dump_tagDefs: (Symbol.sym * Tags.tag_definition) list;
+    dump_tagDefs: (Symbol.sym * Ctype.tag_definition) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
     dump_extern: (Cabs.cabs_identifier * (Symbol.sym list * Core.linking_kind)) list;
-    dump_funinfo: (Symbol.sym * (Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool)) list;
+    dump_funinfo: (Symbol.sym * (Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
   }
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =

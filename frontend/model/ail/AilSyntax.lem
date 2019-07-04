@@ -211,6 +211,8 @@ type declaration =
                    * bool (* is_Noreturn *)
 
 
+(*
+TODO
 type tag_definition =
   | StructDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
   | UnionDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
@@ -227,6 +229,7 @@ instance (Show tag_definition)
       | UnionDef tag_defs -> string_of_identifiers tag_defs
     end
 end
+*)
 
 (* external identifier kind *)
 type id_kind =

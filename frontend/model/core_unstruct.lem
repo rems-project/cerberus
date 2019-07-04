@@ -1,5 +1,5 @@
 open import Pervasives Utils
-open import Core Core_ctype Core_ctype_aux
+open import Core Ctype Core_ctype_aux
 import Symbol State Core_aux Ctype
 
 import Core_typing Core_typing_effect Core_typing_aux
@@ -15,14 +15,14 @@ let insupported str =
   error ("Core_unstruct: unsupported ==> " ^ str)
 
 
-val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Cabs.cabs_identifier * ctype)))
+val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Cabs.cabs_identifier * (qualifiers * ctype))))
 let extract_ctype_pe (Pexpr _ _ pexpr_) =
   match pexpr_ with
-    | PEval (Vctype ty) ->
+    | PEval (Vctype (Ctype _ ty as cty)) ->
         Just match ty with
-          | Atomic (Struct _) ->
+          | Atomic (Ctype _ (Struct _)) ->
               insupported "atomic struct"
-          | Atomic (Union _) ->
+          | Atomic (Ctype _ (Union _)) ->
               insupported "atomic union"
           | Struct tag_sym ->
               Right (tag_sym, get_structDef tag_sym)
@@ -30,7 +30,7 @@ let extract_ctype_pe (Pexpr _ _ pexpr_) =
               let xs = get_unionDef tag_sym in
               insupported "(non atomic) union"
           | _ ->
-              Left ty
+              Left cty
         end
     | _ ->
         Nothing
@@ -111,12 +111,12 @@ let explode_paction env (Paction pol (Action loc a act_) as pact) =
           | (_, Just (Left _)) ->
               (* this is not allocating a struct, so no need to explode *)
               Nothing
-          | (Just al_ty, Just (Right (tag_sym, xs))) ->
+          | (Just (Ctype _ al_ty), Just (Right (tag_sym, xs))) ->
               if al_ty <> Struct tag_sym then
                 insupported "create with non-trivial alignement constraint"
               else
                 Just begin
-                  List.map (fun (ident, ty) ->
+                  List.map (fun (ident, (_, ty)) ->
                     let ty_pe = Caux.mk_ctype_pe ty in
                     (ident, wrap (Create (type_pexpr (Caux.mk_alignof_pe ty_pe)) (type_pexpr ty_pe) pref))
                   ) xs

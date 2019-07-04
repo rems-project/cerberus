@@ -14,6 +14,7 @@ open Core
 module Caux = Core_aux
 module Cmm = Cmm_csem
 
+open Ctype
 
 let sym_compare =
   Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method
@@ -34,7 +35,7 @@ type declaration =
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * attribute list * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
   | Builtin_decl of _sym * (Core.core_base_type * (Core.core_base_type) list)
-  | Aggregate_decl of _sym * Tags.tag_definition
+  | Aggregate_decl of _sym * Ctype.tag_definition
 (*
   | WithAttributes_decl of attribute list * declaration
 *)
@@ -235,7 +236,7 @@ let symbolify_sym _sym =
     | None ->
        Eff.fail (Location_ocaml.region (snd _sym) None) (Core_parser_unresolved_symbol (fst _sym))
 
-let rec symbolify_ctype ty =
+let rec symbolify_ctype (Ctype (annots, ty)) =
   let symbolify_symbol = function
     | Symbol.Symbol (_, _, Some str) ->
       begin lookup_sym (str, (Lexing.dummy_pos, Lexing.dummy_pos)) >>= function
@@ -247,33 +248,30 @@ let rec symbolify_ctype ty =
       end
     | _ -> failwith "symbolify_ctype"
   in
-  let open Core_ctype in
-  match ty with
-  | Void0 ->
-      Eff.return Void0
-  | Basic0 bty ->
-      Eff.return (Basic0 bty)
-  | Array0 (ty, n) ->
+  Eff.fmap (fun ty -> Ctype (annots, ty)) @@ match ty with
+  | Void ->
+      Eff.return Void
+  | Basic bty ->
+      Eff.return (Basic bty)
+  | Array (ty, n) ->
       symbolify_ctype ty >>= fun ty' ->
-      Eff.return (Array0 (ty', n))
-  | Atomic0 ty ->
+      Eff.return (Array (ty', n))
+  | Atomic ty ->
       symbolify_ctype ty >>= fun ty' ->
-      Eff.return (Atomic0 ty')
-  | Function0 ((ret_qs, ret_ty), params, isVariadic) ->
+      Eff.return (Atomic ty')
+  | Function (hasProto, (ret_qs, ret_ty), params, isVariadic) ->
       symbolify_ctype ret_ty >>= fun ret_ty' ->
-      Eff.mapM (fun (qs, ty) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty')) params >>= fun params' ->
-      Eff.return (Function0 ((ret_qs, ret_ty'), params', isVariadic))
-  | Pointer0 (qs, ty) ->
+      Eff.mapM (fun (qs, ty, _) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty', false)) params >>= fun params' ->
+      Eff.return (Function (hasProto, (ret_qs, ret_ty'), params', isVariadic))
+  | Pointer (qs, ty) ->
       symbolify_ctype ty >>= fun ty' ->
-      Eff.return (Pointer0 (qs, ty'))
-  | Struct0 tag ->
+      Eff.return (Pointer (qs, ty'))
+  | Struct tag ->
       symbolify_symbol tag >>= fun tag' ->
-      Eff.return (Struct0 tag')
-  | Union0 tag ->
+      Eff.return (Struct tag')
+  | Union tag ->
       symbolify_symbol tag >>= fun tag' ->
-      Eff.return (Union0 tag')
-  | Builtin str ->
-      Eff.return (Builtin str)
+      Eff.return (Union tag')
 
 let rec symbolify_value _cval =
   match _cval with
@@ -1229,33 +1227,33 @@ basic_type:
 
 ctype:
 | VOID
-    { Core_ctype.Void0 }
+    { Ctype.void }
 | bty= basic_type
-    { Core_ctype.Basic0 bty }
+  { Ctype.Ctype ([], Ctype.Basic bty) }
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
-    { Core_ctype.Array0 (ty, n_opt) }
+    { Ctype.Ctype ([], Ctype.Array (ty, n_opt)) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Core_ctype.Function0 ((Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty)) tys, false) }
+    { Ctype.Ctype ([], Function (false, (Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
 (*     { Core_ctype.Function0 (ty, tys, true) } *)
 | ty= ctype STAR
-    { Core_ctype.Pointer0 (Ctype.no_qualifiers, ty) }
+    { Ctype.Ctype ([], Ctype.Pointer (Ctype.no_qualifiers, ty)) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
-    { Core_ctype.Atomic0 ty }
+    { Ctype.Ctype ([], Ctype.Atomic ty) }
 | (* TODO: check the lexing *) str= SYM
     { match Builtins.translate_builtin_typenames ("__cerbty_" ^ fst str) with
         | Some ty ->
-            Core_aux.proj_ctype ty
+            ty
         | None ->
             $syntaxerror
     }
 | STRUCT tag= SYM
     (* NOTE: we only collect the string name here *)
-    { Core_ctype.Struct0 (Symbol.Symbol ("", -1, Some (fst tag))) }
+    { Ctype.Ctype ([], Ctype.Struct (Symbol.Symbol ("", -1, Some (fst tag)))) }
 | UNION tag= SYM
     (* NOTE: we only collect the string name here *)
-    { Core_ctype.Union0 (Symbol.Symbol ("", -1, Some (fst tag))) }
+    { Ctype.Ctype ([], Ctype.Union (Symbol.Symbol ("", -1, Some (fst tag)))) }
 ;
 (* END Ail types *)
 
@@ -1437,7 +1435,7 @@ value:
 | NULL ty= delimited(LPAREN, ctype, RPAREN)
     { Vobject (OVpointer (Impl_mem.null_ptrval ty)) }
 | CFUNCTION_VALUE _nm= delimited(LPAREN, name, RPAREN)
-  { (*TODO*) Vobject (OVpointer (Impl_mem.null_ptrval Void0)) }
+  { (*TODO*) Vobject (OVpointer (Impl_mem.null_ptrval Ctype.void)) }
 | UNIT_VALUE
     { Vunit }
 | TRUE
@@ -1643,7 +1641,7 @@ def_declaration:
 
 def_field:
 | cid=cabs_id COLON ty=core_ctype
-  { (cid, ty) }
+  { (cid, (no_qualifiers, ty)) }
 ;
 
 def_fields:
