@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Core Core_ctype Boot Decode Output Set_extra Map
+import Core Boot Decode Output Set_extra Map
 import Core_aux Builtins Core_linking
 module Caux = Core_aux
 
@@ -21,7 +21,7 @@ import Translation_aux
 import Fs
 
 module Mem = struct
-  include import Mem Mem_aux
+  include import Mem Mem_aux Mem_common
 end
 
 import Pp
@@ -35,8 +35,6 @@ module U = Undefined
 
 module SEU = State_exception_undefined
 module ND  = Nondeterminism
-
-open import {hol} `ppTheory`
 
 
 import Global
@@ -150,7 +148,7 @@ let liftConc =
     (fun err_str -> SK_misc ["concurrency"; err_str])
     (fun str -> DErr_concurrency str)
 
-val get_thread_states: driverM (list (Core_ctype.thread_id * (maybe Core_ctype.thread_id * Core_run.thread_state)))
+val get_thread_states: driverM (list (Mem.thread_id * (maybe Mem.thread_id * Core_run.thread_state)))
 let get_thread_states =
   ND.get >>= fun dr_st ->
   ND.return dr_st.core_state.Core_run.thread_states
@@ -187,7 +185,7 @@ let rec print_eval_conv_aux dr_st th_st pe =
       ND.return (Left (Loc.other "Driver.print_eval_conv_aux", Errors.CORE_RUN err))
 end
 
-val printf_eval_conv: driver_state -> Core_run.thread_state -> Core_ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
+val printf_eval_conv: driver_state -> Core_run.thread_state -> Ctype.ctype -> Mem.mem_value -> Mem.memM (either Errors.error (Undefined.t Core.value))
 let printf_eval_conv dr_st th_st cty mval =
   let () = Debug.print_debug 4 [] (fun () -> "printf_eval_conv") in
   let (_, cval) = Core_aux.valueFromMemValue mval in
@@ -317,7 +315,7 @@ let symbolicFromIntegerValue ((Defacto_memory_types2.IV _ ival_) as ival) =
   end
 *)
 
-val drive_fs_step: Core_ctype.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
+val drive_fs_step: Mem.thread_id -> Core_run.thread_state -> driver_state -> Core_run.fs_oper -> driverM unit
 let drive_fs_step tid th_st dr_st fs_oper =
   let th_st_from_int n =
     let (Core.Expr arena_annots _) = th_st.Core_run.arena in
@@ -344,7 +342,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let errname = Fs.fs_string_of_error e in
     let err = Builtins.translate_errno ("__cerbvar_" ^ errname) in
     let err_mval = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival err) in
-    liftMem $ Mem.store (Loc.other "update errno") Core_ctype.signed_int false th_st.Core_run.errno err_mval
+    liftMem $ Mem.store (Loc.other "update errno") Ctype.signed_int false th_st.Core_run.errno err_mval
   in
   let return (fs_st, res) =
     match res with
@@ -422,7 +420,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
   let store_dir (fs_st, res) =
     let sym = struct_sym "dirent" in
     let loc = Loc.other "store struct dirent" in
-    let dirent_cty = Core_ctype.Struct sym in
+    let dirent_cty = Ctype.Ctype [] (Ctype.Struct sym) in
     let update_mem dir_name =
       Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing) (fun dirent_ptr ->
         let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Cabs.CabsIdentifier loc "d_name") in
@@ -447,7 +445,8 @@ let drive_fs_step tid th_st dr_st fs_oper =
       let store iTy memb f =
         let ptr = Mem.member_shift_ptrval stat_ptr sym (Cabs.CabsIdentifier loc memb) in
         let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
-        Mem.store loc (Core_ctype.Basic (Ctype.Integer iTy)) false ptr mval
+        Mem.store loc (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer iTy))) false
+                  ptr mval
       in
       let sint = Ctype.Unsigned Ctype.Int_ in
       let uint = Ctype.Signed Ctype.Int_ in
@@ -579,7 +578,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
 
 
 (* For a given thread, perform all possible step that are not action requests *)
-val     drive_core_thread: Core_ctype.thread_id -> driverM unit
+val     drive_core_thread: Mem.thread_id -> driverM unit
 let rec drive_core_thread tid =
   ND.get >>= fun dr_st ->
   let th_info = match List.lookup tid dr_st.core_state.Core_run.thread_states with
@@ -715,7 +714,7 @@ let rec drive_core_thread tid =
             let core_st' = Core_run.update_thread_state tid
               <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
                  Core_run_aux.stack= Core.Stack_empty;
-                 Core_run_aux.errno= Mem.null_ptrval Core_ctype.signed_int;
+                 Core_run_aux.errno= Mem.null_ptrval Ctype.signed_int;
                  Core_run_aux.env= th_st.Core_run_aux.env;
                 (* Dummy locations *)
                  Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
@@ -849,7 +848,7 @@ let action_request_concurrency = function
           Cmm_op.sbBefore=     sb_edges;
           Cmm_op.ddBefore=     dd_edges;
           Cmm_op.aswBefore=    asw_edges;
-          Cmm_op.locationKind= Just (if Core_ctype.is_atomic lvalue_ty then Cmm.Atomic else Cmm.Non_Atomic);
+          Cmm_op.locationKind= Just (if AilTypesAux.is_atomic lvalue_ty then Cmm.Atomic else Cmm.Non_Atomic);
       |> in
       
       ND.log ("STORE REQUEST (aid: " ^ show aid ^ ")") >> (* DEBUG *)
@@ -865,7 +864,7 @@ let action_request_concurrency = function
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "CONCUR REQUEST LOAD") in (* DEBUG *)
 (*      let mval = Mem.symbolic_mval (Symbolic.SYMBsym Symbolic.SYMBint sym) in *)
       let ity = match lvalue_ty with
-        | Core_ctype.Basic (Ctype.Integer ity) ->
+        | Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity)) ->
             ity
         | _ ->
             Ctype.Signed (Ctype.Int_) (* TODO DUMMY *)
@@ -876,7 +875,7 @@ let action_request_concurrency = function
           Cmm_op.sbBefore=     sb_edges;
           Cmm_op.ddBefore=     dd_edges;
           Cmm_op.aswBefore=    asw_edges;
-          Cmm_op.locationKind= Just (if Core_ctype.is_atomic lvalue_ty then Cmm.Atomic else Cmm.Non_Atomic);
+          Cmm_op.locationKind= Just (if AilTypesAux.is_atomic lvalue_ty then Cmm.Atomic else Cmm.Non_Atomic);
       |> in
       
       ND.log ("LOAD REQUEST (aid: " ^ show aid ^ ")") >> (* DEBUG *)
@@ -1049,7 +1048,7 @@ let rec driver with_concurrency =
             liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
-        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (Ctype.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
+        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
             liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
@@ -1353,7 +1352,7 @@ let initial_driver_state file fs_state =
 
 
 
-val spawn_thread: maybe Core_ctype.thread_id -> Core_run.thread_state -> driverM Core_ctype.thread_id
+val spawn_thread: maybe Mem.thread_id -> Core_run.thread_state -> driverM Mem.thread_id
 let driver_spawn_thread parent_tid_opt th_st =
   ND.get >>= fun dr_st ->
   let ((tid, core_st'), run_st') = State.runStateM (
@@ -1366,21 +1365,21 @@ let driver_spawn_thread parent_tid_opt th_st =
   ND.return tid
 let inline spawn_thread = driver_spawn_thread
 
-val update_thread_state: Core_ctype.thread_id -> Core_run.thread_state -> driverM unit
+val update_thread_state: Mem.thread_id -> Core_run.thread_state -> driverM unit
 let driver_update_thread_state tid th_st =
   ND.update (fun dr_st ->
     <| dr_st with core_state= Core_run.update_thread_state tid th_st dr_st.core_state |>
   )
 let inline update_thread_state = driver_update_thread_state
 
-val driver_globals: bool -> Core.file Core_run.core_run_annotation -> driverM Core_ctype.thread_id
+val driver_globals: bool -> Core.file Core_run.core_run_annotation -> driverM Mem.thread_id
 let driver_globals with_concurrency file =
   (* spawning a thread for the initialisation of globals, and later the execution of main *)
   spawn_thread Nothing <|
     (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
     Core_run.arena=  Core.Expr [] Core.Eskip;
     Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
-    Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
+    Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
     Core_run.env= [Map.empty];
     Core_run.current_loc= Loc.unknown;
     Core_run.exec_loc= Core_run.ELoc_globals;
@@ -1409,7 +1408,7 @@ let driver_globals with_concurrency file =
           Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
           Core_run.env= th_st.Core_run.env;
     (*      Core_run.labels= Map.empty; *)
-          Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
+          Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
           Core_run.current_loc= Loc.other ("global(" ^ show glob_sym ^ ")"); (* TODO: preserve locations in Core.globs *)
           Core_run.exec_loc= Core_run.ELoc_globals;
         |>
@@ -1557,7 +1556,7 @@ TODO: this should be removable, since we already set it in Translation
                   (* NOTE: adding a null termination to the char array *)
                   (
                     Mem.array_mval $ mem_vals ++ [Mem.integer_mval Ctype.Char 0],
-                    Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
+                    Ctype.Ctype [] (Ctype.Array Ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1))
                   )
                 ) arg_strs in
               
@@ -1567,8 +1566,8 @@ TODO: this should be removable, since we already set it in Translation
               (* allocating and initialising an object for main.argc *)
               liftMem (
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argc_sym])
-                            (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int Nothing) (fun ptr_val ->
-                  Mem.bind (Mem.store (Loc.other "argc init") Core_ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
+                            (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
+                  Mem.bind (Mem.store (Loc.other "argc init") Ctype.signed_int false ptr_val argc_mem_val) (fun _ ->
                     Mem.return ptr_val
                   )
                 )
@@ -1589,10 +1588,10 @@ TODO: this should be removable, since we already set it in Translation
               (* NOTE: the element argv[argc] is required to be a null pointer
                  by the STD, hence argv has one more element than the number
                  of supplied arguments *)
-              let argv_array_elem_ty = Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char in
-              let argv_array_ty = Core_ctype.Array argv_array_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev))) in
+              let argv_array_elem_ty = Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char) in
+              let argv_array_ty = Ctype.Ctype [] (Ctype.Array argv_array_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev)))) in
               let argv_array_mem_val = Mem.array_mval $
-                List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Core_ctype.char]) in
+                List.map (Mem.pointer_mval Ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Ctype.char]) in
               liftMem (
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argv_sym(*TODO: change the sym?*)])
                             (Mem.alignof_ival argv_array_ty) argv_array_ty Nothing) (fun array_ptr_val ->
@@ -1600,11 +1599,11 @@ TODO: this should be removable, since we already set it in Translation
                 
                 (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
                    so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
-                let argv_ty = Core_ctype.Pointer Ctype.no_qualifiers (Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char) in
+                let argv_ty = Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char))) in
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argv_sym])
                             (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun argv_ptr_val ->
                 Mem.bind (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val
-                            (Mem.pointer_mval (Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char) array_ptr_val)) ( fun _ ->
+                            (Mem.pointer_mval (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers Ctype.char)) array_ptr_val)) ( fun _ ->
 
                 Mem.return argv_ptr_val
                 ))))
@@ -1634,9 +1633,9 @@ TODO: this should be removable, since we already set it in Translation
         
         (* allocating and initialising errno *)
         liftMem (
-          Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int Nothing) (fun ptr_val ->
+          Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Ctype.signed_int) Ctype.signed_int Nothing) (fun ptr_val ->
             let zero = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival 0) in
-            Mem.bind (Mem.store (Loc.other "errno init") Core_ctype.signed_int false ptr_val zero) (fun _ ->
+            Mem.bind (Mem.store (Loc.other "errno init") Ctype.signed_int false ptr_val zero) (fun _ ->
               Mem.return ptr_val
             )
           )

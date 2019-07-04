@@ -3116,18 +3116,18 @@ module BmcMemCommon = struct
                           (file: unit typed_file)
                           : Expr.expr =
     let ctype = CtypeSort.mk_nonatomic_expr raw_ctype in
-    let rec aux raw_ctype =
+    let rec aux (Ctype.Ctype (_, raw_ctype) as cty) =
       match raw_ctype with
-      | Core_ctype.Basic0 (Integer _) (* fall through *)
-      | Pointer0 _ (* fall through *)
-      | Array0 _ (* fall through *)
-      | Struct0 _ ->
+      | Basic (Integer _) (* fall through *)
+      | Pointer _ (* fall through *)
+      | Array _ (* fall through *)
+      | Struct _ ->
           let obj_sort = TODO_LoadedSort.extract_obj_sort sort in
           TODO_LoadedSort.mk_unspecified obj_sort ctype
-      | Atomic0 ty' -> aux ty'
+      | Atomic ty' -> aux ty'
       | ty -> failwith
                 (sprintf "TODO: ctype %s"
-                         (pp_to_string (Pp_core_ctype.pp_ctype ty)))
+                         (pp_to_string (Pp_core_ctype.pp_ctype cty)))
     in aux raw_ctype
     (*if (Sort.equal (LoadedInteger.mk_sort) sort) then
       LoadedInteger.mk_unspecified ctype
@@ -3160,9 +3160,9 @@ module BmcMemCommon = struct
 
   let mk_initial_value (ctype: ctype) (const: string) =
     match ctype with
-    | Void0 ->
+    | Ctype (_, Void) ->
         (UnitSort.mk_unit, [])
-    | Basic0 (Integer ity) ->
+    | Ctype (_, Basic (Integer ity)) ->
         let const = mk_fresh_const name integer_sort in
         (const, assert_initial_range ctype const)
     | _ -> assert false
@@ -4491,30 +4491,30 @@ module BmcConcActions = struct
    * Note: this is essentially a hack to simplify indexing into complex types in Z3.
    * TODO: make this work nicely with unspecified subarrays too. Currently we assume   * array types are specified.
    *)
-  let flatten_multid_arrays (ctype: Core_ctype.ctype0)
+  let flatten_multid_arrays ((Ctype.Ctype (_, ctype)) as cty)
                             (file: unit typed_file)
                             (value: Expr.expr)
                             (initial: bool)
                             : Expr.expr * (Expr.expr list) =
-    assert (Sort.equal (Expr.get_sort value) (CtypeToZ3.ctype_to_z3_sort ctype file));
+    assert (Sort.equal (Expr.get_sort value) (CtypeToZ3.ctype_to_z3_sort cty file));
 
     let rec aux (global_array: Expr.expr)
-                (ctype: Core_ctype.ctype0)
+                ((Ctype (_, ctype)): Ctype.ctype)
                 (value: Expr.expr)
                 (base_index: int)
                 : Expr.expr list =
       match ctype with
-      | Basic0 (Integer _) ->
+      | Basic (Integer _) ->
           [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
                  (Loaded.mk_base_expr value)
           ]
-      | Basic0 _ ->
+      | Basic _ ->
           failwith "TODO: multid-arrays of non-integer ctype"
-      | Pointer0 _ ->
+      | Pointer _ ->
           [mk_eq (Z3Array.mk_select g_ctx global_array (int_to_z3 base_index))
                  (Loaded.mk_base_expr value)
           ]
-      | Array0 (ctype', Some n) ->
+      | Array (ctype', Some n) ->
           (*let size_of_bmcz3sort_ctype' : int =
             bmcz3sort_size (ctype_to_bmcz3sort ctype' file) in*)
           let size_of_ctype' : int = PointerSort.type_size ctype' file in
@@ -4533,21 +4533,21 @@ module BmcConcActions = struct
           List.concat assertions
       | _ ->
           failwith (sprintf "TODO: multid arrays with ctype %s"
-                            (pp_to_string (Pp_core_ctype.pp_ctype ctype)))
+                    (pp_to_string (Pp_core_ctype.pp_ctype (Ctype ([], ctype)))))
    in
     match ctype with
-    | Array0(_, _) ->
+    | Array(_, _) ->
         let new_array =
             Z3Array.mk_const_s g_ctx (sprintf "flattened_%s" (Expr.to_string value))
                                integer_sort (Loaded.base_sort) in
         let loaded_new_array = TODO_LoadedSort.mk_specified new_array in
         let assertions =
           if initial then []
-          else aux new_array ctype value 0 in
+          else aux new_array cty value 0 in
         (loaded_new_array, assertions)
-    | Struct0 _ ->
+    | Struct _ ->
         (TODO_LoadedSort.mk_unspecified Loaded.raw_array_sort
-             (CtypeSort.mk_expr ctype), [])
+             (CtypeSort.mk_expr cty), [])
     | _ ->
         (value, [])
 
@@ -4597,7 +4597,7 @@ module BmcConcActions = struct
     get_file >>= fun file ->
     let sort = CtypeToZ3.ctype_to_z3_sort ctype file in
     let is_atomic_fn = (function ctype -> match ctype with
-                       | Core_ctype.Atomic0 _ -> mk_true
+                       | Ctype.Ctype (_, Atomic _) -> mk_true
                        | _ -> mk_false) in
     get_meta alloc_id >>= fun metadata ->
     let base_addr = get_metadata_base metadata in
@@ -4619,7 +4619,7 @@ module BmcConcActions = struct
       add_assertion is_atomic
     ) sortlist >>= fun _ ->
     begin match ctype with
-    | Struct0 tag ->
+    | Ctype (_, Struct tag) ->
         begin match create_mode with
         | CreateMode_Specified ->
             failwith "TODO: initializing structs as values"

@@ -1,5 +1,7 @@
 open import Pervasives Mem
-import Core_ctype
+import Ctype
+
+type thread_id = nat
 
 type trace_event =
   | ME_function_call of
@@ -9,21 +11,21 @@ type trace_event =
       Symbol.sym * maybe mem_value
 
   | ME_allocate_object of
-      Core_ctype.thread_id   (* the allocating thread *)
-       * Symbol.prefix      (* symbols coming from the Core/C program, 
-                             * for debugging purpose *)
-       * integer_value      (* alignment constraint *)
-       * Core_ctype.ctype   (* type of the allocation *)
-       * maybe mem_value    (* optional initialisation value
-                             * if provided the allocation is made read-only *)
+         thread_id      (* the allocating thread *)
+       * Symbol.prefix  (* symbols coming from the Core/C program,
+                           for debugging purpose *)
+       * integer_value  (* alignment constraint *)
+       * Ctype.ctype    (* type of the allocation *)
+       * maybe mem_value(* optional initialisation value
+                         * if provided the allocation is made read-only *)
        * pointer_value
 
   | ME_allocate_region of
-      Core_ctype.thread_id   (* the allocating thread *)
-       * Symbol.prefix       (* symbols coming from the Core/C program,
-                              * for debugging purpose *)
-       * integer_value       (* alignment constraint *)
-       * integer_value       (* size *)
+        thread_id       (* the allocating thread *)
+       * Symbol.prefix  (* symbols coming from the Core/C program,
+                           for debugging purpose *)
+       * integer_value  (* alignment constraint *)
+       * integer_value  (* size *)
        * pointer_value
 
   | ME_kill of
@@ -34,21 +36,21 @@ type trace_event =
   | ME_load of
       Loc.t
        * maybe string (* prefix *)
-       * Core_ctype.ctype
+       * Ctype.ctype
        * pointer_value
        * mem_value
 
   | ME_store of
       Loc.t
        * maybe string (* prefix *)
-       * Core_ctype.ctype
+       * Ctype.ctype
        * (*is_locking *) bool
        * pointer_value
        * mem_value
 
   | ME_eff_array_shift_ptrval of
       pointer_value
-       * Core_ctype.ctype
+       * Ctype.ctype
        * integer_value
        * pointer_value
 
@@ -59,7 +61,7 @@ type trace_event =
 
 (*
   | ME_realloc of
-      Core_ctype.thread_id
+      Ctype.thread_id
        * integer_value
        * pointer_value
        * integer_value

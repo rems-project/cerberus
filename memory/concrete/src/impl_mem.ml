@@ -1,4 +1,3 @@
-open Core_ctype
 open Ctype
 
 open Ocaml_implementation
@@ -16,29 +15,27 @@ let cabs_ident_equal x y =
        Cabs.instance_Basic_classes_Eq_Cabs_cabs_identifier_dict.isEqual_method x y
 
 let ctype_equal ty1 ty2 =
-  let rec unqualify ty =
+  let rec unqualify (Ctype (_, ty)) =
     match ty with
-      | Void0
-      | Basic0 _
-      | Struct0 _
-      | Union0 _
-      | Builtin _ ->
+      | Void
+      | Basic _
+      | Struct _
+      | Union _ ->
           ty
-      | Function0 ((_, ret_ty), xs, b) ->
-          Function0 (
-            (no_qualifiers, unqualify ret_ty),
-            List.map (fun (_, ty) -> (no_qualifiers, unqualify ty)) xs,
+      | Function (p, (_, ret_ty), xs, b) ->
+          Function (
+            p,
+            (no_qualifiers, Ctype ([], unqualify ret_ty)),
+            List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), false)) xs,
             b
          )
-      | Array0 (elem_ty, n_opt) ->
-          Array0 (unqualify elem_ty, n_opt)
-      | Pointer0 (_, ref_ty) ->
-          Pointer0 (no_qualifiers, unqualify ref_ty)
-      | Atomic0 atom_ty ->
-          Atomic0 (unqualify atom_ty)
-  in
-  Core_ctype.instance_Basic_classes_Eq_Core_ctype_ctype_dict.isEqual_method
-    (unqualify ty1) (unqualify ty2)
+      | Array (elem_ty, n_opt) ->
+          Array (Ctype ([], unqualify elem_ty), n_opt)
+      | Pointer (_, ref_ty) ->
+          Pointer (no_qualifiers, Ctype ([], unqualify ref_ty))
+      | Atomic atom_ty ->
+          Atomic (Ctype ([], unqualify atom_ty))
+  in Ctype.ctypeEqual (Ctype ([], unqualify ty1)) (Ctype ([], unqualify ty2))
 
 module Eff : sig
   type ('a, 'err, 'cs, 'st) eff =
@@ -92,9 +89,9 @@ end)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
 let rec offsetsof tagDefs tag_sym =
   match Pmap.find tag_sym tagDefs with
-    | Tags.StructDef membrs ->
+    | StructDef membrs ->
         let (xs, maxoffset) =
-          List.fold_left (fun (xs, last_offset) (membr, ty) ->
+          List.fold_left (fun (xs, last_offset) (membr, (_, ty)) ->
             let size = sizeof ~tagDefs ty in
             let align = alignof ~tagDefs ty in
             let x = last_offset mod align in
@@ -102,113 +99,111 @@ let rec offsetsof tagDefs tag_sym =
             ((membr, ty, last_offset + pad) :: xs, last_offset + pad + size)
           ) ([], 0) membrs in
         (List.rev xs, maxoffset)
-    | Tags.UnionDef membrs ->
-        (List.map (fun (ident, ty) -> (ident, ty, 0)) membrs, 0)
+    | UnionDef membrs ->
+        (List.map (fun (ident, (_, ty)) -> (ident, ty, 0)) membrs, 0)
 
-and sizeof ?(tagDefs= Tags.tagDefs ()) = function
-  | Void0 | Array0 (_, None) | Function0 _ ->
-      assert false
-  | Basic0 (Integer ity) as ty ->
-      begin match Impl.sizeof_ity ity with
-        | Some n ->
-            n
-        | None ->
-            failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype ty)
-      end
-  | Basic0 (Floating fty) ->
-      begin match Impl.sizeof_fty fty with
-        | Some n ->
-            n
-        | None ->
-            failwith "the concrete memory model requires a complete implementation sizeof FLOAT"
-      end
-  | Array0 (elem_ty, Some n) ->
-      (* TODO: what if too big? *)
-      Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
-  | Pointer0 _ ->
-      begin match Impl.sizeof_pointer with
-        | Some n ->
-            n
-        | None ->
-            failwith "the concrete memory model requires a complete implementation sizeof POINTER"
-      end
-  | Atomic0 atom_ty ->
-      sizeof ~tagDefs atom_ty
-  | Struct0 tag_sym as ty ->
-      let (_, max_offset) = offsetsof tagDefs tag_sym in
-      let align = alignof ~tagDefs ty in
-      let x = max_offset mod align in
-      if x = 0 then max_offset else max_offset + (align - x)
-  | Union0 tag_sym ->
-      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-        | Tags.StructDef _ ->
-            assert false
-        | Tags.UnionDef membrs ->
-            let (max_size, max_align) =
-              List.fold_left (fun (acc_size, acc_align) (_, ty) ->
-                (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
-              ) (0, 0) membrs in
-            (* NOTE: adding padding at the end to satisfy the alignment constraints *)
-            let x = max_size mod max_align in
-            if x = 0 then max_size else max_size + (max_align - x)
-      end
-  | Builtin str ->
-     failwith ("TODO: sizeof Builtin ==> " ^ str)
+and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
+  match ty with
+    | Void | Array (_, None) | Function _ ->
+        assert false
+    | Basic (Integer ity) ->
+        begin match Impl.sizeof_ity ity with
+          | Some n ->
+              n
+          | None ->
+              failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
+        end
+    | Basic (Floating fty) ->
+        begin match Impl.sizeof_fty fty with
+          | Some n ->
+              n
+          | None ->
+              failwith "the concrete memory model requires a complete implementation sizeof FLOAT"
+        end
+    | Array (elem_ty, Some n) ->
+        (* TODO: what if too big? *)
+        Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
+    | Pointer _ ->
+        begin match Impl.sizeof_pointer with
+          | Some n ->
+              n
+          | None ->
+              failwith "the concrete memory model requires a complete implementation sizeof POINTER"
+        end
+    | Atomic atom_ty ->
+        sizeof ~tagDefs atom_ty
+    | Struct tag_sym as ty ->
+        let (_, max_offset) = offsetsof tagDefs tag_sym in
+        let align = alignof ~tagDefs cty in
+        let x = max_offset mod align in
+        if x = 0 then max_offset else max_offset + (align - x)
+    | Union tag_sym ->
+        begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+          | StructDef _ ->
+              assert false
+          | UnionDef membrs ->
+              let (max_size, max_align) =
+                List.fold_left (fun (acc_size, acc_align) (_, (_, ty)) ->
+                  (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
+                ) (0, 0) membrs in
+              (* NOTE: adding padding at the end to satisfy the alignment constraints *)
+              let x = max_size mod max_align in
+              if x = 0 then max_size else max_size + (max_align - x)
+        end
 
-and alignof ?(tagDefs= Tags.tagDefs ()) = function
-  | Void0 ->
-      assert false
-  | Basic0 (Integer ity) as ty ->
-      begin match Impl.alignof_ity ity with
-        | Some n ->
-            n
-        | None ->
-            failwith ("the concrete memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype ty)
-      end
-  | Basic0 (Floating fty) ->
-      begin match Impl.alignof_fty fty with
-        | Some n ->
-            n
-        | None ->
-            failwith "the concrete memory model requires a complete implementation alignof FLOATING"
-      end
-  | Array0 (elem_ty, _) ->
-      alignof ~tagDefs elem_ty
-  | Function0 _ ->
-      assert false
-  | Pointer0 _ ->
-      begin match Impl.alignof_pointer with
-        | Some n ->
-            n
-        | None ->
-            failwith "the concrete memory model requires a complete implementation alignof POINTER"
-      end
-  | Atomic0 atom_ty ->
-      alignof ~tagDefs atom_ty
-  | Struct0 tag_sym ->
-      begin match Pmap.find tag_sym tagDefs with
-        | Tags.UnionDef _ ->
-            assert false
-        | Tags.StructDef membrs  ->
-            (* NOTE: Structs (and unions) alignment is that of the maximum alignment
-               of any of their components. *)
-            List.fold_left (fun acc (_, ty) ->
-              max (alignof ~tagDefs ty) acc
-            ) 0 membrs
-      end
-  | Union0 tag_sym ->
-      begin match Pmap.find tag_sym (Tags.tagDefs ()) with
-        | Tags.StructDef _ ->
-            assert false
-        | Tags.UnionDef membrs ->
-            (* NOTE: Structs (and unions) alignment is that of the maximum alignment
-               of any of their components. *)
-            List.fold_left (fun acc (_, ty) ->
-              max (alignof ~tagDefs ty) acc
-            ) 0 membrs
-      end
-  | Builtin str ->
-     failwith ("TODO: alignof Builtin ==> " ^ str)
+and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
+  match ty with
+    | Void ->
+        assert false
+    | Basic (Integer ity) ->
+        begin match Impl.alignof_ity ity with
+          | Some n ->
+              n
+          | None ->
+              failwith ("the concrete memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
+        end
+    | Basic (Floating fty) ->
+        begin match Impl.alignof_fty fty with
+          | Some n ->
+              n
+          | None ->
+              failwith "the concrete memory model requires a complete implementation alignof FLOATING"
+        end
+    | Array (elem_ty, _) ->
+        alignof ~tagDefs elem_ty
+    | Function _ ->
+        assert false
+    | Pointer _ ->
+        begin match Impl.alignof_pointer with
+          | Some n ->
+              n
+          | None ->
+              failwith "the concrete memory model requires a complete implementation alignof POINTER"
+        end
+    | Atomic atom_ty ->
+        alignof ~tagDefs atom_ty
+    | Struct tag_sym ->
+        begin match Pmap.find tag_sym tagDefs with
+          | UnionDef _ ->
+              assert false
+          | StructDef membrs  ->
+              (* NOTE: Structs (and unions) alignment is that of the maximum alignment
+                 of any of their components. *)
+              List.fold_left (fun acc (_, (_, ty)) ->
+                max (alignof ~tagDefs ty) acc
+              ) 0 membrs
+        end
+    | Union tag_sym ->
+        begin match Pmap.find tag_sym (Tags.tagDefs ()) with
+          | StructDef _ ->
+              assert false
+          | UnionDef membrs ->
+              (* NOTE: Structs (and unions) alignment is that of the maximum alignment
+                 of any of their components. *)
+              List.fold_left (fun acc (_, (_, ty)) ->
+                max (alignof ~tagDefs ty) acc
+              ) 0 membrs
+        end
 
 
 module Concrete : Memory = struct
@@ -230,7 +225,7 @@ module Concrete : Memory = struct
   (* Note: using Z instead of int64 because we need to be able to have
      unsigned 64bits values *)
   type pointer_value_base =
-    | PVnull of ctype0
+    | PVnull of ctype
     | PVfunction of Symbol.sym
     | PVconcrete of Nat_big_num.num
   
@@ -245,12 +240,12 @@ module Concrete : Memory = struct
     float
   
   type mem_value =
-    | MVunspecified of Core_ctype.ctype0
+    | MVunspecified of ctype
     | MVinteger of integerType * integer_value
     | MVfloating of floatingType * floating_value
-    | MVpointer of Core_ctype.ctype0 * pointer_value
+    | MVpointer of ctype * pointer_value
     | MVarray of mem_value list
-    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * Core_ctype.ctype0 * mem_value) list
+    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * ctype * mem_value) list
     | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * mem_value
 
   
@@ -309,7 +304,7 @@ module Concrete : Memory = struct
     prefix: Symbol.prefix;
     base: address;
     size: N.num; (*TODO: this is probably unnecessary once we have the type *)
-    ty: Core_ctype.ctype0 option; (* None when dynamically allocated *)
+    ty: ctype option; (* None when dynamically allocated *)
     is_readonly: bool;
     taint: [ `Unexposed | `Exposed ]; (* NOTE: PNVI-ae, PNVI-ae-udi *)
   }
@@ -392,7 +387,7 @@ module Concrete : Memory = struct
     (* this is only for PNVI-ae-udi *)
     iota_map: [ `Single of storage_instance_id | `Double of storage_instance_id * storage_instance_id ] IntMap.t;
     funptrmap: (Digest.t * string) IntMap.t;
-    varargs: (int * (Core_ctype.ctype0 * pointer_value) list) IntMap.t;
+    varargs: (int * (ctype * pointer_value) list) IntMap.t;
     next_varargs_id: N.num;
     bytemap: AbsByte.t IntMap.t;
     
@@ -793,7 +788,7 @@ module Concrete : Memory = struct
        forall ty bs bs' mval.
          has_size ty -> |bs| >= sizeof ty -> abst ty bs = (mval, bs') ->
          |bs'| + sizeof ty  = |bs| /\ typeof mval = ty *)
-  let rec abst find_overlaping funptrmap ty (bs : AbsByte.t list) : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
+  let rec abst find_overlaping funptrmap (Ctype (_, ty) as cty) (bs : AbsByte.t list) : [`NoTaint | `NewTaint of storage_instance_id list] * mem_value * AbsByte.t list =
     let self = abst find_overlaping funptrmap in
     let extract_unspec xs =
       List.fold_left (fun acc_opt c_opt ->
@@ -806,7 +801,7 @@ module Concrete : Memory = struct
               Some (c :: acc)
       ) (Some []) (List.rev xs) in
     
-    if List.length bs < sizeof ty then
+    if List.length bs < sizeof cty then
       failwith "abst, |bs| < sizeof(ty)";
     
     let merge_taint x y =
@@ -820,13 +815,13 @@ module Concrete : Memory = struct
             `NewTaint (xs @ ys) in
     
     match ty with
-      | Void0
-      | Array0 (_, None)
-      | Function0 _ ->
+      | Void
+      | Array (_, None)
+      | Function _ ->
           (* ty must have a known size *)
           assert false
-      | Basic0 (Integer ity) ->
-          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+      | Basic (Integer ity) ->
+          let (bs1, bs2) = L.split_at (sizeof cty) bs in
           let (prov, _, bs1') = AbsByte.split_bytes bs1 in
             (* PNVI-ae-udi *)
           ( AbsByte.provs_of_bytes bs1
@@ -835,10 +830,10 @@ module Concrete : Memory = struct
                   MVinteger ( ity
                             , mk_ival prov (int_of_bytes (AilTypesAux.is_signed_ity ity) cs))
               | None ->
-                  MVunspecified ty
+                  MVunspecified cty
             end , bs2)
-      | Basic0 (Floating fty) ->
-          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+      | Basic (Floating fty) ->
+          let (bs1, bs2) = L.split_at (sizeof cty) bs in
           (* we don't care about provenances for floats *)
           let (_, _, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint
@@ -847,9 +842,9 @@ module Concrete : Memory = struct
                   MVfloating ( fty
                              , Int64.float_of_bits (N.to_int64 (int_of_bytes true cs)) )
               | None ->
-                  MVunspecified ty
+                  MVunspecified cty
             end, bs2)
-      | Array0 (elem_ty, Some n) ->
+      | Array (elem_ty, Some n) ->
           let rec aux n (taint_acc, mval_acc) cs =
             if n <= 0 then
               (taint_acc, MVarray (List.rev mval_acc), cs)
@@ -858,8 +853,8 @@ module Concrete : Memory = struct
               aux (n-1) (merge_taint taint taint_acc, mval :: mval_acc) cs'
           in
           aux (Nat_big_num.to_int n) (`NoTaint, []) bs
-      | Pointer0 (_, ref_ty) ->
-          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+      | Pointer (_, ref_ty) ->
+          let (bs1, bs2) = L.split_at (sizeof cty) bs in
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, assuming pointer repr is unsigned??");
           let (prov, prov_status, bs1') = AbsByte.split_bytes bs1 in
           ( `NoTaint (* PNVI-ae-udi *)
@@ -867,7 +862,7 @@ module Concrete : Memory = struct
               | Some cs ->
                   let n = int_of_bytes false cs in
                   begin match ref_ty with
-                    | Function0 _ ->
+                    | Ctype (_, Function _) ->
                         if N.equal n N.zero then
                           (* TODO: check *)
                           MVpointer (ref_ty, PV (Prov_none, PVnull ref_ty))
@@ -920,13 +915,13 @@ module Concrete : Memory = struct
                           MVpointer (ref_ty, PV (prov, PVconcrete n))
                   end
               | None ->
-                  MVunspecified (Core_ctype.Pointer0 (no_qualifiers, ref_ty))
+                  MVunspecified (Ctype ([], Pointer (no_qualifiers, ref_ty)))
             end, bs2)
-      | Atomic0 atom_ty ->
+      | Atomic atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
           self atom_ty bs
-      | Struct0 tag_sym ->
-          let (bs1, bs2) = L.split_at (sizeof ty) bs in
+      | Struct tag_sym ->
+          let (bs1, bs2) = L.split_at (sizeof cty) bs in
           let (taint, rev_xs, _, bs') = List.fold_left (fun (taint_acc, acc_xs, previous_offset, acc_bs) (memb_ident, memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let (taint, mval, acc_bs') = self memb_ty (L.drop pad acc_bs) in
@@ -934,12 +929,9 @@ module Concrete : Memory = struct
           ) (`NoTaint, [], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym)) in
           (* TODO: check that bs' = last padding of the struct *)
           (taint, MVstruct (tag_sym, List.rev rev_xs), bs2)
-      | Union0 tag_sym ->
+      | Union tag_sym ->
           failwith "TODO: abst, Union (as value)"
-      | Builtin str ->
-          failwith "TODO: abst, Builtin"
-  
-  
+
   (* INTERNAL bytes_of_int *)
   let bytes_of_int is_signed size i : (char option) list =
     let nbits = 8 * size in
@@ -961,27 +953,27 @@ module Concrete : Memory = struct
       )
   
   let rec typeof mval =
-    let open Core_ctype in
-    match mval with
-      | MVunspecified ty ->
+    Ctype ([], match mval with
+      | MVunspecified (Ctype (_, ty)) ->
           ty
       | MVinteger (ity, _) ->
-          Basic0 (Integer ity)
+          Basic (Integer ity)
       | MVfloating (fty, _) ->
-          Basic0 (Floating fty)
+          Basic (Floating fty)
       | MVpointer (ref_ty, _) ->
-          Pointer0 (no_qualifiers, ref_ty)
+          Pointer (no_qualifiers, ref_ty)
       | MVarray [] ->
           (* ill-formed value *)
           assert false
       | MVarray ((mval::_) as mvals) ->
           (* TODO: checking all the elements would be stupidly slow, but this
              feels wrong *)
-          Array0 (typeof mval, Some (N.of_int (List.length mvals)))
+          Array (typeof mval, Some (N.of_int (List.length mvals)))
       | MVstruct (tag_sym, _) ->
-          Struct0 tag_sym
+          Struct tag_sym
       | MVunion (tag_sym, _, _) ->
-          Union0 tag_sym
+          Union tag_sym
+      )
   
   (* INTERNAL repr *)
   let rec repr funptrmap mval : ((Digest.t * string) IntMap.t * AbsByte.t list) =
@@ -993,13 +985,13 @@ module Concrete : Memory = struct
           ret @@List.map (AbsByte.v prov) begin
             bytes_of_int
               (AilTypesAux.is_signed_ity ity)
-              (sizeof (Basic0 (Integer ity))) n
+              (sizeof (Ctype ([], Basic (Integer ity)))) n
           end
       | MVfloating (fty, fval) ->
           ret @@ List.map (AbsByte.v Prov_none) begin
             bytes_of_int
               true (* TODO: check that *)
-              (sizeof (Basic0 (Floating fty))) (N.of_int64 (Int64.bits_of_float fval))
+              (sizeof (Ctype ([], Basic (Floating fty)))) (N.of_int64 (Int64.bits_of_float fval))
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
@@ -1040,7 +1032,7 @@ module Concrete : Memory = struct
       | MVstruct (tag_sym, xs) ->
           let padding_byte _ = AbsByte.v Prov_none None in
           let (offs, last_off) = offsetsof (Tags.tagDefs ()) tag_sym in
-          let final_pad = sizeof (Core_ctype.Struct0 tag_sym) - last_off in
+          let final_pad = sizeof (Ctype ([], Struct tag_sym)) - last_off in
           (* TODO: rewrite now that offsetsof returns the paddings *)
           let (funptrmap, _, bs) = List.fold_left2 begin fun (funptrmap, last_off, acc) (ident, ty, off) (_, _, mval) ->
               let pad = off - last_off in
@@ -1050,7 +1042,7 @@ module Concrete : Memory = struct
           in
           (funptrmap, bs @ List.init final_pad padding_byte)
       | MVunion (tag_sym, memb_ident, mval) ->
-          let size = sizeof (Core_ctype.Union0 tag_sym) in
+          let size = sizeof (Ctype ([], Union tag_sym)) in
           let (funptrmap', bs) = repr funptrmap mval in
           (funptrmap', bs @ List.init (size - List.length bs) (fun _ -> AbsByte.v Prov_none None))
   
@@ -1153,16 +1145,15 @@ module Concrete : Memory = struct
     let open String_symbol in
     let rec aux addr alloc = function
       | None
-      | Some Void0
-      | Some (Function0 _) ->
+      | Some (Ctype (_, Void))
+      | Some (Ctype (_, Function _)) ->
           None
-      | Some (Basic0 _)
-      | Some (Builtin _)
-      | Some (Union0 _)
-      | Some (Pointer0 _) ->
+      | Some (Ctype (_, Basic _))
+      | Some (Ctype (_, Union _))
+      | Some (Ctype (_, Pointer _)) ->
           let offset = N.sub addr alloc.base in
           Some (string_of_prefix alloc.prefix ^ " + " ^ N.to_string offset)
-      | Some (Struct0 tag_sym) -> (* TODO: nested structs *)
+      | Some (Ctype (_, Struct tag_sym)) -> (* TODO: nested structs *)
           let offset = N.to_int @@ N.sub addr alloc.base in
           let (offs, _) = offsetsof (Tags.tagDefs ()) tag_sym in
           let rec find = function
@@ -1174,14 +1165,14 @@ module Concrete : Memory = struct
               else
                 find offs
           in find offs
-      | Some (Array0 (ty, _)) ->
+      | Some (Ctype (_, Array (ty, _))) ->
           let offset = N.sub addr alloc.base in
           if N.less offset alloc.size then
             let n = (N.to_int offset) / sizeof ty in
             Some (string_of_prefix alloc.prefix ^ "[" ^ string_of_int n ^ "]")
           else
             None
-      | Some (Atomic0 ty) ->
+      | Some (Ctype (_, Atomic ty)) ->
           aux addr alloc @@ Some ty
     in
     match prov with
@@ -1428,7 +1419,7 @@ module Concrete : Memory = struct
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
-    if not (ctype_equal (Core_ctype.unatomic ty) (Core_ctype.unatomic (typeof mval))) then begin
+    if not (ctype_equal (Ctype ([], AilTypesAux.unatomic ty)) (Ctype ([], AilTypesAux.unatomic (typeof mval)))) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"
@@ -1682,7 +1673,7 @@ module Concrete : Memory = struct
     
     let valid_postcond addr1 addr2 =
       let diff_ty' = match diff_ty with
-        | Core_ctype.Array0 (elem_ty, _) ->
+        | Ctype (_, Array (elem_ty, _)) ->
             elem_ty
         | _ ->
             diff_ty in
@@ -1786,9 +1777,9 @@ module Concrete : Memory = struct
   
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
-    match Core_ctype.unatomic ref_ty with
-      | Void0
-      | Function0 _ ->
+    match AilTypesAux.unatomic ref_ty with
+      | Void
+      | Function _ ->
           fail (MerrOther "called isWellAligned_ptrval on void or a function type")
       | _ ->
           begin match ptrval with
@@ -2348,13 +2339,12 @@ let combine_prov prov1 prov2 =
   (* TODO check *)
   let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
     let loc = Location_ocaml.other "memcpy" in
-    let unsigned_char_ty = Core_ctype.Basic0 ((Integer (Unsigned Ichar))) in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
       if Nat_big_num.less i size_n then
-        load loc unsigned_char_ty (array_shift_ptrval ptrval2 unsigned_char_ty (IV (Prov_none, i))) >>= fun (_, mval) ->
-        store loc unsigned_char_ty false (array_shift_ptrval ptrval1 unsigned_char_ty (IV (Prov_none, i))) mval >>= fun _ ->
+        load loc Ctype.unsigned_char (array_shift_ptrval ptrval2 Ctype.unsigned_char (IV (Prov_none, i))) >>= fun (_, mval) ->
+        store loc Ctype.unsigned_char false (array_shift_ptrval ptrval1 Ctype.unsigned_char (IV (Prov_none, i))) mval >>= fun _ ->
         aux (Nat_big_num.succ i)
       else
         return ptrval1 in
@@ -2363,14 +2353,13 @@ let combine_prov prov1 prov2 =
   
   (* TODO: validate more, but looks good *)
   let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
-    let unsigned_char_ty = Core_ctype.Basic0 ((Integer (Unsigned Ichar))) in
     let rec get_bytes ptrval acc = function
       | 0 ->
           return (List.rev acc)
       | size ->
-          load Location_ocaml.unknown unsigned_char_ty ptrval >>= function
+          load Location_ocaml.unknown Ctype.unsigned_char ptrval >>= function
             | (_, MVinteger (_, (IV (byte_prov, byte_n)))) ->
-                let ptr' = array_shift_ptrval ptrval unsigned_char_ty (IV (Prov_none, Nat_big_num.(succ zero))) in
+                let ptr' = array_shift_ptrval ptrval Ctype.unsigned_char (IV (Prov_none, Nat_big_num.(succ zero))) in
                 get_bytes ptr' (byte_n :: acc) (size-1)
             | _ ->
                 assert false in
@@ -2483,7 +2472,7 @@ let combine_prov prov1 prov2 =
       value: string;
       prov: provenance;
       bytes: AbsByte.t list option;
-      typ: Core_ctype.ctype0 option;
+      typ: ctype option;
     }
 
   type ui_alloc =
@@ -2491,7 +2480,7 @@ let combine_prov prov1 prov2 =
       base: string;
       prefix: Symbol.prefix;
       dyn: bool; (* dynamic memory *)
-      typ: Core_ctype.ctype0;
+      typ: ctype;
       size: int;
       values: ui_value list;
       exposed: bool;
@@ -2507,7 +2496,7 @@ let combine_prov prov1 prov2 =
         prov = Prov_none; bytes = None } in
     let add_path p r = { r with path = p :: r.path } in
     match mval with
-    | MVunspecified (Pointer0 _) ->
+    | MVunspecified (Ctype (_, Pointer _)) ->
       mk_scalar `Unspecptr "unspecified" Prov_none (Some bs)
     | MVunspecified _ ->
       mk_scalar `Unspec "unspecified" Prov_none (Some bs)
@@ -2533,7 +2522,7 @@ let combine_prov prov1 prov2 =
       end
     | MVarray mvals ->
       begin match ty with
-        | Array0 (elem_ty, _) ->
+        | Ctype (_, Array (elem_ty, _)) ->
           let size = sizeof elem_ty in
           let (rev_rows, _, _) = List.fold_left begin fun (acc, i, acc_bs) mval ->
               let row = List.map (add_path (string_of_int i)) @@ mk_ui_values acc_bs elem_ty mval in
@@ -2562,7 +2551,7 @@ let combine_prov prov1 prov2 =
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
   let mk_ui_alloc st id alloc : ui_alloc =
-    let ty = match alloc.ty with Some ty -> ty | None -> Array0 (Basic0 (Integer Char), Some alloc.size) in
+    let ty = match alloc.ty with Some ty -> ty | None -> Ctype ([], Array (Ctype ([], Basic (Integer Char)), Some alloc.size)) in
     let size = N.to_int alloc.size in
     let bs = fetch_bytes st.bytemap alloc.base size in
     let (_, mval, _) = abst (find_overlaping st) st.funptrmap ty bs in

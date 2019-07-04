@@ -4,7 +4,7 @@ include Makefile.common
 
 cerberus: cerberus-concrete libc
 
-all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web absint
+all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web
 
 sibylfs:
 	@make -C sibylfs

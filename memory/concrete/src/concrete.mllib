@@ -26,7 +26,6 @@ Context
 AilSyntax
 GenTypes
 
-Core_ctype
 Core_ctype_aux
 
 Core

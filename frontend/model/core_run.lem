@@ -1,4 +1,4 @@
-open import Pervasives String_extra Utils Core Core_ctype Core_ctype_aux Core_aux Show Show_extra Annot Any
+open import Pervasives String_extra Utils Core Core_ctype_aux Core_aux Show Show_extra Annot Any
 import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
@@ -72,13 +72,13 @@ let call_proc core_extern file psym cvals =
 
 
 
-val update_thread_state: thread_id -> thread_state -> core_state -> core_state
+val update_thread_state: Mem_common.thread_id -> thread_state -> core_state -> core_state
 let update_thread_state tid th_st st =
   let f (parent_tid_opt, _) = (parent_tid_opt, th_st) in
   <| st with thread_states= assoc_adjust f tid st.thread_states |>
 
 
-val spawn_thread: maybe thread_id -> thread_state -> core_state -> State.stateM (thread_id * core_state) core_run_state
+val spawn_thread: maybe Mem_common.thread_id -> thread_state -> core_state -> State.stateM (Mem_common.thread_id * core_state) core_run_state
 let spawn_thread parent_tid_opt th_st st =
   State.modify (fun run_st ->
     let tid = run_st.tid_supply in
@@ -87,7 +87,7 @@ let spawn_thread parent_tid_opt th_st st =
   )
 
 
-val kill_thread: thread_id -> thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
+val kill_thread: Mem_common.thread_id -> Mem_common.thread_id -> set Cmm.aid -> Core.value -> core_state -> core_state
 let kill_thread tid parent_tid aswBefores v st =
   let () = Debug.print_debug 5 [Debug.DB_core_dynamics] (fun () -> "KILLING Thread " ^ show tid ^ " (child of thread " ^ show parent_tid ^ ")") in
   let _ = Set.map (fun aid ->
@@ -180,32 +180,32 @@ type action_request =
                      parameters of request *
                      the new state or a callback *)
   | AllocRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                    Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
+                    Cmm.aid * Mem_common.thread_id * Symbol.prefix * Mem.integer_value * Mem.integer_value *
                     (Mem.pointer_value -> thread_state)
   
   | CreateRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                     Cmm.aid * thread_id * Symbol.prefix * Mem.integer_value * ctype * maybe Mem.mem_value *
+                     Cmm.aid * Mem_common.thread_id * Symbol.prefix * Mem.integer_value * Ctype.ctype * maybe Mem.mem_value *
                      (Mem.pointer_value -> thread_state)
   
   | LoadRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid * 
                    (* the request provide a fresh symbolic name to be used by the concurrency if needed *)
-                   Cmm.aid * thread_id * Cmm.memory_order * ctype * Mem.pointer_value * Symbol.sym *
+                   Cmm.aid * Mem_common.thread_id * Cmm.memory_order * Ctype.ctype * Mem.pointer_value * Symbol.sym *
                    (* the argument of the callback is either a concrete value if the memory model
                       is able to give one right away, or is equal to the symbolic value provided by the
                       present LoadRequest *)
                    (Mem.mem_value -> thread_state)
   
   | StoreRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                    Cmm.aid * thread_id * Cmm.memory_order * ctype * (* is_locking *)bool * Mem.pointer_value * Mem.mem_value *
+                    Cmm.aid * Mem_common.thread_id * Cmm.memory_order * Ctype.ctype * (* is_locking *)bool * Mem.pointer_value * Mem.mem_value *
                     thread_state
   | RMWRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                  Cmm.aid * thread_id * Cmm.memory_order * Cmm.memory_order * ctype * Mem.pointer_value *
+                  Cmm.aid * Mem_common.thread_id * Cmm.memory_order * Cmm.memory_order * Ctype.ctype * Mem.pointer_value *
                   Mem.mem_value * Mem.mem_value * thread_state
   | FenceRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                    Cmm.aid * thread_id * Cmm.memory_order *
+                    Cmm.aid * Mem_common.thread_id * Cmm.memory_order *
                     thread_state
   | KillRequest of Loc.t * set Cmm.aid * set Cmm.aid * set Cmm.aid *
-                   Cmm.aid * thread_id * (* is_dynamic *) bool * Mem.pointer_value * thread_state
+                   Cmm.aid * Mem_common.thread_id * (* is_dynamic *) bool * Mem.pointer_value * thread_state
 
 type fs_oper =
   | FS_MKDIR of string * integer (* path * mode_t *)
@@ -233,7 +233,7 @@ type fs_oper =
   | FS_READDIR of integer (* DIR node *)
   | FS_REWINDDIR of integer (* DIR node *)
   | FS_CLOSEDIR of integer (* DIR node *)
-  | FS_PRINTF of list char (* fmt *) * list (Core_ctype.ctype * Mem.pointer_value) (* args *)
+  | FS_PRINTF of list char (* fmt *) * list (Ctype.ctype * Mem.pointer_value) (* args *)
   | FS_VPRINTF of integer (* fd *) * list char (* fmt *) * integer (* va_list *)
   | FS_VSNPRINTF of Mem.pointer_value * Mem.integer_value * list char * integer (* NOTE: this is arguably not a fs operation *)
 
@@ -244,10 +244,10 @@ type core_tau_step_kind =
 
 type core_step =
   | Step_action_request of string * core_runM action_request
-  | Step_memop_request of Mem_common.memop * list Core.value * thread_id * (Core.value -> thread_state)
+  | Step_memop_request of Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
   | Step_tau of string * core_tau_step_kind * core_runM thread_state
   | Step_eval of string * core_runM thread_state
-  | Step_thread_done of thread_id * Core.value
+  | Step_thread_done of Mem_common.thread_id * Core.value
 (*  | Step_nd of string * list core_step *)
   | Step_blocked
   | Step_error of string
@@ -262,8 +262,8 @@ type core_step =
 
 
 val core_action_step:
-    list annot -> map Symbol.sym Symbol.sym -> Mem.mem_state -> Core.file core_run_annotation -> thread_id ->
-    (maybe thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
+    list annot -> map Symbol.sym Symbol.sym -> Mem.mem_state -> Core.file core_run_annotation -> Mem_common.thread_id ->
+    (maybe Mem_common.thread_id * thread_state) -> Core.paction core_run_annotation -> core_step
 let core_action_step arena_annots core_extern mem_st file current_tid (parent_tid_opt, th_st) (Paction p (Action loc annots act)) =
   let sb_before =
     (* filter out actions from other threads *)
@@ -368,7 +368,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                             | Just cval3 ->
                                 match (cval1, cval2) with
                                   | (Vobject (OVinteger ival), Vctype ty) ->
-                                match memValueFromValue (Core_ctype.unatomic ty) cval3 with
+                                match memValueFromValue (Ctype.Ctype [] (AilTypesAux.unatomic ty)) cval3 with
                                   | Just mem_val ->
                                       Step_action_request "CreateRequest" (
                                         E.fresh_action_id >>= fun create_aid ->
@@ -383,7 +383,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                                       )
                                   | Nothing ->
                                       Step_error ((Loc.stringFromLocation loc) ^ "the value of a create_readonly(" ^
-                                                  Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                                                  Pp.stringFromCore_ctype (Ctype.Ctype [] (AilTypesAux.unatomic ty)) ^
                                                   ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval3)
                                 end
                                   | _ ->
@@ -512,7 +512,7 @@ KKK
                     )
 *)
                 | _ ->
-                  match memValueFromValue (Core_ctype.unatomic ty) cval with
+                  match memValueFromValue (Ctype.Ctype [] (AilTypesAux.unatomic ty)) cval with
                     | Just mem_val ->
                         Step_action_request "StoreRequest" (
                           E.fresh_action_id >>= fun store_aid ->
@@ -527,7 +527,7 @@ KKK
                           )
                         )
                     | Nothing ->
-                        Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Core_ctype.unatomic ty) ^
+                        Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Ctype.Ctype [] (AilTypesAux.unatomic ty)) ^
                                     ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
                   end
               end
@@ -732,14 +732,14 @@ KKK
 
 (*
   | FenceRequest of Loc.t * set action_id * set action_id * set action_id *
-                    action_id * thread_id * Cmm.memory_order * ctype *
+                    action_id * Mem_common.thread_id * Cmm.memory_order * ctype *
                     thread_state
 *)
   end
 
 
 
-val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym -> map Symbol.sym Core.object_value -> thread_id -> (maybe thread_id * thread_state) -> list core_step
+val core_thread_step2: Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym -> map Symbol.sym Core.object_value -> Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) -> list core_step
 let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (parent_tid_opt, th_st) =
   let one z = [z] in
   let Expr arena_annots expr_ = th_st.arena in
@@ -909,7 +909,7 @@ BEFORE EVAL_PEXPR2
                         match Map.lookup psym file.funinfo with
                           | Just (_, param_tys, _, _) ->
                             List.map (fun (ty, cval) ->
-                              match Core_aux.memValueFromValue (Core_ctype.Pointer Ctype.no_qualifiers ty) cval with
+                              match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
                                 | Just mval -> mval
                                 | Nothing -> error "Eccall memvalue"
                               end) $ List.zip (List.map snd param_tys) cvals
@@ -1587,7 +1587,7 @@ BEFORE EVAL_PEXPR2
           List.map (fun e -> <|
             arena= e;
             stack= push_empty_continuation Nothing empty_stack;
-            errno= Mem.null_ptrval Core_ctype.signed_int; (* TODO: allocate errno (do not store 0) *)
+            errno= Mem.null_ptrval Ctype.signed_int; (* TODO: allocate errno (do not store 0) *)
             current_loc= th_st.current_loc;
             exec_loc= ELoc_normal [];
             env= th_st.env;

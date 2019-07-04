@@ -1,4 +1,4 @@
-open Core_ctype
+open Ctype
 
 
 module P = PPrint
@@ -15,7 +15,6 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 let pp_symbol  a = !^ (Pp_symbol.to_string_pretty a)
 
 let pp_integer_base_ctype ibty =
-  let open Ctype in
   !^ (match ibty with
     | Ichar          -> "ichar"
     | Short          -> "short"
@@ -30,7 +29,6 @@ let pp_integer_base_ctype ibty =
 
 
 let pp_integer_ctype ity =
-  let open Ctype in
   match ity with
     | Char             -> !^ "char"
     | Bool             -> !^ "_Bool"
@@ -46,7 +44,6 @@ let pp_integer_ctype ity =
     | Ptrdiff_t        -> !^ "ptrdiff_t"
 
 let pp_floating_ctype fty =
-  let open Ctype in
   match fty with
     | RealFloating Float ->
         !^ "float"
@@ -57,35 +54,33 @@ let pp_floating_ctype fty =
 
 
 let pp_basic_ctype bty =
-  let open Ctype in
   match bty with
     | Integer ity -> pp_integer_ctype ity
     | Floating fty -> pp_floating_ctype fty
 
-let rec pp_ctype = function
+let rec pp_ctype (Ctype (_, ty)) =
+  match ty with
 (*   let pp_mems = P.concat_map (fun (name, mbr) -> (pp_member mbr) name) in *)
 
-  | Void0 ->
+  | Void ->
       !^ "void"
-  | Basic0 bty ->
+  | Basic bty ->
       pp_basic_ctype bty
-  | Array0 (elem_ty, n_opt) ->
+  | Array (elem_ty, n_opt) ->
       pp_ctype elem_ty ^^ P.brackets (P.optional Pp_ail.pp_integer n_opt)
-  | Function0 ((ret_qs, ret_ty), args_tys, is_variadic) ->
+  | Function (_, (ret_qs, ret_ty), args_tys, is_variadic) ->
         pp_ctype (*TODO: ret_qs*) ret_ty ^^^ P.parens (
-          comma_list (fun (qs, ty) -> pp_ctype (*TODO: qs*) ty) args_tys ^^
+          comma_list (fun (qs, ty, _) -> pp_ctype (*TODO: qs*) ty) args_tys ^^
           (if is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
         )
-  | Pointer0 (qs, ref_ty) ->
+  | Pointer (qs, ref_ty) ->
       pp_ctype (* TODO:qs*) ref_ty ^^ P.star
-  | Atomic0 atom_ty ->
+  | Atomic atom_ty ->
       !^ "_Atomic" ^^^ P.parens (pp_ctype atom_ty)
-  | Struct0 sym ->
+  | Struct sym ->
       !^ "struct" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
-  | Union0 sym ->
+  | Union sym ->
       !^ "union" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
-  | Builtin str ->
-      !^ str
 
 
 (*

@@ -914,7 +914,7 @@ module MemoryModelCommon = struct
        *)
       let range_assertions =
         begin match ctype_of_bmcaction action with
-        | Basic0 (Integer _) ->
+        | Ctype (_, Basic (Integer _)) ->
             assert_initial_range
                 (ctype_of_bmcaction action)
                 (LoadedInteger.get_specified_value

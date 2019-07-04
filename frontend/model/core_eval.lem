@@ -7,7 +7,7 @@ import Mem
 import AilTypesAux
 import Loc Symbol Exception_undefined Pp
 
-import Core_ctype Core_ctype_aux Core_aux
+import Ctype Core_ctype_aux Core_aux
 module Caux = Core_aux
 
 module EU  = Exception_undefined
@@ -475,7 +475,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               (* NOTE: check if it is a procedure pointer *)
               match Map.lookup sym file.funs with
                 | Just (Proc _ _ _ _) ->
-                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval Core_ctype.Void))))
+                    EU.return (PEval (Vobject (OVpointer (Mem.null_ptrval (Ctype.Ctype [] Ctype.Void)))))
                 | _ ->
                     EU.fail (Unresolved_symbol loc sym)
               end
@@ -524,16 +524,16 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
                     EU.return (PEval (Vobject (OVarray lvals)))
               end
           | (Civmax, Just [Vctype ty]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
                     error ("Core_eval ivmax" ^ (* DEBUG *)
                            Pp.stringFromCore_expr (Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval (Vctype ty)))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civmin, Just [Vctype ty]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
                     error ("Core_eval ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
@@ -544,29 +544,29 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | (Civalignof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
           | (CivCOMPL, Just [Vctype ty; Vobject (OVinteger ival)]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_complement_ival ity ival)))
                 | _ ->
                     error "Core_Eval ivCOMPL, not (is_integer ty)"
               end
           | (CivAND, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_and_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivAND, not (is_integer ty)"
               end
           | (CivOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_or_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivOR, not (is_integer ty)"
               end
           | (CivXOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (Ctype.Integer ity)) ->
+              match AilTypesAux.unatomic ty with
+                | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_xor_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivXOR, not (is_integer ty)"
@@ -578,7 +578,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
 
           | (Cfvfromint, Just [Vobject (OVinteger ival)]) ->
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
-          | (Civfromfloat, Just [Vctype (Core_ctype.Basic (Ctype.Integer ity)); Vobject (OVfloating fval)]) ->
+          | (Civfromfloat, Just [Vctype (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
           
           | (_, Just cvals) ->
@@ -689,13 +689,13 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
                 match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
-                  | Core_ctype.StructDef membrs ->
-                      let memb_ty = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                  | Ctype.StructDef membrs ->
+                      let (_, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
                       (memb_ident, memb_ty, mval)
-                  | Core_ctype.UnionDef _ ->
+                  | Ctype.UnionDef _ ->
                       error "Core_eval.step_eval_pexpr, PEstruct found a UnionDef"
                 end
               ) (List.zip idents cvals) in
@@ -711,11 +711,11 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         match Caux.valueFromPexpr pe' with
           | Just cval ->
               match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
-                | Core_ctype.UnionDef membrs ->
-                    let memb_ty = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                | Ctype.UnionDef membrs ->
+                    let (_, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
                     let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
                     EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
-                | Core_ctype.StructDef _ ->
+                | Ctype.StructDef _ ->
                       error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
                 end
           | Nothing ->
@@ -870,7 +870,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_scalar (Caux.unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_scalar ty then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_scalar: the operand should be a ctype"
           | Nothing ->
@@ -880,7 +880,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_integer (Caux.unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_integer ty then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_integer: the operand should be a ctype"
           | Nothing ->
@@ -890,7 +890,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_signed_integer_type (Caux.unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_signed_integer_type ty then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_signed: the operand should be a ctype"
           | Nothing ->
@@ -900,7 +900,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
         self pe >>= fun pe' ->
         match Caux.valueFromPexpr pe' with
           | Just (Vctype ty) ->
-              EU.return $ PEval (if AilTypesAux.is_unsigned_integer_type (Caux.unproj_ctype ty) then Vtrue else Vfalse)
+              EU.return $ PEval (if AilTypesAux.is_unsigned_integer_type ty then Vtrue else Vfalse)
           | Just _ ->
               EU.fail $ Illformed_program "PEis_unsigned: the operand should be a ctype"
           | Nothing ->
@@ -915,8 +915,8 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | (Just (Vctype ty1), Just (Vctype ty2)) ->
               let are_compatible =
                 AilTypesAux.are_compatible
-                  (Ctype.no_qualifiers, Caux.unproj_ctype ty1)
-                  (Ctype.no_qualifiers, Caux.unproj_ctype ty2) in
+                  (Ctype.no_qualifiers, ty1)
+                  (Ctype.no_qualifiers, ty2) in
               EU.return $ PEval (if are_compatible then Vtrue else Vfalse)
           | (_, _) ->
               EU.fail $ Illformed_program "PEare_compatible: the operands should be ctypes"

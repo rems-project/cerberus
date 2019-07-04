@@ -5,14 +5,14 @@ open import Utils Errors Loc
 import Exception Pp
 
 open import Core Core_aux
-import Mem_common Core_ctype Core_ctype_aux Implementation_
+import Mem_common Ctype Core_ctype_aux Implementation_
 
 open import Core_typing_aux
 
 module I = Implementation_
 
 module Cty = struct
-  include Core_ctype
+  include Ctype
   include Core_ctype_aux
 end
 
@@ -565,8 +565,8 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         E.return (Pexpr annot (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
     | PEmember_shift pe tag_sym memb_ident ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.StructDef z -> z
-          | Core_ctype.UnionDef  z -> z
+          | Cty.StructDef z -> z
+          | Cty.UnionDef  z -> z
         end in
         typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
           match List.lookup memb_ident xs with
@@ -624,14 +624,14 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         end
     | PEstruct tag_sym fields ->
         match fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.UnionDef _ ->
+          | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Core_ctype.StructDef xs ->
+          | Cty.StructDef xs ->
               E.mapM (fun (ident, pe) ->
                 match List.lookup ident xs with
                   | Nothing ->
                       E.fail loc (InvalidMember tag_sym ident)
-                  | Just ty ->
+                  | Just (_, ty) ->
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
@@ -649,13 +649,13 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         end
     | PEunion tag_sym ident pe ->
         match fromJust "Core_typing.infer_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.StructDef _ ->
+          | Cty.StructDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Core_ctype.UnionDef xs ->
+          | Cty.UnionDef xs ->
               match List.lookup ident xs with
                 | Nothing ->
                     E.fail loc (InvalidMember tag_sym ident)
-                | Just ty ->
+                | Just (_, ty) ->
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
@@ -673,15 +673,15 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
                                          InferredType_boolean; InferredType_boolean]) (PEcfunction pe')
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.StructDef xs ->
+          | Cty.StructDef xs ->
               xs
-          | Core_ctype.UnionDef xs ->
+          | Cty.UnionDef xs ->
               xs
         end in
         match List.lookup memb_ident xs with
           | Nothing ->
               E.fail loc (InvalidMember tag_sym memb_ident)
-          | Just ty ->
+          | Just (_, ty) ->
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
@@ -906,8 +906,8 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                        <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2)
     | PEmember_shift pe tag_sym memb_ident ->
           let xs = match fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
-            | Core_ctype.StructDef z -> z
-            | Core_ctype.UnionDef  z -> z
+            | Cty.StructDef z -> z
+            | Cty.UnionDef  z -> z
           end in
           match List.lookup memb_ident xs with
             | Nothing ->
@@ -969,14 +969,14 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEstruct tag_sym fields ->
         guard_match loc "struct()" bTy (BTy_object (OTy_struct tag_sym)) >>
         match fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.UnionDef _ ->
+          | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Core_ctype.StructDef xs ->
+          | Cty.StructDef xs ->
               E.mapM (fun (ident, pe) ->
                 match List.lookup ident xs with
                   | Nothing ->
                       E.fail loc (InvalidMember tag_sym ident)
-                  | Just ty ->
+                  | Just (_, ty) ->
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
@@ -992,13 +992,13 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEunion tag_sym ident pe ->
         guard_match loc "union()" bTy (BTy_object (OTy_union tag_sym)) >>
         match fromJust "Core_typing.typecheck_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.StructDef _ ->
+          | Cty.StructDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Core_ctype.UnionDef xs ->
+          | Cty.UnionDef xs ->
               match List.lookup ident xs with
                 | Nothing ->
                     E.fail loc (InvalidMember tag_sym ident)
-                | Just ty ->
+                | Just (_, ty) ->
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
@@ -1014,15 +1014,15 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         (PEcfunction <$> typecheck_pexpr tagDefs env (BTy_loaded OTy_pointer) pe)
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
-          | Core_ctype.StructDef xs ->
+          | Cty.StructDef xs ->
               xs
-          | Core_ctype.UnionDef xs ->
+          | Cty.UnionDef xs ->
               xs
         end in
         match List.lookup memb_ident xs with
           | Nothing ->
               E.fail loc (InvalidMember tag_sym memb_ident)
-          | Just ty ->
+          | Just (_, ty) ->
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
@@ -1536,7 +1536,7 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
         infer_pexpr tagDefs env pe_ty >>= export_pexpr >>= fun pe_ty' ->
         infer_pexpr tagDefs env pe    >>= export_pexpr >>= fun (Pexpr _ bTy _ as pe') ->
         match (pe_ty, bTy) with
-          | (Pexpr _ _ (PEval (Vctype (Cty.Pointer _ (Cty.Function (qs, ty) nparams isVariadic))))
+          | (Pexpr _ _ (PEval (Vctype (Cty.Ctype _ (Cty.Pointer _ (Cty.Ctype _ (Cty.Function _ (qs, ty) nparams isVariadic))))))
             , BTy_loaded OTy_pointer) ->
               begin
                 if isVariadic then

@@ -69,7 +69,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
           (* TODO/NOTE: this should correspond to constants from array sizes and such *)
           Translation_aux.ctype_of a_e
     end in
-    let oTy = force_core_object_type_of_ctype (Core_aux.proj_ctype ty) in
+    let oTy = force_core_object_type_of_ctype ty in
     TranslateEff.bind (translate_expression ECTX_other ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib (Map.empty: C.core_tag_definitions) a_e) (fun core_e                       ->
     TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_loaded oTy))                           (fun (_, e_sym_pat  , e_sym_pe  ) ->
     TranslateEff.bind (TranslateEff.wrapped_fresh_symbol (C.BTy_object oTy))                           (fun (_, obj_sym_pat, obj_sym_pe) ->
@@ -117,7 +117,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
             Core_run.spawn_thread Nothing <|
               Core_run.arena=  Core_run_aux.convert_expr core_expr;
               Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
-              Core_run.errno=  Mem.null_ptrval Core_ctype.signed_int;
+              Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
               Core_run.env=    [Map.empty];
               Core_run.current_loc= loc;
               Core_run.exec_loc= Core_run.ELoc_normal []; (* TODO: maybe create a new variant *)

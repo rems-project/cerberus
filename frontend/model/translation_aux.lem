@@ -1,10 +1,9 @@
 open import Pervasives Utils Translation_effect Symbol Show Show_extra Ctype
-import Core Core_aux Core_ctype
+import Core Core_aux
 import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
-module Cty  = Core_ctype
 module Caux = Core_aux
 
 

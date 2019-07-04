@@ -3,7 +3,6 @@ open import Pervasives Num_extra Ctype
 open import Utils
 open import AilTypesAux 
 
-open import Core_ctype
 import Core_ctype_aux
 import Implementation_
 
@@ -56,7 +55,7 @@ val stringFromPointer_value: impl_pointer_value -> string
 val stringFromMem_value: impl_mem_value -> string
 val stringFromInteger_value: impl_integer_value -> string
 val stringFromShift_path: shift_path -> string (* DEBUG *)
-val stringFromCore_ctype:  Core_ctype.ctype -> string
+val stringFromCore_ctype:  ctype -> string
 
 declare ocaml target_rep function stringFromPointer_value = `String_defacto_memory.string_of_pointer_value`
 declare ocaml target_rep function stringFromMem_value = `String_defacto_memory.string_of_mem_value`
@@ -289,86 +288,82 @@ let rec simplify_integer_value_base ival_ =
             | Nothing ->
                 Right ival_
           end
-      | IVsizeof ty ->
+      | IVsizeof (Ctype _ ty) ->
           match ty with
-            | Core_ctype.Void ->
+            | Void ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Void"
-            | Core_ctype.Basic (Integer ity) ->
+            | Basic (Integer ity) ->
                 match Nothing (* Implementation_.sizeof_ity ity*) with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
-            | Core_ctype.Basic (Floating fty) ->
+            | Basic (Floating fty) ->
                 match Implementation_.sizeof_fty fty with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
-            | Core_ctype.Array elem_ty Nothing ->
+            | Array elem_ty Nothing ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Array Nothing"
-            | Core_ctype.Array elem_ty (Just n) ->
+            | Array elem_ty (Just n) ->
                 simplify_integer_value_base (IVop IntMul [IVsizeof elem_ty; IVconcrete n])
-            | Core_ctype.Function _ _ _ ->
+            | Function _ _ _ _ ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Function"
-            | Core_ctype.Pointer _ ref_ty ->
+            | Pointer _ ref_ty ->
                 Left 8
-            | Core_ctype.Atomic atom_ty ->
+            | Atomic atom_ty ->
                 simplify_integer_value_base (IVsizeof atom_ty)
-            | Core_ctype.Struct tag_sym ->
+            | Struct tag_sym ->
                 simplify_integer_value_base begin
-                  List.foldl (fun acc (ident, ty) ->
+                  List.foldl (fun acc (ident, (_, ty)) ->
                     IVop IntAdd [ lifted_self (IVsizeof ty);
                                   IVop IntAdd [IVpadding tag_sym ident; acc] ]
                   ) (IVconcrete 0) (Core_ctype_aux.get_structDef tag_sym)
                 end
              
             (* TOOD: move the code from mem_simplify here *)
-            | Core_ctype.Union tag_sym ->
+            | Union tag_sym ->
                 Right ival_ (* error "TODO simplify_integer_value: IVsizeof Union" *)
-            | Core_ctype.Builtin str ->
-                Right ival_ (* error "TODO simplify_integer_value: IVsizeof Builtin" *)
           end
-      | IValignof ty ->
+      | IValignof (Ctype _ ty) ->
           match ty with
-            | Core_ctype.Void ->
+            | Void ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Void"
-            | Core_ctype.Basic (Integer ity) ->
+            | Basic (Integer ity) ->
                 match Implementation_.alignof_ity ity with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
-            | Core_ctype.Basic (Floating fty) ->
+            | Basic (Floating fty) ->
                 match Implementation_.alignof_fty fty with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
-            | Core_ctype.Array elem_ty _ ->
+            | Array elem_ty _ ->
                 simplify_integer_value_base (IValignof elem_ty)
-            | Core_ctype.Function _ _ _ ->
+            | Function _ _ _ _ ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Function"
-            | Core_ctype.Pointer _ ref_ty ->
+            | Pointer _ ref_ty ->
                 Left 8
-            | Core_ctype.Atomic atom_ty ->
+            | Atomic atom_ty ->
                 simplify_integer_value_base (IValignof atom_ty)
-            | Core_ctype.Struct tag_sym ->
+            | Struct tag_sym ->
                 (* TODO *)
                 Right ival_
-            | Core_ctype.Union tag_sym ->
+            | Union tag_sym ->
                 error "TODO simplify_integer_value: IValignof Union"
-            | Core_ctype.Builtin str ->
-                error "TODO simplify_integer_value: IValignof Builtin"
           end
       | IVoffsetof _ _ ->
           Right ival_

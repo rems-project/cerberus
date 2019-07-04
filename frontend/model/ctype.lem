@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Loc
-import Symbol Annot
+open import Pervasives Loc Show
+import Symbol Annot Cabs (* TODO: it would be nice if we can get rid of Cabs *)
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -80,12 +80,19 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
 and ctype =
   Ctype of list Annot.annot * ctype_
 
+type struct_tag = Symbol.sym
+type union_tag  = Symbol.sym
+type member_id  = Symbol.sym
 
 instance (Located ctype)
   let locOf cty =
     let (Ctype annots _) = cty in
     Annot.get_loc_ annots
 end
+
+type tag_definition =
+  | StructDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
+  | UnionDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
 
 (** Type class instances *)
 
@@ -201,7 +208,6 @@ let qualifiersEqual qs1 qs2 =
      qs1.const    = qs2.const
   && qs1.restrict = qs2.restrict
   && qs1.volatile = qs2.volatile
-(*  && qs1.atomic   = qs2.atomic *)
 
 instance (Eq qualifiers)
   let (=)  = qualifiersEqual
@@ -355,6 +361,20 @@ instance (SetType qualifiers)
                    (qs2.const, qs2.restrict, qs2.volatile)
 end
 
+
+instance (Show tag_definition)
+  let show def =
+    let string_of_identifiers tag_defs =
+      List.foldl (fun acc (Cabs.CabsIdentifier _ str, _) ->
+        acc ^ str ^ "; "
+      ) "[" tag_defs ^ "]"
+    in
+    match def with
+      | StructDef tag_defs -> string_of_identifiers tag_defs
+      | UnionDef tag_defs -> string_of_identifiers tag_defs
+    end
+end
+
 (** Some useful functions *)
 
 val proj_ctype_: ctype -> ctype_
@@ -375,6 +395,70 @@ let no_qualifiers = <|
 |>
 
 (** Some standard types *)
+
+val void: ctype
+let void =
+  Ctype [] Void
+
+val char: ctype
+let char =
+  Ctype [] (Basic (Integer Char))
+
+val signed_char: ctype
+let signed_char =
+  Ctype [] (Basic (Integer (Signed Ichar)))
+
+val signed_short: ctype
+let signed_short =
+  Ctype [] (Basic (Integer (Signed Short)))
+
+val signed_int: ctype
+let signed_int =
+  Ctype [] (Basic (Integer (Signed Int_)))
+
+val signed_long: ctype
+let signed_long =
+  Ctype [] (Basic (Integer (Signed Long)))
+
+val signed_long_long: ctype
+let signed_long_long =
+  Ctype [] (Basic (Integer (Signed LongLong)))
+
+val intptr_t: ctype
+let intptr_t =
+  Ctype [] (Basic (Integer (Signed Intptr_t)))
+
+val intmax_t: ctype
+let intmax_t =
+  Ctype [] (Basic (Integer (Signed Intmax_t)))
+
+val unsigned_char: ctype
+let unsigned_char =
+  Ctype [] (Basic (Integer (Unsigned (Ichar))))
+
+val unsigned_short: ctype
+let unsigned_short =
+  Ctype [] (Basic (Integer (Unsigned Short)))
+
+val unsigned_int: ctype
+let unsigned_int =
+  Ctype [] (Basic (Integer (Unsigned Int_)))
+
+val unsigned_long: ctype
+let unsigned_long =
+  Ctype [] (Basic (Integer (Unsigned Long)))
+
+val unsigned_long_long: ctype
+let unsigned_long_long =
+  Ctype [] (Basic (Integer (Unsigned LongLong)))
+
+val uintptr_t: ctype
+let uintptr_t =
+  Ctype [] (Basic (Integer (Unsigned Intptr_t)))
+
+val uintmax_t: ctype
+let uintmax_t =
+  Ctype [] (Basic (Integer (Unsigned Intmax_t)))
 
 val char16_t: ctype
 let char16_t =

@@ -195,6 +195,7 @@ static char *fourbyte_strstr(const unsigned char *h, const unsigned char *n)
   return *h ? (char *)h-3 : (char*)0;
 }
 
+/*
 static char *strtok_p;
 char *strtok(char *restrict s, const char *restrict sep)
 {
@@ -206,6 +207,7 @@ char *strtok(char *restrict s, const char *restrict sep)
   else strtok_p = 0;
   return s;
 }
+*/
 
 static char *twoway_strstr(const unsigned char *h, const unsigned char *n)
 {

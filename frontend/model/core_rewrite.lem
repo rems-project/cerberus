@@ -1,7 +1,7 @@
 open import Pervasives
 
-open import Utils Core Core_aux Core_ctype
-import Symbol Mem Ctype
+open import Utils Core Core_aux Ctype
+import Symbol Mem
 
 import Pp
 
@@ -644,7 +644,7 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
 (* TODO: very quick'n'dirty *)
 (* remove call to conv_int obviously not doing anything (using §5.2.4.2.1) *)
 val in_minimal_range: ctype -> integer -> bool
-let in_minimal_range ty n =
+let in_minimal_range (Ctype _ ty) n =
   match ty with
     | Basic (Ctype.Integer Ctype.Char) ->
         false (* TODO: because we don't use char is signed or unsigned *)

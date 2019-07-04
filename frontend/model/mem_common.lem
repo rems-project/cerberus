@@ -5,7 +5,7 @@ import Undefined
 
 open import Nondeterminism
 
-
+type thread_id = nat
 
 type access_kind =
   | LoadAccess

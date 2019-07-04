@@ -17,11 +17,11 @@ SOURCE_prelude=\
 SOURCE_cabs=\
   cabs.lem \
   undefined.lem \
-  constraint.lem
+  constraint.lem \
+  ctype.lem
 
 SOURCE_ail=\
   Common.lem \
-  AilTypes.lem \
   TypingError.lem \
   ErrorMonad.lem \
   Context.lem \
@@ -29,7 +29,6 @@ SOURCE_ail=\
   GenTypes.lem
 
 SOURCE_core_ctype=\
-  core_ctype.lem \
   core_ctype_aux.lem
 
 SOURCE_core=\

@@ -2,7 +2,7 @@ open Bmc_globals
 open Bmc_sorts
 open Bmc_utils
 
-open AilTypes
+open Ctype
 open Core
 open Impl_mem
 open Printf
@@ -19,21 +19,21 @@ let assert_memory_mode_c () =
   if !!bmc_conf.memory_mode <> MemoryMode_C then
     failwith "Error: C memory model only, please change model."
 
-let is_integer_type (ctype: Core_ctype.ctype0) =
+let is_integer_type (ctype: ctype) =
   match ctype with
-  | Basic0 (Integer _) -> true
+  | Ctype (_, Basic (Integer _)) -> true
   | _ -> false
 
-let is_pointer_type (ctype: Core_ctype.ctype0) =
+let is_pointer_type (ctype: ctype) =
   match ctype with
-  | Pointer0 (_,Basic0 (Integer _)) -> true
+  | Ctype (_, Pointer (_, Ctype (_, Basic (Integer _)))) -> true
   | _ -> false
 
 
 
 (* =========== BmcZ3Sort: Z3 representation of Ctypes =========== *)
 type bmcz3sort =
-  | CaseSortBase of Core_ctype.ctype0 * Sort.sort
+  | CaseSortBase of ctype * Sort.sort
   | CaseSortList of bmcz3sort list
 
 let rec bmcz3sort_size (sort: bmcz3sort) =
@@ -42,80 +42,62 @@ let rec bmcz3sort_size (sort: bmcz3sort) =
   | CaseSortList sortlist ->
       List.fold_left (fun x y -> x + (bmcz3sort_size y)) 0 sortlist
 
-let rec flatten_bmcz3sort (l: bmcz3sort): (Core_ctype.ctype0 * Sort.sort) list =
+let rec flatten_bmcz3sort (l: bmcz3sort): (ctype * Sort.sort) list =
   match l with
   | CaseSortBase (expr, sort) -> [(expr, sort)]
   | CaseSortList ss -> List.concat (List.map flatten_bmcz3sort ss)
 
-let rec ailctype_to_ctype (Ctype (_, ty): AilTypes.ctype)
-                          : Core_ctype.ctype0 =
+let rec base_ctype (Ctype (_, ty) as cty) : ctype =
   match ty with
-  | Void -> Void0
-  | Basic bty -> Basic0 bty
-  | Array (cty, n) -> Array0 (ailctype_to_ctype cty, n)
-  | Function (_, (q,ty1), args, variadic) ->
-      Function0 ((q, ailctype_to_ctype ty1),
-                 List.map (fun (q,ty1,_) -> (q, ailctype_to_ctype ty1)) args,
-                 variadic)
-  | Pointer (v1,v2) -> Pointer0 (v1,ailctype_to_ctype v2)
-  | Atomic cty -> Atomic0 (ailctype_to_ctype cty)
-  | Struct v -> Struct0 v
-  | Union v ->  Union0 v
-
-let rec base_ctype (ty: Core_ctype.ctype0) : Core_ctype.ctype0 =
-  match ty with
-  | Void0 -> assert false
-  | Basic0 _ -> ty
-  | Array0 (ty2, _) ->
+  | Void -> assert false
+  | Basic _ -> cty
+  | Array (ty2, _) ->
       base_ctype ty2
-  | Function0 _ -> assert false
-  | Pointer0 _ -> ty
-  | Atomic0 ty2 ->
+  | Function _ -> assert false
+  | Pointer _ -> cty
+  | Atomic ty2 ->
       base_ctype ty2
-  | Struct0 _ ->
-      ty
-  | Union0 _ ->
-      ty
-  | Builtin _ -> ty
+  | Struct _ ->
+      cty
+  | Union _ ->
+      cty
 
-let rec ctype_to_bmcz3sort (ty  : Core_ctype.ctype0)
+let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
                            (file: unit typed_file)
                            : bmcz3sort =
   match ty with
-  | Void0     -> assert false
-  | Basic0(Integer i) ->
-      CaseSortBase (ty, LoadedInteger.mk_sort)
-  | Basic0(Floating _) ->
+  | Void     -> assert false
+  | Basic(Integer i) ->
+      CaseSortBase (cty, LoadedInteger.mk_sort)
+  | Basic(Floating _) ->
       failwith "Error: floats are not supported."
-  | Array0(ty2, Some n) ->
+  | Array(ty2, Some n) ->
       (* TODO *)
       let sort = ctype_to_bmcz3sort ty2 file in
       CaseSortList (repeat_n (Nat_big_num.to_int n) sort)
-  | Array0(_, None) ->
+  | Array(_, None) ->
       assert false
-  | Function0 _ -> assert false
-  | Pointer0 _ ->
-      CaseSortBase (ty, LoadedPointer.mk_sort)
-  | Atomic0 (Basic0 _ as _ty) (* fall through *)
-  | Atomic0 (Pointer0 _ as _ty) ->
+  | Function _ -> assert false
+  | Pointer _ ->
+      CaseSortBase (cty, LoadedPointer.mk_sort)
+  | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
+  | Atomic (Ctype (_, Pointer _) as _ty) ->
       begin
       match ctype_to_bmcz3sort _ty file with
-      | CaseSortBase(_, sort) -> CaseSortBase (Atomic0 _ty, sort)
+        | CaseSortBase(_, sort) -> CaseSortBase (Ctype ([], Atomic _ty), sort)
       | _ -> assert false
       end
-  | Atomic0 _ ->
+  | Atomic _ ->
       assert false
-  | Struct0 sym ->
+  | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef memlist) ->
-          CaseSortList (List.map (fun (_, ty) -> ctype_to_bmcz3sort ty file)
+          CaseSortList (List.map (fun (_, (_, ty)) -> ctype_to_bmcz3sort ty file)
                                  memlist)
       | _ -> assert false
       end
-  | Union0 _ ->
+  | Union _ ->
     failwith "Error: unions are not supported."
-  | Builtin _ ->
-    assert false
 
 
   (*
@@ -134,7 +116,7 @@ struct_to_sort (sym, memlist_def) file  =
 
 
 
-let size_of_ctype (ty: Core_ctype.ctype0)
+let size_of_ctype (ty: ctype)
                   (file: unit typed_file) =
   bmcz3sort_size (ctype_to_bmcz3sort ty file)
 
@@ -192,9 +174,9 @@ let value_to_z3 (value: value) (file: unit typed_file) : Expr.expr =
   | Vloaded (LVunspecified ctype) ->
       begin
       match ctype with
-      | Basic0 (Integer _) ->
+      | Ctype (_, Basic (Integer _)) ->
           LoadedInteger.mk_unspecified (CtypeSort.mk_expr ctype)
-      | Pointer0 (_, Basic0 (Integer _)) ->
+      | Ctype (_, Pointer (_, Ctype (_, Basic (Integer _)))) ->
           LoadedPointer.mk_unspecified (CtypeSort.mk_expr ctype)
       | _ ->
           assert false
@@ -441,7 +423,7 @@ module ImplFunctions = struct
 
   (* ---- Helper functions ---- *)
   let integer_range (impl: Implementation.implementation)
-                    (ity : AilTypes.integerType) =
+                    (ity : Ctype.integerType) =
     let prec = impl.impl_precision ity in
     if impl.impl_signed ity then
       let prec_minus_one = prec - 1 in
@@ -466,15 +448,15 @@ module ImplFunctions = struct
                @ unsigned_ibt_list
                @ [Char; Bool; Size_t; Ptrdiff_t]
 
-  let ity_to_ctype (ity: AilTypes.integerType) : Core_ctype.ctype0 =
-    Core_ctype.Basic0 (Integer ity)
+  let ity_to_ctype (ity: Ctype.integerType) : ctype =
+    Ctype ([], Basic (Integer ity))
 
 
   (* ---- HELPER MAP MAKING FUNCTION ---- *)
   let mk_ctype_map (name : string)
-                   (types: Core_ctype.ctype0 list)
+                   (types: ctype list)
                    (sort : Sort.sort)
-                   : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+                   : (ctype, Expr.expr) Pmap.map =
     List.fold_left (fun acc ctype ->
       let ctype_expr = CtypeSort.mk_expr ctype in
       let expr = mk_fresh_const
@@ -485,25 +467,25 @@ module ImplFunctions = struct
 
 
   (* TODO: massive code duplication *)
-  let ivmin_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let ivmin_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "ivmin" (List.map ity_to_ctype ity_list) integer_sort
 
-  let ivmax_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let ivmax_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "ivmax" (List.map ity_to_ctype ity_list) integer_sort
 
 
-  let sizeof_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let sizeof_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "sizeof" (List.map ity_to_ctype ity_list) integer_sort
 
-  let is_unsigned_map : (Core_ctype.ctype0, Expr.expr) Pmap.map =
+  let is_unsigned_map : (ctype, Expr.expr) Pmap.map =
     mk_ctype_map "is_unsigned" (List.map ity_to_ctype ity_list)
                                boolean_sort
   (* ---- Assertions ---- *)
   let ivmin_asserts =
-    let ivmin_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let ivmin_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype ivmin_map in
       match ctype with
-      | Basic0 (Integer ity) ->
+      | Ctype (_, Basic (Integer ity)) ->
           let (min, _) = integer_range impl ity in
           mk_eq const (big_num_to_z3 min)
       | _ -> assert false
@@ -512,10 +494,10 @@ module ImplFunctions = struct
              ity_list
 
   let ivmax_asserts =
-    let ivmax_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let ivmax_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype ivmax_map in
       match ctype with
-      | Basic0 (Integer ity) ->
+      | Ctype (_, Basic (Integer ity)) ->
           let (_, max) = integer_range impl ity in
           mk_eq const (big_num_to_z3 max)
       | _ -> assert false
@@ -524,10 +506,10 @@ module ImplFunctions = struct
              ity_list
 
   let sizeof_asserts =
-    let sizeof_assert (ctype: Core_ctype.ctype0) : Expr.expr =
+    let sizeof_assert (ctype: ctype) : Expr.expr =
       let const = Pmap.find ctype sizeof_map in
       match ctype with
-      | Basic0 (Integer ity) ->
+      | Ctype (_, Basic (Integer ity)) ->
           mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
       (*| Pointer0 _ ->
           (* TODO: Check this *)
@@ -560,12 +542,12 @@ end
 
 
 (* Assert const is in range of ctype *)
-let assert_initial_range (ctype: Core_ctype.ctype0) (const: Expr.expr)
+let assert_initial_range (ctype: ctype) (const: Expr.expr)
                          : Expr.expr list =
   match ctype with
-  | Void0 ->
+  | Ctype (_, Void) ->
       []
-  | Basic0 (Integer ity) ->
+  | Ctype (_, Basic (Integer ity)) ->
       let ge_ivmin =
           binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
       let le_ivmax =

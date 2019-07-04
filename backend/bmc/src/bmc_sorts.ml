@@ -7,7 +7,7 @@ open Z3
 open Z3.Arithmetic
 
 type addr_ty = int * int
-type ctype = Core_ctype.ctype0
+type ctype = Ctype.ctype
 
 type permission_flag =
   | ReadWrite
@@ -67,7 +67,7 @@ module IntegerBaseTypeSort = struct
     ; mk_ctor "intptr_t_ibty"
     ]
 
-  let mk_expr (ibty: AilTypes.integerBaseType) =
+  let mk_expr (ibty: Ctype.integerBaseType) =
     let fdecls = get_constructors mk_sort in
     match ibty with
     | Ichar ->
@@ -98,7 +98,7 @@ module IntegerTypeSort = struct
     ; mk_ctor "ptrdiff_t_ity"
     ]
 
-  let mk_expr (ity: AilTypes.integerType) =
+  let mk_expr (ity: Ctype.integerType) =
     let fdecls = get_constructors mk_sort in
     match ity with
     | Char ->
@@ -123,7 +123,7 @@ module BasicTypeSort = struct
         [mk_sym "_integer_bty"] [Some IntegerTypeSort.mk_sort] [0]
       ]
 
-  let mk_expr (btype: AilTypes.basicType) : Expr.expr =
+  let mk_expr (btype: Ctype.basicType) : Expr.expr =
     let fdecls = get_constructors mk_sort in
     match btype with
     | Integer ity ->
@@ -179,57 +179,57 @@ module CtypeSort = struct
 
   let mk_sort = List.nth mk_sort_helper 0
 
-  let rec mk_expr (ctype: ctype) : Expr.expr =
+  let rec mk_expr (Ctype.Ctype (_, ctype): ctype) : Expr.expr =
     let fdecls = get_constructors mk_sort in
     match ctype with
-    | Void0  ->
+    | Void  ->
         Expr.mk_app g_ctx (List.nth fdecls 0) []
-    | Basic0 bty ->
+    | Basic bty ->
         Expr.mk_app g_ctx (List.nth fdecls 1) [BasicTypeSort.mk_expr bty]
-    | Pointer0 (_, ty) ->
+    | Pointer (_, ty) ->
         Expr.mk_app g_ctx (List.nth fdecls 2) [mk_expr ty]
-    | Array0(cty, Some n) ->
+    | Array(cty, Some n) ->
         (* TODO: cty ignored b/c recursive types and tuples *)
         (* Sort of assumed it's always integer for now... *)
         Expr.mk_app g_ctx (List.nth fdecls 3) [big_num_to_z3 n]
-    | Struct0 (Symbol (_, n, _))->
+    | Struct (Symbol (_, n, _))->
         Expr.mk_app g_ctx (List.nth fdecls 4) [int_to_z3 n]
-    | Atomic0 ty ->
+    | Atomic ty ->
         Expr.mk_app g_ctx (List.nth fdecls 5) [mk_expr ty]
-    | Union0 _ -> failwith "TODO: unions"
+    | Union _ -> failwith "TODO: unions"
     | _ -> assert false
 
   let mk_nonatomic_expr (ctype: ctype) : Expr.expr =
     match ctype with
-    | Atomic0 ty -> mk_expr ty
+    | Ctype (_, Atomic ty) -> mk_expr ty
     | _ -> mk_expr ctype
 end
 
-let rec alignof_type (ctype: ctype) (file: unit typed_file) : int =
+let rec alignof_type (Ctype (_, ctype): ctype) (file: unit typed_file) : int =
   match ctype with
-  | Void0 -> assert false
-  | Basic0 (Integer ity) ->
+  | Void -> assert false
+  | Basic (Integer ity) ->
       Option.get (Ocaml_implementation.Impl.alignof_ity ity)
-  | Array0(ty, _) -> alignof_type ty file
-  | Function0 _ -> assert false
-  | Pointer0 _ ->
+  | Array(ty, _) -> alignof_type ty file
+  | Function _ -> assert false
+  | Pointer _ ->
       Option.get (Ocaml_implementation.Impl.sizeof_pointer)
-  | Atomic0 (Basic0 _ as _ty) ->
+  | Atomic (Ctype (_, Basic _) as _ty) ->
       alignof_type _ty file
-  | Atomic0 (Pointer0 _ as _ty) ->
+  | Atomic (Ctype (_, Pointer _) as _ty) ->
       Option.get (Ocaml_implementation.Impl.alignof_pointer)
-  | Struct0 sym ->
+  | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef members) ->
           (* Let alignment be max alignment of a member? *)
           let alignments =
-            List.map (fun (_, mem_ctype) -> alignof_type mem_ctype file)
+            List.map (fun (_, (_, mem_ctype)) -> alignof_type mem_ctype file)
                      members in
           assert (List.length alignments > 0);
           List.fold_left max (List.hd alignments) (List.tl alignments)
       | _ -> assert false
       end
-  | Union0 _ -> failwith "TODO: unions"
+  | Union _ -> failwith "TODO: unions"
   | _ -> assert false
 
 
@@ -313,19 +313,19 @@ module AddressSortPNVI = struct
   let sizeof_ity ity = Option.get (Ocaml_implementation.Impl.sizeof_ity ity)
 
   (* TODO: Move this elsewhere *)
-  let rec type_size (ctype: ctype) (file: unit typed_file): int =
+  let rec type_size (Ctype (_, ctype): ctype) (file: unit typed_file): int =
     match ctype with
-    | Void0 -> assert false
-    | Basic0 (Integer ity) ->
+    | Void -> assert false
+    | Basic (Integer ity) ->
         sizeof_ity ity
-    | Array0(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
-    | Array0 _ -> assert false
-    | Function0 _ -> assert false
-    | Pointer0 _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
-    | Atomic0 (Basic0 _ as _ty) (* fall through *)
-    | Atomic0 (Pointer0 _ as _ty) ->
+    | Array(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
+    | Array _ -> assert false
+    | Function _ -> assert false
+    | Pointer _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
+    | Atomic (Ctype (_, Pointer _) as _ty) ->
         type_size _ty file
-    | Struct0 tag ->
+    | Struct tag ->
         fst (struct_member_index_list tag file)
     | _ -> assert false
   and struct_member_index_list tag (file: unit typed_file) =
@@ -335,10 +335,10 @@ module AddressSortPNVI = struct
         let rec helper rest total_size acc : int * ((int list) * int list) =
           begin match rest with
           | [] -> (total_size, acc)
-          | (_, ty) :: tl ->
+          | (_, (_, ty)) :: tl ->
             let (ty_size, flat_indices) =
               match ty with
-              | Core_ctype.Struct0 tag_inner ->
+              | Ctype.Ctype (_, Ctype.Struct tag_inner) ->
                 let (ty_size, (_, flat_indices)) =
                   struct_member_index_list tag_inner file in
                 (ty_size, flat_indices)
@@ -365,7 +365,7 @@ module AddressSortPNVI = struct
         let (total_size, (rev_indices, rev_flat_indices)) =
           helper members 0 ([],[]) in
         (* TODO: Padding at the end to the largest member (alignment?) *)
-        let largest_align = List.fold_left (fun acc (_, ty) ->
+        let largest_align = List.fold_left (fun acc (_, (_, ty)) ->
           max acc (alignof_type ty file)
         ) 0 members in
         let last_padding =
@@ -1046,7 +1046,7 @@ module PNVIByte = struct
     LoadedByte.get_specified_value (get_value expr)
 
   let unspec_byte : Expr.expr =
-    let byte_ctype = CtypeSort.mk_expr (Basic0 (Integer Char)) in
+    let byte_ctype = CtypeSort.mk_expr Ctype.char in
     mk_byte (int_to_z3 0)
             (LoadedByte.mk_unspecified byte_ctype)
             (IntOption.mk_none)
@@ -1111,23 +1111,23 @@ let sorts_to_tuple (sorts: Sort.sort list) : Sort.sort =
  * int[][] maps to LoadedIntArray
  *)
 module CtypeToZ3 = struct
-  let rec ctype_to_z3_sort (ty: Core_ctype.ctype0)
+  let rec ctype_to_z3_sort (Ctype (_, ty): Ctype.ctype)
                            (file: unit typed_file)
                            : Sort.sort =
      match ty with
-    | Void0     -> assert false
-    | Basic0(Integer i) -> LoadedInteger.mk_sort
-    | Basic0 _ -> assert false
-    | Array0(ty', _) ->
+    | Void     -> assert false
+    | Basic(Integer i) -> LoadedInteger.mk_sort
+    | Basic _ -> assert false
+    | Array(ty', _) ->
         mk_array_sort_from_ctype ty' file
-    | Function0 _ -> assert false
-    | Pointer0 _ -> LoadedPointer.mk_sort
-    | Atomic0 (Basic0 _ as _ty) (* fall through *)
-    | Atomic0 (Pointer0 _ as _ty) ->
+    | Function _ -> assert false
+    | Pointer _ -> LoadedPointer.mk_sort
+    | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
+    | Atomic (Ctype (_, Pointer _) as _ty) ->
         ctype_to_z3_sort _ty file
-    | Atomic0 _ ->
+    | Atomic _ ->
         assert false
-    | Struct0 tagdef ->
+    | Struct tagdef ->
         TODO_LoadedSort.mk_sort (struct_sym_to_z3_sort tagdef file)
         (*
         begin match Pmap.lookup tagdef file.tagDefs with
@@ -1147,16 +1147,15 @@ module CtypeToZ3 = struct
         | _ -> assert false
         end
         *)
-    | Union0 _ ->
+    | Union _ ->
       failwith "Error: unions are not supported."
-    | Builtin _ -> assert false
   and struct_sym_to_z3_sort (struct_sym: sym_ty)
                             (file: unit typed_file)
                             : Sort.sort =
     match Pmap.lookup struct_sym file.tagDefs with
     | Some (StructDef memlist) ->
         let sortlist =
-            List.map (fun (_,ctype) -> ctype_to_z3_sort ctype file)
+            List.map (fun (_,(_, ctype)) -> ctype_to_z3_sort ctype file)
                      memlist in
         sorts_to_tuple sortlist
     | _ ->
@@ -1182,21 +1181,21 @@ module CtypeToZ3 = struct
           TODO_LoadedSort.mk_sort sort
       | OTy_union _ ->
           failwith "Error: unions are not supported."
-  and mk_array_sort_from_ctype (ty: Core_ctype.ctype0)
+  and mk_array_sort_from_ctype (Ctype (_, ty): Ctype.ctype)
                                (file: unit typed_file): Sort.sort =
       match ty with
-      | Void0 -> failwith "TODO: void arrays"
-      | Basic0 (Integer i) ->
+      | Void -> failwith "TODO: void arrays"
+      | Basic (Integer i) ->
           let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedInteger.mk_sort) in
           TODO_LoadedSort.mk_sort sort
-      | Pointer0 _ ->
+      | Pointer _ ->
           let sort = Z3Array.mk_sort g_ctx integer_sort (LoadedPointer.mk_sort) in
           TODO_LoadedSort.mk_sort sort
-      | Array0(ty', _) ->
+      | Array(ty', _) ->
           let inner_sort = mk_array_sort_from_ctype ty' file in
           let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
           TODO_LoadedSort.mk_sort sort
-      | Struct0 tag ->
+      | Struct tag ->
           let inner_sort = TODO_LoadedSort.mk_sort (struct_sym_to_z3_sort tag file) in
           let sort = Z3Array.mk_sort g_ctx integer_sort inner_sort in
           TODO_LoadedSort.mk_sort sort

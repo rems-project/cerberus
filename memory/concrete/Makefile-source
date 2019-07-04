@@ -29,7 +29,6 @@ SOURCE_ail=\
   GenTypes.lem
 
 SOURCE_core_ctype=\
-  core_ctype.lem \
   core_ctype_aux.lem
 
 SOURCE_core=\

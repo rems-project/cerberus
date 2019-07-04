@@ -9,7 +9,6 @@ open Bmc_utils
 open Z3
 open Z3.Arithmetic
 
-open AilTypes
 open Annot
 open Core
 open Core_aux
@@ -36,7 +35,7 @@ module BmcM = struct
     action_map       : (int, BmcZ3.intermediate_action) Pmap.map option;
     param_actions    : (BmcZ3.intermediate_action option) list option;
     alloc_meta       : (alloc, allocation_metadata) Pmap.map option;
-    prov_syms        : (Expr.expr * (Expr.expr * Core_ctype.ctype0)) list option;
+    prov_syms        : (Expr.expr * (Expr.expr * Ctype.ctype)) list option;
 
     drop_cont_map    : (int, Expr.expr) Pmap.map option;
 

@@ -1,7 +1,7 @@
 (* Effects for Translation: state *)
 open import Pervasives Utils Show Show_extra State
 import Boot Symbol Undefined Ctype AilTypesAux
-import Core Core_aux Core_ctype
+import Core Core_aux Ctype
 
 module C    = Core
 module Caux = Core_aux
@@ -12,7 +12,7 @@ type elab_state = <|
   visible_objects_types: map Symbol.sym (Ctype.qualifiers * Ctype.ctype);
   visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
                                               annotate Esave/Erun ctors) *)
-  string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr);
+  string_literals: list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr);
 |>
 
 type elabM 'a = stateM 'a elab_state
@@ -65,11 +65,11 @@ val get_visible_objects: elabM (list Symbol.sym)
 let get_visible_objects = fun st ->
   (foldl (++) [] st.visible_objects, st)
 
-val register_string_literal: Loc.t -> Symbol.sym -> Core_ctype.ctype -> C.pexpr -> elabM unit
+val register_string_literal: Loc.t -> Symbol.sym -> Ctype.ctype -> C.pexpr -> elabM unit
 let register_string_literal loc sym ty pe = fun st ->
   ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
 
-val get_string_literals: elabM (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr))
+val get_string_literals: elabM (list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr))
 let get_string_literals = fun st ->
   (st.string_literals, st)
 

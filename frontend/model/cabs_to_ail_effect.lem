@@ -5,7 +5,7 @@ open import Cabs_to_ail_aux
 
 import AilSyntax AilTypesAux
 
-import Map_extra
+import Map_extra Ctype
 
 module A      = AilSyntax
 
@@ -1848,9 +1848,9 @@ let extract_program startup_str =
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
                            | Struct_definition _ membersDefs ->
-                               (sym, A.StructDef membersDefs) :: acc
+                               (sym, Ctype.StructDef membersDefs) :: acc
                            | Union_definition _ membersDefs ->
-                               (sym, A.UnionDef membersDefs) :: acc
+                               (sym, Ctype.UnionDef membersDefs) :: acc
                            | Enum_definition _ ->
                                acc
                            end
@@ -1921,9 +1921,9 @@ let get_sigma_sofar =
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
                              | Struct_definition _ membersDefs ->
-                                 (sym, A.StructDef membersDefs) :: acc
+                                 (sym, Ctype.StructDef membersDefs) :: acc
                              | Union_definition _ membersDefs ->
-                                 (sym, A.UnionDef membersDefs) :: acc
+                                 (sym, Ctype.UnionDef membersDefs) :: acc
                              | Enum_definition _ ->
                                  acc
                              end
@@ -1945,9 +1945,9 @@ let cabs_to_ail_effect_is_incomplete ty =
       List.foldl (fun acc (ident, tagDef) ->
         match tagDef with
           | Struct_definition _ xs ->
-              (ident, A.StructDef xs) :: acc
+              (ident, Ctype.StructDef xs) :: acc
           | Union_definition _ xs ->
-              (ident, A.UnionDef xs) :: acc
+              (ident, Ctype.UnionDef xs) :: acc
           | Enum_definition _ ->
               acc
         end
