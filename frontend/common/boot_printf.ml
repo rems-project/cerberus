@@ -1,6 +1,6 @@
 open Core_ctype
 open AilSyntax
-open AilTypes
+open Ctype
 
 type formatting = {
   basis:     basis option;
@@ -12,7 +12,7 @@ type formatting = {
 let ctype_of_specifier = function
   | "%d"
   | "%i" ->
-      ({basis= Some Decimal; use_upper= false}, Basic0 (Integer (Signed AilTypes.Int_)))
+      ({basis= Some Decimal; use_upper= false}, Basic0 (Integer (Signed Int_)))
   | "%o" ->
       ({basis= Some Octal; use_upper= false}, Basic0 (Integer (Unsigned Int_)))
   | "%u" ->
@@ -33,14 +33,14 @@ let ctype_of_specifier = function
 (*  | "c" -> *)
 (*  | "s" -> *)
   | "%p" ->
-      ({basis= None; use_upper= false}, Pointer0 (AilTypes.no_qualifiers, Void0))
+      ({basis= None; use_upper= false}, Pointer0 (no_qualifiers, Void0))
 (*  | "n" -> *)
   | "%llx" ->
       ({basis= Some Hexadecimal; use_upper= false}, Basic0 (Integer (Unsigned LongLong)))
   | "%llX" ->
       ({basis= Some Hexadecimal; use_upper= true}, Basic0 (Integer (Unsigned LongLong)))
   | "%s" ->
-      ({basis= None; use_upper= false}, Pointer0 (AilTypes.no_qualifiers, Core_ctype.char))
+      ({basis= None; use_upper= false}, Pointer0 (no_qualifiers, Core_ctype.char))
   | str ->
       failwith ("Boot_ocaml.ctype_of_specifier, TODO: " ^ str)
 

@@ -1,9 +1,10 @@
-open import Pervasives Annot Loc
-import Symbol Cabs
+(* (C) Justus Matthiesen
+ *     Kayvan Memarian
+ *     Victor Gomes
+ *)
 
-
-(** Types ******************************************************************* *)
-type identifier = Symbol.sym
+open import Pervasives Loc
+import Symbol Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -24,7 +25,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Bool
  | Signed of integerBaseType
  | Unsigned of integerBaseType
- | Enum of identifier
+ | Enum of Symbol.sym
  | Wchar_t
  | Size_t
  | Ptrdiff_t
@@ -53,8 +54,6 @@ type qualifiers (*[name = "^\\(\\|\\([a-z A-Z]+_\\)\\)qs[0-9]*'?$"]*) = <|
   (* NOTE: the desugaring collapse _Atomic qualifiers and specifiers *)
 |>
 
-(* NOTE: we restrict qualifiers in the syntax to place that correspond to
-         lvalues (to reflect STD §6.7.3#4) *)
 type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
  | Void
  | Basic of basicType
@@ -68,19 +67,19 @@ type ctype_ (*[name = "^\\([a-z A-Z]*_\\)?ty[0-9]*'?$"]*) =
             the qualifiers in the tuple will be:
               {no_qualifiers with restrict=true} *)
    (* STD §6.2.5#20, bullet 4 *)
- | Function of (* has_proto *)bool * (qualifiers * ctype) * list (qualifiers * ctype * (* is_register *)bool) * (* is_variadic *)bool
+ | Function of (* has_proto *)bool * (qualifiers * ctype)
+             * list (qualifiers * ctype * (* is_register *)bool)
+             * (* is_variadic *)bool
    (* STD §6.2.5#20, bullet 5 *)
    (* NOTE: the qualifiers are that of the referenced type *)
  | Pointer of qualifiers * ctype
    (* STD §6.2.5#20, bullet 6 *)
  | Atomic of ctype
- | Struct of identifier
- | Union of identifier
+ | Struct of Symbol.sym
+ | Union of Symbol.sym
 and ctype =
-  Ctype of list annot * ctype_
+  Ctype of list Annot.annot * ctype_
 
-val proj_ctype_: ctype -> ctype_
-let proj_ctype_ (Ctype _ cty) = cty
 
 instance (Located ctype)
   let locOf cty =
@@ -88,19 +87,8 @@ instance (Located ctype)
     Annot.get_loc_ annots
 end
 
-(* STD §6.2.4#1 *)
-type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
- | Static
- | Thread
- | Automatic
- | Allocated
+(** Type class instances *)
 
-type typeCategory [name = "tc*"] = 
- | LValueType of qualifiers * ctype * (* isRegister *) bool
- | RValueType of ctype
-
-
-(** Type-class instances **************************************************** *)
 let integerBaseTypeEqual ibty1 ibty2 =
   let ord = function
     | Ichar ->
@@ -267,14 +255,7 @@ instance (Eq ctype)
   let (<>) = fun ty1 ty2 -> not (ctypeEqual ty1 ty2)
 end
 
-
-instance (Eq storageDuration)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-
-let ~{hol} setElemCompare_integerBaseType ibty1 ibty2 =
+let setElemCompare_integerBaseType ibty1 ibty2 =
   let ord = function
     | Ichar ->
         (0 : nat)
@@ -312,8 +293,7 @@ instance (SetType integerBaseType)
   let setElemCompare = setElemCompare_integerBaseType
 end
 
-
-let ~{hol} setElemCompare_integerType ity1 ity2 =
+let setElemCompare_integerType ity1 ity2 =
   let ord = function
     | Char ->
         (0 : nat)
@@ -348,7 +328,7 @@ instance (SetType integerType)
 end
 
 
-let ~{hol} setElemCompare_basicType bty1 bty2 =
+let setElemCompare_basicType bty1 bty2 =
   let ord = function
     | Integer _ ->
         (0 : nat)
@@ -371,17 +351,20 @@ end
 
 instance (SetType qualifiers)
   let setElemCompare qs1 qs2 =
-    setElemCompare (qs1.const, qs1.restrict, qs1.volatile(*, qs1.atomic*)) (qs2.const, qs2.restrict, qs2.volatile(*, qs2.atomic*))
+    setElemCompare (qs1.const, qs1.restrict, qs1.volatile)
+                   (qs2.const, qs2.restrict, qs2.volatile)
 end
 
+(** Some useful functions *)
 
-(** Some useful functions *************************************************** *)
+val proj_ctype_: ctype -> ctype_
+let proj_ctype_ (Ctype _ cty) = cty
+
 val make_qualifiers: bool -> bool -> bool (*-> bool*) -> qualifiers
-let make_qualifiers c r v (*a*) = <|
+let make_qualifiers c r v = <|
   const    = c;
   restrict = r;
   volatile = v;
-(*  atomic   = a;*)
 |>
 
 val no_qualifiers: qualifiers
@@ -389,8 +372,9 @@ let no_qualifiers = <|
   const    = false;
   restrict = false;
   volatile = false;
-(*  atomic   = false;*)
 |>
+
+(** Some standard types *)
 
 val char16_t: ctype
 let char16_t =

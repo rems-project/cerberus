@@ -1,5 +1,5 @@
 open AilSyntax
-open AilTypes
+open Ctype
 
 val pp_type_keyword: string -> PPrint.document
 val pp_keyword: string -> PPrint.document

@@ -1,4 +1,4 @@
-open import Pervasives Common Utils AilSyntax AilTypes ErrorMonad TypingError Annot
+open import Pervasives Common Utils AilSyntax ErrorMonad TypingError Annot Ctype
 import Implementation_ Implementation Loc Debug
 
 (* NOTE: a well-formed ctype cannot have an Atomic inside another one *)

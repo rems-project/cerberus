@@ -1,4 +1,4 @@
-open import Pervasives Loc Common AilTypes Context
+open import Pervasives Loc Common Context Ctype
 import Symbol Cmm_csem
 
 (* == Ail syntax datatypes ================================================== *)
@@ -156,6 +156,17 @@ instance forall 'a. (Located (expression 'a))
     loc
 end
 
+(* STD §6.2.4#1 *)
+type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
+ | Static
+ | Thread
+ | Automatic
+ | Allocated
+
+instance (Eq storageDuration)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
 
 (* the boolean tells whether the object was declared with the register
  * storage-class *)

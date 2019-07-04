@@ -1,7 +1,7 @@
-open import Pervasives Num_extra
+open import Pervasives Num_extra Ctype
 
 open import Utils
-open import AilTypes AilTypesAux 
+open import AilTypesAux 
 
 open import Core_ctype
 import Core_ctype_aux

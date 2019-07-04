@@ -1,11 +1,10 @@
 open import Pervasives
 
 open import Utils Core Core_aux Core_ctype
-import Symbol AilTypes Mem
+import Symbol Mem Ctype
 
 import Pp
 
-module ATypes = AilTypes
 module Caux = Core_aux
 
 val pp_pexpr: pexpr -> string
@@ -647,30 +646,30 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
 val in_minimal_range: ctype -> integer -> bool
 let in_minimal_range ty n =
   match ty with
-    | Basic (ATypes.Integer ATypes.Char) ->
+    | Basic (Ctype.Integer Ctype.Char) ->
         false (* TODO: because we don't use char is signed or unsigned *)
-    | Basic (ATypes.Integer ATypes.Bool) ->
+    | Basic (Ctype.Integer Ctype.Bool) ->
         n = 0 && n = 1
-    | Basic (ATypes.Integer (ATypes.Signed ATypes.Ichar)) ->
+    | Basic (Ctype.Integer (Ctype.Signed Ctype.Ichar)) ->
         (0-127) <= n && n <= 127
-    | Basic (ATypes.Integer (ATypes.Signed ATypes.Short)) ->
+    | Basic (Ctype.Integer (Ctype.Signed Ctype.Short)) ->
         (0-32767) <= n && n <= 32767
-    | Basic (ATypes.Integer (ATypes.Signed ATypes.Int_)) ->
+    | Basic (Ctype.Integer (Ctype.Signed Ctype.Int_)) ->
         (0-32767) <= n && n <= 32767
-    | Basic (ATypes.Integer (ATypes.Signed ATypes.Long)) ->
+    | Basic (Ctype.Integer (Ctype.Signed Ctype.Long)) ->
         (0-2147483647) <= n && n <= 2147483647
-    | Basic (ATypes.Integer (ATypes.Signed ATypes.LongLong)) ->
+    | Basic (Ctype.Integer (Ctype.Signed Ctype.LongLong)) ->
         let k = 2 ** 63 - 1 in
         (~ k) <= n && n <= k
-    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Ichar)) ->
+    | Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)) ->
         0 <= n && n <= 255
-    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Short)) ->
+    | Basic (Ctype.Integer (Ctype.Unsigned Ctype.Short)) ->
         0 <= n && n <= 65535
-    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Int_)) ->
+    | Basic (Ctype.Integer (Ctype.Unsigned Ctype.Int_)) ->
         0 <= n && n <= 65535
-    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.Long)) ->
+    | Basic (Ctype.Integer (Ctype.Unsigned Ctype.Long)) ->
         0 <= n && n <= 4294967295
-    | Basic (ATypes.Integer (ATypes.Unsigned ATypes.LongLong)) ->
+    | Basic (Ctype.Integer (Ctype.Unsigned Ctype.LongLong)) ->
         let k = 2 ** 64 - 1 in
         0 <= n && n <= k
     | _ ->

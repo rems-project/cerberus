@@ -1,4 +1,4 @@
-open import Pervasives Symbol Cabs AilTypes GenTypes
+open import Pervasives Symbol Cabs GenTypes Ctype
 
 type simple_assignment_violation =
   | IncompatibleType

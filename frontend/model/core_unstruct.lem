@@ -1,11 +1,10 @@
 open import Pervasives Utils
 open import Core Core_ctype Core_ctype_aux
-import Symbol State Core_aux
+import Symbol State Core_aux Ctype
 
 import Core_typing Core_typing_effect Core_typing_aux
 
 
-module ATy = AilTypes
 module Caux = Core_aux
 
 type explodeM 'a =

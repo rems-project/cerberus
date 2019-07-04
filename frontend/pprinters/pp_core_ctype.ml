@@ -15,7 +15,7 @@ let comma_list f = P.separate_map (P.comma ^^ P.space) f
 let pp_symbol  a = !^ (Pp_symbol.to_string_pretty a)
 
 let pp_integer_base_ctype ibty =
-  let open AilTypes in
+  let open Ctype in
   !^ (match ibty with
     | Ichar          -> "ichar"
     | Short          -> "short"
@@ -30,7 +30,7 @@ let pp_integer_base_ctype ibty =
 
 
 let pp_integer_ctype ity =
-  let open AilTypes in
+  let open Ctype in
   match ity with
     | Char             -> !^ "char"
     | Bool             -> !^ "_Bool"
@@ -46,7 +46,7 @@ let pp_integer_ctype ity =
     | Ptrdiff_t        -> !^ "ptrdiff_t"
 
 let pp_floating_ctype fty =
-  let open AilTypes in
+  let open Ctype in
   match fty with
     | RealFloating Float ->
         !^ "float"
@@ -57,7 +57,7 @@ let pp_floating_ctype fty =
 
 
 let pp_basic_ctype bty =
-  let open AilTypes in
+  let open Ctype in
   match bty with
     | Integer ity -> pp_integer_ctype ity
     | Floating fty -> pp_floating_ctype fty

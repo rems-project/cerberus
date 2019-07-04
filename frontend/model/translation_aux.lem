@@ -1,12 +1,11 @@
-open import Pervasives Utils Translation_effect Symbol Show Show_extra
+open import Pervasives Utils Translation_effect Symbol Show Show_extra Ctype
 import Core Core_aux Core_ctype
-import Implementation AilSyntax AilTypes AilTypesAux GenTypes GenTypesAux
+import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
 module Cty  = Core_ctype
 module Caux = Core_aux
-module Aty  = AilTypes
 
 
 
@@ -104,73 +103,71 @@ let tmp_implementation =
   Implementation.make_implementation
     Implementation.Two'sComplement
     ( function
-        | Aty.Char       -> true (* Check that *)
-	| Aty.Signed   _ -> true
-        | Aty.Bool       -> false
-	| Aty.Unsigned _ -> false
-        | Aty.Enum sym ->
+        | Ctype.Char       -> true (* Check that *)
+	| Ctype.Signed   _ -> true
+        | Ctype.Bool       -> false
+	| Ctype.Unsigned _ -> false
+        | Ctype.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (1), Enum '" ^ show sym ^ "'")
-        | Aty.Size_t ->
+        | Ctype.Size_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Size_t"
-        | Aty.Wchar_t ->
+        | Ctype.Wchar_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Wchar_t"
-        | Aty.Ptrdiff_t ->
+        | Ctype.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Ptrdiff_t"
       end
     )
     ( function
-        | Aty.Char                  -> 7 (* check *)
-        | Aty.Bool                  -> 1 (* check *)
-        | Aty.Signed   Aty.Ichar    -> 7
-        | Aty.Unsigned Aty.Ichar    -> 8
-        | Aty.Signed   Aty.Short    -> 15
-        | Aty.Unsigned Aty.Short    -> 16
-        | Aty.Signed   Aty.Int_     -> 31
-        | Aty.Unsigned Aty.Int_     -> 32
-        | Aty.Signed   Aty.Long     -> 63
-        | Aty.Unsigned Aty.Long     -> 64
-        | Aty.Signed   Aty.LongLong -> 63
-        | Aty.Unsigned Aty.LongLong -> 64
+        | Ctype.Char                  -> 7 (* check *)
+        | Ctype.Bool                  -> 1 (* check *)
+        | Ctype.Signed   Ctype.Ichar    -> 7
+        | Ctype.Unsigned Ctype.Ichar    -> 8
+        | Ctype.Signed   Ctype.Short    -> 15
+        | Ctype.Unsigned Ctype.Short    -> 16
+        | Ctype.Signed   Ctype.Int_     -> 31
+        | Ctype.Unsigned Ctype.Int_     -> 32
+        | Ctype.Signed   Ctype.Long     -> 63
+        | Ctype.Unsigned Ctype.Long     -> 64
+        | Ctype.Signed   Ctype.LongLong -> 63
+        | Ctype.Unsigned Ctype.LongLong -> 64
 
-        | Aty.Signed (Aty.IntN_t n)   -> n-1
-        | Aty.Unsigned (Aty.IntN_t n) -> n
-        | Aty.Signed (Aty.Int_leastN_t _) ->
+        | Ctype.Signed (Ctype.IntN_t n)   -> n-1
+        | Ctype.Unsigned (Ctype.IntN_t n) -> n
+        | Ctype.Signed (Ctype.Int_leastN_t _) ->
             error "WIP: Translation_aux.tmp_implementation, Signed Int_leastN_T"
-        | Aty.Unsigned (Aty.Int_leastN_t _) ->
+        | Ctype.Unsigned (Ctype.Int_leastN_t _) ->
             error "WIP: Translation_aux.tmp_implementation, Unsigned Int_leastN_T"
-        | Aty.Signed (Aty.Int_fastN_t _) ->
+        | Ctype.Signed (Ctype.Int_fastN_t _) ->
             error "WIP: Translation_aux.tmp_implementation, Signed Int_fastN_T"
-        | Aty.Unsigned (Aty.Int_fastN_t _) ->
+        | Ctype.Unsigned (Ctype.Int_fastN_t _) ->
             error "WIP: Translation_aux.tmp_implementation, Unsigned Int_fastN_T"
-        | Aty.Signed (Aty.Intmax_t) ->
+        | Ctype.Signed (Ctype.Intmax_t) ->
             error "WIP: Translation_aux.tmp_implementation, Signed Intmax_T"
-        | Aty.Unsigned (Aty.Intmax_t) ->
+        | Ctype.Unsigned (Ctype.Intmax_t) ->
             error "WIP: Translation_aux.tmp_implementation, Unsigned Intmax_T"
-        | Aty.Signed (Aty.Intptr_t) ->
+        | Ctype.Signed (Ctype.Intptr_t) ->
             error "WIP: Translation_aux.tmp_implementation, Signed Intptr_T"
-        | Aty.Unsigned (Aty.Intptr_t) ->
+        | Ctype.Unsigned (Ctype.Intptr_t) ->
             error "WIP: Translation_aux.tmp_implementation, Unsigned Intptr_T"
         
-        | Aty.Enum sym ->
+        | Ctype.Enum sym ->
             error ("WIP: Translation_aux.tmp_implementation (2), Enum '" ^ show sym ^ "'")
-        | Aty.Size_t ->
+        | Ctype.Size_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Size_t"
-        | Aty.Wchar_t ->
+        | Ctype.Wchar_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Wchar_t"
-        | Aty.Ptrdiff_t ->
+        | Ctype.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Ptrdiff_t"
       end
     )
-    (Aty.Size_t)
-    (Aty.Ptrdiff_t)
+    (Size_t)
+    (Ptrdiff_t)
 
 
-
-open AilTypes
 
 
 let function_return_type = function
-  | Function _ ty _ _ -> ty
+  | Ctype.Function _ ty _ _ -> ty
   | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 
@@ -189,8 +186,8 @@ val exp_type_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let exp_type_of a_expr =
   match GenTypesAux.interpret_genTypeCategory tmp_implementation
       (Annotation.type_of Annotation.concrete_annotation a_expr) with
-    | Right (AilTypes.LValueType _ ty) -> (* unqualify *) ty
-    | Right (AilTypes.RValueType   ty) -> ty
+    | Right (Ctype.LValueType _ ty) -> (* unqualify *) ty
+    | Right (Ctype.RValueType   ty) -> ty
     | _ -> error "[Translation_aux.exp_type_of] impossible case: TODO move to Exception.t"
   end
 *)
@@ -202,8 +199,8 @@ let ctype_of a_expr =
   match ErrorMonad.runErrorMonad
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
         (GenTypes.genTypeCategoryOf a_expr)) with
-    | Right (AilTypes.LValueType _ ty _) -> ty
-    | Right (AilTypes.RValueType   ty) -> ty
+    | Right (GenTypes.LValueType _ ty _) -> ty
+    | Right (GenTypes.RValueType   ty) -> ty
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
         error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
@@ -215,8 +212,8 @@ let qualified_ctype_of a_expr =
   match ErrorMonad.runErrorMonad
       (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
         (GenTypes.genTypeCategoryOf a_expr)) with
-    | Right (AilTypes.LValueType qs ty _) -> (qs, ty)
-    | Right (AilTypes.RValueType   ty) -> (AilTypes.no_qualifiers, ty)
+    | Right (GenTypes.LValueType qs ty _) -> (qs, ty)
+    | Right (GenTypes.RValueType   ty) -> (no_qualifiers, ty)
     | Left (loc, TypingError.TError_MiscError (TypingError.UntypableIntegerConstant n)) ->
         error $ Loc.stringFromLocation loc ^ ": untypable integer constant '" ^ show n ^ "'\n"
     | _ -> error "[Translation_aux.ctype_of] impossible case: TODO move to Exception.t"
@@ -249,11 +246,11 @@ let is_defined_ail_function sym (_, sigm) =
 
 (*
 (* STD §6.3.1.8#1 *)
-val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> AilTypes.ctype * C.pexpr -> AilTypes.ctype * C.pexpr -> C.pexpr
+val mk_usual_arithmetic_conversions: (C.pexpr -> C.pexpr -> C.pexpr) -> Ctype.ctype * C.pexpr -> Ctype.ctype * C.pexpr -> C.pexpr
 let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
-  let longDouble_ty = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.LongDouble)) in
-  let double_ty      = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Double))     in
-  let float_ty       = AilTypes.Basic (AilTypes.Floating (AilTypes.RealFloating AilTypes.Float))      in
+  let longDouble_ty = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.LongDouble)) in
+  let double_ty      = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))     in
+  let float_ty       = Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Float))      in
   
   if AilTypesAux.corresponding_real_type ty1 = Just longDouble_ty || AilTypesAux.corresponding_real_type ty2 = Just longDouble_ty then
     error "WIP: Translate_aux.mk_usual_arithmetic_conversions, long double case"
@@ -268,8 +265,8 @@ let mk_usual_arithmetic_conversions mk_pexpr (ty1, pe1) (ty2, pe2) =
 *)
 
 
-val     combine_params_args: list (AilTypes.qualifiers * AilTypes.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
-                             list (AilTypes.ctype * AilSyntax.expression GenTypes.genTypeCategory)
+val     combine_params_args: list (Ctype.qualifiers * Ctype.ctype * bool) -> list (AilSyntax.expression GenTypes.genTypeCategory) ->
+                             list (Ctype.ctype * AilSyntax.expression GenTypes.genTypeCategory)
 let rec combine_params_args params es =
   match (params, es) with
     | ((_, ty, _) :: params', e :: es') ->
@@ -288,21 +285,21 @@ let rec combine_params_args params es =
 (* TODO: I need functors ... *)
 type translation_stdlib = <|
   ailnames:                           map string Symbol.sym;
-  mkcall_bitwise_AND:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_bitwise_XOR:                 Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_bitwise_OR:                  Aty.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_conv_int:                    Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_conv_loaded_int:             Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_loaded_fvfromint:            Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_loaded_ivfromfloat:          Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_bitwise_AND:                 Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_bitwise_XOR:                 Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_bitwise_OR:                  Ctype.ctype -> C.pexpr -> C.pexpr -> C.pexpr;
+  mkcall_conv_int:                    Ctype.ctype -> C.pexpr -> C.pexpr;
+  mkcall_conv_loaded_int:             Ctype.ctype -> C.pexpr -> C.pexpr;
+  mkcall_loaded_fvfromint:            Ctype.ctype -> C.pexpr -> C.pexpr;
+  mkcall_loaded_ivfromfloat:          Ctype.ctype -> C.pexpr -> C.pexpr;
   mkcall_conv_loaded_int_:            C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_loaded_fvfromint_:           C.pexpr -> C.pexpr -> C.pexpr;
   mkcall_loaded_ivfromfloat_:         C.pexpr -> C.pexpr -> C.pexpr;
-  mkcall_wrapI:                       Aty.ctype -> C.pexpr -> C.pexpr;
-  mkcall_ctype_width:                 Aty.ctype -> C.pexpr;
-  mkcall_is_representable:            C.pexpr -> Aty.ctype -> C.pexpr;
-  mkcall_all_values_representable_in: Aty.ctype -> Aty.ctype -> C.pexpr;
-  mkcall_catch_exceptional_condition: Aty.ctype -> C.pexpr -> C.pexpr;
+  mkcall_wrapI:                       Ctype.ctype -> C.pexpr -> C.pexpr;
+  mkcall_ctype_width:                 Ctype.ctype -> C.pexpr;
+  mkcall_is_representable:            C.pexpr -> Ctype.ctype -> C.pexpr;
+  mkcall_all_values_representable_in: Ctype.ctype -> Ctype.ctype -> C.pexpr;
+  mkcall_catch_exceptional_condition: Ctype.ctype -> C.pexpr -> C.pexpr;
   mkproc_loaded_pointer_to_Bool:      C.pexpr -> C.expr unit;
   mkcall_params_length:               C.pexpr -> C.pexpr;
   mkcall_params_nth:                  C.pexpr -> C.pexpr -> C.pexpr;
@@ -375,7 +372,7 @@ let mk_translation_stdlib (ailnames, stdlib_fun_map) =
 
 
 (* ASSUMES: is_arithmetic ty_src && is_arithmetic ty_dst *)
-val conv_loaded_arith: translation_stdlib -> Aty.ctype -> Aty.ctype -> C.pexpr -> C.pexpr
+val conv_loaded_arith: translation_stdlib -> Ctype.ctype -> Ctype.ctype -> C.pexpr -> C.pexpr
 let conv_loaded_arith stdlib ty_src ty_dst pe =
   if AilTypesAux.is_integer ty_src then
     if AilTypesAux.is_integer ty_dst then

@@ -525,7 +525,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               end
           | (Civmax, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
                     error ("Core_eval ivmax" ^ (* DEBUG *)
@@ -533,7 +533,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               end
           | (Civmin, Just [Vctype ty]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
                     error ("Core_eval ivmin [" ^ Loc.stringFromLocation loc ^ "] ==> " ^ (* DEBUG *)
@@ -545,28 +545,28 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
           | (CivCOMPL, Just [Vctype ty; Vobject (OVinteger ival)]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_complement_ival ity ival)))
                 | _ ->
                     error "Core_Eval ivCOMPL, not (is_integer ty)"
               end
           | (CivAND, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_and_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivAND, not (is_integer ty)"
               end
           | (CivOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_or_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivOR, not (is_integer ty)"
               end
           | (CivXOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
               match Core_ctype.unatomic ty with
-                | (Core_ctype.Basic (AilTypes.Integer ity)) ->
+                | (Core_ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_xor_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivXOR, not (is_integer ty)"
@@ -578,7 +578,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
 
           | (Cfvfromint, Just [Vobject (OVinteger ival)]) ->
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
-          | (Civfromfloat, Just [Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Vobject (OVfloating fval)]) ->
+          | (Civfromfloat, Just [Vctype (Core_ctype.Basic (Ctype.Integer ity)); Vobject (OVfloating fval)]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
           
           | (_, Just cvals) ->
@@ -915,8 +915,8 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | (Just (Vctype ty1), Just (Vctype ty2)) ->
               let are_compatible =
                 AilTypesAux.are_compatible
-                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty1)
-                  (AilTypes.no_qualifiers, Caux.unproj_ctype ty2) in
+                  (Ctype.no_qualifiers, Caux.unproj_ctype ty1)
+                  (Ctype.no_qualifiers, Caux.unproj_ctype ty2) in
               EU.return $ PEval (if are_compatible then Vtrue else Vfalse)
           | (_, _) ->
               EU.fail $ Illformed_program "PEare_compatible: the operands should be ctypes"

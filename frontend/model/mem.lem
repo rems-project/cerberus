@@ -1,5 +1,5 @@
 open import Pervasives
-import Symbol Core_ctype Core_ctype AilTypes Float
+import Symbol Core_ctype Float Ctype
 
 import Mem_common
 
@@ -125,7 +125,7 @@ declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned
 (* the first ctype is the original integer type, the second is the target referenced type *)
 val ptrcast_ival: Core_ctype.ctype -> Core_ctype.ctype -> integer_value -> memM pointer_value
 (* the first ctype is the original referenced type, the integerType is the target integer type *)
-val intcast_ptrval: Core_ctype.ctype -> AilTypes.integerType -> pointer_value -> memM integer_value
+val intcast_ptrval: Core_ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrcast_ival = `Impl_mem.ptrcast_ival`
 declare ocaml target_rep function intcast_ptrval = `Impl_mem.intcast_ptrval`
 
@@ -163,18 +163,18 @@ declare ocaml target_rep function va_list = `Impl_mem.va_list`
 
 
 (* Integer value constructors *)
-val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
+val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
 val integer_ival: integer -> integer_value
-val max_ival: AilTypes.integerType -> integer_value
-val min_ival: AilTypes.integerType -> integer_value
+val max_ival: Ctype.integerType -> integer_value
+val min_ival: Ctype.integerType -> integer_value
 val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
 val offsetof_ival: map Symbol.sym Core_ctype.tag_definition -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
 val sizeof_ival: Core_ctype.ctype -> integer_value
 val alignof_ival: Core_ctype.ctype -> integer_value
-val bitwise_complement_ival: AilTypes.integerType -> integer_value -> integer_value
-val bitwise_and_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
-val bitwise_or_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
-val bitwise_xor_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
+val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
 declare ocaml target_rep function concurRead_ival = `Impl_mem.concurRead_ival`
 declare ocaml target_rep function integer_ival = `Impl_mem.integer_ival`
 declare ocaml target_rep function max_ival = `Impl_mem.max_ival`
@@ -236,15 +236,15 @@ declare ocaml target_rep function le_fval = `Impl_mem.le_fval`
 
 (* Integer <-> Floating casting constructors *)
 val fvfromint: integer_value -> floating_value
-val ivfromfloat: AilTypes.integerType -> floating_value -> integer_value
+val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
 declare ocaml target_rep function fvfromint = `Impl_mem.fvfromint`
 declare ocaml target_rep function ivfromfloat = `Impl_mem.ivfromfloat`
 
 
 (* Memory value constructors *)
 val unspecified_mval: Core_ctype.ctype -> mem_value
-val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
-val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
+val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
+val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
 val pointer_mval: Core_ctype.ctype -> pointer_value -> mem_value
 val array_mval: list mem_value -> mem_value
 val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * Core_ctype.ctype * mem_value) -> mem_value
@@ -262,9 +262,9 @@ declare ocaml target_rep function union_mval = `Impl_mem.union_mval`
 val case_mem_value: forall 'a.
   mem_value ->
   (Core_ctype.ctype -> 'a) -> (* unspecified case *)
-  (AilTypes.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
-  (AilTypes.integerType -> integer_value -> 'a) ->
-  (AilTypes.floatingType -> floating_value -> 'a) ->
+  (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+  (Ctype.integerType -> integer_value -> 'a) ->
+  (Ctype.floatingType -> floating_value -> 'a) ->
   (Core_ctype.ctype -> pointer_value -> 'a) ->
   (list mem_value -> 'a) ->
   (Symbol.sym -> list (Cabs.cabs_identifier * Core_ctype.ctype * mem_value) -> 'a) ->

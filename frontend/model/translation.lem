@@ -10,15 +10,16 @@ import Cmm_csem Mem
 import Decode
 import Core_typing
 
-import AilSyntax AilSyntaxAux AilTypes AilTypesAux
+import AilSyntax AilSyntaxAux Ctype AilTypesAux
 import GenTypes
 import Core Core_aux Undefined Builtins Annot Core_linking
 
 import Linux
 
+import Ctype
+
 module A    = AilSyntax
 module Aaux = AilSyntaxAux
-module Aty  = AilTypes
 
 
 module C    = Core
@@ -51,29 +52,29 @@ let illTypedAil loc debug_str =
 (*
 (* Return the core_object_type that the elaboration of an ail expression of a
    given ctype will have *)
-val     core_type_of_expr_ctype: Aty.ctype -> either C.core_base_type C.core_object_type
+val     core_type_of_expr_ctype: Ctype.ctype -> either C.core_base_type C.core_object_type
 let rec core_type_of_expr_ctype ty =
   match ty with
-    | Aty.Void ->
+    | Ctype.Void ->
         Left C.BTy_unit
-    | Aty.Basic (Aty.Integer _) ->
+    | Ctype.Basic (Ctype.Integer _) ->
         Right C.OTy_integer
-    | Aty.Basic (Aty.Floating _) ->
+    | Ctype.Basic (Ctype.Floating _) ->
         Right C.OTy_floating
-    | Aty.Array _ _ ->
+    | Ctype.Array _ _ ->
         Right C.OTy_pointer
 (*
-    | Aty.Function of (AilTypes.qualifiers * ctype) * list (AilTypes.qualifiers * ctype) * bool (*isVariadic*) ->
+    | Ctype.Function of (Ctype.qualifiers * ctype) * list (Ctype.qualifiers * ctype) * bool (*isVariadic*) ->
 *)      
-    | Aty.Pointer _ _ ->
+    | Ctype.Pointer _ _ ->
         Right C.OTy_pointer
-    | Aty.Atomic atom_ty ->
+    | Ctype.Atomic atom_ty ->
         core_type_of_expr_ctype atom_ty
-    | Aty.Struct tag_ident ->
+    | Ctype.Struct tag_ident ->
         Right (C.OTy_struct tag_ident)
-    | Aty.Union tag_ident ->
+    | Ctype.Union tag_ident ->
         Right (C.OTy_union tag_ident)
-    | Aty.Builtin str ->
+    | Ctype.Builtin str ->
         error "TODO: Translation.core_object_type_of_expr_ctype"
   end
 *)
@@ -89,7 +90,7 @@ let force_core_object_type_of_ctype ty =
 
 val signedInt_gty: GenTypes.genType
 let signedInt_gty =
-  GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Aty.Signed Aty.Int_)))
+  GenTypes.GenBasic (GenTypes.GenInteger (GenTypes.Concrete (Ctype.Signed Ctype.Int_)))
 
 
 
@@ -275,14 +276,14 @@ type expr_ctx =
 
 
 let rec translate_function_designator ctx variadic_env stdlib tagDefs (A.AnnotatedExpression _ _ _ expr as a_expr) =
-  let (Aty.Ctype _ cty as ty) = ctype_of a_expr in
+  let (Ctype.Ctype _ cty as ty) = ctype_of a_expr in
   match (cty, expr) with
-    | (Aty.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
+    | (Ctype.Function has_proto _ params is_variadic, A.AilEunary A.Indirection e) ->
         let () = Debug.print_debug 1 [] (fun () -> "FUNTION POINTERS: UNARY INDIRECTION") in
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (fun_sym, fun_sym_pat, fun_sym_pe) ->
         translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->
         E.return $ Caux.mk_sseq_e fun_sym_pat core_e (Caux.mk_pure_e (Caux.mk_sym_pe fun_sym))
-    | (Aty.Function has_proto _ params is_variadic, A.AilEident fid) ->
+    | (Ctype.Function has_proto _ params is_variadic, A.AilEident fid) ->
         let fid_pe = match fid with
           | Symbol.Symbol _ _ (Just str) ->
               match Map.lookup str stdlib.ailnames with
@@ -297,7 +298,7 @@ let rec translate_function_designator ctx variadic_env stdlib tagDefs (A.Annotat
         E.return $ Caux.mk_pure_e fid_pe
     | (*BISECT-IGNORE*) _ ->
         error ("[Translation.translate_function_designator] wildcard case ==> " ^
-               Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromAil_ctype Aty.no_qualifiers ty)
+               Pp.stringFromAil_expression a_expr ^ " and type= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty)
   end
 
 
@@ -655,12 +656,12 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
         false
   end in
   (* TODO !!!! *)
-  let integer_promotion (ty: Aty.ctype) (e: C.pexpr) : C.pexpr =
+  let integer_promotion (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr =
     let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion tmp_implementation ty) in
     stdlib.mkcall_conv_int promoted_ty e in
   
   (* STD §6.3.1.8 *)
-  let usual_arithmetic_conversion (ty1: Aty.ctype) (ty2: Aty.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
+  let usual_arithmetic_conversion (ty1: Ctype.ctype) (ty2: Ctype.ctype) (e1: C.pexpr) (e2: C.pexpr) : C.pexpr * C.pexpr =
     match (AilTypesAux.corresponding_real_type ty1, AilTypesAux.corresponding_real_type ty2) with
       (* TODO: Convert (long double, double and float) to Ocaml float! This is not the standard behaviour! *)
       | (Just _, Just _) ->
@@ -673,7 +674,7 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
           (* TODO: this is so readable ... *)
           (* STD §6.3.1.8#1, bullet 4 *)
           match (AilTypesAux.promotion tmp_implementation ty1, AilTypesAux.promotion tmp_implementation ty2) with
-            | (Just (Aty.Ctype _ (Aty.Basic (Aty.Integer ity1')) as ty1'), Just (Aty.Ctype _ (Aty.Basic (Aty.Integer ity2')) as ty2')) ->
+            | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
                   (stdlib.mkcall_conv_int ty1' e1, stdlib.mkcall_conv_int ty2' e2)
@@ -703,22 +704,22 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
 (*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty1')
                      (stdlib.mkcall_conv_int ty1' e1)
-                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e1)
+                     (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e1)
                   ,
                    Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty1')
                      (stdlib.mkcall_conv_int ty1' e2)
-                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
+                     (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1'))) e2)
                   )
 *)
                   (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e1)
                      (* "Otherwise, both operands are converted to the unsigned integer type corresponding to the type
                          of the operand with signed integer type". *)
-                     (stdlib.mkcall_conv_int (Aty.Ctype [] (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e1)
+                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e1)
                   ,
                   Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty2' ty1')
                      (stdlib.mkcall_conv_int ty1' e2)
-                     (stdlib.mkcall_conv_int (Aty.Ctype [] (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e2)
+                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity1')))) e2)
                   )
 
                   (* ASK: Should you not check that ty2 is signed ? Can we delete the previous code? *)
@@ -726,20 +727,20 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
 (*
                   (Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty2')
                      (stdlib.mkcall_conv_int ty2' e1)
-                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e1)
+                     (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e1)
                   ,
                   Caux.mk_if_pe (stdlib.mkcall_is_representable e2 ty2')
                      (stdlib.mkcall_conv_int ty2' e2)
-                     (stdlib.mkcall_conv_int (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e2)
+                     (stdlib.mkcall_conv_int (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2'))) e2)
                   )
 *)
                   (Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
                      (stdlib.mkcall_conv_int ty2' e1)
-                     (stdlib.mkcall_conv_int (Aty.Ctype [] (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e1)
+                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e1)
                   ,
                   Caux.mk_if_pe (stdlib.mkcall_all_values_representable_in ty1' ty2')
                      (stdlib.mkcall_conv_int ty2' e2)
-                     (stdlib.mkcall_conv_int (Aty.Ctype [] (Aty.Basic (Aty.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e2)
+                     (stdlib.mkcall_conv_int (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer (AilTypesAux.make_corresponding_unsigned ity2')))) e2)
                   )
 
             | _ ->
@@ -750,8 +751,8 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
                   "is_arithmetic ty2: " ^ (if AilTypesAux.is_arithmetic ty2 then "true" else "false")
                 ) in
                 let () = Debug.print_debug 1 [] (fun () ->
-                  "ty1: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty1 ^
-                  ", ty2: " ^ Pp.stringFromAil_ctype AilTypes.no_qualifiers ty2 ^
+                  "ty1: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty1 ^
+                  ", ty2: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty2 ^
                   ", e1: " ^ Pp.stringFromCore_pexpr e1 ^
                   ", e2: " ^ Pp.stringFromCore_pexpr e2
                 ) in
@@ -875,7 +876,7 @@ else
       | A.AilEunary A.Address e ->
           (* STD §6.5.3.2#3, sentence 5 *)
           if AilTypesAux.is_object (ctype_of e) then
-            let _ = Debug.print_debug 1 [] (fun _ -> "aileunary adress, result type: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers result_ty) in
+            let _ = Debug.print_debug 1 [] (fun _ -> "aileunary adress, result type: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers result_ty) in
              let sym = Symbol.fresh () in
              self e >>= fun core_e ->
              E.return $
@@ -921,7 +922,7 @@ else
                           [ ( Caux.mk_specified_pat obj_sym_pat
                             , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
 match AilTypesAux.unatomic ty with
-  | Aty.Basic (Aty.Integer _) ->
+  | Ctype.Basic (Ctype.Integer _) ->
 (*
                               stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))
 *)
@@ -931,11 +932,11 @@ match AilTypesAux.unatomic ty with
                           stdlib.mkcall_catch_exceptional_condition result_ty core_incr
       else (* is unsigned *)
                           stdlib.mkcall_wrapI result_ty core_incr
-  | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
+  | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
                           (* TODO: not correct semantics for float *)
                           Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
                               (*error "AilEunary PostfixIncr, floating type"*)
-  | Aty.Pointer _ ref_ty ->
+  | Ctype.Pointer _ ref_ty ->
                               Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe 1)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr"
@@ -986,17 +987,17 @@ end
                             [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy))
                               , Caux.mk_specified_pe
 match AilTypesAux.unatomic ty with
-  | Aty.Basic (Aty.Integer _) ->
+  | Ctype.Basic (Ctype.Integer _) ->
                           (* TODO: check again *)
                           let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
       if AilTypesAux.is_signed_integer_type result_ty then
                           stdlib.mkcall_catch_exceptional_condition result_ty core_decr
       else (* is unsigned *)
                           stdlib.mkcall_wrapI result_ty core_decr
-  | Aty.Basic (Aty.Floating (Aty.RealFloating _)) ->
+  | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
                           (* TODO: not correct semantics for float *)
                           Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
-  | Aty.Pointer _ ref_ty ->
+  | Ctype.Pointer _ ref_ty ->
                                    (* TODO: check again *)
                                    Caux.mk_array_shift obj_sym_pe (Caux.proj_ctype ref_ty) (Caux.mk_integer_pe (0 - 1))
   | (*BISECT-IGNORE*) _ ->
@@ -1472,7 +1473,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
           (* NOTE: by Ail typing we can just use the referenced type of either operand *)
           (* TODO: check that, we "only" know that their referenced types are compatible *)
           let diff_ty_pe = match (ctype_of e1) with
-            | Aty.Ctype _ (Aty.Pointer _ ref_ty1) ->
+            | Ctype.Ctype _ (Ctype.Pointer _ ref_ty1) ->
                 Caux.mk_ail_ctype_pe ref_ty1
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "ptrdiff"
@@ -1488,7 +1489,7 @@ else if AilTypesAux.is_pointer (ctype_of e1) && AilTypesAux.is_pointer (ctype_of
                         (C.Expr [] (C.Ememop Mem_common.Ptrdiff [diff_ty_pe; obj1_sym_pe; obj2_sym_pe]))
                         begin
                           Caux.mk_pure_e begin
-                            Caux.mk_if_pe (stdlib.mkcall_is_representable memop_sym_pe Aty.ptrdiff_t)
+                            Caux.mk_if_pe (stdlib.mkcall_is_representable memop_sym_pe Ctype.ptrdiff_t)
                               (Caux.mk_specified_pe memop_sym_pe)
                               (Caux.mk_undef_pe loc Undefined.UB050_pointers_subtraction_not_representable)
                           end
@@ -1791,7 +1792,7 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
            )
   | Nothing ->
         (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
-        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Aty.no_qualifiers (ctype_of e2)) in
+        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers (ctype_of e2)) in
         self e2 >>= fun core_e2 ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e2_sym_pat, e2_sym_pe) ->
         E.return (
@@ -1980,7 +1981,7 @@ end
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
-           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+           | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
                ref_ty
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall atomic_store_explicit"
@@ -2009,7 +2010,7 @@ end
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
-           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+           | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
                ref_ty
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall atomic_load_explicit"
@@ -2042,7 +2043,7 @@ end
       let mo_success = translate_memory_order order_success_e in
       let mo_failure = translate_memory_order order_failure_e in
       let (ty1,ty2) = match (ctype_of object_e, ctype_of expected_e) with
-        | (Aty.Ctype _ (Aty.Pointer _ ty1), Aty.Ctype _ (Aty.Pointer _ ty2)) -> (ty1,ty2)
+        | (Ctype.Ctype _ (Ctype.Pointer _ ty1), Ctype.Ctype _ (Ctype.Pointer _ ty2)) -> (ty1,ty2)
         | _ ->
           illTypedAil loc "AilEcall atomic_compare_exchange_strong_explicit"
       end in
@@ -2076,7 +2077,7 @@ end
               [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
                                    ;Caux.mk_specified_pat expected_sym_pat],
                  Caux.pcompare_exchange_strong
-                    loc (Caux.mk_ail_ctype_pe (Aty.Ctype [] (AilTypesAux.unatomic ty1)))
+                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (AilTypesAux.unatomic ty1)))
                     object_sym_pe expected_sym_pe desired_sym_pe
                     mo_success mo_failure
                 )
@@ -2095,7 +2096,7 @@ end
       let mo_success = translate_memory_order order_success_e in
       let mo_failure = translate_memory_order order_failure_e in
       let (ty1,ty2) = match (ctype_of object_e, ctype_of expected_e) with
-        | (Aty.Ctype _ (Aty.Pointer _ ty1), Aty.Ctype _ (Aty.Pointer _ ty2)) -> (ty1,ty2)
+        | (Ctype.Ctype _ (Ctype.Pointer _ ty1), Ctype.Ctype _ (Ctype.Pointer _ ty2)) -> (ty1,ty2)
         | _ ->
           illTypedAil loc "AilEcall atomic_compare_exchange_weak_explicit"
       end in
@@ -2129,7 +2130,7 @@ end
               [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
                                    ;Caux.mk_specified_pat expected_sym_pat],
                  Caux.pcompare_exchange_weak
-                    loc (Caux.mk_ail_ctype_pe (Aty.Ctype [] (AilTypesAux.unatomic ty1)))
+                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (AilTypesAux.unatomic ty1)))
                     object_sym_pe expected_sym_pe desired_sym_pe
                     mo_success mo_failure
                 )
@@ -2149,7 +2150,7 @@ end
          (* TODO: remove code duplication *)
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
-           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+           | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
                ref_ty
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall linux_read"
@@ -2170,7 +2171,7 @@ end
       | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_write")) [lobject_e; desired_e; order_e] ->
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
-           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+           | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
                ref_ty
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall linux_write"
@@ -2197,7 +2198,7 @@ end
       | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_rmw")) [lobject_e; desired_e; order_e] ->
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
-           | Aty.Ctype _ (Aty.Pointer _ ref_ty) ->
+           | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
                ref_ty
            | (*BISECT-IGNORE*) _ ->
                illTypedAil loc "AilEcall linux_rmw"
@@ -2233,7 +2234,7 @@ end
          let mo_success = translate_memory_order order_success_e in
          let mo_failure = translate_memory_order order_failure_e in
          let ty = match ctype_of object_e with
-           | Aty.Pointer _ ty ->
+           | Ctype.Pointer _ ty ->
                ty
            | _ ->
                error "Translation.translate_expression, AilEcall atomic_compare_exchange_strong_explicit: Ail type error"
@@ -2297,7 +2298,7 @@ TODO: #9
       | A.AilEcall e [] -> (* NOTE: if there are no arguments, we don't need all the temporary object creation stuff *)
           (* STD §6.5.2.2 *)
           let ret_ty = match ctype_of e with
-            | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Function _ (_, ret_ty) params isVariadic))) ->
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function _ (_, ret_ty) params isVariadic))) ->
                 if List.length params = 0 && (not isVariadic) then
                   ret_ty
                 else
@@ -2329,7 +2330,7 @@ TODO: #9
           (* TODO: This is ignoring has_proto, §6.5.2.2#6 is not being considered! *)
           (* STD §6.5.2.2 *)
           let (expect_ret_ty, expect_params, expect_is_variadic) = match ctype_of e with
-            | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Function _ (_, ret_ty) qs_tys is_variadic))) ->
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Function _ (_, ret_ty) qs_tys is_variadic))) ->
                 (ret_ty, qs_tys, is_variadic)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEcall"
@@ -2414,7 +2415,7 @@ TODO: #9
                 let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion tmp_implementation arg_ty) in
                 (prom_ty, stdlib.mkcall_conv_loaded_int prom_ty arg_sym_pe)
               else if AilTypesAux.is_floating arg_ty then
-                (Aty.Ctype [] (Aty.Basic (Aty.Floating (Aty.RealFloating Aty.Double))), arg_sym_pe) (* TODO: convert this to double *)
+                (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))), arg_sym_pe) (* TODO: convert this to double *)
               else (* TODO: should I add the case for pointers as well? *)
                 (arg_ty, arg_sym_pe)
             in E.return (Caux.mk_ail_ctype_pe arg_ty :: rev_arg_ty_pes
@@ -2556,9 +2557,9 @@ else (* is_pointer *)
             )
       | A.AilEoffsetof ty membr_ident ->
           let tag_sym = match ty with
-            | Aty.Ctype _ (Aty.Struct x) ->
+            | Ctype.Ctype _ (Ctype.Struct x) ->
                 x
-            | Aty.Ctype _ (Aty.Union x) ->
+            | Ctype.Ctype _ (Ctype.Union x) ->
                 x
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEoffsetof"
@@ -2572,7 +2573,7 @@ else (* is_pointer *)
       
       | A.AilEarray _ _ e_opts ->
           let elem_ty = match result_ty with
-            | Aty.Ctype _ (Aty.Array ty _) ->
+            | Ctype.Ctype _ (Ctype.Array ty _) ->
                 ty
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEarray"
@@ -2714,9 +2715,9 @@ else (* is_pointer *)
       | A.AilEmemberof e ident ->
           (* STD §6.5.2.3 *)
           let (tag_sym, oTy) = match ctype_of e with
-            | Aty.Ctype _ (Aty.Struct tag_sym) ->
+            | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                 (tag_sym, C.OTy_struct tag_sym)
-            | Aty.Ctype _ (Aty.Union tag_sym) ->
+            | Ctype.Ctype _ (Ctype.Union tag_sym) ->
                 (tag_sym, C.OTy_union tag_sym)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEmemberof"
@@ -2750,8 +2751,8 @@ else (* is_pointer *)
       | A.AilEmemberofptr e ident ->
           (* STD §6.5.2.3 *)
           let (ref_ty, tag_sym) = match ctype_of e with
-            | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Struct tag_sym) as ref_ty)) -> (ref_ty, tag_sym)
-            | Aty.Ctype _ (Aty.Pointer _ (Aty.Ctype _ (Aty.Union tag_sym) as ref_ty))  -> (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Struct tag_sym) as ref_ty)) -> (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Union tag_sym) as ref_ty))  -> (ref_ty, tag_sym)
             | (*BISECT-IGNORE*) _ -> illTypedAil loc "AilEmemberofptr"
           end in
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e_sym_pat   , e_sym_pe   ) ->
@@ -2790,29 +2791,29 @@ else (* is_pointer *)
           E.return $ Caux.mk_pure_e match str with
 (*
             | "INT8_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8)))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 8)))))
             | "INT16_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16)))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 16)))))
             | "INT32_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32)))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 32)))))
             | "INT64_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64)))))
+                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 64)))))
             | "INT8_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 8)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 8)))))
             | "INT16_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 16)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 16)))))
             | "INT32_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 32)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 32)))))
             | "INT64_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Signed (Aty.IntN_t 64)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 64)))))
             | "UINT8_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 8)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 8)))))
             | "UINT16_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 16)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 16)))))
             | "UINT32_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 32)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 32)))))
             | "UINT64_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Aty.Integer (Aty.Unsigned (Aty.IntN_t 64)))))
+                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 64)))))
             | "CHAR_BIT" ->
                 C.PEimpl Implementation_.Characters__bits_in_byte
 *)
@@ -2825,10 +2826,10 @@ else (* is_pointer *)
           let elem_ty = match pref_opt with
             | Nothing ->
                 (* STD §6.4.5#6, sentence 3 *)
-                Cty.Basic (Aty.Integer Aty.Char)
+                Cty.Basic (Ctype.Integer Ctype.Char)
             | Just A.Enc_u8 ->
                 (* STD §6.4.5#6, sentence 4 *)
-                Cty.Basic (Aty.Integer Aty.Char)
+                Cty.Basic (Ctype.Integer Ctype.Char)
             | Just A.Enc_u ->
                 (* STD §6.4.5#6, sentence 6 *)
                 Cty.char16_t
@@ -2876,17 +2877,17 @@ a
       
       
 *)
-      | A.AilEsizeof _ (Aty.Ctype _ (Aty.Basic (Aty.Integer Aty.Char))) ->
+      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer Ctype.Char))) ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
               C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
             )
-      | A.AilEsizeof _ (Aty.Ctype _ (Aty.Basic (Aty.Integer (Aty.Signed Aty.Ichar)))) ->
+      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer (Ctype.Signed Ctype.Ichar)))) ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
               C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
             )
-      | A.AilEsizeof _ (Aty.Ctype _ (Aty.Basic (Aty.Integer (Aty.Unsigned Aty.Ichar)))) ->
+      | A.AilEsizeof _ (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)))) ->
           E.return $
             C.Expr [Annot.Astd "§6.5.3.4#4, sentence 1"] (
               C.Epure (Caux.mk_specified_pe (Caux.mk_integer_pe 1))
@@ -2897,7 +2898,7 @@ a
       
       | A.AilEsizeof_expr e ->
           (* TODO: check qualifiers *)
-          self (A.AnnotatedExpression annot std_annots loc (A.AilEsizeof Aty.no_qualifiers (ctype_of e)))
+          self (A.AnnotatedExpression annot std_annots loc (A.AilEsizeof Ctype.no_qualifiers (ctype_of e)))
       
       | A.AilEalignof _ ty ->
           E.return $
@@ -3125,9 +3126,9 @@ let collect_cases s =
 
 
 type collect_visibles_state = <|
-  visible_syms: list (Symbol.sym * Aty.ctype);
-  goto_visibles_:  map Symbol.sym (list (Symbol.sym * Aty.ctype));
-  label_visibles_: map Symbol.sym (list (Symbol.sym * Aty.ctype));
+  visible_syms: list (Symbol.sym * Ctype.ctype);
+  goto_visibles_:  map Symbol.sym (list (Symbol.sym * Ctype.ctype));
+  label_visibles_: map Symbol.sym (list (Symbol.sym * Ctype.ctype));
 |>
 
 
@@ -3291,7 +3292,7 @@ let collect_visibles stmt =
 
 
 (* TODO: morally the kills and creates should be unseq() *)
-val mk_run_e: Loc.t -> Symbol.sym -> list Symbol.sym -> list (Symbol.sym * Aty.ctype) -> list C.pexpr -> C.expr unit
+val mk_run_e: Loc.t -> Symbol.sym -> list Symbol.sym -> list (Symbol.sym * Ctype.ctype) -> list C.pexpr -> C.expr unit
 let translation_mk_run_e loc sym visibles_before visibles_after pes =
   let killed_syms =
     List.filter (fun sym ->
@@ -3324,7 +3325,7 @@ let inline mk_run_e = translation_mk_run_e
 open Operators
 
 type translate_stmt_env = <|
-  return_ty: Aty.ctype;
+  return_ty: Ctype.ctype;
   is_Noreturn: bool;
   
   variadic_sym_opt: maybe Symbol.sym;
@@ -3339,12 +3340,12 @@ type translate_stmt_env = <|
              Symbol.sym (* loop continuation symbol *)
            * Symbol.sym (* continue continuation symbol *)
            * Symbol.sym (* break continuation symbol *)
-           * list (Symbol.sym * Aty.ctype)
+           * list (Symbol.sym * Ctype.ctype)
   );
-  break: maybe (Symbol.sym * list (Symbol.sym * Aty.ctype));
+  break: maybe (Symbol.sym * list (Symbol.sym * Ctype.ctype));
   
-  goto_visibles:  map Symbol.sym (list (Symbol.sym * Aty.ctype));
-  label_visibles: map Symbol.sym (list (Symbol.sym * Aty.ctype));
+  goto_visibles:  map Symbol.sym (list (Symbol.sym * Ctype.ctype));
+  label_visibles: map Symbol.sym (list (Symbol.sym * Ctype.ctype));
 |>
 
 
@@ -3705,9 +3706,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e))) in
           E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
           match AilTypesAux.unatomic ty with
-            | Aty.Pointer _ ref_ty ->
+            | Ctype.Pointer _ ref_ty ->
                 let mk_store =
-                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
+                  if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
                 if Aaux.is_null_pointer_constant e then
                   E.return (
                     mk_store loc (Caux.mk_ail_ctype_pe ty) (Caux.mk_sym_pe ptr_sym)
@@ -3721,13 +3722,13 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
                     )
             | ty ->
                 let mk_store =
-                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
+                  if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
                 (* we are not dealing with a pointer initialisation *)
 (*
                 E.fresh_typed_symbol true (ctype_of e) >>= fun (e_sym, e_bTy) ->
                 let e_sym_pe = Caux.mk_sym_pe e_sym in
 *)
-                let cty = Aty.Ctype [] ty in
+                let cty = Ctype.Ctype [] ty in
                 translate_expression e >>= fun core_e ->
                 E.return (
                   Caux.mk_sseq_e (Caux.mk_sym_pat e_sym e_bTy) core_e
@@ -3832,7 +3833,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     (* TODO: check, might need some pointer to pointer conversion *)
                     Caux.mk_sym_pe e_sym in
                 let mk_store =
-                  if qs.Aty.const then Caux.pstore_lock else Caux.pstore in
+                  if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in
                 let core_e =
                   Caux.add_loc (locOf core_e) $
                     Caux.mk_sseq_e (Caux.mk_sym_pat sym_global (C.BTy_object C.OTy_pointer)) core_create (
@@ -3930,7 +3931,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                     (* §5.1.2.2.3#1 sentence 1*)
                     (* TODO: "If the return type is not compatible with int" *)
                     C.Ereturn (Caux.mk_specified_pe (Caux.mk_integer_pe 0))
-                  else if return_ty = Aty.Void then
+                  else if return_ty = Ctype.Void then
                     C.Ereturn Caux.mk_unit_pe
                   else
                     (* §6.9.1#12 *)
@@ -3957,7 +3958,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       (* STD §5.1.2.2.3#1 sentence 1 *)
                       (* TODO: "If the return type is not compatible with int" *)
                       C.Erun () ret_label [Caux.mk_specified_pe (Caux.mk_integer_pe 0)]
-                    else if return_ty = Aty.Void then
+                    else if return_ty = Ctype.Void then
                       C.Erun () ret_label [Caux.mk_unit_pe]
                     else
                       (* §6.9.1#12 *)
@@ -4033,7 +4034,7 @@ in
               (* TODO: "If the return type is not compatible with int" *)
               C.Ereturn (Caux.mk_integer_pe_pe 0)
             
-            else if ret_ty = Aty.Void then
+            else if ret_ty = Ctype.Void then
               C.Ereturn (C.PEval (C.Vunit))
             else
               (* §6.9.1#12 *)

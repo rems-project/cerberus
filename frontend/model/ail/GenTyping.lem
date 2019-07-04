@@ -1,4 +1,4 @@
-open import Pervasives Common Utils AilSyntax AilTypes AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc
+open import Pervasives Common Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
 import Constraint Undefined Builtins Debug Pp Cmm_csem Global
 
 module AAux = AilTypesAux
@@ -768,7 +768,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin builtin_function) (object_e' :: es')
-                             , GenRValueType (GenBasic (GenInteger (Concrete (AilTypes.Bool)))))
+                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
                   E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicCompareExchange gty
@@ -793,7 +793,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin builtin_function) (object_e' :: es')
-                             , GenRValueType (GenBasic (GenInteger (Concrete (AilTypes.Bool)))))
+                             , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
                   E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicCompareExchange gty

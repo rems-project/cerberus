@@ -1,9 +1,7 @@
 open import Pervasives
 
-import Symbol Cabs AilTypes AilTypesAux
+import Symbol Cabs Ctype AilTypesAux
 open import Utils Core_ctype
-
-open import {hol} `tagsTheory`
 
 (* SEE src/tags.mli for the documentation *)
 val tagDefs: unit -> map Symbol.sym tag_definition
@@ -54,17 +52,17 @@ declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
 
 
 
-val     are_compatible: (AilTypes.qualifiers * Core_ctype.ctype) -> (AilTypes.qualifiers * Core_ctype.ctype) -> bool
+val     are_compatible: (Ctype.qualifiers * Core_ctype.ctype) -> (Ctype.qualifiers * Core_ctype.ctype) -> bool
 let rec are_compatible (qs1, ty1) (qs2, ty2) =
   (* qualifiers need to be equal (see §6.7.3#10) *)
   qs1 = qs2 && match (ty1, ty2) with
     | (Void, Void) ->
         true
     | (Basic bty1, Basic bty2) ->
-        AilTypesAux.are_compatible (qs1, AilTypes.Ctype [] (AilTypes.Basic bty1)) (qs2, AilTypes.Ctype [] (AilTypes.Basic bty2))
+        AilTypesAux.are_compatible (qs1, Ctype.Ctype [] (Ctype.Basic bty1)) (qs2, Ctype.Ctype [] (Ctype.Basic bty2))
     | (Array elem_ty1 n1_opt, Array elem_ty2 n2_opt) ->
         (* STD §6.7.6.2#6 *)
-           are_compatible (AilTypes.no_qualifiers, elem_ty1) (AilTypes.no_qualifiers, elem_ty2)
+           are_compatible (Ctype.no_qualifiers, elem_ty1) (Ctype.no_qualifiers, elem_ty2)
         && match (n1_opt, n1_opt) with
              | (Just n1, Just n2) -> n1 = n2
              | (Just _ , Nothing) -> true
@@ -96,7 +94,7 @@ let rec are_compatible (qs1, ty1) (qs2, ty2) =
                     false
                   else
                     List.all (fun ((ident1, ty1), (ident2, ty2)) ->
-                      ident1 = ident2 && are_compatible (AilTypes.no_qualifiers, ty1) (AilTypes.no_qualifiers, ty2)
+                      ident1 = ident2 && are_compatible (Ctype.no_qualifiers, ty1) (Ctype.no_qualifiers, ty2)
                     ) (List.zip xs1 xs2)
 
               | _ ->
@@ -111,7 +109,7 @@ let rec are_compatible (qs1, ty1) (qs2, ty2) =
     | (Builtin str1, Builtin str2) ->
         str1 = str2
     | (Atomic atom_ty1, Atomic atom_ty2) ->
-        are_compatible (AilTypes.no_qualifiers, atom_ty1) (AilTypes.no_qualifiers, atom_ty2)
+        are_compatible (Ctype.no_qualifiers, atom_ty1) (Ctype.no_qualifiers, atom_ty2)
     | _ ->
         (* TODO: we can't see Enum types here and there is some impl-def stuff *)
         false

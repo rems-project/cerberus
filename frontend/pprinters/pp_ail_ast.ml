@@ -1,5 +1,5 @@
 open AilSyntax
-open AilTypes
+open Ctype
 open GenTypes
 
 open Pp_prelude
@@ -203,9 +203,9 @@ let pp_stringLiteral (pref_opt, strs) =
   (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
 
 let empty_qs =
-  { AilTypes.const    = false
-  ; AilTypes.restrict = false
-  ; AilTypes.volatile = false
+  { const    = false
+  ; restrict = false
+  ; volatile = false
   }
 
 

@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core Core_ctype Annot Map Map_extra
-import AilSyntax AilTypes Core_ctype_aux
+import AilSyntax Ctype Core_ctype_aux
 import Product Exception Mem Mem_aux
 
 open import Errors
@@ -26,9 +26,9 @@ let rec core_object_type_of_ctype ty =
   match ty with
    | Void ->
        Nothing
-   | Basic (AilTypes.Integer _) ->
+   | Basic (Ctype.Integer _) ->
        Just OTy_integer
-   | Basic (AilTypes.Floating _) ->
+   | Basic (Ctype.Floating _) ->
        Just OTy_floating
    | Array ty _ ->
        match core_object_type_of_ctype ty with
@@ -148,9 +148,9 @@ let rec memValueFromValue ty cval =
         Nothing
     | (_, Vloaded (LVunspecified ty')) ->
         Just (Mem.unspecified_mval ty') (* TODO: check ty = ty'? *)
-    | (Basic (AilTypes.Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
+    | (Basic (Ctype.Integer ity), Vloaded (LVspecified (OVinteger ival))) ->
         Just (Mem.integer_value_mval ity ival)
-    | (Basic (AilTypes.Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
+    | (Basic (Ctype.Floating fty), Vloaded (LVspecified (OVfloating fval))) ->
         Just (Mem.floating_value_mval fty fval)
     | (Pointer _ ref_ty, Vobject (OVpointer ptr_val)) -> (* TODO: not sure about this *)
         Just (Mem.pointer_mval ref_ty ptr_val)
@@ -169,7 +169,7 @@ let rec memValueFromValue ty cval =
           ) (Just []) lvals
     | (Struct tag_sym1, Vloaded (LVspecified (OVstruct tag_sym2 xs))) ->
         let () = Debug.print_debug 1 [] (fun () -> "Comparing struct tag symbols: " ^ Symbol.show_raw tag_sym1 ^ " = " ^ Symbol.show_raw tag_sym2) in
-        if Core_ctype_aux.are_compatible (AilTypes.no_qualifiers, Struct tag_sym1) (AilTypes.no_qualifiers, Struct tag_sym2) then
+        if Core_ctype_aux.are_compatible (Ctype.no_qualifiers, Struct tag_sym1) (Ctype.no_qualifiers, Struct tag_sym2) then
           Just (Mem.struct_mval tag_sym1 xs)
         else
           Nothing
@@ -188,35 +188,35 @@ let rec memValueFromValue ty cval =
 
 
 
-(* Project an AilTypes.ctype into a Core.ctype *)
-val     proj_ctype: AilTypes.ctype -> Core_ctype.ctype
-let rec proj_ctype (AilTypes.Ctype _ ty) =
+(* Project an Ctype.ctype into a Core.ctype *)
+val     proj_ctype: Ctype.ctype -> Core_ctype.ctype
+let rec proj_ctype (Ctype.Ctype _ ty) =
   match ty with
-    | AilTypes.Void ->
+    | Ctype.Void ->
         Core_ctype.Void
-    | AilTypes.Basic bty ->
+    | Ctype.Basic bty ->
         Core_ctype.Basic bty
-    | AilTypes.Array ty n_opt ->
+    | Ctype.Array ty n_opt ->
         Core_ctype.Array (proj_ctype ty) n_opt
-    | AilTypes.Function _ (ret_qs, ret_ty) params isVariadic ->
+    | Ctype.Function _ (ret_qs, ret_ty) params isVariadic ->
         Core_ctype.Function (ret_qs, proj_ctype ret_ty) (
           List.map (fun (qs, ty, _) ->
             (qs, proj_ctype ty)
           ) params
         ) isVariadic
-    | AilTypes.Pointer qs ty ->
+    | Ctype.Pointer qs ty ->
         Core_ctype.Pointer qs (proj_ctype ty)
-    | AilTypes.Atomic ty ->
+    | Ctype.Atomic ty ->
         Core_ctype.Atomic (proj_ctype ty)
-    | AilTypes.Struct tag_sym ->
+    | Ctype.Struct tag_sym ->
         Core_ctype.Struct tag_sym
-    | AilTypes.Union tag_sym ->
+    | Ctype.Union tag_sym ->
         Core_ctype.Union tag_sym
 (*
-    | AilTypes.Struct tag_sym ident_tys ->
+    | Ctype.Struct tag_sym ident_tys ->
         Core_ctype.Struct tag_sym
           (List.map (fun (ident, ty) -> (ident, proj_ctype ty)) ident_tys)
-    | AilTypes.Union tag_sym ident_tys ->
+    | Ctype.Union tag_sym ident_tys ->
         Core_ctype.Union tag_sym
           (List.map (fun (ident, ty) -> (ident, proj_ctype ty)) ident_tys)
 *)
@@ -297,7 +297,7 @@ let mk_boolean_pe b =
 
 (* TODO: PEval Vtrue, Vfalse *)
 
-val mk_ail_ctype_pe: AilTypes.ctype -> pexpr
+val mk_ail_ctype_pe: Ctype.ctype -> pexpr
 let mk_ail_ctype_pe ty =
   Pexpr [] () (PEval (Vctype (proj_ctype ty)))
 
@@ -497,9 +497,9 @@ let plinux_rmw loc ty x n mo =
 let rec zeros_aux tagDefs ty =
   let zero_ival = Mem.integer_ival 0 in
   match ty with
-    | Core_ctype.Basic (AilTypes.Integer ity) ->
+    | Core_ctype.Basic (Ctype.Integer ity) ->
         Mem.integer_value_mval ity zero_ival
-    | Core_ctype.Basic (AilTypes.Floating fty) ->
+    | Core_ctype.Basic (Ctype.Floating fty) ->
         Mem.floating_value_mval fty Mem.zero_fval
     | Core_ctype.Array elem_ty (Just n) ->
         Mem.array_mval (List.replicate (natFromInteger n) (zeros_aux tagDefs elem_ty))
@@ -551,12 +551,12 @@ TODO: bring back structs/unions
   end in
 *)
   match ty with
-    | AilTypes.Void             -> Core_ctype.Void
-    | AilTypes.Basic bt         -> Core_ctype.Basic bt
-    | AilTypes.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
-    | AilTypes.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
-    | AilTypes.Pointer _ ty    -> Core_ctype.Pointer (proj_ctype ty)
-    | AilTypes.Atomic ty        -> Core_ctype.Atomic (proj_ctype ty)
+    | Ctype.Void             -> Core_ctype.Void
+    | Ctype.Basic bt         -> Core_ctype.Basic bt
+    | Ctype.Array ty n       -> Core_ctype.Array (proj_ctype ty) n
+    | Ctype.Function ty ps b -> Core_ctype.Function (proj_ctype ty) (List.map (proj_ctype -| snd) ps) b
+    | Ctype.Pointer _ ty    -> Core_ctype.Pointer (proj_ctype ty)
+    | Ctype.Atomic ty        -> Core_ctype.Atomic (proj_ctype ty)
 (*
     | Ail.STRUCT _ tag members -> STRUCT tag (List.map (fun (a, m) -> (a, proj_member m)) members)
     | Ail.UNION  _ tag members -> UNION  tag (List.map (fun (a, m) -> (a, proj_member m)) members)
@@ -574,30 +574,30 @@ end
 
 (* Bring back a Core.ctype into a Ail.ctype (with loss of qualifiers if coming from proj_ctype) *)
 let rec unproj_ctype ty =
-  AilTypes.Ctype [] (match ty with
+  Ctype.Ctype [] (match ty with
     | Core_ctype.Void ->
-        AilTypes.Void
+        Ctype.Void
     | Core_ctype.Basic bty ->
-        AilTypes.Basic bty
+        Ctype.Basic bty
     | Core_ctype.Array ty n_opt ->
-        AilTypes.Array (unproj_ctype ty) n_opt
+        Ctype.Array (unproj_ctype ty) n_opt
     | Core_ctype.Function (qs, ty) qs_tys is_variadic ->
         (* NOTE: there is a potential loss of information here for hasProto and
            inside the parameters with isRegister. But this shouldn't matter to
            the dynamics *)
-        AilTypes.Function false (qs, unproj_ctype ty) (
+        Ctype.Function false (qs, unproj_ctype ty) (
           List.map (fun (qs,ty) ->
             (qs, unproj_ctype ty, false)
           ) qs_tys
         ) is_variadic
     | Core_ctype.Pointer qs ty ->
-        AilTypes.Pointer qs (unproj_ctype ty)
+        Ctype.Pointer qs (unproj_ctype ty)
     | Core_ctype.Atomic ty ->
-        AilTypes.Atomic (unproj_ctype ty)
+        Ctype.Atomic (unproj_ctype ty)
     | Core_ctype.Struct tag ->
-        AilTypes.Struct tag
+        Ctype.Struct tag
     | Core_ctype.Union tag ->
-        AilTypes.Union tag
+        Ctype.Union tag
   end)
 
 
@@ -609,12 +609,12 @@ let rec unproj_ctype ty =
   end in
 *)
   match ty with
-    | Core_ctype.Void              -> AilTypes.Void
-    | Core_ctype.Basic bt          -> AilTypes.Basic bt
-    | Core_ctype.Array ty n        -> AilTypes.Array (unproj_ctype ty) n
-    | Core_ctype.Function ty tys b -> AilTypes.Function (unproj_ctype ty) (List.map (Product.make AilTypes.no_qualifiers -| unproj_ctype) tys) b
-    | Core_ctype.Pointer ty        -> AilTypes.Pointer AilTypes.no_qualifiers (unproj_ctype ty)
-    | Core_ctype.Atomic ty         -> AilTypes.Atomic (unproj_ctype ty)
+    | Core_ctype.Void              -> Ctype.Void
+    | Core_ctype.Basic bt          -> Ctype.Basic bt
+    | Core_ctype.Array ty n        -> Ctype.Array (unproj_ctype ty) n
+    | Core_ctype.Function ty tys b -> Ctype.Function (unproj_ctype ty) (List.map (Product.make Ctype.no_qualifiers -| unproj_ctype) tys) b
+    | Core_ctype.Pointer ty        -> Ctype.Pointer Ctype.no_qualifiers (unproj_ctype ty)
+    | Core_ctype.Atomic ty         -> Ctype.Atomic (unproj_ctype ty)
 (*
     | STRUCT tag members -> Ail.STRUCT Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
     | UNION  tag members -> Ail.UNION  Ail.no_qualifiers tag (List.map (fun (a, m) -> (a, unproj_member m)) members)
