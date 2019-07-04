@@ -106,9 +106,9 @@ let rec wf_type sigm (Ctype _ ty) =
       return ()
   | Union _ ->
       return ()
-
+(*
   | Builtin _ ->
-      return ()
+      return () *)
   end
 
 

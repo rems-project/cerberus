@@ -13,10 +13,10 @@ val is_array: genType -> bool
 let is_array = function
   | GenArray _ _ ->
       true
-  | GenBuiltin "jmp_buf" ->
+(*  | GenBuiltin "jmp_buf" ->
       true
   | GenBuiltin "fpos_t" ->
-      false
+      false *)
   | _ ->
       false
 end
@@ -301,8 +301,6 @@ let interpret_genType loc impl gty =
         ret (Struct tag)
     | GenUnion tag ->
         ret (Union tag)
-    | GenBuiltin str ->
-        ret (Builtin str)
     | GenAtomic ty ->
         ret (Atomic ty)
   end
@@ -376,7 +374,7 @@ let is_complete sigm gty =
          | _ ->
              false
        end
-  | GenBuiltin "cnd_t" ->
+(*  | GenBuiltin "cnd_t" ->
       true
   | GenBuiltin "fpos_t" ->
       true
@@ -389,7 +387,7 @@ let is_complete sigm gty =
   | GenBuiltin "tss_t" ->
       true
   | GenBuiltin "va_list" ->
-      true
+      true *)
   | _ ->
       false
 end

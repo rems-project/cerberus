@@ -169,10 +169,10 @@ let is_array ty =
   match unatomic ty with
   | Array _ _ ->
       true
-  | Builtin "jmp_buf" ->
+(*  | Builtin "jmp_buf" ->
       true
   | Builtin "fpos_t" ->
-      false
+      false *)
   | _ ->
       false
 end
@@ -264,7 +264,7 @@ val is_object: ctype -> bool
 let is_object ty =
   (* TODO: check atomic *)
   match unatomic ty with
-  | Builtin "FILE" ->
+(*  | Builtin "FILE" ->
       true
   | Builtin "cnd_t" ->
       true
@@ -279,7 +279,7 @@ let is_object ty =
   | Builtin "tss_t" ->
       true
   | Builtin "va_list" ->
-      true
+      true *)
   | _ ->
       not (is_function ty)
 end
@@ -342,7 +342,7 @@ let is_complete sigm ty =
       (* STD §6.2.5#22, sentence 1-2 *)
       (* STD §6.7.6.2#4, sentence 1 *)
       isJust n_opt
-  | Builtin "cnd_t" ->
+(*  | Builtin "cnd_t" ->
       true
   | Builtin "fpos_t" ->
       true
@@ -355,7 +355,7 @@ let is_complete sigm ty =
   | Builtin "tss_t" ->
       true
   | Builtin "va_list" ->
-      true
+      true *)
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match Context.lookup (=) sigm.tag_definitions sym with
@@ -374,8 +374,6 @@ let is_complete sigm ty =
         | _ ->
             false
       end
-  | Builtin str ->
-      true (* FIXME: error ("TODO: AilTypesAux.is_complete, Builtin ==> " ^ str) *)
   | _ ->
       false
 end
@@ -988,8 +986,6 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
         (* STD §6.2.7#1 *)
         (* TODO: being conservative here (aka STD compliant) *)
         tag1 = tag2 (* TODO/NOTE: just looking at the tag should be enough since we only have one translation unit (?) *)
-    | (Builtin str1, Builtin str2) ->
-        str1 = str2
     | (Atomic atom_ty1, Atomic atom_ty2) ->
         are_compatible (no_qualifiers, atom_ty1) (no_qualifiers, atom_ty2)
     | _ ->
@@ -1129,12 +1125,6 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* thanks to the compatibility test we know ref_qs1 = ref_qs2  *)
         Maybe.map (fun ref_ty -> Ctype (a1++a2) (Pointer ref_qs1 ref_ty)) (make_composite ref_ty1 ref_ty2)
-    | (Builtin str1, Builtin str2) ->
-        (* NOTE: We're conservative here. *)
-        if str1 = str2 then
-          Just (Ctype (a1++a2) (Builtin str1))
-        else
-          Nothing
     | _ ->
         Nothing
   end
@@ -1451,16 +1441,10 @@ let rec has_pointer_at_leafs (Ctype _ ty) =
         false
     | Union _ ->
         false
-    | Builtin _ ->
-        (* TODO *)
-        false
   end
 
 let mk_ctype_integer ity =
   Ctype [] (Basic (Integer ity))
-
-let mk_ctype_builtin str =
-  Ctype [] (Builtin str)
 
 let mk_ctype_atomic cty =
   Ctype [] (Atomic cty)

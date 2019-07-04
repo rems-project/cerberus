@@ -95,9 +95,8 @@ let rec simplify_integer_value_base ival_ =
                   | None ->
                       Right ival_
                 end
-          | Enum _
-          | IBuiltin _ ->
-              failwith "IVmin Enum, Builtin"
+          | Enum _ ->
+              failwith "IVmin Enum"
         end
     
     | IVmax ity ->
@@ -127,8 +126,6 @@ let rec simplify_integer_value_base ival_ =
                     Left signed_max
                 | Enum _ ->
                     failwith "IVmax Enum"
-                | IBuiltin _ ->
-                    failwith "IVmax IBuiltin"
               end
           | None ->
               Right ival_
@@ -208,7 +205,7 @@ let rec simplify_integer_value_base ival_ =
                 let max_size = List.fold_left (fun acc z -> max z acc) size sizes in
                 Left (add max_size (sub align (integerRem_f max_size align)))
               end
-          | Builtin0 str ->
+          | Builtin str ->
               failwith "TODO simplify_integer_value: IVsizeof Builtin"
         end
     | IValignof ty ->
@@ -264,7 +261,7 @@ let rec simplify_integer_value_base ival_ =
                      alignment constraint of any of its member *)
                   Left (List.fold_left (fun acc z -> max z acc) n ns)
               end
-          | Builtin0 str ->
+          | Builtin str ->
               failwith "TODO simplify_integer_value: IValignof Builtin"
         end
     | IVoffsetof (tag_sym, memb_ident) ->

@@ -121,8 +121,6 @@ let rec mk_zeroInit_aux tagDefs (ATypes.Ctype _ ty) =
           | _ ->
               error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Union"
         end
-    | ATypes.Builtin str ->
-        error ("WIP[Cabs_to_ail.mk_zeroInit_aux], Builtin: " ^ str)
   end
 let mk_zeroInit tagDefs ty =
   A.AnnotatedExpression () [] Loc.unknown

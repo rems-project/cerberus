@@ -155,9 +155,6 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (ATypes.Ctype _ cty) 
           | _ ->
               error "elemPathFromCtype_aux3, Union"
         end
-    | ATypes.Builtin _ ->
-        (* TODO? *)
-        error "elemPathFromCtype_aux3, Builtin"
   end
 
 val elemPathFromCtype3: bool -> map identifier tag_definition -> ATypes.ctype -> list (init_path * init_path * ATypes.ctype)
@@ -403,8 +400,6 @@ let rec innerCtype tagDefs (ATypes.Ctype _ ty as cty) =
           | _ ->
               error "innerCtype: Union"
         end
-    | ATypes.Builtin _ ->
-        cty
   end
 
 
@@ -2652,8 +2647,7 @@ and static_thread_implicit_initializer tagDefs (ATypes.Ctype _ ty as cty) =
     | Atomic ty ->
         
     | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
-    | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
-    | Builtin of string          *)
+    | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *) *)
   end
 
 

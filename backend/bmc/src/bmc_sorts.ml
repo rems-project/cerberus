@@ -1149,7 +1149,7 @@ module CtypeToZ3 = struct
         *)
     | Union0 _ ->
       failwith "Error: unions are not supported."
-    | Builtin0 _ -> assert false
+    | Builtin _ -> assert false
   and struct_sym_to_z3_sort (struct_sym: sym_ty)
                             (file: unit typed_file)
                             : Sort.sort =

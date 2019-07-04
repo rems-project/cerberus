@@ -47,8 +47,6 @@ let rec core_object_type_of_ctype ty =
        Just (OTy_struct tag_sym)
    | Union tag_sym ->
        Just (OTy_union tag_sym)
-   | Builtin str ->
-       error ("TODO: Caux.core_object_type_of_ctype Builtin '" ^ str ^ "'")
   end
 
 val oTy_of_bTy: core_base_type -> maybe core_object_type
@@ -222,9 +220,6 @@ let rec proj_ctype (AilTypes.Ctype _ ty) =
         Core_ctype.Union tag_sym
           (List.map (fun (ident, ty) -> (ident, proj_ctype ty)) ident_tys)
 *)
-    | AilTypes.Builtin str ->
-        let () = Debug.print_debug 0 [] (fun () -> "BUILTIN: " ^ str) in
-        Core_ctype.Builtin str
   end
 
 
@@ -529,10 +524,6 @@ let rec zeros_aux tagDefs ty =
           | _ ->
               error "Core_aux.zeros_aux, not UnionDef"
         end
-
-(*
- | Builtin of string
-*)
    | _ ->
        error "Core_aux.zeros should only be called on complete types"
   end
@@ -607,8 +598,6 @@ let rec unproj_ctype ty =
         AilTypes.Struct tag
     | Core_ctype.Union tag ->
         AilTypes.Union tag
-    | Core_ctype.Builtin str ->
-        AilTypes.Builtin str
   end)
 
 

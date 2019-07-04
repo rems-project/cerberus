@@ -24,7 +24,6 @@ type genType =
  | GenStruct of identifier
  | GenUnion of identifier
  | GenAtomic of ctype (* TODO: check *)
- | GenBuiltin of string
 
 
 val genChar16_t: genType
@@ -111,8 +110,6 @@ let rec eq_genType gty1 gty2 =
         6
     | GenAtomic _ ->
         7
-    | GenBuiltin _ ->
-        8
   end in
   match (gty1, gty2) with
     | (GenBasic gbty1, GenBasic gbty2 ) ->
@@ -131,8 +128,6 @@ let rec eq_genType gty1 gty2 =
         tag1 = tag2
     | (GenAtomic ty1, GenAtomic ty2) ->
         ty1 = ty2
-    | (GenBuiltin str1, GenBuiltin str2) ->
-        str1 = str2
     | _ ->
         ord gty1 = ord gty2
   end
@@ -195,8 +190,6 @@ match ty with
       GenStruct tag
   | Union  tag ->
       GenUnion tag
-  | Builtin str ->
-      GenBuiltin str
 end
 
 val inject_typeCategory: typeCategory -> genTypeCategory

@@ -84,7 +84,7 @@ let rec pp_ctype = function
       !^ "struct" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
   | Union0 sym ->
       !^ "union" ^^^ pp_symbol sym (*!^(Pp_symbol.to_string sym)*)
-  | Builtin0 str ->
+  | Builtin str ->
       !^ str
 
 

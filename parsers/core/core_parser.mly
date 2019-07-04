@@ -272,8 +272,8 @@ let rec symbolify_ctype ty =
   | Union0 tag ->
       symbolify_symbol tag >>= fun tag' ->
       Eff.return (Union0 tag')
-  | Builtin0 str ->
-      Eff.return (Builtin0 str)
+  | Builtin str ->
+      Eff.return (Builtin str)
 
 let rec symbolify_value _cval =
   match _cval with

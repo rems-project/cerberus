@@ -111,5 +111,4 @@ let rec pp_ctype_raw (AilTypes.Ctype (_,cty)) =
         pp_ctor "Struct" ^^^ pp_id sym
     | Union sym ->
         pp_ctor "Union" ^^^ pp_id sym
-    | Builtin str ->
-        pp_ctor "Builtin" ^^ P.brackets (!^ str)
+
