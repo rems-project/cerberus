@@ -14,7 +14,7 @@ import Translation_aux
 import Enum State_exception_undefined Exception Undefined Nondeterminism Dlist
 
 
-import AilSyntax AilTypes
+import AilSyntax Ctype
 
 import Translation_aux
 
@@ -343,7 +343,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
   let store_error e =
     let errname = Fs.fs_string_of_error e in
     let err = Builtins.translate_errno ("__cerbvar_" ^ errname) in
-    let err_mval = Mem.integer_value_mval (AilTypes.Signed AilTypes.Int_) (Mem.integer_ival err) in
+    let err_mval = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival err) in
     liftMem $ Mem.store (Loc.other "update errno") Core_ctype.signed_int false th_st.Core_run.errno err_mval
   in
   let return (fs_st, res) =
@@ -447,13 +447,13 @@ let drive_fs_step tid th_st dr_st fs_oper =
       let store iTy memb f =
         let ptr = Mem.member_shift_ptrval stat_ptr sym (Cabs.CabsIdentifier loc memb) in
         let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
-        Mem.store loc (Core_ctype.Basic (AilTypes.Integer iTy)) false ptr mval
+        Mem.store loc (Core_ctype.Basic (Ctype.Integer iTy)) false ptr mval
       in
-      let sint = AilTypes.Unsigned AilTypes.Int_ in
-      let uint = AilTypes.Signed AilTypes.Int_ in
-      let ushort = AilTypes.Unsigned AilTypes.Short in
-      let slonglong = AilTypes.Signed AilTypes.LongLong in
-      let ulonglong = AilTypes.Unsigned AilTypes.LongLong in
+      let sint = Ctype.Unsigned Ctype.Int_ in
+      let uint = Ctype.Signed Ctype.Int_ in
+      let ushort = Ctype.Unsigned Ctype.Short in
+      let slonglong = Ctype.Signed Ctype.LongLong in
+      let ulonglong = Ctype.Unsigned Ctype.LongLong in
       Mem.bind (store sint "st_dev" Fs.fs_dev) (fun _ ->
       Mem.bind (store ulonglong "st_ino" Fs.fs_ino) (fun _ ->
       Mem.bind (store ushort "st_mode" Fs.fs_mode) (fun _ ->
@@ -865,10 +865,10 @@ let action_request_concurrency = function
       let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "CONCUR REQUEST LOAD") in (* DEBUG *)
 (*      let mval = Mem.symbolic_mval (Symbolic.SYMBsym Symbolic.SYMBint sym) in *)
       let ity = match lvalue_ty with
-        | Core_ctype.Basic (AilTypes.Integer ity) ->
+        | Core_ctype.Basic (Ctype.Integer ity) ->
             ity
         | _ ->
-            AilTypes.Signed (AilTypes.Int_) (* TODO DUMMY *)
+            Ctype.Signed (Ctype.Int_) (* TODO DUMMY *)
       end in
       let mval = Mem.integer_value_mval ity (Mem.concurRead_ival ity sym) in
       let preEx_step = <|
@@ -1049,7 +1049,7 @@ let rec driver with_concurrency =
             liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
-        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (AilTypes.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
+        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Core_ctype.Basic (Ctype.Integer ity)); Core.Vobject (Core.OVpointer ptr_val)]) ->
             liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
             ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
         
@@ -1552,17 +1552,17 @@ TODO: this should be removable, since we already set it in Translation
                   let mem_vals =
                     List.map (fun c ->
                       (* TODO: fixing impl choice here (ASCII) *)
-                      Mem.integer_mval AilTypes.Char $ Decode.decode_character_constant (String.toString [c])
+                      Mem.integer_mval Ctype.Char $ Decode.decode_character_constant (String.toString [c])
                     ) (String.toCharList arg_str) in
                   (* NOTE: adding a null termination to the char array *)
                   (
-                    Mem.array_mval $ mem_vals ++ [Mem.integer_mval AilTypes.Char 0],
+                    Mem.array_mval $ mem_vals ++ [Mem.integer_mval Ctype.Char 0],
                     Core_ctype.Array Core_ctype.char (Just $ (integerFromNat $ List.length mem_vals) + 1)
                   )
                 ) arg_strs in
               
               (* memory value to be stored in the memory object pointed to by main.argc *)
-              let argc_mem_val = Mem.integer_mval (AilTypes.Signed AilTypes.Int_) (integerFromNat $ List.length args_mem_val_tys) in
+              let argc_mem_val = Mem.integer_mval (Ctype.Signed Ctype.Int_) (integerFromNat $ List.length args_mem_val_tys) in
               
               (* allocating and initialising an object for main.argc *)
               liftMem (
@@ -1589,7 +1589,7 @@ TODO: this should be removable, since we already set it in Translation
               (* NOTE: the element argv[argc] is required to be a null pointer
                  by the STD, hence argv has one more element than the number
                  of supplied arguments *)
-              let argv_array_elem_ty = Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char in
+              let argv_array_elem_ty = Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char in
               let argv_array_ty = Core_ctype.Array argv_array_elem_ty (Just (1 + (integerFromNat $ List.length ptr_vals_rev))) in
               let argv_array_mem_val = Mem.array_mval $
                 List.map (Mem.pointer_mval Core_ctype.char) (List.reverse ptr_vals_rev ++ [Mem.null_ptrval Core_ctype.char]) in
@@ -1600,11 +1600,11 @@ TODO: this should be removable, since we already set it in Translation
                 
                 (* NOTE: because of argument promotions, the char *argv[] is turned into a char **argv
                    so two objects are allocated: an array and a pointer to that array (which is what argv designate) *)
-                let argv_ty = Core_ctype.Pointer AilTypes.no_qualifiers (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) in
+                let argv_ty = Core_ctype.Pointer Ctype.no_qualifiers (Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char) in
                 Mem.bind (Mem.allocate_object tid0 (Symbol.PrefSource loc [main_sym; argv_sym])
                             (Mem.alignof_ival argv_ty) argv_ty Nothing) (fun argv_ptr_val ->
                 Mem.bind (Mem.store (Loc.other "argv init") argv_ty false argv_ptr_val
-                            (Mem.pointer_mval (Core_ctype.Pointer AilTypes.no_qualifiers Core_ctype.char) array_ptr_val)) ( fun _ ->
+                            (Mem.pointer_mval (Core_ctype.Pointer Ctype.no_qualifiers Core_ctype.char) array_ptr_val)) ( fun _ ->
 
                 Mem.return argv_ptr_val
                 ))))
@@ -1635,7 +1635,7 @@ TODO: this should be removable, since we already set it in Translation
         (* allocating and initialising errno *)
         liftMem (
           Mem.bind (Mem.allocate_object tid0 (Symbol.PrefOther "errno") (Mem.alignof_ival Core_ctype.signed_int) Core_ctype.signed_int Nothing) (fun ptr_val ->
-            let zero = Mem.integer_value_mval (AilTypes.Signed AilTypes.Int_) (Mem.integer_ival 0) in
+            let zero = Mem.integer_value_mval (Ctype.Signed Ctype.Int_) (Mem.integer_ival 0) in
             Mem.bind (Mem.store (Loc.other "errno init") Core_ctype.signed_int false ptr_val zero) (fun _ ->
               Mem.return ptr_val
             )

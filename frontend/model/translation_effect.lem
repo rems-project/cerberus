@@ -1,6 +1,6 @@
 (* Effects for Translation: state *)
 open import Pervasives Utils Show Show_extra State
-import Boot Symbol Undefined AilTypes AilTypesAux
+import Boot Symbol Undefined Ctype AilTypesAux
 import Core Core_aux Core_ctype
 
 module C    = Core
@@ -9,7 +9,7 @@ module Caux = Core_aux
 include State
 
 type elab_state = <|
-  visible_objects_types: map Symbol.sym (AilTypes.qualifiers * AilTypes.ctype);
+  visible_objects_types: map Symbol.sym (Ctype.qualifiers * Ctype.ctype);
   visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
                                               annotate Esave/Erun ctors) *)
   string_literals: list (Loc.t * Symbol.sym * Core_ctype.ctype * C.pexpr);
@@ -31,7 +31,7 @@ let wrapped_fresh_symbol bTy =
   return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
 
 (* register C objects from block scope. *)
-val push_block_objects: list (Symbol.sym * (AilTypes.qualifiers * AilTypes.ctype)) -> elabM unit
+val push_block_objects: list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM unit
 let push_block_objects binds = fun st ->
   ((), <| st with
     visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
@@ -47,7 +47,7 @@ let pop_block_objects = fun st ->
         | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
       end |>)
 
-val with_block_objects: forall 'a. list (Symbol.sym * (AilTypes.qualifiers * AilTypes.ctype)) -> elabM 'a -> elabM 'a
+val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a -> elabM 'a
 let with_block_objects binds ma = fun st ->
   let st' = <| st with
     visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
@@ -73,7 +73,7 @@ val get_string_literals: elabM (list (Loc.t * Symbol.sym * Core_ctype.ctype * C.
 let get_string_literals = fun st ->
   (st.string_literals, st)
 
-val resolve_object_type: Symbol.sym -> elabM (AilTypes.qualifiers * AilTypes.ctype)
+val resolve_object_type: Symbol.sym -> elabM (Ctype.qualifiers * Ctype.ctype)
 let resolve_object_type sym = fun st ->
   match Map.lookup sym st.visible_objects_types with
     | Just qs_ty ->

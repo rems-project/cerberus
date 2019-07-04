@@ -3,7 +3,7 @@ import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
-import AilSyntax AilTypes AilTypesAux
+import AilSyntax Ctype AilTypesAux
 import Builtins
 
 open import Implementation_ Decode
@@ -909,7 +909,7 @@ BEFORE EVAL_PEXPR2
                         match Map.lookup psym file.funinfo with
                           | Just (_, param_tys, _, _) ->
                             List.map (fun (ty, cval) ->
-                              match Core_aux.memValueFromValue (Core_ctype.Pointer AilTypes.no_qualifiers ty) cval with
+                              match Core_aux.memValueFromValue (Core_ctype.Pointer Ctype.no_qualifiers ty) cval with
                                 | Just mval -> mval
                                 | Nothing -> error "Eccall memvalue"
                               end) $ List.zip (List.map snd param_tys) cvals

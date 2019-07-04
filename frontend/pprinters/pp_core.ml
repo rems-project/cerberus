@@ -794,10 +794,10 @@ let mk_comment doc =
   )
 
 let pp_funinfo finfos =
-  let mk_pair (_, ty) = (AilTypes.no_qualifiers, ty) in
+  let mk_pair (_, ty) = (Ctype.no_qualifiers, ty) in
   Pmap.fold (fun sym (ret_ty, params, is_variadic, has_proto) acc ->
     acc ^^ pp_raw_symbol sym ^^ P.colon
-        ^^^ pp_ctype (Core_ctype.Function0 ((AilTypes.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic))
+        ^^^ pp_ctype (Core_ctype.Function0 ((Ctype.no_qualifiers, ret_ty), List.map mk_pair params, is_variadic))
         ^^ P.hardline) finfos P.empty
 
 let pp_globs globs =

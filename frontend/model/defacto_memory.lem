@@ -4,7 +4,7 @@ import Num_extra Set_helpers (* fold *) Map_extra
 
 open import Utils Enum
 
-import Cabs AilTypes Dlist Loc Float
+import Cabs Ctype Dlist Loc Float
 
 open import Mem_common Defacto_memory_aux Defacto_memory_types Core_ctype
 import Core_ctype_aux
@@ -149,59 +149,59 @@ let allocation_is_dead alloc_id =
 
 
 (* DEBUG, fixing impl: gcc-5 (Homebrew gcc 5.2.0) 5.2.0 *)
-val defacto_integer_range: AilTypes.integerType -> integer * integer
+val defacto_integer_range: Ctype.integerType -> integer * integer
 let defacto_integer_range = function
- | AilTypes.Char ->
+ | Ctype.Char ->
      (0-128, 127)
- | AilTypes.Bool ->
+ | Ctype.Bool ->
      error "WIP: Mem.integer_range, Bool"
- | AilTypes.Signed AilTypes.Ichar ->
+ | Ctype.Signed Ctype.Ichar ->
      (0-128, 127)
- | AilTypes.Signed AilTypes.Short ->
+ | Ctype.Signed Ctype.Short ->
      (0-32768, 32767)
- | AilTypes.Signed AilTypes.Int_ ->
+ | Ctype.Signed Ctype.Int_ ->
      (0-2147483648, 2147483647)
- | AilTypes.Signed AilTypes.Long ->
+ | Ctype.Signed Ctype.Long ->
      (0-2**63, 2**63-1)
- | AilTypes.Signed AilTypes.LongLong ->
+ | Ctype.Signed Ctype.LongLong ->
      (0-2**63, 2**63-1)
- | AilTypes.Signed (AilTypes.IntN_t n) ->
+ | Ctype.Signed (Ctype.IntN_t n) ->
      (0-(2**(n-1)), 2**(n-1) - 1)
- | AilTypes.Signed (AilTypes.Int_leastN_t n) ->
+ | Ctype.Signed (Ctype.Int_leastN_t n) ->
      (0-(2**(n-1)), 2**(n-1) - 1)
- | AilTypes.Signed (AilTypes.Int_fastN_t n) ->
+ | Ctype.Signed (Ctype.Int_fastN_t n) ->
      (0-(2**(n-1)), 2**(n-1) - 1)
- | AilTypes.Signed AilTypes.Intmax_t ->
+ | Ctype.Signed Ctype.Intmax_t ->
      (0-(2**63), 2**63 - 1)
- | AilTypes.Signed AilTypes.Intptr_t ->
+ | Ctype.Signed Ctype.Intptr_t ->
      (0-(2**63), 2**63 - 1)
- | AilTypes.Unsigned AilTypes.Ichar ->
+ | Ctype.Unsigned Ctype.Ichar ->
      (0, 255)
- | AilTypes.Unsigned AilTypes.Short ->
+ | Ctype.Unsigned Ctype.Short ->
      (0, 65535)
- | AilTypes.Unsigned AilTypes.Int_ ->
+ | Ctype.Unsigned Ctype.Int_ ->
      (0, 4294967295)
- | AilTypes.Unsigned AilTypes.Long ->
+ | Ctype.Unsigned Ctype.Long ->
      (0, 2**64-1)
- | AilTypes.Unsigned AilTypes.LongLong ->
+ | Ctype.Unsigned Ctype.LongLong ->
      (0, 2**64-1)
- | AilTypes.Unsigned (AilTypes.IntN_t n)  ->
+ | Ctype.Unsigned (Ctype.IntN_t n)  ->
      (0, 2**n - 1)
- | AilTypes.Unsigned (AilTypes.Int_leastN_t n)  ->
+ | Ctype.Unsigned (Ctype.Int_leastN_t n)  ->
      (0, 2**n - 1)
- | AilTypes.Unsigned (AilTypes.Int_fastN_t n)  ->
+ | Ctype.Unsigned (Ctype.Int_fastN_t n)  ->
      (0, 2**n - 1)
- | AilTypes.Unsigned AilTypes.Intmax_t ->
+ | Ctype.Unsigned Ctype.Intmax_t ->
      (0, 2**64 - 1)
- | AilTypes.Unsigned AilTypes.Intptr_t ->
+ | Ctype.Unsigned Ctype.Intptr_t ->
      (0, 2**64 - 1)
- | AilTypes.Enum sym ->
+ | Ctype.Enum sym ->
      error "WIP: Mem.integer_range, Enum"
- | AilTypes.Size_t ->
+ | Ctype.Size_t ->
      (0, 2**64-1)
- | AilTypes.Wchar_t ->
+ | Ctype.Wchar_t ->
      (0, 2**64-1)
- | AilTypes.Ptrdiff_t ->
+ | Ctype.Ptrdiff_t ->
      (0-2**63, 2**63-1)
 end
 let inline integer_range = defacto_integer_range
@@ -403,9 +403,9 @@ let rec mkUnspec ty =
   match ty with
     | Void ->
         error "Defacto_memory.mkUnspec: called on Void"
-    | Basic (AilTypes.Integer ity) ->
+    | Basic (Ctype.Integer ity) ->
         MVinteger ity (IV Prov_none IVunspecified) 
-    | Basic (AilTypes.Floating fty) ->
+    | Basic (Ctype.Floating fty) ->
         MVfloating fty FVunspecified
     | Array _ Nothing ->
         error "Defacto_memory.mkUnspec: called on Array _ Nothing"
@@ -505,8 +505,8 @@ let register_address_constraints pref alloc_id size_ival_ align_ival_ =
   
   (* TODO: hack simplifying intptr_t/uintptr_t (cast to uintptr_t is the identity for Z3) *)
   addConstraints "address constraint hack"
-    (MC_conj [ mk_iv_constr MC_le (IVmin (AilTypes.Unsigned AilTypes.Intptr_t)) (IVaddress alloc_id pref)
-             ; mk_iv_constr MC_le (IVaddress alloc_id pref) (IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ])
+    (MC_conj [ mk_iv_constr MC_le (IVmin (Ctype.Unsigned Ctype.Intptr_t)) (IVaddress alloc_id pref)
+             ; mk_iv_constr MC_le (IVaddress alloc_id pref) (IVmax (Ctype.Unsigned Ctype.Intptr_t)) ])
 
 
 
@@ -557,7 +557,7 @@ let impl_allocate_region tid pref (IV _ align_ival_) ((IV _ size_ival_) as size_
   register_distinctness_constraints addr size_ival_ >>
   
   fresh_allocation_id >>= fun alloc_id ->
-  let unsigned_char = Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar)) in
+  let unsigned_char = Basic (Ctype.Integer (Ctype.Signed Ctype.Ichar)) in
   register_allocation alloc_id (Alloc_dynamic size_ival_, Nothing (* mkUnspec (Array unsigned_char (Just 42 (* TODO !!! *))) *)) >>
   
   return (
@@ -741,12 +741,12 @@ let apply_shift_path_element lvalue_ty spe mval =
         end
    | (SPE_array elem_ty ival_, MVpointer _ _) ->
 (*
-       if lvalue_ty <> Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) then
+       if lvalue_ty <> Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)) then
          error ("WIP ==> result_ty <> not unsigned char, SPE_array, MVpointer ===> result_ty = " ^ stringFromCtype result_ty)
        else
 *)
        match lvalue_ty with
-         | Basic (AilTypes.Integer lvalue_ity) ->
+         | Basic (Ctype.Integer lvalue_ity) ->
              return (MVinteger lvalue_ity (IV Prov_none (IVbyteof (mk_op_ival_ IntMul ival_ (IVsizeof elem_ty)) mval)))
          | _ ->
              error ("WIP ==> lvalue_ty <> not an integer value, SPE_array, MVpointer ===> lvalue_ty = " ^ stringFromCtype lvalue_ty)
@@ -782,7 +782,7 @@ let apply_shift_path_element lvalue_ty spe mval =
    | (SPE_array elem_ty ival_1, MVinteger ity ival_2) ->
        error ("lvalue_ty: " ^ stringFromCtype lvalue_ty ^
               ", spe: " ^ stringFromShift_path [spe] ^
-              ", ity: " ^ stringFromCtype (Basic (AilTypes.Integer ity)))
+              ", ity: " ^ stringFromCtype (Basic (Ctype.Integer ity)))
    
    | (SPE_array elem_ty offset_ival_, MVdelayed xs under_mval) ->
        match xs with
@@ -795,7 +795,7 @@ let apply_shift_path_element lvalue_ty spe mval =
                (* TODO: hack *)
                (wip ("Mem.apply_shift_path_element, todo MVdelayed ==> didn't match ==> sh: " ^
                      stringFromShift_path [spe] ^ " -- mval: "^ stringFromMem_value mval))
-               (* (return (MVinteger (AilTypes.Unsigned AilTypes.Ichar) (IV Prov_none (IVconcrete 142)))) *)
+               (* (return (MVinteger (Ctype.Unsigned Ctype.Ichar) (IV Prov_none (IVconcrete 142)))) *)
          | _ ->
              error "Mem.apply_shift_path_element, HELLO KKK"
        end
@@ -813,7 +813,7 @@ let apply_shift_path_element lvalue_ty spe mval =
 let mk_byteof ival_ = function
   | MVinteger _ (IV _ IVunspecified) ->
       IV 
-  | MVfloating of AilTypes.floatingType * impl_floating_value
+  | MVfloating of Ctype.floatingType * impl_floating_value
   | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
   | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
   | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
@@ -825,10 +825,10 @@ end
 
 let project_to_lvalue_type lvalue_ty mval =
   match (lvalue_ty, mval) with
-    | (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)), MVinteger (AilTypes.Unsigned AilTypes.Ichar) _) ->
+    | (Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)), MVinteger (Ctype.Unsigned Ctype.Ichar) _) ->
          return mval
     
-    | (Basic (AilTypes.Integer ((AilTypes.Unsigned AilTypes.Ichar) as uchar_ity)), _) ->
+    | (Basic (Ctype.Integer ((Ctype.Unsigned Ctype.Ichar) as uchar_ity)), _) ->
         let mval_prov = match mval with
           | MVinteger _ (IV prov _) ->
               prov
@@ -839,7 +839,7 @@ let project_to_lvalue_type lvalue_ty mval =
         end in
         return (MVinteger uchar_ity (IV mval_prov (IVbyteof (IVconcrete 0) mval)))
     
-    | (Basic (AilTypes.Integer lvalue_ity), MVinteger mval_ity ival) ->
+    | (Basic (Ctype.Integer lvalue_ity), MVinteger mval_ity ival) ->
         if lvalue_ity = mval_ity then
           return mval
         
@@ -856,7 +856,7 @@ let project_to_lvalue_type lvalue_ty mval =
               return (MVinteger lvalue_ity (IV Prov_none(*TODO*) ival_'))
         end
     
-    | (Basic (AilTypes.Floating lvalue_fty), MVfloating mval_fty fval) ->
+    | (Basic (Ctype.Floating lvalue_fty), MVfloating mval_fty fval) ->
         error "WIP: project_to_lvalue_type floating"
     
     | (Pointer _ lvalue_ref_ty, MVpointer mval_ref_ty (PV prov _ _)) ->
@@ -1026,14 +1026,14 @@ let rec impl_sizeof_ival_aux ty =
   match ty with
     | Core_ctype.Void ->
         error "Mem.impl_sizeof_ival_aux, Void"
-    | Core_ctype.Basic (AilTypes.Integer ity) ->
+    | Core_ctype.Basic (Ctype.Integer ity) ->
         match Implementation_.sizeof_ity ity with
           | Just n ->
               IVconcrete (integerFromNat n)
           | Nothing ->
               IVsizeof ty
         end
-    | Core_ctype.Basic (AilTypes.Floating fty) ->
+    | Core_ctype.Basic (Ctype.Floating fty) ->
         match Implementation_.sizeof_fty fty with
           | Just n ->
               IVconcrete (integerFromNat n)
@@ -1202,7 +1202,7 @@ let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval far
     | MVinteger ity (IV _ ival_ as ival) ->
         match ival_ with
           | IVunspecified ->
-              funspec (Basic (AilTypes.Integer ity))
+              funspec (Basic (Ctype.Integer ity))
           | IVconcurRead ity2 sym ->
               (* TODO: check ity1 vs ity2 ? *)
               fconcur ity2 sym
@@ -1212,7 +1212,7 @@ let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval far
     | MVfloating fty fval ->
         match fval with
           | FVunspecified ->
-              funspec (Basic (AilTypes.Floating fty))
+              funspec (Basic (Ctype.Floating fty))
           | _ ->
               ffval fty fval
         end
@@ -1220,7 +1220,7 @@ let impl_case_mem_value mval funspec (* fsymb *) fconcur fival ffval fptrval far
         match ptrval_ with
           | PVunspecified _ ->
               (* TODO: or use the type in PVunspecified? *)
-              funspec (Pointer AilTypes.no_qualifiers ref_ty)
+              funspec (Pointer Ctype.no_qualifiers ref_ty)
           | _ ->
               fptrval ref_ty ptrval
         end
@@ -1367,7 +1367,7 @@ let rec integerTypes_of_ival ival =
         
     | IVmin ity ->
         
-    | IVmax of AilTypes.integerType
+    | IVmax of Ctype.integerType
     | IVsizeof of ctype
     | IValignof of ctype
     | IVoffsetof of Symbol.t * Cabs.cabs_identifier
@@ -1592,21 +1592,21 @@ let impl_diff_ptrval ty ptrval1 ptrval2 : impl_memM impl_integer_value =
 let impl_intcast_ptrval ref_ty ity ((PV prov ptr_val_ sh) as ptrval) =
   let ival = IV prov (IVfromptr ref_ty ity ptr_val_ sh) in
   match ity with
-    | AilTypes.Signed AilTypes.Intptr_t ->
+    | Ctype.Signed Ctype.Intptr_t ->
         return ival
-    | AilTypes.Unsigned AilTypes.Intptr_t ->
+    | Ctype.Unsigned Ctype.Intptr_t ->
         return ival
-    | AilTypes.Unsigned AilTypes.Long ->
+    | Ctype.Unsigned Ctype.Long ->
         (* TODO: check that it's ok to assume intptr_t to caracterise the
            size of pointers *)
         (* TODO: maybe we should have a flag *)
         (*let intptr_t =
-          Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intptr_t)) in
+          Basic (Ctype.Integer (Ctype.Signed Ctype.Intptr_t)) in
         let unsigned_long =
-          Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long)) in *)
+          Basic (Ctype.Integer (Ctype.Unsigned Ctype.Long)) in *)
         
         (* TODO: unsure about this *)
-        let unsigned_long_ity = AilTypes.Unsigned AilTypes.Long in
+        let unsigned_long_ity = Ctype.Unsigned Ctype.Long in
         address_expression_of_pointer ptrval >>= fun ptr_ival_ ->
         ifM "intcast_ptrval (unsigned long)"
           (MC_conj [ mk_iv_constr MC_le (IVmin unsigned_long_ity) ptr_ival_
@@ -1634,7 +1634,7 @@ let impl_isWellAligned_ptrval ref_ty ptr_val =
 
 
 (* integer types minimal range (STD Annex E #1) *)
-val minimal_range: AilTypes.integerType -> bool * integer * integer
+val minimal_range: Ctype.integerType -> bool * integer * integer
 let minimal_range ity =
   let (min,max) = integer_range ity in
   (true, min, max)
@@ -1675,25 +1675,25 @@ let impl_lt_ival mem_st_opt (IV prov1 ival_1) (IV prov2 ival_2) =
         else
           Nothing
 (*
-    | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmin (AilTypes.Signed AilTypes.Intptr_t)) ->
+    | (IVfromptr _ (Ctype.Signed Ctype.Intptr_t) _, IVmin (Ctype.Signed Ctype.Intptr_t)) ->
         let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
           "using axiom ==> forall ref_ty ptrval, not (Ivfromptr(ref_ty, ptrval) < Ivmin(\"intptr_t\"))"
         ) in
         Just false
     
-    | (IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _, IVmin (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+    | (IVfromptr _ (Ctype.Unsigned Ctype.Intptr_t) _, IVmin (Ctype.Unsigned Ctype.Intptr_t)) ->
         let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
           "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) < Ivmin(\"uintptr_t\")"
         ) in
         Just false
     
-    | (IVmax (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _) ->
+    | (IVmax (Ctype.Signed Ctype.Intptr_t), IVfromptr _ (Ctype.Signed Ctype.Intptr_t) _) ->
         let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
           "using axiom ==> forall ref_ty ptrval, Ivmax(\"intptr_t\") < Ivfromptr(ref_ty, ptrval)"
         ) in
         Just false
     
-    | (IVmax (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _) ->
+    | (IVmax (Ctype.Unsigned Ctype.Intptr_t), IVfromptr _ (Ctype.Unsigned Ctype.Intptr_t) _) ->
         let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
           "using axiom ==> forall ref_ty ptrval,  Ivmax(\"uintptr_t\") < Ivfromptr(ref_ty, ptrval)"
         ) in
@@ -1856,25 +1856,25 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
 
 
 (*
-          | (IVmin (AilTypes.Signed AilTypes.Intptr_t), IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _) ->
+          | (IVmin (Ctype.Signed Ctype.Intptr_t), IVfromptr _ (Ctype.Signed Ctype.Intptr_t) _) ->
               let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
                 "using axiom ==> forall ref_ty ptrval, Ivmin(\"intptr_t\") <= Ivfromptr(ref_ty, ptrval)"
               ) in
               Just true
           
-          | (IVmin (AilTypes.Unsigned AilTypes.Intptr_t), IVfromptr _ (AilTypes.Unsigned AilTypes.Intptr_t) _) ->
+          | (IVmin (Ctype.Unsigned Ctype.Intptr_t), IVfromptr _ (Ctype.Unsigned Ctype.Intptr_t) _) ->
               let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
                 "using axiom ==> forall ref_ty ptrval, Ivmin(\"uintptr_t\") <= Ivfromptr(ref_ty, ptrval)"
               ) in
               Just true
           
-          | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmax (AilTypes.Signed AilTypes.Intptr_t)) ->
+          | (IVfromptr _ (Ctype.Signed Ctype.Intptr_t) _, IVmax (Ctype.Signed Ctype.Intptr_t)) ->
               let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
                 "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) <= Ivmax(\"intptr_t\")"
               ) in
               Just true
           
-          | (IVfromptr _ (AilTypes.Signed AilTypes.Intptr_t) _, IVmax (AilTypes.Unsigned AilTypes.Intptr_t)) ->
+          | (IVfromptr _ (Ctype.Signed Ctype.Intptr_t) _, IVmax (Ctype.Unsigned Ctype.Intptr_t)) ->
               let () = Debug.print_debug 3 [Debug.DB_memory] (fun () ->
                 "using axiom ==> forall ref_ty ptrval, Ivfromptr(ref_ty, ptrval) <= Ivmax(\"uintptr_t\")"
               ) in
@@ -1935,13 +1935,13 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                 else
                   Nothing
           
-          | (IVmin (AilTypes.Size_t), IVoffsetof tag_sym membr_ident) ->
+          | (IVmin (Ctype.Size_t), IVoffsetof tag_sym membr_ident) ->
               let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
               (* TODO: check that *)
               Just true
-          | (IVoffsetof tag_sym membr_ident, IVmax (AilTypes.Size_t)) ->
+          | (IVoffsetof tag_sym membr_ident, IVmax (Ctype.Size_t)) ->
               let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that struct/union type '" ^ show tag_sym ^
                              "' isn't so big the offset to member '" ^ show membr_ident ^
                              "' is representable in size_t") in
@@ -1956,33 +1956,33 @@ let impl_le_ival mem_st_opt (IV _ ival_1 as ival1) (IV _ ival_2 as ival2) =
                 Nothing
           
           (* a byte always range over uchar *)
-          | (IVmin (AilTypes.Unsigned AilTypes.Ichar), IVbyteof _ _) ->
+          | (IVmin (Ctype.Unsigned Ctype.Ichar), IVbyteof _ _) ->
               Just true
-          | (IVbyteof _ _, IVmax (AilTypes.Unsigned AilTypes.Ichar)) ->
+          | (IVbyteof _ _, IVmax (Ctype.Unsigned Ctype.Ichar)) ->
               Just true
 
-          | (IVmin (AilTypes.Signed AilTypes.Int_), IVbyteof _ _) ->
+          | (IVmin (Ctype.Signed Ctype.Int_), IVbyteof _ _) ->
               let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
               Just true
-          | (IVbyteof _ _, IVmax (AilTypes.Signed AilTypes.Int_)) ->
+          | (IVbyteof _ _, IVmax (Ctype.Signed Ctype.Int_)) ->
               let () = Debug.warn [Debug.DB_memory] (fun () -> "TODO: check + document") in
               Just true
           
           (* sizeof and alignof are always in range of size_t *)
 (*
-          | (IVmin AilTypes.Size_t, IVsizeof _) ->
+          | (IVmin Ctype.Size_t, IVsizeof _) ->
               Just true
 *)
-          | (IVsizeof _, IVmax AilTypes.Size_t) ->
+          | (IVsizeof _, IVmax Ctype.Size_t) ->
               Just true
 (*
-          | (IVmin AilTypes.Size_t, IValignof _) ->
+          | (IVmin Ctype.Size_t, IValignof _) ->
               Just true
 *)
-          | (IValignof _, IVmax AilTypes.Size_t) ->
+          | (IValignof _, IVmax Ctype.Size_t) ->
               Just true
           
-          | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax AilTypes.Size_t) ->
+          | (IVop IntSub [IVoffsetof tag_sym1 membr_ident1; IVoffsetof tag_sym2 membr_ident2], IVmax Ctype.Size_t) ->
               if tag_sym1 = tag_sym2 then
                 let () = Debug.warn [Debug.DB_memory] (fun () -> "we are assuming that the delta between members '" ^ show membr_ident1 ^
                                "' and '" ^ show membr_ident2 ^ "' of struct/union type '" ^ show tag_sym1 ^
@@ -2253,7 +2253,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         else
 (* TODO: this might need to be before the test on "is_strong" *)
           match sh with
-            | [SPE_array (Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar))) byte_ival_] ->
+            | [SPE_array (Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar))) byte_ival_] ->
                 return (MVdelayed [(sh, write_mval)] current_mval)
 (*
                 match write_mval with
@@ -2567,7 +2567,7 @@ let impl_memcpy ptr_val1 ptr_val2 size_ival =
 (* BEGIN MEMCMP ================================================================================= *)
 val     memcmp_load_aux: impl_pointer_value -> integer -> integer -> list impl_mem_value -> impl_memM (list impl_mem_value)
 let rec memcmp_load_aux ptrval offset max_offset acc =
-  let uchar_ty = Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Ichar)) in
+  let uchar_ty = Basic (Ctype.Integer (Ctype.Unsigned Ctype.Ichar)) in
   if offset >= max_offset then
     return (List.reverse acc)
   else

@@ -1161,70 +1161,70 @@ attribute_pair:
 (* BEGIN Ail types *)
 integer_base_type:
 | ICHAR
-    { AilTypes.Ichar }
+    { Ctype.Ichar }
 | SHORT
-    { AilTypes.Short }
+    { Ctype.Short }
 | INT
-    { AilTypes.Int_ }
+    { Ctype.Int_ }
 | LONG
-    { AilTypes.Long }
+    { Ctype.Long }
 | LONG_LONG
-    { AilTypes.LongLong }
+    { Ctype.LongLong }
 ;
 
 integer_type:
 | CHAR
-    { AilTypes.Char }
+    { Ctype.Char }
 | BOOL
-    { AilTypes.Bool }
+    { Ctype.Bool }
 | INT8_T
-    { AilTypes.Signed (AilTypes.IntN_t 8) }
+    { Ctype.Signed (Ctype.IntN_t 8) }
 | INT16_T
-    { AilTypes.Signed (AilTypes.IntN_t 16) }
+    { Ctype.Signed (Ctype.IntN_t 16) }
 | INT32_T
-    { AilTypes.Signed (AilTypes.IntN_t 32) }
+    { Ctype.Signed (Ctype.IntN_t 32) }
 | INT64_T
-    { AilTypes.Signed (AilTypes.IntN_t 64) }
+    { Ctype.Signed (Ctype.IntN_t 64) }
 | UINT8_T
-    { AilTypes.Unsigned (AilTypes.IntN_t 8) }
+    { Ctype.Unsigned (Ctype.IntN_t 8) }
 | UINT16_T
-    { AilTypes.Unsigned (AilTypes.IntN_t 16) }
+    { Ctype.Unsigned (Ctype.IntN_t 16) }
 | UINT32_T
-    { AilTypes.Unsigned (AilTypes.IntN_t 32) }
+    { Ctype.Unsigned (Ctype.IntN_t 32) }
 | UINT64_T
-    { AilTypes.Unsigned (AilTypes.IntN_t 64) }
+    { Ctype.Unsigned (Ctype.IntN_t 64) }
 | INTMAX_T
-    { AilTypes.(Signed Intmax_t) }
+    { Ctype.(Signed Intmax_t) }
 | INTPTR_T
-    { AilTypes.(Signed Intptr_t) }
+    { Ctype.(Signed Intptr_t) }
 | UINTMAX_T
-    { AilTypes.(Unsigned Intmax_t) }
+    { Ctype.(Unsigned Intmax_t) }
 | UINTPTR_T
-    { AilTypes.(Unsigned Intptr_t) }
+    { Ctype.(Unsigned Intptr_t) }
 | SIGNED ibty= integer_base_type
-    { AilTypes.Signed ibty }
+    { Ctype.Signed ibty }
 | UNSIGNED ibty= integer_base_type
-    { AilTypes.Unsigned ibty }
+    { Ctype.Unsigned ibty }
 | SIZE_T
-    { AilTypes.Size_t }
+    { Ctype.Size_t }
 | PTRDIFF_T
-    { AilTypes.Ptrdiff_t }
+    { Ctype.Ptrdiff_t }
 ;
 
 floating_type:
 | FLOAT
-    { AilTypes.(RealFloating Float) }
+    { Ctype.(RealFloating Float) }
 | DOUBLE
-    { AilTypes.(RealFloating Double) }
+    { Ctype.(RealFloating Double) }
 | LONG_DOUBLE
-    { AilTypes.(RealFloating LongDouble) }
+    { Ctype.(RealFloating LongDouble) }
 ;
 
 basic_type:
 | ity= integer_type
-    { AilTypes.Integer ity }
+    { Ctype.Integer ity }
 | fty= floating_type
-    { AilTypes.Floating fty }
+    { Ctype.Floating fty }
 ;
 
 ctype:
@@ -1235,12 +1235,12 @@ ctype:
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
     { Core_ctype.Array0 (ty, n_opt) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Core_ctype.Function0 ((AilTypes.no_qualifiers, ty), List.map (fun ty -> (AilTypes.no_qualifiers, ty)) tys, false) }
+    { Core_ctype.Function0 ((Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty)) tys, false) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
 (*     { Core_ctype.Function0 (ty, tys, true) } *)
 | ty= ctype STAR
-    { Core_ctype.Pointer0 (AilTypes.no_qualifiers, ty) }
+    { Core_ctype.Pointer0 (Ctype.no_qualifiers, ty) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
     { Core_ctype.Atomic0 ty }
 | (* TODO: check the lexing *) str= SYM

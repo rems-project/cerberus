@@ -93,7 +93,7 @@ module type Memory = sig
   (* the first ctype is the original integer type, the second is the target referenced type *)
   val ptrcast_ival: Core_ctype.ctype0 -> Core_ctype.ctype0 -> integer_value -> pointer_value memM
   (* the first ctype is the original referenced type, the integerType is the target integer type *)
-  val intcast_ptrval: Core_ctype.ctype0 -> AilTypes.integerType -> pointer_value -> integer_value memM
+  val intcast_ptrval: Core_ctype.ctype0 -> Ctype.integerType -> pointer_value -> integer_value memM
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Core_ctype.ctype0 -> integer_value -> pointer_value
@@ -113,20 +113,20 @@ module type Memory = sig
 
   
   (* Integer value constructors *)
-  val concurRead_ival: AilTypes.integerType -> Symbol.sym -> integer_value
+  val concurRead_ival: Ctype.integerType -> Symbol.sym -> integer_value
   val integer_ival: Nat_big_num.num -> integer_value
-  val max_ival: AilTypes.integerType -> integer_value
-  val min_ival: AilTypes.integerType -> integer_value
+  val max_ival: Ctype.integerType -> integer_value
+  val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
   val offsetof_ival: (Symbol.sym, Tags.tag_definition) Pmap.map -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
   
   val sizeof_ival: Core_ctype.ctype0 -> integer_value
   val alignof_ival: Core_ctype.ctype0 -> integer_value
   
-  val bitwise_complement_ival: AilTypes.integerType -> integer_value -> integer_value
-  val bitwise_and_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_or_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
-  val bitwise_xor_ival: AilTypes.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
+  val bitwise_and_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_or_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
+  val bitwise_xor_ival: Ctype.integerType -> integer_value -> integer_value -> integer_value
   
   val case_integer_value: (* TODO: expose more ctors *)
     integer_value ->
@@ -159,15 +159,15 @@ module type Memory = sig
   
   (* Integer <-> Floating casting constructors *)
   val fvfromint: integer_value -> floating_value
-  val ivfromfloat: AilTypes.integerType -> floating_value -> integer_value
+  val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
   
   
   
   (* Memory value constructors *)
   (*symbolic_mval: Symbolic.symbolic mem_value pointer_value -> mem_value *)
   val unspecified_mval: Core_ctype.ctype0 -> mem_value
-  val integer_value_mval: AilTypes.integerType -> integer_value -> mem_value
-  val floating_value_mval: AilTypes.floatingType -> floating_value -> mem_value
+  val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
+  val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
   val pointer_mval: Core_ctype.ctype0 -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
   val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> mem_value
@@ -177,9 +177,9 @@ module type Memory = sig
   val case_mem_value:
     mem_value ->
     (Core_ctype.ctype0 -> 'a) -> (* unspecified case *)
-    (AilTypes.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
-    (AilTypes.integerType -> integer_value -> 'a) ->
-    (AilTypes.floatingType -> floating_value -> 'a) ->
+    (Ctype.integerType -> Symbol.sym -> 'a) -> (* concurrency read case *)
+    (Ctype.integerType -> integer_value -> 'a) ->
+    (Ctype.floatingType -> floating_value -> 'a) ->
     (Core_ctype.ctype0 -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->
     (Symbol.sym -> (Cabs.cabs_identifier * Core_ctype.ctype0 * mem_value) list -> 'a) ->

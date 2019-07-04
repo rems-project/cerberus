@@ -1,13 +1,13 @@
-open import Pervasives Utils Show
-import Symbol (* Symbolic *) AilTypes
+open import Pervasives Utils Show Ctype
+import Symbol Cabs
 
 
 
 (*
-val string_of_ail_ctype: forall 'a. 'a (* AilTypes.ctype *) -> string
+val string_of_ail_ctype: forall 'a. 'a (* ctype *) -> string
 declare ocaml target_rep function string_of_ail_ctype = `String_ail.string_of_ctype`
 
-val string_of_ail_qualifiers_human: forall 'a. 'a (* AilTypes.qualifiers *) -> string
+val string_of_ail_qualifiers_human: forall 'a. 'a (* qualifiers *) -> string
 declare ocaml target_rep function string_of_ail_qualifiers_human = `String_ail.string_of_qualifiers_human`
 *)
 
@@ -52,10 +52,10 @@ type thread_id = nat
 (* TODO: no volatile for now *)
 type ctype =
  | Void
- | Basic of AilTypes.basicType
+ | Basic of basicType
  | Array of ctype * maybe integer
- | Function of (AilTypes.qualifiers * ctype) * list (AilTypes.qualifiers * ctype) * bool (*isVariadic*)
- | Pointer of AilTypes.qualifiers * ctype
+ | Function of (qualifiers * ctype) * list (qualifiers * ctype) * bool (*isVariadic*)
+ | Pointer of qualifiers * ctype
  | Atomic of ctype
 (*
 TODO: it should be like that
@@ -84,83 +84,83 @@ declare ocaml target_rep function UnionDef = `Tags.UnionDef`
 
 val char: ctype
 let char =
-  Basic (AilTypes.Integer AilTypes.Char)
+  Basic (Integer Char)
 
 val signed_char: ctype
 let signed_char =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Ichar))
+  Basic (Integer (Signed Ichar))
 
 val signed_short: ctype
 let signed_short =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Short))
+  Basic (Integer (Signed Short))
 
 val signed_int: ctype
 let signed_int =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Int_))
+  Basic (Integer (Signed Int_))
 
 val signed_long: ctype
 let signed_long =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Long))
+  Basic (Integer (Signed Long))
 
 val signed_long_long: ctype
 let signed_long_long =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.LongLong))
+  Basic (Integer (Signed LongLong))
 
 val intmax_t: ctype
 let intmax_t =
-  Basic (AilTypes.Integer (AilTypes.Signed AilTypes.Intmax_t))
+  Basic (Integer (Signed Intmax_t))
 
 val ptrdiff_t: ctype
 let ptrdiff_t =
-  Basic (AilTypes.Integer AilTypes.Ptrdiff_t)
+  Basic (Integer Ptrdiff_t)
 
 val size_t: ctype
 let size_t =
-  Basic (AilTypes.Integer AilTypes.Size_t)
+  Basic (Integer Size_t)
 
 val unsigned_char: ctype
 let unsigned_char =
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Ichar)))
+  Basic (Integer (Unsigned (Ichar)))
 
 val unsigned_short: ctype
 let unsigned_short =
-  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Short))
+  Basic (Integer (Unsigned Short))
 
 val unsigned_int: ctype
 let unsigned_int =
-  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Int_))
+  Basic (Integer (Unsigned Int_))
 
 val unsigned_long: ctype
 let unsigned_long =
-  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Long))
+  Basic (Integer (Unsigned Long))
 
 val unsigned_long_long: ctype
 let unsigned_long_long =
-  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.LongLong))
+  Basic (Integer (Unsigned LongLong))
 
 val uintmax_t: ctype
 let uintmax_t =
-  Basic (AilTypes.Integer (AilTypes.Unsigned AilTypes.Intmax_t))
+  Basic (Integer (Unsigned Intmax_t))
 
 
 val char16_t: ctype
 let char16_t =
   (* STD §7.28#2 *)
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_leastN_t 16)))
+  Basic (Integer (Unsigned (Int_leastN_t 16)))
 
 val char32_t: ctype
 let char32_t =
   (* STD §7.28#2 *)
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.Int_leastN_t 32)))
+  Basic (Integer (Unsigned (Int_leastN_t 32)))
 
 (*
 val builtin_signed_integer_type: string -> ctype
 let builtin_signed_integer_type str =
-  Basic (AilTypes.Integer (AilTypes.Signed (AilTypes.IBBuiltin str)))
+  Basic (Integer (Signed (IBBuiltin str)))
 
 val builtin_unsigned_integer_type: string -> ctype
 let builtin_unsigned_integer_type str =
-  Basic (AilTypes.Integer (AilTypes.Unsigned (AilTypes.IBBuiltin str)))
+  Basic (Integer (Unsigned (IBBuiltin str)))
 *)
 
 

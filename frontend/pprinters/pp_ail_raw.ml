@@ -1,4 +1,4 @@
-open AilTypes
+open Ctype
 open Colour
 
 module P = PPrint
@@ -85,7 +85,7 @@ let pp_qualifiers_raw qs =
 
 let pp_integer i = P.string (Nat_big_num.to_string i)
 
-let rec pp_ctype_raw (AilTypes.Ctype (_,cty)) =
+let rec pp_ctype_raw (Ctype (_,cty)) =
   match cty with
     | Void ->
         pp_ctor "Void"

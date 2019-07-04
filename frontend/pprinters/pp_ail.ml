@@ -2,7 +2,7 @@ open Lem_pervasives
 open Either
 
 open AilSyntax
-open AilTypes
+open Ctype
 open GenTypes
 
 open Colour

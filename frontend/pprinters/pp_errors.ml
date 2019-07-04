@@ -25,7 +25,7 @@ let string_of_kind = function
 
 
 let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
-let string_of_ctype ty = String_ail.string_of_ctype AilTypes.no_qualifiers ty
+let string_of_ctype ty = String_ail.string_of_ctype Ctype.no_qualifiers ty
 let string_of_sym = Pp_symbol.to_string_pretty
 let string_of_gentype = String_ail.string_of_genType
 

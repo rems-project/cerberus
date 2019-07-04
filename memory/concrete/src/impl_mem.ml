@@ -1,5 +1,5 @@
 open Core_ctype
-open AilTypes
+open Ctype
 
 open Ocaml_implementation
 open Memory_model
@@ -26,14 +26,14 @@ let ctype_equal ty1 ty2 =
           ty
       | Function0 ((_, ret_ty), xs, b) ->
           Function0 (
-            (AilTypes.no_qualifiers, unqualify ret_ty),
-            List.map (fun (_, ty) -> (AilTypes.no_qualifiers, unqualify ty)) xs,
+            (no_qualifiers, unqualify ret_ty),
+            List.map (fun (_, ty) -> (no_qualifiers, unqualify ty)) xs,
             b
          )
       | Array0 (elem_ty, n_opt) ->
           Array0 (unqualify elem_ty, n_opt)
       | Pointer0 (_, ref_ty) ->
-          Pointer0 (AilTypes.no_qualifiers, unqualify ref_ty)
+          Pointer0 (no_qualifiers, unqualify ref_ty)
       | Atomic0 atom_ty ->
           Atomic0 (unqualify atom_ty)
   in
@@ -246,8 +246,8 @@ module Concrete : Memory = struct
   
   type mem_value =
     | MVunspecified of Core_ctype.ctype0
-    | MVinteger of AilTypes.integerType * integer_value
-    | MVfloating of AilTypes.floatingType * floating_value
+    | MVinteger of integerType * integer_value
+    | MVfloating of floatingType * floating_value
     | MVpointer of Core_ctype.ctype0 * pointer_value
     | MVarray of mem_value list
     | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * Core_ctype.ctype0 * mem_value) list
@@ -920,7 +920,7 @@ module Concrete : Memory = struct
                           MVpointer (ref_ty, PV (prov, PVconcrete n))
                   end
               | None ->
-                  MVunspecified (Core_ctype.Pointer0 (AilTypes.no_qualifiers, ref_ty))
+                  MVunspecified (Core_ctype.Pointer0 (no_qualifiers, ref_ty))
             end, bs2)
       | Atomic0 atom_ty ->
           Debug_ocaml.print_debug 1 [] (fun () -> "TODO: Concrete, is it ok to have the repr of atomic types be the same as their non-atomic version??");
@@ -966,11 +966,11 @@ module Concrete : Memory = struct
       | MVunspecified ty ->
           ty
       | MVinteger (ity, _) ->
-          Basic0 (AilTypes.Integer ity)
+          Basic0 (Integer ity)
       | MVfloating (fty, _) ->
-          Basic0 (AilTypes.Floating fty)
+          Basic0 (Floating fty)
       | MVpointer (ref_ty, _) ->
-          Pointer0 (AilTypes.no_qualifiers, ref_ty)
+          Pointer0 (no_qualifiers, ref_ty)
       | MVarray [] ->
           (* ill-formed value *)
           assert false
@@ -2348,7 +2348,7 @@ let combine_prov prov1 prov2 =
   (* TODO check *)
   let memcpy ptrval1 ptrval2 (IV (_, size_n)) =
     let loc = Location_ocaml.other "memcpy" in
-    let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
+    let unsigned_char_ty = Core_ctype.Basic0 ((Integer (Unsigned Ichar))) in
     (* TODO: if ptrval1 and ptrval2 overlap ==> UB *)
     (* TODO: copy ptrval2 into ptrval1 *)
     let rec aux i =
@@ -2363,7 +2363,7 @@ let combine_prov prov1 prov2 =
   
   (* TODO: validate more, but looks good *)
   let memcmp ptrval1 ptrval2 (IV (_, size_n)) =
-    let unsigned_char_ty = Core_ctype.Basic0 (AilTypes.(Integer (Unsigned Ichar))) in
+    let unsigned_char_ty = Core_ctype.Basic0 ((Integer (Unsigned Ichar))) in
     let rec get_bytes ptrval acc = function
       | 0 ->
           return (List.rev acc)
