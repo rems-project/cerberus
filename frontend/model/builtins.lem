@@ -13,165 +13,6 @@ let builtin = [
   ("__cerbvar_EDOM",   Varname (Just (mk_ctype_integer (Signed Int_))));
   ("__cerbvar_EILSEQ", Varname (Just (mk_ctype_integer (Signed Int_))));
   ("__cerbvar_ERANGE", Varname (Just (mk_ctype_integer (Signed Int_))));
-
-  (* from inttypes.h (§7.8) *)
-  ("__cerbty_imaxdiv_t",   Typename);
-
-(* TODO: these are string literals .... *)
-  ("__cerbvar_PRId8",       Varname Nothing);
-  ("__cerbvar_PRId16",      Varname Nothing);
-  ("__cerbvar_PRId32",      Varname Nothing);
-  ("__cerbvar_PRId64",      Varname Nothing);
-  ("__cerbvar_PRIdLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIdLEAST16", Varname Nothing);
-  ("__cerbvar_PRIdLEAST32", Varname Nothing);
-  ("__cerbvar_PRIdLEAST64", Varname Nothing);
-  ("__cerbvar_PRIdFAST8",   Varname Nothing);
-  ("__cerbvar_PRIdFAST16",  Varname Nothing);
-  ("__cerbvar_PRIdFAST32",  Varname Nothing);
-  ("__cerbvar_PRIdFAST64",  Varname Nothing);
-  ("__cerbvar_PRIdMAX",     Varname Nothing);
-  ("__cerbvar_PRIdPTR",     Varname Nothing);
-  ("__cerbvar_PRIi8",       Varname Nothing);
-  ("__cerbvar_PRIi16",      Varname Nothing);
-  ("__cerbvar_PRIi32",      Varname Nothing);
-  ("__cerbvar_PRIi64",      Varname Nothing);
-  ("__cerbvar_PRIiLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIiLEAST16", Varname Nothing);
-  ("__cerbvar_PRIiLEAST32", Varname Nothing);
-  ("__cerbvar_PRIiLEAST64", Varname Nothing);
-  ("__cerbvar_PRIiFAST8",   Varname Nothing);
-  ("__cerbvar_PRIiFAST16",  Varname Nothing);
-  ("__cerbvar_PRIiFAST32",  Varname Nothing);
-  ("__cerbvar_PRIiFAST64",  Varname Nothing);
-  ("__cerbvar_PRIiMAX",     Varname Nothing);
-  ("__cerbvar_PRIiPTR",     Varname Nothing);
-  ("__cerbvar_PRIo8",       Varname Nothing);
-  ("__cerbvar_PRIo16",      Varname Nothing);
-  ("__cerbvar_PRIo32",      Varname Nothing);
-  ("__cerbvar_PRIo64",      Varname Nothing);
-  ("__cerbvar_PRIoLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIoLEAST16", Varname Nothing);
-  ("__cerbvar_PRIoLEAST32", Varname Nothing);
-  ("__cerbvar_PRIoLEAST64", Varname Nothing);
-  ("__cerbvar_PRIoFAST8",   Varname Nothing);
-  ("__cerbvar_PRIoFAST16",  Varname Nothing);
-  ("__cerbvar_PRIoFAST32",  Varname Nothing);
-  ("__cerbvar_PRIoFAST64",  Varname Nothing);
-  ("__cerbvar_PRIoMAX",     Varname Nothing);
-  ("__cerbvar_PRIoPTR",     Varname Nothing);
-  ("__cerbvar_PRIu8",       Varname Nothing);
-  ("__cerbvar_PRIu16",      Varname Nothing);
-  ("__cerbvar_PRIu32",      Varname Nothing);
-  ("__cerbvar_PRIu64",      Varname Nothing);
-  ("__cerbvar_PRIuLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIuLEAST16", Varname Nothing);
-  ("__cerbvar_PRIuLEAST32", Varname Nothing);
-  ("__cerbvar_PRIuLEAST64", Varname Nothing);
-  ("__cerbvar_PRIuFAST8",   Varname Nothing);
-  ("__cerbvar_PRIuFAST16",  Varname Nothing);
-  ("__cerbvar_PRIuFAST32",  Varname Nothing);
-  ("__cerbvar_PRIuFAST64",  Varname Nothing);
-  ("__cerbvar_PRIuMAX",     Varname Nothing);
-  ("__cerbvar_PRIuPTR",     Varname Nothing);
-  ("__cerbvar_PRIx8",       Varname Nothing);
-  ("__cerbvar_PRIx16",      Varname Nothing);
-  ("__cerbvar_PRIx32",      Varname Nothing);
-  ("__cerbvar_PRIx64",      Varname Nothing);
-  ("__cerbvar_PRIxLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIxLEAST16", Varname Nothing);
-  ("__cerbvar_PRIxLEAST32", Varname Nothing);
-  ("__cerbvar_PRIxLEAST64", Varname Nothing);
-  ("__cerbvar_PRIxFAST8",   Varname Nothing);
-  ("__cerbvar_PRIxFAST16",  Varname Nothing);
-  ("__cerbvar_PRIxFAST32",  Varname Nothing);
-  ("__cerbvar_PRIxFAST64",  Varname Nothing);
-  ("__cerbvar_PRIxMAX",     Varname Nothing);
-  ("__cerbvar_PRIxPTR",     Varname Nothing);
-  ("__cerbvar_PRIX8",       Varname Nothing);
-  ("__cerbvar_PRIX16",      Varname Nothing);
-  ("__cerbvar_PRIX32",      Varname Nothing);
-  ("__cerbvar_PRIX64",      Varname Nothing);
-  ("__cerbvar_PRIXLEAST8",  Varname Nothing);
-  ("__cerbvar_PRIXLEAST16", Varname Nothing);
-  ("__cerbvar_PRIXLEAST32", Varname Nothing);
-  ("__cerbvar_PRIXLEAST64", Varname Nothing);
-  ("__cerbvar_PRIXFAST8",   Varname Nothing);
-  ("__cerbvar_PRIXFAST16",  Varname Nothing);
-  ("__cerbvar_PRIXFAST32",  Varname Nothing);
-  ("__cerbvar_PRIXFAST64",  Varname Nothing);
-  ("__cerbvar_PRIXMAX",     Varname Nothing);
-  ("__cerbvar_PRIXPTR",     Varname Nothing);
-  ("__cerbvar_SCNd8",       Varname Nothing);
-  ("__cerbvar_SCNd16",      Varname Nothing);
-  ("__cerbvar_SCNd32",      Varname Nothing);
-  ("__cerbvar_SCNd64",      Varname Nothing);
-  ("__cerbvar_SCNdLEAST8",  Varname Nothing);
-  ("__cerbvar_SCNdLEAST16", Varname Nothing);
-  ("__cerbvar_SCNdLEAST32", Varname Nothing);
-  ("__cerbvar_SCNdLEAST64", Varname Nothing);
-  ("__cerbvar_SCNdFAST8",   Varname Nothing);
-  ("__cerbvar_SCNdFAST16",  Varname Nothing);
-  ("__cerbvar_SCNdFAST32",  Varname Nothing);
-  ("__cerbvar_SCNdFAST64",  Varname Nothing);
-  ("__cerbvar_SCNdMAX",     Varname Nothing);
-  ("__cerbvar_SCNdPTR",     Varname Nothing);
-  ("__cerbvar_SCNi8",       Varname Nothing);
-  ("__cerbvar_SCNi16",      Varname Nothing);
-  ("__cerbvar_SCNi32",      Varname Nothing);
-  ("__cerbvar_SCNi64",      Varname Nothing);
-  ("__cerbvar_SCNiLEAST8",  Varname Nothing);
-  ("__cerbvar_SCNiLEAST16", Varname Nothing);
-  ("__cerbvar_SCNiLEAST32", Varname Nothing);
-  ("__cerbvar_SCNiLEAST64", Varname Nothing);
-  ("__cerbvar_SCNiFAST8",   Varname Nothing);
-  ("__cerbvar_SCNiFAST16",  Varname Nothing);
-  ("__cerbvar_SCNiFAST32",  Varname Nothing);
-  ("__cerbvar_SCNiFAST64",  Varname Nothing);
-  ("__cerbvar_SCNiMAX",     Varname Nothing);
-  ("__cerbvar_SCNiPTR",     Varname Nothing);
-  ("__cerbvar_SCNo8",       Varname Nothing);
-  ("__cerbvar_SCNo16",      Varname Nothing);
-  ("__cerbvar_SCNo32",      Varname Nothing);
-  ("__cerbvar_SCNo64",      Varname Nothing);
-  ("__cerbvar_SCNoLEAST8",  Varname Nothing);
-  ("__cerbvar_SCNoLEAST16", Varname Nothing);
-  ("__cerbvar_SCNoLEAST32", Varname Nothing);
-  ("__cerbvar_SCNoLEAST64", Varname Nothing);
-  ("__cerbvar_SCNoFAST8",   Varname Nothing);
-  ("__cerbvar_SCNoFAST16",  Varname Nothing);
-  ("__cerbvar_SCNoFAST32",  Varname Nothing);
-  ("__cerbvar_SCNoFAST64",  Varname Nothing);
-  ("__cerbvar_SCNoMAX",     Varname Nothing);
-  ("__cerbvar_SCNoPTR",     Varname Nothing);
-  ("__cerbvar_SCNu8",       Varname Nothing);
-  ("__cerbvar_SCNu16",      Varname Nothing);
-  ("__cerbvar_SCNu32",      Varname Nothing);
-  ("__cerbvar_SCNu64",      Varname Nothing);
-  ("__cerbvar_SCNuLEAST8",  Varname Nothing);
-  ("__cerbvar_SCNuLEAST16", Varname Nothing);
-  ("__cerbvar_SCNuLEAST32", Varname Nothing);
-  ("__cerbvar_SCNuLEAST64", Varname Nothing);
-  ("__cerbvar_SCNuFAST8",   Varname Nothing);
-  ("__cerbvar_SCNuFAST16",  Varname Nothing);
-  ("__cerbvar_SCNuFAST32",  Varname Nothing);
-  ("__cerbvar_SCNuFAST64",  Varname Nothing);
-  ("__cerbvar_SCNuMAX",     Varname Nothing);
-  ("__cerbvar_SCNuPTR",     Varname Nothing);
-  ("__cerbvar_SCNx8",       Varname Nothing);
-  ("__cerbvar_SCNx16",      Varname Nothing);
-  ("__cerbvar_SCNx32",      Varname Nothing);
-  ("__cerbvar_SCNx64",      Varname Nothing);
-  ("__cerbvar_SCNxLEAST8",  Varname Nothing);
-  ("__cerbvar_SCNxLEAST16", Varname Nothing);
-  ("__cerbvar_SCNxLEAST32", Varname Nothing);
-  ("__cerbvar_SCNxLEAST64", Varname Nothing);
-  ("__cerbvar_SCNxFAST8",   Varname Nothing);
-  ("__cerbvar_SCNxFAST16",  Varname Nothing);
-  ("__cerbvar_SCNxFAST32",  Varname Nothing);
-  ("__cerbvar_SCNxFAST64",  Varname Nothing);
-  ("__cerbvar_SCNxMAX",     Varname Nothing);
-  ("__cerbvar_SCNxPTR",     Varname Nothing);
   
   (* from limits.h (§7.10) *)
   ("__cerbvar_CHAR_BIT",   Varname (Just (mk_ctype_integer (Signed Int_)))); (* TODO[check] type based on §6.4.4.1#5 *)
@@ -195,8 +36,6 @@ let builtin = [
   ("__cerbvar_LLONG_MIN",  Varname (Just (mk_ctype_integer (Signed LongLong))));
   ("__cerbvar_LLONG_MAX",  Varname (Just (mk_ctype_integer (Signed LongLong))));
   ("__cerbvar_ULLONG_MAX", Varname (Just (mk_ctype_integer (Unsigned LongLong))));
-  
-  (* TODO: locale.h (§7.11) *)
   
   (* from setjump.h (§7.13) *)
   ("__cerbty_jmp_buf", Typename);
@@ -240,8 +79,7 @@ let builtin = [
   ("__cerbty_size_t",      Typename);
   ("__cerbty_max_align_t", Typename);
   ("__cerbty_wchar_t",     Typename);
-  ("__cerbvar_NULL",        Varname (Just (Ctype [] (Pointer no_qualifiers (Ctype [] Void)))));
-(*   ("__cerbvar_offsetof",    Varname Nothing); *)
+  ("__cerbvar_NULL",       Varname (Just (Ctype [] (Pointer no_qualifiers (Ctype [] Void)))));
   
   (* from stdint.h (§7.20) *)
   ("__cerbty_int8_t",           Typename);
@@ -330,7 +168,6 @@ let builtin = [
 (*  ("__cerbty_size_t", Typename); *) (* Already listed *)
   ("__cerbty_FILE",   Typename);
   ("__cerbty_fpos_t", Typename);
-(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
   ("__cerbvar_IOFBF",        Varname Nothing);
   ("__cerbvar_IOLBF",        Varname Nothing);
   ("__cerbvar_IONBF",        Varname Nothing);
@@ -352,11 +189,9 @@ let builtin = [
   ("__cerbvar_MB_CUR_MAX",   Varname Nothing);
   ("__cerbvar_EXIT_SUCCESS", Varname Nothing);
   ("__cerbvar_RAND_MAX",     Varname Nothing);
-(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
   
   (* from string.h (§7.24) *)
 (*  ("__cerbty_size_t", Typename); *) (* Already listed *)
-(*  ("__cerbvar_NULL", Varname); *) (* Already listed *)
   
   (* TODO: from tgmath.h (§7.25) *)
   
@@ -1140,6 +975,7 @@ end
 
 
 
+(* TODO: check if this function is ever called!! *)
 val ctype_of_builtin_varname: string -> maybe ctype
 let ctype_of_builtin_varname = function
   

@@ -23,7 +23,6 @@ Ctype
 Common
 TypingError
 ErrorMonad
-Context
 AilSyntax
 GenTypes
 

@@ -1,4 +1,4 @@
-open import Pervasives Context AilSyntax AilTypesAux AilWf Utils ErrorMonad Ctype TypingError
+open import Pervasives AilSyntax AilTypesAux AilWf Utils ErrorMonad Ctype TypingError
 import IntegerImpl
 
 (* following the table from (§6.4.4.1#5) *)
@@ -91,11 +91,18 @@ let type_of_constant loc impl = function
       return ity
 end
 
+val disjoint_bindings: bindings -> bool
+let rec disjoint_bindings bs =
+  match bs with
+    | [] -> true
+    | (a, _) :: xs ->
+      List.all (fun (b, _) -> a <> b) xs && disjoint_bindings xs
+  end
 
 val well_formed_bindings: forall 'a. Loc.t -> sigma 'a -> bindings -> errorM unit
 let well_formed_bindings loc sigm bindings =
   mapM_ (fun (_, (_, qs, ty)) -> wf_lvalue sigm qs ty) bindings >>
-  if not (disjoint_bindings identifierEqual bindings) then
+  if not (disjoint_bindings bindings) then
     error "AilTyping.well_formed_bindings: found non disjoint bindings"
   else
     return ()

@@ -736,7 +736,7 @@ let pp_program_aux pp_annot (startup, sigm) =
           
           P.optional (fun e ->
             P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e
-          ) (Context.lookup identifierEqual sigm.object_definitions sym) ^^ P.semi
+          ) (List.assoc_opt sym sigm.object_definitions) ^^ P.semi
       
       | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
           (* first pprinting in comments, some human-readably declarations *)
@@ -756,7 +756,7 @@ let pp_program_aux pp_annot (startup, sigm) =
                 else
                   pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
               end ^^
-              (match Context.lookup identifierEqual sigm.function_definitions sym with
+              (match List.assoc_opt sym sigm.function_definitions with
                 | Some (_, param_syms, stmt) ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty, isRegister)) ->

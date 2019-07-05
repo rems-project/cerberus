@@ -338,7 +338,7 @@ let is_complete sigm ty =
       true *)
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
-      match Context.lookup (=) sigm.tag_definitions sym with
+      match List.lookup sym sigm.tag_definitions with
         | Just (StructDef _) ->
             true
         | _ ->
@@ -348,7 +348,7 @@ let is_complete sigm ty =
       end
     (* STD §6.2.5#22, sentence 3-4 *)
   | Union sym ->
-      match Context.lookup (=) sigm.tag_definitions sym with
+      match List.lookup sym sigm.tag_definitions with
         | Just (UnionDef _) ->
             true
         | _ ->
