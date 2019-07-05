@@ -303,7 +303,7 @@ let string_of_bty =
 
 let string_of_name = function
   | Core.Sym sym -> string_of_sym sym
-  | Core.Impl impl -> Implementation_.string_of_implementation_constant impl
+  | Core.Impl impl -> Implementation.string_of_implementation_constant impl
 
 let string_of_binop bop =
   let open Core in

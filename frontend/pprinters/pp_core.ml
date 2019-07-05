@@ -131,7 +131,7 @@ let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty a))
 (* NOTE: Used to distinguish struct/unions globally *)
 let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string a))
 let pp_number  n = !^ (ansi_format [Yellow] n)
-let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation_.string_of_implementation_constant i)))
+let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
 
 
 let rec pp_core_object_type = function

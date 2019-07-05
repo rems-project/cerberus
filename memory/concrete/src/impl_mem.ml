@@ -1419,7 +1419,7 @@ module Concrete : Memory = struct
       " -> @" ^ Pp_utils.to_plain_string (pp_pointer_value (PV (prov, ptrval_))) ^
       ", mval= " ^ Pp_utils.to_plain_string (pp_mem_value mval)
     );
-    if not (ctype_equal (Ctype ([], AilTypesAux.unatomic ty)) (Ctype ([], AilTypesAux.unatomic (typeof mval)))) then begin
+    if not (ctype_equal (unatomic ty) (unatomic (typeof mval))) then begin
       Printf.printf "STORE ty          ==> %s\n"
         (String_core_ctype.string_of_ctype ty);
       Printf.printf "STORE typeof mval ==> %s\n"
@@ -1777,7 +1777,7 @@ module Concrete : Memory = struct
   
   let isWellAligned_ptrval ref_ty ptrval =
     (* TODO: catch builtin function types *)
-    match AilTypesAux.unatomic ref_ty with
+    match unatomic_ ref_ty with
       | Void
       | Function _ ->
           fail (MerrOther "called isWellAligned_ptrval on void or a function type")

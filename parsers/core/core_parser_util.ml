@@ -130,7 +130,7 @@ type token =
   | CSTRING of string
   
   | SYM of _sym
-  | IMPL of Implementation_.implementation_constant
+  | IMPL of Implementation.implementation_constant
   | UB of Undefined.undefined_behaviour
   | INT_CONST of Nat_big_num.num
   

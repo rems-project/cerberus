@@ -56,7 +56,7 @@ SOURCE_utils=\
 
 SOURCE_ail_typing=\
   Range.lem \
-  Implementation.lem \
+  IntegerImpl.lem \
   AilTypesAux.lem \
   AilSyntaxAux.lem \
   AilWf.lem \
@@ -128,7 +128,7 @@ CERBERUS_LEM_SOURCES=\
   builtins.lem \
   output.lem \
   pp.lem \
-  implementation_.lem \
+  implementation.lem \
   $(SOURCE_defacto) \
   $(SOURCE_utils) \
   nondeterminism.lem \

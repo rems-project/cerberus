@@ -1,8 +1,8 @@
 open import Pervasives Context AilSyntax AilTypesAux AilWf Utils ErrorMonad Ctype TypingError
-import Implementation
+import IntegerImpl
 
 (* following the table from (§6.4.4.1#5) *)
-val type_of_constant: Loc.t -> Implementation.implementation -> integerConstant -> errorM integerType
+val type_of_constant: Loc.t -> IntegerImpl.implementation -> integerConstant -> errorM integerType
 let type_of_constant loc impl = function
   | IConstant n Decimal Nothing ->
       if in_integer_range impl n (Signed Int_) then

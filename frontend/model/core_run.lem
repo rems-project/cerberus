@@ -6,7 +6,7 @@ import Cmm_csem Mem Mem_common Mem_aux
 import AilSyntax Ctype AilTypesAux
 import Builtins
 
-open import Implementation_ Decode
+open import Implementation Decode
 
 open import Errors
 
@@ -368,7 +368,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                             | Just cval3 ->
                                 match (cval1, cval2) with
                                   | (Vobject (OVinteger ival), Vctype ty) ->
-                                match memValueFromValue (Ctype.Ctype [] (AilTypesAux.unatomic ty)) cval3 with
+                                match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval3 with
                                   | Just mem_val ->
                                       Step_action_request "CreateRequest" (
                                         E.fresh_action_id >>= fun create_aid ->
@@ -383,7 +383,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
                                       )
                                   | Nothing ->
                                       Step_error ((Loc.stringFromLocation loc) ^ "the value of a create_readonly(" ^
-                                                  Pp.stringFromCore_ctype (Ctype.Ctype [] (AilTypesAux.unatomic ty)) ^
+                                                  Pp.stringFromCore_ctype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
                                                   ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval3)
                                 end
                                   | _ ->
@@ -512,7 +512,7 @@ KKK
                     )
 *)
                 | _ ->
-                  match memValueFromValue (Ctype.Ctype [] (AilTypesAux.unatomic ty)) cval with
+                  match memValueFromValue (Ctype.Ctype [] (Ctype.unatomic_ ty)) cval with
                     | Just mem_val ->
                         Step_action_request "StoreRequest" (
                           E.fresh_action_id >>= fun store_aid ->
@@ -527,7 +527,7 @@ KKK
                           )
                         )
                     | Nothing ->
-                        Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Ctype.Ctype [] (AilTypesAux.unatomic ty)) ^
+                        Step_error ((Loc.stringFromLocation loc) ^ "the value of a store(" ^ Pp.stringFromCore_ctype (Ctype.Ctype [] (Ctype.unatomic_ ty)) ^
                                     ") didn't match the lvalue type: " ^ Pp.stringFromCore_value cval)
                   end
               end

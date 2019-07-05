@@ -49,7 +49,7 @@ Fs
 Trace_event
 
 Range
-Implementation
+IntegerImpl
 AilTypesAux
 AilSyntaxAux
 AilWf
@@ -63,7 +63,7 @@ Cabs_to_ail_aux
 Cabs_to_ail_effect
 WipFrontend
 
-Implementation_
+Implementation
 Output
 
 Switches
