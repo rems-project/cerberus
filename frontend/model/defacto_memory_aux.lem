@@ -4,7 +4,7 @@ open import Utils
 open import AilTypesAux 
 
 import Core_ctype_aux
-import Implementation_
+import Implementation
 
 open import Mem_common Defacto_memory_types
 
@@ -224,7 +224,7 @@ let rec simplify_integer_value_base ival_ =
       | IVmin ity ->
           match ity with
             | Char ->
-                if Implementation_.char_is_signed then
+                if Implementation.char_is_signed then
                   Left (~ (2 ** (8-1)))
                 else
                   Left 0
@@ -241,14 +241,14 @@ let rec simplify_integer_value_base ival_ =
                 Left 0
             | Ptrdiff_t ->
                 (* this type is signed *)
-                match Implementation_.sizeof_ity ity with
+                match Implementation.sizeof_ity ity with
                   | Just n ->
                       Left (~ (2 ** (8*n-1)))
                   | Nothing ->
                       Right ival_
                 end
             | Signed _ ->
-                match Implementation_.sizeof_ity ity with
+                match Implementation.sizeof_ity ity with
                   | Just n ->
                       Left (~ (2 ** (8*n-1)))
                   | Nothing ->
@@ -258,13 +258,13 @@ let rec simplify_integer_value_base ival_ =
                 error "IVmin Enum"
           end
       | IVmax ity ->
-          match Implementation_.sizeof_ity ity with
+          match Implementation.sizeof_ity ity with
             | Just n ->
                 let signed_max   = (2 ** (8*n-1))  - 1 in
                 let unsigned_max = (2 ** (8*n))  - 1   in
                 match ity with
                   | Char ->
-                      Left (if Implementation_.char_is_signed then
+                      Left (if Implementation.char_is_signed then
                         signed_max
                       else
                         unsigned_max)
@@ -294,14 +294,14 @@ let rec simplify_integer_value_base ival_ =
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Void"
             | Basic (Integer ity) ->
-                match Nothing (* Implementation_.sizeof_ity ity*) with
+                match Nothing (* Implementation.sizeof_ity ity*) with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
             | Basic (Floating fty) ->
-                match Implementation_.sizeof_fty fty with
+                match Implementation.sizeof_fty fty with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
@@ -337,14 +337,14 @@ let rec simplify_integer_value_base ival_ =
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Void"
             | Basic (Integer ity) ->
-                match Implementation_.alignof_ity ity with
+                match Implementation.alignof_ity ity with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
                       Right ival_
                 end
             | Basic (Floating fty) ->
-                match Implementation_.alignof_fty fty with
+                match Implementation.alignof_fty fty with
                   | Just n ->
                       Left (integerFromNat n)
                   | Nothing ->
@@ -378,7 +378,7 @@ let rec simplify_integer_value_base ival_ =
       | IVcomposite _ ->
           error "TODO: Defacto_memory_aux2.simplify_integer_value_base, IVcomposite"
       | IVbitwise ity (BW_complement ival_1) ->
-          match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1) with
+          match (Implementation.sizeof_ity ity, simplify_integer_value_base ival_1) with
             | (Just w, Left n1) ->
                 Left (tmp_compl w n1)
             | (_, Left n1) ->
@@ -387,7 +387,7 @@ let rec simplify_integer_value_base ival_ =
                 Right (IVbitwise ity (BW_complement ival_1'))
           end
       | IVbitwise ity (BW_AND ival_1 ival_2) ->
-          match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          match (Implementation.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
             | (Just w, Left n1, Left n2) ->
                 Left (tmp_AND w n1 n2)
             | (_, x, y) ->
@@ -395,7 +395,7 @@ let rec simplify_integer_value_base ival_ =
                 Right (IVbitwise ity (BW_AND (f x) (f y)))
           end
       | IVbitwise ity (BW_OR ival_1 ival_2) ->
-          match (Implementation_.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
+          match (Implementation.sizeof_ity ity, simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
             | (Just w, Left n1, Left n2) ->
                 Left (tmp_OR w n1 n2)
             | (_, x, y) ->
@@ -403,7 +403,7 @@ let rec simplify_integer_value_base ival_ =
                 Right (IVbitwise ity (BW_OR (f x) (f y)))
           end
       | IVbitwise ity (BW_XOR ival_1 ival_2) ->
-          match ( Implementation_.sizeof_ity ity
+          match ( Implementation.sizeof_ity ity
                 , simplify_integer_value_base ival_1
                 , simplify_integer_value_base ival_2 ) with
             | (Just w, Left n1, Left n2) ->

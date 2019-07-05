@@ -48,7 +48,7 @@ val c_frontend:
 val core_frontend:
   'a * io_helpers ->
   ('b * (Symbol.sym, (unit, unit) Core.generic_fun_map_decl) Pmap.map) *
-  (Implementation_.implementation_constant, unit Core.generic_impl_decl)
+  (Implementation.implementation_constant, unit Core.generic_impl_decl)
   Pmap.map ->
   filename:string ->
   ((unit, unit) Core.generic_file, Location_ocaml.t * Errors.cause) Exception.exceptM

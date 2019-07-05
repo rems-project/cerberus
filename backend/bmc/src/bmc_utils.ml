@@ -177,7 +177,7 @@ let name_cmp = fun nm1 nm2 ->
   match (nm1, nm2) with
   | (Sym sym1, Sym sym2) -> sym_cmp sym1 sym2
   | (Impl impl1, Impl impl2) ->
-      Implementation_.implementation_constant_compare impl1 impl2
+      Implementation.implementation_constant_compare impl1 impl2
   | (Sym _, Impl _) -> (-1)
   | (Impl _, Sym _) -> 1
 
@@ -257,7 +257,7 @@ let bmc_debug_print level str =
 let name_to_string (name: sym_ty generic_name) =
   match name with
   | Sym a  -> symbol_to_string a
-  | Impl i -> Implementation_.string_of_implementation_constant i
+  | Impl i -> Implementation.string_of_implementation_constant i
 
 let print_expr (expr: Expr.expr) =
   print_endline (Expr.to_string expr)

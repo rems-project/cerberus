@@ -921,7 +921,7 @@ else
                        (Caux.mk_case_pe load_sym_pe
                           [ ( Caux.mk_specified_pat obj_sym_pat
                             , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
-match AilTypesAux.unatomic ty with
+match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
 (*
                               stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))
@@ -986,7 +986,7 @@ end
                           C.PEcase load_sym_pe
                             [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy))
                               , Caux.mk_specified_pe
-match AilTypesAux.unatomic ty with
+match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
                           (* TODO: check again *)
                           let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
@@ -1194,7 +1194,7 @@ else
                                Caux.mk_std_pe "6.5.7#5, sentence 3" $ Caux.mk_if_pe (Caux.mk_op_pe C.OpGe promoted1_sym_pe (Caux.mk_integer_pe 0))
                                  expr
                                  (C.Pexpr [] () (
-                                    C.PEcall (C.Impl Implementation_.SHR_signed_negative) [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_sym_pe; promoted2_sym_pe]
+                                    C.PEcall (C.Impl Implementation.SHR_signed_negative) [Caux.mk_ail_ctype_pe (ctype_of e1) ; promoted1_sym_pe; promoted2_sym_pe]
                                  ))))))) ]
                     )
                   )
@@ -2077,7 +2077,7 @@ end
               [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
                                    ;Caux.mk_specified_pat expected_sym_pat],
                  Caux.pcompare_exchange_strong
-                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (AilTypesAux.unatomic ty1)))
+                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (Ctype.unatomic_ ty1)))
                     object_sym_pe expected_sym_pe desired_sym_pe
                     mo_success mo_failure
                 )
@@ -2130,7 +2130,7 @@ end
               [ (Caux.mk_tuple_pat [Caux.mk_specified_pat object_sym_pat
                                    ;Caux.mk_specified_pat expected_sym_pat],
                  Caux.pcompare_exchange_weak
-                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (AilTypesAux.unatomic ty1)))
+                    loc (Caux.mk_ail_ctype_pe (Ctype.Ctype [] (Ctype.unatomic_ ty1)))
                     object_sym_pe expected_sym_pe desired_sym_pe
                     mo_success mo_failure
                 )
@@ -2252,8 +2252,8 @@ end
          E.return $
            (* TODO: weak or strong seq? *)
            C.Esseq [Just sym_object; Just sym_expected_ptr; Just sym_desired] (C.Eunseq [core_object_e; core_expected_e; core_desired_e])
-             (C.Esseq [Just sym_expected_val] (Caux.pload loc (Caux.mk_ail_ctype_pe (AilTypesAux.unatomic ty)) (C.PEsym sym_expected_ptr) Cmm.NA)
-                (Caux.prmw loc (Caux.mk_ail_ctype_pe (AilTypesAux.unatomic ty)) (C.PEsym sym_object) (C.PEsym sym_expected_val) (C.PEsym sym_desired)
+             (C.Esseq [Just sym_expected_val] (Caux.pload loc (Caux.mk_ail_ctype_pe (Ctype.unatomic_ ty)) (C.PEsym sym_expected_ptr) Cmm.NA)
+                (Caux.prmw loc (Caux.mk_ail_ctype_pe (Ctype.unatomic_ ty)) (C.PEsym sym_object) (C.PEsym sym_expected_val) (C.PEsym sym_desired)
                    mo_success mo_failure)
              )
 *)
@@ -2814,7 +2814,7 @@ else (* is_pointer *)
             | "UINT64_MAX" ->
                 Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 64)))))
             | "CHAR_BIT" ->
-                C.PEimpl Implementation_.Characters__bits_in_byte
+                C.PEimpl Implementation.Characters__bits_in_byte
 *)
             | _ ->
                 error ( "WIP: Translation.translate_expr, AilEbuiltin: " ^ str)
@@ -3704,7 +3704,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           E.resolve_object_type ptr_sym >>= fun (qs, ty) ->
           let e_bTy = C.BTy_loaded (force_core_object_type_of_ctype (ctype_of e)) in
           E.wrapped_fresh_symbol e_bTy >>= fun (e_sym, e_sym_pat, e_sym_pe) ->
-          match AilTypesAux.unatomic ty with
+          match Ctype.unatomic_ ty with
             | Ctype.Pointer _ ref_ty ->
                 let mk_store =
                   if qs.Ctype.const then Caux.pstore_lock else Caux.pstore in

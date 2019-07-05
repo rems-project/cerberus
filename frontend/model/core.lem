@@ -2,7 +2,7 @@
 open import Pervasives
 
 open import Ctype Annot Loc
-import Symbol Implementation_ Undefined Cmm_csem
+import Symbol Implementation Undefined Cmm_csem
 import Mem Mem_common
 import Linux
 
@@ -147,7 +147,7 @@ type polarity =  (* memory action polarities *)
 
 type generic_name 'sym = 
  | Sym of 'sym (* Core identifier *)
- | Impl of Implementation_.implementation_constant (* implementation-defined constant *)
+ | Impl of Implementation.implementation_constant (* implementation-defined constant *)
 
 instance forall 'sym. MapKeyType 'sym => (MapKeyType (generic_name 'sym))
   let mapKeyCompare nm1 nm2 =
@@ -217,7 +217,7 @@ and generic_pattern 'bty 'sym =
 
 type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEsym of 'sym
- | PEimpl of Implementation_.implementation_constant (* implementation-defined constant *)
+ | PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
  | PEval of (generic_value 'sym)
  | PEconstrained of list (Mem.mem_iv_constraint * (generic_pexpr 'bty 'sym)) (* constrained value *)
  | PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
@@ -298,7 +298,7 @@ and generic_expr 'a 'bty 'sym =
 type generic_impl_decl 'bty =
   | Def of core_base_type * generic_pexpr 'bty Symbol.sym
   | IFun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym
-type generic_impl 'bty = map Implementation_.implementation_constant (generic_impl_decl 'bty)
+type generic_impl 'bty = map Implementation.implementation_constant (generic_impl_decl 'bty)
 
 type generic_fun_map_decl 'bty 'a =
   | Fun of core_base_type * list (Symbol.sym * core_base_type) * generic_pexpr 'bty Symbol.sym

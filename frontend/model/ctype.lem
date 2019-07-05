@@ -4,7 +4,7 @@
  *)
 
 open import Pervasives Loc Show
-import Symbol Annot Cabs (* TODO: it would be nice if we can get rid of Cabs *)
+import Symbol Annot Cabs
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -378,9 +378,21 @@ end
 (** Some useful functions *)
 
 val proj_ctype_: ctype -> ctype_
-let proj_ctype_ (Ctype _ cty) = cty
+let proj_ctype_ (Ctype _ ty_) = ty_
 
-val make_qualifiers: bool -> bool -> bool (*-> bool*) -> qualifiers
+(* NOTE: a well-formed ctype cannot have an Atomic inside another one *)
+let unatomic (Ctype annots ty_ as ty) =
+match ty_ with
+  | Atomic ty ->
+      ty
+  | _ ->
+      ty
+end
+
+let unatomic_ ty =
+  proj_ctype_ (unatomic ty)
+
+val make_qualifiers: bool -> bool -> bool -> qualifiers
 let make_qualifiers c r v = <|
   const    = c;
   restrict = r;
@@ -393,6 +405,22 @@ let no_qualifiers = <|
   restrict = false;
   volatile = false;
 |>
+
+val combine_qualifiers: qualifiers -> qualifiers -> qualifiers
+let combine_qualifiers qs1 qs2 = <|
+  const    = qs1.const    || qs2.const   ;
+  restrict = qs1.restrict || qs2.restrict;
+  volatile = qs1.volatile || qs2.volatile;
+|>
+
+
+(* Some constructors *)
+
+let mk_ctype_integer ity =
+  Ctype [] (Basic (Integer ity))
+
+let mk_ctype_atomic cty =
+  Ctype [] (Atomic cty)
 
 (** Some standard types *)
 
@@ -481,3 +509,4 @@ let size_t =
 val ptrdiff_t: ctype
 let ptrdiff_t =
   Ctype [] (Basic (Integer Ptrdiff_t))
+

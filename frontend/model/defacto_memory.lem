@@ -842,7 +842,7 @@ let project_to_lvalue_type (Ctype _ lvalue_ty) mval =
           return mval
         
         (* TODO: check that we really allow arbitrary bytes accesses like this *)
-        else match Implementation_.sizeof_ity lvalue_ity with
+        else match Implementation.sizeof_ity lvalue_ity with
           | Nothing ->
               error "WIP: project_to_lvalue_type"
           | Just size ->
@@ -1025,14 +1025,14 @@ let rec impl_sizeof_ival_aux (Ctype _ ty as cty) =
     | Void ->
         error "Mem.impl_sizeof_ival_aux, Void"
     | Basic (Integer ity) ->
-        match Implementation_.sizeof_ity ity with
+        match Implementation.sizeof_ity ity with
           | Just n ->
               IVconcrete (integerFromNat n)
           | Nothing ->
               IVsizeof cty
         end
     | Basic (Floating fty) ->
-        match Implementation_.sizeof_fty fty with
+        match Implementation.sizeof_fty fty with
           | Just n ->
               IVconcrete (integerFromNat n)
           | Nothing ->

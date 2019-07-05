@@ -1060,7 +1060,7 @@ let register_tag_definition loc tag_sym tag_decl =
     | Enum_definition ns_rev ->
         (* NOTE: this function doesn't care about the order of the integers *)
         (* NOTE2: this function is effectful but by its use this shouldn't be observable *)
-        if Implementation_.register_enum tag_sym ns_rev then
+        if Implementation.register_enum tag_sym ns_rev then
           return ()
         else
           (* NOTE: this should have been caught as redefinition just earlier *)
@@ -1106,7 +1106,7 @@ let get_anonymous_struct_or_union ty =
   (* TODO: the unatomic is commented because clang doesn't consider an atomic
      struct/union an anonymous (regardless of the absence of tag). So we do
      the same for now, but need to check further the STD... *)
-  match (* AilTypesAux.unatomic *) ty with
+  match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
           | Just (Struct_definition isAnonymous membrs) ->

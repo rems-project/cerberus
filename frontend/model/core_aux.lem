@@ -409,13 +409,13 @@ val integer_decode_pe:     pexpr -> pexpr -> pexpr
 let bitwise_complement_pe pe1 pe2 =
   Pexpr [] () (PEctor CivCOMPL [pe1; pe2])
 (*
-  Pexpr [] () (PEcall (Impl Implementation_.Bitwise_complement) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation.Bitwise_complement) [pe1; pe2])
 *)
 (*
 let integer_encode_pe pe1 pe2 =
-  Pexpr [] () (PEcall (Impl Implementation_.Integer__encode) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation.Integer__encode) [pe1; pe2])
 let integer_decode_pe pe1 pe2 =
-  Pexpr [] () (PEcall (Impl Implementation_.Integer__decode) [pe1; pe2])
+  Pexpr [] () (PEcall (Impl Implementation.Integer__decode) [pe1; pe2])
 *)
 
 (* Some aliases for positive actions *)

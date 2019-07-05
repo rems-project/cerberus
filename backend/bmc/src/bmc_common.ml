@@ -404,7 +404,7 @@ module ImplFunctions = struct
   let sizeof_ptr = Ocaml_implementation.Impl.sizeof_pointer
 
   (* TODO: precision of Bool is currently 8... *)
-  let impl : Implementation.implementation = {
+  let impl : IntegerImpl.implementation = {
     impl_binary_mode = Two'sComplement;
     impl_signed      = (function
                    | Char       -> Ocaml_implementation.Impl.char_is_signed
@@ -422,7 +422,7 @@ module ImplFunctions = struct
   }
 
   (* ---- Helper functions ---- *)
-  let integer_range (impl: Implementation.implementation)
+  let integer_range (impl: IntegerImpl.implementation)
                     (ity : Ctype.integerType) =
     let prec = impl.impl_precision ity in
     if impl.impl_signed ity then

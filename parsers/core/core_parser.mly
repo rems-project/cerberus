@@ -29,8 +29,8 @@ type attribute =
   | Attr_ailname of string
 
 type declaration =
-  | Def_decl  of Implementation_.implementation_constant * Core.core_base_type * parsed_pexpr
-  | IFun_decl of Implementation_.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
+  | Def_decl  of Implementation.implementation_constant * Core.core_base_type * parsed_pexpr
+  | IFun_decl of Implementation.implementation_constant * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Glob_decl of _sym * Core.core_base_type * parsed_expr
   | Fun_decl  of _sym * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_pexpr)
   | Proc_decl of _sym * attribute list * (Core.core_base_type * (_sym * Core.core_base_type) list * parsed_expr)
@@ -1007,7 +1007,7 @@ let mk_file decls =
 
 %token <Nat_big_num.num> INT_CONST
 %token <Core_parser_util._sym> SYM
-%token <Implementation_.implementation_constant> IMPL
+%token <Implementation.implementation_constant> IMPL
 %token <Undefined.undefined_behaviour> UB
 %token <Mem_common.memop> MEMOP_OP
 

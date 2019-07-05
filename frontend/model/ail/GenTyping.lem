@@ -261,7 +261,7 @@ val combine_qualifiers_left: genType -> genType -> genType
 let combine_qualifiers_left gty1 gty2 =
   match (gty1, gty2) with
     | (GenPointer qs1 ty1, GenPointer qs2 _) ->
-        GenPointer (AAux.combine_qualifiers qs1 qs2) ty1
+        GenPointer (combine_qualifiers qs1 qs2) ty1
     | (GenPointer _  _ , _) ->
         gty1
     | _ ->
@@ -273,7 +273,7 @@ val combine_qualifiers_right: genType -> genType -> genType
 let combine_qualifiers_right gty1 gty2 =
   match (gty1, gty2) with
     | (GenPointer qs1 _, GenPointer qs2 ty2) ->
-        GenPointer (AAux.combine_qualifiers qs1 qs2) ty2
+        GenPointer (combine_qualifiers qs1 qs2) ty2
     | (_, GenPointer _ _) ->
         gty2
     | _ ->
@@ -334,11 +334,11 @@ let well_typed_conditional (loc_cond, loc_e1, loc_e2, loc_e3) gty1 gty2 gty3 is_
 val annotate_stringLiteral: stringLiteral -> E.errorM (expression_ genTypeCategory * genTypeCategory)
 let annotate_stringLiteral (pref_opt, strs) =
   let elem_ty = match pref_opt with
-                  | Nothing     -> AAux.mk_ctype_integer Char    (* STD §6.4.5#6 sentence 3 *)
-                  | Just Enc_u8 -> AAux.mk_ctype_integer Char    (* STD §6.4.5#6 sentence 4 *)
-                  | Just Enc_u  -> char16_t                      (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_U  -> char32_t                      (* STD §6.4.5#6 sentence 6 *)
-                  | Just Enc_L  -> wchar_t                       (* STD §6.4.5#6 sentence 5 *)
+                  | Nothing     -> char     (* STD §6.4.5#6 sentence 3 *)
+                  | Just Enc_u8 -> char     (* STD §6.4.5#6 sentence 4 *)
+                  | Just Enc_u  -> char16_t (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_U  -> char32_t (* STD §6.4.5#6 sentence 6 *)
+                  | Just Enc_L  -> wchar_t  (* STD §6.4.5#6 sentence 5 *)
                 end in
 
   (* TODO: check the type *)
@@ -693,7 +693,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let params_wo_ptr = [(qs, Ctype [] $ AAux.unatomic object_ty, false); (no_qualifiers, memorder_ty, false)] in
+                  let params_wo_ptr = [(qs, Ctype [] $ unatomic_ object_ty, false); (no_qualifiers, memorder_ty, false)] in
                   let gen_fun_ty = GenRValueType (GenFunction false (qs, Ctype [] Void) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (desired_e :: order_e :: args) params_wo_ptr >>= fun es' ->
@@ -716,7 +716,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ret_ty = Ctype [] (AAux.unatomic object_ty) in
+                  let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(no_qualifiers, memorder_ty, false)] in
                   let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
@@ -738,7 +738,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ret_ty = Ctype [] (AAux.unatomic object_ty) in
+                  let ret_ty = Ctype [] (unatomic_ object_ty) in
                   let params_wo_ptr = [(qs, ret_ty, false); (no_qualifiers, memorder_ty, false)] in
                   let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
@@ -753,7 +753,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e  >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ty = Ctype [] $ AAux.unatomic object_ty in
+                  let ty = Ctype [] $ unatomic_ object_ty in
                   let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
                   let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
@@ -778,7 +778,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e  >>= fun (object_e', object_gty) ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let ty = Ctype [] $ AAux.unatomic object_ty in
+                  let ty = Ctype [] $ unatomic_ object_ty in
                   let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
                                        (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
                   let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
@@ -809,7 +809,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
            match (object_gty) with
              | (GenPointer qs object_ty) ->
                  E.return ( AilEcall (AnnotatedExpression ((* TODO: HACK *)GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_read")) [object_e';order_e']
-                          , GenRValueType (inject_type $ Ctype [] (AAux.unatomic object_ty)) )
+                          , GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)) )
              | _ ->
                  error "WIP: typing of linux_read"
            end
@@ -829,7 +829,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
              | (GenPointer qs object_ty) ->
                  E.return (AilEcall (AnnotatedExpression ((* TODO: HACK *)
    GenRValueType GenVoid) annots' loc' (AilEbuiltin "linux_rmw"))
-   [object_e'; desired_e'; order_e'], GenRValueType (inject_type $ Ctype [] (AAux.unatomic object_ty)))
+   [object_e'; desired_e'; order_e'], GenRValueType (inject_type $ Ctype [] (unatomic_ object_ty)))
              | _ ->
                  error "WIP: typing of linux_rmw"
            end
@@ -899,7 +899,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
-                                         , GenLValueType (AAux.combine_qualifiers qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | Nothing ->
                                 E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
@@ -913,7 +913,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
-                                         , GenLValueType (AAux.combine_qualifiers qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | Nothing ->
                                 E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
@@ -970,7 +970,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match List.lookup memb_ident membersDefs with
                       | Just (memb_qs, memb_ty) ->
                           E.return ( AilEmemberofptr e' memb_ident
-                                   , GenLValueType (AAux.combine_qualifiers ref_qs memb_qs) memb_ty false )
+                                   , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                       | Nothing ->
                           E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                  (MemberofptrNoMember memb_ident ref_qs ref_ty)
@@ -984,7 +984,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match List.lookup memb_ident membersDefs with
                       | Just (memb_qs, memb_ty) ->
                           E.return ( AilEmemberofptr e' memb_ident
-                                   , GenLValueType (AAux.combine_qualifiers ref_qs memb_qs) memb_ty false )
+                                   , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                       | Nothing ->
                           E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                  (MemberofptrNoMember memb_ident ref_qs ref_ty)
@@ -1372,7 +1372,7 @@ and nonarray_lvalue_conversion sigm a_expr =
   match genTypeCategoryOf a_expr with
     | GenLValueType qs ty isRegister ->
         if not (AAux.is_array ty) then
-          let rvalue_ty = AAux.unatomic (AAux.unqualify ty) in
+          let rvalue_ty = unatomic_ (AAux.unqualify ty) in
           if AAux.is_incomplete sigm ty then
             error "TODO: nonarray_lvalue_conversion ==> undefined behaviour"
           else
@@ -1447,7 +1447,7 @@ and perform_decays sigm ctx a_expr =
            && not (List.elem ctx [CTXsizeof; CTXaddr; CTXincr; CTXdecr; CTXmemberof; CTXassign]) then
           (* STD §6.3.2.1#2 *)
           (* performing the lvalue conversion *)
-          let rvalue_ty = Ctype [] (AAux.unatomic ty) in
+          let rvalue_ty = Ctype [] (unatomic_ ty) in
           if AAux.is_incomplete sigm ty then
             (* STD §6.3.2.1#2, sentence 3 *)
             E.undef (Loc.locOf ty) Undefined.UB020_nonarray_incomplete_lvalue_conversion

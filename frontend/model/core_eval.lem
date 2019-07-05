@@ -48,7 +48,7 @@ let call_function file f_nm arg_cvals =
               Exception.return (Fun bty params pe)
           | _ ->
               Exception.fail (Illformed_program ("calling an unknown impl-function: " ^
-                                                 Implementation_.string_of_implementation_constant f))
+                                                 Implementation.string_of_implementation_constant f))
         end
   end function
     | Fun _ params body_pe ->
@@ -524,7 +524,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
                     EU.return (PEval (Vobject (OVarray lvals)))
               end
           | (Civmax, Just [Vctype ty]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.max_ival ity)))
                 | _ ->
@@ -532,7 +532,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
                            Pp.stringFromCore_expr (Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval (Vctype ty)))) : Core.expr unit)) (* DEBUG *)
               end
           | (Civmin, Just [Vctype ty]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.min_ival ity)))
                 | _ ->
@@ -544,28 +544,28 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | (Civalignof, Just [Vctype ty]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.alignof_ival ty)))
           | (CivCOMPL, Just [Vctype ty; Vobject (OVinteger ival)]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_complement_ival ity ival)))
                 | _ ->
                     error "Core_Eval ivCOMPL, not (is_integer ty)"
               end
           | (CivAND, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_and_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivAND, not (is_integer ty)"
               end
           | (CivOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_or_ival ity ival1 ival2)))
                 | _ ->
                     error "Core_Eval ivOR, not (is_integer ty)"
               end
           | (CivXOR, Just [Vctype ty; Vobject (OVinteger ival1); Vobject (OVinteger ival2)]) ->
-              match AilTypesAux.unatomic ty with
+              match Ctype.unatomic_ ty with
                 | (Ctype.Basic (Ctype.Integer ity)) ->
                     EU.return $ PEval (Vobject (OVinteger (Mem.bitwise_xor_ival ity ival1 ival2)))
                 | _ ->

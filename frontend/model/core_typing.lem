@@ -5,11 +5,11 @@ open import Utils Errors Loc
 import Exception Pp
 
 open import Core Core_aux
-import Mem_common Ctype Core_ctype_aux Implementation_
+import Mem_common Ctype Core_ctype_aux Implementation
 
 open import Core_typing_aux
 
-module I = Implementation_
+module I = Implementation
 
 module Cty = struct
   include Ctype

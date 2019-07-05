@@ -1,5 +1,5 @@
 open import Pervasives Common AilSyntax Range ErrorMonad TypingError GenTypes Utils Ctype
-import AilTypesAux AilTyping Implementation Debug
+import AilTypesAux AilTyping IntegerImpl Debug
 
 let unatomic = function
   | GenAtomic ty ->
@@ -273,7 +273,7 @@ let rec interpret_genIntegerType loc impl git : errorM integerType =
       return (AilTypesAux.usual_arithmetic_integer impl ity1 ity2)
   end
 
-val interpret_genBasicType: Loc.t -> Implementation.implementation -> genBasicType -> errorM basicType
+val interpret_genBasicType: Loc.t -> IntegerImpl.implementation -> genBasicType -> errorM basicType
 let interpret_genBasicType loc impl = function
   | GenInteger gity ->
       interpret_genIntegerType loc impl gity >>= fun ity ->
@@ -282,7 +282,7 @@ let interpret_genBasicType loc impl = function
       return (Floating fty)
 end
 
-val interpret_genType: Loc.t -> Implementation.implementation -> genType -> errorM ctype
+val interpret_genType: Loc.t -> IntegerImpl.implementation -> genType -> errorM ctype
 let interpret_genType loc impl gty =
   let ret ty = return (Ctype [Annot.Aloc loc] ty) in
   match gty with
@@ -305,7 +305,7 @@ let interpret_genType loc impl gty =
         ret (Atomic ty)
   end
 
-val interpret_genTypeCategory: Loc.t -> Implementation.implementation -> genTypeCategory -> errorM typeCategory
+val interpret_genTypeCategory: Loc.t -> IntegerImpl.implementation -> genTypeCategory -> errorM typeCategory
 let interpret_genTypeCategory loc impl = function
   | GenRValueType gty ->
       RValueType <$> interpret_genType loc impl gty

@@ -1689,15 +1689,15 @@ STD_ "§6.7.6.2#1, sentence 5, not outermost" $
              match ty with
                | Ctype.Array elem_ty _ ->
                    (* NOTE: these are the qualifiers of the pointer *)
-                   ( AilTypesAux.combine_qualifiers qs tquals_qs
+                   ( Ctype.combine_qualifiers qs tquals_qs
                    , (if isAtomic then Ctype.Atomic else id) (Ctype.Pointer Ctype.no_qualifiers elem_ty) )
                | ty ->
                    (qs, ty)
              end)
 *)
            E.return (fun qs ty ->
-             ( AilTypesAux.combine_qualifiers qs tquals_qs
-             , (if isAtomic then AilTypesAux.mk_ctype_atomic else id) ty )
+             ( Ctype.combine_qualifiers qs tquals_qs
+             , (if isAtomic then Ctype.mk_ctype_atomic else id) ty )
            )
 
      | _ ->
@@ -1756,7 +1756,7 @@ and desugar_pointer_declarator (PDecl ptr_loc tquals ptr_decltor_opt)  =
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
   let mk_pointer_ctype ref_qs (Ctype.Ctype annots _ as ref_ty) =
     let loc = Loc.bbox_location [Annot.get_loc_ annots; ptr_loc] in
-    (if isAtomic then AilTypesAux.mk_ctype_atomic else id) (Ctype.Ctype [Annot.Aloc loc] (Ctype.Pointer ref_qs ref_ty)) in
+    (if isAtomic then Ctype.mk_ctype_atomic else id) (Ctype.Ctype [Annot.Aloc loc] (Ctype.Pointer ref_qs ref_ty)) in
   (* STD  §6.7.6.1#1 *)
   match ptr_decltor_opt with
     (* in this case [tquals_qs] are the qualifiers of the referenced type of
@@ -1926,7 +1926,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
           let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
           (* STD §6.9.1#7, sentence 4 *)
           let (_qs, _ty) =
-            mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
+            mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
           
           if AilTypesAux.is_void _ty then
             match fundef with
@@ -1983,7 +1983,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
           let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
           (* STD §6.9.1#7, sentence 4 *)
           let (_qs, _ty) =
-            mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
+            mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
           let ret = (Nothing, ( qs
                               , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
@@ -2462,7 +2462,7 @@ and desugar_struct_declaration struct_decl =
                desugar_type_specifiers because we need to special case the last
                member. *)
             let (qs, ty) =
-              mk_qs_ctype (AilTypesAux.combine_qualifiers tquals_qs specs_qs) base_ty in
+              mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
             E.return (ident, (qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
           ) sdecltors
     
@@ -2547,7 +2547,7 @@ and desugar_type_name (Type_name specs tquals align_specs abs_decltor_opt) =
   let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
   
   let (qs, ty) =
-    mk_qs_ctype (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
+    mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
   E.return (qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty)
 
 
@@ -2796,7 +2796,7 @@ and foo_aux
                   (* TODO: this is wrong *)
                   E.fail loc (Errors.Desugar_MiscViolation Errors.ArrayCharStringLiteral)
                 else
-                  let size = match AilTypesAux.unatomic outer_ty with
+                  let size = match Ctype.unatomic_ outer_ty with
                     | Ctype.Array _ (Just n) ->
                         natFromInteger n
                     | _ ->
@@ -2845,7 +2845,7 @@ and foo_aux
                       | Right ty ->
                           if AilTypesAux.is_struct ty then
                             if ty = outer_ty then
-                              let tag_sym = match AilTypesAux.unatomic ty with
+                              let tag_sym = match Ctype.unatomic_ ty with
                                 | Ctype.Struct tag_sym ->
                                     tag_sym
                                 | _ ->
@@ -3167,7 +3167,7 @@ let () = error "DONE" in
   
   
   else *)
-    match (AilTypesAux.unatomic current_ty, init) with
+    match (Ctype.unatomic_ current_ty, init) with
       | (Ctype.Struct _, Init_expr e) ->
           (* TODO: hack *)
           desugar_expression e >>= fun d_e ->
@@ -3532,7 +3532,7 @@ let desugar_declaration_base specifs idecltors =
             (* NOTE: the wf of the storage classes is checked later (see the
                pattern match on [ty]) *)
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-            let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
+            let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             desugar_init_declarator_BROKEN base_qs base_ty specifs.storage_classes init >>= fun (ident, is_tentative, (qs, _ty), mk_desug_init) ->
             let (Ctype.Ctype _ ty as cty) = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
             
@@ -3776,7 +3776,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
           E.under_scope scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-            let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
+            let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun (InitDecl loc _ _ as init) ->
               check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
               desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
@@ -4062,7 +4062,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc specifs (Declara
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, specs_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
         let base_ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic specs_ty) else specs_ty in
-        let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs     in
+        let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs     in
         
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         match ty with
@@ -4151,7 +4151,7 @@ let desugar_and_register_external_declaration edecl =
     | EDecl_decl (Declaration_base specifs idecltors) ->
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
-        let base_qs = AilTypesAux.combine_qualifiers specs_qs tquals_qs in
+        let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
         (* TODO: why the two maps? *)
         (* NOTE: this is (at least) needed to get the scope of typedefs right
            (see suite/parsing/declarator_visibility.c) *)
@@ -4321,7 +4321,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
       desugar_type_specifiers specifs1.type_specifiers >>= fun (specs_qs, base_ty) ->
       let (qs, ty) =
         let (_, tquals_qs) = translate_type_qualifiers specifs1.type_qualifiers in
-        mk_qs_type1 (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty in
+        mk_qs_type1 (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
       
       let () = Debug.print_debug 2 [] (fun () -> "DECLTOR1:") in
       let () = Debug.print_debug 2 [] (fun () -> (Pp.stringFromAil_ctype qs ty)) in
@@ -4329,7 +4329,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
       (* ----- *)
       
       let (_, tquals_qs) = translate_type_qualifiers specifs1.type_qualifiers in
-      desugar_init_declarator (AilTypesAux.combine_qualifiers specs_qs tquals_qs) base_ty specifs1.storage_classes
+      desugar_init_declarator (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty specifs1.storage_classes
         (InitDecl Loc.unknown decltor1 Nothing) >>= fun (ident, (qs, ty), mk_desug_init) ->
       
       let () = Debug.print_debug 2 [] (fun () -> "INIT DECLARATOR:") in

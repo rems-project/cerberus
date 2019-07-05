@@ -1,6 +1,6 @@
 open import Pervasives Utils Translation_effect Symbol Show Show_extra Ctype
 import Core Core_aux
-import Implementation AilSyntax AilTypesAux GenTypes GenTypesAux
+import IntegerImpl AilSyntax AilTypesAux GenTypes GenTypesAux
 import Boot Map_extra
 
 module C    = Core
@@ -89,7 +89,7 @@ let conv ty1 ty2 e =
       conv_aux(ty2, n)
     
     -- (§6.3.1.3#1) Otherwise, the new type is signed and the value cannot be represented in it;
-    -- either the result is implementation-defined or an implementation-defined signal is raised.
+    -- either the result is IntegerImpl-defined or an IntegerImpl-defined signal is raised.
     else
       error -- TODO
   else
@@ -97,10 +97,10 @@ let conv ty1 ty2 e =
 *)
 
 (* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
-val tmp_implementation: Implementation.implementation
+val tmp_implementation: IntegerImpl.implementation
 let tmp_implementation =
-  Implementation.make_implementation
-    Implementation.Two'sComplement
+  IntegerImpl.make_implementation
+    IntegerImpl.Two'sComplement
     ( function
         | Ctype.Char       -> true (* Check that *)
 	| Ctype.Signed   _ -> true
