@@ -24,7 +24,6 @@ SOURCE_ail=\
   Common.lem \
   TypingError.lem \
   ErrorMonad.lem \
-  Context.lem \
   AilSyntax.lem \
   GenTypes.lem
 

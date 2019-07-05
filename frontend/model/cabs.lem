@@ -434,11 +434,6 @@ instance (Located external_declaration)
     end
 end
 
-instance (Eq storage_class_specifier)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
 instance (SetType cabs_base_type_specifier)
   let setElemCompare bspecif1 bspecif2 =
     let ord = function
@@ -466,15 +461,5 @@ instance (SetType cabs_base_type_specifier)
           10
     end in
     setElemCompare (ord bspecif1) (ord bspecif2)
-end
-
-instance (Eq cabs_type_qualifier)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-instance (Eq function_specifier)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
 end
 
