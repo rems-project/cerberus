@@ -56,6 +56,8 @@ module DefaultImpl: Implementation = struct
     | Enum ident ->
         (* TODO *)
         Some 4
+    | Wint_t ->
+        Some 4 (* TODO *)
     | Size_t
     | Wchar_t
     | Ptrdiff_t ->
@@ -94,6 +96,8 @@ module DefaultImpl: Implementation = struct
           | None ->
               None
         end
+    | Wint_t ->
+        Some 32 (* TODO *)
     | Wchar_t ->
         Some 64 (* TODO *)
     | Ptrdiff_t ->
@@ -141,6 +145,8 @@ module DefaultImpl: Implementation = struct
     | Enum ident ->
         (* TODO *)
         Some 4
+    | Wint_t ->
+        Some 4 (* TODO *)
     | Size_t
     | Wchar_t
     | Ptrdiff_t ->

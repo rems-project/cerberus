@@ -237,6 +237,9 @@ let rec simplify_integer_value_base ival_ =
             | Wchar_t ->
                 (* TODO: it is implementation defined if signed *)
                 Left 0
+            | Wint_t ->
+                (* TODO: it is implementation defined if signed *)
+                Left (~ 2147483648)
             | Unsigned _ ->
                 Left 0
             | Ptrdiff_t ->
@@ -274,6 +277,9 @@ let rec simplify_integer_value_base ival_ =
                   | Size_t ->
                       Left unsigned_max
                   | Wchar_t ->
+                      (* TODO: it is implementation defined if signed *)
+                      Left unsigned_max
+                  | Wint_t ->
                       (* TODO: it is implementation defined if signed *)
                       Left unsigned_max
                   | Unsigned _ ->

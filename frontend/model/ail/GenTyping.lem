@@ -819,6 +819,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
              | _ ->
                  error "WIP: typing of linux_rmw"
            end
+        | (_, _) ->
+           error "WIP: typing builtin"
     end
     
     (* TODO: this is wrong in so many ways!! *)

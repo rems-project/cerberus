@@ -94,6 +94,9 @@ let rec simplify_integer_value_base ival_ =
                   | None ->
                       Right ival_
                 end
+          | Wchar_t
+          | Wint_t ->
+              assert false (* TODO *)
           | Enum _ ->
               failwith "IVmin Enum"
         end
@@ -125,6 +128,9 @@ let rec simplify_integer_value_base ival_ =
                     Left signed_max
                 | Enum _ ->
                     failwith "IVmax Enum"
+                | Wchar_t
+                | Wint_t ->
+                    assert false (* TODO *)
               end
           | None ->
               Right ival_

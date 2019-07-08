@@ -751,7 +751,7 @@ declaration:
 | attribute_specifier_sequence decspecs= declaration_specifiers_typedef
     idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
     { Declaration_base (decspecs, option [] List.rev idecls_opt) }
-| attrs= attribute_declaration
+| attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
       Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (CabsIdentifier (loc, "test"))), None)]) }
@@ -1384,16 +1384,16 @@ attribute_argument_clause:
 ;
 
 balanced_token_sequence: (* NOTE: the list is in reverse *)
-| tks= balanced_token_sequence tk= balance_token
+| balanced_token_sequence balance_token
     {}
 | (* empty *)
     {}
 ;
 
 balance_token:
-| LPAREN tk= balanced_token_sequence RPAREN
-| LBRACK tk= balanced_token_sequence RBRACK
-| LBRACE tk= balanced_token_sequence RBRACE
+| LPAREN balanced_token_sequence RPAREN
+| LBRACK balanced_token_sequence RBRACK
+| LBRACE balanced_token_sequence RBRACE
     {}
 (* NOTE: add attribute arguments here *)
 ;

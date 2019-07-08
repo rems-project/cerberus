@@ -283,6 +283,9 @@ let integerType_to_expr slvSt (ity: Ctype.integerType) =
         Expr.mk_app slvSt.ctx (List.nth fdecls 4) []
     | Ptrdiff_t ->
         Expr.mk_app slvSt.ctx (List.nth fdecls 5) []
+    | Wint_t
+    | Wchar_t ->
+        assert false (* TODO *)
   )
 
 let basicType_to_expr slvSt (bty: Ctype.basicType) =

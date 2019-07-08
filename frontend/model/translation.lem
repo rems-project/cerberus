@@ -608,8 +608,6 @@ and translate_bitwise_operator loc translate usual_arithmetic_conversion stdlib 
   let e2_sym    = Symbol.fresh () in
   let obj1_sym  = Symbol.fresh () in
   let obj2_sym  = Symbol.fresh () in
-  let sym_conv1 = Symbol.fresh () in
-  let sym_conv2 = Symbol.fresh () in
   translate e1   >>= fun core_e1   ->
   translate e2   >>= fun core_e2   ->
   let oTy = C.OTy_integer in
@@ -1150,14 +1148,12 @@ else
           let obj2_sym      = Symbol.fresh () in
           let promoted1_sym = Symbol.fresh () in
           let promoted2_sym = Symbol.fresh () in
-          let res_sym       = Symbol.fresh () in
           let e1_sym_pe        = Caux.mk_sym_pe e1_sym        in
           let e2_sym_pe        = Caux.mk_sym_pe e2_sym        in
           let obj1_sym_pe      = Caux.mk_sym_pe obj1_sym      in
           let obj2_sym_pe      = Caux.mk_sym_pe obj2_sym      in
           let promoted1_sym_pe = Caux.mk_sym_pe promoted1_sym in
           let promoted2_sym_pe = Caux.mk_sym_pe promoted2_sym in
-          (*let res_sym_pe       = Caux.mk_sym_pe res_sym       in*)
           E.return $
             C.Expr [Annot.Astd "§6.5.7"] (
               C.Ewseq (Caux.mk_tuple_pat [ Caux.mk_sym_pat e1_sym (C.BTy_loaded C.OTy_integer)
@@ -3970,7 +3966,6 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   (* adding string literals *)
   E.get_string_literals >>= fun xs ->
   E.foldlM (fun acc (loc, sym, ty, e_init) ->
-    let sym_lit = Symbol.fresh () in
     let expr =
       Caux.pcreate_readonly loc
         (Caux.mk_alignof_pe (Caux.mk_ctype_pe ty))

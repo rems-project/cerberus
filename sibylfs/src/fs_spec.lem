@@ -3255,8 +3255,8 @@ But this is surely not POSIX, and violates the invariant that a call that return
     let cmd = OS_OPEN(cs,oflag,mode) in
     let rpath = Resolve.process_path env s0 d0_ref cmd cs in
     (match rpath with
-     | RN_None -> true
-     | RN_error -> true
+     | RN_none _ -> true
+     | RN_error _ -> true
      | _ -> false end) )
 
 
@@ -5307,7 +5307,7 @@ module Os_operations = struct
               But I don't think this is enforced behaviour, although this is most likely what
               happens in a real implementation *)
            let pps' = <| pps with pps_dh_table=(fmap_update pps.pps_dh_table (dh,dh_st')) |> in
-           let s2 = <| s0 with oss_pid_table=(fmap_update s0.oss_pid_table (pid,pps')) |> in
+           let _ = <| s0 with oss_pid_table=(fmap_update s0.oss_pid_table (pid,pps')) |> in
            OS_normal (update_pending_return s1 pid (Value RV_none))
          ) in
 

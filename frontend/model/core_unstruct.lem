@@ -27,7 +27,7 @@ let extract_ctype_pe (Pexpr _ _ pexpr_) =
           | Struct tag_sym ->
               Right (tag_sym, get_structDef tag_sym)
           | Union tag_sym ->
-              let xs = get_unionDef tag_sym in
+              (*let xs = get_unionDef tag_sym in*)
               insupported "(non atomic) union"
           | _ ->
               Left cty
@@ -82,7 +82,7 @@ type explode_env =
 
 (* If the given expression is a pointer to a struct, explode it to pointers to the members *)
 val explode_ptr_pexpr: explode_env -> typed_pexpr -> maybe (list (Cabs.cabs_identifier * typed_pexpr))
-let explode_ptr_pexpr env (Pexpr annot bTy pexpr_ as pexpr) =
+let explode_ptr_pexpr env (Pexpr annot bTy pexpr_) =
   match pexpr_ with
     | PEsym ptr_sym ->
         match Map.lookup ptr_sym env with
@@ -102,7 +102,7 @@ let explode_ptr_pexpr env (Pexpr annot bTy pexpr_ as pexpr) =
 
 
 (*val explode_paction: explode_env -> typed_paction unit -> list (typed_expr_ unit) *)
-let explode_paction env (Paction pol (Action loc a act_) as pact) =
+let explode_paction env (Paction pol (Action loc a act_)) =
   let wrap z =
     Eaction (Paction pol (Action loc a z)) in
   match act_ with
@@ -121,6 +121,8 @@ let explode_paction env (Paction pol (Action loc a act_) as pact) =
                     (ident, wrap (Create (type_pexpr (Caux.mk_alignof_pe ty_pe)) (type_pexpr ty_pe) pref))
                   ) xs
                 end
+          | (_, _) ->
+              Nothing (* TODO: Kayvan please check *)
         end
 (*
     | CreateReadOnly pe1 pe2 pe3 pref ->
@@ -167,6 +169,7 @@ let explode_paction env (Paction pol (Action loc a act_) as pact) =
   end
   
 
+(*
 (*val     foo: forall 'a. typed_expr 'a ->  *)
 let rec fetch_types (Expr annot expr_) =
   match expr_ with
@@ -206,6 +209,7 @@ let rec fetch_types (Expr annot expr_) =
     | Ewait of thread_id (* wait for thread termination *)
 *)
   end
+  *)
 
 
 val mk_ptr_tuple_pe: list typed_pexpr -> typed_pexpr
@@ -327,6 +331,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         expr
     | Epar es ->
         wrap (Epar (List.map self es))
+    | Ewait _ ->
+        expr
   end
 
 

@@ -169,6 +169,8 @@ let pp_integerType = function
      pp_type_keyword "size_t"
  | Wchar_t ->
      pp_type_keyword "wchar_t"
+ | Wint_t ->
+     pp_type_keyword "wint_t"
  | Ptrdiff_t ->
      pp_type_keyword "ptrdiff_t"
  | Signed ibty ->
@@ -192,6 +194,8 @@ let macro_string_of_integerType = function
      "SIZE"
  | Wchar_t ->
      "WCHAR"
+ | Wint_t ->
+     "WINT"
  | Ptrdiff_t ->
      "PTRDIFF"
  | Enum sym ->

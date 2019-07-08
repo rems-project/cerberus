@@ -132,7 +132,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         end
     | Atomic atom_ty ->
         sizeof ~tagDefs atom_ty
-    | Struct tag_sym as ty ->
+    | Struct tag_sym ->
         let (_, max_offset) = offsetsof tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
         let x = max_offset mod align in
@@ -1830,7 +1830,7 @@ module Concrete : Memory = struct
                       return true
                 end
           end
-      | PV (Prov_some alloc_id, PVconcrete _) as ptrval ->
+      | PV (Prov_some alloc_id, PVconcrete _) ->
           do_test alloc_id
       | PV (Prov_none, _) ->
           return false
@@ -1842,9 +1842,6 @@ module Concrete : Memory = struct
       Debug_ocaml.warn [] (fun () ->
         "implementation defined cast from integer to pointer"
       );
-    let sw_opt =
-      Switches.(has_switch_pred (function SW_PNVI _ -> true | _ -> false)) in
-    
     let n =
       let (min, max) = match Impl.sizeof_pointer with
         | Some sz ->
@@ -2071,6 +2068,7 @@ module Concrete : Memory = struct
             | Unsigned _ ->
                 unsigned_max
             | Ptrdiff_t
+            | Wint_t (* TODO *)
             | Signed _ ->
                 signed_max
             | Enum _ ->
@@ -2092,6 +2090,7 @@ module Concrete : Memory = struct
       | Bool
       | Size_t
       | Wchar_t (* TODO: it is implementation defined if unsigned *)
+      | Wint_t
       | Unsigned _ ->
           (* all of these are unsigned *)
           zero

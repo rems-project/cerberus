@@ -87,6 +87,7 @@ let min_integer_range = function
   | Enum _ -> min_range_signed Int_
   | Size_t -> error "TODO: min_integer_range, Size_t"
   | Wchar_t -> error "TODO: min_integer_range, Wchar_t"
+  | Wint_t -> error "TODO: min_integer_range, Wint_t"
   | Ptrdiff_t -> error "TODO: min_integer_range, Ptrdiff_t"
 end
 
@@ -103,6 +104,7 @@ let min_implementation_signed_char =
         | Enum _ -> true
         | Size_t -> error "TODO: min_implementation_signed_char, Size_t 1"
         | Wchar_t -> error "TODO: min_implementation_signed_char, Wchar_t 1"
+        | Wint_t -> error "TODO: min_implementation_signed_char, Wint_t 1"
         | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 1"
       end
     )
@@ -141,6 +143,7 @@ let min_implementation_signed_char =
         | Enum _ -> 15
         | Size_t -> error "TODO: min_implementation_signed_char, Size_t 2"
         | Wchar_t -> error "TODO: min_implementation_signed_char, Wchar_t 2"
+        | Wint_t -> error "TODO: min_implementation_signed_char, Wint_t 2"
         | Ptrdiff_t -> error "TODO: min_implementation_signed_char, Ptrdiff_t 2"
       end
     )
@@ -160,6 +163,7 @@ let min_implementation_unsigned_char =
         | Enum _ -> true
         | Size_t -> error "TODO: min_implementation_unsigned_char, Size_t 1"
         | Wchar_t -> error "TODO: min_implementation_unsigned_char, Wchar_t 1"
+        | Wint_t -> error "TODO: min_implementation_unsigned_char, Wint_t 1"
         | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 1"
       end
     )
@@ -198,6 +202,7 @@ let min_implementation_unsigned_char =
         | Enum _ -> 15
         | Size_t -> error "TODO: min_implementation_unsigned_char, Size_t 2"
         | Wchar_t -> error "TODO: min_implementation_unsigned_char, Wchar_t 2"
+        | Wint_t -> error "TODO: min_implementation_unsigned_char, Wint_t 2"
         | Ptrdiff_t -> error "TODO: min_implementation_unsigned_char, Ptrdiff_t 2"
       end
     )

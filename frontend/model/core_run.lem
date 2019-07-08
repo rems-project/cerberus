@@ -516,7 +516,6 @@ KKK
                     | Just mem_val ->
                         Step_action_request "StoreRequest" (
                           E.fresh_action_id >>= fun store_aid ->
-                          let val_sym = Symbol.fresh () in
                           E.return (
                             StoreRequest loc sb_before dd_before asw_before
                               store_aid current_tid mo ty is_locking ptr_val mem_val
