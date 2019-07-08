@@ -39,8 +39,11 @@ let rec is_signed_ity ity =
         (* STD §7.19#2 *)
         false
     | Wchar_t ->
-        (* TODO: this is IntegerImpl defined $7.20 *)
+        (* TODO: this is implementation defined $7.20 *)
         false
+    | Wint_t ->
+        (* TODO: this is implementation defined *)
+        true
     | Ptrdiff_t ->
         (* STD §7.19#2 *)
         true
@@ -555,6 +558,15 @@ let le_integer_range impl ity1 ity2 =
   | (Enum _, Ptrdiff_t) ->
       (* impossible *)
       error "le_integer_range: Enum, Ptrdiff_t"
+
+  | (Wchar_t, _) ->
+      error "WIP le_integer_range: wchar_t"
+  | (_, Wchar_t) ->
+      error "WIP le_integer_range: wchar_t"
+  | (Wint_t, _) ->
+      error "WIP le_integer_range: wint_t"
+  | (_, Wint_t) ->
+      error "WIP le_integer_range: wint_t"
   end
 
 

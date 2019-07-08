@@ -152,8 +152,10 @@ let integerTypeEqual ity1 ity2 =
         5
     | Wchar_t ->
         6
-    | Ptrdiff_t ->
+    | Wint_t ->
         7
+    | Ptrdiff_t ->
+        8
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->
@@ -316,8 +318,10 @@ let setElemCompare_integerType ity1 ity2 =
         5
     | Wchar_t ->
         6
-    | Ptrdiff_t ->
+    | Wint_t ->
         7
+    | Ptrdiff_t ->
+        8
   end in
   match (ity1, ity2) with
     | (Signed ibty1, Signed ibty2) ->

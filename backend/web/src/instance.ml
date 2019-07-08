@@ -459,6 +459,10 @@ let multiple_steps step_state (m, st) =
                     None, "undefined behaviour in realloc"
                   | MerrIntFromPtr ->
                     None, "invalid cast integer from pointer"
+                  | MerrPtrComparison ->
+                    None, "error pointer comparison"
+                  | MerrArrayShift ->
+                    None, "error array shilft"
                   | MerrWIP str ->
                     None, "wip: " ^ str
               end

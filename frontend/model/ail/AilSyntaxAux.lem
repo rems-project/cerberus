@@ -30,7 +30,7 @@ let rec is_null_pointer_constant expr =
   end
 
 val memory_order_of_expr: forall 'a. expression 'a -> maybe Cmm_csem.memory_order
-let memory_order_of_expr (AnnotatedExpression _ _ _ expr as a_expr) =
+let memory_order_of_expr (AnnotatedExpression _ _ _ expr) =
   match expr with
     | AilEconst (ConstantInteger (IConstant n _ _)) -> Builtins.decode_memory_order $ natFromInteger n
     | _ -> Nothing

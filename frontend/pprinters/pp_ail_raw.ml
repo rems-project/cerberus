@@ -53,6 +53,8 @@ let pp_integerType_raw = function
      pp_ctor "Size_t"
  | Wchar_t ->
      pp_ctor "Wchar_t"
+ | Wint_t ->
+     pp_ctor "Wint_t"
  | Ptrdiff_t ->
      pp_ctor "Ptrdiff_t"
 

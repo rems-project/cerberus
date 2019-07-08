@@ -63,6 +63,9 @@ let pp_trace_event = function
   | ME_eff_array_shift_ptrval (arr_ptrval, cty, ival, ptrval) ->
     !^ "array_shift (TODO)"
 
+  | ME_member_shift _ ->
+    !^ "member_shift (TODO)"
+
 let pp_trace evs =
   P.flow P.hardline (List.map pp_trace_event evs)
 

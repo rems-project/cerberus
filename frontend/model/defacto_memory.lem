@@ -201,6 +201,8 @@ let defacto_integer_range = function
      (0, 2**64-1)
  | Wchar_t ->
      (0, 2**64-1)
+ | Wint_t ->
+     (0-2147483648, 2147483647)
  | Ptrdiff_t ->
      (0-2**63, 2**63-1)
 end

@@ -16,9 +16,11 @@ let runND exec_mode (type cs) cs_module (m: ('a, 'info, 'err, cs, 'st) ndM) (st0
   let rec with_backtracking m xs =
     let i = (Random.int (List.length xs)) in
     let x = List.nth xs i in
+    (*
     let xs' = List.init (List.length xs - 1) (fun z ->
       List.nth xs (if z < i then z else z+1)
     ) in
+    *)
     m x in (*>>= function
       | [] ->
           with_backtracking m xs'

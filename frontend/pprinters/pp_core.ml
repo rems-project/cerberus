@@ -543,7 +543,6 @@ let rec pp_expr expr =
                 begin match annot with
                 | Abmc_id id ->
                     !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
-                | _ -> acc
                 end
         ) doc annot
     end

@@ -41,6 +41,7 @@ let pp_integer_ctype ity =
     | Enum sym         -> !^ "enum" ^^^ pp_symbol sym
     | Size_t           -> !^ "size_t"
     | Wchar_t          -> !^ "wchar_t"
+    | Wint_t           -> !^ "wint_t"
     | Ptrdiff_t        -> !^ "ptrdiff_t"
 
 let pp_floating_ctype fty =

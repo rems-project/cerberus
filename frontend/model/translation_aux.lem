@@ -112,6 +112,8 @@ let tmp_implementation =
             error "WIP: Translation_aux.tmp_implementation (1), Size_t"
         | Ctype.Wchar_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Wchar_t"
+        | Ctype.Wint_t ->
+            error "WIP: Translation_aux.tmp_implementation (1), Wint_t"
         | Ctype.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (1), Ptrdiff_t"
       end
@@ -155,6 +157,8 @@ let tmp_implementation =
             error "WIP: Translation_aux.tmp_implementation (2), Size_t"
         | Ctype.Wchar_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Wchar_t"
+        | Ctype.Wint_t ->
+            error "WIP: Translation_aux.tmp_implementation (2), Wint_t"
         | Ctype.Ptrdiff_t ->
             error "WIP: Translation_aux.tmp_implementation (2), Ptrdiff_t"
       end
