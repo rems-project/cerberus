@@ -1977,7 +1977,7 @@ end
                   C.
           end
 *)
-     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "atomic_store_explicit")) [lobject_e; desired_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBatomic A.AilBAstore))) [lobject_e; desired_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
@@ -2006,7 +2006,7 @@ end
              end
          end
      
-     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "atomic_load_explicit")) [lobject_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBatomic A.AilBAload))) [lobject_e; order_e] ->
          (* TODO: be more permissive for the memory order *)
          let mo = translate_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
@@ -2038,7 +2038,7 @@ end
 
     | A.AilEcall
           (A.AnnotatedExpression _ _ _
-              (A.AilEbuiltin "atomic_compare_exchange_strong_explicit"))
+              (A.AilEbuiltin (A.AilBatomic A.AilBAcompare_exchange_strong)))
           [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
       let mo_success = translate_memory_order order_success_e in
       let mo_failure = translate_memory_order order_failure_e in
@@ -2091,7 +2091,7 @@ end
       end
     | A.AilEcall
           (A.AnnotatedExpression _ _ _
-              (A.AilEbuiltin "atomic_compare_exchange_weak_explicit"))
+              (A.AilEbuiltin (A.AilBatomic A.AilBAcompare_exchange_weak)))
           [object_e; expected_e; desired_e; order_success_e; order_failure_e] ->
       let mo_success = translate_memory_order order_success_e in
       let mo_failure = translate_memory_order order_failure_e in
@@ -2142,11 +2142,11 @@ end
               ]
           )
       end
-     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_fence")) [order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBlinux A.AilBLfence))) [order_e] ->
         let mo = translate_linux_memory_order order_e in
          E.return $
            C.Expr [] (C.Eaction (C.Paction C.Pos (C.Action loc () (C.LinuxFence mo))))
-     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_read")) [lobject_e; order_e] ->
+     | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBlinux A.AilBLread))) [lobject_e; order_e] ->
          (* TODO: remove code duplication *)
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
@@ -2168,7 +2168,7 @@ end
                     Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
              end
          end
-      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_write")) [lobject_e; desired_e; order_e] ->
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBlinux A.AilBLwrite))) [lobject_e; desired_e; order_e] ->
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
            | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
@@ -2195,7 +2195,7 @@ end
                     Caux.mk_pure_e (Caux.mk_undef_pe loc Undefined.UB_unspecified_lvalue)) ]
              end
          end
-      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin "linux_rmw")) [lobject_e; desired_e; order_e] ->
+      | A.AilEcall (A.AnnotatedExpression _ _ _ (A.AilEbuiltin (A.AilBlinux A.AilBLrmw))) [lobject_e; desired_e; order_e] ->
          let mo = translate_linux_memory_order order_e in
          let ref_ty = match ctype_of lobject_e with
            | Ctype.Ctype _ (Ctype.Pointer _ ref_ty) ->
@@ -2785,40 +2785,14 @@ else (* is_pointer *)
       | A.AilEconst cst ->
           E.return (Caux.mk_pure_e (translate_constant cst))
       
-      | A.AilEbuiltin str ->
-          (* TODO: the redundance with Builtins.lem is wrong *)
-          E.return $ Caux.mk_pure_e match str with
-(*
-            | "INT8_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 8)))))
-            | "INT16_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 16)))))
-            | "INT32_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 32)))))
-            | "INT64_MIN" ->
-                Caux.mk_ivmin_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 64)))))
-            | "INT8_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 8)))))
-            | "INT16_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 16)))))
-            | "INT32_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 32)))))
-            | "INT64_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Signed (Ctype.IntN_t 64)))))
-            | "UINT8_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 8)))))
-            | "UINT16_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 16)))))
-            | "UINT32_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 32)))))
-            | "UINT64_MAX" ->
-                Caux.mk_ivmax_pe (Caux.mk_ctype_pe (Cty.Basic (Ctype.Integer (Ctype.Unsigned (Ctype.IntN_t 64)))))
-            | "CHAR_BIT" ->
-                C.PEimpl Implementation.Characters__bits_in_byte
-*)
-            | _ ->
-                error ( "WIP: Translation.translate_expr, AilEbuiltin: " ^ str)
-          end
+      | A.AilEbuiltin b ->
+        match b with
+          | A.AilBatomic _ ->
+            error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic builtins must be directly called")
+          | A.AilBlinux _ ->
+            error ((Loc.stringFromLocation (Loc.with_cursor loc)) ^ ": atomic linux builtins must be directly called")
+          (* NOTE: other builtins might be legally desugared here *)
+        end
       
       (* TODO: prefix + check, §6.4.5#6 *)
       | A.AilEstr (pref_opt, strs) ->

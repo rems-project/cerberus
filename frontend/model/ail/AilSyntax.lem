@@ -88,6 +88,26 @@ type binaryOperator [name = "bop*"] =  (*r Group of operators also used for assi
   | Eq
   | Ne
 
+type ail_builtin_atomic =
+  | AilBAthread_fence
+  | AilBAstore
+  | AilBAload
+  | AilBAexchange
+  | AilBAcompare_exchange_strong
+  | AilBAcompare_exchange_weak
+  | AilBAfetch_key
+
+type ail_builtin_linux =
+  | AilBLfence
+  | AilBLread
+  | AilBLwrite
+  | AilBLrmw
+
+(* NOTE: add new constructors here when adding new builtins to Ail *)
+type ail_builtin =
+  | AilBatomic of ail_builtin_atomic
+  | AilBlinux of ail_builtin_linux
+
 type expression_ 'a [name = "e*"] = 
   | AilEunary of unaryOperator * expression 'a
   | AilEbinary of expression 'a * binaryOperator * expression 'a
@@ -110,7 +130,7 @@ type expression_ 'a [name = "e*"] =
   | AilEcompound of qualifiers * ctype * expression 'a
   | AilEmemberof of expression 'a * Cabs.cabs_identifier
   | AilEmemberofptr of expression 'a * Cabs.cabs_identifier
-  | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
+  | AilEbuiltin of ail_builtin
   | AilEstr of stringLiteral
   | AilEconst of constant
   | AilEident of identifier

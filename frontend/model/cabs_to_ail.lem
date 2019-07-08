@@ -2081,7 +2081,7 @@ STD_ "§6.5.1#2" $
                 end
           | Nothing ->
               match Builtins.translate_builtin_varnames ident with
-                | Just (d_e, _) ->
+                | Just d_e ->
                     E.return d_e
                 | Nothing ->
                     E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation (Errors.UndeclaredIdentifier (show ident)))

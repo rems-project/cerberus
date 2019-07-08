@@ -44,6 +44,8 @@ let rec pp_ctype_human qs ty
 *)
 val pp_ctype_human: qualifiers -> ctype -> PPrint.document
 
+val pp_ail_builtin: ail_builtin -> PPrint.document
+
 
 
 val pp_arithmeticOperator: arithmeticOperator -> PPrint.document
