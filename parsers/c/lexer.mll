@@ -62,10 +62,10 @@ let keywords: (string * Tokens.token) list = [
 
     "assert", ASSERT;
     "offsetof", OFFSETOF;
-    "__cerbvar_va_start", VA_START;
-    "__cerbvar_va_copy", VA_COPY;
-    "__cerbvar_va_arg", VA_ARG;
-    "__cerbvar_va_end", VA_END;
+    "__cerb_va_start", VA_START;
+    "__cerb_va_copy", VA_COPY;
+    "__cerb_va_arg", VA_ARG;
+    "__cerb_va_end", VA_END;
 
     "__cerb_printtype", PRINT_TYPE;
 

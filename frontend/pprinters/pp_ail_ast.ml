@@ -302,8 +302,8 @@ let dtree_of_expression pp_annot expr =
       | AilEmemberofptr (e, ident) ->
           Dnode ( pp_stmt_ctor "AilEmemberofptr" ^^^ pp_cabs_id ident
                 , (*add_std_annot*) [self e] )
-      | AilEbuiltin str ->
-          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEbuiltin" ^^^ !^str )
+      | AilEbuiltin b ->
+          (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEbuiltin" ^^^ Pp_ail.pp_ail_builtin b )
       | AilEstr lit ->
           (*add_std_to_leaf*)Dleaf ( pp_stmt_ctor "AilEstr" ^^^ pp_stringLiteral lit )
       | AilEconst c ->

@@ -27,6 +27,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Unsigned of integerBaseType
  | Enum of Symbol.sym
  | Wchar_t
+ | Wint_t
  | Size_t
  | Ptrdiff_t
 
@@ -415,6 +416,9 @@ let combine_qualifiers qs1 qs2 = <|
 
 
 (* Some constructors *)
+
+let mk_ctype_pointer qs ty =
+  Ctype [] (Pointer qs ty)
 
 let mk_ctype_integer ity =
   Ctype [] (Basic (Integer ity))

@@ -494,7 +494,25 @@ let rec pp_constant = function
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
      P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
-
+ 
+let pp_ail_builtin = function
+  | AilBatomic b ->
+    begin match b with
+      | AilBAthread_fence -> !^"atomic_thread_fence"
+      | AilBAstore -> !^"atomic_store_explicit"
+      | AilBAload -> !^"atomic_load_explicit"
+      | AilBAexchange -> !^"atomic_exchange_explicit"
+      | AilBAcompare_exchange_strong -> !^"atomic_compare_exchange_strong_explicit"
+      | AilBAcompare_exchange_weak -> !^"atomic_compare_exchange_weak_explicit"
+      | AilBAfetch_key -> !^"atomic_fetch_key_explicit"
+    end
+  | AilBlinux b ->
+    begin match b with
+      | AilBLfence -> !^"linux_fence"
+      | AilBLread -> !^"linux_read"
+      | AilBLwrite -> !^"linux_write"
+      | AilBLrmw -> !^"linux_rmw"
+    end
 
 let rec pp_expression_aux mk_pp_annot a_expr =
   let rec pp p (AnnotatedExpression (annot, _, loc, expr)) =
@@ -545,8 +563,8 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             )
         | AilEcompound (qs, ty, e) ->
             P.parens (pp_ctype qs ty) ^^ P.braces (pp e)
-        | AilEbuiltin str ->
-            !^ str
+        | AilEbuiltin b ->
+            pp_ail_builtin b
         | AilEstr lit ->
             pp_stringLiteral lit
         | AilEconst c ->
