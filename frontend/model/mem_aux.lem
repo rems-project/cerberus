@@ -30,19 +30,24 @@ let integerValueFromMemValue mval =
     (fun _ _ -> Nothing)
     (fun _ _ _ -> Nothing)
 
-(*
-val unspecifiedFromMemValue: mem_value -> maybe Core_ctype.ctype
+val unspecifiedFromMemValue: mem_value -> maybe Ctype.ctype
 let unspecifiedFromMemValue mval =
   case_mem_value mval
-    (fun _ -> Nothing)
     (fun ty -> Just ty)
+    (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ -> Nothing)
     (fun _ _ -> Nothing)
     (fun _ _ _ -> Nothing)
-*)
+
+val isUnspecifiedMemValue: mem_value -> bool
+let isUnspecifiedMemValue mval =
+  match unspecifiedFromMemValue mval with
+    | Just _ -> true
+    | Nothing -> false
+  end
 
 (*
 val symbolicFromMemValue: mem_value -> maybe (Symbolic.symbolic mem_value Mem.pointer_value)
