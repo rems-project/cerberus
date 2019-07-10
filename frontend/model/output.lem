@@ -822,13 +822,16 @@ let convert eval_conv prec_opt lm_opt cspec args =
                         | Nothing ->
                             Nothing
                       end in
-                      match Mem_aux.pointerValueFromMemValue mval with
-                        | Just (_, ptrval) ->
-                            load_character_array ref_ty ptrval prec >>= fun chars ->
-                            Mem.return (Right (U.Defined (chars, args')))
-                        | Nothing ->
-                            error "WIP[error message], Output => CS_s, didn't load a pointer"
-                      end
+                      if Mem_aux.isUnspecifiedMemValue mval then
+                        Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
+                      else
+                          match Mem_aux.pointerValueFromMemValue mval with
+                          | Just (_, ptrval) ->
+                              load_character_array ref_ty ptrval prec >>= fun chars ->
+                              Mem.return (Right (U.Defined (chars, args')))
+                          | Nothing ->
+                              error "WIP[error message], Output => CS_s, didn't load a pointer"
+                        end
                 | (ty, pe) :: _ ->
                     error ("WIP, Output => CS_s, ty <> Pointer ==> " ^
                            stringFromPair Pp.stringFromCore_ctype Pp.stringFromMem_mem_value (ty, Mem.pointer_mval ty pe) )
@@ -842,14 +845,17 @@ let convert eval_conv prec_opt lm_opt cspec args =
               )
           | ((Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ Ctype.Void)) as arg_ty), arg_ptr) :: args' ->
               Mem.load (Loc.other "printf() %p") arg_ty arg_ptr >>= fun (_, mval) ->
-              match Mem_aux.pointerValueFromMemValue mval with
-                | Just (_, ptrval) ->
-                    Mem.return (
-                      Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
-                    )
-                | Nothing ->
-                    error "WIP[error message], Output => CS_p, didn't load a pointer"
-              end
+              if Mem_aux.isUnspecifiedMemValue mval then
+                Mem.return (Right (U.undef (Loc.other "printf() %s") [U.UB_unspecified_lvalue]))
+              else
+                match Mem_aux.pointerValueFromMemValue mval with
+                  | Just (_, ptrval) ->
+                      Mem.return (
+                        Right (U.Defined (String.toCharList (stringFromPointerValue ptrval), args'))
+                      )
+                  | Nothing ->
+                      error "WIP[error message], Output => CS_p, didn't load a pointer"
+                end
           | _ ->
               Mem.return (
                 Right (U.undef (Loc.other "printf() %p") [U.UB153b_illtyped_argument_for_format])
