@@ -150,9 +150,9 @@ let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
 let create_conf w =
   let cpp_cmd () =
     "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I " ^ w.docroot ^ " -I "
-    ^ w.cerb_path ^ "/bmc -I "
-    ^ w.cerb_path ^ "/libc/include -I "
-    ^ w.cerb_path ^ "/libc/include/posix"
+    ^ w.cerb_path ^ "/runtime/bmc -I "
+    ^ w.cerb_path ^ "/runtime/libc/include -I "
+    ^ w.cerb_path ^ "/runtime/libc/include/posix"
   in
   { rewrite_core = false;
     sequentialise_core = false;
