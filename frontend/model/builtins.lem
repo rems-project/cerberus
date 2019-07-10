@@ -301,6 +301,8 @@ let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
         const_ic $ encode_memory_order Cmm_csem.Seq_cst
     | "__cerbvar_atomic_thread_fence" ->
         Just (AilEbuiltin (AilBatomic AilBAthread_fence))
+    | "__cerbvar_atomic_store_explicit" ->
+        Just (AilEbuiltin (AilBatomic AilBAstore))
     | "__cerbvar_atomic_load_explicit" ->
         Just (AilEbuiltin (AilBatomic AilBAload))
     | "__cerbvar_atomic_exchange_explicit" ->

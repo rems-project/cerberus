@@ -33,7 +33,7 @@ export default class View {
   /** Event emitter, the events are handled only for the current view */
   private ee: EventEmitter
 
-  constructor (title: string, data: string, config?: GoldenLayout.Config) {
+  constructor (title: string, data: string, initial_state?: State, config?: GoldenLayout.Config) {
     this.tabs = []
     this.events = {}
     this.ee = {
@@ -57,7 +57,10 @@ export default class View {
     })
     this.title  = title
     this.isHighlighted = false
-    this.setStateEmpty()
+    if (initial_state)
+      this.state = initial_state
+    else
+      this.setStateEmpty()
 
     this.source = new Tabs.Source(title, data, this.ee)
     this.tabs.push(this.source)
