@@ -48,7 +48,7 @@ export class CerberusUI {
     $('#new').on('click', () => {
       let title = prompt('Please enter the file name', 'source.c');
       if (title)
-        this.add(new View(title, ''))
+        this.addView(title, '')
     })
 
     // Load File
@@ -61,7 +61,7 @@ export class CerberusUI {
       let reader = new FileReader()
       reader.onload = (e: ProgressEvent) => {
         if (e.target instanceof FileReader)
-          this.add(new View(file.name, e.target.result as string))
+          this.addView(file.name, e.target.result as string)
       }
       reader.readAsText(file)
     })
@@ -531,7 +531,10 @@ export class CerberusUI {
   }
 
   addView(title: string, source: string, config?: any) {
-    this.add(new View(title, source, config))
+    let state = undefined
+    if (this.currentView)
+      state = _.cloneDeep(this.currentView.state)
+    this.add(new View(title, source, state, config))
     this.refresh()
   }
 
