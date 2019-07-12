@@ -1,4 +1,4 @@
-open import Pervasives Common Utils AilSyntax ErrorMonad TypingError Annot Ctype
+open import Pervasives Utils AilSyntax ErrorMonad TypingError Annot Ctype
 import Implementation IntegerImpl Loc Debug
 
 (* == Predicates on qualifiers ================================================ *)
