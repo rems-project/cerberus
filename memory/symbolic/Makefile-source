@@ -21,7 +21,6 @@ SOURCE_cabs=\
   ctype.lem
 
 SOURCE_ail=\
-  Common.lem \
   TypingError.lem \
   ErrorMonad.lem \
   AilSyntax.lem \

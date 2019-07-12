@@ -1,4 +1,4 @@
-open import Pervasives Loc Common Ctype
+open import Pervasives Loc Ctype
 import Symbol
 
 type identifier = Symbol.sym

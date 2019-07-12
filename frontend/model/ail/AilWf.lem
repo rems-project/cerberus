@@ -1,9 +1,5 @@
-open import Pervasives Common AilSyntax AilTypesAux Ctype
-
-open import TypingError ErrorMonad
+open import Pervasives AilSyntax AilTypesAux Ctype TypingError ErrorMonad
 import Undefined
-
-open import {hol} `utilTheory` `pp_coreTheory` `pp_ailTheory`
 
 (* test whether a ctype has been "adjusted" as described in STD §6.7.6.3#7 and #8
    NOTE: this function obviously doesn't see whether the adjusting was PROPERLY
