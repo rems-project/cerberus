@@ -1703,40 +1703,44 @@ else
           
           let apply_implicit_conversions e =
             let e_ty = ctype_of e in
-            let e_oTy = force_core_object_type_of_ctype e_ty in
             self e >>= fun core_e ->
-            E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
-            E.return $
-              if AilTypesAux.is_integer result_ty then begin
-                (* NOTE: e_ty must then be an integer *)
+            if AilTypesAux.is_integer result_ty then begin
+              let e_oTy = force_core_object_type_of_ctype e_ty in
+              E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
+              (* NOTE: e_ty must then be an integer *)
+              E.return $
                 Caux.mk_sseq_e e_sym_pat core_e
                   (Caux.mk_pure_e (stdlib.mkcall_conv_loaded_int result_ty e_sym_pe))
-              end else if AilTypesAux.is_floating result_ty then begin
-                if AilTypesAux.is_integer e_ty then
+            end else if AilTypesAux.is_floating result_ty then begin
+              if AilTypesAux.is_integer e_ty then
+                let e_oTy = force_core_object_type_of_ctype e_ty in
+                E.wrapped_fresh_symbol (C.BTy_loaded e_oTy) >>= fun (_, e_sym_pat, e_sym_pe  ) ->
+                E.return $
                   Caux.mk_sseq_e e_sym_pat core_e
                     (Caux.mk_pure_e (stdlib.mkcall_loaded_fvfromint result_ty e_sym_pe))
-                else
-                  core_e (* TODO floating conversion *)
-              end else if AilTypesAux.is_pointer result_ty then begin
-                if AilTypesAux.is_integer e_ty then begin
-                  if AilSyntaxAux.is_null_pointer_constant e then
-                    match AilTypesAux.referenced_type result_ty with
-                      | Just ref_ty ->
+              else
+                E.return core_e (* TODO floating conversion *)
+            end else if AilTypesAux.is_pointer result_ty then begin
+              if AilTypesAux.is_integer e_ty then begin
+                if AilSyntaxAux.is_null_pointer_constant e then
+                  match AilTypesAux.referenced_type result_ty with
+                    | Just ref_ty ->
+                        E.return $
                           Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe ref_ty))
-                      | _ ->
-                          error "AilEcond: a pointer must have a referenced type"
-                    end
-                  else
-                    error "AilEcond: invalid implicit conversion from integer to pointer"
-                end else if AilTypesAux.is_pointer e_ty then begin
-                    core_e
-                end else begin
-                    error "AilEcond: invalid implicit conversion to a pointer type"
-                end
+                    | _ ->
+                        error "AilEcond: a pointer must have a referenced type"
+                  end
+                else
+                  error "AilEcond: invalid implicit conversion from integer to pointer"
+              end else if AilTypesAux.is_pointer e_ty then begin
+                  E.return core_e
               end else begin
-                  (* NOTE: typechecker guarantees that e_ty = result_ty in this case *)
-                  core_e
+                  error "AilEcond: invalid implicit conversion to a pointer type"
               end
+            end else begin
+                (* NOTE: typechecker guarantees that e_ty = result_ty in this case *)
+                E.return core_e
+            end
           in
           apply_implicit_conversions e2 >>= fun conv_e2 ->
           apply_implicit_conversions e3 >>= fun conv_e3 ->

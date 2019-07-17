@@ -136,6 +136,7 @@ clean-non-mem:
 	@make -C backend/web clean
 	@make -C backend/ocaml clean
 	@make -C backend/absint clean
+	@make -C runtime/libc clean
 
 clean:
 	@make -C sibylfs clean
