@@ -2056,7 +2056,7 @@ module Concrete : Memory = struct
             sub (pow_int (of_int 2) (8*n)) (of_int 1) in
           begin match ity with
             | Char ->
-                if Impl.char_is_signed then
+                if Impl.is_signed_ity Char then
                   signed_max
                 else
                   unsigned_max
@@ -2083,7 +2083,7 @@ module Concrete : Memory = struct
     let open Nat_big_num in
     IV (Prov_none, begin match ity with
       | Char ->
-          if Impl.char_is_signed then
+          if Impl.is_signed_ity Char then
             negate (pow_int (of_int 2) (8-1))
           else
             zero

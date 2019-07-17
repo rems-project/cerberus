@@ -224,7 +224,7 @@ let rec simplify_integer_value_base ival_ =
       | IVmin ity ->
           match ity with
             | Char ->
-                if Implementation.char_is_signed then
+                if Implementation.is_signed_ity Char then
                   Left (~ (2 ** (8-1)))
                 else
                   Left 0
@@ -267,7 +267,7 @@ let rec simplify_integer_value_base ival_ =
                 let unsigned_max = (2 ** (8*n))  - 1   in
                 match ity with
                   | Char ->
-                      Left (if Implementation.char_is_signed then
+                      Left (if Implementation.is_signed_ity Char then
                         signed_max
                       else
                         unsigned_max)

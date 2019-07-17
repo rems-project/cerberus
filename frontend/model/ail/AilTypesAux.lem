@@ -26,7 +26,7 @@ val     is_signed_ity: integerType -> bool
 let rec is_signed_ity ity =
   match ity with
     | Char ->
-        Implementation.char_is_signed
+        Implementation.is_signed_ity Char
     | Bool ->
         false
     | Signed _ ->
@@ -39,27 +39,24 @@ let rec is_signed_ity ity =
         (* STD §7.19#2 *)
         false
     | Wchar_t ->
-        (* TODO: this is implementation defined $7.20 *)
-        false
+        Implementation.is_signed_ity Wchar_t
     | Wint_t ->
-        (* TODO: this is implementation defined *)
-        true
+        Implementation.is_signed_ity Wint_t
     | Ptrdiff_t ->
         (* STD §7.19#2 *)
         true
   end
 
 (* STD §6.2.5#6, sentence 4 *)
-val     is_unsigned_ity: integerType -> bool
-let rec is_unsigned_ity ity =
+val is_unsigned_ity: integerType -> bool
+let is_unsigned_ity ity =
   not (is_signed_ity ity)
 
 
 (* == constructor predicates on ctypes ====================================== *)
 val is_integer: ctype -> bool
-let is_integer ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
+let is_integer (Ctype _ ty) =
+  match ty with
   | Basic (Integer _) ->
       true
   | _ ->
@@ -68,8 +65,8 @@ end
 
 
 val is_floating: ctype -> bool
-let is_floating ty =
-  match unatomic_ ty with
+let is_floating (Ctype _ ty) =
+  match ty with
     | Basic (Floating _) ->
         true
     | _ ->
@@ -78,7 +75,6 @@ let is_floating ty =
 
 val is_void: ctype -> bool
 let is_void ty =
-  (* TODO: check atomic *)
   match unatomic_ ty with
   | Void ->
       true
@@ -88,8 +84,7 @@ end
 
 val is_pointer: ctype -> bool
 let is_pointer ty =
-     (* STD §6.2.5#22, sentence 3-4 *)
-  (* TODO: check atomic *)
+   (* STD §6.2.5#22, sentence 3-4 *)
   match unatomic_ ty with
   | Pointer _ _ ->
       true
@@ -102,10 +97,6 @@ let is_atomic = function
   | Ctype _ (Atomic _) ->
       (* STD §6.2.5#20, bullet 6 *)
       true
-(*
-  | Pointer qs _ ->
-      qs.atomic
-*)
   | _ ->
       false
 end
@@ -240,32 +231,11 @@ let has_flexible_array_member sigm ty =
 end
 
 
-
 (* == generic predicates on ctypes ========================================== *)
 (* STD §6.2.5#1, sentence 3 *)
 val is_object: ctype -> bool
 let is_object ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-(*  | Builtin "FILE" ->
-      true
-  | Builtin "cnd_t" ->
-      true
-  | Builtin "fpos_t" ->
-      true
-  | Builtin "mtx_t" ->
-      true
-  | Builtin "once_flag" ->
-      true
-  | Builtin "thrd_t" ->
-      true
-  | Builtin "tss_t" ->
-      true
-  | Builtin "va_list" ->
-      true *)
-  | _ ->
-      not (is_function ty)
-end
+  not (is_function ty)
 
 (* STD §6.2.5#18, sentence 1 *)
 val is_arithmetic: ctype -> bool
@@ -317,7 +287,7 @@ let is_complete sigm ty =
       (* STD §6.2.5#19 *)
       false
   | Basic _ ->
-      (* STD §6.2.5#14, sentece 2 *)
+      (* STD §6.2.5#14, sentence 2 *)
       true
   | Pointer _ _ ->
       true
@@ -325,20 +295,6 @@ let is_complete sigm ty =
       (* STD §6.2.5#22, sentence 1-2 *)
       (* STD §6.7.6.2#4, sentence 1 *)
       isJust n_opt
-(*  | Builtin "cnd_t" ->
-      true
-  | Builtin "fpos_t" ->
-      true
-  | Builtin "mtx_t" ->
-      true
-  | Builtin "once_flag" ->
-      true
-  | Builtin "thrd_t" ->
-      true
-  | Builtin "tss_t" ->
-      true
-  | Builtin "va_list" ->
-      true *)
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match List.lookup sym sigm.tag_definitions with
@@ -367,10 +323,7 @@ val is_incomplete: forall 'a. sigma 'a -> ctype -> bool
 let is_incomplete sigm ty =
   not (is_complete sigm ty)
 
-
-
-
-(* ============================================================================================== *)
+(* ========================================================================= *)
 val in_integer_range: IntegerImpl.implementation -> integer -> integerType -> bool
 let in_integer_range impl n ity =
   Range.mem n (IntegerImpl.integer_range impl ity)
@@ -396,23 +349,23 @@ let le_integer_range impl ity1 ity2 =
     true
   else match (normalise_integerType ity1, normalise_integerType ity2) with
     | (Char, Signed Ichar) ->
-        Implementation.char_is_signed
+        Implementation.is_signed_ity Char
     | (Char, Signed ibty) ->
-        Implementation.char_is_signed || (Implementation.precision_ity Char) < (Implementation.precision_ity (Signed ibty))
+        Implementation.is_signed_ity Char || (Implementation.precision_ity Char) < (Implementation.precision_ity (Signed ibty))
     | (Signed Ichar, Char) ->
-        Implementation.char_is_signed
+        Implementation.is_signed_ity Char
     | (Signed ibty, Char) ->
-        Implementation.char_is_signed && Implementation.precision_ity (Signed ibty) = Implementation.precision_ity Char
+        Implementation.is_signed_ity Char && Implementation.precision_ity (Signed ibty) = Implementation.precision_ity Char
     | (Unsigned Ichar, Char) ->
-        not Implementation.char_is_signed
+        not (Implementation.is_signed_ity Char)
     | (Unsigned ibty, Char) ->
-        not Implementation.char_is_signed && Implementation.precision_ity (Unsigned ibty) = Implementation.precision_ity Char
+        not (Implementation.is_signed_ity Char) && Implementation.precision_ity (Unsigned ibty) = Implementation.precision_ity Char
     | (Char, Unsigned _) ->
-        not Implementation.char_is_signed
+        not (Implementation.is_signed_ity Char)
     | (Char, Bool) ->
-        not Implementation.char_is_signed && Implementation.precision_ity Char = Implementation.precision_ity Bool
+        not (Implementation.is_signed_ity Char) && Implementation.precision_ity Char = Implementation.precision_ity Bool
     | (Bool, Char) ->
-        not Implementation.char_is_signed || (Implementation.precision_ity Bool) < (Implementation.precision_ity Char)
+        not (Implementation.is_signed_ity Char) || (Implementation.precision_ity Bool) < (Implementation.precision_ity Char)
 
     | (Signed Ichar, Signed _) ->
         true
@@ -596,55 +549,6 @@ let eq_integer_rank_base ity1 ity2 =
 val eq_integer_rank: integerType -> integerType -> bool
 let eq_integer_rank ity1 ity2 =
   ity1 = ity2 || eq_integer_rank_base ity1 ity2
-
-(*
-val lt_integer_rank_base: IntegerImpl.IntegerImpl -> integerType -> integerType -> bool
-let lt_integer_rank_base impl ity1 ity2 =
-  match (ity1, ity2) with
-    (* STD §6.3.1.1#1, bullet 7 *)
-    | (Bool, _) ->
-        not (Bool = ity2)
-    (* STD §6.3.1.1#1, bullet 3 *)
-    | (Signed Long, Signed LongLong) ->
-        true
-    | (Signed Int_, Signed Long) ->
-        true
-    | (Signed Short, Signed Int_) ->
-        true
-    | (Signed Ichar, Signed Short) ->
-        true
-    (* STD §6.3.1.1#1, bullet 2 *)
-    | (Signed ibty1, Signed ibty2) ->
-        (Implementation.precision_ity (Signed ibty1)) < (Implementation.precision_ity (Signed ibty2))
-    | _ ->
-        false
-  end
-
-val lt_integer_rank_congruence: IntegerImpl.IntegerImpl -> integerType -> integerType -> bool
-let lt_integer_rank_congruence impl ity1 ity2 =
-  match (ity1, ity2) with
-    | (_, Bool) ->
-        false
-    | (Bool, _) ->
-        true
-    | (_, Char) ->
-        false
-    | (Char, Unsigned ibty2) ->
-        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
-    | (Char, Signed ibty2) ->
-        lt_integer_rank_base impl (Signed Ichar) (Signed ibty2)
-    | (Signed ibty1, Signed ibty2) ->
-        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
-    | (Unsigned ibty1, Unsigned ibty2) ->
-        lt_integer_rank_base impl (Signed  ibty1) (Signed ibty2)
-    | (Unsigned ibty1, ity2) ->
-        lt_integer_rank_base impl (Signed  ibty1) ity2
-    | (ity1, Unsigned ibty2) ->
-        lt_integer_rank_base impl ity1 (Signed ibty2)
-    | _ ->
-        error "WIP lt_integer_rank_congruence"
-  end
-*)
 
 val lt_integer_rank: integerType -> integerType -> bool
 let lt_integer_rank ity1 ity2 =
@@ -1248,7 +1152,6 @@ let ~{coq} pointers_to_compatible_types (Ctype _ ty1) (Ctype _ ty2) =
 val is_standard_signed_integer_type: ctype -> bool
 let is_standard_signed_integer_type (Ctype _ ty) =
 match ty with
-(*
   | Basic (Integer (Signed Ichar)) ->
       true
   | Basic (Integer (Signed Short)) ->
@@ -1259,9 +1162,6 @@ match ty with
       true
   | Basic (Integer (Signed LongLong)) ->
       true
-*)
-  | Basic (Integer ity) ->
-      is_signed_ity ity
   | _ ->
       false
 end
@@ -1282,7 +1182,6 @@ let is_signed_integer_type ty =
 val is_standard_unsigned_integer_type: ctype -> bool
 let is_standard_unsigned_integer_type (Ctype _ ty) =
 match ty with
-(*
   | Basic (Integer Bool) ->
       true
   | Basic (Integer (Unsigned Ichar)) ->
@@ -1295,11 +1194,8 @@ match ty with
       true
   | Basic (Integer (Unsigned LongLong)) ->
       true
-*)
-  | Basic (Integer ity) ->
-      is_unsigned_ity ity
   | _ ->
-       false
+      false
 end
 
 (* TODO: no extended types for now *)
