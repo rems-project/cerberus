@@ -3,9 +3,9 @@ open Ctype
 module type Implementation = sig
   val name: string
   val details: string
-  val char_is_signed: bool
   val sizeof_pointer: int option
   val alignof_pointer: int option
+  val is_signed_ity: integerType -> bool
   val sizeof_ity: integerType -> int option
   val precision_ity: integerType -> int option
   val sizeof_fty: floatingType -> int option
@@ -19,15 +19,64 @@ end
 module DefaultImpl: Implementation = struct
   let name = "clang9_x86_64-apple-darwin16.7.0"
   let details = "Apple LLVM version 9.0.0 (clang-900.0.38)\nTarget: x86_64-apple-darwin16.7.0"
-  
-  let char_is_signed =
-    true
-  
+
   let sizeof_pointer =
     Some 8
+
   let alignof_pointer =
     Some 8
-  
+
+  (* INTERNAL *)
+  let registered_enums =
+    ref []
+
+  (* NOTE: for enums implementation we follow GCC, since Clang doesn't document
+     it's implementation details... *)
+  let register_enum tag_sym ns =
+    (* NOTE: we don't support GCC's -fshort-enums option *)
+    let ity =
+      if List.exists (fun n -> Nat_big_num.less n Nat_big_num.zero) ns then
+        Signed Int_
+      else
+        Unsigned Int_ in
+    if List.exists (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums then
+      false
+    else begin
+      registered_enums := (tag_sym, ity) :: !registered_enums;
+      true
+    end
+
+  let typeof_enum tag_sym =
+    match List.find_opt (fun (z, _) -> Symbol.symbol_compare z tag_sym = 0) !registered_enums with
+      | None ->
+          failwith ("Ocaml_implementation.typeof_enum: '" ^
+                    Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
+      | Some (_, z) ->
+          z
+
+  (* NOTE: some of them are not implementation defined *)
+  let rec is_signed_ity = function
+    | Char ->
+        true
+    | Bool ->
+        false
+    | Signed _ ->
+        true
+    | Unsigned _ ->
+        false
+    | Enum tag_sym ->
+        is_signed_ity (typeof_enum tag_sym)
+    | Size_t ->
+        (* STD §7.19#2 *)
+        false
+    | Wchar_t ->
+        true
+    | Wint_t ->
+        true
+    | Ptrdiff_t ->
+        (* STD §7.19#2 *)
+        true
+
   let sizeof_ity = function
     | Char
     | Bool ->
@@ -48,7 +97,6 @@ module DefaultImpl: Implementation = struct
           | Int_leastN_t n
           | Int_fastN_t n ->
               n/8
-              
           | Intmax_t
           | Intptr_t ->
               8
@@ -56,59 +104,24 @@ module DefaultImpl: Implementation = struct
     | Enum ident ->
         (* TODO *)
         Some 4
-    | Wint_t ->
-        Some 4 (* TODO *)
-    | Size_t
     | Wchar_t
+    | Wint_t ->
+        Some 4
+    | Size_t
     | Ptrdiff_t ->
         Some 8
   
   (* NOTE: the code is bit generic here to allow reusability *)
-  let precision_ity = function
-    | Char ->
-        Some (if char_is_signed then 7 else 8)
-    | Bool ->
-        (* TODO: not sure about this. But an impl is clearly allowed to do
-           that (see footnote 122) *)
-        Some 1
-    | Signed _ as ity ->
-        begin match sizeof_ity ity with
-          | Some n ->
-              Some (8*n-1)
-          | None ->
-              None
-        end
-    | Unsigned _ as ity ->
-        begin match sizeof_ity ity with
-          | Some n ->
-              Some (8*n)
-          | None ->
-              None
-        end
-    | Enum ident ->
-        (* TODO *)
-        Some (8*4-1)
-    | Size_t ->
-        begin match sizeof_ity Size_t with
-          | Some n ->
-              (* NOTE: this type is unsigned *)
-              Some (8*n)
-          | None ->
-              None
-        end
-    | Wint_t ->
-        Some 32 (* TODO *)
-    | Wchar_t ->
-        Some 64 (* TODO *)
-    | Ptrdiff_t ->
-        begin match sizeof_ity Ptrdiff_t with
-          | Some n ->
-              (* NOTE: this type is signed *)
-              Some (8*n-1)
-          | None ->
-              None
-        end
-  
+  let precision_ity ity =
+    match sizeof_ity ity with
+    | Some n ->
+      if is_signed_ity ity then
+        Some (8*n-1)
+      else
+        Some (8*n)
+    | None ->
+      None
+
   let sizeof_fty = function
     | RealFloating Float ->
         Some 8 (* TODO:hack ==> 4 *)
@@ -116,7 +129,7 @@ module DefaultImpl: Implementation = struct
         Some 8
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
-  
+
   let alignof_ity = function
     | Char
     | Bool ->
@@ -137,7 +150,6 @@ module DefaultImpl: Implementation = struct
           | Int_leastN_t n
           | Int_fastN_t n ->
               n/8
-              
           | Intmax_t
           | Intptr_t ->
               8
@@ -145,14 +157,13 @@ module DefaultImpl: Implementation = struct
     | Enum ident ->
         (* TODO *)
         Some 4
-    | Wint_t ->
-        Some 4 (* TODO *)
-    | Size_t
     | Wchar_t
+    | Wint_t ->
+        Some 4
+    | Size_t
     | Ptrdiff_t ->
         Some 8
-  
-  
+
   let alignof_fty = function
     | RealFloating Float ->
         Some 8 (* TODO:hack ==> 4 *)
@@ -160,46 +171,14 @@ module DefaultImpl: Implementation = struct
         Some 8
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
-  
-  
-  (* INTERNAL *)
-  let registered_enums =
-    ref []
-  
-  let sym_eq =
-    Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.isEqual_method
-  
-  (* NOTE: for enums implementation we follow GCC, since Clang doesn't document
-     it's implementation details... *)
-  let register_enum tag_sym ns =
-    (* NOTE: we don't support GCC's -fshort-enums option *)
-    let ity =
-      if List.exists (fun n -> Nat_big_num.less n Nat_big_num.zero) ns then
-        Signed Int_
-      else
-        Unsigned Int_ in
-    if List.exists (fun (z, _) -> sym_eq z tag_sym) !registered_enums then
-      false
-    else begin
-      registered_enums := (tag_sym, ity) :: !registered_enums;
-      true
-    end
 
-  let typeof_enum tag_sym =
-    match List.find_opt (fun (z, _) -> sym_eq z tag_sym) !registered_enums with
-      | None ->
-          failwith ("Ocaml_implementation.typeof_enum: '" ^
-                    Symbol.instance_Show_Show_Symbol_sym_dict.show_method tag_sym ^ "' was not registered")
-      | Some (_, z) ->
-          z
 end
 
 module Impl = DefaultImpl
 
-
 module DefactoImpl = struct
   include DefaultImpl
-  
+
   let sizeof_ity = function
     | Signed Intptr_t
     | Unsigned Intptr_t ->

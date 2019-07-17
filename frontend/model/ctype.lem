@@ -26,6 +26,7 @@ type integerType (* [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ity[0-9]*'?$"] *) =
  | Signed of integerBaseType
  | Unsigned of integerBaseType
  | Enum of Symbol.sym
+   (* Things defined in the standard libraries *)
  | Wchar_t
  | Wint_t
  | Size_t
