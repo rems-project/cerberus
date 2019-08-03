@@ -22,11 +22,25 @@ And SibylFS dependencies:
 * ppx_sexp_conv (tested with 113.09.00)
 * sexplib       (tested with 113.00.00)
 
+
 ```bash
 $ opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_sexp_conv sexplib
 ```
 
+PS: apparently I also need
+```bash
+$ opam install ppx_deriving
+```
+
+
 ### LEM
+
+PS: I used
+```
+opam pin -w .
+```
+instead of the last two lines below. 
+
 
 Install `lem`
 
@@ -36,6 +50,8 @@ $ cd lem
 $ make
 $ cd ocaml-lib; sudo make install
 ```
+
+PS: why do we need the following?
 
 Set `LEM_PATH` to `lem` directory and include it in your path:
 
@@ -47,10 +63,12 @@ $ export PATH=$LEM_PATH:$PATH
 
 ### Set Enviroment
 
-Set `CERB_PATH` and include it to your `PATH`:
+PS: is this really necessary?   Why can't the Makefile just figure it out?
+
+Set `CERB_PATH` to that of the `cerberus-private` checkout and include it to your `PATH`:
 
 ```bash
-$ export CERB_PATH=/home/<path>/cerberus
+$ export CERB_PATH=/home/<path>/cerberus-private/
 $ export PATH=$CERB_PATH:$PATH
 ```
 
@@ -130,6 +148,11 @@ Install the common dependencies and the following extra ones:
 * cohttp-lwt-unix (tested with 1.0.3)
 * ezgzip    (tested with 0.2.0)
 
+
+presuming z3 and angstrom are already installed:
+
+opam install lwt cohttp base64 cohttp-lwt-unix ezgzip
+
 Then run:
 
 ```bash
@@ -138,7 +161,8 @@ $ make web
 
 It installs all the available web instances as `webcerb.*` and the web server `cerberus-webserver`.
 
-To build the UI, install node package manager `npm` and run:
+To build the UI, install node package manager `npm` (sudo apt install nodejs npm
+) and run:
 
 ```bash
 $ make ui
