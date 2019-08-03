@@ -32,7 +32,8 @@ $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 
 lem: $(BUILD_DIR)
 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
-	@ulimit -n 7168
+	# PS commented out this as it doesn't work on ubuntu 18.04
+	#@ulimit -n 7168
 	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) $(wildcard $(BUILD_DIR)/ail/*.lem)
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
