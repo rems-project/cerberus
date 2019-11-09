@@ -142,9 +142,6 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Elet a pe1 (add_to_sb p_aids e2)
       | Eif pe1 e2 e3 ->
           Eif pe1 (add_to_sb p_aids e2) (add_to_sb p_aids e3)
-      | Eskip ->
-          (* no change *)
-          expr_
       | Eccall annots ty pe pes ->
           Eccall <| annots with sb_before= (Set.map snd p_aids) union annots.sb_before |> ty pe pes
       | Eproc annots nm pes ->
@@ -161,8 +158,6 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_sb, Easeq"
-      | Eindet _ _ ->
-          error "Core_run_aux.add_to_sb, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_sb, Ebound"
       | End es ->
@@ -246,9 +241,6 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Elet a pe1 (add_to_asw aids e2)
       | Eif pe1 e2 e3 ->
           Eif pe1 (add_to_asw aids e2) (add_to_asw aids e3)
-      | Eskip ->
-          (* no change *)
-          expr_
       | Eccall annots ty pe pes ->
           Eccall <| annots with asw_before= aids union annots.asw_before |> ty pe pes
       | Eproc annots nm pes ->
@@ -261,8 +253,6 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Esseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_asw, Easeq"
-      | Eindet _ _ ->
-          error "Core_run_aux.add_to_asw, Eindet"
       | Ebound _ _ ->
           error "Core_run_aux.add_to_asw, Ebound"
       | Esave sym_bTy xs e ->
@@ -452,8 +442,6 @@ let rec convert_expr (Expr annot expr_) =
         Epure (convert_pexpr pe)
     | Ememop memop pes ->
         Ememop memop (List.map convert_pexpr pes)
-    | Eskip ->
-        Eskip
     | Elet pat pe1 e2 ->
         Elet (convert_pattern pat) (convert_pexpr pe1) (convert_expr e2)
     | Eif pe1 e2 e3 ->
@@ -474,8 +462,6 @@ let rec convert_expr (Expr annot expr_) =
         Esseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
     | Easeq sym_opt act1 pact2 ->
         Easeq sym_opt (convert_action act1) (convert_paction pact2)
-    | Eindet i e ->
-        Eindet i (convert_expr e)
     | Ebound i e ->
         Ebound i (convert_expr e)
     | Esave sym xs e ->

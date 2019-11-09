@@ -171,8 +171,6 @@ let rec free_expr acc (Expr _ e) =
       (free_expr (free_pexpr acc pe) e) \ (symbols_in_pattern {} pat)
   | Eif pe1 e2 e3 ->
       free_expr (free_expr (free_pexpr acc pe1) e2) e3
-  | Eskip ->
-      acc
   | Eccall _ pe1 pe2 pes ->
       List.foldl free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pes
   | Eproc _ _ pes ->
@@ -185,8 +183,6 @@ let rec free_expr acc (Expr _ e) =
       (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
   | Easeq _ _ _ ->
       error ("TODO: free_expr Easeq")
-  | Eindet _ e ->
-      free_expr acc e
   | Ebound _ e ->
       free_expr acc e
   | End es ->
@@ -210,6 +206,8 @@ let rec free_expr acc (Expr _ e) =
   | Eshow _ pes ->
       List.foldl free_pexpr acc pes
 
+  | Eannot _ e ->
+      free_expr acc e
   end
 
 let free acc = function

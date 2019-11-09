@@ -281,6 +281,10 @@ type generic_action 'a 'bty 'sym =
 type generic_paction 'a 'bty 'sym =  (* memory actions with polarity *)
  | Paction of polarity * (generic_action 'a 'bty 'sym)
 
+
+type dyn_annotation =
+  list Mem.footprint
+
 type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
  | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
@@ -288,25 +292,28 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Ecase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_expr 'a 'bty 'sym)) (* pattern matching *)
  | Elet of (generic_pattern 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym)
  | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym)
- | Eskip
  | Eccall of 'a * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* C function call *)
  | Eproc of 'a * (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
  | Ewseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
  | Esseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
  | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
+(*
  | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
+*)
  | Ebound of nat * (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
  | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
  | Esave of ('sym * core_base_type) * list ('sym * ((core_base_type * maybe (Ctype.ctype * bool)) * generic_pexpr 'bty 'sym)) * (generic_expr 'a 'bty 'sym) (* save label *)
  | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym) (* run from label *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem-like thread creation *)
+ (* This two only exists during the execution *)
  | Ewait of Mem_common.thread_id (* wait for thread termination *)
  (* for CN *)
  | Epack of Annot.to_pack_unpack * list (generic_pexpr 'bty 'sym)
  | Eunpack of Annot.to_pack_unpack * list (generic_pexpr 'bty 'sym)
  | Ehave of Symbol.identifier * list (generic_pexpr 'bty 'sym)
  | Eshow of Symbol.identifier * list (generic_pexpr 'bty 'sym)
+ | Eannot of dyn_annotation * generic_expr 'a 'bty 'sym
 
 and generic_expr 'a 'bty 'sym = 
  | Expr of list annot * (generic_expr_ 'a 'bty 'sym)

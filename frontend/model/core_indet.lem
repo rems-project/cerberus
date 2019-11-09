@@ -1,6 +1,7 @@
 open import Pervasives Utils
 import Core Core_aux (* Memory *) Exception Errors Pp (* Memory_order *)
 
+(*
 (* TODO: lem non termination bug *)
 (*
 
@@ -448,6 +449,9 @@ let rec indet_hack (Core.Expr annot expr_ as expr) =
         Core.Expr annot (Core.Ehave id pes)
     | Core.Eshow id pes ->
         Core.Expr annot (Core.Eshow id pes)
+    | Core.Eannot xs e ->
+        Core.Expr annot (Core.Eannot xs (indet_hack e))
+
 (*
     | Core.Eloc loc e ->
         Core.Expr annot (Core.Eloc loc (indet_hack e))
@@ -493,3 +497,8 @@ let hackish_order file =
     | z ->
         z
   end) file.Core.funs |>
+*)
+
+val hackish_order: Core.file unit -> Core.file unit
+let hackish_order file =
+  file

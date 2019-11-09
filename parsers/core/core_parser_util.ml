@@ -77,7 +77,6 @@ type token =
   | NOT
   | UNDEF
   | ERROR
-  | SKIP
   | LET
   | IN
   | IF
@@ -96,7 +95,6 @@ type token =
   | WITH
 *)
 
-  | INDET
   | BOUND
   | CREATE
   | CREATE_READONLY

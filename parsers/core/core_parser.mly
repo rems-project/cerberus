@@ -611,8 +611,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
        Eff.return (
          Eif (pe1, e2, e3)
        )
-   | Eskip ->
-       Eff.return Eskip
    | Eccall ((), _pe_ty, _pe, _pes) ->
        symbolify_pexpr _pe_ty        >>= fun pe_ty ->
        symbolify_pexpr _pe           >>= fun pe  ->
@@ -646,9 +644,6 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
          symbolify_paction _pact2 >>= fun pact2 ->
          Eff.return (Easeq ((sym, bTy), Action (loc, (), act1_), pact2))
        )
-   | Eindet (n, _e) ->
-       symbolify_expr _e >>= fun e ->
-       Eff.return (Eindet (n, e))
    | Ebound (n, _e) ->
        symbolify_expr _e >>= fun e ->
        Eff.return (Ebound (n, e))
@@ -686,7 +681,8 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
    | Epar _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
-   | Ewait _ ->
+   | Ewait _
+   | Eannot _ ->
        assert false
    | Epack (id, pes) ->
        Eff.mapM symbolify_pexpr pes >>= fun pes ->
@@ -787,7 +783,6 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Epure _
     | Ememop _
     | Eaction _
-    | Eskip
     | Eccall _
     | Eproc _
     | Easeq _
@@ -816,12 +811,15 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Esseq (_, _e1, _e2) ->
         register_labels _e1 >>= fun () ->
         register_labels _e2
-    | Eindet (_, _e)
     | Ebound (_, _e) ->
         register_labels _e
     | End _es
     | Epar _es ->
         Eff.mapM_ register_labels _es
+    | Ewait _
+    | Eannot _ ->
+        assert false
+
 
 let with_labels _e m =
   register_labels _e >>= fun () ->
@@ -1565,9 +1563,6 @@ expr:
     { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Epure pe_) }
 | MEMOP LPAREN memop= MEMOP_OP COMMA pes= separated_list(COMMA, pexpr) RPAREN
     { Expr ([Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))], Ememop (memop, pes)) }
-| SKIP
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Eskip ) }
 | LET _pat= pattern EQ _pe1= pexpr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Elet (_pat, _pe1, _e2) ) }
@@ -1607,9 +1602,6 @@ expr:
 | LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _pact2= paction
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
-| INDET n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
-    { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Eindet (Nat_big_num.to_int n, _e) ) }
 | BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Ebound (Nat_big_num.to_int n, _e) ) }
