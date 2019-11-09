@@ -16,8 +16,6 @@ let rec sequentialise_expr (Expr annot expr_) =
         Elet sym pe1 (sequentialise_expr e2)
     | Eif pe1 e2 e3 ->
         Eif pe1 (sequentialise_expr e2) (sequentialise_expr e3)
-    | Eskip ->
-        expr_
     | Eccall _ _ _ _ ->
         expr_
     | Eproc _ _ _ ->
@@ -51,8 +49,6 @@ let rec sequentialise_expr (Expr annot expr_) =
         Esseq pat (sequentialise_expr e1) (sequentialise_expr e2)
     | Easeq _ _ _ ->
         expr_
-    | Eindet i e ->
-        Eindet i (sequentialise_expr e)
     | Ebound i e ->
         Ebound i (sequentialise_expr e)
     | End es ->
@@ -65,6 +61,8 @@ let rec sequentialise_expr (Expr annot expr_) =
         Epar (List.map sequentialise_expr es)
     | Ewait _ ->
         expr_
+    | Eannot xs e ->
+        Eannot xs (sequentialise_expr e)
   end
 
 

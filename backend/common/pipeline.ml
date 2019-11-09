@@ -372,8 +372,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Elet (untype_pattern pat, untype_pexpr pe1, untype_expr e2)
       | Eif (pe, e1, e2) ->
           Eif (untype_pexpr pe, untype_expr e1, untype_expr e2)
-      | Eskip ->
-          Eskip
       | Eccall (a, pe1, pe2, pes) ->
           Eccall (a, untype_pexpr pe1, untype_pexpr pe2, List.map untype_pexpr pes)
       | Eproc (a, nm, pes) ->
@@ -386,8 +384,6 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
       | Easeq (sym_bTy, act1, (Paction (p, act2))) ->
           Easeq (sym_bTy, untype_action act1, Paction (p, untype_action act2))
-      | Eindet (j, e) ->
-          Eindet (j, untype_expr e)
       | Ebound (j, e) ->
           Ebound (j, untype_expr e)
       | End es ->

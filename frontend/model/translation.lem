@@ -2321,6 +2321,7 @@ TODO: #9
           E.wrapped_fresh_symbol C.BTy_ctype >>= fun (ret_sym, ret_sym_pat, ret_sym_pe) ->
           E.wrapped_fresh_symbol (C.BTy_list C.BTy_ctype) >>= fun (params_sym, params_sym_pat, params_sym_pe) ->
           E.return $
+            (* STD §6.5.2.2#10 *)
             Caux.mk_sseq_e fun_sym_pat core_e
             (Caux.mk_sseq_e
               (Caux.mk_tuple_pat [ret_sym_pat; params_sym_pat; Caux.mk_empty_pat C.BTy_boolean; Caux.mk_empty_pat C.BTy_boolean])

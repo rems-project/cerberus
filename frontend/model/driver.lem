@@ -7,7 +7,7 @@ module Caux = Core_aux
 open import Utils Show Errors Trace_event
 import Cmm_op Cmm_csem
 
-import Core_eval Core_run
+import Core_eval Core_run Core_reduction
 
 
 import Translation_aux
@@ -577,6 +577,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
   end
 
 
+(* POST REDUCTION SEMANTICS
 (* For a given thread, perform all possible step that are not action requests *)
 val     drive_core_thread: Mem.thread_id -> driverM unit
 let rec drive_core_thread tid =
@@ -758,6 +759,96 @@ let rec drive_core_thread tid =
 
   end) (Core_run.core_thread_step2 dr_st.layout_state dr_st.core_file dr_st.core_extern dr_st.symbolic_assoc tid th_info)
 
+*)
+
+
+
+
+
+
+
+val     drive_core_thread2: Mem.thread_id -> driverM unit
+let rec drive_core_thread2 tid =
+  ND.get >>= fun dr_st ->
+  let th_info = match List.lookup tid dr_st.core_state.Core_run.thread_states with
+    | Just z ->
+        z (* (tid, z) *)
+    | _ ->
+        error "drive_core_thread, wrong tid"
+  end in
+  ND.mk_step (SK_misc ["drive_core_thread2"]) $ List.map (function
+    | Core_reduction.Step_thread_done2 parent_tid cval ->
+        ( SK_misc ["thread_done"]
+        , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "thread " ^ show tid ^ " is done") >>
+          let actions_of_current_thread: set Cmm.action =
+            Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
+          let last_actions_of_current_thread: set Cmm.action =
+            Set.filter (fun act ->
+              not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
+            ) actions_of_current_thread in
+          ND.update (fun dr_st -> <| dr_st with
+            core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1;
+          |>) >>
+          drive_core_thread2 parent_tid )
+    | Core_reduction.Step_blocked2 ->
+        (SK_misc ["blocked"], ND.return ())
+    | Core_reduction.Step_done2 cval ->
+        ( SK_done
+        , get_thread_states >>= fun th_sts ->
+          let th_st = match lookup tid th_sts with
+            | Just (_, th_st) -> th_st
+            | Nothing -> error "WIP: Step_done"
+          end in
+          ND.update (fun dr_st ->
+            let core_st' = Core_run.update_thread_state tid
+              <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
+                 Core_run_aux.stack= Core.Stack_empty;
+                 Core_run_aux.errno= Mem.null_ptrval Ctype.signed_int;
+                 Core_run_aux.env= th_st.Core_run_aux.env;
+                (* Dummy locations *)
+                 Core_run_aux.exec_loc= Core_run_aux.ELoc_globals;
+                 Core_run_aux.current_loc= Loc.unknown;
+              |> dr_st.core_state
+            in
+            <| dr_st with
+              core_state= core_st';
+              dr_step_counter= dr_st.dr_step_counter + 1;
+            |>))
+    
+    | Core_reduction.Step_eval2 step_m ->
+        ( SK_eval "TODO(str) drive_core_thread2 Step_eval2"
+        , (* case where the Core program does a pure step *)
+          liftCore_run step_m >>= fun th_st' ->
+          ND.update (fun dr_st -> <| dr_st with
+            core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1
+          |>) >>
+          drive_core_thread2 tid )
+    | Core_reduction.Step_tau2 tsk th_st' ->
+        ( SK_tau "TODO(str) drive_core_thread2 Step_tau2"
+        , match tsk with
+            | Core_run.TSK_Misc ->
+                ND.return ()
+            | _ ->
+                error "TODO: drive_core_thread2, non TSK_Misc"
+          end >>= fun () ->
+          ND.update (fun dr_st -> <| dr_st with
+            core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+            dr_step_counter= dr_st.dr_step_counter + 1
+          |>) >>
+          drive_core_thread2 tid )
+    
+    | Core_reduction.Step_error2 debug_str ->
+        error ("WIP: Step_error --> " ^ debug_str)
+    | Core_reduction.Step_action_request2 str _ _ _ ->
+        ( SK_action_request str
+        , ND.return () )
+  end) (Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info)
+
+
+
+
 
 
 
@@ -779,7 +870,7 @@ let rec drive_core_threads () =
   ND.get >>= fun dr_st ->
   ND.mapM_ (fun (tid, _) ->
     ND.print_debug 9 [Debug.DB_driver] (fun () -> "BEFORE drive_core_thread, in drive_core_threads") >>
-    drive_core_thread tid
+    drive_core_thread2 tid
   ) dr_st.core_state.Core_run.thread_states
 
 
@@ -1036,6 +1127,7 @@ let perform_action_request with_concurrency request_m =
   end 
 
 
+(* POST REDUCTION SEMANTICS 
 val     driver: bool -> driverM unit
 let rec driver with_concurrency =
   let process_core_step2 = function
@@ -1198,6 +1290,169 @@ let rec driver with_concurrency =
     ND.pick (SK_misc ["driver 5"]) (Core_run.core_thread_step2 post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern post_core_dr_st.symbolic_assoc tid th_info)
   ) >>=
       process_core_step2 (*post_core_dr_st*)
+*)
+
+
+
+
+
+
+
+
+
+
+
+(* POST REDUCTION SEMANTICS *)
+val action_request_sequential2:
+  Loc.t -> Mem.thread_id -> Cmm.aid -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
+let action_request_sequential2 loc tid aid = function
+  | Core_reduction.AllocRequest2 pref align_ival size_ival mk_th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST ALLOC") in (* DEBUG *)
+      liftMem (Mem.allocate_region tid pref align_ival size_ival) >>= fun ptrval ->
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state;
+          trace= ME_allocate_region tid pref align_ival size_ival ptrval :: dr_st.trace
+        |>
+      )
+  
+  | Core_reduction.CreateRequest2 pref align_ival lvalue_ty init_opt mk_th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST CREATE") in (* DEBUG *)
+      liftMem (Mem.allocate_object tid pref align_ival lvalue_ty init_opt) >>= fun ptrval ->
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid ptrval) dr_st.core_state;
+          trace= ME_allocate_object tid pref align_ival lvalue_ty init_opt ptrval :: dr_st.trace
+        |>
+      )
+  
+  | Core_reduction.LoadRequest2 mo lvalue_ty ptr_val _ mk_th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST LOAD") in (* DEBUG *)
+      liftMem (Mem.load loc lvalue_ty ptr_val) >>= fun (fp, mval) ->
+      liftMem (Mem.prefix_of_pointer ptr_val)  >>= fun pref       ->
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid mval) dr_st.core_state;
+          trace= ME_load loc pref lvalue_ty ptr_val mval :: dr_st.trace
+        |>
+      )
+  
+  | Core_reduction.StoreRequest2 mo lvalue_ty is_locking ptr_val mem_val mk_th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST STORE") in (* DEBUG *)
+      (* TODO: need to make memory layout detect unsequenced races (use to make
+         the concurency to the check even in the sequential mode) *)
+      liftMem (Mem.store loc lvalue_ty is_locking ptr_val mem_val) >>= fun fp ->
+      liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid) dr_st.core_state;
+          trace= ME_store loc pref lvalue_ty is_locking ptr_val mem_val :: dr_st.trace
+        |>
+      )
+  
+(*
+  | Core_run.RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
+      error "WIP: Driver.seq ==> RMWRequest"
+  
+  | Core_run.FenceRequest loc sb_edges dd_edges asw_edges aid tid mo th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST FENCE") in (* DEBUG *)
+      ND.update (fun dr_st ->
+        update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
+      )
+*)
+  
+  | Core_reduction.KillRequest2 is_dynamic ptr_val mk_th_st' ->
+      let () = Debug.print_debug_located 3 [Debug.DB_driver] loc (fun () -> "REQUEST KILL") in (* DEBUG *)
+      liftMem (Mem.kill loc is_dynamic ptr_val) >>
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid) dr_st.core_state;
+          trace= ME_kill loc is_dynamic ptr_val :: dr_st.trace
+        |>
+      )
+end
+
+
+val perform_action_request2:
+  bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
+let perform_action_request2 with_concurrency loc tid request =
+  let execution_mode_is_random = match Global.current_execution_mode () with
+    | Nothing   -> false
+    | Just mode -> mode = Global.Random
+  end in
+  
+  begin
+    if with_concurrency then
+      error "TODO: perform_action_request2 ==> concurrency"
+      (*
+      action_request_concurrency request >>
+      if execution_mode_is_random then
+        ND.get >>= fun dr_st ->
+        let total = number_of_uncommitted dr_st.concurrency_state in
+        let choices = Enum.enumFromTo 0 total in
+        
+        (* DEBUG *)
+        let _ = if choices = [] then error "BOOM" else () in
+        
+        ND.pick (SK_misc ["driver 1"]) choices >>= fun n ->
+        ND.warns_if_no_active_ex (stepConcurrency n)
+      else
+        ND.return ()
+       *)
+    else
+      liftCore_run (SEU.runS Core_run.fresh_action_id') >>= fun aid ->
+      action_request_sequential2 loc tid aid request
+  end
+
+
+val     driver2: bool -> driverM unit
+let rec driver2 with_concurrency =
+  let process_core_step2 = function
+  | Core_reduction.Step_action_request2 _ loc tid request ->
+      perform_action_request2 with_concurrency loc tid request >>= fun () ->
+      driver2 with_concurrency
+  | Core_reduction.Step_tau2 d_info _ ->
+(*      error ("FOUND A TAU: '" ^ show d_info ^ "'") *)
+      error "FOUND AN TAU"
+  | Core_reduction.Step_eval2 (*d_info*) _ ->
+(*      error ("FOUND AN EVAL: '" ^ show d_info ^ "'") *)
+      error "FOUND AN EVAL"
+  | Core_reduction.Step_done2 cval ->
+      ND.print_debug 3 [Debug.DB_driver] (fun () -> "driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval) >> (* DEBUG *)
+      ND.return ()
+  | _ ->
+      error "Driver.driver2, wrong Step_"
+  end in
+  drive_core_threads () >>
+  ND.get >>= fun post_core_dr_st ->
+  
+    (* TODO: hackish *)
+    let non_blocked_th_sts = List.filter (fun (tid, th_info) ->
+      List.any (fun step -> step <> Core_reduction.Step_blocked2) $
+        Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info
+    ) post_core_dr_st.core_state.Core_run.thread_states in
+  
+  (if Global.current_execution_mode () = Just Global.Random then
+    (* HACK The problem is that some threads are blocked (they wait
+       for other threads to finish. If we randomly pick that thread to
+       execute, there will not be any steps to execute, and the whole
+       execution comes to a halt. To properly solve this, we need to
+       implement back tracking. Since we haven't, we temporarily
+       switch to exhaustive mode and also compute the steps of the
+       other threads. *)
+    
+    ND.bindExhaustive (ND.pick (SK_misc ["driver 2"]) non_blocked_th_sts)
+                      (fun (tid, th_info) ->
+                       ND.pick (SK_misc ["driver 3"]) $
+                        Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
+
+   else
+    ND.pick (SK_misc ["driver 4"]) non_blocked_th_sts >>= fun (tid, th_info) ->
+    ND.pick (SK_misc ["driver 5"]) (Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
+  ) >>=
+      process_core_step2
+
+
 
 
 
@@ -1376,8 +1631,8 @@ val driver_globals: bool -> Core.file Core_run.core_run_annotation -> driverM Me
 let driver_globals with_concurrency file =
   (* spawning a thread for the initialisation of globals, and later the execution of main *)
   spawn_thread Nothing <|
-    (* NOTE: the Eskip is just a placeholder, the thread is given its actual state later *)
-    Core_run.arena=  Core.Expr [] Core.Eskip;
+    (* NOTE: the pure(unit) is just a placeholder, the thread is given its actual state later *)
+    Core_run.arena=  Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval Core.Vunit)));
     Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
     Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
     Core_run.env= [Map.empty];
@@ -1417,7 +1672,7 @@ let driver_globals with_concurrency file =
     end >>= fun () ->
     
     (* evaluation of the initialisation *)
-    driver with_concurrency >>= fun () ->
+    driver2 with_concurrency >>= fun () ->
     
     get_thread_states >>= function
       | [(_, (_, th_st))] ->
@@ -1654,7 +1909,7 @@ TODO: this should be removable, since we already set it in Translation
           | _ ->
               error "ERROR (in Driver 2)"
         end >>
-        driver with_concurrency >>
+        driver2 with_concurrency >>
         
         if with_concurrency then
           error "CONCURRENCY IS BROKEN"

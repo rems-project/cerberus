@@ -2720,7 +2720,7 @@ and foo_aux
         pathFromDesigs desigs >>= fun cursor_path ->
         match skipTo cursor_path elems with
           | Nothing ->
-              error "foo_aux, TODO: Just desigs ==> backward (or union desig)"
+              error ("foo_aux, TODO: Just desigs ==> backward (or union desig) ==> cursor_path: " ^ stringFromInit_path cursor_path)
           | Just (elems', skipped_elems) ->
               (* TODO: hackish *)
               E.get_tag_definitions >>= fun tagDefs ->
@@ -2754,43 +2754,14 @@ and foo_aux
                   " ===> " ^ Pp.stringFromAil_expression d_e
                 ) in
                 (* TODO: should use Ail typing instead of this *)
-(*
-                    match AilSyntaxAux.strip_expression d_e with
-                      | AnnotatedExpression () _ loc (AilEconst (ConstantStruct e_tag_sym e_xs)) ->
-                          if not (AilTypesAux.is_struct outer_ty) then
-                            error "TODO: error ConstantStruct trying to init a non struct type"
-                          else
-                            error "TODO: Init_expr ConstantStruct"
-                      | AnnotatedExpression () _ loc (AilEconst (ConstantUnion e_tag_sym membr_ident membr_cst)) ->
-                          if not (AilTypesAux.is_union outer_ty) then
-                            error "TODO: error ConstantUnion trying to init a non union type"
-                          else
-                            error "TODO: Init_expr ConstantUnion"
-                      | AnnotatedExpression () _ loc (AilEstruct e_tag_sym e_xs) ->
-                          if not (AilTypesAux.is_struct outer_ty) then
-                            error "TODO: error AilEstruct trying to init a non struct type"
-                          else
-                            error "TODO: Init_expr AilEstruct"
-                      | AnnotatedExpression () _ loc (AilEunion e_tag_sym membr_ident membr_e_opt) ->
-                          if not (AilTypesAux.is_union outer_ty) then
-                            error "TODO: error AilEunion trying to init a non union type"
-                          else
-                            error "TODO: Init_expr AilEunion"
-                      | AnnotatedExpression () _ loc (AilEstr lit) ->
-                            | _ ->
-                                error "TODO: Init_expr AilEstr"
-                          end
-                      | _ ->
-*)
-                      let d_e' =
-                        if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
-                          A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
-                        else
-                          d_e in
-                      foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
-(*                    end *)
+                let d_e' =
+                  if AilTypesAux.is_pointer cursor_ty && AilSyntaxAux.is_null_pointer_constant d_e then
+                    A.AnnotatedExpression () [] Loc.unknown (AilEconst A.ConstantNull)
+                  else
+                    d_e in
+                foo_aux (*entity_ty*) ((cursor_path, d_e') :: acc) elems' unknown_array xs'
               in
-
+              
               let do_string_literal loc lit =
                 if not (AilTypesAux.is_array_of_character outer_ty) then
                   (* TODO: this is wrong *)
@@ -2882,6 +2853,9 @@ and foo_aux
                     end
 (*                    do_scalar e *)
                 | Init_list ys ->
+        let () = Debug.print_debug 1 [] (fun () ->
+          "HELLO 4"
+        ) in
                     E.get_tag_definitions >>= fun tagDefs ->
                     let outerCard = cardinalityOfCtype tagDefs outer_ty in
                     let (inner_elems_, elems') = List.splitAt (natFromInteger outerCard) elems in
@@ -2911,7 +2885,16 @@ and foo_aux
                           (path, opath, ty') :: zs
                     end in
                     
+                    let inner_elems = List.map (fun (path, opath, ty) ->
+                      (match path with [] -> [] | _::xs -> xs end, match opath with [] -> [] | _::xs -> xs end, ty) (* KKK *)
+                    ) inner_elems in
+        let () = Debug.print_debug 1 [] (fun () ->
+          "ONE"
+        ) in
                     foo_aux (*outer_ty*) [] inner_elems (*unknown_array*)Nothing ys >>= fun (inner, _, _) ->
+        let () = Debug.print_debug 1 [] (fun () ->
+          "TWO"
+        ) in
                     foo_aux (*entity_ty*) (List.reverse inner ++ acc) elems' unknown_array xs'
               end
         end
@@ -2938,6 +2921,9 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
   E.get_tag_definitions >>= fun tagDefs ->
   match (entity_ty, init_) with
     | (Ctype.Ctype annots (Ctype.Array elem_ty Nothing), Init_list xs) ->
+        let () = Debug.print_debug 1 [] (fun () ->
+          "HELLO 5"
+        ) in
         let elems = elemPathFromCtype3 true tagDefs elem_ty in
         let elems' =
           List.map (fun (path, opath, ty) ->
@@ -2952,10 +2938,24 @@ and foo entity_ty init_ : E.desugM (Ctype.ctype * list (init_path * expression u
         end
     | (Ctype.Ctype _ (Ctype.Array _ _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        let () = Debug.print_debug 1 [] (fun () ->
+          "HELLO 2\n" ^
+          stringFromList (fun (x,y,z) ->
+            stringFromInit_path x ^ " -- " ^ stringFromInit_path y
+                                  ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
+          ) elems
+        ) in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | (Ctype.Ctype _ (Ctype.Struct _), Init_list xs) ->
         let elems = elemPathFromCtype3 false tagDefs entity_ty in
+        let () = Debug.print_debug 1 [] (fun () ->
+          "HELLO 1\n" ^
+          stringFromList (fun (x,y,z) ->
+            stringFromInit_path x ^ " -- " ^ stringFromInit_path y
+                                  ^ " -- " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers z ^ "\n"
+          ) elems
+        ) in
         foo_aux (*entity_ty*) [] elems Nothing xs >>= fun (ret, _, _) ->
         E.return (entity_ty, ret)
     | _ ->

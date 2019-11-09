@@ -74,6 +74,7 @@ Core_unstruct
 Core_eval
 Core_run
 Core_run_aux
+Core_reduction
 Driver
 
 Translation

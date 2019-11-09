@@ -200,6 +200,7 @@ let cerberus debug_level progress core_obj
         end >>= fun core_file ->
         if exec then
           let open Exhaustive_driver in
+          let () = Tags.reset_tagDefs () in (* TODO: check this *)
           let () = Tags.set_tagDefs core_file.tagDefs in
           let driver_conf = {concurrency; experimental_unseq; exec_mode; fs_dump; trace} in
           interp_backend io core_file ~args ~batch ~fs ~driver_conf

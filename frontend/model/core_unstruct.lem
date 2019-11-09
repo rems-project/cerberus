@@ -238,7 +238,7 @@ let rec explode_expr env (Expr annot expr_ as expr) =
                   Expr [] (Esseq (Pattern [] (CaseBase (Nothing, BTy_unit)))
                                  (Expr [] (Eaction (Paction pol (Action loc a (Kill is_dynamic pe')))))
                                  acc)
-                ) (Expr [] Eskip) xs
+                ) (Expr [] (Epure (Pexpr [] BTy_unit (PEval Vunit)))) xs
               end
         end
     
@@ -305,8 +305,6 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Elet pat pe (self e))
     | Eif pe e1 e2 ->
         wrap (Eif pe (self e1) (self e2))
-    | Eskip ->
-        expr
     | Eccall _ _ _ _ ->
         expr
     | Eproc _ _ _ ->
@@ -319,8 +317,6 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Esseq pat (self e1) (self e2))
     | Easeq _ _ _ ->
         expr
-    | Eindet n e ->
-        wrap (Eindet n (self e))
     | Ebound n e ->
         wrap (Ebound n (self e))
     | End es ->
@@ -333,6 +329,8 @@ let rec explode_expr env (Expr annot expr_ as expr) =
         wrap (Epar (List.map self es))
     | Ewait _ ->
         expr
+    | Eannot xs e ->
+        wrap (Eannot xs (self e))
   end
 
 

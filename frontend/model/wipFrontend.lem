@@ -130,7 +130,7 @@ let evalConstantExpressionAux loc (*TODO*)(ailnames, stdlib_fun_map, impl) sigm 
         
         (* run the evaluator *)
         let driver_action =
-          ND.bind (Driver.driver false) (fun () ->
+          ND.bind (Driver.driver2 false) (fun () ->
             ND.bind ND.get (fun dr_st' ->
               ND.return (Driver.finalize "wipFrontend" dr_st')
             )

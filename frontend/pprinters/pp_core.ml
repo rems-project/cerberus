@@ -92,16 +92,15 @@ let rec precedence_expr = function
   | Ememop _
   | Eaction _
   | Ecase _
-  | Eskip
   | Eproc _
   | Eccall _
   | Eunseq _
-  | Eindet _
   | Ebound _
   | End _
   | Erun _
   | Epar _
-  | Ewait _ ->
+  | Ewait _
+  | Eannot _ ->
       None
 
   | Eif _ ->
@@ -585,8 +584,6 @@ let rec pp_expr expr =
             pp_control "if" ^^^ pp_pexpr pe1 ^^^ pp_control "then" ^^
             P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
-        | Eskip ->
-            pp_keyword "skip"
         | Eproc (_, nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_pexpr pes)
         | Eccall (_, pe_ty, pe, pes) ->
@@ -616,8 +613,6 @@ let rec pp_expr expr =
         | Easeq ((sym, bTy), act1, pact2) ->
             pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
             pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
-        | Eindet (i, e) ->
-            pp_control "indet" ^^ P.brackets (!^ (string_of_int i)) ^^ P.parens (pp e)
         | Esave ((sym, bTy), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
             P.parens (comma_list (fun (sym, (bTy, pe)) ->
@@ -631,6 +626,8 @@ let rec pp_expr expr =
             pp_keyword "par" ^^ P.parens (comma_list pp es)
         | Ewait tid ->
             pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
+        | Eannot (xs, e) ->
+            pp_keyword "annot(TODO)" ^^ P.parens (pp e)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
         | Ebound (i, e) ->

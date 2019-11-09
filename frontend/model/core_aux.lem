@@ -646,7 +646,7 @@ end
 
 
 let mk_unseq = function
-  | []  -> Expr [] Eskip
+  | []  -> Expr [] (Epure (Pexpr [] () (PEval Vunit)))
   | [e] -> e
   | es  -> Expr [] (Eunseq es)
 end
@@ -669,7 +669,7 @@ val     mk_bTy_sseqs: list (core_base_type * expr unit) -> expr unit
 let rec mk_bTy_sseqs bTy_es =
   match bTy_es with
     | [] ->
-        Expr [] Eskip
+        Expr [] (Epure (Pexpr [] () (PEval Vunit)))
     | [(_, e)] ->
         e
     | (bTy, e) :: bTy_es' ->
@@ -678,9 +678,9 @@ let rec mk_bTy_sseqs bTy_es =
 
 let rec concat_sseq ((Expr annot e_) as e) e' =
    match e_ with
-     | Esseq pat e1 e2 -> Expr annot (Esseq pat e1 (concat_sseq e2 e'))
-     | Eskip           -> e'
-     | _               -> Expr [] (Esseq (mk_empty_pat BTy_unit) e e')
+     | Esseq pat e1 e2                 -> Expr annot (Esseq pat e1 (concat_sseq e2 e'))
+     | Epure (Pexpr _ _ (PEval Vunit)) -> e'
+     | _                               -> Expr [] (Esseq (mk_empty_pat BTy_unit) e e')
   end
 
 let is_negative = function
@@ -862,8 +862,6 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Epure (subst_sym_pexpr sym cval pe)
     | Ememop memop pes ->
         Ememop memop (List.map (subst_sym_pexpr sym cval) pes)
-    | Eskip ->
-        expr_
     | Elet pat pe1 e2 ->
         Elet pat (subst_sym_pexpr sym cval pe1)
           (if in_pattern sym pat then e2 else subst_sym_expr sym cval e2)
@@ -896,8 +894,6 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
           else
             subst_sym_paction sym cval pact2
         end
-    | Eindet i e ->
-        Eindet i (subst_sym_expr sym cval e)
     | Ebound i e ->
         Ebound i (subst_sym_expr sym cval e)
     | Esave lab_sym sym_bTy_pes e ->
@@ -918,6 +914,8 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
         Epar (List.map (subst_sym_expr sym cval) es)
     | Ewait _ ->
       expr_
+    | Eannot xs e ->
+        Eannot xs (subst_sym_expr sym cval e)
 (*
     | Eloc loc e ->
         Eloc loc (subst_sym_expr sym cval e)
@@ -1127,8 +1125,6 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Epure (unsafe_subst_sym_pexpr sym pe' pe)
     | Ememop memop pes ->
         Ememop memop (List.map (unsafe_subst_sym_pexpr sym pe') pes)
-    | Eskip ->
-        expr_
     | Elet pat pe1 e2 ->
         Elet pat (unsafe_subst_sym_pexpr sym pe' pe1) (if in_pattern sym pat then e2 else unsafe_subst_sym_expr sym pe' e2)
     | Eif pe1 e2 e3 ->
@@ -1157,8 +1153,6 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
           else
             unsafe_subst_sym_paction sym pe' pact2
         end
-    | Eindet i e ->
-        Eindet i (unsafe_subst_sym_expr sym pe' e)
     | Ebound i e ->
         Ebound i (unsafe_subst_sym_expr sym pe' e)
     | Esave lab_sym sym_bTy_pes e ->
@@ -1179,6 +1173,8 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
         Epar (List.map (unsafe_subst_sym_expr sym pe') es)
     | Ewait _ ->
         expr_
+    | Eannot xs e ->
+        Eannot xs (unsafe_subst_sym_expr sym pe' e)
 (*
     | Eloc loc e ->
         Eloc loc (unsafe_subst_sym_expr sym pe' e)
@@ -1388,8 +1384,6 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Just pe
     | Ememop _ _ ->
         Nothing
-    | Eskip ->
-        Nothing (* TODO: should turn this into Vunit ? *)
     | Elet pat pe1 e2 ->
         match to_pure e2 with
           | Just (Pexpr annot bTy _ as pe2) ->
@@ -1433,8 +1427,6 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         end
     | Easeq _ _ _ ->
       Nothing
-    | Eindet _ _ ->
-        Nothing
     | Ebound _ e ->
         (* TODO: check *)
         to_pure e
@@ -1448,6 +1440,8 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Ewait _ ->
         Nothing
+    | Eannot _ _ ->
+        error "to_pure Eannot"
 (*
     | Eloc _ e ->
         to_pure e
@@ -1483,8 +1477,6 @@ let rec subst_wait tid v (Expr annot expr_) =
       expr_
   | Ememop _ _ ->
       expr_
-  | Eskip ->
-      expr_
   | Elet sym pe1 e2 ->
       Elet sym pe1 (subst_wait tid v e2)
   | Eif pe1 e2 e3 ->
@@ -1505,8 +1497,6 @@ let rec subst_wait tid v (Expr annot expr_) =
        Esseq _as (subst_wait tid v e1) (subst_wait tid v e2)
    | Easeq _ _ _ ->
        expr_
-   | Eindet i e ->
-       Eindet i (subst_wait tid v e)
    | Ebound i e ->
        Ebound i (subst_wait tid v e)
 (*
@@ -1601,8 +1591,6 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
           | Nothing ->
               find_labeled_continuation sym e3
         end
-    | Eskip ->
-        Nothing
     | Eccall _ _ _ _ ->
         Nothing
     | Eproc _ _ _ ->
@@ -1627,9 +1615,6 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
               find_labeled_continuation sym e2
         end
     | Easeq _ _ _ ->
-        Nothing
-    | Eindet  _ _ ->
-        (* NOTE: Typing forbids labeled continuation bindings inside indet() *)
         Nothing
     | Ebound _ _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
@@ -1680,8 +1665,6 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
     | Eif _ e2 e3 ->
         let acc' = find_labeled_continuation2_aux acc sym e2 in
         find_labeled_continuation2_aux acc' sym e3
-    | Eskip ->
-        acc
     | Eccall _ _ _ _ ->
         acc
     | Eproc _ _ _ ->
@@ -1704,9 +1687,6 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
                    ) (find_labeled_continuation2_aux Map.empty sym e1) in
         find_labeled_continuation2_aux (Map.(union) acc acc') sym e2
     | Easeq _ _ _ ->
-        acc
-    | Eindet  _ _ ->
-        (* NOTE: Typing forbids labeled continuation bindings inside indet() *)
         acc
     | Ebound _ _ ->
         (* NOTE: Typing forbids labeled continuation bindings inside bound() *)
@@ -1855,8 +1835,6 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.empty
     | Ememop _ _ ->
         Map.empty
-    | Eskip ->
-        Map.empty
     | Elet _ _ e2 ->
         collect_labeled_continuations e2
     | Eif pe1 e2 e3 ->
@@ -1878,8 +1856,6 @@ let rec collect_labeled_continuations (Expr annot expr_) =
         Map.(union) (Map.map (fun (a_tys, e) -> (a_tys, Expr annot (Esseq _as e e2))) $ collect_labeled_continuations e1)
                     (collect_labeled_continuations e2)
     | Easeq _ _ _ ->
-        Map.empty
-    | Eindet _ _ ->
         Map.empty
     | Ebound _ _ ->
         Map.empty
@@ -2038,7 +2014,7 @@ let mk_pure_e pe =
 
 val mk_skip_e: expr unit
 let mk_skip_e =
-  Expr [] Eskip
+  Expr [] (Epure (Pexpr [] () (PEval Vunit)))
 
 
 val mk_unseq_e: list (expr unit) -> expr unit
@@ -2123,8 +2099,6 @@ let rec collect_saves_aux st (Expr annots expr_) =
         collect_saves_aux st e
     | Eif _ e1 e2 ->
         collect_saves_aux (collect_saves_aux st e1) e2
-    | Eskip ->
-        st
     | Eccall _ _ _ _ ->
         st
     | Eproc _ _ _ ->
@@ -2152,9 +2126,6 @@ let rec collect_saves_aux st (Expr annots expr_) =
             st2
         end
     | Easeq _ _ _ ->
-        st
-    | Eindet _ _ ->
-        (* typing forbids "saves" inside an "indet()" *)
         st
     | Ebound _ _ ->
         (* typing forbids "saves" inside a "bound()" *)

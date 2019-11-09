@@ -85,7 +85,6 @@ let keywords =
       ("not",          T.NOT         );
       ("undef",        T.UNDEF       );
       ("error",        T.ERROR       );
-      ("skip",         T.SKIP        );
       ("let",          T.LET         );
       ("in",           T.IN          );
       ("if",           T.IF          );
@@ -98,7 +97,6 @@ let keywords =
       ("atom",         T.ATOM        );
       ("save",         T.SAVE        );
       ("run",          T.RUN         );
-      ("indet",        T.INDET       );
       ("bound",        T.BOUND       );
       ("raise",        T.RAISE       );
       ("register",     T.REGISTER    );
