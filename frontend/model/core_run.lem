@@ -286,11 +286,11 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
     | Create pe1 pe2 pref ->
         (* TODO: the russian doll pattern matching is because to to slow on tuples *)
         match pe1 with
-          | Pexpr [] () (PEconstrained xs1) ->
+          | Pexpr _ () (PEconstrained xs1) ->
               error "Create PEconstrained 1"
           | _ ->
               match pe2 with
-                | Pexpr [] () (PEconstrained xs2) ->
+                | Pexpr _ () (PEconstrained xs2) ->
                     error "Create PEconstrained 2"
                 | _ ->
                     match (valueFromPexpr pe1, valueFromPexpr pe2) with
@@ -328,15 +328,15 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
     
     | CreateReadOnly pe1 pe2 pe3 pref ->
       match pe1 with
-        | Pexpr [] () (PEconstrained xs1) ->
+        | Pexpr _ () (PEconstrained xs1) ->
             error "CreateReadOnly PEconstrained 1"
         | _ ->
             match pe2 with
-              | Pexpr [] () (PEconstrained xs2) ->
+              | Pexpr _ () (PEconstrained xs2) ->
                   error "CreateReadOnly PEconstrained 2"
               | _ ->
                   match pe3 with
-                    | Pexpr [] () (PEconstrained xs3) ->
+                    | Pexpr _ () (PEconstrained xs3) ->
                         error "CreateReadOnly PEconstrained 3"
                     | _ ->
               match valueFromPexpr pe1 with
@@ -398,11 +398,11 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
     | Alloc pe1 pe2 pref ->
         (* TODO: doing an indirection in the pattern matching otherwise Lem diverges... *)
         match (pe1, pe2) with
-          | (Pexpr [] () (PEconstrained xs1), Pexpr [] () (PEconstrained xs2)) ->
+          | (Pexpr _ () (PEconstrained xs1), Pexpr _ () (PEconstrained xs2)) ->
               error "Alloc PEconstrained 1 and 2"
-          | (Pexpr [] () (PEconstrained xs1), _) ->
+          | (Pexpr _ () (PEconstrained xs1), _) ->
               error "Alloc PEconstrained 1"
-          | (_, Pexpr [] () (PEconstrained xs2)) ->
+          | (_, Pexpr _ () (PEconstrained xs2)) ->
               error "Alloc PEconstrained 2"
           | _ ->
               match (valueFromPexpr pe1, valueFromPexpr pe2) with
@@ -437,7 +437,7 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
               end
         end
     
-    | Kill _ (Pexpr [] () (PEconstrained xs)) ->
+    | Kill _ (Pexpr _ () (PEconstrained xs)) ->
         error "Kill PEconstrained"
     | Kill kind pe ->
         match valueFromPexpr pe with
@@ -466,21 +466,21 @@ let core_action_step arena_annots core_extern mem_st file current_tid (parent_ti
         end
 
 (*
-    | Store (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store (Pexpr _ () (PEconstrained xs1)) (Pexpr _ () (PEconstrained xs2)) (Pexpr _ () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 1 and 2 and 3"
-    | Store (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) pe3 mo ->
+    | Store (Pexpr _ () (PEconstrained xs1)) (Pexpr _ () (PEconstrained xs2)) pe3 mo ->
         error "Store PEconstrained 1 and 2"
-    | Store (Pexpr [] () (PEconstrained xs1)) pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store (Pexpr _ () (PEconstrained xs1)) pe2 (Pexpr _ () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 1 and 3"
-    | Store pe1 (Pexpr [] () (PEconstrained xs2)) (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store pe1 (Pexpr _ () (PEconstrained xs2)) (Pexpr _ () (PEconstrained xs3)) mo ->
         error "Store PEconstrained 2 and 3"
-    | Store (Pexpr [] () (PEconstrained xs1)) pe2 pe3 mo ->
+    | Store (Pexpr _ () (PEconstrained xs1)) pe2 pe3 mo ->
         error "Store PEconstrained 1"
-    | Store pe1 (Pexpr [] () (PEconstrained xs2)) pe3 mo ->
+    | Store pe1 (Pexpr _ () (PEconstrained xs2)) pe3 mo ->
         error "Store PEconstrained 2"
 *)
 
-    | Store is_locking pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store is_locking pe1 pe2 (Pexpr _ () (PEconstrained xs3)) mo ->
         Step_constrained "Store" (
           List.map (fun (cs, pe3) ->
             ( cs
@@ -558,11 +558,11 @@ KKK
         end
 
 (*
-    | Load (Pexpr [] () (PEconstrained xs1)) (Pexpr [] () (PEconstrained xs2)) mo ->
+    | Load (Pexpr _ () (PEconstrained xs1)) (Pexpr _ () (PEconstrained xs2)) mo ->
         error "Load PEconstrained 1 and 2"
-    | Load (Pexpr [] () (PEconstrained xs1)) pe2 mo ->
+    | Load (Pexpr _ () (PEconstrained xs1)) pe2 mo ->
         error "Load PEconstrained 1"
-    | Load pe1 (Pexpr [] () (PEconstrained xs2)) mo ->
+    | Load pe1 (Pexpr _ () (PEconstrained xs2)) mo ->
         error "Load PEconstrained 2"
 *)
     | Load pe1 pe2 mo ->
@@ -773,7 +773,7 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
     
     | (Ecase pe pat_es, _) ->
         one match pe with
-          | Pexpr [] () (PEconstrained xs) ->
+          | Pexpr _ () (PEconstrained xs) ->
               Step_constrained "Ecase" (
                 List.map (fun (constrs, pe') ->
                     ( constrs
@@ -782,7 +782,7 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
                       |> )
                 ) xs
               )
-          | Pexpr [] () (PEval cval) ->
+          | Pexpr _ () (PEval cval) ->
               match select_case subst_sym_expr cval pat_es with
                 | Just e' ->
                     Step_tau "Ecase" TSK_Misc (
@@ -822,7 +822,7 @@ BEFORE EVAL_PEXPR2
    --------------------------------------------------------
    <let pat = pe1 in e2, κs, Λ> --τ--> <e2[pat \ v], κs, Λ> *)
         one match pe1 with
-          | Pexpr [] () (PEconstrained xs1) ->
+          | Pexpr _ () (PEconstrained xs1) ->
               Step_constrained "Elet" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1384,7 +1384,7 @@ BEFORE EVAL_PEXPR2
     | (Ewseq pat e1 e2, Stack_cons current_proc_opt cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
-          | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
+          | Expr e1_annots (Epure (Pexpr _ () (PEconstrained xs1))) ->
               Step_constrained "Ewseq" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1426,7 +1426,7 @@ BEFORE EVAL_PEXPR2
     | (Esseq pat e1 e2, Stack_cons current_proc_opt cont sk) ->
         let () = Debug.warn [] (fun () -> "Core_run, Esseq ==> TODO negatives") in
         one match e1 with
-          | Expr e1_annots (Epure (Pexpr [] () (PEconstrained xs1))) ->
+          | Expr e1_annots (Epure (Pexpr _ () (PEconstrained xs1))) ->
               Step_constrained "Esseq" (
                 List.map (fun (cs, pe1) ->
                   ( cs
@@ -1505,7 +1505,7 @@ BEFORE EVAL_PEXPR2
           end
         end
     
-    | (Epure (Pexpr [] () (PEconstrained xs)), _) ->
+    | (Epure (Pexpr _ () (PEconstrained xs)), _) ->
         one $ Step_constrained "Epure" (
           List.map (fun (cs, pe') ->
             ( cs
@@ -1513,7 +1513,7 @@ BEFORE EVAL_PEXPR2
           ) xs
         )
     
-    | (Epure (Pexpr [] () (PEval cval)), Stack_empty) ->
+    | (Epure (Pexpr _ () (PEval cval)), Stack_empty) ->
         (* End of program execution *)
         one (Step_done cval)
     

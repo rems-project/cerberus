@@ -41,8 +41,8 @@ let is_pure expr =
   end
 
 type one_step =
-  | TAU of list (map Symbol.sym value) * Core.expr core_run_annotation
-  | EVAL of core_runM (Core.expr core_run_annotation)
+  | TAU of string * list (map Symbol.sym value) * Core.expr core_run_annotation
+  | EVAL of string * core_runM (Core.expr core_run_annotation)
   | UNSEQUENCED_RACE
   | ILLTYPED of string
 
@@ -58,31 +58,31 @@ module E = struct
     SEU.return
   let inline return = core_run_return
   let step_eval_pexprs th_st core_extern mem_st file pes =
-    let () = Debug.print_debug 4 [] (fun () ->
+    let () = Debug.print_debug 5 [] (fun () ->
       "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
     SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false) pes)
 
   let core_run_step_eval_pexpr th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () ->
+    let () = Debug.print_debug 5 [] (fun () ->
       "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
     ) in
     SEU.runEU (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false pe)
   let inline step_eval_pexpr = core_run_step_eval_pexpr
   
   let core_run_eval_pexpr th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () ->
+    let () = Debug.print_debug 5 [] (fun () ->
       "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
     ) in
     SEU.runEU (Core_eval.eval_pexpr_aux_broken th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
   let inline eval_pexpr = core_run_eval_pexpr
   
   let eval_pexpr2 th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
+    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
     SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
   
   let wrapped_eval_pexpr2 th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 4 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
+    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
     (* TODO: it would be better to just call eval_pexpr2, but
        Lem generates buggy OCaml ... *)
     SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)) function
@@ -101,12 +101,17 @@ let inline (<$>) = SEU.fmap
 
 (* ********************************************************************************************** *)
 
+import Debug
+
 let rec one_step_unseq_aux (fps_acc, cvals_acc) = function
   | [] ->
       Just (fps_acc, List.reverse cvals_acc)
   | Expr _ (Epure (Pexpr _ _ (PEval cval))) :: xs ->
       one_step_unseq_aux (fps_acc, cval::cvals_acc) xs
   | Expr _ (Eannot fps (Expr _ (Epure (Pexpr _ _ (PEval cval))))) :: xs ->
+      let () = Debug.print_debug 0 [] (fun () ->
+        "CHECKING FOR RACE"
+      ) in
       if List.any (fun z -> List.any (fun z' -> Mem.do_overlap z z') fps_acc) fps then
         (* found an unsequenced race *)
         Nothing
@@ -125,18 +130,22 @@ let one_step eval_pexpr env (Expr annots expr_) =
   match expr_ with
     (* {A_1} {A_2} E --> {A_1 union A_2} E *)
     | Eannot xs1 (Expr annots2 (Eannot xs2 e)) ->
-        Just (TAU env (Expr (annots ++ annots2) (Eannot (combine_dyn_annotation xs1 xs2) e)))
+        Just (TAU "Eannot" env (Expr (annots ++ annots2) (Eannot (combine_dyn_annotation xs1 xs2) e)))
     
     | Ecase pe xs ->
         error "WIP: one_step Ecase"
     | Elet pat pe1 e2 ->
         match valueFromPexpr pe1 with
           | Just cval ->
-              Just (TAU (update_env pat cval env) e2)
+              Just (TAU "Elet" (update_env pat cval env) e2)
           | Nothing ->
               Just begin
-                EVAL begin
+                EVAL "Elet" begin
                   eval_pexpr pe1 >>= fun pe1' ->
+                  let () = Debug.print_debug 4 [] (fun () ->
+                    "Elet ==> " ^ Pp.stringFromCore_pexpr pe1 ^
+                    " --> " ^ Pp.stringFromCore_pexpr pe1'
+                  ) in
                   E.return (Expr annots (Elet pat pe1' e2))
                 end
               end
@@ -145,13 +154,13 @@ let one_step eval_pexpr env (Expr annots expr_) =
     | Eif pe1 e2 e3 ->
         Just match valueFromPexpr pe1 with
           | Just Vtrue ->
-              TAU env e2
+              TAU "Eif (true)" env e2
           | Just Vfalse ->
-              TAU env e3
+              TAU "Eif (false)" env e3
           | Just _ ->
               ILLTYPED "the first operand of an Eif didn't evaluated to a boolean"
           | Nothing ->
-              EVAL begin
+              EVAL "Eif" begin
                 eval_pexpr pe1 >>= fun pe1' ->
                 E.return (Expr annots (Eif pe1' e2 e3))
               end
@@ -162,45 +171,45 @@ let one_step eval_pexpr env (Expr annots expr_) =
           | Nothing ->
               Just UNSEQUENCED_RACE
           | Just (fps, cvals) ->
-              Just (TAU env (Expr annots (Eannot fps (Expr [] (Epure (Pexpr [] () (PEval (Vtuple cvals))))))))
+              Just (TAU "Eunseq" env (Expr annots (Eannot fps (Expr [] (Epure (Pexpr [] () (PEval (Vtuple cvals))))))))
         end
     
     | Ewseq pat (Expr pe1_annots (Epure pe1)) e2 ->
         Just match valueFromPexpr pe1 with
           | Just cval ->
-              TAU (update_env pat cval env) e2
+              TAU "Ewseq" (update_env pat cval env) e2
           | Nothing ->
               let mk_wseq z =
                 Expr annots (Ewseq pat (Expr pe1_annots (Epure z)) e2) in
-              EVAL (mk_wseq <$> eval_pexpr pe1)
+              EVAL "Ewseq" (mk_wseq <$> eval_pexpr pe1)
         end
     | Esseq pat (Expr pe1_annots (Epure pe1)) e2 ->
         Just match valueFromPexpr pe1 with
           | Just cval ->
-              TAU (update_env pat cval env) e2
+              TAU "Esseq" (update_env pat cval env) e2
           | Nothing ->
               let mk_sseq z =
                 Expr annots (Esseq pat (Expr pe1_annots (Epure z)) e2) in
-              EVAL (mk_sseq <$> eval_pexpr pe1)
+              EVAL "Esseq" (mk_sseq <$> eval_pexpr pe1)
         end
     
     | Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
         Just match valueFromPexpr pe1 with
           | Just cval ->
-              TAU (update_env pat cval env) (Expr [] (Eannot xs e2))
+              TAU "Ewseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
               let mk_wseq z =
                 Expr annots (Ewseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure z)))) e2) in
-              EVAL (mk_wseq <$> eval_pexpr pe1)
+              EVAL "Ewseq Eannot" (mk_wseq <$> eval_pexpr pe1)
         end
     | Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure pe1)))) e2 ->
         Just match valueFromPexpr pe1 with
           | Just cval ->
-              TAU (update_env pat cval env) (Expr [] (Eannot xs e2))
+              TAU "Esseq Eannot" (update_env pat cval env) (Expr [] (Eannot xs e2))
           | Nothing ->
               let mk_sseq z =
                 Expr annots (Esseq pat (Expr annots1 (Eannot xs (Expr annots2 (Epure z)))) e2) in
-              EVAL (mk_sseq <$> eval_pexpr pe1)
+              EVAL "Esseq Eannot" (mk_sseq <$> eval_pexpr pe1)
         end
     
     | _ ->
@@ -219,6 +228,8 @@ type context (* core_run_annotation unit Symbol.sym *) =
 
 let is_value = function
   | Expr _ (Epure (Pexpr _ _ (PEval _))) ->
+      true
+  | Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _))))) ->
       true
   | _ ->
       false
@@ -249,14 +260,14 @@ let rec get_ctx (Expr annot expr_ as expr) =
         else
           get_ctx_unseq_aux annot [] [] es
     | Ewseq pat e1 e2 ->
-        if is_pure e1 then
+        if is_value e1 then
           [(CTX, expr)]
         else
           List.map (fun (ctx, e) ->
             (Cwseq annot pat ctx e2, e)
           ) (get_ctx e1)
     | Esseq pat e1 e2 ->
-        if is_pure e1 then
+        if is_value e1 then
           [(CTX, expr)]
         else
           List.map (fun (ctx, e) ->
@@ -356,8 +367,8 @@ type action_request2 'a =
 
 
 type core_step2 =
-  | Step_eval2 of core_runM thread_state
-  | Step_tau2 of Core_run.core_tau_step_kind * thread_state
+  | Step_eval2 of string * core_runM thread_state
+  | Step_tau2 of string * Core_run.core_tau_step_kind * thread_state
   | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
                             Mem_common.thread_id *
                             action_request2 thread_state
@@ -459,7 +470,7 @@ let step_action eval_pexpr (Action loc act_annots act) =
                 E.return (wrap (CreateReadOnly pe1 pe2 pe3' pref))
               end
         end
-    | Store is_locking pe1 pe2 (Pexpr [] () (PEconstrained xs3)) mo ->
+    | Store is_locking pe1 pe2 (Pexpr _ () (PEconstrained xs3)) mo ->
         error "WIP: Core_reduction.step_action => Store pe1 pe2 PEconstrained"
     | Store is_locking pe1 pe2 pe3 mo ->
         match (act_valueFromPexpr pe1, act_valueFromPexpr pe2, act_valueFromPexpr pe3) with
@@ -586,8 +597,10 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
   List.map (fun (ctx, expr) ->
     match get_pure expr with
       | Just (e_annots, Pexpr _ _ (PEval cval)) ->
+(*
           match ctx with
             | CTX ->
+*)
                 match th_st.stack with
                   | Stack_empty ->
                       (*error "impossible ==> step_ctx ctx = CTX and stack = Stack_empty"*)
@@ -625,7 +638,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                           | Nothing ->
                               Core_run.TSK_Misc
                         end in
-                      Step_tau2 (*"end of procedure"*) tsk begin
+                      Step_tau2 "end of procedure" tsk begin
                         match th_st.env with
                           | [] ->
                               error "end of proc, found an empty Core_run env"
@@ -637,15 +650,17 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                         end
                       end
                   | _ ->
-                      Step_tau2 Core_run.TSK_Misc begin
+                      Step_tau2 "value in CTX" Core_run.TSK_Misc begin
                         <| th_st with arena= apply_ctx ctx (Expr e_annots (Epure (Caux.mk_value_pe cval))) |>
                       end
                 end
+(*
             | _ ->
-                error "Core_run.step_ctx ==> found a value with ctx <> CTX"
+                error ("Core_run.step_ctx ==> found a value with ctx <> CTX ==> " ^ Pp.stringFromCore_expr expr)
           end
+*)
       | Just (e_annots, pe) ->
-          Step_eval2 begin
+          Step_eval2 "Epure" begin
             eval_pexpr pe >>= fun pe' ->
             E.return <| th_st with arena= apply_ctx ctx (Expr e_annots (Epure pe')) |>
           end
@@ -682,7 +697,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                                     )
                             end
                         | ACTION_EVAL debug_str eval_m -> (* of string * core_runM (Core.action core_run_annotation) *)
-                            Step_eval2 begin
+                            Step_eval2 debug_str begin
                               eval_m >>= fun act' ->
                               E.return (wrap_expr (Expr e_annots (Eaction (Paction p act'))))
                             end
@@ -708,10 +723,10 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                 match one_step eval_pexpr th_st.env expr with
                   | Nothing ->
                       error ("STUCK ==> " ^ Pp.stringFromCore_expr expr)
-                  | Just (TAU env' expr') ->
-                      Step_tau2 Core_run.TSK_Misc <| th_st with arena= apply_ctx ctx expr'; env= env' |>
-                  | Just (EVAL eval_m) ->
-                      Step_eval2 begin
+                  | Just (TAU debug_str env' expr') ->
+                      Step_tau2 debug_str Core_run.TSK_Misc <| th_st with arena= apply_ctx ctx expr'; env= env' |>
+                  | Just (EVAL debug_str eval_m) ->
+                      Step_eval2 debug_str begin
                         eval_m >>= fun expr' ->
                         E.return <| th_st with arena= apply_ctx ctx expr' |>
                       end
