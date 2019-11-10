@@ -168,7 +168,7 @@ let rec print_eval_conv_aux dr_st th_st pe =
   match Core_eval.eval_pexpr_aux2 (Loc.other "Driver.print_eval_conv_aux") dr_st.core_extern th_st.Core_run.env (Just dr_st.layout_state) dr_st.core_file pe with
   | Exception.Result (Undefined.Defined (Right cval)) ->
       ND.return (Right (Undefined.Defined cval))
-  | Exception.Result (Undefined.Defined (Left (Core.Pexpr [] () (Core.PEconstrained xs)))) ->
+  | Exception.Result (Undefined.Defined (Left (Core.Pexpr _ () (Core.PEconstrained xs)))) ->
       ND.msum "printf_eval_conv" begin
         List.map (fun (cs, pe) ->
             ( "printf_eval_conv_pe_constrained"
@@ -779,17 +779,23 @@ let rec drive_core_thread2 tid =
   ND.mk_step (SK_misc ["drive_core_thread2"]) $ List.map (function
     | Core_reduction.Step_thread_done2 parent_tid cval ->
         ( SK_misc ["thread_done"]
-        , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () -> "thread " ^ show tid ^ " is done") >>
+        , (* DEBUG *) ND.print_debug 6 [Debug.DB_driver_step] (fun () ->
+            "thread " ^ show tid ^ " is done"
+          ) >>= fun () ->
           let actions_of_current_thread: set Cmm.action =
-            Set.filter (fun act -> Cmm.tid_of act = tid) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
+            Set.filter (fun act ->
+              Cmm.tid_of act = tid
+            ) $ dr_st.concurrency_state.Cmm_op.symPre.Cmm.actions in
           let last_actions_of_current_thread: set Cmm.action =
             Set.filter (fun act ->
-              not (Set.any (fun (act', _) -> act = act') dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
+              not (Set.any (fun (act', _) ->
+                act = act'
+              ) dr_st.concurrency_state.Cmm_op.symPre.Cmm.sb)
             ) actions_of_current_thread in
           ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.kill_thread tid parent_tid (Set.map Cmm.aid_of last_actions_of_current_thread) cval dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1;
-          |>) >>
+          |>) >>= fun () ->
           drive_core_thread2 parent_tid )
     | Core_reduction.Step_blocked2 ->
         (SK_misc ["blocked"], ND.return ())
@@ -816,27 +822,39 @@ let rec drive_core_thread2 tid =
               dr_step_counter= dr_st.dr_step_counter + 1;
             |>))
     
-    | Core_reduction.Step_eval2 step_m ->
-        ( SK_eval "TODO(str) drive_core_thread2 Step_eval2"
-        , (* case where the Core program does a pure step *)
+    | Core_reduction.Step_eval2 debug_str step_m ->
+        ( SK_eval debug_str
+        , let () = Debug.print_debug 3 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+          (* case where the Core program does a pure step *)
           liftCore_run step_m >>= fun th_st' ->
           ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1
-          |>) >>
+          |>) >>= fun () ->
           drive_core_thread2 tid )
-    | Core_reduction.Step_tau2 tsk th_st' ->
-        ( SK_tau "TODO(str) drive_core_thread2 Step_tau2"
-        , match tsk with
+    | Core_reduction.Step_tau2 debug_str tsk th_st' ->
+        ( SK_tau debug_str
+        , let () = Debug.print_debug 3 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
+          match tsk with
             | Core_run.TSK_Misc ->
                 ND.return ()
             | _ ->
                 error "TODO: drive_core_thread2, non TSK_Misc"
           end >>= fun () ->
+
+          begin
+            if debug_str <> "Eloc" then
+            (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+            (* DEBUG *)                   Pp.stringFromCore_expr th_st'.Core_run.arena)
+            else
+              ND.return ()
+          end >>= fun () ->
+
+
           ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1
-          |>) >>
+          |>) >>= fun () ->
           drive_core_thread2 tid )
     
     | Core_reduction.Step_error2 debug_str ->
@@ -869,7 +887,9 @@ val     drive_core_threads: unit -> driverM unit
 let rec drive_core_threads () =
   ND.get >>= fun dr_st ->
   ND.mapM_ (fun (tid, _) ->
-    ND.print_debug 9 [Debug.DB_driver] (fun () -> "BEFORE drive_core_thread, in drive_core_threads") >>
+    ND.print_debug 9 [Debug.DB_driver] (fun () ->
+      "BEFORE drive_core_thread, in drive_core_threads"
+    ) >>= fun () ->
     drive_core_thread2 tid
   ) dr_st.core_state.Core_run.thread_states
 
@@ -1411,10 +1431,10 @@ let rec driver2 with_concurrency =
   | Core_reduction.Step_action_request2 _ loc tid request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
-  | Core_reduction.Step_tau2 d_info _ ->
+  | Core_reduction.Step_tau2 _ d_info _ ->
 (*      error ("FOUND A TAU: '" ^ show d_info ^ "'") *)
       error "FOUND AN TAU"
-  | Core_reduction.Step_eval2 (*d_info*) _ ->
+  | Core_reduction.Step_eval2 _ (*d_info*) _ ->
 (*      error ("FOUND AN EVAL: '" ^ show d_info ^ "'") *)
       error "FOUND AN EVAL"
   | Core_reduction.Step_done2 cval ->

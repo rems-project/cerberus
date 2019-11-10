@@ -24,7 +24,7 @@ module ND = Nondeterminism
 val call_function: Core.file core_run_annotation -> name -> list Core.value ->
                    Exception.exceptM Core.pexpr core_run_cause
 let call_function file f_nm arg_cvals =
-  let () = Debug.print_debug 4 [] (fun () ->
+  let () = Debug.print_debug 5 [] (fun () ->
     "CALL_FUNCTION: " ^ Pp.stringFromCore_pexpr (Pexpr [] () (PEcall f_nm (List.map Caux.mk_value_pe arg_cvals)))
   ) in
   Exception.bind match f_nm with
@@ -76,7 +76,7 @@ let inline (<$>) = EU.fmap
 let pull_helper pull pe_cons (ps: list ('a * pexpr)) =
   match List.foldl (fun acc (a, pe) ->
     match pull pe with
-      | Pexpr [] () (PEconstrained xs) ->
+      | Pexpr _ () (PEconstrained xs) ->
           let ys = match acc with
             | Right pes -> [(ND.empty, pes)]
             | Left ys -> ys
@@ -106,22 +106,22 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
   let self pe = pull_constrained (n+1) pe in
   let wrap f pe =
     match self pe with
-    | Pexpr [] () (PEconstrained xs) ->
+    | Pexpr _ () (PEconstrained xs) ->
         PEconstrained (List.map (fun (cs, pe') -> (cs, Pexpr [] () (f pe'))) xs)
     | pe' -> f pe'
     end
   in
   let wrap_bin f pe1 pe2 =
     match (self pe1, self pe2) with
-    | (Pexpr [] () (PEconstrained xs1), Pexpr [] () (PEconstrained xs2)) ->
+    | (Pexpr _ () (PEconstrained xs1), Pexpr _ () (PEconstrained xs2)) ->
         PEconstrained (
           List.map (fun ((cs1, pe1), (cs2, pe2)) ->
               (ND.concat cs1 cs2, Pexpr [] () (f pe1 pe2))
             ) (Utils.product_list xs1 xs2)
           )
-    | (Pexpr [] () (PEconstrained xs1), pe2') ->
+    | (Pexpr _ () (PEconstrained xs1), pe2') ->
         PEconstrained (List.map (fun (cs, pe) -> (cs, Pexpr [] () (f pe pe2'))) xs1)
-    | (pe1', Pexpr [] () (PEconstrained xs2)) ->
+    | (pe1', Pexpr _ () (PEconstrained xs2)) ->
         PEconstrained (List.map (fun (cs, pe) -> (cs, Pexpr [] () (f pe1' pe))) xs2)
     | (pe1', pe2') -> f pe1' pe2'
     end
@@ -140,7 +140,7 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
         PEconstrained (
             List.foldl (fun acc (cs, pe) ->
               match self pe with
-              | Pexpr [] () (PEconstrained xs) ->
+              | Pexpr _ () (PEconstrained xs) ->
                   (List.map (fun (cs', pe') -> (ND.concat cs cs', pe')) xs) ++ acc
               | pe' ->
                   (cs, pe')::acc
@@ -154,10 +154,10 @@ let rec pull_constrained n (Pexpr _ () pexpr_) =
         wrap_list (PEctor ctor) pes
     | PEcase pe pat_pes ->
         match self pe with
-          | Pexpr [] () (PEconstrained xs) ->
+          | Pexpr annots () (PEconstrained xs) ->
               PEconstrained (
                 List.map (fun (cs, pe) ->
-                  (cs, Pexpr [] () (pull_helper self (PEcase pe) pat_pes))
+                  (cs, Pexpr annots () (pull_helper self (PEcase pe) pat_pes))
                 ) xs
               )
           | pe' ->
@@ -794,7 +794,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
                 EU.return pe_) >>= fun pe_' ->
               (* TODO: check KKK *)
               let (Pexpr _ _ pe_'') = pull_constrained 0 (Pexpr [] () pe_') in
-              let () = Debug.print_debug 4 [] (fun () ->
+              let () = Debug.print_debug 5 [] (fun () ->
                 "PEcall ===> " ^ Pp.stringFromCore_pexpr (Pexpr [] () pe_'')
               ) in
               EU.return pe_''
@@ -827,7 +827,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               EU.return $ PElet pat pe1' pe2
         end
     | PEif pe1 pe2 pe3 ->
-        let () = Debug.print_debug 4 [] (fun () ->
+        let () = Debug.print_debug 5 [] (fun () ->
           "Core_eval ==> PEif (_) ==> " ^ Pp.stringFromCore_pexpr pexpr
         ) in
         self pe1 >>= fun pe1' ->
@@ -934,18 +934,18 @@ val     eval_pexpr_aux2: Loc.t ->
                          Core.pexpr ->
                          EU.t (either Core.pexpr Core.value) core_run_cause
 let rec eval_pexpr_aux2 loc core_extern env mem_st_opt file pe =
-  let () = Debug.print_debug 4 [] (fun () ->
+  let () = Debug.print_debug 5 [] (fun () ->
     "ENTERING Core_eval.eval_pexpr_aux2 ==> " ^ Pp.stringFromCore_pexpr pe
   ) in
   match let pulled = pull_constrained 0 pe in
 
-  let () = Debug.print_debug 4 [] (fun () ->
+  let () = Debug.print_debug 5 [] (fun () ->
     "pulled ==> " ^ Pp.stringFromCore_pexpr pulled
   ) in
   pulled
 
 with
-    | ((Pexpr [] () (PEconstrained _)) as pulled_pe) ->
+    | ((Pexpr _ () (PEconstrained _)) as pulled_pe) ->
         EU.return (Left pulled_pe)
     | pulled_pe ->
         step_eval_pexpr 0 loc core_extern env mem_st_opt file false pulled_pe >>= fun pe' ->
@@ -1000,7 +1000,7 @@ val eval_pexpr_aux_broken:
   Core.pexpr ->
   EU.t Core.value core_run_cause
 let rec eval_pexpr_aux_broken loc core_extern env mem_st_opt file pe =
-  step_eval_pexpr 0 loc core_extern env mem_st_opt file false (let ()=Debug.print_debug 4 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
+  step_eval_pexpr 0 loc core_extern env mem_st_opt file false (let ()=Debug.print_debug 5 [] (fun () -> "BOOM") in pe) >>= fun pe' ->
   match Caux.valueFromPexpr pe' with
     | Just cval ->
         EU.return cval

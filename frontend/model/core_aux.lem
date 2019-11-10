@@ -721,7 +721,7 @@ let rec flatten_constrained_value v =
 
 val valueFromPexpr: pexpr -> maybe value
 let valueFromPexpr = function
-  | Pexpr [] () (PEval cval) ->
+  | Pexpr _ () (PEval cval) ->
       Just ((*flatten_constrained_value*) cval)
   | _ ->
       Nothing
@@ -740,9 +740,9 @@ let rec valueFromPexprs pes =
 val valueOrPEconstrainedFromPexpr: pexpr -> maybe (either value pexpr)
 let valueOrPEconstrainedFromPexpr pe =
   match pe with
-    | Pexpr [] () (PEval cval) ->
+    | Pexpr _ () (PEval cval) ->
         Just (Left cval)
-    | Pexpr [] () (PEconstrained _) ->
+    | Pexpr _ () (PEconstrained _) ->
         Just (Right pe)
     | _ ->
         Nothing
@@ -754,7 +754,7 @@ let rec valueOrPEconstrainedFromPexprs pes =
       (i+1, match (valueOrPEconstrainedFromPexpr pe, acc) with
         | (Just (Left cval), Just (Left cvals)) ->
             Just (Left (cval :: cvals))
-        | (Just (Right (Pexpr [] () (PEconstrained xs) as pe)), Just (Left cvals)) ->
+        | (Just (Right (Pexpr _ () (PEconstrained xs) as pe)), Just (Left cvals)) ->
             Just (Right ((i, xs), pe :: (List.map (fun v -> Pexpr [] () (PEval v)) cvals)))
         | (Just (Right pe), Just (Right (i_xs, pes))) ->
             Just (Right (i_xs, pe :: pes))
@@ -1249,7 +1249,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
         (* empty list (pure expr) *)
         expr
-    | (CaseCtor Ccons [pat1; pat2], Pexpr [] () (PEval (Vlist bTy_elem (cval::cvals)))) ->
+    | (CaseCtor Ccons [pat1; pat2], Pexpr _ () (PEval (Vlist bTy_elem (cval::cvals)))) ->
         (* populated list (value) *)
         subst_pattern_val pat1 cval $
           subst_pattern_val pat2 (Vlist bTy_elem cvals) expr
@@ -1257,7 +1257,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
         (* populated list (pure expr) *)
         unsafe_subst_pattern pat1 pe1 $
           unsafe_subst_pattern pat2 pe2 expr
-    | (CaseCtor Ctuple pats', Pexpr [] () (PEval (Vtuple cvals))) ->
+    | (CaseCtor Ctuple pats', Pexpr _ () (PEval (Vtuple cvals))) ->
         List.foldr (fun (pat', cval) acc ->
           subst_pattern_val pat' cval acc
         ) expr (List.zip pats' cvals)
@@ -1267,13 +1267,13 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
         ) expr (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
+    | (CaseCtor Cspecified [pat'], Pexpr _ () (PEval (Vloaded (LVspecified oval)))) ->
         subst_pattern_val pat' (Vobject oval) expr
-    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
+    | (CaseCtor Cspecified [pat'], Pexpr _ () (PEctor Cspecified [pe''])) ->
         unsafe_subst_pattern pat' pe'' expr
-    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEval (Vloaded (LVunspecified ty)))) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr _ () (PEval (Vloaded (LVunspecified ty)))) ->
         subst_pattern_val pat' (Vctype ty) expr
-    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEctor Cunspecified [pe''])) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr _ () (PEctor Cunspecified [pe''])) ->
         unsafe_subst_pattern pat' pe'' expr
     | (CaseCtor ctor pats, _) ->
         let str_ctor = match ctor with
@@ -1328,7 +1328,7 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
         (* empty list (pure expr) *)
         Just expr
-    | (CaseCtor Ccons [pat1; pat2], Pexpr [] () (PEval (Vlist bTy_elem (cval::cvals)))) ->
+    | (CaseCtor Ccons [pat1; pat2], Pexpr _ () (PEval (Vlist bTy_elem (cval::cvals)))) ->
         (* populated list (value) *)
         Just (subst_pattern_val pat1 cval $
           subst_pattern_val pat2 (Vlist bTy_elem cvals) expr)
@@ -1338,7 +1338,7 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
           | Just e -> subst_pattern pat1 pe1 e
           | Nothing -> Nothing
         end
-    | (CaseCtor Ctuple pats', Pexpr [] () (PEval (Vtuple cvals))) ->
+    | (CaseCtor Ctuple pats', Pexpr _ () (PEval (Vtuple cvals))) ->
         Just $ List.foldr (fun (pat', cval) acc ->
           subst_pattern_val pat' cval acc
         ) expr (List.zip pats' cvals)
@@ -1351,13 +1351,13 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
         ) (Just expr) (List.zip pats' pes)
     (* TODO (maybe), Carray, Civmax, Civmin, Civsizeof, Civalignof *)
     
-    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEval (Vloaded (LVspecified oval)))) ->
+    | (CaseCtor Cspecified [pat'], Pexpr _ () (PEval (Vloaded (LVspecified oval)))) ->
         Just $ subst_pattern_val pat' (Vobject oval) expr
-    | (CaseCtor Cspecified [pat'], Pexpr [] () (PEctor Cspecified [pe''])) ->
+    | (CaseCtor Cspecified [pat'], Pexpr _ () (PEctor Cspecified [pe''])) ->
         subst_pattern pat' pe'' expr
-    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEval (Vloaded (LVunspecified ty)))) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr _ () (PEval (Vloaded (LVunspecified ty)))) ->
         Just $ subst_pattern_val pat' (Vctype ty) expr
-    | (CaseCtor Cunspecified [pat'], Pexpr [] () (PEctor Cunspecified [pe''])) ->
+    | (CaseCtor Cunspecified [pat'], Pexpr _ () (PEctor Cunspecified [pe''])) ->
         subst_pattern pat' pe'' expr
     | (CaseCtor ctor pats, _) ->
         Nothing
@@ -1633,6 +1633,10 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         let () = Debug.warn [] (fun () -> "Core_aux.find_labeled_continuation assumes there are no Esave inside par()") in
         Nothing
     | Ewait _ ->
+        Nothing
+    | Eannot _ _ ->
+        (* NOTE: Eannot only appear at runtime, and inside an Ebound, where
+                 typing forbids labeled continuation bindings. *)
         Nothing
 (*
     | Eloc _ e ->
