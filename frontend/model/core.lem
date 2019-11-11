@@ -272,7 +272,11 @@ type generic_paction 'a 'bty 'sym =  (* memory actions with polarity *)
 
 
 type dyn_annotation =
-  list Mem.footprint
+  | DA_neg of nat * list nat * Mem.footprint (* the nat is its unique "exclusion ID", the list is its "exclusion set" *)
+  | DA_pos of list nat * Mem.footprint (* the list of nat is its "exclusions set" *)
+
+type dyn_annotations =
+  list dyn_annotation
 
 type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
@@ -297,7 +301,9 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epar of list (generic_expr 'a 'bty 'sym) (* cppmem-like thread creation *)
  (* This two only exists during the execution *)
  | Ewait of Mem_common.thread_id (* wait for thread termination *)
- | Eannot of dyn_annotation * generic_expr 'a 'bty 'sym
+  
+ | Eannot of dyn_annotations * generic_expr 'a 'bty 'sym
+ | Eexcluded of nat * generic_action 'a 'bty 'sym
 
 and generic_expr 'a 'bty 'sym = 
  | Expr of list annot * (generic_expr_ 'a 'bty 'sym)

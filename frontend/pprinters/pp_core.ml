@@ -100,7 +100,8 @@ let rec precedence_expr = function
   | Erun _
   | Epar _
   | Ewait _
-  | Eannot _ ->
+  | Eannot _
+  | Eexcluded _ ->
       None
 
   | Eif _ ->
@@ -627,7 +628,16 @@ let rec pp_expr expr =
         | Ewait tid ->
             pp_keyword "wait" ^^ P.parens (pp_thread_id tid)
         | Eannot (xs, e) ->
-            pp_keyword "annot(TODO)" ^^ P.parens (pp e)
+            let pp_dyn_annotations fps =
+              let pp_dyn_annotation = function
+                | DA_neg (n, excl, fp) ->
+                    "DA_neg(" ^ string_of_int n ^ ", " ^ "[" ^ String.concat ", " (List.map string_of_int excl) ^ "]" ^ ")"
+                | DA_pos (excl, fp) ->
+                    "DA_pos(" ^ "[" ^ String.concat ", " (List.map string_of_int excl) ^ "]" ^ ")"
+              in "[" ^ String.concat ", " (List.map pp_dyn_annotation fps) ^ "]" in
+            pp_keyword "annot" ^^ P.brackets (P.string (pp_dyn_annotations xs)) ^^ P.parens (pp e)
+        | Eexcluded (n, Action (_, _, act_)) ->
+            pp_keyword "excluded" ^^ P.brackets (!^ (string_of_int n)) ^^ P.parens (pp_action act_)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
         | Ebound (i, e) ->

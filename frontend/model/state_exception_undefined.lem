@@ -137,3 +137,10 @@ let inline update f =
 val        read: forall 'a 's 'msg. ('s -> 'a) -> stExceptUndefM 'a 's 'msg
 let inline read f =
   runSE (State_exception.read f)
+
+val stExceptUndef_undef:
+  forall 'a 's 'msg. Loc.t -> list Undefined.undefined_behaviour -> stExceptUndefM 'a 's 'msg
+let stExceptUndef_undef loc ubs =
+  State_exception.return (Undefined.undef loc ubs)
+let inline undef loc ubs =
+  stExceptUndef_undef loc ubs

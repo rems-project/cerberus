@@ -752,6 +752,8 @@ let core_thread_step2 mem_st file core_extern _ (*concur_sym_map*) current_tid (
   match (expr_, th_st.stack) with
     | (Eannot _ _, _) ->
         error "Core_run.core_thread_step2 ==> Eannot"
+    | (Eexcluded _ _, _) ->
+        error "Core_run.core_thread_step2 ==> Eexcluded"
 (*
     | (Eskip, Stack_empty) ->
         error "reached empty stack with an Eskip"

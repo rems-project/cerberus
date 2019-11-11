@@ -63,6 +63,8 @@ let rec sequentialise_expr (Expr annot expr_) =
         expr_
     | Eannot xs e ->
         Eannot xs (sequentialise_expr e)
+    | Eexcluded _ _ ->
+        expr_
   end
 
 
