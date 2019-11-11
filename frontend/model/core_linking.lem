@@ -123,8 +123,8 @@ let rec free_pexpr acc (Pexpr _ _ pe) =
       error "free_pexpr PEbmc_assume"
   end
 
-let free_paction acc (Paction _ (Action _ _ act)) =
-  match act with
+let free_action acc (Action _ _ act_) =
+  match act_ with
   | Create pe1 pe2 _ ->
       free_pexpr (free_pexpr acc pe1) pe2
   | CreateReadOnly pe1 pe2 pe3 _ ->
@@ -154,6 +154,9 @@ let free_paction acc (Paction _ (Action _ _ act)) =
  | LinuxRMW _ _ _ _ ->
       error "free_paction: LinuxRMW"
   end
+
+let free_paction acc (Paction _ act) =
+  free_action acc act
 
 let rec free_expr acc (Expr _ e) =
   match e with
@@ -208,6 +211,8 @@ let rec free_expr acc (Expr _ e) =
 
   | Eannot _ e ->
       free_expr acc e
+  | Eexcluded _ act ->
+      free_action acc act
   end
 
 let free acc = function

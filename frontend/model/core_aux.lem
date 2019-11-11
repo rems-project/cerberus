@@ -969,6 +969,8 @@ let rec subst_sym_expr sym cval (Expr annot expr_) =
        Eshow id (List.map (subst_sym_pexpr sym cval) es)
     | Eannot xs e ->
         Eannot xs (subst_sym_expr sym cval e)
+    | Eexcluded n act ->
+        Eexcluded n (subst_sym_action sym cval act)
 (*
     | Eloc loc e ->
         Eloc loc (subst_sym_expr sym cval e)
@@ -1236,6 +1238,9 @@ let rec unsafe_subst_sym_expr sym pe' (Expr annot expr_) =
        Eshow id (List.map (unsafe_subst_sym_pexpr sym pe') es)
     | Eannot xs e ->
         Eannot xs (unsafe_subst_sym_expr sym pe' e)
+    | Eexcluded n act ->
+        Eexcluded n (unsafe_subst_sym_action sym pe' act)
+
 (*
     | Eloc loc e ->
         Eloc loc (unsafe_subst_sym_expr sym pe' e)
@@ -1511,6 +1516,8 @@ let rec to_pure (Expr annot expr_) (*(expr : expr 'a)*) =
         Nothing
     | Eannot _ _ ->
         error "to_pure Eannot"
+    | Eexcluded _ _ ->
+        error "to_pure Eexcluded"
 (*
     | Eloc _ e ->
         to_pure e
@@ -1599,6 +1606,9 @@ let rec subst_wait tid v (Expr annot expr_) =
    | Ehave _ _ ->
        expr_
    | Eshow _ _ ->
+   | Eannot xs e ->
+       Eannot xs (subst_wait tid v e)
+   | Eexcluded _ _ ->
        expr_
 (*
    | Eloc loc e ->
@@ -1722,6 +1732,11 @@ let rec find_labeled_continuation sym (Expr annot expr_) =
         (* NOTE: Eannot only appear at runtime, and inside an Ebound, where
                  typing forbids labeled continuation bindings. *)
         Nothing
+    | Eexcluded _ _ ->
+        (* NOTE: Eexcluded only appear at runtime, and inside an Ebound, where
+                 typing forbids labeled continuation bindings. *)
+        Nothing
+
 (*
     | Eloc _ e ->
         find_labeled_continuation sym e
@@ -1802,6 +1817,13 @@ let rec find_labeled_continuation2_aux acc sym (Expr annot expr_) =
         acc
     | Eshow _ _ ->
         acc
+    | Eannot _ _ ->
+        (* NOTE: Typing forbids labeled continuation bindings inside annot() *)
+        acc
+    | Eexcluded _ _ ->
+        (* NOTE: Typing forbids labeled continuation bindings inside excluded() *)
+        acc
+
 (*
     | Eloc _ e ->
         find_labeled_continuation2_aux acc sym e
@@ -1974,6 +1996,9 @@ let rec collect_labeled_continuations (Expr annot expr_) =
     | Ehave _ _ ->
         Map.empty
     | Eshow _ _ ->
+    | Eannot _ _ ->
+        Map.empty
+    | Eexcluded _ _ ->
         Map.empty
 (*
     | Eloc loc e ->
@@ -2112,7 +2137,7 @@ let isConstrainedValue cval =
   end
 *)
 
-val mk_pure_e: pexpr -> expr unit
+val mk_pure_e: forall 'a. pexpr -> expr 'a
 let mk_pure_e pe =
   Expr [] (Epure pe)
 
@@ -2121,7 +2146,7 @@ let mk_skip_e =
   Expr [] (Epure (Pexpr [] () (PEval Vunit)))
 
 
-val mk_unseq_e: list (expr unit) -> expr unit
+val mk_unseq_e: forall 'a. list (expr 'a) -> expr 'a
 let mk_unseq_e es =
   Expr [] (Eunseq es)
 
@@ -2291,6 +2316,11 @@ let rec collect_saves_aux st (Expr annots expr_) =
     | Ehave _ _ ->
         st
     | Eshow _ _ ->
+    | Eannot _ _ ->
+        (* typing forbids "saves" inside a "annot()" *)
+        st
+    | Eexcluded _ _ ->
+        (* typing forbids "saves" inside a "excluded()" *)
         st
   end
 

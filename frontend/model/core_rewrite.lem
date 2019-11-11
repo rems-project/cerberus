@@ -234,6 +234,9 @@ let rec remove_skips (Expr annot expr_ as expr) =
     | Eannot xs e ->
         (* just traversing *)
         Expr annot (Eannot xs (remove_skips e))
+    | Eexcluded _ _ ->
+        (* unchanged *)
+        expr
   end
 
 
@@ -365,6 +368,9 @@ let rec remove_unseqs (Expr annot expr_ as expr) =
     | Eannot xs e ->
         (* just traversing *)
         Expr annot (Eannot xs (remove_unseqs e))
+    | Eexcluded _ _ ->
+        (* unchanged *)
+        expr
   end
 
 
@@ -582,6 +588,15 @@ let rec remove_dead_aux (Expr annot expr_ as expr) =
         Left expr
     | Eshow _ _ ->
         Left expr
+    | Eannot xs e ->
+        match remove_dead_aux e with
+          | Left e' ->
+              Left (Expr annot (Eannot xs e'))
+          | Right e' ->
+              Right (Expr annot (Eannot xs e'))
+        end
+    | Eexcluded _ _ ->
+        Left expr
   end
 
 let remove_dead expr =
@@ -620,8 +635,10 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
         match (flatten_seqs e1, flatten_seqs e2) with
           | (Expr annot1 (Ewseq pat1 e11 e12), e2') ->
               Expr annot1 (Ewseq pat1 e11 (flatten_seqs (Expr annot (Ewseq pat e12 e2'))))
+(*
           | (Expr annot1 (Esseq pat1 e11 e12), e2') ->
               Expr annot1 (Esseq pat1 e11 (flatten_seqs (Expr annot (Ewseq pat e12 e2'))))
+*)
           | (e1', e2') ->
               Expr annot (Ewseq pat e1' e2')
         end
@@ -630,8 +647,10 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
         flatten_seqs e2
     | Esseq pat e1 e2 ->
         match (flatten_seqs e1, flatten_seqs e2) with
+(* THIS IS WRONG, shouldn't lift a wseq past a sseq
           | (Expr annot1 (Ewseq pat1 e11 e12), e2') ->
               Expr annot1 (Ewseq pat1 e11 (flatten_seqs (Expr annot (Esseq pat e12 e2'))))
+*)
           | (Expr annot1 (Esseq pat1 e11 e12), e2') ->
               Expr annot1 (Esseq pat1 e11 (flatten_seqs (Expr annot (Esseq pat e12 e2'))))
           | (e1', e2') ->
@@ -658,6 +677,10 @@ let rec flatten_seqs (Expr annot expr_ as expr) =
     | Ehave _ _ ->
         expr
     | Eshow _ _ ->
+        expr
+    | Eannot xs e ->
+        Expr annot (Eannot xs (flatten_seqs e))
+    | Eexcluded _ _ ->
         expr
   end
 
@@ -968,6 +991,10 @@ let rec sequentialise_creates_kills (Expr annot expr_) =
         expr_
     | Eshow _ _ ->
         expr_
+    | Eannot xs e ->
+        Eannot xs (sequentialise_creates_kills e)
+    | Eexcluded _ _ ->
+        expr_
   end
 
 
@@ -1262,6 +1289,10 @@ let rec pure_propagation2 (Expr annot expr_ as expr) =
         expr
     | Eshow _ _ ->
         expr
+    | Eannot xs e ->
+        Expr annot (Eannot xs (pure_propagation2 e))
+    | Eexcluded _ _ ->
+        expr
   end
 
 
@@ -1455,6 +1486,10 @@ let rec simpl_case (Expr annot expr_ as expr) =
     | Ehave _ _ ->
         expr
     | Eshow _ _ ->
+        expr
+    | Eannot xs e ->
+        wrap $ Eannot xs (simpl_case e)
+    | Eexcluded _ _ ->
         expr
   end
 

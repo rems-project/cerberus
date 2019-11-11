@@ -1501,6 +1501,8 @@ let rec collect_labels env (Expr _ expr_) =
         E.return env
     | Eannot _ e ->
         collect_labels env e
+    | Eexcluded _ _ ->
+        E.return env
   end
 
 
@@ -1710,6 +1712,8 @@ and typecheck_expr tagDefs (env: typing_env) expected_bTy (Expr annot expr_) =
 
     | Eannot _ _ ->
         error "typecheck_expr, Eannot"
+    | Eexcluded _ _ ->
+        error "typecheck_expr, Eexcluded"
   end
 
 

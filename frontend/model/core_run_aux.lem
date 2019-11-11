@@ -51,8 +51,9 @@ type core_state = <|
 
 (* State of Core evaluator *)
 type core_run_state = <|
-  tid_supply:    Mem_common.thread_id;
-  aid_supply:    Cmm_csem.aid;
+  tid_supply:      Mem_common.thread_id;
+  aid_supply:      Cmm_csem.aid;
+  excluded_supply: nat;
   
   (* Pre-calculated map of labeled continuations (aka. save()).
      the map is over procedure symbols (NOTE: read-only) *)
@@ -86,8 +87,9 @@ let initial_core_state = <|
 |>
 
 let initial_core_run_state xs = <|
-  tid_supply=    0;
-  aid_supply=    0;
+  tid_supply=      0;
+  aid_supply=      0;
+  excluded_supply= 0;
   
   (*env=     [Map.empty];*)
   labeled= xs;
@@ -183,6 +185,10 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
       | Eshow _ _ ->
           (* no change *)
           expr_
+      | Eannot _ _ ->
+          error "Core_run_aux.add_to_sb, Eannot"
+      | Eexcluded _ _ ->
+          error "Core_run_aux.add_to_sb, Eexcluded"
     end
   else
     expr
@@ -278,6 +284,10 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
       | Eshow _ _ ->
           (* no change *)
           expr_
+      | Eannot _ _ ->
+          error "Core_run_aux.add_to_asw, Eannot"
+      | Eexcluded _ _ ->
+          error "Core_run_aux.add_to_asw, Eexcluded"
     end
   else
     expr

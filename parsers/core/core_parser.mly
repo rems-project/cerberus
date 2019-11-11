@@ -682,7 +682,8 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (Epar es)
    | Ewait _
-   | Eannot _ ->
+   | Eannot _
+   | Eexcluded _ ->
        assert false
    | Epack (id, pes) ->
        Eff.mapM symbolify_pexpr pes >>= fun pes ->
@@ -817,7 +818,8 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Epar _es ->
         Eff.mapM_ register_labels _es
     | Ewait _
-    | Eannot _ ->
+    | Eannot _ 
+    | Eexcluded _ ->
         assert false
 
 

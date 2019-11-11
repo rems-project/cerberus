@@ -434,17 +434,17 @@ module Concrete : Memory = struct
     last_used= None;
   }
   
+  (* TODO *)
   type footprint =
-    (* base address, size *)
-    | FP of address * N.num
+      (* base address, size *)
+    | FP of [`W | `R] * address * N.num
   
-  let check_overlap (FP (b1, sz1)) (FP (b2, sz2)) =
-    if N.equal b1 b2 && N.equal sz1 sz2 then
-      ExactOverlap
-    else if N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1) then
-      Disjoint
-    else
-      PartialOverlap
+  let do_overlap (FP (k1, b1, sz1)) (FP (k2, b2, sz2)) =
+    match k1, k2 with
+      | `R, `R ->
+          false
+      | _ ->
+          not (N.(less_equal (add b1 sz1) b2) || N.(less_equal (add b2 sz2) b1))
   
   type 'a memM = ('a, mem_error, integer_value mem_constraint, mem_state) Eff.eff
   
@@ -1401,7 +1401,7 @@ module Concrete : Memory = struct
         return ()
       end >>= fun () ->
       update (fun st -> { st with last_used= alloc_id_opt }) >>= fun () ->
-      let fp = FP (addr, (N.of_int (sizeof ty))) in
+      let fp = FP (`R, addr, (N.of_int (sizeof ty))) in
       begin match bs' with
         | [] ->
             Debug_ocaml.print_debug 10(*KKK*) [] (fun () ->
@@ -1511,7 +1511,7 @@ module Concrete : Memory = struct
                     funptrmap= funptrmap; }
         end >>= fun () ->
         print_bytemap ("AFTER STORE => " ^ Location_ocaml.location_to_string loc) >>= fun () ->
-        return (FP (addr, (N.of_int (sizeof ty)))) in
+        return (FP (`W, addr, (N.of_int (sizeof ty)))) in
       match (prov, ptrval_) with
         | (_, PVnull _) ->
             fail (MerrAccess (loc, StoreAccess, NullPtr))

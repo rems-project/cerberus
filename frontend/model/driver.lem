@@ -767,7 +767,7 @@ let rec drive_core_thread tid =
 
 
 
-val     drive_core_thread2: Mem.thread_id -> driverM unit
+val     drive_core_thread2: Mem.thread_id -> driverM (maybe Core_reduction.core_step2)
 let rec drive_core_thread2 tid =
   ND.get >>= fun dr_st ->
   let th_info = match List.lookup tid dr_st.core_state.Core_run.thread_states with
@@ -797,8 +797,8 @@ let rec drive_core_thread2 tid =
             dr_step_counter= dr_st.dr_step_counter + 1;
           |>) >>= fun () ->
           drive_core_thread2 parent_tid )
-    | Core_reduction.Step_blocked2 ->
-        (SK_misc ["blocked"], ND.return ())
+    | (Core_reduction.Step_blocked2 as step) ->
+        (SK_misc ["blocked"], ND.return (Just step))
     | Core_reduction.Step_done2 cval ->
         ( SK_done
         , get_thread_states >>= fun th_sts ->
@@ -820,7 +820,8 @@ let rec drive_core_thread2 tid =
             <| dr_st with
               core_state= core_st';
               dr_step_counter= dr_st.dr_step_counter + 1;
-            |>))
+            |>) >>= fun () ->
+          ND.return Nothing)
     
     | Core_reduction.Step_eval2 debug_str step_m ->
         ( SK_eval debug_str
@@ -841,7 +842,7 @@ let rec drive_core_thread2 tid =
             | _ ->
                 error "TODO: drive_core_thread2, non TSK_Misc"
           end >>= fun () ->
-
+          
           begin
             if debug_str <> "Eloc" then
             (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
@@ -849,8 +850,7 @@ let rec drive_core_thread2 tid =
             else
               ND.return ()
           end >>= fun () ->
-
-
+          
           ND.update (fun dr_st -> <| dr_st with
             core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
             dr_step_counter= dr_st.dr_step_counter + 1
@@ -859,9 +859,12 @@ let rec drive_core_thread2 tid =
     
     | Core_reduction.Step_error2 debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
-    | Core_reduction.Step_action_request2 str _ _ _ ->
+    | (Core_reduction.Step_action_request2 str _ _ _ as step) ->
         ( SK_action_request str
-        , ND.return () )
+        , ND.return (Just step) )
+    | (Core_reduction.Step_memop_request2 _ _ _ _ as step) -> 
+        ( SK_memop_request
+        , ND.return (Just step) )
   end) (Core_reduction.step_ctx dr_st.layout_state dr_st.core_file dr_st.core_extern tid th_info)
 
 
@@ -883,14 +886,15 @@ let rec drive_core_thread2 tid =
 
 
 (* perform drive_core_thread for all the core threads *)
-val drive_core_threads: unit -> driverM unit
+val drive_core_threads: unit -> driverM (list (Mem.thread_id * maybe Core_reduction.core_step2))
 let drive_core_threads () =
   ND.get >>= fun dr_st ->
-  ND.mapM_ (fun (tid, _) ->
+  ND.mapM (fun (tid, _) ->
     ND.print_debug 9 [Debug.DB_driver] (fun () ->
       "BEFORE drive_core_thread, in drive_core_threads"
     ) >>= fun () ->
-    drive_core_thread2 tid
+    drive_core_thread2 tid >>= fun step ->
+    ND.return (tid, step)
   ) dr_st.core_state.Core_run.thread_states
 
 
@@ -1356,7 +1360,7 @@ let action_request_sequential2 loc tid aid = function
       liftMem (Mem.prefix_of_pointer ptr_val)  >>= fun pref       ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid mval) dr_st.core_state;
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval) dr_st.core_state;
           trace= ME_load loc pref lvalue_ty ptr_val mval :: dr_st.trace
         |>
       )
@@ -1369,7 +1373,7 @@ let action_request_sequential2 loc tid aid = function
       liftMem (Mem.prefix_of_pointer ptr_val) >>= fun pref ->
       ND.update (fun dr_st ->
         <| dr_st with
-          core_state= Core_run.update_thread_state tid (mk_th_st' aid) dr_st.core_state;
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp) dr_st.core_state;
           trace= ME_store loc pref lvalue_ty is_locking ptr_val mem_val :: dr_st.trace
         |>
       )
@@ -1435,6 +1439,107 @@ let rec driver2 with_concurrency =
   | Core_reduction.Step_action_request2 _ loc tid request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
+
+  | Core_reduction.Step_memop_request2 memop cvals tid mk_th_st ->
+      match (memop, cvals) with
+        | (Mem_common.Ptrdiff, [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.diff_ptrval ty ptr_val1 ptr_val2) >>= fun ival ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
+        
+        | (Mem_common.IntFromPtr, [Core.Vctype ref_ty; Core.Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Core.Vobject (Core.OVpointer ptr_val)]) ->
+            liftMem (Mem.intcast_ptrval ref_ty ity ptr_val) >>= fun ival ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger ival)))
+        
+        | (Mem_common.PtrFromInt, [Core.Vctype ty; Core.Vctype ref_ty; Core.Vobject (Core.OVinteger ival)]) ->
+            liftMem (Mem.ptrcast_ival ty ref_ty ival) >>= fun ptrval ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer ptrval)))
+        
+        | (Mem_common.PtrValidForDeref, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptr_val)]) ->
+            liftMem (Mem.validForDeref_ptrval ref_ty ptr_val) >>= fun is_valid ->
+            ND.return (mk_th_st (if is_valid then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrEq, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            ND.print_debug 2 [Debug.DB_driver] (fun () -> "PtrEq") >> (* DEBUG *)
+            liftMem (Mem.eq_ptrval ptr_val1 ptr_val2) >>= fun is_eq ->
+            ND.return (mk_th_st (if is_eq then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrNe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.ne_ptrval ptr_val1 ptr_val2) >>= fun is_ne ->
+            ND.return (mk_th_st (if is_ne then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrLt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.lt_ptrval ptr_val1 ptr_val2) >>= fun is_lt ->
+            ND.return (mk_th_st (if is_lt then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrGt, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.gt_ptrval ptr_val1 ptr_val2) >>= fun is_gt ->
+            ND.return (mk_th_st (if is_gt then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrLe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.le_ptrval ptr_val1 ptr_val2) >>= fun is_le ->
+            ND.return (mk_th_st (if is_le then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.PtrGe, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2)]) ->
+            liftMem (Mem.ge_ptrval ptr_val1 ptr_val2) >>= fun is_ge ->
+            ND.return (mk_th_st (if is_ge then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.Memcpy, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
+                               Core.Vobject (Core.OVinteger size_ival)]) ->
+            liftMem (Mem.memcpy ptr_val1 ptr_val2 size_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+        
+        | (Mem_common.Memcmp, [Core.Vobject (Core.OVpointer ptr_val1); Core.Vobject (Core.OVpointer ptr_val2);
+                               Core.Vobject (Core.OVinteger size_ival)]) ->
+            liftMem (Mem.memcmp ptr_val1 ptr_val2 size_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
+        
+        | (Mem_common.PtrWellAligned, [Core.Vctype ref_ty; Core.Vobject (Core.OVpointer ptrval)]) ->
+            liftMem (Mem.isWellAligned_ptrval ref_ty ptrval) >>= fun b ->
+            ND.return (mk_th_st (if b then Core.Vtrue else Core.Vfalse))
+        
+        | (Mem_common.Realloc, [Core.Vobject (Core.OVinteger align_ival); Core.Vobject (Core.OVpointer old_ptr);
+                               Core.Vobject (Core.OVinteger size_ival)]) ->
+            liftMem (Mem.realloc tid align_ival old_ptr size_ival) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
+        | (Mem_common.PtrArrayShift, [Core.Vobject (Core.OVpointer ptrval); Core.Vctype ty; Core.Vobject (Core.OVinteger n_ival)]) ->
+            liftMem (Mem.eff_array_shift_ptrval ptrval ty n_ival) >>= fun res ->
+            ND.update (fun dr_st ->
+              <| dr_st with
+                trace= ME_eff_array_shift_ptrval ptrval ty n_ival res :: dr_st.trace
+              |>
+            ) >>
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
+        | (Mem_common.Va_start, [Core.Vlist _ ty_cvals]) ->
+            let ty_ptrs =
+              List.map (function
+                | Core.Vtuple [Core.Vctype ty; Core.Vobject (Core.OVpointer ptr)] -> (ty, ptr)
+                | _ -> error "va_start"
+              end) ty_cvals in
+            liftMem (Mem.va_start ty_ptrs) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
+
+        | (Mem_common.Va_copy, [Core.Vobject (Core.OVinteger va)]) ->
+            liftMem (Mem.va_copy va) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVinteger res)))
+
+        | (Mem_common.Va_arg, [Core.Vobject (Core.OVinteger va); Core.Vctype ty]) ->
+            liftMem (Mem.va_arg va ty) >>= fun res ->
+            ND.return (mk_th_st (Core.Vobject (Core.OVpointer res)))
+
+        | (Mem_common.Va_end, [Core.Vobject (Core.OVinteger va)]) ->
+            liftMem (Mem.va_end va) >>
+            ND.return (mk_th_st Core.Vunit)
+
+        | _ ->
+            error ("WIP memop request: " ^ show memop ^ " ==> " ^ Pp.stringFromCore_value (Core.Vtuple cvals) )
+      end >>= fun th_st' ->
+      ND.update (fun dr_st ->
+        update_core_state (Core_run.update_thread_state tid th_st' dr_st.core_state) dr_st
+      ) >>
+      driver2 with_concurrency
+
   | Core_reduction.Step_tau2 _ d_info _ ->
 (*      error ("FOUND A TAU: '" ^ show d_info ^ "'") *)
       error "FOUND AN TAU"
@@ -1442,12 +1547,14 @@ let rec driver2 with_concurrency =
 (*      error ("FOUND AN EVAL: '" ^ show d_info ^ "'") *)
       error "FOUND AN EVAL"
   | Core_reduction.Step_done2 cval ->
-      ND.print_debug 3 [Debug.DB_driver] (fun () -> "driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval) >> (* DEBUG *)
+      ND.print_debug 3 [Debug.DB_driver] (fun () ->
+        "driver.process_core_step ==> Step_done with value: " ^ Pp.stringFromCore_value cval
+      ) >> (* DEBUG *)
       ND.return ()
   | _ ->
       error "Driver.driver2, wrong Step_"
   end in
-  drive_core_threads () >>
+  drive_core_threads () >>= fun tid_steps ->
   ND.get >>= fun post_core_dr_st ->
   
     (* TODO: hackish *)
@@ -1465,16 +1572,62 @@ let rec driver2 with_concurrency =
        switch to exhaustive mode and also compute the steps of the
        other threads. *)
     
+(*
     ND.bindExhaustive (ND.pick (SK_misc ["driver 2"]) non_blocked_th_sts)
                       (fun (tid, th_info) ->
                        ND.pick (SK_misc ["driver 3"]) $
                         Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
+*)
+    ND.bindExhaustive
+      (ND.pick (SK_misc ["driver 2"]) tid_steps)
+      (fun (tid, step_opt) ->
+         let () = Debug.print_debug 3 [] (fun () ->
+           show tid ^ " ==> " ^
+           match step_opt with
+             | Nothing ->
+                 "Nothing"
+             | Just (Core_reduction.Step_eval2 _ _) ->
+                 "Step_eval2"
+             | Just (Core_reduction.Step_tau2 _ _ _) ->
+                 "Step_tau2"
+             | Just (Core_reduction.Step_action_request2 _ _ _ _) ->
+                 "Step_action_request2"
+             | Just (Core_reduction.Step_memop_request2 _ _ _ _) ->
+                 "Step_memop_request2"
+             | Just Core_reduction.Step_blocked2 ->
+                 "Step_blocked2"
+             | Just (Core_reduction.Step_error2 _) ->
+                 "Step_error2"
+             | Just (Core_reduction.Step_thread_done2 _ _) ->
+                 "Step_thread_done2"
+             | Just (Core_reduction.Step_done2 _) ->
+                 "Step_done2"
+           end) in
+         match step_opt with
+           | Just step ->
+               process_core_step2 step
+           | Nothing ->
+               (* TODO: hack hack, should just exit *)
+               ND.return ()
+         end
+(*
+         ND.pick (SK_misc ["driver 3"]) begin
+           ND.
+         end
+         
+         
+                       
+                        Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info
+*)
+)
+
 
    else
     ND.pick (SK_misc ["driver 4"]) non_blocked_th_sts >>= fun (tid, th_info) ->
     ND.pick (SK_misc ["driver 5"]) (Core_reduction.step_ctx post_core_dr_st.layout_state post_core_dr_st.core_file post_core_dr_st.core_extern tid th_info)
-  ) >>=
+>>=
       process_core_step2
+  )
 
 
 
