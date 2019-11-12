@@ -57,59 +57,35 @@ module SEU = State_exception_undefined
 
 (* TODO: duplicate from Core_run *)
 module E = struct
-  let core_run_return =
-    SEU.return
-  let inline return = core_run_return
-  
-  let inline undef = SEU.undef
-  let step_eval_pexprs th_st core_extern mem_st file pes =
-    let () = Debug.print_debug 5 [] (fun () ->
-      "CALLING Core_run.step_eval_pexprs (Core_eval.step_eval_pexpr, hasConstrained= false)"
-    ) in
-    SEU.runEU (EU.mapM (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false) pes)
-
-  let core_run_step_eval_pexpr th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 5 [] (fun () ->
-      "CALLING Core_run.step_eval_pexpr (Core_eval.step_eval_pexpr, hasConstrained= false)"
-    ) in
-    SEU.runEU (Core_eval.step_eval_pexpr 0 th_st.current_loc core_extern th_st.env (Just mem_st) file false pe)
-  let inline step_eval_pexpr = core_run_step_eval_pexpr
-  
-  let core_run_eval_pexpr th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 5 [] (fun () ->
-      "CALLING Core_run.eval_pexpr (Core_eval.eval_pexpr_aux_broken)"
-    ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux_broken th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
-  let inline eval_pexpr = core_run_eval_pexpr
-  
-  let eval_pexpr2 th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
-    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
-  
-  let wrapped_eval_pexpr2 th_st core_extern mem_st file pe =
-    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.wrapped_eval_pexpr2" ) in
-    (* TODO: it would be better to just call eval_pexpr2, but
-       Lem generates buggy OCaml ... *)
-    SEU.bind (SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)) function
-      | Left pe' ->
-          SEU.return pe'
-      | Right cval ->
-          SEU.return (Core_aux.mk_value_pe cval)
-    end
-  
-  let fresh_action_id =
-    SEU.runS Core_run.fresh_action_id'
+  let inline return = SEU.return
+  let inline undef  = SEU.undef
+  let inline mapM   = SEU.mapM
   
   let fresh_excluded_id =
     SEU.runS (fun run_st ->
     let n = run_st.excluded_supply in
     (n, <| run_st with excluded_supply= n+1 |>)
   )
-  let mapM = SEU.mapM
+  
+  
+  let eval_pexpr2 th_st core_extern mem_st file pe =
+    let () = Debug.print_debug 5 [] (fun () -> "CALLING Core_run.eval_pexpr2" ) in
+    SEU.runEU (Core_eval.eval_pexpr_aux2 th_st.current_loc core_extern th_st.env (Just mem_st) file pe)
 end
 
 let inline (>>=) = SEU.bind
 let inline (<$>) = SEU.fmap
+
+let rec full_eval_pexpr th_st core_extern mem_st file pe =
+  E.eval_pexpr2 th_st core_extern mem_st file pe >>= (function
+    | Left pe' ->
+        full_eval_pexpr th_st core_extern mem_st file pe'
+    | Right cval ->
+        E.return cval
+  end)
+
+
+
 
 (* ********************************************************************************************** *)
 
@@ -351,13 +327,6 @@ let one_step eval_pexpr env (Expr annots expr_ as expr) =
   end
 
 
-type context (* core_run_annotation unit Symbol.sym *) =
-  | CTX
-  | Cunseq of list Annot.annot * list (Core.expr core_run_annotation) * context * list (Core.expr core_run_annotation)
-  | Cwseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
-  | Csseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
-  | Cannot of list Annot.annot * Core.dyn_annotations * context
-  | Cbound of list Annot.annot * context
 
 let rec stringFromContext ctx =
   match ctx with
@@ -522,9 +491,13 @@ type action_request2 'a =
   | KillRequest2 of (* is_dynamic *)bool * Mem.pointer_value * (Cmm.aid -> 'a)
 
 
-
+type runstate_step_kind =
+  | RSK_eval
+  | RSK_tau
 
 type core_step2 =
+  | Step_with_runstate2 of string * core_runM thread_state
+
   | Step_eval2 of string * core_runM thread_state
   | Step_tau2 of string * Core_run.core_tau_step_kind * thread_state
   | Step_action_request2 of string * Loc.t * (* set Cmm.aid * set Cmm.aid * set Cmm.aid * *)
@@ -949,6 +922,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
       | Right cval ->
           E.return (Caux.mk_value_pe cval)
     end in
+  let full_eval_pexpr pe =
+    full_eval_pexpr th_st core_extern mem_st file pe in
   List.map (function
     | (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval cval)))) ->
         match th_st.stack with
@@ -956,7 +931,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               (*error "impossible ==> step_ctx ctx = CTX and stack = Stack_empty"*)
               (* TODO: this indirection is silly... *)
               Step_done2 cval
-          | Stack_cons _ [] Stack_empty ->
+          | Stack_cons2 _ CTX Stack_empty ->
               (* reached the end of the execution of a thread. *)
               match parent_tid_opt with
                 | Just parent_tid ->
@@ -971,7 +946,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                     (* this was the startup thread *)
                     Step_done2 cval
               end
-          | Stack_cons current_proc_opt [] (Stack_cons parent_proc_opt cont sk') ->
+          | Stack_cons2 current_proc_opt CTX (Stack_cons2 parent_proc_opt caller_ctx sk') ->
               let () = Debug.print_debug 3 [] (fun () ->
                 "TODO: end of procedure"
               ) in
@@ -994,8 +969,8 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       error "end of proc, found an empty Core_run env"
                   | _ :: env' ->
                       <| th_st with
-                        arena= apply_continuation cont (Expr e_annots (Epure (Caux.mk_value_pe cval)));
-                        stack= Stack_cons parent_proc_opt [] sk';
+                        arena= apply_ctx caller_ctx (Expr e_annots (Epure (Caux.mk_value_pe cval)));
+                        stack= Stack_cons2 parent_proc_opt CTX sk';
                         env= env' |>
                 end
               end
@@ -1149,14 +1124,129 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
               end
           | Eexcluded n act ->
               process_action (Just n)(*excluded*) (fun z -> Eexcluded n z) act
-          | Eccall _ _ _ _ ->
-              error "WIP: CCALL"
+          | Eccall call_annots ty pe pes ->
+              Step_eval2 "Eccall" begin
+                full_eval_pexpr pe >>= function
+                  | Vloaded (LVspecified (OVpointer pv)) ->
+                      E.mapM full_eval_pexpr pes >>= fun cvals ->
+                      let case_funptrval psym =
+                        let mem_values =
+                          match Map.lookup psym file.funinfo with
+                            | Just (_, param_tys, _, _) ->
+                                List.map (fun (ty, cval) ->
+                                  match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
+                                    | Just mval -> mval
+                                    | Nothing -> error "Eccall memvalue"
+                                  end) $ List.zip (List.map snd param_tys) cvals
+                            | Nothing ->
+                                error $ "Eccall : function " ^ show psym ^ " not found"
+                          end in
+                        SEU.runEU (
+                          Exception.bind (Core_run.call_proc core_extern file psym cvals)
+                            EU.return
+                        ) >>= fun (proc_env, expr) ->
+                        E.return <| th_st with
+                          arena= expr;
+(* KKK                          stack= push_empty_continuation (Just psym) th_st.stack; *)
+                          stack= Stack_cons2 (Just psym) CTX (match th_st.stack with Stack_cons2 sym_opt CTX sk' -> Stack_cons2 sym_opt ctx sk' end);
+                          exec_loc= push_exec_loc psym th_st.exec_loc;
+                          env= proc_env :: th_st.env
+                        |>
+(*
+                      Step_tau "Eccall" (TSK_Ccall psym mem_values) (
+                        SEU.runEU (
+                          Exception.bind (call_proc core_extern file psym cvals)
+                            EU.return
+                        ) >>= fun (proc_env, expr) ->
+                        (* TODO: HACK here we always annotate the action as being positive, I'm pretty sure this is wrong *)
+                        let a_expr = add_to_sb (Set.map (fun z -> (Pos, z)) annots.sb_before) (* TODO: remove for sequential !!! *) expr in
+
+                        E.return <| th_st with
+                          arena= a_expr;
+                          stack= push_empty_continuation (Just psym) sk;
+                          exec_loc= push_exec_loc psym th_st.exec_loc;
+                          env= proc_env :: th_st.env
+                        |>
+                      )
+*)
+                      in
+                      Mem.case_ptrval pv
+                        (fun _ -> error "null function pointer")
+                        case_funptrval
+                      (fun _ addr ->
+                        (* TODO: not sure about this case! it happens when calling a function pointer casted to void* via: ((void ( * )(void))p)(); *)
+                        match Mem.case_funsym_opt mem_st pv with
+                          | Just sym ->
+                              case_funptrval sym
+                          | None ->
+                              error (show addr ^ " does not point to a function (Eccall)")
+                        end)
+                      (fun _ -> error "function pointer has an unspecified value")
+
+
+
+
+                  | _ ->
+                      error "Eccall illtyped first operand"
+                end
+              end
+                
+(*
+              match valueFromPexpr pe with
+                | Just (Vloaded (LVspecified (OVpointer pv))) ->
+(*
+                    let case_funptrval psym =
+                      match valueFromPexprs pes with
+                        | Just cvals ->
+                            
+                        | Nothing ->
+                            Step_eval2 "Eccall" begin
+                              E.mapM evE.step_eval_pexprs th_st core_extern mem_st file pes >>= fun pes' ->
+                        E.return <| th_st with arena= Expr arena_annots (Eccall annots ty pe pes') |>
+                            end
+                      end in
+*)
+                    error "WIP: CCALL"
+                | Just cval ->
+                    Step_error2 begin
+                      Loc.stringFromLocation th_st.current_loc ^
+                      " the first argument of pcall() must evaluate to a cfunction, found: " ^
+                      Pp.stringFromCore_value cval
+                    end
+                | Nothing ->
+                    Step_eval2 "Eccall" begin
+                      eval_pexpr pe >>= fun pe' ->
+                      E.return (wrap_expr (Expr e_annots (Eccall call_annots ty pe pes)))
+                    end
+              end
+*)
           | Eproc _ _ _ ->
               error "WIP: PROC"
           | End es ->
-              error "WIP: SAVE"
-          | Erun _ _ _ ->
-              error "WIP: RUN"
+              error "WIP: ND"
+          | Erun run_annots sym pes ->
+              let Stack_cons2 (Just current_proc) _ _ = th_st.stack in
+              Step_eval2 "Erun" begin
+                SEU.read (fun st ->
+                  let proc_sym = match Map.lookup current_proc core_extern with
+                    | Just proc_sym -> proc_sym
+                    | Nothing -> current_proc
+                  end in
+                  Maybe.bind (Map.lookup proc_sym st.labeled) (Map.lookup sym)
+                ) >>= function
+                  | Nothing ->
+                      error ("Erun couldn't resolve label: `" ^ show sym ^
+                             "' for procedure `" ^ show current_proc ^ "'")
+                  | Just (syms, cont_expr) ->
+                      let cont_expr' = List.foldl (fun acc (sym, pe) ->
+                        unsafe_subst_sym_expr sym pe acc
+                      ) cont_expr (List.zip syms pes) in
+                      E.return <| th_st with
+                        arena= cont_expr';
+(*                        stack= push_empty_continuation (Just current_proc) sk;*) (* TODO check *)
+                     |>
+                end
+              end
           | Epar es ->
               error "WIP: PAR"
           | Ewait tid ->

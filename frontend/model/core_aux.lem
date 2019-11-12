@@ -1621,29 +1621,6 @@ end
 
 
 
-let subst_wait_continuation_element tid v = function
-  | Kunseq annots es1 es2 ->
-      Kunseq annots (List.map (subst_wait tid v) es1) (List.map (subst_wait tid v) es2)
-  | Kwseq annots syms_opt e2 ->
-      Kwseq annots syms_opt (subst_wait tid v e2)
-  | Ksseq annots syms_opt e2 ->
-      Ksseq annots syms_opt (subst_wait tid v e2)
-(*
-  | Ktry str_es ->
-      Ktry (List.map (fun (str, e) -> (str, subst_wait tid v e)) str_es)
-*)
-end
-
-let subst_wait_continuation tid v cont =
-  List.map (subst_wait_continuation_element tid v) cont
-
-let rec subst_wait_stack tid v = function
-  | Stack_empty ->
-      Stack_empty
-  | Stack_cons sym_opt cont sk ->
-      Stack_cons sym_opt
-        (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
-end
 
 
 let rec find_labeled_continuation sym (Expr annot expr_) =
@@ -1849,89 +1826,6 @@ let find_labeled_continuation2 sym e =
 
 
 
-val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
-let apply_continuation cont expr =
-  let f _cont (Expr annot _ as expr) =
-    match _cont with
-      | Kwseq annots pat e2 ->
-          Expr annots (Ewseq pat expr e2)
-      | Ksseq annots pat e2 ->
-          Expr annots (Esseq pat expr e2)
-      | Kunseq annots es1 es2 ->
-          Expr annots (Eunseq $ es1 ++ (expr :: es2))
-(*
-      | Ktry str_es ->
-          Etry expr str_es
-*)
-    end in
-  foldl (fun acc x -> f x acc) expr cont
-
-
-(* Functions on continuation and stacks *)
-val empty_stack: forall 'a. stack 'a
-let empty_stack =
-  Stack_empty
-
-val is_empty_stack: forall 'a. stack 'a -> bool
-let is_empty_stack = function
-  | Stack_empty ->
-      true
-  | _ ->
-      false
-end
-
-
-
-val push_empty_continuation: forall 'a. maybe Symbol.sym -> stack 'a -> stack 'a
-let push_empty_continuation sym_opt sk =
-  Stack_cons sym_opt [] sk
-
-val reset_continuation: forall 'a. stack 'a -> stack 'a
-let reset_continuation = function
-  | Stack_empty ->
-      (* TODO: are should this fail, just to catch ill-uses? *)
-      Stack_empty
-  | Stack_cons sym_opt cont sk ->
-      Stack_cons sym_opt [] sk
-end
-
-val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_cause
-let pop_stack = function
-  | Stack_empty ->
-      Exception.fail (Found_empty_stack "pop_stack")
-  | Stack_cons _ cont sk ->
-      Exception.return (cont, sk)
-end
-
-val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
-let pop_continuation_element = function
-  | Stack_empty ->
-      Exception.fail (Found_empty_stack "pop_continuation_element")
-  | Stack_cons _ [] _ ->
-      Exception.fail Reached_end_of_proc
-  | Stack_cons sym_opt (cont_elem :: cont) sk ->
-      Exception.return (cont_elem, Stack_cons sym_opt cont sk)
-end
-
-
-val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
-let push_continuation_element cont_elem = function
-  | Stack_empty ->
-      Exception.fail (Found_empty_stack "push_continuation_element")
-  | Stack_cons sym_opt cont sk ->
-      Exception.return (Stack_cons sym_opt (cont_elem :: cont) sk)
-end
-
-
-
-val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
-let append_to_current_continuation cont_elem = function
-  | Stack_empty ->
-      (* A procedure need to currently be running to append *)
-      Exception.fail (Found_empty_stack "append_to_current_continuation")
-  | Stack_cons sym_opt cont sk ->
-      Exception.return $ Stack_cons sym_opt (cont_elem :: cont) sk
-end
 
 
 val unsafe_subst_sym_fun_map: forall 'a. Symbol.sym -> pexpr -> fun_map 'a -> fun_map 'a
@@ -2236,8 +2130,8 @@ let add_attrs attrs (Expr annot expr_ as expr) =
   end
 
 type collect_saves_state 'a = <|
-  tmp_acc:    Core.labeled_continuations 'a;
-  closed_acc: Core.labeled_continuations 'a;
+  tmp_acc:    map Symbol.sym (list Symbol.sym * Core.expr 'a); (*Core.labeled_continuations 'a; *)
+  closed_acc: map Symbol.sym (list Symbol.sym * Core.expr 'a); (*Core.labeled_continuations 'a; *)
 |>
 
 let empty_saves = <| tmp_acc= Map.empty; closed_acc= Map.empty |>
@@ -2328,7 +2222,7 @@ let rec collect_saves_aux st (Expr annots expr_) =
         st
   end
 
-val collect_saves: forall 'a. expr 'a -> labeled_continuations 'a
+val collect_saves: forall 'a. expr 'a -> map Symbol.sym (list Symbol.sym * expr 'a) (*Core.labeled_continuations 'a *)
 let collect_saves expr =
   let st = collect_saves_aux <| tmp_acc= Map.empty; closed_acc= Map.empty |> expr in
   Map.(union) st.tmp_acc st.closed_acc
@@ -2455,7 +2349,7 @@ let m_collect_saves expr =
 
 import Map_extra
 
-val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (labeled_continuations 'a)
+val collect_labeled_continuations_NEW: forall 'a. file 'a -> map Symbol.sym (map Symbol.sym (list Symbol.sym * expr 'a) (*Core.labeled_continuations 'a *))
 let collect_labeled_continuations_NEW file =
 (*  let xs =  *)
   Map_extra.fold (fun fun_sym decl acc ->

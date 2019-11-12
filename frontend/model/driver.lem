@@ -809,7 +809,7 @@ let rec drive_core_thread2 tid =
           ND.update (fun dr_st ->
             let core_st' = Core_run.update_thread_state tid
               <| Core_run_aux.arena= Core.Expr [] (Core.Epure (Core_aux.mk_value_pe cval));
-                 Core_run_aux.stack= Core.Stack_empty;
+                 Core_run_aux.stack= Core_run.Stack_empty;
                  Core_run_aux.errno= Mem.null_ptrval Ctype.signed_int;
                  Core_run_aux.env= th_st.Core_run_aux.env;
                 (* Dummy locations *)
@@ -839,6 +839,11 @@ let rec drive_core_thread2 tid =
           match tsk with
             | Core_run.TSK_Misc ->
                 ND.return ()
+            | Core_run.TSK_Return sym mval_opt ->
+                ND.update $ fun dr_st ->
+                <| dr_st with
+                  trace= ME_function_return sym mval_opt :: dr_st.trace
+                |>
             | _ ->
                 error "TODO: drive_core_thread2, non TSK_Misc"
           end >>= fun () ->
@@ -1810,7 +1815,7 @@ let driver_globals with_concurrency file =
   spawn_thread Nothing <|
     (* NOTE: the pure(unit) is just a placeholder, the thread is given its actual state later *)
     Core_run.arena=  Core.Expr [] (Core.Epure (Core.Pexpr [] () (Core.PEval Core.Vunit)));
-    Core_run.stack=  Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
+    Core_run.stack=  Core_run.push_empty_continuation Nothing Core_run.empty_stack;
     Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
     Core_run.env= [Map.empty];
     Core_run.current_loc= Loc.unknown;
@@ -1837,7 +1842,7 @@ let driver_globals with_concurrency file =
           (* the previously evaluated globals are substituted in the body of the
              global we are about to evaluate *)
           Core_run.arena= expr;
-          Core_run.stack= Core_aux.push_empty_continuation Nothing Core_aux.empty_stack;
+          Core_run.stack= Core_run.push_empty_continuation Nothing Core_run.empty_stack;
           Core_run.env= th_st.Core_run.env;
     (*      Core_run.labels= Map.empty; *)
           Core_run.errno=  Mem.null_ptrval Ctype.signed_int;
@@ -2080,7 +2085,7 @@ let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs
           | [(_, (_, th_st))] ->
               update_thread_state tid0 <|
                 Core_run.arena= expr;
-                Core_run.stack= Core_aux.push_empty_continuation (Just main_sym) Core_aux.empty_stack;
+                Core_run.stack= Core_run.push_empty_continuation (Just main_sym) Core_run.empty_stack;
                 Core_run.errno= errno_ptr_val;
                 Core_run.current_loc= Loc.other "Driver.drive";
                 Core_run.exec_loc= Core_run.ELoc_normal [main_sym];

@@ -439,24 +439,7 @@ declare {coq} rename type impl = impl_ (* workaround for Lem issue #74 *)
  
  
  
- (* runtime stuff *)
-type continuation_element 'a =
-  | Kunseq of list annot * list (expr 'a) * list (expr 'a)
-  | Kwseq  of list annot * pattern * expr 'a
-  | Ksseq  of list annot * pattern * expr 'a
- (*  | Ktry   list (string * expr 'a) *)
 
-type continuation 'a = list (continuation_element 'a)
-(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
-type labeled_continuations 'a = map Symbol.sym (list Symbol.sym * expr 'a)
-
-
-type stack 'a =
-  | Stack_empty
-    (* the symbol is that of the procedure being executed *)
-  | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
- 
- 
  
  
  

@@ -1,8 +1,8 @@
 open import Pervasives Utils Show Core
 import Global Dlist Pp State_exception_undefined Map_extra
 
-open import Errors Core
-import Cmm_csem Mem_common
+open import Errors Core Annot
+import Cmm_csem Mem_common Core_aux
 
 
 (* DEBUG *)
@@ -20,6 +20,156 @@ type core_run_annotation = <|
   dd_before:  set Cmm_csem.aid;
   asw_before: set Cmm_csem.aid;
 |>
+
+
+ (* runtime stuff *)
+
+
+type context (* core_run_annotation unit Symbol.sym *) =
+  | CTX
+  | Cunseq of list Annot.annot * list (Core.expr core_run_annotation) * context * list (Core.expr core_run_annotation)
+  | Cwseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
+  | Csseq of list Annot.annot * Core.pattern * context * Core.expr core_run_annotation
+  | Cannot of list Annot.annot * Core.dyn_annotations * context
+  | Cbound of list Annot.annot * context
+
+
+
+type continuation_element 'a =
+  | Kunseq of list annot * list (Core.expr 'a) * list (Core.expr 'a)
+  | Kwseq  of list annot * Core.pattern * Core.expr 'a
+  | Ksseq  of list annot * Core.pattern * Core.expr 'a
+ (*  | Ktry   list (string * expr 'a) *)
+
+type continuation 'a = list (continuation_element 'a)
+(* type labeled_continuation 'a = list (Symbol.sym * ctype) * expr 'a *)
+type labeled_continuations 'a = map Symbol.sym (list Symbol.sym * expr 'a)
+
+
+type stack 'a =
+  | Stack_empty
+    (* the symbol is that of the procedure being executed *)
+  | Stack_cons of maybe Symbol.sym * (*labeled_continuations 'a * *) continuation 'a * stack 'a
+    (* TODO: this is for Core_reduction, the previous one is for Core_run *)
+  | Stack_cons2 of maybe Symbol.sym (* name of the current Core procedure, if any *)
+                 * context          (*  *)
+                 * stack 'a
+ 
+
+
+let subst_wait_continuation_element tid v = function
+  | Kunseq annots es1 es2 ->
+      Kunseq annots (List.map (Core_aux.subst_wait tid v) es1) (List.map (Core_aux.subst_wait tid v) es2)
+  | Kwseq annots syms_opt e2 ->
+      Kwseq annots syms_opt (Core_aux.subst_wait tid v e2)
+  | Ksseq annots syms_opt e2 ->
+      Ksseq annots syms_opt (Core_aux.subst_wait tid v e2)
+(*
+  | Ktry str_es ->
+      Ktry (List.map (fun (str, e) -> (str, subst_wait tid v e)) str_es)
+*)
+end
+
+let subst_wait_continuation tid v cont =
+  List.map (subst_wait_continuation_element tid v) cont
+
+let rec subst_wait_stack tid v = function
+  | Stack_empty ->
+      Stack_empty
+  | Stack_cons sym_opt cont sk ->
+      Stack_cons sym_opt
+        (subst_wait_continuation tid v cont) (subst_wait_stack tid v sk)
+end
+
+
+val apply_continuation: forall 'a. continuation 'a -> expr 'a -> expr 'a
+let apply_continuation cont expr =
+  let f _cont (Expr annot _ as expr) =
+    match _cont with
+      | Kwseq annots pat e2 ->
+          Expr annots (Ewseq pat expr e2)
+      | Ksseq annots pat e2 ->
+          Expr annots (Esseq pat expr e2)
+      | Kunseq annots es1 es2 ->
+          Expr annots (Eunseq $ es1 ++ (expr :: es2))
+(*
+      | Ktry str_es ->
+          Etry expr str_es
+*)
+    end in
+  foldl (fun acc x -> f x acc) expr cont
+
+
+(* Functions on continuation and stacks *)
+val empty_stack: forall 'a. stack 'a
+let empty_stack =
+  Stack_empty
+
+val is_empty_stack: forall 'a. stack 'a -> bool
+let is_empty_stack = function
+  | Stack_empty ->
+      true
+  | _ ->
+      false
+end
+
+
+
+val push_empty_continuation: forall 'a. maybe Symbol.sym -> stack 'a -> stack 'a
+let push_empty_continuation sym_opt sk =
+(*  Stack_cons sym_opt [] sk *)
+  Stack_cons2 sym_opt CTX sk
+
+val reset_continuation: forall 'a. stack 'a -> stack 'a
+let reset_continuation = function
+  | Stack_empty ->
+      (* TODO: are should this fail, just to catch ill-uses? *)
+      Stack_empty
+  | Stack_cons sym_opt cont sk ->
+      Stack_cons sym_opt [] sk
+end
+
+val pop_stack: forall 'a. stack 'a -> Exception.exceptM (continuation 'a * stack 'a) core_run_cause
+let pop_stack = function
+  | Stack_empty ->
+      Exception.fail (Found_empty_stack "pop_stack")
+  | Stack_cons _ cont sk ->
+      Exception.return (cont, sk)
+end
+
+val pop_continuation_element: forall 'a. stack 'a -> Exception.exceptM (continuation_element 'a * stack 'a) core_run_cause
+let pop_continuation_element = function
+  | Stack_empty ->
+      Exception.fail (Found_empty_stack "pop_continuation_element")
+  | Stack_cons _ [] _ ->
+      Exception.fail Reached_end_of_proc
+  | Stack_cons sym_opt (cont_elem :: cont) sk ->
+      Exception.return (cont_elem, Stack_cons sym_opt cont sk)
+end
+
+
+val push_continuation_element: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
+let push_continuation_element cont_elem = function
+  | Stack_empty ->
+      Exception.fail (Found_empty_stack "push_continuation_element")
+  | Stack_cons sym_opt cont sk ->
+      Exception.return (Stack_cons sym_opt (cont_elem :: cont) sk)
+end
+
+
+
+val append_to_current_continuation: forall 'a. continuation_element 'a -> stack 'a -> Exception.exceptM (stack 'a) core_run_cause
+let append_to_current_continuation cont_elem = function
+  | Stack_empty ->
+      (* A procedure need to currently be running to append *)
+      Exception.fail (Found_empty_stack "append_to_current_continuation")
+  | Stack_cons sym_opt cont sk ->
+      Exception.return $ Stack_cons sym_opt (cont_elem :: cont) sk
+end
+
+
+
+
 
 (* The state of a Core thread is a pair of the expressions being executed and
    a stack of continuation. Each element of the stack corresponds a Core
@@ -194,7 +344,7 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
     expr
 
 
-val add_to_sb_stack: set (polarity * (Mem_common.thread_id * Cmm_csem.aid)) -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+val add_to_sb_stack: set (polarity * (Mem_common.thread_id * Cmm_csem.aid)) -> stack core_run_annotation -> stack core_run_annotation
 
 let rec add_to_sb_continuation p_aids = function
   | [] ->
@@ -292,7 +442,7 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
   else
     expr
 
-val add_to_asw_stack: set Cmm_csem.aid -> Core.stack core_run_annotation -> Core.stack core_run_annotation
+val add_to_asw_stack: set Cmm_csem.aid -> stack core_run_annotation -> stack core_run_annotation
 
 let rec add_to_asw_continuation aids = function
   | [] ->
@@ -305,7 +455,7 @@ let rec add_to_asw_continuation aids = function
       Ksseq annots _as (add_to_asw aids e2) :: add_to_asw_continuation aids cont
 end
 let rec add_to_asw_stack aids sk =
-  let () = Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "BOOM add_to_asw_stack ==> " ^ Pp.stringFromCore_stack sk) in
+  let () = Debug.print_debug 5 [Debug.DB_driver; Debug.DB_concurrency] (fun () -> "BOOM add_to_asw_stack ==> "(* ^ Pp.stringFromCore_stack sk*)) in
   if Global.using_concurrency () then
     match sk with
       | Stack_empty ->
