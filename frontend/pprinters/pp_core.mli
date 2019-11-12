@@ -27,7 +27,7 @@ sig
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
-  val pp_stack: 'a stack -> PPrint.document
+(*  val pp_stack: 'a stack -> PPrint.document *)
 end
 
 module Make (C : CONFIG) : PP_CORE

@@ -32,7 +32,7 @@ sig
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: ('a, Symbol.sym) generic_action_ -> PPrint.document
-  val pp_stack: 'a stack -> PPrint.document
+(*  val pp_stack: 'a stack -> PPrint.document *)
 end
 
 module Make (Config: CONFIG) =
@@ -858,6 +858,7 @@ let pp_file file =
   end
 
 
+(*
 (* Runtime stuff *)
 let mk_pp_continuation_element cont_elem = fun z ->
   match cont_elem with
@@ -888,7 +889,7 @@ let rec pp_stack = function
         pp_continuation cont
       ) ^^ P.break 1 ^^ P.dot ^^ P.break 1 ^^
       pp_stack sk'
-
+*)
 end
 
 module Basic = Make (struct
