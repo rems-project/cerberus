@@ -1,0 +1,1 @@
+Undefined behaviour: the operand of the unary '*' operator has an invalid value at 0020-end_of_lifetime.c:6:3-5

@@ -33,15 +33,15 @@ citests=(
   0030-call_arith.c
   0031-global.c
   0032-empty_struct_decl.c
-#  0033-duplicate.error.c
-#  0034-duplicate_proto.error.c
-#  0035-thread_local_function.error.c
-#  0036-auto_register_function.error.c
-#  0037-function_conflicting_types.error.c
-#  0038-function_redefinition.error.c
-#  0039-struct_imcomplete.error.c
-#  0040-struct_redefinition.error.c
-#  0041-struct_incompatible.error.c
+  0033-duplicate.error.c
+  0034-duplicate_proto.error.c
+  0035-thread_local_function.error.c
+  0036-auto_register_function.error.c
+  0037-function_conflicting_types.error.c
+  0038-function_redefinition.error.c
+  0039-struct_imcomplete.error.c
+  0040-struct_redefinition.error.c
+  0041-struct_incompatible.error.c
   0042-struct_namespace.c
   0043-struct_shadowing.c
   0044-init_scalar_enclosed.c
@@ -52,7 +52,7 @@ citests=(
   0049-void_return_empty.c
   0050-void_return_arith.c
   0051-global_non_startup.c
-#  0052-global_not_constant.error.c
+  0052-global_not_constant.error.c
 #  0053-recursive_factorial5.c
   0054-while_factorial5.c
   0055-while_acc.c
@@ -65,8 +65,8 @@ citests=(
   0062-cond_call_e2.c
   0063-cond_e.c
   0064-cond_e2.c
-# 0065-const1.error.c
-# 0066-const2.error.c
+  0065-const1.error.c
+  0066-const2.error.c
 # 0101-sym_cfunction.c
 # 0105-incr.c
   0106-typedef_parsing_bug.c
@@ -75,16 +75,39 @@ citests=(
   0110-loop_in_loop.c
   0111-skipped_label.c
   0112-call_in_label.c
-# 0113-cast_assign_parsing.error.c
-# 0114-const_return.error.c
+  0113-cast_assign_parsing.error.c
+  0114-const_return.error.c
   0115-hex_char_const.c
   0116-enum_constants.c
   0127-function-pointer.c
   0128-function-pointer-void-cast.c
   0129-function-pointer-wrong-args.c
-#  0201-main-return-type.error.c
-#  0202-main-not-function.error.c
-#  0203-main-params1.error.c
-#  0204-main-params2.error.c
+  0201-main-return-type.error.c
+  0202-main-not-function.error.c
+  0203-main-params1.error.c
+  0204-main-params2.error.c
+  0205-illegal-storage-class.error.c
+  0209-static-assert-failed.error.c
+  0210-illegal-storage-class-function.error.c
+  0211-function-id-not-function-type.error.c
+  0212-function-redefinition.error.c
+  0214-illegal-storage-class-for-statement.error.c
+  0215-continue-outside-loop.error.c
+  0216-break-outside-loop.error.c
+  0217-non-void-function-return.error.c
+  0218-multiple-storage-class.error.c
+  0219-thread-local-function-declaration.error.c
+  0223-illegal-storage-class-static-init.error.c
+  0224-enum-not-int.error.c
+  0225-incomplete-field.error.c
+  0226-function-field.error.c
+  0227-illegal-type-specs.error.c
+  0228-tag-redecl.error.c
+  0229-illegal-enum-construction.error.c
+  0230-enum-incomplete.error.c
+  0231-tag-redefinition.error.c
+  0232-invalid-use-Atomic.error.c
+  0233-undeclared-identifier.error.c
+  0234-array-static-outside-fun-proto.error.c
 )
 

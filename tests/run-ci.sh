@@ -52,7 +52,13 @@ for file in "${citests[@]}"
 do
   ../cerberus --exec --batch ci/$file > tmp/result 2> tmp/stderr
   if [ -f ./ci/expected/$file.expected ]; then
-    if [[ $file == *.error.c ]]; then 
+    if [[ $file == *.error.c ]]; then
+      # removing the last line from stderr (the time stats)
+      if [ "$(uname)" == "Linux" ]; then
+          sed -i '$ d' tmp/stderr
+      else # otherwise we assume this macOS or BSD
+          sed -i '' -e '$ d' tmp/stderr
+      fi;
       cmp --silent tmp/stderr ci/expected/$file.expected
     else
       cmp --silent tmp/result ci/expected/$file.expected

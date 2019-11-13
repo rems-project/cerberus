@@ -1,3 +1,12 @@
-ci/0204-main-params2.error.c:1:21: error: invalid parameter type for 'main': second parameter must be of type 'char **'. (§5.1.2.2.1)
+ci/0204-main-params2.error.c:1:21: error: undefined behaviour: invalid parameter type for 'main': second parameter must be of type 'char **'
 int main (int argc, void ** argv) { return 0; }
     ^               ~~~~~~~ 
+§5.1.2.2.1#1: 
+1   The function called at program startup is named main. The implementation declares no
+    prototype for this function. It shall be defined with a return type of int and with no
+    parameters:
+            int main(void) { /* ... */ }
+    or with two parameters (referred to here as argc and argv, though any names may be
+    used, as they are local to the function in which they are declared):
+            int main(int argc, char *argv[]) { /* ... */ }
+    or equivalent;10) or in some other implementation-defined manner.
