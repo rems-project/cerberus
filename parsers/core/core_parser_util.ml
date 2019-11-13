@@ -104,6 +104,8 @@ type token =
   | STORE
   | STORE_LOCK
   | LOAD
+  | SEQ_RMW
+  | SEQ_RMW_WITH_FORWARD
   | RMW
   | FENCE
 (*  | COMPARE_EXCHANGE_STRONG *)

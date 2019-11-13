@@ -823,6 +823,44 @@ let rec drive_core_thread2 tid =
             |>) >>= fun () ->
           ND.return Nothing)
     
+    | Core_reduction.Step_with_runstate2 rsk step_m ->
+        match rsk with
+          | Core_reduction.RSK_eval debug_str ->
+              ( SK_eval debug_str
+              , let () = Debug.print_debug 3 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
+                liftCore_run step_m >>= fun th_st' ->
+                ND.update (fun dr_st -> <| dr_st with
+                  core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+                  dr_step_counter= dr_st.dr_step_counter + 1
+                |>) >>= fun () ->
+                drive_core_thread2 tid )
+          | Core_reduction.RSK_tau debug_str tsk ->
+              ( SK_tau debug_str
+              , let () = Debug.print_debug 3 [] (fun () -> "Step_tau(" ^ debug_str ^ ")") in
+                liftCore_run step_m >>= fun th_st' ->
+                match tsk with
+                  | Core_run.TSK_Misc ->
+                      ND.return ()
+                  | Core_run.TSK_Return sym mval_opt ->
+                      ND.update $ fun dr_st ->
+                        <| dr_st with trace= ME_function_return sym mval_opt :: dr_st.trace |>
+                  | _ ->
+                      error "TODO: drive_core_thread2, non TSK_Misc"
+                end >>= fun () ->
+                begin
+                  if debug_str <> "Eloc" then
+                    (* DEBUG *) ND.print_debug 4 [Debug.DB_driver_step] (fun () -> "tau(tid_" ^ show tid ^ "): " ^ debug_str ^ " with arena= " ^
+                    (* DEBUG *)                   Pp.stringFromCore_expr th_st'.Core_run.arena)
+                  else
+                    ND.return ()
+                end >>= fun () ->
+                ND.update (fun dr_st -> <| dr_st with
+                  core_state= Core_run.update_thread_state tid th_st' dr_st.core_state;
+                  dr_step_counter= dr_st.dr_step_counter + 1
+                |>) >>= fun () ->
+                drive_core_thread2 tid )
+        end
+    
     | Core_reduction.Step_eval2 debug_str step_m ->
         ( SK_eval debug_str
         , let () = Debug.print_debug 3 [] (fun () -> "Step_eval(" ^ debug_str ^ ")") in
@@ -1383,6 +1421,18 @@ let action_request_sequential2 loc tid aid = function
         |>
       )
   
+  | Core_reduction.SeqRMWRequest2 lvalue_ty ptr_val mk_mval' mk_th_st' ->
+      liftMem (Mem.load loc lvalue_ty ptr_val)              >>= fun (_, mval) ->
+      liftCore_run (mk_mval' mval)                          >>= fun mval'     ->
+      liftMem (Mem.store loc lvalue_ty false ptr_val mval') >>= fun fp        ->
+      liftMem (Mem.prefix_of_pointer ptr_val)               >>= fun pref      ->
+      ND.update (fun dr_st ->
+        <| dr_st with
+          core_state= Core_run.update_thread_state tid (mk_th_st' aid fp mval mval') dr_st.core_state;
+          trace= ME_seq_rmw loc pref lvalue_ty ptr_val mval mval' :: dr_st.trace
+        |>
+      )
+  
 (*
   | Core_run.RMWRequest loc sb_edges dd_edges asw_edges aid tid mo1 mo2 lvalue_ty ptr_val mval_expected mval_actual th_st' ->
       error "WIP: Driver.seq ==> RMWRequest"
@@ -1441,7 +1491,8 @@ let perform_action_request2 with_concurrency loc tid request =
 val     driver2: bool -> driverM unit
 let rec driver2 with_concurrency =
   let process_core_step2 = function
-  | Core_reduction.Step_action_request2 _ loc tid request ->
+  | Core_reduction.Step_action_request2 _ loc tid m_request ->
+      liftCore_run m_request >>= fun request ->
       perform_action_request2 with_concurrency loc tid request >>= fun () ->
       driver2 with_concurrency
 
@@ -1942,8 +1993,8 @@ end
 
 
 
-val drive: bool -> bool -> Core.file Core_run.core_run_annotation -> list string -> driverM driver_result
-let drive (with_concurrency: bool) (use_experimental_unseq: bool) file (arg_strs: list string) =
+val drive: bool -> Core.file Core_run.core_run_annotation -> list string -> driverM driver_result
+let drive (with_concurrency: bool) file (arg_strs: list string) =
   (* Setting the read-only tag definitions (used by the memory model) *)
   (* first we execute the body of global definitions and remove their symbols
      from the rest of the program *)

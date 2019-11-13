@@ -665,9 +665,9 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | Easeq ((sym, bTy), act1, pact2) ->
+        | Easeq ((sym, bTy), act1, act2) ->
             pp_control "let atom" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^ P.equals ^^^
-            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction pact2))
+            pp (Expr ([], Eaction (Paction (Pos, act1)))) ^^^ pp_control "in" ^^^ pp (Expr ([], Eaction (Paction (Pos, act2))))
         | Esave ((sym, bTy), sym_bTy_pes, e) ->
             pp_keyword "save" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
             P.parens (comma_list (fun (sym, ((bTy,_), pe)) ->
@@ -710,9 +710,8 @@ let rec pp_expr expr =
             pp_keyword "excluded" ^^ P.brackets (!^ (string_of_int n)) ^^ P.parens (pp_action act_)
         | End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
-        | Ebound (i, e) ->
-            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
-            P.parens (pp e)
+        | Ebound e ->
+            pp_keyword "bound" ^^ P.parens (pp e)
       end
     end
     in pp false None expr
@@ -737,6 +736,14 @@ and pp_action act =
        pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
     | Load0 (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
+    | SeqRMW (b, ty, e1, sym, e2) ->
+        let kw = if b then "seq_rmw_with_forward" else "seq_rmw" in
+        pp_keyword kw ^^ P.parens (
+          pp_pexpr ty ^^ P.comma ^^^
+          pp_pexpr e1 ^^ P.comma ^^^
+          pp_symbol sym ^^^ !^ "=>" ^^^
+          pp_pexpr e2
+        )
     | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "rmw" ^^
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^

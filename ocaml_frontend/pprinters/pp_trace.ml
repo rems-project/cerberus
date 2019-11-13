@@ -66,6 +66,14 @@ let pp_trace_event = function
                      ^^^ P.parens (pp_integer_value ival)
                      ^^^ P.parens (pp_pointer_value res_ptrval)
 
+  | ME_seq_rmw (loc, pref, cty, ptrval, mval, mval') ->
+    !^ "seq_rmw" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+                ^^^ P.parens (pp_string_opt pref)
+                ^^^ P.parens (pp_ctype cty)
+                ^^^ P.parens (pp_pointer_value ptrval)
+                ^^^ P.parens (pp_mem_value mval)
+                ^^^ P.parens (pp_mem_value mval')
+
   | ME_member_shift _ ->
     !^ "member_shift (TODO)"
 

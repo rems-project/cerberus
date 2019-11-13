@@ -264,6 +264,7 @@ type generic_action_ 'bty 'sym =  (* memory actions *)
  | Kill of kill_kind  * (generic_pexpr 'bty 'sym) (* the boolean indicates whether the action is dynamic (i.e. free()), the size *)
  | Store of bool * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
  | Load of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order
+ | SeqRMW of bool * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * 'sym * (generic_pexpr 'bty 'sym) (* the boolean indicates whether the value should be that of the update (otherwise it is what was read from memory) *)
  | RMW of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
  | Fence of Cmm_csem.memory_order
  | CompareExchangeStrong of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * Cmm_csem.memory_order * Cmm_csem.memory_order
@@ -299,13 +300,13 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Eccall of 'a * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* C function call *)
  | Eproc of 'a * (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
- | Ewseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
- | Esseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
- | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_paction 'a 'bty 'sym) (* atomic sequencing *)
+ | Ewseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
+ | Esseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
+ | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_action 'a 'bty 'sym) (* atomic sequencing *)
 (*
  | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
 *)
- | Ebound of nat * (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
+ | Ebound of (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
  | End of list (generic_expr 'a 'bty 'sym) (* nondeterministic sequencing *)
  | Esave of ('sym * core_base_type) * list ('sym * ((core_base_type * maybe (Ctype.ctype * bool)) * generic_pexpr 'bty 'sym)) * (generic_expr 'a 'bty 'sym) (* save label *)
  | Erun of 'a * 'sym * list (generic_pexpr 'bty 'sym) (* run from label *)

@@ -637,16 +637,16 @@ let rec symbolify_expr ((Expr (annot, expr_)) : parsed_expr) : (unit expr) Eff.t
          symbolify_expr _e2     >>= fun e2  ->
          Eff.return (Esseq (pat, e1, e2))
        )
-   | Easeq ((_sym, bTy), Action (loc, (), _act1_), _pact2) ->
+   | Easeq ((_sym, bTy), Action (loc1, (), _act1_), Action (loc2, (), _act2_)) ->
        symbolify_action_ _act1_ >>= fun act1_ ->
        under_scope (
          register_sym _sym        >>= fun sym   ->
-         symbolify_paction _pact2 >>= fun pact2 ->
-         Eff.return (Easeq ((sym, bTy), Action (loc, (), act1_), pact2))
+         symbolify_action_ _act2_ >>= fun act2_ ->
+         Eff.return (Easeq ((sym, bTy), Action (loc1, (), act1_), Action (loc2, (), act2_)))
        )
-   | Ebound (n, _e) ->
+   | Ebound _e ->
        symbolify_expr _e >>= fun e ->
-       Eff.return (Ebound (n, e))
+       Eff.return (Ebound e)
    | End _es ->
        Eff.mapM symbolify_expr _es >>= fun es ->
        Eff.return (End es)
@@ -720,6 +720,14 @@ and symbolify_action_ = function
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
      Eff.return (Store0 (b, pe1, pe2, pe3, mo))
+ | SeqRMW (b, _pe1, _pe2, _sym, _pe3) ->
+     symbolify_pexpr _pe1 >>= fun pe1 ->
+     symbolify_pexpr _pe2 >>= fun pe2 ->
+     under_scope (
+       register_sym _sym    >>= fun sym ->
+       symbolify_pexpr _pe3 >>= fun pe3 ->
+       Eff.return (SeqRMW (b, pe1, pe3, sym, pe3))
+     )
  | Load0 (_pe1, _pe2, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -812,7 +820,7 @@ let rec register_labels ((Expr (_, expr_)) : parsed_expr) : unit Eff.t  =
     | Esseq (_, _e1, _e2) ->
         register_labels _e1 >>= fun () ->
         register_labels _e2
-    | Ebound (_, _e) ->
+    | Ebound _e ->
         register_labels _e
     | End _es
     | Epar _es ->
@@ -1099,7 +1107,7 @@ let mk_file decls =
 %token SLASH_BACKSLASH BACKSLASH_SLASH
 
 (* memory actions *)
-%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
+%token CREATE CREATE_READONLY ALLOC STORE STORE_LOCK LOAD SEQ_RMW SEQ_RMW_WITH_FORWARD KILL FREE RMW FENCE (* COMPARE_EXCHANGE_STRONG *)
 
 (* continuation operators *)
 %token SAVE RUN
@@ -1600,12 +1608,12 @@ expr:
 | LET STRONG _pat= pattern EQ _e1= expr IN _e2= expr
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
            , Esseq (_pat, _e1, _e2) ) }
-| LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _pact2= paction
+| LET ATOM _sym= SYM COLON _bTy= core_base_type EQ _act1= action IN _act2= action
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), _pact2) ) }
-| BOUND n= delimited(LBRACKET, INT_CONST, RBRACKET) _e= delimited(LPAREN, expr, RPAREN)
+           , Easeq ((_sym,_bTy), Action (Location_ocaml.unknown, (), _act1), Action (Location_ocaml.unknown, (), _act2)) ) }
+| BOUND _e= delimited(LPAREN, expr, RPAREN)
     { Expr ( [Aloc (Location_ocaml.(region ($startpos, $endpos) NoCursor))]
-           , Ebound (Nat_big_num.to_int n, _e) ) }
+           , Ebound _e ) }
 | SAVE _sym= SYM COLON bTy= core_base_type
        _xs= delimited(LPAREN,
               separated_list(COMMA,
@@ -1647,6 +1655,11 @@ action:
     { Store0 (true, _pe1, _pe2, _pe3, mo) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
     { Load0 (_pe1, _pe2, mo) }
+| SEQ_RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
+    { SeqRMW (false, _pe1, _pe2, _sym, _pe3) }
+| SEQ_RMW_WITH_FORWARD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
+    { SeqRMW (true, _pe1, _pe2, _sym, _pe3) }
+
 | RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
     { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN
