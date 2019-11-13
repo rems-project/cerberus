@@ -2107,8 +2107,8 @@ end
 (*
           (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
           (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
-          let () = Debug.print_debug 1 [] (fun () ->
-            "HACK!!!! => AilEcompoundAssign is WIP and only doing +=  ==>  memory order is also wrong"
+          let () = Debug.print_debug 0 [] (fun () ->
+            "HACK!!!! => AilEcompoundAssign is WIP and only doing E1 += E2 (without any conversion or UB check) (it is also wrong for atomics)"
           ) in
           (* TODO: check sequencing with respect to indet function calls *)
           self e1 >>= fun core_e1 ->
@@ -2119,22 +2119,24 @@ end
           (*let oTy1 = force_core_object_type_of_ctype (Caux.proj_ctype (ctype_of e2)) in*)
           let oTy2 = force_core_object_type_of_ctype (ctype_of e2) in
           
-          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, l1_sym_pat   , l1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (_, v1_sym_pat   , v1_sym_pe  ) ->
-          E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun (_, v2_sym_pat   , v2_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, lvalue_sym_pat   , lvalue_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (load_sym, load_sym_pat   , load_sym_pe  ) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy2)          >>= fun (_, e2_sym_pat   , e2_sym_pe  ) ->
+(*
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (_, z1_sym_pat   , z1_sym_pe  ) ->
           E.wrapped_fresh_symbol (C.BTy_loaded lvalue_oTy)    >>= fun (_, z2_sym_pat   , z2_sym_pe  ) ->
+*)
 
           let lvalue_ty_pe = Caux.mk_ail_ctype_pe lvalue_ty in
           
           E.wrapped_fresh_symbol (C.BTy_object lvalue_oTy)    >>= fun (_, obj1_sym_pat   , obj1_sym_pe  ) ->
           E.wrapped_fresh_symbol (C.BTy_object oTy2)          >>= fun (_, obj2_sym_pat   , obj2_sym_pe  ) ->
           let stored_pe =
-            Caux.mk_case_pe (Caux.mk_tuple_pe [v1_sym_pe; v2_sym_pe])
+            Caux.mk_case_pe (Caux.mk_tuple_pe [load_sym_pe; e2_sym_pe])
               [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat]
                 , Caux.mk_specified_pe (Caux.mk_op_pe C.OpAdd obj1_sym_pe obj2_sym_pe) ) ] in
           
-
+(*
           E.return begin
             Caux.mk_wseq_e (Caux.mk_tuple_pat [Caux.mk_tuple_pat [l1_sym_pat; v1_sym_pat]; v2_sym_pat]) begin
               Caux.mk_unseq_e
@@ -2150,6 +2152,15 @@ end
             end
           end
 *)
+
+
+        E.return begin
+          Caux.mk_wseq_e (Caux.mk_tuple_pat [lvalue_sym_pat; e2_sym_pat])
+                         (Caux.mk_unseq_e [ Caux.pload loc lvalue_ty_pe lvalue_sym_pe Cmm.NA; core_e2 ])
+                         begin
+                           Caux.seq_rmw loc true(*with_forward*) lvalue_ty_pe lvalue_sym_pe load_sym stored_pe
+                         end
+        end
 
 
 (*
