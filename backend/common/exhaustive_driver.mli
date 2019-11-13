@@ -2,7 +2,6 @@ type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
   exec_mode: Global_ocaml.execution_mode;
   concurrency: bool;
-  experimental_unseq: bool;
   fs_dump: bool;
   trace: bool;
 }

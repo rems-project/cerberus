@@ -121,6 +121,8 @@ let keywords =
       ("store",  T.STORE );
       ("store_lock",  T.STORE_LOCK );
       ("load",   T.LOAD  );
+      ("seq_rmw",   T.SEQ_RMW  );
+      ("seq_rmw_with_forward",   T.SEQ_RMW_WITH_FORWARD  );
       ("rmw",    T.RMW   );
       ("fence",  T.FENCE );
 (*      ("compare_exchange_strong",  T.COMPARE_EXCHANGE_STRONG); *)

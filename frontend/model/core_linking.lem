@@ -137,6 +137,8 @@ let free_action acc (Action _ _ act_) =
       free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3
   | Load pe1 pe2 _ ->
       free_pexpr (free_pexpr acc pe1) pe2
+  | SeqRMW _ pe1 pe2 sym pe3 ->
+      (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) \ { sym }
   | RMW pe1 pe2 pe3 pe4 _ _ ->
       free_pexpr (free_pexpr (free_pexpr (free_pexpr acc pe1) pe2) pe3) pe4
   | Fence _ ->
@@ -186,7 +188,7 @@ let rec free_expr acc (Expr _ e) =
       (free_expr (free_expr acc e1) e2) \ (symbols_in_pattern {} pat)
   | Easeq _ _ _ ->
       error ("TODO: free_expr Easeq")
-  | Ebound _ e ->
+  | Ebound e ->
       free_expr acc e
   | End es ->
       List.foldl free_expr acc es

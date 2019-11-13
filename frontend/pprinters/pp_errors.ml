@@ -17,11 +17,11 @@ type kind =
 
 let string_of_kind = function
   | Error ->
-      ansi_format [Bold; Red] "error:"
+      ansi_format ~err:true [Bold; Red] "error:"
   | Warning ->
-      ansi_format [Bold; Magenta] "warning:"
+      ansi_format ~err:true [Bold; Magenta] "warning:"
   | Note ->
-      ansi_format [Bold; Black] "note:"
+      ansi_format ~err:true [Bold; Black] "note:"
 
 
 let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
@@ -264,11 +264,11 @@ let string_of_misc_violation = function
 
 let string_of_desugar_cause = function
   | Desugar_ConstraintViolation e ->
-      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation e
+      (ansi_format ~err:true [Bold] "constraint violation: ") ^ string_of_constraint_violation e
   | Desugar_MiscViolation e ->
       string_of_misc_violation e
   | Desugar_UndefinedBehaviour ub ->
-      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
+      (ansi_format ~err:true [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | Desugar_NeverSupported str ->
       "feature that will never supported: " ^ str
   | Desugar_NotYetSupported str ->
@@ -290,9 +290,9 @@ let string_of_ail_typing_misc_error = function
 
 let string_of_ail_typing_error = function
   | TError_ConstraintViolation tcv ->
-      (ansi_format [Bold] "constraint violation: ") ^ string_of_constraint_violation tcv
+      (ansi_format ~err:true [Bold] "constraint violation: ") ^ string_of_constraint_violation tcv
   | TError_UndefinedBehaviour ub ->
-      (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
+      (ansi_format ~err:true [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub
   | TError_MiscError tme ->
       string_of_ail_typing_misc_error tme
   | TError_NotYetSupported str ->
@@ -402,7 +402,7 @@ let string_of_core_parser_cause = function
 
 let string_of_driver_cause = function
   | Driver_UB ubs ->
-      String.concat "\n" @@ List.map (fun ub -> (ansi_format [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
+      String.concat "\n" @@ List.map (fun ub -> (ansi_format ~err:true [Bold] "undefined behaviour: ") ^ Undefined.ub_short_string ub) ubs
 
 let short_message = function
   | CPP err ->
@@ -498,7 +498,7 @@ let get_quote ref =
 let make_message loc err k =
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
   let kind = string_of_kind k in
-  let msg = ansi_format [Bold] (short_message err) in
+  let msg = ansi_format ~err:true [Bold] (short_message err) in
   let rec string_of_refs = function
     | [] -> "unknown ISO C reference"
     | [ref] -> ref
@@ -506,8 +506,8 @@ let make_message loc err k =
   in
   let rec string_of_quotes = function
     | [] -> "no C11 reference"
-    | [ref] -> ansi_format [Bold] ref ^ ": " ^ get_quote ref
-    | ref::refs -> ansi_format [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
+    | [ref] -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref
+    | ref::refs -> ansi_format ~err:true [Bold] ref ^ ": " ^ get_quote ref ^ "\n\n" ^ string_of_quotes refs
   in
   match Global_ocaml.verbose (), get_std_ref err with
   | Basic, _
@@ -527,5 +527,5 @@ let to_string (loc, err) =
   | _ -> make_message loc err Error
 
 let fatal msg =
-  prerr_endline (ansi_format [Bold; Red] "error: " ^ ansi_format [Bold] msg);
+  prerr_endline (ansi_format ~err:true [Bold; Red] "error: " ^ ansi_format ~err:true [Bold] msg);
   exit 1

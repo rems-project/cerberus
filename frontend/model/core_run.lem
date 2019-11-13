@@ -1599,17 +1599,16 @@ BEFORE EVAL_PEXPR2
           |>) es
         )
     | (Ewait _, _) ->
-        (* We don't do anything here. When a thread terminated, the driver
+        (* We don't do anything here. When a thread terminates, the driver
            substitute the corresponding wait in parent thread with the returned
            value. *)
         error "Core_run, Ewait"
     | (Easeq _ _ _, _) ->
         error "Core_run must be called after Core_indet"
-    | (Ebound _ e, _) ->
+    | (Ebound e, _) ->
         let () = Debug.print_debug 4 [] (fun () ->
           "STEP Ebound"
         ) in
-        (* TODO: use the index ? *)
         one $ Step_bound (
           E.return <| th_st with arena= e |>
         )

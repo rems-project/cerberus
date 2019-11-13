@@ -59,7 +59,13 @@ let pp_trace_event = function
                ^^^ !^(string_of_bool is_locking)
                ^^^ P.parens (pp_pointer_value ptrval)
                ^^^ P.parens (pp_mem_value mval)
-
+  | ME_seq_rmw (loc, pref, cty, ptrval, mval, mval') ->
+    !^ "seq_rmw" ^^^ P.parens !^(Location_ocaml.location_to_string loc)
+                ^^^ P.parens (pp_string_opt pref)
+                ^^^ P.parens (pp_ctype cty)
+                ^^^ P.parens (pp_pointer_value ptrval)
+                ^^^ P.parens (pp_mem_value mval)
+                ^^^ P.parens (pp_mem_value mval')
   | ME_eff_array_shift_ptrval (arr_ptrval, cty, ival, ptrval) ->
     !^ "array_shift (TODO)"
 

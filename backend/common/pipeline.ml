@@ -342,6 +342,8 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
                    Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
                | Load0 (pe1, pe2, mo) ->
                    Load0 (untype_pexpr pe1, untype_pexpr pe2, mo)
+               | SeqRMW (b, pe1, pe2, sym, pe3) ->
+                   SeqRMW (b, untype_pexpr pe1, untype_pexpr pe2, sym, untype_pexpr pe3)
                | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
                    RMW0 (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
                | Fence0 mo ->
@@ -382,10 +384,10 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Ewseq (untype_pattern pat, untype_expr e1, untype_expr e2)
       | Esseq (pat, e1, e2) ->
           Esseq (untype_pattern pat, untype_expr e1, untype_expr e2)
-      | Easeq (sym_bTy, act1, (Paction (p, act2))) ->
-          Easeq (sym_bTy, untype_action act1, Paction (p, untype_action act2))
-      | Ebound (j, e) ->
-          Ebound (j, untype_expr e)
+      | Easeq (sym_bTy, act1, act2) ->
+          Easeq (sym_bTy, untype_action act1, untype_action act2)
+      | Ebound e ->
+          Ebound (untype_expr e)
       | End es ->
           End (List.map untype_expr es)
       | Esave (sym_bTy, xs, e) ->

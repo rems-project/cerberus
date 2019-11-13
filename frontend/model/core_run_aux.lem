@@ -310,7 +310,7 @@ let rec add_to_sb p_aids (Expr annot expr_ as expr) =
           Esseq _as (add_to_sb p_aids e1) (add_to_sb p_aids e2)
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_sb, Easeq"
-      | Ebound _ _ ->
+      | Ebound _ ->
           error "Core_run_aux.add_to_sb, Ebound"
       | End es ->
           End (List.map (add_to_sb p_aids) es)
@@ -397,7 +397,7 @@ let rec add_to_asw aids (Expr annot expr_ as expr) =
           Esseq _as (add_to_asw aids e1) (add_to_asw aids e2) (* TODO this is wrong *)
       | Easeq _ _ _ ->
           error "Core_run_aux.add_to_asw, Easeq"
-      | Ebound _ _ ->
+      | Ebound _ ->
           error "Core_run_aux.add_to_asw, Ebound"
       | Esave sym_bTy xs e ->
           Esave sym_bTy xs (add_to_asw aids e)
@@ -596,10 +596,10 @@ let rec convert_expr (Expr annot expr_) =
         Ewseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
     | Esseq pat e1 e2 ->
         Esseq (convert_pattern pat) (convert_expr e1) (convert_expr e2)
-    | Easeq sym_opt act1 pact2 ->
-        Easeq sym_opt (convert_action act1) (convert_paction pact2)
-    | Ebound i e ->
-        Ebound i (convert_expr e)
+    | Easeq sym_opt act1 act2 ->
+        Easeq sym_opt (convert_action act1) (convert_action act2)
+    | Ebound e ->
+        Ebound (convert_expr e)
     | Esave sym xs e ->
         Esave sym (List.map (fun (sym, (bTy, pe)) -> (sym, (bTy, convert_pexpr pe))) xs) (convert_expr e)
     | Erun _ sym pes ->
@@ -630,6 +630,8 @@ and convert_action_ act_ =
         Kill b (convert_pexpr pe)
     | Store b pe1 pe2 pe3 mo ->
         Store b (convert_pexpr pe1) (convert_pexpr pe2) (convert_pexpr pe3) mo
+    | SeqRMW b pe1 pe2 sym pe3 ->
+        SeqRMW b (convert_pexpr pe1) (convert_pexpr pe2) sym (convert_pexpr pe3)
     | Load pe1 pe2 mo ->
         Load (convert_pexpr pe1) (convert_pexpr pe2) mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->

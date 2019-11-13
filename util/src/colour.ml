@@ -39,16 +39,19 @@ let int_fg = function
 let do_colour =
   ref (Unix.isatty Unix.stdout)
 
-let ansi_format f str =
-  if !do_colour then
+let do_colour_stderr =
+  ref (Unix.isatty Unix.stderr)
+
+let ansi_format ?(err=false) f str =
+  if !do_colour && (if err then !do_colour_stderr else true) then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     "\x1b[" ^ g f ^ str ^ "\x1b[0m" (* TODO: optimize, someday *)
   else
     str
 
 
-let pp_ansi_format f doc =
-  if !do_colour then
+let pp_ansi_format ?(err=false) f doc =
+  if !do_colour && (if err then !do_colour_stderr else true) then
     let g f = String.concat ";" (List.map (fun z -> string_of_int (int_fg z)) f) ^ "m" in
     !^ ("\x1b[" ^ g f) ^^ doc ^^ !^ "\x1b[0m" (* TODO: optimize, someday *)
   else

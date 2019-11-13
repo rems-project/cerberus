@@ -47,6 +47,15 @@ type trace_event =
        * (*is_locking *) bool
        * pointer_value
        * mem_value
+  
+  | ME_seq_rmw of (* postfix incr/decr and compound assignments *)
+      Loc.t
+       * maybe string (* prefix *)
+       * Ctype.ctype
+       * pointer_value
+       * mem_value (* loaded value *)
+       * mem_value (* stored value *)
+
 
   | ME_eff_array_shift_ptrval of
       pointer_value

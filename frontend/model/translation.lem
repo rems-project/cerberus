@@ -910,41 +910,32 @@ else
           E.return (
             C.Expr [Annot.Astd "§6.5.2.4"; Annot.Astd "§6.5.2.4#2, sentence 1"; Annot.Astd "§6.5.2.4#2, sentence 3"] (
               C.Ewseq lvalue_sym_pat core_e (
-                C.Expr [Annot.Astd "§6.5.2.4#2, sentence 4"] (
-                  C.Easeq ((load_sym, C.BTy_loaded oTy))
-                    (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
-                    (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
-                       core_ty_e
-                       lvalue_sym_pe
-                       (Caux.mk_case_pe load_sym_pe
-                          [ ( Caux.mk_specified_pat obj_sym_pat
-                            , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
+                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e lvalue_sym_pe load_sym begin
+                  Caux.mk_case_pe load_sym_pe
+                    [ ( Caux.mk_specified_pat obj_sym_pat
+                      , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
 match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
-(*
-                              stdlib.mkcall_conv_int (ctype_of e) (Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1))
-*)
-                          (* TODO: check again *)
-                          let core_incr = Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1) in
+      (* TODO: check again *)
+      let core_incr = Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_integer_pe 1) in
       if AilTypesAux.is_signed_integer_type result_ty then
-                          stdlib.mkcall_catch_exceptional_condition result_ty core_incr
+                                  stdlib.mkcall_catch_exceptional_condition result_ty core_incr
       else (* is unsigned *)
-                          stdlib.mkcall_wrapI result_ty core_incr
+                                  stdlib.mkcall_wrapI result_ty core_incr
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
-                          (* TODO: not correct semantics for float *)
-                          Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
+                                (* TODO: not correct semantics for float *)
+                                Caux.mk_op_pe C.OpAdd obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
                               (*error "AilEunary PostfixIncr, floating type"*)
   | Ctype.Pointer _ ref_ty ->
-                              Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe 1)
+                                Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe 1)
   | (*BISECT-IGNORE*) _ ->
       illTypedAil loc "AilEunary PostfixIncr"
 end
                             )
-                          ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
-                            , Caux.mk_unspecified_pe ty(*TODO:check*) )
-                          ] )
-                       Cmm.NA)))
-                )
+                    ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
+                      , Caux.mk_unspecified_pe ty(*TODO:check*) )
+                    ]
+                end
               )
             )
           )
@@ -954,6 +945,7 @@ end
       (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
       | A.AilEunary A.PostfixDecr e ->
           (* STD §6.5.2.4 *)
+(*
           let () = if AilTypesAux.is_atomic (ctype_of e) then
             Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
           else
@@ -971,43 +963,49 @@ end
           let load_sym_pe   = Caux.mk_sym_pe load_sym             in
           let obj_sym_pe    = Caux.mk_sym_pe obj_sym              in
           
+*)
+          let () = if AilTypesAux.is_atomic (ctype_of e) then
+            Debug.warn [Debug.DB_elaboration] (fun () -> "TODO: elaboration is wrong for atomic types")
+          else
+            () in
+          
+          self e >>= fun core_e ->
+          let () = Debug.print_debug 1 [Debug.DB_elaboration] (fun () -> "TODO: needs to fix this") in
+          let ty  = AilTypesAux.rvalue_coercion (snd (from_lvalue_type e)) in
+          let oTy = force_core_object_type_of_ctype ty    in
+          let core_ty_e = Caux.mk_ail_ctype_pe ty in
+          E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer) >>= fun (lvalue_sym, lvalue_sym_pat, lvalue_sym_pe) ->
+          E.wrapped_fresh_symbol (C.BTy_loaded oTy)           >>= fun (load_sym,   load_sym_pat,   load_sym_pe)   ->
+          E.wrapped_fresh_symbol (C.BTy_object oTy)           >>= fun (obj_sym,    obj_sym_pat,    obj_sym_pe)    ->
+          
           E.return $
             C.Expr [Annot.Astd "§6.5.2.4#3"] (
               C.Ewseq (Caux.mk_sym_pat lvalue_sym (C.BTy_object C.OTy_pointer)) core_e (
-                C.Expr [] (
-                  C.Easeq ((load_sym, C.BTy_loaded oTy))
-                    (C.Action loc default (C.Load core_ty_e lvalue_sym_pe Cmm.NA))
-                    (C.Paction C.Neg (C.Action loc default (C.Store false(* not locking *)
-                       core_ty_e
-                       lvalue_sym_pe
-                       (C.Pexpr [] () begin
-                          C.PEcase load_sym_pe
-                            [ ( Caux.mk_specified_pat (Caux.mk_sym_pat obj_sym (C.BTy_object oTy))
-                              , Caux.mk_specified_pe
+                Caux.seq_rmw loc false(* return the value of the load *) core_ty_e lvalue_sym_pe load_sym begin
+                  Caux.mk_case_pe load_sym_pe
+                    [ ( Caux.mk_specified_pat obj_sym_pat
+                      , Caux.mk_specified_pe $ Caux.mk_std_pe "§6.5.2.4#2, sentence 2"
 match Ctype.unatomic_ ty with
   | Ctype.Basic (Ctype.Integer _) ->
-                          (* TODO: check again *)
-                          let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
+      (* TODO: check again *)
+      let core_decr = Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_integer_pe 1) in
       if AilTypesAux.is_signed_integer_type result_ty then
-                          stdlib.mkcall_catch_exceptional_condition result_ty core_decr
+                                  stdlib.mkcall_catch_exceptional_condition result_ty core_decr
       else (* is unsigned *)
-                          stdlib.mkcall_wrapI result_ty core_decr
+                                  stdlib.mkcall_wrapI result_ty core_decr
   | Ctype.Basic (Ctype.Floating (Ctype.RealFloating _)) ->
-                          (* TODO: not correct semantics for float *)
-                          Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
+                                (* TODO: not correct semantics for float *)
+                                Caux.mk_op_pe C.OpSub obj_sym_pe (Caux.mk_floating_value_pe Mem.one_fval)
   | Ctype.Pointer _ ref_ty ->
-                                   (* TODO: check again *)
-                                   Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe (0 - 1))
+                                Caux.mk_array_shift obj_sym_pe ref_ty (Caux.mk_integer_pe (0-1))
   | (*BISECT-IGNORE*) _ ->
-      illTypedAil loc "AilEunary PostfixIncr"
+      illTypedAil loc "AilEunary PostfixDecr"
 end
-                             )
-                            ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
-                              , Caux.mk_unspecified_pe ty(*TODO:check*) )
-                            ]
-                       end)
-                       Cmm.NA)))
-                )
+                            )
+                    ; ( C.Pattern [] (C.CaseCtor C.Cunspecified [Caux.mk_empty_pat C.BTy_ctype])
+                      , Caux.mk_unspecified_pe ty(*TODO:check*) )
+                    ]
+                end
               )
             )
       
@@ -1886,6 +1884,7 @@ end
               [ ( Caux.mk_tuple_pat [Caux.mk_specified_pat obj1_sym_pat; Caux.mk_specified_pat obj2_sym_pat]
                 , Caux.mk_specified_pe (Caux.mk_op_pe C.OpAdd obj1_sym_pe obj2_sym_pe) ) ] in
           
+
           E.return begin
             Caux.mk_wseq_e (Caux.mk_tuple_pat [Caux.mk_tuple_pat [l1_sym_pat; v1_sym_pat]; v2_sym_pat]) begin
               Caux.mk_unseq_e
@@ -1901,6 +1900,15 @@ end
             end
           end
 
+(*
+        E.return begin
+          Caux.mk_wseq_e (Caux.mk_tuple_pat [Caux.mk_tuple_pat l1_sym_pat; v1_sym_pat]; v2_sym_pat]) begin
+            
+          end
+        end
+
+SEQ_RMW
+*)
 
 
 (*
@@ -3366,8 +3374,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
           (* ASK: this annotation looks wrong!! is this really implementing 6.5#2 ? *)
           C.Expr [Annot.Astd "§6.5#2"] $
           C.Esseq (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
-            (* TODO: Ebound index *)
-            (C.Expr [] (C.Ebound 0 core_e))
+            (C.Expr [] (C.Ebound core_e))
             (Caux.mk_pure_e Caux.mk_unit_pe)
           )
     
@@ -3580,13 +3587,11 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
             e_sym_pe in
         
         (* All the visible objects from the current function need to be killed. *)
-        (* TODO: Ebound index *)
-
         E.return $ begin
           if env.is_Noreturn then
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
-            Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound 0 core_e)) (
+            Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound core_e)) (
               mk_run_e loc env.return_lab visible_syms [] [ret_pe]
             )
         end
