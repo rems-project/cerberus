@@ -89,6 +89,11 @@ cerberus-bmc: _lib/concrete/concrete.cmxa
 
 bmc: cerberus-bmc
 
+ail_playground: _lib/concrete/concrete.cmxa
+	@make -C backend/ail_playground
+	@cp backend/driver/ail_playground ail_playground
+
+
 cerberus-absint: _lib/concrete/concrete.cmxa
 	@make -C backend/absint
 	@cp backend/absint/cerberus-absint cerberus-absint
