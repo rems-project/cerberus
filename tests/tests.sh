@@ -86,5 +86,6 @@ citests=(
 #  0202-main-not-function.error.c
 #  0203-main-params1.error.c
 #  0204-main-params2.error.c
+  0297-atomic_memberof.undef.c
 )
 
