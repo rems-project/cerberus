@@ -15,7 +15,6 @@
 #define ATOMIC_LLONG_LOCK_FREE     __cerbvar_ATOMIC_LLONG_LOCK_FREE
 #define ATOMIC_POINTER_LOCK_FREE   __cerbvar_ATOMIC_POINTER_LOCK_FREE
 
-#define ATOMIC_FLAG_INIT           __cerbvar_ATOMIC_FLAG_INIT
 
 typedef enum memory_order {
   memory_order_relaxed = __cerbvar_memory_order_relaxed,
@@ -30,6 +29,9 @@ typedef enum memory_order {
 typedef struct atomic_flag {
   _Atomic(_Bool) _Value;
 } atomic_flag;
+
+#define ATOMIC_FLAG_INIT { /*._Value=*/ 0 }
+
 
 
 #define ATOMIC_VAR_INIT(value) (value)
