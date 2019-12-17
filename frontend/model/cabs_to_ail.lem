@@ -505,8 +505,9 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
           | _ ->
               error "constructValue_aux, Union"
         end
-    | Ctype.Atomic _ ->
-        error "TODO: Atomic"
+    | Ctype.Atomic ty' ->
+        (* TODO: check this *)
+        constructValue_aux tagDefs path elems ty'
     | _ ->
         match List.lookup path elems with
           | Nothing ->
