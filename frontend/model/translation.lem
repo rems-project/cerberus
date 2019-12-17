@@ -2992,6 +2992,12 @@ else (* is_pointer *)
 
       
       | A.AilErvalue e ->
+          let mo =
+            if AilTypesAux.is_atomic (ctype_of e) then
+              (* STD §6.2.6.1#9 *)
+              Cmm.Seq_cst
+            else
+              Cmm.NA in
           (* TODO: check + I don't like have a wseq here *)
           self e >>= fun core_e ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
@@ -2999,7 +3005,7 @@ else (* is_pointer *)
           E.return (
             C.Expr [] (
               C.Ewseq ( (* Caux.mk_specified_pat *) e_sym_pat) core_e (
-                Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe Cmm.NA
+                Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe mo
               )
             )
           )
