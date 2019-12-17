@@ -26,8 +26,10 @@ typedef enum memory_order {
   memory_order_seq_cst = __cerbvar_memory_order_seq_cst
 } memory_order;
 
-// TODO: atomic_flag
-// atomic_flag ===> a structure type representing a lock-free, primitive atomic flag; and several atomic analogs of integer types.
+// TODO: check the definition of atomic_flag
+typedef struct atomic_flag {
+  _Atomic(_Bool) _Value;
+} atomic_flag;
 
 
 #define ATOMIC_VAR_INIT(value) (value)
