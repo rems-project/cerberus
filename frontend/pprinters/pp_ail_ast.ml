@@ -506,7 +506,7 @@ let pp_annot gtc =
           (* TODO: do the colour turn off in pp_ansi_format *)
           let saved = !Colour.do_colour in
           Colour.do_colour := false;
-          let ret = P.squotes (pp_genType gty) in
+          let ret = P.squotes (Pp_ail.pp_genType gty) in
           Colour.do_colour := saved;
           ret
        )
