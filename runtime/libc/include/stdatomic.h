@@ -37,7 +37,8 @@ typedef struct atomic_flag {
 #define ATOMIC_VAR_INIT(value) (value)
 
 
-#define atomic_init(obj, value)    __cerbvar_atomic_init(obj, value)
+//#define atomic_init(obj, value)    __cerbvar_atomic_init(obj, value)
+#define atomic_init(obj,value)   (*obj = value)
 
 
 void atomic_thread_fence(memory_order order);
