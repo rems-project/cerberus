@@ -1,10 +1,10 @@
 Cerberus C semantics
 =====
 
-Some example usage of the CLI
+Example uses of the CLI
 ---
 
-### Running the pipeline without executing:
+### Running the elaborate-and-link pipeline without executing:
 
 ```bash
 $ cerberus file1.c ... fileN.c
@@ -13,16 +13,17 @@ This will elaborate the C translation units to Core programs, and link them, bef
 
 Include directories can be added with the usual ```-I```, and macros can be forwarded to the preprocessor using ```-D``` (and unset with ```-U```).
 
-The **ail** intermediate representation, and the **core** program can be printed by passing them as argument to ```--pp=```.
+The C abstract syntax (**cabs**), and the **Ail** intermediate representation can be printed with  ```--ast=cabs``` and ```--ast=ast```.
 
-The C abstract syntax (**cabs**), and the **ail** AST can be printed by passing them as argument to ```--ast=```.
+The **Ail** intermediate representation, and the **Core** program can be pretty-printed with ```--pp=ail``` ```--pp=core```.
 
 
-### Executing something
+
+### Executing something:
 ```bash
 $ cerberus --exec file1.c ... fileN.c
 ```
-This will look for a ```main()``` function and starts from there. To see the return value, or get a machine friendly collection of stdout and stderr, add ```--batch```.
+This will elaborate to Core, link, look for a ```main()```, function and start executing the Core from there. To see the return value, or get a machine-friendly collection of stdout and stderr, add ```--batch```.
 
 ### Passing command line arguments to the C program
 ```bash
@@ -31,7 +32,7 @@ $ cerberus --args="arg1","arg2" file.c
 
 ---
 
-Various C programs can be found in ```tests/```
+Various C programs can be found in ```tests/```.
 
 
 
@@ -48,15 +49,15 @@ You also need `lem`, which can be installed using opam from the rems-project rep
 $ opam repository add rems https://github.com/rems-project/opam-repository.git
 $ opam install lem
 ```
-Then using opam, install the following packages (the versions are ones that are known to work, older ones may also be fine):
+Then, again using opam, install the following packages (the versions are ones that are known to work; newer or older ones may also be fine):
 
 * ocamlfind       (1.8.1)
 * ocamlbuild      (0.14.0)
 * pprint          (20180528)
 * yojson          (1.7.0)
-* ppx\_sexp\_conv (v0.13.0), this a dependency of SibylFS
-* sexplib	        (v0.13.0), this a dependency of SibylFS
-* ppx\_deriving	 (4.4), this a dependency of SibylFS
+* ppx\_sexp\_conv (v0.13.0), this is a dependency of SibylFS
+* sexplib	        (v0.13.0), this is a dependency of SibylFS
+* ppx\_deriving	 (4.4), this is a dependency of SibylFS
 * cmdliner        (1.0.4)
 * menhir			 (20190924)
 * z3				 (4.8.6)
@@ -67,14 +68,14 @@ $ opam install ocamlfind ocamlbuild pprint yojson ppx_sexp_conv sexplib ppx_deri
 
 ### Set Environment
 
-Set `CERB_PATH` to that of the `cerberus-private` checkout and include it to your `PATH`:
+Set `CERB_PATH` to that of the `cerberus-private` checkout and include it in your `PATH`:
 
 ```bash
 $ export CERB_PATH=/home/<path>/cerberus-private/
 $ export PATH=$CERB_PATH:$PATH
 ```
 
-You also need to have C compiler accessible from the command ``cc``. Cerberus will make use of it of its preprocessor.
+You also need to have a C compiler accessible from the command ``cc``. Cerberus will make use of it for its preprocessor.
 
 
 ### Building with the concrete memory model
@@ -85,9 +86,9 @@ Just run:
 $ make
 ```
 
-It installs the internal libraries in `_lib` and the produces the CLI binary `cerberus`.
+This installs the internal libraries in `_lib` and produces the CLI binary `cerberus`.
 
-Run and have fun!
+Run as above.
 
 ```bash
 $ cerberus --help
@@ -104,15 +105,15 @@ Using `opam`, install the following extra dependencies:
 $ opam install z3 angstrom
 ```
 
-And run:
+Then:
 
 ```bash
 $ make cerberus-symbolic
 ```
 
-It installs the internal libraries in `_lib` and produces the CLI binary `cerberus-symbolic`.
+This installs the internal libraries in `_lib` and produces the CLI binary `cerberus-symbolic`.
 
-Run and have fun!
+And run:
 
 ```bash
 $ cerberus-symbolic --help
@@ -126,15 +127,19 @@ Install the common dependencies and the following extra ones:
 * z3        (4.8.6)
 * angstrom  (4.06.0)
 
+```bash
+$ opam install z3 angstrom
+```
+
 Then run:
 
 ```bash
 $ make cerberus-bmc
 ```
 
-It installs the internal libraries in `_lib` and the CLI binary `cerberus-bmc`.
+This installs the internal libraries in `_lib` and the CLI binary `cerberus-bmc`.
 
-Run and have fun!
+Run:
 
 ```bash
 $ cerberus-bmc --help
@@ -160,16 +165,16 @@ presuming z3 and angstrom are already installed:
 $ opam install lwt cohttp base64 cohttp-lwt-unix ezgzip
 ```
 
-Then run:
+Then:
 
 ```bash
 $ make web
 ```
 
-It installs all the available web instances as `webcerb.*` and the web server `cerberus-webserver`.
+This installs all the available web instances as `webcerb.*` and the web server `cerberus-webserver`.
 
 To build the UI, install node package manager `npm` (sudo apt install nodejs npm
-) and run:
+) and:
 
 ```bash
 $ make ui
@@ -177,7 +182,7 @@ $ make ui
 
 Edit the generated `config.json`.
 
-Run and have fun!
+Run:
 
 ```bash
 $ cerberus-server --help
@@ -192,7 +197,7 @@ Install the common dependencies and the APRON library (tested with 20160125).
 $ opam install apron
 ```
 
-Then run:
+Then:
 
 ```bash
 $ make absint
@@ -213,7 +218,7 @@ Internal Libraries
 ### Util
 
 These are utility modules that do not depend on any model (any LEM file). They
-are located at `./util`. And can be built with:
+are located at `./util`, and can be built with:
 
 ```bash
 $ make util
@@ -225,7 +230,7 @@ SibylFS: formal specification and oracle-based testing for POSIX and real-world
 file systems. More information can be obtained at
 [https://sibylfs.github.io](https://sibylfs.github.io).
 
-The files are located at `./sibylfs`. And can be built with:
+The files are located at `./sibylfs`, and can be built with:
 
 ```bash
 $ make sibylfs
