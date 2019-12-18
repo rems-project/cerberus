@@ -14,6 +14,7 @@ type cerberus_conf = {
   concurrency:     bool;
   error_verbosity: error_verbosity;
   defacto:         bool;
+  agnostic:        bool;
   n1570:           Yojson.Basic.json option;
 }
 
@@ -33,6 +34,7 @@ val set_cerb_conf:
     error_verbosity ->
     bool ->
     bool ->
+    bool ->
     unit
 
 (* NOTE: used in driver.lem *)
@@ -40,6 +42,7 @@ val current_execution_mode: unit -> execution_mode option
 
 val concurrency_mode: unit -> bool
 val isDefacto: unit -> bool
+val isAgnostic: unit -> bool
 
 (* NOTE: used in pp_errors.ml *)
 val verbose: unit -> error_verbosity

@@ -20,6 +20,7 @@ type cerberus_conf = {
   concurrency:        bool;
   error_verbosity:    error_verbosity;
   defacto:            bool;
+  agnostic:           bool;
   n1570:              Yojson.Basic.json option;
 }
 
@@ -40,8 +41,8 @@ let cerb_path =
       error "expecting the environment variable CERB_PATH set to point to the location of Cerberus."
 
 
-let set_cerb_conf exec exec_mode concurrency error_verbosity defacto bmc =
-  let conf = { defacto; concurrency; error_verbosity;
+let set_cerb_conf exec exec_mode concurrency error_verbosity defacto agnostic bmc =
+  let conf = { defacto; concurrency; error_verbosity; agnostic;
     exec_mode_opt= if exec then Some exec_mode else None;
     n1570=         if error_verbosity = QuoteStd then
                      Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
@@ -54,6 +55,9 @@ let concurrency_mode () =
 
 let isDefacto () =
   !!cerb_conf.defacto
+
+let isAgnostic () =
+  !!cerb_conf.agnostic
 
 let current_execution_mode () =
   !!cerb_conf.exec_mode_opt
