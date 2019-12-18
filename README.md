@@ -13,9 +13,9 @@ This will elaborate the C translation units to Core programs, and link them, bef
 
 Include directories can be added with the usual ```-I```, and macros can be forwarded to the preprocessor using ```-D``` (and unset with ```-U```).
 
-The C abstract syntax (**cabs**), and the **Ail** intermediate representation can be printed with  ```--ast=cabs``` and ```--ast=ast```.
+The C abstract syntax (**cabs**) and the **Ail** intermediate representation can be printed with  ```--ast=cabs``` and ```--ast=ast```.
 
-The **Ail** intermediate representation, and the **Core** program can be pretty-printed with ```--pp=ail``` ```--pp=core```.
+The **Ail** intermediate representation and the **Core** program can be pretty-printed with ```--pp=ail``` and ```--pp=core```.
 
 
 
