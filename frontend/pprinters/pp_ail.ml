@@ -860,7 +860,7 @@ let pp_genType = function
   | GenUnion tag_sym ->
       !^ "union" ^^^ pp_id tag_sym
   | GenAtomic ty ->
-      !^ "atomic" ^^ pp_ctype no_qualifiers ty
+      !^ "atomic" ^^^ pp_ctype no_qualifiers ty
 
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
