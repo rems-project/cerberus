@@ -4,6 +4,8 @@ type simple_assignment_violation =
   | IncompatibleType
   | IncompatiblePointerType
   | DiscardsQualifiers
+  | NotArithmetic
+  | BoolExpectsArithmeticOrPointer
 
 type arith_binop_violation =
   (* 6.5.5 Multiplicative operators *)
@@ -176,6 +178,10 @@ let std_of_assign_violation = function
       ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
   | DiscardsQualifiers ->
       ["§6.5.16.1#1, bullet 3 and 4"; "FOOTNOTE.112"]
+  | NotArithmetic ->
+      ["§6.5.16.1#1, bullet 1"]
+  | BoolExpectsArithmeticOrPointer ->
+      ["§6.5.16.1#1, bullet 6"]
 end
 
 let std_of_arith_binop_violation = function

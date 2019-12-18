@@ -55,38 +55,32 @@ let is_unsigned_ity ity =
 
 (* == constructor predicates on ctypes ====================================== *)
 val is_integer: ctype -> bool
-let is_integer (Ctype _ ty) =
-  match ty with
-  | Basic (Integer _) ->
+let is_integer = function
+  | Ctype _ (Basic (Integer _)) ->
       true
   | _ ->
       false
 end
 
-
 val is_floating: ctype -> bool
-let is_floating (Ctype _ ty) =
-  match ty with
-    | Basic (Floating _) ->
-        true
-    | _ ->
-        false
-  end
+let is_floating = function
+  | Ctype _ (Basic (Floating _)) ->
+      true
+  | _ ->
+      false
+end
 
 val is_void: ctype -> bool
-let is_void ty =
-  match unatomic_ ty with
-  | Void ->
+let is_void = function
+  | Ctype _ Void ->
       true
   | _ ->
       false
 end
 
 val is_pointer: ctype -> bool
-let is_pointer ty =
-   (* STD §6.2.5#22, sentence 3-4 *)
-  match unatomic_ ty with
-  | Pointer _ _ ->
+let is_pointer = function
+  | Ctype _ (Pointer _ _) ->
       true
   | _ ->
       false
@@ -113,24 +107,20 @@ end
 
 (* STD §6.2.5#15, sentence 1 *)
 val is_character: ctype -> bool
-let is_character ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Basic (Integer Char) ->
+let is_character = function
+  | Ctype _ (Basic (Integer Char)) ->
       true
-  | Basic (Integer (Signed Ichar)) ->
+  | Ctype _ (Basic (Integer (Signed Ichar))) ->
       true
-  | Basic (Integer (Unsigned Ichar)) ->
+  | Ctype _ (Basic (Integer (Unsigned Ichar))) ->
       true
   | _ ->
       false
 end
 
 val is_Bool: ctype -> bool
-let is_Bool ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Basic (Integer Bool) ->
+let is_Bool = function
+  | Ctype _ (Basic (Integer Bool)) ->
       true
   | _ ->
       false
@@ -138,10 +128,8 @@ end
 
 (* TODO: STD doc *)
 val     is_array: ctype -> bool
-let is_array ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Array _ _ ->
+let is_array = function
+  | Ctype _ (Array _ _) ->
       true
 (*  | Builtin "jmp_buf" ->
       true
@@ -152,21 +140,16 @@ let is_array ty =
 end
 
 val is_array_unknown_size: ctype -> bool
-let is_array_unknown_size ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-    | Array _ Nothing ->
-        true
-    | _ ->
-        false
-  end
-
+let is_array_unknown_size = function
+  | Ctype _ (Array _ Nothing) ->
+      true
+  | _ ->
+      false
+end
 
 val is_array_of_character: ctype -> bool
-let is_array_of_character ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Array elem_ty _ ->
+let is_array_of_character = function
+  | Ctype _ (Array elem_ty _) ->
       is_character elem_ty
   | _ ->
       false
@@ -174,30 +157,24 @@ end
 
 (* STD §6.2.5#1, sentence 3 *)
 val is_function: ctype -> bool
-let is_function ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Function _ _ _ _ ->
+let is_function = function
+  | Ctype _ (Function _ _ _ _) ->
       true
   | _ ->
       false
 end
 
 val is_struct: ctype -> bool
-let is_struct ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Struct _ ->
+let is_struct = function
+  | Ctype _ (Struct _) ->
       true
   | _ ->
       false
 end
 
 val is_union: ctype -> bool
-let is_union ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Union _ ->
+let is_union = function
+  | Ctype _ (Union _) ->
       true
   | _ ->
       false
@@ -209,24 +186,22 @@ let is_struct_or_union ty =
 
 
 val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
-let has_flexible_array_member sigm ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-    | Struct tag_sym ->
-        match List.lookup tag_sym sigm.tag_definitions with
-          | Just (StructDef membersDefs) ->
-              match List.dest_init membersDefs with
-                | Just (_, (_, (_, last_ty))) ->
-                    (* NOTE: this assumes membersDefs is wf
-                       (i.e. it has more than one element) *)
-                    is_array_unknown_size last_ty
-                | Nothing ->
-                    false
-              end
-          | _ ->
-              error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
-        end
-    | _ ->
+let has_flexible_array_member sigm = function
+  | Ctype _ (Struct tag_sym) ->
+      match List.lookup tag_sym sigm.tag_definitions with
+        | Just (StructDef membersDefs) ->
+            match List.dest_init membersDefs with
+              | Just (_, (_, (_, last_ty))) ->
+                  (* NOTE: this assumes membersDefs is wf
+                     (i.e. it has more than one element) *)
+                  is_array_unknown_size last_ty
+              | Nothing ->
+                  false
+            end
+        | _ ->
+            error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
+      end
+  | _ ->
         false
 end
 
@@ -268,6 +243,7 @@ let is_derived (Ctype _ ty) =
 
 (* STD §6.2.5#24 *)
 (* NOTE: dead code *)
+(*
 val is_derived_declarator: ctype -> bool
 let is_derived_declarator ty =
   match unatomic_ ty with
@@ -276,12 +252,14 @@ let is_derived_declarator ty =
   | Pointer _ _ -> true
   | _ -> false
   end
+*)
 
 (* TODO *)
 (* STD §6.2.5#1, sentence 4 *)
 val is_complete: forall 'a. sigma 'a -> ctype -> bool
 let is_complete sigm ty =
-  (* TODO: check atomic *)
+  (* NOTE: for atomic types we look at the argument type. The standard doesn't say
+     when/whether atomic types are complete... *)
   match unatomic_ ty with
   | Void ->
       (* STD §6.2.5#19 *)
@@ -1295,11 +1273,9 @@ let compatibleWithQualifiedUnqualifiedVersionOf ty tys =
 
 
 val referenced_type: ctype -> maybe ctype
-let referenced_type ty =
-  (* TODO: check atomic *)
-  match unatomic_ ty with
-  | Pointer _ ty' ->
-      Just ty'
+let referenced_type = function
+  | Ctype _ (Pointer _ ref_ty) ->
+      Just ref_ty
   | _ ->
       Nothing
 end
