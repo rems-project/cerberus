@@ -1,69 +1,71 @@
-Cerberus
+Cerberus C semantics
 =====
 
-Cerberus CLI
+Some example usage of the CLI
 ---
 
-### Ocaml, opam and common dependencies
-
-Install `ocaml` (at least 4.06.0) and `opam`.
-Then using opam, install Cerberus dependencies:
-
-* ocamlfind (tested with 1.7.3-1)
-* cmdliner  (tested with 1.0.2)
-* menhir    (tested with 20171212)
-* pprint    (tested with 20171003)
-* yojson    (tested with 1.4.1)
-
-LEM dependencies:
-* zarith    (tested with 1.7)
-
-And SibylFS dependencies:
-* ppx_sexp_conv (tested with 113.09.00)
-* sexplib       (tested with 113.00.00)
-
+### Running the pipeline without executing:
 
 ```bash
-$ opam install ocamlfind cmdliner menhir pprint yojson zarith ppx_sexp_conv sexplib
+$ cerberus file1.c ... fileN.c
 ```
+This will elaborate the C translation units to Core programs, and link them, before returning silently.
 
-PS: apparently I also need
+Include directories can be added with the usual ```-I```, and macros can be forwarded to the preprocessor using ```-D``` (and unset with ```-U```).
+
+The **ail** intermediate representation, and the **core** program can be printed by passing them as argument to ```--pp=```.
+
+The C abstract syntax (**cabs**), and the **ail** AST can be printed by passing them as argument to ```--ast=```.
+
+
+### Executing something
 ```bash
-$ opam install ppx_deriving
+$ cerberus --exec file1.c ... fileN.c
+```
+This will look for a ```main()``` function and starts from there. To see the return value, or get a machine friendly collection of stdout and stderr, add ```--batch```.
+
+### Passing command line arguments to the C program
+```bash
+$ cerberus --args="arg1","arg2" file.c
 ```
 
+---
 
-### LEM
-
-PS: I used
-```
-opam pin -w .
-```
-instead of the last two lines below. 
+Various C programs can be found in ```tests/```
 
 
-Install `lem`
+
+Building the Cerberus CLI
+---
+
+### Opam, Ocaml and dependencies
+
+To build Cerberus you need `opam` (see [here](https://opam.ocaml.org/doc/Install.html) to install) and `ocaml` (>= 4.07).
+
+You also need `lem`, which can be installed using opam from the rems-project repository:
 
 ```bash
-$ git clone https://github.com/rems-project/lem.git
-$ cd lem
-$ make
-$ cd ocaml-lib; sudo make install
+$ opam repository add rems https://github.com/rems-project/opam-repository.git
+$ opam install lem
 ```
+Then using opam, install the following packages (the versions are ones that are known to work, older ones may also be fine):
 
-PS: why do we need the following?
-
-Set `LEM_PATH` to `lem` directory and include it in your path:
+* ocamlfind       (1.8.1)
+* ocamlbuild      (0.14.0)
+* pprint          (20180528)
+* yojson          (1.7.0)
+* ppx\_sexp\_conv (v0.13.0), this a dependency of SibylFS
+* sexplib	        (v0.13.0), this a dependency of SibylFS
+* ppx\_deriving	 (4.4), this a dependency of SibylFS
+* cmdliner        (1.0.4)
+* menhir			 (20190924)
+* z3				 (4.8.6)
 
 ```bash
-$ export LEM_PATH=/home/<path>/lem
-$ export PATH=$LEM_PATH:$PATH
-
+$ opam install ocamlfind ocamlbuild pprint yojson ppx_sexp_conv sexplib ppx_deriving cmdliner menhir z3
 ```
 
-### Set Enviroment
-
-PS: is this really necessary?   Why can't the Makefile just figure it out?
+### Set Environment
 
 Set `CERB_PATH` to that of the `cerberus-private` checkout and include it to your `PATH`:
 
@@ -72,7 +74,10 @@ $ export CERB_PATH=/home/<path>/cerberus-private/
 $ export PATH=$CERB_PATH:$PATH
 ```
 
-### Cerberus with the Concrete Memory Model
+You also need to have C compiler accessible from the command ``cc``. Cerberus will make use of it of its preprocessor.
+
+
+### Building with the concrete memory model
 
 Just run:
 
@@ -80,7 +85,7 @@ Just run:
 $ make
 ```
 
-It installs the internal libraries in `_lib` and the CLI binary `cerberus`.
+It installs the internal libraries in `_lib` and the produces the CLI binary `cerberus`.
 
 Run and have fun!
 
@@ -88,12 +93,12 @@ Run and have fun!
 $ cerberus --help
 ```
 
-### Cerberus with the Symbolic Memory Model
+### Building with the symbolic memory model
 
 Using `opam`, install the following extra dependencies:
 
-* z3        (tested with 4.7.1)
-* angstrom  (tested with 4.06.0)
+* z3        (4.8.6)
+* angstrom  (4.06.0)
 
 ```bash
 $ opam install z3 angstrom
@@ -105,7 +110,7 @@ And run:
 $ make cerberus-symbolic
 ```
 
-It installs the internal libraries in `_lib` and the CLI binary `cerberus-symbolic`.
+It installs the internal libraries in `_lib` and produces the CLI binary `cerberus-symbolic`.
 
 Run and have fun!
 
@@ -113,13 +118,13 @@ Run and have fun!
 $ cerberus-symbolic --help
 ```
 
-Cerberus BMC
+Building Cerberus-BMC
 ---
 
 Install the common dependencies and the following extra ones:
 
-* z3        (tested with 4.7.1)
-* angstrom  (tested with 4.06.0)
+* z3        (4.8.6)
+* angstrom  (4.06.0)
 
 Then run:
 
@@ -135,23 +140,25 @@ Run and have fun!
 $ cerberus-bmc --help
 ```
 
-Cerberus Web/UI
+Building the web server
 ---
 
 Install the common dependencies and the following extra ones:
 
-* z3        (tested with 4.7.1)
-* angstrom  (tested with 4.06.0)
-* lwt       (tested with 3.3.0)
-* cohttp    (tested with 1.1.0)
-* base64    (tested with 2.2.0)
-* cohttp-lwt-unix (tested with 1.0.3)
-* ezgzip    (tested with 0.2.0)
+* z3        (4.8.6)
+* angstrom  (4.06.0)
+* lwt       (3.3.0)
+* cohttp    (1.1.0)
+* base64    (2.2.0)
+* cohttp-lwt-unix (1.0.3)
+* ezgzip    (0.2.0)
 
 
 presuming z3 and angstrom are already installed:
 
-opam install lwt cohttp base64 cohttp-lwt-unix ezgzip
+```bash
+$ opam install lwt cohttp base64 cohttp-lwt-unix ezgzip
+```
 
 Then run:
 
@@ -176,7 +183,7 @@ Run and have fun!
 $ cerberus-server --help
 ```
 
-Cerberus Abstract Interpreter
+Building the abstract interpreter
 ---
 
 Install the common dependencies and the APRON library (tested with 20160125).
