@@ -20,7 +20,7 @@ citests=(
   0017-for_simple.c
   0018-lt_promotion.c
   0019-arith_promotion.c
-  0020-end_of_lifetime.c
+  0020-end_of_lifetime.undef.c
 #  0021-fact.c
   0022-while_continue.c
 #  0023-jump1.c
@@ -87,5 +87,6 @@ citests=(
 #  0203-main-params1.error.c
 #  0204-main-params2.error.c
   0297-atomic_memberof.undef.c
+  0298-atomic_memberofptr.undef.c
 )
 
