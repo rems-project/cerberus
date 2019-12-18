@@ -279,6 +279,9 @@ let string_of_desugar_cause = function
 let string_of_ail_typing_misc_error = function
   | UntypableIntegerConstant i ->
       "integer constant cannot be represented by any type"
+  | UnableToTypeIntegerConstant ->
+      "the implementation setting is not complete enough to type the integer constant. \
+       Try using another implementation of the --agnostic flag"
   | ParameterTypeNotAdjusted ->
       "internal: the parameter type was not adjusted"
   | VaStartArgumentType ->

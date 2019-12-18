@@ -1,6 +1,8 @@
 open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
 import Constraint Undefined Builtins Debug Pp Cmm_csem Global
 
+import Implementation
+
 module AAux = AilTypesAux
 module GAux = GenTypesAux
 module E = ErrorMonad
@@ -14,117 +16,134 @@ let lookup_tag_definition s sym =
   List.lookup sym s.tag_definitions
 
 
-val gen_typing_type_of_constant: integerConstant -> genIntegerType
-let gen_typing_type_of_constant iCst =
-  let () = Debug.warn [] (fun () ->
-    "GenTyping.type_of_constant is BROKEN, using min ranges is wrong"
-  ) in
-  match iCst with
-    | IConstant n Decimal Nothing ->
-        if AAux.in_min_integer_range n (Signed Int_) then
-          Concrete (Signed Int_)
-(*
-        else if AAux.in_min_integer_range n (Signed Long) then
-          Concrete (Signed Long)
-        else if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-*)
-        else
-          Unknown iCst
-    | IConstant n _ Nothing ->
-        (* Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Signed Int_) then
-          Concrete (Signed Int_)
-(*
-        else if AAux.in_min_integer_range n (Unsigned Int_) then
-          Concrete (Unsigned Int_)
-        else if AAux.in_min_integer_range n (Unsigned Long) then
-          Concrete (Unsigned Long)
-        else if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-        else if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-*)
-        else
-          Unknown iCst
-    
-    | IConstant n _ (Just U) ->
-        (* Decimal, Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Unsigned Int_) then
-          Concrete (Unsigned Int_)
-(*
-        else if AAux.in_min_integer_range n (Unsigned Long) then
-          Concrete (Unsigned Long)
-        else if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-*)
-        else
-          Unknown iCst
-    
-    | IConstant n Decimal (Just L) ->
-        if AAux.in_min_integer_range n (Signed Long) then
-          Concrete (Signed Long)
-(*
-        else if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-*)
-        else
-          Unknown iCst
-    | IConstant n _ (Just L) ->
-        (* Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Signed Long) then
-          Concrete (Signed Long)
-(*
-        else if AAux.in_min_integer_range n (Unsigned Long) then
-          Concrete (Unsigned Long)
-        else if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-        else if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-*)
-        else
-          Unknown iCst
-    
-    | IConstant n _ (Just UL) ->
-        (* Decimal, Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Unsigned Long) then
-          Concrete (Unsigned Long)
-(*
-        else if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-*)
-        else
-          Unknown iCst
-    
-    | IConstant n Decimal (Just LL) ->
-        if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-        else
-          Unknown iCst
-    | IConstant n _ (Just LL) ->
-        (* Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Signed LongLong) then
-          Concrete (Signed LongLong)
-(*
-        else if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-*)
-        else
-          Unknown iCst
-    
-    | IConstant n _ (Just ULL) ->
-        (* Decimal, Octal or Hexadecimal *)
-        if AAux.in_min_integer_range n (Unsigned LongLong) then
-          Concrete (Unsigned LongLong)
-        else
-          Unknown iCst
-    
-    | IConstantMax ity ->
-        Concrete ity
-    
-    | IConstantMin ity ->
-        Concrete ity
+(* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever allows
+   recursive functions inside other functions... *)
+let in_range loc (n: integer) ity =
+  match Implementation.precision_ity ity with
+    | Nothing ->
+        E.fail loc (TError_MiscError UnableToTypeIntegerConstant)
+    | Just prec ->
+        let (min, max) =
+          if Implementation.is_signed_ity ity then
+            (* NOTE: we are assuming two's complement integer. Which will be the only allowed
+               implementation in case in C2X anyways *)
+            (~(2 ** prec), (2 ** prec) - 1)
+          else
+            (0, (2 ** prec) - 1) in
+        E.return (min <= n && n <= max)
+  end
+
+let rec try_ranges loc n = function
+  | [] ->
+      E.fail loc (TError_MiscError (UntypableIntegerConstant n))
+  | ity :: acc ->
+      in_range loc n ity >>= function
+        | true ->
+            E.return ity
+        | false ->
+            try_ranges loc n acc
+      end
 end
+
+val gen_typing_type_of_constant: Loc.t -> integerConstant -> E.errorM genIntegerType
+let gen_typing_type_of_constant loc iCst =
+  if Global.isAgnostic () then
+    let () = Debug.warn [] (fun () ->
+      "The typing of Ail integer constants is imprecise because of the --agnostic flag"
+    ) in
+    (* NOTE: in this mode, this function is trying to stay implementation agnostic,
+       and therefore only performs the first check of each lists in the table
+       from §6.4.4.1#5 using the miminal requirement on implementations. *)
+    E.return match iCst with
+      | IConstant n Decimal Nothing ->
+          if AAux.in_min_integer_range n (Signed Int_) then
+            Concrete (Signed Int_)
+          else
+            Unknown iCst
+      | IConstant n _ Nothing ->
+          (* Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Signed Int_) then
+            Concrete (Signed Int_)
+          else
+            Unknown iCst
+      | IConstant n _ (Just U) ->
+          (* Decimal, Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Unsigned Int_) then
+            Concrete (Unsigned Int_)
+          else
+            Unknown iCst
+      | IConstant n Decimal (Just L) ->
+          if AAux.in_min_integer_range n (Signed Long) then
+            Concrete (Signed Long)
+          else
+            Unknown iCst
+      | IConstant n _ (Just L) ->
+          (* Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Signed Long) then
+            Concrete (Signed Long)
+          else
+            Unknown iCst
+      | IConstant n _ (Just UL) ->
+          (* Decimal, Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Unsigned Long) then
+            Concrete (Unsigned Long)
+          else
+            Unknown iCst
+      | IConstant n Decimal (Just LL) ->
+          if AAux.in_min_integer_range n (Signed LongLong) then
+            Concrete (Signed LongLong)
+          else
+            Unknown iCst
+      | IConstant n _ (Just LL) ->
+          (* Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Signed LongLong) then
+            Concrete (Signed LongLong)
+          else
+            Unknown iCst
+      | IConstant n _ (Just ULL) ->
+          (* Decimal, Octal or Hexadecimal *)
+          if AAux.in_min_integer_range n (Unsigned LongLong) then
+            Concrete (Unsigned LongLong)
+          else
+            Unknown iCst
+      | IConstantMax ity ->
+          Concrete ity
+      | IConstantMin ity ->
+          Concrete ity
+    end
+  else
+    (* Non agnostic version *)
+    match iCst with
+      | IConstant n Decimal Nothing ->
+          Concrete <$> try_ranges loc n [ Signed Int_; Signed Long; Signed LongLong ]
+      | IConstant n _ Nothing ->
+          (* Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Signed Int_; Unsigned Int_; Unsigned Long
+                                        ; Signed LongLong; Unsigned LongLong ]
+      | IConstant n _ (Just U) ->
+          (* Decimal, Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Unsigned Int_; Unsigned Long; Unsigned LongLong ]
+      | IConstant n Decimal (Just L) ->
+          Concrete <$> try_ranges loc n [ Signed Long; Signed LongLong ]
+      | IConstant n _ (Just L) ->
+          (* Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Signed Long; Unsigned Long; Signed LongLong; Unsigned LongLong ]
+      | IConstant n _ (Just UL) ->
+          (* Decimal, Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Unsigned Long; Unsigned LongLong ]
+      | IConstant n Decimal (Just LL) ->
+          Concrete <$> try_ranges loc n [ Signed LongLong ]
+      | IConstant n _ (Just LL) ->
+          (* Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Signed LongLong; Unsigned LongLong ]
+      | IConstant n _ (Just ULL) ->
+          (* Decimal, Octal or Hexadecimal *)
+          Concrete <$> try_ranges loc n [ Unsigned LongLong ]
+      | IConstantMax ity ->
+          E.return (Concrete ity)
+      | IConstantMin ity ->
+          E.return (Concrete ity)
+  end
 
 (* STD §6.5.16.1#1 *)
 val well_typed_assignment: sigma unit -> assignment_violation -> Loc.t -> ctype -> genType -> expression genTypeCategory -> E.errorM unit
@@ -347,11 +366,12 @@ let annotate_stringLiteral (pref_opt, strs) =
     , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))) false )
 
 
-val     typecheck_constant: constant -> E.errorM genType
-let rec typecheck_constant cst =
+val     typecheck_constant: Loc.t -> constant -> E.errorM genType
+let rec typecheck_constant loc cst =
   match cst with
     | ConstantInteger iCst ->
-        E.return (GenBasic (GenInteger (gen_typing_type_of_constant iCst)))
+        gen_typing_type_of_constant loc iCst >>= fun gity ->
+        E.return (GenBasic (GenInteger gity))
     | ConstantFloating ((_, suff_opt)) ->
         E.add "§6.4.4.2#4" >>
         let rfty = match suff_opt with
@@ -381,7 +401,7 @@ let rec typecheck_constant cst =
         end
     | ConstantArray elem_ty csts ->
         (* TODO: this is probably too strong *)
-        E.mapM typecheck_constant csts >>= function
+        E.mapM (typecheck_constant loc) csts >>= function
           | [] ->
               error "typecheck_constant: empty array constant"
           | gtys ->
@@ -396,13 +416,13 @@ let rec typecheck_constant cst =
     | ConstantStruct tag_sym xs ->
         E.mapM (fun (memb_ident, cst) ->
           (* TODO: need to check that the members type match ... *)
-          typecheck_constant cst >>= fun gty ->
+          typecheck_constant loc cst >>= fun gty ->
           E.return (memb_ident, gty)
         ) xs >>= fun xs_gtys ->
         E.return (GenTypes.GenStruct tag_sym)
     | ConstantUnion tag_sym memb_ident cst ->
           (* TODO: need to check that the members type match ... *)
-        typecheck_constant cst >>= fun gty_membr ->
+        typecheck_constant loc cst >>= fun gty_membr ->
         E.return (GenTypes.GenUnion tag_sym)
   end
 
@@ -1266,7 +1286,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         annotate_constant cst >>= fun (cst', gty) ->
         E.return (AilEconst cst', gty)
 *)
-        typecheck_constant cst >>= fun gty ->
+        typecheck_constant loc cst >>= fun gty ->
         E.return (AilEconst cst, GenRValueType gty)
     
     (* TODO: check *)

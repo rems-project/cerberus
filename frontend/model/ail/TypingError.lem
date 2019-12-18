@@ -3,6 +3,8 @@ import Constraint Undefined
 
 type typing_misc_error =
   | UntypableIntegerConstant of integer (* §6.4.4.1#6, sentence 5 *)
+  | UnableToTypeIntegerConstant (* This is used when in NON agnostic mode, the Impl
+                                   is not complete enough to type an integer constant *)
   | ParameterTypeNotAdjusted (* internal *)
   | VaStartArgumentType (* §7.16.1.4#1 *)
   | VaArgArgumentType (* §7.16.1.1#1 *)
@@ -18,6 +20,8 @@ val std_of_typing_misc_error: typing_misc_error -> list string
 let std_of_typing_misc_error = function
   | UntypableIntegerConstant _ ->
       ["§6.4.4.1#6, sentence 5"]
+  | UnableToTypeIntegerConstant ->
+      []
   | ParameterTypeNotAdjusted ->
       []
   | VaStartArgumentType ->
