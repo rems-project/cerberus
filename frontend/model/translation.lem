@@ -890,7 +890,8 @@ else
             translate_function_designator ctx variadic_env stdlib tagDefs e
       
       (* TODO: promotion? + atomicity *)
-      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
+      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
+         with compare_exchange_weak with seq_cst, seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
           (* STD §6.5.2.4 *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
