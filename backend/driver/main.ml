@@ -103,7 +103,7 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd nostdinc nolibc macros macros_undef
+             cpp_cmd nostdinc nolibc agnostic macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
@@ -122,7 +122,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto agnostic false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -302,6 +302,11 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
+let agnostic =
+  let doc = "Asks Cerberus to delay looking at implementation settings until as late \
+             as possible. This makes the pipeline somewhat implementation agnostic." in
+  Arg.(value & flag & info ["agnostic"] ~doc)
+
 let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
@@ -398,7 +403,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
+                         cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $

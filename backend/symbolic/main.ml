@@ -122,7 +122,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
