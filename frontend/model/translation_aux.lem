@@ -380,13 +380,22 @@ let conv_loaded_arith stdlib ty_src ty_dst pe =
   if AilTypesAux.is_integer ty_src then
     if AilTypesAux.is_integer ty_dst then
       stdlib.mkcall_conv_loaded_int ty_dst pe
-    else (* is_floating ty_dst *)
+    else if AilTypesAux.is_floating ty_dst then
       stdlib.mkcall_loaded_fvfromint ty_dst pe
+    else
+      (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
+      error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
 (*      C.Pexpr [] () (C.PEctor C.Cfvfromint [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
-  else (* is_floating ty_src *)
+  else if AilTypesAux.is_floating ty_src then
     if AilTypesAux.is_integer ty_dst then
       stdlib.mkcall_loaded_ivfromfloat ty_dst pe
 (*      C.Pexpr [] () (C.PEctor C.Civfromfloat [Caux.mk_ail_ctype_pe ty_dst; pe]) *)
-    else (* is_floating ty_dst *)
+    else if AilTypesAux.is_floating ty_dst then
       (* TODO: floating vs floating conversion *)
       pe
+    else
+      (* NOTE: this case will occurs in particular if ty_dst is an atomic type *)
+      error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_dst)"
+  else
+    (* NOTE: this case will occurs in particular if ty_src is an atomic type *)
+    error "Translation_aux.conv_loaded_arith, not (is_arithmetic ty_src)"

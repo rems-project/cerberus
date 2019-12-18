@@ -1766,26 +1766,29 @@ else
           let core_ty_pe1 = Caux.mk_ail_ctype_pe $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           
           let e2_sym = Symbol.fresh () in
+          let ty1 = ctype_of e1 in
+          let ty2 = ctype_of e2 in
           begin
-if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
+if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
-              conv_loaded_arith stdlib (ctype_of e2) (ctype_of e1)
+              conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1)
             )
 
-else if AilTypesAux.is_struct_or_union (ctype_of e1) then
+else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
             (* TODO(check): I don't think that any conversion is needed here. *)
             (* TODO2: if we have multiple translation units, then maybe there should be a conversion? *)
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
               fun z -> z
             )
 
-else match AilTypesAux.referenced_type (ctype_of e1) with
+(* NOTE: we apply unatomic to ty1 because the left operand may be an atomic pointer to ... (STD §6.5.16.1#1, bullet 3) *)
+else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
   | Just ref_ty ->
         if Aaux.is_null_pointer_constant e2 then
             E.return (
@@ -1796,13 +1799,13 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
         else
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
               fun z -> z
            )
   | Nothing ->
         (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
-        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers (ctype_of e2)) in
+        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty2) in (* TODO *)
         self e2 >>= fun core_e2 ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e2_sym_pat, e2_sym_pe) ->
         E.return (
@@ -1821,12 +1824,11 @@ end
             ) in
           
           let mo =
-            if AilTypesAux.is_atomic (ctype_of e1) then
+            if AilTypesAux.is_atomic ty1 then
               (* STD §6.2.6.1#9 *)
               Cmm.Seq_cst
             else
               Cmm.NA in
-          
           E.return $
             C.Expr [Annot.Astd "§6.5.16#3, sentence 4"] (
               C.Ewseq (Caux.mk_tuple_pat [ e1_sym_pat
@@ -1851,11 +1853,7 @@ end
             C.Expr [Annot.Astd "§6.5.17#2, sentence 2"] (
               C.Esseq (Caux.mk_empty_pat (C.BTy_loaded oTy)) core_e1 core_e2
           )
-
-
-
-
-
+      
       | A.AilEcompoundAssign e1 aop e2 ->
           (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
           (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
@@ -2726,7 +2724,11 @@ else (* is_pointer *)
           let (tag_sym, oTy) = match ctype_of e with
             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                 (tag_sym, C.OTy_struct tag_sym)
+            | Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Struct tag_sym))) ->
+                (tag_sym, C.OTy_struct tag_sym)
             | Ctype.Ctype _ (Ctype.Union tag_sym) ->
+                (tag_sym, C.OTy_union tag_sym)
+            | Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Union tag_sym))) ->
                 (tag_sym, C.OTy_union tag_sym)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEmemberof"
@@ -2760,8 +2762,14 @@ else (* is_pointer *)
       | A.AilEmemberofptr e ident ->
           (* STD §6.5.2.3 *)
           let (ref_ty, tag_sym) = match ctype_of e with
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Struct tag_sym) as ref_ty)) -> (ref_ty, tag_sym)
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Union tag_sym) as ref_ty))  -> (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Struct tag_sym) as ref_ty)) ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Struct tag_sym))) as ref_ty)) ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Union tag_sym) as ref_ty))  ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Union tag_sym))) as ref_ty)) ->
+                (ref_ty, tag_sym)
             | (*BISECT-IGNORE*) _ -> illTypedAil loc "AilEmemberofptr"
           end in
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e_sym_pat   , e_sym_pe   ) ->

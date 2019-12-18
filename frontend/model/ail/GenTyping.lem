@@ -151,9 +151,18 @@ let well_typed_assignment s f loc ty1 gty2 e2 =
   let throw err =
     E.constraint_violation (with_cursor_from (locOf e2) loc) (f err ty1 gty2)
   in
-  if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 && GAux.is_arithmetic gty2 then
-    let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in
-    E.add "§6.5.16.1#1, bullet 1"
+  if AAux.atomic_qualified_unqualified AAux.is_arithmetic ty1 then
+    if GAux.is_arithmetic gty2 then
+      let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 1") in (* DEBUG *)
+      E.add "§6.5.16.1#1, bullet 1"
+    else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 then
+      if GAux.is_pointer gty2 then
+        let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
+        E.add "§6.5.16.1#1, bullet 6"
+      else
+        throw BoolExpectsArithmeticOrPointer
+    else
+      throw NotArithmetic
   
   else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty1 then
     E.add "§6.5.16.1#1, bullet 2" >>
@@ -230,10 +239,7 @@ let well_typed_assignment s f loc ty1 gty2 e2 =
             throw IncompatibleType
     end
   
-  else if AAux.atomic_qualified_unqualified AAux.is_Bool ty1 && GAux.is_pointer gty2 then
-    let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] OK: bullet 6") in (* DEBUG *)
-    E.add "§6.5.16.1#1, bullet 6"
-  
+  (* NOTE: bullet 6 is dealt with earlier (look for the code dealing with bullet 1) *)
   else
     let _ = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () -> "[well_typed_assignment] KO: the end") in (* DEBUG *)
     throw IncompatibleType
@@ -535,7 +541,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AAux.modifiable sigm qs' ty' && (AAux.is_real ty' || AAux.is_pointer ty') then
+              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' || AAux.atomic_qualified_unqualified AAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryIncrement ty')
@@ -548,7 +554,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         match GenTypes.genTypeCategoryOf e' with
           | GenLValueType qs' ty' _ ->
               AAux.lvalue_coercion sigm ty' >>= fun ty' ->
-              if AAux.modifiable sigm qs' ty' && (AAux.is_real ty' || AAux.is_pointer ty') then
+              if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' || AAux.atomic_qualified_unqualified AAux.is_pointer ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryDecrement ty')
@@ -888,18 +894,19 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEmemberof e memb_ident ->
         (* TODO: factorise *)
-        (* TODO: Atomic types *)
         annotate_expression CTXmemberof e >>= fun a_e ->
         (* the value of the AilEmemberof operator is an lvalue if [e] is an lvalue *)
         match GenTypes.genTypeCategoryOf a_e with
           | GenLValueType qs ty _ ->
-              (* NOTE: the member his not a "register" regardless of whether the
+              (* NOTE: the member is not a "register" regardless of whether the
                  struct/union was *)
               (* NOTE: the qualifiers of the value are the combination of the ones
                 of the left operand [e] and the ones in the declaration of the
                  member type (see §6.5.2.3#3 and #8) *)
-              match ty with
-                | Ctype _ (Struct tag_sym) ->
+              (* NOTE: we use unatomic_ here because §6.5.2.3#1 says the first operand must be
+                 "atomic, qualified, or unqualified structure or union type" *)
+              match unatomic_ ty with
+                | Struct tag_sym ->
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
@@ -913,7 +920,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                       | _ ->
                           error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
                     end
-                | Ctype _ (Union tag_sym) ->
+                | Union tag_sym ->
                     match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
@@ -931,33 +938,44 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofReferenceBaseTypeLvalue qs ty)
               end
           | GenRValueType gty ->
+              (* NOTE: even so we are dealing with a rvalue, the memberof operator might be
+                 inside a sizeof(), and therefore not executed.
+                 So the UB from §6.5.2.3#5, doesn't necessarily happens here *)
+              let do_struct tag_sym =
+                match lookup_tag_definition sigm tag_sym with
+                  | Just (StructDef membersDefs) ->
+                      match List.lookup memb_ident membersDefs with
+                        | Just (_, memb_ty) ->
+                            E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
+                        | Nothing ->
+                            E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident) )
+                                                   (MemberofNoMemberRvalue memb_ident gty)
+                      end
+                  | _ ->
+                      error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
+                end in
+              let do_union tag_sym =
+                match lookup_tag_definition sigm tag_sym with
+                  | Just (UnionDef membersDefs) ->
+                      match List.lookup memb_ident membersDefs with
+                        | Just (_, memb_ty) ->
+                            E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
+                        | Nothing ->
+                            E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
+                                                   (MemberofNoMemberRvalue memb_ident gty)
+                      end
+                  | _ ->
+                      error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
+                end in
               match gty with
+                | GenAtomic (Ctype _ (Struct tag_sym)) ->
+                    do_struct tag_sym
+                | GenAtomic (Ctype _ (Union tag_sym)) ->
+                    do_union tag_sym
                 | GenStruct tag_sym ->
-                    match lookup_tag_definition sigm tag_sym with
-                      | Just (StructDef membersDefs) ->
-                          match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_ty) ->
-                                E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
-                            | Nothing ->
-                                E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident) )
-                                                       (MemberofNoMemberRvalue memb_ident gty)
-                          end
-                      | _ ->
-                          error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
-                    end
+                    do_struct tag_sym
                 | GenUnion tag_sym ->
-                    match lookup_tag_definition sigm tag_sym with
-                      | Just (UnionDef membersDefs) ->
-                          match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_ty) ->
-                                E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
-                            | Nothing ->
-                                E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
-                                                       (MemberofNoMemberRvalue memb_ident gty)
-                          end
-                      | _ ->
-                          error "annotate_expression(AilEmemberof union): failed to find a valid tag definition"
-                    end
+                    do_union tag_sym
                 | _ ->
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofReferenceBaseTypeRvalue gty)
               end
@@ -965,43 +983,54 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEmemberofptr e memb_ident ->
       (* TODO: factorize *)
-      (* TODO: Atomic types *)
       (* NOTE: the qualifiers of the value are the combination of the ones
          of the referenced type of left operand [e] and the ones in the
          declaration of the member type (see §6.5.2.3#4) *)
         annotate_rvalue e >>= function
-          | (e', GenPointer ref_qs (Ctype _ (Struct tag_sym) as ref_ty)) ->
-              match lookup_tag_definition sigm tag_sym with
-                | Just (StructDef membersDefs) ->
-                    match List.lookup memb_ident membersDefs with
-                      | Just (memb_qs, memb_ty) ->
-                          E.return ( AilEmemberofptr e' memb_ident
-                                   , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
-                      | Nothing ->
-                          E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
-                                                 (MemberofptrNoMember memb_ident ref_qs ref_ty)
-                    end
+          | (e', gty) ->
+              match gty with
+                | GenPointer ref_qs (Ctype _ (Struct tag_sym) as ref_ty) ->
+                    E.return (ref_qs, Left tag_sym, ref_ty)
+                | GenPointer ref_qs (Ctype _ (Atomic (Ctype _ (Struct tag_sym))) as ref_ty) ->
+                    E.return (ref_qs, Left tag_sym, ref_ty)
+                | GenPointer ref_qs (Ctype _ (Union tag_sym) as ref_ty) ->
+                    E.return (ref_qs, Right tag_sym, ref_ty)
+                | GenPointer ref_qs (Ctype _ (Atomic (Ctype _ (Union tag_sym))) as ref_ty) ->
+                    E.return (ref_qs, Right tag_sym, ref_ty)
+                | GenPointer ref_qs ref_ty ->
+                    E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofptrReferenceBaseType ref_qs ref_ty)
                 | _ ->
-                    error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
-              end
-          | (e', GenPointer ref_qs (Ctype _ (Union tag_sym) as ref_ty)) ->
-              match lookup_tag_definition sigm tag_sym with
-                | Just (UnionDef membersDefs) ->
-                    match List.lookup memb_ident membersDefs with
-                      | Just (memb_qs, memb_ty) ->
-                          E.return ( AilEmemberofptr e' memb_ident
-                                   , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
-                      | Nothing ->
-                          E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
-                                                 (MemberofptrNoMember memb_ident ref_qs ref_ty)
+                    E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofptrReferenceTypeNotPointer gty)
+              end >>= function
+                | (ref_qs, Left tag_sym, ref_ty) ->
+                    match lookup_tag_definition sigm tag_sym with
+                      | Just (StructDef membersDefs) ->
+                          match List.lookup memb_ident membersDefs with
+                            | Just (memb_qs, memb_ty) ->
+                                E.return ( AilEmemberofptr e' memb_ident
+                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
+                            | Nothing ->
+                                E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
+                                                       (MemberofptrNoMember memb_ident ref_qs ref_ty)
+                          end
+                      | _ ->
+                          error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
                     end
-                | _ ->
-                    error "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
+                | (ref_qs, Right tag_sym, ref_ty) ->
+                    match lookup_tag_definition sigm tag_sym with
+                      | Just (UnionDef membersDefs) ->
+                          match List.lookup memb_ident membersDefs with
+                            | Just (memb_qs, memb_ty) ->
+                                E.return ( AilEmemberofptr e' memb_ident
+                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
+                            | Nothing ->
+                                E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
+                                                       (MemberofptrNoMember memb_ident ref_qs ref_ty)
+                          end
+                      | _ ->
+                          error "annotate_expression(AilEmemberofptr union): failed to find a valid tag definition"
+                    end
               end
-          | (_, GenPointer ref_qs ref_ty) ->
-              E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofptrReferenceBaseType ref_qs ref_ty)
-          | (_, gty) ->
-              E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofptrReferenceTypeNotPointer gty)
         end
     
     | AilEassign e1 e2 ->
@@ -1215,7 +1244,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEcast qs ty e ->
         wf_lvalue sigm qs ty >>
         annotate_rvalue e >>= fun (e', gty) ->
-        if not (is_scalar gty && AAux.is_scalar ty) then
+        if not (is_scalar gty && AAux.atomic_qualified_unqualified AAux.is_scalar ty) then
           E.constraint_violation (with_cursor_from (locOf e) loc) (CastInvalidType qs ty)
         else if is_pointer gty && AAux.is_floating ty then
           E.constraint_violation (with_cursor_from (locOf e) loc) CastPointerToFloat
@@ -1677,7 +1706,7 @@ and annotate_initialization sigm gamm ty e =
 and annotate_definition_aux sigm gamm (ty, e) =
   if    (AAux.is_array ty --> AAux.has_unknown_size ty)
      || (AAux.is_complete_object sigm ty --> not (AAux.is_vla ty)) then
-    if AAux.is_scalar ty then
+    if AAux.atomic_qualified_unqualified AAux.is_scalar ty then
       E.add "§6.7.9#11, sentence 3" >>
       (* NOTE: since we are not passing a `qs' with `ty' to annotate_assignee,
          we are indeed unqualifying the scalar type *)
@@ -1685,7 +1714,7 @@ and annotate_definition_aux sigm gamm (ty, e) =
       annotate_assignee sigm gamm InitializationAsSimpleAssignment Loc.unknown ty e
       
       (* TODO: "(...) that has automatic storage duration" *)
-      else if AAux.is_struct_or_union ty then
+      else if AAux.atomic_qualified_unqualified AAux.is_struct_or_union ty then
         (* TODO: check *)
         E.add "§6.7.9#13" >>
         annotate_rvalue sigm gamm e >>= fun (a_e, gty) ->

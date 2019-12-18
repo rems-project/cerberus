@@ -119,6 +119,10 @@ let string_of_constraint_violation = function
       "incompatible pointer types assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "'"
   | SimpleAssignmentViolation (DiscardsQualifiers, ty1, gty2) ->
       "assigning to '" ^ string_of_ctype ty1 ^ "' from '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
+  | SimpleAssignmentViolation (NotArithmetic, ty1, gty2) ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from non arithmetic type '" ^ string_of_gentype gty2 ^ "'"
+  | SimpleAssignmentViolation (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
+      "assigning to '" ^ string_of_ctype ty1 ^ "' from non scalar type '" ^ string_of_gentype gty2 ^ "'"
   | IntegerConstantOutRange ->
       "integer constant not in the range of the representable values for its type"
   | NoLinkageMultipleDeclaration x ->
@@ -191,6 +195,10 @@ let string_of_constraint_violation = function
       "incompatible pointer types returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "'"
   | ReturnAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
       "returning '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
+  | ReturnAsSimpleAssignment (NotArithmetic, ty1, gty2) ->
+      "returning '" ^ string_of_gentype gty2 ^ "' from a function with an arithmetic result type '" ^ string_of_ctype ty1 ^ "'"
+  | ReturnAsSimpleAssignment (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
+      "returning non scalar type '" ^ string_of_gentype gty2 ^ "' from a function with result type '" ^ string_of_ctype ty1 ^ "'"
   | ArrayDeclarationNegativeSize ->
       "array declared with a negative or zero size"
   | ArrayDeclarationIncompleteType ->
@@ -223,6 +231,10 @@ let string_of_constraint_violation = function
       "incompatible pointer types initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "'"
   | InitializationAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
       "initializing '" ^ string_of_ctype ty1 ^ "' with an expression of type '" ^ string_of_gentype gty2 ^ "' discards qualifiers"
+  | InitializationAsSimpleAssignment (NotArithmetic, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression with a non arithmetic type '" ^ string_of_gentype gty2 ^ "'"
+  | InitializationAsSimpleAssignment (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
+      "initializing '" ^ string_of_ctype ty1 ^ "' with an expression with a non scalar type '" ^ string_of_gentype gty2 ^ "'"
   | IllegalStorageClassIterationStatement
   | IllegalStorageClassFileScoped
   | IllegalStorageClassFunctionDefinition ->
@@ -237,6 +249,10 @@ let string_of_constraint_violation = function
       "incompatible pointer types passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
   | FunctionParameterAsSimpleAssignment (DiscardsQualifiers, ty1, gty2) ->
       "passing '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "' discards qualifiers"
+  | FunctionParameterAsSimpleAssignment (NotArithmetic, ty1, gty2) ->
+      "passing non arithmetic '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
+  | FunctionParameterAsSimpleAssignment (BoolExpectsArithmeticOrPointer, ty1, gty2) ->
+      "passing non scalar '" ^ string_of_gentype gty2 ^ "' to parameter of type '" ^ string_of_ctype ty1 ^ "'"
   | ExternalRedefinition sym ->
       "redefinition of '" ^ string_of_sym sym ^ "'"
   | AssertMacroExpressionScalarType ->
