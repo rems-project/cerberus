@@ -3,15 +3,19 @@ import Loc Debug
 
 type digest
 declare ocaml target_rep type digest = `Digest.t`
+declare coq target_rep type digest = unit
 
 val digest: unit -> digest
 declare ocaml target_rep function digest = `Fresh.digest`
+declare coq target_rep function digest = `fun _: unit => tt`
 
 val digest_compare: digest -> digest ->int 
 declare ocaml target_rep function digest_compare = `Digest.compare`
+declare coq target_rep function digest_compare = `fun _: unit _: unit => 0`
 
 val string_of_digest: digest -> string
 declare ocaml target_rep function string_of_digest = `Digest.to_hex`
+declare coq target_rep function string_of_digest = `fun _: tt => EmptyString`
 
 instance (Eq digest)
   let (=) x y = digest_compare x y = 0
@@ -122,6 +126,7 @@ type prefix =
 
 val fresh_int: unit -> nat
 declare ocaml target_rep function fresh_int = `Fresh.int`
+declare coq   target_rep function fresh_int = `BOOM` (* TODO *)
 
 val digest_of_sym: sym -> digest
 let digest_of_sym (Symbol dig _ _) = dig

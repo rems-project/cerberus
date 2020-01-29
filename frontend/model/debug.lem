@@ -18,6 +18,8 @@ declare ocaml target_rep type domain = `Debug_ocaml.domain`
 val get_level: unit -> nat
 declare ocaml target_rep function get_level   = `Debug_ocaml.get_debug_level`
 declare hol   target_rep function get_level u = 0 (* TODO: HOL hack *)
+declare coq   target_rep function get_level   = `fun _: tt => 0`
+
 
 
 val output_string: string -> unit
@@ -27,6 +29,7 @@ declare hol   target_rep function output_string = `util$output_string`
 val print_debug: nat -> list domain -> (unit -> string) -> unit
 declare ocaml target_rep function print_debug = `Debug_ocaml.print_debug`
 declare hol   target_rep function print_debug = `util$print_debug`
+declare coq   target_rep function print_debug = `fun (_:nat) (_: list domain) (_: unit -> string) := tt`
 
 val print_debug_located: nat -> list domain -> Loc.t -> (unit -> string) -> unit
 declare ocaml target_rep function print_debug_located = `Debug_ocaml.print_debug_located`

@@ -2,11 +2,13 @@ open import Bool Basic_classes Num
 
 type float
 declare ocaml target_rep type float = `float`
+declare coq   target_rep type float = `float`
 
 (* Relational operations *)
 
 val floatEq : float -> float -> bool
 declare ocaml target_rep function floatEq = infix `=`
+declare coq   target_rep function floatEq = infix `=`
 
 instance (Eq float)
   let (=) = floatEq
@@ -15,9 +17,11 @@ end
 
 val floatLt : float -> float -> bool
 declare ocaml target_rep function floatLt = infix `<`
+declare coq   target_rep function floatLt = `ltb%float_scope`
 
 val floatLe : float -> float -> bool
 declare ocaml target_rep function floatLe = infix `<=`
+declare coq   target_rep function floatLe = `leb%float_scope`
 
 val floatCompare : float -> float -> ordering
 let inline floatCompare = defaultCompare
@@ -34,15 +38,19 @@ end
 
 val floatAdd : float -> float -> float
 declare ocaml target_rep function floatAdd = `Floating.add`
+declare coq   target_rep function floatAdd = `add%float_scope`
 
 val floatSub : float -> float -> float
 declare ocaml target_rep function floatSub = `Floating.sub`
+declare coq   target_rep function floatSub = `sub%float_scope`
 
 val floatMul : float -> float -> float
 declare ocaml target_rep function floatMul = `Floating.mul`
+declare coq   target_rep function floatMul = `mul%float_scope`
 
 val floatDiv : float -> float -> float
 declare ocaml target_rep function floatDiv = `Floating.div`
+declare coq   target_rep function floatDiv = `div%float_scope`
 
 instance (NumAdd float)
   let (+) = floatAdd
@@ -64,6 +72,7 @@ end
 
 val of_int : int -> float
 declare ocaml target_rep function of_int = `float_of_int`
+declare coq   target_rep function of_int = `of_int63` (* TODO: check *)
 
 val of_integer : integer -> float
 let of_integer x = of_int (Num.intFromInteger x)

@@ -30,14 +30,19 @@ $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@cp $(MODEL_LEM) $(BUILD_DIR)
 	@make lem
 
-lem: $(BUILD_DIR)
-	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
-	# PS commented out this as it doesn't work on ubuntu 18.04
-	#@ulimit -n 7168
-	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) $(wildcard $(BUILD_DIR)/ail/*.lem)
-	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
-	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
-	@sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
+# lem: $(BUILD_DIR)
+# 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
+# 	# PS commented out this as it doesn't work on ubuntu 18.04
+# 	#@ulimit -n 7168
+# 	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) $(wildcard $(BUILD_DIR)/ail/*.lem)
+# 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
+# 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
+# 	@sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
+
+lem_coq: $(BUILD_DIR)
+	@echo $(BOLD)LEM$(RESET) -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ))
+	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ))
+
 
 clean:
 	@rm -rf ocaml_generated _build

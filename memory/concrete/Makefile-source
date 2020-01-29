@@ -139,3 +139,8 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_core_to_core) \
   $(SOURCE_core_dynamics) \
   $(SOURCE_elaboration)
+
+CERBERUS_LEM_SOURCES_COQ=\
+  core.lem \
+  core_reduction.lem \
+  core_eval.lem

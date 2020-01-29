@@ -15,6 +15,7 @@ end
 val error: forall 'a. string -> 'a
 declare ocaml target_rep function error = `Debug_ocaml.error`
 declare hol target_rep function error = `ARB`
+declare coq target_rep function error = `BOOM`
 
 val list_init : forall 'a. nat -> (nat -> 'a) -> list 'a
 declare ocaml target_rep function list_init = `List.init` 
