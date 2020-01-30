@@ -7,9 +7,13 @@ type floating_value
 declare ocaml target_rep type pointer_value  = `Impl_mem.pointer_value`
 declare ocaml target_rep type integer_value  = `Impl_mem.integer_value`
 declare ocaml target_rep type floating_value = `Impl_mem.floating_value`
+declare coq target_rep type pointer_value  = `tt` (* BOOM *)
+declare coq target_rep type integer_value  = `tt` (* BOOM *)
+declare coq target_rep type floating_value = `tt` (* BOOM *)
 
 type mem_value
 declare ocaml target_rep type mem_value = `Impl_mem.mem_value`
+declare coq target_rep type mem_value = `tt` (* BOOM *)
 
 type mem_iv_constraint = Mem_common.mem_constraint integer_value
 
@@ -28,6 +32,8 @@ type footprint
 val do_overlap: footprint -> footprint -> bool
 declare ocaml target_rep type footprint = `Impl_mem.footprint`
 declare ocaml target_rep function do_overlap = `Impl_mem.do_overlap`
+declare coq target_rep type footprint = `tt` (* BOOM *)
+declare coq target_rep function do_overlap = `BOOM`
 
 
 type mem_state
@@ -78,6 +84,8 @@ val null_ptrval: Ctype.ctype -> pointer_value
 val fun_ptrval: Symbol.sym -> pointer_value
 declare ocaml target_rep function null_ptrval = `Impl_mem.null_ptrval`
 declare ocaml target_rep function fun_ptrval = `Impl_mem.fun_ptrval`
+declare coq target_rep function null_ptrval = `BOOM`
+declare coq target_rep function fun_ptrval = `BOOM`
 
 (*TODO: revise that, just a hack for codegen*)
 val concrete_ptrval: integer -> integer -> pointer_value
@@ -91,6 +99,10 @@ val case_funsym_opt: mem_state -> pointer_value -> maybe Symbol.sym
 declare ocaml target_rep function concrete_ptrval = `Impl_mem.concrete_ptrval`
 declare ocaml target_rep function case_ptrval = `Impl_mem.case_ptrval`
 declare ocaml target_rep function case_funsym_opt = `Impl_mem.case_funsym_opt`
+
+declare coq target_rep function concrete_ptrval = `BOOM`
+declare coq target_rep function case_ptrval = `BOOM`
+declare coq target_rep function case_funsym_opt = `BOOM`
 
 (* Operations on pointer values *)
 val eq_ptrval: pointer_value -> pointer_value -> memM bool
@@ -107,17 +119,28 @@ declare ocaml target_rep function gt_ptrval = `Impl_mem.gt_ptrval`
 declare ocaml target_rep function le_ptrval = `Impl_mem.le_ptrval`
 declare ocaml target_rep function ge_ptrval = `Impl_mem.ge_ptrval`
 declare ocaml target_rep function diff_ptrval = `Impl_mem.diff_ptrval`
+declare coq target_rep function eq_ptrval = `BOOM`
+declare coq target_rep function ne_ptrval = `BOOM`
+declare coq target_rep function lt_ptrval = `BOOM`
+declare coq target_rep function gt_ptrval = `BOOM`
+declare coq target_rep function le_ptrval = `BOOM`
+declare coq target_rep function ge_ptrval = `BOOM`
+declare coq target_rep function diff_ptrval = `BOOM`
 
 val update_prefix: (Symbol.prefix * mem_value) -> memM unit
 val prefix_of_pointer: pointer_value -> memM (maybe string)
 declare ocaml target_rep function update_prefix = `Impl_mem.update_prefix`
 declare ocaml target_rep function prefix_of_pointer = `Impl_mem.prefix_of_pointer`
+declare coq target_rep function update_prefix = `BOOM`
+declare coq target_rep function prefix_of_pointer = `BOOM`
 
 val validForDeref_ptrval: Ctype.ctype -> pointer_value -> memM bool
 declare ocaml target_rep function validForDeref_ptrval = `Impl_mem.validForDeref_ptrval`
+declare coq target_rep function validForDeref_ptrval = `BOOM`
 
 val isWellAligned_ptrval: Ctype.ctype -> pointer_value -> memM bool
 declare ocaml target_rep function isWellAligned_ptrval = `Impl_mem.isWellAligned_ptrval`
+declare coq target_rep function isWellAligned_ptrval = `BOOM`
 
 (* Casting operations *)
 (* the first ctype is the original integer type, the second is the target referenced type *)
@@ -126,6 +149,8 @@ val ptrcast_ival: Ctype.ctype -> Ctype.ctype -> integer_value -> memM pointer_va
 val intcast_ptrval: Ctype.ctype -> Ctype.integerType -> pointer_value -> memM integer_value
 declare ocaml target_rep function ptrcast_ival = `Impl_mem.ptrcast_ival`
 declare ocaml target_rep function intcast_ptrval = `Impl_mem.intcast_ptrval`
+declare coq target_rep function ptrcast_ival = `BOOM`
+declare coq target_rep function intcast_ptrval = `BOOM`
 
 
 (* Pointer shifting constructors *)
@@ -133,10 +158,13 @@ val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointe
 val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
 declare ocaml target_rep function array_shift_ptrval = `Impl_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_ptrval`
+declare coq target_rep function array_shift_ptrval = `BOOM`
+declare coq target_rep function member_shift_ptrval = `BOOM`
 
 (* Effectfull version of pointer shifting constructors *)
 val eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> memM pointer_value
 declare ocaml target_rep function eff_array_shift_ptrval = `Impl_mem.eff_array_shift_ptrval`
+declare coq target_rep function eff_array_shift_ptrval = `BOOM`
 
 
 val memcpy: pointer_value -> pointer_value -> integer_value -> memM pointer_value
@@ -146,6 +174,10 @@ val realloc: Mem_common.thread_id -> integer_value -> pointer_value -> integer_v
 declare ocaml target_rep function memcpy = `Impl_mem.memcpy`
 declare ocaml target_rep function memcmp = `Impl_mem.memcmp`
 declare ocaml target_rep function realloc = `Impl_mem.realloc`
+
+declare coq target_rep function memcpy = `BOOM`
+declare coq target_rep function memcmp = `BOOM`
+declare coq target_rep function realloc = `BOOM`
 
 val va_start: list (Ctype.ctype * pointer_value) -> memM integer_value
 val va_copy: integer_value -> memM integer_value
@@ -158,6 +190,12 @@ declare ocaml target_rep function va_copy = `Impl_mem.va_copy`
 declare ocaml target_rep function va_arg = `Impl_mem.va_arg`
 declare ocaml target_rep function va_end = `Impl_mem.va_end`
 declare ocaml target_rep function va_list = `Impl_mem.va_list`
+
+declare coq target_rep function va_start = `BOOM`
+declare coq target_rep function va_copy = `BOOM`
+declare coq target_rep function va_arg = `BOOM`
+declare coq target_rep function va_end = `BOOM`
+declare coq target_rep function va_list = `BOOM`
 
 
 (* Integer value constructors *)
@@ -186,6 +224,19 @@ declare ocaml target_rep function bitwise_and_ival = `Impl_mem.bitwise_and_ival`
 declare ocaml target_rep function bitwise_or_ival = `Impl_mem.bitwise_or_ival`
 declare ocaml target_rep function bitwise_xor_ival = `Impl_mem.bitwise_xor_ival`
 
+declare coq target_rep function concurRead_ival = `BOOM`
+declare coq target_rep function integer_ival = `BOOM`
+declare coq target_rep function max_ival = `BOOM`
+declare coq target_rep function min_ival = `BOOM`
+declare coq target_rep function op_ival = `BOOM`
+declare coq target_rep function offsetof_ival = `BOOM`
+declare coq target_rep function sizeof_ival = `BOOM`
+declare coq target_rep function alignof_ival = `BOOM`
+declare coq target_rep function bitwise_complement_ival = `BOOM`
+declare coq target_rep function bitwise_and_ival = `BOOM`
+declare coq target_rep function bitwise_or_ival = `BOOM`
+declare coq target_rep function bitwise_xor_ival = `BOOM`
+
 (* Integer value destructors *)
 val case_integer_value: forall 'a. (* TODO: expose more ctors *)
     integer_value ->
@@ -203,10 +254,14 @@ val le_ival: maybe mem_state -> integer_value -> integer_value -> maybe bool
 declare ocaml target_rep function eq_ival = `Impl_mem.eq_ival`
 declare ocaml target_rep function lt_ival = `Impl_mem.lt_ival`
 declare ocaml target_rep function le_ival = `Impl_mem.le_ival`
+declare coq target_rep function eq_ival = `BOOM`
+declare coq target_rep function lt_ival = `BOOM`
+declare coq target_rep function le_ival = `BOOM`
 
 
 val eval_integer_value: integer_value -> maybe integer
 declare ocaml target_rep function eval_integer_value = `Impl_mem.eval_integer_value`
+declare coq target_rep function eval_integer_value = `BOOM`
 
 
 (* Floating value constructors *)
@@ -216,6 +271,9 @@ val str_fval: string -> floating_value
 declare ocaml target_rep function zero_fval = `Impl_mem.zero_fval`
 declare ocaml target_rep function one_fval = `Impl_mem.one_fval`
 declare ocaml target_rep function str_fval = `Impl_mem.str_fval`
+declare coq target_rep function zero_fval = `BOOM`
+declare coq target_rep function one_fval = `BOOM`
+declare coq target_rep function str_fval = `BOOM`
 
 (* Floating value destructors *)
 val case_fval: forall 'a. floating_value -> (unit -> 'a) -> (Float.float -> 'a) -> 'a
@@ -230,6 +288,10 @@ declare ocaml target_rep function op_fval = `Impl_mem.op_fval`
 declare ocaml target_rep function eq_fval = `Impl_mem.eq_fval`
 declare ocaml target_rep function lt_fval = `Impl_mem.lt_fval`
 declare ocaml target_rep function le_fval = `Impl_mem.le_fval`
+declare coq target_rep function op_fval = `BOOM`
+declare coq target_rep function eq_fval = `BOOM`
+declare coq target_rep function lt_fval = `BOOM`
+declare coq target_rep function le_fval = `BOOM`
 
 
 (* Integer <-> Floating casting constructors *)
@@ -237,6 +299,8 @@ val fvfromint: integer_value -> floating_value
 val ivfromfloat: Ctype.integerType -> floating_value -> integer_value
 declare ocaml target_rep function fvfromint = `Impl_mem.fvfromint`
 declare ocaml target_rep function ivfromfloat = `Impl_mem.ivfromfloat`
+declare coq target_rep function fvfromint = `BOOM`
+declare coq target_rep function ivfromfloat = `BOOM`
 
 
 (* Memory value constructors *)
@@ -254,6 +318,13 @@ declare ocaml target_rep function pointer_mval = `Impl_mem.pointer_mval`
 declare ocaml target_rep function array_mval = `Impl_mem.array_mval`
 declare ocaml target_rep function struct_mval = `Impl_mem.struct_mval`
 declare ocaml target_rep function union_mval = `Impl_mem.union_mval`
+declare coq target_rep function unspecified_mval = `BOOM`
+declare coq target_rep function integer_value_mval = `BOOM`
+declare coq target_rep function floating_value_mval = `BOOM`
+declare coq target_rep function pointer_mval = `BOOM`
+declare coq target_rep function array_mval = `BOOM`
+declare coq target_rep function struct_mval = `BOOM`
+declare coq target_rep function union_mval = `BOOM`
 
 
 (* Memory value destructor *)
@@ -269,6 +340,7 @@ val case_mem_value: forall 'a.
   (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
   'a
 declare ocaml target_rep function case_mem_value = `Impl_mem.case_mem_value`
+declare coq target_rep function case_mem_value = `BOOM`
 
 
 
@@ -288,3 +360,8 @@ declare ocaml target_rep function stringFromCtype  = `String_Ctype.string_of_cty
 declare ocaml target_rep function stringFromMem_value = `Impl_mem.string_of_mem_value`
 declare ocaml target_rep function stringFromPointer_value = `Impl_mem.string_of_pointer_value`
 declare ocaml target_rep function stringFromInteger_value = `Impl_mem.string_of_integer_value`
+
+declare coq target_rep function stringFromCtype  = `BOOM`
+declare coq target_rep function stringFromMem_value = `BOOM`
+declare coq target_rep function stringFromPointer_value = `BOOM`
+declare coq target_rep function stringFromInteger_value = `BOOM`

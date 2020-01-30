@@ -141,6 +141,13 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_elaboration)
 
 CERBERUS_LEM_SOURCES_COQ=\
+  Range.lem \
+  IntegerImpl.lem \
+  GenTypes.lem \
+  TypingError.lem \
+  ErrorMonad.lem \
+  AilTypesAux.lem \
+  AilSyntax.lem \
   core.lem \
   core_reduction.lem \
   core_eval.lem

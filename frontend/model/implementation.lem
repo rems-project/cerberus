@@ -20,6 +20,15 @@ declare ocaml target_rep function alignof_fty = `Ocaml_implementation.Impl.align
 declare ocaml target_rep function register_enum = `Ocaml_implementation.Impl.register_enum`
 declare ocaml target_rep function typeof_enum = `Ocaml_implementation.Impl.typeof_enum`
 
+declare coq target_rep function is_signed_ity = `Coq_implementation.Impl.is_signed_ity`
+declare coq target_rep function sizeof_ity = `Coq_implementation.Impl.sizeof_ity`
+declare coq target_rep function precision_ity = `Coq_implementation.Impl.precision_ity`
+declare coq target_rep function sizeof_fty = `Coq_implementation.Impl.sizeof_fty`
+declare coq target_rep function alignof_ity = `Coq_implementation.Impl.alignof_ity`
+declare coq target_rep function alignof_fty = `Coq_implementation.Impl.alignof_fty`
+declare coq target_rep function register_enum = `Coq_implementation.Impl.register_enum`
+declare coq target_rep function typeof_enum = `Coq_implementation.Impl.typeof_enum`
+
 type implementation_constant =
   (* J.3.2 Environment *)
   (* The mapping between physical source file multibyte characters and the source character set in

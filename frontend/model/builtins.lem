@@ -469,6 +469,7 @@ end
 (* Some GCC builtins *)
 val gcc_builtin_ctz: integer -> integer
 declare ocaml target_rep function gcc_builtin_ctz = `Ocaml_gcc_builtins.ctz`
+declare coq target_rep function gcc_builtin_ctz = `BOOM`
 
 val gcc_builtin_bswap16: integer -> integer
 val gcc_builtin_bswap32: integer -> integer
@@ -477,3 +478,7 @@ val gcc_builtin_bswap64: integer -> integer
 declare ocaml target_rep function gcc_builtin_bswap16 = `Ocaml_gcc_builtins.bswap16`
 declare ocaml target_rep function gcc_builtin_bswap32 = `Ocaml_gcc_builtins.bswap32`
 declare ocaml target_rep function gcc_builtin_bswap64 = `Ocaml_gcc_builtins.bswap64`
+
+declare coq target_rep function gcc_builtin_bswap16 = `BOOM`
+declare coq target_rep function gcc_builtin_bswap32 = `BOOM`
+declare coq target_rep function gcc_builtin_bswap64 = `BOOM`

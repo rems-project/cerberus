@@ -13,6 +13,9 @@ declare ocaml target_rep function set_tagDefs = `Tags.set_tagDefs`
 declare hol target_rep function tagDefs = `tagDefs`
 declare hol target_rep function set_tagDefs = `set_tagDefs`
 
+declare coq target_rep function tagDefs = `BOOM`
+declare coq target_rep function set_tagDefs = `BOOM`
+
 val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
   fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())

@@ -39,6 +39,7 @@ declare hol   target_rep function print_debug_located =
 val warn: list domain -> (unit -> string) -> unit
 declare ocaml target_rep function warn = `Debug_ocaml.warn`
 declare hol   target_rep function warn = `util$output_string`
+declare coq   target_rep function warn = `fun (_: list domain) (_: unit -> string) := tt`
 
 
 (*

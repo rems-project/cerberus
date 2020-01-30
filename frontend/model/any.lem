@@ -3,3 +3,4 @@ open import Pervasives
 
 val bounded_integer : integer -> integer -> integer
 declare ocaml target_rep function bounded_integer = `Ocaml_any.bounded_integer`
+declare coq target_rep function bounded_integer = `BOOM`

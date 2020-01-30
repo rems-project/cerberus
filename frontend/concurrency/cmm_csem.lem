@@ -652,7 +652,7 @@ let each_empty faults_list X =
 
 
 val statically_satisfied : forall. condition_t -> opsem_t -> program -> bool
-let {hol; isabelle; tex} statically_satisfied condition opsem (p : program) =
+let {hol; isabelle; tex; coq} statically_satisfied condition opsem (p : program) =
   let Xs = {(Xo,Xw,rl) | opsem p Xo} in
   condition Xs
 
@@ -660,9 +660,10 @@ let {hol; isabelle; tex} statically_satisfied condition opsem (p : program) =
 
 val observable_filter : forall. set (candidate_execution) -> set (observable_execution)
 let {hol; isabelle; tex} observable_filter X = {(Xo,Xw) | exists rl. (Xo,Xw,rl) IN X}
+let {coq} observable_filter X = {(Xo,Xw) | forall ((Xo,Xw,_rl) IN X) | true}
 
 val behaviour : forall. memory_model -> condition_t -> opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} behaviour M condition opsem (p : program) =
+let {hol; isabelle; tex; coq} behaviour M condition opsem (p : program) =
   let consistent_executions =
     { (Xo,Xw,rl) |
         opsem p Xo &&
@@ -677,10 +678,10 @@ let {hol; isabelle; tex} behaviour M condition opsem (p : program) =
 
 val rf_observable_filter : forall. set (candidate_execution) -> set (rf_observable_execution)
 let {hol; isabelle; tex} rf_observable_filter X = {(Xo,Xw.rf) | exists rl. (Xo,Xw,rl) IN X}
-
+let {coq} rf_observable_filter = Set.map (fun (Xo,Xw,rl) -> (Xo,Xw.rf))
 
 val rf_behaviour : forall. memory_model -> condition_t -> opsem_t -> program -> rf_program_behaviours
-let {hol; isabelle; tex} rf_behaviour M condition opsem (p : program) =
+let {hol; isabelle; tex; coq} rf_behaviour M condition opsem (p : program) =
   let consistent_executions =
     { (Xo,Xw,rl) |
         opsem p Xo &&
@@ -1069,6 +1070,8 @@ let replace_read_value a v =
 val downclosed : forall . set (action) -> set (action * action) -> bool
 let {hol; isabelle; tex}
     downclosed A R = forall a b. b IN A && (a,b) IN R --> a IN A
+let {coq}
+    downclosed A R = forall ((a,b) IN R). b IN A --> a IN A
 let {ocaml}
     downclosed A R = true
 
@@ -1081,7 +1084,7 @@ let fringe_set Xo A = minimal_elements (Xo.actions \ A) (sbasw Xo)
 
 
 val relation_plug : forall. set (action * action) -> action -> action -> set (action * action)
-let {hol; isabelle; tex}
+let {hol; isabelle; coq; tex}
     relation_plug R a a' =
   { (x,y) | ((x,y) IN R && (x <> a) && (y <> a)) ||
             ((a,y) IN R && (x = a') && (y <> a)) ||
@@ -1128,6 +1131,7 @@ let {hol; isabelle; tex}
         is_prefix opsem p Xo' A &&
         a' IN fringe_set Xo' A &&
         same_prefix Xo' (pre_execution_plug Xo a a') A
+declare coq target_rep function receptiveness = `BOOM`
 
 
 
@@ -1150,6 +1154,7 @@ let {hol; isabelle; tex}
   exists fs'.
     (forall a. a IN fs --> a IN fs' || exists v. replace_read_value a v IN fs') &&
     (A union fs') subset A'
+declare coq target_rep function extends_prefix = `BOOM`
 
 
 
@@ -1162,9 +1167,10 @@ The above requires the fringe_set to be finite for tot_consistency and for induc
 val produce_well_formed_threads : forall. opsem_t -> bool
 let {ocaml}
     produce_well_formed_threads opsem = true
-let {hol; isabelle; tex}
+let {hol; isabelle; coq; tex}
     produce_well_formed_threads (opsem:opsem_t) =
     forall Xo p. exists Xw rl. opsem p Xo --> well_formed_threads (Xo,Xw,rl)
+declare coq target_rep function produce_well_formed_threads = `BOOM`
 
 
 
@@ -1294,7 +1300,7 @@ let single_thread_memory_model =
 
 
 val single_thread_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} single_thread_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} single_thread_behaviour opsem (p : program) =
   behaviour single_thread_memory_model single_thread_condition opsem p
 
 
@@ -1489,7 +1495,7 @@ let locks_only_memory_model =
   |>
 
 val locks_only_behaviour : forall . opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} locks_only_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} locks_only_behaviour opsem (p : program) =
   behaviour locks_only_memory_model locks_only_condition opsem p
 
 
@@ -1590,7 +1596,7 @@ let relaxed_only_memory_model =
 
 
 val relaxed_only_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} relaxed_only_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} relaxed_only_behaviour opsem (p : program) =
   behaviour relaxed_only_memory_model relaxed_only_condition opsem p
 
 
@@ -1651,25 +1657,39 @@ let release_acquire_synchronizes_with_set actions sb asw rf lo =
        release_acquire_synchronizes_with actions sb asw rf lo a b}
 
 val sw_asw: pre_execution -> set (action * action)
-let ~{ocaml} sw_asw Xo =
+let ~{ocaml;coq} sw_asw Xo =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
                          (a, b) IN Xo.asw}
+let {coq} sw_asw Xo =
+  {(a, b) | forall ((a, b) IN Xo.asw) | a IN Xo.actions && 
+                                        b IN Xo.actions &&
+                                        tid_of a <> tid_of b}
 
 val sw_lock: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_lock Xo Xw =
+let ~{ocaml;coq} sw_lock Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
                          is_unlock a && is_lock b && (a,b) IN Xw.lo}
+let {coq} sw_lock Xo Xw =
+  {(a, b) | forall ((a,b) IN Xw.lo) | a IN Xo.actions && 
+                                      b IN Xo.actions &&
+                                      tid_of a <> tid_of b &&
+                                      is_unlock a && is_lock b}
 
 val sw_rel_acq: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_rel_acq Xo Xw =
+let ~{ocaml;coq} sw_rel_acq Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
                          is_release a && is_acquire b && (a,b) IN Xw.rf}
+let {coq} sw_rel_acq Xo Xw =
+  {(a, b) | forall (a IN Xo.actions) (b IN Xo.actions)
+          | tid_of a <> tid_of b &&
+            is_release a && is_acquire b && (a,b) IN Xw.rf}
+
 
 val release_acquire_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_synchronizes_with_set_alt Xo Xw =
@@ -1738,7 +1758,7 @@ let release_acquire_memory_model =
 
 
 val release_acquire_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} release_acquire_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_behaviour opsem (p : program) =
   behaviour release_acquire_memory_model release_acquire_condition opsem p
 
 
@@ -1798,13 +1818,19 @@ let release_sequence_set_alt Xo Xw =
   release_sequence_set Xo.actions Xo.lk Xw.mo
 
 val sw_rel_acq_rs: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_rel_acq_rs Xo Xw =
+let ~{ocaml;coq} sw_rel_acq_rs Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
                          is_release a && is_acquire b && 
                          (exists (c IN Xo.actions). (a,c) IN release_sequence_set_alt Xo Xw && 
                                                     (c,b) IN Xw.rf)}
+let {coq} sw_rel_acq_rs Xo Xw =
+  {(a, b) | forall (a IN Xo.actions) (b IN Xo.actions) 
+          | tid_of a <> tid_of b &&
+            is_release a && is_acquire b && 
+            (exists (c IN Xo.actions). (a,c) IN release_sequence_set_alt Xo Xw && 
+                                       (c,b) IN Xw.rf)}
 
 val release_acquire_relaxed_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_relaxed_synchronizes_with_set_alt Xo Xw =
@@ -1856,7 +1882,7 @@ let release_acquire_relaxed_memory_model =
 
 
 val release_acquire_relaxed_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} release_acquire_relaxed_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_relaxed_behaviour opsem (p : program) =
   behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p
 
 
@@ -1923,7 +1949,7 @@ let hypothetical_release_sequence_set_alt Xo Xw =
   hypothetical_release_sequence_set Xo.actions Xo.lk Xw.mo
 
 val sw_fence_sb_hrs_rf_sb: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_fence_sb_hrs_rf_sb Xo Xw =
+let ~{ocaml;coq} sw_fence_sb_hrs_rf_sb Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
@@ -1933,9 +1959,19 @@ let ~{ocaml} sw_fence_sb_hrs_rf_sb Xo Xw =
                            (x,y) IN hypothetical_release_sequence_set_alt Xo Xw && 
                            (y,z) IN Xw.rf && 
                            (z,b) IN Xo.sb)}
+let {coq} sw_fence_sb_hrs_rf_sb Xo Xw =
+  {(a, b) | forall (a IN Xo.actions) (b IN Xo.actions)
+          | tid_of a <> tid_of b &&
+            is_fence a && is_release a && is_fence b && is_acquire b &&
+            (exists (x IN Xo.actions) (y IN Xo.actions) (z IN Xo.actions).
+              (a,x) IN Xo.sb && 
+              (x,y) IN hypothetical_release_sequence_set_alt Xo Xw && 
+              (y,z) IN Xw.rf && 
+              (z,b) IN Xo.sb)}
+
 
 val sw_fence_sb_hrs_rf: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_fence_sb_hrs_rf Xo Xw =
+let ~{ocaml;coq} sw_fence_sb_hrs_rf Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
@@ -1944,9 +1980,17 @@ let ~{ocaml} sw_fence_sb_hrs_rf Xo Xw =
                            (a,x) IN Xo.sb && 
                            (x,y) IN hypothetical_release_sequence_set_alt Xo Xw && 
                            (y,b) IN Xw.rf)}
+let {coq} sw_fence_sb_hrs_rf Xo Xw =
+  {(a, b) | forall (a IN Xo.actions) (b IN Xo.actions)
+          | tid_of a <> tid_of b &&
+            is_fence a && is_release a && is_acquire b &&
+            (exists (x IN Xo.actions) (y IN Xo.actions).
+              (a,x) IN Xo.sb && 
+              (x,y) IN hypothetical_release_sequence_set_alt Xo Xw && 
+              (y,b) IN Xw.rf)}
 
 val sw_fence_rs_rf_sb: pre_execution -> execution_witness -> set (action * action)
-let ~{ocaml} sw_fence_rs_rf_sb Xo Xw =
+let ~{ocaml;coq} sw_fence_rs_rf_sb Xo Xw =
   {(a, b) | forall a b | a IN Xo.actions && 
                          b IN Xo.actions &&
                          tid_of a <> tid_of b &&
@@ -1955,6 +1999,14 @@ let ~{ocaml} sw_fence_rs_rf_sb Xo Xw =
                            (a,x) IN release_sequence_set_alt Xo Xw && 
                            (x,y) IN Xw.rf && 
                            (y,b) IN Xo.sb)}
+let {coq} sw_fence_rs_rf_sb Xo Xw =
+  {(a, b) | forall (a IN Xo.actions) (b IN Xo.actions)
+          | tid_of a <> tid_of b &&
+            is_release a && is_fence b && is_acquire b &&
+            (exists (x IN Xo.actions) (y IN Xo.actions).
+              (a,x) IN release_sequence_set_alt Xo Xw && 
+              (x,y) IN Xw.rf && 
+              (y,b) IN Xo.sb)}
 
 val release_acquire_fenced_synchronizes_with_set_alt: pre_execution -> execution_witness -> set (action * action)
 let ~{ocaml} release_acquire_fenced_synchronizes_with_set_alt Xo Xw =
@@ -2011,7 +2063,7 @@ let release_acquire_fenced_memory_model =
 
 
 val release_acquire_fenced_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} release_acquire_fenced_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_fenced_behaviour opsem (p : program) =
   behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p
 
 
@@ -2099,7 +2151,7 @@ let sc_accesses_memory_model =
 
 
 val sc_accesses_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} sc_accesses_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} sc_accesses_behaviour opsem (p : program) =
   behaviour sc_accesses_memory_model sc_accesses_condition opsem p
 
 
@@ -2198,7 +2250,7 @@ let sc_fenced_memory_model =
 
 
 val sc_fenced_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} sc_fenced_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} sc_fenced_behaviour opsem (p : program) =
   behaviour sc_fenced_memory_model sc_fenced_condition opsem p
 
 
@@ -2364,7 +2416,7 @@ let with_consume_memory_model =
 
 
 val with_consume_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} with_consume_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} with_consume_behaviour opsem (p : program) =
   behaviour with_consume_memory_model with_consume_condition opsem p
 
 
@@ -2479,7 +2531,7 @@ let standard_memory_model =
   |>
 
 val standard_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} standard_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} standard_behaviour opsem (p : program) =
   behaviour standard_memory_model with_consume_condition opsem p
 
 
@@ -2528,12 +2580,12 @@ let release_acquire_SC_memory_model =
 
 
 val release_acquire_SC_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} release_acquire_SC_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_SC_behaviour opsem (p : program) =
   behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p
 
 
 val release_acquire_SC_rf_behaviour : forall. opsem_t -> program -> rf_program_behaviours
-let {hol; isabelle; tex} release_acquire_SC_rf_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_SC_rf_behaviour opsem (p : program) =
   rf_behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p
 
 
@@ -2578,7 +2630,7 @@ let SC_memory_model =
 
 
 val SC_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} SC_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} SC_behaviour opsem (p : program) =
   behaviour SC_memory_model SC_condition opsem p
 
 
@@ -2601,7 +2653,10 @@ let {hol; isabelle; tex} bounded_executions (Xs:set candidate_execution) =
   exists N. forall ((Xo,Xw,rl) IN Xs).
     finite Xo.actions &&
     size Xo.actions < N
-
+declare coq target_rep function bounded_executions = `BOOM`
+(* What does "size Xo.actions < N" do that "finite Xo.actions doesn't
+   already do? If "size Xo.actions < N" is not needed, could just use
+   the hol, etc. definition for Coq too *)
 
 val tot_condition : forall. condition_t
 let tot_condition (Xs:set candidate_execution) =
@@ -2726,11 +2781,11 @@ let tot_memory_model =
 
 
 val tot_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} tot_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} tot_behaviour opsem (p : program) =
   behaviour tot_memory_model tot_condition opsem p
 
 val tot_rf_behaviour : forall. opsem_t -> program -> rf_program_behaviours
-let {hol; isabelle; tex} tot_rf_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} tot_rf_behaviour opsem (p : program) =
   rf_behaviour tot_memory_model tot_condition opsem p
 
 
@@ -2739,7 +2794,7 @@ let {hol; isabelle; tex} tot_rf_behaviour opsem (p : program) =
 (***********************)
 
 val cond : forall. (program -> pre_execution -> bool) -> program -> bool
-let {hol; isabelle; tex} 
+let {hol; isabelle; tex; coq} 
 cond opsem p = statically_satisfied sc_fenced_condition opsem p
 
 let M1 = tot_memory_model
@@ -2749,90 +2804,90 @@ let P2 = tot_condition
 
 
 
-theorem {hol; isabelle; tex} genthm: 
+theorem {hol; isabelle; tex; coq} genthm: 
   ( forall opsem p.
     cond opsem p -->
     (rf_behaviour M1 P1 opsem p = rf_behaviour M2 P2 opsem p))
 
-theorem {hol; isabelle; tex} thm0:
+theorem {hol; isabelle; tex; coq} thm0:
 (forall opsem p.
   (behaviour with_consume_memory_model true_condition opsem p =
    behaviour standard_memory_model true_condition opsem p))
 
 
-theorem {hol; isabelle; tex} thm1:
+theorem {hol; isabelle; tex; coq} thm1:
 (forall opsem p.
   statically_satisfied sc_fenced_condition opsem p -->
   (behaviour sc_fenced_memory_model sc_fenced_condition opsem p =
    behaviour with_consume_memory_model true_condition opsem p))
 
-theorem {hol; isabelle; tex} thm2:
+theorem {hol; isabelle; tex; coq} thm2:
 (forall opsem p.
   statically_satisfied sc_accesses_condition opsem p -->
   (behaviour sc_accesses_memory_model sc_accesses_condition opsem p =
    behaviour sc_fenced_memory_model sc_fenced_condition opsem p))
 
-theorem {hol; isabelle; tex} thm3:
+theorem {hol; isabelle; tex; coq} thm3:
 (forall opsem p.
   statically_satisfied release_acquire_fenced_condition opsem p -->
   (behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p =
    behaviour sc_accesses_memory_model sc_accesses_condition opsem p))
 
-theorem {hol; isabelle; tex} thm4:
+theorem {hol; isabelle; tex; coq} thm4:
 (forall opsem p.
   statically_satisfied release_acquire_relaxed_condition opsem p -->
   (behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p =
    behaviour release_acquire_fenced_memory_model release_acquire_fenced_condition opsem p))
 
-theorem {hol; isabelle; tex} thm6:
+theorem {hol; isabelle; tex; coq} thm6:
 (forall opsem p.
   statically_satisfied relaxed_only_condition opsem p -->
   (behaviour relaxed_only_memory_model relaxed_only_condition opsem p =
    behaviour release_acquire_relaxed_memory_model release_acquire_relaxed_condition opsem p))
 
-theorem {hol; isabelle; tex} thm7:
+theorem {hol; isabelle; tex; coq} thm7:
 (forall opsem p.
   statically_satisfied locks_only_condition opsem p -->
   (behaviour locks_only_memory_model locks_only_condition opsem p =
    behaviour release_acquire_memory_model release_acquire_condition opsem p))
 
-theorem {hol; isabelle; tex} thm8:
+theorem {hol; isabelle; tex; coq} thm8:
 (forall opsem p.
   statically_satisfied locks_only_condition opsem p -->
   (behaviour locks_only_memory_model locks_only_condition opsem p =
    behaviour relaxed_only_memory_model relaxed_only_condition opsem p))
 
-theorem {hol; isabelle; tex} thm9:
+theorem {hol; isabelle; tex; coq} thm9:
 (forall opsem p.
   statically_satisfied single_thread_condition opsem p -->
   (behaviour single_thread_memory_model single_thread_condition opsem p = 
    behaviour locks_only_memory_model locks_only_condition opsem p))
 
-theorem {hol; isabelle; tex} thm10:
+theorem {hol; isabelle; tex; coq} thm10:
 (forall opsem p.
   statically_satisfied release_acquire_SC_condition opsem p -->
   (behaviour sc_fenced_memory_model sc_fenced_condition opsem p =
    behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
-theorem {hol; isabelle; tex} thm5:
+theorem {hol; isabelle; tex; coq} thm5:
 (forall opsem p.
   statically_satisfied release_acquire_condition opsem p -->
   (behaviour release_acquire_memory_model release_acquire_condition opsem p =
    behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
-theorem {hol; isabelle; tex} thm11:
+theorem {hol; isabelle; tex; coq} thm11:
 (forall opsem p.
   statically_satisfied SC_condition opsem p -->
   (behaviour SC_memory_model SC_condition opsem p =
    behaviour release_acquire_SC_memory_model release_acquire_SC_condition opsem p))
 
-theorem {hol; isabelle; tex} thm12:
+theorem {hol; isabelle; tex; coq} thm12:
 (forall opsem p.
   statically_satisfied locks_only_condition opsem p -->
   (behaviour SC_memory_model SC_condition opsem p = 
    behaviour locks_only_memory_model locks_only_condition opsem p))
 
-theorem {hol; isabelle; tex} bigthm:
+theorem {hol; isabelle; tex; coq} bigthm:
 (forall opsem p.
   opsem_assumptions opsem &&
   statically_satisfied tot_condition opsem p -->
@@ -2841,84 +2896,84 @@ theorem {hol; isabelle; tex} bigthm:
 
 
 (* val genthm : bool *)
-(* let {hol; isabelle; tex} genthm = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} genthm = forall opsem p. *)
 (*   cond opsem p --> *)
 (*   (rf_behaviour M1 P1 opsem p = rf_behaviour M2 P2 opsem p) *)
 
 
 
 (* val thm0 : bool *)
-(* let {hol; isabelle; tex} thm0 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm0 = forall opsem p. *)
 (*   ( with_consume_behaviour opsem p = standard_behaviour opsem p) *)
 
 (* (* The theorem syntax: *)
-(* theorem {hol; isabelle; tex} thm0:  *)
+(* theorem {hol; isabelle; tex; coq} thm0:  *)
 (*   (forall opsem p. *)
 (*     ( with_consume_behaviour opsem p = standard_behaviour opsem p)) *)
 (* *) *)
 
 (* val thm1 : bool *)
-(* let {hol; isabelle; tex} thm1 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm1 = forall opsem p. *)
 (*   statically_satisfied sc_fenced_condition opsem p --> *)
 (*   (sc_fenced_behaviour opsem p = with_consume_behaviour opsem p) *)
 
 (* val thm2 : bool *)
-(* let {hol; isabelle; tex} thm2 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm2 = forall opsem p. *)
 (*   statically_satisfied sc_accesses_condition opsem p --> *)
 (*   (sc_accesses_behaviour opsem p = sc_fenced_behaviour opsem p) *)
 
 (* val thm3 : bool *)
-(* let {hol; isabelle; tex} thm3 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm3 = forall opsem p. *)
 (*   statically_satisfied release_acquire_fenced_condition opsem p --> *)
 (*   (release_acquire_fenced_behaviour opsem p = sc_accesses_behaviour opsem p) *)
 
 (* val thm4 : bool *)
-(* let {hol; isabelle; tex} thm4 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm4 = forall opsem p. *)
 (*   statically_satisfied release_acquire_relaxed_condition opsem p --> *)
 (*   (release_acquire_relaxed_behaviour opsem p = release_acquire_fenced_behaviour opsem p) *)
 
 (* val thm6 : bool *)
-(* let {hol; isabelle; tex} thm6 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm6 = forall opsem p. *)
 (*   statically_satisfied relaxed_only_condition opsem p --> *)
 (*   (relaxed_only_behaviour opsem p = release_acquire_relaxed_behaviour opsem p) *)
 
 (* val thm7 : bool *)
-(* let {hol; isabelle; tex} thm7 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm7 = forall opsem p. *)
 (*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (locks_only_behaviour opsem p = release_acquire_behaviour opsem p) *)
 
 (* val thm8 : bool *)
-(* let {hol; isabelle; tex} thm8 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm8 = forall opsem p. *)
 (*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (locks_only_behaviour opsem p = relaxed_only_behaviour opsem p) *)
 
 (* val thm9 : bool *)
-(* let {hol; isabelle; tex} thm9 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm9 = forall opsem p. *)
 (*   statically_satisfied single_thread_condition opsem p --> *)
 (*   (single_thread_behaviour opsem p = locks_only_behaviour opsem p) *)
 
 (* val thm10 : bool *)
-(* let {hol; isabelle; tex} thm10 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm10 = forall opsem p. *)
 (*   statically_satisfied release_acquire_SC_condition opsem p --> *)
 (*   (sc_fenced_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm5 : bool *)
-(* let {hol; isabelle; tex} thm5 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm5 = forall opsem p. *)
 (*   statically_satisfied release_acquire_condition opsem p --> *)
 (*   (release_acquire_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm11 : bool *)
-(* let {hol; isabelle; tex} thm11 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm11 = forall opsem p. *)
 (*   statically_satisfied SC_condition opsem p --> *)
 (*   (SC_behaviour opsem p = release_acquire_SC_behaviour opsem p) *)
 
 (* val thm12 : bool *)
-(* let {hol; isabelle; tex} thm12 = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} thm12 = forall opsem p. *)
 (*   statically_satisfied locks_only_condition opsem p --> *)
 (*   (SC_behaviour opsem p = locks_only_behaviour opsem p) *)
 
 (* val bigthm : bool *)
-(* let {hol; isabelle; tex} bigthm = forall opsem p. *)
+(* let {hol; isabelle; tex; coq} bigthm = forall opsem p. *)
 (*   opsem_assumptions opsem && *)
 (*   statically_satisfied tot_condition opsem p --> *)
 (*   (release_acquire_SC_rf_behaviour opsem p = tot_rf_behaviour opsem p) *)
@@ -3013,7 +3068,7 @@ let release_acquire_no_locks_memory_model =
 
 
 val release_acquire_no_locks_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex} release_acquire_no_locks_behaviour opsem (p : program) =
+let {hol; isabelle; tex; coq} release_acquire_no_locks_behaviour opsem (p : program) =
   behaviour release_acquire_no_locks_memory_model release_acquire_no_locks_condition opsem p
 
 
@@ -3078,7 +3133,7 @@ let release_acquire_lifetime_no_locks_memory_model =
   |>
 
 val release_acquire_lifetime_no_locks_behaviour : forall. opsem_t -> program -> program_behaviours
-let {hol; isabelle; tex}release_acquire_lifetime_no_locks_behaviour  opsem (p : program) =
+let {hol; isabelle; tex; coq}release_acquire_lifetime_no_locks_behaviour  opsem (p : program) =
   behaviour release_acquire_lifetime_no_locks_memory_model release_acquire_lifetime_no_locks_condition opsem p
 
 *)
@@ -3257,9 +3312,10 @@ type program_behaviours_fp =
 
 val observable_filter_fp : forall. set (candidate_execution_fp) -> set (observable_execution_fp)
 let {hol; isabelle; tex} observable_filter_fp X = {(Xo,Xw) | exists rl. (Xo,Xw,rl) IN X}
+let {coq} observable_filter_fp X = {(Xo,Xw) | forall ((Xo,Xw,_rl) IN X) | true}
 
 val behaviour_fp : forall. memory_model_fp -> condition_t -> opsem_t -> program -> program_behaviours_fp
-let {hol; isabelle; tex} behaviour_fp M condition opsem (p : program) =
+let {hol; isabelle; tex; coq} behaviour_fp M condition opsem (p : program) =
   let consistent_executions_fp =
     { (Xo,Xw,rl) |
         opsem p Xo &&
@@ -3392,5 +3448,5 @@ let overlap_memory_model =
   |>
 
 val overlap_behaviour: opsem_t -> program -> program_behaviours_fp
-let {hol; isabelle; tex} overlap_behaviour opsem p =
+let {hol; isabelle; tex; coq} overlap_behaviour opsem p =
   behaviour_fp overlap_memory_model sc_fenced_condition opsem p

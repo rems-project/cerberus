@@ -28,6 +28,7 @@ declare hol   target_rep function current_execution_mode = `util$current_executi
 val using_concurrency: unit -> bool
 declare ocaml target_rep function using_concurrency = `Global_ocaml.concurrency_mode`
 declare hol  target_rep function using_concurrency u = false
+declare coq  target_rep function using_concurrency u = false
 
 
 val isDefacto: unit -> bool

@@ -13,6 +13,8 @@ val pretty_stringFromMem_mem_value: forall 'a. 'a -> string
 declare ocaml target_rep function pretty_stringFromMem_mem_value = `String_mem.string_pretty_of_mem_value_decimal`
 declare hol  target_rep function pretty_stringFromMem_mem_value =
                                  `util$emptyString`
+declare coq  target_rep function pretty_stringFromMem_mem_value =
+                                 `BOOM`
 
 import Loc (* Somebody is going to hate me for this *)
 
@@ -272,6 +274,8 @@ let ~{ocaml} consistencyFromTrace trace (pre, wit, rel) =
   trace pre (incInitialState pre) s &&
   (s.incWit = wit) &&
   (incCommittedSet s = pre.actions)
+declare coq target_rep function consistencyFromTrace = `BOOM`
+
 
 val incConsistent: candidate_execution -> bool
 let ~{ocaml} incConsistent =

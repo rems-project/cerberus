@@ -839,7 +839,8 @@ let is_real (Ctype _ ty) =
 
 (* (§6.2.7) Compatible type *)
 val            are_compatible: (qualifiers * ctype) -> (qualifiers * ctype) -> bool
-let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
+let rec        are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
+(* let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) = *)
   (* qualifiers need to be equal (see §6.7.3#10) *)
   qs1 = qs2 && match (ty1, ty2) with
     | (Void, Void) ->
