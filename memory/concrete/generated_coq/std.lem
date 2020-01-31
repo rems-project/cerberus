@@ -1,0 +1,4 @@
+val STD_: forall 'a. string -> 'a -> 'a
+declare ocaml target_rep function STD_ = `Logging.log_standard`
+declare hol   target_rep function STD_ s x = x
+

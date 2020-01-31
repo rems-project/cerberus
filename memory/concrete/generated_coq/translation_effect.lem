@@ -1,0 +1,90 @@
+(* Effects for Translation: state *)
+open import Pervasives Utils Show Show_extra State
+import Boot Symbol Undefined Ctype AilTypesAux
+import Core Core_aux Ctype
+
+module C    = Core
+module Caux = Core_aux
+
+include State
+
+type elab_state = <|
+  visible_objects_types: map Symbol.sym (Ctype.qualifiers * Ctype.ctype);
+  visible_objects: list (list Symbol.sym); (* visible C objects with scoping (used to properly
+                                              annotate Esave/Erun ctors) *)
+  string_literals: list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr);
+|>
+
+type elabM 'a = stateM 'a elab_state
+
+val elab_init: unit -> elab_state
+let elab_init () = <|
+  visible_objects_types= Map.empty;
+  visible_objects= [[]];
+  string_literals= [];
+|>
+
+(* TODO: this does not need to be in the monad *)
+val wrapped_fresh_symbol: C.core_base_type -> elabM (Symbol.sym * C.pattern * C.pexpr)
+let wrapped_fresh_symbol bTy =
+  let sym = Symbol.fresh () in
+  return (sym, Caux.mk_sym_pat sym bTy, Caux.mk_sym_pe sym)
+
+(* register C objects from block scope. *)
+val push_block_objects: list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM unit
+let push_block_objects binds = fun st ->
+  ((), <| st with
+    visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |>)
+
+(* forget C objects from the most recent block. *)
+val pop_block_objects: elabM unit
+let pop_block_objects = fun st ->
+  ((), <| st with visible_objects=
+      match st.visible_objects with
+        | _ :: xs -> xs
+        | _       -> error "[Translation.E.pop_block_objects] found an ill-formed scope stack."
+      end |>)
+
+val with_block_objects: forall 'a. list (Symbol.sym * (Ctype.qualifiers * Ctype.ctype)) -> elabM 'a -> elabM 'a
+let with_block_objects binds ma = fun st ->
+  let st' = <| st with
+    visible_objects_types= List.foldl (fun acc (sym, qs_ty) -> Map.insert sym qs_ty acc) st.visible_objects_types binds;
+    visible_objects= (List.map fst binds) :: st.visible_objects
+  |> in
+  let (a, st'') = ma st' in
+  (a, <| st'' with visible_objects=
+      match st''.visible_objects with
+        | _ :: xs -> xs
+        | _       -> error "[Translation.E.with_block_objects] found an ill-formed scope stack."
+      end |>)
+
+(* returns the list of all the C objects in scope. *)
+val get_visible_objects: elabM (list Symbol.sym)
+let get_visible_objects = fun st ->
+  (foldl (++) [] st.visible_objects, st)
+
+val register_string_literal: Loc.t -> Symbol.sym -> Ctype.ctype -> C.pexpr -> elabM unit
+let register_string_literal loc sym ty pe = fun st ->
+  ((), <| st with string_literals= (loc, sym, ty, pe) :: st.string_literals |>)
+
+val get_string_literals: elabM (list (Loc.t * Symbol.sym * Ctype.ctype * C.pexpr))
+let get_string_literals = fun st ->
+  (st.string_literals, st)
+
+val resolve_object_type: Symbol.sym -> elabM (Ctype.qualifiers * Ctype.ctype)
+let resolve_object_type sym = fun st ->
+  match Map.lookup sym st.visible_objects_types with
+    | Just qs_ty ->
+        (qs_ty, st)
+    | Nothing ->
+        let sym_str = match sym with
+          | Symbol.Symbol _ n Nothing ->
+              "sym_" ^ show n
+          | Symbol.Symbol _ n (Just str) ->
+              str ^ "{" ^ show n ^ "}"
+        end in
+        error ("Translation_effect.resolve_object_type ===> " ^ sym_str)
+  end
+
