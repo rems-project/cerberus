@@ -141,6 +141,7 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_elaboration)
 
 CERBERUS_LEM_SOURCES_COQ=\
+  loc.lem \
   Range.lem \
   IntegerImpl.lem \
   GenTypes.lem \
@@ -150,4 +151,41 @@ CERBERUS_LEM_SOURCES_COQ=\
   AilSyntax.lem \
   core.lem \
   core_reduction.lem \
-  core_eval.lem
+  core_eval.lem \
+  symbol.lem \
+  ctype.lem \
+  state_exception.lem \
+  any.lem \
+  global.lem \
+  core_run_aux.lem \
+  mem_aux.lem \
+  dlist.lem \
+  product.lem \
+  symbol.lem \
+  cabs.lem \
+  core_run.lem \
+  constraint.lem \
+  undefined.lem \
+  bimap.lem \
+  exception.lem \
+  cmm_csem.lem \
+  cmm_aux.lem \
+  state_exception_undefined.lem \
+  state.lem \
+  decode.lem \
+  builtins.lem \
+  pp.lem \
+  errors.lem \
+  core_aux.lem \
+  float.lem \
+  implementation.lem \
+  annot.lem \
+  debug.lem \
+  enum.lem \
+  mem.lem \
+  mem_common.lem \
+  nondeterminism.lem \
+  linux.lem \
+  core_ctype_aux.lem \
+  cmm_op.lem \
+  exception_undefined.lem

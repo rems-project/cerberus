@@ -13,6 +13,8 @@ MODEL_LEM = $(addprefix $(MODEL_DIR)/, $(CERBERUS_LEM_SOURCES))
 CONC_LEM_SOURCES = cmm_csem.lem cmm_op.lem linux.lem
 CONC_LEM = $(addprefix $(FRONTEND)/concurrency/, $(CONC_LEM_SOURCES))
 
+
+
 include Makefile-source
 
 .PHONY: concrete lem clean
@@ -30,6 +32,15 @@ $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@cp $(MODEL_LEM) $(BUILD_DIR)
 	@make lem
 
+$(COQ_BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
+	@make clean
+	@make -C $(CERB_PATH) clean-non-mem
+	@echo $(BOLD)LEM Concrete$(RESET)
+	@mkdir -p $(BUILD_DIR)
+	@cp $(CONC_LEM) $(BUILD_DIR)
+	@cp $(MODEL_LEM) $(BUILD_DIR)
+	@make lem
+
 # lem: $(BUILD_DIR)
 # 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
 # 	# PS commented out this as it doesn't work on ubuntu 18.04
@@ -39,10 +50,21 @@ $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 # 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
 # 	@sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
 
-lem_coq: $(BUILD_DIR)
-	@echo $(BOLD)LEM$(RESET) -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ))
-	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ))
+build_coq:
+	coq_makefile -f _CoqProject -o Makefile.coq
+	$(MAKE) -f Makefile.coq
 
+generate_coq: $(BUILD_DIR)
+	mkdir -p coq_generated
+	$(LEM) -outdir coq_generated -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ)) 
+
+
+clean_coq: 
+	@rm -rf coq_generated/*.glob
+	@rm -rf coq_generated/*.v.d
+	@rm -rf coq_generated/*.vo
 
 clean:
 	@rm -rf ocaml_generated _build
+	@rm -rf coq_generated
+
