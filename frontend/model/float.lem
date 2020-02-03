@@ -72,7 +72,7 @@ end
 
 val of_int : int -> float
 declare ocaml target_rep function of_int = `float_of_int`
-declare coq   target_rep function of_int = `of_int63` (* TODO: check *)
+declare coq   target_rep function of_int = `BOOM`
 
 val of_integer : integer -> float
 let of_integer x = of_int (Num.intFromInteger x)
@@ -85,7 +85,7 @@ declare ocaml target_rep function string_of_float = `string_of_float`
 
 val to_int : float -> int
 declare ocaml target_rep function to_int = `int_of_float`
-declare coq   target_rep function to_int = `to_int63` (* TODO: does not exist *)
+declare coq   target_rep function to_int = `BOOM`
 
 val to_integer : float -> integer
 let to_integer x = Num.integerFromInt (to_int x)

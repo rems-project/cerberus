@@ -67,3 +67,7 @@ cpp_error
 
 bisect*.out
 logs
+
+*.vo
+*.v.d
+*.glob
