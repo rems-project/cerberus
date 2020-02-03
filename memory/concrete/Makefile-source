@@ -188,4 +188,5 @@ CERBERUS_LEM_SOURCES_COQ=\
   linux.lem \
   core_ctype_aux.lem \
   cmm_op.lem \
-  exception_undefined.lem
+  exception_undefined.lem \
+  utils.lem
