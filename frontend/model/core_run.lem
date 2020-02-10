@@ -3,7 +3,7 @@ import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
 import Cmm_csem Mem Mem_common Mem_aux
-import AilSyntax Ctype AilTypesAux
+import Ctype
 import Builtins
 
 open import Implementation Decode

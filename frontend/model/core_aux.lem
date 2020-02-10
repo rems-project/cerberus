@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core Ctype Annot Map Map_extra
-import AilSyntax Core_ctype_aux
+import Core_ctype_aux
 import Product Exception Mem Mem_common Mem_aux
 
 open import Errors
