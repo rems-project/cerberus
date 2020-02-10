@@ -189,3 +189,55 @@ CERBERUS_LEM_SOURCES_COQ=\
   cmm_op.lem \
   exception_undefined.lem \
   utils.lem
+
+
+# CERBERUS_LEM_SOURCES_COQ=\
+#   loc.lem \             source locations (fake in Lem; real impl in OCaml). Currently mapped to unit, but will want proper locations
+#   Range.lem \           tiny, just integer ranges
+#   IntegerImpl.lem \     C integer impl - maybe here only for ctype.lem. maybe don't use much of IntegerImpl for that.
+#   GenTypes.lem \        the types that the Ail type system returns. no idea why we have those
+#   TypingError.lem \     typing error of Ail; no idea why here
+#   ErrorMonad.lem \      needed by AilTypesAux - maybe we can get rid of that
+#   AilTypesAux.lem \     certainly need some of this, but could move things that depend on an implementation to another module
+#   AilSyntax.lem \       not actually used in core_run, but is used by other things
+#   core.lem \            need
+#   core_reduction.lem \  need (the dynamics of effectful expressions)
+#   core_eval.lem \       need (the dynamics of pure expressions)
+#   symbol.lem \          need (symbols - eg core variables)
+#   ctype.lem \           need
+#   state_exception.lem \ need (monad)
+#   any.lem \             for Victor static analysis arbitrary value - needed, but not really in our source langauge.
+#   global.lem \          connecting to OCaml global state. will map to some particular Coq state
+#   core_run_aux.lem \    reused some aux functions, but not lots of these
+#   mem_aux.lem \         need
+#   dlist.lem \           used for logging; shouldn't really need
+#   product.lem \         could use Lem now
+#   core_run.lem \        this is old; it's going to disappear; not sure why we have it here
+#   constraint.lem \      need - C constraint-violation names (this uses GenTYpes)
+#   bimap.lem \           need (and tiny) - for undefined
+#   undefined.lem \       need - C UB names
+#   exception.lem \       need? exception monad
+#   cmm_csem.lem \        should split into types (used elsewhere) and lots of other stuff (not used)
+#   cmm_aux.lem \         need (but small)
+#   state_exception_undefined.lem \     need (monad)
+#   state.lem \           need (monad)
+#   decode.lem \          mainly used by the frontend. and for printf, but hf doesn't have that
+#   builtins.lem \        harmless
+#   pp.lem \              morally don't want, but used for logging
+#   errors.lem \          Cerberus errors - including runtime errors, which we need
+#   core_aux.lem \        need a fair few of these
+#   float.lem \           need to have it, but for Hf can stub out with dummy (well-typed) impls
+#   implementation.lem \  K needs to check if we use this
+#   annot.lem \           AST nodes can be annotated with STD annotations or locations
+#   debug.lem \           debug function - stub out
+#   enum.lem \            enum type class - commented out
+#   mem.lem \             need memory interface
+#   mem_common.lem \      need (memory functions that don't depend on concrete/symbolic)
+#   nondeterminism.lem \  need (monad) - maybe only was for core_run??
+#   linux.lem \           type of linux memory actions - need for that
+#   core_ctype_aux.lem \  need
+#   cmm_op.lem \          shouldn't need that - Kyndylan's op sem
+#   exception_undefined.lem \   need (monad)
+#   utils.lem             things that should have been in Lem std library
+  
+
