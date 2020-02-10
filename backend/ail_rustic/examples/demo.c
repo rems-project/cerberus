@@ -5,13 +5,13 @@ struct s {
 };
 
 [[rc::forall("a"), rc::funlifetime("f"), rc::leq("f", "a")]]
-void f([[rc::mut("a")]] struct s * [[rc::mut("f"), rc::nonnull]] x) {
-  x->f1 = 1;
+void f([[rc::mut("a")]] struct s * [[rc::mut("f"), rc::nonnull]] p) {
+  p->f1 = 1;
 }
 
-[[rc::forall("a"), [rc::funtionlifetime("f")], rc::leq("f", "a")]]
-void g([[rc::read("a"),rc::inited("s{f1:init,f2:notinit,f3:notinit}")]] struct s * [[rc::mut("f"),rc::nonnull]] x) {
-  int x = x->f1 + 1;
+[[rc::forall("a"), rc::funtionlifetime("f"), rc::leq("f", "a")]]
+void g([[rc::read("a"), rc::inited("s{f1:init,f2:notinit,f3:notinit}")]] struct s * [[rc::mut("f"),rc::nonnull]] p) {
+  int x = p->f1 + 1;
 }
 
 int main(void) {
