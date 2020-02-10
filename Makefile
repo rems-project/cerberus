@@ -95,7 +95,7 @@ ail_playground: _lib/concrete/concrete.cmxa
 
 ail_rustic: _lib/concrete/concrete.cmxa
 	@make -C backend/ail_rustic
-	@cp backend/driver/_main.native ail_rustic
+	@cp backend/ail_rustic/main_.native ail_rustic
 
 
 cerberus-absint: _lib/concrete/concrete.cmxa
