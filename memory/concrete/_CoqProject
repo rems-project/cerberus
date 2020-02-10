@@ -1,0 +1,19 @@
+-R /home/christopher/Sources/lem/share/lem/coq-lib Lem
+-R coq_generated/ ""
+/home/christopher/Sources/lem/share/lem/coq-lib/lem_set_extra.v
+/home/christopher/Sources/lem/share/lem/coq-lib/lem_assert_extra.v
+/home/christopher/Sources/lem/share/lem/coq-lib/lem_list_extra.v
+/home/christopher/Sources/lem/share/lem/coq-lib/lem_string_extra.v
+/home/christopher/Sources/lem/share/lem/coq-lib/lem_show_extra.v
+coq_generated/utils.v
+coq_generated/enum.v
+coq_generated/debug.v
+coq_generated/symbol.v
+coq_generated/loc.v
+coq_generated/annot.v
+coq_generated/ctype.v
+coq_generated/implementation.v
+coq_generated/bimap.v
+coq_generated/undefined.v
+coq_generated/cmm_csem.v
+coq_generated/core.v

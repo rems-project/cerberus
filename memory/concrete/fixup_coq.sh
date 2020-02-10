@@ -1,0 +1,1 @@
+sed -i 's/Definition t0_default{a: Type} : t0 a := Defined DAEMON./Definition t0_default{a: Type} : t0 a := Defined a DAEMON.\nArguments Defined {_} _.\nArguments Undef {_} _ _.\nArguments Error {_} _ _./g' coq_generated/undefined.v

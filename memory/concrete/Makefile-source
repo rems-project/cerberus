@@ -162,11 +162,10 @@ CERBERUS_LEM_SOURCES_COQ=\
   dlist.lem \
   product.lem \
   symbol.lem \
-  cabs.lem \
   core_run.lem \
   constraint.lem \
-  undefined.lem \
   bimap.lem \
+  undefined.lem \
   exception.lem \
   cmm_csem.lem \
   cmm_aux.lem \

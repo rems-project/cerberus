@@ -15,11 +15,13 @@ CONC_LEM = $(addprefix $(FRONTEND)/concurrency/, $(CONC_LEM_SOURCES))
 
 
 
+default: concrete
+
 include Makefile-source
 
 .PHONY: concrete lem clean
 
-concrete: $(BUILD_DIR)
+concrete: lem
 	@echo $(BOLD)BUILDING Concrete Memory Model$(RESET)
 	@OCAMLPATH=$(CERB_PATH)/_lib ocamlbuild $(OB_FLAGS) concrete.cma concrete.cmxa
 
@@ -30,25 +32,16 @@ $(BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
 	@mkdir -p $(BUILD_DIR)
 	@cp $(CONC_LEM) $(BUILD_DIR)
 	@cp $(MODEL_LEM) $(BUILD_DIR)
-	@make lem
+	# @make lem
 
-$(COQ_BUILD_DIR): $(CONC_LEM) $(MODEL_LEM)
-	@make clean
-	@make -C $(CERB_PATH) clean-non-mem
-	@echo $(BOLD)LEM Concrete$(RESET)
-	@mkdir -p $(BUILD_DIR)
-	@cp $(CONC_LEM) $(BUILD_DIR)
-	@cp $(MODEL_LEM) $(BUILD_DIR)
-	@make lem
-
-# lem: $(BUILD_DIR)
-# 	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
-# 	# PS commented out this as it doesn't work on ubuntu 18.04
-# 	#@ulimit -n 7168
-# 	@OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) $(wildcard $(BUILD_DIR)/ail/*.lem)
-# 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
-# 	@sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
-# 	@sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
+lem: $(BUILD_DIR)
+	@echo $(BOLD)LEM$(RESET) -ocaml *.lem
+	# PS commented out this as it doesn't work on ubuntu 18.04
+	#@ulimit -n 7168
+	OCAMLRUNPARAM=b $(CERB_PATH)/tools/colours.sh $(LEM) -ocaml $(wildcard $(BUILD_DIR)/*.lem) $(wildcard $(BUILD_DIR)/ail/*.lem)
+	sed -i"" -e "s/open Operators//" $(BUILD_DIR)/core_run.ml
+	sed -i"" -e "s/open Operators//" $(BUILD_DIR)/driver.ml
+	sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(BUILD_DIR)/*.ml
 
 build_coq:
 	coq_makefile -f _CoqProject -o Makefile.coq
@@ -57,6 +50,7 @@ build_coq:
 generate_coq: $(BUILD_DIR)
 	mkdir -p coq_generated
 	$(LEM) -outdir coq_generated -coq $(addprefix $(BUILD_DIR)/, $(CERBERUS_LEM_SOURCES_COQ)) 
+	./fixup_coq.sh
 
 
 clean_coq: 
@@ -67,4 +61,3 @@ clean_coq:
 clean:
 	@rm -rf ocaml_generated _build
 	@rm -rf coq_generated
-
