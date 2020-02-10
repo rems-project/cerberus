@@ -1386,6 +1386,8 @@ attribute_argument_clause:
 balanced_token_sequence: (* NOTE: the list is in reverse *)
 | balanced_token_sequence balance_token
     {}
+| strs= separated_nonempty_list(COMMA, STRING_LITERAL)
+   {}
 | (* empty *)
     {}
 ;
