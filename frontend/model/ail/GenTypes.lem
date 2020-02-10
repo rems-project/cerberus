@@ -21,8 +21,8 @@ type genType =
               * list (qualifiers * ctype * (* is_register *)bool)
               * (* is_variadic *)bool
  | GenPointer of qualifiers * ctype
- | GenStruct of identifier
- | GenUnion of identifier
+ | GenStruct of ail_identifier
+ | GenUnion of ail_identifier
  | GenAtomic of ctype (* TODO: check *)
 
 

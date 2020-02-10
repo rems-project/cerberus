@@ -8,9 +8,9 @@ let link_fail loc cause =
 
 (* NOTE: the function returns an assoc list of redundant tentative to global definitions *)
 val link_extern: forall 'a. SetType 'a =>
-                 map cabs_identifier (list 'a * linking_kind) ->
-                 map cabs_identifier (list 'a * linking_kind) ->
-                 exceptM ((map cabs_identifier (list 'a * linking_kind)) * list (sym * sym)) (Loc.t * cause)
+                 map identifier (list 'a * linking_kind) ->
+                 map identifier (list 'a * linking_kind) ->
+                 exceptM ((map identifier (list 'a * linking_kind)) * list (sym * sym)) (Loc.t * cause)
 let link_extern ext acc =
   Map_extra.fold (fun k (ds, lk_def) m_acc ->
     let () = Debug.print_debug 3 [] (fun _ -> "linking " ^ show k) in

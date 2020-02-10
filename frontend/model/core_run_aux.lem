@@ -1,5 +1,5 @@
 open import Pervasives Utils Show Core
-import Global Dlist Pp State_exception_undefined Map_extra
+import Global Dlist State_exception_undefined Map_extra
 
 open import Errors Core Annot
 import Cmm_csem Mem_common Core_aux

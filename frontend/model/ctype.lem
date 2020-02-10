@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Loc Show
-import Symbol Annot Cabs
+open import Pervasives Loc Show Symbol
+import Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -93,8 +93,8 @@ instance (Located ctype)
 end
 
 type tag_definition =
-  | StructDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
-  | UnionDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
+  | StructDef of list (Symbol.identifier * (qualifiers * ctype))
+  | UnionDef of list (Symbol.identifier * (qualifiers * ctype))
 
 (** Type class instances *)
 
@@ -219,7 +219,7 @@ instance (Eq qualifiers)
 end
 
 
-let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
+let rec ~{coq} ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
   let ord = function
     | Void ->
         (0 : nat)
@@ -259,6 +259,7 @@ let rec ctypeEqual (Ctype _ ty1) (Ctype _ ty2) =
     | _ ->
         ord ty1 = ord ty2
   end
+let {coq} ctypeEqual = unsafe_structural_equality (* CHECK *)
 
 instance (Eq ctype)
   let (=)  = ctypeEqual
@@ -371,8 +372,8 @@ end
 instance (Show tag_definition)
   let show def =
     let string_of_identifiers tag_defs =
-      List.foldl (fun acc (Cabs.CabsIdentifier _ str, _) ->
-        acc ^ str ^ "; "
+      List.foldl (fun acc (i,_) ->
+        acc ^ (show i) ^ "; "
       ) "[" tag_defs ^ "]"
     in
     match def with

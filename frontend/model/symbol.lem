@@ -1,21 +1,55 @@
-open import Pervasives Utils Show Show_extra Enum
-import Loc Debug
+open import Pervasives Utils Show Show_extra Enum Loc
+import Debug
 
-type digest
+type identifier =
+  | Identifier of Loc.t * string
+
+instance (Eq identifier)
+  let (=) ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    str1 = str2
+  let (<>) ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    str1 <> str2
+end
+
+instance (SetType identifier)
+  let setElemCompare ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    setElemCompare str1 str2
+end
+
+instance (Located identifier)
+  let locOf ident =
+    let (Identifier loc _) = ident in
+    loc
+end
+
+instance (Show identifier)
+  let show ident =
+    let Identifier _ str = ident in
+    str
+end
+
+(* fix the below *)
+type digest = Digest of unit
 declare ocaml target_rep type digest = `Digest.t`
-declare coq target_rep type digest = unit
+(* declare coq target_rep type digest = unit *)
 
 val digest: unit -> digest
 declare ocaml target_rep function digest = `Fresh.digest`
-declare coq target_rep function digest = `fun _: unit => tt`
+let {coq} digest () = Digest ()
 
 val digest_compare: digest -> digest ->int 
 declare ocaml target_rep function digest_compare = `Digest.compare`
-declare coq target_rep function digest_compare = `fun _: unit _: unit => 0`
+let {coq} digest_compare _ _ = 0
 
 val string_of_digest: digest -> string
 declare ocaml target_rep function string_of_digest = `Digest.to_hex`
-declare coq target_rep function string_of_digest = `fun _: tt => EmptyString`
+let {coq} string_of_digest _ = ""
 
 instance (Eq digest)
   let (=) x y = digest_compare x y = 0
@@ -45,8 +79,8 @@ end
 type sym =
   Symbol of digest * nat * maybe string
 
-val        symbolEqual: sym -> sym -> bool
-let inline symbolEqual sym1 sym2 =
+val        symbolEqual_: sym -> sym -> bool
+let inline symbolEqual_ sym1 sym2 =
   match (sym1, sym2) with
     | (Symbol d1 n1 str_opt1, Symbol d2 n2 str_opt2) ->
         if d1 = d2 && n1 = n2 then
@@ -60,6 +94,10 @@ let inline symbolEqual sym1 sym2 =
         else
           false
   end
+
+let inline {ocaml} symbolEqual = symbolEqual_
+let ~{ocaml} symbolEqual = symbolEqual_
+
 
 val symbol_compare: sym -> sym -> ordering
 let symbol_compare (Symbol d1 n1 _) (Symbol d2 n2 _) =
@@ -126,23 +164,23 @@ type prefix =
 
 val fresh_int: unit -> nat
 declare ocaml target_rep function fresh_int = `Fresh.int`
-declare coq   target_rep function fresh_int = `BOOM` (* TODO *)
+declare coq   target_rep function fresh_int = `DAEMON` (* TODO *)
 
 val digest_of_sym: sym -> digest
 let digest_of_sym (Symbol dig _ _) = dig
 
 val fresh: unit -> sym
 let fresh () =
-  Symbol (digest()) (fresh_int ()) Nothing
+  Symbol (digest ()) (fresh_int ()) Nothing
 
 val fresh_pretty : string -> sym
 let fresh_pretty str =
-  Symbol (digest()) (fresh_int ()) (Just str)
+  Symbol (digest ()) (fresh_int ()) (Just str)
 
 val fresh_pretty_with_id : (nat -> string) -> sym
 let fresh_pretty_with_id mkStr =
   let id = fresh_int () in
-  Symbol (digest()) id (Just (mkStr id))
+  Symbol (digest ()) id (Just (mkStr id))
 
 val fresh_fancy : maybe string -> sym
 let fresh_fancy = function

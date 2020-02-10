@@ -65,7 +65,7 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
-  | DeclFunIds of context * Cabs.cabs_identifier list
+  | DeclFunIds of context * Symbol.identifier list
   | DeclPtr of Cabs.pointer_declarator
   | DeclOther
 and declarator =
@@ -89,7 +89,7 @@ let pointer_decl pdecl d =
   { d with sort=    DeclPtr pdecl;
   }
 
-let identifier_decl (Cabs.CabsIdentifier(_, str) as i) =
+let identifier_decl (Symbol.Identifier(_, str) as i) =
   { id=      str;
     sort=    DeclId;
     direct=  Cabs.DDecl_identifier i;

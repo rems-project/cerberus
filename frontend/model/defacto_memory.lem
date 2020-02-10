@@ -816,8 +816,8 @@ let mk_byteof ival_ = function
   | MVfloating of floatingType * impl_floating_value
   | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
   | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
-  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * impl_mem_value)
-  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.identifier (*member*) * impl_mem_value)
+  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.identifier (*member*) * impl_mem_value
   
   | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value
 end
@@ -851,7 +851,7 @@ let project_to_lvalue_type (Ctype _ lvalue_ty) mval =
               let ival_' = IVcomposite (
                 List.map (fun i ->
                   IVbyteof (IVconcrete (integerFromNat i)) mval
-                ) (enumFromTo 0 (size-1))
+                ) (mkListFromTo_nat 0 (size-1))
               ) in
               return (MVinteger lvalue_ity (IV Prov_none(*TODO*) ival_'))
         end
@@ -1368,7 +1368,7 @@ let rec integerTypes_of_ival ival =
     | IVmax of integerType
     | IVsizeof of ctype
     | IValignof of ctype
-    | IVoffsetof of Symbol.t * Cabs.cabs_identifier
+    | IVoffsetof of Symbol.t * Cabs.identifier
     | IVptrdiff of pointer_value_base * pointer_value_base
     | IVbyteof of integer_value_base * mem_value (* the integer value is the position (indexed from zero) *)
     | IVcomposite of list integer_value_base

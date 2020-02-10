@@ -24,7 +24,7 @@ let string_of_kind = function
       ansi_format ~err:true [Bold; Black] "note:"
 
 
-let string_of_cid (Cabs.CabsIdentifier (_, s)) = s
+let string_of_cid (Symbol.Identifier (_, s)) = s
 let string_of_ctype ty = String_ail.string_of_ctype Ctype.no_qualifiers ty
 let string_of_sym = Pp_symbol.to_string_pretty
 let string_of_gentype = String_ail.string_of_genType
@@ -360,13 +360,13 @@ let string_of_core_typing_cause = function
       String_core.string_of_core_base_type found_bTy ^ ")"
   | InvalidTag tag_sym ->
       "InvalidTag(" ^ Pp_symbol.to_string tag_sym ^ ")"
-  | InvalidMember (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+  | InvalidMember (tag_sym, Symbol.Identifier (_, memb_str)) ->
       "InvalidMember(" ^ Pp_symbol.to_string tag_sym ^ ", " ^ memb_str ^ ")"
   | CoreTyping_TODO str ->
       "CoreTyping_TODO(" ^ str ^ ")"
 
 let string_of_core_linking_cause = function
-  | DuplicateExternalName (Cabs.CabsIdentifier (_, name)) ->
+  | DuplicateExternalName (Symbol.Identifier (_, name)) ->
     "duplicate external symbol: " ^ name
   | DuplicateMain ->
     "duplicate main function"

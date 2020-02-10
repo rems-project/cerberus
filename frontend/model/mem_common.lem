@@ -327,8 +327,8 @@ type mem_value =
   | MVfloating of string
   | MVpointer of pointer_value
   | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
-  | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
-  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+  | MVstruct of Symbol.t * list (Cabs.identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.identifier * mem_value (* the symbols are respectively the tag and the member *)
 
 
 *)

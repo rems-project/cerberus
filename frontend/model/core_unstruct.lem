@@ -8,14 +8,14 @@ import Core_typing Core_typing_effect Core_typing_aux
 module Caux = Core_aux
 
 type explodeM 'a =
-  State.stateM 'a (map Symbol.sym (list (Cabs.cabs_identifier * Symbol.sym)))
+  State.stateM 'a (map Symbol.sym (list (Symbol.identifier * Symbol.sym)))
 
 
 let insupported str =
   error ("Core_unstruct: unsupported ==> " ^ str)
 
 
-val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Cabs.cabs_identifier * (qualifiers * ctype))))
+val extract_ctype_pe: typed_pexpr -> maybe (either ctype (Symbol.sym * list (Symbol.identifier * (qualifiers * ctype))))
 let extract_ctype_pe (Pexpr _ _ pexpr_) =
   match pexpr_ with
     | PEval (Vctype (Ctype _ ty as cty)) ->
@@ -76,12 +76,12 @@ end
 
 
 type explode_env =
-  map Symbol.sym (list (Cabs.cabs_identifier * Symbol.sym))
+  map Symbol.sym (list (Symbol.identifier * Symbol.sym))
 
 
 
 (* If the given expression is a pointer to a struct, explode it to pointers to the members *)
-val explode_ptr_pexpr: explode_env -> typed_pexpr -> maybe (list (Cabs.cabs_identifier * typed_pexpr))
+val explode_ptr_pexpr: explode_env -> typed_pexpr -> maybe (list (Symbol.identifier * typed_pexpr))
 let explode_ptr_pexpr env (Pexpr annot bTy pexpr_) =
   match pexpr_ with
     | PEsym ptr_sym ->

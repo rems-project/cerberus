@@ -1,5 +1,5 @@
 open import Pervasives Utils AilSyntax AilTypesAux Ctype
-import Cabs Cmm_csem
+import Cmm_csem
 
 (* Things needed to model in a implementation independent way,
    types and constant the std library defines. *)
@@ -193,8 +193,8 @@ let decode_memory_order  = function
   | _ -> Nothing
 end
 
-val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (expression_ unit)
-let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
+val translate_builtin_varnames: Symbol.identifier -> maybe (expression_ unit)
+let translate_builtin_varnames (Symbol.Identifier _ str) =
   let const_int ic: maybe(expression_ unit) =
     Just (AilEconst (ConstantInteger ic))
   in
@@ -469,7 +469,7 @@ end
 (* Some GCC builtins *)
 val gcc_builtin_ctz: integer -> integer
 declare ocaml target_rep function gcc_builtin_ctz = `Ocaml_gcc_builtins.ctz`
-declare coq target_rep function gcc_builtin_ctz = `BOOM`
+declare coq target_rep function gcc_builtin_ctz = `DAEMON`
 
 val gcc_builtin_bswap16: integer -> integer
 val gcc_builtin_bswap32: integer -> integer
@@ -479,6 +479,6 @@ declare ocaml target_rep function gcc_builtin_bswap16 = `Ocaml_gcc_builtins.bswa
 declare ocaml target_rep function gcc_builtin_bswap32 = `Ocaml_gcc_builtins.bswap32`
 declare ocaml target_rep function gcc_builtin_bswap64 = `Ocaml_gcc_builtins.bswap64`
 
-declare coq target_rep function gcc_builtin_bswap16 = `BOOM`
-declare coq target_rep function gcc_builtin_bswap32 = `BOOM`
-declare coq target_rep function gcc_builtin_bswap64 = `BOOM`
+declare coq target_rep function gcc_builtin_bswap16 = `DAEMON`
+declare coq target_rep function gcc_builtin_bswap32 = `DAEMON`
+declare coq target_rep function gcc_builtin_bswap64 = `DAEMON`

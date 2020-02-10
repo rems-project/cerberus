@@ -3,6 +3,7 @@ open Cabs
 open Pp_prelude
 open Pp_ast
 open Colour
+open Pp_symbol
 
 open Location_ocaml
 
@@ -69,13 +70,10 @@ let pp_colour_keyword k =
 let pp_colour_type_keyword k =
   !^(ansi_format [Green] k)
 
-let pp_colour_identifier id =
-  !^(ansi_format [Yellow] id)
-
 let pp_colour_function_identifier id =
   !^(ansi_format [Bold; Blue] id)
 
-let pp_colour_label (CabsIdentifier (_, str)) =
+let pp_colour_label (Symbol.Identifier (_, str)) =
   !^(ansi_format [Magenta] str)
 
 let pp_decl_ctor k =
@@ -117,9 +115,6 @@ let node_of_list_option dtree_of = function
       List.map dtree_of xs
   | None ->
       [ Dleaf (pp_ctor "None") ]
-
-let pp_cabs_identifier (CabsIdentifier (loc, str)) =
-  pp_location loc ^^^ pp_colour_identifier str
 
 let pp_bool = function
   | true  -> !^ "true"
@@ -171,7 +166,7 @@ let pp_cabs_string_literal (pref_opt, strs) =
 let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
   match expr with
     | CabsEident ident ->
-        Dleaf (pp_stmt_ctor "CabsEident" ^^^ pp_location loc ^^^ pp_cabs_identifier ident)
+        Dleaf (pp_stmt_ctor "CabsEident" ^^^ pp_location loc ^^^ pp_identifier ident)
     | CabsEconst cst ->
         Dleaf (pp_stmt_ctor "CabsEconst" ^^^ pp_location loc ^^^ pp_cabs_constant cst)
     | CabsEstring lit ->
@@ -188,13 +183,13 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
     | CabsEassert e ->
         Dnode (pp_stmt_ctor "CabsEassert" ^^^ pp_location loc, [dtree_of_cabs_expression e])
     | CabsEoffsetof (tyname, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEoffsetof" ^^^ pp_location loc ^^^ pp_cabs_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEoffsetof" ^^^ pp_location loc ^^^ pp_identifier ident
               , [dtree_of_type_name tyname] )
     | CabsEmemberof (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEmemberof" ^^^ pp_location loc ^^^ P.dot ^^ pp_cabs_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEmemberof" ^^^ pp_location loc ^^^ P.dot ^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEmemberofptr (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEmemberofptr" ^^^ pp_location loc ^^^ P.dot ^^ pp_cabs_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEmemberofptr" ^^^ pp_location loc ^^^ P.dot ^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEpostincr e ->
         Dnode (pp_stmt_ctor "CabsEpostincr" ^^^ pp_location loc, [dtree_of_cabs_expression e])
@@ -230,7 +225,7 @@ let rec dtree_of_cabs_expression (CabsExpression (loc, expr)) =
         Dnode ( pp_stmt_ctor "CabsEcomma" ^^^ pp_location loc
               , [dtree_of_cabs_expression e1; dtree_of_cabs_expression e2] )
     | CabsEva_start (e, ident) ->
-        Dnode ( pp_stmt_ctor "CabsEva_start" ^^^ pp_location loc ^^^ pp_cabs_identifier ident
+        Dnode ( pp_stmt_ctor "CabsEva_start" ^^^ pp_location loc ^^^ pp_identifier ident
               , [dtree_of_cabs_expression e] )
     | CabsEva_copy (e1, e2) ->
         Dnode ( pp_stmt_ctor "CabsEva_copy" ^^^ pp_location loc
@@ -393,16 +388,16 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
     | TSpec_Atomic tyname ->
         Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
     | TSpec_struct (id_opt, s_decls_opt) ->
-        Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+        Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_identifier id_opt),
                  node_of_list_option dtree_of_struct_declaration s_decls_opt)
     | TSpec_union (id_opt, s_decls_opt) ->
-        Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+        Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_identifier id_opt),
                  node_of_list_option dtree_of_struct_declaration s_decls_opt)
     | TSpec_enum (id_opt, enums_opt) ->
-        Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_cabs_identifier id_opt),
+        Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_identifier id_opt),
                node_of_list_option dtree_of_enumerator enums_opt)
     | TSpec_name id ->
-        Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_cabs_identifier id))
+        Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_identifier id))
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (specs, qs, align_specs, s_decls) ->
@@ -428,7 +423,7 @@ and dtree_of_static_assert_declaration = function
       Dleaf (pp_cabs_string_literal s)])
 
 and dtree_of_enumerator (id, e_opt) =
-  Dnode (pp_cabs_identifier id ^^^ P.comma, [node_of_option dtree_of_cabs_expression e_opt])
+  Dnode (pp_identifier id ^^^ P.comma, [node_of_option dtree_of_cabs_expression e_opt])
 
 and pp_cabs_type_qualifier = function
   | Q_const ->
@@ -460,7 +455,7 @@ and dtree_of_declarator = function
 
 and dtree_of_direct_declarator = function
   | DDecl_identifier ident ->
-      Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_cabs_identifier ident)
+      Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_identifier ident)
   | DDecl_declarator decltor ->
       Dnode (pp_decl_ctor "DDecl_declarator", [dtree_of_declarator decltor])
   | DDecl_array (ddecltor, adecltor) ->
@@ -552,7 +547,7 @@ and dtree_of_designator = function
   | Desig_array e ->
       Dnode (pp_decl_ctor "Desig_array", [dtree_of_cabs_expression e])
   | Desig_member ident ->
-      Dleaf (pp_decl_ctor "Desig_member" ^^^ pp_cabs_identifier ident)
+      Dleaf (pp_decl_ctor "Desig_member" ^^^ pp_identifier ident)
 
 and dtree_of_initializer_list inits =
   dtree_of_list (fun (desigs_opt, init) ->

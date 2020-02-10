@@ -46,7 +46,7 @@ let rec concat_specs = function
   | [spec] -> spec
   | s::ss -> append_specs s (concat_specs ss)
 
-let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
+let string_of_cabs_id (Symbol.Identifier(_, n)) = n
 
 
 %}
@@ -96,14 +96,14 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 (* ========================================================================== *)
 
 %type<string> typedef_name var_name
-%type<Cabs.cabs_identifier> general_identifier
+%type<Symbol.identifier> general_identifier
 
 %type<LF.context> save_context
 
 %type<LF.declarator> declarator direct_declarator declarator_varname
   declarator_typedefname
 
-%type<Cabs.cabs_identifier>
+%type<Symbol.identifier>
   enumeration_constant
 
 %type<Cabs.cabs_expression>
@@ -127,10 +127,10 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 %type<Cabs.cabs_assignment_operator>
   assignment_operator
 
-%type<Cabs.declaration>
+%type<Cabs.declaration0>
   no_leading_attribute_declaration
 
-%type<Cabs.declaration>
+%type<Cabs.declaration0>
   declaration
 
 %type<Cabs.specifiers>
@@ -142,7 +142,7 @@ let string_of_cabs_id (Cabs.CabsIdentifier(_, n)) = n
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Cabs.cabs_identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+%type<Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -338,13 +338,13 @@ var_name:
 typedef_name_spec:
 | i= typedef_name
     { TSpec ((Location_ocaml.region ($startpos, $endpos) None),
-             TSpec_name (CabsIdentifier (Location_ocaml.point $startpos, i))) }
+             TSpec_name (Identifier (Location_ocaml.point $startpos, i))) }
 ;
 
 general_identifier:
 | i= typedef_name
 | i= var_name
-    { CabsIdentifier (Location_ocaml.point $startpos, i) }
+    { Symbol.Identifier (Location_ocaml.point $startpos, i) }
 ;
 
 save_context:
@@ -377,7 +377,7 @@ enumeration_constant:
 primary_expression:
 | str= var_name
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
-        CabsEident (CabsIdentifier (Location_ocaml.point $startpos(str), str))) }
+        CabsEident (Symbol.Identifier (Location_ocaml.point $startpos(str), str))) }
 | cst= CONSTANT
     { CabsExpression (Location_ocaml.region ($startpos, $endpos) None,
                       CabsEconst cst) }
@@ -754,7 +754,7 @@ declaration:
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
-      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (CabsIdentifier (loc, "test"))), None)]) }
+      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
@@ -1048,9 +1048,9 @@ function_declarator:
 
 identifier_list: (* NOTE: the list is in reverse *)
 | id= var_name
-    { [ CabsIdentifier (Location_ocaml.point $startpos, id) ] }
+    { [ Symbol.Identifier (Location_ocaml.point $startpos, id) ] }
 | ids= identifier_list COMMA id= var_name
-    { CabsIdentifier (Location_ocaml.point $startpos, id) :: ids }
+    { Symbol.Identifier (Location_ocaml.point $startpos, id) :: ids }
 ;
 
 pointer:

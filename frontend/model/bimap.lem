@@ -1,28 +1,53 @@
 open import Pervasives
 
-type bimap 'a 'b =
-  Bimap of map 'a 'b * map 'b 'a
+(* type bimap 'a 'b =
+ *   map 'a 'b * map 'b 'a
+ * 
+ * 
+ * 
+ * 
+ * val lookupL:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'a -> bimap 'a 'b -> maybe 'b
+ * let lookupL a (mapa, _) =
+ *   Map.lookup a mapa
+ * 
+ * val lookupR:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'b -> bimap 'a 'b -> maybe 'a
+ * let lookupR b (_, mapb) =
+ *   Map.lookup b mapb
+ * 
+ * 
+ * val fromList: forall 'a 'b. MapKeyType 'a, MapKeyType 'b => list ('a * 'b) -> bimap 'a 'b
+ * let rec fromList_aux ((mapa, mapb) as acc) xs =
+ *   match xs with
+ *   | [] ->
+ *       acc
+ *   | (a, b) :: xs ->
+ *       fromList_aux ((Map.insert a b mapa), (Map.insert b a mapb)) xs
+ *   end
+ * 
+ * let fromList =
+ *   fromList_aux (Map.empty, Map.empty) *)
 
 
 
 
-val lookupL:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'a -> bimap 'a 'b -> maybe 'b
-let lookupL a (Bimap mapa _) =
-  Map.lookup a mapa
 
-val lookupR:  forall 'a 'b. MapKeyType 'a, MapKeyType 'b => 'b -> bimap 'a 'b -> maybe 'a
-let lookupR b (Bimap _ mapb) =
-  Map.lookup b mapb
+type bimap_list 'a 'b = list ('a * 'b)
+type bimap 'a 'b = list ('a * 'b)
 
 
-val fromList: forall 'a 'b. MapKeyType 'a, MapKeyType 'b => list ('a * 'b) -> bimap 'a 'b
-let rec fromList_aux (Bimap mapa mapb as acc) xs =
-  match xs with
-  | [] ->
-      acc
-  | (a, b) :: xs ->
-      fromList_aux (Bimap (Map.insert a b mapa) (Map.insert b a mapb)) xs
+val lookupL:  forall 'a 'b. Eq 'a => 'a -> bimap 'a 'b -> maybe 'b
+let lookupL a l = List.lookup a l
+
+
+let rec lookupR_aux b l = 
+  match l with
+  | [] -> Nothing
+  | (a',b')::l' -> if b = b' then Just a' else lookupR_aux b l'
   end
 
-let fromList =
-  fromList_aux (Bimap Map.empty Map.empty)
+val lookupR:  forall 'a 'b. Eq 'b => 'b -> bimap 'a 'b -> maybe 'a
+let lookupR b l = lookupR_aux b l
+
+
+val fromList: forall 'a 'b. Eq 'a, Eq 'b => list ('a * 'b) -> bimap 'a 'b
+let fromList = id

@@ -692,6 +692,27 @@ type undefined_behaviour =
   | UB_CERB002b_out_of_bound_store
 
 
+let undefined_behaviour_compare = defaultCompare (* TODO: CHECK *)
+
+instance ( Ord undefined_behaviour ) 
+  let compare = undefined_behaviour_compare
+  let (<) x y =
+    undefined_behaviour_compare x y = LT
+  let (<=) x y =
+    undefined_behaviour_compare x y <> GT
+  let (>) x y =
+    undefined_behaviour_compare x y = GT
+  let (>=) x y =
+    undefined_behaviour_compare x y <> LT
+end 
+
+
+instance (Eq undefined_behaviour) (* TODO: check *)
+  let (=) = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+
 val std_of_undefined_behaviour: undefined_behaviour -> maybe string
 let std_of_undefined_behaviour = function
   | UB004a_incorrect_main_return_type ->

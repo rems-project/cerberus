@@ -138,7 +138,7 @@ open import List
 (*open import Sorting*)
 open import Relation
 *)
-open import Cmm_aux
+open import Cmm_aux Memory_order
 
 
 
@@ -2654,8 +2654,8 @@ let {hol; isabelle; tex} bounded_executions (Xs:set candidate_execution) =
     finite Xo.actions &&
     size Xo.actions < N
 declare coq target_rep function bounded_executions = `BOOM`
-(* What does "size Xo.actions < N" do that "finite Xo.actions doesn't
-   already do? If "size Xo.actions < N" is not needed, could just use
+(* What does 'size Xo.actions < N' do that 'finite Xo.actions' doesn't
+   already do? If 'size Xo.actions < N' is not needed, could just use
    the hol, etc. definition for Coq too *)
 
 val tot_condition : forall. condition_t

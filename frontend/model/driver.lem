@@ -423,7 +423,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let dirent_cty = Ctype.Ctype [] (Ctype.Struct sym) in
     let update_mem dir_name =
       Mem.bind (Mem.allocate_object tid (Symbol.PrefOther "dirent") (Mem.alignof_ival dirent_cty) dirent_cty Nothing) (fun dirent_ptr ->
-        let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Cabs.CabsIdentifier loc "d_name") in
+        let d_name_ptr = Mem.member_shift_ptrval dirent_ptr sym (Symbol.Identifier loc "d_name") in
         Mem.bind (Output.store_chars_in_array true d_name_ptr dir_name) (fun _ ->
           (Mem.return dirent_ptr)))
     in
@@ -443,7 +443,7 @@ let drive_fs_step tid th_st dr_st fs_oper =
     let update_mem stat =
       let loc = Loc.other "store struct stat" in
       let store iTy memb f =
-        let ptr = Mem.member_shift_ptrval stat_ptr sym (Cabs.CabsIdentifier loc memb) in
+        let ptr = Mem.member_shift_ptrval stat_ptr sym (Symbol.Identifier loc memb) in
         let mval = Mem.integer_value_mval iTy (Mem.integer_ival (f stat)) in
         Mem.store loc (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer iTy))) false
                   ptr mval
@@ -1180,7 +1180,7 @@ let perform_action_request with_concurrency request_m =
       if execution_mode_is_random then
         ND.get >>= fun dr_st ->
         let total = number_of_uncommitted dr_st.concurrency_state in
-        let choices = Enum.enumFromTo 0 total in
+        let choices = Utils.mkListFromTo_nat 0 total in
         
         (* DEBUG *)
         let _ = if choices = [] then error "BOOM" else () in

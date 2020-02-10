@@ -63,11 +63,11 @@ declare ocaml target_rep function stringFromInteger_value = `String_defacto_memo
 declare ocaml target_rep function stringFromShift_path = `String_defacto_memory.string_of_shift_path` (* DEBUG *)
 declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.string_of_ctype`
 
-declare coq target_rep function stringFromPointer_value = `BOOM`
-declare coq target_rep function stringFromMem_value = `BOOM`
-declare coq target_rep function stringFromInteger_value = `BOOM`
-declare coq target_rep function stringFromShift_path = `BOOM` (* DEBUG *)
-declare coq target_rep function stringFromCore_ctype  = `BOOM`
+declare coq target_rep function stringFromPointer_value = `DAEMON`
+declare coq target_rep function stringFromMem_value = `DAEMON`
+declare coq target_rep function stringFromInteger_value = `DAEMON`
+declare coq target_rep function stringFromShift_path = `DAEMON` (* DEBUG *)
+declare coq target_rep function stringFromCore_ctype  = `DAEMON`
 
 
 

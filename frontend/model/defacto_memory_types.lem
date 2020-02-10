@@ -61,7 +61,7 @@ and pointer_value_base =
 (* we don't flatten out nested structs/unions in shift_path's; they just appear as SPE_array with the struct/union type. *)
 and shift_path_element =
   | SPE_array of ctype * integer_value_base
-  | SPE_member of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) 
+  | SPE_member of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) 
  
 
 (* Core values of type OTy_integer will always be of this form *)
@@ -84,8 +84,8 @@ and integer_value_base =
   | IVsizeof of ctype
   | IValignof of ctype
     (* NOTE: this is a number bytes padding trailing a struct/union member *)
-  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
-  | IVpadding of Symbol.sym (*struct/union tag*)  * Cabs.cabs_identifier (*member*)
+  | IVoffsetof of Symbol.sym (*struct/union tag*)  * Symbol.identifier (*member*)
+  | IVpadding of Symbol.sym (*struct/union tag*)  * Symbol.identifier (*member*)
   
   | IVptrdiff of ctype * (pointer_value_base * list shift_path_element) * (pointer_value_base * list shift_path_element)
   (* TODO: tentative *)
@@ -112,8 +112,8 @@ and impl_mem_value =
   | MVfloating of Ctype.floatingType * impl_floating_value
   | MVpointer of ctype * impl_pointer_value (* the first parameter is the referenced type of the pointer value *)
   | MVarray of list impl_mem_value (* INVARIANT: all of the same mem_value constructor and type *)
-  | MVstruct of Symbol.sym (*struct/union tag*) * list (Cabs.cabs_identifier (*member*) * ctype * impl_mem_value)
-  | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * impl_mem_value
+  | MVstruct of Symbol.sym (*struct/union tag*) * list (Symbol.identifier (*member*) * ctype * impl_mem_value)
+  | MVunion of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) * impl_mem_value
   
   | MVdelayed of list (shift_path * impl_mem_value) * impl_mem_value
   
