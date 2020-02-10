@@ -3,7 +3,7 @@ open Pipeline
 let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
-(*
+
 let io =
   let open Pipeline in
   { pass_message = begin
@@ -66,7 +66,7 @@ let cpp_str =
   ^ " -DHEAP_PAGES=10"
 
 
-let rustic out filename =
+let rustic filename =
   match frontend cpp_str filename with
     | Exception.Exception err ->
         prerr_endline (Pp_errors.to_string err)
@@ -86,5 +86,3 @@ let file =
 let () =
   let rustic_t = Term.(pure rustic $ file) in
   Term.exit @@ Term.eval (rustic_t, Term.info "Ail rustic")
-*)
-let () = ()
