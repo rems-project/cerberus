@@ -1,14 +1,18 @@
 open import Bool Basic_classes Num
 
+(* open import {coq} `Coq.Floats.Floats` *)
+
 type float
 declare ocaml target_rep type float = `float`
-declare coq   target_rep type float = `float`
+(* declare coq   target_rep type float = `float` *)
+declare coq   target_rep type float = `unit ` (* TODO: FIX THESE AND BELOW *)
 
 (* Relational operations *)
 
 val floatEq : float -> float -> bool
 declare ocaml target_rep function floatEq = infix `=`
-declare coq   target_rep function floatEq = infix `=`
+(* declare coq   target_rep function floatEq = infix `=` *)
+let {coq} floatEq = unsafe_structural_equality
 
 instance (Eq float)
   let (=) = floatEq
@@ -17,11 +21,13 @@ end
 
 val floatLt : float -> float -> bool
 declare ocaml target_rep function floatLt = infix `<`
-declare coq   target_rep function floatLt = `ltb%float_scope`
+(* declare coq   target_rep function floatLt = `ltb%float_scope` *)
+let {coq} floatLt _ _ = false
 
 val floatLe : float -> float -> bool
 declare ocaml target_rep function floatLe = infix `<=`
-declare coq   target_rep function floatLe = `leb%float_scope`
+(* declare coq   target_rep function floatLe = `leb%float_scope` *)
+let {coq} floatLe _ _ = true
 
 val floatCompare : float -> float -> ordering
 let inline floatCompare = defaultCompare
@@ -38,19 +44,23 @@ end
 
 val floatAdd : float -> float -> float
 declare ocaml target_rep function floatAdd = `Floating.add`
-declare coq   target_rep function floatAdd = `add%float_scope`
+(* declare coq   target_rep function floatAdd = `add%float_scope` *)
+let {coq} floatAdd a _ = a
 
 val floatSub : float -> float -> float
 declare ocaml target_rep function floatSub = `Floating.sub`
-declare coq   target_rep function floatSub = `sub%float_scope`
+(* declare coq   target_rep function floatSub = `sub%float_scope` *)
+let {coq} floatSub a _ = a
 
 val floatMul : float -> float -> float
 declare ocaml target_rep function floatMul = `Floating.mul`
-declare coq   target_rep function floatMul = `mul%float_scope`
+(* declare coq   target_rep function floatMul = `mul%float_scope` *)
+let {coq} floatMul a _ = a
 
 val floatDiv : float -> float -> float
 declare ocaml target_rep function floatDiv = `Floating.div`
-declare coq   target_rep function floatDiv = `div%float_scope`
+(* declare coq   target_rep function floatDiv = `div%float_scope` *)
+let {coq} floatDiv a _ = a
 
 instance (NumAdd float)
   let (+) = floatAdd
@@ -72,7 +82,7 @@ end
 
 val of_int : int -> float
 declare ocaml target_rep function of_int = `float_of_int`
-declare coq   target_rep function of_int = `BOOM`
+declare coq target_rep function of_int _a = `tt`
 
 val of_integer : integer -> float
 let of_integer x = of_int (Num.intFromInteger x)
@@ -85,7 +95,7 @@ declare ocaml target_rep function string_of_float = `string_of_float`
 
 val to_int : float -> int
 declare ocaml target_rep function to_int = `int_of_float`
-declare coq   target_rep function to_int = `BOOM`
+let {coq} to_int _ = 0
 
 val to_integer : float -> integer
 let to_integer x = Num.integerFromInt (to_int x)

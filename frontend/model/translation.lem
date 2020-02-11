@@ -5,7 +5,7 @@ open import Pervasives Utils Global Loc String_extra Num
 
 import State Translation_effect Loc List_extra
 open import Translation_aux
-import Cmm_csem Mem
+import Memory_order Mem
 
 import Decode
 import Core_typing
@@ -30,7 +30,7 @@ end
 module Caux = Core_aux
 module U    = Undefined
 
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 
 
 module E = Translation_effect

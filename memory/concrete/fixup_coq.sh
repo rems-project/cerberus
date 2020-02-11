@@ -1,1 +1,7 @@
 sed -i 's/Definition t0_default{a: Type} : t0 a := Defined DAEMON./Definition t0_default{a: Type} : t0 a := Defined a DAEMON.\nArguments Defined {_} _.\nArguments Undef {_} _ _.\nArguments Error {_} _ _./g' coq_generated/undefined.v
+
+sed -i 's/Definition kill_reason_default{err: Type} : kill_reason err := Undef0 unit_default DAEMON./Definition kill_reason_default{err: Type} : kill_reason err := Undef0 err unit_default DAEMON.\nArguments Undef0 {_} _ _.\nArguments Error0 {_} _ _.\nArguments Other {_} _.\n/g' coq_generated/nondeterminism.v
+
+
+sed -i 's/Definition nd_action_default {a: Type} {info: Type} {err: Type} {cs: Type} {st: Type} : nd_action a info err cs st := NDactive DAEMON./Definition nd_action_default {a: Type} {info: Type} {err: Type} {cs: Type} {st: Type} : nd_action a info err cs st := NDactive a info err cs st DAEMON./g' coq_generated/nondeterminism.v
+sed -i 's/Definition ndM_default {a: Type} {info: Type} {err: Type} {cs: Type} {st: Type} : ndM a info err cs st := ND (fun (x37 : st) => (DAEMON, DAEMON))./Definition ndM_default {a: Type} {info: Type} {err: Type} {cs: Type} {st: Type} : ndM a info err cs st := ND a info err cs st (fun (x37 : st) => (DAEMON, DAEMON)).\nArguments NDactive {_} {_} {_} {_} {_} _.\nArguments NDkilled {_} {_} {_} {_} {_} _.\nArguments NDnd {_} {_} {_} {_} {_} _ _.\nArguments NDguard {_} {_} {_} {_} {_} _ _ _.\nArguments NDbranch {_} {_} {_} {_} {_} _ _ _.\nArguments NDstep {_} {_} {_} {_} {_} _ _.\nArguments ND {_} {_} {_} {_} {_} _./g' coq_generated/nondeterminism.v

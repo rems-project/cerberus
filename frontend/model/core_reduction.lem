@@ -3,14 +3,14 @@ open import Utils
 open import Core Core_aux Core_run_aux
 
 import State
-import Core_eval Cmm_aux Cmm_csem
+import Core_eval Cmm_aux
 
 (* TODO *)
 import Core_run
 
 module Cmm = struct
   include Cmm_aux
-  include Cmm_csem
+  include Memory_order
 end
 
 module Caux = Core_aux

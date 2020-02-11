@@ -81,6 +81,7 @@ Translation
 Translation_aux
 Translation_effect
 
+Memory_order
 Cmm_csem
 Cmm_aux
 Cmm_op

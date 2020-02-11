@@ -195,7 +195,7 @@ let scan_impl lexbuf =
 
 let scan_ub lexbuf =
   let id = Lexing.lexeme lexbuf in
-  match Bimap.lookupR compare compare (String.sub id 2 (String.length id - 4)) Undefined.ub_str_bimap with
+  match Undefined.ub_str_bimap_lookupR (String.sub id 2 (String.length id - 4)) with
     | Some ub ->
         T.UB ub
     | None ->

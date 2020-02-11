@@ -211,13 +211,13 @@ let pp_name = function
 
 
 let pp_memory_order = function
-  | Cmm_csem.NA      -> !^ "NA"
-  | Cmm_csem.Seq_cst -> pp_keyword "seq_cst"
-  | Cmm_csem.Relaxed -> pp_keyword "relaxed"
-  | Cmm_csem.Release -> pp_keyword "release"
-  | Cmm_csem.Acquire -> pp_keyword "acquire"
-  | Cmm_csem.Consume -> pp_keyword "consume"
-  | Cmm_csem.Acq_rel -> pp_keyword "acq_rel"
+  | Memory_order.NA      -> !^ "NA"
+  | Memory_order.Seq_cst -> pp_keyword "seq_cst"
+  | Memory_order.Relaxed -> pp_keyword "relaxed"
+  | Memory_order.Release -> pp_keyword "release"
+  | Memory_order.Acquire -> pp_keyword "acquire"
+  | Memory_order.Consume -> pp_keyword "consume"
+  | Memory_order.Acq_rel -> pp_keyword "acq_rel"
 
 let pp_linux_memory_order = function
   | Linux.Once      -> pp_keyword "once"
@@ -650,19 +650,19 @@ let rec pp_expr expr =
 
 and pp_action act =
   let pp_args args mo =
-    P.parens (comma_list pp_pexpr args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+    P.parens (comma_list pp_pexpr args ^^ if mo = Memory_order.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
   match act with
     | Create (al, ty, _) ->
         pp_keyword "create" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty)
     | CreateReadOnly (al, ty, init, _) ->
         pp_keyword "create_readonly" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr ty ^^ P.comma ^^^ pp_pexpr init)
-    | Alloc0 (al, n, _) ->
+    | Alloc (al, n, _) ->
         pp_keyword "alloc" ^^ P.parens (pp_pexpr al ^^ P.comma ^^^ pp_pexpr n)
     | Kill (b, e) ->
         pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_pexpr e)
-    | Store0 (is_locking, ty, e1, e2, mo) ->
+    | Store (is_locking, ty, e1, e2, mo) ->
        pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [ty; e1; e2] mo
-    | Load0 (ty, e, mo) ->
+    | Load (ty, e, mo) ->
        pp_keyword "load" ^^ pp_args [ty; e] mo
     | SeqRMW (b, ty, e1, sym, e2) ->
         let kw = if b then "seq_rmw_with_forward" else "seq_rmw" in
@@ -672,12 +672,12 @@ and pp_action act =
           pp_symbol sym ^^^ !^ "=>" ^^^
           pp_pexpr e2
         )
-    | RMW0 (ty, e1, e2, e3, mo1, mo2) ->
+    | RMW (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "rmw" ^^
         P.parens (pp_pexpr ty ^^ P.comma ^^^ pp_pexpr e1 ^^ P.comma ^^^
                   pp_pexpr e2 ^^ P.comma ^^^ pp_pexpr e3 ^^ P.comma ^^^
                   pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | Fence0 mo ->
+    | Fence mo ->
         pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
     | CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
         pp_keyword "compare_exchange_strong" ^^

@@ -1,5 +1,5 @@
 open import Pervasives Utils AilSyntax AilSyntaxAux AilWf TypingError GenTypes GenTypesAux Constraint Std Loc Ctype
-import Constraint Undefined Builtins Debug Pp Cmm_csem Global
+import Constraint Undefined Builtins Debug Pp Memory_order Global
 
 module AAux = AilTypesAux
 module GAux = GenTypesAux
@@ -684,11 +684,11 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (desired_e :: order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
-                  | Just Cmm_csem.Acquire ->
+                  | Just Memory_order.Acquire ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
-                  | Just Cmm_csem.Consume ->
+                  | Just Memory_order.Consume ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Memory_order.Acq_rel ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -708,9 +708,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Memory_order.Release ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Memory_order.Acq_rel ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -748,9 +748,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Memory_order.Release ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Memory_order.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
@@ -773,9 +773,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
-                  | Just Cmm_csem.Release ->
+                  | Just Memory_order.Release ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
-                  | Just Cmm_csem.Acq_rel ->
+                  | Just Memory_order.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
                     E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')

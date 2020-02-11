@@ -15,5 +15,10 @@ coq_generated/ctype.v
 coq_generated/implementation.v
 coq_generated/bimap.v
 coq_generated/undefined.v
-coq_generated/cmm_csem.v
+coq_generated/memory_order.v
+coq_generated/nondeterminism.v
+coq_generated/mem_common.v
+coq_generated/float.v
+coq_generated/mem.v
+coq_generated/cmm_aux.v
 coq_generated/core.v

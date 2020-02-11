@@ -17,7 +17,12 @@
 (*  notice, this list of conditions and the following disclaimer.         *)
 (*  2. Redistributions in binary form must reproduce the above copyright  *)
 (*  notice, this list of conditions and the following disclaimer in the   *)
-(*  documentation and/or other materials provided with the distribution.  *)
+(*  documentation and/or other type program_impl  = nat
+type location_impl = Mem.pointer_value
+type cvalue_impl   = Mem.mem_value
+type aid_impl      = nat
+type tid_impl      = nat
+smaterials provided with the distribution.  *)
 (*  3. The names of the authors may not be used to endorse or promote     *)
 (*  products derived from this software without specific prior written    *)
 (*  permission.                                                           *)
@@ -138,7 +143,7 @@ open import List
 (*open import Sorting*)
 open import Relation
 *)
-open import Cmm_aux 
+open import Cmm_aux Memory_order
 
 
 
@@ -188,43 +193,6 @@ declare hol target_rep function minimal_elements = `minimal_elements`
 
 (**** Cppmem base types ****)
 
-type aid = aid_impl
-type program = program_impl
-type tid = tid_impl
-type location = location_impl
-type cvalue = cvalue_impl
-
-
-type memory_order =
-  | NA
-  | Seq_cst
-  | Relaxed
-  | Release
-  | Acquire
-  | Consume
-  | Acq_rel
-
-instance (Eq memory_order)
-  let (=)  = unsafe_structural_equality
-  let (<>) = unsafe_structural_inequality
-end
-
-instance (SetType memory_order)
-  let setElemCompare = defaultCompare
-end
-
-instance (Show memory_order)
-  let show mo =
-    match mo with
-    | NA      -> "NA"
-    | Seq_cst -> "Seq_cst"
-    | Relaxed -> "Relaxed"
-    | Release -> "Release"
-    | Acquire -> "Acquire"
-    | Consume -> "Consume"
-    | Acq_rel -> "Acq_rel"
-    end
-end
 
 type lock_outcome =
     Locked

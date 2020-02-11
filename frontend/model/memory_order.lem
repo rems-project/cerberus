@@ -1,4 +1,12 @@
-import Pervasives
+open import Pervasives Cmm_aux
+
+
+type aid = aid_impl
+type program = program_impl
+type tid = tid_impl
+type location = location_impl
+type cvalue = cvalue_impl
+
 
 type memory_order =
   | NA
@@ -8,3 +16,25 @@ type memory_order =
   | Acquire
   | Consume
   | Acq_rel
+
+instance (Eq memory_order)
+  let (=)  = unsafe_structural_equality
+  let (<>) = unsafe_structural_inequality
+end
+
+instance (SetType memory_order)
+  let setElemCompare = defaultCompare
+end
+
+instance (Show memory_order)
+  let show mo =
+    match mo with
+    | NA      -> "NA"
+    | Seq_cst -> "Seq_cst"
+    | Relaxed -> "Relaxed"
+    | Release -> "Release"
+    | Acquire -> "Acquire"
+    | Consume -> "Consume"
+    | Acq_rel -> "Acq_rel"
+    end
+end

@@ -334,20 +334,20 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
                    Create (untype_pexpr pe1, untype_pexpr pe2, pref)
                | CreateReadOnly (pe1, pe2, pe3, pref) ->
                    CreateReadOnly (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, pref)
-               | Alloc0 (pe1, pe2, pref) ->
-                   Alloc0 (untype_pexpr pe1, untype_pexpr pe2, pref)
+               | Alloc (pe1, pe2, pref) ->
+                   Alloc (untype_pexpr pe1, untype_pexpr pe2, pref)
                | Kill (b, pe) ->
                    Kill (b, untype_pexpr pe)
-               | Store0 (b, pe1, pe2, pe3, mo) ->
-                   Store0 (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
-               | Load0 (pe1, pe2, mo) ->
-                   Load0 (untype_pexpr pe1, untype_pexpr pe2, mo)
+               | Store (b, pe1, pe2, pe3, mo) ->
+                   Store (b, untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, mo)
+               | Load (pe1, pe2, mo) ->
+                   Load (untype_pexpr pe1, untype_pexpr pe2, mo)
                | SeqRMW (b, pe1, pe2, sym, pe3) ->
                    SeqRMW (b, untype_pexpr pe1, untype_pexpr pe2, sym, untype_pexpr pe3)
-               | RMW0 (pe1, pe2, pe3, pe4, mo1, mo2) ->
-                   RMW0 (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
-               | Fence0 mo ->
-                   Fence0 mo
+               | RMW (pe1, pe2, pe3, pe4, mo1, mo2) ->
+                   RMW (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
+               | Fence mo ->
+                   Fence mo
                | CompareExchangeStrong (pe1, pe2, pe3, pe4, mo1, mo2) ->
                    CompareExchangeStrong (untype_pexpr pe1, untype_pexpr pe2, untype_pexpr pe3, untype_pexpr pe4, mo1, mo2)
                | CompareExchangeWeak (pe1, pe2, pe3, pe4, mo1, mo2) ->

@@ -96,7 +96,8 @@ SOURCE_defacto=\
   mem_aux.lem
 
 SOURCE_concurrency_interface=\
-  cmm_aux.lem 
+  cmm_aux.lem \
+  memory_order.lem
 
 FLAT_SOURCE_concurrency_interface=\
   cmm_aux.lem \
@@ -141,7 +142,22 @@ CERBERUS_LEM_SOURCES=\
   $(SOURCE_elaboration)
 
 CERBERUS_LEM_SOURCES_COQ=\
+  utils.lem \
+  enum.lem \
+  debug.lem \
+  symbol.lem \
   loc.lem \
+  annot.lem \
+  ctype.lem \
+  implementation.lem \
+  bimap.lem \
+  undefined.lem \
+  core.lem \
+  memory_order.lem \
+  cmm_aux.lem \
+  mem_common.lem \
+  float.lem \
+  mem.lem \
   Range.lem \
   IntegerImpl.lem \
   GenTypes.lem \
@@ -149,11 +165,8 @@ CERBERUS_LEM_SOURCES_COQ=\
   ErrorMonad.lem \
   AilTypesAux.lem \
   AilSyntax.lem \
-  core.lem \
   core_reduction.lem \
   core_eval.lem \
-  symbol.lem \
-  ctype.lem \
   state_exception.lem \
   any.lem \
   global.lem \
@@ -162,13 +175,8 @@ CERBERUS_LEM_SOURCES_COQ=\
   dlist.lem \
   product.lem \
   symbol.lem \
-  core_run.lem \
   constraint.lem \
-  bimap.lem \
-  undefined.lem \
   exception.lem \
-  cmm_csem.lem \
-  cmm_aux.lem \
   state_exception_undefined.lem \
   state.lem \
   decode.lem \
@@ -176,16 +184,7 @@ CERBERUS_LEM_SOURCES_COQ=\
   pp.lem \
   errors.lem \
   core_aux.lem \
-  float.lem \
-  implementation.lem \
-  annot.lem \
-  debug.lem \
-  enum.lem \
-  mem.lem \
-  mem_common.lem \
   nondeterminism.lem \
   linux.lem \
   core_ctype_aux.lem \
-  cmm_op.lem \
-  exception_undefined.lem \
-  utils.lem
+  exception_undefined.lem

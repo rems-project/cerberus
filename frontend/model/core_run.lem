@@ -2,7 +2,7 @@ open import Pervasives String_extra Utils Core Core_ctype_aux Core_aux Show Show
 import Set_extra
 import State Loc
 import Exception Errors Undefined Exception_undefined State_exception_undefined
-import Cmm_csem Mem Mem_common Mem_aux
+import Memory_order Mem Mem_common Mem_aux
 import Ctype
 import Builtins
 
@@ -19,7 +19,7 @@ module SEU = State_exception_undefined
 module Caux = Core_aux
 module Cmm = struct
   include Cmm_aux
-  include Cmm_csem
+  include Memory_order
 end
 
 import Core_run_aux

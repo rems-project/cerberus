@@ -1,5 +1,5 @@
 open import Pervasives Utils AilSyntax AilTypesAux Ctype
-import Cmm_csem
+import Memory_order
 
 (* Things needed to model in a implementation independent way,
    types and constant the std library defines. *)
@@ -171,25 +171,25 @@ let translate_errno = function
   | str -> error $ "Unknown errno code: " ^ str
 end
 
-val encode_memory_order: Cmm_csem.memory_order -> integer
+val encode_memory_order: Memory_order.memory_order -> integer
 let encode_memory_order  = function
-  | Cmm_csem.Relaxed -> 0
-  | Cmm_csem.Consume -> 1
-  | Cmm_csem.Acquire -> 2
-  | Cmm_csem.Release -> 3
-  | Cmm_csem.Acq_rel -> 4
-  | Cmm_csem.Seq_cst -> 5
-  | Cmm_csem.NA -> error $ "encode_memory_order NA"
+  | Memory_order.Relaxed -> 0
+  | Memory_order.Consume -> 1
+  | Memory_order.Acquire -> 2
+  | Memory_order.Release -> 3
+  | Memory_order.Acq_rel -> 4
+  | Memory_order.Seq_cst -> 5
+  | Memory_order.NA -> error $ "encode_memory_order NA"
 end
 
-val decode_memory_order: nat -> maybe Cmm_csem.memory_order
+val decode_memory_order: nat -> maybe Memory_order.memory_order
 let decode_memory_order  = function
-  | 0 -> Just $ Cmm_csem.Relaxed
-  | 1 -> Just $ Cmm_csem.Consume
-  | 2 -> Just $ Cmm_csem.Acquire
-  | 3 -> Just $ Cmm_csem.Release
-  | 4 -> Just $ Cmm_csem.Acq_rel
-  | 5 -> Just $ Cmm_csem.Seq_cst
+  | 0 -> Just $ Memory_order.Relaxed
+  | 1 -> Just $ Memory_order.Consume
+  | 2 -> Just $ Memory_order.Acquire
+  | 3 -> Just $ Memory_order.Release
+  | 4 -> Just $ Memory_order.Acq_rel
+  | 5 -> Just $ Memory_order.Seq_cst
   | _ -> Nothing
 end
 
@@ -288,17 +288,17 @@ let translate_builtin_varnames (Symbol.Identifier _ str) =
     
     (* stdatomic.h *)
     | "__cerbvar_memory_order_relaxed" ->
-        const_ic $ encode_memory_order Cmm_csem.Relaxed
+        const_ic $ encode_memory_order Memory_order.Relaxed
     | "__cerbvar_memory_order_consume" ->
-        const_ic $ encode_memory_order Cmm_csem.Consume
+        const_ic $ encode_memory_order Memory_order.Consume
     | "__cerbvar_memory_order_acquire" ->
-        const_ic $ encode_memory_order Cmm_csem.Acquire
+        const_ic $ encode_memory_order Memory_order.Acquire
     | "__cerbvar_memory_order_release" ->
-        const_ic $ encode_memory_order Cmm_csem.Release
+        const_ic $ encode_memory_order Memory_order.Release
     | "__cerbvar_memory_order_acq_rel" ->
-        const_ic $ encode_memory_order Cmm_csem.Acq_rel
+        const_ic $ encode_memory_order Memory_order.Acq_rel
     | "__cerbvar_memory_order_seq_cst" ->
-        const_ic $ encode_memory_order Cmm_csem.Seq_cst
+        const_ic $ encode_memory_order Memory_order.Seq_cst
     | "__cerbvar_atomic_thread_fence" ->
         Just (AilEbuiltin (AilBatomic AilBAthread_fence))
     | "__cerbvar_atomic_store_explicit" ->

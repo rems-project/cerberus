@@ -12,7 +12,7 @@ open Errors
 open Core
 
 module Caux = Core_aux
-module Cmm = Cmm_csem
+module Cmm = Memory_order
 
 open Ctype
 
@@ -684,18 +684,18 @@ and symbolify_action_ = function
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
      Eff.return (CreateReadOnly (pe1, pe2, pe3, pref))
- | Alloc0 (_pe1, _pe2, pref) ->
+ | Alloc (_pe1, _pe2, pref) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
-     Eff.return (Alloc0 (pe1, pe2, pref))
+     Eff.return (Alloc (pe1, pe2, pref))
  | Kill (b, _pe) -> 
      symbolify_pexpr _pe >>= fun pe ->
      Eff.return (Kill (b, pe))
- | Store0 (b, _pe1, _pe2, _pe3, mo) ->
+ | Store (b, _pe1, _pe2, _pe3, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
-     Eff.return (Store0 (b, pe1, pe2, pe3, mo))
+     Eff.return (Store (b, pe1, pe2, pe3, mo))
  | SeqRMW (b, _pe1, _pe2, _sym, _pe3) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -704,18 +704,18 @@ and symbolify_action_ = function
        symbolify_pexpr _pe3 >>= fun pe3 ->
        Eff.return (SeqRMW (b, pe1, pe3, sym, pe3))
      )
- | Load0 (_pe1, _pe2, mo) ->
+ | Load (_pe1, _pe2, mo) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
-     Eff.return (Load0 (pe1, pe2, mo))
- | RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
+     Eff.return (Load (pe1, pe2, mo))
+ | RMW (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
      symbolify_pexpr _pe3 >>= fun pe3 ->
      symbolify_pexpr _pe4 >>= fun pe4 ->
-     Eff.return (RMW0 (pe1, pe2, pe3, pe4, mo1, mo2))
- | Fence0 mo ->
-     Eff.return (Fence0 mo)
+     Eff.return (RMW (pe1, pe2, pe3, pe4, mo1, mo2))
+ | Fence mo ->
+     Eff.return (Fence mo)
  | CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) ->
      symbolify_pexpr _pe1 >>= fun pe1 ->
      symbolify_pexpr _pe2 >>= fun pe2 ->
@@ -1243,7 +1243,7 @@ ctype:
     { Ctype.Ctype ([], Function (false, (Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
-(*     { Core_ctype.Function0 (ty, tys, true) } *)
+(*     { Core_ctype.Function (ty, tys, true) } *)
 | ty= ctype STAR
     { Ctype.Ctype ([], Ctype.Pointer (Ctype.no_qualifiers, ty)) }
 | ATOMIC ty= delimited(LPAREN, ctype, RPAREN)
@@ -1601,32 +1601,32 @@ action:
 | CREATE_READONLY LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
     { CreateReadOnly (_pe1, _pe2, _pe3, Symbol.PrefOther "Core") }
 | ALLOC LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Alloc0 (_pe1, _pe2, Symbol.PrefOther "Core") }
+    { Alloc (_pe1, _pe2, Symbol.PrefOther "Core") }
 | FREE _pe= delimited(LPAREN, pexpr, RPAREN)
     { Kill (true, _pe) }
 | KILL _pe= delimited(LPAREN, pexpr, RPAREN)
     { Kill (false, _pe) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
-    { Store0 (false, _pe1, _pe2, _pe3, Cmm.NA) }
+    { Store (false, _pe1, _pe2, _pe3, Cmm.NA) }
 | STORE_LOCK LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr RPAREN
-    { Store0 (true, _pe1, _pe2, _pe3, Cmm.NA) }
+    { Store (true, _pe1, _pe2, _pe3, Cmm.NA) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr RPAREN
-    { Load0 (_pe1, _pe2, Cmm.NA) }
+    { Load (_pe1, _pe2, Cmm.NA) }
 | STORE LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA mo= memory_order RPAREN
-    { Store0 (false, _pe1, _pe2, _pe3, mo) }
+    { Store (false, _pe1, _pe2, _pe3, mo) }
 | STORE_LOCK LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA mo= memory_order RPAREN
-    { Store0 (true, _pe1, _pe2, _pe3, mo) }
+    { Store (true, _pe1, _pe2, _pe3, mo) }
 | LOAD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA mo= memory_order RPAREN
-    { Load0 (_pe1, _pe2, mo) }
+    { Load (_pe1, _pe2, mo) }
 | SEQ_RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
     { SeqRMW (false, _pe1, _pe2, _sym, _pe3) }
 | SEQ_RMW_WITH_FORWARD LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _sym= SYM EQ_GT _pe3= pexpr COMMA mo= memory_order RPAREN
     { SeqRMW (true, _pe1, _pe2, _sym, _pe3) }
 
 | RMW LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
-    { RMW0 (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
+    { RMW (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }
 | FENCE LPAREN mo= memory_order RPAREN
-    { Fence0 mo }
+    { Fence mo }
 (*
 | COMPARE_EXCHANGE_STRONG LPAREN _pe1= pexpr COMMA _pe2= pexpr COMMA _pe3= pexpr COMMA _pe4= pexpr COMMA mo1= memory_order COMMA mo2= memory_order RPAREN
     { CompareExchangeStrong (_pe1, _pe2, _pe3, _pe4, mo1, mo2) }

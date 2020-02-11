@@ -1266,3 +1266,11 @@ let fmap f m =
     | Undef loc us  -> Undef loc us
     | Error loc str -> Error loc str
   end
+
+
+(* for convenience, for connecting with the OCaml *)
+let ub_str_bimap_lookupL (u : undefined_behaviour) : maybe string =
+  Bimap.lookupL u ub_str_bimap
+
+let ub_str_bimap_lookupR (s : string) : maybe undefined_behaviour =
+  Bimap.lookupR s ub_str_bimap
