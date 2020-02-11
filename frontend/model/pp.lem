@@ -1,5 +1,6 @@
 open import Pervasives
 import Symbol
+import Cabs
 import AilSyntax Ctype GenTypes
 import Core
 import Cmm_op (* DEBUG *)

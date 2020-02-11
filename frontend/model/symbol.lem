@@ -1,5 +1,38 @@
-open import Pervasives Utils Show Show_extra Enum
-import Loc Debug
+open import Pervasives Utils Show Show_extra Enum Loc
+import Debug
+
+type identifier =
+  | Identifier of Loc.t * string
+
+instance (Eq identifier)
+  let (=) ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    str1 = str2
+  let (<>) ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    str1 <> str2
+end
+
+instance (SetType identifier)
+  let setElemCompare ident1 ident2 =
+    let (Identifier _ str1) = ident1 in
+    let (Identifier _ str2) = ident2 in
+    setElemCompare str1 str2
+end
+
+instance (Located identifier)
+  let locOf ident =
+    let (Identifier loc _) = ident in
+    loc
+end
+
+instance (Show identifier)
+  let show ident =
+    let Identifier _ str = ident in
+    str
+end
 
 type digest
 declare ocaml target_rep type digest = `Digest.t`

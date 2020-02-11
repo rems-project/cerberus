@@ -7,8 +7,8 @@ module A = AilSyntax
 
 
 type tag_definition =
-  | Struct_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (Ctype.qualifiers * Ctype.ctype))
-  | Union_definition of bool(* isAnonymous*) * list (Cabs.cabs_identifier * (Ctype.qualifiers * Ctype.ctype))
+  | Struct_definition of bool(* isAnonymous*) * list (Symbol.identifier * (Ctype.qualifiers * Ctype.ctype))
+  | Union_definition of bool(* isAnonymous*) * list (Symbol.identifier * (Ctype.qualifiers * Ctype.ctype))
   | Enum_definition of list integer
 
 
@@ -81,7 +81,7 @@ let string_of_storageDuration = function
 end
 
 
-val mk_zeroInit: map A.identifier tag_definition -> Ctype.ctype -> A.expression unit
+val mk_zeroInit: map A.ail_identifier tag_definition -> Ctype.ctype -> A.expression unit
 let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
   match ty with
     | Ctype.Void ->

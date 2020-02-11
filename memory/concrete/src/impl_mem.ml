@@ -11,8 +11,8 @@ module L = struct
   include Lem_list
 end
 
-let cabs_ident_equal x y =
-       Cabs.instance_Basic_classes_Eq_Cabs_cabs_identifier_dict.isEqual_method x y
+let ident_equal x y =
+       Symbol.instance_Basic_classes_Eq_Symbol_identifier_dict.isEqual_method x y
 
 let ctype_equal ty1 ty2 =
   let rec unqualify (Ctype (_, ty)) =
@@ -245,8 +245,8 @@ module Concrete : Memory = struct
     | MVfloating of floatingType * floating_value
     | MVpointer of ctype * pointer_value
     | MVarray of mem_value list
-    | MVstruct of Symbol.sym (*struct/union tag*) * (Cabs.cabs_identifier (*member*) * ctype * mem_value) list
-    | MVunion of Symbol.sym (*struct/union tag*) * Cabs.cabs_identifier (*member*) * mem_value
+    | MVstruct of Symbol.sym (*struct/union tag*) * (Symbol.identifier (*member*) * ctype * mem_value) list
+    | MVunion of Symbol.sym (*struct/union tag*) * Symbol.identifier (*member*) * mem_value
 
   
   type mem_iv_constraint = integer_value mem_constraint
@@ -498,12 +498,12 @@ module Concrete : Memory = struct
     | MVstruct (tag_sym, xs) ->
         parens (!^ "struct" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
           comma_list (fun (ident, _, mval) ->
-            dot ^^ Pp_cabs.pp_cabs_identifier ident ^^ equals ^^^ pp_mem_value mval
+            dot ^^ Pp_symbol.pp_identifier ident ^^ equals ^^^ pp_mem_value mval
           ) xs
         )
     | MVunion (tag_sym, membr_ident, mval) ->
         parens (!^ "union" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)) ^^ braces (
-          dot ^^ Pp_cabs.pp_cabs_identifier membr_ident ^^ equals ^^^
+          dot ^^ Pp_symbol.pp_identifier membr_ident ^^ equals ^^^
           pp_mem_value mval
         )
   
@@ -1159,7 +1159,7 @@ module Concrete : Memory = struct
           let rec find = function
             | [] ->
               None
-            | (Cabs.CabsIdentifier (_, memb), _, off) :: offs ->
+            | (Symbol.Identifier (_, memb), _, off) :: offs ->
               if offset = off then
                 Some (string_of_prefix alloc.prefix ^ "." ^ memb)
               else
@@ -1888,7 +1888,7 @@ module Concrete : Memory = struct
   let offsetof_ival tagDefs tag_sym memb_ident =
     let (xs, _) = offsetsof tagDefs tag_sym in
     let pred (ident, _, _) =
-      cabs_ident_equal ident memb_ident in
+      ident_equal ident memb_ident in
     match List.find_opt pred xs with
       | Some (_, _, offset) ->
           IV (Prov_none, N.of_int offset)
@@ -2535,7 +2535,7 @@ let combine_prov prov1 prov2 =
       (* NOTE: we recombine the bytes to get paddings *)
       let (bs1, bs2) = L.split_at (sizeof ty) bs in
           let (rev_rowss, _, bs') = List.fold_left begin
-          fun (acc_rowss, previous_offset, acc_bs) (Cabs.CabsIdentifier (_, memb), memb_ty, memb_offset) ->
+          fun (acc_rowss, previous_offset, acc_bs) (Symbol.Identifier (_, memb), memb_ty, memb_offset) ->
             let pad = memb_offset - previous_offset in
             let acc_bs' = L.drop pad acc_bs in
             let (_, mval, acc_bs'') = abst (find_overlaping st) st.funptrmap memb_ty acc_bs' in
@@ -2546,7 +2546,7 @@ let combine_prov prov1 prov2 =
             (rows''::acc_rowss, memb_offset + sizeof memb_ty, acc_bs'')
         end ([], 0, bs1) (fst (offsetsof (Tags.tagDefs ()) tag_sym))
       in List.concat (List.rev rev_rowss)
-    | MVunion (tag_sym, Cabs.CabsIdentifier (_, memb), mval) ->
+    | MVunion (tag_sym, Symbol.Identifier (_, memb), mval) ->
       List.map (add_path memb) (mk_ui_values bs ty mval) (* FIXME: THE TYPE IS WRONG *)
 
   let mk_ui_alloc st id alloc : ui_alloc =

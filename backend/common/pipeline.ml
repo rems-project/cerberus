@@ -514,7 +514,7 @@ type 'a core_dump =
     dump_tagDefs: (Symbol.sym * Ctype.tag_definition) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
-    dump_extern: (Cabs.cabs_identifier * (Symbol.sym list * Core.linking_kind)) list;
+    dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
     dump_funinfo: (Symbol.sym * (Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
   }
 
@@ -522,7 +522,7 @@ let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
   else Digest.compare d1 d2
 
-let cabsid_compare (Cabs.CabsIdentifier (_, s1)) (Cabs.CabsIdentifier (_, s2)) =
+let cabsid_compare (Symbol.Identifier (_, s1)) (Symbol.Identifier (_, s2)) =
   String.compare s1 s2
 
 let map_from_assoc compare =
