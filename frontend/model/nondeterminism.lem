@@ -172,13 +172,15 @@ let inline mapM_ = nd_mapM_
 
 
 (* NOTE: this is foldl *)
-val     nd_foldlM: forall 'a 'b 'info 'err 'cs 'st. ('a -> 'b -> ndM 'a 'info 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'info 'err 'cs 'st (* GENERIC Monad *)
-let rec nd_foldlM f a = function                                                 (* GENERIC Monad *)
-  | [] ->                                                                    (* GENERIC Monad *)
-      return a                                                               (* GENERIC Monad *)
-  | x::xs ->                                                                 (* GENERIC Monad *)
-      f a x >>= fun fax -> nd_foldlM f fax xs                                    (* GENERIC Monad *)
-end
+(* GENERIC Monad *)
+val     nd_foldlM: forall 'a 'b 'info 'err 'cs 'st. ('a -> 'b -> ndM 'a 'info 'err 'cs 'st) -> 'a -> list 'b -> ndM 'a 'info 'err 'cs 'st
+let rec nd_foldlM f a l = 
+  match l with
+  | [] ->
+      return a
+  | x::xs ->
+      f a x >>= fun fax -> nd_foldlM f fax xs
+  end
 let inline foldlM = nd_foldlM
 
 
@@ -245,7 +247,8 @@ val liftND: forall 'a 'info1 'info2 'err1 'err2 'cs 'st1 'st2.
   ('err1 -> 'err2) ->
   ndM 'a 'info1 'err1 'cs 'st1 -> ndM 'a 'info2 'err2 'cs 'st2
 
-let rec liftAction get put liftInfo liftErr = function
+let rec liftAction get put liftInfo liftErr nd = 
+  match nd with
   | NDactive a ->
       NDactive a
   | NDkilled r ->

@@ -21,4 +21,5 @@ coq_generated/mem_common.v
 coq_generated/float.v
 coq_generated/mem.v
 coq_generated/cmm_aux.v
+coq_generated/linux.v
 coq_generated/core.v

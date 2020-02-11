@@ -7,13 +7,13 @@ type floating_value
 declare ocaml target_rep type pointer_value  = `Impl_mem.pointer_value`
 declare ocaml target_rep type integer_value  = `Impl_mem.integer_value`
 declare ocaml target_rep type floating_value = `Impl_mem.floating_value`
-declare coq target_rep type pointer_value  = `tt` (* BOOM *)
-declare coq target_rep type integer_value  = `tt` (* BOOM *)
-declare coq target_rep type floating_value = `tt` (* BOOM *)
+declare coq target_rep type pointer_value  = `unit` (* BOOM *)
+declare coq target_rep type integer_value  = `unit` (* BOOM *)
+declare coq target_rep type floating_value = `unit` (* BOOM *)
 
 type mem_value
 declare ocaml target_rep type mem_value = `Impl_mem.mem_value`
-declare coq target_rep type mem_value = `tt` (* BOOM *)
+declare coq target_rep type mem_value = `unit` (* BOOM *)
 
 type mem_iv_constraint = Mem_common.mem_constraint integer_value
 
@@ -32,7 +32,7 @@ type footprint
 val do_overlap: footprint -> footprint -> bool
 declare ocaml target_rep type footprint = `Impl_mem.footprint`
 declare ocaml target_rep function do_overlap = `Impl_mem.do_overlap`
-declare coq target_rep type footprint = `tt` (* BOOM *)
+declare coq target_rep type footprint = `unit` (* BOOM *)
 declare coq target_rep function do_overlap = `DAEMON`
 
 

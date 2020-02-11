@@ -281,7 +281,7 @@ type mem_constraint 'a =
   | MC_conj of list (mem_constraint 'a)
   | MC_not of mem_constraint 'a
 
-instance forall 'a. (Constraints mem_constraint 'a)
+instance forall 'a. (Constraints (mem_constraint 'a))
   let empty = MC_empty
   let negate cs = MC_not cs
   let concat cs1 cs2 = MC_conj [cs1; cs2]
