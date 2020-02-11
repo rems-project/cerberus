@@ -73,7 +73,7 @@ let rustic filename =
     | Exception.Result (_, None, _) ->
         assert false
     | Exception.Result (_, Some ail_file, _) ->
-        Rustic.run ail_file
+        Rustic.run_rustic ail_file
 
 
 open Cmdliner
