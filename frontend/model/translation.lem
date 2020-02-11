@@ -3880,7 +3880,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                      | _ -> Map.insert sym finfo finfoacc
                   end)
             
-            | Just (loc, param_syms, stmt) ->
+            | Just (loc, _, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
                 (* TODO: variadic!! *)

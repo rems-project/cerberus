@@ -4026,7 +4026,7 @@ let rec register_labels (CabsStatement _ stmt_) =
 
 (* TODO: check + annotate with STD *)
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
-let desugar_and_register_function_definition (FunDef fundef_loc _ specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
+let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
   else
@@ -4099,7 +4099,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc _ specifs (Decla
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
          function identifier, so add it here *)
-      (Loc.with_cursor_from fundef_loc loc, List.map fst bindings, d_stmt)
+      (Loc.with_cursor_from fundef_loc loc, attrs, List.map fst bindings, d_stmt)
     end
 
 

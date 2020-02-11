@@ -1,5 +1,5 @@
 open import Pervasives Loc Ctype
-import Symbol
+import Symbol Annot
 
 type ail_identifier = Symbol.sym
 
@@ -226,7 +226,7 @@ type sigma 'a = <|
   declarations: list (ail_identifier * (Loc.t * declaration));
   object_definitions: list (ail_identifier * (expression 'a));
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: list (ail_identifier * (Loc.t * list ail_identifier * statement 'a));
+  function_definitions: list (ail_identifier * (Loc.t * Annot.attributes * list ail_identifier * statement 'a));
   static_assertions: list (expression 'a * stringLiteral);
   tag_definitions: list (ail_identifier * tag_definition);
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);

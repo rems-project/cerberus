@@ -121,6 +121,16 @@ let reinstall_function_context d =
   | _ -> ()
 
 let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
+  let xs = match attr_opt with
+    | None ->
+        []
+    | Some z ->
+        List.map (fun ((ns, id), args_opt) ->
+          let open Annot in
+          { attr_ns=   ns
+          ; attr_id=   id
+          ; attr_args= match args_opt with None -> [] | Some z -> z }
+        ) (List.concat z) in
   match d.sort, rev_dlist_opt with
   | DeclFunIds (_, ids), None ->
     let open Cabs in
@@ -140,42 +150,9 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
       | DDecl_function (ddecl, _) -> DDecl_function (ddecl, Params (params, false))
       | _ -> assert false in
     let decl = Cabs.Declarator (None, direct_declarator) in
-    Cabs.FunDef (loc, Annot.Attrs [(*TODO*)], specifs, decl, stmt)
+    Cabs.FunDef (loc, Annot.Attrs xs, specifs, decl, stmt)
   | DeclFunIds (_, ids), Some rev_dlist ->
     assert false
   | _, _ ->
-    let aux = function
-      | None ->
-          print_endline "NO ATTRIBUTE"
-      | Some attr ->
-          print_endline "FOUND ATTRIBUTE";
-          List.iteri (fun i ((x_opt, y), args) ->
-            Printf.printf "%d => %s\n" i begin
-              match x_opt with
-                | None ->
-                    "none, " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier y)
-                | Some x ->
-                    "some " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier x) ^ ", " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier y)
-            end
-          ) (List.concat attr)
-(*
-((((Cabs.cabs_identifier option * Cabs.cabs_identifier) * ((string list) option)) list) list)
-*)
-
-    in
-(*
-    aux attr_opt;
-    let xs = match attr_opt with
-      | None ->
-          []
-      | Some z ->
-          List.map (fun (ns, id, args) ->
-            let open Annot in
-            { attr_ns=    ns
-            ; attr_id=    id
-            ; attrs_args= args }
-          ) (List.concat z)
-    in
-*)
-    Cabs.FunDef (loc, Annot.Attrs [(*xs*)], specifs, cabs_of_declarator d, stmt)
+    Cabs.FunDef (loc, Annot.Attrs xs, specifs, cabs_of_declarator d, stmt)
 
