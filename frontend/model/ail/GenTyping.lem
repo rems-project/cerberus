@@ -1946,7 +1946,7 @@ let annotate_sigma sigm =
   ) sigm.object_definitions >>= fun object_defs' ->
   
   (* Typechecking of functions that have a definition *)
-  E.mapM (fun (ident, (loc, param_idents, s)) ->
+  E.mapM (fun (ident, (loc, attr, param_idents, s)) ->
     match List.lookup ident sigm.declarations with
       | Just (_, Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
           (* TODO: qualifiers *)
@@ -1960,7 +1960,7 @@ let annotate_sigma sigm =
           if sigma_fresh_bindings bindings sigm then
             let add_bindings bs acc = foldl (fun acc b -> b :: acc) bs acc in
             annotate_statement sigm (add_bindings bindings []) ret_ty s >>= fun s' ->
-              E.return (ident, (loc, param_idents, s'))
+              E.return (ident, (loc, attr, param_idents, s'))
           else
             error "annotate_sigma: parameter ail_identifiers are not fresh"
       | _ ->

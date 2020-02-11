@@ -84,3 +84,23 @@ let option z f = function
   | None   -> z
 
 
+let add_dtree_of_attributes (Annot.Attrs xs) dtree =
+  let open Annot in
+  match xs with
+    | [] ->
+        dtree
+    | _ ->
+        let string_of_ident (Symbol.Identifier (_, str)) = str in
+        Dnode ( pp_ctor "Attributes"
+              , List.map (fun attr ->
+                  let str =
+                    begin match attr.attr_ns with
+                  | Some z ->
+                          string_of_ident z ^ "::"
+                      | None ->
+                          ""
+                    end ^ string_of_ident attr.attr_id ^
+                    "(" ^ String.concat ", " (List.map (fun z -> "\"" ^ String.escaped z ^ "\"") attr.attr_args) ^  ")" in
+                  Dleaf (!^ str)
+                ) xs )
+        :: dtree

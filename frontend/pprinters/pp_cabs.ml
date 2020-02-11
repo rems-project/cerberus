@@ -619,9 +619,10 @@ and dtree_of_for_clause = function
      Dnode (pp_stmt_ctor "FC_decl", [dtree_of_declaration decl])
 
 
-let dtree_of_function_definition (FunDef (_, _, specifs, decltor, stmt)) =
+let dtree_of_function_definition (FunDef (_, attrs, specifs, decltor, stmt)) =
   Dnode ( pp_ctor "FunDef"
-        , [ dtree_of_specifiers specifs
+        , add_dtree_of_attributes attrs
+          [ dtree_of_specifiers specifs
           ; dtree_of_declarator decltor
           ; dtree_of_cabs_statement stmt ] )
 

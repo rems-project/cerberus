@@ -417,11 +417,11 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
 
-let dtree_of_function_definition pp_annot (fun_sym, (loc, param_syms, stmt)) =
+let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =
   let param_dtrees =
     [] in
   Dnode ( pp_decl_ctor "FunctionDecl" ^^^ Location_ocaml.pp_location loc ^^^ Pp_ail.pp_id fun_sym
-        , param_dtrees @ [dtree_of_statement pp_annot stmt] )
+        , add_dtree_of_attributes attrs (param_dtrees @ [dtree_of_statement pp_annot stmt]) )
 
 let pp_storageDuration = function
   | Static    -> pp_type_keyword "static"

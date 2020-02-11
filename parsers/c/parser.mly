@@ -1379,25 +1379,25 @@ attribute_prefixed_token:
 ;
 
 attribute_argument_clause:
-| LPAREN attr_arg= balanced_token_sequence RPAREN
-    { [] }
+| LPAREN attr_args= balanced_token_sequence RPAREN
+    { List.concat (List.rev attr_args) }
 ;
 
 balanced_token_sequence: (* NOTE: the list is in reverse *)
-| balanced_token_sequence balance_token
-    {}
-| strs= separated_nonempty_list(COMMA, STRING_LITERAL)
-   {}
-| (* empty *)
-    {}
+| tk= balanced_token
+    { [tk] }
+| tks= balanced_token_sequence tk= balanced_token
+    { tk :: tks }
 ;
 
-balance_token:
+balanced_token:
 | LPAREN balanced_token_sequence RPAREN
 | LBRACK balanced_token_sequence RBRACK
 | LBRACE balanced_token_sequence RBRACE
-    {}
+    { [] }
 (* NOTE: add attribute arguments here *)
+| strs= separated_nonempty_list(COMMA, STRING_LITERAL)
+   { List.map (fun (_, strs) -> String.concat "" strs) strs }
 ;
 
 

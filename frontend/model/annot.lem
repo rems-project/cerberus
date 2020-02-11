@@ -7,9 +7,9 @@ type bmc_annot =
   | Abmc_id of nat (* NOTE: basically same as uid *)
 
 type attribute = <|
-  attr_ns: maybe string;
-  attr_id: string;
-  attrs_args: list string;
+  attr_ns: maybe Symbol.identifier;
+  attr_id: Symbol.identifier;
+  attr_args: list string;
 |>
 
 type attributes =
@@ -20,7 +20,7 @@ type annot =
   | Aloc of Loc.t (* C source location *)
   | Auid of string (* Unique ID *)
   | Abmc of bmc_annot
-  | Aattrs of attributes
+  | Aattrs of attributes (* C2X attributes *)
 
 
 val     get_loc: list annot -> maybe Loc.t
