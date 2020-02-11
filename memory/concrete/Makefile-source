@@ -187,9 +187,7 @@ CERBERUS_LEM_SOURCES_COQ=\
   nondeterminism.lem \
   linux.lem \
   core_ctype_aux.lem \
-  cmm_op.lem \
-  exception_undefined.lem \
-  utils.lem
+  exception_undefined.lem
 
 
 # CERBERUS_LEM_SOURCES_COQ=\
