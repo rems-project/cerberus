@@ -20,5 +20,4 @@ int main(void) {
   f(&s0);
   // s0 now has field f1 initialised
   g(&s0);
-  return 0;
 }
