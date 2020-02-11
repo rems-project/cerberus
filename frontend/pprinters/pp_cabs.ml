@@ -624,7 +624,7 @@ and dtree_of_for_clause = function
      Dnode (pp_stmt_ctor "FC_decl", [dtree_of_declaration decl])
 
 
-let dtree_of_function_definition (FunDef (_, specifs, decltor, stmt)) =
+let dtree_of_function_definition (FunDef (_, _, specifs, decltor, stmt)) =
   Dnode ( pp_ctor "FunDef"
         , [ dtree_of_specifiers specifs
           ; dtree_of_declarator decltor
@@ -639,7 +639,7 @@ let dtree_of_external_declaration = function
 
 let filter_external_decl =
   let pred = function
-    | EDecl_func (FunDef (loc, _, _, _))
+    | EDecl_func (FunDef (loc, _, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
     | EDecl_decl (Declaration_base (_, InitDecl(loc, _, _)::_)) ->
       Location_ocaml.from_main_file loc

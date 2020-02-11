@@ -6,11 +6,21 @@ import Symbol
 type bmc_annot =
   | Abmc_id of nat (* NOTE: basically same as uid *)
 
+type attribute = <|
+  attr_ns: maybe string;
+  attr_id: string;
+  attrs_args: list string;
+|>
+
+type attributes =
+  | Attrs of list attribute
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
   | Auid of string (* Unique ID *)
   | Abmc of bmc_annot
+  | Aattrs of attributes
 
 
 val     get_loc: list annot -> maybe Loc.t
@@ -25,6 +35,8 @@ let rec get_loc annots =
     | (Auid _ :: annots') ->
         get_loc annots'
     | (Abmc _ :: annots') ->
+        get_loc annots'
+    | (Aattrs _ :: annots') ->
         get_loc annots'
   end
 
@@ -47,6 +59,8 @@ let rec get_uid annots =
     | (Auid uid :: _) ->
         Just uid
     | (Abmc _ :: annots') ->
+        get_uid annots'
+    | (Aattrs _ :: annots') ->
         get_uid annots'
   end
 
