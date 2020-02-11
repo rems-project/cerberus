@@ -1,5 +1,6 @@
 open Symbol
 open Pp_prelude
+open Location_ocaml
 
 
 let to_string (Symbol (dig, n, str_opt)) =
@@ -23,6 +24,11 @@ let to_string_id (n, _) = string_of_int n
 *)
 
 
+
+let pp_colour_identifier id =
+  !^(Colour.ansi_format [Yellow] id)
+
+
 let rec pp_prefix = function
   | PrefSource (_, syms) ->
       P.braces (P.separate_map P.dot (fun sym -> !^ (to_string_pretty sym)) syms)
@@ -36,3 +42,7 @@ let rec pp_prefix = function
       P.braces (!^ "malloc'd")
   | PrefCompoundLiteral _ ->
       P.braces (!^ "compound literal")
+
+
+let pp_identifier (Symbol.Identifier (loc, str)) =
+  pp_location loc ^^^ pp_colour_identifier str

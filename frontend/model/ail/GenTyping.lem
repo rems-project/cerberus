@@ -11,7 +11,7 @@ let inline (>>=) m f = E.bind m f
 let inline (>>) m f = m >>= (fun _ -> f)
 let inline (<$>) = E.fmap
 
-val lookup_tag_definition: forall 'a. sigma 'a -> identifier -> maybe tag_definition
+val lookup_tag_definition: forall 'a. sigma 'a -> ail_identifier -> maybe tag_definition
 let lookup_tag_definition s sym =
   List.lookup sym s.tag_definitions
 
@@ -1962,7 +1962,7 @@ let annotate_sigma sigm =
             annotate_statement sigm (add_bindings bindings []) ret_ty s >>= fun s' ->
               E.return (ident, (loc, param_idents, s'))
           else
-            error "annotate_sigma: parameter identifiers are not fresh"
+            error "annotate_sigma: parameter ail_identifiers are not fresh"
       | _ ->
           error "annotate_sigma: function definition must have a declaration"
     end

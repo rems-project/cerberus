@@ -192,12 +192,12 @@ let rec pp_constant = function
  | ConstantStruct (tag_sym, xs) ->
      P.parens (!^ "struct" ^^^ Pp_ail.pp_id tag_sym) ^^ P.braces (
        comma_list (fun (memb_ident, cst) ->
-         P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
+         P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
        ) xs
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
    P.parens (!^ "union" ^^^ Pp_ail.pp_id tag_sym)
-   ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
+   ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
 
 let pp_stringLiteral (pref_opt, strs) =
   (P.optional Pp_ail.pp_encodingPrefix pref_opt) ^^ pp_ansi_format [Bold; Cyan] (P.dquotes (!^ (String.concat "" strs)))
@@ -236,7 +236,7 @@ let dtree_of_expression pp_annot expr =
     let pp_implicit_ctor str =
       pp_std_annot ^^^ !^ (ansi_format [Bold; Red] str) ^^^ Location_ocaml.pp_location loc ^^^ pp_annot annot in
     
-    let pp_cabs_id = Pp_cabs.pp_cabs_identifier in
+    let pp_cabs_id = Pp_symbol.pp_identifier in
     let dtree_of_generic_association = function
       | AilGAtype (ty, e) ->
         Dnode ( pp_stmt_ctor "AilGAtype" ^^^ P.squotes (pp_ctype empty_qs ty),
@@ -454,7 +454,7 @@ let dtree_of_declaration (i, (_, decl)) =
 
 let dtree_of_tag_definition (i, tag) =
   let dleaf_of_field (i, (qs, ty)) =
-    Dleaf (Pp_cabs.pp_cabs_identifier i ^^^ P.squotes (pp_ctype qs ty))
+    Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty))
   in match tag with
   | StructDef fs ->
     Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i

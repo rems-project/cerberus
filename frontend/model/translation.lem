@@ -152,7 +152,7 @@ let oneAil_tau =
 
 
 (*
-val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Cabs.cabs_identifier -> C.shift_path
+val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Symbol.identifier -> C.shift_path
 let shiftPathFromMember program tag ident =
   match List.lookup tag (snd program).A.tag_definitions with
     | Just (A.StructDef ident_tys) ->
@@ -3348,7 +3348,7 @@ type translate_stmt_env = <|
 
 
 val translate_stmt:
-  translation_stdlib -> C.core_tag_definitions -> A.identifier -> translate_stmt_env ->
+  translation_stdlib -> C.core_tag_definitions -> A.ail_identifier -> translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
   E.elabM (C.core_base_type * C.expr unit)
 
@@ -3758,7 +3758,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
 
 
 (* TODO: delete this *)
-val translate_tag_definitions: list (A.identifier * Ctype.tag_definition) -> C.core_tag_definitions
+val translate_tag_definitions: list (A.ail_identifier * Ctype.tag_definition) -> C.core_tag_definitions
 let translate_tag_definitions ctx =
   Map.fromList ctx
 (*

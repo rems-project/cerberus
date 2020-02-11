@@ -49,8 +49,8 @@ end
 
 type init_element =
   | Elem_array of integer
-  | Elem_member of cabs_identifier
-(*   | Elem_union of cabs_identifier *)
+  | Elem_member of Symbol.identifier
+(*   | Elem_union of Symbol.identifier *)
 
 type init_path = list init_element
 
@@ -154,7 +154,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         end
   end
 
-val elemPathFromCtype3: bool -> map identifier tag_definition -> Ctype.ctype -> list (init_path * init_path * Ctype.ctype)
+val elemPathFromCtype3: bool -> map ail_identifier tag_definition -> Ctype.ctype -> list (init_path * init_path * Ctype.ctype)
 let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entity_cty) =
   match entity_ty with
     | Ctype.Array _ Nothing ->
@@ -282,7 +282,7 @@ type elemPathMaker = <|
   getElems: integer -> (list path_elem * elemPathMaker);
 |>
 
-val mk_elemsPathFromCtype: map identifier tag_definition -> Ctype.ctype -> elemPathMaker
+val mk_elemsPathFromCtype: map ail_identifier tag_definition -> Ctype.ctype -> elemPathMaker
 let mk_elemsPathFromCtype tagDefs ty =
   let elems = elemPathFromCtype3 tagDefs ty in
   <|
@@ -337,7 +337,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
 
 
 
-val     ctypeAtPath: map identifier tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
+val     ctypeAtPath: map ail_identifier tag_definition -> Ctype.ctype -> init_path -> Ctype.ctype
 let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
   match (ty, path) with
     | (_, []) ->
@@ -402,7 +402,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
 
 
 
-val     outerValidPath: map identifier tag_definition -> Ctype.ctype -> list (init_element) -> init_path
+val     outerValidPath: map ail_identifier tag_definition -> Ctype.ctype -> list (init_element) -> init_path
 let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
   match (ty, path) with
     | (_, []) ->
@@ -447,7 +447,7 @@ let outerValidPath tagDefs ty path =
 (*
 type init_element =
   | Elem_array of integer
-  | Elem_member of cabs_identifier
+  | Elem_member of Symbol.identifier
 
 type init_path = list init_element * Ctype.ctype
 *)
@@ -456,7 +456,7 @@ type init_path = list init_element * Ctype.ctype
 E.desugM (list (init_path * expression unit) * list (init_path * init_path * Ctype.ctype)) =
 *)
 
-val constructValue: map identifier tag_definition -> list (init_path * expression unit) -> Ctype.ctype -> expression unit
+val constructValue: map ail_identifier tag_definition -> list (init_path * expression unit) -> Ctype.ctype -> expression unit
 let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
   match ty with
     | Ctype.Array _ Nothing ->
@@ -582,15 +582,15 @@ let rec is_integer_constant_expression (AnnotatedExpression () _ loc expr_ as ex
 (*
     | AilEgeneric of expression 'a * list (generic_association 'a)
     | AilEarray of bool * ctype * list (maybe (expression 'a))
-    | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
-    | AilEunion of identifier * Cabs.cabs_identifier * maybe (expression 'a)
+    | AilEstruct of ail_identifier * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
+    | AilEunion of ail_identifier * Symbol.identifier * maybe (expression 'a)
     | AilEcompound of ctype * expression 'a
-    | AilEmemberof of expression 'a * Cabs.cabs_identifier
-    | AilEmemberofptr of expression 'a * Cabs.cabs_identifier
+    | AilEmemberof of expression 'a * Symbol.identifier
+    | AilEmemberofptr of expression 'a * Symbol.identifier
     | AilEbuiltin of string (* TODO: see if that can be moved to [constant] *)
     | AilEstr of stringLiteral
     | AilEconst of constant
-    | AilEident of identifier
+    | AilEident of ail_identifier
 *)
     | AilEannot _ e ->
         is_integer_constant_expression e
@@ -923,20 +923,20 @@ type qs_ctype_builder =
 
 
 val desugar_struct_declaration:
-  struct_declaration -> E.desugM (list (cabs_identifier * (Ctype.qualifiers * Ctype.ctype)))
+  struct_declaration -> E.desugM (list (Symbol.identifier * (Ctype.qualifiers * Ctype.ctype)))
 
 val desugar_struct_declarator:
-  struct_declarator -> E.desugM (cabs_identifier * qs_ctype_builder)
+  struct_declarator -> E.desugM (Symbol.identifier * qs_ctype_builder)
 
 val desugar_init_declarator_BROKEN:
   Ctype.qualifiers -> Ctype.ctype -> list storage_class_specifier -> init_declarator ->
-  E.desugM (cabs_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
+  E.desugM (Symbol.identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit))))
 
 val desugar_init_declarator:
   bool(* isAtomic *) -> Ctype.qualifiers -> Ctype.ctype ->
   list storage_class_specifier -> init_declarator ->
-  E.desugM (maybe (Loc.t * linkage * identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
+  E.desugM (maybe (Loc.t * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit)))))
 
 val desugar_generic_association:
@@ -946,13 +946,13 @@ val check_storage_class_specifiers:
   Loc.t -> declaration_context -> list storage_class_specifier -> E.desugM unit
 
 val desugar_enumerator:
-  enumerator -> E.desugM (cabs_identifier * maybe (Loc.t * integer))
+  enumerator -> E.desugM (Symbol.identifier * maybe (Loc.t * integer))
 
 val desugar_alignment_specifier:
   alignment_specifier -> E.desugM unit
 
 val desugar_parameter_type_list:
-  fundef -> parameter_type_list -> E.desugM (list (maybe cabs_identifier * (Ctype.qualifiers * Ctype.ctype * bool)) * bool)
+  fundef -> parameter_type_list -> E.desugM (list (maybe Symbol.identifier * (Ctype.qualifiers * Ctype.ctype * bool)) * bool)
 
 val desugar_type_name:
   type_name -> E.desugM (Ctype.qualifiers * Ctype.ctype)
@@ -974,7 +974,7 @@ val wip_desugar_initializer_:
   Loc.t -> storageDuration -> Ctype.ctype -> initializer_ -> E.desugM (Ctype.ctype * expression unit)
 
 val static_thread_implicit_initializer:
-  map identifier tag_definition -> Ctype.ctype -> constant
+  map ail_identifier tag_definition -> Ctype.ctype -> constant
 
 
 
@@ -1588,7 +1588,7 @@ let rec desugar_type_specifiers specs =
               E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic (Ctype.Integer (Ctype.Enum tag_sym))))
           
           (* *)
-          | [TSpec _ (TSpec_name ((CabsIdentifier cid_loc str) as ident))] ->
+          | [TSpec _ (TSpec_name ((Symbol.Identifier cid_loc str) as ident))] ->
               E.print_debugM 2 (fun () -> "Cabs_to_ail, TSpec_name ==> " ^ str) >>
               match Builtins.translate_builtin_typenames str with
                 | Just ty ->
@@ -1843,7 +1843,7 @@ and desugar_direct_abstract_declarator under_array = function
       )
 end
 
-(* TYPE: E.desugM (cabs_identifier * (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))) *)
+(* TYPE: E.desugM (Symbol.identifier * (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))) *)
 and desugar_direct_declarator fundef under_array = function
   | DDecl_identifier ident ->
       E.return (ident, fun base_qs base_ty -> (base_qs, base_ty))
@@ -2008,7 +2008,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
 
 
 
-(* TYPE: E.desugM (cabs_identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) *)
+(* TYPE: E.desugM (Symbol.identifier * (AilTypes.qualifiers -> AilTypes.ctype -> (AilTypes.qualifiers * AilTypes.ctype))) *)
 and desugar_declarator fundef (Declarator ptr_decltor_opt ddecltor) =
   maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator
     ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
@@ -2050,7 +2050,7 @@ and desugar_expression (CabsExpression loc expr) =
   AnnotatedExpression () [] loc <$>
   match expr with
     | CabsEident ident ->
-        let (CabsIdentifier _ str) = ident in (* DEBUG *)
+        let (Symbol.Identifier _ str) = ident in (* DEBUG *)
         E.print_debugM 2 (fun () -> "DESUGARING, CabsEident: " ^ str) >>= fun () -> (* DEBUG *)
 STD_ "§6.5.1#2" $
         E.resolve_ordinary_identifier loc ident >>= function
@@ -2284,7 +2284,7 @@ STD_ "§6.7.1#8" $
 *)
 
 (* TODO: get rid of this function *)
-(* E.desugM (cabs_identifier * Ctype.qualifiers * Ctype.ctype * desugM (unit -> maybe expression unit)) *)
+(* E.desugM (Symbol.identifier * Ctype.qualifiers * Ctype.ctype * desugM (unit -> maybe expression unit)) *)
 and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_specifier) idecltor =
   let () = Debug.print_debug 1 [] (fun () ->
     "TODO ==> USING `desugar_init_declarator_BROKEN'"
@@ -2644,8 +2644,8 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
         
     | Atomic ty ->
         
-    | Struct of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *)
-    | Union of identifier * list (Cabs.cabs_identifier * ctype) (* TODO: no bitfields for now *) *)
+    | Struct of identifier * list (Cabs.Symbol.identifier * ctype) (* TODO: no bitfields for now *)
+    | Union of identifier * list (Cabs.Symbol.identifier * ctype) (* TODO: no bitfields for now *) *)
   end
 
 
@@ -3522,7 +3522,7 @@ and desugar_and_register_static_assert_declaration sa_decl =
 
 
 (* TODO: this is broken *)
-val desugar_declaration_base: specifiers -> list init_declarator -> E.desugM (list (identifier * expression unit))
+val desugar_declaration_base: specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit))
 let desugar_declaration_base specifs idecltors =
   let () = Debug.print_debug 1 [] (fun () ->
     "BROKEN: desugar_declaration_base"
@@ -3641,7 +3641,7 @@ let desugar_declaration_base specifs idecltors =
 
 type stmt_context = <|
   switch_depth: nat;
-  cont_ident_opt: maybe cabs_identifier; (* Just ..., if inside a loop *)
+  cont_ident_opt: maybe Symbol.identifier; (* Just ..., if inside a loop *)
 |>
 
 let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
@@ -3734,7 +3734,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                      <*> desugar_statement_aux ctx' s
       
       | CabsSwhile e s ->
-          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3750,7 +3750,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
           end
       
       | CabsSdo e s ->
-          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3766,7 +3766,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
           end
       
       | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
-          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -3865,7 +3865,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
           )
       
       | CabsSfor fc_opt e2_opt e3_opt s ->
-          E.freshify (CabsIdentifier loc "continue") >>= fun cont_ident ->
+          E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
           let ctx' =
@@ -4306,7 +4306,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
       (* ----- *)
       
       let decltor1 =
-        Declarator (Just ptr_decltor1) (DDecl_identifier (CabsIdentifier Loc.unknown "ptrToPtrToConstInt")) in
+        Declarator (Just ptr_decltor1) (DDecl_identifier (Identifier Loc.unknown "ptrToPtrToConstInt")) in
       let specifs1 = <|
         storage_classes= [];
         type_specifiers= [TSpec_int];

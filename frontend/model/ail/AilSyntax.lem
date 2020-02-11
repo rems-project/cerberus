@@ -1,7 +1,7 @@
 open import Pervasives Loc Ctype
 import Symbol
 
-type identifier = Symbol.sym
+type ail_identifier = Symbol.sym
 
 type reg = nat
 
@@ -64,8 +64,8 @@ type constant [name = "c*"] =
   | ConstantFloating      of floatingConstant
   | ConstantCharacter     of characterConstant
   | ConstantArray         of ctype * list constant
-  | ConstantStruct        of Symbol.sym * list (Cabs.cabs_identifier * constant)
-  | ConstantUnion         of Symbol.sym * Cabs.cabs_identifier * constant
+  | ConstantStruct        of Symbol.sym * list (Symbol.identifier * constant)
+  | ConstantUnion         of Symbol.sym * Symbol.identifier * constant
 
 type unaryOperator =
   | Plus
@@ -117,30 +117,30 @@ type expression_ 'a [name = "e*"] =
   | AilEcast of qualifiers * ctype * expression 'a
   | AilEcall of expression 'a * list (expression 'a)
   | AilEassert of expression 'a
-  | AilEoffsetof of ctype * Cabs.cabs_identifier
+  | AilEoffsetof of ctype * Symbol.identifier
   | AilEgeneric of expression 'a * list (generic_association 'a)
   (* NOTE: these don't exist in C (apart from in decl)
    * the boolean says whether this array was created from a string literal
    * used to initialise a pointer to an array of character *)
   | AilEarray of bool * ctype * list (maybe (expression 'a))
-  | AilEstruct of identifier * list (Cabs.cabs_identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
-  | AilEunion of identifier * Cabs.cabs_identifier * maybe (expression 'a)
+  | AilEstruct of ail_identifier * list (Symbol.identifier * maybe (expression 'a)) (* tag, pairs of member id, expression *)
+  | AilEunion of ail_identifier * Symbol.identifier * maybe (expression 'a)
   (* NOTE: the expression obviously need to match the type, and will typically
    * be a AilEarray or AilEstruct *)
   | AilEcompound of qualifiers * ctype * expression 'a
-  | AilEmemberof of expression 'a * Cabs.cabs_identifier
-  | AilEmemberofptr of expression 'a * Cabs.cabs_identifier
+  | AilEmemberof of expression 'a * Symbol.identifier
+  | AilEmemberofptr of expression 'a * Symbol.identifier
   | AilEbuiltin of ail_builtin
   | AilEstr of stringLiteral
   | AilEconst of constant
-  | AilEident of identifier
+  | AilEident of ail_identifier
   | AilEsizeof of qualifiers * ctype
   | AilEsizeof_expr of expression 'a
   | AilEalignof of qualifiers * ctype
   (* NOTE: type annotation on expression, used to remember the type of desugared
    * enumeration constants *)
   | AilEannot of ctype * (expression 'a)
-  | AilEva_start of expression 'a * identifier
+  | AilEva_start of expression 'a * ail_identifier
   | AilEva_arg of expression 'a * ctype
   | AilEva_copy of expression 'a * expression 'a
   | AilEva_end of expression 'a
@@ -177,7 +177,7 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
 (* the boolean tells whether the object was declared with the register
  * storage-class *)
 type bindings =
-  list (identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+  list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
 
 type statement_ 'a [name="s*"] =
   | AilSskip
@@ -193,9 +193,9 @@ type statement_ 'a [name="s*"] =
   | AilSswitch of expression 'a * statement 'a
   | AilScase of integerConstant * statement 'a
   | AilSdefault of statement 'a
-  | AilSlabel of identifier * statement 'a
-  | AilSgoto of identifier
-  | AilSdeclaration of list (identifier * expression 'a)
+  | AilSlabel of ail_identifier * statement 'a
+  | AilSgoto of ail_identifier
+  | AilSdeclaration of list (ail_identifier * expression 'a)
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 and statement 'a [name="s*"] =
@@ -223,17 +223,17 @@ type id_kind =
   | IK_definition
 
 type sigma 'a = <|
-  declarations: list (identifier * (Loc.t * declaration));
-  object_definitions: list (identifier * (expression 'a));
+  declarations: list (ail_identifier * (Loc.t * declaration));
+  object_definitions: list (ail_identifier * (expression 'a));
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: list (identifier * (Loc.t * list identifier * statement 'a));
+  function_definitions: list (ail_identifier * (Loc.t * list ail_identifier * statement 'a));
   static_assertions: list (expression 'a * stringLiteral);
-  tag_definitions: list (identifier * tag_definition);
-  extern_idmap: map Cabs.cabs_identifier (identifier * id_kind);
+  tag_definitions: list (ail_identifier * tag_definition);
+  extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
 |>
 
 
-type gamma = list (identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+type gamma = list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
 
-type ail_program 'a = maybe identifier * sigma 'a
+type ail_program 'a = maybe ail_identifier * sigma 'a
 

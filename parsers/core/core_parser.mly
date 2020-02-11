@@ -1345,7 +1345,7 @@ name:
 
 cabs_id:
 | n= SYM
-  { Cabs.CabsIdentifier (Location_ocaml.region (snd n) None, fst n) }
+  { Symbol.Identifier (Location_ocaml.region (snd n) None, fst n) }
 ;
 
 memory_order:

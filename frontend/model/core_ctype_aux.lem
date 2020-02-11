@@ -1,6 +1,6 @@
 open import Pervasives
 
-import Symbol Cabs AilTypesAux
+import Symbol AilTypesAux
 open import Utils Ctype
 
 (* SEE src/tags.mli for the documentation *)
@@ -17,7 +17,7 @@ val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
   fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())
 
-val get_structDef: Symbol.sym -> list (Cabs.cabs_identifier * (qualifiers * ctype))
+val get_structDef: Symbol.sym -> list (Symbol.identifier * (qualifiers * ctype))
 let get_structDef tag_sym =
   match Map.lookup tag_sym (tagDefs ()) with
     | Just (StructDef xs) ->
@@ -30,7 +30,7 @@ let get_structDef tag_sym =
                "): couldn't find a struct/union definition")
   end
 
-val get_unionDef: Symbol.sym -> (Cabs.cabs_identifier * (qualifiers * ctype)) * list (Cabs.cabs_identifier * (qualifiers * ctype))
+val get_unionDef: Symbol.sym -> (Symbol.identifier * (qualifiers * ctype)) * list (Symbol.identifier * (qualifiers * ctype))
 let get_unionDef tag_sym =
   match Map.lookup tag_sym (tagDefs ()) with
     | Just (UnionDef []) ->
@@ -162,6 +162,6 @@ let tags_are_compatible tag_sym1 tag_sym2 =
 *)
 
 (*
-  | StructDef of list (Cabs.cabs_identifier * ctype)
-  | UnionDef of list (Cabs.cabs_identifier * ctype)
+  | StructDef of list (Symbol.identifier * ctype)
+  | UnionDef of list (Symbol.identifier * ctype)
 *)

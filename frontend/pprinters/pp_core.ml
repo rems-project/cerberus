@@ -287,11 +287,11 @@ let rec pp_object_value = function
   | OVstruct (tag_sym, xs) ->
       P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
-        comma_list (fun (Cabs.CabsIdentifier (_, ident), _, mval) ->
+        comma_list (fun (Symbol.Identifier (_, ident), _, mval) ->
           P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
         ) xs
       )
-  | OVunion (tag_sym, Cabs.CabsIdentifier (_, ident), mval) ->
+  | OVunion (tag_sym, Symbol.Identifier (_, ident), mval) ->
       P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
       P.braces (
         P.dot ^^ !^ ident ^^ P.equals ^^^ Impl_mem.pp_mem_value mval
@@ -460,7 +460,7 @@ let pp_pexpr pe =
             pp_keyword "array_shift" ^^ P.parens (
               pp pe1 ^^ P.comma ^^^ pp_ctype ty ^^ P.comma ^^^ pp pe2
             )
-        | PEmember_shift (pe, tag_sym, (Cabs.CabsIdentifier (_, memb_ident))) ->
+        | PEmember_shift (pe, tag_sym, (Symbol.Identifier (_, memb_ident))) ->
             pp_keyword "member_shift" ^^ P.parens (
               pp pe ^^ P.comma ^^^ pp_raw_symbol tag_sym ^^ P.comma ^^^ P.dot ^^ !^ memb_ident
             )
@@ -475,11 +475,11 @@ let pp_pexpr pe =
         | PEstruct (tag_sym, xs) ->
             P.parens (pp_const "struct" ^^^ pp_raw_symbol tag_sym) ^^
             P.braces (
-              comma_list (fun (Cabs.CabsIdentifier (_, ident), pe) ->
+              comma_list (fun (Symbol.Identifier (_, ident), pe) ->
                 P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
               ) xs
             )
-        | PEunion (tag_sym, Cabs.CabsIdentifier (_, ident), pe) ->
+        | PEunion (tag_sym, Symbol.Identifier (_, ident), pe) ->
             P.parens (pp_const "union" ^^^ pp_raw_symbol tag_sym) ^^
             P.braces (
               P.dot ^^ !^ ident ^^ P.equals ^^^ pp pe
@@ -487,7 +487,7 @@ let pp_pexpr pe =
         | PEmemberof (tag_sym, memb_ident, pe) ->
             pp_keyword "memberof" ^^ P.parens (
               pp_symbol tag_sym ^^ P.comma ^^^
-              Pp_cabs.pp_cabs_identifier memb_ident ^^ P.comma ^^^
+              Pp_symbol.pp_identifier memb_ident ^^ P.comma ^^^
               pp pe
             )
         | PEcfunction pe ->
@@ -731,7 +731,7 @@ let pp_tagDefinitions tagDefs =
       | Ctype.StructDef tags -> ("struct", tags)
       | Ctype.UnionDef tags -> ("union", tags)
     in
-    let pp_tag (Cabs.CabsIdentifier (_, name), (_, ty)) =
+    let pp_tag (Symbol.Identifier (_, name), (_, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty
     in
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals

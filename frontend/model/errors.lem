@@ -1,9 +1,9 @@
-open import Pervasives Utils Cabs AilSyntax Core
-import Loc TypingError Undefined Constraint
+open import Pervasives Utils AilSyntax Core
+import Loc TypingError Undefined Constraint Symbol
 
 type misc_violation =
   | UndeclaredIdentifier of string (*§6.5.1#2 *)
-  | MultipleEnumDeclaration of cabs_identifier (* §6.7.2.2#3, FOOTNOTE.127 *)
+  | MultipleEnumDeclaration of Symbol.identifier (* §6.7.2.2#3, FOOTNOTE.127 *)
   | EnumSimpleDeclarationConstruction (* §6.7.2.3#7, FOOTNOTE.131 *)
   | ArrayDeclarationStarIllegalScope (* §6.7.6.2#4, sentence 2 *)
   | ArrayCharStringLiteral (* §6.7.9#14 *)
@@ -35,10 +35,10 @@ type core_typing_cause =
   (* NOTE: I cannot fire these errors *)
   | HeterogenousList of core_base_type (* expected *) * core_base_type (* found *)
   | InvalidTag of Symbol.sym
-  | InvalidMember of Symbol.sym * Cabs.cabs_identifier
+  | InvalidMember of Symbol.sym * Symbol.identifier
 
 type core_linking_cause =
-  | DuplicateExternalName of Cabs.cabs_identifier
+  | DuplicateExternalName of Symbol.identifier
   | DuplicateMain
 
 type core_run_cause =

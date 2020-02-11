@@ -493,11 +493,11 @@ let rec pp_constant = function
  | ConstantStruct (tag_sym, xs) ->
      P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (
        comma_list (fun (memb_ident, cst) ->
-         P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
+         P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst
        ) xs
      )
  | ConstantUnion (tag_sym, memb_ident, cst) ->
-     P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
+     P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ pp_constant cst)
  
 let pp_ail_builtin = function
   | AilBatomic b ->
@@ -554,7 +554,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
         | AilEassert e ->
             !^ "assert" ^^ P.parens (pp e)
         | AilEoffsetof (ty, ident) ->
-            !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_cabs.pp_cabs_identifier ident)
+            !^ "offsetof" ^^ P.parens (pp_ctype no_qualifiers ty ^^ P.comma ^^^ Pp_symbol.pp_identifier ident)
         | AilEgeneric (e, gas) ->
             pp_keyword "_Generic" ^^ P.parens (pp e ^^ P.comma ^^^ comma_list (pp_generic_association_aux mk_pp_annot) gas)
         | AilEarray (_, ty, e_opts) ->
@@ -563,7 +563,7 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             P.parens (!^ "struct" ^^^ pp_id tag_sym) ^^ P.braces (comma_list (function (ident, Some e) -> pp e | (ident, None) -> !^ "_") xs)
         | AilEunion (tag_sym, memb_ident, e_opt) ->
             P.parens (!^ "union" ^^^ pp_id tag_sym) ^^ P.braces (
-              P.dot ^^ Pp_cabs.pp_cabs_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
+              P.dot ^^ Pp_symbol.pp_identifier memb_ident ^^ P.equals ^^^ (function None -> !^ "_" | Some e -> pp e) e_opt
             )
         | AilEcompound (qs, ty, e) ->
             P.parens (pp_ctype qs ty) ^^ P.braces (pp e)
@@ -590,9 +590,9 @@ let rec pp_expression_aux mk_pp_annot a_expr =
             else
               pp_keyword "Alignof_" ^^ P.parens (pp_ctype qs ty)
         | AilEmemberof (e, ident) ->
-            pp e ^^ P.dot ^^ Pp_cabs.pp_cabs_identifier ident
+            pp e ^^ P.dot ^^ Pp_symbol.pp_identifier ident
         | AilEmemberofptr (e, ident) ->
-            pp e ^^ (!^ "->") ^^ Pp_cabs.pp_cabs_identifier ident
+            pp e ^^ (!^ "->") ^^ Pp_symbol.pp_identifier ident
         | AilEannot (_, e) ->
             !^ "/* annot */" ^^^ pp e
         | AilEva_start (e, sym) ->
@@ -711,7 +711,7 @@ let pp_tag_definition (tag, def) =
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
-              pp_ctype qs ty ^^^ Pp_cabs.pp_cabs_identifier ident
+              pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi
@@ -719,7 +719,7 @@ let pp_tag_definition (tag, def) =
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
-              pp_ctype qs ty ^^^ Pp_cabs.pp_cabs_identifier ident
+              pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
         ) ^^ P.semi

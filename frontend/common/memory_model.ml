@@ -97,7 +97,7 @@ module type Memory = sig
   
   (* Pointer shifting constructors *)
   val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
-  val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
+  val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
   
   val eff_array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value memM
   
@@ -118,7 +118,7 @@ module type Memory = sig
   val max_ival: Ctype.integerType -> integer_value
   val min_ival: Ctype.integerType -> integer_value
   val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
+  val offsetof_ival: (Symbol.sym, Ctype.tag_definition) Pmap.map -> Symbol.sym -> Symbol.identifier -> integer_value
   
   val sizeof_ival: Ctype.ctype -> integer_value
   val alignof_ival: Ctype.ctype -> integer_value
@@ -170,8 +170,8 @@ module type Memory = sig
   val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
   val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
   val array_mval: mem_value list -> mem_value
-  val struct_mval: Symbol.sym -> (Cabs.cabs_identifier * Ctype.ctype * mem_value) list -> mem_value
-  val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
+  val struct_mval: Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> mem_value
+  val union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value
   
   (* Memory value destructor *)
   val case_mem_value:
@@ -182,8 +182,8 @@ module type Memory = sig
     (Ctype.floatingType -> floating_value -> 'a) ->
     (Ctype.ctype -> pointer_value -> 'a) ->
     (mem_value list -> 'a) ->
-    (Symbol.sym -> (Cabs.cabs_identifier * Ctype.ctype * mem_value) list -> 'a) ->
-    (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
+    (Symbol.sym -> (Symbol.identifier * Ctype.ctype * mem_value) list -> 'a) ->
+    (Symbol.sym -> Symbol.identifier -> mem_value -> 'a) ->
     'a
   
   

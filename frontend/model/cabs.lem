@@ -1,39 +1,6 @@
+import Symbol
 open import Pervasives Loc
 import Annot
-
-type cabs_identifier =
-  | CabsIdentifier of Loc.t * string
-
-instance (Eq cabs_identifier)
-  let (=) ident1 ident2 =
-    let (CabsIdentifier _ str1) = ident1 in
-    let (CabsIdentifier _ str2) = ident2 in
-    str1 = str2
-  let (<>) ident1 ident2 =
-    let (CabsIdentifier _ str1) = ident1 in
-    let (CabsIdentifier _ str2) = ident2 in
-    str1 <> str2
-end
-
-instance (SetType cabs_identifier)
-  let setElemCompare ident1 ident2 =
-    let (CabsIdentifier _ str1) = ident1 in
-    let (CabsIdentifier _ str2) = ident2 in
-    setElemCompare str1 str2
-end
-
-instance (Located cabs_identifier)
-  let locOf ident =
-    let (CabsIdentifier loc _) = ident in
-    loc
-end
-
-instance (Show cabs_identifier)
-  let show ident =
-    let CabsIdentifier _ str = ident in
-    str
-end
-
 
 (* §6.4.4 Constants *)
 type cabs_integer_suffix =
@@ -80,15 +47,15 @@ type cabs_string_literal = maybe cabs_encoding_prefix * list string
 (* §6.5 Expressions *)
 type cabs_expression_ =
   (* §6.5.1 Primary expressions, Syntax *)
-  | CabsEident of cabs_identifier
+  | CabsEident of Symbol.identifier
   | CabsEconst of cabs_constant
   | CabsEstring of cabs_string_literal
   | CabsEgeneric of cabs_expression * list cabs_generic_association
   (* §6.5.2 Postfix operators, Syntax *)
   | CabsEsubscript of cabs_expression * cabs_expression
   | CabsEcall of cabs_expression * list cabs_expression
-  | CabsEmemberof of cabs_expression * cabs_identifier
-  | CabsEmemberofptr of cabs_expression * cabs_identifier
+  | CabsEmemberof of cabs_expression * Symbol.identifier
+  | CabsEmemberofptr of cabs_expression * Symbol.identifier
   | CabsEpostincr of cabs_expression
   | CabsEpostdecr of cabs_expression
   | CabsEcompound of type_name * list (maybe (list designator) * initializer_)
@@ -112,8 +79,8 @@ type cabs_expression_ =
   (* NOTE: the following are suppose to be in the library, but need
      special treatment *)
   | CabsEassert of cabs_expression
-  | CabsEoffsetof of type_name * cabs_identifier
-  | CabsEva_start of cabs_expression * cabs_identifier
+  | CabsEoffsetof of type_name * Symbol.identifier
+  | CabsEva_start of cabs_expression * Symbol.identifier
   | CabsEva_copy of cabs_expression * cabs_expression
   | CabsEva_arg of cabs_expression * type_name
   | CabsEva_end of cabs_expression
@@ -215,11 +182,11 @@ and cabs_type_specifier_ =
   | TSpec_Bool
   | TSpec_Complex
   | TSpec_Atomic of type_name (* §6.7.2.4 Atomic type specifiers, Syntax *)
-  | TSpec_struct of maybe cabs_identifier * maybe (list struct_declaration)
-  | TSpec_union  of maybe cabs_identifier * maybe (list struct_declaration)
-  | TSpec_enum   of maybe cabs_identifier * maybe (list (cabs_identifier * maybe
+  | TSpec_struct of maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_union  of maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_enum   of maybe Symbol.identifier * maybe (list (Symbol.identifier * maybe
                                                            cabs_expression))
-  | TSpec_name   of cabs_identifier
+  | TSpec_name   of Symbol.identifier
 and cabs_type_specifier =
   | TSpec of Loc.t * cabs_type_specifier_
 
@@ -257,7 +224,7 @@ and declarator =
   | Declarator of maybe pointer_declarator * direct_declarator
 
 and direct_declarator =
-  | DDecl_identifier of cabs_identifier
+  | DDecl_identifier of Symbol.identifier
   | DDecl_declarator of declarator
   | DDecl_array      of direct_declarator * array_declarator
   | DDecl_function   of direct_declarator * parameter_type_list
@@ -302,7 +269,7 @@ and initializer_ =
 
 and designator =
   | Desig_array of cabs_expression
-  | Desig_member of cabs_identifier
+  | Desig_member of Symbol.identifier
 
 
 (* §6.7.10 Static assertions *)
@@ -310,12 +277,12 @@ and static_assert_declaration =
  | Static_assert of cabs_expression * cabs_string_literal
 
 (* §6.7.2.2 Enumeration specifiers, Syntax *)
-type enumerator = cabs_identifier * maybe cabs_expression
+type enumerator = Symbol.identifier * maybe cabs_expression
 
 (* §6.8 Statements and blocks, Syntax *)
 type cabs_statement_ =
   (* §6.8.1 Labeled statements, Syntax *)
-  | CabsSlabel of cabs_identifier * cabs_statement
+  | CabsSlabel of Symbol.identifier * cabs_statement
   | CabsScase of cabs_expression * cabs_statement
   | CabsSdefault of cabs_statement
   (* §6.8.2 Compound statement, Syntax *)
@@ -333,7 +300,7 @@ type cabs_statement_ =
   | CabsSdo of cabs_expression * cabs_statement
   | CabsSfor of maybe for_clause * maybe cabs_expression * maybe cabs_expression * cabs_statement
   (* §6.8.6 Jump statements, Syntax *)
-  | CabsSgoto of cabs_identifier
+  | CabsSgoto of Symbol.identifier
   | CabsScontinue
   | CabsSbreak
   | CabsSreturn of maybe cabs_expression

@@ -65,7 +65,7 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
-  | DeclFunIds of context * Cabs.cabs_identifier list
+  | DeclFunIds of context * Symbol.identifier list
   | DeclPtr of Cabs.pointer_declarator
   | DeclOther
 and declarator =
@@ -89,7 +89,7 @@ let pointer_decl pdecl d =
   { d with sort=    DeclPtr pdecl;
   }
 
-let identifier_decl (Cabs.CabsIdentifier(_, str) as i) =
+let identifier_decl (Symbol.Identifier(_, str) as i) =
   { id=      str;
     sort=    DeclId;
     direct=  Cabs.DDecl_identifier i;
@@ -153,9 +153,9 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
             Printf.printf "%d => %s\n" i begin
               match x_opt with
                 | None ->
-                    "none, " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier y)
+                    "none, " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier y)
                 | Some x ->
-                    "some " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier x) ^ ", " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier y)
+                    "some " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier x) ^ ", " ^ Pp_utils.to_plain_string (Pp_symbol.pp_identifier y)
             end
           ) (List.concat attr)
 (*
