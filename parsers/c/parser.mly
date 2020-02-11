@@ -1313,20 +1313,20 @@ external_declaration:
 
 (* §6.9.1 Function definitions *)
 function_definition1:
-| ioption(attribute_specifier_sequence) specifs= declaration_specifiers
+| attr_opt= ioption(attribute_specifier_sequence) specifs= declaration_specifiers
   decltor= declarator_varname
     { let ctxt = LF.save_context () in
       LF.reinstall_function_context decltor;
-      (specifs, decltor, ctxt) }
+      (attr_opt, specifs, decltor, ctxt) }
 ;
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
   stmt= compound_statement
     { let loc = Location_ocaml.region ($startpos, $endpos) None in
-      let (specifs, decltor, ctxt) = specifs_decltor_ctxt in
+      let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       LF.restore_context ctxt;
-      LF.create_function_definition loc specifs decltor stmt rev_decl_opt }
+      LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)

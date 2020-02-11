@@ -120,7 +120,7 @@ let reinstall_function_context d =
   | DeclFun ctxt -> restore_context ctxt; declare_varname d.id
   | _ -> ()
 
-let create_function_definition loc specifs d stmt rev_dlist_opt =
+let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
   match d.sort, rev_dlist_opt with
   | DeclFunIds (_, ids), None ->
     let open Cabs in
@@ -140,9 +140,42 @@ let create_function_definition loc specifs d stmt rev_dlist_opt =
       | DDecl_function (ddecl, _) -> DDecl_function (ddecl, Params (params, false))
       | _ -> assert false in
     let decl = Cabs.Declarator (None, direct_declarator) in
-    Cabs.FunDef (loc, specifs, decl, stmt)
+    Cabs.FunDef (loc, Annot.Attrs [(*TODO*)], specifs, decl, stmt)
   | DeclFunIds (_, ids), Some rev_dlist ->
     assert false
   | _, _ ->
-    Cabs.FunDef (loc, specifs, cabs_of_declarator d, stmt)
+    let aux = function
+      | None ->
+          print_endline "NO ATTRIBUTE"
+      | Some attr ->
+          print_endline "FOUND ATTRIBUTE";
+          List.iteri (fun i ((x_opt, y), args) ->
+            Printf.printf "%d => %s\n" i begin
+              match x_opt with
+                | None ->
+                    "none, " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier y)
+                | Some x ->
+                    "some " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier x) ^ ", " ^ Pp_utils.to_plain_string (Pp_cabs.pp_cabs_identifier y)
+            end
+          ) (List.concat attr)
+(*
+((((Cabs.cabs_identifier option * Cabs.cabs_identifier) * ((string list) option)) list) list)
+*)
+
+    in
+(*
+    aux attr_opt;
+    let xs = match attr_opt with
+      | None ->
+          []
+      | Some z ->
+          List.map (fun (ns, id, args) ->
+            let open Annot in
+            { attr_ns=    ns
+            ; attr_id=    id
+            ; attrs_args= args }
+          ) (List.concat z)
+    in
+*)
+    Cabs.FunDef (loc, Annot.Attrs [(*xs*)], specifs, cabs_of_declarator d, stmt)
 

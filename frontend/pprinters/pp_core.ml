@@ -544,6 +544,8 @@ let rec pp_expr expr =
                 | Abmc_id id ->
                     !^"{-" ^^ !^(string_of_int id) ^^ !^"-}" ^^ acc
                 end
+            | Aattrs _ ->
+                !^ "TODO(Aattrs)"
         ) doc annot
     end
     begin

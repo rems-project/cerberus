@@ -1,4 +1,5 @@
 open import Pervasives Loc
+import Annot
 
 type cabs_identifier =
   | CabsIdentifier of Loc.t * string
@@ -357,7 +358,7 @@ and external_declaration =
 
 (* §6.9.1 Function definitions, Syntax *)
 and function_definition =
-  | FunDef of Loc.t * specifiers * declarator * cabs_statement
+  | FunDef of Loc.t * Annot.attributes * specifiers * declarator * cabs_statement
 
 
 (* This type's sole purpose it to allow the construction of multiset of base
@@ -421,7 +422,7 @@ end
 instance (Located external_declaration)
   let locOf edecl =
     match edecl with
-      | EDecl_func (FunDef _ _ decl _) ->
+      | EDecl_func (FunDef _ _ _ decl _) ->
           locOf decl
       | EDecl_decl (Declaration_base _ idecls) ->
           (* NOTE: Return just the first InitDecl location *)
