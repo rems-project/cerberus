@@ -10,8 +10,10 @@ let plop2 = function
 let string_of_attrs attrs =
   String.concat ", " (List.map (fun a -> string_of_identifier a.Annot.attr_id ^ plop2 a.Annot.attr_args) attrs)
 
-let print_fun_wo_args (Symbol.Symbol (_, _, Some id)) ((_, Annot.Attrs attrs, _, _)) =
-  print_string (id ^ ": " ^ string_of_attrs attrs ^ "\n")
+let string_of_sym (Symbol.Symbol (_, _, Some id)) = id
+
+let string_of_fun_wo_args sym ((_, Annot.Attrs attrs, _, _)) =
+  string_of_sym sym ^ ": " ^ string_of_attrs attrs
 
 let string_of_ty = function
 | Ctype.Ctype _ -> "?"
@@ -22,18 +24,18 @@ let string_of_arg (id, ty) =
 let string_of_args args =
   String.concat "," (List.map string_of_arg args)
 
-let print_fun_w_args (Symbol.Symbol (_, _, Some id)) (retty, argsty) ((_, Annot.Attrs attrs, args, _)) =
+let string_of_fun_w_args sym (retty, argsty) ((_, Annot.Attrs attrs, args, _)) =
   let args = List.combine argsty args in
-  print_string (id ^ ": " ^ string_of_attrs attrs ^ " (" ^ string_of_args args ^ ")\n")
+  string_of_sym sym ^ ": " ^ string_of_attrs attrs ^ " (" ^ string_of_args args ^ ")"
 
-let print_fun = function
-| (x, (Some ty, Some bod)) -> print_fun_w_args x ty bod
-| (x, (_, Some bod)) -> print_fun_wo_args x bod
+let string_of_fun = function
+| (x, (Some ty, Some bod)) -> string_of_fun_w_args x ty bod
+| (x, (_, Some bod)) -> string_of_fun_wo_args x bod
 | (_, (None, None)) -> assert false (* ? *)
-| _ -> failwith "???"
+| (x, _)-> string_of_sym x ^ " no body"
 
 let print_funs fs =
-  List.iter print_fun fs
+  List.iter (fun f -> print_string (string_of_fun f ^ "\n")) fs
 
 let rec map_option_aux f acc = function
   | [] -> List.rev acc
