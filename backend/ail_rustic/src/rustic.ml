@@ -1,6 +1,6 @@
 open AilSyntax
 
-let plop (Symbol.Identifier (_, s)) = s
+let string_of_identifier (Symbol.Identifier (_, s)) = s
 
 let plop2 = function
 | [] -> ""
@@ -8,7 +8,7 @@ let plop2 = function
 
 
 let string_of_attrs attrs =
-  String.concat ", " (List.map (fun a -> plop a.Annot.attr_id ^ plop2 a.Annot.attr_args) attrs)
+  String.concat ", " (List.map (fun a -> string_of_identifier a.Annot.attr_id ^ plop2 a.Annot.attr_args) attrs)
 
 let print_fun_wo_args (Symbol.Symbol (_, _, Some id)) ((_, Annot.Attrs attrs, _, _)) =
   print_string (id ^ ": " ^ string_of_attrs attrs ^ "\n")
