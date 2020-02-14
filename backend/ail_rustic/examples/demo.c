@@ -14,6 +14,22 @@ void g([[rc::read("a"), rc::inited("s{f1:init,f2:notinit,f3:notinit}")]] struct 
   int x = p->f1 + 1;
 }
 
+struct ll_node {
+  int x;
+  struct ll_node * next [[rc::recursive]];
+};
+
+// TODO: actual mutex
+struct mutex {
+  int taken;
+};
+
+struct lk_s {
+  struct mutex m [[rc::struct_owner]];
+  int x [[rc::owned_by("m")]];
+  int * p [[rc::owned_by("m")]];
+};
+
 int main(void) {
   struct s s0;
   // s0 is nonnull, but not initialised
