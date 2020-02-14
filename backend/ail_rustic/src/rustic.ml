@@ -31,14 +31,15 @@ let string_of_ty = function
 | Ctype.Ctype _ -> "?"
 
 let string_of_annots annots =
-  let annots = map_option (
-  let open Annot in function
-| Astd x -> None
-| Aloc loc -> None
-| Auid _ -> None
-| Abmc _ -> None
-| Aattrs (Attrs attrs) -> Some attrs
-    ) annots in
+  let annots =
+    map_option
+      (let open Annot in function
+      | Astd x -> None
+      | Aloc loc -> None
+      | Auid _ -> None
+      | Abmc _ -> None
+      | Aattrs (Attrs attrs) -> Some attrs)
+      annots in
   let annots = List.concat annots in
   String.concat " " (List.map string_of_attr annots)
 
