@@ -63,6 +63,19 @@ struct ll_lk_node {
   struct ll_lk_node * next [[rc::recursive, rc::owned_by("m")]];
 };
 
+void f4() {
+  int x; // owns something of size |int|
+  int y = x + 1;
+}
+
+void f5(int * x [[rc::mut("a")]]) {
+  [[rc::updatety("x","*zap")]]
+  // after the following statement, one of `x` and `y` has to be a pointer what `x` was a pointer to
+  // the other's value should not be "used" (or at least, not used to dereference)
+  int * y = x; 
+  int z = *y; // it has to be `y`
+}
+
 int main(void) {
   struct s s0;
   // s0 is nonnull, but not initialised
