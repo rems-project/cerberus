@@ -152,21 +152,28 @@ let collect_functions s =
   let m = List.fold_left (fun m (id, f) -> add_right id (cvt_def f) m) m fs in
   m
 
+let collect_structs s =
+  map_option (function (_, (_, Decl_function _)) -> None | (id, (_, Decl_object (_, _, ty))) -> Some (id, ty)) s.declarations
+
+let type_of_fun (f : fn_decl) =
+  failwith "TODO"
+
 let collect_function_types fs =
   (* TODO: probably needs something better *)
   let hh _ = function
-  | (Some fn_decl, _) -> Some fn_decl
+  | (Some fn_decl, _) -> Some (type_of_fun fn_decl)
   | _ -> None in
   Ail_identifier_option_map.map hh fs
 
-let check_function ftys id f = failwith "TODO"
-  
+let check_function stys ftys id f =
+  failwith "TODO"
 
 let run_rustic ail_file =
   match ail_file with
   | (id, s) ->
     let fs = collect_functions s in
+    let stys = collect_structs s in
     print_funs (Ail_identifier_map.bindings fs); flush stdout;
     let ftys = collect_function_types fs in
-    Ail_identifier_map.iter (check_function ftys) fs;
+    Ail_identifier_map.iter (check_function stys ftys) fs;
     ()
