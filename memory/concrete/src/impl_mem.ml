@@ -1216,7 +1216,7 @@ module Concrete : Memory = struct
      given allocation id *)
   let zap_pointers alloc_id =
     modify (fun st ->
-      let bytemap' = IntMap.fold (fun alloc_id alloc acc ->
+      let bytemap' = IntMap.fold (fun _ alloc acc ->
         let bs = fetch_bytes st.bytemap alloc.base (N.to_int alloc.size) in
         match alloc.ty with
           | None ->
@@ -1224,7 +1224,7 @@ module Concrete : Memory = struct
               acc
           | Some ty ->
               begin match abst (find_overlaping st) st.funptrmap ty bs with
-                | (_, MVpointer (ref_ty, (PV (Prov_some alloc_id', _))), []) when alloc_id = alloc_id' ->
+                | (_, MVpointer (ref_ty, (PV (Prov_some ptr_alloc_id, _))), []) when alloc_id = ptr_alloc_id ->
                     let bs' = List.init (N.to_int alloc.size) (fun i ->
                       (Nat_big_num.add alloc.base (Nat_big_num.of_int i), AbsByte.v Prov_none None)
                     ) in
