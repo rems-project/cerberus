@@ -29,8 +29,8 @@ struct ll_node {
 
 [[rc::function_lifetime("f")]]
 void f2(struct ll_node * x [[rc::read("f")]]) {
-  if (x) {
-    [[rc::block_lifetime("b")]] // now b <= f
+  if (x) [[rc::block_lifetime("b")]] {
+     // now b <= f
     int y = x->f;
     f2(x->next); // this uses b for the f argument
   }
@@ -38,7 +38,7 @@ void f2(struct ll_node * x [[rc::read("f")]]) {
 
 // TODO: actual mutex
 struct mutex {
-  int taken;
+  _Atomic(int) taken;
 };
 
 [[rc::is_lock_function("mutex")]]
@@ -48,9 +48,9 @@ void unlock(struct mutex *);
 
 struct lk_s {
   struct mutex m [[rc::mutex]];
-  int f [[rc::owned_by("m")]];
-  int * p [[rc::owned_by("m")]];
-  int f2; // not owned
+  int f [[rc::protected_by("m")]];
+  int * p [[rc::protected_by("m")]];
+  int f2; // not protected by the lock, so the struct owns it
 };
 
 void f3(struct lk_s * x) {
@@ -68,8 +68,8 @@ void f3(struct lk_s * x) {
 
 struct ll_lk_node {
   struct mutex m [[rc::mutex]];
-  int f [[rc::owned_by("m")]];
-  struct ll_lk_node * next [[rc::recursive, rc::owned_by("m")]];
+  int f [[rc::protected_by("m")]];
+  struct ll_lk_node * next [[rc::recursive, rc::protected_by("m")]];
 };
 
 void f4() {
@@ -79,7 +79,6 @@ void f4() {
 
 [[rc::function_lifetime("f")]]
 void f5(int * x [[rc::mut("f")]]) { // rc::mut should implicitly mean rc::mut("f")
-  [[rc::block_lifetime("b")]]
   [[rc::updatety("x","*zap")]]
   // after the following statement, one of `x` and `y` has to be a pointer what `x` was a pointer to
   // the other's value should not be "used" (or at least, not used to dereference)
@@ -89,7 +88,7 @@ void f5(int * x [[rc::mut("f")]]) { // rc::mut should implicitly mean rc::mut("f
 }
 
 [[rc::function_lifetime("f")]]
-void f7_free(struct ll_lk_node * s [[rc::mine]]) {
+void f7_free(struct ll_lk_node * s [[rc::take("a")]]) { // take is only valid for function
   // delete s is fine
 }
 
