@@ -545,7 +545,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
                        complete object type, but then #2 defers to §6.5.6#2 which does. *)
               if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified AAux.is_pointer_to_complete_object sigm ty') then
+                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryIncrement ty')
@@ -562,7 +562,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               (* NOTE: the STD at §6.5.3#1 doesn't directly says that pointer operand must be to
                        complete object type, but then #2 defers to §6.5.6#2 which does. *)
               if AAux.modifiable sigm qs' ty' && (AAux.atomic_qualified_unqualified AAux.is_real ty' ||
-                                                  AAux.atomic_qualified_unqualified AAux.is_pointer_to_complete_object sigm ty') then
+                                                  AAux.atomic_qualified_unqualified (AAux.is_pointer_to_complete_object sigm) ty') then
                 E.return (AilEunary uop e', GenRValueType (inject_type ty'))
               else
                 E.constraint_violation (with_cursor_from (locOf e) loc) (InvalidArgumentTypeUnaryDecrement ty')
