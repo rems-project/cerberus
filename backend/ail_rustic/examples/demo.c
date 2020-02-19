@@ -31,7 +31,8 @@ struct ll_node {
 void f2(struct ll_node * x [[rc::read("f")]]) {
   if (x) [[rc::block_lifetime("b")]] {
      // now b <= f
-    int y = x->f;
+    int y;
+    y = x->f;
     f2(x->next); // this uses b for the f argument
   }
 }
@@ -95,4 +96,9 @@ void f7_free(struct ll_lk_node * s [[rc::take("a")]]) { // take is only valid fo
 void f8_call_f7(void) {
   struct ll_lk_node * s; //
   f7_free(s);
+}
+
+[[rc::should_not_typecheck]]
+void f9(int [[rc::read]] * x [[rc::nonnull]]) {
+  *x = 3;
 }
