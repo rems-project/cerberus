@@ -163,14 +163,14 @@ let string_of_rc_ownership = function
 | RC_zap -> "zap"
 
 type rc_type =
-| RC_basic
+| RC_scalar
 | RC_ptr of rc_ownership * rc_type
 | RC_struct of Symbol.sym * rc_ownership
 | RC_atomic of rc_type
 
 let rec string_of_rc_type = function
-| RC_basic -> "."
-| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "]" ^ string_of_rc_type t ^ ""
+| RC_scalar -> "scalar"
+| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "] " ^ string_of_rc_type t ^ ""
 | RC_struct (id, o) -> "struct " ^ string_of_sym id ^ "[" ^ string_of_rc_ownership o ^ "]"
 | RC_atomic t -> "atomic " ^ string_of_rc_type t
 
@@ -208,8 +208,8 @@ let rc_ownership_of_annots annots =
   | _ -> RC_zap
 
 let rec rc_type_of_cty = function
-| Ctype.Ctype (_, Void) -> RC_basic
-| Ctype.Ctype (_, Basic _) -> RC_basic
+| Ctype.Ctype (_, Void) -> RC_scalar
+| Ctype.Ctype (_, Basic _) -> RC_scalar
 | Ctype.Ctype (_, Array _) -> failwith "array"
 | Ctype.Ctype (_, Function _) -> failwith "function"
 | Ctype.Ctype (annots, Pointer (_, cty)) -> RC_ptr (rc_ownership_of_annots annots, rc_type_of_cty cty)
@@ -228,7 +228,7 @@ let collect_function_types fs =
   Ail_identifier_option_map.map hh fs
 
 let zap = function
-| RC_basic -> RC_basic
+| RC_scalar -> RC_scalar
 | RC_ptr (_, rcty) -> RC_ptr (RC_zap, rcty)
 | RC_struct (id, _) -> RC_struct (id, RC_zap)
 
@@ -241,8 +241,8 @@ let sub_own t1 t2 = match (t1, t2) with
 | (RC_read, RC_write) -> false
 
 let rec sub_rcty t1 t2 = match (t1, t2) with
-| (RC_basic, RC_basic) -> true
-| (RC_basic, _) | (_, RC_basic) -> false
+| (RC_scalar, RC_scalar) -> true
+| (RC_scalar, _) | (_, RC_scalar) -> false
 | (RC_ptr (o1, t1), RC_ptr (o2, t2)) -> sub_own o1 o2 && sub_rcty t1 t2
 | (RC_ptr _, _) | (_, RC_ptr _) -> false
 | (RC_struct (_, o1), RC_struct (_, o2)) -> true
@@ -251,14 +251,16 @@ module Type_error = struct
 type t =
 | TE_general of string
 | TE_todo of string
-| TE_expected_but_got of rc_type * rc_type
+| TE_expected_at_most_but_got of rc_type * rc_type
+| TE_expected_at_least_but_got of rc_type * rc_type
 | TE_internal_error of string
 
 let string_of = function
 | TE_general s -> s
 | TE_todo s -> "TODO: " ^ s
-| TE_expected_but_got (t1, t2) -> "expected " ^ string_of_rc_type t1 ^ " but got " ^ string_of_rc_type t2
-| TE_internal_error s -> "internal error!"
+| TE_expected_at_most_but_got (t1, t2) -> "expected at most `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_expected_at_least_but_got (t1, t2) -> "expected at least `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_internal_error s -> "internal error: " ^ s
 end
 module TE_either = Either_fixed.Make(Type_error)
 
@@ -269,27 +271,50 @@ and check_expression_ stys ftys gamma = function
   (match lookup_in_gamma x gamma with
   | None -> TE_either.mzero (TE_general "unbound variable")
   | Some ty -> TE_either.return ty)
-| AilEassign (AnnotatedExpression (_, _, _, AilEunary (Indirection, AnnotatedExpression (_, _, _, AilEident x))), e2) ->
-  (match lookup_in_gamma x gamma with
-  | None -> failwith "can't find variable"
-  | Some cty ->
-    (match cty with
-     | RC_ptr (RC_write, _) -> failwith "TODO: ptr"
-     | _ -> failwith "type violation?"))
-| AilEassign _ -> TE_either.mzero (TE_todo "complex assign") (* TODO *)
+| AilEassign (e1, e2) ->
+  TE_either.bind
+    (check_expression stys ftys gamma e1)
+    (function
+      | RC_ptr (o, t) as ty ->
+        if sub_own RC_write o then TE_either.return RC_scalar (* TODO: ? *)
+        else TE_either.mzero (Type_error.TE_expected_at_most_but_got (RC_ptr (RC_write, t), ty))
+      | _ -> TE_either.mzero (Type_error.TE_internal_error "writing to a non-ptr?"))
 | AilEcall (AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))), [e]) ->
   (match Ail_identifier_map.find_opt f ftys with
    | None -> TE_either.mzero (TE_general ("unbound function " ^ string_of_sym f))
    | Some ([paramty], retty) ->
      TE_either.bind
      (check_expression stys ftys gamma e)
-      (fun argty -> if sub_rcty argty paramty then TE_either.return retty else TE_either.mzero (TE_expected_but_got (paramty, argty)))
+      (fun argty -> if sub_rcty argty paramty then TE_either.return retty else TE_either.mzero (TE_expected_at_least_but_got (paramty, argty)))
     | _ -> failwith "multiple args")
 | AilEcall _ -> failwith "TODO: other AilEcall"
 | AilEunary (Address, e) ->
   TE_either.bind
     (check_expression stys ftys gamma e)
     (fun ty -> TE_either.return (RC_ptr (RC_read, ty)))
+| AilEunary (Indirection, e) ->
+  TE_either.bind
+    (check_expression stys ftys gamma e)
+    (function
+    | RC_ptr (_, t) -> TE_either.return t
+    | _ -> TE_either.mzero (Type_error.TE_internal_error "derefing a non-pointer?"))
+| AilEunary ((Plus|Minus|Bnot|PostfixIncr|PostfixDecr), e) -> check_expression stys ftys gamma e
+| AilEbinary _ -> failwith "TODO: binary"
+| AilEcompoundAssign _ -> failwith "TODO: compound assign"
+| AilEcond _ -> failwith "TODO: cond"
+| AilEcast (_, _, e) -> check_expression stys ftys gamma e
+| AilEconst e -> TE_either.return RC_scalar
+| AilEmemberof _ -> failwith "TODO: memberof"
+| AilEfunction_decay _ -> TE_either.mzero (Type_error.TE_internal_error "non-directly-applied functions are not handled")
+| AilEannot _ -> failwith "TODO: annot"
+| AilEassert _ -> TE_either.return RC_scalar
+| AilEcompound _ -> failwith "TODO: compound"
+| AilErvalue e ->
+  TE_either.bind
+    (check_expression stys ftys gamma e)
+    (function
+    | RC_ptr (_, t) -> TE_either.return t
+    | _ -> TE_either.mzero (Type_error.TE_general "rvalue?"))
 | AilEmemberofptr (e, p) ->
   TE_either.bind
     (check_expression stys ftys gamma e)
@@ -300,9 +325,9 @@ and check_expression_ stys ftys gamma = function
          | Some sty ->
            (match String_map.find_opt (string_of_identifier p) sty with
            | None -> TE_either.mzero (TE_general "???")
-           | Some x -> TE_either.return x
+           | Some ty -> TE_either.return (RC_ptr (o, ty))
              ))
-     | _ -> TE_either.mzero (TE_internal_error ""))
+     | _ -> TE_either.mzero (TE_internal_error "memberofptr on non-struct"))
 | _ -> failwith "TODO: unhandled expression"
 
 (* TODO: this is completely wrong, it's just a skeleton *)
@@ -349,6 +374,8 @@ let check_function stys ftys id = function
   let should_typecheck = should_typecheck_of def in
   let sad = " " ^ Ansi.start_red ^ "sad" ^ Ansi.reset_colour in
   let happy = " " ^ Ansi.start_green ^ "happy" ^ Ansi.reset_colour ^ "\n" in
+  let rejected_as_expected = " " ^ Ansi.start_green ^ "rejected as expected" ^ Ansi.reset_colour ^ "\n" in
+  let unexpectedly_accepted = " " ^ Ansi.start_red ^ "unexpectedly accepted" ^ Ansi.reset_colour ^ "\n" in
   print_string (string_of_sym id ^ ":");
   flush stdout;
   let m =
@@ -358,9 +385,9 @@ let check_function stys ftys id = function
     | Some m -> m) in
   (match check_statements stys ftys [(m, [])] [def.fn_def_sts] with
    | TE_either.Left err ->
-     if should_typecheck then print_string (sad ^ ": " ^ Type_error.string_of err ^ "\n") else print_string happy
+     if should_typecheck then print_string (sad ^ ": " ^ Type_error.string_of err ^ "\n") else print_string rejected_as_expected
    | TE_either.Right () ->
-     if should_typecheck then print_string happy else print_string (sad ^ "\n"))
+     if should_typecheck then print_string happy else print_string unexpectedly_accepted)
 | _ -> print_string (string_of_sym id ^ " skipped\n")
 
 let collect_structs s =
