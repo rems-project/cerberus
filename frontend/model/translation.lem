@@ -3862,8 +3862,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             | Nothing ->
                 (* if the function has no definition,
                    we create Core procedure declaration *)
-                let finfo =
-                  (return_ty
+                let finfo =     (* TODO: plug in non-empty attributes *)
+                  (loc, Annot.Attrs [], return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (_, ty, _) -> (Nothing, ty)) params
                   , is_variadic, has_proto) in
@@ -3880,12 +3880,12 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                      | _ -> Map.insert sym finfo finfoacc
                   end)
             
-            | Just (loc, _, param_syms, stmt) ->
+            | Just (loc, attrs, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
                 (* TODO: variadic!! *)
                 let finfo =
-                  (return_ty
+                  ( loc, attrs, return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (sym, (_, ty, _)) -> (Just sym, ty)) (List.zip param_syms params)
                   , is_variadic, has_proto) in
