@@ -258,7 +258,7 @@ let string_of = function
 | TE_general s -> s
 | TE_todo s -> "TODO: " ^ s
 | TE_expected_but_got (t1, t2) -> "expected " ^ string_of_rc_type t1 ^ " but got " ^ string_of_rc_type t2
-| TE_internal_error s -> "internal error!"
+| TE_internal_error s -> "internal error: " ^ s
 end
 module TE_either = Either_fixed.Make(Type_error)
 
@@ -269,14 +269,14 @@ and check_expression_ stys ftys gamma = function
   (match lookup_in_gamma x gamma with
   | None -> TE_either.mzero (TE_general "unbound variable")
   | Some ty -> TE_either.return ty)
-| AilEassign (AnnotatedExpression (_, _, _, AilEunary (Indirection, AnnotatedExpression (_, _, _, AilEident x))), e2) ->
-  (match lookup_in_gamma x gamma with
-  | None -> failwith "can't find variable"
-  | Some cty ->
-    (match cty with
-     | RC_ptr (RC_write, _) -> failwith "TODO: ptr"
-     | _ -> failwith "type violation?"))
-| AilEassign _ -> TE_either.mzero (TE_todo "complex assign") (* TODO *)
+| AilEassign (e1, e2) ->
+  TE_either.bind
+    (check_expression stys ftys gamma e1)
+    (fun ty ->
+      match ty with
+      | RC_ptr (RC_write, _) -> TE_either.return RC_basic (* TODO: not right*)
+      | RC_ptr (_, t) as ty -> TE_either.mzero (Type_error.TE_expected_but_got (RC_ptr (RC_write, t), ty))
+      | _ -> TE_either.mzero (Type_error.TE_internal_error "writing to a non-ptr?"))
 | AilEcall (AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))), [e]) ->
   (match Ail_identifier_map.find_opt f ftys with
    | None -> TE_either.mzero (TE_general ("unbound function " ^ string_of_sym f))
@@ -290,11 +290,29 @@ and check_expression_ stys ftys gamma = function
   TE_either.bind
     (check_expression stys ftys gamma e)
     (fun ty -> TE_either.return (RC_ptr (RC_read, ty)))
+| AilEunary (Indirection, e) ->
+  TE_either.bind
+    (check_expression stys ftys gamma e)
+    (function
+    | RC_ptr (_, t) -> TE_either.return t
+    | _ -> TE_either.mzero (Type_error.TE_internal_error "derefing a non-pointer?"))
+| AilEunary ((Plus|Minus|Bnot|PostfixIncr|PostfixDecr), e) -> check_expression stys ftys gamma e
+| AilEbinary _ -> failwith "TODO: binary"
+| AilEcompoundAssign _ -> failwith "TODO: compound assign"
+| AilEcond _ -> failwith "TODO: cond"
+| AilEcast (_, _, e) -> check_expression stys ftys gamma e
+| AilEconst e -> TE_either.return RC_basic
+| AilEmemberof _ -> failwith "TODO: memberof"
+| AilEfunction_decay _ -> TE_either.mzero (Type_error.TE_internal_error "non-directly-applied functions are not handled")
+| AilEannot _ -> failwith "TODO: annot"
+| AilEassert _ -> TE_either.return RC_basic
+| AilEcompound _ -> failwith "TODO: compound"
+| AilErvalue e -> check_expression stys ftys gamma e
 | AilEmemberofptr (e, p) ->
   TE_either.bind
     (check_expression stys ftys gamma e)
     (function
-     | RC_struct (s, o) ->
+     | RC_ptr (_, RC_struct (s, o)) ->
          (match Ail_identifier_map.find_opt s stys with
          | None -> TE_either.mzero (TE_general "???")
          | Some sty ->
@@ -302,7 +320,7 @@ and check_expression_ stys ftys gamma = function
            | None -> TE_either.mzero (TE_general "???")
            | Some x -> TE_either.return x
              ))
-     | _ -> TE_either.mzero (TE_internal_error ""))
+     | _ -> TE_either.mzero (TE_internal_error "memberofptr on non-struct"))
 | _ -> failwith "TODO: unhandled expression"
 
 (* TODO: this is completely wrong, it's just a skeleton *)
