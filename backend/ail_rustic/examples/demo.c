@@ -5,7 +5,12 @@ struct s {
 };
 
 [[rc::function_lifetime("f")]]
-void f([[rc::mut("a")]] struct s * p [[rc::mut("f"), rc::nonnull]]) {
+void f([[rc::mut("a")]] struct s * p [[rc::write("f"), rc::nonnull]]) {
+  p->f1 = 1;
+}
+
+[[rc::should_not_typecheck]]
+void fx(struct s * p [[rc::read("f")]]) {
   p->f1 = 1;
 }
 

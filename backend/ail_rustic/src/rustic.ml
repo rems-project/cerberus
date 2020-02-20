@@ -157,11 +157,22 @@ let collect_functions s =
 
 type rc_ownership = RC_read | RC_write | RC_zap
 
+let string_of_rc_ownership = function
+| RC_read -> "read"
+| RC_write -> "write"
+| RC_zap -> "zap"
+
 type rc_type =
 | RC_basic
 | RC_ptr of rc_ownership * rc_type
 | RC_struct of Symbol.sym * rc_ownership
 | RC_atomic of rc_type
+
+let rec string_of_rc_type = function
+| RC_basic -> "."
+| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "]" ^ string_of_rc_type t ^ ""
+| RC_struct (id, o) -> "struct " ^ string_of_sym id ^ "[" ^ string_of_rc_ownership o ^ "]"
+| RC_atomic t -> "atomic " ^ string_of_rc_type t
 
 type ('b) gamma_ty = (rc_type Ail_identifier_map.t * 'b) list
 
@@ -236,10 +247,28 @@ let rec sub_rcty t1 t2 = match (t1, t2) with
 | (RC_ptr _, _) | (_, RC_ptr _) -> false
 | (RC_struct (_, o1), RC_struct (_, o2)) -> true
 
-let rec check_expression stys ftys gamma (AnnotatedExpression (_, _, _, e)) : 'a option =
+module Type_error = struct
+type t =
+| TE_general of string
+| TE_todo of string
+| TE_expected_but_got of rc_type * rc_type
+| TE_internal_error of string
+
+let string_of = function
+| TE_general s -> s
+| TE_todo s -> "TODO: " ^ s
+| TE_expected_but_got (t1, t2) -> "expected " ^ string_of_rc_type t1 ^ " but got " ^ string_of_rc_type t2
+| TE_internal_error s -> "internal error!"
+end
+module TE_either = Either_fixed.Make(Type_error)
+
+let rec check_expression stys ftys gamma (AnnotatedExpression (_, _, _, e)) : 'a TE_either.t =
   check_expression_ stys ftys gamma e
 and check_expression_ stys ftys gamma = function
-| AilEident x -> lookup_in_gamma x gamma
+| AilEident x ->
+  (match lookup_in_gamma x gamma with
+  | None -> TE_either.mzero (TE_general "unbound variable")
+  | Some ty -> TE_either.return ty)
 | AilEassign (AnnotatedExpression (_, _, _, AilEunary (Indirection, AnnotatedExpression (_, _, _, AilEident x))), e2) ->
   (match lookup_in_gamma x gamma with
   | None -> failwith "can't find variable"
@@ -247,41 +276,43 @@ and check_expression_ stys ftys gamma = function
     (match cty with
      | RC_ptr (RC_write, _) -> failwith "TODO: ptr"
      | _ -> failwith "type violation?"))
-| AilEassign _ -> None (* TODO *)
+| AilEassign _ -> TE_either.mzero (TE_todo "complex assign") (* TODO *)
 | AilEcall (AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))), [e]) ->
   (match Ail_identifier_map.find_opt f ftys with
-   | None -> None
+   | None -> TE_either.mzero (TE_general ("unbound function " ^ string_of_sym f))
    | Some ([paramty], retty) ->
-     (match check_expression stys ftys gamma e with
-      | None -> None
-      | Some argty -> if sub_rcty argty paramty then Some retty else None)
+     TE_either.bind
+     (check_expression stys ftys gamma e)
+      (fun argty -> if sub_rcty argty paramty then TE_either.return retty else TE_either.mzero (TE_expected_but_got (paramty, argty)))
     | _ -> failwith "multiple args")
 | AilEcall _ -> failwith "TODO: other AilEcall"
 | AilEunary (Address, e) ->
-  Option2.map_post
+  TE_either.bind
     (check_expression stys ftys gamma e)
-    (fun ty -> RC_ptr (RC_read, ty))
+    (fun ty -> TE_either.return (RC_ptr (RC_read, ty)))
 | AilEmemberofptr (e, p) ->
-  Option2.bind
+  TE_either.bind
     (check_expression stys ftys gamma e)
     (function
      | RC_struct (s, o) ->
-       Option2.bind
-         (Ail_identifier_map.find_opt s stys)
-         (fun sty ->
-           Option2.map_post
-             (String_map.find_opt (string_of_identifier p) sty)
-             (fun x -> x))
-     | _ -> None)
+         (match Ail_identifier_map.find_opt s stys with
+         | None -> TE_either.mzero (TE_general "???")
+         | Some sty ->
+           (match String_map.find_opt (string_of_identifier p) sty with
+           | None -> TE_either.mzero (TE_general "???")
+           | Some x -> TE_either.return x
+             ))
+     | _ -> TE_either.mzero (TE_internal_error ""))
 | _ -> failwith "TODO: unhandled expression"
 
 (* TODO: this is completely wrong, it's just a skeleton *)
-let rec check_statements stys ftys (gamma : 'b gamma_ty) = function
+let rec check_statements stys ftys (gamma : 'b gamma_ty) : 'a -> unit TE_either.t = function
 | [] -> pop stys ftys gamma
 | AnnotatedStatement (_, AilSskip) :: sts -> check_statements stys ftys gamma sts
 | AnnotatedStatement (_, AilSexpr e) :: sts ->
-  check_expression stys ftys gamma e <> None && (* TODO: this is wrong: gamma can change! *)
-  check_statements stys ftys gamma sts
+  TE_either.bind
+    (check_expression stys ftys gamma e)
+    (fun _ -> check_statements stys ftys gamma sts)
 | AnnotatedStatement (_, AilSblock (bds, sts1)) :: sts ->
   (match Ail_identifier_map_aux.of_list bds with
   | None -> assert false
@@ -289,30 +320,48 @@ let rec check_statements stys ftys (gamma : 'b gamma_ty) = function
     let bds = Ail_identifier_map.map (fun (_, _, cty) -> zap (rc_type_of_cty cty)) bds in
     check_statements stys ftys ((bds, sts) :: gamma) sts1)
 | AnnotatedStatement (_, AilSif (_, s1, s2)) :: sts ->
-  check_statements stys ftys ((Ail_identifier_map.empty, sts) :: gamma) [s1] &&
-  check_statements stys ftys ((Ail_identifier_map.empty, sts) :: gamma) [s2]
+  TE_either.bind
+    (check_statements stys ftys ((Ail_identifier_map.empty, sts) :: gamma) [s1])
+    (fun () -> check_statements stys ftys ((Ail_identifier_map.empty, sts) :: gamma) [s2])
 | AnnotatedStatement (_, AilSreturnVoid) :: sts ->
   pop stys ftys gamma
 | AnnotatedStatement (_, AilSdeclaration [(x, e)]) :: sts ->
-  true
+  check_statements stys ftys gamma sts (* TODO: ? *)
 | AnnotatedStatement (_, s) :: sts -> failwith "TODO: unhandled statement"
 and pop stys ftys = function
-| [] -> true
+| [] -> TE_either.return ()
 | (_, sts) :: gamma -> check_statements stys ftys gamma sts
+
+let should_typecheck_of (def : 'a fn_def) =
+  let should_not_typecheck = 
+  List.exists
+    (fun a ->
+      match a.Annot.attr_ns with
+      | None -> false
+      | Some ns ->
+        string_of_identifier ns = "rc" && string_of_identifier a.Annot.attr_id = "should_not_typecheck"
+      )
+    def.fn_def_attrs in
+  not should_not_typecheck
 
 let check_function stys ftys id = function
 | (Some dcl, Some def) ->
-  print_string (string_of_sym id);
+  let should_typecheck = should_typecheck_of def in
+  let sad = " " ^ Ansi.start_red ^ "sad" ^ Ansi.reset_colour in
+  let happy = " " ^ Ansi.start_green ^ "happy" ^ Ansi.reset_colour ^ "\n" in
+  print_string (string_of_sym id ^ ":");
   flush stdout;
   let m =
     let m = List.combine def.fn_def_ids (List.map (fun (_, cty, _) -> rc_type_of_cty cty) dcl.fn_decl_argstys) in
     (match Ail_identifier_map_aux.of_list m with
     | None -> assert false
     | Some m -> m) in
-  let r = check_statements stys ftys [(m, [])] [def.fn_def_sts] in
-  if r then print_string (": happy\n")
-  else print_string (": sad\n")
-| _ -> print_string (": skipped\n")
+  (match check_statements stys ftys [(m, [])] [def.fn_def_sts] with
+   | TE_either.Left err ->
+     if should_typecheck then print_string (sad ^ ": " ^ Type_error.string_of err ^ "\n") else print_string happy
+   | TE_either.Right () ->
+     if should_typecheck then print_string happy else print_string (sad ^ "\n"))
+| _ -> print_string (string_of_sym id ^ " skipped\n")
 
 let collect_structs s =
   let g xs =
