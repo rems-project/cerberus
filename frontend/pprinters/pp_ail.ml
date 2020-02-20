@@ -895,3 +895,18 @@ let pp_program do_colour show_include ail_prog =
 (* For debugging: prints all the type annotations *)
 let pp_program_with_annot =
   pp_program_aux (fun gtc doc -> P.braces (pp_genTypeCategory gtc) ^^ P.brackets doc)
+
+
+let pp_id_only (Symbol.Identifier (_,n)) = P.string n
+let pp_attr_arg arg = P.dquotes (P.string arg)
+let pp_attr_args args = P.parens (P.separate_map P.comma pp_attr_arg args)
+
+
+let pp_attribute a = 
+  P.optional (fun ns -> pp_id_only ns ^^ P.colon ^^ P.colon) a.Annot.attr_ns  ^^ 
+    pp_id_only a.Annot.attr_id ^^^ pp_attr_args a.Annot.attr_args
+
+let pp_attributes (Annot.Attrs attrs) = 
+  match attrs with
+  | [] -> P.empty
+  | _ -> P.brackets (P.brackets (P.separate_map P.comma pp_attribute attrs))

@@ -79,3 +79,7 @@ val pp_program_with_annot: GenTypes.genTypeCategory ail_program -> PPrint.docume
 (* DEBUG *)
 val pp_genType: GenTypes.genType -> PPrint.document
 val pp_genTypeCategory: GenTypes.genTypeCategory -> PPrint.document
+
+
+val pp_attribute: Annot.attribute -> PPrint.document
+val pp_attributes: Annot.attributes -> PPrint.document
