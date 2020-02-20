@@ -4,15 +4,17 @@ struct s {
   struct s2 * f3 [[rc::cell("f3get", "f3set")]];
 };
 
-[[rc::function_lifetime("f")]]
-void f([[rc::write("a")]] struct s * p [[rc::write("f"), rc::nonnull]]) {
+//[[rc::function_lifetime("f")]]
+void f1(struct s [[rc::write("a")]] * [[rc::write("f")]] p) { // rc::nonnull
   p->f1 = 1;
 }
 
 [[rc::should_not_typecheck]]
-void fx(struct s * [[rc::read("f")]] p) {
+void f2(struct s [[rc::read("f")]] * p [[rc::write("a")]]) {
   p->f1 = 1;
 }
+
+/*
 
 [[rc::funtion_lifetime("f")]]
 void g([[rc::read("f"), rc::inited("s{f1:init,f2:notinit,f3:notinit}")]] struct s * [[rc::write("f")]] p [[rc::nonnull]]) {
@@ -107,3 +109,5 @@ void f8_call_f7(void) {
 void f9(int [[rc::read]] * x [[rc::nonnull]]) {
   *x = 3;
 }
+
+*/
