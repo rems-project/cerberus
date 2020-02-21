@@ -326,7 +326,7 @@ let pprints =
 let astprints =
   let open Pipeline in
   let doc = "Pretty print the intermediate syntax tree for the listed languages \
-             (ranging over {cabs, ail, core})." in
+             (ranging over {cabs, ail})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
