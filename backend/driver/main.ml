@@ -318,26 +318,26 @@ let exec_mode =
 
 let pprints =
   let open Pipeline in
-  let doc = "Pretty print the intermediate programs for the listed languages\
+  let doc = "Pretty print the intermediate programs for the listed languages \
              (ranging over {ail, core})." in
   Arg.(value & opt (list (enum ["ail", Ail; "core", Core])) [] &
        info ["pp"] ~docv:"LANG1,..." ~doc)
 
 let astprints =
   let open Pipeline in
-  let doc = "Pretty print the intermediate syntax tree for the listed languages\
-             (ranging over {cabs, ail, core})." in
+  let doc = "Pretty print the intermediate syntax tree for the listed languages \
+             (ranging over {cabs, ail})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
 let fs =
-  let doc = "Initialise the internal file system with the contents of the\
+  let doc = "Initialise the internal file system with the contents of the \
              directory DIR" in
   Arg.(value & opt (some string) None & info ["fs"] ~docv:"DIR" ~doc)
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations,\
+  let doc = "Pretty print flags [annot: include location and ISO annotations, \
              fout: output in a file]." in
   Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] &
        info ["pp_flags"] ~doc)
@@ -347,9 +347,9 @@ let files =
   Arg.(value & pos_all file [] & info [] ~docv:"FILE" ~doc)
 
 let progress =
-  let doc = "Progress mode: the return code indicate how far the source program\
+  let doc = "Progress mode: the return code indicate how far the source program \
              went through the pipeline \
-             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed,\
+             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed, \
              13 = elaborated, 14 = executed]" in
   Arg.(value & flag & info ["progress"] ~doc)
 
