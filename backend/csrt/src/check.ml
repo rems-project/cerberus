@@ -302,35 +302,35 @@ type function_type =
 
 let rec pp_function_type = function
   | FT_AC ((id,bt), ftyp) -> 
-     sprintf "(A (%s : %s) %s)" 
+     sprintf "A (%s : %s) . %s" 
        id 
        (pp_base_type bt)
        (pp_function_type ftyp)
   | FT_AL ((id,ls), ftyp) -> 
-     sprintf "(AL (%s : %s) %s)" 
+     sprintf "AL (%s : %s) . %s"
        id 
        (pp_logical_sort ls)
        (pp_function_type ftyp)
   | FT_ImpR (rt,ftyp) ->
-     sprintf "(%s =* %s)"
+     sprintf "%s =* %s"
        (pp_resource_type rt)
        (pp_function_type ftyp)
   | FT_ImpL (lc,ftyp) ->
-     sprintf "(%s => %s)"
+     sprintf "%s => %s"
        (pp_logical_constraint lc)
        (pp_function_type ftyp)
   | FT_Return rt ->
      pp_return_type rt
 
-let rec sexp_to_function_type = function
-  | List [Atom "A"; List [Atom id; Atom ":"; bt]; ftyp] ->
-     FT_AC ((id, sexp_to_base_type bt), sexp_to_function_type ftyp)
-  | List [Atom "AL"; List [Atom id; Atom ":"; ls]; ftyp] ->
-     FT_AL ((id, sexp_to_logical_sort ls), sexp_to_function_type ftyp)
-  | List [rt; Atom "=*"; ftyp] ->
-     FT_ImpR (sexp_to_resource_type rt, sexp_to_function_type ftyp)
-  | List [lc; Atom "=>"; ftyp] ->
-     FT_ImpL (sexp_to_logical_constraint lc, sexp_to_function_type ftyp)
+let rec list_to_function_type = function
+  | Atom "A" :: List [Atom id; Atom ":"; bt] :: ftyp ->
+     FT_AC ((id, sexp_to_base_type bt), list_to_function_type ftyp)
+  | Atom "AL":: List [Atom id; Atom ":"; ls] :: ftyp ->
+     FT_AL ((id, sexp_to_logical_sort ls), list_to_function_type ftyp)
+  | rt :: Atom "=*" :: ftyp ->
+     FT_ImpR (sexp_to_resource_type rt, list_to_function_type ftyp)
+  | lc :: Atom "=>" :: ftyp ->
+     FT_ImpL (sexp_to_logical_constraint lc, list_to_function_type ftyp)
   | rt -> FT_Return (sexp_to_return_type rt)
 
 
