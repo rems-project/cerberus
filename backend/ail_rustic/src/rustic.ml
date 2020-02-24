@@ -155,12 +155,17 @@ let collect_functions s =
   let m = List.fold_left (fun m (id, f) -> add_right id (cvt_def f) m) m fs in
   m
 
-type rc_ownership = RC_read | RC_write | RC_zap
+type rc_ownership =
+| RC_read
+| RC_write
+| RC_zap
+| RC_bad
 
 let string_of_rc_ownership = function
 | RC_read -> "read"
 | RC_write -> "write"
 | RC_zap -> "zap"
+| RC_bad -> "BAD"
 
 type rc_type =
 | RC_scalar
@@ -198,14 +203,14 @@ let rc_ownership_of_annot = function
     in
   (match map_option f attrs with
   | [x] -> Some x
-  | _ -> failwith "?"
-  )
+  | _ -> failwith "?")
 | _ -> None
 
 let rc_ownership_of_annots annots =
   match map_option rc_ownership_of_annot annots with
   | [rcow] -> rcow
-  | _ -> RC_zap
+  | [] -> RC_bad
+  | _ :: _ :: _ -> failwith "ambiguous annotations"
 
 let rec rc_type_of_cty = function
 | Ctype.Ctype (_, Void) -> RC_scalar
@@ -232,13 +237,13 @@ let zap = function
 | RC_ptr (_, rcty) -> RC_ptr (RC_zap, rcty)
 | RC_struct (id, _) -> RC_struct (id, RC_zap)
 
-let sub_own t1 t2 = match (t1, t2) with
-| (RC_zap, RC_zap) -> true
-| (RC_zap, _) -> false
-| (_, RC_zap) -> true
-| (_, RC_read) -> true
-| (RC_write, RC_write) -> true
-| (RC_read, RC_write) -> false
+let own_rank = function
+| RC_read -> 0
+| RC_write -> 1
+| RC_zap -> 2
+
+let sub_own t1 t2 =
+  own_rank t1 <= own_rank t2
 
 let rec sub_rcty t1 t2 = match (t1, t2) with
 | (RC_scalar, RC_scalar) -> true
@@ -264,7 +269,7 @@ let string_of = function
 end
 module TE_either = Either_fixed.Make(Type_error)
 
-let rec check_expression stys ftys gamma (AnnotatedExpression (_, _, _, e)) : 'a TE_either.t =
+let rec check_expression stys ftys gamma (AnnotatedExpression (_, _, _, e)) : rc_type TE_either.t =
   check_expression_ stys ftys gamma e
 and check_expression_ stys ftys gamma = function
 | AilEident x ->
@@ -276,6 +281,7 @@ and check_expression_ stys ftys gamma = function
     (check_expression stys ftys gamma e1)
     (function
       | RC_ptr (o, t) as ty ->
+        print_string (string_of_rc_type ty ^ "\n");
         if sub_own RC_write o then TE_either.return RC_scalar (* TODO: ? *)
         else TE_either.mzero (Type_error.TE_expected_at_most_but_got (RC_ptr (RC_write, t), ty))
       | _ -> TE_either.mzero (Type_error.TE_internal_error "writing to a non-ptr?"))
