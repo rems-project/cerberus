@@ -5,9 +5,6 @@ open Sexplib
 open Sexp
 open Printf
 
-let pp_fun_map_decl f = 
-  print_string (Pp_utils.to_plain_string (Pp_core.All.pp_funinfo_with_attributes f))
-
 
 (* type num = Nat_big_num.num *)
 type integer = int
@@ -35,8 +32,6 @@ let pp_list f xs =
 let sexp_list_to f = function
   | Atom _ -> failwith "expected List"
   | List sxs -> List.map f sxs
-
-
 
 
 type index_term =
@@ -256,41 +251,50 @@ type return_type =
   | RT_AndL of logical_constraint * return_type
   | RT_Done
 
-let rec pp_return_type = function
+let rec pp_list_return_type = function
   | RT_EC ((id,typ), rtyp) -> 
-     sprintf "(E (%s : %s) %s)" 
+     sprintf "E (%s : %s) . %s" 
        id 
        (pp_base_type typ)
-       (pp_return_type rtyp)
+       (pp_list_return_type rtyp)
   | RT_EL ((id,ls), rtyp) ->
-     sprintf "(EL (%s : %s) %s)" 
+     sprintf "EL (%s : %s) %s" 
        id
        (pp_logical_sort ls)
-       (pp_return_type rtyp)
+       (pp_list_return_type rtyp)
   | RT_AndR (rt, rtyp) ->
-     sprintf "(%s * %s)" 
+     sprintf "%s * %s" 
        (pp_resource_type rt)
-       (pp_return_type rtyp)
+       (pp_list_return_type rtyp)
   | RT_AndL (lc, rtyp) ->
-     sprintf "(%s & %s)"
+     sprintf "%s & %s"
        (pp_logical_constraint lc)
-       (pp_return_type rtyp)
+       (pp_list_return_type rtyp)
   | RT_Done ->
-     "()"
+     "I"
 
-let rec sexp_to_return_type = function
-  | List [Atom "E"; List [Atom id; Atom ":"; bt]; rtyp] ->
-     RT_EC ((id, sexp_to_base_type bt), sexp_to_return_type rtyp)
-  | List [Atom "EL"; List [Atom id; Atom ":"; ls]; rtyp] ->
-     RT_EL ((id, sexp_to_logical_sort ls), sexp_to_return_type rtyp)
-  | List [rt; Atom "*"; rtyp] ->
-     RT_AndR (sexp_to_resource_type rt, sexp_to_return_type rtyp)
-  | List [lc; Atom "&"; rtyp] ->
-     RT_AndL (sexp_to_logical_constraint lc, sexp_to_return_type rtyp)
-  | List [] ->                  (* "()" *)
-     RT_Done
-  | rt -> parse_error "return type" rt
+let pp_return_type rt = 
+  sprintf "(%s)" (pp_list_return_type rt)
 
+
+
+
+let rec list_sexp_to_return_type = function
+  | Atom "E" :: List [Atom id; Atom ":"; bt] :: Atom "." :: rtyp ->
+     RT_EC ((id, sexp_to_base_type bt), list_sexp_to_return_type rtyp)
+  | Atom "EL" :: List [Atom id; Atom ":"; ls] :: Atom "." :: rtyp ->
+     RT_EL ((id, sexp_to_logical_sort ls), list_sexp_to_return_type rtyp)
+  | rt :: Atom "*" :: rtyp ->
+     RT_AndR (sexp_to_resource_type rt, list_sexp_to_return_type rtyp)
+  | lc :: Atom "&" :: rtyp ->
+     RT_AndL (sexp_to_logical_constraint lc, list_sexp_to_return_type rtyp)
+  | Atom "I" :: [] -> RT_Done
+  | rt -> parse_error "return type" (List rt)
+
+let sexp_to_return_type rt = 
+  match rt with
+  | List rt -> list_sexp_to_return_type rt
+  | Atom _ -> list_sexp_to_return_type [rt]
 
 
 type function_type = 
@@ -300,40 +304,48 @@ type function_type =
   | FT_ImpL of logical_constraint * function_type
   | FT_Return of return_type
 
-let rec pp_function_type = function
+let rec pp_list_function_type = function
   | FT_AC ((id,bt), ftyp) -> 
      sprintf "A (%s : %s) . %s" 
        id 
        (pp_base_type bt)
-       (pp_function_type ftyp)
+       (pp_list_function_type ftyp)
   | FT_AL ((id,ls), ftyp) -> 
      sprintf "AL (%s : %s) . %s"
        id 
        (pp_logical_sort ls)
-       (pp_function_type ftyp)
+       (pp_list_function_type ftyp)
   | FT_ImpR (rt,ftyp) ->
      sprintf "%s =* %s"
        (pp_resource_type rt)
-       (pp_function_type ftyp)
+       (pp_list_function_type ftyp)
   | FT_ImpL (lc,ftyp) ->
      sprintf "%s => %s"
        (pp_logical_constraint lc)
-       (pp_function_type ftyp)
+       (pp_list_function_type ftyp)
   | FT_Return rt ->
-     pp_return_type rt
+     pp_list_return_type rt
 
-let rec list_to_function_type = function
-  | Atom "A" :: List [Atom id; Atom ":"; bt] :: ftyp ->
-     FT_AC ((id, sexp_to_base_type bt), list_to_function_type ftyp)
-  | Atom "AL":: List [Atom id; Atom ":"; ls] :: ftyp ->
-     FT_AL ((id, sexp_to_logical_sort ls), list_to_function_type ftyp)
+let pp_function_type ftyp = 
+  sprintf "(%s)" (pp_list_function_type ftyp)
+  
+
+let rec list_sexp_to_function_type = function
+  | Atom "A" :: List [Atom id; Atom ":"; bt] :: Atom "." :: ftyp ->
+     FT_AC ((id, sexp_to_base_type bt), list_sexp_to_function_type ftyp)
+  | Atom "AL":: List [Atom id; Atom ":"; ls] :: Atom "." :: ftyp ->
+     FT_AL ((id, sexp_to_logical_sort ls), list_sexp_to_function_type ftyp)
   | rt :: Atom "=*" :: ftyp ->
-     FT_ImpR (sexp_to_resource_type rt, list_to_function_type ftyp)
+     FT_ImpR (sexp_to_resource_type rt, list_sexp_to_function_type ftyp)
   | lc :: Atom "=>" :: ftyp ->
-     FT_ImpL (sexp_to_logical_constraint lc, list_to_function_type ftyp)
-  | rt -> FT_Return (sexp_to_return_type rt)
+     FT_ImpL (sexp_to_logical_constraint lc, list_sexp_to_function_type ftyp)
+  | rt -> FT_Return (list_sexp_to_return_type rt)
 
 
+let sexp_to_function_type ftyp = 
+  match ftyp with
+  | List ftyp -> list_sexp_to_function_type ftyp
+  | Atom a -> list_sexp_to_function_type [ftyp]
 
 
 let test () = 
@@ -343,11 +355,16 @@ let test () =
   print_endline (pp_resource_type (sexp_to_resource_type (of_string s)));
   let s = "((list int) -> loc)" in
   print_endline (pp_logical_sort (sexp_to_logical_sort (of_string s)));
-  let s = "(E (r : int) ((r = (f i)) & ((array x n f) * ())))" in
+  let s = "(E (r : int) . (r = (f i)) & (array x n f) * I)" in
   print_endline (pp_return_type (sexp_to_return_type (of_string s)));
-  let s = "(A (x : loc) (A (i : int) (AL (n : int) (AL (f : (int -> int)) (((0 <= i) & (i < n)) => ((array x n f) =* (EL (r : int) ((r = (f i)) & ((array x n f) * ())))))))))" in
+  let s = "(A (x : loc) . A (i : int) . AL (n : int) . AL (f : (int -> int)) . ((0 <= i) & (i < n)) => (array x n f) =* EL (r : int) . (r = (f i)) & (array x n f) * I)" in
   print_endline (pp_function_type (sexp_to_function_type (of_string s)));
   ()
+
+
+
+let pp_fun_map_decl f = 
+  print_string (Pp_utils.to_plain_string (Pp_core.All.pp_funinfo_with_attributes f))
 
 let check core_file = 
   (* let _tags = Tags.tagDefs () in *)
