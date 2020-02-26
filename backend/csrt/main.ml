@@ -39,9 +39,9 @@ let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 let conf cpp_str = {
     debug_level = 0
-  ; pprints = []
-  ; astprints = []
-  ; ppflags = []
+  ; pprints = [Core]
+  ; astprints = [Core]
+  ; ppflags = [FOut]
   ; typecheck_core = true
   ; rewrite_core = true
   ; sequentialise_core = true
@@ -49,7 +49,7 @@ let conf cpp_str = {
   ; cpp_stderr = true
 }
 
-let frontend conf filename =
+let frontend conf filename = 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
