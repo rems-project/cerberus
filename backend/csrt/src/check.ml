@@ -6,6 +6,14 @@ open Sexplib
 open Printf
 
 
+let o f g x = f (g (x))
+
+let rec nest (fs : ('a -> 'a) list) = List.fold_right o fs (fun a -> a)
+
+
+type integer_size
+
+
 type ('a,'b) either = Left of 'a | Right of 'b
 
 (* type num = Nat_big_num.num *)
@@ -252,16 +260,18 @@ open BT
 module RT = struct
 
   type resource_type = 
-    | Block of index_term
+    | Block of index_term * index_term
     | Int of index_term * index_term (* location and value *)
+    | Points of index_term * index_term
+    | Uninit of index_term * index_term * resource_type
     | Array of index_term * index_term * index_term
-    | Pointer of index_term * resource_type
-    | Uninit of index_term * resource_type * resource_type list
+   (* Array (pointer, size, (f : int -> loc)) *)
 
   let rec pp_resource_type = function
-    | Block it -> 
-       sprintf "(block %s)" 
-         (pp_index_term it)
+    | Block (it1,it2) -> 
+       sprintf "(block %s %s)" 
+         (pp_index_term it1)
+         (pp_index_term it2)
     | Int (it1,it2) -> 
        sprintf "(int %s %s)" 
          (pp_index_term it1) 
@@ -271,33 +281,36 @@ module RT = struct
          (pp_index_term it1)
          (pp_index_term it2)
          (pp_index_term it3)
-    | Pointer (it,rt) -> 
-       sprintf "(pointer %s %s)" 
-         (pp_index_term it)
-         (pp_resource_type rt)
-    | Uninit (it,rt,rts) -> 
+    | Points (it1,it2) -> 
+       sprintf "(points %s %s)" 
+         (pp_index_term it1)
+         (pp_index_term it2)
+    | Uninit (it1,it2,rt) -> 
        sprintf "(uninit %s %s %s)" 
-         (pp_index_term it)
+         (pp_index_term it1)
+         (pp_index_term it2)
          (pp_resource_type rt)
-         (pp_list pp_resource_type rts)
 
   let rec sexp_to_resource_type sx = 
     let open Sexp in
     match sx with 
-    | List [Atom "block";op] -> 
-       Block (sexp_to_index_term op)
+    | List [Atom "block";it1;it2] -> 
+       Block (sexp_to_index_term it1,
+              sexp_to_index_term it2)
     | List [Atom "int"; it1; it2] ->
-       Int (sexp_to_index_term it1, sexp_to_index_term it2)
+       Int (sexp_to_index_term it1, 
+            sexp_to_index_term it2)
     | List [Atom "array"; it1; it2; it3] ->
        Array (sexp_to_index_term it1, 
-                 sexp_to_index_term it2, 
-                 sexp_to_index_term it3)
-    | List [Atom "pointer"; it; rt] ->
-       Pointer (sexp_to_index_term it, sexp_to_resource_type rt)
-    | List [Atom "uninit"; it; rt; rts] ->
-       Uninit (sexp_to_index_term it, 
-                  sexp_to_resource_type rt, 
-                  sexp_list_to (sexp_to_resource_type) rts)
+              sexp_to_index_term it2, 
+              sexp_to_index_term it3)
+    | List [Atom "points"; it1; it2] ->
+       Points (sexp_to_index_term it1, 
+               sexp_to_index_term it2)
+    | List [Atom "uninit"; it1; it2; rt] ->
+       Uninit (sexp_to_index_term it1, 
+               sexp_to_index_term it2, 
+               sexp_to_resource_type rt)
     | t -> parse_error "resource type" t
 end
 
@@ -338,22 +351,31 @@ open LS
 
 
 type return_type = 
-  | ExistsC of (id * (base_type,return_type) either) * return_type
-  | ExistsL of (id * logical_sort) * return_type
+  | ExistsC of id * base_type * return_type
+  | ExistsL of id * logical_sort * return_type
   | AndR of resource_type * return_type
   | AndL of logical_constraint * return_type
   | Done
 
+(* for currying *)
+let existsC (id : id) (bt : base_type) (rt : return_type) : return_type = 
+  ExistsC (id, bt, rt)
+let existsL (id : id) (ls : logical_sort) (rt : return_type) : return_type = 
+  ExistsL (id, ls, rt)
+let andR (r : resource_type) (rt : return_type) : return_type = 
+  AndR (r, rt)
+let andL (ls : logical_constraint) (rt : return_type) : return_type = 
+  AndL (ls, rt)
+
+
+
 let rec pp_list_return_type = function
-  | ExistsC ((id, typ), rtyp) -> 
+  | ExistsC (id, typ, rtyp) -> 
      sprintf "EC (%s : %s) . %s" 
        id 
-       (begin match typ with 
-        | Left typ -> pp_base_type typ
-        | Right typ -> pp_return_type typ
-        end)
+       (pp_base_type typ)
        (pp_list_return_type rtyp)
-  | ExistsL ((id,ls), rtyp) ->
+  | ExistsL (id, ls, rtyp) ->
      sprintf "EL (%s : %s) %s" 
        id
        (pp_logical_sort ls)
@@ -377,12 +399,9 @@ let rec list_sexp_to_return_type sx =
   let open Sexp in 
   match sx with
   | Atom "EC" :: List [Atom id; Atom ":"; t] :: Atom "." :: rtyp ->
-     let t = try Left (sexp_to_base_type t) with 
-             | _ -> Right (sexp_to_return_type t)
-     in
-     ExistsC ((id, t), list_sexp_to_return_type rtyp)
+     ExistsC (id, sexp_to_base_type t, list_sexp_to_return_type rtyp)
   | Atom "EL" :: List [Atom id; Atom ":"; ls] :: Atom "." :: rtyp ->
-     ExistsL ((id, sexp_to_logical_sort ls), list_sexp_to_return_type rtyp)
+     ExistsL (id, sexp_to_logical_sort ls, list_sexp_to_return_type rtyp)
   | rt :: Atom "*" :: rtyp ->
      AndR (sexp_to_resource_type rt, list_sexp_to_return_type rtyp)
   | lc :: Atom "&" :: rtyp ->
@@ -392,27 +411,36 @@ let rec list_sexp_to_return_type sx =
 
 and sexp_to_return_type rt = 
   let open Sexp in
-  begin match rt with
+  match rt with
   | List rt -> list_sexp_to_return_type rt
   | Atom _ -> list_sexp_to_return_type [rt]
-  end
 
 
 type function_type = 
-  | AC of (id * base_type) * function_type
-  | AL of (id * logical_sort) * function_type
+  | ForallC of id * base_type * function_type
+  | ForallL of id * logical_sort * function_type
   | ImpR of resource_type * function_type
   | ImpL of logical_constraint * function_type
   | Return of return_type
 
+let forallC (id : id) (bt : base_type) (ft : function_type) : function_type = 
+  ForallC (id, bt, ft)
+let forallL (id : id) (ls : logical_sort) (ft : function_type) : function_type = 
+  ForallL (id, ls, ft)
+let impR (r : resource_type) (ft : function_type) : function_type = 
+  ImpR (r, ft)
+let impL (ls : logical_constraint) (ft : function_type) : function_type = 
+  ImpL (ls, ft)
+
+
 let rec pp_list_function_type = function
-  | AC ((id,bt), ftyp) -> 
+  | ForallC (id, bt, ftyp) -> 
      sprintf "A (%s : %s) . %s" 
        id 
        (pp_base_type bt)
        (pp_list_function_type ftyp)
-  | AL ((id,ls), ftyp) -> 
-     sprintf "AL (%s : %s) . %s"
+  | ForallL (id, ls, ftyp) -> 
+     sprintf "ForallL (%s : %s) . %s"
        id 
        (pp_logical_sort ls)
        (pp_list_function_type ftyp)
@@ -435,9 +463,9 @@ let rec list_sexp_to_function_type sx =
   let open Sexp in
   match sx with
   | Atom "A" :: List [Atom id; Atom ":"; bt] :: Atom "." :: ftyp ->
-     AC ((id, sexp_to_base_type bt), list_sexp_to_function_type ftyp)
-  | Atom "AL":: List [Atom id; Atom ":"; ls] :: Atom "." :: ftyp ->
-     AL ((id, sexp_to_logical_sort ls), list_sexp_to_function_type ftyp)
+     ForallC (id, sexp_to_base_type bt, list_sexp_to_function_type ftyp)
+  | Atom "ForallL":: List [Atom id; Atom ":"; ls] :: Atom "." :: ftyp ->
+     ForallL (id, sexp_to_logical_sort ls, list_sexp_to_function_type ftyp)
   | rt :: Atom "=*" :: ftyp ->
      ImpR (sexp_to_resource_type rt, list_sexp_to_function_type ftyp)
   | lc :: Atom "=>" :: ftyp ->
@@ -447,10 +475,9 @@ let rec list_sexp_to_function_type sx =
 
 let sexp_to_function_type ftyp = 
   let open Sexp in
-  begin match ftyp with
+  match ftyp with
   | List ftyp -> list_sexp_to_function_type ftyp
   | Atom a -> list_sexp_to_function_type [ftyp]
-  end
 
 
 (* Programs and terms *)
@@ -490,6 +517,13 @@ module ID_M = struct
   let bind (m : 'a m) (f : 'a -> 'b m) : 'b m = 
     fun s -> let a, s' = m s in f a s'
   let (>>=) = bind
+  let rec doM (ms : ('a m) list) : ('a list) m = 
+    match ms with
+    | [] -> return []
+    | m :: ms -> 
+       m >>= fun x -> 
+       doM ms >>= fun xs ->
+       return (x :: xs)
 end
 
 
@@ -509,72 +543,78 @@ let option_get = function
   | None -> failwith "get None"
 
 
+(* let core_type_value ov = 
+ *   Core_typing.typeof_object_value 
+ *     Location_ocaml.unknown 
+ *     Core_typing_aux.empty_env ov
+ * 
+ * let rec sizeof_ov ov = 
+ *   Impl_mem.sizeof_ival (core_type_value ov) *)
 
-let infer_type__value (cv,lv,lc) v : return_type m = 
+let infer_type__value v : return_type m = 
 
-  let rec object_aux (cv,lv,lc) ov inner_rt : return_type m = 
-    fresh >>= fun n ->
-    begin match ov with
+  let rec loaded_value_aux lv : (return_type -> return_type) m = 
+    match lv with
+    | LVspecified ov -> object_aux ov
+    | LVunspecified _ -> failwith "LVunspecified not implemented"
 
+  and object_aux ov : (return_type -> return_type) m = 
+    match ov with
     | OVinteger i -> 
+       fresh >>= fun n ->
        let i = option_get (eval_integer_value i) in
-       return (ExistsC ((n, Left Int), 
-                      AndL (var_equal_to n (Int i), inner_rt)))
-
-    | OVfloating _ -> failwith "floats not supported"
-
+       return (nest [existsC n Int; andL (var_equal_to n (Int i))])
+    | OVfloating _ -> 
+       failwith "floats not supported"
     | OVpointer p -> 
+       fresh >>= fun n ->
        case_ptrval p 
          (fun _ctype ->  (* case null *)
-           return (ExistsC ((n, Left Loc), AndL (var_null n, inner_rt))))
+           return (nest [existsC n Loc; andL (var_null n)]))
          (fun _sym ->    (* case function pointer *)
            failwith "function pointers not supported")
          (fun _prov i -> (* case concrete pointer *)
-          return (ExistsC ((n, Left Loc), 
-                           AndL (var_equal_to n (Int i), inner_rt))))
+          return (nest [existsC n Loc; andL (var_equal_to n (Int i))]))
          (fun _ ->       (* case unspecified_value *)
            unreachable ())
-      
-    | OVarray _ -> failwith "OVarray not implemented"
-    | OVstruct _ -> failwith "OVstruct not implemented"
-    | OVunion _ -> failwith "OVunion not implemented"
-    end
+    | OVarray os -> failwith "not implemented yet"
+       (* let n = List.length os in
+        * fresh >>= fun pointer ->
+        * fresh >>= fun f ->
+        * return (nest [existsC pointer Loc;
+        *               existsL size (Base Loc);
+        *               existsL f (Fun (Base Loc, Base Loc));
+        *               (\* do we have to specify f's index to location mapping *\)
+        *               andR (Array (Var pointer, Var n, f));
+        *               ]) *)
+    | OVstruct _ -> 
+       failwith "OVstruct not implemented"
+    | OVunion _ -> 
+       failwith "OVunion not implemented"
   in
     
-  let rec value_aux (cv,lv,lc) outer_rt inner_rt : return_type m =
-    begin match outer_rt with
-    | Vobject ov -> object_aux (cv,lv,lc) ov inner_rt
-    | Vloaded lv -> failwith "infer_type_value Vloaded"
+  let rec value_aux rt : (return_type -> return_type) m =
+    match rt with
+    | Vobject ov -> object_aux ov
+    | Vloaded lv -> loaded_value_aux lv
     | Vunit -> 
        fresh >>= fun n ->
-       return (ExistsC ((n, Left Unit), inner_rt))
+       return (existsC n Unit)
     | Vtrue -> 
        fresh >>= fun n ->
-       return (ExistsC ((n, Left Bool), 
-                      AndL (var_equal_to n (Bool true), inner_rt)))
+       return (nest [existsC n Bool; andL (var_equal_to n (Bool true))])
     | Vfalse ->
        fresh >>= fun n ->
-       return (ExistsC ((n, Left Bool), 
-                      AndL (var_equal_to n (Bool false), inner_rt)))
+       return (nest [existsC n Bool; andL (var_equal_to n (Bool false))])
     | Vctype _ -> failwith "Vctype not supported"
     | Vlist _ ->  failwith "infer_type_value Vlist"
     | Vtuple vs -> 
-       fresh >>= fun n ->
-       value_aux_list (cv,lv,lc) vs >>= fun ts ->
-       return (ExistsC ((n, Right ts), inner_rt))
-    end
-
-  and value_aux_list (cv,lv,lc) vs : return_type m = 
-    begin match vs with
-    | [] -> 
-       return Done
-    | v :: vs -> 
-       value_aux_list (cv,lv,lc) vs >>= fun vts ->
-       value_aux (cv,lv,lc) v vts
-    end
+       doM (List.map value_aux vs) >>= fun vs ->
+       return (nest vs)
   in
 
-  value_aux (cv,lv,lc) v Done
+  value_aux v >>= fun f -> 
+  return (f Done)
 
 
 
@@ -587,15 +627,14 @@ let test_parse () =
   print_endline (pp_logical_sort (sexp_to_logical_sort (Sexp.of_string s)));
   let s = "(EC (r : int) . (r = (f i)) & (array x n f) * I)" in
   print_endline (pp_return_type (sexp_to_return_type (Sexp.of_string s)));
-  let s = "(A (x : loc) . A (i : int) . AL (n : int) . AL (f : (int -> int)) . ((0 <= i) & (i < n)) => (array x n f) =* EL (r : int) . (r = (f i)) & (array x n f) * I)" in
+  let s = "(A (x : loc) . A (i : int) . ForallL (n : int) . ForallL (f : (int -> int)) . ((0 <= i) & (i < n)) => (array x n f) =* EL (r : int) . (r = (f i)) & (array x n f) * I)" in
   print_endline (pp_function_type (sexp_to_function_type (Sexp.of_string s)));
   print_endline "\n";
   ()
 
 
 let test_value_infer () = 
-  let infer v = 
-    fst (infer_type__value (empty_context, empty_context, empty_context) v init) in
+  let infer v = fst (infer_type__value v ID.init) in
   let t = Vtrue in
   let () = print_endline (pp_return_type (infer t)) in
   let t = 
