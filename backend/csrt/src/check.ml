@@ -3,232 +3,132 @@ open Core
 open Impl_mem
 open Nat_big_num
 open Sexplib
+open Sexp
 open Printf
 
 
-let o f g x = f (g (x))
-
-let rec nest (fs : ('a -> 'a) list) = List.fold_right o fs (fun a -> a)
-
-
-type integer_size
-
-
-type ('a,'b) either = Left of 'a | Right of 'b
-
-(* type num = Nat_big_num.num *)
-type integer = Nat_big_num.num
-type size = integer
-
 type id = string
-type loc = integer
+type num = Nat_big_num.num
+type loc = num
 
-
-(* Types and sorts *)
-
-let pp_integer = string_of_int
-let parse_integer = int_of_string
-
-let pp_bool = function
-  | true -> "true"
-  | false -> "false"
-
+let pp_num = string_of_int
+let parse_num = int_of_string
 
 let parse_error t sx = 
-  let err = sprintf "unexpected %s: %s" t (Sexp.to_string sx) in
+  let err = sprintf "unexpected %s: %s" t (to_string sx) in
   raise (Invalid_argument err)
 
+let pp_to_sexp_list f xs = 
+  "(" ^ (String.concat " " (List.map f xs)) ^ ")"
 
-let pp_list f xs = 
-  "[" ^ (String.concat ", " (List.map f xs)) ^ "]"
-
-let sexp_list_to f = function
-  | Sexp.Atom _ -> failwith "expected Sexp.List"
-  | Sexp.List sxs -> List.map f sxs
-
+let parse_sexp_list f = function
+  | Atom _ -> failwith "expected List"
+  | List sxs -> List.map f sxs
 
 let unreachable () = failwith "unreachable"
 
-
-
-(* Types and sorts *)
 
 module IT = struct
 
   type index_term =
     | Var of id
-    | Int of integer
+    | Num of num
     | Bool of bool
-    (* | IT_Loc of loc *)
     | Add of index_term * index_term
     | Sub of index_term * index_term
     | Mul of index_term * index_term
     | Div of index_term * index_term
     | Exp of index_term * index_term
-    | Fun of id * index_term
     | App of index_term * index_term
+    | List of index_term list
+
+  let var id = Var id
+
+  let rec pp = function
+    | Var id -> id
+    | Num i -> Nat_big_num.to_string i
+    | Bool true -> "true"
+    | Bool false -> "false"
+    | Add (it1,it2) -> sprintf "(%s + %s)" (pp it1) (pp it2)
+    | Sub (it1,it2) -> sprintf "(%s - %s)" (pp it1) (pp it2)
+    | Mul (it1,it2) -> sprintf "(%s * %s)" (pp it1) (pp it2)
+    | Div (it1,it2) -> sprintf "(%s / %s)" (pp it1) (pp it2)
+    | Exp (it1,it2) -> sprintf "(%s ^ %s)" (pp it1) (pp it2)
+    | App (it1,it2) -> sprintf "(%s %s)" (pp it1) (pp it2)
+    | List its -> sprintf "(list %s)" (pp_to_sexp_list pp its)
 
 
-  let rec pp_index_term = function
-    | Var id -> 
-       id
-    | Int i -> 
-       Nat_big_num.to_string i
-    | Bool bool -> 
-       pp_bool bool
-    | Add (it1,it2) -> 
-       sprintf "(%s + %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-    | Sub (it1,it2) -> 
-       sprintf "(%s - %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-    | Mul (it1,it2) -> 
-       sprintf "(%s * %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-    | Div (it1,it2) -> 
-       sprintf "(%s / %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-    | Exp (it1,it2) -> 
-       sprintf "(%s ^ %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-    | Fun (id,it) ->
-       sprintf "(fn %s %s)" 
-         id 
-         (pp_index_term it)
-    | App (it1,it2) ->
-       sprintf "(%s %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-
-
-  let rec sexp_to_index_term sx = 
-    let open Sexp in
+  let rec parse_sexp sx = 
     match sx with
-    | Atom "true" -> 
-       Bool true
-    | Atom "false" -> 
-       Bool false
-    | Atom str -> 
-       begin try Int (Nat_big_num.of_string str) with
-       | _ -> Var str
-       end
-    | List [o1;Atom "+";o2] -> 
-       Add (sexp_to_index_term o1, sexp_to_index_term o2)
-    | List [o1;Atom "-";o2] -> 
-       Sub (sexp_to_index_term o1, sexp_to_index_term o2)
-    | List [o1;Atom "*";o2] -> 
-       Mul (sexp_to_index_term o1, sexp_to_index_term o2)
-    | List [o1;Atom "/";o2] -> 
-       Div (sexp_to_index_term o1, sexp_to_index_term o2)
-    | List [o1;Atom "^";o2] -> 
-       Exp (sexp_to_index_term o1, sexp_to_index_term o2)
-    | List [Atom "fn";Atom id;it] -> 
-       Fun (id,sexp_to_index_term it)
-    | List [o1;o2] -> 
-       App (sexp_to_index_term o1, sexp_to_index_term o2)
+    | Atom "true" -> Bool true
+    | Atom "false" -> Bool false
+    | Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
+       Num (Nat_big_num.of_string str)
+    | Atom str -> Var str
+    | List [o1;Atom "+";o2] -> Add (parse_sexp o1, parse_sexp o2)
+    | List [o1;Atom "-";o2] -> Sub (parse_sexp o1, parse_sexp o2)
+    | List [o1;Atom "*";o2] -> Mul (parse_sexp o1, parse_sexp o2)
+    | List [o1;Atom "/";o2] -> Div (parse_sexp o1, parse_sexp o2)
+    | List [o1;Atom "^";o2] -> Exp (parse_sexp o1, parse_sexp o2)
+    | List [Atom "list"; its] -> List (parse_sexp_list parse_sexp its)
+    | List [o1;o2] -> App (parse_sexp o1, parse_sexp o2)
     | t -> parse_error "index term" t
 
 end
 
-open IT
 
 module LP = struct
 
   type logical_predicate = 
-    | EQ of index_term * index_term
-    | NE of index_term * index_term
-    | LT of index_term * index_term
-    | GT of index_term * index_term
-    | LE of index_term * index_term
-    | GE of index_term * index_term
-    | Null of index_term
+    | EQ of IT.index_term * IT.index_term
+    | NE of IT.index_term * IT.index_term
+    | LT of IT.index_term * IT.index_term
+    | GT of IT.index_term * IT.index_term
+    | LE of IT.index_term * IT.index_term
+    | GE of IT.index_term * IT.index_term
+    | Null of IT.index_term
 
-  let pp_logical_predicate = function
-    | EQ (o1,o2) -> 
-       sprintf "(%s = %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | NE (o1,o2) -> 
-       sprintf "(%s <> %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | LT (o1,o2) -> 
-       sprintf "(%s < %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | GT (o1,o2) -> 
-       sprintf "(%s > %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | LE (o1,o2) -> 
-       sprintf "(%s <= %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | GE (o1,o2) -> 
-       sprintf "(%s >= %s)" 
-         (pp_index_term o1)
-         (pp_index_term o2)
-    | Null o1 ->
-       sprintf "(null %s)" 
-         (pp_index_term o1)
+  let pp = function
+    | EQ (o1,o2) -> sprintf "(%s = %s)"  (IT.pp o1) (IT.pp o2)
+    | NE (o1,o2) -> sprintf "(%s <> %s)" (IT.pp o1) (IT.pp o2)
+    | LT (o1,o2) -> sprintf "(%s < %s)"  (IT.pp o1) (IT.pp o2)
+    | GT (o1,o2) -> sprintf "(%s > %s)"  (IT.pp o1) (IT.pp o2)
+    | LE (o1,o2) -> sprintf "(%s <= %s)" (IT.pp o1) (IT.pp o2)
+    | GE (o1,o2) -> sprintf "(%s >= %s)" (IT.pp o1) (IT.pp o2)
+    | Null o1 -> sprintf "(null %s)" (IT.pp o1)
 
-  let sexp_to_logical_predicate sx =
-    let open Sexp in
+  let parse_sexp sx =
     match sx with 
-    | List [o1;op;o2] -> 
-       let lp_o1 = sexp_to_index_term o1 in
-       let lp_o2 = sexp_to_index_term o2 in
-       begin match op with
-       | Atom "=" -> EQ (lp_o1, lp_o2)
-       | Atom "<>" -> NE (lp_o1, lp_o2)
-       | Atom "<" -> LT (lp_o1, lp_o2)
-       | Atom ">" -> GT (lp_o1, lp_o2)
-       | Atom "<=" -> LE (lp_o1, lp_o2)
-       | Atom ">=" -> GE (lp_o1, lp_o2)
-       | t -> parse_error "logical predicate" t
-       end
+    | List [o1;Atom "=";o2]  -> EQ (IT.parse_sexp o1, IT.parse_sexp o2)
+    | List [o1;Atom "<>";o2] -> NE (IT.parse_sexp o1, IT.parse_sexp o2)
+    | List [o1;Atom "<";o2]  -> LT (IT.parse_sexp o1, IT.parse_sexp o2)
+    | List [o1;Atom ">";o2]  -> GT (IT.parse_sexp o1, IT.parse_sexp o2)
+    | List [o1;Atom "<=";o2] -> LE (IT.parse_sexp o1, IT.parse_sexp o2)
+    | List [o1;Atom ">=";o2] -> GE (IT.parse_sexp o1, IT.parse_sexp o2)
     | t -> parse_error "logical predicate" t
 end
 
-open LP
 
 module LC = struct
 
   type logical_constraint =
-    | Pred of logical_predicate
+    | Pred of LP.logical_predicate
     | And of logical_constraint * logical_constraint
     | Not of logical_constraint
 
+  let rec pp = function
+    | And (o1,o2) -> sprintf "(%s & %s)" (pp o1) (pp o2)
+    | Not (o1) -> sprintf "(not %s)" (pp o1)
+    | Pred p -> LP.pp p
 
-  let rec pp_logical_constraint = function
-    | And (o1,o2) -> 
-       sprintf "(%s & %s)" 
-         (pp_logical_constraint o1)
-         (pp_logical_constraint o2)
-    | Not (o1) -> 
-       sprintf "(not %s)" 
-         (pp_logical_constraint o1)
-    | Pred p -> 
-       pp_logical_predicate p
-
-
-  let rec sexp_to_logical_constraint sx =
-    let open Sexp in
+  let rec parse_sexp sx =
     match sx with
-    | List [Atom "not";op] -> 
-       Not (sexp_to_logical_constraint op)
-    | List [o1; Atom "&"; o2] ->
-       And (sexp_to_logical_constraint o1, sexp_to_logical_constraint o2)
-    | l -> Pred (sexp_to_logical_predicate l)
+    | List [Atom "not";op] -> Not (parse_sexp op)
+    | List [o1; Atom "&"; o2] -> And (parse_sexp o1, parse_sexp o2)
+    | l -> Pred (LP.parse_sexp l)
 
 end
 
-open LC
 
 module BT = struct
 
@@ -237,257 +137,214 @@ module BT = struct
     | Bool
     | Int
     | Loc
+    | Struct of id
 
-  let pp_base_type = function
+  let rec pp = function
     | Unit -> "unit"
     | Bool -> "bool"
     | Int -> "int"
     | Loc -> "loc"
+    | Struct id -> sprintf "(struct %s)" id
 
-  let sexp_to_base_type sx = 
-    let open Sexp in
+  let rec parse_sexp sx = 
     match sx with
     | Atom "unit" -> Unit
     | Atom "bool" -> Bool
     | Atom "int" -> Int
     | Atom "loc" -> Loc
+    | List [Atom "struct"; Atom id] -> Struct id
     | a -> parse_error "base type" a
 
 end
 
-open BT
 
-module RT = struct
+module RE = struct
 
-  type resource_type = 
-    | Block of index_term * index_term
-    | Int of index_term * index_term (* location and value *)
-    | Points of index_term * index_term
-    | Uninit of index_term * index_term * resource_type
-    | Array of index_term * index_term * index_term
-   (* Array (pointer, size, (f : int -> loc)) *)
+  type resource = 
+    | Block of IT.index_term * IT.index_term
+    | Int of IT.index_term * IT.index_term (* location and value *)
+    | Points of IT.index_term * IT.index_term
+    | Uninit of IT.index_term * IT.index_term * resource
+    | Array of IT.index_term * IT.index_term
+   (* Array (pointer, list pointer) *)
 
-  let rec pp_resource_type = function
+  let rec pp = function
     | Block (it1,it2) -> 
        sprintf "(block %s %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
+         (IT.pp it1)
+         (IT.pp it2)
     | Int (it1,it2) -> 
        sprintf "(int %s %s)" 
-         (pp_index_term it1) 
-         (pp_index_term it2)
-    | Array (it1,it2,it3) -> 
-       sprintf "(array %s %s %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-         (pp_index_term it3)
+         (IT.pp it1) 
+         (IT.pp it2)
+    | Array (it1,it2) -> 
+       sprintf "(array %s %s)" 
+         (IT.pp it1)
+         (IT.pp it2)
     | Points (it1,it2) -> 
        sprintf "(points %s %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
+         (IT.pp it1)
+         (IT.pp it2)
     | Uninit (it1,it2,rt) -> 
        sprintf "(uninit %s %s %s)" 
-         (pp_index_term it1)
-         (pp_index_term it2)
-         (pp_resource_type rt)
+         (IT.pp it1)
+         (IT.pp it2)
+         (pp rt)
 
-  let rec sexp_to_resource_type sx = 
-    let open Sexp in
+  let rec parse_sexp sx = 
     match sx with 
     | List [Atom "block";it1;it2] -> 
-       Block (sexp_to_index_term it1,
-              sexp_to_index_term it2)
+       Block (IT.parse_sexp it1,
+              IT.parse_sexp it2)
     | List [Atom "int"; it1; it2] ->
-       Int (sexp_to_index_term it1, 
-            sexp_to_index_term it2)
-    | List [Atom "array"; it1; it2; it3] ->
-       Array (sexp_to_index_term it1, 
-              sexp_to_index_term it2, 
-              sexp_to_index_term it3)
+       Int (IT.parse_sexp it1, 
+            IT.parse_sexp it2)
+    | List [Atom "array"; it1; it2] ->
+       Array (IT.parse_sexp it1, 
+              IT.parse_sexp it2)
     | List [Atom "points"; it1; it2] ->
-       Points (sexp_to_index_term it1, 
-               sexp_to_index_term it2)
+       Points (IT.parse_sexp it1, 
+               IT.parse_sexp it2)
     | List [Atom "uninit"; it1; it2; rt] ->
-       Uninit (sexp_to_index_term it1, 
-               sexp_to_index_term it2, 
-               sexp_to_resource_type rt)
+       Uninit (IT.parse_sexp it1, 
+               IT.parse_sexp it2, 
+               parse_sexp rt)
     | t -> parse_error "resource type" t
 end
-
-open RT
 
 
 module LS = struct
 
   type logical_sort = 
-    | Base of base_type
-    | List of base_type
+    | Base of BT.base_type
+    | List of BT.base_type
     | Fun of logical_sort * logical_sort
 
 
-  let rec pp_logical_sort = function
+  let rec pp = function
     | List ls -> 
        sprintf "(list %s)" 
-         (pp_base_type ls)
+         (BT.pp ls)
     | Fun (ls1,ls2) -> 
        sprintf "(%s -> %s)" 
-         (pp_logical_sort ls1)
-         (pp_logical_sort ls2)
+         (pp ls1)
+         (pp ls2)
     | Base bt -> 
-         pp_base_type bt
+         BT.pp bt
 
-  let rec sexp_to_logical_sort sx =
+  let rec parse_sexp sx =
     match sx with
-    | Sexp.List [Sexp.Atom "list"; a] ->
-       List (sexp_to_base_type a)
-    | Sexp.List [o1; Sexp.Atom "->"; o2] ->
-       Fun (sexp_to_logical_sort o1, sexp_to_logical_sort o2)
-    | ((Sexp.Atom _) as a) -> Base (sexp_to_base_type a)
+    | Sexp.List [Atom "list"; a] ->
+       List (BT.parse_sexp a)
+    | Sexp.List [o1; Atom "->"; o2] ->
+       Fun (parse_sexp o1, parse_sexp o2)
+    | ((Sexp.Atom _) as a) -> Base (BT.parse_sexp a)
     | ls -> parse_error "logical sort" ls
 
 end
 
-open LS
+
+module RT = struct
+
+  type return_item = 
+    | A of id * BT.base_type
+    | L of id * LS.logical_sort
+    | R of RE.resource
+    | C of LC.logical_constraint
+
+  type return_type = return_item list
 
 
-type return_type = 
-  | ExistsC of id * base_type * return_type
-  | ExistsL of id * logical_sort * return_type
-  | AndR of resource_type * return_type
-  | AndL of logical_constraint * return_type
-  | Done
+  let rec pp = function
+    | A (id, typ) :: ret -> 
+       sprintf "EC (%s : %s) . %s" id (BT.pp typ) (pp ret)
+    | L (id, ls) :: ret  -> 
+       sprintf "EL (%s : %s) . %s" id (LS.pp ls) (pp ret)
+    | R rt :: ret -> 
+       sprintf "%s * %s" (RE.pp rt) (pp ret)
+    | C lc :: ret -> 
+       sprintf "%s & %s" (LC.pp lc) (pp ret)
+    | [] -> 
+       "I"
 
-(* for currying *)
-let existsC (id : id) (bt : base_type) (rt : return_type) : return_type = 
-  ExistsC (id, bt, rt)
-let existsL (id : id) (ls : logical_sort) (rt : return_type) : return_type = 
-  ExistsL (id, ls, rt)
-let andR (r : resource_type) (rt : return_type) : return_type = 
-  AndR (r, rt)
-let andL (ls : logical_constraint) (rt : return_type) : return_type = 
-  AndL (ls, rt)
+  let rec parse_sexp = function
+    | Atom "EC" :: List [Atom id; Atom ":"; t] :: Atom "." :: ret ->
+       A (id, BT.parse_sexp t) :: parse_sexp ret
+    | Atom "EL" :: List [Atom id; Atom ":"; ls] :: Atom "." :: ret ->
+       L (id, LS.parse_sexp ls) :: parse_sexp ret
+    | rt :: Atom "*" :: ret ->
+       R (RE.parse_sexp rt) :: parse_sexp ret
+    | lc :: Atom "&" :: ret ->
+       C (LC.parse_sexp lc) :: parse_sexp ret
+    | Atom "I" :: [] -> 
+       []
+    | rt -> 
+       parse_error "return type" (List rt)
 
-
-
-let rec pp_list_return_type = function
-  | ExistsC (id, typ, rtyp) -> 
-     sprintf "EC (%s : %s) . %s" 
-       id 
-       (pp_base_type typ)
-       (pp_list_return_type rtyp)
-  | ExistsL (id, ls, rtyp) ->
-     sprintf "EL (%s : %s) %s" 
-       id
-       (pp_logical_sort ls)
-       (pp_list_return_type rtyp)
-  | AndR (rt, rtyp) ->
-     sprintf "%s * %s" 
-       (pp_resource_type rt)
-       (pp_list_return_type rtyp)
-  | AndL (lc, rtyp) ->
-     sprintf "%s & %s"
-       (pp_logical_constraint lc)
-       (pp_list_return_type rtyp)
-  | Done ->
-     "I"
-
-and pp_return_type rt = 
-  sprintf "(%s)" (pp_list_return_type rt)
+end
 
 
-let rec list_sexp_to_return_type sx = 
-  let open Sexp in 
-  match sx with
-  | Atom "EC" :: List [Atom id; Atom ":"; t] :: Atom "." :: rtyp ->
-     ExistsC (id, sexp_to_base_type t, list_sexp_to_return_type rtyp)
-  | Atom "EL" :: List [Atom id; Atom ":"; ls] :: Atom "." :: rtyp ->
-     ExistsL (id, sexp_to_logical_sort ls, list_sexp_to_return_type rtyp)
-  | rt :: Atom "*" :: rtyp ->
-     AndR (sexp_to_resource_type rt, list_sexp_to_return_type rtyp)
-  | lc :: Atom "&" :: rtyp ->
-     AndL (sexp_to_logical_constraint lc, list_sexp_to_return_type rtyp)
-  | Atom "I" :: [] -> Done
-  | rt -> parse_error "return type" (List rt)
+module FT = struct
 
-and sexp_to_return_type rt = 
-  let open Sexp in
-  match rt with
-  | List rt -> list_sexp_to_return_type rt
-  | Atom _ -> list_sexp_to_return_type [rt]
+  
+  (* basically the same as return_item, so could unify if it stays
+     like this? *)
+  type argument = 
+    | A of id * BT.base_type
+    | L of id * LS.logical_sort
+    | R of RE.resource
+    | C of LC.logical_constraint
 
+  type arguments = argument list
 
-type function_type = 
-  | ForallC of id * base_type * function_type
-  | ForallL of id * logical_sort * function_type
-  | ImpR of resource_type * function_type
-  | ImpL of logical_constraint * function_type
-  | Return of return_type
+  type function_type = Fn of arguments * RT.return_type
 
-let forallC (id : id) (bt : base_type) (ft : function_type) : function_type = 
-  ForallC (id, bt, ft)
-let forallL (id : id) (ls : logical_sort) (ft : function_type) : function_type = 
-  ForallL (id, ls, ft)
-let impR (r : resource_type) (ft : function_type) : function_type = 
-  ImpR (r, ft)
-let impL (ls : logical_constraint) (ft : function_type) : function_type = 
-  ImpL (ls, ft)
+  let rec pp_arguments = function
+    | A (id, bt) :: args -> 
+       sprintf "AC (%s : %s) . %s" id (BT.pp bt) (pp_arguments args)
+    | L (id, ls) :: args -> 
+       sprintf "AL (%s : %s) . %s" id (LS.pp ls) (pp_arguments args)
+    | R (rt) :: args ->
+       sprintf "%s =* %s" (RE.pp rt) (pp_arguments args)
+    | C (lc) :: args ->
+       sprintf "%s => %s" (LC.pp lc) (pp_arguments args)
+    | [] -> 
+       ""
 
+  let pp (Fn (args, rt)) = 
+    sprintf "%s%s" (pp_arguments args) (RT.pp rt)
 
-let rec pp_list_function_type = function
-  | ForallC (id, bt, ftyp) -> 
-     sprintf "A (%s : %s) . %s" 
-       id 
-       (pp_base_type bt)
-       (pp_list_function_type ftyp)
-  | ForallL (id, ls, ftyp) -> 
-     sprintf "ForallL (%s : %s) . %s"
-       id 
-       (pp_logical_sort ls)
-       (pp_list_function_type ftyp)
-  | ImpR (rt,ftyp) ->
-     sprintf "%s =* %s"
-       (pp_resource_type rt)
-       (pp_list_function_type ftyp)
-  | ImpL (lc,ftyp) ->
-     sprintf "%s => %s"
-       (pp_logical_constraint lc)
-       (pp_list_function_type ftyp)
-  | Return rt ->
-     pp_list_return_type rt
+  let rec parse_sexp_aux acc = function
+    | Atom "AC" :: List [Atom id; Atom ":"; bt] :: Atom "." :: args ->
+       parse_sexp_aux (A (id, BT.parse_sexp bt) :: acc) args
+    | Atom "AL":: List [Atom id; Atom ":"; ls] :: Atom "." :: args ->
+       parse_sexp_aux (L (id, LS.parse_sexp ls) :: acc) args
+    | rt :: Atom "=*" :: args ->
+       parse_sexp_aux (R (RE.parse_sexp rt) :: acc) args
+    | lc :: Atom "=>" :: args ->
+       parse_sexp_aux (C (LC.parse_sexp lc) :: acc) args
+    | rt -> 
+       Fn (List.rev acc, RT.parse_sexp rt)
 
-let pp_function_type ftyp = 
-  sprintf "(%s)" (pp_list_function_type ftyp)
+  let parse_sexp = function
+    | List ft -> parse_sexp_aux [] ft
+    | t -> parse_error "function type" t
+         
+end
   
 
-let rec list_sexp_to_function_type sx = 
-  let open Sexp in
-  match sx with
-  | Atom "A" :: List [Atom id; Atom ":"; bt] :: Atom "." :: ftyp ->
-     ForallC (id, sexp_to_base_type bt, list_sexp_to_function_type ftyp)
-  | Atom "ForallL":: List [Atom id; Atom ":"; ls] :: Atom "." :: ftyp ->
-     ForallL (id, sexp_to_logical_sort ls, list_sexp_to_function_type ftyp)
-  | rt :: Atom "=*" :: ftyp ->
-     ImpR (sexp_to_resource_type rt, list_sexp_to_function_type ftyp)
-  | lc :: Atom "=>" :: ftyp ->
-     ImpL (sexp_to_logical_constraint lc, list_sexp_to_function_type ftyp)
-  | rt -> Return (list_sexp_to_return_type rt)
 
 
-let sexp_to_function_type ftyp = 
-  let open Sexp in
-  match ftyp with
-  | List ftyp -> list_sexp_to_function_type ftyp
-  | Atom a -> list_sexp_to_function_type [ftyp]
 
 
 (* Programs and terms *)
 
 type 'a variable_context = (id * 'a) list
 
-type cv_context = base_type variable_context
-type lv_context = logical_sort variable_context
-type rv_context = resource_type variable_context
-type lc_context = logical_constraint list
+type cv_context = BT.base_type variable_context
+type lv_context = LS.logical_sort variable_context
+type rv_context = RE.resource variable_context
+type lc_context = LC.logical_constraint list
 
 let empty_context = []
 
@@ -517,6 +374,7 @@ module ID_M = struct
   let bind (m : 'a m) (f : 'a -> 'b m) : 'b m = 
     fun s -> let a, s' = m s in f a s'
   let (>>=) = bind
+
   let rec doM (ms : ('a m) list) : ('a list) m = 
     match ms with
     | [] -> return []
@@ -524,6 +382,11 @@ module ID_M = struct
        m >>= fun x -> 
        doM ms >>= fun xs ->
        return (x :: xs)
+  let foreach (f : 'a -> 'b m) (xs : 'a list) : ('b list) m = 
+    doM (List.map f xs)
+    
+  let liftM (f : 'a -> 'b) (x : 'a) : 'b m =
+    return (f x)
 end
 
 
@@ -531,11 +394,11 @@ end
 open Core
 open ID_M
 
-let var_equal_to (id : id) (it : index_term) = 
-  Pred (EQ (Var id, it))
+let var_equal_to (id : id) (it : IT.index_term) = 
+  LC.Pred (EQ (Var id, it))
 
 let var_null (id : id) = 
-  Pred (Null (Var id))
+  LC.Pred (Null (Var id))
 
 
 let option_get = function
@@ -551,84 +414,82 @@ let option_get = function
  * let rec sizeof_ov ov = 
  *   Impl_mem.sizeof_ival (core_type_value ov) *)
 
-let infer_type__value v : return_type m = 
+let infer_type__value v : RT.return_type m = 
 
-  let rec loaded_value_aux lv : (return_type -> return_type) m = 
+  let rec loaded_value_aux lv : (id * RT.return_type) m = 
     match lv with
     | LVspecified ov -> object_aux ov
     | LVunspecified _ -> failwith "LVunspecified not implemented"
 
-  and object_aux ov : (return_type -> return_type) m = 
+  and object_aux ov : (id * RT.return_type) m = 
     match ov with
     | OVinteger i -> 
        fresh >>= fun n ->
        let i = option_get (eval_integer_value i) in
-       return (nest [existsC n Int; andL (var_equal_to n (Int i))])
+       return (n, [RT.A (n,BT.Int); RT.C (var_equal_to n (Num i))])
     | OVfloating _ -> 
        failwith "floats not supported"
     | OVpointer p -> 
        fresh >>= fun n ->
        case_ptrval p 
          (fun _ctype ->  (* case null *)
-           return (nest [existsC n Loc; andL (var_null n)]))
+           return (n, [RT.A (n,BT.Loc); RT.C (var_null n)]))
          (fun _sym ->    (* case function pointer *)
            failwith "function pointers not supported")
          (fun _prov i -> (* case concrete pointer *)
-          return (nest [existsC n Loc; andL (var_equal_to n (Int i))]))
+          return (n, [RT.A (n,BT.Loc); RT.C (var_equal_to n (Num i))]))
          (fun _ ->       (* case unspecified_value *)
            unreachable ())
-    | OVarray os -> failwith "not implemented yet"
-       (* let n = List.length os in
-        * fresh >>= fun pointer ->
-        * fresh >>= fun f ->
-        * return (nest [existsC pointer Loc;
-        *               existsL size (Base Loc);
-        *               existsL f (Fun (Base Loc, Base Loc));
-        *               (\* do we have to specify f's index to location mapping *\)
-        *               andR (Array (Var pointer, Var n, f));
-        *               ]) *)
+    | OVarray os -> 
+       (* let n = of_int (List.length os) in *)
+       fresh >>= fun pointer ->
+       foreach loaded_value_aux os >>= fun os ->
+       let names, items = List.split os in
+       let ts = 
+         RT.A (pointer, BT.Loc) ::
+         RT.R (Array (IT.Var pointer, IT.List (List.map IT.var names))) ::
+         List.concat items
+       in
+       return (pointer, ts)
     | OVstruct _ -> 
        failwith "OVstruct not implemented"
     | OVunion _ -> 
        failwith "OVunion not implemented"
   in
     
-  let rec value_aux rt : (return_type -> return_type) m =
+  let rec value_aux rt : RT.return_type m =
     match rt with
-    | Vobject ov -> object_aux ov
-    | Vloaded lv -> loaded_value_aux lv
+    | Vobject ov -> object_aux ov >>= (liftM snd)
+    | Vloaded lv -> loaded_value_aux lv >>= (liftM snd)
     | Vunit -> 
        fresh >>= fun n ->
-       return (existsC n Unit)
+       return [RT.A (n, BT.Unit)]
     | Vtrue -> 
        fresh >>= fun n ->
-       return (nest [existsC n Bool; andL (var_equal_to n (Bool true))])
+       return [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool true))]
     | Vfalse ->
        fresh >>= fun n ->
-       return (nest [existsC n Bool; andL (var_equal_to n (Bool false))])
+       return [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool false))]
     | Vctype _ -> failwith "Vctype not supported"
     | Vlist _ ->  failwith "infer_type_value Vlist"
     | Vtuple vs -> 
-       doM (List.map value_aux vs) >>= fun vs ->
-       return (nest vs)
+       foreach value_aux vs >>= fun rts ->
+       return (List.concat rts)
   in
 
-  value_aux v >>= fun f -> 
-  return (f Done)
+  value_aux v
 
 
 
 let test_parse () = 
   let s = "(not ((1 + (x * 3)) < (2 + (x * 3))))" in
-  print_endline (pp_logical_constraint (sexp_to_logical_constraint (Sexp.of_string s)));
-  let s = "(array x (1 + (5 * y)) (fn i (i + 10)))" in
-  print_endline (pp_resource_type (sexp_to_resource_type (Sexp.of_string s)));
+  print_endline (LC.pp (LC.parse_sexp (of_string s)));
+  let s = "(array x (4 10))" in
+  print_endline (RE.pp (RE.parse_sexp (of_string s)));
   let s = "((list int) -> loc)" in
-  print_endline (pp_logical_sort (sexp_to_logical_sort (Sexp.of_string s)));
-  let s = "(EC (r : int) . (r = (f i)) & (array x n f) * I)" in
-  print_endline (pp_return_type (sexp_to_return_type (Sexp.of_string s)));
+  print_endline (LS.pp (LS.parse_sexp (of_string s)));
   let s = "(A (x : loc) . A (i : int) . ForallL (n : int) . ForallL (f : (int -> int)) . ((0 <= i) & (i < n)) => (array x n f) =* EL (r : int) . (r = (f i)) & (array x n f) * I)" in
-  print_endline (pp_function_type (sexp_to_function_type (Sexp.of_string s)));
+  print_endline (FT.pp (FT.parse_sexp (of_string s)));
   print_endline "\n";
   ()
 
@@ -636,7 +497,7 @@ let test_parse () =
 let test_value_infer () = 
   let infer v = fst (infer_type__value v ID.init) in
   let t = Vtrue in
-  let () = print_endline (pp_return_type (infer t)) in
+  let () = print_endline (RT.pp (infer t)) in
   let t = 
     Vtuple 
       [Vtrue; 
@@ -644,7 +505,7 @@ let test_value_infer () =
                Vobject (OVinteger (integer_ival (of_int 123)))]; 
        Vunit]
   in
-  let () = print_endline (pp_return_type (infer t)) in
+  let () = print_endline (RT.pp (infer t)) in
   ()
 
 
@@ -655,6 +516,6 @@ let pp_fun_map_decl f =
 let check (core_file : unit Core.file) =
   let () = Tags.set_tagDefs core_file.tagDefs in
   let () = pp_fun_map_decl core_file.funinfo in
-  test_parse ();
+  (* test_parse (); *)
   test_value_infer ()
 
