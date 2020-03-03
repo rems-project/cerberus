@@ -5,7 +5,8 @@ struct s {
 };
 
 //[[rc::function_lifetime("f")]]
-void f1(struct s [[rc::write("a")]] * [[rc::write("f")]] p) { // rc::nonnull
+[[rc::fun_spec("(p : ptr[read,nonnull,init](struct s[write]) -> @")]]
+void f1(struct s * p) { // rc::nonnull
   p->f1 = 1;
 }
 
@@ -111,3 +112,23 @@ void f9(int [[rc::read]] * x [[rc::nonnull]]) {
 }
 
 */
+
+struct mpool_entry {
+  struct mpool_entry * next;
+}
+
+struct mpool {
+  struct mpool_entry * entries;
+}
+
+void mpool_init(struct mpool * p) {
+
+}
+
+void * mpool_get() {
+
+}
+
+void mpool_put(struct mpool * p, void * ptr) {
+
+}
