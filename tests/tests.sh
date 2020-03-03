@@ -88,5 +88,6 @@ citests=(
 #  0204-main-params2.error.c
   0297-atomic_memberof.undef.c
   0298-atomic_memberofptr.undef.c
+  0299-qualified_ptrdiff.c
 )
 

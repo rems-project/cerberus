@@ -1120,7 +1120,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEbinary e1 (Arithmetic Sub as bop) e2 ->
         annotate_rvalue e1 >>= fun (e1', gty1) ->
         annotate_rvalue e2 >>= fun (e2', gty2) ->
-        if are_pointers_to_compatible_complete_objects sigm gty1 gty2 then
+        if are_pointers_to_qualifiedOrUnqualified_compatible_complete_objects sigm gty1 gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType (GenBasic (GenInteger PtrdiffT)))
         else if is_pointer_to_complete_object sigm gty1 && is_integer gty2 then
           E.return (AilEbinary e1' bop e2', GenRValueType gty1)
