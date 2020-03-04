@@ -394,6 +394,10 @@ end
 open Core
 open ID_M
 
+
+
+
+
 let var_equal_to (id : id) (it : IT.index_term) = 
   LC.Pred (EQ (Var id, it))
 
@@ -414,70 +418,78 @@ let option_get = function
  * let rec sizeof_ov ov = 
  *   Impl_mem.sizeof_ival (core_type_value ov) *)
 
-let infer_type__value v : RT.return_type m = 
+(* type struct_env = (Symbol.sym, Ctype.tag_definition) Pmap.map *)
 
-  let rec loaded_value_aux lv : (id * RT.return_type) m = 
-    match lv with
-    | LVspecified ov -> object_aux ov
-    | LVunspecified _ -> failwith "LVunspecified not implemented"
 
-  and object_aux ov : (id * RT.return_type) m = 
-    match ov with
-    | OVinteger i -> 
-       fresh >>= fun n ->
-       let i = option_get (eval_integer_value i) in
-       return (n, [RT.A (n,BT.Int); RT.C (var_equal_to n (Num i))])
-    | OVfloating _ -> 
-       failwith "floats not supported"
-    | OVpointer p -> 
-       fresh >>= fun n ->
-       case_ptrval p 
-         (fun _ctype ->  (* case null *)
-           return (n, [RT.A (n,BT.Loc); RT.C (var_null n)]))
-         (fun _sym ->    (* case function pointer *)
-           failwith "function pointers not supported")
-         (fun _prov i -> (* case concrete pointer *)
-          return (n, [RT.A (n,BT.Loc); RT.C (var_equal_to n (Num i))]))
-         (fun _ ->       (* case unspecified_value *)
-           unreachable ())
-    | OVarray os -> 
-       (* let n = of_int (List.length os) in *)
-       fresh >>= fun pointer ->
-       foreach loaded_value_aux os >>= fun os ->
-       let names, items = List.split os in
-       let ts = 
-         RT.A (pointer, BT.Loc) ::
-         RT.R (Array (IT.Var pointer, IT.List (List.map IT.var names))) ::
-         List.concat items
-       in
-       return (pointer, ts)
-    | OVstruct _ -> 
-       failwith "OVstruct not implemented"
-    | OVunion _ -> 
-       failwith "OVunion not implemented"
-  in
-    
-  let rec value_aux rt : RT.return_type m =
-    match rt with
-    | Vobject ov -> object_aux ov >>= (liftM snd)
-    | Vloaded lv -> loaded_value_aux lv >>= (liftM snd)
-    | Vunit -> 
-       fresh >>= fun n ->
-       return [RT.A (n, BT.Unit)]
-    | Vtrue -> 
-       fresh >>= fun n ->
-       return [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool true))]
-    | Vfalse ->
-       fresh >>= fun n ->
-       return [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool false))]
-    | Vctype _ -> failwith "Vctype not supported"
-    | Vlist _ ->  failwith "infer_type_value Vlist"
-    | Vtuple vs -> 
-       foreach value_aux vs >>= fun rts ->
-       return (List.concat rts)
-  in
 
-  value_aux v
+let rec infer_lv lv : (id * RT.return_type) m = 
+  match lv with
+  | LVspecified ov -> infer_ov ov
+  | LVunspecified _ -> failwith "LVunspecified not implemented"
+
+and infer_ov ov : (id * RT.return_type) m = 
+  match ov with
+  | OVinteger i -> 
+     fresh >>= fun n ->
+     let i = option_get (eval_integer_value i) in
+     return (n, [RT.A (n,BT.Int); RT.C (var_equal_to n (Num i))])
+  | OVfloating _ -> 
+     failwith "floats not supported"
+  | OVpointer p -> 
+     fresh >>= fun n ->
+     case_ptrval p 
+       (fun _ctype ->  (* case null *)
+         return (n, [RT.A (n,BT.Loc); RT.C (var_null n)]))
+       (fun _sym ->    (* case function pointer *)
+         failwith "function pointers not supported")
+       (fun _prov i -> (* case concrete pointer *)
+        return (n, [RT.A (n,BT.Loc); RT.C (var_equal_to n (Num i))]))
+       (fun _ ->       (* case unspecified_value *)
+         unreachable ())
+  | OVarray os -> 
+     (* let n = of_int (List.length os) in *)
+     fresh >>= fun pointer ->
+     foreach infer_lv os >>= fun os ->
+     let names, items = List.split os in
+     let ts = 
+       (RT.A (pointer, BT.Loc) :: List.concat items) @
+       [RT.R (Array (IT.Var pointer, IT.List (List.map IT.var names)))]
+     in
+     return (pointer, ts)
+  | OVstruct (sym,flds) -> 
+     failwith "OVstruct not implemented"
+  | OVunion _ -> 
+     failwith "OVunion not implemented"
+
+let rec infer_v rt : (id * RT.return_type) m =
+  match rt with
+  | Vobject ov -> infer_ov ov
+  | Vloaded lv -> infer_lv lv
+  | Vunit -> 
+     fresh >>= fun n ->
+     return (n, [RT.A (n, BT.Unit)])
+  | Vtrue -> 
+     fresh >>= fun n ->
+     return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool true))])
+  | Vfalse ->
+     fresh >>= fun n ->
+     return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool false))])
+  | Vctype _ -> 
+     unreachable ()
+  | Vlist _ ->  
+     unreachable ()
+  | Vtuple vs -> 
+     unreachable ()
+
+
+type fenv = (Symbol.sym, FT.function_type) Pmap.map
+type aenv = (Symbol.sym, BT.base_type) Pmap.map
+type lenv = (Symbol.sym, LS.logical_sort) Pmap.map
+type cenv = LC.logical_constraint list
+type renv = (Symbol.sym, RE.resource) Pmap.map
+
+let rec infer_p fenv aenv lenv renv c = ()
+
 
 
 
@@ -495,7 +507,7 @@ let test_parse () =
 
 
 let test_value_infer () = 
-  let infer v = fst (infer_type__value v ID.init) in
+  let infer v = snd (fst (infer_v v ID.init)) in
   let t = Vtrue in
   let () = print_endline (RT.pp (infer t)) in
   let t = 
