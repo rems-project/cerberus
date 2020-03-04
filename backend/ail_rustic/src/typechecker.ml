@@ -108,12 +108,6 @@ let collect_functions s =
   let m = List.fold_left (fun m (id, f) -> add_right id (cvt_def f) m) m fs in
   m
 
-let rec string_of_rc_type = function
-| RC_scalar -> "scalar"
-| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "] " ^ string_of_rc_type t ^ ""
-| RC_struct (id, o) -> "struct " ^ string_of_sym id ^ "[" ^ string_of_rc_ownership o ^ "]"
-| RC_atomic t -> "atomic " ^ string_of_rc_type t
-
 type ('b) gamma_ty = ((rc_type * rc_type) String_map.t * 'b) list
 
 let rec lookup_in_gamma x = function
@@ -147,6 +141,7 @@ let rc_ownership_of_annots annots =
   | [] -> RC_bad
   | _ :: _ :: _ -> failwith "ambiguous annotations"
 
+(*
 let rec rc_type_of_cty = function
 | Ctype.Ctype (_, Void) -> RC_scalar
 | Ctype.Ctype (_, Basic _) -> RC_scalar
@@ -164,6 +159,7 @@ let rc_type_pair_of_cty cty =
 
 let type_of_fun (f : fn_decl) =
   (List.map (fun (_, b, _) -> rc_type_of_cty b) f.fn_decl_argstys, rc_type_of_cty f.fn_decl_retty)
+  *)
 
 type fun_spec_t = (string * (Rustic_types.rc_type * Rustic_types.rc_type)) list * Rustic_types.rc_type
 
@@ -228,22 +224,25 @@ module Type_error = struct
 type t =
 | TE_general of string
 | TE_todo of string
-| TE_expected_at_most_but_got of rc_type * rc_type
-| TE_expected_at_least_but_got of rc_type * rc_type
+| TE_expected_but_got of Location_ocaml.t * rc_type * rc_type
+| TE_function_expected_but_got of Location_ocaml.t * rc_type * rc_type
 | TE_internal_error of string
 
 let string_of = function
 | TE_general s -> s
 | TE_todo s -> "TODO: " ^ s
-| TE_expected_at_most_but_got (t1, t2) -> "expected at most `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
-| TE_expected_at_least_but_got (t1, t2) -> "expected at least `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_expected_but_got (loc, t1, t2) -> Location_ocaml.location_to_string loc ^ ": expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
+| TE_function_expected_but_got (loc, t1, t2) -> Location_ocaml.location_to_string loc ^ ": function expected `" ^ string_of_rc_type t1 ^ "` but got `" ^ string_of_rc_type t2 ^ "`"
 | TE_internal_error s -> "internal error: " ^ s
 end
 module TE_either = Either_fixed.Make(Type_error)
 
-let rec check_expression stys (ftys : fun_spec_t Rustic_types.String_map.t) (gamma : 'b gamma_ty) (AnnotatedExpression (_, _, _, e)) : (rc_type * rc_type) TE_either.t =
-  check_expression_ stys ftys gamma e
-and check_expression_ stys ftys gamma = function
+let loc_of_expression = function
+| AnnotatedExpression (_, _, loc, _) -> loc
+
+let rec check_expression stys (ftys : fun_spec_t Rustic_types.String_map.t) (gamma : 'b gamma_ty) (AnnotatedExpression (_, _, loc, e)) : (rc_type * rc_type) TE_either.t =
+  check_expression_ stys ftys gamma loc e
+and check_expression_ stys ftys gamma loc = function
 | AilEident x ->
   (match lookup_in_gamma (string_of_sym x) gamma with
   | None -> TE_either.mzero (TE_general "unbound variable")
@@ -252,10 +251,11 @@ and check_expression_ stys ftys gamma = function
   TE_either.bind
     (check_expression stys ftys gamma e1)
     (function
+      | (RC_scalar, _) -> TE_either.return (RC_scalar, RC_scalar)
       | (RC_ptr (o, t) as ty1, ty2) ->
         (*print_string (string_of_rc_type ty ^ "\n");*)
-        if RC_write = o then TE_either.return (RC_scalar, RC_scalar) (* TODO: ? *)
-        else TE_either.mzero (Type_error.TE_expected_at_most_but_got (RC_ptr (RC_write, t), ty1))
+        if RC_write = o then TE_either.return (RC_placeholder "=1", RC_placeholder "=2")
+        else TE_either.mzero (Type_error.TE_expected_but_got (loc, RC_ptr (RC_write, t), ty1))
       | _ -> TE_either.mzero (Type_error.TE_internal_error "writing to a non-ptr?"))
 | AilEcall (AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))), [e]) ->
   (match String_map.find_opt (string_of_sym f) ftys with
@@ -265,13 +265,13 @@ and check_expression_ stys ftys gamma = function
      (check_expression stys ftys gamma e)
       (fun (_, argty) ->
         if Rustic_types.RC_type.compare argty (fst paramty) = 0 then TE_either.return (failwith "???", retty)
-        else TE_either.mzero (TE_expected_at_least_but_got (fst paramty, argty)))
+        else TE_either.mzero (TE_function_expected_but_got (loc_of_expression e, fst paramty, retty)))
     | _ -> failwith "TODO: allow multiple args")
 | AilEcall _ -> failwith "TODO: other AilEcall"
 | AilEunary (Address, e) ->
   TE_either.bind
     (check_expression stys ftys gamma e)
-    (fun (ty1, ty2) -> TE_either.return (RC_ptr (RC_read, ty1), RC_scalar (*???*)))
+    (fun (ty1, ty2) -> TE_either.return (RC_ptr (RC_read, ty1), RC_placeholder "&"))
 | AilEunary (Indirection, e) ->
   TE_either.bind
     (check_expression stys ftys gamma e)
@@ -293,7 +293,7 @@ and check_expression_ stys ftys gamma = function
   TE_either.bind
     (check_expression stys ftys gamma e)
     (function
-    | (RC_ptr (_, t), ty2) -> TE_either.return (t, RC_scalar (* ???*))
+    | (RC_ptr (_, t), ty2) -> TE_either.return (t, ty2 (* ???*))
     | _ -> TE_either.mzero (Type_error.TE_general "rvalue?"))
 | AilEmemberofptr (e, p) ->
   TE_either.bind
@@ -305,7 +305,7 @@ and check_expression_ stys ftys gamma = function
          | Some sty ->
            (match String_map.find_opt (string_of_identifier p) sty with
            | None -> TE_either.mzero (TE_general "unknown struct field")
-           | Some ty -> TE_either.return (RC_ptr (o, ty), RC_scalar (*???*))))
+           | Some ty -> TE_either.return (RC_ptr (o, ty), RC_placeholder "->")))
      | _ -> TE_either.mzero (TE_internal_error "memberofptr on non-struct"))
 | _ -> failwith "TODO: unhandled expression"
 
@@ -321,7 +321,7 @@ let rec check_statements stys (ftys : fun_spec_t Rustic_types.String_map.t) (gam
   (match String_map_aux.of_list (List.map (fun (x, v) -> (string_of_sym x, v)) bds) with
   | None -> assert false
   | Some bds ->
-    let bds = String_map.map (fun (_, _, cty) -> (fun (ty1, ty2) -> (zap ty1, zap ty2)) (rc_type_pair_of_cty cty)) bds in
+    let bds = String_map.map (fun (_, _, cty) -> (fun (ty1, ty2) -> (zap ty1, zap ty2)) (failwith "TODO: need annotations")) bds in
     check_statements stys ftys ((bds, sts) :: gamma) sts1)
 | AnnotatedStatement (_, AilSif (_, s1, s2)) :: sts ->
   TE_either.bind
@@ -349,7 +349,7 @@ let should_typecheck_of (def : 'a fn_def) =
 
 let collect_structs s =
   let g xs =
-    let xs = List.map (fun (id, (_, cty)) -> (string_of_identifier id, rc_type_of_cty cty)) xs in
+    let xs = List.map (fun (id, (_, cty)) -> (string_of_identifier id, failwith "TODO: need annotations!")) xs in
     match String_map_aux.of_list xs with
     | None -> assert false
     | Some xs -> xs in
