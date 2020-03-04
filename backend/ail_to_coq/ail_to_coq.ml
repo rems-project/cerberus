@@ -41,11 +41,12 @@ let run : string -> typed_ail -> unit = fun fname (entry_point, sigma) ->
     match c_ty with
     | Pointer(_,_) -> "LPtr"
     | Struct(sym)  -> "layout_of struct_" ^ sym_to_str sym
-    | _            -> not_implemented "some c_type" (* TODO *)
+    | _            -> "..."
   in
 
   (* Printing some header. *)
   line "From refinedc.lang Require Export notation.";
+  line "From refinedc.lang Require Import tactics.";
   line "Set Default Proof Using \"Type\".";
   skip_line ();
 
@@ -105,7 +106,7 @@ let run : string -> typed_ail -> unit = fun fname (entry_point, sigma) ->
     line "];";
     decr indent;
     line "|}.";
-    line "Next Obligation. do ! constructor; set_solver. Qed."
+    line "Solve Obligations with solve_struct_obligations."
   in
   List.iter tag_def tag_defs;
 
