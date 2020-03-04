@@ -1,0 +1,354 @@
+open import Pervasives
+open import Assert_extra
+
+import Symbol
+
+open import Core
+
+type bty = core_base_type
+type pexpr = generic_pexpr bty Symbol.sym
+type pexprs = list pexpr
+type expr 'a = generic_expr 'a bty Symbol.sym
+type pattern = generic_pattern bty Symbol.sym
+type annot = Annot.annot
+type annots = list annot
+type action 'a = generic_action 'a bty Symbol.sym
+type paction 'a = generic_paction 'a bty Symbol.sym
+
+let annots_of_pexpr (Pexpr annots _ _) = annots
+let bty_of_pexpr (Pexpr _ bty _) = bty
+
+
+(* ... adapting the algorithm from
+   http://matt.might.net/articles/a-normalization/ for core *)
+
+let atomic_pexpr (Pexpr _ _ e) = 
+  match e with
+  | PEsym _  -> true
+  | PEimpl _ -> true
+  | PEval _v -> true
+  | _ -> false
+  end
+
+let var_pat sym annots bty = 
+  Pattern annots (CaseBase (Just sym, bty))
+let var_pexpr sym annots bty = 
+  Pexpr annots bty (PEsym sym) 
+
+
+
+type pexpr_context 'a = 'a -> pexpr
+
+
+
+val n_pexpr :         pexpr -> pexpr_context pexpr -> pexpr
+val n_pexpr_name :    pexpr -> pexpr_context pexpr -> pexpr
+val n_pexpr_names :   pexprs -> pexpr_context pexprs -> pexpr
+val normalise_pexpr : pexpr -> pexpr
+
+val let_bind_pexpr : pexpr -> pexpr_context pexpr -> pexpr
+let let_bind_pexpr pexp ctxt = 
+  let (Pexpr annots bty _) = pexp in
+  let sym = Symbol.fresh () in
+  let pat = var_pat sym annots bty in
+  let pexp_name = var_pexpr sym annots bty in
+  let body = ctxt pexp_name in
+  Pexpr annots (bty_of_pexpr body) (PElet pat pexp body)
+
+
+let rec normalise_pexpr e = 
+  n_pexpr e (fun e -> e)
+
+and n_pexpr_name e k = 
+  n_pexpr (e : pexpr) (fun e -> 
+  if atomic_pexpr e then k e 
+  else let_bind_pexpr e k)
+
+and n_pexpr_name_2 (e,e') k = 
+  n_pexpr_name e (fun e -> 
+  n_pexpr_name e' (fun e' ->
+  k (e,e')))
+
+and n_pexpr_names (es : list pexpr) (k : list pexpr -> pexpr) : pexpr =
+  match es with
+  | [] -> k []
+  | e :: es -> 
+     n_pexpr_name e (fun e -> 
+     n_pexpr_names es (fun es ->
+     k (e :: es)))
+  end
+
+and n_pexpr e k = 
+
+  let (Pexpr annot bty pe) = e in
+  let annotate pe = Pexpr annot bty pe in
+
+  match pe with
+  | PEsym _ -> 
+     k e
+  | PEimpl _ -> 
+     k e
+  | PEval _ -> 
+     k e
+  | PEconstrained _ -> 
+     failwith "unreachable"
+  | PEundef _ _ -> 
+     k e
+  | PEerror err e' ->
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (PEerror err e')))
+  | PEctor ctor args ->
+     n_pexpr_names args (fun args -> 
+     k (annotate (PEctor ctor args)))
+  | PEcase e' pats ->
+     n_pexpr_name e' (fun e' -> 
+     let pats = List.map (fun (pat,pe) -> (pat, normalise_pexpr pe)) pats in
+     k (annotate (PEcase e' pats)))
+  | PEarray_shift e' ctype e'' ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (PEarray_shift e' ctype e'')))
+  | PEmember_shift e' sym id ->
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (PEmember_shift e' sym id)))
+  | PEnot e' -> 
+     n_pexpr_name e' (fun e' -> 
+     k (annotate (PEnot e')))
+  | PEop binop e' e'' ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (PEop binop e' e'')))
+  | PEstruct sym fields ->
+     let (fnames, pes) = List.unzip fields in
+     n_pexpr_names pes (fun pes ->
+     let fields = List.zip fnames pes in
+     k (annotate (PEstruct sym fields)))
+  | PEunion sym id e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEunion sym id e')))
+  | PEcfunction e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEcfunction e')))
+  | PEmemberof sym id e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEmemberof sym id e')))
+  | PEcall sym args ->
+     n_pexpr_names args (fun args ->
+     k (annotate (PEcall sym args)))
+  | PElet pat e' e'' ->
+     n_pexpr e' (fun e' ->
+     annotate (PElet pat e' (n_pexpr e'' k)))
+  | PEif e' e'' e''' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEif e' (normalise_pexpr e'') (normalise_pexpr e'''))))
+  | PEis_scalar e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEis_scalar e')))
+  | PEis_integer e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEis_integer e')))
+  | PEis_signed e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEis_signed e')))
+  | PEis_unsigned e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEis_unsigned e')))
+  | PEbmc_assume e' ->
+     n_pexpr_name e' (fun e' ->
+     k (annotate (PEbmc_assume e')))
+  | PEare_compatible e' e'' ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') ->
+     k (annotate (PEare_compatible e' e'')))
+  end
+
+
+
+let rec pull_let_pexpr (pexpr : pexpr) (k : pexpr -> expr unit) : expr unit = 
+  let pexpr = normalise_pexpr pexpr in
+  match pexpr with
+  | Pexpr annots _bty (PElet pat e' e'') ->
+     Expr annots (Elet pat e' (pull_let_pexpr e'' k))
+  | Pexpr _ _ _ ->
+     k pexpr
+  end
+
+and pull_let_pexprs (pexprs : pexprs) (k : pexprs -> expr unit) : expr unit =
+  match pexprs with
+  | [] -> k []
+  | e :: es -> 
+     pull_let_pexpr e (fun e -> 
+     pull_let_pexprs es (fun es -> 
+     k (e :: es)))
+  end
+
+let pull_let_action (action : action 'a) (k : action 'a -> expr unit) = 
+  let (Action t an a) = action in
+  let wrap a = Action t an a in
+  match a with
+  | Create e1 e2 sym ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     k (wrap (Create e1 e2 sym))))
+  | CreateReadOnly e1 e2 e3 sym ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     k (wrap (CreateReadOnly e1 e2 e3 sym)))))
+  | Alloc e1 e2 sym ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     k (wrap (Alloc e1 e2 sym))))
+  | Kill b e1 ->
+     pull_let_pexpr e1 (fun e1 ->
+     k (wrap (Kill b e1)))
+  | Store b e1 e2 e3 mo ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     k (wrap (Store b e1 e2 e3 mo)))))
+  | Load e1 e2 mo ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     k (wrap (Load e1 e2 mo))))
+  | RMW e1 e2 e3 e4 mo1 mo2 ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     pull_let_pexpr e4 (fun e4 ->
+     k (wrap (RMW e1 e2 e3 e4 mo1 mo2))))))
+  | Fence mo -> 
+     k (wrap (Fence mo))
+  | CompareExchangeStrong e1 e2 e3 e4 mo1 mo2 ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     pull_let_pexpr e4 (fun e4 ->
+     k (wrap (CompareExchangeStrong e1 e2 e3 e4 mo1 mo2))))))
+  | CompareExchangeWeak e1 e2 e3 e4 mo1 mo2 ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     pull_let_pexpr e4 (fun e4 ->
+     k (wrap (CompareExchangeWeak e1 e2 e3 e4 mo1 mo2))))))
+  | LinuxFence lmo ->
+     k (wrap (LinuxFence lmo))
+  | LinuxLoad e1 e2 lmo ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     k (wrap (LinuxLoad e1 e2 lmo))))
+  | LinuxStore e1 e2 e3 lmo ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     k (wrap (LinuxStore e1 e2 e3 lmo)))))
+  | LinuxRMW e1 e2 e3 lmo ->
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexpr e3 (fun e3 ->
+     k (wrap (LinuxRMW e1 e2 e3 lmo)))))
+  end
+     
+
+let pull_let_paction pa (k : paction 'a -> expr unit) = 
+  let (Paction pol a) = pa in
+  let wrap a = Paction pol a in
+  pull_let_action a (fun a -> 
+  k (wrap a))
+
+let rec normalise_expr (e : expr unit) = 
+
+  let (Expr annot pe) = e in
+  let wrap pe : expr unit = Expr annot pe in
+  
+  match pe with
+  | Epure pexpr -> 
+     pull_let_pexpr pexpr (fun e -> 
+     wrap (Epure e))
+  | Ememop memop pexprs -> 
+     pull_let_pexprs pexprs (fun pexprs -> 
+     wrap (Ememop memop pexprs))
+  | Eaction paction ->
+     pull_let_paction paction (fun paction ->
+     wrap (Eaction paction))
+  | Ecase pexpr patterns ->
+     pull_let_pexpr pexpr (fun pexpr ->
+     let patterns = 
+       List.map (fun (pat,expr) -> (pat, normalise_expr expr)) patterns in
+     wrap (Ecase pexpr patterns))
+  | Elet pat e1 e2 ->
+     pull_let_pexpr e1 (fun e1 ->
+     let e2 = normalise_expr e2 in
+     wrap (Elet pat e1 e2))
+  | Eif e1 e2 e3 ->
+     pull_let_pexpr e1 (fun e1 ->
+     let e2 = normalise_expr e2 in
+     let e3 = normalise_expr e3 in
+     wrap (Eif e1 e2 e2))
+  | Eskip ->
+     wrap (Eskip)
+  | Eccall a e1 e2 es ->        (* have to check *)
+     pull_let_pexpr e1 (fun e1 ->
+     pull_let_pexpr e2 (fun e2 ->
+     pull_let_pexprs es (fun es ->
+     wrap (Eccall a e1 e2 es))))
+  | Eproc a name es ->
+     pull_let_pexprs es (fun es ->
+     wrap (Eproc a name es))
+  | Eunseq es ->                (* have to check *)
+     let es = List.map normalise_expr es in
+     wrap (Eunseq es)
+  | Ewseq pat e1 e2 ->          (* have to check *)
+     let e1 = normalise_expr e1 in
+     let e2 = normalise_expr e2 in
+     wrap (Ewseq pat e1 e2)
+  | Esseq pat e1 e2 ->          (* have to check *)
+     let e1 = normalise_expr e1 in
+     let e2 = normalise_expr e2 in
+     wrap (Esseq pat e1 e2)
+  | Easeq b action paction ->   (* have to check *)
+     pull_let_action action (fun action ->
+     pull_let_paction paction (fun paction ->
+     wrap (Easeq b action paction)))
+  | Eindet n e ->               (* have to check *)
+     let e = normalise_expr e in
+     wrap (Eindet n e)
+  | Ebound n e ->               (* have to check *)
+     let e = normalise_expr e in
+     wrap (Ebound n e)
+  | End es ->                   (* have to check *)
+     let es = List.map normalise_expr es in
+     wrap (End es)
+  | Esave b syms_typs_pes e ->  (* have to check *)
+     let (syms,typs_pes) = List.unzip syms_typs_pes in
+     let (typs,pes) = List.unzip typs_pes in
+     pull_let_pexprs pes (fun pes ->
+     let typs_pes = List.zip typs pes in
+     let syms_typs_pes = List.zip syms typs_pes in
+     let e = normalise_expr e in
+     wrap (Esave b syms_typs_pes e))
+  | Erun a sym pes ->
+     pull_let_pexprs pes (fun pes ->
+     wrap (Erun a sym pes))
+  | Epar es -> 
+     let es = List.map normalise_expr es in
+     wrap (Epar es)
+  | Ewait tid ->
+     wrap (Ewait tid)
+  end
+
+
+let normalise_fun d = 
+  match d with
+  | Fun rt args body -> 
+     Fun rt args (normalise_pexpr body)
+  | Proc l rt args body -> 
+     Proc l rt args (normalise_expr body)
+  | ProcDecl _ _ _ -> d
+  | BuiltinDecl _ _ _ -> d
+  end
+
+
+let normalise_funs fns = 
+  Map.map normalise_fun fns
+
+let normalise file = 
+  <| file with funs = normalise_funs file.funs |>
+
