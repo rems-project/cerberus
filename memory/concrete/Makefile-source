@@ -33,6 +33,7 @@ SOURCE_core=\
   core.lem \
   errors.lem \
   core_aux.lem \
+  core_anormalise.lem \
   core_linking.lem
 
 SOURCE_core_typing=\
