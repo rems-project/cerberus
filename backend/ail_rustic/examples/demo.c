@@ -5,12 +5,13 @@ struct s {
 };
 
 //[[rc::function_lifetime("f")]]
-[[rc::fun_spec("(p : ptr[read,nonnull,init](struct s[write]) -> @")]]
+[[rc::fun_spec("(p : ptr[read](struct s[write]) -|): scalar")]]
 void f1(struct s * p) { // rc::nonnull
   p->f1 = 1;
 }
 
 [[rc::should_not_typecheck]]
+[[rc::fun_spec("(p : ptr[read](struct s[read]) -|): scalar")]]
 void f2(struct s [[rc::read("f")]] * p [[rc::write("a")]]) {
   p->f1 = 1;
 }
@@ -29,6 +30,7 @@ int f6(void) {
   // s0 now has field f1 initialised
   g(&s0);
 }
+*/
 
 struct ll_node {
   int f;
@@ -36,15 +38,17 @@ struct ll_node {
 };
 
 [[rc::function_lifetime("f")]]
-void f2(struct ll_node * x [[rc::read("f")]]) {
+[[rc::fun_spec("(x : ptr[read](struct ll_node[read]) -|): scalar")]]
+void f3(struct ll_node * x [[rc::read("f")]]) {
   if (x) [[rc::block_lifetime("b")]] {
      // now b <= f
     int y;
     y = x->f;
-    f2(x->next); // this uses b for the f argument
+    f3(x->next); // this uses b for the f argument
   }
 }
 
+/*
 // TODO: actual mutex
 struct mutex {
   _Atomic(int) taken;
@@ -115,11 +119,11 @@ void f9(int [[rc::read]] * x [[rc::nonnull]]) {
 
 struct mpool_entry {
   struct mpool_entry * next;
-}
+};
 
 struct mpool {
   struct mpool_entry * entries;
-}
+};
 
 void mpool_init(struct mpool * p) {
 
