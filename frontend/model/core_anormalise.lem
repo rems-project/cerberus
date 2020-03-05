@@ -30,6 +30,7 @@ let atomic_pexpr (Pexpr _ _ e) =
   | _ -> false
   end
 
+(* Here we depend on bty being of type core_base_type *)
 let var_pat sym annots bty = 
   Pattern annots (CaseBase (Just sym, bty))
 let var_pexpr sym annots bty = 
@@ -281,7 +282,7 @@ let rec normalise_expr (e : expr unit) =
      pull_let_pexpr e1 (fun e1 ->
      let e2 = normalise_expr e2 in
      let e3 = normalise_expr e3 in
-     wrap (Eif e1 e2 e2))
+     wrap (Eif e1 e2 e3))
   | Eskip ->
      wrap (Eskip)
   | Eccall a e1 e2 es ->        (* have to check *)
@@ -337,10 +338,8 @@ let rec normalise_expr (e : expr unit) =
 
 let normalise_fun d = 
   match d with
-  | Fun rt args body -> 
-     Fun rt args (normalise_pexpr body)
-  | Proc l rt args body -> 
-     Proc l rt args (normalise_expr body)
+  | Fun rt args body -> Fun rt args (normalise_pexpr body)
+  | Proc l rt args body -> Proc l rt args (normalise_expr body)
   | ProcDecl _ _ _ -> d
   | BuiltinDecl _ _ _ -> d
   end
