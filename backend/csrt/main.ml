@@ -39,9 +39,9 @@ let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
 
 let conf cpp_str = {
     debug_level = 0
-  ; pprints = [Core]
-  ; astprints = [Core]
-  ; ppflags = [FOut]
+  ; pprints = []
+  ; astprints = []
+  ; ppflags = []
   ; typecheck_core = true
   ; rewrite_core = true
   ; sequentialise_core = true
@@ -54,7 +54,8 @@ let frontend conf filename =
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
   c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
-  core_passes (conf,io) ~filename core_file
+  typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
+  return typed_core_file
 
 
 

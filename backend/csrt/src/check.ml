@@ -525,9 +525,16 @@ let pp_fun_map_decl f =
   let pp = Pp_core.All.pp_funinfo_with_attributes f in
   print_string (Pp_utils.to_plain_string pp)
 
-let check (core_file : unit Core.file) =
+let print_core_file core_file = 
+  let pp = Pp_core.Basic.pp_file core_file in
+  print_endline (Pp_utils.to_plain_pretty_string pp)
+
+let check (core_file : unit Core.typed_file) =
+  let core_file = Core_anormalise.normalise core_file in
   let () = Tags.set_tagDefs core_file.tagDefs in
   let () = pp_fun_map_decl core_file.funinfo in
+  let () = print_core_file core_file in
+
   (* test_parse (); *)
   test_value_infer ()
 
