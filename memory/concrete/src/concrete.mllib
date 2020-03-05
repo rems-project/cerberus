@@ -70,6 +70,7 @@ Core_sequentialise
 Core_indet
 Core_rewrite
 Core_unstruct
+Core_anormalise
 
 Core_eval
 Core_run
