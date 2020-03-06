@@ -525,16 +525,26 @@ let pp_fun_map_decl f =
   let pp = Pp_core.All.pp_funinfo_with_attributes f in
   print_string (Pp_utils.to_plain_string pp)
 
-let print_core_file core_file = 
+(* (\* from https://ocaml.org/learn/tutorials/file_manipulation.html *\)
+ * let write_file file string =
+ *   let oc = open_out file in
+ *   fprintf oc "%s\n" string;
+ *   close_out oc *)
+
+
+let print_core_file core_file filename = 
   let pp = Pp_core.Basic.pp_file core_file in
-  print_endline (Pp_utils.to_plain_pretty_string pp)
+  let () = Pipeline.run_pp (Some (filename,"core")) pp in
+  ();;
+  (* print_endline (Pp_utils.to_plain_pretty_string pp) *)
 
 let check (core_file : unit Core.typed_file) =
-  let core_file = Core_anormalise.normalise core_file in
-  let () = Tags.set_tagDefs core_file.tagDefs in
-  let () = pp_fun_map_decl core_file.funinfo in
-  let () = print_core_file core_file in
-
+  let normalised_core_file = Core_anormalise.normalise_file core_file in
+  print_core_file core_file "out1";
+  Tags.set_tagDefs core_file.tagDefs;
+  pp_fun_map_decl core_file.funinfo;
+  print_core_file normalised_core_file "out2";
+  let _mu_file = Mucore.core_to_mu__file normalised_core_file in
   (* test_parse (); *)
-  test_value_infer ()
+  test_value_infer ();
 

@@ -31,6 +31,7 @@ SOURCE_core_ctype=\
 
 SOURCE_core=\
   core.lem \
+  mucore.lem \
   errors.lem \
   core_aux.lem \
   core_anormalise.lem \

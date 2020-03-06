@@ -71,6 +71,7 @@ Core_indet
 Core_rewrite
 Core_unstruct
 Core_anormalise
+Mucore
 
 Core_eval
 Core_run
