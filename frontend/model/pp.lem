@@ -48,7 +48,8 @@ val stringFromCore_ctype:  Ctype.ctype -> string
 val stringFromCore_core_base_type:  Core.core_base_type -> string
 val stringFromCore_value:  Core.value -> string
 val stringFromCore_pexpr:  forall 'ty. Core.generic_pexpr 'ty Symbol.sym -> string
-val stringFromCore_expr:   forall 'a. Core.expr 'a -> string
+val stringFromCore_action: forall 'ty. Core.generic_action_ 'ty Symbol.sym -> string
+val stringFromCore_expr:   forall 'a 'ty. Core.generic_expr 'a 'ty Symbol.sym -> string
 val stringFromCore_params: forall 'a. list (Symbol.sym * Core.core_base_type) -> string
 val stringFromCore_file:   forall 'a. Core.file 'a -> string
 val stringFromCore_stack:  forall 'a. Core.stack 'a -> string
@@ -57,6 +58,7 @@ declare ocaml target_rep function stringFromCore_ctype  = `String_core_ctype.str
 declare ocaml target_rep function stringFromCore_core_base_type  = `String_core.string_of_core_base_type`
 declare ocaml target_rep function stringFromCore_value  = `String_core.string_of_value`
 declare ocaml target_rep function stringFromCore_pexpr  = `String_core.string_of_pexpr`
+declare ocaml target_rep function stringFromCore_action  = `String_core.string_of_action`
 declare ocaml target_rep function stringFromCore_expr   = `String_core.string_of_expr`
 declare ocaml target_rep function stringFromCore_params = `String_core.string_of_params`
 declare ocaml target_rep function stringFromCore_file   = `String_core.string_of_file`
