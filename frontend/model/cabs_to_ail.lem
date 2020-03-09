@@ -100,7 +100,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
   match cty with
     | Ctype.Void ->
         error "elemPathFromCtype_aux3, Void"
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ ->
         error "elemPathFromCtype_aux3, Function"
     | Ctype.Basic _ ->
         (path_prefix, outer_path, outer_ty) :: acc
@@ -375,7 +375,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         cty
     | Ctype.Array elem_ty _ ->
         innerCtype tagDefs elem_ty
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ ->
         error "innerCtype: Function"
     | Ctype.Pointer _ _ ->
         cty
@@ -952,7 +952,7 @@ val desugar_alignment_specifier:
   alignment_specifier -> E.desugM unit
 
 val desugar_parameter_type_list:
-  fundef -> parameter_type_list -> E.desugM (list (maybe Symbol.identifier * (Ctype.qualifiers * Ctype.ctype * bool)) * bool)
+  fundef -> parameter_type_list -> E.desugM (list (maybe Symbol.identifier * (Ctype.qualifiers * Ctype.ctype * Ctype.is_register)) * bool)
 
 val desugar_type_name:
   type_name -> E.desugM (Ctype.qualifiers * Ctype.ctype)
@@ -1839,7 +1839,8 @@ and desugar_direct_abstract_declarator under_array = function
       E.return (
         fun base_qs base_ty ->
           mk_qs_ctype Ctype.no_qualifiers
-            (Ctype.Ctype [] (Ctype.Function false (base_qs, base_ty) params isVariadic))
+            (Ctype.Ctype [] (Ctype.Function <| Ctype.has_proto= false; Ctype.return= (base_qs, base_ty);
+                                               Ctype.params= params; Ctype.is_variadic= isVariadic |>))
       )
 end
 
@@ -1884,7 +1885,8 @@ and desugar_direct_declarator fundef under_array = function
       E.return ( ident
                , fun base_qs base_ty ->
                    mk_qs_ctype Ctype.no_qualifiers
-                     (Ctype.Ctype [Annot.Aloc (Loc.locOf ddecltor)] (Ctype.Function false (base_qs, base_ty) params isVariadic)) )
+                     (Ctype.Ctype [Annot.Aloc (Loc.locOf ddecltor)] (Ctype.Function <| Ctype.has_proto= false; Ctype.return= (base_qs, base_ty);
+                                                                                       Ctype.params= params; Ctype.is_variadic= isVariadic |>)) )
 end
 
 
@@ -1903,7 +1905,7 @@ and desugar_parameter_type_list fundef (Params param_decls isVariadic) =
     | [(Nothing, (qs, Ctype.Ctype annots Ctype.Void, isRegister))] ->
         (* NOTE: the (illegal) case where there is a identifier is dealt with
            inside 'desugar_parameter_declaration' *)
-        if not (AilTypesAux.is_unqualified qs) || isRegister then
+        if not (AilTypesAux.is_unqualified qs) || (isRegister = Ctype.IsRegister) then
           (* NOTE: this is undefined according to annex J.2, though
              I don't undestand why when reading the text (at §6.7.6.3) *)
           E.undef (Annot.get_loc_ annots) Undefined.UB078_modified_void_parameter
@@ -1961,7 +1963,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
                         E.undef (Loc.locOf decltor) Undefined.UB059_incomplete_no_linkage_identifier
                   end
               | false ->
-                  let isRegister = List.elem SC_register specifs.storage_classes in
+                  let isRegister = if List.elem SC_register specifs.storage_classes then Ctype.IsRegister else Ctype.NotRegister in
                   let scs = specifs.storage_classes in
                   E.register_ordinary_identifier ident (E.OK_object true) scs >>= fun (link, sym) ->
                   (* TODO: check this registration *)
@@ -1986,9 +1988,10 @@ and desugar_parameter_declaration is_first fundef param_decl =
           let (_qs, _ty) =
             mk_qs_ctype (Ctype.combine_qualifiers specs_qs tquals_qs) base_ty in
           let (qs, ty) = AilTypesAux.adjust _qs _ty in
+          let isRegister = if List.elem SC_register specifs.storage_classes then Ctype.IsRegister else Ctype.NotRegister in
           let ret = (Nothing, ( qs
                               , if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty
-                              , List.elem SC_register specifs.storage_classes )) in
+                              , isRegister )) in
           match fundef with
             | IsFunDef ->
                 if not (is_first && AilTypesAux.is_void ty) then
@@ -3547,14 +3550,13 @@ let desugar_declaration_base specifs idecltors =
               E.return acc
               
             else match ty with
-              | Ctype.Function _ return_qs_ty params is_variadic ->
+              | Ctype.Function funty ->
                   check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     E.OK_function specifs.storage_classes >>= fun (_, sym) ->
                   E.register_function_declaration (Loc.locOf ident) sym true (
-                    return_qs_ty,
-                    Just params, (* TODO: KKKK !!!! *)
-                    is_variadic,
+                    funty.Ctype.return,
+                    if List.null funty.Ctype.params then Nothing else Just (funty.Ctype.params, funty.Ctype.is_variadic),
                     List.elem FS_inline   specifs.function_specifiers,
                     List.elem FS_Noreturn specifs.function_specifiers
                   ) >>
@@ -3586,13 +3588,14 @@ let desugar_declaration_base specifs idecltors =
                     extern_idmap= Map.empty;
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
+                  let isRegister = if List.elem SC_register specifs.storage_classes then Ctype.IsRegister else Ctype.NotRegister in
                   match link with
                     | Linkage_external ->
                         E.register_external_object_declaration sym
-                          (false(*TODO:check*), ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                          (false(*TODO:check*), ident_loc, dur, isRegister, qs, cty)
                     | _ ->
                         E.register_internal_object_declaration sym
-                          (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                          (ident_loc, dur, isRegister, qs, cty)
                   end >>
                   mk_desug_init () >>= function
                     | Just (ty', d_e) ->
@@ -3674,15 +3677,16 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
             E.mapM self ss
           ) >>= fun (bs_, d_ss) ->
           
-          let bs = List.filter (fun (_, ((_, dur, _), _, _)) ->
-            match dur with
+          let bs = List.filter (fun (_, info) ->
+            match info.A.bs_duration with
               | Static ->
                   false
               | Thread ->
                   false
               | _ ->
                   true
-            end) bs_ in
+            end
+          ) bs_ in
           
           (* this is removing unnecessary blocks introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
@@ -3776,6 +3780,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
           E.fresh_block_scope >>= fun scope ->
           E.under_scope scope (
             desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty) ->
+            let isRegister = if List.elem SC_register specifs.storage_classes then Ctype.IsRegister else Ctype.NotRegister in
             let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun (InitDecl loc _ _ as init) ->
@@ -3801,7 +3806,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                       E.constraint_violation loc IllegalStorageClassIterationStatement
                     
                     else match ty with
-                      | Ctype.Ctype _ (Ctype.Function _ _ _ _) ->
+                      | Ctype.Ctype _ (Ctype.Function _) ->
                           E.constraint_violation loc IllegalStorageClassIterationStatement
                       | _ ->
                           mk_desug_init () >>= function
@@ -3816,19 +3821,27 @@ let rec desugar_statement_aux ctx (CabsStatement loc stmt_) =
                                   ) in
                                   (* TODO: tentative *)
                                   E.register_internal_object_declaration sym
-                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty')
+                                    (ident_loc, dur, isRegister, qs, ty')
                                 else
                                   E.register_internal_object_declaration sym
-                                    (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty)
+                                    (ident_loc, dur, isRegister, qs, ty)
                                 end >>= fun () ->
                                 E.return ( (sym, d_e) :: acc1
-                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, <| A.bs_loc= ident_loc;
+                                                    A.bs_duration= dur;
+                                                    A.bs_isRegister= isRegister;
+                                                    A.bs_qs= qs;
+                                                    A.bs_ty= ty |>) :: acc2 )
                             | Nothing ->
                                 let dur = determinate_storage_duration link specifs.storage_classes in
                                 E.register_internal_object_declaration sym
-                                  (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>= fun () ->
+                                  (ident_loc, dur, isRegister, qs, ty) >>= fun () ->
                                 E.return ( acc1
-                                         , (sym, ((ident_loc, dur, List.elem SC_register specifs.storage_classes), qs, ty)) :: acc2 )
+                                         , (sym, <| A.bs_loc= ident_loc;
+                                                    A.bs_duration= dur;
+                                                    A.bs_isRegister= isRegister;
+                                                    A.bs_qs= qs;
+                                                    A.bs_ty= ty |>) :: acc2 )
                           end
                     end
               end) ([], []) (List.reverse xs) >>= fun (sym_d_es, bindings) ->
@@ -4025,14 +4038,13 @@ let rec register_labels (CabsStatement _ stmt_) =
 
 
 (* TODO: check + annotate with STD *)
-val desugar_and_register_function_definition: function_definition -> E.desugM unit
+val desugar_and_register_function_definition: cabs_function_definition -> E.desugM unit
 let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
   else
     (* NOTE: §6.9.1#5 is enforces inside the following call to
        'desugar_declarator' (see 'desugar_direct_declarator') *)
-
     E.fresh_block_scope >>= fun funblock_scope ->
     E.with_scope2 funblock_scope begin
       desugar_declarator IsFunDef decltor
@@ -4042,7 +4054,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
        **specified by the declarator portion of the function definition**, which
        here means `ddecltor' without `specifs' *)
     match mk_qs_ctype Ctype.no_qualifiers (Ctype.Ctype [] Ctype.Void) with
-      | (_, Ctype.Ctype _ (Ctype.Function _ _ _ _)) ->
+      | (_, Ctype.Ctype _ (Ctype.Function _)) ->
           E.return ()
       | _ ->
           (* STD §6.9.1#2 *)
@@ -4067,7 +4079,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
         
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         match ty with
-          | Ctype.Ctype _ (Ctype.Function _(*has_proto*) (return_qs, return_ty) params isVariadic) ->
+          | Ctype.Ctype _ (Ctype.Function funty) ->
               (* NOTE: the constraint in §6.9.1#3 is enforced later in the Ail
                  typechecker *)
               let () = Debug.print_debug 4 [] (fun () ->
@@ -4080,14 +4092,13 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
               end >>
               
               E.register_function_declaration (Loc.locOf fun_ident) fun_sym false (
-                (return_qs, return_ty),
-                Just params, (* TODO: KKKK !!!! *)
-                isVariadic,
+                funty.Ctype.return,
+                if List.null funty.Ctype.params then Nothing else Just (funty.Ctype.params, funty.Ctype.is_variadic),
                 List.elem FS_inline   specifs.function_specifiers,
                 List.elem FS_Noreturn specifs.function_specifiers
                ) >>
               
-              E.set_current_return_type return_ty >>
+              E.set_current_return_type (snd funty.Ctype.return) >>
               desugar_statement stmt >>= fun d_stmt ->
               E.return (Loc.locOf fun_ident, fun_sym, d_stmt)
         | _ ->
@@ -4099,7 +4110,10 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
          function identifier, so add it here *)
-      (Loc.with_cursor_from fundef_loc loc, attrs, List.map fst bindings, d_stmt)
+      <| A.fdef_loc= Loc.with_cursor_from fundef_loc loc;
+         A.fdef_attrs= attrs;
+         A.fdef_params= List.map fst bindings;
+         A.fdef_body= d_stmt |>
     end
 
 
@@ -4152,6 +4166,7 @@ let desugar_and_register_external_declaration edecl =
     | EDecl_decl (Declaration_base specifs idecltors) ->
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
+        let isRegister = if List.elem SC_register specifs.storage_classes then Ctype.IsRegister else Ctype.NotRegister in
         let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
         (* TODO: why the two maps? *)
         (* NOTE: this is (at least) needed to get the scope of typedefs right
@@ -4169,18 +4184,17 @@ let desugar_and_register_external_declaration edecl =
           | Just (ident_loc, link, sym, isTentative, (qs, ty), mk_desug_init) ->
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
-                | Ctype.Ctype _ (Ctype.Function _ return_ty params is_variadic) ->
+                | Ctype.Ctype _ (Ctype.Function funty) ->
                     E.register_function_declaration ident_loc sym true (
-                      return_ty,
-                      Just params, (* TODO: KKKK !!!! *)
-                      is_variadic,
+                      funty.Ctype.return,
+                      if List.null funty.Ctype.params then Nothing else Just (funty.Ctype.params, funty.Ctype.is_variadic),
                       List.elem FS_inline   specifs.function_specifiers,
                       List.elem FS_Noreturn specifs.function_specifiers
                     )
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
-                      (isTentative, ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                      (isTentative, ident_loc, dur, isRegister, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->

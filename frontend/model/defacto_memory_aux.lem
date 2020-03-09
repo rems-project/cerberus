@@ -318,7 +318,7 @@ let rec simplify_integer_value_base ival_ =
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Array Nothing"
             | Array elem_ty (Just n) ->
                 simplify_integer_value_base (IVop IntMul [IVsizeof elem_ty; IVconcrete n])
-            | Function _ _ _ _ ->
+            | Function _ ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IVsizeof Function"
             | Pointer _ ref_ty ->
@@ -358,7 +358,7 @@ let rec simplify_integer_value_base ival_ =
                 end
             | Array elem_ty _ ->
                 simplify_integer_value_base (IValignof elem_ty)
-            | Function _ _ _ _ ->
+            | Function _ ->
                 (* Ail type error *)
                 error "Defacto_memory_aux2.simplify_integer_value_base, IValignof Function"
             | Pointer _ ref_ty ->

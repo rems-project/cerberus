@@ -38,18 +38,19 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ Pp_ail.pp_basicType bty
     | Array (elem_ty, n_opt) ->
         !^ "array" ^^^ P.optional Pp_ail.pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
-    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+    | Function funty ->
+        let (ret_qs, ret_ty) = funty.return in
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
-        !^ (if is_variadic then "variadic function" else "function") ^^^
-        (if has_proto then !^ "with proto " else P.empty) ^^
+        !^ (if funty.is_variadic then "variadic function" else "function") ^^^
+        (if funty.has_proto then !^ "with proto " else P.empty) ^^
         P.parens (
           comma_list (fun (param_qs, param_ty, isRegister) ->
-            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+            (fun z -> match isRegister with IsRegister -> !^ "register" ^^^ z | NotRegister -> z)
               (pp_ctype_human param_qs param_ty)
-          ) params
+          ) funty.params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
     | Pointer (ref_qs, ref_ty) ->
@@ -87,19 +88,19 @@ let pp_genType = function
  | GenBasic gbty ->
      pp_genBasicType_raw gbty
   | GenArray (ty, None) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "None")
+     !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "None")
   | GenArray (ty, Some n) ->
-      !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (Pp_ail.pp_integer n))
-
-     
- | GenFunction (has_proto, ty, params, is_variadic) ->
-      !^ "GenFunction" ^^ P.brackets (
-        comma_list (fun (qs, ty, isRegister) ->
-          P.parens (pp_ctype_human qs ty ^^
-                    P.comma ^^^ !^ (if isRegister then "true" else "false"))
-        ) params ^^ P.comma ^^ !^ (if is_variadic then "true" else "false")
-       )
-
+     !^ "GenArray" ^^ P.brackets (pp_ctype_human no_qualifiers ty ^^ P.comma ^^^ !^ "Some" ^^ P.brackets (Pp_ail.pp_integer n))
+ | GenFunction funty ->
+     let (ret_qs, ret_ty) = funty.return in
+     !^ "GenFunction" ^^ P.brackets (
+       !^ (if funty.has_proto then "has_proto" else "no_proto") ^^ P.comma ^^^
+       pp_ctype_human ret_qs ret_ty ^^ P.comma ^^^
+       comma_list (fun (qs, ty, isRegister) ->
+         P.parens (pp_ctype_human qs ty ^^
+                   P.comma ^^^ Pp_ail_raw.pp_is_register_raw isRegister)
+       ) funty.params ^^ P.comma ^^ !^ (if funty.is_variadic then "true" else "false")
+     )
  | GenPointer (ref_qs, ref_ty) ->
      !^ "GenPointer" ^^ P.brackets (pp_ctype_human ref_qs ref_ty)
   | GenStruct sym ->
@@ -352,11 +353,11 @@ let dtree_of_expression pp_annot expr =
     end in
   self expr
 
-let dtree_of_binding (i, ((_, sd, is_reg), qs, ty)) =
-  Dleaf (Pp_ail.pp_id i
-         ^^^ Pp_ail.pp_storageDuration sd
-         ^^^ pp_cond is_reg (pp_type_keyword "register")
-           (P.squotes (pp_ctype qs ty)))
+let dtree_of_binding (sym, info) =
+  Dleaf (Pp_ail.pp_id sym
+         ^^^ Pp_ail.pp_storageDuration info.bs_duration
+         ^^^ (fun doc -> match info.bs_isRegister with IsRegister -> pp_type_keyword "register" ^^^ doc | NotRegister -> doc)
+               (P.squotes (pp_ctype info.bs_qs info.bs_ty)))
 
 let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
@@ -417,11 +418,11 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
 
-let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =
+let dtree_of_function_definition pp_annot (fun_sym, xs) =
   let param_dtrees =
     [] in
-  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ Location_ocaml.pp_location loc ^^^ Pp_ail.pp_id fun_sym
-        , add_dtree_of_attributes attrs (param_dtrees @ [dtree_of_statement pp_annot stmt]) )
+  Dnode ( pp_decl_ctor "FunctionDecl" ^^^ Location_ocaml.pp_location xs.fdef_loc ^^^ Pp_ail.pp_id fun_sym
+        , add_dtree_of_attributes xs.fdef_attrs (param_dtrees @ [dtree_of_statement pp_annot xs.fdef_body]) )
 
 let pp_storageDuration = function
   | Static    -> pp_type_keyword "static"
@@ -432,24 +433,27 @@ let pp_storageDuration = function
 let dtree_of_declaration (i, (_, decl)) =
   let pp_storage (sd, isRegister) =
     pp_storageDuration sd ^^
-    (if isRegister then P.space ^^ pp_type_keyword "register" else P.empty)
+    (match isRegister with IsRegister -> P.space ^^ pp_type_keyword "register" | NotRegister -> P.empty)
   in
   match decl with
   | Decl_object (msd, qs, cty) ->
-    Dleaf (pp_decl_ctor "Decl_object" ^^^
-           Pp_ail.pp_id_obj i  ^^^
-           P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
-  | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
-    Dleaf (pp_decl_ctor "Decl_function" ^^^
-           Pp_ail.pp_id_func i ^^^
-           Colour.pp_ansi_format [Green] begin
-             P.squotes (
-               (pp_cond is_inline !^"inline"
-               (pp_cond is_noreturn !^"_Noreturn"
-               (pp_ctype_human empty_qs
-                  (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
-             )
-           end)
+      Dleaf (pp_decl_ctor "Decl_object" ^^^
+             Pp_ail.pp_id_obj i  ^^^
+             P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
+  | Decl_function xs ->
+      Dleaf (pp_decl_ctor "Decl_function" ^^^
+             Pp_ail.pp_id_func i ^^^
+             Colour.pp_ansi_format [Green] begin
+               P.squotes (
+                 (pp_cond xs.fdecl_is_inline !^"inline"
+                 (pp_cond xs.fdecl_is_Noreturn !^"_Noreturn"
+                 (pp_ctype_human empty_qs
+                    (Ctype ([], Function { has_proto= xs.fdecl_has_proto;
+                                            return= xs.fdecl_return;
+                                            params= xs.fdecl_params;
+                                            is_variadic= xs.fdecl_is_variadic })))))
+               )
+             end)
 
 
 let dtree_of_tag_definition (i, tag) =
@@ -500,7 +504,7 @@ let pp_annot gtc =
           ret in
         pp_ansi_format [Green] qs_ty_doc ^^^
         !^ (ansi_format [Cyan] "lvalue") ^^
-        (if isRegister then P.space ^^ !^ "register" else P.empty)
+        (match isRegister with IsRegister -> P.space ^^ !^ "register" | NotRegister -> P.empty)
     | GenRValueType gty ->
         pp_ansi_format [Green] (
           (* TODO: do the colour turn off in pp_ansi_format *)

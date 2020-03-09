@@ -249,20 +249,22 @@ let pp_ctype_aux pp_ident_opt qs (Ctype (_, ty) as cty) =
           fun k -> pp_qualifiers qs ^^ pp_basicType bty ^^ k
       | Array (elem_ty, n_opt) ->
           fun k -> aux qs elem_ty k ^^ P.brackets (P.optional pp_integer n_opt)
-      | Function (_, (ret_qs, ret_ty), params, isVariadic) ->
+      | Function funty ->
+          let (ret_qs, ret_ty) = funty.return in
           fun k -> aux ret_qs ret_ty P.empty ^^^
                    P.parens (
-                     (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
-                     (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                     (if List.length funty.params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) funty.params) ^^
+                     (if funty.is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                    ) ^^ k
       | Pointer (ref_qs, ref_ty) ->
           fun k ->
             begin match ref_ty with
-              | Ctype (_, Function (_, (ret_qs, ret_ty), params, isVariadic)) ->
+              | Ctype (_, Function funty) ->
+                  let (ret_qs, ret_ty) = funty.return in
                 aux ret_qs ret_ty P.empty ^^^ P.parens (!^"*") ^^^
                 P.parens (
-                  (if List.length params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) params) ^^
-                  (if isVariadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
+                  (if List.length funty.params = 0 then !^"void" else comma_list (fun (qs, ty, _) -> aux qs ty P.empty) funty.params) ^^
+                  (if funty.is_variadic then P.comma ^^^ P.dot ^^ P.dot ^^ P.dot else P.empty)
                 ) ^^ k
               | _ -> aux ref_qs ref_ty (wrap (P.star ^^ pp_qualifiers qs ^^ k))
             end
@@ -360,17 +362,18 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
     | Array (elem_ty, n_opt) ->
         (* NOTE: here [qs] is that of the element type *)
         !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype_human qs elem_ty
-    | Function (has_proto, (ret_qs, ret_ty), params, is_variadic) ->
+    | Function funty ->
+        let (ret_qs, ret_ty) = funty.return in
         (* TODO: warn if [qs] is not empty, this is an invariant violation *)
         if not (AilTypesAux.is_unqualified qs) then
           print_endline "TODO: warning, found qualifiers in a function type (this is an UB)"; (* TODO: is it really UB? *)
         
-        !^ (if is_variadic then "variadic function" else "function") ^^^
+        !^ (if funty.is_variadic then "variadic function" else "function") ^^^
         P.parens (
           comma_list (fun (param_qs, param_ty, isRegister) ->
-            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+            (fun z -> match isRegister with IsRegister -> pp_type_keyword "register" ^^^ z | NotRegister -> z)
               (pp_ctype_human param_qs param_ty)
-          ) params
+          ) funty.params
         ) ^^^
         !^ "returning" ^^^ pp_ctype_human ret_qs ret_ty
     | Pointer (ref_qs, ref_ty) ->
@@ -645,18 +648,16 @@ let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
         let block =
           P.separate_map
             (P.semi ^^ P.break 1)
-            (fun (id, (dur_reg_opt, qs, ty)) ->
+            (fun (id, info (*dur_reg_opt, qs, ty*)) ->
               if !Debug_ocaml.debug_level > 5 then
                 (* printing the types in a human readable format *)
-                P.parens ( P.empty
-                             (* TODO
-                  P.optional (fun (dur, isRegister) ->
-                    (fun z -> if isRegister then pp_keyword "register" ^^^ z else z)
-                      (pp_storageDuration dur)
-                  ) dur_reg_opt ^^^ pp_ctype_human qs ty
-                ) ^^^ pp_id_obj id *) )
+                P.parens (
+                  (fun z -> match info.bs_isRegister with IsRegister -> pp_keyword "register" ^^^ z | NotRegister -> z)
+                    (pp_storageDuration info.bs_duration) ^^^
+                    pp_ctype_human info.bs_qs info.bs_ty
+                ) ^^^ pp_id_obj id
               else
-                pp_ctype qs ty ^^^ pp_id_obj id
+                pp_ctype info.bs_qs info.bs_ty ^^^ pp_id_obj id
                ) bindings ^^ P.semi ^^ P.break 1 ^^
           P.separate_map (P.break 1) pp_statement ss in
         P.lbrace ^^ P.nest 2 (P.break 1 ^^ block) ^/^ P.rbrace
@@ -760,17 +761,24 @@ let pp_program_aux pp_annot (startup, sigm) =
             P.space ^^ P.equals ^^^ pp_expression_aux pp_annot e
           ) (List.assoc_opt sym sigm.object_definitions) ^^ P.semi
       
-      | Decl_function (has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) ->
+      | Decl_function xs -> (*(has_proto, (ret_qs, ret_ty), params, is_variadic, is_inline, is_Noreturn) -> *)
           (* first pprinting in comments, some human-readably declarations *)
           (* TODO: colour hack *)
+          let funty = {
+            has_proto= xs.fdecl_has_proto;
+            return= xs.fdecl_return;
+            params= xs.fdecl_params;
+            is_variadic= xs.fdecl_is_variadic;
+          } in
+          let (ret_qs, ret_ty) = xs.fdecl_return in
           pp_ansi_format [Red] (
             !^ "// declare" ^^^ pp_id sym ^^^
-            (if has_proto then !^ "WITH PROTO " else P.empty) ^^
-            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function (has_proto, (ret_qs, ret_ty), params, is_variadic)))
+            (if xs.fdecl_has_proto then !^ "WITH PROTO " else P.empty) ^^
+            !^ "as" ^^^ pp_ctype_human no_qualifiers (Ctype ([], Function funty))
           ) ^^ P.hardline ^^
           
-          (fun k -> if is_inline   then !^ "inline"    ^^^ k else k) (
-            (fun k -> if is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
+          (fun k -> if xs.fdecl_is_inline   then !^ "inline"    ^^^ k else k) (
+            (fun k -> if xs.fdecl_is_Noreturn then !^ "_Noreturn" ^^^ k else k) (
               begin
                 if !Debug_ocaml.debug_level > 5 then
                   (* printing the types in a human readable format *)
@@ -779,38 +787,38 @@ let pp_program_aux pp_annot (startup, sigm) =
                   pp_ctype_declaration (pp_id_func sym) ret_qs ret_ty
               end ^^
               (match List.assoc_opt sym sigm.function_definitions with
-                | Some (_, _, param_syms, stmt) ->
+                | Some fdef ->
                     P.parens (
                       comma_list (fun (sym, (qs, ty, isRegister)) ->
                         if !Debug_ocaml.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           pp_id_obj sym ^^ P.colon ^^^
                           P.parens (
-                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                            (fun z -> match isRegister with IsRegister -> !^ "register" ^^^ z | NotRegister -> z)
                               (pp_ctype_human qs ty)
                           )
                         else
                           pp_ctype qs ty ^^^ pp_id_obj sym
-                      ) (List.combine param_syms params) ^^
-                      if is_variadic then
+                      ) (List.combine fdef.fdef_params xs.fdecl_params) ^^
+                      if xs.fdecl_is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                       else
                         P.empty
                     ) ^^^
-                    pp_statement_aux pp_annot stmt
+                    pp_statement_aux pp_annot fdef.fdef_body
                 | None ->
                     P.parens (
                       comma_list (fun (qs, ty, isRegister) ->
                         if !Debug_ocaml.debug_level > 5 then
                           (* printing the types in a human readable format *)
                           P.parens (
-                            (fun z -> if isRegister then !^ "register" ^^^ z else z)
+                            (fun z -> match isRegister with IsRegister -> !^ "register" ^^^ z | NotRegister -> z)
                               (pp_ctype_human qs ty)
                           )
                         else
                           pp_ctype qs ty
-                      ) params ^^
-                      if is_variadic then
+                      ) xs.fdecl_params ^^
+                      if xs.fdecl_is_variadic then
                         P.comma ^^^ P.dot ^^ P.dot ^^ P.dot
                       else
                         P.empty
@@ -850,8 +858,9 @@ let pp_genType = function
       pp_genBasicType gbty
   | GenArray (ty, n_opt) ->
       !^ "array" ^^^ P.optional pp_integer n_opt ^^^ !^ "of" ^^^ pp_ctype no_qualifiers ty
-  | GenFunction (_, (qs, ty), params, is_variadic) ->
+  | GenFunction funty ->
       (* TODO: maybe add parameters *)
+      let (qs, ty) = funty.return in
       !^ "function returning" ^^^ pp_ctype qs ty
   | GenPointer (ref_qs, ref_ty) ->
       pp_ctype no_qualifiers (Ctype ([], Pointer (ref_qs, ref_ty)))
@@ -865,7 +874,7 @@ let pp_genType = function
 let pp_genTypeCategory = function
  | GenLValueType (qs, ty, isRegister) ->
      !^ "GenLValueType" ^^ P.brackets (
-       pp_qualifiers qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (if isRegister then "true" else "false")
+       pp_qualifiers qs ^^ P.comma ^^^ pp_ctype_raw ty ^^ P.comma ^^^ !^ (match isRegister with IsRegister -> "IsRegister" | NotRegister -> "NotRegister")
      )
  | GenRValueType gty ->
      !^ "GenRValueType" ^^ P.brackets (pp_genType gty)

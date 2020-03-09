@@ -180,20 +180,26 @@ instance (SetType namespace)
     end
 end
 
-type function_declaration =
-  | FDeclPrototype of
-        Loc.t
-      * (Ctype.qualifiers * Ctype.ctype)
-      * list (Ctype.qualifiers * Ctype.ctype * bool)
-      * bool (* isVariadic *)
-      * bool (* isInline *)
-      * bool (* isNoReturn *)
-  | FDeclEmptyParentheses of
-        Loc.t
-      * (Ctype.qualifiers * Ctype.ctype)
-      * bool (* isVariadic *)
-      * bool (* isInline *)
-      * bool (* isNoReturn *)
+type function_prototype = <|
+  proto_loc: Loc.t;
+  proto_return: Ctype.qualifiers * Ctype.ctype;
+  proto_params: list (Ctype.qualifiers * Ctype.ctype * Ctype.is_register);
+  proto_is_variadic: bool;
+  proto_is_inline: bool;
+  proto_is_Noreturn: bool;
+|>
+
+type function_noparams = <|
+  noparams_loc: Loc.t;
+  noparams_return: Ctype.qualifiers * Ctype.ctype;
+  noparams_is_inline: bool;
+  noparams_is_Noreturn: bool;
+|>
+
+
+type internal_function_declaration =
+  | FDeclPrototype of function_prototype
+  | FDeclNoParams of function_noparams
 
 type registration =
   | Internal of A.ail_identifier * identifier_kind * maybe linkage
@@ -222,17 +228,20 @@ type state = <|
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations: map A.ail_identifier (
+  function_declarations: map A.ail_identifier (Loc.t * internal_function_declaration);
+(*
+(
     (*hasProto*)bool * Loc.t *
     ( (Ctype.qualifiers * Ctype.ctype)                     (* qualifier and return type *)
     * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) (* Nothing if there was no parameter type list,
                                                                 the boolean is the isRegister flag *)
     * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
    );
-  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
-  internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
+*)
+  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * A.storageDuration * Ctype.is_register * Ctype.qualifiers * Ctype.ctype);
+  internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * Ctype.is_register * Ctype.qualifiers * Ctype.ctype);
   
-  function_definitions: map A.ail_identifier (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit);
+  function_definitions: map A.ail_identifier (A.function_definition unit);
   global_object_definitions: map A.ail_identifier global_definition;
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
@@ -382,7 +391,8 @@ let collect_with_scope scope m =
               | Kind_ordinary (OK_object false) ->
                   match Map.lookup sym st.external_object_declarations with
                     | Just (isTentative, loc, dur, isRegister, qs, ty) ->
-                        (sym, ((loc, dur, isRegister), qs, ty)) :: acc
+                        (sym, <| A.bs_loc= loc; A.bs_duration= dur;
+                                 A.bs_isRegister= isRegister; A.bs_qs= qs; A.bs_ty= ty |>) :: acc
                     | Nothing ->
                         match Map.lookup sym st.internal_object_declarations with
                           | Just (_, A.Static, _, _, _) ->
@@ -390,7 +400,8 @@ let collect_with_scope scope m =
                           | Just (_, A.Thread, _, _, _) ->
                               acc
                           | Just (loc, dur, isRegister, qs, ty) ->
-                              (sym, ((loc, dur, isRegister), qs, ty)) :: acc
+                              (sym, <| A.bs_loc= loc; A.bs_duration= dur;
+                                       A.bs_isRegister= isRegister; A.bs_qs= qs; A.bs_ty= ty |>) :: acc
                           | Nothing ->
                               (* TODO: check *)
                               acc
@@ -1266,7 +1277,7 @@ let is_static_object_identifier sym =
   end
 
 
-val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype)
+val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * Ctype.is_register * Ctype.qualifiers * Ctype.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
@@ -1360,14 +1371,13 @@ let register_global_object_definition sym gdef =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.ail_identifier -> (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit) -> desugM unit
+val register_function_definition: A.ail_identifier -> A.function_definition unit -> desugM unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, _, xs, _) = fdef in
-      "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
+      "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show fdef.A.fdef_params
     ) in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
@@ -1387,97 +1397,127 @@ let function_is_defined sym =
   )
 
 
+(* STD §6.7.6.3#15 *)
+let internal_decls_are_compatible_proto_vs_noparams xs ys =
+     (* sentence 1 *)
+     AilTypesAux.are_compatible xs.proto_return ys.noparams_return
+     (* sentence 3 *)
+  && not xs.proto_is_variadic
+  && List.all (fun (_, ty, _) -> ty = AilTypesAux.default_argument_promotion (error "TODO: integerImpl") ty) xs.proto_params
+  
+let internal_decls_are_compatible decl1 decl2 =
+  match (decl1, decl2) with
+    | (FDeclPrototype xs1, FDeclPrototype xs2) ->
+          (* sentence 1 *)
+           AilTypesAux.are_compatible xs1.proto_return xs2.proto_return
+        && begin
+             (* sentence 2 *)
+             if List.length xs1.proto_params = List.length xs2.proto_params then
+               List.all (fun ((_, ty1, isRegister1), (_, ty2, isRegister2)) ->
+                 (* NOTE: sentence 5 of #15 says to check unqualified versions of
+                    the type for compatibility *)
+                 AilTypesAux.are_compatible (Ctype.no_qualifiers, ty1) (Ctype.no_qualifiers, ty2)
+               ) (List.zip xs1.proto_params xs2.proto_params)
+             else
+              false
+           end
+        && xs1.proto_is_variadic <-> xs2.proto_is_variadic
+    | (FDeclPrototype xs1, FDeclNoParams xs2) ->
+        internal_decls_are_compatible_proto_vs_noparams xs1 xs2
+    | (FDeclNoParams xs1, FDeclPrototype xs2) ->
+        internal_decls_are_compatible_proto_vs_noparams xs2 xs1
+    | (FDeclNoParams xs1, FDeclNoParams xs2) ->
+        (* sentence 1 *)
+        AilTypesAux.are_compatible xs1.noparams_return xs2.noparams_return
+  end
+
+
+let compose_internal_decls decl1 decl2 =
+  match (decl1, decl2) with
+    | (FDeclPrototype xs1, FDeclPrototype xs2) ->
+        if    (* sentence 1 *)
+              AilTypesAux.are_compatible xs1.proto_return xs2.proto_return
+           && begin
+                (* sentence 2 *)
+                if List.length xs1.proto_params = List.length xs2.proto_params then
+                  List.all (fun ((_, ty1, isRegister1), (_, ty2, isRegister2)) ->
+                    (* NOTE: sentence 5 of #15 says to check unqualified versions of
+                       the type for compatibility *)
+                    AilTypesAux.are_compatible (Ctype.no_qualifiers, ty1) (Ctype.no_qualifiers, ty2)
+                  ) (List.zip xs1.proto_params xs2.proto_params)
+                else
+                  false
+              end
+           && xs1.proto_is_variadic <-> xs2.proto_is_variadic
+        then
+          
+        else
+          Nothing
+    | (FDeclPrototype xs1, FDeclNoParams xs2) ->
+        internal_decls_are_compatible_proto_vs_noparams xs1 xs2
+    | (FDeclNoParams xs1, FDeclPrototype xs2) ->
+        internal_decls_are_compatible_proto_vs_noparams xs2 xs1
+    | (FDeclNoParams xs1, FDeclNoParams xs2) ->
+        (* sentence 1 *)
+        AilTypesAux.are_compatible xs1.noparams_return xs2.noparams_return
+  end
+
 val register_function_declaration:
-  Loc.t -> A.ail_identifier -> bool -> ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool) -> desugM unit
-let register_function_declaration loc sym is_proto decl =
-  (* DEBUG *)
-  let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
-    let params' = Maybe.maybe [] id params_opt in
-    let fun_ty = Ctype.Ctype [Annot.Aloc loc] (Ctype.Function is_proto (ret_qs, ret_ty) params' isVariadic) in
-    Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^
-    (if Maybe.isNothing params_opt then " NO_PARAMS" else "")
-  in
-(*
-    Pp.stringFromAil_ctype ret_qs ret_ty ^ "(" ^ stringFromList (
-      fun (qs, ty, isRegister) ->
-        (if isRegister then "register " else "") ^ Pp.stringFromAil_ctype qs ty
-    ) params ^ ")" in
-*)
+  Loc.t -> A.ail_identifier -> bool ->
+  ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * Ctype.is_register) * bool) * bool * bool) ->
+  desugM unit
+let register_function_declaration loc sym is_proto (ret_qs_ty, params_isVariadic_opt, isInline, isNoreturn) =
+  let decl =
+    match params_isVariadic_opt with
+      | Nothing ->
+          FDeclNoParams <| noparams_loc= loc;
+                           noparams_return= ret_qs_ty;
+                           noparams_is_inline= isInline;
+                           noparams_is_Noreturn= isNoreturn |>
+      | Just (params, isVariadic) ->
+          FDeclPrototype <| proto_loc= loc;
+                            proto_return= ret_qs_ty;
+                            proto_params= params;
+                            proto_is_variadic= isVariadic;
+                            proto_is_inline= isInline;
+                            proto_is_Noreturn= isNoreturn |>
+    end in
   
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just (prev_has_proto, _, prev_decl) ->
-(* KKK
-        let () = Debug.print_debug 1 [] (fun () ->
-          "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
-        ) in
-*)
-(*
-        let (prev_ret_qs_ty, prev_params, prev_is_variadic, prev_is_inline, prev_is_Noreturn) = prev_decl in
-        let (new_ret_qs_ty, new_params, new_is_variadic, new_is_inline, new_is_Noreturn) = decl in
-        
-        let prev_fun_ty = Ctype.Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
-        let new_fun_ty  = Ctype.Function is_proto new_ret_qs_ty new_params new_is_variadic in
-        
-        let () = Debug.print_debug 1 [] (fun () ->
-          "PREVIOUS qs,ty ==> " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers prev_fun_ty
-        ) in
-        let () = Debug.print_debug 1 [] (fun () ->
-          "NEW qs,ty ==> " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers new_fun_ty
-        ) in
-        
-        let () = match AilTypesAux.make_composite prev_fun_ty new_fun_ty with
-          | Just compo_ty ->
-              Debug.print_debug 1 [] (fun () -> "make_composite WORKED: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers compo_ty)
-          | Nothing ->
-              Debug.print_debug 1 [] (fun () -> "make_composite FAILED")
-        end in
-*)
-
-(*
-        (* function () returning void *)
-        let old_ty = Ctype.Function true (Ctype.no_qualifiers, Ctype.Void) [] false in
-        (* function (pointer to function () returning void) returning void *)
-        let new_ty = Ctype.Function true (Ctype.no_qualifiers, Ctype.Void) [(Ctype.no_qualifiers, old_ty, false)] false in
-        
-*)
-(*
-        
-        let prev_fun_type = Function prev_has_proto prev_ret_qs_ty prev_params prev_is_variadic in
-        let new_fun_type  = Function new_has_proto new_ret_qs_ty new_params new_is_variadic in
-
-Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1
-
-AilTypesAux.make_composite
-
-
-
-  (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
-
-
-((Ctype.qualifiers * Ctype.ctype) * (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool)
-*)
-
-        if decl <> prev_decl then
+    | Just (_, prev_decl) ->
+        if not (internal_decls_are_compatible decl prev_decl) then
 (*          undef loc Undefined.UB015_incompatible_redeclaration *)
           (* TODO: check that we are indeed only dealing with same scope redefinition here *)
           constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
         else
-          let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
           return ()
     | Nothing ->
         State_exception.update (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
-           string_of_decl decl) in
-          <| st with function_declarations= Map.insert sym (is_proto, loc, decl) st.function_declarations |>
+            "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^
+            match params_isVariadic_opt with
+              | Nothing ->
+                  "NO PARAMS with return type= " ^ uncurry Pp.stringFromAil_ctype ret_qs_ty ^ ", "
+              | Just (params, isVariadic) ->
+                  let fun_ty = Ctype.Ctype [Annot.Aloc loc] (
+                    Ctype.Function
+                      <| Ctype.has_proto= is_proto;
+                         Ctype.return= ret_qs_ty;
+                         Ctype.params= params;
+                         Ctype.is_variadic= isVariadic; |> ) in
+                  "with type= " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^
+                  (if isInline then " INLINE" else "") ^
+                  (if isNoreturn then " NORETURN" else "")
+            end) in
+          <| st with function_declarations= Map.insert sym (loc, decl) st.function_declarations |>
         )
   end
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * A.storageDuration * Ctype.is_register * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1550,7 +1590,7 @@ let update_external_object_type sym ty =
 
 (* TODO: factorize *)
 val register_internal_object_declaration:
-  A.ail_identifier -> (Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+  A.ail_identifier -> (Loc.t * A.storageDuration * Ctype.is_register * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_internal_object_declaration sym ((loc, _, _, _, _) as decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1728,15 +1768,21 @@ let extract_program startup_str =
     map_union
       begin map_union
         begin
-          Map.map (fun (hasProto, loc, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun ((*hasProto, *) loc, fdecl(*(ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)*)) ->
             let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
+(*
             let params = match params_opt with
               | Nothing -> []
               | Just z  -> z
-            end in
-            (loc, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
+            end in *)
+            (loc, A.Decl_function fdecl (*<| A.fdecl_has_proto= hasProto;
+                                     A.fdecl_return= ret_qs_ty;
+                                     A.fdecl_params= params;
+                                     A.fdecl_is_variadic= isVariadic;
+                                     A.fdecl_is_inline= isInline;
+                                     A.fdecl_is_Noreturn= isNoreturn |>*))
           ) st.function_declarations
         end
         begin
@@ -1878,8 +1924,12 @@ let get_gamma_sofar =
     (* TODO: this is putting too much in gamma (i.e. things which are not in the
        current scope). But since we are dealing with fresh symbols, this
        shouldn't be observable? *)
-    List.map (fun (sym, (loc, dur, b, qs, ty)) ->
-      (sym, ((loc, dur, b), qs, ty))
+    List.map (fun (sym, (loc, dur, isRegister, qs, ty)) ->
+      (sym, <| A.bs_loc= loc;
+               A.bs_duration= dur;
+               A.bs_isRegister= isRegister;
+               A.bs_qs= qs;
+               A.bs_ty= ty |>)
     ) (Map_extra.toList st.internal_object_declarations)
   )
 
@@ -1891,19 +1941,9 @@ let get_sigma_sofar =
   State_exception.read (fun st ->
     let decls = Map_extra.toList (
       map_union
-        begin
-          Map.map (fun (hasProto, loc, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
-            let () = Debug.print_debug 1 [] (fun () ->
-              "KKK: check + find STD quote"
-            ) in
-            (* TODO: is it correct "complete" the params like that ? *)
-            let params = match params_opt with
-              | Nothing -> []
-              | Just z  -> z
-            end in
-            (loc, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
-          ) st.function_declarations
-        end
+       begin
+         Map.map (fun (loc, fdecl) -> (loc, A.Decl_function fdecl)) st.function_declarations
+       end
         begin
           Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
             (loc, A.Decl_object ((dur, isRegister)) qs ty)

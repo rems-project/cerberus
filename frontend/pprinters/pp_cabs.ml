@@ -401,11 +401,12 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
 
 and dtree_of_struct_declaration = function
   | Struct_declaration (specs, qs, align_specs, s_decls) ->
-      Dnode (pp_ctor "Struct_declaration", filter_opt_list [
-        node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs  ;
-        leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs     ;
-        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
-        node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ])
+      Dnode ( pp_ctor "Struct_declaration"
+            , filter_opt_list
+                [ node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs
+                ; leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs
+                ; node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs
+                ; node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ] )
   | Struct_assert sa_decl ->
       Dnode (pp_ctor "Struct_assert", [dtree_of_static_assert_declaration sa_decl])
 

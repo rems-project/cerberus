@@ -158,7 +158,7 @@ end
 (* STD §6.2.5#1, sentence 3 *)
 val is_function: ctype -> bool
 let is_function = function
-  | Ctype _ (Function _ _ _ _) ->
+  | Ctype _ (Function _) ->
       true
   | _ ->
       false
@@ -235,7 +235,7 @@ let is_derived (Ctype _ ty) =
   | Array _ _ -> true
   | Struct _ -> true
   | Union _ -> true
-  | Function _ _ _ _ -> true
+  | Function _ -> true
   | Pointer _ _ -> true
   | Atomic _ -> true
   | _ -> false
@@ -669,6 +669,18 @@ let integer_promotion impl = function
   end
 
 
+(* STD §6.5.2.2#6, sentence 1 *)
+val default_argument_promotion: IntegerImpl.implementation -> ctype -> ctype
+let default_argument_promotion impl = function
+  | Ctype annots (Basic (Integer ity)) ->
+      Ctype annots (Basic (Integer (integer_promotion impl ity)))
+  | Ctype annots (Basic (Floating (RealFloating Float))) ->
+      Ctype annots (Basic (Floating (RealFloating Double)))
+  | ty ->
+      ty
+end
+
+
 val promotion: IntegerImpl.implementation -> ctype -> maybe ctype
 let promotion impl = function
   | Ctype annots (Basic (Integer ity)) ->
@@ -843,12 +855,12 @@ let rec ~{coq} are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
              | (Nothing, Just _ ) -> true
              | (Nothing, Nothing) -> true
            end
-    | (Function _ (ret_qs1, ret_ty1) params1 isVariadic1, Function _ (ret_qs2, ret_ty2) params2 isVariadic2) ->
+    | (Function xs1, Function xs2) ->
         (* STD §6.7.6.3#15 *)
         (* TODO: when the two types do not both have a param list *)
-           are_compatible (ret_qs1, ret_ty1) (ret_qs2, ret_ty2)
-        && are_compatible_params params1 params2
-        && isVariadic1 = isVariadic2
+           are_compatible xs1.return xs2.return
+        && are_compatible_params xs1.params xs2.params
+        && xs1.is_variadic = xs2.is_variadic
     | (Pointer ref_qs1 ref_ty1, Pointer ref_qs2 ref_ty2) ->
         (* STD §6.7.6.1#2 *)
         are_compatible (ref_qs1, ref_ty1) (ref_qs2, ref_ty2)
@@ -896,7 +908,7 @@ and are_compatible_params params1 params2 =
 
 
 val            is_composite_params_aux: (ctype -> ctype -> ctype -> bool) -> 
-                                        list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
+                                        list (qualifiers * ctype * is_register) -> list (qualifiers * ctype * is_register) -> list (qualifiers * ctype * is_register) -> bool
 let rec ~{coq} is_composite_params_aux is_composite p1 p2 p3 =
   match (p1, p2, p3) with
     | ([], [], []) ->
@@ -920,30 +932,31 @@ let rec ~{coq} is_composite (Ctype _ ty1) (Ctype _ ty2) (Ctype _ ty3) =
     | (Array ty1 n1_opt, Array ty2 n2_opt, Array ty3 n3_opt) ->
         (* TODO: this is probably wrong regarding the sizes *)
         is_composite ty1 ty2 ty3 && n1_opt = n2_opt && n1_opt = n3_opt
-    | (Function _ (qs1, ty1) p1 _, Function _ (qs2, ty2) p2 _, Function _ (qs3, ty3) p3 _) ->
+    | (Function xs1, Function xs2, Function xs3) ->
         (* TODO: return qualifiers? *)
-        is_composite ty1 ty2 ty3 && is_composite_params p1 p2 p3
+        is_composite (snd xs1.return) (snd xs2.return) (snd xs3.return) &&
+        is_composite_params xs1.params xs2.params xs3.params
     | (Pointer qs1 ty1, Pointer qs2 ty2, Pointer qs3 ty3) ->
         is_composite ty1 ty2 ty3 && qs1 = qs2 && qs1 = qs3
     | _ ->
         false
   end
 
-val        is_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> bool
+val        is_composite_params: list (qualifiers * ctype * is_register) -> list (qualifiers * ctype * is_register) -> list (qualifiers * ctype * is_register) -> bool
 let ~{coq} is_composite_params params1 params2 params3 =
   is_composite_params_aux is_composite params1 params2 params3
 
 val make_composite_params_aux:
   (ctype -> ctype -> maybe ctype) ->
-  (list (qualifiers * ctype * bool) * list (qualifiers * ctype * bool)) ->
-  maybe (list (qualifiers * ctype * bool))
+  (list (qualifiers * ctype * is_register) * list (qualifiers * ctype * is_register)) ->
+  maybe (list (qualifiers * ctype * is_register))
 let rec ~{coq} make_composite_params_aux make_composite = function
   | ([], []) ->
       Just []
   | ((_, ty1, _) :: params1, (_, ty2, _) :: params2) ->
       match (make_composite ty1 ty2, make_composite_params_aux make_composite (params1, params2)) with
         | (Just ty, Just p) ->
-            Just ((no_qualifiers, ty, false) :: p)
+            Just ((no_qualifiers, ty, NotRegister) :: p)
         | _ ->
             Nothing
       end
@@ -983,16 +996,19 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
               Nothing
         end in
           Maybe.map (fun ty -> Ctype (a1++a2) (Array ty n_opt)) (make_composite elem_ty1 elem_ty2)
-    | (Function hasProto1 (ret_qs1, ret_ty1) params1 isVariadic1, Function hasProto2 (ret_qs2, ret_ty2) params2 isVariadic2) ->
+    | (Function xs1, Function xs2) ->
         (* TODO: return qualifiers? *)
         (* TODO: like the preceding comment said, there is quite a bit of
            simplication here *)
-        if isVariadic1 <> isVariadic2 then
+        if xs1.is_variadic <> xs2.is_variadic then
           Nothing
-        else match (make_composite ret_ty1 ret_ty2, make_composite_params params1 params2) with
+        else match (make_composite (snd xs1.return) (snd xs2.return), make_composite_params xs1.params xs2.params) with
           | (Just ret_ty, Just params) ->
               (* TODO: check the prototype thing *)
-              Just (Ctype (a1++a2) (Function (hasProto1 || hasProto2) (ret_qs1, ret_ty) params isVariadic1))
+              Just (Ctype (a1++a2) (Function <| has_proto= xs1.has_proto || xs2.has_proto;
+                                                return= (fst xs1.return, ret_ty);
+                                                params= params;
+                                                is_variadic= xs1.is_variadic |>))
           | _ ->
               Nothing
         end
@@ -1003,7 +1019,7 @@ let rec ~{coq} make_composite (Ctype a1 ty1 as cty1) (Ctype a2 ty2 as cty2) =
         Nothing
   end
 
-val        make_composite_params: list (qualifiers * ctype * bool) -> list (qualifiers * ctype * bool) -> maybe (list (qualifiers * ctype * bool))
+val        make_composite_params: list (qualifiers * ctype * is_register) -> list (qualifiers * ctype * is_register) -> maybe (list (qualifiers * ctype * is_register))
 let ~{coq} make_composite_params params1 params2 =
   make_composite_params_aux make_composite (params1, params2)
 
@@ -1022,8 +1038,8 @@ end
 val function_coercion: ctype -> ctype
 let function_coercion (Ctype loc ty) =
 Ctype loc $ match ty with
-  | Function hasProto ret_qs_ty params isVariadic ->
-      Pointer no_qualifiers (Ctype [] (Function hasProto ret_qs_ty params isVariadic))
+  | Function xs ->
+      Pointer no_qualifiers (Ctype [] (Function xs))
   | ty ->
       ty
 end
@@ -1234,12 +1250,12 @@ match ty with
          doesn't do the right thing. Cabs_to_ail should not use it anymore
          (at least not for Array) *)
       (no_qualifiers, Ctype a (Pointer qs elem_ty))
- | Function hasProto ret_qs_ty params isVariadic ->
+ | Function xs ->
       (* STD §6.7.6.3#8 *)
      let () = Debug.warn [] (fun () ->
        "(unsure) AilTypesAux.Function, qualifiers"
      ) in
-     (no_qualifiers, Ctype a (Pointer qs (Ctype [] (Function hasProto ret_qs_ty params isVariadic))))
+     (no_qualifiers, Ctype a (Pointer qs (Ctype [] (Function xs))))
  | ty ->
      (qs, Ctype a ty)
 end
@@ -1295,7 +1311,7 @@ let rec has_pointer_at_leafs (Ctype _ ty) =
         false
     | Array elem_ty _ ->
         has_pointer_at_leafs elem_ty
-    | Function _ _ _ _ ->
+    | Function _ ->
         false
     | Pointer _ _ ->
         true

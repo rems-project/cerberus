@@ -51,7 +51,7 @@ declare ocaml target_rep function reset_tagDefs = `Tags.reset_tagDefs`
 
 
 
-
+(*
 val     are_compatible: (qualifiers * ctype) -> (qualifiers * ctype) -> bool
 let rec are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
   (* qualifiers need to be equal (see §6.7.3#10) *)
@@ -129,7 +129,7 @@ end
 
 and are_compatible_params params1 params2 =
   are_compatible_params_aux true (params1, params2)
-
+*)
 
 (*
 val tags_are_compatible: Symbol.sym -> Symbol.sym -> bool

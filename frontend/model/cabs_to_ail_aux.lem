@@ -1,6 +1,7 @@
 open import Pervasives
 open import Utils Cabs
 
+import Debug Pp
 import AilSyntax Ctype
 
 module A = AilSyntax
@@ -96,7 +97,7 @@ let rec mk_zeroInit_aux tagDefs (Ctype.Ctype _ ty) =
         A.ConstantArray elem_ty begin
           List.replicate (natFromInteger n) (mk_zeroInit_aux tagDefs elem_ty)
         end
-    | Ctype.Function _ _ _ _ ->
+    | Ctype.Function _ ->
         error "[Cabs_to_ail.mk_zeroInit_aux] - internal ERROR: Function"
     | Ctype.Pointer _ _ ->
         A.ConstantNull
@@ -135,3 +136,12 @@ val oneAil: expression unit
 let oneAil =
   AnnotatedExpression () [] Loc.unknown
     (AilEconst (ConstantInteger (IConstant 1 Decimal Nothing)))
+
+
+(* DEBUG printing functions *)
+val _DEBUG_print_function_registration: A.ail_identifier -> bool -> Ctype.ctype -> maybe (list (Ctype.qualifiers * Ctype.ctype * Ctype.is_register)) -> unit
+let _DEBUG_print_function_registration sym is_proto fun_ty params_opt =
+  Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
+    "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
+    Pp.stringFromAil_ctype Ctype.no_qualifiers fun_ty ^ (if Maybe.isNothing params_opt then " NO_PARAMS" else "")
+  )

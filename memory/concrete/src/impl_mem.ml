@@ -22,13 +22,12 @@ let ctype_equal ty1 ty2 =
       | Struct _
       | Union _ ->
           ty
-      | Function (p, (_, ret_ty), xs, b) ->
-          Function (
-            p,
-            (no_qualifiers, Ctype ([], unqualify ret_ty)),
-            List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), false)) xs,
-            b
-         )
+      | Function funty ->
+          Function {
+            has_proto= funty.has_proto;
+            return = (no_qualifiers, Ctype ([], unqualify (snd funty.return)));
+            params= List.map (fun (_, ty, _) -> (no_qualifiers, Ctype ([], unqualify ty), NotRegister)) funty.params;
+            is_variadic= funty.is_variadic }
       | Array (elem_ty, n_opt) ->
           Array (Ctype ([], unqualify elem_ty), n_opt)
       | Pointer (_, ref_ty) ->

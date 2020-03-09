@@ -48,6 +48,18 @@ let rec concat_specs = function
 
 let string_of_cabs_id (Symbol.Identifier(_, n)) = n
 
+let to_attributes = function
+  | None ->
+      Annot.Attrs []
+  | Some seqs ->
+      Annot.Attrs begin
+        List.map (fun ((ns, id), args_opt) ->
+          let open Annot in
+          { attr_ns=   ns
+          ; attr_id=   id
+          ; attr_args= match args_opt with None -> [] | Some z -> z }
+        ) (List.concat seqs)
+      end
 
 %}
 
@@ -236,7 +248,7 @@ let string_of_cabs_id (Symbol.Identifier(_, n)) = n
 %type<Cabs.external_declaration>
   external_declaration
 
-%type<Cabs.function_definition>
+%type<Cabs.cabs_function_definition>
   function_definition
 
 %start<Cabs.translation_unit> translation_unit
@@ -892,10 +904,10 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 struct_declaration:
-| ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
+| seqs_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
     { let (tspecs, tquals, align_specs) = tspecs_tquals in
-      Struct_declaration (tspecs, tquals, align_specs,
+      Struct_declaration ((*to_attributes seqs_opt, *)tspecs, tquals, align_specs,
                           option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
@@ -1005,8 +1017,18 @@ declarator:
 ;
 
 direct_declarator:
-| i = general_identifier ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
-    { LF.identifier_decl i }
+| i = general_identifier seqs_opt= ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
+    { (* KKK *)
+let attrs = to_attributes seqs_opt in
+begin match attrs with
+  | Attrs [attr] ->
+      let open Annot in
+        Printf.printf "direct_declarator(BASE) ===> %s\n" (let Symbol.Identifier (_, str) = attr.attr_id in str)
+  | _ ->
+      ()
+end;
+
+LF.identifier_decl i }
 | LPAREN save_context decltor= declarator RPAREN
     { LF.declarator_decl decltor }
 | decl= array_declarator ioption(attribute_specifier_sequence)
@@ -1313,20 +1335,20 @@ external_declaration:
 
 (* §6.9.1 Function definitions *)
 function_definition1:
-| attr_opt= ioption(attribute_specifier_sequence) specifs= declaration_specifiers
+| seqs_opt= ioption(attribute_specifier_sequence) specifs= declaration_specifiers
   decltor= declarator_varname
     { let ctxt = LF.save_context () in
       LF.reinstall_function_context decltor;
-      (attr_opt, specifs, decltor, ctxt) }
+      (to_attributes seqs_opt, specifs, decltor, ctxt) }
 ;
 
 function_definition:
 | specifs_decltor_ctxt= function_definition1 rev_decl_opt= declaration_list?
   stmt= compound_statement
     { let loc = Location_ocaml.region ($startpos, $endpos) None in
-      let (attr_opt, specifs, decltor, ctxt) = specifs_decltor_ctxt in
+      let (attrs, specifs, decltor, ctxt) = specifs_decltor_ctxt in
       LF.restore_context ctxt;
-      LF.create_function_definition loc attr_opt specifs decltor stmt rev_decl_opt }
+      LF.create_function_definition loc attrs specifs decltor stmt rev_decl_opt }
 ;
 
 declaration_list: (* NOTE: the list is in reverse *)

@@ -259,10 +259,11 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
   | Atomic ty ->
       symbolify_ctype ty >>= fun ty' ->
       Eff.return (Atomic ty')
-  | Function (hasProto, (ret_qs, ret_ty), params, isVariadic) ->
+  | Function funty -> (*(hasProto, (ret_qs, ret_ty), params, isVariadic) -> *)
+      let (ret_qs, ret_ty) = funty.return in
       symbolify_ctype ret_ty >>= fun ret_ty' ->
-      Eff.mapM (fun (qs, ty, _) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty', false)) params >>= fun params' ->
-      Eff.return (Function (hasProto, (ret_qs, ret_ty'), params', isVariadic))
+      Eff.mapM (fun (qs, ty, _) -> symbolify_ctype ty >>= fun ty' -> Eff.return (qs, ty', NotRegister)) funty.params >>= fun params' ->
+      Eff.return (Function { funty with return= (ret_qs, ret_ty'); params= params' })
   | Pointer (qs, ty) ->
       symbolify_ctype ty >>= fun ty' ->
       Eff.return (Pointer (qs, ty'))
@@ -1233,7 +1234,9 @@ ctype:
 | ty= ctype LBRACKET n_opt= INT_CONST? RBRACKET
     { Ctype.Ctype ([], Ctype.Array (ty, n_opt)) }
 | ty= ctype tys= delimited(LPAREN, separated_list(COMMA, ctype), RPAREN)
-    { Ctype.Ctype ([], Function (false, (Ctype.no_qualifiers, ty), List.map (fun ty -> (Ctype.no_qualifiers, ty, false)) tys, false)) }
+    { Ctype.Ctype ([], Function { has_proto=false; return = (Ctype.no_qualifiers, ty);
+                                  params= List.map (fun ty -> (Ctype.no_qualifiers, ty, NotRegister)) tys;
+                                  is_variadic= false }) }
 (* TODO *)
 (* | ty= ctype LPAREN tys= separated_list(COMMA, ctype) COMMA DOTS RPAREN *)
 (*     { Core_ctype.Function0 (ty, tys, true) } *)

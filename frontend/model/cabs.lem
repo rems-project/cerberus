@@ -320,11 +320,11 @@ type translation_unit =
   | TUnit of list external_declaration
 
 and external_declaration =
-  | EDecl_func of function_definition
+  | EDecl_func of cabs_function_definition
   | EDecl_decl of declaration
 
 (* §6.9.1 Function definitions, Syntax *)
-and function_definition =
+and cabs_function_definition =
   | FunDef of Loc.t * Annot.attributes * specifiers * declarator * cabs_statement
 
 

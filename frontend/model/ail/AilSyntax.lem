@@ -174,10 +174,16 @@ type storageDuration [name = "^\\([a-z A-Z]*_\\)?dur[0-9]*'?$"] =
  | Automatic
  | Allocated
 
-(* the boolean tells whether the object was declared with the register
- * storage-class *)
+type ident_info = <|
+  bs_loc: Loc.t;
+  bs_duration: storageDuration;
+  bs_isRegister: is_register;
+  bs_qs: qualifiers;
+  bs_ty: ctype
+|>
+
 type bindings =
-  list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+  list (ail_identifier * ident_info)
 
 type statement_ 'a [name="s*"] =
   | AilSskip
@@ -207,14 +213,25 @@ instance forall 'a. (Located (statement 'a))
     loc
 end
 
+type function_declaration = <|
+  fdecl_has_proto: bool;
+  fdecl_return: qualifiers * ctype;
+  fdecl_params: list (qualifiers * ctype * is_register);
+  fdecl_is_variadic: bool;
+  fdecl_is_inline: bool;
+  fdecl_is_Noreturn: bool;
+|>
+
+type function_definition 'a = <|
+  fdef_loc: Loc.t;
+  fdef_attrs: Annot.attributes;
+  fdef_params: list ail_identifier;
+  fdef_body: statement 'a;
+|>
+
 type declaration =
-  | Decl_object   of (storageDuration * bool) * qualifiers * ctype
-  | Decl_function of bool (* has_prototype *)
-                   * (qualifiers * ctype) (* return qualifiers *)
-                   * (list (qualifiers * ctype * (* isRegister *)bool))
-                   * bool (* is_variadic *)
-                   * bool (* is_inline *)
-                   * bool (* is_Noreturn *)
+  | Decl_object   of (storageDuration * is_register) * qualifiers * ctype
+  | Decl_function of function_declaration
 
 (* external identifier kind *)
 type id_kind =
@@ -226,14 +243,14 @@ type sigma 'a = <|
   declarations: list (ail_identifier * (Loc.t * declaration));
   object_definitions: list (ail_identifier * (expression 'a));
   (* the list of identifiers are the parameter names used in the body *)
-  function_definitions: list (ail_identifier * (Loc.t * Annot.attributes * list ail_identifier * statement 'a));
+  function_definitions: list (ail_identifier * function_definition 'a);
   static_assertions: list (expression 'a * stringLiteral);
   tag_definitions: list (ail_identifier * tag_definition);
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
 |>
 
 
-type gamma = list (ail_identifier * ((Loc.t * storageDuration * bool) * qualifiers * ctype))
+type gamma = list (ail_identifier * ident_info)
 
 type ail_program 'a = maybe ail_identifier * sigma 'a
 

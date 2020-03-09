@@ -17,9 +17,7 @@ type genType =
  | GenVoid
  | GenBasic of genBasicType
  | GenArray of ctype * (maybe integer)
- | GenFunction of (* has_proto *)bool * (qualifiers * ctype)
-              * list (qualifiers * ctype * (* is_register *)bool)
-              * (* is_variadic *)bool
+ | GenFunction of function_ctype
  | GenPointer of qualifiers * ctype
  | GenStruct of ail_identifier
  | GenUnion of ail_identifier
@@ -39,12 +37,12 @@ let genChar32_t =
 
 (* TODO: is this ever used? *)
 type typeCategory [name = "tc*"] = 
- | LValueType of qualifiers * ctype * (* isRegister *) bool
+ | LValueType of qualifiers * ctype * is_register
  | RValueType of ctype
 
 
 type genTypeCategory =
- | GenLValueType of qualifiers * ctype * (* isRegister *) bool
+ | GenLValueType of qualifiers * ctype * is_register
  | GenRValueType of genType
 
 
@@ -107,7 +105,7 @@ let rec eq_genType gty1 gty2 =
         1
     | GenArray _ _ ->
         2
-    | GenFunction _ _ _ _ ->
+    | GenFunction _ ->
         3
     | GenPointer _ _ ->
         4
@@ -123,10 +121,8 @@ let rec eq_genType gty1 gty2 =
         gbty1 = gbty2
     | (GenArray ty1 n1_opt, GenArray ty2 n2_opt) ->
         ty1 = ty2 && n1_opt = n2_opt
-    | (GenFunction has_proto1 (qs1, ty1) params1 b1,
-       GenFunction has_proto2 (qs2, ty2) params2 b2 ) ->
-        has_proto1 = has_proto2 && qs1 = qs2
-        && ty1 = ty2 && params1 = params2 && b1 = b2
+    | (GenFunction xs1, GenFunction xs2) ->
+        Function xs1 = Function xs2
     | (GenPointer qs1 ty1, GenPointer qs2 ty2) ->
         qs1 = qs2 && ty1 = ty2
     | (GenStruct tag1, GenStruct tag2) ->
@@ -189,8 +185,8 @@ match ty with
       GenPointer qs ty
   | Array ty n_opt ->
       GenArray ty n_opt
-  | Function has_proto qs_ty params b ->
-      GenFunction has_proto qs_ty params b
+  | Function xs ->
+      GenFunction xs
   | Atomic ty ->
       GenAtomic ty
   | Struct tag ->

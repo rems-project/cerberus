@@ -369,7 +369,7 @@ let annotate_stringLiteral (pref_opt, strs) =
   (* TODO: check the type *)
   E.return
     ( AilEstr (pref_opt, strs)
-    , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))) false )
+    , GenLValueType no_qualifiers (Ctype [] (Array elem_ty (Just $ integerFromNatural (naturalFromNat (List.length strs + 1))))) NotRegister )
 
 
 val     typecheck_constant: Loc.t -> constant -> E.errorM genType
@@ -435,7 +435,7 @@ let rec typecheck_constant loc cst =
 val annotate_rvalue: sigma unit -> gamma -> expression unit -> E.errorM (expression genTypeCategory * genType)
 val annotate_assignee: sigma unit -> gamma -> assignment_violation -> Loc.t -> ctype -> expression unit -> E.errorM (expression genTypeCategory)
 val annotate_arguments:
-  sigma unit -> gamma -> Loc.t -> bool -> bool -> list (expression unit) -> list (qualifiers * ctype * bool) ->
+  sigma unit -> gamma -> Loc.t -> bool -> bool -> list (expression unit) -> list (qualifiers * ctype * is_register) ->
   E.errorM (list (expression genTypeCategory))
 
 (* context given to [annotate_expression] to inform it on the what the current
@@ -503,9 +503,9 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
         E.add "§6.5.3.2#1" >>
         annotate_expression CTXaddr e >>= fun a_e ->
         match GenTypes.genTypeCategoryOf a_e with
-          | GenRValueType (GenFunction hasProto ty params isVariadic) ->
+          | GenRValueType (GenFunction xs) ->
               (* e is a 'function designator' *)
-              let gty' = GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic)) in
+              let gty' = GenPointer no_qualifiers (Ctype [] (Function xs)) in
               E.return (AilEunary Address a_e, GenRValueType gty')
           | GenRValueType gty ->
               E.constraint_violation (with_cursor_from (locOf e) loc) (UnaryAddressNotRvalue gty)
@@ -513,11 +513,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               (* e is an 'lvalue' *)
               let () = Debug.warn [Debug.DB_ail_typing]
                  (fun () -> "(TODO) GenTyping.annotate_expression AilEunary Address, not checking for bit-field member") in
-              if isRegister then
-                E.constraint_violation (with_cursor_from (locOf e) loc) UnaryAddressRegisterLvalue
-              else
-                E.add "§6.5.3.2#3, 2nd sentence" >>
-                E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
+              match isRegister with
+                | IsRegister ->
+                    E.constraint_violation (with_cursor_from (locOf e) loc) UnaryAddressRegisterLvalue
+                | NotRegister ->
+                    E.add "§6.5.3.2#3, 2nd sentence" >>= fun () ->
+                    E.return (AilEunary Address a_e, GenRValueType (GenPointer qs ty))
+              end
         end
     
     | AilEunary Indirection e ->
@@ -528,7 +530,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               E.add "§6.5.3.2#4, sentence 3" >>
               if AAux.is_object ref_ty then
                 (* *)
-                E.return (AilEunary Indirection e', GenLValueType ref_qs ref_ty false)
+                E.return (AilEunary Indirection e', GenLValueType ref_qs ref_ty NotRegister)
               else
                 (* TODO: check that it's ok to drop the qualifiers *)
                 E.return (AilEunary Indirection e', GenRValueType (inject_type ref_ty))
@@ -628,7 +630,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
           (* TODO: check that *)
           annotate_definition_aux sigm gamm (ty, e) >>= fun a_e ->
           E.add "§6.5.2.5#4" >>
-          E.return (AilEcompound qs ty a_e, GenLValueType qs ty false)
+          E.return (AilEcompound qs ty a_e, GenLValueType qs ty NotRegister)
         else
           E.constraint_violation loc InvalidTypeCompoundLiteral
 
@@ -679,22 +681,27 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     
     | AilEident sym ->
         match (List.lookup sym gamm, List.lookup sym sigm.declarations) with
-          | (Just ((_, _, isRegister), qs, ty), Nothing) ->
+          | (Just info, Nothing) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
-                "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
+                "[AilEident (gamma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype info.bs_qs info.bs_ty
               ) in
-              E.return (AilEident sym, GenLValueType qs ty isRegister)
+              E.return (AilEident sym, GenLValueType info.bs_qs info.bs_ty info.bs_isRegister)
           | (Nothing, Just (_, Decl_object (_, isRegister) qs ty)) ->
               let () = Debug.print_debug 1 [Debug.DB_ail_typing] (fun () ->
                 "[AilEident (sigma)] " ^ show sym ^ " -- " ^ Pp.stringFromAil_ctype qs ty
               ) in
               E.return (AilEident sym, GenLValueType qs ty isRegister)
-          | (Nothing, Just (_, Decl_function has_proto (ret_qs, ret_ty) params is_variadic _ (* is_inline *) _ (* is_Noreturn *))) ->
+          | (Nothing, Just (_, Decl_function xs)) ->
               (* TODO: is_inline, is_Noreturn *)
               (* NOTE: here sym is a 'function designator', hence it has function type. BUT
                  other part of the typechecker MUST perform the 'function_coercion' as described in
                  (§6.3.2.1#4). *)
-              E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function has_proto (ret_qs, ret_ty) params is_variadic))))
+              let funty = <| has_proto= xs.fdecl_has_proto;
+                             return= xs.fdecl_return;
+                             params= xs.fdecl_params;
+                             is_variadic= xs.fdecl_is_variadic; |> in
+              E.return ( AilEident sym
+                       , GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function funty))) )
           | _ ->
               error "gentpying.annotate_expression: AilEident symbol couldn't be resolved"
         end
@@ -713,8 +720,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             annotate_rvalue object_e >>= fun (object_e',  object_gty)  ->
             match object_gty with
               | GenPointer qs object_ty ->
-                  let params_wo_ptr = [(qs, Ctype [] $ unatomic_ object_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, Ctype [] Void) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let params_wo_ptr = [(qs, Ctype [] $ unatomic_ object_ty, NotRegister); (no_qualifiers, memorder_ty, NotRegister)] in
+                  let gen_fun_gty = (GenFunction <|
+                    has_proto= false;
+                    return= (qs, Ctype [] Void);
+                    params= (qs, Ctype [] (Pointer qs object_ty), NotRegister) :: params_wo_ptr;
+                    is_variadic= false;
+                  |>) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicStore object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (desired_e :: order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -725,7 +737,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB205_atomic_store_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression (GenRValueType gen_fun_gty) annots' loc' $ AilEbuiltin b) (object_e' :: es')
                              , GenRValueType GenVoid)
                   end
               | gty ->
@@ -737,8 +749,13 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match object_gty with
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
-                  let params_wo_ptr = [(no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let params_wo_ptr = [(no_qualifiers, memorder_ty, NotRegister)] in
+                  let gen_fun_gty = (GenFunction <|
+                    has_proto= false;
+                    return= (qs, ret_ty);
+                    params= (qs, Ctype [] (Pointer qs object_ty), NotRegister) :: params_wo_ptr;
+                    is_variadic= false;
+                  |>) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicLoad object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false (order_e :: args) params_wo_ptr >>= fun es' ->
                   match memory_order_of_expr order_e with
@@ -747,7 +764,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB206_atomic_load_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression (GenRValueType gen_fun_gty) annots' loc' $ AilEbuiltin b) (object_e' :: es')
                              , GenRValueType (inject_type ret_ty))
                   end
               | gty ->
@@ -759,11 +776,16 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match object_gty with
               | GenPointer qs object_ty ->
                   let ret_ty = Ctype [] (unatomic_ object_ty) in
-                  let params_wo_ptr = [(qs, ret_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType (GenFunction false (qs, ret_ty) ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false) in
+                  let params_wo_ptr = [(qs, ret_ty, NotRegister); (no_qualifiers, memorder_ty, NotRegister)] in
+                  let gen_fun_gty = (GenFunction <|
+                    has_proto= false;
+                    return= (qs, ret_ty);
+                    params= (qs, Ctype [] (Pointer qs object_ty), NotRegister) :: params_wo_ptr;
+                    is_variadic= false;
+                  |>) in
                   guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
                   annotate_arguments loc_cursor false false args params_wo_ptr >>= fun es' ->
-                  E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                  E.return (AilEcall (AnnotatedExpression (GenRValueType gen_fun_gty) annots' loc' $ AilEbuiltin b) (object_e' :: es')
                            , GenRValueType (inject_type ret_ty))
               | gty ->
                   E.constraint_violation loc_cursor $ AtomicAddressArgumentMustBePointer AtomicExchange gty
@@ -774,11 +796,15 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match object_gty with
               | GenPointer qs object_ty ->
                   let ty = Ctype [] $ unatomic_ object_ty in
-                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
-                                       (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
-                                       ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
-                  guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
+                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, NotRegister); (qs, ty, NotRegister);
+                                       (no_qualifiers, memorder_ty, NotRegister); (no_qualifiers, memorder_ty, NotRegister)] in
+                  let gen_fun_gty = (GenFunction <|
+                    has_proto= false;
+                    return= (no_qualifiers, Ctype [] (Basic (Integer Bool)));
+                    params= (qs, Ctype [] (Pointer qs object_ty), NotRegister) :: params_wo_ptr;
+                    is_variadic= false;
+                  |>) in
+                  guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty)       >>= fun ()  ->
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
@@ -787,7 +813,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression (GenRValueType gen_fun_gty) annots' loc' $ AilEbuiltin b) (object_e' :: es')
                              , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
@@ -799,11 +825,15 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
             match object_gty with
               | GenPointer qs object_ty ->
                   let ty = Ctype [] $ unatomic_ object_ty in
-                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, false); (qs, ty, false);
-                                       (no_qualifiers, memorder_ty, false); (no_qualifiers, memorder_ty, false)] in
-                  let gen_fun_ty = GenRValueType $GenFunction false (no_qualifiers, Ctype [] $ Basic (Integer Bool))
-                                       ((qs, Ctype [] $ Pointer qs object_ty, false) :: params_wo_ptr) false in
-                  guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty) >>= fun () ->
+                  let params_wo_ptr = [(qs, Ctype [] $ Pointer qs ty, NotRegister); (qs, ty, NotRegister);
+                                       (no_qualifiers, memorder_ty, NotRegister); (no_qualifiers, memorder_ty, NotRegister)] in
+                  let gen_fun_gty = (GenFunction <|
+                    has_proto= false;
+                    return= (no_qualifiers, Ctype [] (Basic (Integer Bool)));
+                    params= (qs, Ctype [] (Pointer qs object_ty), NotRegister) :: params_wo_ptr;
+                    is_variadic= false;
+                  |>) in
+                  guard_violation loc_cursor (AtomicAddressArgumentMustBeAtomic AtomicCompareExchange object_ty) (AAux.is_atomic object_ty)       >>= fun ()  ->
                   annotate_arguments loc_cursor false false (expected_e :: desired_e :: order_success_e :: order_failure_e :: args) params_wo_ptr >>= fun es' ->
                   (* TODO: The failure argument shall be no stronger than the success argument. *)
                   match memory_order_of_expr order_failure_e with
@@ -812,7 +842,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   | Just Cmm_csem.Acq_rel ->
                     E.undef loc_cursor Undefined.UB207_atomic_compare_exchange_memorder
                   | _ ->
-                    E.return (AilEcall (AnnotatedExpression gen_fun_ty annots' loc' $ AilEbuiltin b) (object_e' :: es')
+                    E.return (AilEcall (AnnotatedExpression (GenRValueType gen_fun_gty) annots' loc' $ AilEbuiltin b) (object_e' :: es')
                              , GenRValueType (GenBasic (GenInteger (Concrete Bool))))
                   end
               | gty ->
@@ -866,11 +896,12 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
     | AilEcall e es ->
         E.add "§6.5.2.2#1" >>
         annotate_rvalue e >>= function
-          | (e', GenPointer qs (Ctype _ (Function has_proto (ret_qs, ret_ty) params is_variadic))) ->
+          | (e', GenPointer qs (Ctype _ (Function xs))) ->
               (* TODO: qualifiers *)
               let () = Debug.warn [] (fun () ->
                 "(unsure) the typing of AilEcall doesn't look at [ret_qs]"
               ) in
+              let (ret_qs, ret_ty) = xs.return in
               if not (AAux.is_void ret_ty || AAux.is_complete_object sigm ret_ty) then
                 if AAux.is_array ret_ty then
                   E.constraint_violation loc (FunctionCallArrayReturnType ret_ty)
@@ -878,7 +909,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                   E.constraint_violation loc (FunctionCallIncompleteReturnType ret_ty)
               (* TODO: do we need to check if qs is unqualified? *)
               else if AAux.is_unqualified qs then
-                annotate_arguments (locOf e) has_proto is_variadic es params >>= fun es' ->
+                annotate_arguments (locOf e) xs.has_proto xs.is_variadic es xs.params >>= fun es' ->
                 E.return (AilEcall e' es', GenRValueType (inject_type ret_ty))
               else
                 error "annotate_expression(AilEcall): function decay pointer should not be qualified"
@@ -920,7 +951,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
-                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty NotRegister )
                             | Nothing ->
                                 E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
@@ -934,7 +965,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
-                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers qs memb_qs) memb_ty NotRegister )
                             | Nothing ->
                                 E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                        (MemberofNoMemberLvalue memb_ident qs ty)
@@ -1016,7 +1047,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
-                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty NotRegister )
                             | Nothing ->
                                 E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                        (MemberofptrNoMember memb_ident ref_qs ref_ty)
@@ -1030,7 +1061,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                           match List.lookup memb_ident membersDefs with
                             | Just (memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
-                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
+                                         , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty NotRegister )
                             | Nothing ->
                                 E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
                                                        (MemberofptrNoMember memb_ident ref_qs ref_ty)
@@ -1504,20 +1535,22 @@ and perform_decays sigm ctx a_expr =
                 && not (List.elem ctx [CTXarray_init] && is_literal) then
           (* STD §6.3.2.1#3 *)
           (* performing the array decay *)
-          if isRegister then
-            E.undef Loc.unknown Undefined.UB022_register_array_decay
-          else
-            (* TODO: qualifiers?? *)
-            let () = begin
-              if not (AAux.is_unqualified qs) then
-                Debug.warn [Debug.DB_ail_typing] (fun () -> "(UNSURE) GenTyping.array_decay, qs <> {}")
-              else
-                ()
-            end in
-            E.return (
-              AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
-                std_annots (Loc.locOf a_expr) (AilEarray_decay a_expr)
-            )
+          match isRegister with
+            | IsRegister ->
+                E.undef Loc.unknown Undefined.UB022_register_array_decay
+            | NotRegister ->
+                (* TODO: qualifiers?? *)
+                let () = begin
+                  if not (AAux.is_unqualified qs) then
+                    Debug.warn [Debug.DB_ail_typing] (fun () -> "(UNSURE) GenTyping.array_decay, qs <> {}")
+                  else
+                    ()
+                end in
+                E.return begin
+                  AnnotatedExpression (GenRValueType (inject_type (AAux.array_coercion ty)))
+                  std_annots (Loc.locOf a_expr) (AilEarray_decay a_expr)
+                end
+          end
         else
           E.return a_expr
     | (std_annots, GenRValueType gty) ->
@@ -1525,9 +1558,9 @@ and perform_decays sigm ctx a_expr =
           (* STD §6.3.2.1#4 *)
           (* performing the function decay *)
           E.return match gty with
-            | GenFunction hasProto ty params isVariadic ->
+            | GenFunction xs ->
                 AnnotatedExpression
-                  (GenRValueType (GenPointer no_qualifiers (Ctype [] (Function hasProto ty params isVariadic))))
+                  (GenRValueType (GenPointer no_qualifiers (Ctype [] (Function xs))))
                   std_annots (Loc.locOf a_expr) (AilEfunction_decay a_expr)
             | GenArray elem_ty sz_opt ->
               match a_expr with
@@ -1798,8 +1831,8 @@ and annotate_definition_aux sigm gamm (ty, e) =
 val annotate_definition: sigma unit -> gamma -> (Symbol.sym * expression unit) -> E.errorM (Symbol.sym * expression genTypeCategory)
 let annotate_definition sigm gamm (sym, e) =
   match List.lookup sym gamm with
-    | Just (_, sym_qs, sym_ty) ->
-        annotate_definition_aux sigm gamm (sym_ty, e) >>= fun a_e ->
+    | Just info ->
+        annotate_definition_aux sigm gamm (info.bs_ty, e) >>= fun a_e ->
         E.return (sym, a_e)
     | Nothing ->
         error "annotate_definition: symbol not found in the context"
@@ -1934,9 +1967,15 @@ let annotate_sigma sigm =
     | (_, (Decl_object dur_opt qs ty as decl)) ->
         wf_lvalue sigm qs ty >>
         E.return (ident, decl)
-    | (_, (Decl_function hasProto ret_ty params isVariadic _ (* isInline *) _ (* isNoreturn *) as decl)) ->
+    | (_, (Decl_function xs as decl)) ->
+        let funty = <|
+          has_proto= xs.fdecl_has_proto;
+          return= xs.fdecl_return;
+          params= xs.fdecl_params;
+          is_variadic= xs.fdecl_is_variadic;
+        |> in
         (* TODO?   ==> AilTyping.well_formed_bindings bs && *)
-        wf_type sigm (Ctype [] (Function hasProto ret_ty params isVariadic)) >>
+        wf_type sigm (Ctype [] (Function funty)) >>= fun () ->
         E.return (ident, decl)
     end
   ) sigm.declarations >>
@@ -1954,21 +1993,25 @@ let annotate_sigma sigm =
   ) sigm.object_definitions >>= fun object_defs' ->
   
   (* Typechecking of functions that have a definition *)
-  E.mapM (fun (ident, (loc, attr, param_idents, s)) ->
+  E.mapM (fun (ident, xs) ->
     match List.lookup ident sigm.declarations with
-      | Just (_, Decl_function hasProto (ret_qs, ret_ty) params _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+      | Just (_, Decl_function ys) ->
+          let (ret_qs, ret_ty) = ys.fdecl_return in
           (* TODO: qualifiers *)
           let () = Debug.warn [] (fun () ->
             "(unsure) annotate_sigma doesn't look at [ret_qs]"
            ) in
           let bindings = List.map (fun (ident, (qs, ty, isRegister)) ->
             (* STD §6.9.1#9, first sentence *)
-            (ident, ((loc, Automatic, isRegister), qs, ty))
-          ) (List.zip param_idents params) in
+            (ident, <| bs_loc= xs.fdef_loc; bs_duration= Automatic; bs_isRegister= isRegister; bs_qs= qs; bs_ty= ty |>)
+          ) (List.zip xs.fdef_params ys.fdecl_params) in
           if sigma_fresh_bindings bindings sigm then
             let add_bindings bs acc = foldl (fun acc b -> b :: acc) bs acc in
-            annotate_statement sigm (add_bindings bindings []) ret_ty s >>= fun s' ->
-              E.return (ident, (loc, attr, param_idents, s'))
+            annotate_statement sigm (add_bindings bindings []) ret_ty xs.fdef_body >>= fun stmt' ->
+              E.return (ident, <| fdef_loc= xs.fdef_loc;
+                                  fdef_attrs= xs.fdef_attrs;
+                                  fdef_params= xs.fdef_params;
+                                  fdef_body= stmt'; |>)
           else
             error "annotate_sigma: parameter ail_identifiers are not fresh"
       | _ ->
@@ -2040,10 +2083,10 @@ let annotate_program (startup_opt, sigm) =
         E.return (startup_opt, sigm')
     | Just startup ->
         match List.lookup startup sigm.declarations with
-          | Just (loc, Decl_function hasProto (ret_qs, ret_ty) params (* bs *) _ (* isVariadic *) _ (* isInline *) _ (* isNoreturn *)) ->
+          | Just (loc, Decl_function xs) ->
               (* STD §5.1.2.2.1 *)
               (* TODO: "... or equivalent;10) or in some other implementation-defined manner." *)
-              match params with
+              match xs.fdecl_params with
                 | [] ->
                     (* TODO: not sure if really allowed by the std, clearly used a lot *)
                     E.return ()
@@ -2060,7 +2103,8 @@ let annotate_program (startup_opt, sigm) =
                     E.undef (Loc.with_cursor_from (Loc.locOf aty2) loc) Undefined.UB004c_incorrect_main_argument2
                 | ((_, aty1, _)::_) ->
                     E.undef (Loc.with_cursor_from (Loc.locOf aty1) loc) Undefined.UB004b_incorrect_main_argument1
-              end >>
+              end >>= fun () ->
+              let (ret_qs, ret_ty) = xs.fdecl_return in
               (* TODO: check arguments *)
               if ret_qs = no_qualifiers && proj_ctype_ ret_ty = Basic (Integer (Signed Int_)) then
                 annotate_sigma sigm >>= fun sigm' ->

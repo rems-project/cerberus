@@ -170,7 +170,7 @@ let tmp_implementation =
 
 
 let function_return_type = function
-  | Ctype.Function _ ty _ _ -> ty
+  | Ctype.Function xs -> snd xs.Ctype.return
   | _ -> error "[Translation_aux.function_return_type] impossible case: TODO move to Exception.t"
 end
 

@@ -413,7 +413,7 @@ let rec mkUnspec (Ctype _ ty) =
         error "Defacto_memory.mkUnspec: called on Array _ Nothing"
     | Array ty (Just n) ->
         MVarray $ replicate (natFromInteger n) (mkUnspec ty)
-    | Function _ _ _ _ ->
+    | Function _ ->
         error "Defacto_memory.mkUnspec: called on Function _ _ _"
     | (Pointer _ ty') ->
         MVpointer ty' (PV Prov_none (PVunspecified ty') [])
@@ -1044,7 +1044,7 @@ let rec impl_sizeof_ival_aux (Ctype _ ty as cty) =
         error "Mem.impl_sizeof_ival_aux, Array Nothing"
     | Array elem_ty (Just n) ->
         IVop IntMul [impl_sizeof_ival_aux elem_ty; IVconcrete n]
-    | Function _ _ _ _ ->
+    | Function _ ->
         error "Mem.impl_sizeof_ival_aux, Function"
     | Pointer _ _ ->
         IVconcrete 8 (* TODO *)
