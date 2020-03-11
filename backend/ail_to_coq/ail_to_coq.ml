@@ -16,9 +16,15 @@ let id_to_str Symbol.(Identifier(_,id)) = id
 
 let translate_layout Ctype.(Ctype(_, c_ty)) =
   match c_ty with
-  | Pointer(_,_) -> LPtr
-  | Struct(sym)  -> LStruct(sym_to_str sym)
-  | _            -> not_implemented "translate_layout"
+  | Void               -> not_implemented "translate_layout (Void)"
+  | Basic(Integer(i))  -> not_implemented "translate_layout (Basic int)"
+  | Basic(Floating(_)) -> not_implemented "translate_layout (Basic float)"
+  | Array(_,_)         -> not_implemented "translate_layout (Basic)"
+  | Function(_,_,_,_)  -> not_implemented "translate_layout (Function)"
+  | Pointer(_,_)       -> LPtr
+  | Atomic(_)          -> not_implemented "translate_layout (Atomic)"
+  | Struct(sym)        -> LStruct(sym_to_str sym)
+  | Union(_)           -> not_implemented "translate_layout (Union)"
 
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
@@ -224,7 +230,7 @@ let translate_block : 'a -> stmt SMap.t -> stmt * stmt SMap.t =
               let fn (id, e, es) stmt = Call(id, e, es, stmt) in
               List.fold_right fn l stmt
           | _                 ->
-              not_implemented "weird top level expression"
+              trans_expr e (fun e -> ExprS(e, stmt))
         in
         (stmt, blocks)
     | AilSif(e,s1,s2)     ->
@@ -256,7 +262,25 @@ let translate_block : 'a -> stmt SMap.t -> stmt * stmt SMap.t =
           SMap.add id_body stmt blocks
         in
         (Goto(id_body), blocks)
-    | AilSdo(_,_)         -> not_implemented "statement do"
+    | AilSdo(s,e)         ->
+        let id_body = fresh_block_id () in
+        let id_cont = fresh_block_id () in
+        (* Translate the continuation. *)
+        let blocks =
+          let (stmt, blocks) = trans break continue final stmts blocks in
+          SMap.add id_cont stmt blocks
+        in
+        (* Translate the body. *)
+        let blocks =
+          let break    = Some(Goto(id_cont)) in
+          let continue = Some(Goto(id_body)) in
+          let stmt =
+            trans_expr e (fun e -> If(e, Goto(id_body), Goto(id_cont)))
+          in
+          let (stmt, blocks) = trans break continue (Some stmt) [s] blocks in
+          SMap.add id_body stmt blocks
+        in
+        (Goto(id_body), blocks)
     | AilSswitch(_,_)     -> not_implemented "statement switch"
     | AilScase(_,_)       -> not_implemented "statement case"
     | AilSdefault(_)      -> not_implemented "statement default"
@@ -312,7 +336,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let struct_name = sym_to_str id in
       let struct_members =
         match def with
-        | UnionDef(_)  -> not_implemented "union" (* TODO *)
+        | UnionDef(_)  -> not_implemented "union"
         | StructDef(l) ->
             let fn (id, (_, c_ty)) =
               (id_to_str id, translate_layout c_ty)

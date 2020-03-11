@@ -46,6 +46,7 @@ type stmt =
   | If     of expr * stmt * stmt
 (*| AnnotStmt (n : nat) {A} (a : A) (s : stmt)*)
   | Assert of expr * stmt
+  | ExprS  of expr * stmt
 
 type struct_decl =
   { struct_name    : string
