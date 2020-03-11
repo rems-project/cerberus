@@ -12,16 +12,11 @@ module Sym = struct
 
   type sym = Symbol.sym
 
-
-
   module Env = struct
-
     type t = (string, Symbol.sym) Pmap.map
-
-    let new_env = Pmap.empty
+    let new_env = Pmap.empty String.compare
     let lookup name env = Pmap.lookup name env
     let add name sym env = Pmap.add name sym env
-
   end
 
   let fresh = Symbol.fresh
@@ -89,7 +84,7 @@ module IT = struct
     | List its -> sprintf "(list %s)" (pp_to_sexp_list pp its)
 
 
-  let rec parse_sexp env sx = 
+  let rec parse_sexp (env : Sym.Env.t) sx = 
     match sx with
     | Atom "true" -> 
        Bool true
@@ -137,7 +132,7 @@ module LP = struct
     | GE (o1,o2) -> sprintf "(%s >= %s)" (IT.pp o1) (IT.pp o2)
     | Null o1 -> sprintf "(null %s)" (IT.pp o1)
 
-  let parse_sexp env sx =
+  let parse_sexp (env : Sym.Env.t) sx =
     match sx with 
     | List [o1;Atom "=";o2]  -> 
        EQ (IT.parse_sexp env o1, IT.parse_sexp env o2)
@@ -168,7 +163,7 @@ module LC = struct
     | Not (o1) -> sprintf "(not %s)" (pp o1)
     | Pred p -> LP.pp p
 
-  let rec parse_sexp env sx =
+  let rec parse_sexp (env : Sym.Env.t) sx =
     match sx with
     | List [Atom "not";op] -> Not (parse_sexp env op)
     | List [o1; Atom "&"; o2] -> And (parse_sexp env o1, parse_sexp env o2)
@@ -193,7 +188,7 @@ module BT = struct
     | Loc -> "loc"
     | Struct sym -> sprintf "(struct %s)" (Sym.pp sym)
 
-  let rec parse_sexp env sx = 
+  let rec parse_sexp (env : Sym.Env.t) sx = 
     match sx with
     | Atom "unit" -> Unit
     | Atom "bool" -> Bool
@@ -238,7 +233,7 @@ module RE = struct
          (IT.pp it2)
          (pp rt)
 
-  let rec parse_sexp env sx = 
+  let rec parse_sexp (env : Sym.Env.t) sx = 
     match sx with 
     | List [Atom "block";it1;it2] -> 
        Block (IT.parse_sexp env it1,
@@ -279,7 +274,7 @@ module LS = struct
     | Base bt -> 
          BT.pp bt
 
-  let rec parse_sexp env sx =
+  let rec parse_sexp (env : Sym.Env.t) sx =
     match sx with
     | Sexp.List [Atom "list"; a] ->
        List (BT.parse_sexp env a)
@@ -331,7 +326,7 @@ module RT = struct
     | I -> 
        "I"
 
-  let rec parse_sexp env = function
+  let rec parse_sexp (env : Sym.Env.t) = function
     | Atom "EC" :: List [Atom id; Atom ":"; t] :: Atom "." :: rt ->
        let sym = Sym.fresh_pretty id in
        let env' = Sym.Env.add id sym env in
@@ -387,7 +382,7 @@ module FT = struct
   let pp (Fn (args, rt)) = 
     sprintf "%s%s" (pp_arguments args) (RT.pp rt)
 
-  let rec parse_sexp_aux acc env = function
+  let rec parse_sexp_aux acc (env : Sym.Env.t) = function
     | Atom "AC" :: List [Atom id; Atom ":"; bt] :: Atom "." :: args ->
        let sym = Sym.fresh_pretty id in
        let env' = Sym.Env.add id sym env in
@@ -407,7 +402,7 @@ module FT = struct
     | rt -> 
        Fn (List.rev acc, RT.parse_sexp env rt)
 
-  let parse_sexp env = function
+  let parse_sexp (env : Sym.Env.t) = function
     | List ft -> parse_sexp_aux [] env ft
     | t -> parse_error "function type" t
          
@@ -466,72 +461,72 @@ let option_get = function
 
 
 
-let rec infer_lv lv : sym * (RT.return_type -> RT.return_type) = 
-  match lv with
-  | LVspecified ov -> infer_ov ov
-  | LVunspecified _ -> failwith "LVunspecified not implemented"
+(* let rec infer_lv lv : sym * (RT.return_type -> RT.return_type) = 
+ *   match lv with
+ *   | LVspecified ov -> infer_ov ov
+ *   | LVunspecified _ -> failwith "LVunspecified not implemented" *)
 
-and infer_ov ov : sym * (RT.return_type -> RT.return_type) = 
-  match ov with
-  | OVinteger i -> 
-     let n, lc = fresh (), fresh () in
-     let i = option_get (eval_integer_value i) in
-     let constr = var_equal_to n (Num i) in
-     (n, RT.combine [RT.a n BT.Int; RT.c lc constr])
-  | OVfloating _ -> 
-     failwith "floats not supported"
-  | OVpointer p -> 
-     let n = fresh () in
-     let rt = 
-       case_ptrval p 
-         (fun _ctype ->  (* case null *)
-           let lc = fresh () in
-           RT.combine [RT.a n BT.Loc; RT.c lc (var_null n)])
-         (fun _sym ->    (* case function pointer *)
-           failwith "function pointers not supported")
-         (fun _prov i -> (* case concrete pointer *)
-           let constr = var_equal_to n (Num i) in
-           let lc = fresh () in
-           RT.combine [RT.a n BT.Loc; RT.c lc constr])
-         (fun _ ->       (* case unspecified_value *)
-           unreachable ())
-     in
-     (n, rt)
-  | OVarray os -> 
-     (* let n = of_int (List.length os) in *)
-     let pointer = fresh () in
-     let names, items = List.split (List.map infer_lv os) in
-     let vars = List.map IT.var names in
-     let r = fresh () in
-     let ts = 
-       ((RT.a pointer BT.Loc) :: List.concat items) @
-       [RT.r r (Array (IT.Var pointer, IT.List vars))]
-     in
-     (pointer, RT.make ts)
-  | OVstruct (sym,flds) -> 
-     failwith "OVstruct not implemented"
-  | OVunion _ -> 
-     failwith "OVunion not implemented"
-
-let rec infer_v rt : (id * RT.return_type) m =
-  match rt with
-  | Vobject ov -> infer_ov ov
-  | Vloaded lv -> infer_lv lv
-  | Vunit -> 
-     fresh >>= fun n ->
-     return (n, [RT.A (n, BT.Unit)])
-  | Vtrue -> 
-     fresh >>= fun n ->
-     return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool true))])
-  | Vfalse ->
-     fresh >>= fun n ->
-     return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool false))])
-  | Vctype _ -> 
-     unreachable ()
-  | Vlist _ ->  
-     unreachable ()
-  | Vtuple vs -> 
-     unreachable ()
+(* and infer_ov ov : sym * (RT.return_type -> RT.return_type) = 
+ *   match ov with
+ *   | OVinteger i -> 
+ *      let n, lc = fresh (), fresh () in
+ *      let i = option_get (eval_integer_value i) in
+ *      let constr = var_equal_to n (Num i) in
+ *      (n, RT.combine [RT.a n BT.Int; RT.c lc constr])
+ *   | OVfloating _ -> 
+ *      failwith "floats not supported"
+ *   | OVpointer p -> 
+ *      let n = fresh () in
+ *      let rt = 
+ *        case_ptrval p 
+ *          (fun _ctype ->  (\* case null *\)
+ *            let lc = fresh () in
+ *            RT.combine [RT.a n BT.Loc; RT.c lc (var_null n)])
+ *          (fun _sym ->    (\* case function pointer *\)
+ *            failwith "function pointers not supported")
+ *          (fun _prov i -> (\* case concrete pointer *\)
+ *            let constr = var_equal_to n (Num i) in
+ *            let lc = fresh () in
+ *            RT.combine [RT.a n BT.Loc; RT.c lc constr])
+ *          (fun _ ->       (\* case unspecified_value *\)
+ *            unreachable ())
+ *      in
+ *      (n, rt)
+ *   | OVarray os -> 
+ *      (\* let n = of_int (List.length os) in *\)
+ *      let pointer = fresh () in
+ *      let names, items = List.split (List.map infer_lv os) in
+ *      let vars = List.map IT.var names in
+ *      let r = fresh () in
+ *      let ts = 
+ *        ((RT.a pointer BT.Loc) :: List.concat items) @
+ *        [RT.r r (Array (IT.Var pointer, IT.List vars))]
+ *      in
+ *      (pointer, RT.make ts)
+ *   | OVstruct (sym,flds) -> 
+ *      failwith "OVstruct not implemented"
+ *   | OVunion _ -> 
+ *      failwith "OVunion not implemented"
+ * 
+ * let rec infer_v rt : (id * RT.return_type) m =
+ *   match rt with
+ *   | Vobject ov -> infer_ov ov
+ *   | Vloaded lv -> infer_lv lv
+ *   | Vunit -> 
+ *      fresh >>= fun n ->
+ *      return (n, [RT.A (n, BT.Unit)])
+ *   | Vtrue -> 
+ *      fresh >>= fun n ->
+ *      return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool true))])
+ *   | Vfalse ->
+ *      fresh >>= fun n ->
+ *      return (n, [RT.A (n,BT.Bool); RT.C (var_equal_to n (Bool false))])
+ *   | Vctype _ -> 
+ *      unreachable ()
+ *   | Vlist _ ->  
+ *      unreachable ()
+ *   | Vtuple vs -> 
+ *      unreachable () *)
 
 
 type fenv = (Symbol.sym, FT.function_type) Pmap.map
@@ -547,30 +542,30 @@ let rec infer_p fenv aenv lenv renv c = ()
 
 let test_parse () = 
   let s = "(not ((1 + (x * 3)) < (2 + (x * 3))))" in
-  print_endline (LC.pp (LC.parse_sexp (of_string s)));
+  print_endline (LC.pp (LC.parse_sexp Sym.Env.new_env (of_string s)));
   let s = "(array x (4 10))" in
-  print_endline (RE.pp (RE.parse_sexp (of_string s)));
+  print_endline (RE.pp (RE.parse_sexp Sym.Env.new_env (of_string s)));
   let s = "((list int) -> loc)" in
-  print_endline (LS.pp (LS.parse_sexp (of_string s)));
+  print_endline (LS.pp (LS.parse_sexp Sym.Env.new_env (of_string s)));
   let s = "(A (x : loc) . A (i : int) . ForallL (n : int) . ForallL (f : (int -> int)) . ((0 <= i) & (i < n)) => (array x n f) =* EL (r : int) . (r = (f i)) & (array x n f) * I)" in
-  print_endline (FT.pp (FT.parse_sexp (of_string s)));
+  print_endline (FT.pp (FT.parse_sexp Sym.Env.new_env (of_string s)));
   print_endline "\n";
   ()
 
 
-let test_value_infer () = 
-  let infer v = snd (fst (infer_v v ID.init)) in
-  let t = Vtrue in
-  let () = print_endline (RT.pp (infer t)) in
-  let t = 
-    Vtuple 
-      [Vtrue; 
-       Vtuple [Vfalse; 
-               Vobject (OVinteger (integer_ival (of_int 123)))]; 
-       Vunit]
-  in
-  let () = print_endline (RT.pp (infer t)) in
-  ()
+(* let test_value_infer () = 
+ *   let infer v = snd (fst (infer_v v ID.init)) in
+ *   let t = Vtrue in
+ *   let () = print_endline (RT.pp (infer t)) in
+ *   let t = 
+ *     Vtuple 
+ *       [Vtrue; 
+ *        Vtuple [Vfalse; 
+ *                Vobject (OVinteger (integer_ival (of_int 123)))]; 
+ *        Vunit]
+ *   in
+ *   let () = print_endline (RT.pp (infer t)) in
+ *   () *)
 
 
 let pp_fun_map_decl f = 
@@ -591,12 +586,11 @@ let print_core_file core_file filename =
   (* print_endline (Pp_utils.to_plain_pretty_string pp) *)
 
 let check (core_file : unit Core.typed_file) =
-  let normalised_core_file = Core_anormalise.normalise_file core_file in
+  let mu_file = Core_anormalise.normalise_file core_file in
   Tags.set_tagDefs core_file.tagDefs;
   pp_fun_map_decl core_file.funinfo;
   print_core_file core_file "out1";
-  print_core_file normalised_core_file "out2";
-  let _mu_file = Mucore.core_to_mu__file normalised_core_file in
+  print_core_file (Mucore.mu_to_core__file mu_file) "out2";
   (* test_parse (); *)
-  test_value_infer ();
+  (* test_value_infer (); *)
 
