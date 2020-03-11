@@ -5,8 +5,11 @@ import Symbol
 
 open import Core
 open import Mucore
+     import Core_typing Core_typing_aux
 
 type bty = core_base_type
+type value = generic_value Symbol.sym
+type values = list value
 type pexpr = generic_pexpr bty Symbol.sym
 type pexprs = list pexpr
 type expr 'a = generic_expr 'a bty Symbol.sym
@@ -16,6 +19,8 @@ type annots = list annot
 type action 'a = generic_action 'a bty Symbol.sym
 type paction 'a = generic_paction 'a bty Symbol.sym
 
+type mu_value = Mucore.mu_value bty
+type mu_values = list mu_value
 type mu_pexpr = Mucore.mu_pexpr bty
 type mu_pexprs = list mu_pexpr
 type mu_expr 'a = Mucore.mu_expr 'a bty
@@ -55,6 +60,8 @@ type mu_pexpr_context 'a = 'a -> mu_pexpr
 
 
 
+val n_val :           annots -> value -> mu_pexpr_context mu_value -> mu_pexpr
+val n_val_names :     annots -> values -> mu_pexpr_context tsymbols -> mu_pexpr
 val n_pexpr :         pexpr -> mu_pexpr_context mu_pexpr -> mu_pexpr
 val n_pexpr_name :    pexpr -> mu_pexpr_context tsymbol -> mu_pexpr
 val n_pexpr_names :   pexprs -> mu_pexpr_context tsymbols -> mu_pexpr
@@ -68,6 +75,70 @@ let let_bind_pexpr pexp ctxt =
   let pat = var_pat sym annots bty in
   let body = ctxt (Sym annots bty sym) in
   M_Pexpr annots (bty_of_mu_pexpr body) (M_PElet pat pexp body)
+
+
+let mu_pexpr_for_val annots bty v = 
+  M_Pexpr annots bty (M_PEval v)
+
+
+let typeof_value v = 
+  match Core_typing.typeof_value Loc.unknown Core_typing_aux.empty_env v with
+  | Exception.Result bty -> bty
+  | Exception.Exception msg -> failwith "msg"
+  end
+
+
+let rec n_ov annots v k = 
+  match v with
+  | Core.OVinteger iv -> k (M_OVinteger iv)
+  | Core.OVfloating fv -> k (M_OVfloating fv)
+  | Core.OVpointer pv -> k (M_OVpointer pv)
+  | Core.OVarray is -> 
+     let vs = List.map Vloaded is in
+     n_val_names annots vs (fun syms ->
+     k (M_OVarray syms))
+  | Core.OVstruct sym is ->
+     k (M_OVstruct sym is)
+  | Core.OVunion sym id mv ->
+     k (M_OVunion sym id mv)
+  end
+
+and n_lv annots v k = 
+  match v with
+  | LVspecified ov ->
+     n_val_name annots (Vobject ov) (fun sym ->
+     k (M_LVspecified sym))
+  | LVunspecified ct ->
+     k (M_LVunspecified ct)
+  end
+
+and n_val annots v k = 
+  match v with
+  | Vobject ov -> n_ov annots ov (fun ov -> k (M_Vobject ov))
+  | Vloaded lv -> n_lv annots lv (fun lv -> k (M_Vloaded lv))
+  | Vunit -> k M_Vunit
+  | Vtrue -> k M_Vtrue
+  | Vfalse -> k M_Vfalse
+  | Vctype ct -> k (M_Vctype ct)
+  | Vlist cbt vs -> n_val_names annots vs (fun vs -> k (M_Vlist cbt vs))
+  | Vtuple vs -> n_val_names annots vs (fun vs -> k (M_Vtuple vs))
+  end
+
+and n_val_name annots v k = 
+  let bty = typeof_value v in
+  n_val annots v (fun v -> 
+  let pe = mu_pexpr_for_val annots bty v in
+  let_bind_pexpr pe (fun sym -> 
+  k sym))
+
+and n_val_names annots vs k = 
+  match vs with
+  | [] -> k []
+  | v :: vs ->
+     n_val_name annots v (fun sym ->
+     n_val_names annots vs (fun syms ->
+     k (sym :: syms)))
+  end
 
 
 let rec normalise_pexpr e = 
@@ -101,8 +172,8 @@ and n_pexpr_names (es : list pexpr) (k : tsymbols -> mu_pexpr) : mu_pexpr =
 
 and n_pexpr e k = 
 
-  let (Pexpr annot bty pe) = e in
-  let annotate pe = M_Pexpr annot bty pe in
+  let (Pexpr annots bty pe) = e in
+  let annotate pe = M_Pexpr annots bty pe in
 
   match pe with
   | PEsym sym -> 
@@ -110,7 +181,8 @@ and n_pexpr e k =
   | PEimpl i -> 
      k (annotate (M_PEimpl i))
   | PEval v -> 
-     k (annotate (M_PEval v))
+     n_val annots v (fun v ->
+     k (annotate (M_PEval v)))
   | PEconstrained l -> 
      let (constraints,exprs) = List.unzip l in
      n_pexpr_names exprs (fun exprs ->

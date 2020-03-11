@@ -7,29 +7,47 @@ import Mem Mem_common
 
 import Core
 
-
-type mu_object_type = Core.core_object_type
-
+open import Assert_extra
 
 
-(* although we might drop the BTy_ctype *)
-type mu_base_type = Core.core_base_type
-type bty = mu_base_type
 
 type symbol = Symbol.sym
-type tsymbol 'bty = Sym of list Annot.annot * 'bty * Symbol.sym
-
-
+type mu_object_type = Core.core_object_type
+type mu_base_type = Core.core_base_type
+type bty = mu_base_type
 type mu_name = Core.generic_name symbol
+type tsymbol 'bty = Sym of list Annot.annot * 'bty * Symbol.sym 
+(* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
+type ov_tsymbol 'bty = tsymbol 'bty       (* object_value *)
+type lv_tsymbol 'bty = tsymbol 'bty       (* loaded_value *)
+type va_tsymbol 'bty = tsymbol 'bty       (* value *)
 
-type mu_object_value = Core.generic_object_value symbol
-type mu_loaded_value = Core.generic_loaded_value symbol
 
+type mu_object_value 'bty =  (* C object values *)
+ | M_OVinteger of Mem.integer_value (* integer value *)
+ | M_OVfloating of Mem.floating_value (* floating-point value *)
+ | M_OVpointer of Mem.pointer_value (* pointer value *)
+ | M_OVarray of list (lv_tsymbol 'bty) (* C array value *)
+ | M_OVstruct of symbol * list (Symbol.identifier * ctype * Mem.mem_value) (* C struct value *)
+ | M_OVunion of symbol * Symbol.identifier * Mem.mem_value (* C union value *)
+
+type mu_loaded_value 'bty =  (* potentially unspecified C object values *)
+ | M_LVspecified of ov_tsymbol 'bty (* non-unspecified loaded value *)
+ | M_LVunspecified of ctype (* unspecified loaded value *)
 
 
 (* again, we might remove something from the definition here,
    e.g. Vctype *)
-type mu_value = Core.generic_value symbol
+type mu_value 'bty =  (* Core values *)
+ | M_Vobject of mu_object_value 'bty (* C object value *)
+ | M_Vloaded of mu_loaded_value 'bty (* loaded C object value *)
+ | M_Vunit
+ | M_Vtrue
+ | M_Vfalse
+ | M_Vctype of ctype (* C type as value *)
+ | M_Vlist of Core.core_base_type * list (tsymbol 'bty)
+ | M_Vtuple of list (tsymbol 'bty) (* tuple *)
+
 
 
 type mu_ctor 'bty = Core.generic_ctor 'bty
@@ -40,7 +58,7 @@ type mu_pattern 'bty = Core.generic_pattern 'bty symbol
 type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEsym of symbol
  | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
- | M_PEval of mu_value
+ | M_PEval of mu_value 'bty
  | M_PEconstrained of list (Mem.mem_iv_constraint * tsymbol 'bty) (* constrained value *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * tsymbol 'bty (* impl-defined static error *)
@@ -175,29 +193,96 @@ type mu_file 'bty 'a = <|
 let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) = 
   List.map (fun (a,b) -> (a, f b)) l
 
-(* for error reporting *)
-type outer 'a 'bty = 
-  | PEXPR of Core.generic_pexpr 'bty symbol
-  | ACTION of Core.generic_action_ 'bty symbol
-  | EXPR of Core.generic_expr 'a 'bty symbol
-  | NONE
-
-val print_endline : string -> unit
-declare ocaml target_rep function print_endline = `print_endline`
 
 let make_symbol_pexpr (Sym annots bty sym) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEsym sym)
 
-let rec mu_to_core__pexpr (pexpr : mu_pexpr 'bty)
+type symbol_env 'bty = map symbol (mu_pexpr 'bty)
+
+let lookup_tsymbol env (Sym _ _ sym) = 
+  match Map.lookup sym env with
+  | Just v -> v
+  | Nothing -> 
+     let err = "symbol " ^ show sym ^ " not found" in
+     failwith err
+  end
+
+let get_loaded_value env sym = 
+  match lookup_tsymbol env sym with
+  | M_Pexpr _ _ (M_PEval (M_Vloaded lv)) -> lv
+  | _ -> failwith "not a loaded value"
+  end
+
+let get_object_value env sym = 
+  match lookup_tsymbol env sym with
+  | M_Pexpr _ _ (M_PEval (M_Vobject ov)) -> ov
+  | _ -> failwith "not an object value"
+  end
+
+let get_value env sym = 
+  match lookup_tsymbol env sym with
+  | M_Pexpr _ _ (M_PEval v) -> v
+  | _ -> failwith "not an object value"
+  end
+
+
+let rec mu_to_core__object_value (env : symbol_env 'bty) ov = 
+  match ov with
+  | M_OVinteger iv -> Core.OVinteger iv
+  | M_OVfloating fv -> Core.OVfloating fv
+  | M_OVpointer ov -> Core.OVpointer ov
+  | M_OVstruct s is -> Core.OVstruct s is
+  | M_OVunion s i mv -> Core.OVunion s i mv
+  | M_OVarray is ->
+     let is = List.map (get_loaded_value env) is in
+     Core.OVarray (List.map (mu_to_core__loaded_value env) is)
+  end
+
+and mu_to_core__loaded_value (env : symbol_env 'bty) lv = 
+  match lv with
+  | M_LVspecified sym ->
+     let ov = get_object_value env sym in
+     Core.LVspecified (mu_to_core__object_value env ov)
+  | M_LVunspecified ct -> Core.LVunspecified ct
+  end
+
+
+let rec mu_to_core__value (env : symbol_env 'bty) (v : mu_value 'bty)
+        : Core.generic_value symbol =
+  match v with
+  | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env ov)
+  | M_Vloaded lv -> Core.Vloaded (mu_to_core__loaded_value env lv)
+  | M_Vunit -> Core.Vunit
+  | M_Vtrue -> Core.Vtrue
+  | M_Vfalse -> Core.Vfalse
+  | M_Vctype ct -> Core.Vctype ct
+  | M_Vlist cbt is -> 
+     let is = List.map (get_value env) is in
+     Core.Vlist cbt (List.map (mu_to_core__value env) is)
+  | M_Vtuple is ->
+     let is = List.map (get_value env) is in
+     Core.Vtuple (List.map (mu_to_core__value env) is)
+  end
+  
+
+let maybe_extend_env (env : symbol_env 'bty) pat (pe : mu_pexpr 'bty) = 
+  let (Core.Pattern _ p) = pat in
+  match p with
+  | Core.CaseBase (Just sym, _cbt)  ->
+     Map.insert sym pe env
+  | _ -> env
+  end
+
+let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
         : Core.generic_pexpr 'bty symbol =
   let (M_Pexpr annots bty pexpr_) = pexpr in
   let pexpr_ = match pexpr_ with
     | M_PEsym s ->
-       Core.PEsym s       
+       Core.PEsym s
     | M_PEimpl ic -> 
        Core.PEimpl ic
     | M_PEval v -> 
-       Core.PEval v
+       Core.PEval (mu_to_core__value env v)
     | M_PEconstrained l -> 
        let l = mapsnd make_symbol_pexpr l in
        Core.PEconstrained l
@@ -208,7 +293,7 @@ let rec mu_to_core__pexpr (pexpr : mu_pexpr 'bty)
     | M_PEctor ctor pes -> 
        Core.PEctor ctor (map make_symbol_pexpr pes)
     | M_PEcase p pats ->
-       let pats = mapsnd mu_to_core__pexpr pats in
+       let pats = mapsnd (mu_to_core__pexpr env) pats in
        Core.PEcase (make_symbol_pexpr p) pats
     | M_PEarray_shift pe1 ctype pe2 ->
        Core.PEarray_shift (make_symbol_pexpr pe1) ctype (make_symbol_pexpr pe2)
@@ -230,9 +315,15 @@ let rec mu_to_core__pexpr (pexpr : mu_pexpr 'bty)
     | M_PEcall name args ->
        Core.PEcall name (map make_symbol_pexpr args)
     | M_PElet pat p1 p2 ->
-       Core.PElet pat (mu_to_core__pexpr p1) (mu_to_core__pexpr p2)
+       let env' = maybe_extend_env env pat p1 in
+       Core.PElet pat 
+         (mu_to_core__pexpr env p1) 
+         (mu_to_core__pexpr env' p2)
     | M_PEif p0 p1 p2 ->
-       Core.PEif (make_symbol_pexpr p0) (mu_to_core__pexpr p1) (mu_to_core__pexpr p2)
+       Core.PEif 
+         (make_symbol_pexpr p0)
+         (mu_to_core__pexpr env p1)
+         (mu_to_core__pexpr env p2)
     | M_PEis_scalar p ->
        Core.PEis_scalar (make_symbol_pexpr p)
     | M_PEis_integer p ->
@@ -294,22 +385,25 @@ let mu_to_core__action (M_Action t a action_) =
 let mu_to_core__paction (M_Paction p action) = 
   Core.Paction p (mu_to_core__action action)
 
-let rec mu_to_core__expr (expr : mu_expr 'a 'bty)
+let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
         : Core.generic_expr 'a 'bty symbol =
   let (M_Expr annots expr_) = expr in
   let expr_ = match expr_ with
     | M_Epure p -> 
-       Core.Epure (mu_to_core__pexpr p)
+       Core.Epure (mu_to_core__pexpr env p)
     | M_Ememop memop pexprs ->
        Core.Ememop memop (map make_symbol_pexpr pexprs)
     | M_Eaction pa ->
        Core.Eaction (mu_to_core__paction pa)
     | M_Ecase pe es ->
-       Core.Ecase (make_symbol_pexpr pe) (mapsnd mu_to_core__expr es)
+       Core.Ecase (make_symbol_pexpr pe) (mapsnd (mu_to_core__expr env) es)
     | M_Elet pat pe e ->
-       Core.Elet pat (mu_to_core__pexpr pe) (mu_to_core__expr e)
+       let env' = maybe_extend_env env pat pe in
+       Core.Elet pat (mu_to_core__pexpr env pe) (mu_to_core__expr env' e)
     | M_Eif pe e1 e2 ->
-       Core.Eif (make_symbol_pexpr pe) (mu_to_core__expr e1) (mu_to_core__expr e2)
+       Core.Eif (make_symbol_pexpr pe) 
+                (mu_to_core__expr env e1)
+                (mu_to_core__expr env e2)
     | M_Eskip ->
        Core.Eskip
     | M_Eccall a pe1 pe2 pes ->
@@ -318,27 +412,27 @@ let rec mu_to_core__expr (expr : mu_expr 'a 'bty)
     | M_Eproc a name pes ->
        Core.Eproc a name (map make_symbol_pexpr pes)
     | M_Eunseq es ->
-       Core.Eunseq (map mu_to_core__expr es)
+       Core.Eunseq (map (mu_to_core__expr env) es)
     | M_Ewseq pat e1 e2 ->
-       Core.Ewseq pat (mu_to_core__expr e1) (mu_to_core__expr e2)
+       Core.Ewseq pat (mu_to_core__expr env e1) (mu_to_core__expr env e2)
     | M_Esseq pat e1 e2 ->
-       Core.Esseq pat (mu_to_core__expr e1) (mu_to_core__expr e2)
+       Core.Esseq pat (mu_to_core__expr env e1) (mu_to_core__expr env e2)
     | M_Easeq (s,bt) a pa ->
        Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa)
     | M_Eindet n e ->
-       Core.Eindet n (mu_to_core__expr e)
+       Core.Eindet n (mu_to_core__expr env e)
     | M_Ebound n e ->
-       Core.Ebound n (mu_to_core__expr e)
+       Core.Ebound n (mu_to_core__expr env e)
     | M_End es ->
-       Core.End (List.map mu_to_core__expr es)
+       Core.End (List.map (mu_to_core__expr env) es)
     | M_Esave (sym,bt) sbp e ->
        let sbp = 
          List.map (fun (sym,(bt,pe)) -> (sym,(bt,make_symbol_pexpr pe))) sbp in
-       Core.Esave (sym,bt) sbp (mu_to_core__expr e)
+       Core.Esave (sym,bt) sbp (mu_to_core__expr env e)
     | M_Erun a sym pes ->
-       Core.Erun a sym (List.map make_symbol_pexpr pes)
+       Core.Erun a sym (map make_symbol_pexpr pes)
     | M_Epar es ->
-       Core.Epar (List.map mu_to_core__expr es)
+       Core.Epar (map (mu_to_core__expr env) es)
     | M_Ewait tid -> 
        Core.Ewait tid
   end in
@@ -349,9 +443,9 @@ let mu_to_core__impl_decl (i : mu_impl_decl 'bty)
     : Core.generic_impl_decl 'bty =
   match i with
   | M_Def bt p -> 
-     Core.Def bt (mu_to_core__pexpr p)
+     Core.Def bt (mu_to_core__pexpr Map.empty p)
   | M_IFun bt args body -> 
-     Core.IFun bt args (mu_to_core__pexpr body)
+     Core.IFun bt args (mu_to_core__pexpr Map.empty body)
   end
 
 let mu_to_core__impl (i : mu_impl 'bty) 
@@ -363,9 +457,9 @@ let mu_to_core__fun_map_decl (d : mu_fun_map_decl 'bty 'a)
     : Core.generic_fun_map_decl 'bty 'a =
   match d with
   | M_Fun bt args pe ->
-     Core.Fun bt args (mu_to_core__pexpr pe)
+     Core.Fun bt args (mu_to_core__pexpr Map.empty pe)
   | M_Proc loc bt args e ->
-     Core.Proc loc bt args (mu_to_core__expr e)
+     Core.Proc loc bt args (mu_to_core__expr Map.empty e)
   | M_ProcDecl loc bt bts ->
      Core.ProcDecl loc bt bts
   | M_BuiltinDecl loc bt bts ->
@@ -380,7 +474,7 @@ let mu_to_core__fun_map (fmap : mu_fun_map 'bty 'a)
 let mu_to_core__globs (g : mu_globs 'a 'bty) 
     : Core.generic_globs 'a 'bty = 
   match g with
-  | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr e)
+  | M_GlobalDef bt e -> Core.GlobalDef bt (mu_to_core__expr Map.empty e)
   | M_GlobalDecl bt -> Core.GlobalDecl bt 
   end
 
