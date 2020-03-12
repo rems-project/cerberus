@@ -71,8 +71,8 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
       pp "NULL"
   | Val(Void)               ->
       pp "VOID"
-  | Val(Int(s))             ->
-      pp "i2v %s ..." s
+  | Val(Int(s,it))          ->
+      pp "i2v %s %a" s pp_int_type it
   | UnOp(op,ty,e)           ->
       pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
   | BinOp(op,ty1,ty2,e1,e2) ->
@@ -98,7 +98,7 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   | Goto(id)               ->
       pp "Goto %S" id
   | Return(e)              ->
-      pp "Return @[<hov 0>%a@]" pp_expr e
+      pp "Return @[<hov 0>(%a)@]" pp_expr e
   | Assign(lay,e1,e2,stmt) ->
       pp "@[<hov 2>%a <-{ %a }@ %a ;@]@;%a"
         pp_expr e1 pp_layout lay pp_expr e2 pp_stmt stmt
