@@ -1,27 +1,33 @@
 open Extra
 
+type int_type =
+  | ItInt of { size : int ; signed : bool }
+  | ItSize_t
+  | ItIntptr_t of bool (* signed *)
+
+type op_type =
+  | OpInt of int_type
+  | OpPtr
+
 type un_op =
   | NotBoolOp
   | NotIntOp
   | NegOp
-  | CastOp of { length : int ; signed : bool }
+  | CastOp of op_type
 
 type bin_op =
   | AddOp | SubOp | MulOp | DivOp | ModOp | AndOp | OrOp | XorOp | ShlOp
   | ShrOp | EqOp | NeOp | LtOp | GtOp | LeOp | GeOp | RoundDownOp | RoundUpOp
 
-type op_type =
-  | IntOp of { size : int ; signed : bool }
-  | PtrOp
-
 type value =
   | Null
   | Void
-  (* TODO *)
+  | Int of string (* FIXME type *)
 
 type layout =
   | LPtr
   | LStruct of string
+  | LInt of int_type
 
 type expr =
   | Var       of string option * bool (* Global? *)

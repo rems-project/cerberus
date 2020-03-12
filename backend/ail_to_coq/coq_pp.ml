@@ -8,14 +8,34 @@ let section_name : string -> string = fun fname ->
   let cleanup name c = String.concat "_" (String.split_on_char c name) in
   List.fold_left cleanup fname ['/'; '-'; '.']
 
+let pp_int_type : Coq_ast.int_type pp = fun ff it ->
+  let pp fmt = Format.fprintf ff fmt in
+  match it with
+  | ItInt(i)      -> pp "{|it_size := %i%%nat; it_signed := %b|}"
+                       i.size i.signed
+  | ItSize_t      -> pp "size_t"
+  | ItIntptr_t(b) -> pp "size_t" (* FIXME *)
+
+let pp_layout : Coq_ast.layout pp = fun ff layout ->
+  let pp fmt = Format.fprintf ff fmt in
+  match layout with
+  | LPtr        -> pp "LPtr"
+  | LStruct(id) -> pp "layout_of struct_%s" id
+  | LInt(i)     -> pp "it_layout %a" pp_int_type i
+
+let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
+  let pp fmt = Format.fprintf ff fmt in
+  match ty with
+  | OpInt(i) -> pp "IntOp %a" pp_int_type i
+  | OpPtr    -> pp "PtrOp"
+
 let pp_un_op : Coq_ast.un_op pp = fun ff op ->
   let pp fmt = Format.fprintf ff fmt in
   match op with
-  | NotBoolOp                -> pp "NotBoolOp"
-  | NotIntOp                 -> pp "NotIntOp"
-  | NegOp                    -> pp "NegOp"
-  | CastOp({length; signed}) ->
-      pp "(CastOp {cast_length := %i; cast_signed := %b})" length signed
+  | NotBoolOp  -> pp "NotBoolOp"
+  | NotIntOp   -> pp "NotIntOp"
+  | NegOp      -> pp "NegOp"
+  | CastOp(ty) -> pp "(CastOp $ %a)" pp_op_type ty
 
 let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
   Format.pp_print_string ff @@
@@ -39,19 +59,6 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
   | RoundDownOp -> "..." (* TODO *) 
   | RoundUpOp   -> "..." (* TODO *) 
 
-let pp_layout : Coq_ast.layout pp = fun ff layout ->
-  match layout with
-  | LPtr        -> Format.pp_print_string ff "LPtr"
-  | LStruct(id) -> Format.pp_print_string ff ("layout_of struct_" ^ id)
-
-let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
-  let pp fmt = Format.fprintf ff fmt in
-  match ty with
-  | IntOp({size; signed}) ->
-      pp "IntOp { it_sizw := %i ; it_signed := %b }" size signed
-  | PtrOp                 ->
-      pp "PtrOp"
-
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
   match e with
@@ -64,6 +71,8 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
       pp "NULL"
   | Val(Void)               ->
       pp "VOID"
+  | Val(Int(s))             ->
+      pp "i2v %s ..." s
   | UnOp(op,ty,e)           ->
       pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
   | BinOp(op,ty1,ty2,e1,e2) ->
