@@ -81,7 +81,7 @@ let translate_gen_type ty =
   | GenRValueType(ty)            ->
   match ty with
   | GenPointer(_,_)              -> LPtr
-  | GenVoid                      -> assert false 
+  | GenVoid                      -> assert false
   | GenArray(_,_)                -> assert false
   | GenFunction(_,_,_,_)         -> assert false
   | GenStruct(id)                -> LStruct(sym_to_str id)
@@ -126,7 +126,7 @@ let op_type_of_genTypeCategory ty =
   | GenRValueType(ty)    ->
   match ty with
   | GenPointer(_,_)          -> OpPtr
-  | GenVoid                  -> assert false 
+  | GenVoid                  -> assert false
   | GenArray(_,_)            -> assert false
   | GenFunction(_,_,_,_)     -> assert false
   | GenStruct(_)             -> assert false
@@ -147,7 +147,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   let translate = translate_expr lval in
   match e with
   | AilEunary(Address,e)         ->
-      let (e, l) = translate e in
+      let (e, l) = translate_expr true e in
       (AddrOf(e), l)
   | AilEunary(Indirection,e)     ->
       let layout = translate_gen_type (gen_type_of_expr e) in
@@ -293,7 +293,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       ((if lval then Deref(layout,e) else Use(layout,e)), l)
   | AilEarray_decay(e)           -> not_implemented "expr array_decay"
   | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
-        
+
 let strip_statement (AnnotatedStatement(_, s)) = s
 
 let trans_expr e (e_stmt : expr -> stmt) : stmt =
@@ -345,7 +345,7 @@ let translate_block : 'a -> stmt SMap.t -> stmt * stmt SMap.t =
           | AilEassert(e)     ->
               trans_expr e (fun e -> Assert(e, stmt))
           | AilEassign(e1,e2) ->
-              let e1 = trans_lval e1 in 
+              let e1 = trans_lval e1 in
               let layout = translate_gen_type ty in
               trans_expr e2 (fun e2 -> Assign(layout, e1, e2, stmt))
           | AilEcall(e,es)    ->
@@ -435,7 +435,7 @@ let translate_block : 'a -> stmt SMap.t -> stmt * stmt SMap.t =
     | AilSreg_store(_,_)  -> not_implemented "statement store"
   in
   trans None None (Some(Return(Val(Void))))
- 
+
 (** [translate fname ail] translates typed Ail AST to Coq AST. *)
 let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the entry point. *)
