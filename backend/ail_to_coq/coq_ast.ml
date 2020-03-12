@@ -22,7 +22,7 @@ type bin_op =
 type value =
   | Null
   | Void
-  | Int of string (* FIXME type *)
+  | Int of string * int_type
 
 type layout =
   | LPtr

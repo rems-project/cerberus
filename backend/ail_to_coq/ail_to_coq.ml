@@ -257,7 +257,13 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
         | ConstantInteger(i)          ->
             begin
               match i with
-              | IConstant(i,_,_) -> Int(Z.to_string i)
+              | IConstant(i,_,_) ->
+                  let it =
+                    match op_type_of_genTypeCategory ty with
+                    | OpInt(it) -> it
+                    | _         -> assert false
+                  in
+                  Int(Z.to_string i, it)
               | _                -> not_implemented "weird integer constant"
             end
         | ConstantFloating(_)         -> not_implemented "constant float"
