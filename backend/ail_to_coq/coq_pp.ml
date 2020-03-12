@@ -42,9 +42,9 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
   match op with
   | AddOp       -> "+"
   | SubOp       -> "-"
-  | MulOp       -> "..." (* TODO *) 
-  | DivOp       -> "..." (* TODO *) 
-  | ModOp       -> "..." (* TODO *) 
+  | MulOp       -> "×"
+  | DivOp       -> "/"
+  | ModOp       -> "%"
   | AndOp       -> "..." (* TODO *) 
   | OrOp        -> "..." (* TODO *) 
   | XorOp       -> "..." (* TODO *) 
