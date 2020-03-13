@@ -19,9 +19,10 @@ let pp_int_type : Coq_ast.int_type pp = fun ff it ->
 let pp_layout : Coq_ast.layout pp = fun ff layout ->
   let pp fmt = Format.fprintf ff fmt in
   match layout with
-  | LPtr        -> pp "LPtr"
-  | LStruct(id) -> pp "layout_of struct_%s" id
-  | LInt(i)     -> pp "it_layout %a" pp_int_type i
+  | LPtr               -> pp "LPtr"
+  | LStruct(id, false) -> pp "layout_of struct_%s" id
+  | LStruct(id, true ) -> pp "ul_layout union_%s" id
+  | LInt(i)            -> pp "it_layout %a" pp_int_type i
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
   let pp fmt = Format.fprintf ff fmt in
@@ -62,35 +63,37 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
   match e with
-  | Var(None   ,g)          ->
+  | Var(None   ,g)                ->
       pp "\"_\""
-  | Var(Some(x),g)          ->
+  | Var(Some(x),g)                ->
       let x = if g then x else Printf.sprintf "\"%s\"" x in
       Format.pp_print_string ff x
-  | Val(Null)               ->
+  | Val(Null)                     ->
       pp "NULL"
-  | Val(Void)               ->
+  | Val(Void)                     ->
       pp "VOID"
-  | Val(Int(s,it))          ->
+  | Val(Int(s,it))                ->
       pp "i2v %s %a" s pp_int_type it
-  | UnOp(op,ty,e)           ->
+  | UnOp(op,ty,e)                 ->
       pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
-  | BinOp(op,ty1,ty2,e1,e2) ->
+  | BinOp(op,ty1,ty2,e1,e2)       ->
       pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
         pp_op_type ty1 pp_op_type ty2 pp_expr e2
-  | Deref(lay,e)            ->
+  | Deref(lay,e)                  ->
       pp "!{%a} (%a)" pp_layout lay pp_expr e
-  | CAS(ty,e1,e2,e3)        ->
+  | CAS(ty,e1,e2,e3)              ->
       pp "CAS@ (%a)@ (%a)@ (%a)@ (%a)" pp_op_type ty
         pp_expr e1 pp_expr e2 pp_expr e3
-  | SkipE(e)                ->
+  | SkipE(e)                      ->
       pp "SkipE (%a)" pp_expr e
-  | Use(lay,e)              ->
+  | Use(lay,e)                    ->
       pp "use{%a} (%a)" pp_layout lay pp_expr e
-  | AddrOf(e)               ->
+  | AddrOf(e)                     ->
       pp "&(%a)" pp_expr e
-  | GetMember(e,name,field) ->
-      pp "(%a) at{%s} %S" pp_expr e ("struct_" ^ name) field
+  | GetMember(e,name,false,field) ->
+      pp "(%a) at{struct_%s} %S" pp_expr e name field
+  | GetMember(e,name,true ,field) ->
+      pp "(%a) at_union{union_%s} %S" pp_expr e name field
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
@@ -150,11 +153,26 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   let pp_func_decl (id, _) = pp "Context (%s : loc).@;" id in
   List.iter pp_func_decl ast.functions;
 
-  (* Definition of structs. *)
+  (* Definition of structs/unions. *)
   let pp_struct (id, decl) =
     pp "@;(* Definition of struct [%s]. *)@;" id;
     pp "@[<v 2>Program Definition struct_%s := {|@;" id;
     pp "@[<v 2>sl_members := [";
+
+    let n = List.length decl.struct_members in
+    let fn i (id, layout) =
+      let sc = if i = n - 1 then "" else ";" in
+      pp "@;(%S, %a)%s" id pp_layout layout sc
+    in
+    List.iteri fn decl.struct_members;
+
+    pp "@]@;];@]@;|}.@;";
+    pp "Solve Obligations with solve_struct_obligations.@;"
+  in
+  let pp_union (id, decl) =
+    pp "@;(* Definition of struct [%s]. *)@;" id;
+    pp "@[<v 2>Program Definition union_%s := {|@;" id;
+    pp "@[<v 2>ul_members := [";
 
     let n = List.length decl.struct_members in
     let fn i (id, layout) =
@@ -175,7 +193,10 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     else
       sort_structs found (strs @ [str])
   in
-  List.iter pp_struct (sort_structs [] ast.structs);
+  let pp_struct_union s =
+    if (snd s).struct_is_union then pp_union s else pp_struct s
+  in
+  List.iter pp_struct_union (sort_structs [] ast.structs);
 
   (* Definition of functions. *)
   let pp_function (id, def) =
