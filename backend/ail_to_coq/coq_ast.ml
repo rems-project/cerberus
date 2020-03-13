@@ -1,5 +1,9 @@
 open Extra
 
+type rc_attr =
+  { rc_attr_id   : string
+  ; rc_attr_args : string list }
+
 type int_type =
   | ItInt of { size : int ; signed : bool }
   | ItSize_t
@@ -61,6 +65,7 @@ type struct_decl =
 
 type func_def =
   { func_name   : string
+  ; func_attrs  : rc_attr list
   ; func_args   : (string * layout) list
   ; func_vars   : (string * layout) list
   ; func_init   : string

@@ -14,6 +14,16 @@ let not_implemented : string -> 'a = fun s ->
 let sym_to_str = Pp_symbol.to_string_pretty
 let id_to_str Symbol.(Identifier(_,id)) = id
 
+(* Extract attributes with namespace ["rc"]. *)
+let collect_rc_attrs (Annot.Attrs(attrs)) =
+  let fn acc Annot.{attr_ns; attr_id; attr_args} =
+    match Option.map id_to_str attr_ns with
+    | Some("rc") -> let rc_attr_id = id_to_str attr_id in
+                    {rc_attr_id; rc_attr_args = attr_args} :: acc
+    | _          -> acc
+  in
+  List.rev (List.fold_left fn [] attrs)
+
 let translate_int_type i =
   let size_of_base_type signed i =
     match i with
@@ -492,9 +502,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the definition of functions. *)
   let functions =
-    let build (id, (_, _, args, AnnotatedStatement(_, stmt))) =
+    let build (id, (_, attrs, args, AnnotatedStatement(_, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
+      let func_attrs = collect_rc_attrs attrs in
       let func_args =
         let args_decl =
           let rec find l =
@@ -530,7 +541,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let (stmt, blocks) = translate_block stmts SMap.empty in
         SMap.add func_init stmt blocks
       in
-      (func_name, {func_name; func_args; func_vars; func_init; func_blocks})
+      let func =
+        {func_name; func_attrs; func_args; func_vars; func_init; func_blocks}
+      in
+      (func_name, func)
     in
     List.map build fun_defs
   in
