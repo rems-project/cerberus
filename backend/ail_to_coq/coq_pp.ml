@@ -179,8 +179,15 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
 
   (* Definition of functions. *)
   let pp_function (id, def) =
-    pp "@;@;(* Definition of function [%s]. *)@;" id;
+    pp "\n@;(* Definition of function [%s]. *)@;" id;
     pp "@[<v 2>Definition impl_%s : function := {|@;" id;
+
+    let pp_attr {rc_attr_id=id; rc_attr_args=args} =
+      let args = List.map (Printf.sprintf "\"%s\"") args in
+      pp "(* %s(%s) *)@;" id (String.concat ", " args)
+    in
+    List.iter pp_attr def.func_attrs;
+ 
 
     pp "@[<v 2>f_args := [";
     begin
