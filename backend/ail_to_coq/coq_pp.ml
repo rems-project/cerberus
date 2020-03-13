@@ -166,7 +166,16 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "@]@;];@]@;|}.@;";
     pp "Solve Obligations with solve_struct_obligations.@;"
   in
-  List.iter pp_struct ast.structs;
+  let rec sort_structs found strs =
+    match strs with
+    | []                     -> []
+    | (id, s) as str :: strs ->
+    if List.for_all (fun id -> List.mem id found) s.struct_deps then
+      str :: sort_structs (id :: found) strs
+    else
+      sort_structs found (strs @ [str])
+  in
+  List.iter pp_struct (sort_structs [] ast.structs);
 
   (* Definition of functions. *)
   let pp_function (id, def) =

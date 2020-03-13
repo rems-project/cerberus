@@ -56,6 +56,7 @@ type stmt =
 
 type struct_decl =
   { struct_name    : string
+  ; struct_deps    : string list
   ; struct_members : (string * layout) list }
 
 type func_def =
