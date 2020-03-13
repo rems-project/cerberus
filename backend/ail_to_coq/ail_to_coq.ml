@@ -476,7 +476,16 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
             in
             List.map fn l
       in
-      (struct_name, {struct_name ; struct_members})
+      let struct_deps =
+        let fn acc (id, layout) =
+          match layout with
+          | LPtr        -> acc
+          | LStruct(id) -> id :: acc
+          | LInt(_)     -> acc
+        in
+        List.rev (List.fold_left fn [] struct_members)
+      in
+      (struct_name, {struct_name ; struct_deps; struct_members})
     in
     List.map build tag_defs
   in
