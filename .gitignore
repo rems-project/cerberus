@@ -67,3 +67,5 @@ cpp_error
 
 bisect*.out
 logs
+
+*~
