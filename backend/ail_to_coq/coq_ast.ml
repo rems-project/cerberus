@@ -30,7 +30,7 @@ type value =
 
 type layout =
   | LPtr
-  | LStruct of string
+  | LStruct of string * bool (* Union? *)
   | LInt of int_type
 
 type expr =
@@ -43,7 +43,7 @@ type expr =
   | SkipE     of expr
   | Use       of layout * expr
   | AddrOf    of expr
-  | GetMember of expr * string * string
+  | GetMember of expr * string * bool (* From_union? *) * string
 (*| AnnotExpr (n : nat) {A} (a : A) (e : expr)*)
 
 type stmt =
@@ -59,9 +59,10 @@ type stmt =
   | ExprS  of expr * stmt
 
 type struct_decl =
-  { struct_name    : string
-  ; struct_deps    : string list
-  ; struct_members : (string * layout) list }
+  { struct_name     : string
+  ; struct_deps     : string list
+  ; struct_is_union : bool
+  ; struct_members  : (string * layout) list }
 
 type func_def =
   { func_name   : string

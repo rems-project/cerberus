@@ -60,8 +60,8 @@ let translate_layout Ctype.(Ctype(_, c_ty)) =
   | Function(_,_,_,_)  -> not_implemented "translate_layout (Function)"
   | Pointer(_,_)       -> LPtr
   | Atomic(_)          -> not_implemented "translate_layout (Atomic)"
-  | Struct(sym)        -> LStruct(sym_to_str sym)
-  | Union(_)           -> not_implemented "translate_layout (Union)"
+  | Struct(sym)        -> LStruct(sym_to_str sym, false)
+  | Union(syn)         -> LStruct(sym_to_str syn, true )
 
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
@@ -94,8 +94,8 @@ let translate_gen_type ty =
   | GenVoid                      -> assert false
   | GenArray(_,_)                -> assert false
   | GenFunction(_,_,_,_)         -> assert false
-  | GenStruct(id)                -> LStruct(sym_to_str id)
-  | GenUnion(_)                  -> assert false
+  | GenStruct(id)                -> LStruct(sym_to_str id, false)
+  | GenUnion(id)                 -> LStruct(sym_to_str id, true )
   | GenAtomic(c_ty)              -> translate_layout c_ty
   | GenBasic(b)                  ->
   match b with
@@ -190,14 +190,14 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
         | Gt             -> GtOp
         | Le             -> LeOp
         | Ge             -> GeOp
-        | And            -> not_implemented "binary operator (And)"
-        | Or             -> not_implemented "binary operator (Or)"
+        | And            -> AndOp
+        | Or             -> OrOp
         | Comma          -> not_implemented "binary operator (Comma)"
         | Arithmetic(op) ->
         match op with
         | Mul  -> MulOp
         | Div  -> DivOp
-        | Mod  -> not_implemented "binary operator (Mod)"
+        | Mod  -> ModOp
         | Add  -> AddOp
         | Sub  -> SubOp
         | Shl  -> not_implemented "binary operator (Shl)"
@@ -243,20 +243,24 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEcompound(q,c_ty,e)       -> not_implemented "expr compound"
   | AilEmemberof(e,id)           (*-> not_implemented "expr memberof"*)
   | AilEmemberofptr(e,id)        ->
-      let struct_name =
+      let (struct_name, from_union) =
         let open GenTypes in
         match gen_type_of_expr e with
         | GenRValueType(GenPointer(_, Ctype(_, Struct(sym)))) ->
-            sym_to_str sym
+            (sym_to_str sym, false)
+        | GenRValueType(GenPointer(_, Ctype(_, Union(sym) ))) ->
+            (sym_to_str sym, true )
         | GenRValueType(_                                   ) ->
             assert false
         | GenLValueType(_, Ctype(_, Struct(sym)), _)          ->
-            sym_to_str sym
+            (sym_to_str sym, false)
+        | GenLValueType(_, Ctype(_, Union(sym) ), _)          ->
+            (sym_to_str sym, true )
         | GenLValueType(_, _                    , _)          ->
             assert false
       in
       let (e, l) = translate e in
-      (GetMember(e, struct_name, id_to_str id), l)
+      (GetMember(e, struct_name, from_union, id_to_str id), l)
   | AilEbuiltin(b)               -> not_implemented "expr builtin"
   | AilEstr(s)                   -> not_implemented "expr str"
   | AilEconst(c)                 ->
@@ -301,7 +305,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       let layout = translate_gen_type (gen_type_of_expr e) in
       let (e, l) = translate_expr true e in
       ((if lval then Deref(layout,e) else Use(layout,e)), l)
-  | AilEarray_decay(e)           -> not_implemented "expr array_decay"
+  | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
   | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
 
 let strip_statement (AnnotatedStatement(_, s)) = s
@@ -477,25 +481,30 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   let structs =
     let build (id, def) =
       let struct_name = sym_to_str id in
-      let struct_members =
-        match def with
-        | UnionDef(_)  -> not_implemented "union"
-        | StructDef(l) ->
-            let fn (id, (_, c_ty)) =
-              (id_to_str id, translate_layout c_ty)
-            in
-            List.map fn l
+      let (struct_members, struct_is_union) =
+        let (l, is_union) =
+          match def with
+          | UnionDef(l)  -> (l, true )
+          | StructDef(l) -> (l, false)
+        in
+        let fn (id, (_, c_ty)) =
+          (id_to_str id, translate_layout c_ty)
+        in
+        (List.map fn l, is_union)
       in
       let struct_deps =
         let fn acc (id, layout) =
           match layout with
-          | LPtr        -> acc
-          | LStruct(id) -> id :: acc
-          | LInt(_)     -> acc
+          | LPtr          -> acc
+          | LStruct(id,_) -> id :: acc
+          | LInt(_)       -> acc
         in
         List.rev (List.fold_left fn [] struct_members)
       in
-      (struct_name, {struct_name ; struct_deps; struct_members})
+      let struct_ =
+        {struct_name; struct_deps; struct_is_union; struct_members}
+      in
+      (struct_name, struct_)
     in
     List.map build tag_defs
   in
