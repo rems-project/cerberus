@@ -1,5 +1,6 @@
 open Extra
 open Coq_ast
+open Rc_annot
 
 (** [section_name fname] builds a reasonable Coq section name from a file. The
     slash, dash and dot characters are replaced by underscores. Note that this
@@ -203,12 +204,16 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "\n@;(* Definition of function [%s]. *)@;" id;
     pp "@[<v 2>Definition impl_%s : function := {|@;" id;
 
-    let pp_attr {rc_attr_id=id; rc_attr_args=args} =
+    let pp_attr attr =
+      let _ =
+        try ignore (parse_attr attr) with Invalid_annot(msg) ->
+        Printf.eprintf "Error: %s\n%!" msg
+      in
+      let {rc_attr_id=id; rc_attr_args=args} = attr in
       let args = List.map (Printf.sprintf "\"%s\"") args in
       pp "(* %s(%s) *)@;" id (String.concat ", " args)
     in
     List.iter pp_attr def.func_attrs;
- 
 
     pp "@[<v 2>f_args := [";
     begin
