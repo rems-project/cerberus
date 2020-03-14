@@ -48,6 +48,23 @@ let rec concat_specs = function
 
 let string_of_cabs_id (Symbol.Identifier(_, n)) = n
 
+let to_attrs = function
+  | None ->
+      Annot.Attrs []
+  | Some z ->
+      Annot.Attrs begin
+        List.map (fun ((ns, id), args_opt) ->
+          let open Annot in
+          { attr_ns=   ns
+          ; attr_id=   id
+          ; attr_args= match args_opt with None -> [] | Some z -> z }
+        ) (List.concat (List.rev z))
+      end
+
+let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_) as stmt) =
+  let Annot.Attrs xs' = to_attrs attr_opt in
+  CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
+
 
 %}
 
@@ -1188,26 +1205,32 @@ static_assert_declaration:
 (* §6.8 Statements and blocks *)
 statement:
 | stmt= labeled_statement
-| attribute_specifier_sequence? stmt= scoped(compound_statement)
-| stmt= expression_statement
-| attribute_specifier_sequence? stmt= scoped(selection_statement)
-| attribute_specifier_sequence? stmt= scoped(iteration_statement)
-| attribute_specifier_sequence? stmt= jump_statement
     { stmt }
+| attr_opt= attribute_specifier_sequence? stmt= scoped(compound_statement)
+    { inject_attr attr_opt stmt }
+| stmt= expression_statement
+    { stmt }
+| attr_opt= attribute_specifier_sequence? stmt= scoped(selection_statement)
+| attr_opt= attribute_specifier_sequence? stmt= scoped(iteration_statement)
+| attr_opt= attribute_specifier_sequence? stmt= jump_statement
+    { inject_attr attr_opt stmt }
 ;
 
 (* §6.8.1 Labeled statements *)
 labeled_statement:
-| ioption(attribute_specifier_sequence) i= general_identifier COLON
+| attr_opt= ioption(attribute_specifier_sequence) i= general_identifier COLON
   stmt= statement
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+        to_attrs attr_opt,
         CabsSlabel (i, stmt)) }
-| attribute_specifier_sequence? CASE expr= constant_expression COLON
+| attr_opt= attribute_specifier_sequence? CASE expr= constant_expression COLON
   stmt= statement
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+        to_attrs attr_opt,
         CabsScase (expr, stmt)) }
-| attribute_specifier_sequence? DEFAULT COLON stmt= statement
+| attr_opt= attribute_specifier_sequence? DEFAULT COLON stmt= statement
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     to_attrs attr_opt,
                      CabsSdefault stmt) }
 ;
 
@@ -1215,10 +1238,12 @@ labeled_statement:
 compound_statement:
 | LBRACE bis_opt= block_item_list? RBRACE
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSblock (option [] List.rev bis_opt)) }
 (* NON-STD cppmem syntax *)
 | LBRACES stmts= separated_nonempty_list(PIPES, statement) RBRACES
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSpar stmts) }
 ;
 
@@ -1232,6 +1257,7 @@ block_item_list: (* NOTE: the list is in reverse *)
 block_item:
 | decl= declaration
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSdecl decl) }
 | stmt= statement
     { stmt }
@@ -1241,9 +1267,11 @@ block_item:
 expression_statement:
 | expr_opt= expression? SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      option CabsSnull (fun z -> CabsSexpr z) expr_opt) }
-| attribute_specifier_sequence expr= expression SEMICOLON
+| attr= attribute_specifier_sequence expr= expression SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     to_attrs (Some attr),
                      CabsSexpr expr) }
 ;
 
@@ -1251,13 +1279,16 @@ expression_statement:
 selection_statement:
 | IF LPAREN expr= expression RPAREN stmt= scoped(statement) %prec THEN
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSif (expr, stmt, None)) }
 | IF LPAREN expr= expression RPAREN stmt1= scoped(statement)
   ELSE stmt2= scoped(statement)
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSif (expr, stmt1, Some stmt2)) }
 | SWITCH LPAREN expr= expression RPAREN stmt= scoped(statement)
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSswitch (expr, stmt)) }
 ;
 
@@ -1265,18 +1296,22 @@ selection_statement:
 iteration_statement:
 | WHILE LPAREN expr= expression RPAREN stmt= scoped(statement)
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSwhile (expr, stmt)) }
 | DO stmt= scoped(statement) WHILE LPAREN expr= expression RPAREN SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSdo (expr, stmt)) }
 | FOR LPAREN expr1_opt= expression? SEMICOLON expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN stmt= scoped(statement)
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSfor (map_option (fun x -> FC_expr x) expr1_opt,
                                expr2_opt,expr3_opt, stmt)) }
 | FOR LPAREN decl= declaration expr2_opt= expression? SEMICOLON
   expr3_opt= expression? RPAREN stmt= scoped(statement)
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSfor (Some (FC_decl decl), expr2_opt, expr3_opt, stmt)) }
 ;
 
@@ -1284,15 +1319,19 @@ iteration_statement:
 jump_statement:
 | GOTO i= general_identifier SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSgoto i) }
 | CONTINUE SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsScontinue) }
 | BREAK SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSbreak) }
 | RETURN expr_opt= expression? SEMICOLON
     { CabsStatement (Location_ocaml.region ($startpos, $endpos) None,
+                     Annot.no_attributes,
                      CabsSreturn expr_opt) }
 ;
 

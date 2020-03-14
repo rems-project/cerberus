@@ -1915,9 +1915,9 @@ let rec annotate_statement_ loc sigm gamm ty stmt =
         E.return (AilSreg_store r e')
   end
 
-and annotate_statement sigm gamm ty (AnnotatedStatement loc stmt) =
+and annotate_statement sigm gamm ty (AnnotatedStatement loc attrs stmt) =
   annotate_statement_ loc sigm gamm ty stmt >>= fun stmt' ->
-  E.return (AnnotatedStatement loc stmt')
+  E.return (AnnotatedStatement loc attrs stmt')
 
 
 val annotate_block:

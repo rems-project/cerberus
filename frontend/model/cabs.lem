@@ -308,7 +308,7 @@ type cabs_statement_ =
   | CabsSpar of list cabs_statement
 
 and cabs_statement =
-  | CabsStatement of Loc.t * cabs_statement_
+  | CabsStatement of Loc.t * Annot.attributes * cabs_statement_
 
 and for_clause =
  | FC_expr of cabs_expression
@@ -352,7 +352,7 @@ end
 
 instance (Located cabs_statement)
   let locOf stmt =
-    let (CabsStatement loc _) = stmt in
+    let (CabsStatement loc _ _) = stmt in
     loc
 end
 

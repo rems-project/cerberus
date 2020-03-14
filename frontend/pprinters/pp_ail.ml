@@ -628,7 +628,7 @@ and pp_generic_association_aux pp_annot = function
       pp_keyword "default" ^^ P.colon ^^^ pp_expression_aux pp_annot e
 
 
-let rec pp_statement_aux pp_annot (AnnotatedStatement (_, stmt)) =
+let rec pp_statement_aux pp_annot (AnnotatedStatement (_, _, stmt)) =
   let pp_statement = pp_statement_aux pp_annot in
   match stmt with
     | AilSskip ->

@@ -3075,7 +3075,7 @@ type collect_cases_state = <|
 |>
 
 val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_cases_state
-let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
+let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
   let register_case ic_n =
     St.update (fun s -> <| s with case_csts= ic_n :: s.case_csts |>) in
   let register_default =
@@ -3137,14 +3137,14 @@ type erase_loop_control_state = <|
 |>
 
 val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.stateM (A.statement GenTypes.genTypeCategory) erase_loop_control_state
-let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
+let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
   let with_fresh_labels mf =
     fun st ->
       let continue_sym = Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x) in
       let break_sym    = Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x) in
       let (ret, st')   = mf <| elc_continue= Just continue_sym; elc_break= Just break_sym |> in
       ((continue_sym, break_sym, ret), st) in 
-  A.AnnotatedStatement loc <$> match stmt_ with
+  A.AnnotatedStatement loc attrs <$> match stmt_ with
     | A.AilSskip ->
         St.return stmt_
     | A.AilSexpr _ ->
@@ -3158,18 +3158,18 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSwhile e (A.AnnotatedStatement loc (A.AilSblock []
-                [s'; A.AnnotatedStatement loc (A.AilSlabel continue_sym (A.AnnotatedStatement loc A.AilSskip))])))
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSwhile e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])))
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
 
     | A.AilSdo s e ->
         (* STD §6.8.6.2#2 and §6.8.6.3#2 *)
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSdo (A.AnnotatedStatement loc (A.AilSblock []
-                [s'; A.AnnotatedStatement loc (A.AilSlabel continue_sym (A.AnnotatedStatement loc A.AilSskip))])) e)
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSdo (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])) e)
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
     | A.AilSbreak ->
         St.get >>= function
           | <| elc_break= Just break_sym |> ->
@@ -3192,9 +3192,9 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         with_fresh_labels (erase_loop_control_aux s) >>= fun (_, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSswitch e (A.AnnotatedStatement loc (A.AilSblock []
-                [ A.AnnotatedStatement loc (A.AilSgoto break_sym); s' ])))
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSswitch e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSgoto break_sym); s' ])))
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
     | A.AilScase iCst s ->
         A.AilScase iCst <$> erase_loop_control_aux s
     | A.AilSdefault s ->
@@ -3223,7 +3223,7 @@ let erase_loop_control stmt =
 
 
 val     collect_visibles_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_visibles_state
-let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
+let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
   match stmt with
     | A.AilSskip ->
         St.return ()
@@ -3353,7 +3353,7 @@ val translate_stmt:
   E.elabM (C.core_base_type * C.expr unit)
 
 
-let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
+let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : E.elabM (C.expr unit) =
   let translate_expression = translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
       translate_stmt2 stdlib tagDefs f <| env with case_labs=   case_labs;

@@ -562,43 +562,44 @@ and dtree_of_initializer_list inits =
   ) inits
 
 
-let rec dtree_of_cabs_statement (CabsStatement (loc, stmt_)) =
-  match stmt_ with
+let rec dtree_of_cabs_statement (CabsStatement (loc, attrs, stmt_)) =
+  with_attributes attrs
+  begin match stmt_ with
   | CabsSlabel (ident, s) ->
-      Dnode ( pp_stmt_ctor "CabsSlabel" ^^^ pp_colour_label ident
-            , [dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsSlabel" ^^^ pp_colour_label ident,
+              [dtree_of_cabs_statement s] )
   | CabsScase (e, s) ->
-      Dnode ( pp_stmt_ctor "CabsScase"
-            , [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
+      Dnode ( pp_stmt_ctor "CabsScase",
+              [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
   | CabsSdefault s ->
-      Dnode (pp_stmt_ctor "CabsSdefault", [dtree_of_cabs_statement s])
+      Dnode (pp_stmt_ctor "CabsSdefault", [dtree_of_cabs_statement s] )
   | CabsSblock [] ->
       Dleaf (pp_stmt_ctor "CabsSblock" ^^^ !^ "empty")
   | CabsSblock ss ->
-      Dnode (pp_stmt_ctor "CabsSblock", List.map dtree_of_cabs_statement ss)
+      Dnode ( pp_stmt_ctor "CabsSblock", (List.map dtree_of_cabs_statement ss) )
   | CabsSdecl decl ->
-      Dnode (pp_stmt_ctor "CabsSdecl", [dtree_of_declaration decl])
+      Dnode ( pp_stmt_ctor "CabsSdecl", [dtree_of_declaration decl] )
   | CabsSnull ->
       Dleaf (pp_stmt_ctor "CabsSnull")
   | CabsSexpr e ->
-      Dnode (pp_stmt_ctor "CabsSexpr", [dtree_of_cabs_expression e])
+      Dnode ( pp_stmt_ctor "CabsSexpr", [dtree_of_cabs_expression e] )
   | CabsSif (e, s1, s2_opt) ->
-      Dnode ( pp_stmt_ctor "CabsSif"
-            , [ dtree_of_cabs_expression e
+      Dnode ( pp_stmt_ctor "CabsSif",
+              [ dtree_of_cabs_expression e
               ; dtree_of_cabs_statement s1
               ; node_of_option dtree_of_cabs_statement s2_opt ] )
   | CabsSswitch (e, s) ->
-      Dnode (pp_stmt_ctor "CabsSswitch", [dtree_of_cabs_expression e; dtree_of_cabs_statement s])
+      Dnode ( pp_stmt_ctor "CabsSswitch", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
   | CabsSwhile (e, s) ->
-      Dnode (pp_stmt_ctor "CabsSwhile", [dtree_of_cabs_expression e; dtree_of_cabs_statement s])
+      Dnode ( pp_stmt_ctor "CabsSwhile", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
   | CabsSdo (e, s) ->
-      Dnode (pp_stmt_ctor "CabsSdo", [dtree_of_cabs_expression e; dtree_of_cabs_statement s])
+      Dnode ( pp_stmt_ctor "CabsSdo", [dtree_of_cabs_expression e; dtree_of_cabs_statement s] )
   | CabsSfor (fc_opt, e1_opt, e2_opt, s) ->
-      Dnode ( pp_stmt_ctor "CabsSfor"
-            , [ node_of_option dtree_of_for_clause fc_opt
-              ; node_of_option dtree_of_cabs_expression e1_opt
-              ; node_of_option dtree_of_cabs_expression e2_opt
-              ; dtree_of_cabs_statement s ] )
+      Dnode ( pp_stmt_ctor "CabsSfor",
+                [ node_of_option dtree_of_for_clause fc_opt
+                ; node_of_option dtree_of_cabs_expression e1_opt
+                ; node_of_option dtree_of_cabs_expression e2_opt
+                ; dtree_of_cabs_statement s ] )
   | CabsSgoto ident ->
       Dleaf (pp_stmt_ctor "CabsSgoto" ^^^ pp_colour_label ident)
   | CabsScontinue ->
@@ -606,11 +607,12 @@ let rec dtree_of_cabs_statement (CabsStatement (loc, stmt_)) =
   | CabsSbreak ->
       Dleaf (pp_stmt_ctor "CabsSbreak")
   | CabsSreturn e_opt ->
-      Dnode (pp_stmt_ctor "CabsSreturn", [node_of_option dtree_of_cabs_expression e_opt])
+      Dnode ( pp_stmt_ctor "CabsSreturn", [node_of_option dtree_of_cabs_expression e_opt] )
   | CabsSpar [] ->
       Dleaf (pp_stmt_ctor "CabsSpar" ^^^ !^ "empty")
   | CabsSpar ss ->
       Dnode (pp_stmt_ctor "CabsSpar", List.map dtree_of_cabs_statement ss)
+  end
 
 and dtree_of_for_clause = function
  | FC_expr e ->
