@@ -45,7 +45,7 @@ let rec simplify_integer_value_base ival_ =
           | IntRem_f ->
               fun x y -> if equal y (of_int 0) then of_int 0 else integerRem_f x y
           | IntExp ->
-              fun x y -> pow_int x (Pervasives.abs (to_int y))
+              fun x y -> pow_int x (Stdlib.abs (to_int y))
         in
         begin match (simplify_integer_value_base ival_1, simplify_integer_value_base ival_2) with
           | (Left n1, Left n2) ->
@@ -60,7 +60,7 @@ let rec simplify_integer_value_base ival_ =
     | IVmin ity ->
         begin match ity with
           | Char ->
-              if Impl.char_is_signed then
+              if Impl.is_signed_ity Char then
                 Left (negate (pow_int (of_int 2) (8-1)))
               else
                 Left (of_int 0)
@@ -113,7 +113,7 @@ let rec simplify_integer_value_base ival_ =
                 (sub (pow_int (of_int 2) (8*n)) (of_int 1)) in
               begin match ity with
                 | Char ->
-                    Left (if Impl.char_is_signed then
+                    Left (if Impl.is_signed_ity Char then
                       signed_max
                     else
                       unsigned_max)
@@ -174,7 +174,7 @@ let rec simplify_integer_value_base ival_ =
                 | _ -> assert false
               in
               simplify_integer_value_base begin
-                List.fold_left (fun acc (ident, (_, ty)) ->
+                List.fold_left (fun acc (ident, (_, _, ty)) ->
                   IVop (IntAdd, [lifted_self (IVsizeof ty); IVop (IntAdd, [IVpadding (tag_sym, ident);  acc])])
                 ) (IVconcrete (of_int 0)) membrs
               end
@@ -195,7 +195,7 @@ let rec simplify_integer_value_base ival_ =
                   | Right _ ->
                       assert false
               in
-              begin match List.map (fun (memb_ident, (_, ty)) ->
+              begin match List.map (fun (memb_ident, (_, _, ty)) ->
                   match simplify_integer_value_base (IVsizeof ty) with
                     | Left n ->
                         n
@@ -248,7 +248,7 @@ let rec simplify_integer_value_base ival_ =
                 | UnionDef membrs -> membrs
                 | _ -> assert false
               in
-              begin match List.map (fun (memb_ident, (_, ty)) ->
+              begin match List.map (fun (memb_ident, (_, _, ty)) ->
                   match simplify_integer_value_base (IValignof ty) with
                     | Left n ->
                         n

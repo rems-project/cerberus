@@ -180,7 +180,7 @@ module Constraints = struct
         let xs = match tagDef with
           | Ctype.StructDef z
           | Ctype.UnionDef z -> z in
-        List.iter (fun (Cabs.CabsIdentifier (_, membr_str), _) ->
+        List.iter (fun (Sym.Identifier (_, membr_str), _) ->
           let padding_str = "padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str in
           Solver.add slvSt.slv [
             Arithmetic.mk_le ctx (Arithmetic.Integer.mk_numeral_i ctx 0)
@@ -399,7 +399,7 @@ let integer_value_base_to_expr slvSt ival_ =
         Expr.mk_app slvSt.ctx slvSt.ivalignofDecl [ctype_to_expr slvSt ty]
     | Defacto_memory_types.IVoffsetof (tag_sym, memb_ident) ->
       failwith "TODO Smt: IVoffsetof"
-    | Defacto_memory_types.IVpadding (Sym.Symbol (_, tag_sym_n, _), Cabs.CabsIdentifier (_, membr_str)) ->
+    | Defacto_memory_types.IVpadding (Sym.Symbol (_, tag_sym_n, _), Sym.Identifier (_, membr_str)) ->
         Expr.mk_const_s slvSt.ctx ("padding__tag_" ^ string_of_int tag_sym_n ^ "__" ^ membr_str) slvSt.addrSort
     | Defacto_memory_types.IVptrdiff (diff_ty, (ptrval_1, sh1), (ptrval_2, sh2)) ->
         let ptrval_e1 = (* WIP *) aux (Defacto_memory_types.IVop (IntAdd, [ address_expression_of_pointer_base ptrval_1
