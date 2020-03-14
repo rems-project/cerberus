@@ -92,7 +92,7 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
   | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef memlist) ->
-          CaseSortList (List.map (fun (_, (_, ty)) -> ctype_to_bmcz3sort ty file)
+          CaseSortList (List.map (fun (_, (_, _, ty)) -> ctype_to_bmcz3sort ty file)
                                  memlist)
       | _ -> assert false
       end
@@ -407,7 +407,7 @@ module ImplFunctions = struct
   let impl : IntegerImpl.implementation = {
     impl_binary_mode = Two'sComplement;
     impl_signed      = (function
-                   | Char       -> Ocaml_implementation.Impl.char_is_signed
+                   | Char       -> Ocaml_implementation.Impl.is_signed_ity Char
                    | Bool       -> false
                    | Signed _   -> true
                    | Unsigned _ -> false
@@ -462,7 +462,7 @@ module ImplFunctions = struct
       let expr = mk_fresh_const
                     (sprintf "%s(%S)" name (Expr.to_string ctype_expr))
                     sort in
-      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) types
+      Pmap.add ctype expr acc) (Pmap.empty Stdlib.compare) types
   (* ---- Constants ---- *)
 
 

@@ -7,7 +7,7 @@
 
 module Int = struct
   type t = int
-  let compare (x : t) y = Pervasives.compare x y
+  let compare (x : t) y = Stdlib.compare x y
 end
 
 module Int_map = Map.Make(Int)
@@ -15,7 +15,7 @@ module Int_map = Map.Make(Int)
 module Aid = struct
   type t = Bmc_types.aid
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
   let string_of (a : t) =
     String.make 1 (Char.chr ((Char.code 'a') + a))
 end
@@ -23,31 +23,31 @@ end
 module Tid = struct
   type t = Bmc_types.tid
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Memory_order2 = struct
   type t = Bmc_types.memory_order
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Z3_location = struct
   type t = Bmc_types.z3_location
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Z3_value = struct
   type t = Bmc_types.z3_value
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Memop = struct
   type t = Mem_common.memop
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Memop_action = struct
@@ -67,7 +67,7 @@ module Memop_action = struct
         pair_compare Z3_location.compare Z3_location.compare (l11,l12) (l21,l22)
     | Bmc_types.Memop_PtrArrayShift(l11,l12), Bmc_types.Memop_PtrArrayShift(l21,l22) ->
         pair_compare Z3_location.compare Z3_location.compare (l11,l12) (l21,l22)
-    | _,_ -> Pervasives.compare (memop_rank x) (memop_rank y)
+    | _,_ -> Stdlib.compare (memop_rank x) (memop_rank y)
     )
 end
 
@@ -97,7 +97,7 @@ module Action = struct
       pair_compare Aid.compare (pair_compare Tid.compare Z3_location.compare)  (a1, (t1,l1)) (a2, (t2, l2))
     | Bmc_types.Memop(a1, t1, m1), Bmc_types.Memop(a2,t2,m2) ->
       pair_compare Aid.compare (pair_compare Tid.compare Memop_action.compare) (a1, (t1, m1)) (a2, (t2, m2))
-    | _, _ -> Pervasives.compare (action_rank x) (action_rank y))
+    | _, _ -> Stdlib.compare (action_rank x) (action_rank y))
 end
 
 module Action_set = Set.Make(Action)
@@ -113,7 +113,7 @@ module Transitive_reduction_aid = Functors.Transitive_reduction(Aid)(Aid_times_a
 module Pos = struct
   type t = Rational_ml.t * int
   let compare (x : t) y =
-    Pervasives.compare x y
+    Stdlib.compare x y
 end
 
 module Action_times_pos = Functors.Ord_pair(Action)(Pos)
