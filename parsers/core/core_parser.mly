@@ -1641,7 +1641,7 @@ def_declaration:
 
 def_field:
 | cid=cabs_id COLON ty=core_ctype
-  { (cid, (no_qualifiers, ty)) }
+  { (cid, (Annot.no_attributes, no_qualifiers, ty)) }
 ;
 
 def_fields:

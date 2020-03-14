@@ -400,12 +400,14 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
         Dleaf (pp_ctor "TSpec_name" ^^ P.brackets (pp_identifier id))
 
 and dtree_of_struct_declaration = function
-  | Struct_declaration (specs, qs, align_specs, s_decls) ->
-      Dnode (pp_ctor "Struct_declaration", filter_opt_list [
-        node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs  ;
-        leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs     ;
-        node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
-        node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ])
+  | Struct_declaration (attrs, specs, qs, align_specs, s_decls) ->
+      with_attributes attrs begin
+        Dnode (pp_ctor "Struct_declaration", filter_opt_list [
+          node_opt_list "Type_specifiers"   dtree_of_cabs_type_specifier specs  ;
+          leaf_opt_list "Type_qualifiers"   pp_cabs_type_qualifier       qs     ;
+          node_opt_list "Alignment_specifiers" dtree_of_alignment_specifier align_specs;
+          node_opt_list "Struct_declarator" dtree_of_struct_declarator   s_decls ])
+      end
   | Struct_assert sa_decl ->
       Dnode (pp_ctor "Struct_assert", [dtree_of_static_assert_declaration sa_decl])
 
@@ -454,8 +456,10 @@ and dtree_of_declarator = function
               ; dtree_of_direct_declarator ddecl ] )
 
 and dtree_of_direct_declarator = function
-  | DDecl_identifier ident ->
-      Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_identifier ident)
+  | DDecl_identifier (attrs, ident) ->
+      with_attributes attrs begin
+        Dleaf (pp_decl_ctor "DDecl_identifier" ^^^ pp_identifier ident)
+      end
   | DDecl_declarator decltor ->
       Dnode (pp_decl_ctor "DDecl_declarator", [dtree_of_declarator decltor])
   | DDecl_array (ddecltor, adecltor) ->

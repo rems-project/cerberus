@@ -631,7 +631,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
                 match List.lookup ident xs with
                   | Nothing ->
                       E.fail loc (InvalidMember tag_sym ident)
-                  | Just (_, ty) ->
+                  | Just (_, _, ty) ->
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
@@ -655,7 +655,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
               match List.lookup ident xs with
                 | Nothing ->
                     E.fail loc (InvalidMember tag_sym ident)
-                | Just (_, ty) ->
+                | Just (_, _, ty) ->
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
@@ -681,7 +681,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         match List.lookup memb_ident xs with
           | Nothing ->
               E.fail loc (InvalidMember tag_sym memb_ident)
-          | Just (_, ty) ->
+          | Just (_, _, ty) ->
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^
@@ -976,7 +976,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                 match List.lookup ident xs with
                   | Nothing ->
                       E.fail loc (InvalidMember tag_sym ident)
-                  | Just (_, ty) ->
+                  | Just (_, _, ty) ->
                       match core_object_type_of_ctype ty with
                         | Nothing ->
                             E.fail loc (CoreTyping_TODO ("in PEstruct, failed to convert '" ^
@@ -998,7 +998,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
               match List.lookup ident xs with
                 | Nothing ->
                     E.fail loc (InvalidMember tag_sym ident)
-                | Just (_, ty) ->
+                | Just (_, _, ty) ->
                     match core_object_type_of_ctype ty with
                       | Nothing ->
                           E.fail loc (CoreTyping_TODO ("in PEunion, failed to convert '" ^
@@ -1022,7 +1022,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         match List.lookup memb_ident xs with
           | Nothing ->
               E.fail loc (InvalidMember tag_sym memb_ident)
-          | Just (_, ty) ->
+          | Just (_, _, ty) ->
               match core_object_type_of_ctype ty with
                 | Nothing ->
                     E.fail loc (CoreTyping_TODO ("in PEmemberof, failed to convert '" ^

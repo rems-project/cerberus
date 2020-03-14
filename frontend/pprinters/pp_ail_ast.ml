@@ -455,8 +455,10 @@ let dtree_of_declaration (i, (_, decl)) =
 
 
 let dtree_of_tag_definition (i, tag) =
-  let dleaf_of_field (i, (qs, ty)) =
-    Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty))
+  let dleaf_of_field (i, (attrs, qs, ty)) =
+    with_attributes attrs begin
+      Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty))
+    end
   in match tag with
   | StructDef fs ->
     Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i

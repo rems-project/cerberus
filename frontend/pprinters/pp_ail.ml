@@ -710,7 +710,7 @@ let pp_tag_definition (tag, def) =
     | StructDef ident_qs_tys ->
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
               pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1
@@ -718,7 +718,7 @@ let pp_tag_definition (tag, def) =
     | UnionDef ident_qs_tys ->
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
-            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (qs, ty)) ->
+            P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
               pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
             ) ident_qs_tys
           ) ^^ P.break 1

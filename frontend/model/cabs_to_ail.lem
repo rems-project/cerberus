@@ -117,13 +117,13 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: xs)) ->
+          | Just (Struct_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: xs)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              List.foldl (fun acc (memb_ident, (_, memb_ty)) ->
+              List.foldl (fun acc (memb_ident, (_, _, memb_ty)) ->
                 wip tagDefs acc
                   (Elem_member memb_ident :: path_prefix)
                   (Elem_member memb_ident :: path_prefix, memb_ty)
@@ -139,7 +139,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
     | Ctype.Union tag_sym ->
         (* TODO: check *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+          | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
@@ -165,7 +165,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               ([Elem_array 0], if is_unknown_size then entity_cty else elem_ty)
           | Ctype.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
-                | Just (Struct_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                | Just (Struct_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
@@ -178,7 +178,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
           | Ctype.Union tag_sym ->
               (* TODO: check *)
               match Map.lookup tag_sym tagDefs with
-                | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+                | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
@@ -311,7 +311,7 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              List.foldl (fun acc (_, (_, memb_ty)) ->
+              List.foldl (fun acc (_, (_, _, memb_ty)) ->
                 cardinalityOfCtype tagDefs memb_ty + acc
               ) 0 xs
           |  _ ->
@@ -353,7 +353,7 @@ let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
               match List.lookup memb_ident xs with
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
-                | Just (_, memb_ty) ->
+                | Just (_, _, memb_ty) ->
                     ctypeAtPath tagDefs memb_ty path'
               end
           | _ ->
@@ -384,7 +384,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         innerCtype tagDefs atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ ((_, (_, memb_ty)) :: _)) ->
+          | Just (Struct_definition _ ((_, (_, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Struct"
@@ -392,7 +392,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         (* TODO: this may be wrong when called in a Desig context ... *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ ((_, (_, memb_ty)) :: _)) ->
+          | Just (Union_definition _ ((_, (_, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Union"
@@ -422,7 +422,7 @@ let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
           List.reverse acc
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ ((first_memb_ident, (_, memb_ty)) :: _)) ->
+          | Just (Struct_definition _ ((first_memb_ident, (_, _, memb_ty)) :: _)) ->
               if first_memb_ident = memb_ident then
                 match path' with
                   | [] ->
@@ -480,7 +480,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
                 )
               else () in
-              let membrs = List.map (fun (memb_ident, (_, memb_ty)) ->
+              let membrs = List.map (fun (memb_ident, (_, _, memb_ty)) ->
                 (memb_ident, Just (constructValue_aux tagDefs (path ++ [Elem_member memb_ident]) elems memb_ty))
               ) xs in
               AnnotatedExpression () [] (Loc.other "Cabs_to_ail.constructValue") begin
@@ -491,7 +491,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition isAnonymous ((first_memb_ident, (_, first_memb_ty)) :: _)) ->
+          | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
@@ -923,10 +923,10 @@ type qs_ctype_builder =
 
 
 val desugar_struct_declaration:
-  struct_declaration -> E.desugM (list (Symbol.identifier * (Ctype.qualifiers * Ctype.ctype)))
+  struct_declaration -> E.desugM (list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype)))
 
 val desugar_struct_declarator:
-  struct_declarator -> E.desugM (Symbol.identifier * qs_ctype_builder)
+  struct_declarator -> E.desugM ((Annot.attributes * Symbol.identifier) * qs_ctype_builder)
 
 val desugar_init_declarator_BROKEN:
   Ctype.qualifiers -> Ctype.ctype -> list storage_class_specifier -> init_declarator ->
@@ -1417,7 +1417,7 @@ let arrayFromStringLiteral size_opt (pref_opt, strs) =
 
 (* STD §6.7.2.1#3, except for the flexible array part *)
 let check_members membrDefs =
-  E.mapM_ (fun (ident, (qs, ty)) ->
+  E.mapM_ (fun (ident, (_, qs, ty)) ->
     if AilTypesAux.is_function ty then
       E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
     else
@@ -1469,7 +1469,7 @@ let rec desugar_type_specifiers specs =
                   (* xs was an empty list *)
                   (* STD §6.7.2.1#8, sentence 3 *)
                   E.undef Loc.unknown Undefined.UB061_no_named_members
-              | Just ((last_ident, (lastMemb_qs, lastMemb_ty)), membDefs) ->
+              | Just ((last_ident, (_, lastMemb_qs, lastMemb_ty)), membDefs) ->
                   (* STD §6.7.2.1#3 *)
                   check_members membDefs >>
                   if AilTypesAux.is_function lastMemb_ty then
@@ -1845,24 +1845,24 @@ end
 
 (* TYPE: E.desugM (Symbol.identifier * (Ctype.qualifiers -> Ctype.ctype -> (Ctype.qualifiers * Ctype.ctype))) *)
 and desugar_direct_declarator fundef under_array = function
-  | DDecl_identifier ident ->
-      E.return (ident, fun base_qs base_ty -> (base_qs, base_ty))
+  | DDecl_identifier attrs ident ->
+      E.return ((attrs, ident), fun base_qs base_ty -> (base_qs, base_ty))
   
   | DDecl_declarator decltor ->
       desugar_declarator fundef decltor
   
   | DDecl_array ddecltor a_decltor ->
       (* NOTE: the recursive call is "under an array" declaration *)
-      desugar_direct_declarator fundef IsUnderArray ddecltor >>= fun (ident, mk_outer_qs_ctype) ->
+      desugar_direct_declarator fundef IsUnderArray ddecltor >>= fun (attrs_ident, mk_outer_qs_ctype) ->
       desugar_array_declarator under_array a_decltor         >>= fun mk_array_qs_ctype          ->
-      E.return ( ident
+      E.return ( attrs_ident
                , fun base_qs base_ty ->
                    let (array_qs, array_ty) = mk_array_qs_ctype base_qs base_ty in
                    mk_outer_qs_ctype array_qs array_ty )
   
   | DDecl_function ddecltor param_tys ->
       (* TODO: check the NotFunDef *)
-      desugar_direct_declarator NotFunDef under_array ddecltor >>= fun (ident, mk_qs_ctype) ->
+      desugar_direct_declarator NotFunDef under_array ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
       match fundef with
         | IsFunDef ->
             desugar_parameter_type_list fundef param_tys
@@ -1881,7 +1881,7 @@ and desugar_direct_declarator fundef under_array = function
          Ail typing does catch that error afterwards, but it's still tasteless *)
       (* NOTE: this function is NEVER called for a function definition, so
          hasProto = false *)
-      E.return ( ident
+      E.return ( attrs_ident
                , fun base_qs base_ty ->
                    mk_qs_ctype Ctype.no_qualifiers
                      (Ctype.Ctype [Annot.Aloc (Loc.locOf ddecltor)] (Ctype.Function false (base_qs, base_ty) params isVariadic)) )
@@ -1923,7 +1923,7 @@ and desugar_parameter_declaration is_first fundef param_decl =
         else
           (* NOTE: specs_qs <> no_qualifiers when the specifiers had a type-name or _Atomic *)
           desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
-          desugar_declarator NotFunDef decltor            >>= fun (ident, mk_qs_ctype) ->
+          desugar_declarator NotFunDef decltor            >>= fun ((_, ident), mk_qs_ctype) ->
           let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
           (* STD §6.9.1#7, sentence 4 *)
           let (_qs, _ty) =
@@ -2012,9 +2012,9 @@ and desugar_parameter_declaration is_first fundef param_decl =
 and desugar_declarator fundef (Declarator ptr_decltor_opt ddecltor) =
   maybe (E.return (fun qs ty -> (qs, ty))) desugar_pointer_declarator
     ptr_decltor_opt >>= fun mk_pointer_qs_ctype ->
-  desugar_direct_declarator fundef NotUnderArray ddecltor >>= fun (ident, mk_qs_ctype) ->
+  desugar_direct_declarator fundef NotUnderArray ddecltor >>= fun (attrs_ident, mk_qs_ctype) ->
   (* TODO: check, but seems correct *)
-  E.return ( ident
+  E.return ( attrs_ident
            , fun base_qs base_ty ->
                let (ptr_qs, ptr_ty) = mk_pointer_qs_ctype base_qs base_ty in
                mk_qs_ctype ptr_qs ptr_ty )
@@ -2293,7 +2293,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
   E.get_scope >>= fun scope ->
   match idecltor with
     | InitDecl _ decltor Nothing ->
-        desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
+        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         let mk_desug_init =
           fun () -> E.return Nothing in
@@ -2307,7 +2307,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
         E.return (ident, is_tentative, (qs, ty), mk_desug_init)
     
     | InitDecl loc decltor (Just init) ->
-        desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
+        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
         let (qs, ty) = mk_qs_ctype base_qs base_ty in
         
         (* TODO: check that we really never have parameter objects here *)
@@ -2378,7 +2378,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
   E.get_scope >>= fun scope ->
   match idecltor with
     | InitDecl loc decltor Nothing ->
-        desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
+        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
         let (qs, _ty) = mk_qs_ctype base_qs base_ty in
         let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
         let mk_desug_init =
@@ -2407,7 +2407,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
         if scs = [SC_typedef] then
           E.fail loc (Errors.Desugar_MiscViolation Errors.TypedefInitializer)
         else
-          desugar_declarator NotFunDef decltor >>= fun (ident, mk_qs_ctype) ->
+          desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
           let (qs, _ty) = mk_qs_ctype base_qs base_ty in
           let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
           (* TODO: check that we really never have parameter objects here *)
@@ -2442,7 +2442,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
 
 and desugar_struct_declaration struct_decl =
   match struct_decl with
-    | Struct_declaration specs tquals align_specs sdecltors ->
+    | Struct_declaration _ specs tquals align_specs sdecltors ->
         (* TODO: align_specs is ignored here *)
         desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
@@ -2458,13 +2458,13 @@ and desugar_struct_declaration struct_decl =
           end
         else
           E.mapM (fun sdecltor ->
-            desugar_struct_declarator sdecltor >>= fun (ident, mk_qs_ctype) ->
+            desugar_struct_declarator sdecltor >>= fun ((attrs, ident), mk_qs_ctype) ->
             (* NOTE: the checks for §6.7.2.1#3 are done by
                desugar_type_specifiers because we need to special case the last
                member. *)
             let (qs, ty) =
               mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
-            E.return (ident, (qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
+            E.return (ident, (attrs, qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
           ) sdecltors
     
     | Struct_assert sa_decl ->
@@ -2614,7 +2614,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
         match Map.lookup tag_sym tagDefs with
           | Just (Struct_definition _ xs) ->
               ConstantStruct tag_sym $
-                List.map (fun (ident, (_, ty)) ->
+                List.map (fun (ident, (_, _, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
                   (ident, static_thread_implicit_initializer tagDefs ty)
                 ) xs
@@ -2625,7 +2625,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
           | Just (Union_definition _ xs) ->
-              let (ident, (_, ty)) = match xs with
+              let (ident, (_, _, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
                     error "Cabs_to_ail.static_thread_implicit, Union, empty definition"
@@ -2896,7 +2896,7 @@ and foo_aux
                                 elem_ty
                             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                                 match Map.lookup tag_sym tagDefs with
-                                  | Just (Struct_definition isAnonymous ((_, (_, first_memb_ty)) :: _)) ->
+                                  | Just (Struct_definition isAnonymous ((_, (_, _, first_memb_ty)) :: _)) ->
                                       let () = if isAnonymous then
                                         Debug.print_debug 1 [] (fun () ->
                                           "foo_aux: this may be WRONG ==> anonymous Struct"
@@ -4036,7 +4036,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
     E.fresh_block_scope >>= fun funblock_scope ->
     E.with_scope2 funblock_scope begin
       desugar_declarator IsFunDef decltor
-    end >>= fun (idents_map, (fun_ident, mk_qs_ctype)) ->
+    end >>= fun (idents_map, ((_, fun_ident), mk_qs_ctype)) ->
     
     (* NOTE: as per §6.9.1#2, we perform a dummy instantiation of the type
        **specified by the declarator portion of the function definition**, which

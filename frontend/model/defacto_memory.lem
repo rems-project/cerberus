@@ -353,7 +353,7 @@ let mk_offsetof_ival_ acc tag_sym memb_ident =
         let prefix_xs =
           List.takeWhile (fun (ident, _) -> memb_ident <> ident) xs in
         (* then we sum their sizeof and trailing paddings *)
-        List.foldl (fun acc' (ident, (_, ty)) ->
+        List.foldl (fun acc' (ident, (_, _, ty)) ->
           if ident = memb_ident then
             (* TODO: this should be dead code since we fold on the prefix *)
             acc'
@@ -422,10 +422,10 @@ let rec mkUnspec (Ctype _ ty) =
     | Struct tag_sym ->
         let xs = Core_ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
-          List.map (fun (ident, (_, ty)) -> (ident, ty, mkUnspec ty)) xs
+          List.map (fun (ident, (_, _, ty)) -> (ident, ty, mkUnspec ty)) xs
         )
     | (Union tag_sym) ->
-        let ((memb_ident, (_, ty)), _) = Core_ctype_aux.get_unionDef tag_sym in
+        let ((memb_ident, (_, _, ty)), _) = Core_ctype_aux.get_unionDef tag_sym in
         MVunion tag_sym memb_ident (mkUnspec ty)
   end
 
@@ -888,7 +888,7 @@ let project_to_lvalue_type (Ctype _ lvalue_ty) mval =
           match List.lookup memb_ident (x::xs) with
             | Nothing ->
                 error "project_to_lvalue_type, MVunion was ill-typed (wrong member_ident)"
-            | Just (_, Ctype _ memb_ty) ->
+            | Just (_, _, Ctype _ memb_ty) ->
                 if lvalue_ty = memb_ty then
                   return memb_mval
                 else
@@ -2238,7 +2238,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
           match sh with
             | SPE_member tag_sym memb_ident :: sh' ->
                 MVstruct tag_sym <$>
-                  mapM (fun (ident, (_, ty)) ->
+                  mapM (fun (ident, (_, _, ty)) ->
                     if ident = memb_ident then
                       easy_update_mem_value_aux write_ty sh' write_mval (mkUnspec ty) >>= fun mval' ->
                       return (ident, ty, mval')

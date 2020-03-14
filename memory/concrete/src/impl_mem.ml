@@ -91,7 +91,7 @@ let rec offsetsof tagDefs tag_sym =
   match Pmap.find tag_sym tagDefs with
     | StructDef membrs ->
         let (xs, maxoffset) =
-          List.fold_left (fun (xs, last_offset) (membr, (_, ty)) ->
+          List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
             let size = sizeof ~tagDefs ty in
             let align = alignof ~tagDefs ty in
             let x = last_offset mod align in
@@ -100,7 +100,7 @@ let rec offsetsof tagDefs tag_sym =
           ) ([], 0) membrs in
         (List.rev xs, maxoffset)
     | UnionDef membrs ->
-        (List.map (fun (ident, (_, ty)) -> (ident, ty, 0)) membrs, 0)
+        (List.map (fun (ident, (_, _, ty)) -> (ident, ty, 0)) membrs, 0)
 
 and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
   match ty with
@@ -143,7 +143,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
               assert false
           | UnionDef membrs ->
               let (max_size, max_align) =
-                List.fold_left (fun (acc_size, acc_align) (_, (_, ty)) ->
+                List.fold_left (fun (acc_size, acc_align) (_, (_, _, ty)) ->
                   (max acc_size (sizeof ~tagDefs ty), max acc_align (alignof ~tagDefs ty))
                 ) (0, 0) membrs in
               (* NOTE: adding padding at the end to satisfy the alignment constraints *)
@@ -189,7 +189,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | StructDef membrs  ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, ty)) ->
+              List.fold_left (fun acc (_, (_, _, ty)) ->
                 max (alignof ~tagDefs ty) acc
               ) 0 membrs
         end
@@ -200,7 +200,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
           | UnionDef membrs ->
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
-              List.fold_left (fun acc (_, (_, ty)) ->
+              List.fold_left (fun acc (_, (_, _, ty)) ->
                 max (alignof ~tagDefs ty) acc
               ) 0 membrs
         end
