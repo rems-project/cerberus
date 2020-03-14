@@ -181,9 +181,9 @@ let name_cmp = fun nm1 nm2 ->
   | (Sym _, Impl _) -> (-1)
   | (Impl _, Sym _) -> 1
 
-let cabsid_cmp = fun ident1 ident2 ->
-  let (Cabs.CabsIdentifier(_, str1)) = ident1 in
-  let (Cabs.CabsIdentifier(_, str2)) = ident2 in
+let ident_cmp = fun ident1 ident2 ->
+  let (Sym.Identifier(_, str1)) = ident1 in
+  let (Sym.Identifier(_, str2)) = ident2 in
   compare str1 str2
 
 
@@ -263,7 +263,7 @@ let print_expr (expr: Expr.expr) =
   print_endline (Expr.to_string expr)
 
 let pp_to_stdout (doc: PPrint.document) =
-  PPrint.ToChannel.pretty 1.0 150 (Pervasives.stdout) doc
+  PPrint.ToChannel.pretty 1.0 150 (Stdlib.stdout) doc
 
 let pp_to_string (doc: PPrint.document) : string =
   Pp_utils.to_plain_string doc

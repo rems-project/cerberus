@@ -320,7 +320,7 @@ let compute_crit (po : (bmc_action * bmc_action) list) =
   let tid_to_edge_list_map =
     Pmap.fold (fun key value tid_map ->
       add_to_pmap (tid_of_bmcaction key) (key, value) tid_map)
-      edge_lists (Pmap.empty Pervasives.compare) in
+      edge_lists (Pmap.empty Stdlib.compare) in
   let top_sorted =
     List.map (fun (_, edge_list) -> top_sort edge_list)
              (Pmap.bindings_list tid_to_edge_list_map) in
@@ -794,7 +794,7 @@ module MemoryModelCommon = struct
     (* Map from aid to corresponding Z3 event *)
     let event_map = List.fold_left2 (fun acc action z3expr ->
       Pmap.add (aid_of_bmcaction action) z3expr acc)
-      (Pmap.empty Pervasives.compare) all_actions all_events in
+      (Pmap.empty Stdlib.compare) all_actions all_events in
     let z3action (action: bmc_action) : Expr.expr =
       Pmap.find (aid_of_bmcaction action) event_map in
     let decls = mk_decls event_sort in
@@ -1088,7 +1088,7 @@ module MemoryModelCommon = struct
         let read = z3action e_read in
         let write = z3action e_write in
 
-        if (Pervasives.compare (base_ctype ctype_read) (base_ctype ctype_write) <> 0)
+        if (Stdlib.compare (base_ctype ctype_read) (base_ctype ctype_write) <> 0)
            && ((tid_of_bmcaction e_write) <> initial_tid) then
           [mk_not (mk_and [fns.getGuard read
                           ;fns.getGuard write
@@ -1898,7 +1898,7 @@ module RC11MemoryModel : MemoryModel = struct
     ; event_map  = event_map
     ; action_map = List.fold_left (fun acc a ->
                       Pmap.add (aid_of_bmcaction a) (get_action a) acc)
-                      (Pmap.empty Pervasives.compare) all_actions
+                      (Pmap.empty Stdlib.compare) all_actions
 
     ; decls      = decls
     ; fns        = fns
@@ -2456,7 +2456,7 @@ module GenericModel (M: CatModel) : MemoryModel = struct
     let action_map =
       List.fold_left (fun acc a ->
         Pmap.add (aid_of_bmcaction a) (get_action a) acc)
-        (Pmap.empty Pervasives.compare) actions in
+        (Pmap.empty Stdlib.compare) actions in
 
     let model : z3_memory_model =
       { event_sort    = common.event_sort
