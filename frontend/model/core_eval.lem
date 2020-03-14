@@ -690,7 +690,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
               let xs = List.map (fun (memb_ident, cval) ->
                 match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
                   | Ctype.StructDef membrs ->
-                      let (_, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                      let (_, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
@@ -712,7 +712,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just cval ->
               match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
                 | Ctype.UnionDef membrs ->
-                    let (_, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                    let (_, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
                     let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
                     EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
                 | Ctype.StructDef _ ->

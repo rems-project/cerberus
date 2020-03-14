@@ -1101,7 +1101,7 @@ let get_tag_definitions =
 
 
 val get_anonymous_struct_or_union:
-  Ctype.ctype -> desugM (maybe (list (Symbol.identifier * (Ctype.qualifiers * Ctype.ctype))))
+  Ctype.ctype -> desugM (maybe (list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype))))
 let get_anonymous_struct_or_union ty =
   (* TODO: the unatomic is commented because clang doesn't consider an atomic
      struct/union an anonymous (regardless of the absence of tag). So we do

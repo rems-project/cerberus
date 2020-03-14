@@ -771,7 +771,7 @@ declaration:
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
-      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Symbol.Identifier (loc, "test"))), None)]) }
+      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
@@ -909,10 +909,10 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 struct_declaration:
-| ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
+| attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
     { let (tspecs, tquals, align_specs) = tspecs_tquals in
-      Struct_declaration (tspecs, tquals, align_specs,
+      Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
                           option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
@@ -1022,8 +1022,8 @@ declarator:
 ;
 
 direct_declarator:
-| i = general_identifier ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
-    { LF.identifier_decl i }
+| i = general_identifier attr_opt= ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
+    { LF.identifier_decl (to_attrs attr_opt) i }
 | LPAREN save_context decltor= declarator RPAREN
     { LF.declarator_decl decltor }
 | decl= array_declarator ioption(attribute_specifier_sequence)

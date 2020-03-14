@@ -93,8 +93,8 @@ instance (Located ctype)
 end
 
 type tag_definition =
-  | StructDef of list (Symbol.identifier * (qualifiers * ctype))
-  | UnionDef of list (Symbol.identifier * (qualifiers * ctype))
+  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+  | UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
 
 (** Type class instances *)
 
@@ -371,13 +371,13 @@ end
 instance (Show tag_definition)
   let show def =
     let string_of_identifiers tag_defs =
-      List.foldl (fun acc (i,_) ->
-        acc ^ (show i) ^ "; "
+      List.foldl (fun acc (ident, _) ->
+        acc ^ (show ident) ^ "; "
       ) "[" tag_defs ^ "]"
     in
     match def with
-      | StructDef tag_defs -> string_of_identifiers tag_defs
-      | UnionDef tag_defs -> string_of_identifiers tag_defs
+      | StructDef membrs -> string_of_identifiers membrs
+      | UnionDef  membrs -> string_of_identifiers membrs
     end
 end
 

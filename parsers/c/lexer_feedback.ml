@@ -89,10 +89,10 @@ let pointer_decl pdecl d =
   { d with sort=    DeclPtr pdecl;
   }
 
-let identifier_decl (Symbol.Identifier(_, str) as i) =
+let identifier_decl attrs (Symbol.Identifier(_, str) as i) =
   { id=      str;
     sort=    DeclId;
-    direct=  Cabs.DDecl_identifier i;
+    direct=  Cabs.DDecl_identifier (attrs, i);
   }
 
 let declarator_decl d =
@@ -143,7 +143,7 @@ let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
       } in
     let params = List.map (fun id ->
         PDeclaration_decl (signed_int_specifiers,
-                           Declarator (None,  DDecl_identifier id))
+                           Declarator (None,  DDecl_identifier (Annot.no_attributes, id)))
       ) ids in
     let direct_declarator =
       match d.direct with
