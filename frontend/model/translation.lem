@@ -2629,7 +2629,7 @@ else (* is_pointer *)
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
-                  let (_, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
+                  let (_, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
                   let oTy = force_core_object_type_of_ctype memb_ty in
                   begin
                     if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
@@ -2656,7 +2656,7 @@ else (* is_pointer *)
                       )
                   end
               | Nothing ->
-                  let (_, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
+                  let (_, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
                   E.return (
                     (ident, Caux.mk_unspecified_pe ty) :: acc,
                     mk_core
@@ -2700,7 +2700,7 @@ else (* is_pointer *)
                 match List.lookup memb_ident ident_tys with
                   | (*BISECT-IGNORE*) Nothing ->
                       illTypedAil loc "AilEunion: couldn't find a union definition"
-                  | Just (_, memb_ty) ->
+                  | Just (_, _, memb_ty) ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
                         | Nothing ->
