@@ -15,6 +15,10 @@ type attribute = <|
 type attributes =
   | Attrs of list attribute
 
+val no_attributes: attributes
+let no_attributes =
+  Attrs []
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)

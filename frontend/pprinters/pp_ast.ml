@@ -6,7 +6,31 @@ module P = PPrint
 
 type doc_tree =
   | Dleaf of P.document
+  | Dleaf_attrs of P.document * Annot.attributes
   | Dnode of P.document * doc_tree list
+  | Dnode_attrs of P.document * Annot.attributes * doc_tree list
+
+
+let add_dtree_of_attributes (Annot.Attrs xs) dtrees =
+  let open Annot in
+  match xs with
+    | [] ->
+        dtrees
+    | _ ->
+        let string_of_ident (Symbol.Identifier (_, str)) = str in
+        Dnode ( !^ (ansi_format [Bold; Red] "Attributes")
+              , List.map (fun attr ->
+                  let str =
+                    begin match attr.attr_ns with
+                  | Some z ->
+                          string_of_ident z ^ "::"
+                      | None ->
+                          ""
+                    end ^ string_of_ident attr.attr_id ^
+                    "(" ^ String.concat ", " (List.map (fun z -> "\"" ^ String.escaped z ^ "\"") attr.attr_args) ^  ")" in
+                  Dleaf (!^ str)
+                ) xs )
+        :: dtrees
 
 let pp_doc_tree dtree =
   let to_space = function
@@ -30,6 +54,10 @@ let pp_doc_tree dtree =
             (aux (pref ^ to_space current ^ " ", '`'))
             dtrees
         end
+    | Dleaf_attrs (doc, attrs) ->
+        aux (pref, current) (Dnode (doc, add_dtree_of_attributes attrs []))
+    | Dnode_attrs (doc, attrs, dtrees) ->
+        aux (pref, current) (Dnode (doc, add_dtree_of_attributes attrs dtrees))
   in
   begin match dtree with
     | Dleaf doc ->
@@ -83,24 +111,12 @@ let option z f = function
   | Some x -> Some (f x)
   | None   -> z
 
-
-let add_dtree_of_attributes (Annot.Attrs xs) dtree =
-  let open Annot in
-  match xs with
-    | [] ->
-        dtree
-    | _ ->
-        let string_of_ident (Symbol.Identifier (_, str)) = str in
-        Dnode ( pp_ctor "Attributes"
-              , List.map (fun attr ->
-                  let str =
-                    begin match attr.attr_ns with
-                  | Some z ->
-                          string_of_ident z ^ "::"
-                      | None ->
-                          ""
-                    end ^ string_of_ident attr.attr_id ^
-                    "(" ^ String.concat ", " (List.map (fun z -> "\"" ^ String.escaped z ^ "\"") attr.attr_args) ^  ")" in
-                  Dleaf (!^ str)
-                ) xs )
-        :: dtree
+let with_attributes (Annot.Attrs xs as attrs) = function
+  | Dleaf doc ->
+      Dleaf_attrs (doc, attrs)
+  | Dleaf_attrs (doc, Annot.Attrs xs') ->
+      Dleaf_attrs (doc, Annot.Attrs (xs @ xs'))
+  | Dnode (doc, dtrees) ->
+      Dnode_attrs (doc, attrs, dtrees)
+  | Dnode_attrs (doc, Annot.Attrs xs', dtrees) ->
+      Dnode_attrs (doc, Annot.Attrs (xs @ xs'), dtrees)

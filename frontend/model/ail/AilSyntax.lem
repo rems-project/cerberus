@@ -199,11 +199,11 @@ type statement_ 'a [name="s*"] =
   | AilSpar of list (statement 'a) (* NON-STD cppmem threads *)
   | AilSreg_store of reg * expression 'a
 and statement 'a [name="s*"] =
-  | AnnotatedStatement of Loc.t * statement_ 'a
+  | AnnotatedStatement of Loc.t * Annot.attributes * statement_ 'a
 
 instance forall 'a. (Located (statement 'a))
   let locOf stmt =
-    let (AnnotatedStatement loc _) = stmt in
+    let (AnnotatedStatement loc _ _) = stmt in
     loc
 end
 

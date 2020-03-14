@@ -358,10 +358,11 @@ let dtree_of_binding (i, ((_, sd, is_reg), qs, ty)) =
          ^^^ pp_cond is_reg (pp_type_keyword "register")
            (P.squotes (pp_ctype qs ty)))
 
-let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
+let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, attrs, stmt_)) =
   let dtree_of_expression = dtree_of_expression pp_annot in
   let dtree_of_statement = dtree_of_statement pp_annot in
-  match stmt_ with
+  with_attributes attrs
+  begin match stmt_ with
     | AilSskip ->
         Dleaf (pp_stmt_ctor "AilSskip")
     | AilSexpr e ->
@@ -416,6 +417,7 @@ let rec dtree_of_statement pp_annot (AnnotatedStatement (loc, stmt_)) =
     | AilSreg_store (r, e) ->
         Dnode (pp_stmt_ctor "AilSreg_store" ^^^ !^("r" ^ string_of_int r)
               , [dtree_of_expression e])
+  end
 
 let dtree_of_function_definition pp_annot (fun_sym, (loc, attrs, param_syms, stmt)) =
   let param_dtrees =
