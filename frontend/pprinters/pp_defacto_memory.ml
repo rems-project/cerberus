@@ -60,7 +60,7 @@ and pp_pointer_value_base = function
 and pp_shift_path_element = function
   | SPE_array (ty, ival_) ->
       !^ "SPE_array" ^^ P.parens (Pp_core_ctype.pp_ctype ty ^^ P.comma ^^ pp_integer_value_base ival_)
-  | SPE_member (tag_sym, (Cabs.CabsIdentifier (_, memb_str))) ->
+  | SPE_member (tag_sym, (Symbol.Identifier (_, memb_str))) ->
       !^ "SPE_member" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
  
 and pp_shift_path sh =
@@ -93,9 +93,9 @@ and pp_integer_value_base = function
       !^ "IVsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
   | IValignof ty ->
       !^ "IValignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-  | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+  | IVoffsetof (tag_sym, Symbol.Identifier (_, memb_str)) ->
       !^ "IVoffset" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
-  | IVpadding (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+  | IVpadding (tag_sym, Symbol.Identifier (_, memb_str)) ->
       !^ "IVpadding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
   | IVptrdiff (ty, (ptr_val_1, sh1), (ptr_val_2, sh2)) ->
       !^ "IVptrdiff" ^^ P.parens (
@@ -153,7 +153,7 @@ and pp_mem_value = function
      ) ^^^
      P.braces (
       comma_list (fun (mb_ident, _, mval) ->
-        P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
+        P.dot ^^ Pp_symbol.pp_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       ) xs
      )
   | MVunion (tag_sym, mb_ident, mval) ->
@@ -161,7 +161,7 @@ and pp_mem_value = function
         !^ "union" ^^^ !^ (Pp_symbol.to_string_pretty tag_sym)
       ) ^^^
       P.braces (
-        P.dot ^^ Pp_cabs.pp_cabs_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
+        P.dot ^^ Pp_symbol.pp_identifier mb_ident ^^ P.equals ^^^ pp_mem_value mval
       )
   | MVdelayed (xs, mval) ->
       !^ "MVcomposite" ^^
@@ -230,9 +230,9 @@ let pp_pretty_integer_value format (IV (_, ival_)) =
       !^ "ivsizeof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
     | IValignof ty ->
       !^ "ivalignof" ^^ P.parens (Pp_core_ctype.pp_ctype ty)
-    | IVoffsetof (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+    | IVoffsetof (tag_sym, Symbol.Identifier (_, memb_str)) ->
         !^ "IVoffsetof"
-    | IVpadding (tag_sym, Cabs.CabsIdentifier (_, memb_str)) ->
+    | IVpadding (tag_sym, Symbol.Identifier (_, memb_str)) ->
         !^ "padding" ^^ P.parens (!^ (Pp_symbol.to_string_pretty tag_sym) ^^ P.comma ^^^ !^ memb_str)
     | IVptrdiff (ty, (ptr_val_1, sh1), (ptr_val_2, sh2)) ->
       !^ "ptrdiff" ^^ P.parens (
