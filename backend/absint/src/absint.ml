@@ -17,7 +17,7 @@ type absvalue =
   | ATunit
   (*| ATtrue => 1
   | ATfalse => 0 *)
-  | ATctype of Core_ctype.ctype0 (* C type as value *)
+  | ATctype of Ctype.ctype (* C type as value *)
   | ATtuple of absvalue list
   | ATexpr of Texpr1.t
   | ATcons of Tcons1.t
@@ -321,7 +321,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
     absvalue_of_texpr ~with_sym core man te >>= begin function
       | ATpointer (APfunction sym) ->
           begin match Pmap.lookup sym core.funinfo with
-            | Some (ret, params, is_variadic, has_proto) ->
+            | Some (_, _, ret, params, is_variadic, has_proto) ->
               get_env () >>= fun env ->
               let toint b =
                 ATexpr (Texpr1.cst env (Coeff.s_of_int (if b then 1 else 0)))
