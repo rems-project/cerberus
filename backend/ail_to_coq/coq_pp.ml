@@ -12,10 +12,17 @@ let section_name : string -> string = fun fname ->
 let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   let pp fmt = Format.fprintf ff fmt in
   match it with
-  | ItInt(i)      -> pp "{|it_size := %i%%nat; it_signed := %b|}"
-                       i.size i.signed
-  | ItSize_t      -> pp "size_t"
-  | ItIntptr_t(b) -> pp "size_t" (* FIXME *)
+  | ItSize_t(true)      -> pp "ssize_t"
+  | ItSize_t(false)     -> pp "size_t"
+  | ItI8(true)          -> pp "i8"
+  | ItI8(false)         -> pp "u8"
+  | ItI16(true)         -> pp "i16"
+  | ItI16(false)        -> pp "u16"
+  | ItI32(true)         -> pp "i32"
+  | ItI32(false)        -> pp "u32"
+  | ItI64(true)         -> pp "i64"
+  | ItI64(false)        -> pp "u64"
+
 
 let pp_layout : Coq_ast.layout pp = fun ff layout ->
   let pp fmt = Format.fprintf ff fmt in
@@ -47,19 +54,19 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
   | MulOp       -> "×"
   | DivOp       -> "/"
   | ModOp       -> "%"
-  | AndOp       -> "..." (* TODO *) 
-  | OrOp        -> "..." (* TODO *) 
-  | XorOp       -> "..." (* TODO *) 
-  | ShlOp       -> "..." (* TODO *) 
-  | ShrOp       -> "..." (* TODO *) 
+  | AndOp       -> "..." (* TODO *)
+  | OrOp        -> "..." (* TODO *)
+  | XorOp       -> "..." (* TODO *)
+  | ShlOp       -> "..." (* TODO *)
+  | ShrOp       -> "..." (* TODO *)
   | EqOp        -> "="
   | NeOp        -> "!="
   | LtOp        -> "<"
   | GtOp        -> ">"
   | LeOp        -> "≤"
   | GeOp        -> "≥"
-  | RoundDownOp -> "..." (* TODO *) 
-  | RoundUpOp   -> "..." (* TODO *) 
+  | RoundDownOp -> "..." (* TODO *)
+  | RoundUpOp   -> "..." (* TODO *)
 
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
@@ -253,7 +260,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "@]@;|}.";
   in
   List.iter pp_function ast.functions;
- 
+
   (* Closing the section. *)
   pp "@]@;End %s.@]" sect
 

@@ -5,9 +5,11 @@ type rc_attr =
   ; rc_attr_args : string list }
 
 type int_type =
-  | ItInt of { size : int ; signed : bool }
-  | ItSize_t
-  | ItIntptr_t of bool (* signed *)
+  | ItSize_t of bool (* signed *)
+  | ItI8     of bool (* signed *)
+  | ItI16    of bool (* signed *)
+  | ItI32    of bool (* signed *)
+  | ItI64    of bool (* signed *)
 
 type op_type =
   | OpInt of int_type

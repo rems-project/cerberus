@@ -29,7 +29,7 @@ let translate_int_type i =
     match i with
     | Ichar           -> not_implemented "size_of_base_type (IChar)"
     | Short           -> not_implemented "size_of_base_type (Short)"
-    | Int_            -> ItInt({size = 2; signed})
+    | Int_            -> ItI32(signed)
     | Long            -> not_implemented "size_of_base_type (LongLong)"
     | LongLong        -> not_implemented "size_of_base_type (LongLong)"
       (* Things defined in the standard libraries *)
@@ -37,7 +37,7 @@ let translate_int_type i =
     | Int_leastN_t(_) -> not_implemented "size_of_base_type (Int_leastN_t)"
     | Int_fastN_t(_)  -> not_implemented "size_of_base_type (Int_fastN_t)"
     | Intmax_t        -> not_implemented "size_of_base_type (Intmax_t)"
-    | Intptr_t        -> ItIntptr_t(signed)
+    | Intptr_t        -> ItSize_t(signed)
   in
   match i with
   | Char        -> not_implemented "translate_layout (Char)"
@@ -48,7 +48,7 @@ let translate_int_type i =
   (* Things defined in the standard libraries *)
   | Wchar_t     -> not_implemented "translate_layout (Wchar_t)"
   | Wint_t      -> not_implemented "translate_layout (Win_t)"
-  | Size_t      -> ItSize_t
+  | Size_t      -> ItSize_t(false)
   | Ptrdiff_t   -> not_implemented "translate_layout (Ptrdiff_t)"
 
 let translate_layout Ctype.(Ctype(_, c_ty)) =
@@ -100,7 +100,7 @@ let translate_gen_type ty =
   | GenBasic(b)                  ->
   match b with
   | GenInteger(Concrete(i))      -> LInt(translate_int_type i)
-  | GenInteger(SizeT)            -> LInt(ItSize_t)
+  | GenInteger(SizeT)            -> LInt(ItSize_t(false))
   | GenInteger(PtrdiffT)         -> assert false
   | GenInteger(Unknown(_))       -> assert false
   | GenInteger(Promote(_))       -> assert false
