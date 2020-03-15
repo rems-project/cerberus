@@ -3760,7 +3760,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
 (* TODO: delete this *)
 val translate_tag_definitions: list (A.ail_identifier * Ctype.tag_definition) -> C.core_tag_definitions
 let translate_tag_definitions ctx =
-  Map.fromList ctx
+  Map.fromList (List.map (fun (x, (_, y)) -> (x, y)) ctx)
 (*
   Map.fromList $ List.map (function
     | (sym, A.StructDef tagDef) ->
