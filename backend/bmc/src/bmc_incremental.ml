@@ -72,7 +72,7 @@ module BmcInline = struct
     ; fn_call_map      = Pmap.empty Stdlib.compare
     ; fn_type          = None
     ; proc_expr        = None
-    ; fn_ptr_map       = Pmap.empty Stdlib.compare
+    ; fn_ptr_map       = Pmap.empty Sym.instance_Basic_classes_SetType_Symbol_sym_dict.Lem_basic_classes.setElemCompare_method
     }
 
   (* ======= Accessors ======== *)
@@ -1273,24 +1273,30 @@ module BmcZ3 = struct
         get_file >>= fun file ->
         let sort = cbt_to_z3 bTy file in
         return (mk_fresh_const (sprintf "error_%d" uid) sort)
-    | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
+    | PEctor (Civmin, [Pexpr(_, BTy_ctype, PEval (Vctype ty))]) ->
         (* TODO: Get rid of ImplFunctions *)
-        let raw_ctype = strip_atomic ctype in
-        assert (is_integer_type raw_ctype);
-        begin match Pmap.lookup raw_ctype ImplFunctions.ivmin_map with
-        | Some expr -> return expr
-        | None ->
-           failwith (sprintf "Unsupported ctype: %s"
-                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+        begin match strip_atomic ty with
+          | Ctype (_, Basic (Integer ity)) as ty' ->
+              begin match Pmap.lookup ity ImplFunctions.ivmin_map with
+                | Some expr -> return expr
+                | None ->
+                    failwith (sprintf "Unsupported ctype (ivmin): %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype ty')))
+              end
+          | _ ->
+              assert false
         end
-    | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
-        let raw_ctype = strip_atomic ctype in
-        assert (is_integer_type raw_ctype);
-        begin match Pmap.lookup raw_ctype ImplFunctions.ivmax_map with
-        | Some expr -> return expr
-        | None ->
-           failwith (sprintf "Unsupported ctype: %s"
-                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+    | PEctor(Civmax, [Pexpr(_, BTy_ctype, PEval (Vctype ty))]) ->
+        begin match strip_atomic ty with
+          | Ctype (_, Basic (Integer ity)) as ty' ->
+              begin match Pmap.lookup ity ImplFunctions.ivmax_map with
+                | Some expr -> return expr
+                | None ->
+                    failwith (sprintf "Unsupported ctype (ivmax): %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype ty')))
+              end
+          | _ ->
+              assert false
         end
     | PEctor(Civsizeof, [Pexpr(_, BTy_ctype, PEval (Vctype ctype))]) ->
         (*let raw_ctype = strip_atomic ctype in*)
@@ -1398,13 +1404,17 @@ module BmcZ3 = struct
     | PEis_scalar _  -> assert false
     | PEis_integer _ -> assert false
     | PEis_signed _  -> assert false
-    | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ctype))) ->
-        let raw_ctype = strip_atomic ctype in
-        begin match Pmap.lookup raw_ctype ImplFunctions.is_unsigned_map with
-        | Some expr -> return expr
-        | None ->
-           failwith (sprintf "Unsupported ctype: %s"
-                             (pp_to_string (Pp_core_ctype.pp_ctype raw_ctype)))
+    | PEis_unsigned (Pexpr(_, BTy_ctype, PEval (Vctype ty))) ->
+        begin match strip_atomic ty with
+          | Ctype (_, Basic (Integer ity)) as ty' ->
+              begin match Pmap.lookup ity ImplFunctions.is_unsigned_map with
+                | Some expr -> return expr
+                | None ->
+                    failwith (sprintf "Unsupported ctype (is_unsigned): %s"
+                             (pp_to_string (Pp_core_ctype.pp_ctype ty')))
+              end
+          | _ ->
+              assert false
         end
     | PEis_unsigned _    -> assert false
     | PEare_compatible (pe1, pe2) ->
@@ -2842,14 +2852,14 @@ module BmcVC = struct
         vcs_pe ctype_dst >>= fun vcs_ctype_dst ->
         vcs_pe ptr       >>= fun vcs_ptr ->
 
-        let ctype = (match ctype_dst with
-          | Pexpr(_, BTy_ctype, PEval (Vctype ctype)) -> ctype
+        let ity = (match ctype_dst with
+          | Pexpr(_, BTy_ctype, PEval (Vctype (Ctype (_, Basic (Integer z))))) -> z
           | _ -> assert false
           ) in
         get_expr (get_id_pexpr ptr) >>= fun z3d_ptr ->
         let ptr_addr = PointerSort.get_addr_index z3d_ptr in
-        let min_value = Pmap.find ctype ImplFunctions.ivmin_map in
-        let max_value = Pmap.find ctype ImplFunctions.ivmax_map in
+        let min_value = Pmap.find ity ImplFunctions.ivmin_map in
+        let max_value = Pmap.find ity ImplFunctions.ivmax_map in
 
         let dbg = VcDebugStr (string_of_int uid ^ "_IntFromPtr_invalid_cast") in
         return ((mk_or [PointerSort.is_null z3d_ptr
