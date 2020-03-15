@@ -308,8 +308,6 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
   | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
 
-let strip_statement (AnnotatedStatement(_, s)) = s
-
 let trans_expr e (e_stmt : expr -> stmt) : stmt =
   let (e, calls) = translate_expr false e in
   let fn (id, e, es) stmt = Call(id, e, es, stmt) in
@@ -335,9 +333,11 @@ let translate_block : 'a -> stmt SMap.t -> stmt * stmt SMap.t =
     let resume goto = match goto with None -> assert false | Some(s) -> s in
     (* End of the block reached. *)
     match stmts with
-    | []         -> (resume final, blocks)
-    | s :: stmts ->
-    match strip_statement s with
+    | []                                         -> (resume final, blocks)
+    | (AnnotatedStatement(_, attrs, s)) :: stmts ->
+    let attrs = collect_rc_attrs attrs in
+    ignore attrs; (* FIXME statement attributes. *)
+    match s with
     (* Nested block. *)
     | AilSblock(bs, ss)   -> ignore (insert_bindings bs);
                              trans break continue final (ss @ stmts) blocks
@@ -477,9 +477,11 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     List.fold_right fn decls []
   in
 
-  (* Get the definition of structs. *)
+  (* Get the definition of structs/unions. *)
   let structs =
-    let build (id, def) =
+    let build (id, (attrs, def)) =
+      let attrs = collect_rc_attrs attrs in
+      ignore attrs; (* FIXME struct/union attributes. *)
       let struct_name = sym_to_str id in
       let (struct_members, struct_is_union) =
         let (l, is_union) =
@@ -487,7 +489,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
           | UnionDef(l)  -> (l, true )
           | StructDef(l) -> (l, false)
         in
-        let fn (id, (_, c_ty)) =
+        let fn (id, (attrs, _, c_ty)) =
+          let attrs = collect_rc_attrs attrs in
+          ignore attrs; (* FIXME per-field attributes. *)
           (id_to_str id, translate_layout c_ty)
         in
         (List.map fn l, is_union)
@@ -511,7 +515,12 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the definition of functions. *)
   let functions =
-    let build (id, (_, attrs, args, AnnotatedStatement(_, stmt))) =
+    let build (id, (_, attrs, args, AnnotatedStatement(_, s_attrs, stmt))) =
+      let _ =
+        match collect_rc_attrs s_attrs with
+        | []        -> ()
+        | attr :: _ -> not_implemented "rc attribute on function body"
+      in
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
       let func_attrs = collect_rc_attrs attrs in
