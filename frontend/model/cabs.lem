@@ -182,8 +182,8 @@ and cabs_type_specifier_ =
   | TSpec_Bool
   | TSpec_Complex
   | TSpec_Atomic of type_name (* §6.7.2.4 Atomic type specifiers, Syntax *)
-  | TSpec_struct of maybe Symbol.identifier * maybe (list struct_declaration)
-  | TSpec_union  of maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_struct of Annot.attributes * maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_union  of Annot.attributes * maybe Symbol.identifier * maybe (list struct_declaration)
   | TSpec_enum   of maybe Symbol.identifier * maybe (list (Symbol.identifier * maybe
                                                            cabs_expression))
   | TSpec_name   of Symbol.identifier

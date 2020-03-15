@@ -13,7 +13,7 @@ let inline (<$>) = E.fmap
 
 val lookup_tag_definition: forall 'a. sigma 'a -> ail_identifier -> maybe tag_definition
 let lookup_tag_definition s sym =
-  List.lookup sym s.tag_definitions
+  Maybe.map snd (List.lookup sym s.tag_definitions)
 
 
 (* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever allows
@@ -1988,7 +1988,7 @@ let annotate_sigma sigm =
       else
         E.return ()
     in match tag with
-    | (_, StructDef xs) ->
+    | (_, (_, StructDef xs)) ->
         (* STD §6.7.2.1#3 *)
         match List.dest_init xs with
           | Nothing ->
@@ -2012,7 +2012,7 @@ let annotate_sigma sigm =
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
         ) xs
-    | (_, UnionDef xs) ->
+    | (_, (_, UnionDef xs)) ->
         E.mapM (check_member sigm) xs >>
         E.mapM_ (fun (_, (_, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
