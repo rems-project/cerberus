@@ -117,7 +117,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
         wip tagDefs acc path_prefix (outer_path, outer_ty) atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: xs)) ->
+          | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: xs)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Struct"
@@ -139,7 +139,7 @@ let rec wip tagDefs acc path_prefix (outer_path, outer_ty) (Ctype.Ctype _ cty) =
     | Ctype.Union tag_sym ->
         (* TODO: check *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "elemPathFromCtype_aux3: this may be WRONG ==> anonymous Union"
@@ -165,7 +165,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
               ([Elem_array 0], if is_unknown_size then entity_cty else elem_ty)
           | Ctype.Struct tag_sym ->
               match Map.lookup tag_sym tagDefs with
-                | Just (Struct_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+                | Just (Struct_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3_aux: this may be WRONG ==> anonymous Struct"
@@ -178,7 +178,7 @@ let elemPathFromCtype3 is_unknown_size tagDefs (Ctype.Ctype _ entity_ty as entit
           | Ctype.Union tag_sym ->
               (* TODO: check *)
               match Map.lookup tag_sym tagDefs with
-                | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+                | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
                     let () = if isAnonymous then
                       Debug.print_debug 1 [] (fun () ->
                         "elemPathFromCtype3: this may be WRONG ==> anonymous Union"
@@ -305,7 +305,8 @@ let rec cardinalityOfCtype tagDefs (Ctype.Ctype _ ty) =
         n * cardinalityOfCtype tagDefs elem_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition isAnonymous xs) ->
+
+          | Just (Struct_definition _ isAnonymous xs) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "cardinalityOfCtype: this may be WRONG ==> anonymous Struct"
@@ -349,7 +350,7 @@ let rec ctypeAtPath tagDefs (Ctype.Ctype _ ty as cty) path =
           ctypeAtPath tagDefs elem_ty path'
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ xs) ->
+          | Just (Struct_definition _ _ xs) ->
               match List.lookup memb_ident xs with
                 | Nothing ->
                     error "ctypeAtPath: Struct, invalid member"
@@ -384,7 +385,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
         innerCtype tagDefs atom_ty
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ ((_, (_, _, memb_ty)) :: _)) ->
+          | Just (Struct_definition _ _ ((_, (_, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Struct"
@@ -392,7 +393,7 @@ let rec innerCtype tagDefs (Ctype.Ctype _ ty as cty) =
     | Ctype.Union tag_sym ->
         (* TODO: this may be wrong when called in a Desig context ... *)
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ ((_, (_, _, memb_ty)) :: _)) ->
+          | Just (Union_definition _ _ ((_, (_, _, memb_ty)) :: _)) ->
               innerCtype tagDefs memb_ty
           | _ ->
               error "innerCtype: Union"
@@ -422,7 +423,7 @@ let rec outerValidPath_aux tagDefs (Ctype.Ctype _ ty) path acc =
           List.reverse acc
     | (Ctype.Struct tag_sym, Elem_member memb_ident :: path') ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ ((first_memb_ident, (_, _, memb_ty)) :: _)) ->
+          | Just (Struct_definition _ _ ((first_memb_ident, (_, _, memb_ty)) :: _)) ->
               if first_memb_ident = memb_ident then
                 match path' with
                   | [] ->
@@ -474,7 +475,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition isAnonymous xs) ->
+          | Just (Struct_definition _ isAnonymous xs) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Struct"
@@ -491,7 +492,7 @@ let rec constructValue_aux tagDefs path elems (Ctype.Ctype _ ty as cty) =
         end
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
+          | Just (Union_definition _ isAnonymous ((first_memb_ident, (_, _, first_memb_ty)) :: _)) ->
               let () = if isAnonymous then
                 Debug.print_debug 1 [] (fun () ->
                   "constructValue_aux: this may be WRONG ==> anonymous Union"
@@ -1447,13 +1448,13 @@ let rec desugar_type_specifiers specs =
     | Just (loc, bty) ->
         E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Basic bty))
     | Nothing ->
-        let desugar_new_struct_or_union struct_or_union tag_ident_opt sdecls =
+        let desugar_new_struct_or_union attrs struct_or_union tag_ident_opt sdecls =
           let (kind_ctor, def_ctor, type_ctor) =
             match struct_or_union with
               | STRUCT ->
-                  (E.Kind_struct, Struct_definition, fun sym -> Ctype.Ctype [] (Ctype.Struct sym))
+                  (E.Kind_struct, Struct_definition attrs, fun sym -> Ctype.Ctype [] (Ctype.Struct sym))
               | UNION ->
-                  (E.Kind_union, Union_definition, fun sym -> Ctype.Ctype [] (Ctype.Union sym))
+                  (E.Kind_union, Union_definition attrs, fun sym -> Ctype.Ctype [] (Ctype.Union sym))
             end in
           (* STD §6.7.2.1#8, sentence 1 *)
           (* NOTE: the std say that because we have a 'Just sdecls', a new
@@ -1510,11 +1511,11 @@ let rec desugar_type_specifiers specs =
               error "TSpec_enum Nothing, Nothing"
           
             (* NOTE: The parser does not generate such struct *)
-          | [TSpec _ (TSpec_struct Nothing Nothing)] ->
+          | [TSpec _ (TSpec_struct _ Nothing Nothing)] ->
               error "TSpec_struct Nothing, Nothing"
           
             (* NOTE: The parser does not generate such union *)
-          | [TSpec _ (TSpec_union Nothing Nothing)] ->
+          | [TSpec _ (TSpec_union _ Nothing Nothing)] ->
               error "TSpec_union Nothing, Nothing"
           
           | [TSpec loc (TSpec_enum (Just tag_ident) Nothing)] ->
@@ -1529,23 +1530,26 @@ let rec desugar_type_specifiers specs =
                     E.constraint_violation loc EnumTagIncomplete
               end
           
-          | [TSpec loc (TSpec_struct (Just tag_ident) Nothing)] ->
-              (* NOTE: 'desugar_type_specifiers' must NOT be called on a
-                 specifier occurring in the form described by §6.7.2.3#7 *)
-              E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
-                | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
-                    STD_ "§6.7.2.3#9"
-                      E.return (Ctype.no_qualifiers, Ctype.Ctype [] (Ctype.Struct tag_sym))
-                | Just (_, (tag_sym, _)) ->
-                    E.constraint_violation loc (TagRedeclaration tag_sym)
-                | Nothing ->
-                    (* STD §6.7.2.3#8 *)
-                    (* TODO: check, but this seems right *)
-                    E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
-                    E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Struct tag_sym))
-              end
+          | [TSpec loc (TSpec_struct attrs (Just tag_ident) Nothing)] ->
+              if attrs <> Annot.no_attributes then
+                E.fail loc (Errors.Desugar_TODO "Attribute constraint violation ==> N2335 6.7.2.1#6 and 6.7.2.3#4")
+              else
+                (* NOTE: 'desugar_type_specifiers' must NOT be called on a
+                   specifier occurring in the form described by §6.7.2.3#7 *)
+                E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
+                  | Just (_, (tag_sym, E.Kind_tag E.Kind_struct)) ->
+                      STD_ "§6.7.2.3#9"
+                        E.return (Ctype.no_qualifiers, Ctype.Ctype [] (Ctype.Struct tag_sym))
+                  | Just (_, (tag_sym, _)) ->
+                      E.constraint_violation loc (TagRedeclaration tag_sym)
+                  | Nothing ->
+                      (* STD §6.7.2.3#8 *)
+                      (* TODO: check, but this seems right *)
+                      E.register_tag E.Kind_struct (Just tag_ident) >>= fun tag_sym ->
+                      E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Struct tag_sym))
+                end
           
-          | [TSpec loc (TSpec_union (Just tag_ident) Nothing)] ->
+          | [TSpec loc (TSpec_union attrs (Just tag_ident) Nothing)] ->
               (* NOTE: 'desugar_type_specifiers' must NOT be called on a
                  specifier occurring in the form described by §6.7.2.3#7 *)
               E.resolve_extraordinary_identifier tag_ident E.Namespace_tag >>= function
@@ -1561,11 +1565,11 @@ let rec desugar_type_specifiers specs =
                     E.return (Ctype.no_qualifiers, Ctype.Ctype [Annot.Aloc loc] (Ctype.Union tag_sym))
               end
           
-          | [TSpec _ (TSpec_struct tag_ident_opt (Just sdecls))] ->
-              desugar_new_struct_or_union STRUCT tag_ident_opt sdecls
+          | [TSpec loc (TSpec_struct attrs tag_ident_opt (Just sdecls))] ->
+              desugar_new_struct_or_union attrs STRUCT tag_ident_opt sdecls
           
-          | [TSpec _ (TSpec_union tag_ident_opt (Just sdecls))] ->
-              desugar_new_struct_or_union UNION tag_ident_opt sdecls
+          | [TSpec _ (TSpec_union attrs tag_ident_opt (Just sdecls))] ->
+              desugar_new_struct_or_union attrs UNION tag_ident_opt sdecls
           
           | [TSpec loc (TSpec_Atomic tyname)] ->
               desugar_type_name tyname >>= fun (qs, ty) ->
@@ -2326,10 +2330,10 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
           tag_definitions=
             List.foldl (fun acc (ident, tagDef) ->
               match tagDef with
-                | Struct_definition _ xs ->
-                    (ident, Ctype.StructDef xs) :: acc
-                | Union_definition _ xs ->
-                    (ident, Ctype.UnionDef xs) :: acc
+                | Struct_definition attrs _ xs ->
+                    (ident, (attrs, Ctype.StructDef xs)) :: acc
+                | Union_definition attrs _ xs ->
+                    (ident, (attrs, Ctype.UnionDef xs)) :: acc
                 | Enum_definition _ ->
                     acc
               end
@@ -2612,7 +2616,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
     
     | Ctype.Struct tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Struct_definition _ xs) ->
+          | Just (Struct_definition _ _ xs) ->
               ConstantStruct tag_sym $
                 List.map (fun (ident, (_, _, ty)) ->
                   (* we ignore the qualifiers, initialisers don't care about them *)
@@ -2624,7 +2628,7 @@ and static_thread_implicit_initializer tagDefs (Ctype.Ctype _ ty as cty) =
     
     | Ctype.Union tag_sym ->
         match Map.lookup tag_sym tagDefs with
-          | Just (Union_definition _ xs) ->
+          | Just (Union_definition _ _ xs) ->
               let (ident, (_, _, ty)) = match xs with
                 | [] ->
                     (* NOTE: I don't the parser can produce an empty Union_definition *)
@@ -2854,7 +2858,7 @@ and foo_aux
                               end in
                               E.get_tag_definitions >>= fun tagDefs ->
                               match Map.lookup tag_sym tagDefs with
-                                | Just (Struct_definition isAnonymous membrs) ->
+                                | Just (Struct_definition _ isAnonymous membrs) ->
                                     let () = if isAnonymous then
                                       Debug.print_debug 1 [] (fun () ->
                                         "foo_aux (Init_expr, is_struct): this may be WRONG ==> anonymous Struct"
@@ -2896,7 +2900,7 @@ and foo_aux
                                 elem_ty
                             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                                 match Map.lookup tag_sym tagDefs with
-                                  | Just (Struct_definition isAnonymous ((_, (_, _, first_memb_ty)) :: _)) ->
+                                  | Just (Struct_definition _ isAnonymous ((_, (_, _, first_memb_ty)) :: _)) ->
                                       let () = if isAnonymous then
                                         Debug.print_debug 1 [] (fun () ->
                                           "foo_aux: this may be WRONG ==> anonymous Struct"
@@ -3575,10 +3579,10 @@ let desugar_declaration_base specifs idecltors =
                     tag_definitions=
                       List.foldl (fun acc (ident, tagDef) ->
                         match tagDef with
-                          | Struct_definition _ xs ->
-                              (ident, Ctype.StructDef xs) :: acc
-                          | Union_definition _ xs ->
-                              (ident, Ctype.UnionDef xs) :: acc
+                          | Struct_definition attrs _ xs ->
+                              (ident, (attrs, Ctype.StructDef xs)) :: acc
+                          | Union_definition attrs _ xs ->
+                              (ident, (attrs, Ctype.UnionDef xs)) :: acc
                           | Enum_definition _ ->
                               acc
                         end
@@ -4119,18 +4123,23 @@ let desugar_and_register_external_declaration edecl =
     (* struct-or-union identifier ; *)
     | EDecl_decl (Declaration_base <|
         storage_classes= [];
-        type_specifiers= [TSpec _ (TSpec_struct (Just ident) Nothing)];
+        type_specifiers= [TSpec _ (TSpec_struct attrs (Just ident) Nothing)];
         type_qualifiers= [];
         function_specifiers= [];
         alignment_specifiers= [];
       |> []) ->
+        let () =
+          if attrs <> Annot.no_attributes then
+            Debug.print_debug 0 [] (fun () ->
+              "TODO(attributes ignored) -- TSpec_struct 3 => " ^ show ident)
+          else () in
         STD_ "§6.7.2.3#7"
         E.void (E.register_tag E.Kind_struct (Just ident))
     
     (* struct-or-union identifier ; *)
     | EDecl_decl (Declaration_base <|
         storage_classes= [];
-        type_specifiers= [TSpec _ (TSpec_union (Just ident) Nothing)];
+        type_specifiers= [TSpec _ (TSpec_union attrs (Just ident) Nothing)];
         type_qualifiers= [];
         function_specifiers= [];
         alignment_specifiers= [];
@@ -4193,10 +4202,10 @@ let desugar_and_register_external_declaration edecl =
                         List.reverse begin
                           List.foldl (fun acc (ident, tagDef) ->
                             match tagDef with
-                              | Struct_definition _ xs ->
-                                  (ident, Ctype.StructDef xs) :: acc
-                              | Union_definition _ xs ->
-                                  (ident, Ctype.UnionDef xs) :: acc
+                              | Struct_definition attrs _ xs ->
+                                  (ident, (attrs, Ctype.StructDef xs)) :: acc
+                              | Union_definition attrs _ xs ->
+                                  (ident, (attrs, Ctype.UnionDef xs)) :: acc
                               | Enum_definition _ ->
                                   acc
                             end

@@ -387,12 +387,16 @@ and dtree_of_cabs_type_specifier (TSpec (_, tspec)) =
         Dleaf (pp_ctor "TSpec__Complex")
     | TSpec_Atomic tyname ->
         Dnode (pp_ctor "TSpec_Atomic", [dtree_of_type_name tyname])
-    | TSpec_struct (id_opt, s_decls_opt) ->
-        Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_identifier id_opt),
-                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
-    | TSpec_union (id_opt, s_decls_opt) ->
-        Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_identifier id_opt),
-                 node_of_list_option dtree_of_struct_declaration s_decls_opt)
+    | TSpec_struct (attrs, id_opt, s_decls_opt) ->
+        with_attributes attrs begin
+          Dnode (pp_ctor "TSpec_struct" ^^ P.brackets (pp_option pp_identifier id_opt),
+                   node_of_list_option dtree_of_struct_declaration s_decls_opt)
+        end
+    | TSpec_union (attrs, id_opt, s_decls_opt) ->
+        with_attributes attrs begin
+          Dnode (pp_ctor "TSpec_union" ^^ P.brackets (pp_option pp_identifier id_opt),
+                   node_of_list_option dtree_of_struct_declaration s_decls_opt)
+        end
     | TSpec_enum (id_opt, enums_opt) ->
         Dnode (pp_ctor "TSpec_enum" ^^ P.brackets (pp_option pp_identifier id_opt),
                node_of_list_option dtree_of_enumerator enums_opt)

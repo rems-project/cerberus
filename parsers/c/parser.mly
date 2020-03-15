@@ -159,7 +159,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_) as stmt) =
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -884,21 +884,21 @@ attribute_type_specifier_unique:
 
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
-| ctor= struct_or_union attribute_specifier_sequence?
+| ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE rev_decls= struct_declaration_list RBRACE
-    { ctor iopt (Some (List.rev rev_decls)) }
-| ctor= struct_or_union attribute_specifier_sequence?
+    { ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
+| ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
-    { ctor (Some i) None }
+    { ctor (to_attrs attr_opt) (Some i) None }
 ;
 
 struct_or_union:
 | STRUCT
-    { fun x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
-                        TSpec_struct (x, y)) }
+    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+                              TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
-                        TSpec_union (x, y)) }
+    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+                              TSpec_union (attrs, x, y)) }
 ;
 
 struct_declaration_list: (* NOTE: the list is in reverse *)
