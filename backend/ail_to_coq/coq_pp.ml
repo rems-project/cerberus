@@ -173,6 +173,22 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   let pp_func_decl (id, _) = pp "Context (%s : loc).@;" id in
   List.iter pp_func_decl ast.functions;
 
+  (* Printing for struct/union members. *)
+  let pp_members members =
+    let n = List.length members in
+    let fn i (id, (attrs, layout)) =
+      let sc = if i = n - 1 then "" else ";" in
+      let annot =
+        try field_annot attrs with Invalid_annot(msg) ->
+          Printf.eprintf "Error: %s\n%!" msg; exit 1
+      in
+      ignore annot; (* TODO actually handle attributes. *)
+
+      pp "@;(%S, %a)%s" id pp_layout layout sc
+    in
+    List.iteri fn members
+  in
+
   (* Definition of structs/unions. *)
   let pp_struct (id, decl) =
     pp "@;(* Definition of struct [%s]. *)@;" id;
@@ -191,27 +207,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     List.iter pp_attr decl.struct_attrs;
 
     pp "@[<v 2>sl_members := [";
-
-    let n = List.length decl.struct_members in
-    let fn i (id, (attrs, layout)) =
-      let sc = if i = n - 1 then "" else ";" in
-
-      (* TODO actually handle attributes. *)
-      let pp_attr attr =
-        let _ =
-          try ignore (parse_attr attr) with Invalid_annot(msg) ->
-          Printf.eprintf "Error: %s\n%!" msg
-        in
-        let {rc_attr_id=id; rc_attr_args=args} = attr in
-        let args = List.map (Printf.sprintf "\"%s\"") args in
-        pp "(* %s(%s) *)@;" id (String.concat ", " args)
-      in
-      List.iter pp_attr attrs;
-
-      pp "@;(%S, %a)%s" id pp_layout layout sc
-    in
-    List.iteri fn decl.struct_members;
-
+    pp_members decl.struct_members;
     pp "@]@;];@]@;|}.@;";
     pp "Solve Obligations with solve_struct_obligations.@;"
   in
@@ -232,27 +228,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     List.iter pp_attr decl.struct_attrs;
 
     pp "@[<v 2>ul_members := [";
-
-    let n = List.length decl.struct_members in
-    let fn i (id, (attrs, layout)) =
-      let sc = if i = n - 1 then "" else ";" in
-
-      (* TODO actually handle attributes. *)
-      let pp_attr attr =
-        let _ =
-          try ignore (parse_attr attr) with Invalid_annot(msg) ->
-          Printf.eprintf "Error: %s\n%!" msg
-        in
-        let {rc_attr_id=id; rc_attr_args=args} = attr in
-        let args = List.map (Printf.sprintf "\"%s\"") args in
-        pp "(* %s(%s) *)@;" id (String.concat ", " args)
-      in
-      List.iter pp_attr attrs;
-
-      pp "@;(%S, %a)%s" id pp_layout layout sc
-    in
-    List.iteri fn decl.struct_members;
-
+    pp_members decl.struct_members;
     pp "@]@;];@]@;|}.@;";
     pp "Solve Obligations with solve_struct_obligations.@;"
   in
@@ -275,17 +251,11 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "\n@;(* Definition of function [%s]. *)@;" id;
     pp "@[<v 2>Definition impl_%s : function := {|@;" id;
 
-    (* TODO actually handle attributes. *)
-    let pp_attr attr =
-      let _ =
-        try ignore (parse_attr attr) with Invalid_annot(msg) ->
-        Printf.eprintf "Error: %s\n%!" msg
-      in
-      let {rc_attr_id=id; rc_attr_args=args} = attr in
-      let args = List.map (Printf.sprintf "\"%s\"") args in
-      pp "(* %s(%s) *)@;" id (String.concat ", " args)
+    let annots =
+      try function_annots def.func_attrs with Invalid_annot(msg) ->
+        Printf.eprintf "Error: %s\n%!" msg; exit 1
     in
-    List.iter pp_attr def.func_attrs;
+    ignore annots; (* TODO handle annotations. *)
 
     pp "@[<v 2>f_args := [";
     begin
