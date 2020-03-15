@@ -13,9 +13,9 @@ let run_pp with_ext doc =
   let (is_fout, oc) =
     match with_ext with
       | Some (filename, ext_str) ->
-          (true, Pervasives.open_out (Filename.remove_extension (Filename.basename filename) ^ "." ^ ext_str))
+          (true, Stdlib.open_out (Filename.remove_extension (Filename.basename filename) ^ "." ^ ext_str))
       | None ->
-          (false, Pervasives.stdout) in
+          (false, Stdlib.stdout) in
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
   let term_col = match terminal_size () with

@@ -71,7 +71,7 @@ let pp n g =
     List.fold_left (fun acc (aid, act) ->
       let tid = Core_run_effect.tid_of act in
       Pmap.add tid ((aid, act) :: if Pmap.mem tid acc then Pmap.find tid acc else []) acc
-    ) (Pmap.empty Pervasives.compare) $ Pmap.bindings_list g.actions in
+    ) (Pmap.empty Stdlib.compare) $ Pmap.bindings_list g.actions in
   
   let pp_relation rel col =
     P.separate_map (P.semi ^^ P.break 1) (fun (i, i') ->
