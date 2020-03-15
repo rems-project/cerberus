@@ -1,5 +1,5 @@
 true: use_menhir, bin_annot, color(always)
-true: debug
+true: debug, thread
 
 true: package(lem), package(pprint), package(yojson), package(unix), package(util), package(ppx_sexp_conv), package(sexplib), package(sibylfs), package(z3), package(symbolic), package(angstrom)
 true: package(cmdliner), package(str)
@@ -13,5 +13,5 @@ true: package(cmdliner), package(str)
 <parsers/c/*>: external_tokens(Tokens), explain, warn(@8)
 <parsers/core/*>: external_tokens(Core_parser_util), explain, warn(@8)
 
-<src/*.native>: link_cstubs
+<src/*.native>: cclib(-lstdc++), link_cstubs
 

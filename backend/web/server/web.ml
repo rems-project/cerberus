@@ -282,17 +282,25 @@ let parse_incoming_msg content =
         Some { (get msg.interactive) with last_id = int_of_string v } }
     | ("interactive[state]", [v]) ->
       { msg with interactive=
-        Some { (get msg.interactive) with marshalled_state = B64.decode v } }
+        Some { (get msg.interactive) with marshalled_state = Base64.decode_exn v } }
     | ("interactive[active]", [v]) ->
       { msg with interactive=
         Some { (get msg.interactive) with active_id = int_of_string v } }
     | ("interactive[tagDefs]", [v]) ->
       { msg with interactive=
-        Some { (get msg.interactive) with tagDefs = B64.decode v } }
+        Some { (get msg.interactive) with tagDefs = Base64.decode_exn v } }
     | (k, _) ->
       Debug.warn ("unknown value " ^ k ^ " when parsing incoming message");
       msg (* ignore unknown key *)
-  in List.fold_left parse empty content
+  in
+  try
+    List.fold_left parse empty content
+  with
+    | Invalid_argument str ->
+        begin 
+          Debug.warn ("Failed to decode Base64 msg ==> " ^ str);
+          failwith "parse_incoming_msg"
+        end
 
 (* Outgoing messages *)
 
@@ -330,7 +338,7 @@ let json_of_exec_tree ((ns, es) : exec_tree) =
             ("stderr", `String n.stderr);
             ("state",
              match n.next_state with
-             | Some state -> `String (B64.encode state)
+             | Some state -> `String (Base64.encode_string state)
              | None -> `Null);
            ]
   in
@@ -391,7 +399,7 @@ let json_of_result = function
       ("result", `String "");
       ("ranges",
        `Assoc (List.map (fun (uid, range) -> (uid, json_of_range range)) ranges));
-      ("tagDefs", `String (B64.encode tags));
+      ("tagDefs", `String (Base64.encode_string tags));
     ]
   | Step (res, activeId, t) ->
     `Assoc [
