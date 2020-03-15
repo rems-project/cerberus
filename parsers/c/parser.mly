@@ -61,7 +61,7 @@ let to_attrs = function
         ) (List.concat (List.rev z))
       end
 
-let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_) as stmt) =
+let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
