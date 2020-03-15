@@ -131,7 +131,7 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
         pp_expr e pp_stmt stmt1 pp_stmt stmt2
   | Assert(e, stmt)        ->
       pp "assert: (%a) ;@;%a" pp_expr e pp_stmt stmt
-  | ExprS(e, stmt)         ->
+  | ExprS(_, e, stmt)      ->
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
 let pp_ast : Coq_ast.t pp = fun ff ast ->
@@ -168,7 +168,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "@[<v 2>sl_members := [";
 
     let n = List.length decl.struct_members in
-    let fn i (id, layout) =
+    let fn i (id, (_, layout)) =
       let sc = if i = n - 1 then "" else ";" in
       pp "@;(%S, %a)%s" id pp_layout layout sc
     in
@@ -183,7 +183,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "@[<v 2>ul_members := [";
 
     let n = List.length decl.struct_members in
-    let fn i (id, layout) =
+    let fn i (id, (_, layout)) =
       let sc = if i = n - 1 then "" else ";" in
       pp "@;(%S, %a)%s" id pp_layout layout sc
     in
@@ -201,8 +201,8 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     else
       sort_structs found (strs @ [str])
   in
-  let pp_struct_union s =
-    if (snd s).struct_is_union then pp_union s else pp_struct s
+  let pp_struct_union ((_, {struct_is_union}) as s) =
+    if struct_is_union then pp_union s else pp_struct s
   in
   List.iter pp_struct_union (sort_structs [] ast.structs);
 
@@ -248,7 +248,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
 
     pp "@[<v 2>f_code := (";
     begin
-      let fn id stmt =
+      let fn id (_, stmt) =
         pp "@;@[<v 2><[ \"%s\" :=@;" id;
         pp_stmt ff stmt;
         pp "@]@;]> $";
