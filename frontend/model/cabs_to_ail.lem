@@ -2442,7 +2442,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
 
 and desugar_struct_declaration struct_decl =
   match struct_decl with
-    | Struct_declaration _ specs tquals align_specs sdecltors ->
+    | Struct_declaration outer_attrs specs tquals align_specs sdecltors ->
         (* TODO: align_specs is ignored here *)
         desugar_type_specifiers specs >>= fun (specs_qs, base_ty) ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers tquals in
@@ -2464,7 +2464,7 @@ and desugar_struct_declaration struct_decl =
                member. *)
             let (qs, ty) =
               mk_qs_ctype (Ctype.combine_qualifiers tquals_qs specs_qs) base_ty in
-            E.return (ident, (attrs, qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
+            E.return (ident, (Annot.combine_attributes outer_attrs attrs, qs, if isAtomic then Ctype.Ctype [] (Ctype.Atomic ty) else ty))
           ) sdecltors
     
     | Struct_assert sa_decl ->

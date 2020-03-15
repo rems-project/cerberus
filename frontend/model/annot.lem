@@ -19,6 +19,10 @@ val no_attributes: attributes
 let no_attributes =
   Attrs []
 
+val combine_attributes: attributes -> attributes -> attributes
+let combine_attributes (Attrs xs1) (Attrs xs2) =
+  Attrs (xs1 ++ xs2)
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
