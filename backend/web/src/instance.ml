@@ -68,6 +68,7 @@ let hack ~conf mode =
       concurrency=      false;
       error_verbosity=  Global_ocaml.QuoteStd;
       defacto=          false;
+      agnostic=         false;
       n1570=            Some conf.instance.n1570;
     }
   in cerb_conf := fun () -> conf
