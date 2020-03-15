@@ -96,6 +96,21 @@ let conv ty1 ty2 e =
     error -- TODO: floats, OR ty1/ty2 are non-scalar hence this function is undefined
 *)
 
+val integerImpl: IntegerImpl.implementation
+let integerImpl =
+  IntegerImpl.make_implementation
+    IntegerImpl.Two'sComplement
+    Implementation.is_signed_ity
+    (fun ity ->
+      match Implementation.precision_ity ity with
+        | Just n -> n
+        | Nothing -> error "Translation_aux.integerImpl, is_precision_ity Nothing"
+      end
+    )
+    (Size_t)
+    (Ptrdiff_t)
+
+(*
 (* TODO: temporary ==> gcc-4.8.2 x86_64-apple-darwin13.0.0 *)
 val tmp_implementation: IntegerImpl.implementation
 let tmp_implementation =
@@ -165,7 +180,7 @@ let tmp_implementation =
     )
     (Size_t)
     (Ptrdiff_t)
-
+*)
 
 
 
@@ -200,7 +215,7 @@ let exp_type_of a_expr =
 val ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> ctype
 let ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) integerImpl
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType _ ty _) -> ty
     | Right (GenTypes.RValueType   ty) -> ty
@@ -213,7 +228,7 @@ let ctype_of a_expr =
 val qualified_ctype_of: AilSyntax.expression GenTypes.genTypeCategory -> qualifiers * ctype
 let qualified_ctype_of a_expr =
   match ErrorMonad.runErrorMonad
-      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) tmp_implementation
+      (GenTypesAux.interpret_genTypeCategory (Loc.locOf a_expr) integerImpl
         (GenTypes.genTypeCategoryOf a_expr)) with
     | Right (GenTypes.LValueType qs ty _) -> (qs, ty)
     | Right (GenTypes.RValueType   ty) -> (no_qualifiers, ty)
