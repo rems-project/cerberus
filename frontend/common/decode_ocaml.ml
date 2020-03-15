@@ -159,6 +159,8 @@ let decode_character_constant = function
               if String.length str = 2 then
                 failwith "decode_character_constant, invalid constant: '\\x'"
               else
+                (* Hexadecimal escape sequence *)
+                (* see STD §6.4.4.4#9 *)
                 let str = String.sub str 2 (String.length str - 2) in
                 let b = ref true in
                 String.iter (fun c ->
