@@ -27,6 +27,7 @@ let pp_int_type : Coq_ast.int_type pp = fun ff it ->
 let pp_layout : Coq_ast.layout pp = fun ff layout ->
   let pp fmt = Format.fprintf ff fmt in
   match layout with
+  | LVoid              -> pp "LVoid"
   | LPtr               -> pp "LPtr"
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
@@ -86,12 +87,15 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
       pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
   | BinOp(op,ty1,ty2,e1,e2)       ->
       begin
-        match (ty1, op) with
-        | (OpPtr(l), AddOp) ->
+        match (ty1, ty2, op) with
+        | (OpPtr(l), OpInt(_), AddOp) ->
             pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
               pp_layout l pp_op_type ty2 pp_expr e2
-        | (OpPtr(_), _    ) ->
+        | (OpPtr(_), OpInt(_), _) ->
             Format.eprintf "Binop [%a] not supported on pointers\n%!"
+              pp_bin_op op; exit 1
+        | (OpInt(_), OpPtr(_), _) ->
+            Format.eprintf "Wrong ordering of integer pointer binop [%a]\n%!"
               pp_bin_op op; exit 1
         | _                 ->
             pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
