@@ -14,7 +14,7 @@ let simplify (n, d) =
 let compare (x : t) y =
   let (n1, d1) = simplify x in
   let (n2, d2) = simplify y in
-  Pervasives.compare (n1 * d2) (n2 * d1)
+  Stdlib.compare (n1 * d2) (n2 * d1)
 
 let max (n1, d1) (n2, d2) =
   if n1 * d2 < d1 * n2 then (n2, d2) else (n1, d1)

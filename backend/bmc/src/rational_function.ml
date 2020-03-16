@@ -36,7 +36,7 @@ type t =
   | F_times of t * t
   | F_div of t * t
 
-  let formula_compare (x : t) y = Pervasives.compare x y
+  let formula_compare (x : t) y = Stdlib.compare x y
   let compare (x : t) y = formula_compare x y
 
   let rec simplify_formula = function

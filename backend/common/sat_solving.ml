@@ -194,8 +194,8 @@ let is_unsat (Assertions (_, _, strs)) =
     ) in
   Debug_ocaml.print_debug 3 [] (fun () -> "IS UNSAT?\n" ^ str_problem ^ "\n=================================\n");
   let ic, oc = Unix.open_process "z3 -nw -t:100 -smt2 -in" in
-  Pervasives.output_string oc (str_problem ^ "\n(check-sat)\n(exit)\n");
-  Pervasives.flush oc;
+  Stdlib.output_string oc (str_problem ^ "\n(check-sat)\n(exit)\n");
+  Stdlib.flush oc;
   let buf = Buffer.create 16 in
   (try
     while true do

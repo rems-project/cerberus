@@ -17,7 +17,7 @@ type execution_result = (string Pset.set, Errors.t9) Exception.t3
 let simplify_result (result : execution_result_full) : execution_result =
   match result with
   | Result l1   -> Result (Pset.from_list 
-                           Pervasives.compare 
+                           Stdlib.compare 
                            (List.map String_core.string_of_expr l1)
                           )
   | Exception e -> Exception e

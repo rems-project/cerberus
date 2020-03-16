@@ -17,7 +17,7 @@ val identifier: declarator -> string
 val cabs_of_declarator: declarator -> Cabs.declarator
 
 val pointer_decl: Cabs.pointer_declarator -> declarator -> declarator
-val identifier_decl: Symbol.identifier -> declarator
+val identifier_decl: Annot.attributes -> Symbol.identifier -> declarator
 val declarator_decl: declarator -> declarator
 val array_decl: Cabs.array_declarator -> declarator -> declarator
 val fun_decl: Cabs.parameter_type_list -> context -> declarator -> declarator

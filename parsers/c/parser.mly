@@ -61,7 +61,7 @@ let to_attrs = function
         ) (List.concat (List.rev z))
       end
 
-let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_) as stmt) =
+let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_)) =
   let Annot.Attrs xs' = to_attrs attr_opt in
   CabsStatement (loc, Annot.Attrs (xs @ xs'), stmt_)
 
@@ -159,7 +159,7 @@ let inject_attr attr_opt (CabsStatement (loc, Annot.Attrs xs, stmt_) as stmt) =
 %type<Cabs.cabs_type_specifier>
   struct_or_union_specifier
 
-%type<Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
+%type<Annot.attributes -> Symbol.identifier option -> (Cabs.struct_declaration list) option -> Cabs.cabs_type_specifier>
   struct_or_union
 
 %type<Cabs.struct_declaration list>
@@ -771,7 +771,7 @@ declaration:
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
-      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Symbol.Identifier (loc, "test"))), None)]) }
+      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
@@ -884,21 +884,21 @@ attribute_type_specifier_unique:
 
 (* §6.7.2.1 Structure and union specifiers *)
 struct_or_union_specifier:
-| ctor= struct_or_union attribute_specifier_sequence?
+| ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     iopt= general_identifier? LBRACE rev_decls= struct_declaration_list RBRACE
-    { ctor iopt (Some (List.rev rev_decls)) }
-| ctor= struct_or_union attribute_specifier_sequence?
+    { ctor (to_attrs attr_opt) iopt (Some (List.rev rev_decls)) }
+| ctor= struct_or_union attr_opt= attribute_specifier_sequence?
     i= general_identifier
-    { ctor (Some i) None }
+    { ctor (to_attrs attr_opt) (Some i) None }
 ;
 
 struct_or_union:
 | STRUCT
-    { fun x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
-                        TSpec_struct (x, y)) }
+    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+                              TSpec_struct (attrs, x, y)) }
 | UNION
-    { fun x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
-                        TSpec_union (x, y)) }
+    { fun attrs x y -> TSpec (Location_ocaml.region ($startpos, $endpos) None,
+                              TSpec_union (attrs, x, y)) }
 ;
 
 struct_declaration_list: (* NOTE: the list is in reverse *)
@@ -909,10 +909,10 @@ struct_declaration_list: (* NOTE: the list is in reverse *)
 ;
 
 struct_declaration:
-| ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
+| attr_opt= ioption(attribute_specifier_sequence) tspecs_tquals= specifier_qualifier_list
     rev_sdeclrs_opt= struct_declarator_list? SEMICOLON
     { let (tspecs, tquals, align_specs) = tspecs_tquals in
-      Struct_declaration (tspecs, tquals, align_specs,
+      Struct_declaration (to_attrs attr_opt, tspecs, tquals, align_specs,
                           option [] List.rev rev_sdeclrs_opt) }
 | sa_decl= static_assert_declaration
     { Struct_assert sa_decl }
@@ -1022,8 +1022,8 @@ declarator:
 ;
 
 direct_declarator:
-| i = general_identifier ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
-    { LF.identifier_decl i }
+| i = general_identifier attr_opt= ioption(attribute_specifier_sequence) (* TODO/FIXME: this introduce a reduce/reduce conflict *)
+    { LF.identifier_decl (to_attrs attr_opt) i }
 | LPAREN save_context decltor= declarator RPAREN
     { LF.declarator_decl decltor }
 | decl= array_declarator ioption(attribute_specifier_sequence)

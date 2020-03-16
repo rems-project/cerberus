@@ -182,8 +182,8 @@ and cabs_type_specifier_ =
   | TSpec_Bool
   | TSpec_Complex
   | TSpec_Atomic of type_name (* §6.7.2.4 Atomic type specifiers, Syntax *)
-  | TSpec_struct of maybe Symbol.identifier * maybe (list struct_declaration)
-  | TSpec_union  of maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_struct of Annot.attributes * maybe Symbol.identifier * maybe (list struct_declaration)
+  | TSpec_union  of Annot.attributes * maybe Symbol.identifier * maybe (list struct_declaration)
   | TSpec_enum   of maybe Symbol.identifier * maybe (list (Symbol.identifier * maybe
                                                            cabs_expression))
   | TSpec_name   of Symbol.identifier
@@ -192,7 +192,7 @@ and cabs_type_specifier =
 
 (* §6.7.2.1 Structure and union specifiers, Syntax *)
 and struct_declaration =
-  | Struct_declaration of list cabs_type_specifier * list cabs_type_qualifier * list alignment_specifier * list struct_declarator
+  | Struct_declaration of Annot.attributes * list cabs_type_specifier * list cabs_type_qualifier * list alignment_specifier * list struct_declarator
   | Struct_assert      of static_assert_declaration
 
 and struct_declarator =
@@ -224,7 +224,7 @@ and declarator =
   | Declarator of maybe pointer_declarator * direct_declarator
 
 and direct_declarator =
-  | DDecl_identifier of Symbol.identifier
+  | DDecl_identifier of Annot.attributes * Symbol.identifier
   | DDecl_declarator of declarator
   | DDecl_array      of direct_declarator * array_declarator
   | DDecl_function   of direct_declarator * parameter_type_list
@@ -365,7 +365,7 @@ end
 (* NOTE: It returns the location of the identifier *)
 let rec loc_of_direct_declarator ddecl =
   match ddecl with
-    | DDecl_identifier id ->
+    | DDecl_identifier _ id ->
         locOf id
     | DDecl_declarator (Declarator _ ddecl) ->
         loc_of_direct_declarator ddecl

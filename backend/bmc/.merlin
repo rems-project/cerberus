@@ -10,5 +10,6 @@ B _build/src
 B _build/parsers/c
 B _build/parsers/core
 B ../../_lib/concrete
+B ../../_lib/util
 
 PKG lem concrete cmdliner pprint ounit Z3 lwt cohttp cohttp.lwt yojson base64 ezgzip ppx_sexp_conv sexplib ocamlbuild

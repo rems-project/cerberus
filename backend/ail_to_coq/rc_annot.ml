@@ -1,5 +1,6 @@
 open Earley_core
 open Earley
+open Extra
 
 (** {3 Combinators and tokens} *)
 
@@ -81,6 +82,8 @@ and type_expr =
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
   | Ty_direct of ident
+
+let type_void : type_expr = Ty_direct "void"
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
@@ -229,3 +232,60 @@ let parse_attr : Coq_ast.rc_attr -> annot = fun attr ->
   | "unlock"     -> no_args Annot_unlock
   | "inv"        -> single_arg annot_inv (fun e -> Annot_inv(e))
   | _            -> error "undefined"
+
+(** {3 High level parsing of attributes} *)
+
+type function_annot =
+  { fa_parameters : (ident * coq_term) list
+  ; fa_args       : type_expr list
+  ; fa_returns    : type_expr
+  ; fa_requires   : constr list
+  ; fa_ensures    : constr list }
+
+let function_annots : Coq_ast.rc_attr list -> function_annot = fun attrs ->
+  let parameters = ref [] in
+  let args = ref [] in
+  let returns = ref None in
+  let requires = ref [] in
+  let ensures = ref [] in
+
+  let handle_attr ({Coq_ast.rc_attr_id = id; _} as attr) =
+    let error msg =
+      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+    in
+    match (parse_attr attr, !returns) with
+    | (Annot_parameters(l), _   ) -> parameters := !parameters @ l
+    | (Annot_args(l)      , _   ) -> args := !args @ l
+    | (Annot_returns(ty)  , None) -> returns := Some(ty)
+    | (Annot_returns(ty)  , _   ) -> error "already specified"
+    | (Annot_requires(l)  , _   ) -> requires := !requires @ l
+    | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
+    | (_                  , _   ) -> error "is invalid for a function"
+  in
+  List.iter handle_attr attrs;
+
+  { fa_parameters = !parameters
+  ; fa_args       = !args
+  ; fa_returns    = Option.get type_void !returns
+  ; fa_requires   = !requires
+  ; fa_ensures    = !ensures }
+
+let field_annot : Coq_ast.rc_attr list -> type_expr = fun attrs ->
+  let field = ref None in
+
+  let handle_attr ({Coq_ast.rc_attr_id = id; _} as attr) =
+    let error msg =
+      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+    in
+    match (parse_attr attr, !field) with
+    | (Annot_field(ty), None) -> field := Some(ty)
+    | (Annot_field(ty), _   ) -> error "already specified"
+    | (_              , _   ) -> error "is invalid for a field"
+  in
+  List.iter handle_attr attrs;
+
+  match !field with
+  | None     -> raise (Invalid_annot "a field annotation is required")
+  | Some(ty) -> ty
+
+

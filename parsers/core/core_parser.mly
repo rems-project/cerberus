@@ -72,7 +72,7 @@ type symbolify_state = {
 let initial_symbolify_state = {
   labels= Pmap.empty Core_parser_util._sym_compare;
   sym_scopes= [Pmap.map (fun sym -> (sym, Location_ocaml.unknown)) M.std];
-  ailnames= Pmap.empty Pervasives.compare;
+  ailnames= Pmap.empty Stdlib.compare;
 }
 
 module Eff : sig
@@ -1641,7 +1641,7 @@ def_declaration:
 
 def_field:
 | cid=cabs_id COLON ty=core_ctype
-  { (cid, (no_qualifiers, ty)) }
+  { (cid, (Annot.no_attributes, no_qualifiers, ty)) }
 ;
 
 def_fields:

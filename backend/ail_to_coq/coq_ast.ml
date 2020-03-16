@@ -58,13 +58,14 @@ type stmt =
   | If     of expr * stmt * stmt
 (*| AnnotStmt (n : nat) {A} (a : A) (s : stmt)*)
   | Assert of expr * stmt
-  | ExprS  of expr * stmt
+  | ExprS  of rc_attr list * expr * stmt
 
 type struct_decl =
   { struct_name     : string
+  ; struct_attrs    : rc_attr list
   ; struct_deps     : string list
   ; struct_is_union : bool
-  ; struct_members  : (string * layout) list }
+  ; struct_members  : (string * (rc_attr list * layout)) list }
 
 type func_def =
   { func_name   : string
@@ -72,7 +73,7 @@ type func_def =
   ; func_args   : (string * layout) list
   ; func_vars   : (string * layout) list
   ; func_init   : string
-  ; func_blocks : stmt SMap.t }
+  ; func_blocks : (rc_attr list * stmt) SMap.t }
 
 type t =
   { source_file : string
