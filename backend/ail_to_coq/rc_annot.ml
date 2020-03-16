@@ -114,11 +114,11 @@ and parser type_expr =
 
 (** {4 Annotations on type definitions} *)
 
-let parser annot_parameter : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_parameter : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
-let parser annot_refine : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_refine : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
 let parser annot_ptr_type : (ident * type_expr) Earley.grammar =
   | id:ident ":" ty:type_expr
@@ -131,8 +131,8 @@ let parser annot_type : ident Earley.grammar =
 let parser annot_size : ident Earley.grammar =
   | id:ident
 
-let parser annot_exist : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_exist : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
 let parser annot_constr : constr Earley.grammar =
   | c:constr
@@ -169,12 +169,12 @@ let parser annot_inv : constr Earley.grammar =
 (** {3 Parsing of attributes} *)
 
 type annot =
-  | Annot_parameters of (ident * coq_term) list
-  | Annot_refined_by of (ident * coq_term) list
+  | Annot_parameters of (ident * coq_expr) list
+  | Annot_refined_by of (ident * coq_expr) list
   | Annot_ptr_type   of (ident * type_expr)
   | Annot_type       of ident
   | Annot_size       of ident
-  | Annot_exist      of (ident * coq_term) list
+  | Annot_exist      of (ident * coq_expr) list
   | Annot_constraint of constr list
   | Annot_immovable
   | Annot_tunion
@@ -243,7 +243,7 @@ let parse_attr : Coq_ast.rc_attr -> annot = fun attr ->
 (** {3 High level parsing of attributes} *)
 
 type function_annot =
-  { fa_parameters : (ident * coq_term) list
+  { fa_parameters : (ident * coq_expr) list
   ; fa_args       : type_expr list
   ; fa_returns    : type_expr
   ; fa_requires   : constr list
