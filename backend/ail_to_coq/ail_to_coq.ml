@@ -411,7 +411,12 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
           in
           let (s1, blocks) = trans break continue final [s1] blocks in
           let (s2, blocks) = trans break continue final [s2] blocks in
-          (trans_expr e (fun e -> If(e, s1, s2)), blocks)
+          begin
+            match bool_expr e with
+            | BE_leaf(e) -> (trans_expr e (fun e -> If(e, s1, s2)), blocks)
+            | _          ->
+                not_implemented "conditional with || or &&" (* TODO *)
+          end
       | AilSwhile(e,s)      ->
           let id_body = fresh_block_id () in
           let id_cont = fresh_block_id () in
@@ -425,6 +430,11 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             let break    = Some(Goto(id_cont)) in
             let continue = Some(Goto(id_body)) in
             let (stmt, blocks) = trans break continue continue [s] blocks in
+            let e =
+              match bool_expr e with
+              | BE_leaf(e) -> e
+              | _          -> not_implemented "while with || or &&" (* TODO *)
+            in
             let stmt = trans_expr e (fun e -> If(e, stmt, Goto(id_cont))) in
             SMap.add id_body ([], stmt) blocks
           in
@@ -442,6 +452,11 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             let break    = Some(Goto(id_cont)) in
             let continue = Some(Goto(id_body)) in
             let stmt =
+              let e =
+                match bool_expr e with
+                | BE_leaf(e) -> e
+                | _          -> not_implemented "do with || or &&" (* TODO *)
+              in
               trans_expr e (fun e -> If(e, Goto(id_body), Goto(id_cont)))
             in
             let (stmt, blocks) =
