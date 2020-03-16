@@ -6,6 +6,8 @@ open Coq_pp
 
 type typed_ail = GenTypes.genTypeCategory AilSyntax.ail_program
 
+type ail_expr = GenTypes.genTypeCategory AilSyntax.expression
+
 let not_implemented : string -> 'a = fun s ->
   Printf.eprintf "Feature not implemented: %s.\n%!" s;
   exit 1
@@ -190,21 +192,14 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
         | Gt             -> GtOp
         | Le             -> LeOp
         | Ge             -> GeOp
-        | And            -> AndOp
-        | Or             -> OrOp
+        | And            -> not_implemented "nested && operator"
+        | Or             -> not_implemented "nested || operator"
         | Comma          -> not_implemented "binary operator (Comma)"
         | Arithmetic(op) ->
         match op with
-        | Mul  -> MulOp
-        | Div  -> DivOp
-        | Mod  -> ModOp
-        | Add  -> AddOp
-        | Sub  -> SubOp
-        | Shl  -> not_implemented "binary operator (Shl)"
-        | Shr  -> not_implemented "binary operator (Shr)"
-        | Band -> not_implemented "binary operator (Band)"
-        | Bxor -> not_implemented "binary operator (Bxor)"
-        | Bor  -> not_implemented "binary operator (Bor)"
+        | Mul  -> MulOp | Div  -> DivOp | Mod  -> ModOp | Add  -> AddOp
+        | Sub  -> SubOp | Shl  -> ShlOp | Shr  -> ShrOp | Band -> AndOp
+        | Bxor -> XorOp | Bor  -> OrOp
       in
       (BinOp(op, ty1, ty2, e1, e2), l1 @ l2)
   | AilEassign(e1,e2)            -> not_implemented "nested assignment"
@@ -308,7 +303,31 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
   | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
 
-let trans_expr e (e_stmt : expr -> stmt) : stmt =
+type bool_expr =
+  | BE_leaf of ail_expr
+  | BE_neg  of bool_expr
+  | BE_and  of bool_expr * bool_expr
+  | BE_or   of bool_expr * bool_expr
+
+let rec bool_expr : ail_expr -> bool_expr = fun e ->
+  match strip_expr e with
+  | AilEbinary(e1,And,e2) -> BE_and(bool_expr e1, bool_expr e2)
+  | AilEbinary(e1,Or ,e2) -> BE_or(bool_expr e1, bool_expr e2)
+  | AilEbinary(e1,Eq ,e2) ->
+      begin
+        let be1 = bool_expr e1 in
+        let be2 = bool_expr e2 in
+        match (is_const_0 e1, be1, is_const_0 e2, be2) with
+        | (false, _         , false, _         )
+        | (true , _         , true , _         )
+        | (false, BE_leaf(_), true , _         )
+        | (true , _         , false, BE_leaf(_)) -> BE_leaf(e)
+        | (false, _         , true , _         ) -> BE_neg(be1)
+        | (true , _         , false, _         ) -> BE_neg(be2)
+      end
+  | _                     -> BE_leaf(e)
+
+let trans_expr : ail_expr -> (expr -> stmt) -> stmt = fun e e_stmt ->
   let (e, calls) = translate_expr false e in
   let fn (id, e, es) stmt = Call(id, e, es, stmt) in
   List.fold_right fn calls (e_stmt e)
