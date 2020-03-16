@@ -55,7 +55,7 @@ let translate_int_type i =
 
 let translate_layout Ctype.(Ctype(_, c_ty)) =
   match c_ty with
-  | Void               -> not_implemented "translate_layout (Void)"
+  | Void               -> LVoid
   | Basic(Integer(i))  -> LInt (translate_int_type i)
   | Basic(Floating(_)) -> not_implemented "translate_layout (Basic float)"
   | Array(_,_)         -> not_implemented "translate_layout (Basic)"
@@ -552,6 +552,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let struct_deps =
         let fn acc (id, (_, layout)) =
           match layout with
+          | LVoid         -> acc
           | LPtr          -> acc
           | LStruct(id,_) -> id :: acc
           | LInt(_)       -> acc

@@ -12,6 +12,7 @@ type int_type =
   | ItI64    of bool (* signed *)
 
 type layout =
+  | LVoid
   | LPtr
   | LStruct of string * bool (* Union? *)
   | LInt of int_type
