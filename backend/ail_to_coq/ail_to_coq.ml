@@ -137,7 +137,7 @@ let op_type_of_genTypeCategory ty =
   | GenLValueType(_,_,_) -> not_implemented "op_type_of_expr (L)"
   | GenRValueType(ty)    ->
   match ty with
-  | GenPointer(_,_)          -> OpPtr
+  | GenPointer(_,c_ty)       -> OpPtr(translate_layout c_ty)
   | GenVoid                  -> assert false
   | GenArray(_,_)            -> assert false
   | GenFunction(_,_,_,_)     -> assert false
