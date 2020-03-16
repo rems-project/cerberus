@@ -655,7 +655,7 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
   end in
   (* TODO !!!! *)
   let integer_promotion (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr =
-    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion tmp_implementation ty) in
+    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion integerImpl ty) in
     stdlib.mkcall_conv_int promoted_ty e in
   
   (* STD §6.3.1.8 *)
@@ -671,7 +671,7 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
       | (Nothing, Nothing) ->
           (* TODO: this is so readable ... *)
           (* STD §6.3.1.8#1, bullet 4 *)
-          match (AilTypesAux.promotion tmp_implementation ty1, AilTypesAux.promotion tmp_implementation ty2) with
+          match (AilTypesAux.promotion integerImpl ty1, AilTypesAux.promotion integerImpl ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
@@ -2421,7 +2421,7 @@ TODO: #9
           E.foldlM (fun (rev_arg_ty_pes, rev_variadic_core_creates) (arg_ty, arg_is_null, arg_sym_pe) ->
             let (conv_ty, conv_value) =
               if AilTypesAux.is_integer arg_ty then
-                let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion tmp_implementation arg_ty) in
+                let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion integerImpl arg_ty) in
                 (prom_ty, stdlib.mkcall_conv_loaded_int prom_ty arg_sym_pe)
               else if AilTypesAux.is_floating arg_ty then
                 (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))), arg_sym_pe) (* TODO: convert this to double *)
@@ -2629,7 +2629,7 @@ else (* is_pointer *)
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
-                  let (_, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
+                  let (_, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
                   let oTy = force_core_object_type_of_ctype memb_ty in
                   begin
                     if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
@@ -2656,7 +2656,7 @@ else (* is_pointer *)
                       )
                   end
               | Nothing ->
-                  let (_, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
+                  let (_, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
                   E.return (
                     (ident, Caux.mk_unspecified_pe ty) :: acc,
                     mk_core
@@ -2700,7 +2700,7 @@ else (* is_pointer *)
                 match List.lookup memb_ident ident_tys with
                   | (*BISECT-IGNORE*) Nothing ->
                       illTypedAil loc "AilEunion: couldn't find a union definition"
-                  | Just (_, memb_ty) ->
+                  | Just (_, _, memb_ty) ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
                         | Nothing ->
@@ -3619,7 +3619,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
         let promoted_pe =
           Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
             stdlib.mkcall_conv_int (fromJust "Translation.translate_stmt2: switch expr promotion"
-              (AilTypesAux.promotion tmp_implementation (ctype_of e))) control_sym_pe
+              (AilTypesAux.promotion integerImpl (ctype_of e))) control_sym_pe
           ) in
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
@@ -3758,9 +3758,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
 
 
 (* TODO: delete this *)
-val translate_tag_definitions: list (A.ail_identifier * Ctype.tag_definition) -> C.core_tag_definitions
+val translate_tag_definitions: list (A.ail_identifier * (Annot.attributes * Ctype.tag_definition)) -> C.core_tag_definitions
 let translate_tag_definitions ctx =
-  Map.fromList ctx
+  Map.fromList (List.map (fun (x, (_, y)) -> (x, y)) ctx)
 (*
   Map.fromList $ List.map (function
     | (sym, A.StructDef tagDef) ->

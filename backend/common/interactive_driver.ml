@@ -142,7 +142,7 @@ let drive file =
       | Some (retTy, [], expr_main) ->
           expr_main
       |  _ ->
-          Pervasives.output_string stderr "ERROR: couldn't find the Core main function\n";
+          Stdlib.output_string stderr "ERROR: couldn't find the Core main function\n";
           exit (-1)
   in
   

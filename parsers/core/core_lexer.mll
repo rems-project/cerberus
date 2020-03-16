@@ -8,7 +8,7 @@ type token = T.token
 let keywords =
   List.fold_left
     (fun m (k, e) -> Pmap.add k e m)
-    (Pmap.empty Pervasives.compare)
+    (Pmap.empty Stdlib.compare)
     [
       (* for Core ctypes *)
       ("_Atomic",     T.ATOMIC     );

@@ -13,7 +13,7 @@ let inline (<$>) = E.fmap
 
 val lookup_tag_definition: forall 'a. sigma 'a -> ail_identifier -> maybe tag_definition
 let lookup_tag_definition s sym =
-  List.lookup sym s.tag_definitions
+  Maybe.map snd (List.lookup sym s.tag_definitions)
 
 
 (* NOTE: move in_range and try_ranges inside gen_typing_type_of_constant if Lem ever allows
@@ -918,7 +918,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (memb_qs, memb_ty) ->
+                            | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
                                          , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -932,7 +932,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (memb_qs, memb_ty) ->
+                            | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
                                          , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -953,7 +953,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 match lookup_tag_definition sigm tag_sym with
                   | Just (StructDef membersDefs) ->
                       match List.lookup memb_ident membersDefs with
-                        | Just (_, memb_ty) ->
+                        | Just (_, _, memb_ty) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
                         | Nothing ->
                             E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident) )
@@ -966,7 +966,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                 match lookup_tag_definition sigm tag_sym with
                   | Just (UnionDef membersDefs) ->
                       match List.lookup memb_ident membersDefs with
-                        | Just (_, memb_ty) ->
+                        | Just (_, _, memb_ty) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
                         | Nothing ->
                             E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
@@ -1014,7 +1014,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (memb_qs, memb_ty) ->
+                            | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
                                          , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -1028,7 +1028,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     match lookup_tag_definition sigm tag_sym with
                       | Just (UnionDef membersDefs) ->
                           match List.lookup memb_ident membersDefs with
-                            | Just (memb_qs, memb_ty) ->
+                            | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
                                          , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
                             | Nothing ->
@@ -1977,7 +1977,7 @@ let annotate_sigma sigm =
   ) sigm.function_definitions >>= fun function_defs' ->
   
   E.mapM (fun tag ->
-    let check_member sigm (ident, (qs, ty)) =
+    let check_member sigm (ident, (_, qs, ty)) =
       E.add "§6.7.2.1#3" >>
       if AilTypesAux.has_flexible_array_member sigm ty then
         E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray
@@ -1988,7 +1988,7 @@ let annotate_sigma sigm =
       else
         E.return ()
     in match tag with
-    | (_, StructDef xs) ->
+    | (_, (_, StructDef xs)) ->
         (* STD §6.7.2.1#3 *)
         match List.dest_init xs with
           | Nothing ->
@@ -1996,7 +1996,7 @@ let annotate_sigma sigm =
               error "GenTyping.annotate_sigma, StructDef, empty sdecls_opt"
           | Just ([], memb) ->
               check_member sigm memb
-          | Just (xs', (last_ident, (last_qs, last_ty))) ->
+          | Just (xs', (last_ident, (_, last_qs, last_ty))) ->
               E.mapM_ (check_member sigm) xs' >>
               (* This allows flexible array members *)
               if AilTypesAux.has_flexible_array_member sigm last_ty then
@@ -2008,13 +2008,13 @@ let annotate_sigma sigm =
               else
                 E.return ()
         end >>
-        E.mapM_ (fun (_, (qs, ty)) ->
+        E.mapM_ (fun (_, (_, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
         ) xs
-    | (_, UnionDef xs) ->
+    | (_, (_, UnionDef xs)) ->
         E.mapM (check_member sigm) xs >>
-        E.mapM_ (fun (_, (qs, ty)) ->
+        E.mapM_ (fun (_, (_, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
         ) xs

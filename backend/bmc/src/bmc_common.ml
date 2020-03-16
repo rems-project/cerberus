@@ -92,7 +92,7 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
   | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef memlist) ->
-          CaseSortList (List.map (fun (_, (_, ty)) -> ctype_to_bmcz3sort ty file)
+          CaseSortList (List.map (fun (_, (_, _, ty)) -> ctype_to_bmcz3sort ty file)
                                  memlist)
       | _ -> assert false
       end
@@ -407,7 +407,7 @@ module ImplFunctions = struct
   let impl : IntegerImpl.implementation = {
     impl_binary_mode = Two'sComplement;
     impl_signed      = (function
-                   | Char       -> Ocaml_implementation.Impl.char_is_signed
+                   | Char       -> Ocaml_implementation.Impl.is_signed_ity Char
                    | Bool       -> false
                    | Signed _   -> true
                    | Unsigned _ -> false
@@ -451,81 +451,64 @@ module ImplFunctions = struct
   let ity_to_ctype (ity: Ctype.integerType) : ctype =
     Ctype ([], Basic (Integer ity))
 
-
   (* ---- HELPER MAP MAKING FUNCTION ---- *)
-  let mk_ctype_map (name : string)
-                   (types: ctype list)
+  let mk_integerType_map (name : string)
+                   (itys: integerType list)
                    (sort : Sort.sort)
-                   : (ctype, Expr.expr) Pmap.map =
-    List.fold_left (fun acc ctype ->
-      let ctype_expr = CtypeSort.mk_expr ctype in
+                   : (integerType, Expr.expr) Pmap.map =
+    List.fold_left (fun acc ity ->
+      let ctype_expr = CtypeSort.mk_expr (ity_to_ctype ity) in
       let expr = mk_fresh_const
                     (sprintf "%s(%S)" name (Expr.to_string ctype_expr))
                     sort in
-      Pmap.add ctype expr acc) (Pmap.empty Pervasives.compare) types
+      Pmap.add ity expr acc) (Pmap.empty Stdlib.compare) itys
   (* ---- Constants ---- *)
 
 
   (* TODO: massive code duplication *)
-  let ivmin_map : (ctype, Expr.expr) Pmap.map =
-    mk_ctype_map "ivmin" (List.map ity_to_ctype ity_list) integer_sort
+  let ivmin_map : (integerType, Expr.expr) Pmap.map =
+    mk_integerType_map "ivmin" ity_list integer_sort
 
-  let ivmax_map : (ctype, Expr.expr) Pmap.map =
-    mk_ctype_map "ivmax" (List.map ity_to_ctype ity_list) integer_sort
+  let ivmax_map : (integerType, Expr.expr) Pmap.map =
+    mk_integerType_map "ivmax" ity_list integer_sort
 
 
-  let sizeof_map : (ctype, Expr.expr) Pmap.map =
-    mk_ctype_map "sizeof" (List.map ity_to_ctype ity_list) integer_sort
+  let sizeof_map : (integerType, Expr.expr) Pmap.map =
+    mk_integerType_map "sizeof" ity_list integer_sort
 
-  let is_unsigned_map : (ctype, Expr.expr) Pmap.map =
-    mk_ctype_map "is_unsigned" (List.map ity_to_ctype ity_list)
-                               boolean_sort
+  let is_unsigned_map : (integerType, Expr.expr) Pmap.map =
+    mk_integerType_map "is_unsigned" ity_list boolean_sort
   (* ---- Assertions ---- *)
   let ivmin_asserts =
-    let ivmin_assert (ctype: ctype) : Expr.expr =
-      let const = Pmap.find ctype ivmin_map in
-      match ctype with
-      | Ctype (_, Basic (Integer ity)) ->
-          let (min, _) = integer_range impl ity in
-          mk_eq const (big_num_to_z3 min)
-      | _ -> assert false
+    let ivmin_assert (ity: integerType) : Expr.expr =
+      let const = Pmap.find ity ivmin_map in
+      let (min, _) = integer_range impl ity in
+      mk_eq const (big_num_to_z3 min)
     in
-    List.map (fun ity -> ivmin_assert (ity_to_ctype ity))
-             ity_list
+    List.map ivmin_assert ity_list
 
   let ivmax_asserts =
-    let ivmax_assert (ctype: ctype) : Expr.expr =
-      let const = Pmap.find ctype ivmax_map in
-      match ctype with
-      | Ctype (_, Basic (Integer ity)) ->
-          let (_, max) = integer_range impl ity in
-          mk_eq const (big_num_to_z3 max)
-      | _ -> assert false
+    let ivmax_assert (ity: integerType) : Expr.expr =
+      let const = Pmap.find ity ivmax_map in
+      let (_, max) = integer_range impl ity in
+      mk_eq const (big_num_to_z3 max)
     in
-    List.map (fun ity -> ivmax_assert (ity_to_ctype ity))
-             ity_list
+    List.map ivmax_assert ity_list
 
   let sizeof_asserts =
-    let sizeof_assert (ctype: ctype) : Expr.expr =
-      let const = Pmap.find ctype sizeof_map in
-      match ctype with
-      | Ctype (_, Basic (Integer ity)) ->
-          mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
-      (*| Pointer0 _ ->
-          (* TODO: Check this *)
-          mk_eq const (int_to_z3 (Option.get (sizeof_pointer)) *)
-      | _ -> assert false
+    let sizeof_assert (ity: integerType) : Expr.expr =
+      let const = Pmap.find ity sizeof_map in
+      mk_eq const (int_to_z3 (Option.get (sizeof_ity ity)))
     in
-    List.map (fun ity -> sizeof_assert (ity_to_ctype ity))
-             ity_list
+    List.map sizeof_assert ity_list
 
   (* TODO: char; other types *)
   let is_unsigned_asserts =
     let signed_tys =
-      List.map (fun ty -> Pmap.find (ity_to_ctype ty) is_unsigned_map)
+      List.map (fun ity -> Pmap.find ity is_unsigned_map)
                signed_ibt_list in
     let unsigned_tys =
-      List.map (fun ty -> Pmap.find (ity_to_ctype ty) is_unsigned_map)
+      List.map (fun ity -> Pmap.find ity is_unsigned_map)
                unsigned_ibt_list in
     List.map (fun signed_const ->
                 mk_eq signed_const (mk_false)) signed_tys
@@ -549,9 +532,9 @@ let assert_initial_range (ctype: ctype) (const: Expr.expr)
       []
   | Ctype (_, Basic (Integer ity)) ->
       let ge_ivmin =
-          binop_to_z3 OpGe const (Pmap.find ctype ImplFunctions.ivmin_map) in
+          binop_to_z3 OpGe const (Pmap.find ity ImplFunctions.ivmin_map) in
       let le_ivmax =
-          binop_to_z3 OpLe const (Pmap.find ctype ImplFunctions.ivmax_map) in
+          binop_to_z3 OpLe const (Pmap.find ity ImplFunctions.ivmax_map) in
       [ge_ivmin;le_ivmax]
   | _ ->
       bmc_debug_print 8 (sprintf "TODO: assert_initial_range of non-int type");

@@ -228,7 +228,7 @@ type sigma 'a = <|
   (* the list of identifiers are the parameter names used in the body *)
   function_definitions: list (ail_identifier * (Loc.t * Annot.attributes * list ail_identifier * statement 'a));
   static_assertions: list (expression 'a * stringLiteral);
-  tag_definitions: list (ail_identifier * tag_definition);
+  tag_definitions: list (ail_identifier * (Annot.attributes * tag_definition));
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
 |>
 

@@ -359,7 +359,7 @@ let is_complete sigm gty =
      (* STD §6.2.5#22, sentence 3-4 *)
    | GenStruct sym ->
        match List.lookup sym sigm.tag_definitions with
-         | Just (StructDef _) ->
+         | Just (_, StructDef _) ->
              true
          | _ ->
              let _ = Debug.print_debug 5 [Debug.DB_ail_typing]
@@ -369,7 +369,7 @@ let is_complete sigm gty =
      (* STD §6.2.5#22, sentence 3-4 *)
    | GenUnion sym ->
        match List.lookup sym sigm.tag_definitions with
-         | Just (UnionDef _) ->
+         | Just (_, UnionDef _) ->
              true
          | _ ->
              false

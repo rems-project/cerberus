@@ -13,7 +13,7 @@ let output_string str =
 
 
 let sort_assoc_list xs =
-  List.stable_sort (fun (a, _) (b, _) -> Pervasives.compare a b) xs
+  List.stable_sort (fun (a, _) (b, _) -> Stdlib.compare a b) xs
 
 
 let random_select xs =

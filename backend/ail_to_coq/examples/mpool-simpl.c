@@ -1,13 +1,13 @@
 #define ENTRY_SIZE 4096
 #define NULL (void*)0
 
-struct [[rc::size("ENTRY_SIZE"), rc::refined_by("n : nat")]] mpool_entry {
-    [[rc::field("(n > 0) @ optional<&own<(n - 1) @ struct mpool_entry>>")]]
+struct [[rc::size("ENTRY_SIZE"), rc::refined_by("n : {nat}")]] mpool_entry {
+    [[rc::field("{n > 0} @ optional<&own<{n - 1} @ mpool_entry>>")]]
     struct mpool_entry *next;
 };
 
-struct [[rc::refined_by("n : nat")]] mpool {
-    [[rc::field("(n > 0) @ optional<&own<(n - 1) @ struct mpool_entry>>")]]
+struct [[rc::refined_by("n : {nat}")]] mpool {
+    [[rc::field("{n > 0} @ optional<&own<{n - 1} @ mpool_entry>>")]]
     struct mpool_entry *entry_list;
 };
 
@@ -41,7 +41,7 @@ void *mpool_get(struct mpool *p) {
 ]]
 void mpool_put(struct mpool *p, void *ptr) {
     struct mpool_entry *e = ptr;
-    [[rc::subtype("padded<uninit (struct mpool_entry), _, ENTRY_SIZE>>")]]
+    [[rc::subtype("padded<!uninit<{struct mpool_entryr}>, _, ENTRY_SIZE>")]]
     *e;
     e->next = p->entry_list;
     p->entry_list = e;

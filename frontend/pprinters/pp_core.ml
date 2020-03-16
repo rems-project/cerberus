@@ -732,7 +732,7 @@ let pp_tagDefinitions tagDefs =
       | Ctype.StructDef tags -> ("struct", tags)
       | Ctype.UnionDef tags -> ("union", tags)
     in
-    let pp_tag (Symbol.Identifier (_, name), (_, ty)) =
+    let pp_tag (Symbol.Identifier (_, name), (_, _, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty
     in
     pp_keyword "def" ^^^ pp_keyword ty ^^^ pp_raw_symbol sym ^^^ P.colon ^^ P.equals
