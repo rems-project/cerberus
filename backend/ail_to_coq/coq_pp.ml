@@ -36,7 +36,7 @@ let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
   let pp fmt = Format.fprintf ff fmt in
   match ty with
   | OpInt(i) -> pp "IntOp %a" pp_int_type i
-  | OpPtr    -> pp "PtrOp"
+  | OpPtr(_) -> pp "PtrOp" (* FIXME *)
 
 let pp_un_op : Coq_ast.un_op pp = fun ff op ->
   let pp fmt = Format.fprintf ff fmt in
@@ -85,8 +85,18 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   | UnOp(op,ty,e)                 ->
       pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
   | BinOp(op,ty1,ty2,e1,e2)       ->
-      pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
-        pp_op_type ty1 pp_op_type ty2 pp_expr e2
+      begin
+        match (ty1, op) with
+        | (OpPtr(l), AddOp) ->
+            pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
+              pp_layout l pp_op_type ty2 pp_expr e2
+        | (OpPtr(_), _    ) ->
+            Format.eprintf "Binop [%a] not supported on pointers\n%!"
+              pp_bin_op op; exit 1
+        | _                 ->
+            pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
+              pp_op_type ty1 pp_op_type ty2 pp_expr e2
+      end
   | Deref(lay,e)                  ->
       pp "!{%a} (%a)" pp_layout lay pp_expr e
   | CAS(ty,e1,e2,e3)              ->
@@ -136,7 +146,7 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       let pp_attr attr =
         let _ =
           try ignore (parse_attr attr) with Invalid_annot(msg) ->
-          Printf.eprintf "Error: %s\n%!" msg
+          Format.eprintf "Error: %s\n%!" msg
         in
         let {rc_attr_id=id; rc_attr_args=args} = attr in
         let args = List.map (Printf.sprintf "\"%s\"") args in
@@ -180,7 +190,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
       let sc = if i = n - 1 then "" else ";" in
       let annot =
         try field_annot attrs with Invalid_annot(msg) ->
-          Printf.eprintf "Error: %s\n%!" msg; exit 1
+          Format.eprintf "Error: %s\n%!" msg; exit 1
       in
       ignore annot; (* TODO actually handle attributes. *)
 
@@ -198,7 +208,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     let pp_attr attr =
       let _ =
         try ignore (parse_attr attr) with Invalid_annot(msg) ->
-        Printf.eprintf "Error: %s\n%!" msg
+        Format.eprintf "Error: %s\n%!" msg
       in
       let {rc_attr_id=id; rc_attr_args=args} = attr in
       let args = List.map (Printf.sprintf "\"%s\"") args in
@@ -219,7 +229,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     let pp_attr attr =
       let _ =
         try ignore (parse_attr attr) with Invalid_annot(msg) ->
-        Printf.eprintf "Error: %s\n%!" msg
+        Format.eprintf "Error: %s\n%!" msg
       in
       let {rc_attr_id=id; rc_attr_args=args} = attr in
       let args = List.map (Printf.sprintf "\"%s\"") args in
@@ -253,7 +263,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
 
     let annots =
       try function_annots def.func_attrs with Invalid_annot(msg) ->
-        Printf.eprintf "Error: %s\n%!" msg; exit 1
+        Format.eprintf "Error: %s\n%!" msg; exit 1
     in
     ignore annots; (* TODO handle annotations. *)
 
@@ -290,7 +300,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
         let pp_attr attr =
           let _ =
             try ignore (parse_attr attr) with Invalid_annot(msg) ->
-            Printf.eprintf "Error: %s\n%!" msg
+            Format.eprintf "Error: %s\n%!" msg
           in
           let {rc_attr_id=id; rc_attr_args=args} = attr in
           let args = List.map (Printf.sprintf "\"%s\"") args in
