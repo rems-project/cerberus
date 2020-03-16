@@ -99,8 +99,10 @@ module IT = struct
   let (%>) t1 t2 = GT (t1, t2)
   let (%<=) t1 t2 = LE (t1, t2)
   let (%>=) t1 t2 = GE (t1, t2)
-  let (%>=) t1 t2 = GE (t1, t2)
 
+  let (%&) t1 t2 = And (t1, t2)
+  let (%|) t1 t2 = Or (t1, t2)
+                  
   (* let rec pp = function
    *   | V sym -> Sym.pp sym
    *   | Num i -> Nat_big_num.to_string i
@@ -302,7 +304,7 @@ module RT = struct
   type t = RT of binding list
  
   let make (ts : binding list) = RT ts
-
+  let extr (RT ts) = ts
 
   (* type t = list binding
    *   | A of (Sym.t * BT.t) * t
@@ -430,6 +432,7 @@ end
 
 module SymMap = Map.Make(Sym)
 
+let addl = List.fold_left (fun m (k,v) -> SymMap.add k v m)
       
 type kind = 
   | Argument
@@ -443,13 +446,11 @@ let kind_of_binding = function
   | R _ -> Resource
   | C _ -> Constraint
 
-let string_of_kind = function
+let pp_kind = function
   | Argument -> "computational"
   | Logical -> "logical"
   | Resource -> "resource"
   | Constraint -> "constraint"
-
-
 
 
 type env = 
@@ -488,7 +489,20 @@ let lookup sym env =
   | None -> unbound sym
   | Some t -> t
 
+let incorrect_kind sym has should_be = 
+  failwith (sprintf "variable %s has kind %s but is expected to have kind %s" 
+              (Sym.pp sym) (pp_kind has) (pp_kind should_be))
+let incorrect_bt sym has should_be = 
+  failwith (sprintf "variable %s has type %s but is expected to have type %s" 
+              (Sym.pp sym) (BT.pp has) (BT.pp should_be))
 
+let ensure_type sym has should_be = 
+  if has = should_be then () else incorrect_bt sym has should_be
+
+let ensure_akind sym kind = 
+  match kind with 
+  | A bt -> bt
+  | b -> incorrect_kind sym (kind_of_binding b) Argument
 
 
 
@@ -527,26 +541,16 @@ let bt_of_binop (op : Core.binop) : ((BT.t * BT.t) * BT.t) =
   | OpOr -> ((BT.Bool, BT.Bool), BT.Bool)
 
           
-let incorrect_kind sym has should_be = 
-  let err = sprintf "variable %s has kind %s but is expected to have kind %s" 
-              (Sym.pp sym) (string_of_kind has) (string_of_kind should_be)
-  in
-  failwith err
 
-let incorrect_bt sym has should_be = 
-  let err = sprintf "variable %s has type %s but is expected to have type %s" 
-              (Sym.pp sym) (BT.pp has) (BT.pp should_be)
-  in
-  failwith err
 
-let ensure_type sym has should_be = 
-  if has = should_be then () else incorrect_bt sym has should_be
 
-let infer_pexpr env pe = 
 
+let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) = 
   match pe with
   | M_PEsym sym ->
-     RT.make [(sym, (lookup sym env))]
+     let b = lookup sym env in
+     let _ = ensure_akind sym b in
+     RT.make [(name, b)]
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -567,35 +571,19 @@ let infer_pexpr env pe =
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
      let sym = of_tsymbol sym in
-     begin match SymMap.find_opt sym env with
-     | None -> 
-        unbound sym
-     | Some (A t) -> 
-        let () = ensure_type sym t BT.Bool in
-        let newsym = fresh () in
-        let constr = (V newsym) %= Not (V newsym) in
-        RT.make [(newsym, A t); (fresh (), C constr)]
-     | Some b -> 
-        incorrect_kind sym (kind_of_binding b) Argument
-     end
+     let b = lookup sym env in
+     let t = ensure_akind sym b in
+     let () = ensure_type sym t BT.Bool in
+     let constr = (V name) %= Not (V sym) in
+     RT.make [(name, A t); (name, C constr)]
   | M_PEop (op,sym1,sym2) ->
      let sym1, sym2 = of_tsymbol sym1, of_tsymbol sym2 in
-     begin match SymMap.find_opt sym1 env, 
-                 SymMap.find_opt sym2 env with
-     | None, _ -> unbound sym1
-     | _, None ->  unbound sym2
-     | Some (A t1), Some (A t2) -> 
-        let ((st1,st2),rt) = bt_of_binop op in
-        let () = ensure_type sym1 t1 st1 in
-        let () = ensure_type sym2 t2 st2 in
-        let newsym = fresh () in
-        let constr = V newsym %= (make_binop op (V sym1) (V sym2)) in
-        RT.make [(newsym, A rt); (fresh (), C constr)]
-     | Some b, Some (A _) -> 
-        incorrect_kind sym1 (kind_of_binding b) Argument
-     | _, Some b -> 
-        incorrect_kind sym2 (kind_of_binding b) Argument
-     end
+     let b1, b2 = lookup sym1 env, lookup sym2 env in
+     let t1, t2 = ensure_akind sym1 b1, ensure_akind sym2 b2 in
+     let ((st1,st2),rt) = bt_of_binop op in
+     let (),() = ensure_type sym1 t1 st1, ensure_type sym2 t2 st2 in
+     let constr = V name %= (make_binop op (V sym1) (V sym2)) in
+     RT.make [(name, A rt); (fresh (), C constr)]
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -606,10 +594,42 @@ let infer_pexpr env pe =
      failwith "todo M_PEmemberof"
   | M_PEcall _ ->
      failwith "todo M_PEcall"
-  | M_PElet _ ->
-     failwith "todo M_PElet"
-  | M_PEif _ ->
-     failwith "todo M_PEif"
+  | M_PElet (p, e1, e2) ->
+     (* todo: check against cbt? *)
+     begin match p with 
+     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
+        let name2 = match mname2 with
+          | Some name2 -> name2
+          | None -> fresh ()
+        in
+        let rt = infer_pexpr name2 env e1 in
+        infer_pexpr name (addl env (RT.extr rt)) e1
+     | Pattern (_annot, CaseCtor _) ->
+        failwith "todo ctor pattern"
+     end
+  | M_PEif (sym1,sym2,sym3) ->
+     let sym1, sym2, sym3 = 
+       of_tsymbol sym1, 
+       of_tsymbol sym2, 
+       of_tsymbol sym3 
+     in
+     let b1, b2, b3 = 
+       lookup sym1 env, 
+       lookup sym2 env, 
+       lookup sym3 env 
+     in
+     let t1, t2, t3 = 
+       ensure_akind sym1 b1, 
+       ensure_akind sym2 b2, 
+       ensure_akind sym3 b3 
+     in
+     let () = ensure_type sym1 t1 BT.Bool in
+     let () = ensure_type sym3 t3 t2 in
+     let constr = 
+       (V sym1 %& (V name %= V sym2)) %| 
+       ((Not (V sym1)) %& (V name %= V sym3)) 
+     in
+     RT.make [(name, A t2); (fresh (), C constr)]
   | M_PEis_scalar _ ->
      failwith "todo M_PEis_scalar"
   | M_PEis_integer _ ->
