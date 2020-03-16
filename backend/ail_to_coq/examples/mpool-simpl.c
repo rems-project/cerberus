@@ -12,7 +12,7 @@ struct [[rc::refined_by("n : {nat}")]] mpool {
 };
 
 [[
-  rc::args("{p} @ &own<!uninit<{struct_mpool}>>"),
+  rc::args("p @ &own<uninit<{struct_mpool}>>"),
   rc::returns("void"),
   rc::ensures("p @ &own<{0} @ mpool>")
 ]]
@@ -21,8 +21,8 @@ void mpool_init(struct mpool *p) {
 }
 
 [[
-  rc::args("{p} @ &own<{n} @ mpool>"),
-  rc::returns("{n > 0} @ optional<&own<!uninit<{ENTRY_SIZE}>>>"),
+  rc::args("p @ &own<{n} @ mpool>"),
+  rc::returns("{n > 0} @ optional<&own<uninit<{ENTRY_SIZE}>>>"),
   rc::ensures("p @ &own<{n - 1} @ mpool>")
 ]]
 void *mpool_get(struct mpool *p) {
@@ -35,13 +35,13 @@ void *mpool_get(struct mpool *p) {
 }
 
 [[
-  rc::args("{p} @ &own<{n} @ mpool>", "&own<!uninit<{ENTRY_SIZE}>>"),
+  rc::args("p @ &own<n @ mpool>", "&own<uninit<{ENTRY_SIZE}>>"),
   rc::returns("void"),
   rc::ensures("p @ &own<{n + 1} @ mpool>")
 ]]
 void mpool_put(struct mpool *p, void *ptr) {
     struct mpool_entry *e = ptr;
-    [[rc::subtype("padded<!uninit<{struct mpool_entryr}>, _, ENTRY_SIZE>")]]
+    [[rc::subtype("padded<uninit<{struct mpool_entry}>, _, ENTRY_SIZE>")]]
     *e;
     e->next = p->entry_list;
     p->entry_list = e;
