@@ -49,13 +49,23 @@ let conf cpp_str = {
   ; cpp_stderr = true
 }
 
+
+
 let frontend conf filename = 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
-  c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
-  typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
-  return typed_core_file
+  match Filename.extension filename with
+  | ".c" ->
+     c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
+     typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
+     return typed_core_file
+  | ".core" ->
+     core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
+     typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
+     return typed_core_file
+  | ext ->
+     failwith (Printf.sprintf "wrong file extension %s" ext)
 
 
 
