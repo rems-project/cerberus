@@ -44,7 +44,7 @@ let bty_of_mu_pexpr (M_Pexpr _ bty _) = bty
 
 let is_symbol (M_Pexpr annots bty e) = 
   match e with
-  | M_PEsym sym -> Just (Sym annots bty sym)
+  | M_PEsym sym -> Just (TSym annots bty sym)
   | _ -> Nothing
   end
 
@@ -61,9 +61,11 @@ type mu_pexpr_context 'a = 'a -> mu_pexpr
 
 
 val n_val :           annots -> value -> mu_pexpr_context mu_value -> mu_pexpr
+val n_val_name :      annots -> value -> mu_pexpr_context tsymbol -> mu_pexpr
 val n_val_names :     annots -> values -> mu_pexpr_context tsymbols -> mu_pexpr
 val n_pexpr :         pexpr -> mu_pexpr_context mu_pexpr -> mu_pexpr
 val n_pexpr_name :    pexpr -> mu_pexpr_context tsymbol -> mu_pexpr
+val n_pexpr_no_let :  pexpr -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
 val n_pexpr_names :   pexprs -> mu_pexpr_context tsymbols -> mu_pexpr
 val normalise_pexpr : pexpr -> mu_pexpr
 val normalise_pexpr_name : pexpr -> mu_pexpr
@@ -73,7 +75,7 @@ let let_bind_pexpr pexp ctxt =
   let (M_Pexpr annots bty _) = pexp in
   let sym = Symbol.fresh () in
   let pat = var_pat sym annots bty in
-  let body = ctxt (Sym annots bty sym) in
+  let body = ctxt (TSym annots bty sym) in
   M_Pexpr annots (bty_of_mu_pexpr body) (M_PElet pat pexp body)
 
 
@@ -145,7 +147,7 @@ let rec normalise_pexpr e =
   n_pexpr e (fun e -> e)
 
 and normalise_pexpr_name e = 
-  n_pexpr_name e (fun (Sym annots bty sym) -> 
+  n_pexpr_name e (fun (TSym annots bty sym) -> 
   M_Pexpr annots bty (M_PEsym sym))
 
 
@@ -160,6 +162,14 @@ and n_pexpr_name_2 (e,e') k =
   n_pexpr_name e (fun e -> 
   n_pexpr_name e' (fun e' ->
   k (e,e')))
+
+(* and n_pexpr_no_let (e : pexpr) (k : mu_pexpr -> mu_pexpr) : mu_pexpr = 
+ *   match e with
+ *   | Pexpr annots bty (PElet pat e' e'') -> 
+ *      n_pexpr_no_let e' (fun e' -> 
+ *      M_Pexpr annots bty (M_PElet pat e' (n_pexpr e'' k)))
+ *   | e -> n_pexpr e k
+ *   end *)
 
 and n_pexpr_names (es : list pexpr) (k : tsymbols -> mu_pexpr) : mu_pexpr =
   match es with
@@ -196,10 +206,12 @@ and n_pexpr e k =
   | PEctor ctor args ->
      n_pexpr_names args (fun args -> 
      k (annotate (M_PEctor ctor args)))
-  | PEcase e' pats ->
+  | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
-     let pats = List.map (fun (pat,pe) -> (pat, normalise_pexpr pe)) pats in
-     k (annotate (M_PEcase e' pats)))
+     let (pats,pes) = List.unzip pats_pes in
+     n_pexpr_names pes (fun pes ->
+     let pats_pes = List.zip pats pes in
+     k (annotate (M_PEcase e' pats_pes))))
   | PEarray_shift e' ctype e'' ->
      n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEarray_shift e' ctype e'')))
@@ -231,10 +243,13 @@ and n_pexpr e k =
      k (annotate (M_PEcall sym args)))
   | PElet pat e' e'' ->
      n_pexpr e' (fun e' ->
+     (* n_pexpr_no_let e' (fun e' -> *)
      annotate (M_PElet pat e' (n_pexpr e'' k)))
   | PEif e' e'' e''' ->
      n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEif e' (normalise_pexpr e'') (normalise_pexpr e'''))))
+     n_pexpr_name e'' (fun e'' ->
+     n_pexpr_name e''' (fun e''' ->
+     k (annotate (M_PEif e' e'' e''')))))
   | PEis_scalar e' ->
      n_pexpr_name e' (fun e' ->
      k (annotate (M_PEis_scalar e')))
@@ -269,12 +284,15 @@ let rec pull_let_name (pexpr : mu_pexpr) (k : tsymbol -> mu_expr 'a) : mu_expr '
   | M_Pexpr annots _bty (M_PElet pat e' e'') ->
      M_Expr annots (M_Elet pat e' (pull_let_name e'' k))
   | M_Pexpr annots bty (M_PEsym sym) ->
-     k (Sym annots bty sym)
+     k (TSym annots bty sym)
   | _ -> failwith "not a symbol"
   end
 
 
-let pull_let_pexpr_noname (pexpr : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+(* let pull_let_pexpr_no_let (pexpr : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+ *   pull_let (n_pexpr_no_let pexpr (fun p -> p)) k *)
+
+let rec pull_let_pexpr (pexpr : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
   pull_let (normalise_pexpr pexpr) k
 
 let rec pull_let_pexpr_name (pexpr : pexpr) (k : tsymbol -> mu_expr 'a) : mu_expr 'a = 
@@ -364,68 +382,92 @@ let pull_let_paction pa (k : mu_paction 'a -> mu_expr 'a) =
   k (wrap a))
 
 
-let rec normalise_expr (e : expr 'a) = 
+(* let rec normalise_expr e = n_expr e (fun e -> e) *)
+
+let rec normalise_expr e =
+  n_expr e (fun e -> e)
+
+(* and n_expr_no_let (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a) 
+ *         : mu_expr 'a = 
+ *   let (Expr annots e_) = e in
+ *   let wrap e_ = M_Expr annots e_ in
+ *   match e_ with
+ *   | Ewseq pat e1 e2 -> 
+ *      n_expr_no_let e1 (fun e1 -> 
+ *      wrap (M_Ewseq pat e1 (n_expr e2 k)))
+ *   | Esseq pat e1 e2 -> 
+ *      n_expr_no_let e1 (fun e1 -> 
+ *      wrap (M_Esseq pat e1 (n_expr e2 k)))
+ *   | Eunseq _ -> failwith "todo Eunseq"
+ *   | Easeq _ _ _ -> failwith "todo Easeq"
+ *   | Eindet _ _ -> failwith "todo Eindet"
+ *   | End _ -> failwith "todo End"
+ *   (\* | Eif e1 e2 e3 ->
+ *    *    pull_let_pexpr_name e1 (fun e1 ->
+ *    *    let e2 = n_expr_no_let_or_ctrl e2 k in
+ *    *    let e3 = n_expr_no_let_or_ctrl e3 k in
+ *    *    wrap (M_Eif e1 e2 e3))           
+ *    * | Ecase e1 pats_es ->
+ *    *    pull_let_pexpr_name e1 (fun e1 ->
+ *    *    let pats_es = mapsnd (fun e -> n_expr_no_let_or_ctrl e k) pats_es in
+ *    *    wrap (M_Ecase e1 pats_es)) *\)
+ *   | _ -> n_expr e k
+ *   end *)
+
+
+and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a) 
+        : mu_expr 'a = 
   let (Expr annot pe) = e in
   let wrap pe : mu_expr 'a = M_Expr annot pe in
   
   match pe with
   | Epure pexpr -> 
-     pull_let_pexpr_noname pexpr (fun e -> 
-     wrap (M_Epure e))
+     pull_let_pexpr pexpr (fun e -> 
+     k (wrap (M_Epure e)))
   | Ememop memop pexprs -> 
      pull_let_pexprs_names pexprs (fun pexprs -> 
-     wrap (M_Ememop memop pexprs))
+     k (wrap (M_Ememop memop pexprs)))
   | Eaction paction ->
      pull_let_paction paction (fun paction ->
-     wrap (M_Eaction paction))
-  | Ecase pexpr patterns ->
+     k (wrap (M_Eaction paction)))
+  | Ecase pexpr pats_es ->
      pull_let_pexpr_name pexpr (fun pexpr ->
-     let patterns = 
-       List.map (fun (pat,expr) -> (pat, normalise_expr expr)) patterns in
-     wrap (M_Ecase pexpr patterns))
+     let pats_es = mapsnd (fun expr -> normalise_expr expr) pats_es in
+     k (wrap (M_Ecase pexpr pats_es)))
   | Elet pat e1 e2 ->
-     pull_let_pexpr_noname e1 (fun e1 ->
-     let e2 = normalise_expr e2 in
-     wrap (M_Elet pat e1 e2))
+     pull_let_pexpr e1 (fun e1 ->
+     wrap (M_Elet pat e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
      pull_let_pexpr_name e1 (fun e1 ->
      let e2 = normalise_expr e2 in
      let e3 = normalise_expr e3 in
-     wrap (M_Eif e1 e2 e3))
+     k (wrap (M_Eif e1 e2 e3)))
   | Eskip ->
-     wrap (M_Eskip)
-  | Eccall a e1 e2 es ->        (* have to check *)
+     k (wrap (M_Eskip))
+  | Eccall a e1 e2 es ->
      pull_let_pexpr_name e1 (fun e1 ->
      pull_let_pexpr_name e2 (fun e2 ->
      pull_let_pexprs_names es (fun es ->
-     wrap (M_Eccall a e1 e2 es))))
+     k (wrap (M_Eccall a e1 e2 es)))))
   | Eproc a name es ->
      pull_let_pexprs_names es (fun es ->
-     wrap (M_Eproc a name es))
-  | Eunseq es ->                (* have to check *)
-     let es = List.map normalise_expr es in
-     wrap (M_Eunseq es)
-  | Ewseq pat e1 e2 ->          (* have to check *)
-     let e1 = normalise_expr e1 in
-     let e2 = normalise_expr e2 in
-     wrap (M_Ewseq pat e1 e2)
-  | Esseq pat e1 e2 ->          (* have to check *)
-     let e1 = normalise_expr e1 in
-     let e2 = normalise_expr e2 in
-     wrap (M_Esseq pat e1 e2)
-  | Easeq b action paction ->   (* have to check *)
-     pull_let_action action (fun action ->
-     pull_let_paction paction (fun paction ->
-     wrap (M_Easeq b action paction)))
-  | Eindet n e ->               (* have to check *)
-     let e = normalise_expr e in
-     wrap (M_Eindet n e)
-  | Ebound n e ->               (* have to check *)
-     let e = normalise_expr e in
-     wrap (M_Ebound n e)
-  | End es ->                   (* have to check *)
-     let es = List.map normalise_expr es in
-     wrap (M_End es)
+     k (wrap (M_Eproc a name es)))
+  | Eunseq es ->
+     failwith "todo Eunseq"
+  | Ewseq pat e1 e2 ->
+     n_expr e1 (fun e1 ->
+     wrap (M_Ewseq pat e1 (n_expr e2 k)))
+  | Esseq pat e1 e2 ->
+     n_expr e1 (fun e1 ->
+     wrap (M_Esseq pat e1 (n_expr e2 k)))
+  | Easeq b action paction ->
+     failwith "todo Easeq"
+  | Eindet n e ->
+     failwith "todo Eindet"
+  | Ebound n e ->
+     wrap (M_Ebound n (n_expr e (fun e -> e)))
+  | End es ->
+     failwith "todo End"
   | Esave b syms_typs_pes e ->  (* have to check *)
      let (syms,typs_pes) = List.unzip syms_typs_pes in
      let (typs,pes) = List.unzip typs_pes in
@@ -433,15 +475,14 @@ let rec normalise_expr (e : expr 'a) =
      let typs_pes = List.zip typs pes in
      let syms_typs_pes = List.zip syms typs_pes in
      let e = normalise_expr e in
-     wrap (M_Esave b syms_typs_pes e))
+     k (wrap (M_Esave b syms_typs_pes e)))
   | Erun a sym pes ->
      pull_let_pexprs_names pes (fun pes ->
-     wrap (M_Erun a sym pes))
+     k (wrap (M_Erun a sym pes)))
   | Epar es -> 
-     let es = List.map normalise_expr es in
-     wrap (M_Epar es)
+     failwith "todo Epar"
   | Ewait tid ->
-     wrap (M_Ewait tid)
+     failwith "todo Ewait"
   end
 
 
