@@ -16,7 +16,7 @@ type mu_object_type = Core.core_object_type
 type mu_base_type = Core.core_base_type
 type bty = mu_base_type
 type mu_name = Core.generic_name symbol
-type tsymbol 'bty = Sym of list Annot.annot * 'bty * Symbol.sym 
+type tsymbol 'bty = TSym of list Annot.annot * 'bty * Symbol.sym 
 (* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
 type ov_tsymbol 'bty = tsymbol 'bty       (* object_value *)
 type lv_tsymbol 'bty = tsymbol 'bty       (* loaded_value *)
@@ -63,7 +63,7 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * tsymbol 'bty (* impl-defined static error *)
  | M_PEctor of mu_ctor 'bty * list (tsymbol 'bty) (* data constructor application *)
- | M_PEcase of (tsymbol 'bty) * list ((mu_pattern 'bty) * (mu_pexpr 'bty)) (* pattern matching *)
+ | M_PEcase of (tsymbol 'bty) * list ((mu_pattern 'bty) * (tsymbol 'bty)) (* pattern matching *)
  | M_PEarray_shift of (tsymbol 'bty) * ctype * (tsymbol 'bty) (* pointer array shift *)
  | M_PEmember_shift of (tsymbol 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of tsymbol 'bty (* boolean not *)
@@ -74,7 +74,7 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEmemberof of symbol * Symbol.identifier * tsymbol 'bty (* C struct/union member access *)
  | M_PEcall of mu_name * list (tsymbol 'bty) (* pure function call *)
  | M_PElet of (mu_pattern 'bty) * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure let *)
- | M_PEif of tsymbol 'bty * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure if *)
+ | M_PEif of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty (* pure if *)
  | M_PEis_scalar of tsymbol 'bty
  | M_PEis_integer of tsymbol 'bty
  | M_PEis_signed of tsymbol 'bty
@@ -120,17 +120,17 @@ type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  | M_Eskip
  | M_Eccall of 'a * tsymbol 'bty * tsymbol 'bty * list (tsymbol 'bty) (* C function call *)
  | M_Eproc of 'a * mu_name * list (tsymbol 'bty) (* Core procedure call *)
- | M_Eunseq of list (mu_expr 'a 'bty) (* unsequenced expressions *)
+ (* | M_Eunseq of list (mu_expr 'a 'bty) (\* unsequenced expressions *\) *)
  | M_Ewseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
  | M_Esseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* strong sequencing *)
- | M_Easeq of (symbol * mu_base_type) * (mu_action 'a 'bty) * (mu_paction 'a 'bty) (* atomic sequencing *)
- | M_Eindet of nat * (mu_expr 'a 'bty) (* indeterminately sequenced expr *)
+ (* | M_Easeq of (symbol * mu_base_type) * (mu_action 'a 'bty) * (mu_paction 'a 'bty) (\* atomic sequencing *\) *)
+ (* | M_Eindet of nat * (mu_expr 'a 'bty) (\* indeterminately sequenced expr *)
  | M_Ebound of nat * (mu_expr 'a 'bty) (* $\ldots$and boundary *)
- | M_End of list (mu_expr 'a 'bty) (* nondeterministic sequencing *)
+ (* | M_End of list (mu_expr 'a 'bty) (\* nondeterministic sequencing *\) *)
  | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * tsymbol 'bty)) * (mu_expr 'a 'bty) (* save label *)
  | M_Erun of 'a * symbol * list (tsymbol 'bty) (* run from label *)
- | M_Epar of list (mu_expr 'a 'bty) (* cppmem-like thread creation *)
- | M_Ewait of Mem_common.thread_id (* wait for thread termination *)
+ (* | M_Epar of list (mu_expr 'a 'bty) (\* cppmem-like thread creation *\) *)
+ (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
 
 and mu_expr 'a 'bty = 
  | M_Expr of list annot * (mu_expr_ 'a 'bty)
@@ -194,12 +194,12 @@ let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) =
   List.map (fun (a,b) -> (a, f b)) l
 
 
-let make_symbol_pexpr (Sym annots bty sym) : Core.generic_pexpr 'bty symbol =
+let make_symbol_pexpr (TSym annots bty sym) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEsym sym)
 
 type symbol_env 'bty = map symbol (mu_pexpr 'bty)
 
-let lookup_tsymbol env (Sym _ _ sym) = 
+let lookup_tsymbol env (TSym _ _ sym) = 
   match Map.lookup sym env with
   | Just v -> v
   | Nothing -> 
@@ -292,9 +292,11 @@ let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
        Core.PEerror err (make_symbol_pexpr p)
     | M_PEctor ctor pes -> 
        Core.PEctor ctor (map make_symbol_pexpr pes)
-    | M_PEcase p pats ->
-       let pats = mapsnd (mu_to_core__pexpr env) pats in
-       Core.PEcase (make_symbol_pexpr p) pats
+    | M_PEcase p pats_pes ->
+       let (pats,pes) = List.unzip pats_pes in
+       let pes = List.map make_symbol_pexpr pes in
+       let pats_pes = List.zip pats pes in
+       Core.PEcase (make_symbol_pexpr p) pats_pes
     | M_PEarray_shift pe1 ctype pe2 ->
        Core.PEarray_shift (make_symbol_pexpr pe1) ctype (make_symbol_pexpr pe2)
     | M_PEmember_shift p s id  ->
@@ -322,8 +324,8 @@ let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
     | M_PEif p0 p1 p2 ->
        Core.PEif 
          (make_symbol_pexpr p0)
-         (mu_to_core__pexpr env p1)
-         (mu_to_core__pexpr env p2)
+         (make_symbol_pexpr p1)
+         (make_symbol_pexpr p2)
     | M_PEis_scalar p ->
        Core.PEis_scalar (make_symbol_pexpr p)
     | M_PEis_integer p ->
@@ -411,30 +413,30 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
          (map make_symbol_pexpr pes)
     | M_Eproc a name pes ->
        Core.Eproc a name (map make_symbol_pexpr pes)
-    | M_Eunseq es ->
-       Core.Eunseq (map (mu_to_core__expr env) es)
+    (* | M_Eunseq es ->
+     *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     | M_Ewseq pat e1 e2 ->
        Core.Ewseq pat (mu_to_core__expr env e1) (mu_to_core__expr env e2)
     | M_Esseq pat e1 e2 ->
        Core.Esseq pat (mu_to_core__expr env e1) (mu_to_core__expr env e2)
-    | M_Easeq (s,bt) a pa ->
-       Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa)
-    | M_Eindet n e ->
-       Core.Eindet n (mu_to_core__expr env e)
+    (* | M_Easeq (s,bt) a pa ->
+     *    Core.Easeq (s,bt) (mu_to_core__action a) (mu_to_core__paction pa) *)
+    (* | M_Eindet n e ->
+     *    Core.Eindet n (mu_to_core__expr env e) *)
     | M_Ebound n e ->
        Core.Ebound n (mu_to_core__expr env e)
-    | M_End es ->
-       Core.End (List.map (mu_to_core__expr env) es)
+    (* | M_End es ->
+     *    Core.End (List.map (mu_to_core__expr env) es) *)
     | M_Esave (sym,bt) sbp e ->
        let sbp = 
          List.map (fun (sym,(bt,pe)) -> (sym,(bt,make_symbol_pexpr pe))) sbp in
        Core.Esave (sym,bt) sbp (mu_to_core__expr env e)
     | M_Erun a sym pes ->
        Core.Erun a sym (map make_symbol_pexpr pes)
-    | M_Epar es ->
-       Core.Epar (map (mu_to_core__expr env) es)
-    | M_Ewait tid -> 
-       Core.Ewait tid
+    (* | M_Epar es ->
+     *    Core.Epar (map (mu_to_core__expr env) es) *)
+    (* | M_Ewait tid -> 
+     *    Core.Ewait tid *)
   end in
   Core.Expr annots expr_
 
