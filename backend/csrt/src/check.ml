@@ -4,9 +4,7 @@ open Mucore
 open Impl_mem
 open Nat_big_num
 open Sexplib
-open Sexp
 open Printf
-
 
 module Symbol = struct
   type t = Symbol.sym
@@ -42,16 +40,9 @@ type loc = num
 let pp_num = string_of_int
 let parse_num = int_of_string
 
-let parse_error t sx = 
-  let err = sprintf "unexpected %s: %s" t (to_string sx) in
+let parse_error (t : string) (sx : Sexp.t) = 
+  let err = sprintf "unexpected %s: %s" t (Sexp.to_string sx) in
   raise (Invalid_argument err)
-
-let pp_to_sexp_list f xs = 
-  "(" ^ (String.concat " " (List.map f xs)) ^ ")"
-
-let parse_sexp_list f = function
-  | Atom _ -> failwith "expected List"
-  | List sxs -> List.map f sxs
 
 let unreachable () = failwith "unreachable"
 
@@ -59,8 +50,6 @@ let unreachable () = failwith "unreachable"
 module IT = struct
 
   type t =
-
-    | V of Sym.t
     | Num of num
     | Bool of bool
 
@@ -87,6 +76,8 @@ module IT = struct
 
     | List of t list
 
+    | V of Sym.t
+
   let (%+) t1 t2 = Add (t1,t2)
   let (%-) t1 t2 = Sub (t1,t2)
   let (%*) t1 t2 = Mul (t1,t2)
@@ -103,70 +94,95 @@ module IT = struct
   let (%&) t1 t2 = And (t1, t2)
   let (%|) t1 t2 = Or (t1, t2)
                   
-  (* let rec pp = function
-   *   | V sym -> Sym.pp sym
-   *   | Num i -> Nat_big_num.to_string i
-   *   | Bool true -> "true"
-   *   | Bool false -> "false"
-   *   | Add (it1,it2) -> sprintf "(%s + %s)" (pp it1) (pp it2)
-   *   | Sub (it1,it2) -> sprintf "(%s - %s)" (pp it1) (pp it2)
-   *   | Mul (it1,it2) -> sprintf "(%s * %s)" (pp it1) (pp it2)
-   *   | Div (it1,it2) -> sprintf "(%s / %s)" (pp it1) (pp it2)
-   *   | Exp (it1,it2) -> sprintf "(%s ^ %s)" (pp it1) (pp it2)
-   *   | App (it1,it2) -> sprintf "(%s %s)" (pp it1) (pp it2)
-   *   | List its -> sprintf "(list %s)" (pp_to_sexp_list pp its)
- *     | EQ (o1,o2) -> sprintf "(%s = %s)"  (IT.pp o1) (IT.pp o2)
- *     | NE (o1,o2) -> sprintf "(%s <> %s)" (IT.pp o1) (IT.pp o2)
- *     | LT (o1,o2) -> sprintf "(%s < %s)"  (IT.pp o1) (IT.pp o2)
- *     | GT (o1,o2) -> sprintf "(%s > %s)"  (IT.pp o1) (IT.pp o2)
- *     | LE (o1,o2) -> sprintf "(%s <= %s)" (IT.pp o1) (IT.pp o2)
- *     | GE (o1,o2) -> sprintf "(%s >= %s)" (IT.pp o1) (IT.pp o2)
- *     | Null o1 -> sprintf "(null %s)" (IT.pp o1) 
-   *   | And (o1,o2) -> sprintf "(%s & %s)" (pp o1) (pp o2)
-   *   | Not (o1) -> sprintf "(not %s)" (pp o1)
-   *   | P p -> LP.pp p *)
+  let rec pp = function
+    | Num i -> Nat_big_num.to_string i
+    | Bool b -> if b then "true" else "false"
+
+    | Add (it1,it2) -> sprintf "(%s + %s)" (pp it1) (pp it2)
+    | Sub (it1,it2) -> sprintf "(%s - %s)" (pp it1) (pp it2)
+    | Mul (it1,it2) -> sprintf "(%s * %s)" (pp it1) (pp it2)
+    | Div (it1,it2) -> sprintf "(%s / %s)" (pp it1) (pp it2)
+    | Exp (it1,it2) -> sprintf "(%s ^ %s)" (pp it1) (pp it2)
+    | App (it1,it2) -> sprintf "(app %s %s)" (pp it1) (pp it2)
+    | Rem_t (it1,it2) -> sprintf "(rem_t %s %s)" (pp it1) (pp it2)
+    | Rem_f (it1,it2) -> sprintf "(rem_f %s %s)" (pp it1) (pp it2)
+
+    | EQ (o1,o2) -> sprintf "(%s = %s)"  (pp o1) (pp o2)
+    | NE (o1,o2) -> sprintf "(%s <> %s)" (pp o1) (pp o2)
+    | LT (o1,o2) -> sprintf "(%s < %s)"  (pp o1) (pp o2)
+    | GT (o1,o2) -> sprintf "(%s > %s)"  (pp o1) (pp o2)
+    | LE (o1,o2) -> sprintf "(%s <= %s)" (pp o1) (pp o2)
+    | GE (o1,o2) -> sprintf "(%s >= %s)" (pp o1) (pp o2)
+
+    | Null o1 -> sprintf "(null %s)" (pp o1) 
+    | And (o1,o2) -> sprintf "(%s & %s)" (pp o1) (pp o2)
+    | Or (o1,o2) -> sprintf "(%s | %s)" (pp o1) (pp o2)
+    | Not (o1) -> sprintf "(not %s)" (pp o1)
+
+    | List its -> sprintf "(list (%s))" 
+                    (String.concat " " (List.map pp its))
+
+    | V sym -> Sym.pp sym
 
 
-(*   let rec parse_sexp (env : Sym.Env.t) sx = 
- *     match sx with
- *     | Atom "true" -> 
- *        Bool true
- *     | Atom "false" -> 
- *        Bool false
- *     | Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
- *        Num (Nat_big_num.of_string str)
- *     | Atom str -> V (Sym.parse env str)
- *     | List [o1;Atom "+";o2] -> 
- *        Add (parse_sexp env o1, parse_sexp env o2)
- *     | List [o1;Atom "-";o2] -> 
- *        Sub (parse_sexp env o1, parse_sexp env o2)
- *     | List [o1;Atom "*";o2] -> 
- *        Mul (parse_sexp env o1, parse_sexp env o2)
- *     | List [o1;Atom "/";o2] -> 
- *        Div (parse_sexp env o1, parse_sexp env o2)
- *     | List [o1;Atom "^";o2] -> 
- *        Exp (parse_sexp env o1, parse_sexp env o2)
- *     | List [Atom "list"; its] -> 
- *        List (parse_sexp_list (parse_sexp env) its)
- *     | List [o1;o2] -> 
- *        App (parse_sexp env o1, parse_sexp env o2)
- *     | List [o1;Atom "=";o2]  -> 
- *        EQ (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | List [o1;Atom "<>";o2] -> 
- *        NE (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | List [o1;Atom "<";o2]  -> 
- *        LT (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | List [o1;Atom ">";o2]  -> 
- *        GT (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | List [o1;Atom "<=";o2] -> 
- *        LE (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | List [o1;Atom ">=";o2] -> 
- *        GE (IT.parse_sexp env o1, IT.parse_sexp env o2)
- *     | t -> 
- *        parse_error "logical predicate" t
-   *   | List [Atom "not";op] -> Not (parse_sexp env op)
-   *   | List [o1; Atom "&"; o2] -> And (parse_sexp env o1, parse_sexp env o2)
-   *   | l -> P (LP.parse_sexp env l) *)
+
+  let rec parse_sexp (env : Sym.Env.t) sx = 
+    match sx with
+
+    | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
+       Num (Nat_big_num.of_string str)
+    | Sexp.Atom "true" -> 
+       Bool true
+    | Sexp.Atom "false" -> 
+       Bool false
+
+    | Sexp.List [o1;Sexp.Atom "+";o2] -> 
+       Add (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "-";o2] -> 
+       Sub (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "*";o2] -> 
+       Mul (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "/";o2] -> 
+       Div (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "^";o2] -> 
+       Exp (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [Sexp.Atom "app"; o1;o2] -> 
+       App (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [Sexp.Atom "rem_t";o1;o2] -> 
+       Rem_t (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [Sexp.Atom "rem_f";o1;o2] -> 
+       Rem_f (parse_sexp env o1, parse_sexp env o2)
+
+    | Sexp.List [o1;Sexp.Atom "=";o2]  -> 
+       EQ (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "<>";o2] -> 
+       NE (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "<";o2]  -> 
+       LT (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom ">";o2]  -> 
+       GT (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom "<=";o2] -> 
+       LE (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1;Sexp.Atom ">=";o2] -> 
+       GE (parse_sexp env o1, parse_sexp env o2)
+
+    | Sexp.List [Sexp.Atom "null";op] -> 
+       Null (parse_sexp env op)
+    | Sexp.List [o1; Sexp.Atom "&"; o2] -> 
+       And (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [o1; Sexp.Atom "|"; o2] -> 
+       Or (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.List [Sexp.Atom "not";op] -> 
+       Not (parse_sexp env op)
+
+    | Sexp.List [Sexp.Atom "list"; List its] -> 
+       let its = List.map (parse_sexp env) its in
+       List its
+
+    | Sexp.Atom str -> V (Sym.parse env str)
+
+    | t -> 
+       parse_error "index term" t
 
 end
 
@@ -176,31 +192,46 @@ open IT
 
 module BT = struct
 
-  type t = 
-    | Unit
+  type t =
+    | Unit 
     | Bool
     | Int
     | Loc
+    (* | Loc of t *)
+    | Array of t
+    | List of t
+    | Tuple of t list
     | Struct of Sym.t
+
 
   let rec pp = function
     | Unit -> "unit"
     | Bool -> "bool"
     | Int -> "int"
     | Loc -> "loc"
+    (* | Loc t -> sprintf "(loc %s)" (pp t) *)
+    | Array t -> sprintf "(array %s)" (pp t)
+    | List bt -> sprintf "(list %s)" (pp bt)
+    | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (List.map pp bts))
     | Struct sym -> sprintf "(struct %s)" (Sym.pp sym)
   
-  (* let rec parse_sexp (env : Sym.Env.t) sx = 
-   *   match sx with
-   *   | Atom "unit" -> Unit
-   *   | Atom "bool" -> Bool
-   *   | Atom "int" -> Int
-   *   | Atom "loc" -> Loc
-   *   | List [Atom "struct"; Atom id] -> Struct (Sym.parse env id)
-   *   | a -> parse_error "base type" a *)
+  let rec parse_sexp (env : Sym.Env.t) sx = 
+    match sx with
+    | Sexp.Atom "unit" -> Unit
+    | Sexp.Atom "bool" -> Bool
+    | Sexp.Atom "int" -> Int
+    | Sexp.Atom "loc" -> Loc
+    (* | Sexp.List [Sexp.Atom "loc"; bt] -> Loc (parse_sexp env bt) *)
+    | Sexp.List [Sexp.Atom "array"; bt] -> Array (parse_sexp env bt)
+    | Sexp.List [Sexp.Atom "list"; bt] -> List (parse_sexp env bt)
+    | Sexp.List [Sexp.Atom "tuple"; Sexp.List bts] -> Tuple (List.map (parse_sexp env) bts)
+    | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> Struct (Sym.parse env id)
+    | a -> parse_error "base type" a
 
 end
 
+
+open BT
 
 module RE = struct
 
@@ -208,51 +239,44 @@ module RE = struct
     | Block of IT.t * IT.t
     | Int of IT.t * IT.t (* location and value *)
     | Points of IT.t * IT.t
-    | Array of IT.t * IT.t list
+    | Array of IT.t * IT.t
    (* Array (pointer, list pointer) *)
 
-  (* let rec pp = function
-   *   | Block (it1,it2) -> 
-   *      sprintf "(block %s %s)" 
-   *        (IT.pp it1)
-   *        (IT.pp it2)
-   *   | Int (it1,it2) -> 
-   *      sprintf "(int %s %s)" 
-   *        (IT.pp it1) 
-   *        (IT.pp it2)
-   *   | Array (it1,it2) -> 
-   *      sprintf "(array %s %s)" 
-   *        (IT.pp it1)
-   *        (IT.pp it2)
-   *   | Points (it1,it2) -> 
-   *      sprintf "(points %s %s)" 
-   *        (IT.pp it1)
-   *        (IT.pp it2)
-   *   | Uninit (it1,it2,rt) -> 
-   *      sprintf "(uninit %s %s %s)" 
-   *        (IT.pp it1)
-   *        (IT.pp it2)
-   *        (pp rt)
-   * 
-   * let rec parse_sexp (env : Sym.Env.t) sx = 
-   *   match sx with 
-   *   | List [Atom "block";it1;it2] -> 
-   *      Block (IT.parse_sexp env it1,
-   *             IT.parse_sexp env it2)
-   *   | List [Atom "int"; it1; it2] ->
-   *      Int (IT.parse_sexp env it1, 
-   *           IT.parse_sexp env it2)
-   *   | List [Atom "array"; it1; it2] ->
-   *      Array (IT.parse_sexp env it1, 
-   *             IT.parse_sexp env it2)
-   *   | List [Atom "points"; it1; it2] ->
-   *      Points (IT.parse_sexp env it1, 
-   *              IT.parse_sexp env it2)
-   *   | List [Atom "uninit"; it1; it2; rt] ->
-   *      Uninit (IT.parse_sexp env it1, 
-   *              IT.parse_sexp env it2, 
-   *              parse_sexp env rt)
-   *   | t -> parse_error "resource type" t *)
+  let rec pp = function
+    | Block (it1,it2) -> 
+       sprintf "(block %s %s)" 
+         (IT.pp it1)
+         (IT.pp it2)
+    | Int (it1,it2) -> 
+       sprintf "(int %s %s)" 
+         (IT.pp it1) 
+         (IT.pp it2)
+    | Array (it1,it2) -> 
+       sprintf "(array %s %s)" 
+         (IT.pp it1)
+         (IT.pp it2)
+    | Points (it1,it2) -> 
+       sprintf "(points %s %s)" 
+         (IT.pp it1)
+         (IT.pp it2)
+
+  
+  let rec parse_sexp (env : Sym.Env.t) sx = 
+    let open Sexp in
+    match sx with 
+    | Sexp.List [Sexp.Atom "block";it1;it2] -> 
+       Block (IT.parse_sexp env it1,
+              IT.parse_sexp env it2)
+    | Sexp.List [Sexp.Atom "int"; it1; it2] ->
+       Int (IT.parse_sexp env it1, 
+            IT.parse_sexp env it2)
+    | Sexp.List [Sexp.Atom "array"; it1; it2] ->
+       Array (IT.parse_sexp env it1, 
+              IT.parse_sexp env it2)
+    | Sexp.List [Sexp.Atom "points"; it1; it2] ->
+       Points (IT.parse_sexp env it1, 
+               IT.parse_sexp env it2)
+    | t -> parse_error "resource type" t
 
 end
 
@@ -265,168 +289,134 @@ module LS = struct
     | Fun of t * t
 
 
-  (* let rec pp = function
-   *   | List ls -> 
-   *      sprintf "(list %s)" 
-   *        (BT.pp ls)
-   *   | Fun (ls1,ls2) -> 
-   *      sprintf "(%s -> %s)" 
-   *        (pp ls1)
-   *        (pp ls2)
-   *   | Base bt -> 
-   *        BT.pp bt
-   * 
-   * let rec parse_sexp (env : Sym.Env.t) sx =
-   *   match sx with
-   *   | Sexp.List [Atom "list"; a] ->
-   *      List (BT.parse_sexp env a)
-   *   | Sexp.List [o1; Atom "->"; o2] ->
-   *      Fun (parse_sexp env o1, parse_sexp env o2)
-   *   | ((Sexp.Atom _) as a) -> 
-   *      Base (BT.parse_sexp env a)
-   *   | ls -> parse_error "logical sort" ls *)
-
-end
-
-
-
-type t = 
-  | A of BT.t
-  | L of LS.t
-  | R of RE.t
-  | C of IT.t         
-
-type binding = Sym.t * t
-
-
-module RT = struct
-
-  type t = RT of binding list
- 
-  let make (ts : binding list) = RT ts
-  let extr (RT ts) = ts
-
-  (* type t = list binding
-   *   | A of (Sym.t * BT.t) * t
-   *   | L of (Sym.t * LS.t) * t
-   *   | R of (Sym.t * RE.t) * t
-   *   | C of (Sym.t * IT.t) * t
-   *   | I
-   * 
-   * type tT = t -> t
-   * 
-   * let a sym bt : tT = fun t -> A ((sym,bt),t)
-   * let l sym ls : tT = fun t -> L ((sym,ls),t)
-   * let r sym re : tT = fun t -> R ((sym,re),t)
-   * let c sym lc : tT = fun t -> C ((sym,lc),t)
-   * 
-   * let comb f g x = f (g (x))
-   * 
-   * let rec combine (ris : tT list) : tT = 
-   *   match ris with
-   *   | [] -> (fun ri -> ri)
-   *   | ri :: ris -> comb ri (combine ris)
-   * 
-   * let make ris = combine ris I *)
-
-
-  (* let rec pp = function
-   *   | A ((id, typ), rt) -> 
-   *      sprintf "EC (%s : %s) . %s" (Sym.pp id) (BT.pp typ) (pp rt)
-   *   | L ((id, ls), rt)  -> 
-   *      sprintf "EL (%s : %s) . %s" (Sym.pp id) (LS.pp ls) (pp rt)
-   *   | R ((id, re), rt) -> 
-   *      sprintf "(%s : %s) * %s" (Sym.pp id) (RE.pp re) (pp rt)
-   *   | C ((id, lc), rt) -> 
-   *      sprintf "(%s : %s) & %s" (Sym.pp id) (LC.pp lc) (pp rt)
-   *   | I -> 
-   *      "I"
-   * 
-   * let rec parse_sexp (env : Sym.Env.t) = function
-   *   | Atom "EC" :: List [Atom id; Atom ":"; t] :: Atom "." :: rt ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      A ((sym, BT.parse_sexp env t), parse_sexp env' rt)
-   *   | Atom "EL" :: List [Atom id; Atom ":"; ls] :: Atom "." :: rt ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      L ((sym, LS.parse_sexp env ls), parse_sexp env' rt)
-   *   | List [Atom id; Atom ":"; re] :: Atom "*" :: rt ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      R ((sym, RE.parse_sexp env re), parse_sexp env' rt)
-   *   | List [Atom id; Atom ":"; lc] :: Atom "&" :: rt ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      C ((sym, LC.parse_sexp env lc), parse_sexp env' rt)
-   *   | Atom "I" :: [] -> 
-   *      I
-   *   | rt -> 
-   *      parse_error "rturn type" (List rt) *)
-
-end
-
-
-
-module FT = struct
-
+  let rec pp = function
+    | List ls -> 
+       sprintf "(list %s)" 
+         (BT.pp ls)
+    | Fun (ls1,ls2) -> 
+       sprintf "(%s -> %s)" 
+         (pp ls1)
+         (pp ls2)
+    | Base bt -> 
+         BT.pp bt
   
-  (* basically the same as return_item, so could unify if it stays
-     like this? *)
-  (* type t = 
-   *   | A of Sym.t * BT.t
-   *   | L of Sym.t * LS.t
-   *   | R of Sym.t * RE.t
-   *   | C of Sym.t * IT.t
-   *   | RT
-   * 
-   * type t = Fn of args * RT.t *)
+  let rec parse_sexp (env : Sym.Env.t) sx =
+    match sx with
+    | Sexp.List [Sexp.Atom "list"; a] ->
+       List (BT.parse_sexp env a)
+    | Sexp.List [o1; Sexp.Atom "->"; o2] ->
+       Fun (parse_sexp env o1, parse_sexp env o2)
+    | Sexp.Atom _ -> 
+       Base (BT.parse_sexp env sx)
+    | ls -> parse_error "logical sort" ls
 
-  type t_argument = binding
-  type t_arguments = t_argument list
-
-  type t = FT of t_arguments * RT.t
+end
 
 
-  (* let rec pp_arguments = function
-   *   | A (sym, bt) :: args -> 
-   *      sprintf "AC (%s : %s) . %s" (Sym.pp sym) (BT.pp bt) (pp_arguments args)
-   *   | L (sym, ls) :: args -> 
-   *      sprintf "AL (%s : %s) . %s" (Sym.pp sym) (LS.pp ls) (pp_arguments args)
-   *   | R (sym, rt) :: args ->
-   *      sprintf "(%s : %s) =* %s" (Sym.pp sym) (RE.pp rt) (pp_arguments args)
-   *   | C (sym, lc) :: args ->
-   *      sprintf "(%s : %s) => %s" (Sym.pp sym) (LC.pp lc) (pp_arguments args)
-   *   | [] -> 
-   *      ""
-   * 
-   * let pp (Fn (args, rt)) = 
-   *   sprintf "%s%s" (pp_arguments args) (RT.pp rt)
-   * 
-   * let rec parse_sexp_aux acc (env : Sym.Env.t) = function
-   *   | Atom "AC" :: List [Atom id; Atom ":"; bt] :: Atom "." :: args ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      parse_sexp_aux (A (sym, BT.parse_sexp env bt) :: acc) env' args
-   *   | Atom "AL":: List [Atom id; Atom ":"; ls] :: Atom "." :: args ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      parse_sexp_aux (L (sym, LS.parse_sexp env ls) :: acc) env' args
-   *   | List [Atom id; Atom ":"; re] :: Atom "=*" :: args ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      parse_sexp_aux (R (sym, RE.parse_sexp env re) :: acc) env' args
-   *   | List [Atom id; Atom ":"; lc] :: Atom "=>" :: args ->
-   *      let sym = Sym.fresh_pretty id in
-   *      let env' = Sym.Env.add id sym env in
-   *      parse_sexp_aux (C (sym, LC.parse_sexp env lc) :: acc) env' args
-   *   | rt -> 
-   *      Fn (List.rev acc, RT.parse_sexp env rt)
-   * 
-   * let parse_sexp (env : Sym.Env.t) = function
-   *   | List ft -> parse_sexp_aux [] env ft
-   *   | t -> parse_error "function type" t *)
+
+module T = struct
+
+  type t = 
+    | A of BT.t
+    | L of LS.t
+    | R of RE.t
+    | C of IT.t
+
+  let pp = function
+    | (id, A typ) -> 
+       sprintf "(%s : %s)" (Sym.pp id) (BT.pp typ)
+    | (id, L ls)  -> 
+       sprintf "(Logical %s : %s)" (Sym.pp id) (LS.pp ls)
+    | (id, R re) -> 
+       sprintf "(Resource %s : %s)" (Sym.pp id) (RE.pp re)
+    | (id, C lc) -> 
+       sprintf "(Constraint %s : %s)" (Sym.pp id) (IT.pp lc)
+
+  let parse_sexp (env : Sym.Env.t) s = 
+    let open Sexp in
+    match s with
+    | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
+       let sym = Sym.fresh_pretty id in
+       let env = Sym.Env.add id sym env in
+       ((sym, A (BT.parse_sexp env t)), env)
+    | Sexp.List [Sexp.Atom "Logical"; Sexp.Atom id; Sexp.Atom ":"; ls] ->
+       let sym = Sym.fresh_pretty id in
+       let env = Sym.Env.add id sym env in
+       ((sym, L (LS.parse_sexp env ls)), env)
+    | Sexp.List [Sexp.Atom "Resource"; Sexp.Atom id; Sexp.Atom ":"; re] ->
+       let sym = Sym.fresh_pretty id in
+       let env = Sym.Env.add id sym env in
+       ((sym, R (RE.parse_sexp env re)), env)
+    | Sexp.List [Sexp.Atom "Constraint"; Sexp.Atom id; Sexp.Atom ":"; lc] ->
+       let sym = Sym.fresh_pretty id in
+       let env = Sym.Env.add id sym env in
+       ((sym, C (IT.parse_sexp env lc)), env)
+    | t -> 
+       parse_error "rturn type" t
          
+  type binding = Sym.t * t
+  type bindings = binding list
+
+  type kind = 
+    | Argument
+    | Logical
+    | Resource
+    | Constraint
+
+  let kind_of_binding = function
+    | A _ -> Argument
+    | L _ -> Logical
+    | R _ -> Resource
+    | C _ -> Constraint
+
+  let pp_kind = function
+    | Argument -> "computational"
+    | Logical -> "logical"
+    | Resource -> "resource"
+    | Constraint -> "constraint"
+
+
+  let pp_list ts = 
+    String.concat " , " (List.map pp ts)
+
+  let parse_sexp_list fstr (env : Sym.Env.t) s = 
+    let rec aux (env : Sym.Env.t) acc ts = 
+      match ts with
+      | [] -> (List.rev acc, env)
+      | t :: ts ->
+         let (b, env) = parse_sexp env t in
+         aux env (b :: acc) ts
+    in
+    match s with
+    | Sexp.List ts -> aux env [] ts
+    | t -> parse_error fstr t
+         
+end
+
+module R = struct
+  type t = R of T.bindings
+  let make (ts : T.bindings) = R ts
+  let extr (R ts) = ts
+  let pp (R ts) = T.pp_list ts
+  let parse_sexp env s = 
+    let bs, env = T.parse_sexp_list "return type" env s in
+    (make bs, env)
+end
+
+module A = struct
+  type t = A of T.bindings
+  let make (ts : T.bindings) = A ts
+  let extr (A ts) = ts
+  let pp (A ts) = T.pp_list ts
+  let parse_sexp env s = 
+    let bs, env = T.parse_sexp_list "function type" env s in
+    (make bs, env)
+end
+
+module F = struct
+
+  type t = F of R.t * A.t
+
 end
   
 
@@ -434,28 +424,10 @@ module SymMap = Map.Make(Sym)
 
 let addl = List.fold_left (fun m (k,v) -> SymMap.add k v m)
       
-type kind = 
-  | Argument
-  | Logical
-  | Resource
-  | Constraint
-
-let kind_of_binding = function
-  | A _ -> Argument
-  | L _ -> Logical
-  | R _ -> Resource
-  | C _ -> Constraint
-
-let pp_kind = function
-  | Argument -> "computational"
-  | Logical -> "logical"
-  | Resource -> "resource"
-  | Constraint -> "constraint"
-
 
 type env = 
-  { vars : binding SymMap.t
-  ; struct_decls : Ctype.tag_definition SymMap.t
+  { vars : T.binding SymMap.t
+  ; struct_decls : T.bindings SymMap.t
   }
 
 let empty_env = 
@@ -484,14 +456,14 @@ let unbound sym =
   let err = sprintf "unbound variable %s" (Sym.pp sym) in
   failwith err
 
-let lookup sym env = 
+let lookup env sym = 
   match SymMap.find_opt sym env with
   | None -> unbound sym
   | Some t -> t
 
 let incorrect_kind sym has should_be = 
   failwith (sprintf "variable %s has kind %s but is expected to have kind %s" 
-              (Sym.pp sym) (pp_kind has) (pp_kind should_be))
+              (Sym.pp sym) (T.pp_kind has) (T.pp_kind should_be))
 let incorrect_bt sym has should_be = 
   failwith (sprintf "variable %s has type %s but is expected to have type %s" 
               (Sym.pp sym) (BT.pp has) (BT.pp should_be))
@@ -501,8 +473,8 @@ let ensure_type sym has should_be =
 
 let ensure_akind sym kind = 
   match kind with 
-  | A bt -> bt
-  | b -> incorrect_kind sym (kind_of_binding b) Argument
+  | T.A bt -> bt
+  | b -> incorrect_kind sym (T.kind_of_binding b) T.Argument
 
 
 
@@ -532,25 +504,185 @@ let bt_of_binop (op : Core.binop) : ((BT.t * BT.t) * BT.t) =
   | OpRem_t -> ((BT.Int, BT.Int), BT.Int)
   | OpRem_f -> ((BT.Int, BT.Int), BT.Int)
   | OpExp -> ((BT.Int, BT.Int), BT.Int)
-  | OpEq -> ((BT.Int, BT.Int), BT.Int)
-  | OpGt -> ((BT.Int, BT.Int), BT.Int)
-  | OpLt -> ((BT.Int, BT.Int), BT.Int)
-  | OpGe -> ((BT.Int, BT.Int), BT.Int)
-  | OpLe -> ((BT.Int, BT.Int), BT.Int)
+  | OpEq -> ((BT.Int, BT.Int), BT.Bool)
+  | OpGt -> ((BT.Int, BT.Int), BT.Bool)
+  | OpLt -> ((BT.Int, BT.Int), BT.Bool)
+  | OpGe -> ((BT.Int, BT.Int), BT.Bool)
+  | OpLe -> ((BT.Int, BT.Int), BT.Bool)
   | OpAnd -> ((BT.Bool, BT.Bool), BT.Bool)
   | OpOr -> ((BT.Bool, BT.Bool), BT.Bool)
 
           
 
 
+let rec bt_of_core_object_type = function
+  | OTy_integer -> BT.Int
+  | OTy_floating -> failwith "floats not supported"
+  | OTy_pointer -> failwith "bt_of_core_object_type loc"
+  | OTy_array cbt -> Array (bt_of_core_object_type cbt)
+  | OTy_struct sym -> Struct sym
+  | OTy_union _sym -> failwith "todo: union types"
+
+let rec bt_of_core_base_type = function
+  | Core.BTy_unit -> BT.Unit
+  | Core.BTy_boolean -> BT.Bool
+  | Core.BTy_ctype -> failwith "BT ctype"
+  | Core.BTy_list bt -> BT.List (bt_of_core_base_type bt)
+  | Core.BTy_tuple bts -> BT.Tuple (List.map bt_of_core_base_type bts)
+  | Core.BTy_object ot -> bt_of_core_object_type ot
+  | Core.BTy_loaded ot -> bt_of_core_object_type ot
+  | Core.BTy_storable -> unreachable ()
+
+
+let make_int_type f t = 
+  let ft = IT.Num (of_string f) in
+  let tt = IT.Num (of_string t) in
+  let constr name = (V name %>= ft) %& (V name %<= tt) in
+  (BT.Int, constr)
+
+(* according to https://en.wikipedia.org/wiki/C_data_types *)
+(* todo: check *)
+let bt_constr_of_integerBaseType signed ibt = 
+  let make = make_int_type in
+  match signed, ibt with
+  | true,  Ctype.Ichar    -> make "-127" "127"
+  | false, Ctype.Ichar    -> make "0" "255"
+  | true,  Ctype.Short    -> make "-32767" "32767"
+  | false, Ctype.Short    -> make "0" "65535"
+  | true,  Ctype.Int_     -> make "-32767" "32767"
+  | false, Ctype.Int_     -> make "0" "65535"
+  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
+  | false, Ctype.Long     -> make "0" "4294967295"
+  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
+  | false, Ctype.LongLong -> make "0" "18446744073709551615"
+  | _, Ctype.IntN_t n -> failwith "todo standard library types"
+  | _, Ctype.Int_leastN_t n -> failwith "todo standard library types"
+  | _, Ctype.Int_fastN_t n -> failwith "todo standard library types"
+  | _, Ctype.Intmax_t -> failwith "todo standard library types"
+  | _, Ctype.Intptr_t -> failwith "todo standard library types"
+
+
+let bt_constr_of_integerType it = 
+  match it with
+  | Ctype.Char -> 
+     failwith "todo char"
+  | Ctype.Bool -> 
+     (BT.Bool, None)
+  | Ctype.Signed ibt -> 
+     let (bt,constr) = bt_constr_of_integerBaseType true ibt in
+     (bt, Some constr)
+  | Ctype.Unsigned ibt -> 
+     let (bt,constr) = bt_constr_of_integerBaseType false ibt in
+     (bt, Some constr)
+  | Ctype.Enum _sym -> 
+     failwith "todo enum"
+  | Ctype.Wchar_t ->
+     failwith "todo wchar_t"
+  | Ctype.Wint_t ->
+     failwith "todo wint_t"
+  | Ctype.Size_t ->
+     failwith "todo size_t"
+  | Ctype.Ptrdiff_t -> 
+     failwith "todo standard library types"
+
+let rec bt_constr_of_ctype (Ctype.Ctype (_annots, ct)) = 
+  match ct with
+  | Void -> 
+     failwith "bt_constr_of_ctype void" 
+  | Basic (Integer it) -> 
+     bt_constr_of_integerType it
+  | Basic (Floating _) -> 
+     failwith "floats not supported"
+  | Array (ct, _maybe_integer) -> 
+     (* let (bt,constr) = bt_constr_of_ctype ct in *)
+     failwith "todo arrays"
+  | Function _ -> 
+     failwith "function pointers not supported"
+  | Pointer (_qualifiers, ctype) ->
+     failwith "todo: pointers"
+     (* BT.Loc (bt_constr_of_ctype ctype) *)
+  | Atomic ct ->              (* check *)
+     bt_constr_of_ctype ct
+  | Struct sym -> 
+     (Struct sym, None)
+  | Union sym ->
+     failwith "todo: union types"
+
+let integer_value_to_num iv = 
+  match (Impl_mem.eval_integer_value iv) with
+  | Some i -> i
+  | None -> failwith "integer_value_to_num: None"
+
+let infer_object_value name ov = 
+  match ov with
+  | M_OVinteger iv ->
+     let constr = V name %= Num (integer_value_to_num iv) in
+     R.make [(name, A BT.Int); (fresh (), C constr)]
+  | M_OVfloating iv ->
+     failwith "floats not supported"
+  | M_OVpointer p ->
+     Impl_mem.case_ptrval p
+       (fun cbt -> 
+         (* todo *)
+         (* let (bt,_constr2) = bt_constr_of_ctype cbt in *)
+         let constr = Null (V name) in
+         R.make [(name, A (BT.Loc));
+                 (fresh (), C constr)]
+       )
+       (fun sym -> 
+         failwith "function pointers not supported"
+       )
+       (fun _prov loc ->
+         let constr = V name %= Num loc in
+         R.make [(name, A (BT.Loc));
+                 (fresh (), C constr)]
+       )
+       (fun _ ->
+         failwith "unspecified pointer value"
+       )
+  | M_OVarray _ ->
+     failwith "todo: array"
+  | M_OVstruct (sym, fields) ->
+     failwith "todo: struct"
+  | M_OVunion _ -> 
+     failwith "todo: union types"
+
+let infer_loaded_value name env lv = 
+     failwith "todo object_value"
+
+let infer_value name env v = 
+  match v with
+  | M_Vobject ov ->
+     infer_object_value name ov
+  | M_Vloaded lv ->
+     infer_loaded_value name env lv
+  | M_Vunit ->
+     R.make [(name, A BT.Unit)]
+  | M_Vtrue ->
+     let constr = V name in
+     R.make [(name, A BT.Bool); (fresh (), C constr)]
+  | M_Vfalse -> 
+     let constr = Not (V name) in
+     R.make [(name, A BT.Bool); (fresh (), C constr)]
+  | M_Vctype ct ->
+     failwith "todo ctype"
+  | M_Vlist (cbt, tsyms) ->
+     let t = bt_of_core_base_type cbt in
+     let _ = List.map (fun sym -> ensure_type sym (lookup env sym) t) in
+     (* maybe record list length? *)
+     R.make [(name, A (BT.List t))]
+  | M_Vtuple tsyms ->
+     let syms = List.map of_tsymbol tsyms in
+     let ts = List.map (lookup env) syms in
+     R.make [(name, A (BT.Tuple ts))]
 
 
 let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) = 
   match pe with
   | M_PEsym sym ->
-     let b = lookup sym env in
+     let b = lookup env sym in
      let _ = ensure_akind sym b in
-     RT.make [(name, b)]
+     R.make [(name, b)]
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -571,19 +703,19 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
      let sym = of_tsymbol sym in
-     let b = lookup sym env in
+     let b = lookup env sym in
      let t = ensure_akind sym b in
      let () = ensure_type sym t BT.Bool in
      let constr = (V name) %= Not (V sym) in
-     RT.make [(name, A t); (name, C constr)]
+     R.make [(name, A t); (name, C constr)]
   | M_PEop (op,sym1,sym2) ->
      let sym1, sym2 = of_tsymbol sym1, of_tsymbol sym2 in
-     let b1, b2 = lookup sym1 env, lookup sym2 env in
+     let b1, b2 = lookup env sym1, lookup env sym2 in
      let t1, t2 = ensure_akind sym1 b1, ensure_akind sym2 b2 in
      let ((st1,st2),rt) = bt_of_binop op in
      let (),() = ensure_type sym1 t1 st1, ensure_type sym2 t2 st2 in
      let constr = V name %= (make_binop op (V sym1) (V sym2)) in
-     RT.make [(name, A rt); (fresh (), C constr)]
+     R.make [(name, A rt); (fresh (), C constr)]
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -603,7 +735,7 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
           | None -> fresh ()
         in
         let rt = infer_pexpr name2 env e1 in
-        infer_pexpr name (addl env (RT.extr rt)) e1
+        infer_pexpr name (addl env (R.extr rt)) e1
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
@@ -614,9 +746,9 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
        of_tsymbol sym3 
      in
      let b1, b2, b3 = 
-       lookup sym1 env, 
-       lookup sym2 env, 
-       lookup sym3 env 
+       lookup env sym1, 
+       lookup env sym2, 
+       lookup env sym3 
      in
      let t1, t2, t3 = 
        ensure_akind sym1 b1, 
@@ -629,7 +761,7 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
        (V sym1 %& (V name %= V sym2)) %| 
        ((Not (V sym1)) %& (V name %= V sym3)) 
      in
-     RT.make [(name, A t2); (fresh (), C constr)]
+     R.make [(name, A t2); (fresh (), C constr)]
   | M_PEis_scalar _ ->
      failwith "todo M_PEis_scalar"
   | M_PEis_integer _ ->
@@ -642,15 +774,49 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
      failwith "todo M_PEbmc_assume"
   | M_PEare_compatible _ ->
      failwith "todo M_PEare_compatible"
- 
+
+
+let check_expr env (M_Expr (_annots, e)) = 
+  match e with
+ | M_Epure _ -> 
+    failwith "epure"
+ | M_Ememop _ ->
+    failwith "ememop"
+ | M_Eaction _ ->
+    failwith "eaction"
+ | M_Ecase _ ->
+    failwith "ecase"
+ | M_Elet _ ->
+    failwith "elet"
+ | M_Eif _ ->
+    failwith "eif"
+ | M_Eskip -> 
+    failwith "eskip" 
+ | M_Eccall _ ->
+    failwith "eccall"
+ | M_Eproc _ ->
+    failwith "eproc"
+ | M_Ewseq _ ->
+    failwith "ewseq"
+ | M_Esseq _ ->
+    failwith "esseq"
+ | M_Ebound _ ->
+    failwith "ebound"
+ | M_Esave _ ->
+    failwith "esave"
+ | M_Erun _ ->
+    failwith "erun"
      
 
+
+let test_infer_expr () = 
+  failwith "not implemented"
 
 let pp_fun_map_decl f = 
   let pp = Pp_core.All.pp_funinfo_with_attributes f in
   print_string (Pp_utils.to_plain_string pp)
 
-(* (\* from https://ocaml.org/learn/tutorials/file_manipulation.html *\)
+(* (* from https://ocaml.org/learn/tutorials/file_manipulation.html *)
  * let write_file file string =
  *   let oc = open_out file in
  *   fprintf oc "%s\n" string;
@@ -670,5 +836,5 @@ let check (core_file : unit Core.typed_file) =
   print_core_file core_file "out1";
   print_core_file (mu_to_core__file mu_file) "out2";
   (* test_parse (); *)
-  (* test_value_infer (); *)
+  test_infer_expr ();
 
