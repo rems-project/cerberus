@@ -11,9 +11,15 @@ type int_type =
   | ItI32    of bool (* signed *)
   | ItI64    of bool (* signed *)
 
+type layout =
+  | LVoid
+  | LPtr
+  | LStruct of string * bool (* Union? *)
+  | LInt of int_type
+
 type op_type =
   | OpInt of int_type
-  | OpPtr
+  | OpPtr of layout
 
 type un_op =
   | NotBoolOp
@@ -29,11 +35,6 @@ type value =
   | Null
   | Void
   | Int of string * int_type
-
-type layout =
-  | LPtr
-  | LStruct of string * bool (* Union? *)
-  | LInt of int_type
 
 type expr =
   | Var       of string option * bool (* Global? *)

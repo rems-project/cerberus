@@ -55,7 +55,7 @@ let translate_int_type i =
 
 let translate_layout Ctype.(Ctype(_, c_ty)) =
   match c_ty with
-  | Void               -> not_implemented "translate_layout (Void)"
+  | Void               -> LVoid
   | Basic(Integer(i))  -> LInt (translate_int_type i)
   | Basic(Floating(_)) -> not_implemented "translate_layout (Basic float)"
   | Array(_,_)         -> not_implemented "translate_layout (Basic)"
@@ -137,7 +137,7 @@ let op_type_of_genTypeCategory ty =
   | GenLValueType(_,_,_) -> not_implemented "op_type_of_expr (L)"
   | GenRValueType(ty)    ->
   match ty with
-  | GenPointer(_,_)          -> OpPtr
+  | GenPointer(_,c_ty)       -> OpPtr(translate_layout c_ty)
   | GenVoid                  -> assert false
   | GenArray(_,_)            -> assert false
   | GenFunction(_,_,_,_)     -> assert false
@@ -152,6 +152,16 @@ let op_type_of_expr (AnnotatedExpression(ty, _, _, _)) =
 
 let op_type_of_ctype c_ty =
   op_type_of_genTypeCategory (GenTypes.(GenRValueType(inject_type c_ty)))
+
+let struct_data : ail_expr -> string * bool = fun e ->
+  let open GenTypes in
+  match gen_type_of_expr e with
+  | GenRValueType(GenPointer(_,Ctype(_,Struct(s))))
+  | GenLValueType(_,Ctype(_,Struct(s)),_)           -> (sym_to_str s, false)
+  | GenRValueType(GenPointer(_,Ctype(_,Union(s) )))
+  | GenLValueType(_,Ctype(_,Union(s) ),_)           ->(sym_to_str s, true )
+  | GenRValueType(_                               ) -> assert false
+  | GenLValueType(_,_                 ,_)           -> assert false
 
 let strip_expr (AnnotatedExpression(_,_,_,e)) = e
 
@@ -183,7 +193,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       let ty1 = op_type_of_expr e1 in
       let ty2 = op_type_of_expr e2 in
       let (e1, l1) = translate e1 in
-      let (e2, l2) = translate e2 in
+      let (e2, l2) = translate_expr false e2 in
       let op =
         match op with
         | Eq             -> EqOp
@@ -236,26 +246,15 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEstruct(sym,fs)           -> not_implemented "expr struct"
   | AilEunion(sym,id,eo)         -> not_implemented "expr union"
   | AilEcompound(q,c_ty,e)       -> not_implemented "expr compound"
-  | AilEmemberof(e,id)           (*-> not_implemented "expr memberof"*)
-  | AilEmemberofptr(e,id)        ->
-      let (struct_name, from_union) =
-        let open GenTypes in
-        match gen_type_of_expr e with
-        | GenRValueType(GenPointer(_, Ctype(_, Struct(sym)))) ->
-            (sym_to_str sym, false)
-        | GenRValueType(GenPointer(_, Ctype(_, Union(sym) ))) ->
-            (sym_to_str sym, true )
-        | GenRValueType(_                                   ) ->
-            assert false
-        | GenLValueType(_, Ctype(_, Struct(sym)), _)          ->
-            (sym_to_str sym, false)
-        | GenLValueType(_, Ctype(_, Union(sym) ), _)          ->
-            (sym_to_str sym, true )
-        | GenLValueType(_, _                    , _)          ->
-            assert false
-      in
+  | AilEmemberof(e,id)           ->
+      if not lval then assert false;
+      let (struct_name, from_union) = struct_data e in
       let (e, l) = translate e in
       (GetMember(e, struct_name, from_union, id_to_str id), l)
+  | AilEmemberofptr(e,id)        ->
+      let (struct_name, from_union) = struct_data e in
+      let (e, l) = translate e in
+      (GetMember(Deref(LPtr, e), struct_name, from_union, id_to_str id), l)
   | AilEbuiltin(b)               -> not_implemented "expr builtin"
   | AilEstr(s)                   -> not_implemented "expr str"
   | AilEconst(c)                 ->
@@ -296,10 +295,11 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEprint_type(e)            -> not_implemented "expr print_type"
   | AilEbmc_assume(e)            -> not_implemented "expr bmc_assume"
   | AilEreg_load(r)              -> not_implemented "expr reg_load"
+  | AilErvalue(e) when lval      -> translate e
   | AilErvalue(e)                ->
       let layout = translate_gen_type (gen_type_of_expr e) in
       let (e, l) = translate_expr true e in
-      ((if lval then Deref(layout,e) else Use(layout,e)), l)
+      (Use(layout, e), l)
   | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
   | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
 
@@ -552,6 +552,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let struct_deps =
         let fn acc (id, (_, layout)) =
           match layout with
+          | LVoid         -> acc
           | LPtr          -> acc
           | LStruct(id,_) -> id :: acc
           | LInt(_)       -> acc
