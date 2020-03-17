@@ -37,7 +37,6 @@ let list_sep : char -> 'a Earley.grammar -> 'a list Earley.grammar =
 type ident     = string
 type iris_term = string
 type coq_term  = string
-type layout    = coq_term
 
 (** Identifier token (regexp ["[A-Za-z_]+"]). *)
 let ident : ident Earley.grammar =
@@ -57,61 +56,69 @@ let iris_term : iris_term Earley.grammar =
 let coq_term : coq_term Earley.grammar =
   well_bracketed '{' '}'
 
-  (** Synonym of [coq_term]. *)
-let layout : layout Earley.grammar =
-  coq_term
-
 (** {3 Main grammars} *)
 
-type ptr_kind = Own | Shr | Frac of coq_term
+type coq_expr =
+  | Coq_ident of string
+  | Coq_all   of string
 
 type constr =
   | Constr_Iris  of string
   | Constr_exist of string * constr
   | Constr_own   of string * type_expr
-  | Constr_Coq   of string
+  | Constr_Coq   of coq_expr
+
+and ptr_kind = Own | Shr | Frac of type_expr
 
 and type_expr =
-  | Ty_refine of coq_term * type_expr
+  | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
   | Ty_opt1   of type_expr
   | Ty_opt2   of type_expr * type_expr
-  | Ty_uninit of layout
   | Ty_dots
   | Ty_exists of ident * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
   | Ty_direct of ident
+  | Ty_Coq    of coq_expr
 
 let type_void : type_expr = Ty_direct "void"
+
+let parser coq_expr =
+  | x:ident    -> Coq_ident(x)
+  | s:coq_term -> Coq_all(s)
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
   | "∃" x:ident "." c:constr                      -> Constr_exist(x,c)
   | x:ident "@" "&own<" ty:type_expr ">"          -> Constr_own(x,ty)
-  | s:coq_term                                    -> Constr_Coq(s)
+  | c:coq_expr                                    -> Constr_Coq(c)
 
 and parser type_expr =
-  | s:coq_term "@" ty:type_expr                   -> Ty_refine(s, ty)
+  | c:coq_expr ty:{"@" type_expr}?                ->
+      begin
+        match (c, ty) with
+        | (Coq_ident(x), None    ) -> Ty_direct(x)
+        | (_           , None    ) -> Ty_Coq(c)
+        | (_           , Some(ty)) -> Ty_refine(c,ty)
+      end
   | "&own<" ty:type_expr ">"                      -> Ty_ptr(Own, ty)
   | "&shr<" ty:type_expr ">"                      -> Ty_ptr(Shr, ty)
-  | "&frac<" s:coq_term "," ty:type_expr ">"      -> Ty_ptr(Shr, ty)
-  | "!uninit<" l:layout ">"                       -> Ty_uninit(l) 
+  | "&frac<" l:type_expr "," ty:type_expr ">"     -> Ty_ptr(Frac(l), ty)
   | "..."                                         -> Ty_dots
   | "∃" x:ident "." ty:type_expr                  -> Ty_exists(x,ty)
   | ty:type_expr "&" c:constr                     -> Ty_constr(ty,c)
   | id:ident "<" tys:(list_sep ',' type_expr) ">" -> Ty_params(id,tys)
-  | x:ident                                       -> Ty_direct(x)
 
 (** {3 Entry points} *)
 
 (** {4 Annotations on type definitions} *)
 
-let parser annot_parameter : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_parameter : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
-let parser annot_refine : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_refine : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
 let parser annot_ptr_type : (ident * type_expr) Earley.grammar =
   | id:ident ":" ty:type_expr
@@ -124,8 +131,8 @@ let parser annot_type : ident Earley.grammar =
 let parser annot_size : ident Earley.grammar =
   | id:ident
 
-let parser annot_exist : (ident * coq_term) Earley.grammar =
-  | id:ident ":" s:coq_term
+let parser annot_exist : (ident * coq_expr) Earley.grammar =
+  | id:ident ":" s:coq_expr
 
 let parser annot_constr : constr Earley.grammar =
   | c:constr
@@ -162,12 +169,12 @@ let parser annot_inv : constr Earley.grammar =
 (** {3 Parsing of attributes} *)
 
 type annot =
-  | Annot_parameters of (ident * coq_term) list
-  | Annot_refined_by of (ident * coq_term) list
+  | Annot_parameters of (ident * coq_expr) list
+  | Annot_refined_by of (ident * coq_expr) list
   | Annot_ptr_type   of (ident * type_expr)
   | Annot_type       of ident
   | Annot_size       of ident
-  | Annot_exist      of (ident * coq_term) list
+  | Annot_exist      of (ident * coq_expr) list
   | Annot_constraint of constr list
   | Annot_immovable
   | Annot_tunion
@@ -236,7 +243,7 @@ let parse_attr : Coq_ast.rc_attr -> annot = fun attr ->
 (** {3 High level parsing of attributes} *)
 
 type function_annot =
-  { fa_parameters : (ident * coq_term) list
+  { fa_parameters : (ident * coq_expr) list
   ; fa_args       : type_expr list
   ; fa_returns    : type_expr
   ; fa_requires   : constr list
