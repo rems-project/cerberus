@@ -73,7 +73,7 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
   match e with
-  | Var(None   ,g)                ->
+  | Var(None   ,_)                ->
       pp "\"_\""
   | Var(Some(x),g)                ->
       let x = if g then x else Printf.sprintf "\"%s\"" x in
@@ -214,7 +214,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     else
       sort_structs found (strs @ [str])
   in
-  let pp_struct_union ((_, {struct_is_union}) as s) =
+  let pp_struct_union ((_, {struct_is_union; _}) as s) =
     if struct_is_union then pp_union s else pp_struct s
   in
   List.iter pp_struct_union (sort_structs [] ast.structs);

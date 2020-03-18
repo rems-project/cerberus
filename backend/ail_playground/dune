@@ -1,0 +1,6 @@
+(executable
+ (name main)
+ (public_name ail_playground)
+ (flags (:standard -w -27))
+ (libraries cmdliner str unix earley.core
+  cerb_frontend cerb_backend mem_concrete util))

@@ -1,0 +1,9 @@
+(library
+ (name util)
+ (public_name cerberus.util)
+ (synopsis "Cerberus util library")
+ (modules :standard)
+ (wrapped false)
+ (libraries lem pprint yojson))
+
+; FIXME add binannot?

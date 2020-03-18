@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Global_ocaml
 
 module Mem = Naive_memory

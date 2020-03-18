@@ -1,0 +1,8 @@
+(include_subdirs unqualified)
+
+(executable
+ (name main)
+ (public_name cerberus-bmc)
+ (flags (:standard -w -6))
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_concrete util))

@@ -1,3 +1,5 @@
+open Cerb_frontend
+open Cerb_backend
 open Global_ocaml
 open Pipeline
 
@@ -138,7 +140,7 @@ let cerberus debug_level progress
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.foldlM (fun core_files file ->
+    Exception.foldlM0 (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
         return (core_file::core_files)) [] (core_libraries (not nolibc) link_lib_path link_core_obj @ files)
   in
@@ -170,7 +172,7 @@ let cerberus debug_level progress
         | None -> Filename.chop_extension first_file
       in
       if cpp_only then
-        Exception.foldlM (fun () file ->
+        Exception.foldlM0 (fun () file ->
             cpp (conf, io) file >>= fun processed_file ->
             print_file processed_file;
             return ()
@@ -364,6 +366,6 @@ let () =
                          fs_dump $ fs $
                          output_file $
                          files $ args) in
-  (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)

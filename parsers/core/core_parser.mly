@@ -1,4 +1,6 @@
 %{
+open Cerb_frontend
+
 open Lem_pervasives
 open Either
 open Global
@@ -1121,7 +1123,7 @@ let mk_file decls =
 %start <Core_parser_util.result>start
 %parameter <M : sig
                   val mode: Core_parser_util.mode
-                  val std: (Core_parser_util._sym, Symbol.sym) Pmap.map
+                  val std: (Core_parser_util._sym, Cerb_frontend.Symbol.sym) Pmap.map
                 end>
 
 %%

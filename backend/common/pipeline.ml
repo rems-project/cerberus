@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Global_ocaml
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
@@ -140,7 +141,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse file_content =
-    Cparser_driver.parse_from_string file_content >>= fun cabs_tunit ->
+    C_parser_driver.parse_from_string file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin

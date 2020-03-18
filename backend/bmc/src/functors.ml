@@ -54,7 +54,7 @@ let rec list_compare f xs ys =
 
 module Ord_list (X : Set.OrderedType) : Set.OrderedType with type t = X.t list = struct
   type t = X.t list
-  let rec compare (xs : t) (ys) =
+  let compare (xs : t) (ys) =
     list_compare X.compare xs ys
 end
 

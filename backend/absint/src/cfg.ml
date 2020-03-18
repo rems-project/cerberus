@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Core
 open Ctype
 
