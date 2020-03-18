@@ -14,12 +14,6 @@ module SymMap =
   Map.Make (struct type t = Symbol.sym 
                    let compare = Symbol.symbol_compare end)
 
-module IdMap = 
-  Map.Make (struct type t = Symbol.identifier 
-                   let compare 
-                         (Symbol.Identifier (_,i1)) 
-                         (Symbol.Identifier (_,i2)) = String.compare i1 i2 end)
-
 
 module Sym = struct
   include Symbol 
@@ -28,6 +22,8 @@ module Sym = struct
   let of_tsymbol (s : 'bty Mucore.tsymbol) = 
     let (TSym (_, _, sym)) = s in sym
   let compare = Symbol.symbol_compare
+
+  let name_of_id (Identifier (_, s)) = s
 
   module Names = struct
     module M = Map.Make(String)
@@ -207,20 +203,17 @@ module BT = struct
     | Bool
     | Int
     | Loc
-    (* | Loc of t *)
-    | Array of t
+    | Array
     | List of t
     | Tuple of t list
     | Struct of Sym.sym
-
 
   let rec pp = function
     | Unit -> "unit"
     | Bool -> "bool"
     | Int -> "int"
     | Loc -> "loc"
-    (* | Loc t -> sprintf "(loc %s)" (pp t) *)
-    | Array t -> sprintf "(array %s)" (pp t)
+    | Array -> "array"
     | List bt -> sprintf "(list %s)" (pp bt)
     | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (List.map pp bts))
     | Struct sym -> sprintf "(struct %s)" (Sym.pp sym)
@@ -231,8 +224,7 @@ module BT = struct
     | Sexp.Atom "bool" -> Bool
     | Sexp.Atom "int" -> Int
     | Sexp.Atom "loc" -> Loc
-    (* | Sexp.List [Sexp.Atom "loc"; bt] -> Loc (parse_sexp env bt) *)
-    | Sexp.List [Sexp.Atom "array"; bt] -> Array (parse_sexp env bt)
+    | Sexp.Atom "array" -> Array
     | Sexp.List [Sexp.Atom "list"; bt] -> List (parse_sexp env bt)
     | Sexp.List [Sexp.Atom "tuple"; Sexp.List bts] -> Tuple (List.map (parse_sexp env) bts)
     | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> Struct (Sym.parse env id)
@@ -364,11 +356,8 @@ module T = struct
     | t -> 
        parse_error "rturn type" t
          
-  type vbinding = Sym.sym * t
-  type vbindings = vbinding list
-
-  type fbinding = Sym.identifier * t
-  type fbindings = fbinding list
+  type binding = Sym.sym * t
+  type bindings = binding list
 
   type kind = 
     | Argument
@@ -407,8 +396,8 @@ module T = struct
 end
 
 module A = struct
-  type t = A of T.vbindings
-  let make (ts : T.vbindings) = A ts
+  type t = A of T.bindings
+  let make (ts : T.bindings) = A ts
   let extr (A ts) = ts
   let pp (A ts) = T.pp_list ts
   let parse_sexp env s = 
@@ -418,8 +407,8 @@ end
 
 
 module R = struct
-  type t = R of T.vbindings
-  let make (ts : T.vbindings) = R ts
+  type t = R of T.bindings
+  let make (ts : T.bindings) = R ts
   let extr (R ts) = ts
   let pp (R ts) = T.pp_list ts
   let parse_sexp env s = 
@@ -437,7 +426,7 @@ end
       
 
 type global_env = 
-  { struct_decls : T.fbindings SymMap.t 
+  { struct_decls : T.bindings SymMap.t 
   ; fun_decls : F.t SymMap.t
   }
 
@@ -462,11 +451,6 @@ let add_var env (sym, t) =
 
 let add_vars env bindings = 
   List.fold_left add_var env bindings
-
-
-let option_get = function
-  | Some a -> a
-  | None -> failwith "get None"
 
 
 let core_type_value ov = 
@@ -546,8 +530,8 @@ let bt_of_binop (op : Core.binop) : ((BT.t * BT.t) * BT.t) =
 let rec bt_of_core_object_type = function
   | OTy_integer -> BT.Int
   | OTy_floating -> failwith "floats not supported"
-  | OTy_pointer -> failwith "bt_of_core_object_type loc"
-  | OTy_array cbt -> Array (bt_of_core_object_type cbt)
+  | OTy_pointer -> BT.Loc
+  | OTy_array cbt -> BT.Array
   | OTy_struct sym -> Struct sym
   | OTy_union _sym -> failwith "todo: union types"
 
@@ -570,18 +554,18 @@ let make_int_type f t =
 
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
 (* todo: check *)
-let bt_constr_of_integerBaseType signed ibt = 
+let bt_and_constr_of_integerBaseType signed ibt = 
   let make = make_int_type in
   match signed, ibt with
   | true,  Ctype.Ichar    -> make "-127" "127"
-  | false, Ctype.Ichar    -> make "0" "255"
   | true,  Ctype.Short    -> make "-32767" "32767"
-  | false, Ctype.Short    -> make "0" "65535"
   | true,  Ctype.Int_     -> make "-32767" "32767"
-  | false, Ctype.Int_     -> make "0" "65535"
   | true,  Ctype.Long     -> make "-2147483647" "2147483647"
-  | false, Ctype.Long     -> make "0" "4294967295"
   | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
+  | false, Ctype.Ichar    -> make "0" "255"
+  | false, Ctype.Short    -> make "0" "65535"
+  | false, Ctype.Int_     -> make "0" "65535"
+  | false, Ctype.Long     -> make "0" "4294967295"
   | false, Ctype.LongLong -> make "0" "18446744073709551615"
   | _, Ctype.IntN_t n -> failwith "todo standard library types"
   | _, Ctype.Int_leastN_t n -> failwith "todo standard library types"
@@ -589,18 +573,17 @@ let bt_constr_of_integerBaseType signed ibt =
   | _, Ctype.Intmax_t -> failwith "todo standard library types"
   | _, Ctype.Intptr_t -> failwith "todo standard library types"
 
-
-let bt_constr_of_integerType it = 
+let bt_and_constr_of_integerType it = 
   match it with
   | Ctype.Char -> 
      failwith "todo char"
   | Ctype.Bool -> 
      (BT.Bool, None)
   | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_constr_of_integerBaseType true ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
      (bt, Some constr)
   | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_constr_of_integerBaseType false ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
      (bt, Some constr)
   | Ctype.Enum _sym -> 
      failwith "todo enum"
@@ -613,28 +596,37 @@ let bt_constr_of_integerType it =
   | Ctype.Ptrdiff_t -> 
      failwith "todo standard library types"
 
-let rec bt_constr_of_ctype (Ctype.Ctype (_annots, ct)) = 
+let rec bt_and_constr_of_ctype (Ctype.Ctype (_annots, ct)) = 
   match ct with
   | Void -> 
-     failwith "bt_constr_of_ctype void" 
+     (Unit, None)               (* check *)
   | Basic (Integer it) -> 
-     bt_constr_of_integerType it
+     bt_and_constr_of_integerType it
   | Basic (Floating _) -> 
      failwith "floats not supported"
   | Array (ct, _maybe_integer) -> 
-     (* let (bt,constr) = bt_constr_of_ctype ct in *)
-     failwith "todo arrays"
+     (Array, None)
   | Function _ -> 
      failwith "function pointers not supported"
   | Pointer (_qualifiers, ctype) ->
-     failwith "todo: pointers"
-     (* BT.Loc (bt_constr_of_ctype ctype) *)
+     (Loc, None)
   | Atomic ct ->              (* check *)
-     bt_constr_of_ctype ct
+     bt_and_constr_of_ctype ct
   | Struct sym -> 
      (Struct sym, None)
   | Union sym ->
      failwith "todo: union types"
+
+let binding_of_ctype ctype name = 
+  match bt_and_constr_of_ctype ctype with
+  | (bt, Some c) -> [(name, T.A bt); (fresh (), T.C (c name))]
+  | (bt, None) -> [(name, T.A bt)]
+
+let sym_or_fresh (msym : sym option) : sym = 
+  match msym with
+  | Some sym -> sym
+  | None -> fresh ()
+
 
 let integer_value_to_num iv = 
   match (Impl_mem.eval_integer_value iv) with
@@ -650,20 +642,16 @@ let infer_object_value name ov =
      failwith "floats not supported"
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
-       (fun cbt -> 
-         (* todo *)
-         (* let (bt,_constr2) = bt_constr_of_ctype cbt in *)
+       (fun _cbt -> 
          let constr = Null (V name) in
-         R.make [(name, A (BT.Loc));
-                 (fresh (), C constr)]
+         R.make [(name, A (BT.Loc)); (fresh (), C constr)]
        )
        (fun sym -> 
          failwith "function pointers not supported"
        )
        (fun _prov loc ->
          let constr = V name %= Num loc in
-         R.make [(name, A (BT.Loc));
-                 (fresh (), C constr)]
+         R.make [(name, A (BT.Loc)); (fresh (), C constr)]
        )
        (fun _ ->
          failwith "unspecified pointer value"
@@ -756,10 +744,7 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
      (* todo: check against cbt? *)
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
-        let name2 = match mname2 with
-          | Some name2 -> name2
-          | None -> fresh ()
-        in
+        let name2 = sym_or_fresh mname2 in
         let rt = infer_pexpr name2 env e1 in
         infer_pexpr name (add_vars env (R.extr rt)) e1
      | Pattern (_annot, CaseCtor _) ->
@@ -858,23 +843,11 @@ let check_functions env fns =
                              
 
 let record_funinfo sym (_loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
-  let make_arg_t (msym,ctype) =
-    let sym = match msym with
-      | None -> fresh ()
-      | Some sym -> sym
-    in
-    match bt_constr_of_ctype ctype with
-    | (t, None) -> [(sym, T.A t)]
-    | (t, Some c) -> [(sym, T.A t); (fresh (), T.C (c sym))]
-  in
+  let make_arg_t (msym,ctype) = binding_of_ctype ctype (sym_or_fresh msym) in
   if is_variadic then failwith "variadic functions not supported"
   else 
     let args_type = A.make (concatmap make_arg_t args) in
-    let ret_name = fresh () in
-    let ret_type = match bt_constr_of_ctype ret_ctype with
-      | (t, None) -> R.make [(ret_name, T.A t)]
-      | (t, Some c) -> R.make [(ret_name, T.A t); (fresh (), T.C (c ret_name))]
-    in
+    let ret_type = R.make (binding_of_ctype ret_ctype (fresh ()) )in
     SymMap.add sym (F.F (args_type,ret_type)) fun_decls
 
 let record_funinfo env funinfo = 
@@ -883,18 +856,14 @@ let record_funinfo env funinfo =
 
 
 let record_tagDef sym def struct_decls =
-  let make_struct_decl fields =
-    let make_field (id, (_attributes, _qualifier, ctype)) =
-      let (bt,_) = bt_constr_of_ctype ctype in
-      (id, T.A bt)
-    in
-    List.map make_field fields
+  let make_field (id, (_attributes, _qualifier, ctype)) =
+    binding_of_ctype ctype (fresh_pretty (name_of_id id))
   in
   match def with
   | Ctype.UnionDef _ -> 
      failwith "todo: union types"
   | Ctype.StructDef fields ->
-     SymMap.add sym (make_struct_decl fields) struct_decls
+     SymMap.add sym (concatmap make_field fields) struct_decls
 
 let record_tagDefs env tagDefs = 
   { env with struct_decls = Pmap.fold record_tagDef tagDefs env.struct_decls }
