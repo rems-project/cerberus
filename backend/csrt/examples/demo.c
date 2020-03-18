@@ -4,7 +4,6 @@ struct s {
   struct s2 *f3;
 };
 
-[[t("(2 + x)")]]
 void f(struct s *p) {
   p->f1 = 1;
 }

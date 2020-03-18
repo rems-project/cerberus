@@ -6,39 +6,49 @@ open Nat_big_num
 open Sexplib
 open Printf
 
-module Symbol = struct
-  type t = Symbol.sym
-  let fresh = Symbol.fresh
-  let fresh_pretty = Symbol.fresh_pretty
+let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
+  List.concat (List.map f xs)
+
+
+module SymMap = 
+  Map.Make (struct type t = Symbol.sym 
+                   let compare = Symbol.symbol_compare end)
+
+module IdMap = 
+  Map.Make (struct type t = Symbol.identifier 
+                   let compare 
+                         (Symbol.Identifier (_,i1)) 
+                         (Symbol.Identifier (_,i2)) = String.compare i1 i2 end)
+
+
+module Sym = struct
+  include Symbol 
+  type id = Symbol.identifier
   let pp = Pp_symbol.to_string_pretty
   let of_tsymbol (s : 'bty Mucore.tsymbol) = 
     let (TSym (_, _, sym)) = s in sym
   let compare = Symbol.symbol_compare
-end
 
-module Sym = struct
-  include Symbol
-  module Env = struct
-    module Map = Map.Make(String)
-    type t = Symbol.t Map.t
-    let empty = Map.empty
-    let find_opt = Map.find_opt
-    let add = Map.add
+  module Names = struct
+    module M = Map.Make(String)
+    type t = Symbol.sym M.t
+    let empty = M.empty
+    let find_opt = M.find_opt
+    let add = M.add
   end
-  let parse (env : Env.t) name = 
-    match Env.find_opt name env with
+
+  let parse (env : Names.t) name = 
+    match Names.find_opt name env with
     | None -> failwith (sprintf "unbound variable %s" name)
     | Some sym -> sym
+
 end
+
 
 
 
 
 type num = Nat_big_num.num
-type loc = num
-
-let pp_num = string_of_int
-let parse_num = int_of_string
 
 let parse_error (t : string) (sx : Sexp.t) = 
   let err = sprintf "unexpected %s: %s" t (Sexp.to_string sx) in
@@ -76,7 +86,7 @@ module IT = struct
 
     | List of t list
 
-    | V of Sym.t
+    | V of Sym.sym
 
   let (%+) t1 t2 = Add (t1,t2)
   let (%-) t1 t2 = Sub (t1,t2)
@@ -126,7 +136,7 @@ module IT = struct
 
 
 
-  let rec parse_sexp (env : Sym.Env.t) sx = 
+  let rec parse_sexp (env : Sym.Names.t) sx = 
     match sx with
 
     | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
@@ -201,7 +211,7 @@ module BT = struct
     | Array of t
     | List of t
     | Tuple of t list
-    | Struct of Sym.t
+    | Struct of Sym.sym
 
 
   let rec pp = function
@@ -215,7 +225,7 @@ module BT = struct
     | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (List.map pp bts))
     | Struct sym -> sprintf "(struct %s)" (Sym.pp sym)
   
-  let rec parse_sexp (env : Sym.Env.t) sx = 
+  let rec parse_sexp (env : Sym.Names.t) sx = 
     match sx with
     | Sexp.Atom "unit" -> Unit
     | Sexp.Atom "bool" -> Bool
@@ -261,7 +271,7 @@ module RE = struct
          (IT.pp it2)
 
   
-  let rec parse_sexp (env : Sym.Env.t) sx = 
+  let rec parse_sexp (env : Sym.Names.t) sx = 
     let open Sexp in
     match sx with 
     | Sexp.List [Sexp.Atom "block";it1;it2] -> 
@@ -300,7 +310,7 @@ module LS = struct
     | Base bt -> 
          BT.pp bt
   
-  let rec parse_sexp (env : Sym.Env.t) sx =
+  let rec parse_sexp (env : Sym.Names.t) sx =
     match sx with
     | Sexp.List [Sexp.Atom "list"; a] ->
        List (BT.parse_sexp env a)
@@ -332,30 +342,33 @@ module T = struct
     | (id, C lc) -> 
        sprintf "(Constraint %s : %s)" (Sym.pp id) (IT.pp lc)
 
-  let parse_sexp (env : Sym.Env.t) s = 
+  let parse_sexp (env : Sym.Names.t) s = 
     let open Sexp in
     match s with
     | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
        let sym = Sym.fresh_pretty id in
-       let env = Sym.Env.add id sym env in
+       let env = Sym.Names.add id sym env in
        ((sym, A (BT.parse_sexp env t)), env)
     | Sexp.List [Sexp.Atom "Logical"; Sexp.Atom id; Sexp.Atom ":"; ls] ->
        let sym = Sym.fresh_pretty id in
-       let env = Sym.Env.add id sym env in
+       let env = Sym.Names.add id sym env in
        ((sym, L (LS.parse_sexp env ls)), env)
     | Sexp.List [Sexp.Atom "Resource"; Sexp.Atom id; Sexp.Atom ":"; re] ->
        let sym = Sym.fresh_pretty id in
-       let env = Sym.Env.add id sym env in
+       let env = Sym.Names.add id sym env in
        ((sym, R (RE.parse_sexp env re)), env)
     | Sexp.List [Sexp.Atom "Constraint"; Sexp.Atom id; Sexp.Atom ":"; lc] ->
        let sym = Sym.fresh_pretty id in
-       let env = Sym.Env.add id sym env in
+       let env = Sym.Names.add id sym env in
        ((sym, C (IT.parse_sexp env lc)), env)
     | t -> 
        parse_error "rturn type" t
          
-  type binding = Sym.t * t
-  type bindings = binding list
+  type vbinding = Sym.sym * t
+  type vbindings = vbinding list
+
+  type fbinding = Sym.identifier * t
+  type fbindings = fbinding list
 
   type kind = 
     | Argument
@@ -363,7 +376,7 @@ module T = struct
     | Resource
     | Constraint
 
-  let kind_of_binding = function
+  let kind_of_t = function
     | A _ -> Argument
     | L _ -> Logical
     | R _ -> Resource
@@ -379,8 +392,8 @@ module T = struct
   let pp_list ts = 
     String.concat " , " (List.map pp ts)
 
-  let parse_sexp_list fstr (env : Sym.Env.t) s = 
-    let rec aux (env : Sym.Env.t) acc ts = 
+  let parse_sexp_list fstr (env : Sym.Names.t) s = 
+    let rec aux (env : Sym.Names.t) acc ts = 
       match ts with
       | [] -> (List.rev acc, env)
       | t :: ts ->
@@ -393,9 +406,20 @@ module T = struct
          
 end
 
+module A = struct
+  type t = A of T.vbindings
+  let make (ts : T.vbindings) = A ts
+  let extr (A ts) = ts
+  let pp (A ts) = T.pp_list ts
+  let parse_sexp env s = 
+    let bs, env = T.parse_sexp_list "argument type" env s in
+    (make bs, env)
+end
+
+
 module R = struct
-  type t = R of T.bindings
-  let make (ts : T.bindings) = R ts
+  type t = R of T.vbindings
+  let make (ts : T.vbindings) = R ts
   let extr (R ts) = ts
   let pp (R ts) = T.pp_list ts
   let parse_sexp env s = 
@@ -403,39 +427,41 @@ module R = struct
     (make bs, env)
 end
 
-module A = struct
-  type t = A of T.bindings
-  let make (ts : T.bindings) = A ts
-  let extr (A ts) = ts
-  let pp (A ts) = T.pp_list ts
-  let parse_sexp env s = 
-    let bs, env = T.parse_sexp_list "function type" env s in
-    (make bs, env)
-end
-
 module F = struct
 
-  type t = F of R.t * A.t
+  type t = F of A.t * R.t
 
 end
   
 
-module SymMap = Map.Make(Sym)
-
-let addl = List.fold_left (fun m (k,v) -> SymMap.add k v m)
       
 
+type global_env = 
+  { struct_decls : T.fbindings SymMap.t 
+  ; fun_decls : F.t SymMap.t
+  }
+
+let empty_global = 
+  { struct_decls = SymMap.empty
+  ; fun_decls = SymMap.empty
+  }
+
 type env = 
-  { vars : T.binding SymMap.t
-  ; struct_decls : T.bindings SymMap.t
+  { vars : T.t SymMap.t 
+  ; global : global_env
   }
 
 let empty_env = 
   { vars = SymMap.empty
-  ; struct_decls = SymMap.empty
+  ; global = empty_global
   }
 
 
+let add_var env (sym, t) = 
+  { env with vars = SymMap.add sym t env.vars }
+
+let add_vars env bindings = 
+  List.fold_left add_var env bindings
 
 
 let option_get = function
@@ -456,8 +482,8 @@ let unbound sym =
   let err = sprintf "unbound variable %s" (Sym.pp sym) in
   failwith err
 
-let lookup env sym = 
-  match SymMap.find_opt sym env with
+let lookup_var (env: env) (sym: Sym.sym) : T.t = 
+  match SymMap.find_opt sym env.vars with
   | None -> unbound sym
   | Some t -> t
 
@@ -474,8 +500,10 @@ let ensure_type sym has should_be =
 let ensure_akind sym kind = 
   match kind with 
   | T.A bt -> bt
-  | b -> incorrect_kind sym (T.kind_of_binding b) T.Argument
+  | b -> incorrect_kind sym (T.kind_of_t b) T.Argument
 
+let lookup_avar env sym =
+  ensure_akind sym (lookup_var env sym)
 
 
 let make_binop op (v1 : IT.t) (v2 : IT.t) =
@@ -655,7 +683,7 @@ let infer_value name env v =
   | M_Vobject ov ->
      infer_object_value name ov
   | M_Vloaded lv ->
-     infer_loaded_value name env lv
+     infer_loaded_value name env.vars lv
   | M_Vunit ->
      R.make [(name, A BT.Unit)]
   | M_Vtrue ->
@@ -668,19 +696,19 @@ let infer_value name env v =
      failwith "todo ctype"
   | M_Vlist (cbt, tsyms) ->
      let t = bt_of_core_base_type cbt in
-     let _ = List.map (fun sym -> ensure_type sym (lookup env sym) t) in
+     let _ = List.map (fun sym -> ensure_type sym (lookup_avar env sym) t) in
      (* maybe record list length? *)
      R.make [(name, A (BT.List t))]
   | M_Vtuple tsyms ->
      let syms = List.map of_tsymbol tsyms in
-     let ts = List.map (lookup env) syms in
+     let ts = List.map (lookup_avar env) syms in
      R.make [(name, A (BT.Tuple ts))]
 
 
 let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) = 
   match pe with
   | M_PEsym sym ->
-     let b = lookup env sym in
+     let b = lookup_var env sym in
      let _ = ensure_akind sym b in
      R.make [(name, b)]
   | M_PEimpl _ ->
@@ -703,15 +731,13 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
      let sym = of_tsymbol sym in
-     let b = lookup env sym in
-     let t = ensure_akind sym b in
+     let t = lookup_avar env sym in
      let () = ensure_type sym t BT.Bool in
      let constr = (V name) %= Not (V sym) in
      R.make [(name, A t); (name, C constr)]
   | M_PEop (op,sym1,sym2) ->
      let sym1, sym2 = of_tsymbol sym1, of_tsymbol sym2 in
-     let b1, b2 = lookup env sym1, lookup env sym2 in
-     let t1, t2 = ensure_akind sym1 b1, ensure_akind sym2 b2 in
+     let t1, t2 = lookup_avar env sym1, lookup_avar env sym2 in
      let ((st1,st2),rt) = bt_of_binop op in
      let (),() = ensure_type sym1 t1 st1, ensure_type sym2 t2 st2 in
      let constr = V name %= (make_binop op (V sym1) (V sym2)) in
@@ -735,7 +761,7 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
           | None -> fresh ()
         in
         let rt = infer_pexpr name2 env e1 in
-        infer_pexpr name (addl env (R.extr rt)) e1
+        infer_pexpr name (add_vars env (R.extr rt)) e1
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
@@ -745,15 +771,10 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
        of_tsymbol sym2, 
        of_tsymbol sym3 
      in
-     let b1, b2, b3 = 
-       lookup env sym1, 
-       lookup env sym2, 
-       lookup env sym3 
-     in
      let t1, t2, t3 = 
-       ensure_akind sym1 b1, 
-       ensure_akind sym2 b2, 
-       ensure_akind sym3 b3 
+       lookup_avar env sym1, 
+       lookup_avar env sym2, 
+       lookup_avar env sym3 
      in
      let () = ensure_type sym1 t1 BT.Bool in
      let () = ensure_type sym3 t3 t2 in
@@ -776,7 +797,7 @@ let rec infer_pexpr name env (M_Pexpr (_annots, _bty, pe)) =
      failwith "todo M_PEare_compatible"
 
 
-let check_expr env (M_Expr (_annots, e)) = 
+let check_expr fname env (M_Expr (_annots, e)) : unit = 
   match e with
  | M_Epure _ -> 
     failwith "epure"
@@ -812,15 +833,81 @@ let check_expr env (M_Expr (_annots, e)) =
 let test_infer_expr () = 
   failwith "not implemented"
 
+
+let check_pure_function_body env name args body = 
+  ()
+
+let check_function_body env name args body = 
+  let env = env in
+  check_expr name env body
+
+
+let check_function env name fn = 
+  match fn with
+  | M_Fun (_bt, args, body) ->
+     check_pure_function_body env name args body
+  | M_Proc (_loc, _bt, args, body) ->
+     check_function_body env name args body
+  | M_ProcDecl _
+  | M_BuiltinDecl _ -> ()
+
+
+let check_functions env fns =
+  Pmap.iter (check_function env) fns
+
+                             
+
+let record_funinfo sym (_loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
+  let make_arg_t (msym,ctype) =
+    let sym = match msym with
+      | None -> fresh ()
+      | Some sym -> sym
+    in
+    match bt_constr_of_ctype ctype with
+    | (t, None) -> [(sym, T.A t)]
+    | (t, Some c) -> [(sym, T.A t); (fresh (), T.C (c sym))]
+  in
+  if is_variadic then failwith "variadic functions not supported"
+  else 
+    let args_type = A.make (concatmap make_arg_t args) in
+    let ret_name = fresh () in
+    let ret_type = match bt_constr_of_ctype ret_ctype with
+      | (t, None) -> R.make [(ret_name, T.A t)]
+      | (t, Some c) -> R.make [(ret_name, T.A t); (fresh (), T.C (c ret_name))]
+    in
+    SymMap.add sym (F.F (args_type,ret_type)) fun_decls
+
+let record_funinfo env funinfo = 
+  { env with fun_decls = Pmap.fold record_funinfo funinfo env.fun_decls }
+
+
+
+let record_tagDef sym def struct_decls =
+  let make_struct_decl fields =
+    let make_field (id, (_attributes, _qualifier, ctype)) =
+      let (bt,_) = bt_constr_of_ctype ctype in
+      (id, T.A bt)
+    in
+    List.map make_field fields
+  in
+  match def with
+  | Ctype.UnionDef _ -> 
+     failwith "todo: union types"
+  | Ctype.StructDef fields ->
+     SymMap.add sym (make_struct_decl fields) struct_decls
+
+let record_tagDefs env tagDefs = 
+  { env with struct_decls = Pmap.fold record_tagDef tagDefs env.struct_decls }
+
+
+
+
+
+
+
 let pp_fun_map_decl f = 
   let pp = Pp_core.All.pp_funinfo_with_attributes f in
   print_string (Pp_utils.to_plain_string pp)
-
-(* (* from https://ocaml.org/learn/tutorials/file_manipulation.html *)
- * let write_file file string =
- *   let oc = open_out file in
- *   fprintf oc "%s\n" string;
- *   close_out oc *)
 
 
 let print_core_file core_file filename = 
@@ -828,13 +915,18 @@ let print_core_file core_file filename =
   Pipeline.run_pp (Some (filename,"core")) pp
   (* write_file filename (Pp_utils.to_plain_pretty_string pp) *)
 
-let check (core_file : unit Core.typed_file) =
+let init core_file mu_file = 
   Colour.do_colour := false;
-  let mu_file = Core_anormalise.normalise_file core_file in
   Tags.set_tagDefs core_file.tagDefs;
   pp_fun_map_decl core_file.funinfo;
   print_core_file core_file "out1";
-  print_core_file (mu_to_core__file mu_file) "out2";
-  (* test_parse (); *)
-  test_infer_expr ();
+  print_core_file (mu_to_core__file mu_file) "out2"
+  
 
+let check (core_file : unit Core.typed_file) =
+  let mu_file = Core_anormalise.normalise_file core_file in
+  let () = init core_file mu_file in
+  let env = empty_global in
+  let env = record_tagDefs env mu_file.mu_tagDefs in
+  let env = record_funinfo env mu_file.mu_funinfo in
+  check_functions env mu_file.mu_funs
