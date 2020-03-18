@@ -1,4 +1,5 @@
 {
+open Cerb_frontend
 
 exception Error
 

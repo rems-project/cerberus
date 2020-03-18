@@ -1,0 +1,20 @@
+(executable
+ (name main)
+ (public_name cerberus)
+ (flags (:standard -w -6))
+ (modules main)
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_concrete util))
+
+(executable
+ (name main_symbolic)
+ (public_name cerberus-symbolic)
+ (flags (:standard -w -6))
+ (modules main_symbolic)
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_symbolic util))
+
+(rule
+ (target main_symbolic.ml)
+ (deps main.ml)
+ (action (copy main.ml main_symbolic.ml)))

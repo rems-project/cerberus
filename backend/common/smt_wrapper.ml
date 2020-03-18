@@ -1,5 +1,6 @@
 (* TODO: for now use Z3 via the command line ... *)
 
+open Cerb_frontend
 open Symbol
 open Symbolic
 

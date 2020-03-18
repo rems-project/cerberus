@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Core_parser_util
 
 let genparse mode std filename =

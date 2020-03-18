@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 (* TODO: move some of that out, and share with BMC *)
 module Ord_pair (X : Set.OrderedType) (Y : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t = struct
     type t = X.t * Y.t

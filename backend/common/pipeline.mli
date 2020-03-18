@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 type language =
   | Cabs | Ail | Core
 

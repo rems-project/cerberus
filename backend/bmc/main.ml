@@ -1,3 +1,5 @@
+open Cerb_frontend
+open Cerb_backend
 open Global_ocaml
 open Pipeline
 
@@ -548,6 +550,6 @@ let () =
                          ocaml $ ocaml_corestd $
                          output_file $
                          files $ args) in
-  (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)

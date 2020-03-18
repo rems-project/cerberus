@@ -1,164 +1,223 @@
-include Makefile.common
+# Checking for required tools.
+ifeq (,$(shell which dune 2> /dev/null))
+$(error "Compilation requires [dune].")
+endif
+ifeq (,$(shell which lem 2> /dev/null))
+$(error "Compilation requires [lem].")
+endif
 
-.PHONY: all default sibylfs util concrete symbolic clean-non-mem clean clear cerberus cerberus-concrete cerberus-bmc cerberus-ocaml ocaml bmc cerberus-symbolic web ui cerberus-absint absint
+# Trick to avoid printing the commands.
+# To enable the printing of commands, use [make Q= ...],
+Q = @
 
-cerberus: cerberus-concrete libc
+.PHONY: normal
+normal: cerberus-concrete libc
 
+.PHONY: all
 all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web
 
-sibylfs:
-	@make -C sibylfs
-
+.PHONY: util
 util:
-	@make -C util
+	@echo "[DUNE] library [$@]"
+	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
 
-concrete:
-	@make -C memory/concrete
+.PHONY: sibylfs
+sibylfs:
+	@echo "[DUNE] library [$@]"
+	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
 
-symbolic:
-	@make -C memory/symbolic
-libc:
-	@make -C runtime/libc
+.PHONY: cerberus-concrete
+cerberus-concrete: ocaml-src
+	@echo "[DUNE] cerberus (concrete)"
+	$(Q)dune build _build/default/backend/driver/main.exe
 
-_lib:
-	@mkdir _lib
+.PHONY: cerberus-symbolic
+cerberus-symbolic: ocaml-src
+	@echo "[DUNE] cerberus-symbolic"
+	$(Q)dune build _build/default/backend/driver/main_symbolic.exe
 
-sibylfs/_build/sibylfs.cmxa: sibylfs
-
-_lib/sibylfs/sibylfs.cmxa: _lib sibylfs/_build/sibylfs.cmxa
-	@echo $(BOLD)INSTALLING SybilFS in ./_lib$(RESET)
-	@mkdir -p _lib/sibylfs
-	@cp sibylfs/META _lib/sibylfs/
-	@cp sibylfs/_build/sibylfs.a sibylfs/_build/sibylfs.cma sibylfs/_build/sibylfs.cmxa _lib/sibylfs/
-	@cp sibylfs/_build/generated/*.cmi _lib/sibylfs/
-	@cp sibylfs/_build/generated/*.cmx _lib/sibylfs/
-
-util/_build/src/util.cmxa: util
-
-_lib/util/util.cmxa: _lib util/_build/src/util.cmxa
-	@echo $(BOLD)INSTALLING Util in ./_lib$(RESET)
-	@mkdir -p _lib/util
-	@cp util/META _lib/util/
-	@cp util/_build/src/util.a util/_build/src/util.cma util/_build/src/util.cmxa _lib/util/
-	@cp util/_build/src/*.cmi _lib/util/
-	@cp util/_build/src/*.cmx _lib/util/
-
-memory/concrete/_build/src/concrete.cmxa: concrete
-
-_lib/concrete/concrete.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memory/concrete/_build/src/concrete.cmxa
-	@echo $(BOLD)INSTALLING Concrete Memory Model in ./_lib$(RESET)
-	@mkdir -p _lib/concrete
-	@cp memory/concrete/META _lib/concrete/
-	@cp memory/concrete/_build/src/concrete.a memory/concrete/_build/src/concrete.cma memory/concrete/_build/src/concrete.cmxa _lib/concrete
-	@cp memory/concrete/_build/src/*.cmi _lib/concrete
-	@cp memory/concrete/_build/src/*.cmx _lib/concrete
-	@cp memory/concrete/_build/ocaml_generated/*.cmi _lib/concrete
-	@cp memory/concrete/_build/ocaml_generated/*.cmx _lib/concrete
-	@cp memory/concrete/_build/frontend/pprinters/*.cmi _lib/concrete
-	@cp memory/concrete/_build/frontend/pprinters/*.cmx _lib/concrete
-	@cp memory/concrete/_build/frontend/common/*.cmi _lib/concrete
-	@cp memory/concrete/_build/frontend/common/*.cmx _lib/concrete
-
-memory/symbolic/_build/src/symbolic.cmxa: symbolic
-
-_lib/symbolic/symbolic.cmxa: _lib/util/util.cmxa _lib/sibylfs/sibylfs.cmxa memory/symbolic/_build/src/symbolic.cmxa
-	@echo $(BOLD)INSTALLING Symbolic Memory Model in ./_lib$(RESET)
-	@mkdir -p _lib/symbolic
-	@cp memory/symbolic/META _lib/symbolic/
-	@cp memory/symbolic/_build/src/symbolic.a memory/symbolic/_build/src/symbolic.cma memory/symbolic/_build/src/symbolic.cmxa _lib/symbolic
-	@cp memory/symbolic/_build/src/*.cmi _lib/symbolic
-	@cp memory/symbolic/_build/src/*.cmx _lib/symbolic
-	@cp memory/symbolic/_build/ocaml_generated/*.cmi _lib/symbolic
-	@cp memory/symbolic/_build/ocaml_generated/*.cmx _lib/symbolic
-	@cp memory/symbolic/_build/frontend/pprinters/*.cmi _lib/symbolic
-	@cp memory/symbolic/_build/frontend/pprinters/*.cmx _lib/symbolic
-	@cp memory/symbolic/_build/frontend/common/*.cmi _lib/symbolic
-	@cp memory/symbolic/_build/frontend/common/*.cmx _lib/symbolic
-
-cerberus-concrete: _lib/concrete/concrete.cmxa
-	@make -C backend/driver
-	@cp backend/driver/cerberus cerberus
-
-cerberus-symbolic: _lib/symbolic/symbolic.cmxa
-	@make -C backend/symbolic
-	@cp backend/symbolic/cerberus-symbolic cerberus-symbolic
-
-cerberus-bmc: _lib/concrete/concrete.cmxa
-	@make -C backend/bmc
-	@cp backend/bmc/cerberus-bmc cerberus-bmc
-
+.PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc
+cerberus-bmc: ocaml-src
+	@echo "[DUNE] cerberus-bmc"
+	$(Q)dune build _build/default/backend/bmc/main.exe
+	# FIXME does not compile
 
-ail_playground: _lib/concrete/concrete.cmxa
-	@make -C backend/ail_playground
-	@cp backend/driver/ail_playground ail_playground
+LIBC_TARGETS = runtime/libc/libc.co runtime/libc/libm.co
 
-ail_rustic: _lib/concrete/concrete.cmxa
-	@make -C backend/ail_rustic
-	@cp backend/ail_rustic/main_.native ail_rustic
+.PHONY: libc
+libc: $(LIBC_TARGETS)
 
+$(LIBC_TARGETS): export CERB_PATH := $(shell pwd)
 
-cerberus-absint: _lib/concrete/concrete.cmxa
-	@make -C backend/absint
-	@cp backend/absint/cerberus-absint cerberus-absint
+LIBC_SRC = runtime/libc/src/ctype.c runtime/libc/src/stdio.c \
+           runtime/libc/src/stdlib.c runtime/libc/src/string.c \
+           runtime/libc/src/time.c runtime/libc/src/utime.c \
+           runtime/libc/src/unistd.c runtime/libc/src/stat.c \
+           runtime/libc/src/uio.c runtime/libc/src/internal.c \
+           runtime/libc/src/vfscanf.c runtime/libc/src/signal.c
+LIBM_SRC = runtime/libc/src/math.c
 
-absint: cerberus-absint
+runtime/libc/libc.co: cerberus-concrete $(LIBC_SRC)
+	@echo "[CERB] $@"
+	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
+    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
+    $(LIBC_SRC)
 
-cerberus-ocaml: _lib/concrete/concrete.cmxa
-	@make -C backend/ocaml
-	@cp backend/ocaml/driver/cerberus-ocaml cerberus-ocaml
-	@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
-	@mkdir -p _lib/rt-ocaml
-	@cp backend/ocaml/runtime/META _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/rt_ocaml.a backend/ocaml/runtime/_build/rt_ocaml.cma backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
-	@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
+runtime/libc/libm.co: cerberus-concrete $(LIBM_SRC)
+	@echo "[CERB] $@"
+	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
+    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
+    $(LIBM_SRC)
 
+.PHONY: ail_playground
+ail_playground: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/$@/main.exe
+
+.PHONY: ail_to_coq
+ail_to_coq: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/$@/main.exe
+
+.PHONY: rustic
+rustic: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/$@/main.exe
+
+.PHONY: absint
+absint: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/$@/main.exe
+
+.PHONY: csrt
+csrt: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/$@/main.exe
+
+.PHONY: cerberus-ocaml ocaml
 ocaml: cerberus-ocaml
+cerberus-ocaml: ocaml-src
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
+	# FIXME does not compile
+	# FIXME should generate rt-ocaml as a library
+	#@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
+	#@mkdir -p _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/META _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/_build/rt_ocaml.a \
+		   backend/ocaml/runtime/_build/rt_ocaml.cma \
+			 backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
+	#@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
 
+.PHONY: cbuild
 cbuild: tools/cbuild.ml
-	@echo $(BOLD)BUILDING cbuild$(RESET)
-	@ocamlfind ocamlopt -o cbuild tools/cbuild.ml -linkpkg -package cmdliner,str,unix
-	@rm -rf tools/cbuild.cmx tools/cbuild.cmi tools/cbuild.o
+	@echo "[DUNE] $@"
+	$(Q)dune build _build/default/tools/cbuild.exe
 
-tmp:
-	@mkdir -p tmp
+tmp/:
+	@echo "[MKDIR] tmp"
+	$(Q)mkdir -p tmp
 
-config.json:
-	@cp $(CERB_PATH)/tools/config.json $(CERB_PATH)
+config.json: tools/config.json
+	@echo "[CP] $< → $@"
+	@cp $< $@
 
-web: _lib/concrete/concrete.cmxa _lib/symbolic/symbolic.cmxa tmp config.json
-	@make -C backend/web
-	@cp -L backend/web/concrete/_build/src/instance.native webcerb.concrete
-	@cp -L backend/web/symbolic/_build/src/instance.native webcerb.symbolic
-	@cp -L backend/web/server/_build/web.native cerberus-webserver
+.PHONY: web
+web: ocaml-src config.json tmp/
+	$(error "Not yet implemented.") # TODO
+#	@make -C backend/web
+#	@cp -L backend/web/concrete/_build/src/instance.native webcerb.concrete
+#	@cp -L backend/web/symbolic/_build/src/instance.native webcerb.symbolic
+#	@cp -L backend/web/server/_build/web.native cerberus-webserver
 
+.PHONY: ui
 ui:
-	make -C public
+	$(error "Not yet implemented.") # TODO
+#	make -C public
 
-clean-non-mem:
-	@make -C backend/driver clean
-	@make -C backend/bmc clean
-	@make -C backend/symbolic clean
-	@make -C backend/web clean
-	@make -C backend/ocaml clean
-	@make -C backend/absint clean
-	@make -C runtime/libc clean
+#### LEM sources
+LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
+                    dlist.lem debug.lem enum.lem state.lem symbol.lem \
+                    exception.lem product.lem float.lem any.lem
+LEM_CABS          = cabs.lem undefined.lem constraint.lem ctype.lem
+LEM_AIL           = typingError.lem errorMonad.lem ailSyntax.lem genTypes.lem
+LEM_CORE_CTYPE    = core_ctype_aux.lem
+LEM_CORE          = core.lem mucore.lem errors.lem core_aux.lem \
+                    core_anormalise.lem core_linking.lem
+LEM_CORE_TYPING   = core_typing.lem core_typing_aux.lem core_typing_effect.lem
+LEM_UTILS         = boot.lem decode.lem exception_undefined.lem multiset.lem \
+                    state_exception.lem state_exception_undefined.lem \
+                    std.lem monadic_parsing.lem fs.lem trace_event.lem
+LEM_AIL_TYPING    = range.lem integerImpl.lem ailTypesAux.lem \
+                    ailSyntaxAux.lem ailWf.lem ailTyping.lem genTypesAux.lem \
+                    genTyping.lem
+LEM_CABS_TO_AIL   = cabs_to_ail_aux.lem scope_table.lem \
+                    cabs_to_ail_effect.lem cabs_to_ail.lem wipFrontend.lem
+LEM_CORE_TO_CORE  = core_sequentialise.lem core_indet.lem core_rewrite.lem \
+                    core_unstruct.lem
+LEM_CORE_DYNAMICS = core_run_aux.lem core_eval.lem core_run.lem driver.lem
+LEM_ELABORATION   = translation_effect.lem translation_aux.lem translation.lem 
+LEM_DEFACTO       = mem_common.lem defacto_memory_types.lem \
+                    defacto_memory_aux.lem defacto_memory.lem mem.lem \
+                    mem_aux.lem
+LEM_CONC_INTERF   = cmm_aux.lem
+LEM_CONC          = cmm_csem.lem cmm_op.lem linux.lem
 
+LEM_SRC_AUX       = $(LEM_PRELUDE) \
+                    $(LEM_CABS) \
+                    $(addprefix ail/, $(LEM_AIL)) \
+                    $(LEM_CORE_CTYPE) \
+                    builtins.lem output.lem pp.lem implementation.lem \
+                    $(LEM_DEFACTO) \
+                    $(LEM_UTILS) \
+                    nondeterminism.lem \
+                    $(LEM_CONC_INTERF) \
+                    $(LEM_CORE) \
+                    $(LEM_CORE_TYPING) \
+                    $(addprefix ail/, $(LEM_AIL_TYPING)) \
+                    $(LEM_CABS_TO_AIL) \
+                    $(LEM_CORE_TO_CORE) \
+                    $(LEM_CORE_DYNAMICS) \
+                    $(LEM_ELABORATION)
+
+LEM_SRC = $(addprefix frontend/model/, $(LEM_SRC_AUX)) \
+					$(addprefix frontend/concurrency/, $(LEM_CONC))
+####
+
+OCAML_GEN_DIR = ocaml_frontend/generated
+OCAML_SRC = $(addprefix $(OCAML_GEN_DIR)/, $(addsuffix .ml, $(notdir $(basename $(LEM_SRC)))))
+
+LEM_FLAGS = -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn
+
+# All targets generated at once thanks to [&:].
+$(OCAML_SRC)&: $(LEM_SRC)
+	@echo "[MKDIR] ocaml_frontend/generated"
+	$(Q)mkdir -p $(OCAML_GEN_DIR)
+	@echo "[LEM] generating files in [$(OCAML_GEN_DIR)] (log in [lem.log])"
+	$(Q)lem $(LEM_FLAGS) \
+    -outdir $(OCAML_GEN_DIR) -ocaml \
+    $(LEM_SRC) 2> lem.log
+	@echo "[SED] patching things up in [$(OCAML_GEN_DIR)]"
+	$(Q)sed -i"" -e "s/open Operators//" $(OCAML_GEN_DIR)/core_run.ml
+	$(Q)sed -i"" -e "s/open Operators//" $(OCAML_GEN_DIR)/driver.ml
+	$(Q)sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
+
+.PHONY: ocaml-src
+ocaml-src: $(OCAML_SRC)
+
+.PHONY: clean_ocaml
+clean_ocaml:
+	$(Q)rm -f $(OCAML_SRC)
+
+.PHONY: clean
 clean:
-	@make -C sibylfs clean
-	@make -C util clean
-	@make -C memory/concrete clean
-	@make -C memory/symbolic clean
-	@make -C backend/driver clean
-	@make -C backend/bmc clean
-	@make -C backend/symbolic clean
-	@make -C backend/web clean
-	@make -C backend/ocaml clean
-	@rm -rf tools/*.cmi tools/*.cmx tools/*.o
-	@rm -rf _lib
+	$(Q)dune clean
+	$(Q)rm -f $(LIBC_TARGETS)
 
-clear: clean
-	@rm -rf cerberus cerberus-* webcerb.*
+.PHONY: distclean
+distclean: clean clean_ocaml
+	$(Q)rm -rf tmp config.json ocaml_frontend/generated

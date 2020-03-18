@@ -1,0 +1,97 @@
+(library
+ (name sibylfs)
+ (public_name cerberus.sibylfs)
+ (synopsis "Sibylfs")
+ (flags (:standard -w -3-8-9-27-33-39))
+ (preprocess (pps ppx_sexp_conv))
+ (modules abstract_string dir_heap fs_dict_wrappers fs_dump ; fs_interface FIXME?
+  fs_prelude fs_printer fs_spec lem_support list_array sibylfs)
+ (wrapped false)
+ (libraries sha lem ppx_sexp_conv sexplib))
+
+(rule
+ (targets abstract_string.mli fs_dict_wrappers.mli fs_interface.mli
+  lem_support.mli)
+ (deps src/abstract_string.mli src/fs_dict_wrappers.mli
+  src/fs_interface.mli src/lem_support.mli)
+ (action (progn
+  (copy src/abstract_string.mli  abstract_string.mli)
+  (copy src/fs_dict_wrappers.mli fs_dict_wrappers.mli)
+  (copy src/fs_interface.mli     fs_interface.mli)
+  (copy src/lem_support.mli      lem_support.mli)
+ )))
+
+(rule
+ (targets abstract_string.ml fs_dict_wrappers.ml fs_dump.ml fs_interface.ml
+  fs_printer.ml lem_support.ml)
+ (deps src/abstract_string.ml src/fs_dict_wrappers.ml src/fs_dump.ml
+  src/fs_interface.ml src/fs_printer.ml src/lem_support.ml patch_all_ml.sed)
+ (action (progn
+  (copy src/abstract_string.ml  abstract_string.ml)
+  (copy src/fs_dict_wrappers.ml fs_dict_wrappers.ml)
+  (copy src/fs_dump.ml          fs_dump.ml)
+  (copy src/fs_interface.ml     fs_interface.ml)
+  (copy src/fs_printer.ml       fs_printer.ml)
+  (copy src/lem_support.ml      lem_support.ml)
+  (run sed -i -f patch_all_ml.sed abstract_string.ml)
+  (run sed -i -f patch_all_ml.sed fs_dict_wrappers.ml)
+  (run sed -i -f patch_all_ml.sed fs_dump.ml)
+  (run sed -i -f patch_all_ml.sed fs_interface.ml)
+  (run sed -i -f patch_all_ml.sed fs_printer.ml)
+  (run sed -i -f patch_all_ml.sed lem_support.ml)
+ )))
+ 
+(rule
+ (targets dir_heap.ml dir_heap.lem)
+ (deps src/dir_heap.lem patch/dir_heap.sed patch_all_ml.sed)
+ (action (progn
+  (copy src/dir_heap.lem dir_heap.lem)
+  (run lem -only_changed_output -wl_unused_vars ign -wl_rename err
+   -wl_comp_message ign -wl_pat_exh ign -ocaml dir_heap.lem)
+  (run sed -i -f patch/dir_heap.sed dir_heap.ml)
+  (run sed -i -f patch_all_ml.sed dir_heap.ml)
+ )))
+
+(rule
+ (targets fs_prelude.ml fs_prelude.lem)
+ (deps src/fs_prelude.lem patch/fs_prelude.sed patch_all_ml.sed)
+ (action (progn
+  (copy src/fs_prelude.lem fs_prelude.lem)
+  (run lem -only_changed_output -wl_unused_vars ign -wl_rename err
+   -wl_comp_message ign -wl_pat_exh ign -ocaml fs_prelude.lem)
+  (run sed -i -f patch/fs_prelude.sed fs_prelude.ml)
+  (run sed -i -f patch_all_ml.sed fs_prelude.ml)
+ )))
+
+(rule
+ (targets fs_spec.ml fs_spec.lem)
+ (deps src/fs_spec.lem patch/fs_spec.sed patch_all_ml.sed)
+ (action (progn
+  (copy src/fs_spec.lem fs_spec.lem)
+  (run lem -only_changed_output -wl_unused_vars ign -wl_rename err
+   -wl_comp_message ign -wl_pat_exh ign -ocaml fs_spec.lem)
+  (run sed -i -f patch/fs_spec.sed fs_spec.ml)
+  (run sed -i -f patch_all_ml.sed fs_spec.ml)
+ )))
+
+(rule
+ (targets list_array.ml list_array.lem)
+ (deps src/list_array.lem patch_all_ml.sed)
+ (action (progn
+  (copy src/list_array.lem list_array.lem)
+  (run lem -only_changed_output -wl_unused_vars ign -wl_rename err
+   -wl_comp_message ign -wl_pat_exh ign -ocaml list_array.lem)
+  (run sed -i -f patch_all_ml.sed list_array.ml)
+ )))
+
+(rule
+ (targets sibylfs.ml sibylfs.lem)
+ (deps src/sibylfs.lem patch_all_ml.sed)
+ (action (progn
+  (copy src/sibylfs.lem sibylfs.lem)
+  (run lem -only_changed_output -wl_unused_vars ign -wl_rename err
+   -wl_comp_message ign -wl_pat_exh ign -ocaml sibylfs.lem)
+  (run sed -i -f patch_all_ml.sed sibylfs.ml)
+ )))
+ 
+; FIXME add binannot?

@@ -272,7 +272,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_parameters(l), _   ) -> parameters := !parameters @ l
     | (Annot_args(l)      , _   ) -> args := !args @ l
     | (Annot_returns(ty)  , None) -> returns := Some(ty)
-    | (Annot_returns(ty)  , _   ) -> error "already specified"
+    | (Annot_returns(_)   , _   ) -> error "already specified"
     | (Annot_requires(l)  , _   ) -> requires := !requires @ l
     | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
@@ -296,7 +296,7 @@ let field_annot : rc_attr list -> type_expr = fun attrs ->
     in
     match (parse_attr attr, !field) with
     | (Annot_field(ty), None) -> field := Some(ty)
-    | (Annot_field(ty), _   ) -> error "already specified"
+    | (Annot_field(_) , _   ) -> error "already specified"
     | (_              , _   ) -> error "is invalid for a field"
   in
   List.iter handle_attr attrs;

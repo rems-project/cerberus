@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 (* §6.4 Lexical elements *)
 type token =
   | EOF

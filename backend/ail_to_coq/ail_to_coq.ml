@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Extra
 open Panic
 open Coq_ast

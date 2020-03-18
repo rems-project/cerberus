@@ -1,0 +1,6 @@
+(executable
+ (name main)
+ (public_name csrt)
+ (flags (:standard -w -26-27-33-39))
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_concrete util))

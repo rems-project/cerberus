@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 type _sym =
   string * (Lexing.position * Lexing.position)
 

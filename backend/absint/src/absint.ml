@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Cfg
 open Core
 

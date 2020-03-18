@@ -3,6 +3,8 @@
 (* Based on Jacques-Henri Jourdan and Francois Pottier TOPLAS 2017:
    "A simple, possibly correct LR parser for C11" *)
 
+open Cerb_frontend
+
 type context
 val save_context: unit -> context
 val restore_context: context -> unit
@@ -25,5 +27,5 @@ val fun_ids_decl: Symbol.identifier list -> context -> declarator -> declarator
 
 val reinstall_function_context: declarator -> unit
 val create_function_definition: Location_ocaml.t -> ((((Symbol.identifier option * Symbol.identifier) * ((string list) option)) list) list) option -> Cabs.specifiers ->
-  declarator -> Cabs.cabs_statement -> Cabs.declaration0 list option ->
+  declarator -> Cabs.cabs_statement -> Cabs.declaration list option ->
   Cabs.function_definition

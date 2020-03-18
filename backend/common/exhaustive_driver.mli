@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)
   exec_mode: Global_ocaml.execution_mode;
