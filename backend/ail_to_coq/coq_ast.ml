@@ -16,6 +16,7 @@ type layout =
   | LPtr
   | LStruct of string * bool (* Union? *)
   | LInt of int_type
+  | LArray of layout * string (* size *)
 
 type op_type =
   | OpInt of int_type
