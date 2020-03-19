@@ -53,17 +53,24 @@ let translate_int_type i =
   | Size_t      -> ItSize_t(false)
   | Ptrdiff_t   -> not_implemented "translate_layout (Ptrdiff_t)"
 
-let translate_layout Ctype.(Ctype(_, c_ty)) =
+(** [translate_layout fa c_ty] translates the C type [c_ty] into a layout. The
+    argument [fa] must be set to [true] when in function arguments, since this
+    requires a different tranlation for arrays (always pointers). *)
+let translate_layout fa c_ty =
+  let rec translate Ctype.(Ctype(_, c_ty)) =
   match c_ty with
-  | Void               -> LVoid
-  | Basic(Integer(i))  -> LInt (translate_int_type i)
-  | Basic(Floating(_)) -> not_implemented "translate_layout (Basic float)"
-  | Array(_,_)         -> not_implemented "translate_layout (Basic)"
-  | Function(_,_,_,_)  -> not_implemented "translate_layout (Function)"
-  | Pointer(_,_)       -> LPtr
-  | Atomic(_)          -> not_implemented "translate_layout (Atomic)"
-  | Struct(sym)        -> LStruct(sym_to_str sym, false)
-  | Union(syn)         -> LStruct(sym_to_str syn, true )
+    | Void                -> LVoid
+    | Basic(Integer(i))   -> LInt (translate_int_type i)
+    | Basic(Floating(_))  -> not_implemented "translate_layout (Basic float)"
+    | Array(_,_) when fa  -> LPtr
+    | Array(c_ty,None )   -> not_implemented "translate_layout (Array[])"
+    | Array(c_ty,Some(n)) -> LArray(translate c_ty, Z.to_string n)
+    | Function(_,_,_,_)   -> not_implemented "translate_layout (Function)"
+    | Pointer(_,_)        -> LPtr
+    | Atomic(_)           -> not_implemented "translate_layout (Atomic)"
+    | Struct(sym)         -> LStruct(sym_to_str sym, false)
+    | Union(syn)          -> LStruct(sym_to_str syn, true )
+  in translate c_ty
 
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
@@ -89,7 +96,7 @@ let rec ident_of_expr (AnnotatedExpression(_, _, _, expr)) =
 let translate_gen_type ty =
   let open GenTypes in
   match ty with
-  | GenLValueType(_,c_ty,_)      -> translate_layout c_ty
+  | GenLValueType(_,c_ty,_)      -> translate_layout false c_ty
   | GenRValueType(ty)            ->
   match ty with
   | GenPointer(_,_)              -> LPtr
@@ -98,7 +105,7 @@ let translate_gen_type ty =
   | GenFunction(_,_,_,_)         -> assert false
   | GenStruct(id)                -> LStruct(sym_to_str id, false)
   | GenUnion(id)                 -> LStruct(sym_to_str id, true )
-  | GenAtomic(c_ty)              -> translate_layout c_ty
+  | GenAtomic(c_ty)              -> translate_layout false c_ty
   | GenBasic(b)                  ->
   match b with
   | GenInteger(Concrete(i))      -> LInt(translate_int_type i)
@@ -137,7 +144,7 @@ let op_type_of_genTypeCategory ty =
   | GenLValueType(_,_,_) -> not_implemented "op_type_of_expr (L)"
   | GenRValueType(ty)    ->
   match ty with
-  | GenPointer(_,c_ty)       -> OpPtr(translate_layout c_ty)
+  | GenPointer(_,c_ty)       -> OpPtr(translate_layout false c_ty)
   | GenVoid                  -> assert false
   | GenArray(_,_)            -> assert false
   | GenFunction(_,_,_,_)     -> assert false
@@ -165,6 +172,12 @@ let struct_data : ail_expr -> string * bool = fun e ->
 
 let strip_expr (AnnotatedExpression(_,_,_,e)) = e
 
+let rec will_decay (AnnotatedExpression(_,_,_,e)) =
+  match e with
+  | AilEarray_decay(_) -> true
+  | AilEbinary(e,_,_)  -> will_decay e
+  | _                  -> false (* FIXME *)
+
 let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   let translate = translate_expr lval in
   match e with
@@ -172,6 +185,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       let (e, l) = translate_expr true e in
       (AddrOf(e), l)
   | AilEunary(Indirection,e)     ->
+      if will_decay e then translate e else
       let layout = translate_gen_type (gen_type_of_expr e) in
       let (e, l) = translate e in
       (Deref(layout, e), l)
@@ -343,7 +357,7 @@ let insert_bindings bindings =
     if Hashtbl.mem local_vars id then
       not_implemented ("variable name collision with " ^ id);
     Hashtbl.add local_vars id c_ty;
-    (id, translate_layout c_ty)
+    (id, translate_layout false c_ty)
   in
   List.map fn bindings
 
@@ -478,7 +492,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
             let layout =
-              try translate_layout (Hashtbl.find local_vars id)
+              try translate_layout false (Hashtbl.find local_vars id)
               with Not_found -> assert false
             in
             let fn e = Assign(layout, Var(Some(id),false), e, stmt) in
@@ -545,17 +559,21 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let fn (id, (attrs, _, c_ty)) =
           let attrs = collect_rc_attrs attrs in
-          (id_to_str id, (attrs, translate_layout c_ty))
+          (id_to_str id, (attrs, translate_layout false c_ty))
         in
         (List.map fn l, is_union)
       in
       let struct_deps =
-        let fn acc (id, (_, layout)) =
-          match layout with
-          | LVoid         -> acc
-          | LPtr          -> acc
-          | LStruct(id,_) -> id :: acc
-          | LInt(_)       -> acc
+        let fn acc (_, (_, layout)) =
+          let rec extend acc layout =
+            match layout with
+            | LVoid         -> acc
+            | LPtr          -> acc
+            | LStruct(id,_) -> id :: acc
+            | LInt(_)       -> acc
+            | LArray(l,_)   -> extend acc l
+          in
+          extend acc layout
         in
         List.rev (List.fold_left fn [] struct_members)
       in
@@ -590,7 +608,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
           Hashtbl.add local_vars id c_ty;
-          (id, translate_layout c_ty)
+          (id, translate_layout true c_ty)
         in
         List.mapi fn args_decl
       in
