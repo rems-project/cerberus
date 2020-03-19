@@ -24,7 +24,7 @@ let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   | ItI64(false)        -> pp "u64"
 
 
-let pp_layout : Coq_ast.layout pp = fun ff layout ->
+let rec pp_layout : Coq_ast.layout pp = fun ff layout ->
   let pp fmt = Format.fprintf ff fmt in
   match layout with
   | LVoid              -> pp "LVoid"
@@ -32,6 +32,7 @@ let pp_layout : Coq_ast.layout pp = fun ff layout ->
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
+  | LArray(layout, n)  -> pp "mk_array_layout (%a) %s" pp_layout layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
   let pp fmt = Format.fprintf ff fmt in
@@ -192,11 +193,13 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     let n = List.length members in
     let fn i (id, (attrs, layout)) =
       let sc = if i = n - 1 then "" else ";" in
+      (*
       let annot =
         try field_annot attrs with Invalid_annot(msg) ->
           Format.eprintf "Error: %s\n%!" msg; exit 1
       in
       ignore annot; (* TODO actually handle attributes. *)
+      *)
 
       pp "@;(%S, %a)%s" id pp_layout layout sc
     in
