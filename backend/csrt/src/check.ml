@@ -9,6 +9,16 @@ open Printf
 let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
   List.concat (List.map f xs)
 
+let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
+  match xs with
+  | [] -> []
+  | x :: xs ->
+     match f x with
+     | None -> filter_map f xs
+     | Some y -> y :: filter_map f xs
+
+type loc = Location_ocaml.t
+
 module StringMap = Map.Make(String)
 
 module Sym = struct
@@ -333,6 +343,14 @@ module LS = struct
 end
 
 
+module LC = struct
+  type t = LC of IT.t
+  let parse_sexp env s = LC (IT.parse_sexp env s)
+  let pp (LC c) = IT.pp c
+end
+
+open LC
+
 
 module T = struct
 
@@ -340,7 +358,7 @@ module T = struct
     | A of BT.t
     | L of LS.t
     | R of RE.t
-    | C of IT.t
+    | C of LC.t
 
   let pp = function
     | (id, A typ) -> 
@@ -350,7 +368,7 @@ module T = struct
     | (id, R re) -> 
        sprintf "(Resource %s : %s)" (Sym.pp id) (RE.pp re)
     | (id, C lc) -> 
-       sprintf "(Constraint %s : %s)" (Sym.pp id) (IT.pp lc)
+       sprintf "(Constraint %s : %s)" (Sym.pp id) (LC.pp lc)
 
   let parse_sexp (env : Sym.t StringMap.t) s = 
     let open Sexp in
@@ -370,7 +388,7 @@ module T = struct
     | Sexp.List [Sexp.Atom "Constraint"; Sexp.Atom id; Sexp.Atom ":"; lc] ->
        let sym = Sym.fresh_pretty id in
        let env = StringMap.add id sym env in
-       ((sym, C (IT.parse_sexp env lc)), env)
+       ((sym, C (LC.parse_sexp env lc)), env)
     | t -> 
        parse_error "rturn type" t
          
@@ -418,43 +436,46 @@ end
 
 module A = struct
   type t = A of T.bindings
-  let make (ts : T.bindings) = A ts
-  let extr (A ts) = ts
   let pp (A ts) = T.pp_list ts
   let parse_sexp env s = 
     let bs, env = T.parse_sexp_list "argument type" env s in
-    (make bs, env)
+    (A bs, env)
 end
 
 
 module R = struct
   type t = R of T.bindings
-  let make (ts : T.bindings) = R ts
-  let extr (R ts) = ts
   let pp (R ts) = T.pp_list ts
   let parse_sexp env s = 
     let bs, env = T.parse_sexp_list "return type" env s in
-    (make bs, env)
+    (R bs, env)
 end
+
 
 module F = struct
-
   type t = F of A.t * R.t
-
+  let forget (F (A args, R ret)) = 
+    let args = List.filter (function (_,T.A _) -> true | _ -> false) args in
+    let ret = List.filter (function (_,T.A _) -> true | _ -> false) ret in
+    F (A args, R ret)
 end
   
+
+open A
+open R
+open F
 
       
 
 type global_env = 
   { struct_decls : T.fbindings SymMap.t ; 
-    fun_decls : F.t SymMap.t }
+    fun_decls : (loc * F.t * Sym.t) SymMap.t } (* third item is return name *)
 
 type local_env = 
   { a: BT.t SymMap.t; 
     l: LS.t SymMap.t; 
     r: RE.t SymMap.t; 
-    c: IT.t SymMap.t; }
+    c: LC.t SymMap.t; }
 
 type env = 
   { local : local_env ; 
@@ -498,7 +519,7 @@ let add_var env (sym, t) =
 let add_vars env bindings = 
   List.fold_left add_var env bindings
 
-let lookup_var (env: 'v SymMap.t) (sym: Sym.t) : 'v = 
+let lookup (env: 'v SymMap.t) (sym: Sym.t) : 'v = 
   match SymMap.find_opt sym env with
   | Some t -> t
   | None -> failwith (sprintf "unbound variable %s" (Sym.pp sym))
@@ -601,6 +622,9 @@ let rec bt_of_core_base_type = function
   | Core.BTy_loaded ot -> bt_of_core_object_type ot
   | Core.BTy_storable -> unreachable ()
 
+let binding_of_core_base_type (sym,ctype) = 
+  (sym, T.A (bt_of_core_base_type ctype))
+
 
 let make_int_type f t = 
   let ft = IT.Num (of_string f) in
@@ -675,12 +699,14 @@ let rec bt_and_constr_of_ctype (Ctype.Ctype (_annots, ct)) =
 
 let binding_of_ctype ctype name = 
   match bt_and_constr_of_ctype ctype with
-  | (bt, Some c) -> [(name, T.A bt); (Sym.fresh (), T.C (c (V name)))]
+  | (bt, Some c) -> [(name, T.A bt); 
+                     (Sym.fresh (), T.C (LC (c (V name))))]
   | (bt, None) -> [(name, T.A bt)]
 
 let fbinding_of_ctype ctype (id : Id.id) = 
   match bt_and_constr_of_ctype ctype with
-  | (bt, Some c) -> [(Some id, T.A bt); (None, T.C (c (F id)))]
+  | (bt, Some c) -> [(Some id, T.A bt); 
+                     (None, T.C (LC (c (F id))))]
   | (bt, None) -> [(Some id, T.A bt)]
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
@@ -697,22 +723,22 @@ let integer_value_to_num iv =
 let infer_object_value name ov = 
   match ov with
   | M_OVinteger iv ->
-     let constr = V name %= Num (integer_value_to_num iv) in
-     R.make [(name, A BT.Int); (Sym.fresh (), C constr)]
+     let constr = LC (V name %= Num (integer_value_to_num iv)) in
+     R [(name, A BT.Int); (Sym.fresh (), C constr)]
   | M_OVfloating iv ->
      failwith "floats not supported"
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        (fun _cbt -> 
-         let constr = Null (V name) in
-         R.make [(name, A (BT.Loc)); (Sym.fresh (), C constr)]
+         let constr = LC (Null (V name)) in
+         R [(name, A (BT.Loc)); (Sym.fresh (), C constr)]
        )
        (fun sym -> 
          failwith "function pointers not supported"
        )
        (fun _prov loc ->
-         let constr = V name %= Num loc in
-         R.make [(name, A (BT.Loc)); (Sym.fresh (), C constr)]
+         let constr = LC (V name %= Num loc) in
+         R [(name, A (BT.Loc)); (Sym.fresh (), C constr)]
        )
        (fun _ ->
          failwith "unspecified pointer value"
@@ -734,36 +760,36 @@ let infer_value name env v vloc =
   | M_Vloaded lv ->
      infer_loaded_value name env lv
   | M_Vunit ->
-     R.make [(name, A BT.Unit)]
+     R [(name, A BT.Unit)]
   | M_Vtrue ->
-     let constr = V name in
-     R.make [(name, A BT.Bool); (Sym.fresh (), C constr)]
+     let constr = LC (V name) in
+     R [(name, A BT.Bool); (Sym.fresh (), C constr)]
   | M_Vfalse -> 
-     let constr = Not (V name) in
-     R.make [(name, A BT.Bool); (Sym.fresh (), C constr)]
+     let constr = LC (Not (V name)) in
+     R [(name, A BT.Bool); (Sym.fresh (), C constr)]
   | M_Vctype ct ->
      failwith "todo ctype"
   | M_Vlist (cbt, tsyms) ->
      let t = bt_of_core_base_type cbt in
      let check_item tsym =
        let (sym,loc) = Sym.lof_tsymbol tsym in
-       let typ = lookup_var env.local.a sym in
+       let typ = lookup env.local.a sym in
        ensure_type (sym, typ, loc) (t, vloc) in
      let _ = List.map check_item tsyms in
      (* maybe record list length? *)
-     R.make [(name, A (BT.List t))]
+     R [(name, A (BT.List t))]
   | M_Vtuple tsyms ->
      let syms = List.map Sym.of_tsymbol tsyms in
-     let ts = List.map (lookup_var env.local.a) syms in
-     R.make [(name, A (BT.Tuple ts))]
+     let ts = List.map (lookup env.local.a) syms in
+     R [(name, A (BT.Tuple ts))]
 
 
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
   let kloc = Annot.get_loc_ annots in
   match pe with
   | M_PEsym sym ->
-     let b = lookup_var env.local.a sym in
-     R.make [(name, T.A b)]
+     let b = lookup env.local.a sym in
+     R [(name, T.A b)]
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -784,20 +810,20 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
      let (sym,loc) = Sym.lof_tsymbol sym in
-     let t = lookup_var env.local.a sym in
+     let t = lookup env.local.a sym in
      let () = ensure_type (sym, t, loc) (BT.Bool, kloc) in
-     let constr = (V name) %= Not (V sym) in
-     R.make [(name, A t); (name, C constr)]
+     let constr = LC ((V name) %= Not (V sym)) in
+     R [(name, A t); (name, C constr)]
   | M_PEop (op,sym1,sym2) ->
      let (sym1, loc1) = Sym.lof_tsymbol sym1 in
      let (sym2, loc2) = Sym.lof_tsymbol sym2 in
-     let t1 = lookup_var env.local.a sym1 in
-     let t2 = lookup_var env.local.a sym2 in
+     let t1 = lookup env.local.a sym1 in
+     let t2 = lookup env.local.a sym2 in
      let ((st1,st2),rt) = bt_of_binop op in
      let () = ensure_type (sym1, t1, loc1) (st1, kloc) in
      let () = ensure_type (sym2, t2, loc2) (st2, kloc) in
-     let constr = V name %= (make_binop op (V sym1) (V sym2)) in
-     R.make [(name, A rt); (Sym.fresh (), C constr)]
+     let constr = LC (V name %= (make_binop op (V sym1) (V sym2))) in
+     R [(name, A rt); (Sym.fresh (), C constr)]
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -813,8 +839,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        let rt = infer_pexpr name2 env e1 in
-        infer_pexpr name (add_vars env (R.extr rt)) e1
+        let (R rt) = infer_pexpr name2 env e1 in
+        infer_pexpr name (add_vars env rt) e1
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
@@ -823,17 +849,17 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let sym2, loc2 = Sym.lof_tsymbol sym2 in
      let sym3, loc3 = Sym.lof_tsymbol sym3 in
      let t1, t2, t3 = 
-       lookup_var env.local.a sym1,
-       lookup_var env.local.a sym2, 
-       lookup_var env.local.a sym3 
+       lookup env.local.a sym1,
+       lookup env.local.a sym2, 
+       lookup env.local.a sym3 
      in
      let () = ensure_type (sym1, t1, loc1) (BT.Bool, kloc) in
      let () = ensure_type (sym3, t3, loc3) (t2, kloc) in
      let constr = 
-       (V sym1 %& (V name %= V sym2)) %| 
-       ((Not (V sym1)) %& (V name %= V sym3)) 
+       LC ( (V sym1 %& (V name %= V sym2)) %| 
+              ((Not (V sym1)) %& (V name %= V sym3)) )
      in
-     R.make [(name, A t2); (Sym.fresh (), C constr)]
+     R [(name, A t2); (Sym.fresh (), C constr)]
   | M_PEis_scalar _ ->
      failwith "todo M_PEis_scalar"
   | M_PEis_integer _ ->
@@ -848,39 +874,80 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo M_PEare_compatible"
 
 
-let check_expr _fname env (M_Expr (_annots, e)) : unit = 
+type subtype_error = 
+  | SE_Plus of T.binding
+  | SE_Minus of T.binding
+  | SE_Mismatch of T.binding * T.binding
+  | SE_Constraint of Sym.t * LC.t
+
+type subtype_result = 
+  | Subtype
+  | Not_subtype of subtype_error
+
+
+let constraints_hold env (LC c) = 
+  true                          (* todo: call z3 *)
+
+
+let rec subtype env (R rt1) (R rt2) = 
+  match rt1, rt2 with
+  | [], [] -> Subtype
+  | r1 :: rt1', r2 :: rt2' ->
+     begin match r1, r2 with
+       
+     | (_, T.C c1), _ ->
+        subtype (add_var env r1) (R rt1') (R rt2)
+
+     | _, (n2, T.C c2) ->
+        if constraints_hold env c2 
+        then subtype env (R rt1) (R rt2')
+        else Not_subtype (SE_Constraint (n2, c2))
+
+     | b1, b2 ->
+        if b1 = b2
+        then subtype (add_var env r1) (R rt1) (R rt2)
+        else Not_subtype (SE_Mismatch (b1, b2))
+     end
+
+  | r1 :: _, [] -> Not_subtype (SE_Plus r1)
+  | [], r2 :: _ -> Not_subtype (SE_Minus r2)
+
+
+let check_expr fname env (M_Expr (_annots, e)) ret : unit = 
+  let name = Sym.fresh () in    (* fix *)
   match e with
  | M_Epure pe -> 
-    let t = infer_pexpr  in
-    failwith "epure"
+    let t = infer_pexpr name env pe in
+    let _ = subtype env t ret in
+    ()
  | M_Ememop _ ->
-    failwith "ememop"
+    failwith "todo ememop"
  | M_Eaction _ ->
-    failwith "eaction"
+    failwith "todo eaction"
  | M_Ecase _ ->
-    failwith "ecase"
+    failwith "todo ecase"
  | M_Elet _ ->
-    failwith "elet"
+    failwith "todo elet"
  | M_Eif _ ->
-    failwith "eif"
+    failwith "todo eif"
  | M_Eskip -> 
-    failwith "eskip" 
+    failwith "todo eskip" 
  | M_Eccall _ ->
-    failwith "eccall"
+    failwith "todo eccall"
  | M_Eproc _ ->
-    failwith "eproc"
+    failwith "todo eproc"
  | M_Ewseq _ ->
-    failwith "ewseq"
+    failwith "todo ewseq"
  | M_Esseq _ ->
-    failwith "esseq"
+    failwith "todo esseq"
  | M_Ebound _ ->
-    failwith "ebound"
+    failwith "todo ebound"
  | M_End _ ->
-    failwith "ebound"
+    failwith "todo end"
  | M_Esave _ ->
-    failwith "esave"
+    failwith "todo esave"
  | M_Erun _ ->
-    failwith "erun"
+    failwith "todo erun"
      
 
 
@@ -888,20 +955,43 @@ let test_infer_expr () =
   failwith "not implemented"
 
 
-let check_pure_function_body env name args body = 
-  ()
-
-let check_function_body env name args body = 
-  let env = env in
-  check_expr name env body
 
 
-let check_function env name fn = 
+
+
+let check_function_body env name body decl_typ = 
+  let (F (A args, ret)) = decl_typ in
+  let env = add_vars env args in
+  check_expr name env body ret
+
+
+
+let embed_fun_proc body = 
+  let (M_Pexpr (annots, _, _)) = body in
+  M_Expr (annots, M_Epure (body))
+
+
+
+let check_function env fsym fn = 
+
+  let (loc,decl_typ,ret_name) = lookup env.global.fun_decls fsym in
+
+  let check_consistent ret args = 
+     let ft_def = 
+       F (A (List.map binding_of_core_base_type args), 
+          R [binding_of_core_base_type (ret_name,ret)]) 
+     in
+    if forget ft_def = forget decl_typ then ()
+    else failwith "inconsistent"
+  in
+
   match fn with
-  | M_Fun (_bt, args, body) ->
-     check_pure_function_body env name args body
-  | M_Proc (_loc, _bt, args, body) ->
-     check_function_body env name args body
+  | M_Fun (ret, args, body) ->
+     check_consistent ret args;
+     check_function_body env fsym (embed_fun_proc body) decl_typ
+  | M_Proc (_loc, ret, args, body) ->
+     check_consistent ret args;
+     check_function_body env fsym body decl_typ
   | M_ProcDecl _
   | M_BuiltinDecl _ -> ()
 
@@ -911,16 +1001,18 @@ let check_functions env fns =
 
                              
 
-let record_funinfo sym (_loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
+let record_funinfo sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
   let make_arg_t (msym,ctype) = binding_of_ctype ctype (sym_or_fresh msym) in
   if is_variadic then failwith "variadic functions not supported"
   else 
-    let args_type = A.make (concatmap make_arg_t args) in
-    let ret_type = R.make (binding_of_ctype ret_ctype (Sym.fresh ()) )in
-    SymMap.add sym (F.F (args_type,ret_type)) fun_decls
+    let ret_name = (Sym.fresh_pretty "__return_val__")in
+    let args_type = A (concatmap make_arg_t args) in
+    let ret_type = R (binding_of_ctype ret_ctype ret_name) in
+    SymMap.add sym (loc, F.F (args_type,ret_type), ret_name) fun_decls
 
 let record_funinfo env funinfo = 
-  { env with fun_decls = Pmap.fold record_funinfo funinfo env.fun_decls }
+  let fun_decls = Pmap.fold record_funinfo funinfo env.global.fun_decls in
+  { env with global = { env.global with fun_decls = fun_decls } }
 
 
 
@@ -934,7 +1026,8 @@ let record_tagDef sym def struct_decls =
      SymMap.add sym (concatmap make_field_and_constraint fields) struct_decls
 
 let record_tagDefs env tagDefs = 
-  { env with struct_decls = Pmap.fold record_tagDef tagDefs env.struct_decls }
+  let struct_decls = Pmap.fold record_tagDef tagDefs env.global.struct_decls in
+  { env with global = {env.global with struct_decls = struct_decls } }
 
 
 
@@ -963,7 +1056,7 @@ let init core_file mu_file =
 let check (core_file : unit Core.typed_file) =
   let mu_file = Core_anormalise.normalise_file core_file in
   let () = init core_file mu_file in
-  let env = empty_global in
+  let env = empty_env in
   let env = record_tagDefs env mu_file.mu_tagDefs in
   let env = record_funinfo env mu_file.mu_funinfo in
   check_functions env mu_file.mu_funs
