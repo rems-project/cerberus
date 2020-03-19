@@ -875,6 +875,8 @@ let check_expr _fname env (M_Expr (_annots, e)) : unit =
     failwith "esseq"
  | M_Ebound _ ->
     failwith "ebound"
+ | M_End _ ->
+    failwith "ebound"
  | M_Esave _ ->
     failwith "esave"
  | M_Erun _ ->
