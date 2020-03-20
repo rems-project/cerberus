@@ -6,6 +6,13 @@ ifeq (,$(shell which lem 2> /dev/null))
 $(error "Compilation requires [lem].")
 endif
 
+# GNU vs BSD
+ifeq (GNU,$(shell sed --version 2>&1 > /dev/null && echo GNU))
+SEDI = sed -i
+else
+SEDI = sed -i ''
+endif
+
 # Trick to avoid printing the commands.
 # To enable the printing of commands, use [make Q= ...],
 Q = @
@@ -205,9 +212,9 @@ $(OCAML_SRC)&: $(LEM_SRC)
     -outdir $(PRELUDE_SRC_DIR) -ocaml \
     $(LEM_SRC) 2> ocaml_frontend/lem.log
 	@echo "[SED] patching things up in [$(PRELUDE_SRC_DIR)]"
-	$(Q)sed -i"" -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
-	$(Q)sed -i"" -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
-	$(Q)sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
+	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
+	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
+	$(Q)$(SEDI) -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
 
 #### LEM sources for sibylfs
 SIBYLFS_LEM = dir_heap.lem fs_prelude.lem fs_spec.lem list_array.lem \
@@ -249,10 +256,10 @@ $(SIBYLFS_TRG)&: $(SIBYLFS_SRC) $(SIBYLFS_SED)
 	@echo "[CP] $(SIBYLFS_ML_TRG)"
 	$(Q)cp $(SIBYLFS_ML_SRC) $(SIBYLFS_SRC_DIR)
 	@echo "[SED] patching things up in [$(SIBYLFS_SRC_DIR)]"
-	$(Q)sed -i"" -f sibylfs/patch/dir_heap.sed   sibylfs/generated/dir_heap.ml
-	$(Q)sed -i"" -f sibylfs/patch/fs_prelude.sed sibylfs/generated/fs_prelude.ml
-	$(Q)sed -i"" -f sibylfs/patch/fs_spec.sed    sibylfs/generated/fs_spec.ml
-	$(Q)sed -i"" -f sibylfs/patch_all_ml.sed $(SIBYLFS_LEM_TRG) $(SIBYLFS_ML_TRG)
+	$(Q)$(SEDI) -f sibylfs/patch/dir_heap.sed   sibylfs/generated/dir_heap.ml
+	$(Q)$(SEDI) -f sibylfs/patch/fs_prelude.sed sibylfs/generated/fs_prelude.ml
+	$(Q)$(SEDI) -f sibylfs/patch/fs_spec.sed    sibylfs/generated/fs_spec.ml
+	$(Q)$(SEDI) -f sibylfs/patch_all_ml.sed $(SIBYLFS_LEM_TRG) $(SIBYLFS_ML_TRG)
 
 .PHONY: prelude-src
 prelude-src: $(OCAML_SRC) sibylfs-src
