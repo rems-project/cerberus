@@ -1,89 +1,86 @@
-open Ctype
-open AilSyntax
 open Extra
+open Panic
 open Coq_ast
 open Coq_pp
 
 type typed_ail = GenTypes.genTypeCategory AilSyntax.ail_program
+type ail_expr  = GenTypes.genTypeCategory AilSyntax.expression
+type c_type    = Ctype.ctype
+type i_type    = Ctype.integerType
+type type_cat  = GenTypes.typeCategory
+type loc       = Location_ocaml.t
 
-type ail_expr = GenTypes.genTypeCategory AilSyntax.expression
-
-let interp_gt : GenTypes.genType -> Ctype.ctype = fun t ->
-  let loc = Location_ocaml.unknown in
-  let impl = Ocaml_implementation.hafniumIntImpl in
-  let c_ty = GenTypesAux.interpret_genType loc impl t in
-  match ErrorMonad.runErrorMonad c_ty with
-  | Either.Right(c_ty) -> c_ty
-  | _                  -> assert false
-
-let interp_gtc : GenTypes.genTypeCategory -> GenTypes.typeCategory = fun tc ->
+let to_type_cat : GenTypes.genTypeCategory -> type_cat = fun tc ->
   let loc = Location_ocaml.unknown in
   let impl = Ocaml_implementation.hafniumIntImpl in
   let m_tc = GenTypesAux.interpret_genTypeCategory loc impl tc in
   match ErrorMonad.runErrorMonad m_tc with
   | Either.Right(tc) -> tc
-  | _                -> assert false
+  | Either.Left(_,_) -> assert false (* FIXME possible here? *)
 
-let not_implemented : string -> 'a = fun s ->
-  Printf.eprintf "Feature not implemented: %s.\n%!" s;
-  exit 1
+let not_impl loc fmt = panic loc ("Not implemented: " ^^ fmt)
 
 (* Short names for common functions. *)
-let sym_to_str = Pp_symbol.to_string_pretty
-let id_to_str Symbol.(Identifier(_,id)) = id
+let sym_to_str : Symbol.sym -> string =
+  Pp_symbol.to_string_pretty
+
+let id_to_str : Symbol.identifier -> string =
+  fun Symbol.(Identifier(_,id)) -> id
 
 (* Extract attributes with namespace ["rc"]. *)
-let collect_rc_attrs (Annot.Attrs(attrs)) =
+let collect_rc_attrs : Annot.attributes -> Coq_ast.rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
     | Some("rc") -> let rc_attr_id = id_to_str attr_id in
                     {rc_attr_id; rc_attr_args = attr_args} :: acc
     | _          -> acc
   in
-  List.rev (List.fold_left fn [] attrs)
+  fun (Annot.Attrs(attrs)) -> List.rev (List.fold_left fn [] attrs)
 
-let translate_int_type : Ctype.integerType -> Coq_ast.int_type = fun i ->
+let translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
+  let open Ctype in
   let size_of_base_type signed i =
     match i with
-    | Ichar           -> not_implemented "size_of_base_type (IChar)"
-    | Short           -> not_implemented "size_of_base_type (Short)"
+    | Ichar           -> ItI8(signed)
+    | Short           -> ItI16(signed)
     | Int_            -> ItI32(signed)
-    | Long            -> not_implemented "size_of_base_type (LongLong)"
-    | LongLong        -> not_implemented "size_of_base_type (LongLong)"
+    | Long            -> ItI64(signed)
+    | LongLong        -> not_impl loc "size_of_base_type (LongLong)"
     (* Things defined in the standard libraries *)
-    | IntN_t(_)       -> not_implemented "size_of_base_type (IntN_t)"
-    | Int_leastN_t(_) -> not_implemented "size_of_base_type (Int_leastN_t)"
-    | Int_fastN_t(_)  -> not_implemented "size_of_base_type (Int_fastN_t)"
-    | Intmax_t        -> not_implemented "size_of_base_type (Intmax_t)"
+    | IntN_t(_)       -> not_impl loc "size_of_base_type (IntN_t)"
+    | Int_leastN_t(_) -> not_impl loc "size_of_base_type (Int_leastN_t)"
+    | Int_fastN_t(_)  -> not_impl loc "size_of_base_type (Int_fastN_t)"
+    | Intmax_t        -> not_impl loc "size_of_base_type (Intmax_t)"
     | Intptr_t        -> ItSize_t(signed)
   in
   match i with
-  | Char        -> not_implemented "layout_of (Char)"
-  | Bool        -> not_implemented "layout_of (Bool)"
+  | Char        -> not_impl loc "layout_of (Char)"
+  | Bool        -> not_impl loc"layout_of (Bool)"
   | Signed(i)   -> size_of_base_type true  i
   | Unsigned(i) -> size_of_base_type false i
-  | Enum(_)     -> not_implemented "layout_of (Enum)"
+  | Enum(_)     -> not_impl loc "layout_of (Enum)"
   (* Things defined in the standard libraries *)
-  | Wchar_t     -> not_implemented "layout_of (Wchar_t)"
-  | Wint_t      -> not_implemented "layout_of (Win_t)"
+  | Wchar_t     -> not_impl loc "layout_of (Wchar_t)"
+  | Wint_t      -> not_impl loc "layout_of (Win_t)"
   | Size_t      -> ItSize_t(false)
-  | Ptrdiff_t   -> not_implemented "layout_of (Ptrdiff_t)"
+  | Ptrdiff_t   -> not_impl loc "layout_of (Ptrdiff_t)"
 
 (** [layout_of fa c_ty] translates the C type [c_ty] into a layout.  Note that
     argument [fa] must be set to [true] when in function arguments, since this
     requires a different tranlation for arrays (always pointers). *)
-let layout_of fa c_ty =
-  let rec layout_of Ctype.(Ctype(_, c_ty)) =
-  match c_ty with
+let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
+  let rec layout_of Ctype.(Ctype(annots, c_ty)) =
+    let loc = Annot.get_loc_ annots in
+    match c_ty with
     | Void                -> LVoid
-    | Basic(Integer(i))   -> LInt (translate_int_type i)
-    | Basic(Floating(_))  -> not_implemented "layout_of (Basic float)"
+    | Basic(Integer(i))   -> LInt (translate_int_type loc i)
+    | Basic(Floating(_))  -> not_impl loc "layout_of (Basic float)"
     | Array(_,_) when fa  -> LPtr
-    | Array(c_ty,None )   -> not_implemented "layout_of (Array[])"
+    | Array(c_ty,None )   -> not_impl loc "layout_of (Array[])"
     | Array(c_ty,Some(n)) -> LArray(layout_of c_ty, Z.to_string n)
-    | Function(_,_,_,_)   -> not_implemented "layout_of (Function)"
+    | Function(_,_,_,_)   -> not_impl loc "layout_of (Function)"
     | Pointer(_,_)        -> LPtr
-    | Atomic(_)           -> not_implemented "layout_of (Atomic)"
+    | Atomic(_)           -> not_impl loc "layout_of (Atomic)"
     | Struct(sym)         -> LStruct(sym_to_str sym, false)
     | Union(syn)          -> LStruct(sym_to_str syn, true )
   in
@@ -104,7 +101,8 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let rec ident_of_expr (AnnotatedExpression(_,_,_,e)) =
+let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,_,e)) =
+  let open AilSyntax in
   match e with
   | AilEident(sym)        -> Some(sym_to_str sym)
   | AilEfunction_decay(e) -> ident_of_expr e
@@ -115,11 +113,12 @@ let layout_of_tc : GenTypes.typeCategory -> Coq_ast.layout = fun tc ->
   | GenTypes.LValueType(_,c_ty,_) -> layout_of false c_ty
   | GenTypes.RValueType(c_ty)     -> layout_of false c_ty
 
-let translate_gen_type ty = layout_of_tc (interp_gtc ty)
+let translate_gen_type ty = layout_of_tc (to_type_cat ty)
 
-let tc_of (AnnotatedExpression(ty,_,_,_)) = interp_gtc ty
+let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
 
-let is_const_0 (AnnotatedExpression(_, _, _, e)) =
+let is_const_0 (AilSyntax.AnnotatedExpression(_, _, _, e)) =
+  let open AilSyntax in
   match e with
   | AilEconst(c) ->
       begin
@@ -129,25 +128,25 @@ let is_const_0 (AnnotatedExpression(_, _, _, e)) =
       end
   | _            -> false
 
-let op_type_of Ctype.(Ctype(_, c_ty)) =
+let op_type_of loc Ctype.(Ctype(_, c_ty)) =
   match c_ty with
-  | Void                -> not_implemented "op_type_of (Void)"
-  | Basic(Integer(i))   -> OpInt(translate_int_type i)
-  | Basic(Floating(_))  -> not_implemented "op_type_of (Basic float)"
-  | Array(_,_)          -> not_implemented "op_type_of (Array)"
-  | Function(_,_,_,_)   -> not_implemented "op_type_of (Function)"
+  | Void                -> not_impl loc "op_type_of (Void)"
+  | Basic(Integer(i))   -> OpInt(translate_int_type loc i)
+  | Basic(Floating(_))  -> not_impl loc "op_type_of (Basic float)"
+  | Array(_,_)          -> not_impl loc "op_type_of (Array)"
+  | Function(_,_,_,_)   -> not_impl loc "op_type_of (Function)"
   | Pointer(_,c_ty)     -> OpPtr(layout_of false c_ty)
-  | Atomic(_)           -> not_implemented "op_type_of (Atomic)"
-  | Struct(_)           -> not_implemented "op_type_of (Struct)"
-  | Union(_)            -> not_implemented "op_type_of (Union)"
+  | Atomic(_)           -> not_impl loc "op_type_of (Atomic)"
+  | Struct(_)           -> not_impl loc "op_type_of (Struct)"
+  | Union(_)            -> not_impl loc "op_type_of (Union)"
 
 let op_type_of_tc : GenTypes.typeCategory -> Coq_ast.op_type = fun tc ->
   match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> op_type_of c_ty
-  | GenTypes.RValueType(c_ty)     -> op_type_of c_ty
+  | GenTypes.LValueType(_,c_ty,_) -> op_type_of Location_ocaml.unknown c_ty
+  | GenTypes.RValueType(c_ty)     -> op_type_of Location_ocaml.unknown c_ty
 
 let struct_data : ail_expr -> string * bool = fun e ->
-  let AnnotatedExpression(gtc,_,_,_) = e in
+  let AilSyntax.AnnotatedExpression(gtc,_,_,_) = e in
   let open GenTypes in
   match gtc with
   | GenRValueType(GenPointer(_,Ctype(_,Struct(s))))
@@ -157,15 +156,20 @@ let struct_data : ail_expr -> string * bool = fun e ->
   | GenRValueType(_                               ) -> assert false
   | GenLValueType(_,_                 ,_)           -> assert false
 
-let strip_expr (AnnotatedExpression(_,_,_,e)) = e
+let strip_expr (AilSyntax.AnnotatedExpression(_,_,_,e)) = e
 
-let rec will_decay (AnnotatedExpression(_,_,_,e)) =
-  match e with
+let rec will_decay : ail_expr -> bool = fun e ->
+  let open AilSyntax in
+  match strip_expr e with
   | AilEarray_decay(_) -> true
   | AilEbinary(e,_,_)  -> will_decay e
   | _                  -> false (* FIXME *)
 
-let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
+let not_implemented : string -> 'a = fun s ->
+  panic_no_pos "Feature not implemented: %s." s
+
+let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
+  let open AilSyntax in
   let translate = translate_expr lval in
   match e with
   | AilEunary(Address,e)         ->
@@ -223,7 +227,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
             (Val(Null), [])
         | _                                                   ->
         let ty = op_type_of_tc (tc_of e) in
-        let op_ty = op_type_of c_ty in
+        let op_ty = op_type_of Location_ocaml.unknown c_ty in
         let (e, l) = translate e in
         (UnOp(CastOp(op_ty), ty, e), l)
       end
@@ -268,7 +272,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
               match i with
               | IConstant(i,_,_) ->
                   let it =
-                    match op_type_of_tc (interp_gtc ty) with
+                    match op_type_of_tc (to_type_cat ty) with
                     | OpInt(it) -> it
                     | _         -> assert false
                   in
@@ -351,6 +355,7 @@ let insert_bindings bindings =
 let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
                         stmt * (rc_attr list * stmt) SMap.t =
   let rec trans break continue final stmts blocks =
+    let open AilSyntax in
     let resume goto = match goto with None -> assert false | Some(s) -> s in
     (* End of the block reached. *)
     match stmts with
@@ -526,8 +531,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   let global_vars =
     let fn (id, (_, decl)) acc =
       match decl with
-      | Decl_object _ -> sym_to_str id :: acc
-      | _             -> acc
+      | AilSyntax.Decl_object _ -> sym_to_str id :: acc
+      | _                       -> acc
     in
     List.fold_right fn decls []
   in
@@ -540,8 +545,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let (struct_members, struct_is_union) =
         let (l, is_union) =
           match def with
-          | UnionDef(l)  -> (l, true )
-          | StructDef(l) -> (l, false)
+          | Ctype.UnionDef(l)  -> (l, true )
+          | Ctype.StructDef(l) -> (l, false)
         in
         let fn (id, (attrs, _, c_ty)) =
           let attrs = collect_rc_attrs attrs in
@@ -574,6 +579,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the definition of functions. *)
   let functions =
+    let open AilSyntax in
     let build (id, (_, attrs, args, AnnotatedStatement(_, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in

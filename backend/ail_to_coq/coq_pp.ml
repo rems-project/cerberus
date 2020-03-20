@@ -1,4 +1,5 @@
 open Extra
+open Panic
 open Coq_ast
 open Rc_annot
 
@@ -93,11 +94,10 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
             pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
               pp_layout l pp_op_type ty2 pp_expr e2
         | (OpPtr(_), OpInt(_), _) ->
-            Format.eprintf "Binop [%a] not supported on pointers\n%!"
-              pp_bin_op op; exit 1
+            panic_no_pos "Binop [%a] not supported on pointers." pp_bin_op op
         | (OpInt(_), OpPtr(_), _) ->
-            Format.eprintf "Wrong ordering of integer pointer binop [%a]\n%!"
-              pp_bin_op op; exit 1
+            panic_no_pos "Wrong ordering of integer pointer binop [%a]."
+              pp_bin_op op
         | _                 ->
             pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
               pp_op_type ty1 pp_op_type ty2 pp_expr e2
@@ -196,7 +196,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
       (*
       let annot =
         try field_annot attrs with Invalid_annot(msg) ->
-          Format.eprintf "Error: %s\n%!" msg; exit 1
+          panic_no_pos "Error: %s" msg
       in
       ignore annot; (* TODO actually handle attributes. *)
       *)
@@ -270,7 +270,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
 
     let annots =
       try function_annots def.func_attrs with Invalid_annot(msg) ->
-        Format.eprintf "Error: %s\n%!" msg; exit 1
+        panic_no_pos "Error: %s" msg
     in
     ignore annots; (* TODO handle annotations. *)
 
