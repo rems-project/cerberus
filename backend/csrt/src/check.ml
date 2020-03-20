@@ -784,6 +784,28 @@ let infer_value name env v vloc =
      R [(name, A (BT.Tuple ts))]
 
 
+
+let call_typ loc_call env name args =
+  let rec check env decl_args args = 
+    match decl_args, args with
+    | A [], [] -> true
+    | A [], _ -> 
+       failwith (sprintf "%s: function given too many arguments" 
+                   (pp_loc loc_call))
+    | A _, [] -> 
+       failwith (sprintf "%s: function given too few arguments"
+                   (pp_loc loc_call))
+  in
+
+  match name with
+  | Core.Impl _ -> failwith "todo implementation-defined constrant"
+  | Core.Sym sym ->
+     let (loc,decl_typ,_ret_name) = lookup env.global.fun_decls sym in 
+     let (F (A decl_args, decl_ret)) = decl_typ in
+     
+     ()
+
+
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
   let kloc = Annot.get_loc_ annots in
   match pe with
@@ -881,7 +903,7 @@ type subtype_error =
   | SE_Constraint of Sym.t * LC.t
 
 type subtype_result = 
-  | Subtype
+  | Subtype of env
   | Not_subtype of subtype_error
 
 
@@ -889,26 +911,33 @@ let constraints_hold env (LC c) =
   true                          (* todo: call z3 *)
 
 
+let resource_typ_equal env t1 t2 = 
+  t1 = t2                       (* todo: maybe up to variable
+                                   instantiations or so *)
+
 let rec subtype env (R rt1) (R rt2) = 
   match rt1, rt2 with
-  | [], [] -> Subtype
+  | [], [] -> Subtype env
   | r1 :: rt1', r2 :: rt2' ->
-     begin match r1, r2 with
-       
-     | (_, T.C c1), _ ->
+     begin match snd r1, snd r2 with
+     | T.C c1, _ ->
         subtype (add_var env r1) (R rt1') (R rt2)
-
-     | _, (n2, T.C c2) ->
+     | _, T.C c2 ->
         if constraints_hold env c2 
         then subtype env (R rt1) (R rt2')
-        else Not_subtype (SE_Constraint (n2, c2))
-
-     | b1, b2 ->
-        if b1 = b2
-        then subtype (add_var env r1) (R rt1) (R rt2)
-        else Not_subtype (SE_Mismatch (b1, b2))
+        else Not_subtype (SE_Constraint (fst r2, c2))
+     | T.A t1, T.A t2 
+          when t1 = t2 ->
+        subtype (add_var env r1) (R rt1) (R rt2)
+     | T.L t1, T.L t2 
+          when t1 = t2 ->
+        subtype (add_var env r1) (R rt1) (R rt2)
+     | T.R t1, T.R t2
+          when resource_typ_equal env t1 t2 ->
+        subtype env (R rt1) (R rt2)
+     | _ ->
+        subtype (add_var env r1) (R rt1) (R rt2)
      end
-
   | r1 :: _, [] -> Not_subtype (SE_Plus r1)
   | [], r2 :: _ -> Not_subtype (SE_Minus r2)
 
