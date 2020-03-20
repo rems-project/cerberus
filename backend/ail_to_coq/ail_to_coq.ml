@@ -165,10 +165,7 @@ let rec will_decay : ail_expr -> bool = fun e ->
   | AilEbinary(e,_,_)  -> will_decay e
   | _                  -> false (* FIXME *)
 
-let not_implemented : string -> 'a = fun s ->
-  panic_no_pos "Feature not implemented: %s." s
-
-let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
+let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, loc, e)) =
   let open AilSyntax in
   let translate = translate_expr lval in
   match e with
@@ -187,11 +184,11 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
         match op with
         | Address     -> assert false (* Handled above. *)
         | Indirection -> assert false (* Handled above. *)
-        | Plus        -> not_implemented "unary operator (Plus)"
-        | Minus       -> not_implemented "unary operator (Minus)"
-        | Bnot        -> not_implemented "unary operator (Bnot)"
-        | PostfixIncr -> not_implemented "unary operator (PostfixIncr)"
-        | PostfixDecr -> not_implemented "unary operator (PostfixDecr)"
+        | Plus        -> not_impl loc "unary operator (Plus)"
+        | Minus       -> not_impl loc "unary operator (Minus)"
+        | Bnot        -> not_impl loc "unary operator (Bnot)"
+        | PostfixIncr -> not_impl loc "unary operator (PostfixIncr)"
+        | PostfixDecr -> not_impl loc "unary operator (PostfixDecr)"
       in
       (UnOp(op, ty, e), l)
   | AilEbinary(e1,op,e2)         ->
@@ -207,9 +204,9 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
         | Gt             -> GtOp
         | Le             -> LeOp
         | Ge             -> GeOp
-        | And            -> not_implemented "nested && operator"
-        | Or             -> not_implemented "nested || operator"
-        | Comma          -> not_implemented "binary operator (Comma)"
+        | And            -> not_impl loc "nested && operator"
+        | Or             -> not_impl loc "nested || operator"
+        | Comma          -> not_impl loc "binary operator (Comma)"
         | Arithmetic(op) ->
         match op with
         | Mul  -> MulOp | Div  -> DivOp | Mod  -> ModOp | Add  -> AddOp
@@ -217,9 +214,9 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
         | Bxor -> XorOp | Bor  -> OrOp
       in
       (BinOp(op, ty1, ty2, e1, e2), l1 @ l2)
-  | AilEassign(e1,e2)            -> not_implemented "nested assignment"
-  | AilEcompoundAssign(e1,op,e2) -> not_implemented "expr compound assign"
-  | AilEcond(e1,e2,e3)           -> not_implemented "expr cond"
+  | AilEassign(e1,e2)            -> not_impl loc "nested assignment"
+  | AilEcompoundAssign(e1,op,e2) -> not_impl loc "expr compound assign"
+  | AilEcond(e1,e2,e3)           -> not_impl loc "expr cond"
   | AilEcast(q,c_ty,e)           ->
       begin
         match c_ty with
@@ -234,7 +231,7 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
   | AilEcall(e,es)               ->
       let fun_id =
         match ident_of_expr e with
-        | None     -> not_implemented "expr complicated call"
+        | None     -> not_impl loc "expr complicated call"
         | Some(id) -> id
       in
       let (es, l) =
@@ -244,13 +241,13 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
       let ret_id = Some(fresh_ret_id ()) in
       let call = (ret_id, Var(Some(fun_id), true), es) in
       (Var(ret_id, false), l @ [call])
-  | AilEassert(e)                -> not_implemented "expr assert nested"
-  | AilEoffsetof(c_ty,is)        -> not_implemented "expr offsetof"
-  | AilEgeneric(e,gas)           -> not_implemented "expr generic"
-  | AilEarray(b,c_ty,oes)        -> not_implemented "expr array"
-  | AilEstruct(sym,fs)           -> not_implemented "expr struct"
-  | AilEunion(sym,id,eo)         -> not_implemented "expr union"
-  | AilEcompound(q,c_ty,e)       -> not_implemented "expr compound"
+  | AilEassert(e)                -> not_impl loc "expr assert nested"
+  | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
+  | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
+  | AilEarray(b,c_ty,oes)        -> not_impl loc "expr array"
+  | AilEstruct(sym,fs)           -> not_impl loc "expr struct"
+  | AilEunion(sym,id,eo)         -> not_impl loc "expr union"
+  | AilEcompound(q,c_ty,e)       -> not_impl loc "expr compound"
   | AilEmemberof(e,id)           ->
       if not lval then assert false;
       let (struct_name, from_union) = struct_data e in
@@ -260,8 +257,8 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
       let (struct_name, from_union) = struct_data e in
       let (e, l) = translate e in
       (GetMember(Deref(LPtr, e), struct_name, from_union, id_to_str id), l)
-  | AilEbuiltin(b)               -> not_implemented "expr builtin"
-  | AilEstr(s)                   -> not_implemented "expr str"
+  | AilEbuiltin(b)               -> not_impl loc "expr builtin"
+  | AilEstr(s)                   -> not_impl loc "expr str"
   | AilEconst(c)                 ->
       let c =
         match c with
@@ -277,36 +274,36 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, _, e)) =
                     | _         -> assert false
                   in
                   Int(Z.to_string i, it)
-              | _                -> not_implemented "weird integer constant"
+              | _                -> not_impl loc "weird integer constant"
             end
-        | ConstantFloating(_)         -> not_implemented "constant float"
-        | ConstantCharacter(_)        -> not_implemented "constant char"
-        | ConstantArray(_,_)          -> not_implemented "constant array"
-        | ConstantStruct(_,_)         -> not_implemented "constant struct"
-        | ConstantUnion(_,_,_)        -> not_implemented "constant union"
+        | ConstantFloating(_)         -> not_impl loc "constant float"
+        | ConstantCharacter(_)        -> not_impl loc "constant char"
+        | ConstantArray(_,_)          -> not_impl loc "constant array"
+        | ConstantStruct(_,_)         -> not_impl loc "constant struct"
+        | ConstantUnion(_,_,_)        -> not_impl loc "constant union"
       in
       (Val(c), [])
   | AilEident(sym)               ->
       let id = sym_to_str sym in
       (Var(Some(id), not (Hashtbl.mem local_vars id)), [])
-  | AilEsizeof(q,c_ty)           -> not_implemented "expr sizeof"
-  | AilEsizeof_expr(e)           -> not_implemented "expr sizeof_expr"
-  | AilEalignof(q,c_ty)          -> not_implemented "expr alignof"
-  | AilEannot(c_ty,e)            -> not_implemented "expr annot"
-  | AilEva_start(e,sym)          -> not_implemented "expr va_start"
-  | AilEva_arg(e,c_ty)           -> not_implemented "expr va_arg"
-  | AilEva_copy(e1,e2)           -> not_implemented "expr va_copy"
-  | AilEva_end(e)                -> not_implemented "expr va_end"
-  | AilEprint_type(e)            -> not_implemented "expr print_type"
-  | AilEbmc_assume(e)            -> not_implemented "expr bmc_assume"
-  | AilEreg_load(r)              -> not_implemented "expr reg_load"
+  | AilEsizeof(q,c_ty)           -> not_impl loc "expr sizeof"
+  | AilEsizeof_expr(e)           -> not_impl loc "expr sizeof_expr"
+  | AilEalignof(q,c_ty)          -> not_impl loc "expr alignof"
+  | AilEannot(c_ty,e)            -> not_impl loc "expr annot"
+  | AilEva_start(e,sym)          -> not_impl loc "expr va_start"
+  | AilEva_arg(e,c_ty)           -> not_impl loc "expr va_arg"
+  | AilEva_copy(e1,e2)           -> not_impl loc "expr va_copy"
+  | AilEva_end(e)                -> not_impl loc "expr va_end"
+  | AilEprint_type(e)            -> not_impl loc "expr print_type"
+  | AilEbmc_assume(e)            -> not_impl loc "expr bmc_assume"
+  | AilEreg_load(r)              -> not_impl loc "expr reg_load"
   | AilErvalue(e) when lval      -> translate e
   | AilErvalue(e)                ->
       let layout = layout_of_tc (tc_of e) in
       let (e, l) = translate_expr true e in
       (Use(layout, e), l)
   | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
-  | AilEfunction_decay(e)        -> not_implemented "expr function_decay"
+  | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
 
 type bool_expr =
   | BE_leaf of ail_expr
@@ -343,10 +340,10 @@ let trans_lval e : expr =
 
 (* Insert local variables. *)
 let insert_bindings bindings =
-  let fn (id, (_, _, c_ty)) =
+  let fn (id, ((loc, _, _), _, c_ty)) =
     let id = sym_to_str id in
     if Hashtbl.mem local_vars id then
-      not_implemented ("variable name collision with " ^ id);
+      not_impl loc "Variable name collision with [%s]." id;
     Hashtbl.add local_vars id c_ty;
     (id, layout_of false c_ty)
   in
@@ -359,8 +356,8 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
     let resume goto = match goto with None -> assert false | Some(s) -> s in
     (* End of the block reached. *)
     match stmts with
-    | []                                         -> (resume final, blocks)
-    | (AnnotatedStatement(_, attrs, s)) :: stmts ->
+    | []                                           -> (resume final, blocks)
+    | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
     let attrs = collect_rc_attrs attrs in
     let attrs_used = ref false in
     let res =
@@ -390,7 +387,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
                 let translate = translate_expr false in
                 let fun_id =
                   match ident_of_expr e with
-                  | None     -> not_implemented "expr complicated call"
+                  | None     -> not_impl loc "expr complicated call"
                   | Some(id) -> id
                 in
                 let (es, l) =
@@ -420,7 +417,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             match bool_expr e with
             | BE_leaf(e) -> (trans_expr e (fun e -> If(e, s1, s2)), blocks)
             | _          ->
-                not_implemented "conditional with || or &&" (* TODO *)
+                not_impl loc "conditional with || or &&" (* TODO *)
           end
       | AilSwhile(e,s)      ->
           let id_body = fresh_block_id () in
@@ -438,7 +435,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             let e =
               match bool_expr e with
               | BE_leaf(e) -> e
-              | _          -> not_implemented "while with || or &&" (* TODO *)
+              | _          -> not_impl loc "while with || or &&" (* TODO *)
             in
             let stmt = trans_expr e (fun e -> If(e, stmt, Goto(id_cont))) in
             SMap.add id_body ([], stmt) blocks
@@ -460,7 +457,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
               let e =
                 match bool_expr e with
                 | BE_leaf(e) -> e
-                | _          -> not_implemented "do with || or &&" (* TODO *)
+                | _          -> not_impl loc "do with || or &&" (* TODO *)
               in
               trans_expr e (fun e -> If(e, Goto(id_body), Goto(id_cont)))
             in
@@ -470,9 +467,9 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             SMap.add id_body ([], stmt) blocks
           in
           (Goto(id_body), blocks)
-      | AilSswitch(_,_)     -> not_implemented "statement switch"
-      | AilScase(_,_)       -> not_implemented "statement case"
-      | AilSdefault(_)      -> not_implemented "statement default"
+      | AilSswitch(_,_)     -> not_impl loc "statement switch"
+      | AilScase(_,_)       -> not_impl loc "statement case"
+      | AilSdefault(_)      -> not_impl loc "statement default"
       | AilSlabel(l,s)      ->
           let (stmt, blocks) =
             trans break continue final (s :: stmts) blocks
@@ -490,8 +487,8 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
             trans_expr e fn
           in
           (List.fold_right add_decl ls stmt, blocks)
-      | AilSpar(_)          -> not_implemented "statement par"
-      | AilSreg_store(_,_)  -> not_implemented "statement store"
+      | AilSpar(_)          -> not_impl loc "statement par"
+      | AilSreg_store(_,_)  -> not_impl loc "statement store"
     in
     if not !attrs_used then
       begin
@@ -580,7 +577,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of functions. *)
   let functions =
     let open AilSyntax in
-    let build (id, (_, attrs, args, AnnotatedStatement(_, s_attrs, stmt))) =
+    let build (id, (_, attrs, args, AnnotatedStatement(loc, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
       let func_attrs = collect_rc_attrs attrs in
@@ -607,14 +604,14 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let func_vars =
         match stmt with
         | AilSblock(bindings, _) -> insert_bindings bindings
-        | _                      -> not_implemented "body not a block"
+        | _                      -> not_impl loc "Body not a block."
       in
       let func_init = fresh_block_id () in
       let func_blocks =
         let stmts =
           match stmt with
           | AilSblock(_, stmts) -> stmts
-          | _                   -> not_implemented "body not a block"
+          | _                   -> not_impl loc "Body not a block."
         in
         let (stmt, blocks) = translate_block stmts SMap.empty in
         SMap.add func_init (collect_rc_attrs s_attrs, stmt) blocks
