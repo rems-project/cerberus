@@ -16,29 +16,34 @@ normal: cerberus-concrete libc
 .PHONY: all
 all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web
 
+.PHONY: full-build
+full-build: prelude-src
+	@echo "[DUNE] full build (no libc)"
+	$(Q)dune build
+
 .PHONY: util
 util:
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
 
 .PHONY: sibylfs
-sibylfs:
+sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
 
 .PHONY: cerberus-concrete
-cerberus-concrete: ocaml-src
+cerberus-concrete: prelude-src
 	@echo "[DUNE] cerberus (concrete)"
 	$(Q)dune build _build/default/backend/driver/main.exe
 
 .PHONY: cerberus-symbolic
-cerberus-symbolic: ocaml-src
+cerberus-symbolic: prelude-src
 	@echo "[DUNE] cerberus-symbolic"
 	$(Q)dune build _build/default/backend/driver/main_symbolic.exe
 
 .PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc
-cerberus-bmc: ocaml-src
+cerberus-bmc: prelude-src
 	@echo "[DUNE] cerberus-bmc"
 	$(Q)dune build _build/default/backend/bmc/main.exe
 	# FIXME does not compile
@@ -71,33 +76,33 @@ runtime/libc/libm.co: cerberus-concrete $(LIBM_SRC)
     $(LIBM_SRC)
 
 .PHONY: ail_playground
-ail_playground: ocaml-src
+ail_playground: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/$@/main.exe
 
 .PHONY: ail_to_coq
-ail_to_coq: ocaml-src
+ail_to_coq: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/$@/main.exe
 
 .PHONY: rustic
-rustic: ocaml-src
+rustic: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/$@/main.exe
 
 .PHONY: absint
-absint: ocaml-src
+absint: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/$@/main.exe
 
 .PHONY: csrt
-csrt: ocaml-src
+csrt: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/$@/main.exe
 
 .PHONY: cerberus-ocaml ocaml
 ocaml: cerberus-ocaml
-cerberus-ocaml: ocaml-src
+cerberus-ocaml: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
 	# FIXME does not compile
@@ -127,7 +132,7 @@ config.json: tools/config.json
 	@cp $< $@
 
 .PHONY: web
-web: ocaml-src config.json tmp/
+web: prelude-src config.json tmp/
 	$(error "Not yet implemented.") # TODO
 #	@make -C backend/web
 #	@cp -L backend/web/concrete/_build/src/instance.native webcerb.concrete
@@ -139,7 +144,7 @@ ui:
 	$(error "Not yet implemented.") # TODO
 #	make -C public
 
-#### LEM sources
+#### LEM sources for the frontend
 LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
                     dlist.lem debug.lem enum.lem state.lem symbol.lem \
                     exception.lem product.lem float.lem any.lem
@@ -188,30 +193,80 @@ LEM_SRC = $(addprefix frontend/model/, $(LEM_SRC_AUX)) \
 					$(addprefix frontend/concurrency/, $(LEM_CONC))
 ####
 
-OCAML_GEN_DIR = ocaml_frontend/generated
-OCAML_SRC = $(addprefix $(OCAML_GEN_DIR)/, $(addsuffix .ml, $(notdir $(basename $(LEM_SRC)))))
-
-LEM_FLAGS = -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn
+PRELUDE_SRC_DIR = ocaml_frontend/generated
+OCAML_SRC = $(addprefix $(PRELUDE_SRC_DIR)/, $(addsuffix .ml, $(notdir $(basename $(LEM_SRC)))))
 
 # All targets generated at once thanks to [&:].
 $(OCAML_SRC)&: $(LEM_SRC)
-	@echo "[MKDIR] ocaml_frontend/generated"
-	$(Q)mkdir -p $(OCAML_GEN_DIR)
-	@echo "[LEM] generating files in [$(OCAML_GEN_DIR)] (log in [lem.log])"
-	$(Q)lem $(LEM_FLAGS) \
-    -outdir $(OCAML_GEN_DIR) -ocaml \
-    $(LEM_SRC) 2> lem.log
-	@echo "[SED] patching things up in [$(OCAML_GEN_DIR)]"
-	$(Q)sed -i"" -e "s/open Operators//" $(OCAML_GEN_DIR)/core_run.ml
-	$(Q)sed -i"" -e "s/open Operators//" $(OCAML_GEN_DIR)/driver.ml
+	@echo "[MKDIR] $(PRELUDE_SRC_DIR)"
+	$(Q)mkdir -p $(PRELUDE_SRC_DIR)
+	@echo "[LEM] generating files in [$(PRELUDE_SRC_DIR)] (log in [ocaml_frontend/lem.log])"
+	$(Q)lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
+    -outdir $(PRELUDE_SRC_DIR) -ocaml \
+    $(LEM_SRC) 2> ocaml_frontend/lem.log
+	@echo "[SED] patching things up in [$(PRELUDE_SRC_DIR)]"
+	$(Q)sed -i"" -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
+	$(Q)sed -i"" -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
 	$(Q)sed -i"" -e "s/Debug.DB_/Debug_ocaml.DB_/g" $(OCAML_SRC)
 
-.PHONY: ocaml-src
-ocaml-src: $(OCAML_SRC)
+#### LEM sources for sibylfs
+SIBYLFS_LEM = dir_heap.lem fs_prelude.lem fs_spec.lem list_array.lem \
+              sibylfs.lem
+SIBYLFS_ML  = abstract_string.ml fs_dict_wrappers.ml fs_interface.ml \
+              fs_dump.ml fs_printer.ml lem_support.ml
+SIBYLFS_MLI = abstract_string.mli fs_dict_wrappers.mli fs_interface.mli \
+              lem_support.mli
 
-.PHONY: clean_ocaml
-clean_ocaml:
-	$(Q)rm -f $(OCAML_SRC)
+SIBYLFS_LEM_ML  = $(addsuffix .ml, $(basename $(SIBYLFS_LEM)))
+
+SIBYLFS_LEM_SRC = $(addprefix sibylfs/src/, $(SIBYLFS_LEM))
+SIBYLFS_ML_SRC  = $(addprefix sibylfs/src/, $(SIBYLFS_ML))
+SIBYLFS_MLI_SRC = $(addprefix sibylfs/src/, $(SIBYLFS_MLI))
+
+SIBYLFS_LEM_TRG = $(addprefix sibylfs/generated/, $(SIBYLFS_LEM_ML))
+SIBYLFS_ML_TRG  = $(addprefix sibylfs/generated/, $(SIBYLFS_ML))
+SIBYLFS_MLI_TRG = $(addprefix sibylfs/generated/, $(SIBYLFS_MLI))
+
+SIBYLFS_SRC = $(SIBYLFS_LEM_SRC) $(SIBYLFS_ML_SRC) $(SIBYLFS_MLI_SRC)
+SIBYLFS_TRG = $(SIBYLFS_LEM_TRG) $(SIBYLFS_ML_TRG) $(SIBYLFS_MLI_TRG)
+
+SIBYLFS_SED = sibylfs/patch_all_ml.sed sibylfs/patch/dir_heap.sed \
+              sibylfs/patch/fs_prelude.sed sibylfs/patch/fs_spec.sed
+####
+
+SIBYLFS_SRC_DIR = sibylfs/generated
+
+# All targets generated at once thanks to [&:].
+$(SIBYLFS_TRG)&: $(SIBYLFS_SRC) $(SIBYLFS_SED)
+	@echo "[MKDIR] $(SIBYLFS_SRC_DIR)"
+	$(Q)mkdir -p $(SIBYLFS_SRC_DIR)
+	@echo "[LEM] generating files in [$(SIBYLFS_SRC_DIR)] (log in [sibylfs/lem.log])"
+	$(Q)lem -wl_unused_vars ign -wl_rename err -wl_comp_message ign \
+	  -wl_pat_exh ign -outdir $(SIBYLFS_SRC_DIR) -ocaml \
+    $(SIBYLFS_LEM_SRC) 2> sibylfs/lem.log
+	@echo "[CP] $(SIBYLFS_MLI_TRG)"
+	$(Q)cp $(SIBYLFS_MLI_SRC) $(SIBYLFS_SRC_DIR)
+	@echo "[CP] $(SIBYLFS_ML_TRG)"
+	$(Q)cp $(SIBYLFS_ML_SRC) $(SIBYLFS_SRC_DIR)
+	@echo "[SED] patching things up in [$(SIBYLFS_SRC_DIR)]"
+	$(Q)sed -i"" -f sibylfs/patch/dir_heap.sed   sibylfs/generated/dir_heap.ml
+	$(Q)sed -i"" -f sibylfs/patch/fs_prelude.sed sibylfs/generated/fs_prelude.ml
+	$(Q)sed -i"" -f sibylfs/patch/fs_spec.sed    sibylfs/generated/fs_spec.ml
+	$(Q)sed -i"" -f sibylfs/patch_all_ml.sed $(SIBYLFS_LEM_TRG) $(SIBYLFS_ML_TRG)
+
+.PHONY: prelude-src
+prelude-src: $(OCAML_SRC) sibylfs-src
+
+.PHONY: sibylfs-src
+sibylfs-src: $(SIBYLFS_TRG)
+
+.PHONY: clean-prelude-src
+clean-prelude-src:
+	$(Q)rm -rf $(PRELUDE_SRC_DIR)
+
+.PHONY: clean-sibylfs-src
+clean-sibylfs-src:
+	$(Q)rm -rf $(SIBYLFS_SRC_DIR)
 
 .PHONY: clean
 clean:
@@ -219,5 +274,5 @@ clean:
 	$(Q)rm -f $(LIBC_TARGETS)
 
 .PHONY: distclean
-distclean: clean clean_ocaml
-	$(Q)rm -rf tmp config.json ocaml_frontend/generated
+distclean: clean clean-prelude-src clean-sibylfs-src
+	$(Q)rm -rf tmp config.json
