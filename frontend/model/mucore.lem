@@ -126,7 +126,7 @@ type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  (* | M_Easeq of (symbol * mu_base_type) * (mu_action 'a 'bty) * (mu_paction 'a 'bty) (\* atomic sequencing *\) *)
  (* | M_Eindet of nat * (mu_expr 'a 'bty) (\* indeterminately sequenced expr *)
  | M_Ebound of nat * (mu_expr 'a 'bty) (* $\ldots$and boundary *)
- (* | M_End of list (mu_expr 'a 'bty) (\* nondeterministic sequencing *\) *)
+ | M_End of list (mu_expr 'a 'bty) (* nondeterministic choice *)
  | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * tsymbol 'bty)) * (mu_expr 'a 'bty) (* save label *)
  | M_Erun of 'a * symbol * list (tsymbol 'bty) (* run from label *)
  (* | M_Epar of list (mu_expr 'a 'bty) (\* cppmem-like thread creation *\) *)
@@ -425,8 +425,8 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
      *    Core.Eindet n (mu_to_core__expr env e) *)
     | M_Ebound n e ->
        Core.Ebound n (mu_to_core__expr env e)
-    (* | M_End es ->
-     *    Core.End (List.map (mu_to_core__expr env) es) *)
+    | M_End es ->
+       Core.End (List.map (mu_to_core__expr env) es)
     | M_Esave (sym,bt) sbp e ->
        let sbp = 
          List.map (fun (sym,(bt,pe)) -> (sym,(bt,make_symbol_pexpr pe))) sbp in

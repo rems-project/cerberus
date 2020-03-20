@@ -469,7 +469,8 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
   | Ebound n e ->
      wrap (M_Ebound n (n_expr e k))
   | End es ->
-     failwith "todo End"
+     let es = List.map normalise_expr es in
+     k (wrap (M_End es))
   | Esave b syms_typs_pes e ->  (* have to check *)
      let (syms,typs_pes) = List.unzip syms_typs_pes in
      let (typs,pes) = List.unzip typs_pes in
