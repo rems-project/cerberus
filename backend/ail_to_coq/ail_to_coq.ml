@@ -8,6 +8,22 @@ type typed_ail = GenTypes.genTypeCategory AilSyntax.ail_program
 
 type ail_expr = GenTypes.genTypeCategory AilSyntax.expression
 
+let interp_gt : GenTypes.genType -> Ctype.ctype = fun t ->
+  let loc = Location_ocaml.unknown in
+  let impl = Ocaml_implementation.hafniumIntImpl in
+  let c_ty = GenTypesAux.interpret_genType loc impl t in
+  match ErrorMonad.runErrorMonad c_ty with
+  | Either.Right(c_ty) -> c_ty
+  | _                  -> assert false
+
+let interp_gtc : GenTypes.genTypeCategory -> GenTypes.typeCategory = fun tc ->
+  let loc = Location_ocaml.unknown in
+  let impl = Ocaml_implementation.hafniumIntImpl in
+  let m_tc = GenTypesAux.interpret_genTypeCategory loc impl tc in
+  match ErrorMonad.runErrorMonad m_tc with
+  | Either.Right(tc) -> tc
+  | _                -> assert false
+
 let not_implemented : string -> 'a = fun s ->
   Printf.eprintf "Feature not implemented: %s.\n%!" s;
   exit 1
@@ -26,7 +42,7 @@ let collect_rc_attrs (Annot.Attrs(attrs)) =
   in
   List.rev (List.fold_left fn [] attrs)
 
-let translate_int_type i =
+let translate_int_type : Ctype.integerType -> Coq_ast.int_type = fun i ->
   let size_of_base_type signed i =
     match i with
     | Ichar           -> not_implemented "size_of_base_type (IChar)"
@@ -34,7 +50,7 @@ let translate_int_type i =
     | Int_            -> ItI32(signed)
     | Long            -> not_implemented "size_of_base_type (LongLong)"
     | LongLong        -> not_implemented "size_of_base_type (LongLong)"
-      (* Things defined in the standard libraries *)
+    (* Things defined in the standard libraries *)
     | IntN_t(_)       -> not_implemented "size_of_base_type (IntN_t)"
     | Int_leastN_t(_) -> not_implemented "size_of_base_type (Int_leastN_t)"
     | Int_fastN_t(_)  -> not_implemented "size_of_base_type (Int_fastN_t)"
@@ -42,35 +58,36 @@ let translate_int_type i =
     | Intptr_t        -> ItSize_t(signed)
   in
   match i with
-  | Char        -> not_implemented "translate_layout (Char)"
-  | Bool        -> not_implemented "translate_layout (Bool)"
+  | Char        -> not_implemented "layout_of (Char)"
+  | Bool        -> not_implemented "layout_of (Bool)"
   | Signed(i)   -> size_of_base_type true  i
   | Unsigned(i) -> size_of_base_type false i
-  | Enum(sym)   -> not_implemented "translate_layout (Enum)"
+  | Enum(_)     -> not_implemented "layout_of (Enum)"
   (* Things defined in the standard libraries *)
-  | Wchar_t     -> not_implemented "translate_layout (Wchar_t)"
-  | Wint_t      -> not_implemented "translate_layout (Win_t)"
+  | Wchar_t     -> not_implemented "layout_of (Wchar_t)"
+  | Wint_t      -> not_implemented "layout_of (Win_t)"
   | Size_t      -> ItSize_t(false)
-  | Ptrdiff_t   -> not_implemented "translate_layout (Ptrdiff_t)"
+  | Ptrdiff_t   -> not_implemented "layout_of (Ptrdiff_t)"
 
-(** [translate_layout fa c_ty] translates the C type [c_ty] into a layout. The
+(** [layout_of fa c_ty] translates the C type [c_ty] into a layout.  Note that
     argument [fa] must be set to [true] when in function arguments, since this
     requires a different tranlation for arrays (always pointers). *)
-let translate_layout fa c_ty =
-  let rec translate Ctype.(Ctype(_, c_ty)) =
+let layout_of fa c_ty =
+  let rec layout_of Ctype.(Ctype(_, c_ty)) =
   match c_ty with
     | Void                -> LVoid
     | Basic(Integer(i))   -> LInt (translate_int_type i)
-    | Basic(Floating(_))  -> not_implemented "translate_layout (Basic float)"
+    | Basic(Floating(_))  -> not_implemented "layout_of (Basic float)"
     | Array(_,_) when fa  -> LPtr
-    | Array(c_ty,None )   -> not_implemented "translate_layout (Array[])"
-    | Array(c_ty,Some(n)) -> LArray(translate c_ty, Z.to_string n)
-    | Function(_,_,_,_)   -> not_implemented "translate_layout (Function)"
+    | Array(c_ty,None )   -> not_implemented "layout_of (Array[])"
+    | Array(c_ty,Some(n)) -> LArray(layout_of c_ty, Z.to_string n)
+    | Function(_,_,_,_)   -> not_implemented "layout_of (Function)"
     | Pointer(_,_)        -> LPtr
-    | Atomic(_)           -> not_implemented "translate_layout (Atomic)"
+    | Atomic(_)           -> not_implemented "layout_of (Atomic)"
     | Struct(sym)         -> LStruct(sym_to_str sym, false)
     | Union(syn)          -> LStruct(sym_to_str syn, true )
-  in translate c_ty
+  in
+  layout_of c_ty
 
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
@@ -87,36 +104,20 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let rec ident_of_expr (AnnotatedExpression(_, _, _, expr)) =
-  match expr with
+let rec ident_of_expr (AnnotatedExpression(_,_,_,e)) =
+  match e with
   | AilEident(sym)        -> Some(sym_to_str sym)
   | AilEfunction_decay(e) -> ident_of_expr e
   | _                     -> None
 
-let translate_gen_type ty =
-  let open GenTypes in
-  match ty with
-  | GenLValueType(_,c_ty,_)      -> translate_layout false c_ty
-  | GenRValueType(ty)            ->
-  match ty with
-  | GenPointer(_,_)              -> LPtr
-  | GenVoid                      -> assert false
-  | GenArray(_,_)                -> assert false
-  | GenFunction(_,_,_,_)         -> assert false
-  | GenStruct(id)                -> LStruct(sym_to_str id, false)
-  | GenUnion(id)                 -> LStruct(sym_to_str id, true )
-  | GenAtomic(c_ty)              -> translate_layout false c_ty
-  | GenBasic(b)                  ->
-  match b with
-  | GenInteger(Concrete(i))      -> LInt(translate_int_type i)
-  | GenInteger(SizeT)            -> LInt(ItSize_t(false))
-  | GenInteger(PtrdiffT)         -> assert false
-  | GenInteger(Unknown(_))       -> assert false
-  | GenInteger(Promote(_))       -> assert false
-  | GenInteger(Usual(_,_))       -> assert false
-  | GenFloating(_)               -> assert false
+let layout_of_tc : GenTypes.typeCategory -> Coq_ast.layout = fun tc ->
+  match tc with
+  | GenTypes.LValueType(_,c_ty,_) -> layout_of false c_ty
+  | GenTypes.RValueType(c_ty)     -> layout_of false c_ty
 
-let gen_type_of_expr (AnnotatedExpression(ty, _, _, _)) = ty
+let translate_gen_type ty = layout_of_tc (interp_gtc ty)
+
+let tc_of (AnnotatedExpression(ty,_,_,_)) = interp_gtc ty
 
 let is_const_0 (AnnotatedExpression(_, _, _, e)) =
   match e with
@@ -128,41 +129,27 @@ let is_const_0 (AnnotatedExpression(_, _, _, e)) =
       end
   | _            -> false
 
-let rec op_type_of_genIntegerType i =
-  let open GenTypes in
-  match i with
-  | Concrete(i) -> OpInt(translate_int_type i)
-  | SizeT       -> assert false
-  | PtrdiffT    -> assert false
-  | Unknown(_)  -> assert false
-  | Promote(i)  -> op_type_of_genIntegerType i (* FIXME cast? *)
-  | Usual(i,_)  -> op_type_of_genIntegerType i (* FIXME second one? *)
+let op_type_of Ctype.(Ctype(_, c_ty)) =
+  match c_ty with
+  | Void                -> not_implemented "op_type_of (Void)"
+  | Basic(Integer(i))   -> OpInt(translate_int_type i)
+  | Basic(Floating(_))  -> not_implemented "op_type_of (Basic float)"
+  | Array(_,_)          -> not_implemented "op_type_of (Array)"
+  | Function(_,_,_,_)   -> not_implemented "op_type_of (Function)"
+  | Pointer(_,c_ty)     -> OpPtr(layout_of false c_ty)
+  | Atomic(_)           -> not_implemented "op_type_of (Atomic)"
+  | Struct(_)           -> not_implemented "op_type_of (Struct)"
+  | Union(_)            -> not_implemented "op_type_of (Union)"
 
-let op_type_of_genTypeCategory ty =
-  let open GenTypes in
-  match ty with
-  | GenLValueType(_,_,_) -> not_implemented "op_type_of_expr (L)"
-  | GenRValueType(ty)    ->
-  match ty with
-  | GenPointer(_,c_ty)       -> OpPtr(translate_layout false c_ty)
-  | GenVoid                  -> assert false
-  | GenArray(_,_)            -> assert false
-  | GenFunction(_,_,_,_)     -> assert false
-  | GenStruct(_)             -> assert false
-  | GenUnion(_)              -> assert false
-  | GenAtomic(_)             -> assert false (* FIXME *)
-  | GenBasic(GenInteger(i))  -> op_type_of_genIntegerType i
-  | GenBasic(GenFloating(_)) -> assert false
-
-let op_type_of_expr (AnnotatedExpression(ty, _, _, _)) =
-  op_type_of_genTypeCategory ty
-
-let op_type_of_ctype c_ty =
-  op_type_of_genTypeCategory (GenTypes.(GenRValueType(inject_type c_ty)))
+let op_type_of_tc : GenTypes.typeCategory -> Coq_ast.op_type = fun tc ->
+  match tc with
+  | GenTypes.LValueType(_,c_ty,_) -> op_type_of c_ty
+  | GenTypes.RValueType(c_ty)     -> op_type_of c_ty
 
 let struct_data : ail_expr -> string * bool = fun e ->
+  let AnnotatedExpression(gtc,_,_,_) = e in
   let open GenTypes in
-  match gen_type_of_expr e with
+  match gtc with
   | GenRValueType(GenPointer(_,Ctype(_,Struct(s))))
   | GenLValueType(_,Ctype(_,Struct(s)),_)           -> (sym_to_str s, false)
   | GenRValueType(GenPointer(_,Ctype(_,Union(s) )))
@@ -186,11 +173,11 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       (AddrOf(e), l)
   | AilEunary(Indirection,e)     ->
       if will_decay e then translate e else
-      let layout = translate_gen_type (gen_type_of_expr e) in
+      let layout = layout_of_tc (tc_of e) in
       let (e, l) = translate e in
       (Deref(layout, e), l)
   | AilEunary(op,e)              ->
-      let ty = op_type_of_expr e in
+      let ty = op_type_of_tc (tc_of e) in
       let (e, l) = translate e in
       let op =
         match op with
@@ -204,8 +191,8 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
       in
       (UnOp(op, ty, e), l)
   | AilEbinary(e1,op,e2)         ->
-      let ty1 = op_type_of_expr e1 in
-      let ty2 = op_type_of_expr e2 in
+      let ty1 = op_type_of_tc (tc_of e1) in
+      let ty2 = op_type_of_tc (tc_of e2) in
       let (e1, l1) = translate e1 in
       let (e2, l2) = translate_expr false e2 in
       let op =
@@ -235,8 +222,8 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
         | Ctype(_,Pointer(_,Ctype(_,Void))) when is_const_0 e ->
             (Val(Null), [])
         | _                                                   ->
-        let ty = op_type_of_expr e in
-        let op_ty = op_type_of_ctype c_ty in
+        let ty = op_type_of_tc (tc_of e) in
+        let op_ty = op_type_of c_ty in
         let (e, l) = translate e in
         (UnOp(CastOp(op_ty), ty, e), l)
       end
@@ -281,7 +268,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
               match i with
               | IConstant(i,_,_) ->
                   let it =
-                    match op_type_of_genTypeCategory ty with
+                    match op_type_of_tc (interp_gtc ty) with
                     | OpInt(it) -> it
                     | _         -> assert false
                   in
@@ -311,7 +298,7 @@ let rec translate_expr lval (AnnotatedExpression(ty, _, _, e)) =
   | AilEreg_load(r)              -> not_implemented "expr reg_load"
   | AilErvalue(e) when lval      -> translate e
   | AilErvalue(e)                ->
-      let layout = translate_gen_type (gen_type_of_expr e) in
+      let layout = layout_of_tc (tc_of e) in
       let (e, l) = translate_expr true e in
       (Use(layout, e), l)
   | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
@@ -357,7 +344,7 @@ let insert_bindings bindings =
     if Hashtbl.mem local_vars id then
       not_implemented ("variable name collision with " ^ id);
     Hashtbl.add local_vars id c_ty;
-    (id, translate_layout false c_ty)
+    (id, layout_of false c_ty)
   in
   List.map fn bindings
 
@@ -386,14 +373,13 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
       | AilSskip            -> trans break continue final stmts blocks
       | AilSexpr(e)         ->
           let (stmt, blocks) = trans break continue final stmts blocks in
-          let ty = gen_type_of_expr e in
           let stmt =
             match strip_expr e with
             | AilEassert(e)     ->
                 trans_expr e (fun e -> Assert(e, stmt))
             | AilEassign(e1,e2) ->
                 let e1 = trans_lval e1 in
-                let layout = translate_gen_type ty in
+                let layout = layout_of_tc (tc_of e) in
                 trans_expr e2 (fun e2 -> Assign(layout, e1, e2, stmt))
             | AilEcall(e,es)    ->
                 let translate = translate_expr false in
@@ -492,7 +478,7 @@ let translate_block : 'a -> (rc_attr list * stmt) SMap.t ->
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
             let layout =
-              try translate_layout false (Hashtbl.find local_vars id)
+              try layout_of false (Hashtbl.find local_vars id)
               with Not_found -> assert false
             in
             let fn e = Assign(layout, Var(Some(id),false), e, stmt) in
@@ -559,7 +545,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let fn (id, (attrs, _, c_ty)) =
           let attrs = collect_rc_attrs attrs in
-          (id_to_str id, (attrs, translate_layout false c_ty))
+          (id_to_str id, (attrs, layout_of false c_ty))
         in
         (List.map fn l, is_union)
       in
@@ -608,7 +594,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
           Hashtbl.add local_vars id c_ty;
-          (id, translate_layout true c_ty)
+          (id, layout_of true c_ty)
         in
         List.mapi fn args_decl
       in

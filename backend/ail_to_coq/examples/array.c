@@ -14,3 +14,7 @@ int main() {
   a[0].i = 1;
   return 0;
 }
+
+int test(int a[2], int b[], int *c){
+  return 0;
+}
