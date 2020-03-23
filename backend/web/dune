@@ -1,0 +1,28 @@
+(library
+ (name instance)
+ (modules instance instance_api)
+ (flags (:standard -w -3-6-27))
+ (wrapped false)
+ (libraries cmdliner lwt
+  cerb_frontend cerb_backend bmc))
+
+(executable
+ (name web)
+ (public_name web)
+ (flags (:standard -w -3-6-27))
+ (modules web)
+ (libraries lwt cohttp-lwt-unix ezgzip
+  cerb_frontend cerb_backend mem_concrete util instance))
+
+(executable
+ (name web_symbolic)
+ (public_name web-symbolic)
+ (flags (:standard -w -3-6-27))
+ (modules web_symbolic)
+ (libraries lwt cohttp-lwt-unix ezgzip
+  cerb_frontend cerb_backend mem_symbolic util instance))
+
+(rule
+ (target web_symbolic.ml)
+ (deps web.ml)
+ (action (copy web.ml web_symbolic.ml)))

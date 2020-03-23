@@ -1,1 +1,2 @@
-(dirs common driver bmc ail_playground rustic absint ocaml ail_to_coq csrt)
+(dirs absint ail_playground ail_to_coq bmc common csrt driver rustic web)
+; FIXME remove file one [ocaml] builds.
