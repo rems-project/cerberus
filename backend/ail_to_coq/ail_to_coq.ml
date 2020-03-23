@@ -183,6 +183,18 @@ let rec will_decay : ail_expr -> bool = fun e ->
   | AilEbinary(e,_,_)  -> will_decay e
   | _                  -> false (* FIXME *)
 
+let rec find_function_decl fname decls =
+  let open AilSyntax in
+  match decls with
+  | []                         -> assert false
+  | (id_decl, (_, d)) :: decls ->
+  if sym_to_str id_decl <> fname then find_function_decl fname decls else
+  match d with
+  | Decl_function(_,(_, ty),args,_,_,_) -> (ty, args)
+  | Decl_object(_,_,_)                  -> assert false
+
+let global_decls = ref []
+
 let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
@@ -262,8 +274,15 @@ let rec translate_expr lval goal_ty e =
           | None     -> not_impl loc "expr complicated call"
           | Some(id) -> id
         in
+        let (_, args) = find_function_decl fun_id !global_decls in
         let (es, l) =
-          let es_ls = List.map translate es in
+          let fn i e =
+            let (_, ty, _) = List.nth args i in
+            match op_type_opt Location_ocaml.unknown ty with
+            | Some(OpInt(_)) as goal_ty -> translate_expr lval goal_ty e
+            | _                         -> translate e
+          in
+          let es_ls = List.mapi fn es in
           (List.map fst es_ls, List.concat (List.map snd es_ls))
         in
         let ret_id = Some(fresh_ret_id ()) in
@@ -390,9 +409,7 @@ let insert_bindings bindings =
   in
   List.map fn bindings
 
-let translate_block : 'a -> (rc_attr list * stmt) SMap.t -> op_ty_opt ->
-                        stmt * (rc_attr list * stmt) SMap.t =
-    fun stmts blocks ret_ty ->
+let translate_block stmts blocks ret_ty =
   let rec trans break continue final stmts blocks =
     let open AilSyntax in
     let resume goto = match goto with None -> assert false | Some(s) -> s in
@@ -587,6 +604,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   let tag_defs   = sigma.tag_definitions      in
   (*let ext_idmap  = sigma.extern_idmap         in*)
 
+  (* Give global access to declarations. *)
+  global_decls := decls;
+
   (* Get the global variables. *)
   let global_vars =
     let fn (id, (_, decl)) acc =
@@ -644,18 +664,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
       let func_attrs = collect_rc_attrs attrs in
-      let (args_decl, ret_ty) =
-        let rec find l =
-          match l with
-          | []                     -> assert false
-          | (id_decl, (_, d)) :: l ->
-          if sym_to_str id_decl <> func_name then find l else
-          match d with
-          | Decl_function(_,(_, ty),args,_,_,_) -> (args, ty)
-          | Decl_object(_,_,_)                  -> assert false
-        in
-        find decls
-      in
+      let (ret_ty, args_decl) = find_function_decl func_name decls in
       let func_args =
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
