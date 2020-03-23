@@ -192,6 +192,7 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, loc, e)) =
       in
       (UnOp(op, ty, e), l)
   | AilEbinary(e1,op,e2)         ->
+      let res_ty = op_type_of_tc (to_type_cat ty) in
       let ty1 = op_type_of_tc (tc_of e1) in
       let ty2 = op_type_of_tc (tc_of e2) in
       let (e1, l1) = translate e1 in
@@ -212,6 +213,22 @@ let rec translate_expr lval (AilSyntax.AnnotatedExpression(ty, _, loc, e)) =
         | Mul  -> MulOp | Div  -> DivOp | Mod  -> ModOp | Add  -> AddOp
         | Sub  -> SubOp | Shl  -> ShlOp | Shr  -> ShrOp | Band -> AndOp
         | Bxor -> XorOp | Bor  -> OrOp
+      in
+      let (e1, ty1, e2, ty2) =
+        (* Inserting casts if necessary for integer operations. *)
+        match (ty1, ty2, res_ty) with
+        | (OpInt(_), OpInt(_), OpInt(_)) ->
+            let (ty1, e1) =
+              if ty1 = res_ty then (ty1, e1)
+              else (res_ty, UnOp(CastOp(res_ty), ty1, e1))
+            in
+            let (ty2, e2) =
+              if ty2 = res_ty then (ty2, e2)
+              else (res_ty, UnOp(CastOp(res_ty), ty2, e2))
+            in
+            (e1, ty1, e2, ty2)
+        | _                              ->
+            (e1, ty1, e2, ty2)
       in
       (BinOp(op, ty1, ty2, e1, e2), l1 @ l2)
   | AilEassign(e1,e2)            -> not_impl loc "nested assignment"
