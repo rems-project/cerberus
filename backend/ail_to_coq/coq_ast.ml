@@ -10,6 +10,7 @@ type int_type =
   | ItI16    of bool (* signed *)
   | ItI32    of bool (* signed *)
   | ItI64    of bool (* signed *)
+  | ItBool
 
 type layout =
   | LVoid
