@@ -76,7 +76,11 @@ Section examples_int_c.
         "b" <-{ it_layout bool_it }
           UnOp (CastOp $ IntOp bool_it) (IntOp i32) ((use{it_layout i64} ("l")) ={IntOp i64, IntOp i64} (use{it_layout i64} ("l"))) ;
         "b" <-{ it_layout bool_it }
+          UnOp (CastOp $ IntOp bool_it) (IntOp i32) ((UnOp (CastOp $ IntOp i64) (IntOp i32) (use{it_layout i32} ("i"))) ={IntOp i64, IntOp i64} (use{it_layout i64} ("l"))) ;
+        "b" <-{ it_layout bool_it }
           UnOp (CastOp $ IntOp bool_it) (IntOp i64) ((use{it_layout i64} ("l")) +{IntOp i64, IntOp i64} (use{it_layout i64} ("l"))) ;
+        "b" <-{ it_layout bool_it }
+          UnOp (CastOp $ IntOp bool_it) (IntOp i64) ((UnOp (CastOp $ IntOp i64) (IntOp i32) (use{it_layout i32} ("i"))) +{IntOp i64, IntOp i64} (use{it_layout i64} ("l"))) ;
         if: UnOp (CastOp $ IntOp bool_it) (IntOp i32) ((use{it_layout i64} ("l")) ={IntOp i64, IntOp i64} (use{it_layout i64} ("l")))
         then
         assert: (UnOp (CastOp $ IntOp bool_it) (IntOp i32) ((use{it_layout i64} ("l")) ={IntOp i64, IntOp i64} (use{it_layout i64} ("l")))) ;
