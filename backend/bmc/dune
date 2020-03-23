@@ -3,7 +3,8 @@
 (executable
  (name main)
  (public_name cerberus-bmc)
- (flags (:standard -w -6-27))
-; (c_library_flags -lstdc++) ; FIXME
+ (flags (:standard -w -6-27)
+        (-cclib -lstdc++))
+; (c_library_flags -lstdc++) ; WHY IS THIS NOT WORKING (instead of cclib)?
  (libraries cmdliner str unix angstrom
   cerb_frontend cerb_backend mem_concrete util))
