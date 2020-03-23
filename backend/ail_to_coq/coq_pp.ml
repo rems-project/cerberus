@@ -23,7 +23,7 @@ let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   | ItI32(false)        -> pp "u32"
   | ItI64(true)         -> pp "i64"
   | ItI64(false)        -> pp "u64"
-
+  | ItBool              -> pp "bool_it"
 
 let rec pp_layout : Coq_ast.layout pp = fun ff layout ->
   let pp fmt = Format.fprintf ff fmt in
