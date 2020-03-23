@@ -32,7 +32,7 @@ type mu_object_value 'bty =  (* C object values *)
  | M_OVunion of symbol * Symbol.identifier * Mem.mem_value (* C union value *)
 
 type mu_loaded_value 'bty =  (* potentially unspecified C object values *)
- | M_LVspecified of ov_tsymbol 'bty (* non-unspecified loaded value *)
+ | M_LVspecified of mu_object_value 'bty (* non-unspecified loaded value *)
  | M_LVunspecified of ctype (* unspecified loaded value *)
 
 
@@ -240,8 +240,7 @@ let rec mu_to_core__object_value (env : symbol_env 'bty) ov =
 
 and mu_to_core__loaded_value (env : symbol_env 'bty) lv = 
   match lv with
-  | M_LVspecified sym ->
-     let ov = get_object_value env sym in
+  | M_LVspecified ov ->
      Core.LVspecified (mu_to_core__object_value env ov)
   | M_LVunspecified ct -> Core.LVunspecified ct
   end

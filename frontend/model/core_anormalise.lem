@@ -179,8 +179,8 @@ let rec n_ov lb annots v k =
 and n_lv lb annots v k = 
   match v with
   | LVspecified ov ->
-     n_val_name lb annots (Vobject ov) (fun sym ->
-     k (M_LVspecified sym))
+     n_ov lb annots ov (fun ov ->
+     k (M_LVspecified ov))
   | LVunspecified ct ->
      k (M_LVunspecified ct)
   end
