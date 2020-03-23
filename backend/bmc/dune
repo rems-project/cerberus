@@ -4,13 +4,13 @@
  (flags (:standard -w -6-27))
  (wrapped false)
  (modules :standard \ main)
+ (c_library_flags -lstdc++)
  (libraries angstrom cerb_frontend cerb_backend))
 
 (executable
  (name main)
  (public_name cerberus-bmc)
- (flags (:standard -w -6-27) (-cclib -lstdc++))
+ (flags (:standard -w -6-27))
  (modules main)
-; (c_library_flags -lstdc++) ; WHY IS THIS NOT WORKING (instead of cclib)?
  (libraries cmdliner str unix angstrom
   cerb_frontend cerb_backend mem_concrete util bmc))
