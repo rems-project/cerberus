@@ -36,7 +36,11 @@ int main() {
     b = true;
     b = false;
     b = l == l;
+    // the following is not allowed intentionally
+    // b = i == l;
+    b = (long)i == l;
     b = l + l;
+    b = i + l;
 
     // test if stmt and assert
     if (l == l) {
