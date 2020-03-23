@@ -233,6 +233,7 @@ let rec translate_expr lval goal_ty e =
     | AilEbinary(e1,op,e2)         ->
         let ty1 = op_type_of_tc (tc_of e1) in
         let ty2 = op_type_of_tc (tc_of e2) in
+        let arith_op = ref false in
         let op =
           match op with
           | Eq             -> EqOp
@@ -245,6 +246,7 @@ let rec translate_expr lval goal_ty e =
           | Or             -> not_impl loc "nested || operator"
           | Comma          -> not_impl loc "binary operator (Comma)"
           | Arithmetic(op) ->
+          arith_op := true;
           match op with
           | Mul  -> MulOp | Div  -> DivOp | Mod  -> ModOp | Add  -> AddOp
           | Sub  -> SubOp | Shl  -> ShlOp | Shr  -> ShrOp | Band -> AndOp
@@ -253,11 +255,13 @@ let rec translate_expr lval goal_ty e =
         let (goal_ty, ty1, ty2) =
           match (ty1, ty2, res_ty) with
           | (OpInt(_), OpInt(_), Some((OpInt(_) as res_ty))) ->
-              (Some(res_ty), res_ty, res_ty)
+              if !arith_op then (Some(res_ty), res_ty, res_ty) else
+              if ty1 = ty2 then (None, ty1, ty2) else
+              not_impl loc "Operand types not uniform for comparing operator."
           | (_       , _       , _                         ) ->
               (None        , ty1   , ty2   )
         in
-        let (e1, l1) = translate_expr lval goal_ty e1 in
+        let (e1, l1) = translate_expr lval  goal_ty e1 in
         let (e2, l2) = translate_expr false goal_ty e2 in
         (BinOp(op, ty1, ty2, e1, e2), l1 @ l2)
     | AilEassign(e1,e2)            -> not_impl loc "nested assignment"
