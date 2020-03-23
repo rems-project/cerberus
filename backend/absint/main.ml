@@ -140,7 +140,7 @@ let cerberus debug_level progress
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.foldlM0 (fun core_files file ->
+    Exception.except_foldlM (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
         return (core_file::core_files)) [] (core_libraries (not nolibc) link_lib_path link_core_obj @ files)
   in
@@ -172,7 +172,7 @@ let cerberus debug_level progress
         | None -> Filename.chop_extension first_file
       in
       if cpp_only then
-        Exception.foldlM0 (fun () file ->
+        Exception.except_foldlM (fun () file ->
             cpp (conf, io) file >>= fun processed_file ->
             print_file processed_file;
             return ()

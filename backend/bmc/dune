@@ -3,6 +3,7 @@
 (executable
  (name main)
  (public_name cerberus-bmc)
- (flags (:standard -w -6))
- (libraries cmdliner str unix
+ (flags (:standard -w -6-27))
+; (c_library_flags -lstdc++) ; FIXME
+ (libraries cmdliner str unix angstrom
   cerb_frontend cerb_backend mem_concrete util))

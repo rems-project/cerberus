@@ -36,10 +36,10 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (*========================================================================*)
 
-open Auxl
+open Cerb_backend.Auxl
 open Bmc_sorts
-open Bmc_utils
-open Core
+
+open Cerb_frontend
 open Printf
 open Util
 open Z3

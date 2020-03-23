@@ -4,6 +4,8 @@
 (* this assumes 'asw' is pretty simple *)
 
 (* thanks to Stella Lau for a bug fix *)
+open Cerb_frontend
+open Cerb_backend (* for Dot *)
 
 module Int = struct
   type t = int

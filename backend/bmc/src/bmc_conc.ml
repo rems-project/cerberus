@@ -4,6 +4,8 @@ open Bmc_globals
 open Bmc_sorts
 open Bmc_types
 open Bmc_utils
+
+open Cerb_frontend
 open Core
 open Printf
 open Util
@@ -1246,7 +1248,9 @@ end
 module RC11MemoryModel : MemoryModel = struct
   open MemoryModelCommon
 
+(* UNUSED
   type func_decl_ty = string * Sort.sort list * Sort.sort
+*)
 
   type decls = {
     (* Accessors *)
@@ -1315,6 +1319,7 @@ module RC11MemoryModel : MemoryModel = struct
     sbrf_clk : Expr.expr -> Expr.expr;
   }
 
+(* UNUSED
   type assertions = {
     aid            : Expr.expr list;
     guard          : Expr.expr list;
@@ -1344,6 +1349,7 @@ module RC11MemoryModel : MemoryModel = struct
 
     sbrf_clk       : Expr.expr list;
   }
+*)
 
   (*
   type execution = {
@@ -1380,9 +1386,11 @@ module RC11MemoryModel : MemoryModel = struct
 
   (* ==== Helper aliases ==== *)
 
+(* UNUSED
   let mk_forall arglist symlist expr : Expr.expr =
     Quantifier.expr_of_quantifier (Quantifier.mk_forall g_ctx
       arglist symlist expr None [] [] None None)
+*)
 
   (* ==== Type definitions ==== *)
   let mk_decls (events: Sort.sort)

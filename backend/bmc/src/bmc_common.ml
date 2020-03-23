@@ -2,6 +2,7 @@ open Bmc_globals
 open Bmc_sorts
 open Bmc_utils
 
+open Cerb_frontend
 open Ctype
 open Core
 open Impl_mem
@@ -195,8 +196,8 @@ let cot_to_z3 (cot: core_object_type) : Sort.sort =
   | OTy_union _ ->
     failwith "Error: unions are not supported."
 
-let rec cbt_to_z3 (cbt: core_base_type)
-                  (file: unit typed_file): Sort.sort =
+let cbt_to_z3 (cbt: core_base_type)
+              (file: unit typed_file): Sort.sort =
   match cbt with
   | BTy_unit                -> UnitSort.mk_sort
   | BTy_boolean             -> boolean_sort
@@ -398,7 +399,6 @@ let mk_guarded_ite (exprs : Expr.expr list)
 (* =========== CUSTOM Z3 FUNCTIONS =========== *)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
 module ImplFunctions = struct
-  open Z3.FuncDecl
   (* ---- Implementation ---- *)
   let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
   let sizeof_ptr = Ocaml_implementation.Impl.sizeof_pointer

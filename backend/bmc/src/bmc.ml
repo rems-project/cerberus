@@ -3,16 +3,11 @@ open Bmc_conc
 open Bmc_globals
 open Bmc_monad
 open Bmc_sorts
-open Bmc_substitute
-open Bmc_types
 open Bmc_utils
 open Z3
-open Z3.Arithmetic
 
-open Annot
+open Cerb_frontend
 open Core
-open Core_aux
-open Impl_mem
 open Printf
 open Util
 

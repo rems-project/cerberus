@@ -7,13 +7,13 @@ open Bmc_substitute
 open Bmc_types
 open Bmc_utils
 
+open Cerb_frontend
 open Core
 open Core_aux
 open Impl_mem
 open Printf
 open Util
 open Z3
-open Z3.Arithmetic
 
 module Caux = Core_aux
 
@@ -3500,8 +3500,10 @@ module BmcSeqMem = struct
 
     let addr_cmp = Stdlib.compare
 
+(* UNUSED
     let mk_addr (alloc: alloc_id) (index: index) =
       (alloc, index)
+*)
 
     let empty_memory = Pmap.empty addr_cmp
 
