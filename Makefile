@@ -140,16 +140,17 @@ config.json: tools/config.json
 
 .PHONY: web
 web: prelude-src config.json tmp/
-	$(error "Not yet implemented.") # TODO
-#	@make -C backend/web
-#	@cp -L backend/web/concrete/_build/src/instance.native webcerb.concrete
-#	@cp -L backend/web/symbolic/_build/src/instance.native webcerb.symbolic
-#	@cp -L backend/web/server/_build/web.native cerberus-webserver
+	@echo "[DUNE] web"
+	$(Q)dune build _build/default/backend/web/web.exe
+	$(Q)dune build _build/default/backend/web/instance.exe
+	$(Q)dune build _build/default/backend/web/instance_symbolic.exe
+	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
+	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
+	@cp -L _build/default/backend/web/web.exe cerberus-webserver
 
 .PHONY: ui
 ui:
-	$(error "Not yet implemented.") # TODO
-#	make -C public
+	make -C public
 
 #### LEM sources for the frontend
 LEM_PRELUDE       = utils.lem global.lem loc.lem annot.lem bimap.lem \
@@ -277,8 +278,9 @@ clean-sibylfs-src:
 
 .PHONY: clean
 clean:
-	$(Q)dune clean
+	$(Q)rm -f webcerb.concrete webcerb.symbolic cerberus-webserver
 	$(Q)rm -f $(LIBC_TARGETS)
+	$(Q)dune clean
 
 .PHONY: distclean
 distclean: clean clean-prelude-src clean-sibylfs-src
