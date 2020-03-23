@@ -67,7 +67,7 @@ type rc_type =
 
 module RC_type = struct
   type t = rc_type
-  let compare (x : t) y = Pervasives.compare x y (* yuck *)
+  let compare (x : t) y = Stdlib.compare x y (* yuck *)
 end
 
 module RC_type_pair = Ord_pair(RC_type)(RC_type)

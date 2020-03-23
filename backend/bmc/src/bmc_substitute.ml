@@ -1,5 +1,6 @@
 open Bmc_utils
 
+open Cerb_frontend
 open Core
 
 type substitute_map = (sym_ty, typed_pexpr) Pmap.map
@@ -65,7 +66,7 @@ let rec unsafe_substitute_pexpr (map: substitute_map)
   in
     Pexpr(annot, ty, ret)
 
-let rec unsafe_substitute_action (map: substitute_map)
+let unsafe_substitute_action (map: substitute_map)
                           (Action(loc, a, action_) : 'a typed_action) =
   let ret = match action_ with
     | Create (pe1, pe2, sym) ->

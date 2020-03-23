@@ -139,7 +139,7 @@ let cerberus debug_level progress core_obj
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.foldlM0 (fun core_files file ->
+    Exception.except_foldlM (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
         return (core_file::core_files)) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ files)
   in
@@ -178,7 +178,7 @@ let cerberus debug_level progress core_obj
     | files ->
       (* Run only CPP *)
       if cpp_only then
-        Exception.foldlM0 (fun () file ->
+        Exception.except_foldlM (fun () file ->
             cpp (conf, io) file >>= fun processed_file ->
             print_file processed_file;
             return ()
@@ -187,7 +187,7 @@ let cerberus debug_level progress core_obj
       (* Dump a core object (-c) *)
       else if core_obj then
         prelude >>= fun core_std ->
-        Exception.foldlM0 (fun () file ->
+        Exception.except_foldlM (fun () file ->
           frontend (conf, io) file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;

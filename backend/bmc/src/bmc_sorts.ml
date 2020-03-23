@@ -1,5 +1,7 @@
 open Bmc_globals
 open Bmc_utils
+
+open Cerb_frontend
 open Core
 open Printf
 open Util
@@ -891,8 +893,6 @@ end
 (* TODO: should create once using fresh names and reuse.
  * Current scheme may be susceptible to name reuse => bugs. *)
 module LoadedSort (M : sig val obj_sort : Sort.sort end) : LoadedSortTy = struct
-  open Z3.Datatype
-
   let mk_sort = TODO_LoadedSort.mk_sort M.obj_sort
 
   let mk_specified (expr: Expr.expr) =
