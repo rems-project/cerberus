@@ -39,22 +39,27 @@ let collect_rc_attrs : Annot.attributes -> Coq_ast.rc_attr list =
 
 let translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
   let open Ctype in
+  let open Ocaml_implementation in
   let size_of_base_type signed i =
     match i with
-    | Ichar           -> ItI8(signed)
-    | Short           -> ItI16(signed)
-    | Int_            -> ItI32(signed)
-    | Long            -> ItI64(signed)
-    | LongLong        -> not_impl loc "size_of_base_type (LongLong)"
     (* Things defined in the standard libraries *)
-    | IntN_t(_)       -> not_impl loc "size_of_base_type (IntN_t)"
-    | Int_leastN_t(_) -> not_impl loc "size_of_base_type (Int_leastN_t)"
-    | Int_fastN_t(_)  -> not_impl loc "size_of_base_type (Int_fastN_t)"
-    | Intmax_t        -> not_impl loc "size_of_base_type (Intmax_t)"
-    | Intptr_t        -> ItSize_t(signed)
+    | IntN_t(_)                              -> not_impl loc "size_of_base_type (IntN_t)"
+    | Int_leastN_t(_)                        -> not_impl loc "size_of_base_type (Int_leastN_t)"
+    | Int_fastN_t(_)                         -> not_impl loc "size_of_base_type (Int_fastN_t)"
+    | Intmax_t                               -> not_impl loc "size_of_base_type (Intmax_t)"
+    | Intptr_t                               -> ItSize_t(signed)
+    (* normal integer types *)
+    | Ichar | Short | Int_ | Long | LongLong ->
+       match HafniumImpl.sizeof_ity (if signed then Signed(i) else Unsigned i) with
+       | Some 1 -> ItI8(signed)
+       | Some 2 -> ItI16(signed)
+       | Some 4 -> ItI32(signed)
+       | Some 8 -> ItI64(signed)
+       | Some p -> not_impl loc "unknown integer precision: %i" p
+       | None -> assert false
   in
   match i with
-  | Char        -> not_impl loc "layout_of (Char)"
+  | Char        -> size_of_base_type (hafniumIntImpl.impl_signed Char)  Ichar
   | Bool        -> ItBool
   | Signed(i)   -> size_of_base_type true  i
   | Unsigned(i) -> size_of_base_type false i
