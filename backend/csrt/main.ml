@@ -80,7 +80,7 @@ let check filename =
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)
   | Exception.Result core_file ->
-     Check.check core_file
+     Check.check_and_report core_file
 
 
 open Cmdliner
