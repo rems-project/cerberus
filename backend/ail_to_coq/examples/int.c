@@ -35,7 +35,6 @@ int main() {
     // test boolean
     b = true;
     b = false;
-    // TODO: look at this, the output here seems wrong (== should operate on i64 and not i32)
     b = l == l;
     b = l + l;
 
