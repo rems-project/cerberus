@@ -256,7 +256,7 @@ type function_annot =
   ; fa_requires   : constr list
   ; fa_ensures    : constr list }
 
-let function_annots : rc_attr list -> function_annot = fun attrs ->
+let function_annot : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
   let args = ref [] in
   let exists = ref [] in
@@ -322,3 +322,22 @@ let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   | Annot_subtype(ty) -> EA_subtype(ty)
   | Annot_unlock      -> EA_unlock
   | _                 -> error "is invalid (wrong kind)"
+
+type struct_annot = annot list (* FIXME *)
+
+let struct_annot : rc_attr list -> struct_annot = fun attrs ->
+  List.map parse_attr attrs (* FIXME *)
+
+type block_annot = constr option
+
+let block_annot : rc_attr list -> block_annot = fun attrs ->
+  let error msg =
+    raise (Invalid_annot (Printf.sprintf "block annotation %s" msg))
+  in
+  match attrs with
+  | []      -> None
+  | _::_::_ -> error "carries more than one attributes"
+  | [attr]  ->
+  match parse_attr attr with
+  | Annot_inv(c) -> Some(c)
+  | _            -> error "is invalid (wrong kind)"

@@ -501,7 +501,8 @@ let translate_block stmts blocks ret_ty =
             (* Statements after the if in their own block. *)
             let (stmt, blocks) = trans break continue final stmts blocks in
             let block_id = fresh_block_id () in
-            (Some(Goto(block_id)), SMap.add block_id (Some([]), stmt) blocks)
+            let blocks = SMap.add block_id (Some(None), stmt) blocks in
+            (Some(Goto(block_id)), blocks)
           in
           let (s1, blocks) = trans break continue final [s1] blocks in
           let (s2, blocks) = trans break continue final [s2] blocks in
@@ -518,10 +519,15 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some([]), stmt) blocks
+            SMap.add id_cont (Some(None), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
+            let annot =
+              attrs_used := true;
+              try Some(block_annot attrs) with Invalid_annot(msg) ->
+                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+            in
             let break    = Some(Goto(id_cont)) in
             let continue = Some(Goto(id_body)) in
             let (stmt, blocks) = trans break continue continue [s] blocks in
@@ -533,7 +539,7 @@ let translate_block stmts blocks ret_ty =
             let stmt =
               trans_bool_expr e (fun e -> If(e, stmt, Goto(id_cont)))
             in
-            SMap.add id_body (Some([]), stmt) blocks
+            SMap.add id_body (annot, stmt) blocks
           in
           (Goto(id_body), blocks)
       | AilSdo(s,e)         ->
@@ -542,10 +548,15 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some([]), stmt) blocks
+            SMap.add id_cont (Some(None), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
+            let annot =
+              attrs_used := true;
+              try Some(block_annot attrs) with Invalid_annot(msg) ->
+                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+            in
             let break    = Some(Goto(id_cont)) in
             let continue = Some(Goto(id_body)) in
             let stmt =
@@ -559,7 +570,7 @@ let translate_block stmts blocks ret_ty =
             let (stmt, blocks) =
               trans break continue (Some stmt) [s] blocks
             in
-            SMap.add id_body (Some([]), stmt) blocks
+            SMap.add id_body (annot, stmt) blocks
           in
           (Goto(id_body), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
@@ -569,7 +580,7 @@ let translate_block stmts blocks ret_ty =
           let (stmt, blocks) =
             trans break continue final (s :: stmts) blocks
           in
-          let blocks = SMap.add (sym_to_str l) (Some([]), stmt) blocks in
+          let blocks = SMap.add (sym_to_str l) (Some(None), stmt) blocks in
           (Goto(sym_to_str l), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) = trans break continue final stmts blocks in
@@ -594,15 +605,15 @@ let translate_block stmts blocks ret_ty =
     in
     if not !attrs_used then
       begin
-        let pp_rc oc {rc_attr_id = id; rc_attr_args = args} =
-          Printf.fprintf oc "%s(" id;
+        let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
+          Format.fprintf ff "%s(" id;
           match args with
-          | arg :: args -> Printf.fprintf oc "%s" arg;
-                           List.iter (Printf.fprintf oc ", %s") args;
-                           Printf.fprintf oc ")"
-          | []          -> Printf.fprintf oc ")"
+          | arg :: args -> Format.fprintf ff "%s" arg;
+                           List.iter (Format.fprintf ff ", %s") args;
+                           Format.fprintf ff ")"
+          | []          -> Format.fprintf ff ")"
         in
-        let fn = Printf.eprintf "Ignored attribute [%a]\n%!" pp_rc in
+        let fn = Panic.wrn None "Ignored attribute [%a]." pp_rc in
         List.iter fn attrs;
       end;
     res
@@ -642,8 +653,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of structs/unions. *)
   let structs =
     let build (id, (attrs, def)) =
-      let struct_attrs =
-        try Some(List.map parse_attr (collect_rc_attrs attrs))
+      let struct_annot =
+        try Some(struct_annot (collect_rc_attrs attrs))
         with Invalid_annot(msg) ->
           Panic.wrn None "Warning: %s." msg; None
       in
@@ -679,7 +690,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         List.rev (List.fold_left fn [] struct_members)
       in
       let struct_ =
-        { struct_name ; struct_attrs ; struct_deps
+        { struct_name ; struct_annot ; struct_deps
         ; struct_is_union ; struct_members }
       in
       (struct_name, struct_)
@@ -693,8 +704,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     let build (id, (_, attrs, args, AnnotatedStatement(loc, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
-      let func_attrs =
-        try Some(function_annots (collect_rc_attrs attrs))
+      let func_annot =
+        try Some(function_annot (collect_rc_attrs attrs))
         with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
       in
       let (ret_ty, args_decl) = find_function_decl func_name decls in
@@ -722,7 +733,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
-          try Some(List.map parse_attr (collect_rc_attrs s_attrs))
+          try Some(block_annot (collect_rc_attrs s_attrs))
           with Invalid_annot(msg) ->
             Panic.wrn None "Warning: %s." msg; None
         in
@@ -730,7 +741,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       in
       let func_vars = collect_bindings () in
       let func =
-        {func_name; func_attrs; func_args; func_vars; func_init; func_blocks}
+        {func_name; func_annot; func_args; func_vars; func_init; func_blocks}
       in
       (func_name, func)
     in

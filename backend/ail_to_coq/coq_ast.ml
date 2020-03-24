@@ -56,25 +56,23 @@ type stmt =
   | Call   of string option * expr * expr list * stmt
   | SkipS  of stmt
   | If     of expr * stmt * stmt
-(*| AnnotStmt (n : nat) {A} (a : A) (s : stmt)*)
   | Assert of expr * stmt
   | ExprS  of expr_annot option * expr * stmt
 
 type struct_decl =
   { struct_name     : string
-  ; struct_attrs    : annot list option (* FIXME more precise annotation. *)
+  ; struct_annot    : struct_annot option
   ; struct_deps     : string list
   ; struct_is_union : bool
   ; struct_members  : (string * (type_expr option * layout)) list }
 
 type func_def =
   { func_name   : string
-  ; func_attrs  : function_annot option
+  ; func_annot  : function_annot option
   ; func_args   : (string * layout) list
   ; func_vars   : (string * layout) list
   ; func_init   : string
-  ; func_blocks : (annot list option * stmt) SMap.t }
-  (* FIXME more precise annotation. *)
+  ; func_blocks : (block_annot option * stmt) SMap.t }
 
 type t =
   { source_file : string
