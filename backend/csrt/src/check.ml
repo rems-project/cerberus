@@ -106,9 +106,15 @@ module Id = struct
 end
 
 
-module SymMap = Map.Make(Sym)
-
-
+module SymMap = struct
+  include Map.Make(Sym)
+  let find_first (p : 'k -> 'v -> bool) (m : 'v t) : ('k * 'v) option =
+    fold (fun k v acc ->
+        match acc with
+        | Some _ -> acc
+        | None -> if p k v then Some (k,v) else None
+      ) m None
+end
 
 
 
@@ -380,6 +386,13 @@ module BT = struct
 
   let subst _sym _sym' t = t
 
+  let type_equal env t1 t2 = 
+    t1 = t2                       (* todo: maybe up to variable
+                                     instantiation, etc. *)
+  let types_equal env ts1 ts2 = 
+    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
+      (List.combine ts1 ts2)
+
 end
 
 
@@ -445,6 +458,13 @@ module RE = struct
     | Array (it, it') -> 
        Array (IT.subst sym sym' it, IT.subst sym sym' it')
 
+  let type_equal env t1 t2 = 
+    t1 = t2                       (* todo: maybe up to variable
+                                     instantiation, etc. *)
+
+  let types_equal env ts1 ts2 = 
+    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
+      (List.combine ts1 ts2)
 end
 
 
@@ -481,6 +501,15 @@ module LS = struct
        return (Base bt)
 
   let subst _sym _sym' t = t
+
+  let type_equal env t1 t2 = 
+    t1 = t2                       (* todo: maybe up to variable
+                                     instantiation, etc. *)
+
+  let types_equal env ts1 ts2 = 
+    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
+      (List.combine ts1 ts2)
+
 
 end
 
@@ -642,10 +671,6 @@ end
 
 module F = struct
   type t = F of A.t * R.t
-  let forget (F (A args, R ret)) = 
-    let args = List.filter (function (_,T.A _) -> true | _ -> false) args in
-    let ret = List.filter (function (_,T.A _) -> true | _ -> false) ret in
-    F (A args, R ret)
   let subst sym sym' (F (a,r)) = 
     F (A.subst sym sym' a, R.subst sym sym' r)
   let pp (F (a,r)) = 
@@ -661,15 +686,15 @@ open F
 
 module Err = struct
 
-  type subtype_error = 
-    | SE_Surplus_A of { surplus : Sym.t * BT.t }
-    | SE_Surplus_L of { surplus : Sym.t * LS.t }
-    | SE_Surplus_R of { surplus : Sym.t * RE.t }
-    | SE_Missing_A of { missing : Sym.t * BT.t }
-    | SE_Missing_L of { missing : Sym.t * LS.t }
-    | SE_Missing_R of { missing:  Sym.t * RE.t }
-    | SE_Mismatch_ret of { has : B.t; expected: B.t; }
-    | SE_Unsat_constraint of { unsat : Sym.t * LC.t }
+  type call_or_return_error = 
+    | Surplus_A of { surplus : Sym.t * BT.t }
+    | Surplus_L of { surplus : Sym.t * LS.t }
+    | Surplus_R of { surplus : Sym.t * RE.t }
+    | Missing_A of { missing : Sym.t * BT.t }
+    | Missing_L of { missing : Sym.t * LS.t }
+    | Missing_R of { missing:  Sym.t * RE.t }
+    | Mismatch of { has : B.t; expected: B.t; }
+    | Unsat_constraint of { unsat : Sym.t * LC.t }
 
   type type_error = 
     | Unsupported of { 
@@ -687,8 +712,6 @@ module Err = struct
         expected: BT.t;
         context_loc: Loc.t;
       }
-    | Surplus_fun_arg of Loc.t
-    | Missing_fun_arg of Loc.t
     | Inconsistent_fundef of {
         loc: Loc.t;
         decl: F.t;
@@ -698,8 +721,10 @@ module Err = struct
         loc: Loc.t;
         fn: Sym.t;
       }
-    | Subtype_error of 
-        subtype_error * Loc.t
+    | Return_error of 
+        call_or_return_error * Loc.t
+    | Call_error of 
+        call_or_return_error * Loc.t
 
 
   let unsupported loc s = 
@@ -709,39 +734,46 @@ module Err = struct
     fail (Wrong_bt { e = sym; e_has = has; e_loc = loc; 
                      expected = expected; context_loc = kloc })
 
-  let surplus_fun_arg loc = 
-    fail (Surplus_fun_arg loc)
 
-  let missing_fun_arg loc = 
-    fail (Missing_fun_arg loc)
+  let return_error loc se = 
+    fail (Return_error (se, loc))
+  let call_error loc se = 
+    fail (Call_error (se, loc))
 
 
-  let subtype_error loc se = 
-    fail (Subtype_error (se, loc))
+  let return_surplus_A loc n t = 
+    return_error loc (Surplus_A { surplus = (n,t) })
+  let return_surplus_L loc n t = 
+    return_error loc (Surplus_L { surplus = (n,t) })
+  let return_surplus_R loc n t = 
+    return_error loc (Surplus_R { surplus = (n,t) })
+  let return_missing_A loc n t = 
+    return_error loc (Missing_A { missing = (n,t) })
+  let return_missing_L loc n t = 
+    return_error loc (Missing_L { missing = (n,t) })
+  let return_missing_R loc n t = 
+    return_error loc (Missing_R { missing = (n,t) })
+  let return_mismatch loc b b' = 
+    return_error loc (Mismatch { has = b; expected = b' })
+  let return_unsat_constraint loc sym lc = 
+    return_error loc (Unsat_constraint { unsat = (sym, lc) })
 
-  let subtype_surplus_A loc n b = 
-    subtype_error loc (SE_Surplus_A { surplus = (n,b) })
-
-  let subtype_surplus_L loc n b = 
-    subtype_error loc (SE_Surplus_L { surplus = (n,b) })
-
-  let subtype_surplus_R loc n b = 
-    subtype_error loc (SE_Surplus_R { surplus = (n,b) })
-
-  let subtype_missing_A loc n b = 
-    subtype_error loc (SE_Missing_A { missing = (n,b) })
-
-  let subtype_missing_L loc n b = 
-    subtype_error loc (SE_Missing_L { missing = (n,b) })
-
-  let subtype_missing_R loc n b = 
-    subtype_error loc (SE_Missing_R { missing = (n,b) })
-
-  let subtype_mismatch_ret loc b b' = 
-    subtype_error loc (SE_Mismatch_ret { has = b; expected = b' })
-
-  let subtype_unsat_constraint loc sym lc = 
-    subtype_error loc (SE_Unsat_constraint { unsat = (sym, lc) })
+  let call_surplus_A loc n t = 
+    call_error loc (Surplus_A { surplus = (n,t) })
+  let call_surplus_L loc n t = 
+    call_error loc (Surplus_L { surplus = (n,t) })
+  let call_surplus_R loc n t = 
+    call_error loc (Surplus_R { surplus = (n,t) })
+  let call_missing_A loc n t = 
+    call_error loc (Missing_A { missing = (n,t) })
+  let call_missing_L loc n t = 
+    call_error loc (Missing_L { missing = (n,t) })
+  let call_missing_R loc n t = 
+    call_error loc (Missing_R { missing = (n,t) })
+  let call_mismatch loc b b' = 
+    call_error loc (Mismatch { has = b; expected = b' })
+  let call_unsat_constraint loc sym lc = 
+    call_error loc (Unsat_constraint { unsat = (sym, lc) })
 
   let inconsistent_fundef loc decl defn = 
     fail (Inconsistent_fundef {loc = loc; decl = decl; defn = defn})
@@ -752,47 +784,26 @@ module Err = struct
   let unbound_symbol loc sym = 
     fail (Unbound_symbol {loc = loc; unbound = sym})
 
-  let pp = function 
-
-    | Unsupported {loc; unsupported} ->
-       sprintf "%s. Unsupported feature: %s" 
-         (Loc.pp loc) unsupported
-    | Unbound_symbol {loc; unbound} ->
-       sprintf "%s. Unbound symbol %s"
-         (Loc.pp loc) (Sym.pp unbound)
-    | Wrong_bt {e; e_has; e_loc; expected; context_loc} ->
-       sprintf "%s. The expression at %s is expected to have 
-                type %s but has type %s"
-      (Loc.pp context_loc) (Loc.pp e_loc) (BT.pp expected) (BT.pp e_has)
-    | Surplus_fun_arg loc ->
-       sprintf "%s. Too many function arguments" (Loc.pp loc)
-    | Missing_fun_arg loc ->
-       sprintf "%s. Missing function arguments" (Loc.pp loc)
-    | Inconsistent_fundef {loc; decl; defn} ->
-       sprintf "%s. Function definition inconsistent. Should be %s, is %s."
-         (Loc.pp loc) (F.pp decl) (F.pp defn)
-    | Variadic_function {loc; fn } ->
-       sprintf "Line %s. Variadic functions unsupported (%s)" 
-         (Loc.pp loc) (Sym.pp fn)
-    | Subtype_error (SE_Surplus_A {surplus}, loc) ->
+  let pp_return_error loc = function
+    | Surplus_A {surplus} ->
        sprintf "Line %s. Returning unexpected value of type %s" 
          (Loc.pp loc) (BT.pp (snd surplus))
-    | Subtype_error (SE_Surplus_L {surplus}, loc) ->
+    | Surplus_L {surplus} ->
        sprintf "%s. Returning unexpected logical value of type %s" 
          (Loc.pp loc) (LS.pp (snd surplus))
-    | Subtype_error (SE_Surplus_R {surplus}, loc) ->
+    | Surplus_R {surplus} ->
        sprintf "%s. Returning unexpected resource of type %s" 
          (Loc.pp loc) (RE.pp (snd surplus))
-    | Subtype_error (SE_Missing_A {missing}, loc) ->
+    | Missing_A {missing} ->
        sprintf "%s. Missing return value of type %s" 
          (Loc.pp loc) (BT.pp (snd missing))
-    | Subtype_error (SE_Missing_L {missing}, loc) ->
+    | Missing_L {missing} ->
        sprintf "%s. MIssing logical return value of type %s" 
          (Loc.pp loc) (LS.pp (snd missing))
-    | Subtype_error (SE_Missing_R {missing}, loc) ->
+    | Missing_R {missing} ->
        sprintf "%s. Missing return resource of type %s" 
          (Loc.pp loc) (RE.pp (snd missing))
-    | Subtype_error (SE_Mismatch_ret {has; expected}, loc) ->
+    | Mismatch {has; expected} ->
        let has_pp = match has with
          | (_, T.A t) -> sprintf "return value of type %s" (BT.pp t)
          | (_, T.L t) -> sprintf "logical return value of type %s" (LS.pp t)
@@ -814,9 +825,76 @@ module Err = struct
           sprintf "%s. Expected return constraint %s but found %s" 
             (Loc.pp loc) (LC.pp t) has_pp
        end
-    | Subtype_error (SE_Unsat_constraint {unsat}, loc) ->
+    | Unsat_constraint {unsat} ->
        sprintf "%s. Unsatisfied return constraint %s: %s" 
          (Loc.pp loc) (Sym.pp (fst unsat)) (LC.pp (snd unsat))
+
+  let pp_call_error loc = function
+    | Surplus_A {surplus} ->
+       sprintf "Line %s. Supplying unexpected argument of type %s" 
+         (Loc.pp loc) (BT.pp (snd surplus))
+    | Surplus_L {surplus} ->
+       sprintf "%s. Supplying unexpected logical argument of type %s" 
+         (Loc.pp loc) (LS.pp (snd surplus))
+    | Surplus_R {surplus} ->
+       sprintf "%s. Supplying unexpected resource of type %s" 
+         (Loc.pp loc) (RE.pp (snd surplus))
+    | Missing_A {missing} ->
+       sprintf "%s. Missing argument of type %s" 
+         (Loc.pp loc) (BT.pp (snd missing))
+    | Missing_L {missing} ->
+       sprintf "%s. MIssing logical argument of type %s" 
+         (Loc.pp loc) (LS.pp (snd missing))
+    | Missing_R {missing} ->
+       sprintf "%s. Missing resource argument of type %s" 
+         (Loc.pp loc) (RE.pp (snd missing))
+    | Mismatch {has; expected} ->
+       let has_pp = match has with
+         | (_, T.A t) -> sprintf "argument of type %s" (BT.pp t)
+         | (_, T.L t) -> sprintf "logical argument of type %s" (LS.pp t)
+         | (_, T.R t) -> sprintf "resource argument of type %s" (RE.pp t)
+         | (_, T.C t) -> sprintf "constraint argument %s" (LC.pp t)
+       in
+       begin match expected with
+       | (_, T.A t) ->
+          sprintf "%s. Expected argument of type %s but found %s" 
+            (Loc.pp loc) (BT.pp t) has_pp
+       | (_, T.L t) ->
+          sprintf "%s. Expected logical argument of type %s but found %s" 
+            (Loc.pp loc) (LS.pp t) has_pp
+       | (_, T.R t) ->
+          sprintf "%s. Expected resource argument of type %s but found %s" 
+            (Loc.pp loc) (RE.pp t) has_pp
+       | (_, T.C t) ->
+          (* dead, I think *)
+          sprintf "%s. Expected constraint argument %s but found %s" 
+            (Loc.pp loc) (LC.pp t) has_pp
+       end
+    | Unsat_constraint {unsat} ->
+       sprintf "%s. Unsatisfied return constraint %s: %s" 
+         (Loc.pp loc) (Sym.pp (fst unsat)) (LC.pp (snd unsat))
+
+  let pp = function 
+    | Unsupported {loc; unsupported} ->
+       sprintf "%s. Unsupported feature: %s" 
+         (Loc.pp loc) unsupported
+    | Unbound_symbol {loc; unbound} ->
+       sprintf "%s. Unbound symbol %s"
+         (Loc.pp loc) (Sym.pp unbound)
+    | Wrong_bt {e; e_has; e_loc; expected; context_loc} ->
+       sprintf "%s. The expression at %s is expected to have 
+                type %s but has type %s"
+      (Loc.pp context_loc) (Loc.pp e_loc) (BT.pp expected) (BT.pp e_has)
+    | Inconsistent_fundef {loc; decl; defn} ->
+       sprintf "%s. Function definition inconsistent. Should be %s, is %s"
+         (Loc.pp loc) (F.pp decl) (F.pp defn)
+    | Variadic_function {loc; fn } ->
+       sprintf "Line %s. Variadic functions unsupported (%s)" 
+         (Loc.pp loc) (Sym.pp fn)
+    | Return_error (err, loc) -> 
+       pp_return_error loc err
+    | Call_error (err, loc) -> 
+       pp_call_error loc err
 
 
 end
@@ -862,6 +940,15 @@ let add_rvar env (sym, t) =
 let add_cvar env (sym, t) = 
   { env with local = { env.local with c = SymMap.add sym t env.local.c } }
 
+let remove_avar env sym = 
+  { env with local = { env.local with a = SymMap.remove sym env.local.a } }
+let remove_lvar env sym = 
+  { env with local = { env.local with l = SymMap.remove sym env.local.l } }
+let remove_rvar env sym = 
+  { env with local = { env.local with r = SymMap.remove sym env.local.r } }
+let remove_cvar env sym = 
+  { env with local = { env.local with c = SymMap.remove sym env.local.c } }
+
 
 let add_avars env bindings = 
   List.fold_left add_avar env bindings
@@ -884,6 +971,26 @@ let lookup (loc : Loc.t) (env: 'v SymMap.t) (sym: Sym.t) : ('v,type_error) m =
 
 
 
+let constraint_holds env (LC c) = 
+  true                          (* todo: call z3 *)
+
+
+let get_resource env r = 
+  match SymMap.find_first (fun _ r' -> RE.type_equal env r' r) env.local.r with
+  | None -> None
+  | Some (n,r) -> 
+     let env = remove_rvar env n in
+     Some (env, n)
+
+(* todo: which one should we pick if there's multiple options? *)
+let find_logical_var env ls = 
+  match SymMap.find_first (fun _ ls' -> LS.type_equal env ls' ls) env.local.l with
+  | None -> None
+  | Some (n,r) -> 
+     Some (env, n)
+
+
+
 let core_type_value ov = 
   Core_typing.typeof_object_value 
     Location_ocaml.unknown 
@@ -891,11 +998,6 @@ let core_type_value ov =
 
 (* let rec sizeof_ov ov = 
  *   Impl_mem.sizeof_ival (core_type_value ov) *)
-
-let ensure_type (sym, has, loc) (expected, kloc) : (unit, type_error) Ex.m = 
-  if has = expected 
-  then return ()
-  else wrong_bt (sym, has, loc) (expected, kloc)
 
 
 
@@ -1116,6 +1218,13 @@ let infer_loaded_value loc name lv =
     failwith "todo: LV unspecified"
 
 
+
+let ensure_type env (sym, has, loc) (expected, kloc) : (unit, type_error) Ex.m = 
+  if BT.type_equal env has expected 
+  then return ()
+  else wrong_bt (sym, has, loc) (expected, kloc)
+
+
 let infer_value loc name env v : (R.t, type_error) m = 
   match v with
   | M_Vobject ov ->
@@ -1139,7 +1248,7 @@ let infer_value loc name env v : (R.t, type_error) m =
      (flip mapM) tsyms (fun tsym ->
        let (sym,iloc) = Sym.lof_tsymbol tsym in
        lookup loc env.local.a sym >>= fun typ ->
-       ensure_type (sym, typ, iloc) (i_t, loc) 
+       ensure_type env (sym, typ, iloc) (i_t, loc) 
      ) >>
      (* maybe record list length? *)
      let t = R [(name, A (BT.List i_t))] in
@@ -1151,26 +1260,61 @@ let infer_value loc name env v : (R.t, type_error) m =
      return t
 
 
-(* let call_typ loc_call env name args =
- *   let rec check env decl_args args = 
- *     match decl_args, args with
- *     | A [], [] -> return true
- *     | A [], _ -> surplus_fun_arg loc_call
- *     | A _, [] -> missing_fun_arg loc_call
- * 
- *   in
- * 
- *   match name with
- *   | Core.Impl _ -> 
- *      failwith "todo implementation-defined constrant"
- *   | Core.Sym sym ->
- *      lookup loc_call env.global.fun_decls sym >>= fun decl ->
- *      let (loc,decl_typ,_ret_name) = decl in 
- *      let (F (A decl_args, decl_ret)) = decl_typ in
- *      
- *      return () *)
+let call_typ loc_call env name args =
 
-let call_typ _ _ _ _ = failwith "todo"
+  let rec check_and_refine env tsyms (F (A.A args, ret)) = 
+    match args with
+    | [] -> 
+       begin match tsyms with
+         | [] -> return (env, ret)
+         | tsym :: _ -> 
+            let (sym,loc) = Sym.lof_tsymbol tsym in
+            lookup loc env.local.a sym >>= fun t' ->
+            call_surplus_A loc sym t'
+       end
+
+    | (n, T.A t) :: args' ->
+       begin match tsyms with
+       | tsym :: tsyms' ->
+          let (sym,loc) = Sym.lof_tsymbol tsym in
+          lookup loc env.local.a sym >>= fun t' ->
+          if BT.type_equal env t' t
+          then check_and_refine env tsyms' (F.subst n sym (F (A.A args', ret)))
+          else call_mismatch loc (sym, T.A t') (n, T.A t)
+       | [] ->
+          call_missing_A loc_call n t
+       end
+
+    | (n, T.L t) :: args' -> 
+       begin match find_logical_var env t with
+       | Some (env,sym) -> 
+          check_and_refine env tsyms (F.subst n sym (F (A.A args', ret)))
+       | None -> 
+          call_missing_L loc_call n t
+       end
+
+    | (n, T.R t) :: args' -> 
+       begin match get_resource env t with
+       | Some (env,sym) -> 
+          check_and_refine env tsyms (F (A.A args', ret))
+       | None -> 
+          call_missing_R loc_call n t
+       end
+
+    | (n, T.C t) :: args' -> 
+       if constraint_holds env t 
+       then check_and_refine env tsyms (F (A.A args', ret))
+       else call_unsat_constraint loc_call n t
+
+  in
+
+  match name with
+  | Core.Impl _ -> 
+     failwith "todo implementation-defined constrant"
+  | Core.Sym sym ->
+     lookup loc_call env.global.fun_decls sym >>= fun decl ->
+     let (loc,decl_typ,_ret_name) = decl in 
+     check_and_refine env args decl_typ
 
 
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
@@ -1200,7 +1344,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PEnot sym ->
      let (sym,a_loc) = Sym.lof_tsymbol sym in
      lookup loc env.local.a sym >>= fun t ->
-     ensure_type (sym, t, a_loc) (BT.Bool, loc) >>
+     ensure_type env (sym, t, a_loc) (BT.Bool, loc) >>
      let constr = LC ((V name) %= Not (V sym)) in
      let t = R [(name, A t); (name, C constr)] in
      return t
@@ -1210,8 +1354,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      lookup loc env.local.a sym1 >>= fun t1 ->
      lookup loc env.local.a sym2 >>= fun t2 ->
      let ((st1,st2),rt) = bt_of_binop op in
-     ensure_type (sym1, t1, loc1) (st1, loc) >>
-     ensure_type (sym2, t2, loc2) (st2, loc) >>
+     ensure_type env (sym1, t1, loc1) (st1, loc) >>
+     ensure_type env (sym2, t2, loc2) (st2, loc) >>
      let constr = LC (V name %= (make_binop op (V sym1) (V sym2))) in
      let t = R [(name, A rt); (Sym.fresh (), C constr)] in
      return t
@@ -1242,8 +1386,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      lookup loc env.local.a sym1 >>= fun t1 ->
      lookup loc env.local.a sym2 >>= fun t2 ->
      lookup loc env.local.a sym3 >>= fun t3 ->
-     ensure_type (sym1, t1, loc1) (BT.Bool, loc) >>
-     ensure_type (sym3, t3, loc3) (t2, loc) >>
+     ensure_type env (sym1, t1, loc1) (BT.Bool, loc) >>
+     ensure_type env (sym3, t3, loc3) (t2, loc) >>
      let constr = 
        LC ( (V sym1 %& (V name %= V sym2)) %| 
               ((Not (V sym1)) %& (V name %= V sym3)) )
@@ -1264,18 +1408,6 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo M_PEare_compatible"
 
 
-
-
-
-let constraints_hold env (LC c) = 
-  true                          (* todo: call z3 *)
-
-
-let resource_typ_equal env t1 t2 = 
-  t1 = t2                       (* todo: maybe up to variable
-                                   instantiations or so *)
-
-
 let subtype loc env (R.R r1) (R.R r2) = 
 
   let rec check env rt1 rt2 =
@@ -1283,34 +1415,34 @@ let subtype loc env (R.R r1) (R.R r2) =
     | [], [] -> 
        return env
     | (n, T.A r1) :: _, [] -> 
-       subtype_surplus_A loc n r1
+       return_surplus_A loc n r1
     | (n, T.L r1) :: _, [] -> 
-       subtype_surplus_L loc n r1
+       return_surplus_L loc n r1
     | (n, T.R r1) :: _, [] -> 
-       subtype_surplus_R loc n r1
+       return_surplus_R loc n r1
     | [], (n, T.A r2) :: _ -> 
-       subtype_missing_A loc n r2
+       return_missing_A loc n r2
     | [], (n, T.L r2) :: _ -> 
-       subtype_missing_L loc n r2
+       return_missing_L loc n r2
     | [], (n, T.R r2) :: _ -> 
-       subtype_missing_R loc n r2
+       return_missing_R loc n r2
     | ((_, T.C c1) as r1) :: rt1', _ ->
        check (add_var env r1) rt1' rt2
     | _, (n2, T.C c2) :: rt2' ->
-       if constraints_hold env c2 
+       if constraint_holds env c2 
        then check env rt1 rt2'
-       else subtype_unsat_constraint loc n2 c2
+       else return_unsat_constraint loc n2 c2
     | ((_, T.A t1) as r1) :: rt1', (_, T.A t2) :: rt2'
-           when t1 = t2 ->
+           when BT.type_equal env t1 t2 ->
        check (add_var env r1) rt1 rt2
     | ((_, T.L t1) as r1) :: rt1', (_, T.L t2) :: rt2'
-         when t1 = t2 ->
+         when LS.type_equal env t1 t2 ->
        check (add_var env r1) rt1 rt2
     | (_, T.R t1) :: rt1', (_,T.R t2) :: rt2'
-         when resource_typ_equal env t1 t2 ->
+         when RE.type_equal env t1 t2 ->
        check env rt1 rt2
     | r1 :: _, r2 :: _ ->
-       subtype_mismatch_ret loc r1 r2
+       return_mismatch loc r1 r2
   in
 
   check env r1 r2
@@ -1380,13 +1512,16 @@ let embed_fun_proc body =
 
 let check_function env fsym fn = 
 
+  let forget = filter_map (function (_,T.A t) -> Some t | _ -> None) in
+
   let check_consistent loc decl_typ args ret = 
     mapM (binding_of_core_base_type loc) args >>= fun args ->
     binding_of_core_base_type loc ret >>= fun ret ->
-    let ft_def = F (A args,R [ret]) in 
-    if forget ft_def = forget decl_typ 
+    let (F (A decl_args, R decl_ret)) = decl_typ in
+    if BT.types_equal env (forget decl_args) (forget args) &&
+         BT.types_equal env (forget decl_ret) (forget [ret])
     then return ()
-    else inconsistent_fundef loc decl_typ ft_def
+    else inconsistent_fundef loc decl_typ (F (A args,R [ret]))
   in
 
   match fn with
