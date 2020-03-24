@@ -82,7 +82,7 @@ let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
     | Basic(Integer(i))   -> LInt (translate_int_type loc i)
     | Basic(Floating(_))  -> not_impl loc "layout_of (Basic float)"
     | Array(_,_) when fa  -> LPtr
-    | Array(c_ty,None )   -> not_impl loc "layout_of (Array[])"
+    | Array(c_ty,None )   -> LPtr
     | Array(c_ty,Some(n)) -> LArray(layout_of c_ty, Z.to_string n)
     | Function(_,_,_,_)   -> not_impl loc "layout_of (Function)"
     | Pointer(_,_)        -> LPtr
