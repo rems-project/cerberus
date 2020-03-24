@@ -1,7 +1,6 @@
 open Extra
 open Panic
 open Coq_ast
-open Rc_annot
 
 (** [section_name fname] builds a reasonable Coq section name from a file. The
     slash, dash and dot characters are replaced by underscores. Note that this
@@ -147,18 +146,7 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   | Assert(e, stmt)        ->
       pp "assert: (%a) ;@;%a" pp_expr e pp_stmt stmt
   | ExprS(attrs, e, stmt)  ->
-      (* TODO actually handle attributes. *)
-      let pp_attr attr =
-        let _ =
-          try ignore (parse_attr attr) with Invalid_annot(msg) ->
-          Format.eprintf "Error: %s\n%!" msg
-        in
-        let {rc_attr_id=id; rc_attr_args=args} = attr in
-        let args = List.map (Printf.sprintf "\"%s\"") args in
-        pp "(* %s(%s) *)@;" id (String.concat ", " args)
-      in
-      List.iter pp_attr attrs;
-
+      (* TODO use attribute. *)
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
 let pp_ast : Coq_ast.t pp = fun ff ast ->
@@ -193,14 +181,6 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     let n = List.length members in
     let fn i (id, (attrs, layout)) =
       let sc = if i = n - 1 then "" else ";" in
-      (*
-      let annot =
-        try field_annot attrs with Invalid_annot(msg) ->
-          panic_no_pos "Error: %s" msg
-      in
-      ignore annot; (* TODO actually handle attributes. *)
-      *)
-
       pp "@;(%S, %a)%s" id pp_layout layout sc
     in
     List.iteri fn members
@@ -211,18 +191,6 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     pp "@;(* Definition of struct [%s]. *)@;" id;
     pp "@[<v 2>Program Definition struct_%s := {|@;" id;
 
-    (* TODO actually handle attributes. *)
-    let pp_attr attr =
-      let _ =
-        try ignore (parse_attr attr) with Invalid_annot(msg) ->
-        Format.eprintf "Error: %s\n%!" msg
-      in
-      let {rc_attr_id=id; rc_attr_args=args} = attr in
-      let args = List.map (Printf.sprintf "\"%s\"") args in
-      pp "(* %s(%s) *)@;" id (String.concat ", " args)
-    in
-    List.iter pp_attr decl.struct_attrs;
-
     pp "@[<v 2>sl_members := [";
     pp_members decl.struct_members;
     pp "@]@;];@]@;|}.@;";
@@ -231,18 +199,6 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   let pp_union (id, decl) =
     pp "@;(* Definition of union [%s]. *)@;" id;
     pp "@[<v 2>Program Definition union_%s := {|@;" id;
-
-    (* TODO actually handle attributes. *)
-    let pp_attr attr =
-      let _ =
-        try ignore (parse_attr attr) with Invalid_annot(msg) ->
-        Format.eprintf "Error: %s\n%!" msg
-      in
-      let {rc_attr_id=id; rc_attr_args=args} = attr in
-      let args = List.map (Printf.sprintf "\"%s\"") args in
-      pp "(* %s(%s) *)@;" id (String.concat ", " args)
-    in
-    List.iter pp_attr decl.struct_attrs;
 
     pp "@[<v 2>ul_members := [";
     pp_members decl.struct_members;
@@ -267,12 +223,6 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   let pp_function (id, def) =
     pp "\n@;(* Definition of function [%s]. *)@;" id;
     pp "@[<v 2>Definition impl_%s : function := {|@;" id;
-
-    let annots =
-      try function_annots def.func_attrs with Invalid_annot(msg) ->
-        panic_no_pos "Error: %s" msg
-    in
-    ignore annots; (* TODO handle annotations. *)
 
     pp "@[<v 2>f_args := [";
     begin
@@ -302,18 +252,6 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
     begin
       let fn id (attrs, stmt) =
         pp "@;@[<v 2><[ \"%s\" :=@;" id;
-
-        (* TODO actually handle attributes. *)
-        let pp_attr attr =
-          let _ =
-            try ignore (parse_attr attr) with Invalid_annot(msg) ->
-            Format.eprintf "Error: %s\n%!" msg
-          in
-          let {rc_attr_id=id; rc_attr_args=args} = attr in
-          let args = List.map (Printf.sprintf "\"%s\"") args in
-          pp "(* %s(%s) *)@;" id (String.concat ", " args)
-        in
-        List.iter pp_attr attrs;
 
         pp_stmt ff stmt;
         pp "@]@;]> $";
