@@ -930,6 +930,10 @@ let empty_env =
   { local = empty_local; 
     global = empty_global }
 
+let with_fresh_local global_env = 
+  { global = global_env; 
+    local = empty_local }
+
 
 let add_avar env (sym, t) = 
   { env with local = { env.local with a = SymMap.add sym t env.local.a } }
@@ -1322,11 +1326,12 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   match pe with
   | M_PEsym sym ->
      lookup loc env.local.a sym >>= fun b ->
-     return (R [(name, T.A b)])
+     return (env, R [(name, T.A b)])
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
-     infer_value loc name env v
+     infer_value loc name env v >>= fun t ->
+     return (env, t)
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
   | M_PEundef _ ->
@@ -1347,7 +1352,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      ensure_type env (sym, t, a_loc) (BT.Bool, loc) >>
      let constr = LC ((V name) %= Not (V sym)) in
      let t = R [(name, A t); (name, C constr)] in
-     return t
+     return (env, t)
   | M_PEop (op,sym1,sym2) ->
      let (sym1, loc1) = Sym.lof_tsymbol sym1 in
      let (sym2, loc2) = Sym.lof_tsymbol sym2 in
@@ -1358,7 +1363,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      ensure_type env (sym2, t2, loc2) (st2, loc) >>
      let constr = LC (V name %= (make_binop op (V sym1) (V sym2))) in
      let t = R [(name, A rt); (Sym.fresh (), C constr)] in
-     return t
+     return (env, t)
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -1367,14 +1372,14 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo PEcfunction"
   | M_PEmemberof _ ->
      failwith "todo M_PEmemberof"
-  | M_PEcall _ ->
-     failwith "todo M_PEcall"
+  | M_PEcall (mu_name, tsyms) ->
+     call_typ loc env mu_name tsyms
   | M_PElet (p, e1, e2) ->
      (* todo: check against cbt? *)
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (R rt) ->
+        infer_pexpr name2 env e1 >>= fun (env, R rt) ->
         infer_pexpr name (add_vars env rt) e1
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1393,7 +1398,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
               ((Not (V sym1)) %& (V name %= V sym3)) )
      in
      let t = R [(name, A t2); (Sym.fresh (), C constr)] in
-     return t
+     return (env, t)
   | M_PEis_scalar _ ->
      failwith "todo M_PEis_scalar"
   | M_PEis_integer _ ->
@@ -1455,9 +1460,9 @@ let check_expr fname env (M_Expr (annots, e)) ret =
   let name = Sym.fresh () in    (* fix *)
   match e with
   | M_Epure pe -> 
-     infer_pexpr name env pe >>= fun t ->
+     infer_pexpr name env pe >>= fun (env, t) ->
      subtype loc env t ret >>= fun env ->
-     return ()
+     return env
   | M_Ememop _ ->
      failwith "todo ememop"
   | M_Eaction _ ->
@@ -1497,10 +1502,12 @@ let test_infer_expr () =
 
 
 
-let check_function_body env name body decl_typ = 
+let check_function_body genv name body decl_typ = 
   let (F (A args, ret)) = decl_typ in
+  let env = with_fresh_local genv in
   let env = add_vars env args in
-  check_expr name env body ret
+  check_expr name env body ret >>= fun _env ->
+  return ()
 
 
 
@@ -1510,7 +1517,7 @@ let embed_fun_proc body =
 
 
 
-let check_function env fsym fn = 
+let check_function genv fsym fn = 
 
   let forget = filter_map (function (_,T.A t) -> Some t | _ -> None) in
 
@@ -1518,6 +1525,7 @@ let check_function env fsym fn =
     mapM (binding_of_core_base_type loc) args >>= fun args ->
     binding_of_core_base_type loc ret >>= fun ret ->
     let (F (A decl_args, R decl_ret)) = decl_typ in
+    let env = with_fresh_local genv in
     if BT.types_equal env (forget decl_args) (forget args) &&
          BT.types_equal env (forget decl_ret) (forget [ret])
     then return ()
@@ -1527,15 +1535,15 @@ let check_function env fsym fn =
   match fn with
   | M_Fun (ret, args, body) ->
      let loc = Loc.unknown in
-     lookup loc env.global.fun_decls fsym >>= fun decl ->
+     lookup loc genv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body env fsym (embed_fun_proc body) decl_typ
+     check_function_body genv fsym (embed_fun_proc body) decl_typ
   | M_Proc (loc, ret, args, body) ->
-     lookup loc env.global.fun_decls fsym >>= fun decl ->
+     lookup loc genv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body env fsym body decl_typ
+     check_function_body genv fsym body decl_typ
   | M_ProcDecl _
   | M_BuiltinDecl _ -> 
      return ()
@@ -1559,9 +1567,9 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
     let fun_decls = SymMap.add sym (loc, ft, ret_name) fun_decls in
     return fun_decls
 
-let record_funinfo env funinfo = 
-  pmap_foldM record_fun funinfo env.global.fun_decls >>= fun fun_decls ->
-  return { env with global = { env.global with fun_decls = fun_decls } }
+let record_funinfo genv funinfo = 
+  pmap_foldM record_fun funinfo genv.fun_decls >>= fun fun_decls ->
+  return { genv with fun_decls = fun_decls }
 
 
 
@@ -1575,9 +1583,9 @@ let record_tagDef sym def (struct_decls : fbindings SymMap.t)=
      concatmapM make_field_and_constraint fields >>= fun fields ->
      return (SymMap.add sym fields struct_decls)
 
-let record_tagDefs env tagDefs = 
-  pmap_foldM record_tagDef tagDefs env.global.struct_decls >>= fun struct_decls ->
-  return { env with global = {env.global with struct_decls = struct_decls } }
+let record_tagDefs genv tagDefs = 
+  pmap_foldM record_tagDef tagDefs genv.struct_decls >>= fun struct_decls ->
+  return { genv with struct_decls = struct_decls }
 
 
 
@@ -1606,7 +1614,7 @@ let init core_file mu_file =
 let check (core_file : unit Core.typed_file) =
   let mu_file = Core_anormalise.normalise_file core_file in
   let () = init core_file mu_file in
-  let env = empty_env in
+  let env = empty_global in
   record_tagDefs env mu_file.mu_tagDefs >>= fun env ->
   record_funinfo env mu_file.mu_funinfo >>= fun env ->
   check_functions env mu_file.mu_funs
