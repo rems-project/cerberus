@@ -58,7 +58,7 @@ type stmt =
   | If     of expr * stmt * stmt
 (*| AnnotStmt (n : nat) {A} (a : A) (s : stmt)*)
   | Assert of expr * stmt
-  | ExprS  of annot list option * expr * stmt (* FIXME more precise annotation. *)
+  | ExprS  of expr_annot option * expr * stmt
 
 type struct_decl =
   { struct_name     : string
