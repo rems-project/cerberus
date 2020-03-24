@@ -418,12 +418,14 @@ let insert_bindings bindings =
     let id = sym_to_str id in
     if Hashtbl.mem local_vars id then
       not_impl loc "Variable name collision with [%s]." id;
-    Hashtbl.add local_vars id c_ty
+    Hashtbl.add local_vars id (true, c_ty)
   in
   List.iter fn bindings
 
 let collect_bindings () =
-  let fn id c_ty acc = (id, layout_of false c_ty) :: acc in
+  let fn id (is_var, c_ty) acc =
+    if is_var then (id, layout_of false c_ty) :: acc else acc
+  in
   Hashtbl.fold fn local_vars []
 
 let translate_block stmts blocks ret_ty =
@@ -587,7 +589,8 @@ let translate_block stmts blocks ret_ty =
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
             let ty =
-              try Hashtbl.find local_vars id with Not_found -> assert false
+              try snd (Hashtbl.find local_vars id)
+              with Not_found -> assert false
             in
             let layout = layout_of false ty in
             let goal_ty =
@@ -712,7 +715,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let func_args =
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
-          Hashtbl.add local_vars id c_ty;
+          Hashtbl.add local_vars id (false, c_ty);
           (id, layout_of true c_ty)
         in
         List.mapi fn args_decl
