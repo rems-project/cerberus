@@ -1,8 +1,7 @@
 int main() {
     int toplevel, i;
     if (1) {
-        // TODO: support this?
-        // int nested;
+        int nested;
         1;
     }
 

@@ -15,8 +15,9 @@ Section examples_control_flow_c.
     f_args := [
     ];
     f_local_vars := [
+      ("i", it_layout i32);
       ("toplevel", it_layout i32);
-      ("i", it_layout i32)
+      ("nested", it_layout i32)
     ];
     f_init := "#0";
     f_code := (
