@@ -189,8 +189,12 @@ type annot =
 
 exception Invalid_annot of string
 
-let parse_attr : Coq_ast.rc_attr -> annot = fun attr ->
-  let {Coq_ast.rc_attr_id = id; Coq_ast.rc_attr_args = args} = attr in
+type rc_attr =
+  { rc_attr_id   : string
+  ; rc_attr_args : string list }
+
+let parse_attr : rc_attr -> annot = fun attr ->
+  let {rc_attr_id = id; rc_attr_args = args} = attr in
   let error msg =
     raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
   in
@@ -198,7 +202,9 @@ let parse_attr : Coq_ast.rc_attr -> annot = fun attr ->
   let parse : type a.a grammar -> string -> a = fun gr s ->
     let parse_string = Earley.parse_string gr Blanks.default in
     try parse_string s with Earley.Parse_error(_,i) ->
-      let msg = Printf.sprintf  "Parse error in \"%s\" at position %i" s i in
+      let msg =
+        Printf.sprintf  "no parse in annotation \"%s\" at position %i" s i
+      in
       raise (Invalid_annot msg)
   in
 
@@ -249,14 +255,14 @@ type function_annot =
   ; fa_requires   : constr list
   ; fa_ensures    : constr list }
 
-let function_annots : Coq_ast.rc_attr list -> function_annot = fun attrs ->
+let function_annots : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
   let args = ref [] in
   let returns = ref None in
   let requires = ref [] in
   let ensures = ref [] in
 
-  let handle_attr ({Coq_ast.rc_attr_id = id; _} as attr) =
+  let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
     in
@@ -277,10 +283,10 @@ let function_annots : Coq_ast.rc_attr list -> function_annot = fun attrs ->
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures }
 
-let field_annot : Coq_ast.rc_attr list -> type_expr = fun attrs ->
+let field_annot : rc_attr list -> type_expr = fun attrs ->
   let field = ref None in
 
-  let handle_attr ({Coq_ast.rc_attr_id = id; _} as attr) =
+  let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
     in

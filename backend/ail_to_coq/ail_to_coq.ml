@@ -1,6 +1,7 @@
 open Extra
 open Panic
 open Coq_ast
+open Rc_annot
 open Coq_pp
 
 type typed_ail = GenTypes.genTypeCategory AilSyntax.ail_program
@@ -27,8 +28,11 @@ let sym_to_str : Symbol.sym -> string =
 let id_to_str : Symbol.identifier -> string =
   fun Symbol.(Identifier(_,id)) -> id
 
+let loc_of_id : Symbol.identifier -> loc =
+  fun Symbol.(Identifier(loc,id)) -> loc
+
 (* Extract attributes with namespace ["rc"]. *)
-let collect_rc_attrs : Annot.attributes -> Coq_ast.rc_attr list =
+let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
     | Some("rc") -> let rc_attr_id = id_to_str attr_id in
@@ -483,7 +487,12 @@ let translate_block stmts blocks ret_ty =
                 List.fold_right fn l stmt
             | _                 ->
                 attrs_used := true;
-                trans_expr e None (fun e -> ExprS(attrs, e, stmt))
+                let annots =
+                  try Some(List.map parse_attr attrs)
+                  with Invalid_annot(msg) ->
+                    Panic.wrn (Some(loc)) "Warning: %s." msg; None
+                in
+                trans_expr e None (fun e -> ExprS(annots, e, stmt))
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
@@ -493,7 +502,7 @@ let translate_block stmts blocks ret_ty =
             (* Statements after the if in their own block. *)
             let (stmt, blocks) = trans break continue final stmts blocks in
             let block_id = fresh_block_id () in
-            (Some(Goto(block_id)), SMap.add block_id ([], stmt) blocks)
+            (Some(Goto(block_id)), SMap.add block_id (Some([]), stmt) blocks)
           in
           let (s1, blocks) = trans break continue final [s1] blocks in
           let (s2, blocks) = trans break continue final [s2] blocks in
@@ -510,7 +519,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont ([], stmt) blocks
+            SMap.add id_cont (Some([]), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
@@ -525,7 +534,7 @@ let translate_block stmts blocks ret_ty =
             let stmt =
               trans_bool_expr e (fun e -> If(e, stmt, Goto(id_cont)))
             in
-            SMap.add id_body ([], stmt) blocks
+            SMap.add id_body (Some([]), stmt) blocks
           in
           (Goto(id_body), blocks)
       | AilSdo(s,e)         ->
@@ -534,7 +543,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont ([], stmt) blocks
+            SMap.add id_cont (Some([]), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
@@ -551,7 +560,7 @@ let translate_block stmts blocks ret_ty =
             let (stmt, blocks) =
               trans break continue (Some stmt) [s] blocks
             in
-            SMap.add id_body ([], stmt) blocks
+            SMap.add id_body (Some([]), stmt) blocks
           in
           (Goto(id_body), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
@@ -561,7 +570,8 @@ let translate_block stmts blocks ret_ty =
           let (stmt, blocks) =
             trans break continue final (s :: stmts) blocks
           in
-          (Goto(sym_to_str l), SMap.add (sym_to_str l) ([], stmt) blocks)
+          let blocks = SMap.add (sym_to_str l) (Some([]), stmt) blocks in
+          (Goto(sym_to_str l), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) = trans break continue final stmts blocks in
           let add_decl (id, e) stmt =
@@ -633,7 +643,11 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of structs/unions. *)
   let structs =
     let build (id, (attrs, def)) =
-      let struct_attrs = collect_rc_attrs attrs in
+      let struct_attrs =
+        try Some(List.map parse_attr (collect_rc_attrs attrs))
+        with Invalid_annot(msg) ->
+          Panic.wrn None "Warning: %s." msg; None
+      in
       let struct_name = sym_to_str id in
       let (struct_members, struct_is_union) =
         let (l, is_union) =
@@ -641,9 +655,13 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
           | Ctype.UnionDef(l)  -> (l, true )
           | Ctype.StructDef(l) -> (l, false)
         in
-        let fn (id, (attrs, _, c_ty)) =
-          let attrs = collect_rc_attrs attrs in
-          (id_to_str id, (attrs, layout_of false c_ty))
+        let fn (id, (attrs, loc, c_ty)) =
+          let ty =
+            try Some(field_annot (collect_rc_attrs attrs))
+            with Invalid_annot(msg) ->
+              Panic.wrn (Some(loc_of_id id)) "Warning: %s." msg; None
+          in
+          (id_to_str id, (ty, layout_of false c_ty))
         in
         (List.map fn l, is_union)
       in
@@ -676,7 +694,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     let build (id, (_, attrs, args, AnnotatedStatement(loc, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       let func_name = sym_to_str id in
-      let func_attrs = collect_rc_attrs attrs in
+      let func_attrs =
+        try Some(function_annots (collect_rc_attrs attrs))
+        with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
+      in
       let (ret_ty, args_decl) = find_function_decl func_name decls in
       let func_args =
         let fn i (_, c_ty, _) =
@@ -701,7 +722,12 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
-        SMap.add func_init (collect_rc_attrs s_attrs, stmt) blocks
+        let annots =
+          try Some(List.map parse_attr (collect_rc_attrs s_attrs))
+          with Invalid_annot(msg) ->
+            Panic.wrn None "Warning: %s." msg; None
+        in
+        SMap.add func_init (annots, stmt) blocks
       in
       let func_vars = collect_bindings () in
       let func =
