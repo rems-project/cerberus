@@ -725,6 +725,8 @@ module Err = struct
         call_or_return_error * Loc.t
     | Call_error of 
         call_or_return_error * Loc.t
+    | Integer_value_error of 
+        Loc.t
 
 
   let unsupported loc s = 
@@ -895,6 +897,9 @@ module Err = struct
        pp_return_error loc err
     | Call_error (err, loc) -> 
        pp_call_error loc err
+    | Integer_value_error loc ->
+       sprintf "%s. integer_value_to_num return None"
+         (Loc.pp loc)
 
 
 end
@@ -1076,7 +1081,7 @@ let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m =
   | Core.BTy_loaded ot -> 
      bt_of_core_object_type loc ot
   | Core.BTy_storable -> 
-     failwith "BTy_storable"
+     unsupported loc "BTy_storable"
 
 let binding_of_core_base_type loc (sym,ctype) = 
   bt_of_core_base_type loc ctype >>= fun bt ->
@@ -1089,106 +1094,20 @@ let make_int_type f t =
   let constr name = (name %>= ft) %& (name %<= tt) in
   (BT.Int, constr)
 
-(* according to https://en.wikipedia.org/wiki/C_data_types *)
-(* todo: check *)
-let bt_and_constr_of_integerBaseType signed ibt = 
-  let make = make_int_type in
-  match signed, ibt with
-  | true,  Ctype.Ichar    -> make "-127" "127"
-  | true,  Ctype.Short    -> make "-32767" "32767"
-  | true,  Ctype.Int_     -> make "-32767" "32767"
-  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
-  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
-  | false, Ctype.Ichar    -> make "0" "255"
-  | false, Ctype.Short    -> make "0" "65535"
-  | false, Ctype.Int_     -> make "0" "65535"
-  | false, Ctype.Long     -> make "0" "4294967295"
-  | false, Ctype.LongLong -> make "0" "18446744073709551615"
-  | _, Ctype.IntN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Int_leastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Int_fastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intmax_t -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intptr_t -> 
-     failwith "todo standard library types"
-
-let bt_and_constr_of_integerType it = 
-  match it with
-  | Ctype.Char -> 
-     failwith "todo char"
-  | Ctype.Bool -> 
-     (BT.Bool, None)
-  | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
-     (bt, Some constr)
-  | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
-     (bt, Some constr)
-  | Ctype.Enum _sym -> 
-     failwith "todo enum"
-  | Ctype.Wchar_t ->
-     failwith "todo wchar_t"
-  | Ctype.Wint_t ->
-     failwith "todo wint_t"
-  | Ctype.Size_t ->
-     failwith "todo size_t"
-  | Ctype.Ptrdiff_t -> 
-     failwith "todo standard library types"
-
-let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) = 
-  let loc = Annot.get_loc_ annots in
-  match ct with
-  | Void -> (* check *)
-     return (Unit, None)
-  | Basic (Integer it) -> 
-     return (bt_and_constr_of_integerType it)
-  | Basic (Floating _) -> 
-     unsupported loc "floats"
-  | Array (ct, _maybe_integer) -> 
-     return (Array, None)
-  | Function _ -> 
-     unsupported loc "function pointers"
-  | Pointer (_qualifiers, ctype) ->
-     return (Loc, None)
-  | Atomic ct ->              (* check *)
-     bt_and_constr_of_ctype ct
-  | Struct sym -> 
-     return (Struct sym, None)
-  | Union sym ->
-     failwith "todo: union types"
-
-let binding_of_ctype ctype name = 
-  bt_and_constr_of_ctype ctype >>= function
-  | (bt, Some c) -> 
-     return [(name, T.A bt); (Sym.fresh (), T.C (LC (c (V name))))]
-  | (bt, None) -> 
-     return [(name, T.A bt)]
-
-let fbinding_of_ctype ctype (id : Id.id) = 
-  bt_and_constr_of_ctype ctype >>= function
-  | (bt, Some c) -> 
-     return [(Some id, T.A bt); (None, T.C (LC (c (F id))))]
-  | (bt, None) -> 
-     return [(Some id, T.A bt)]
-
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
   match msym with
   | Some sym -> sym
   | None -> Sym.fresh ()
 
 
-let integer_value_to_num iv = 
-  match (Impl_mem.eval_integer_value iv) with
-  | Some i -> i
-  | None -> failwith "integer_value_to_num: None"
+let integer_value_to_num loc iv = 
+  of_maybe (Integer_value_error loc) (Impl_mem.eval_integer_value iv)
 
 let infer_object_value loc name ov = 
   match ov with
   | M_OVinteger iv ->
-     let constr = LC (V name %= Num (integer_value_to_num iv)) in
+     integer_value_to_num loc iv >>= fun i ->
+     let constr = LC (V name %= Num i) in
      let t = R [(name, A BT.Int); (Sym.fresh (), C constr)] in
      return t
   | M_OVfloating iv ->
@@ -1475,7 +1394,7 @@ let check_expr fname env (M_Expr (annots, e)) ret =
      failwith "todo eif"
   | M_Eskip -> 
      failwith "todo eskip" 
-  | M_Eccall _ ->
+  | M_Eccall (_a, tsym, asd, tsyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
      failwith "todo eproc"
@@ -1554,7 +1473,90 @@ let check_functions env fns =
 
                              
 
+
+
+(* according to https://en.wikipedia.org/wiki/C_data_types *)
+(* todo: check *)
+let bt_and_constr_of_integerBaseType signed ibt = 
+  let make = make_int_type in
+  match signed, ibt with
+  | true,  Ctype.Ichar    -> make "-127" "127"
+  | true,  Ctype.Short    -> make "-32767" "32767"
+  | true,  Ctype.Int_     -> make "-32767" "32767"
+  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
+  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
+  | false, Ctype.Ichar    -> make "0" "255"
+  | false, Ctype.Short    -> make "0" "65535"
+  | false, Ctype.Int_     -> make "0" "65535"
+  | false, Ctype.Long     -> make "0" "4294967295"
+  | false, Ctype.LongLong -> make "0" "18446744073709551615"
+  | _, Ctype.IntN_t n -> 
+     failwith "todo standard library types"
+  | _, Ctype.Int_leastN_t n -> 
+     failwith "todo standard library types"
+  | _, Ctype.Int_fastN_t n -> 
+     failwith "todo standard library types"
+  | _, Ctype.Intmax_t -> 
+     failwith "todo standard library types"
+  | _, Ctype.Intptr_t -> 
+     failwith "todo standard library types"
+
+let bt_and_constr_of_integerType it = 
+  match it with
+  | Ctype.Char -> 
+     failwith "todo char"
+  | Ctype.Bool -> 
+     (BT.Bool, None)
+  | Ctype.Signed ibt -> 
+     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
+     (bt, Some constr)
+  | Ctype.Unsigned ibt -> 
+     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
+     (bt, Some constr)
+  | Ctype.Enum _sym -> 
+     failwith "todo enum"
+  | Ctype.Wchar_t ->
+     failwith "todo wchar_t"
+  | Ctype.Wint_t ->
+     failwith "todo wint_t"
+  | Ctype.Size_t ->
+     failwith "todo size_t"
+  | Ctype.Ptrdiff_t -> 
+     failwith "todo standard library types"
+
+let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) = 
+  let loc = Annot.get_loc_ annots in
+  match ct with
+  | Void -> (* check *)
+     return (Unit, None)
+  | Basic (Integer it) -> 
+     return (bt_and_constr_of_integerType it)
+  | Basic (Floating _) -> 
+     unsupported loc "floats"
+  | Array (ct, _maybe_integer) -> 
+     return (Array, None)
+  | Function _ -> 
+     unsupported loc "function pointers"
+  | Pointer (_qualifiers, ctype) ->
+     return (Loc, None)
+  | Atomic ct ->              (* check *)
+     bt_and_constr_of_ctype ct
+  | Struct sym -> 
+     return (Struct sym, None)
+  | Union sym ->
+     failwith "todo: union types"
+
+
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
+
+  let binding_of_ctype ctype name = 
+    bt_and_constr_of_ctype ctype >>= function
+    | (bt, Some c) -> 
+       return [(name, T.A bt); (Sym.fresh (), T.C (LC (c (V name))))]
+    | (bt, None) -> 
+       return [(name, T.A bt)]
+  in
+
   let make_arg_t (msym,ctype) = binding_of_ctype ctype (sym_or_fresh msym) in
   if is_variadic 
   then variadic_function loc sym
@@ -1574,6 +1576,15 @@ let record_funinfo genv funinfo =
 
 
 let record_tagDef sym def (struct_decls : fbindings SymMap.t)=
+
+  let fbinding_of_ctype ctype (id : Id.id) = 
+    bt_and_constr_of_ctype ctype >>= function
+    | (bt, Some c) -> 
+       return [(Some id, T.A bt); (None, T.C (LC (c (F id))))]
+    | (bt, None) -> 
+       return [(Some id, T.A bt)]
+  in
+
   let make_field_and_constraint (id, (_attributes, _qualifier, ctype)) =
     fbinding_of_ctype ctype id in
   match def with
