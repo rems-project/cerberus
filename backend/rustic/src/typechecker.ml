@@ -206,6 +206,7 @@ let zap = function
 | RC_scalar -> RC_scalar
 | RC_ptr (_, rcty) -> RC_ptr (RC_zap, rcty)
 | RC_struct (id, _) -> RC_struct (id, RC_zap)
+| _ -> assert false (* FIXME? *)
 
 let own_rank = function
 | RC_read -> 0

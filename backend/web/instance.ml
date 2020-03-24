@@ -93,7 +93,7 @@ let elaborate ~conf ~filename =
   try
     load_core_stdlib () >>= fun core_stdlib ->
     load_core_impl core_stdlib conf.instance.core_impl >>= fun core_impl ->
-    c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) filename
+    c_frontend (conf.pipeline, conf.io) (core_stdlib, core_impl) ~filename
     >>= function
     | (Some cabs, Some ail, core) ->
       core_passes (conf.pipeline, conf.io) ~filename core

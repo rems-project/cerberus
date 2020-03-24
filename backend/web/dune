@@ -1,7 +1,6 @@
 (library
  (name instance_api)
  (modules instance_api)
- (flags (:standard -w -3))
  (wrapped false)
  (libraries cmdliner lwt
   cerb_frontend bmc))
@@ -9,7 +8,7 @@
 (executable
  (name instance)
  (public_name instance-concrete)
- (flags (:standard -w -3-6-27))
+ (flags (:standard -w -27))
  (modules instance)
  (libraries str lwt cohttp-lwt-unix ezgzip
   cerb_frontend cerb_backend mem_concrete util instance_api))
@@ -17,7 +16,7 @@
 (executable
  (name instance_symbolic)
  (public_name instance-symbolic)
- (flags (:standard -w -3-6-27))
+ (flags (:standard -w -27))
  (modules instance_symbolic)
  (libraries str lwt cohttp-lwt-unix ezgzip
   cerb_frontend cerb_backend mem_symbolic util instance_api))
@@ -25,7 +24,7 @@
 (executable
  (name web)
  (public_name web)
- (flags (:standard -w -3-6-27))
+ (flags (:standard -w -27))
  (modules web)
  (libraries lwt cohttp-lwt-unix ezgzip
   cerb_frontend cerb_backend mem_concrete util instance_api))

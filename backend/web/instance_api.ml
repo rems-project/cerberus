@@ -16,7 +16,7 @@ type conf =
     timeout: int;             (* instance execution timeout *)
     tagDefs: string;          (* marshalled tag defs *)
     switches: string list;
-    n1570: Yojson.Basic.json;
+    n1570: Yojson.Basic.t;
   }
 
 type active_node =

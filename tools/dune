@@ -1,6 +1,5 @@
 (executable
  (name cbuild)
  (public_name cbuild)
- ;(flags (:standard -w -6))
  (modules cbuild)
  (libraries cmdliner str unix))

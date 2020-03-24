@@ -252,7 +252,7 @@ and onelinecomment = parse
 and hash = parse
   | (' ' (decimal_constant as n) " \""
     ([^ '\012' '\t' '"']* as file) "\"" [^ '\n']* '\n')
-      { Lexing.(
+      { (
         let n =
           try int_of_string n
           with Failure _ ->

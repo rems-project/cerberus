@@ -1,19 +1,12 @@
 open Cerb_frontend
 open Global_ocaml
-open Core
-
-open Pp_run
 
 module ND  = Nondeterminism
 module SEU = State_exception_undefined
 
-let (>>=) = SEU.stExceptUndef_bind
-
 let isActive = function
-  | (ND.Active _, _, _) ->
-      true
-  | _ ->
-      false
+  | (ND.Active _, _, _) -> true
+  | _ -> false
 
 type driver_conf = {
 (* TODO: bring back ==> [`Interactive | `Exhaustive | `Random] -> *)

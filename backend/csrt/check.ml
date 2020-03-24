@@ -3,7 +3,6 @@ open Cerb_backend
 (* open Lem_pervasives  *)
 open Core 
 open Mucore
-open Impl_mem
 open Nat_big_num
 open Sexplib
 open Printf
@@ -409,7 +408,7 @@ module RE = struct
     | Array of IT.t * IT.t
    (* Array (pointer, list pointer) *)
 
-  let rec pp = function
+  let pp = function
     | Block (it1,it2) -> 
        sprintf "(block %s %s)" 
          (IT.pp it1)
@@ -428,8 +427,7 @@ module RE = struct
          (IT.pp it2)
 
   
-  let rec parse_sexp (env : Sym.t StringMap.t) sx = 
-    let open Sexp in
+  let parse_sexp (env : Sym.t StringMap.t) sx = 
     match sx with 
     | Sexp.List [Sexp.Atom "block";it1;it2] -> 
        IT.parse_sexp env it1 >>= fun it1 ->
@@ -589,7 +587,6 @@ module B = struct
        sprintf "(Constraint %s : %s)" (Sym.pp id) (LC.pp lc)
 
   let parse_sexp (env : Sym.t StringMap.t) s = 
-    let open Sexp in
     match s with
     | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
        let sym = Sym.fresh_pretty id in

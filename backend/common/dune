@@ -2,7 +2,7 @@
  (name cerb_backend)
  (public_name cerberus.backend_common)
  (synopsis "Cerberus backend utilities")
- (flags (:standard -w -8-27-32-33))
+ (flags (:standard -w -27))
  (modules :standard \ smt smt_wrapper boot_pprint2 tests cerbcore cmulator
   cpp_mem_model interactive_driver sat_solving)
  (foreign_stubs (language c) (names cerberus_cstubs))
