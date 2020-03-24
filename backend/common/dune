@@ -5,5 +5,5 @@
  (flags (:standard -w -8-27-32-33))
  (modules :standard \ smt smt_wrapper boot_pprint2 tests cerbcore cmulator
   cpp_mem_model interactive_driver sat_solving)
- (c_names cerberus_cstubs)
+ (foreign_stubs (language c) (names cerberus_cstubs))
  (libraries cerb_frontend core_parser c_parser pprint util z3))

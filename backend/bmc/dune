@@ -12,5 +12,5 @@
  (public_name cerberus-bmc)
  (flags (:standard -w -6-27))
  (modules main)
- (libraries cmdliner str unix angstrom
+ (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util bmc))
