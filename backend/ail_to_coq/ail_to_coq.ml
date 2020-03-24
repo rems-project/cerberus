@@ -433,7 +433,8 @@ let translate_block stmts blocks ret_ty =
       match s with
       (* Nested block. *)
       | AilSblock(bs, ss)   -> ignore (insert_bindings bs);
-                               trans break continue final (ss @ stmts) blocks
+                               if bs != [] then not_impl loc "bindings in nested blocks currently not supported"
+                               else trans break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
       | AilSgoto(l)         -> (Goto(sym_to_str l), blocks)
       | AilSreturnVoid      -> (Return(Val(Void)) , blocks)
