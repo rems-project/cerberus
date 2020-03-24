@@ -414,10 +414,13 @@ let insert_bindings bindings =
     let id = sym_to_str id in
     if Hashtbl.mem local_vars id then
       not_impl loc "Variable name collision with [%s]." id;
-    Hashtbl.add local_vars id c_ty;
-    (id, layout_of false c_ty)
+    Hashtbl.add local_vars id c_ty
   in
-  List.map fn bindings
+  List.iter fn bindings
+
+let collect_bindings () =
+  let fn id c_ty acc = (id, layout_of false c_ty) :: acc in
+  Hashtbl.fold fn local_vars []
 
 let translate_block stmts blocks ret_ty =
   let rec trans break continue final stmts blocks =
@@ -432,9 +435,8 @@ let translate_block stmts blocks ret_ty =
     let res =
       match s with
       (* Nested block. *)
-      | AilSblock(bs, ss)   -> ignore (insert_bindings bs);
-                               if bs != [] then not_impl loc "bindings in nested blocks currently not supported"
-                               else trans break continue final (ss @ stmts) blocks
+      | AilSblock(bs, ss)   -> insert_bindings bs;
+                               trans break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
       | AilSgoto(l)         -> (Goto(sym_to_str l), blocks)
       | AilSreturnVoid      -> (Return(Val(Void)) , blocks)
@@ -684,7 +686,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         List.mapi fn args_decl
       in
-      let func_vars =
+      let _ =
+        (* Collection top level local variables. *)
         match stmt with
         | AilSblock(bindings, _) -> insert_bindings bindings
         | _                      -> not_impl loc "Body not a block."
@@ -700,6 +703,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         SMap.add func_init (collect_rc_attrs s_attrs, stmt) blocks
       in
+      let func_vars = collect_bindings () in
       let func =
         {func_name; func_attrs; func_args; func_vars; func_init; func_blocks}
       in
