@@ -488,8 +488,7 @@ let translate_block stmts blocks ret_ty =
             | _                 ->
                 attrs_used := true;
                 let annots =
-                  try Some(List.map parse_attr attrs)
-                  with Invalid_annot(msg) ->
+                  try Some(expr_annot attrs) with Invalid_annot(msg) ->
                     Panic.wrn (Some(loc)) "Warning: %s." msg; None
                 in
                 trans_expr e None (fun e -> ExprS(annots, e, stmt))

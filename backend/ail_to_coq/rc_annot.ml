@@ -252,12 +252,14 @@ type function_annot =
   { fa_parameters : (ident * coq_expr) list
   ; fa_args       : type_expr list
   ; fa_returns    : type_expr
+  ; fa_exists     : (ident * coq_expr) list
   ; fa_requires   : constr list
   ; fa_ensures    : constr list }
 
 let function_annots : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
   let args = ref [] in
+  let exists = ref [] in
   let returns = ref None in
   let requires = ref [] in
   let ensures = ref [] in
@@ -273,6 +275,7 @@ let function_annots : rc_attr list -> function_annot = fun attrs ->
     | (Annot_returns(ty)  , _   ) -> error "already specified"
     | (Annot_requires(l)  , _   ) -> requires := !requires @ l
     | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
+    | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -280,6 +283,7 @@ let function_annots : rc_attr list -> function_annot = fun attrs ->
   { fa_parameters = !parameters
   ; fa_args       = !args
   ; fa_returns    = Option.get type_void !returns
+  ; fa_exists     = !exists
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures }
 
@@ -301,4 +305,20 @@ let field_annot : rc_attr list -> type_expr = fun attrs ->
   | None     -> raise (Invalid_annot "a field annotation is required")
   | Some(ty) -> ty
 
+type expr_annot =
+  | EA_none (* no annotation *)
+  | EA_subtype of type_expr
+  | EA_unlock
 
+let expr_annot : rc_attr list -> expr_annot = fun attrs ->
+  let error msg =
+    raise (Invalid_annot (Printf.sprintf "expression annotation %s" msg))
+  in
+  match attrs with
+  | []      -> EA_none
+  | _::_::_ -> error "carries more than one attributes"
+  | [attr]  ->
+  match parse_attr attr with
+  | Annot_subtype(ty) -> EA_subtype(ty)
+  | Annot_unlock      -> EA_unlock
+  | _                 -> error "is invalid (wrong kind)"
