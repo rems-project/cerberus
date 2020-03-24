@@ -3,9 +3,6 @@ open Cerb_frontend
 
 open Lem_pervasives
 open Either
-open Global
-
-open Location_ocaml
 
 open Core_parser_util
 
@@ -44,7 +41,7 @@ type declaration =
 
 
 
-let rec hasAilname: attribute list -> string option = function
+let hasAilname: attribute list -> string option = function
   | [] ->
       None
   | Attr_ailname str :: _ ->
@@ -275,7 +272,7 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
       symbolify_symbol tag >>= fun tag' ->
       Eff.return (Union tag')
 
-let rec symbolify_value _cval =
+let symbolify_value _cval =
   match _cval with
    | Vunit ->
        Eff.return Vunit

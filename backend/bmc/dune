@@ -1,7 +1,7 @@
 (library
  (name bmc)
  (public_name cerberus.bmc)
- (flags (:standard -w -6-27))
+ (flags (:standard -w -27))
  (wrapped false)
  (modules :standard \ main)
  (c_library_flags -lstdc++)
@@ -10,7 +10,7 @@
 (executable
  (name main)
  (public_name cerberus-bmc)
- (flags (:standard -w -6-27))
+ (flags (:standard -w -27))
  (modules main)
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util bmc))

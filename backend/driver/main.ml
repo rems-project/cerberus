@@ -51,7 +51,7 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
+    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -178,8 +178,8 @@ let cerberus debug_level progress core_obj
     | files ->
       (* Run only CPP *)
       if cpp_only then
-        Exception.except_foldlM (fun () file ->
-            cpp (conf, io) file >>= fun processed_file ->
+        Exception.except_foldlM (fun () filename ->
+            cpp (conf, io) ~filename >>= fun processed_file ->
             print_file processed_file;
             return ()
           ) () files >>= fun () ->

@@ -10,7 +10,6 @@
 open Cerb_frontend
 
 open Cabs
-open Location_ocaml
 
 module LF = Lexer_feedback
 

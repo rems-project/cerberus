@@ -5,5 +5,3 @@
  (modules :standard)
  (wrapped false)
  (libraries lem pprint yojson))
-
-; FIXME add binannot?

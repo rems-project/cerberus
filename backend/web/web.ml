@@ -488,8 +488,8 @@ let respond_json ~time ~rheader json =
        ("Server-Timing",
         match time with Some t -> "dur=" ^ string_of_float t | None -> "");
        ("Server", "Cerberus/1.0")] in
-  let data = compress @@ Yojson.to_string json in
-  (Server.respond_string ~flush:true ~headers) `OK data ()
+  let body = compress @@ Yojson.to_string json in
+  Server.respond_string ~flush:true ~headers ~status:`OK ~body ()
 
 let date () =
   let open Unix in
@@ -547,7 +547,7 @@ let respond_file ~rheader fname =
   in
   if rheader.if_none_match = hash then begin
     Debug.warn "not-modified";
-    Server.respond `Not_modified `Empty ()
+    Server.respond ~status:`Not_modified ~body:`Empty ()
   end
   else Lwt.catch try_with @@ function
     | Unix.Unix_error (Unix.ENOENT, _, _) ->
@@ -604,7 +604,7 @@ let shorten source =
       if len > 1000000 then (* max: 1MB *)
         return @@ Failure "File is too large."
       else
-        Lwt_io.open_file Lwt_io.Output (path ^ hash) >>= fun oc ->
+        Lwt_io.open_file ~mode:Lwt_io.Output (path ^ hash) >>= fun oc ->
         Lwt_io.write_from_string oc source 0 (String.length source) >>= fun _ ->
         Lwt_io.close oc >>= fun () ->
         return @@ Shorten hash
@@ -680,13 +680,13 @@ let head uri path =
     let docroot = (!webconf()).docroot in
     let filename = Server.resolve_local_file ~docroot ~uri in
     if is_regular filename && Sys.file_exists filename then
-        Server.respond `OK  `Empty ()
+        Server.respond ~status:`OK ~body:`Empty ()
     else forbidden path
   in
   let try_with () =
     Debug.print 10 ("HEAD " ^ path);
     match path with
-    | "/" -> Server.respond `OK `Empty ()
+    | "/" -> Server.respond ~status:`OK ~body:`Empty ()
     | _   -> check_local_file ()
   in catch try_with begin fun e ->
     Debug.error_exception "HEAD" e;
@@ -788,7 +788,7 @@ let request ~conf (flow, conn) req body =
     end
   end else begin
     let headers = Cohttp.Header.of_list [("Location", "https://cerberus.cl.cam.ac.uk" ^ path)] in
-    (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
+    Server.respond ~headers ~status:`Moved_permanently ~body:Cohttp_lwt__.Body.empty ()
   end
 
 let redirect ~conf conn req body =
@@ -796,9 +796,8 @@ let redirect ~conf conn req body =
   let meth = Request.meth req in
   match meth, Uri.path uri with
   | `GET, "/" | `GET, "/index.html" | `GET, "/cerberus" | `GET, "/cerberus/index.html" ->
-    let headers =
-      Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)] in
-    (Server.respond ~headers) `Moved_permanently Cohttp_lwt__.Body.empty ()
+    let headers = Cohttp.Header.of_list [("Location", "https:" ^ Uri.to_string uri)] in
+    Server.respond ~headers ~status:`Moved_permanently ~body:Cohttp_lwt__.Body.empty ()
   | _ -> request ~conf conn req body
 
 let initialise () =

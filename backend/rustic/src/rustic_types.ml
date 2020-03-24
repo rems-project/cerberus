@@ -77,7 +77,8 @@ type rc_change =
 | RC_changed of rc_type
 
 (* TODO: this is super brittle, but I don't know how else to do it *)
-let string_of_sym (Symbol.Symbol (_, _, Some id)) = id
+let string_of_sym (Symbol.Symbol (_, _, id_opt)) =
+  match id_opt with Some id -> id | None -> assert false (* FIXME? *)
 
 let rec string_of_rc_type = function
 | RC_placeholder s -> "?" ^ s
