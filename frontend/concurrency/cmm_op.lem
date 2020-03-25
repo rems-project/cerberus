@@ -6,6 +6,8 @@
 open import Pervasives Show Show_extra
 open import Cmm_aux Cmm_csem
 
+import Mem
+
 open import {hol} `pp_memTheory` `utilTheory`
 
 (* TODO: It was not type checking with Mem.mem_value *)

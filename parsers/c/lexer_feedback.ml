@@ -3,6 +3,8 @@
 (* Based on Jacques-Henri Jourdan and Francois Pottier TOPLAS 2017:
    "A simple, possibly correct LR parser for C11" *)
 
+open Cerb_frontend
+
 module IdSet = Set.Make(String)
 
 type context = IdSet.t

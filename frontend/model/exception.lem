@@ -66,12 +66,12 @@ val except_mapM: forall 'a 'b 'msg. ('a -> exceptM 'b 'msg) -> list 'a -> except
 let except_mapM f = listM (List.map f)
 
 
-val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg
-let rec foldlM f a = function
+val     except_foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg
+let rec except_foldlM f a = function
   | [] ->
       except_return a
   | x::xs ->
-      except_bind (f a x) (fun z -> foldlM f z xs)
+      except_bind (f a x) (fun z -> except_foldlM f z xs)
 end
 
 
@@ -158,3 +158,4 @@ let inline bind = except_bind
 let inline fmap = except_fmap
 let inline sequence = except_sequence
 let inline mapM = except_mapM
+let inline foldlM = except_foldlM

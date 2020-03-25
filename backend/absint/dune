@@ -1,0 +1,8 @@
+(include_subdirs unqualified)
+
+(executable
+ (name main)
+ (public_name absint)
+ (flags (:standard -w -27-32))
+ (libraries cmdliner str unix apron apron.boxD apron.octD apron.polkaMPQ
+  apron.t1pMPQ cerb_frontend cerb_backend mem_concrete util))

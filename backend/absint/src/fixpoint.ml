@@ -54,7 +54,9 @@ struct
       widen: bool;
     }
 
+  (* unused
   type strategy = point Nested_list.nlist
+  *)
 
   (* internal state *)
   type 'a state =

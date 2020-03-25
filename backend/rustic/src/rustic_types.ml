@@ -1,3 +1,5 @@
+open Cerb_frontend
+
 (* TODO: move some of that out, and share with BMC *)
 module Ord_pair (X : Set.OrderedType) (Y : Set.OrderedType) : Set.OrderedType with type t = X.t * Y.t = struct
     type t = X.t * Y.t
@@ -65,7 +67,7 @@ type rc_type =
 
 module RC_type = struct
   type t = rc_type
-  let compare (x : t) y = Pervasives.compare x y (* yuck *)
+  let compare (x : t) y = Stdlib.compare x y (* yuck *)
 end
 
 module RC_type_pair = Ord_pair(RC_type)(RC_type)
@@ -75,7 +77,8 @@ type rc_change =
 | RC_changed of rc_type
 
 (* TODO: this is super brittle, but I don't know how else to do it *)
-let string_of_sym (Symbol.Symbol (_, _, Some id)) = id
+let string_of_sym (Symbol.Symbol (_, _, id_opt)) =
+  match id_opt with Some id -> id | None -> assert false (* FIXME? *)
 
 let rec string_of_rc_type = function
 | RC_placeholder s -> "?" ^ s

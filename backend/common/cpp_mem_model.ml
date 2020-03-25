@@ -8,6 +8,7 @@
  * pointer-interconvertible with Y, or the immediately-enclosing array object
  * if Y is an array element.  *)
 
+open Cerb_frontend
 open Mem_common
 open Memory_model
 open Core_ctype

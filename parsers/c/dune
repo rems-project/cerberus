@@ -1,0 +1,13 @@
+(library
+ (name c_parser)
+ (public_name cerberus.c_parser)
+ (synopsis "C parser")
+ (flags (:standard -w -27-32))
+ (modules :standard)
+ (wrapped false)
+ (libraries cerb_frontend))
+
+(ocamllex c_lexer)
+(menhir
+ (flags (--external-tokens Tokens))
+ (modules c_parser))

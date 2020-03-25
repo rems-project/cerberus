@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Rustic_types
 open Rustic_parser
 
@@ -181,7 +182,7 @@ let fun_spec_of def  : fun_spec_t option =
           if string_of_identifier ns = "rc" && string_of_identifier a.Annot.attr_id = "fun_spec" then
             (match a.Annot.attr_args with
              | [s] ->
-               (match Opal.parse_string Rustic_parser.fun_spec s with
+               (match Opal.parse_string fun_spec s with
                | Some s -> Some s
                | None -> print_string "couldn't parse spec :-("; None)
              | _ -> None)
@@ -205,6 +206,7 @@ let zap = function
 | RC_scalar -> RC_scalar
 | RC_ptr (_, rcty) -> RC_ptr (RC_zap, rcty)
 | RC_struct (id, _) -> RC_struct (id, RC_zap)
+| _ -> assert false (* FIXME? *)
 
 let own_rank = function
 | RC_read -> 0
