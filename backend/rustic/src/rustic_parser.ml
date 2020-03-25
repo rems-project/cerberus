@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Opal
 open Rustic_types
 

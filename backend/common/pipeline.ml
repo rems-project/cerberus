@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Global_ocaml
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
@@ -5,7 +6,7 @@ external terminal_size: unit -> (int * int) option = "terminal_size"
 (* Pipeline *)
 
 let (>>=) = Exception.except_bind
-let (>>) m f = m >>= fun _ -> f
+(*let (>>) m f = m >>= fun _ -> f*)
 let (<$>)  = Exception.except_fmap
 let return = Exception.except_return
 
@@ -140,7 +141,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse file_content =
-    Cparser_driver.parse_from_string file_content >>= fun cabs_tunit ->
+    C_parser_driver.parse_from_string file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
@@ -222,6 +223,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 
+(*
 let pp_core (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   whenM (List.mem Core conf.astprints) begin
@@ -232,6 +234,7 @@ let pp_core (conf, io) ~filename core_file =
     fun () ->
       io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
   end
+*)
 
 let core_rewrite (conf, io) core_file =
   return (Core_rewrite.rewrite_file core_file)

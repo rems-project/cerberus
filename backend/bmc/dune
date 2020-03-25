@@ -1,0 +1,16 @@
+(library
+ (name bmc)
+ (public_name cerberus.bmc)
+ (flags (:standard -w -27))
+ (wrapped false)
+ (modules :standard \ main)
+ (c_library_flags -lstdc++)
+ (libraries angstrom cerb_frontend cerb_backend))
+
+(executable
+ (name main)
+ (public_name cerberus-bmc)
+ (flags (:standard -w -27))
+ (modules main)
+ (libraries cmdliner str unix
+  cerb_frontend cerb_backend mem_concrete util bmc))

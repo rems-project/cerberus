@@ -1,5 +1,0 @@
-requires = ""
-description = "Utility functions for Cerberus"
-archive(byte) = "util.cma"
-archive(native) = "util.cmxa"
-version = "0.0.1"

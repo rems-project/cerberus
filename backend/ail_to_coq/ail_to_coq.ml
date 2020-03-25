@@ -1,8 +1,8 @@
+open Cerb_frontend
 open Extra
 open Panic
 open Coq_ast
 open Rc_annot
-open Coq_pp
 
 type typed_ail = GenTypes.genTypeCategory AilSyntax.ail_program
 type ail_expr  = GenTypes.genTypeCategory AilSyntax.expression

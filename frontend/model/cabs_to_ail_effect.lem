@@ -7,6 +7,8 @@ import AilSyntax AilTypesAux
 
 import Map_extra Ctype
 
+import Mem
+
 module A      = AilSyntax
 
 

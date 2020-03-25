@@ -1,0 +1,5 @@
+(executable
+ (name cbuild)
+ (public_name cbuild)
+ (modules cbuild)
+ (libraries cmdliner str unix))
