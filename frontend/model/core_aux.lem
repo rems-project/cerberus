@@ -254,9 +254,15 @@ val mk_unit_pe: pexpr
 let mk_unit_pe =
   Pexpr [] () (PEval Vunit)
 
+
+let mk_boolean_v = function
+  | true -> Vtrue
+  | false -> Vfalse
+  end
+
 val mk_boolean_pe: bool -> pexpr
 let mk_boolean_pe b =
-  Pexpr [] () (PEval (if b then Vtrue else Vfalse))
+  Pexpr [] () (PEval (mk_boolean_v b))
 
 (* TODO: PEval Vtrue, Vfalse *)
 

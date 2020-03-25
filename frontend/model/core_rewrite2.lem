@@ -1,6 +1,6 @@
 open import Pervasives
 
-open import Utils Core Core_aux Ctype Annot
+open import Utils Core Core_aux Ctype Annot Pervasives_extra
 import Symbol Mem
 
 import Pp
@@ -441,29 +441,60 @@ let id_expr_alg =
 
 
 
-(* let rewriter_cfunction env = 
- * 
- *   let a_PEcfunction = function
- *     | PEsym sym ->
- *        match Map.find sym env with
- *        | 
- *        end 
- *     | _ -> 
- *        failwith "rewriter_cfunction: passing function pointers not supported"
- *   in
- * 
- *   let pexpr_alg = <| id_pexpr_alg with a_PEcfunction = a_PEcfunction |> in
- *   let expr_alg = <| id_expr_alg with pexpr_alg = pexpr_alg |> in
- *   expr_alg *)
+
+let rewriter_cfunction (funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool)) = 
+
+  let make sym = 
+    match Map.lookup sym funinfo with
+    | Just (_loc,_attrs,ctype,args,is_variadic,has_proto) ->
+       let args_ctypes = List.map snd args in
+       let v_args_ctypes = Vlist BTy_ctype (List.map Vctype args_ctypes) in
+       let v_ctype = Vctype ctype in
+       let v_is_variadic = mk_boolean_v is_variadic in
+       let v_has_proto = mk_boolean_v has_proto in
+       PEval (Vtuple [v_ctype; v_args_ctypes; v_is_variadic; v_has_proto])
+       
+    | Nothing ->
+       let err  = "rewriter_cfunction: passing function pointers "
+                  ^ "not supported. Symbol: " ^ show sym
+       in
+       failwith err
+    end 
+  in
+
+  let a_PEcfunction pe = 
+    match pe with
+    | Pexpr _ _ (PEsym sym) -> 
+       make sym
+    | Pexpr _ _ (PEval (Vloaded (LVspecified (OVpointer p)))) ->
+       Mem.case_ptrval p
+         (fun _ -> failwith "null function pointer")
+         (fun sym -> make sym)
+         (fun _ -> failwith "concrete pointer")
+         (fun _ -> failwith "unspecified function pointer")
+    | Pexpr _ _ (PEval (Vobject (OVpointer p))) ->
+       Mem.case_ptrval p
+         (fun _ -> failwith "null function pointer")
+         (fun sym -> make sym)
+         (fun _ -> failwith "concrete pointer")
+         (fun _ -> failwith "unspecified function pointer")
+    | Pexpr _ _ (PEval (Vloaded (LVunspecified))) ->
+       failwith "unspecified function pointer"
+    | _ -> 
+      let err  = "rewriter_cfunction: passing function pointers "
+                 ^ "not supported. Expression: " ^ Pp.stringFromCore_pexpr pe 
+      in
+      failwith err
+    end
+  in
+
+  let pexpr_alg = <| id_pexpr_alg with a_PEcfunction = a_PEcfunction |> in
+  let expr_alg = <| id_expr_alg with pexpr_alg = pexpr_alg |> in
+  expr_alg
 
 
-let rw_expr = 
-  fold_expr id_expr_alg
-
-let rw_pexpr = 
-  fold_pexpr id_pexpr_alg
-
-
+let rw_expr e = fold_expr id_expr_alg e
+let rw_pexpr e = fold_pexpr id_pexpr_alg e
 
 
 let rw_fun fn = 
