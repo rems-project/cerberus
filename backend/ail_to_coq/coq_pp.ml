@@ -145,8 +145,8 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
         pp_expr e pp_stmt stmt1 pp_stmt stmt2
   | Assert(e, stmt)        ->
       pp "assert: (%a) ;@;%a" pp_expr e pp_stmt stmt
-  | ExprS(attrs, e, stmt)  ->
-      (* TODO use attribute. *)
+  | ExprS(annot, e, stmt)  ->
+      Option.iter (Option.iter (pp "annot: (%s) ;@;")) annot;
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
 let pp_ast : Coq_ast.t pp = fun ff ast ->
@@ -156,6 +156,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   (* Printing some header. *)
   pp "@[<v 0>From refinedc.lang Require Export notation.@;";
   pp "From refinedc.lang Require Import tactics.@;";
+  pp "From refinedc.typing Require Import annotations.@;";
   pp "Set Default Proof Using \"Type\".@;@;";
 
   (* Printing generation data and entry point in a comment. *)
