@@ -156,6 +156,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   (* Printing some header. *)
   pp "@[<v 0>From refinedc.lang Require Export notation.@;";
   pp "From refinedc.lang Require Import tactics.@;";
+  pp "From refinedc.typing Require Import annotations.@;";
   pp "Set Default Proof Using \"Type\".@;@;";
 
   (* Printing generation data and entry point in a comment. *)
