@@ -237,7 +237,12 @@ let pp_core (conf, io) ~filename core_file =
 *)
 
 let core_rewrite (conf, io) core_file =
-  return (Core_rewrite.rewrite_file core_file)
+  let core_file2 = core_file in
+  (*   match Core_rewrite2.rw_file core_file with
+   *   | Exception.Result core_file -> core_file
+   *   | Exception.Exception err -> prerr_endline err; failwith "error"
+   * in  *)
+  return (Core_rewrite.rewrite_file (core_file2))
   >|> whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
     fun () ->
       io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
