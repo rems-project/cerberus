@@ -240,7 +240,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "type"       -> single_arg annot_type (fun e -> Annot_type(e))
   | "size"       -> single_arg annot_size (fun e -> Annot_size(e))
   | "exist"      -> many_args annot_exist (fun l -> Annot_exist(l))
-  | "constraint" -> many_args annot_constr (fun l -> Annot_constraint(l))
+  | "constraints"-> many_args annot_constr (fun l -> Annot_constraint(l))
   | "immovable"  -> no_args Annot_immovable
   | "tunion"     -> no_args Annot_tunion
   | "field"      -> single_arg annot_field (fun e -> Annot_field(e))
