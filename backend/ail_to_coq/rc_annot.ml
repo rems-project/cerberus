@@ -31,22 +31,20 @@ let well_bracketed : char -> char -> string Earley.grammar = fun c_op c_cl ->
   let name = Printf.sprintf "<%cwell-bracketed%c>" c_op c_cl in
   Earley.black_box fn (Charset.singleton c_op) false name
 
-let list_sep : char -> 'a Earley.grammar -> 'a list Earley.grammar =
-  fun c gr -> parser {e:gr es:{_:CHR(c) gr}* -> e::es}?[[]]
-
 type ident     = string
 type iris_term = string
 type coq_term  = string
 
 (** Identifier token (regexp ["[A-Za-z_]+"]). *)
 let ident : ident Earley.grammar =
-  let cs = Charset.from_string "A-Za-z_" in
+  let cs_first = Charset.from_string "A-Za-z_" in
+  let cs = Charset.from_string "A-Za-z_0-9" in
   let fn buf pos =
     let nb = ref 1 in
     while Charset.mem cs (Input.get buf (pos + !nb)) do incr nb done;
     (String.sub (Input.line buf) pos !nb, buf, pos + !nb)
   in
-  Earley.black_box fn cs false "<ident>"
+  Earley.black_box fn cs_first false "<ident>"
 
 (** Arbitrary ("well-bracketed") string delimited by ['['] and [']']. *)
 let iris_term : iris_term Earley.grammar =
@@ -65,7 +63,7 @@ type coq_expr =
 type constr =
   | Constr_Iris  of string
   | Constr_exist of string * constr
-  | Constr_own   of string * type_expr
+  | Constr_own   of string * ptr_kind * type_expr
   | Constr_Coq   of coq_expr
 
 and ptr_kind = Own | Shr | Frac of type_expr
@@ -91,8 +89,13 @@ let parser coq_expr =
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
   | "∃" x:ident "." c:constr                      -> Constr_exist(x,c)
-  | x:ident "@" "&own<" ty:type_expr ">"          -> Constr_own(x,ty)
+  | x:ident "@" (k,ty):ptr_type                   -> Constr_own(x,k,ty)
   | c:coq_expr                                    -> Constr_Coq(c)
+
+and parser ptr_type =
+  | "&own<" ty:type_expr ">"                      -> (Own    , ty)
+  | "&shr<" ty:type_expr ">"                      -> (Shr    , ty)
+  | "&frac<" l:type_expr "," ty:type_expr ">"     -> (Frac(l), ty)
 
 and parser type_expr =
   | c:coq_expr ty:{"@" type_expr}?                ->
@@ -102,13 +105,15 @@ and parser type_expr =
         | (_           , None    ) -> Ty_Coq(c)
         | (_           , Some(ty)) -> Ty_refine(c,ty)
       end
-  | "&own<" ty:type_expr ">"                      -> Ty_ptr(Own, ty)
-  | "&shr<" ty:type_expr ">"                      -> Ty_ptr(Shr, ty)
-  | "&frac<" l:type_expr "," ty:type_expr ">"     -> Ty_ptr(Frac(l), ty)
+  | (k,ty):ptr_type                               -> Ty_ptr(k, ty)
   | "..."                                         -> Ty_dots
   | "∃" x:ident "." ty:type_expr                  -> Ty_exists(x,ty)
   | ty:type_expr "&" c:constr                     -> Ty_constr(ty,c)
-  | id:ident "<" tys:(list_sep ',' type_expr) ">" -> Ty_params(id,tys)
+  | id:ident "<" tys:type_args ">"                -> Ty_params(id,tys)
+
+and parser type_args =
+  | EMPTY                           -> []
+  | e:type_expr es:{"," type_expr}* -> e::es
 
 (** {3 Entry points} *)
 
@@ -158,8 +163,9 @@ let parser annot_ensures : constr Earley.grammar =
 
 (** {4 Annotations on statement expressions (ExprS)} *)
 
-let parser annot_subtype : type_expr Earley.grammar =
-  | ty:type_expr
+(*
+let parser annot : ... Earley.grammar =
+*)
 
 (** {4 Annotations on blocks} *)
 
@@ -183,8 +189,7 @@ type annot =
   | Annot_requires   of constr list
   | Annot_returns    of type_expr
   | Annot_ensures    of constr list
-  | Annot_subtype    of type_expr
-  | Annot_unlock
+  | Annot_annot      of string
   | Annot_inv        of constr
 
 exception Invalid_annot of string
@@ -220,6 +225,12 @@ let parse_attr : rc_attr -> annot = fun attr ->
     | _  -> c (List.map (parse gr) args)
   in
 
+  let raw_single_arg : (string -> annot) -> annot = fun c ->
+    match args with
+    | [s] -> c s
+    | _   -> error "should have exactly one argument"
+  in
+
   let no_args : annot -> annot = fun c ->
     match args with
     | [] -> c
@@ -232,8 +243,8 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "ptr_type"   -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
   | "type"       -> single_arg annot_type (fun e -> Annot_type(e))
   | "size"       -> single_arg annot_size (fun e -> Annot_size(e))
-  | "exist"      -> many_args annot_exist (fun l -> Annot_exist(l))
-  | "constraint" -> many_args annot_constr (fun l -> Annot_constraint(l))
+  | "exists"     -> many_args annot_exist (fun l -> Annot_exist(l))
+  | "constraints"-> many_args annot_constr (fun l -> Annot_constraint(l))
   | "immovable"  -> no_args Annot_immovable
   | "tunion"     -> no_args Annot_tunion
   | "field"      -> single_arg annot_field (fun e -> Annot_field(e))
@@ -241,8 +252,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "requires"   -> many_args annot_requires (fun l -> Annot_requires(l))
   | "returns"    -> single_arg annot_returns (fun e -> Annot_returns(e))
   | "ensures"    -> many_args annot_ensures (fun l -> Annot_ensures(l))
-  | "subtype"    -> single_arg annot_subtype (fun e -> Annot_subtype(e))
-  | "unlock"     -> no_args Annot_unlock
+  | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
   | "inv"        -> single_arg annot_inv (fun e -> Annot_inv(e))
   | _            -> error "undefined"
 
@@ -305,23 +315,19 @@ let field_annot : rc_attr list -> type_expr = fun attrs ->
   | None     -> raise (Invalid_annot "a field annotation is required")
   | Some(ty) -> ty
 
-type expr_annot =
-  | EA_none (* no annotation *)
-  | EA_subtype of type_expr
-  | EA_unlock
+type expr_annot = string option
 
 let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   let error msg =
     raise (Invalid_annot (Printf.sprintf "expression annotation %s" msg))
   in
   match attrs with
-  | []      -> EA_none
+  | []      -> None
   | _::_::_ -> error "carries more than one attributes"
   | [attr]  ->
   match parse_attr attr with
-  | Annot_subtype(ty) -> EA_subtype(ty)
-  | Annot_unlock      -> EA_unlock
-  | _                 -> error "is invalid (wrong kind)"
+  | Annot_annot(s) -> Some(s)
+  | _              -> error "is invalid (wrong kind)"
 
 type struct_annot = annot list (* FIXME *)
 

@@ -171,7 +171,7 @@ LEM_AIL_TYPING    = range.lem integerImpl.lem ailTypesAux.lem \
 LEM_CABS_TO_AIL   = cabs_to_ail_aux.lem scope_table.lem \
                     cabs_to_ail_effect.lem cabs_to_ail.lem wipFrontend.lem
 LEM_CORE_TO_CORE  = core_sequentialise.lem core_indet.lem core_rewrite.lem \
-                    core_rewrite.lem core_unstruct.lem
+                    core_unstruct.lem
 LEM_CORE_DYNAMICS = core_run_aux.lem core_eval.lem core_run.lem driver.lem
 LEM_ELABORATION   = translation_effect.lem translation_aux.lem translation.lem 
 LEM_DEFACTO       = mem_common.lem defacto_memory_types.lem \
