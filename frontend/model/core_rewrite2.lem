@@ -1,22 +1,30 @@
 open import Pervasives
 
-open import Utils Core Core_aux Ctype Annot Pervasives_extra
+open import Utils Core Core_aux Ctype Annot Exception 
+open import Exception.Operators
 import Symbol Mem
 
 import Pp
 
-let mapsnd f l = List.map (fun (a,b) -> (a, f b)) l
+type msg = string
+
+let mapsnd (f : 'a2 -> 'b ) (l : list ('a1 * 'a2)) : list ('a1 * 'b) =
+  List.map (fun (a1,a2) -> (a1, f a2)) l
+
+let mapsndM (f : 'a2 -> exceptM 'b msg) (l : list ('a1 * 'a2)) =
+  mapM (fun (a1,a2) -> f a2 >>= fun b -> return (a1,b)) l
+     
 
 
 type object_and_loaded_value_alg 'ov 'lv = 
- <| a_OVinteger : Mem.integer_value -> 'ov
-  ; a_OVfloating : Mem.floating_value -> 'ov
-  ; a_OVpointer : Mem.pointer_value -> 'ov
-  ; a_OVarray : list 'lv -> 'ov
-  ; a_OVstruct : Symbol.sym -> list (Symbol.identifier * ctype * Mem.mem_value) -> 'ov
-  ; a_OVunion : Symbol.sym -> Symbol.identifier -> Mem.mem_value -> 'ov
-  ; a_LVspecified : 'ov -> 'lv
-  ; a_LVunspecified : ctype -> 'lv
+ <| a_OVinteger : Mem.integer_value -> exceptM 'ov msg
+  ; a_OVfloating : Mem.floating_value -> exceptM 'ov msg
+  ; a_OVpointer : Mem.pointer_value -> exceptM 'ov msg
+  ; a_OVarray : list 'lv -> exceptM 'ov msg
+  ; a_OVstruct : Symbol.sym -> list (Symbol.identifier * ctype * Mem.mem_value) -> exceptM 'ov msg
+  ; a_OVunion : Symbol.sym -> Symbol.identifier -> Mem.mem_value -> exceptM 'ov msg
+  ; a_LVspecified : 'ov -> exceptM 'lv msg
+  ; a_LVunspecified : ctype -> exceptM 'lv msg
  |>
 
 let rec fold_object_value alg ov = 
@@ -24,236 +32,259 @@ let rec fold_object_value alg ov =
   | OVinteger iv -> alg.a_OVinteger iv
   | OVfloating fv -> alg.a_OVfloating fv
   | OVpointer pv -> alg.a_OVpointer pv
-  | OVarray lvs -> alg.a_OVarray (List.map (fold_loaded_value alg) lvs)
+  | OVarray lvs -> 
+     mapM (fold_loaded_value alg) lvs >>= 
+     alg.a_OVarray 
   | OVstruct sym icmv -> alg.a_OVstruct sym icmv
   | OVunion sym id mv -> alg.a_OVunion sym id mv
   end
 
 and fold_loaded_value alg lv = 
   match lv with
-  | LVspecified ov -> alg.a_LVspecified (fold_object_value alg ov)
-  | LVunspecified ct -> alg.a_LVunspecified ct
+  | LVspecified ov -> 
+     fold_object_value alg ov >>=
+     alg.a_LVspecified 
+  | LVunspecified ct -> 
+     alg.a_LVunspecified ct
   end
 
 type value_alg 'ov 'lv 'value =
   <| object_and_loaded_value_alg : object_and_loaded_value_alg 'ov 'lv
-   ; a_Vobject : 'ov -> 'value
-   ; a_Vloaded : 'lv -> 'value
-   ; a_Vunit : 'value
-   ; a_Vtrue : 'value
-   ; a_Vfalse : 'value
-   ; a_Vctype : ctype -> 'value
-   ; a_Vlist : core_base_type -> list 'value -> 'value
-   ; a_Vtuple : list 'value -> 'value
+   ; a_Vobject : 'ov -> exceptM 'value msg
+   ; a_Vloaded : 'lv -> exceptM 'value msg
+   ; a_Vunit : exceptM 'value msg
+   ; a_Vtrue : exceptM 'value msg
+   ; a_Vfalse : exceptM 'value msg
+   ; a_Vctype : ctype -> exceptM 'value msg
+   ; a_Vlist : core_base_type -> list 'value -> exceptM 'value msg
+   ; a_Vtuple : list 'value -> exceptM 'value msg
   |>
 
 
 let rec fold_value alg v = 
   match v with
   | Vobject ov -> 
-     alg.a_Vobject (fold_object_value alg.object_and_loaded_value_alg ov)
+     fold_object_value alg.object_and_loaded_value_alg ov >>=
+     alg.a_Vobject 
   | Vloaded lv -> 
-     alg.a_Vloaded (fold_loaded_value alg.object_and_loaded_value_alg lv)
-  | Vunit -> alg.a_Vunit
-  | Vtrue -> alg.a_Vtrue
-  | Vfalse -> alg.a_Vfalse
-  | Vctype ct -> alg.a_Vctype ct
-  | Vlist ct vs -> alg.a_Vlist ct (List.map (fold_value alg) vs)
-  | Vtuple vs -> alg.a_Vtuple (List.map (fold_value alg) vs)
+     fold_loaded_value alg.object_and_loaded_value_alg lv >>=
+     alg.a_Vloaded 
+  | Vunit -> 
+     alg.a_Vunit
+  | Vtrue -> 
+     alg.a_Vtrue
+  | Vfalse -> 
+     alg.a_Vfalse
+  | Vctype ct -> 
+     alg.a_Vctype ct
+  | Vlist ct vs -> 
+     mapM (fold_value alg) vs >>=
+     alg.a_Vlist ct 
+  | Vtuple vs -> 
+     mapM (fold_value alg) vs >>=
+     alg.a_Vtuple 
  end
 
-type pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr = 
+type pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr = 
   <| value_alg : value_alg 'ov 'lv 'value
-   ; a_Pexpr : list annot -> 'bty -> 'pexpr_ -> 'pexpr
-   ; a_PEsym : 'sym -> 'pexpr_
-   ; a_PEimpl : Implementation.implementation_constant -> 'pexpr_
-   ; a_PEval : 'value -> 'pexpr_
-   ; a_PEconstrained :  list (Mem.mem_iv_constraint * 'pexpr) -> 'pexpr_
-   ; a_PEundef : Loc.t -> Undefined.undefined_behaviour -> 'pexpr_
-   ; a_PEerror : string -> 'pexpr -> 'pexpr_
-   ; a_PEctor : (generic_ctor 'bty) -> list 'pexpr -> 'pexpr_
-   ; a_PEcase : 'pexpr -> list ((generic_pattern 'bty 'sym) * 'pexpr) -> 'pexpr_
-   ; a_PEarray_shift : 'pexpr -> ctype -> 'pexpr -> 'pexpr_
-   ; a_PEmember_shift : 'pexpr -> 'sym -> Symbol.identifier -> 'pexpr_
-   ; a_PEnot : 'pexpr -> 'pexpr_
-   ; a_PEop : binop -> 'pexpr -> 'pexpr -> 'pexpr_
-   ; a_PEstruct : 'sym -> list (Symbol.identifier * 'pexpr) -> 'pexpr_
-   ; a_PEunion : 'sym -> Symbol.identifier -> 'pexpr -> 'pexpr_
-   ; a_PEcfunction : 'pexpr -> 'pexpr_
-   ; a_PEmemberof : 'sym -> Symbol.identifier -> 'pexpr -> 'pexpr_
-   ; a_PEcall : (generic_name 'sym) -> list 'pexpr -> 'pexpr_
-   ; a_PElet : (generic_pattern 'bty 'sym) -> 'pexpr -> 'pexpr -> 'pexpr_
-   ; a_PEif : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr_
-   ; a_PEis_scalar : 'pexpr -> 'pexpr_
-   ; a_PEis_integer : 'pexpr -> 'pexpr_
-   ; a_PEis_signed : 'pexpr -> 'pexpr_
-   ; a_PEis_unsigned : 'pexpr -> 'pexpr_
-   ; a_PEbmc_assume : 'pexpr -> 'pexpr_
-   ; a_PEare_compatible : 'pexpr -> 'pexpr -> 'pexpr_
+   ; a_PEsym : list annot -> 'bty -> 'sym -> exceptM 'pexpr msg
+   ; a_PEimpl : list annot -> 'bty -> Implementation.implementation_constant -> exceptM 'pexpr msg
+   ; a_PEval : list annot -> 'bty -> 'value -> exceptM 'pexpr msg
+   ; a_PEconstrained : list annot -> 'bty -> list (Mem.mem_iv_constraint * 'pexpr) -> exceptM 'pexpr msg
+   ; a_PEundef : list annot -> 'bty -> Loc.t -> Undefined.undefined_behaviour -> exceptM 'pexpr msg
+   ; a_PEerror : list annot -> 'bty -> string -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEctor : list annot -> 'bty -> (generic_ctor 'bty) -> list 'pexpr -> exceptM 'pexpr msg
+   ; a_PEcase : list annot -> 'bty -> 'pexpr -> list ((generic_pattern 'bty 'sym) * 'pexpr) -> exceptM 'pexpr msg
+   ; a_PEarray_shift : list annot -> 'bty -> 'pexpr -> ctype -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEmember_shift : list annot -> 'bty -> 'pexpr -> 'sym -> Symbol.identifier -> exceptM 'pexpr msg
+   ; a_PEnot : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEop : list annot -> 'bty -> binop -> 'pexpr -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEstruct : list annot -> 'bty -> 'sym -> list (Symbol.identifier * 'pexpr) -> exceptM 'pexpr msg
+   ; a_PEunion : list annot -> 'bty -> 'sym -> Symbol.identifier -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEcfunction : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEmemberof : list annot -> 'bty -> 'sym -> Symbol.identifier -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEcall : list annot -> 'bty -> (generic_name 'sym) -> list 'pexpr -> exceptM 'pexpr msg
+   ; a_PElet : list annot -> 'bty -> (generic_pattern 'bty 'sym) -> 'pexpr -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEif : list annot -> 'bty -> 'pexpr -> 'pexpr -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEis_scalar : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEis_integer : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEis_signed : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEis_unsigned : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEbmc_assume : list annot -> 'bty -> 'pexpr -> exceptM 'pexpr msg
+   ; a_PEare_compatible : list annot -> 'bty -> 'pexpr -> 'pexpr -> exceptM 'pexpr msg
   |>
+
 
 
 let rec fold_pexpr alg pe =
   let (Pexpr annots bty pe_) = pe in
-  let wrap pe_ = alg.a_Pexpr annots bty pe_ in
   match pe_ with
   | PEsym sym -> 
-     wrap (alg.a_PEsym sym)
+     alg.a_PEsym annots bty sym
   | PEimpl c -> 
-     wrap (alg.a_PEimpl c)
+     alg.a_PEimpl annots bty c
   | PEval v -> 
-     wrap (alg.a_PEval (fold_value alg.value_alg v))
+     fold_value alg.value_alg v >>= fun v ->
+     alg.a_PEval annots bty v
   | PEconstrained c_pes -> 
-     wrap (alg.a_PEconstrained (mapsnd (fold_pexpr alg) c_pes))
+     mapsndM (fold_pexpr alg) c_pes >>= fun c_pes ->
+     alg.a_PEconstrained annots bty c_pes
   | PEundef l u -> 
-     wrap (alg.a_PEundef l u)
+     alg.a_PEundef annots bty l u
   | PEerror str pe -> 
-     wrap (alg.a_PEerror str (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEerror annots bty str pe
   | PEctor ctor args -> 
-     wrap (alg.a_PEctor ctor (List.map (fold_pexpr alg) args))
+     mapM (fold_pexpr alg) args >>= fun args ->
+     alg.a_PEctor annots bty ctor args
   | PEcase pe ppes -> 
-     wrap (alg.a_PEcase (fold_pexpr alg pe) (mapsnd (fold_pexpr alg) ppes))
+     fold_pexpr alg pe >>= fun pe ->
+     mapsndM (fold_pexpr alg) ppes >>= fun ppes ->
+     alg.a_PEcase annots bty pe ppes
   | PEarray_shift pe1 ct pe2 -> 
-     wrap (alg.a_PEarray_shift (fold_pexpr alg pe1) ct (fold_pexpr alg pe2))
+     fold_pexpr alg pe1 >>= fun pe1 ->
+     fold_pexpr alg pe2 >>= fun pe2 ->
+     alg.a_PEarray_shift annots bty pe1 ct pe2
   | PEmember_shift pe sym id -> 
-     wrap (alg.a_PEmember_shift (fold_pexpr alg pe) sym id)
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEmember_shift annots bty pe sym id
   | PEnot pe ->
-     wrap (alg.a_PEnot (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEnot annots bty pe
   | PEop op pe1 pe2 ->
-     wrap (alg.a_PEop op (fold_pexpr alg pe1) (fold_pexpr alg pe2))
+     fold_pexpr alg pe1 >>= fun pe1 ->
+     fold_pexpr alg pe2 >>= fun pe2 ->
+     alg.a_PEop annots bty op pe1 pe2
   | PEstruct sym id_pes ->
-     wrap (alg.a_PEstruct sym (mapsnd (fold_pexpr alg) id_pes))
+     mapsndM (fold_pexpr alg) id_pes >>= fun id_pes ->
+     alg.a_PEstruct annots bty sym id_pes
   | PEunion sym id pe ->
-     wrap (alg.a_PEunion sym id (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEunion annots bty sym id pe
   | PEcfunction pe ->
-     wrap (alg.a_PEcfunction pe)
+     alg.a_PEcfunction annots bty pe
   | PEmemberof sym id pe ->
-     wrap (alg.a_PEmemberof sym id pe)
+     alg.a_PEmemberof annots bty sym id pe
   | PEcall name pes ->
-     wrap (alg.a_PEcall name (List.map (fold_pexpr alg) pes))
+     mapM (fold_pexpr alg) pes >>= fun pes ->
+     alg.a_PEcall annots bty name pes
   | PElet pat pe1 pe2 ->
-     wrap (alg.a_PElet pat (fold_pexpr alg pe1) (fold_pexpr alg pe2))
+     fold_pexpr alg pe1 >>= fun pe1 ->
+     fold_pexpr alg pe2 >>= fun pe2 ->
+     alg.a_PElet annots bty pat pe1 pe2
   | PEif pe1 pe2 pe3 ->
-     wrap (alg.a_PEif (fold_pexpr alg pe1) (fold_pexpr alg pe2) (fold_pexpr alg pe3))
+     fold_pexpr alg pe1 >>= fun pe1 ->
+     fold_pexpr alg pe2 >>= fun pe2 ->
+     fold_pexpr alg pe3 >>= fun pe3 ->
+     alg.a_PEif annots bty pe1 pe2 pe3
   | PEis_scalar pe ->
-     wrap (alg.a_PEis_scalar (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun p2 ->
+     alg.a_PEis_scalar annots bty pe
   | PEis_integer pe ->
-     wrap (alg.a_PEis_integer (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEis_integer annots bty pe
   | PEis_signed pe ->
-     wrap (alg.a_PEis_signed (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEis_signed annots bty pe
   | PEis_unsigned pe ->
-     wrap (alg.a_PEis_unsigned (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEis_unsigned annots bty pe
   | PEbmc_assume pe ->
-     wrap (alg.a_PEbmc_assume (fold_pexpr alg pe))
+     fold_pexpr alg pe >>= fun pe ->
+     alg.a_PEbmc_assume annots bty pe
   | PEare_compatible pe1 pe2 ->
-     wrap (alg.a_PEare_compatible (fold_pexpr alg pe1) (fold_pexpr alg pe2))
+     fold_pexpr alg pe1 >>= fun pe1 ->
+     fold_pexpr alg pe2 >>= fun pe2 ->
+     alg.a_PEare_compatible annots bty pe1 pe2
   end
 
 
-type action_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr 'a 'action_ 'action 'paction =
-  <| apexpr_alg : pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr
-   ; a_Action : Loc.t -> 'a -> 'action_ -> 'action
-   ; a_Paction : polarity -> 'action -> 'paction
-   ; a_Create : 'pexpr -> 'pexpr -> Symbol.prefix -> 'action_
-   ; a_CreateReadOnly : 'pexpr -> 'pexpr -> 'pexpr -> Symbol.prefix -> 'action_
-   ; a_Alloc : 'pexpr -> 'pexpr -> Symbol.prefix -> 'action_
-   ; a_Kill : bool -> 'pexpr -> 'action_
-   ; a_Store : bool -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> 'action_
-   ; a_Load : 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> 'action_
-   ; a_RMW : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> 'action_
-   ; a_Fence : Cmm_csem.memory_order -> 'action_
-   ; a_CompareExchangeStrong : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> 'action_
-   ; a_CompareExchangeWeak : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> 'action_
-   ; a_LinuxFence : Linux.linux_memory_order -> 'action_
-   ; a_LinuxLoad : 'pexpr -> 'pexpr -> Linux.linux_memory_order -> 'action_
-   ; a_LinuxStore : 'pexpr -> 'pexpr -> 'pexpr -> Linux.linux_memory_order -> 'action_
-   ; a_LinuxRMW : 'pexpr -> 'pexpr -> 'pexpr -> Linux.linux_memory_order -> 'action_
+type action_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction =
+  <| apexpr_alg : pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr
+   ; a_Action : Loc.t -> 'a -> 'action_ -> exceptM 'action msg
+   ; a_Paction : polarity -> 'action -> exceptM 'paction msg
+   ; a_Create : 'pexpr -> 'pexpr -> Symbol.prefix -> exceptM 'action_ msg
+   ; a_CreateReadOnly : 'pexpr -> 'pexpr -> 'pexpr -> Symbol.prefix -> exceptM 'action_ msg
+   ; a_Alloc : 'pexpr -> 'pexpr -> Symbol.prefix -> exceptM 'action_ msg
+   ; a_Kill : bool -> 'pexpr -> exceptM 'action_ msg
+   ; a_Store : bool -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_Load : 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_RMW : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_Fence : Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_CompareExchangeStrong : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_CompareExchangeWeak : 'pexpr -> 'pexpr -> 'pexpr -> 'pexpr -> Cmm_csem.memory_order -> Cmm_csem.memory_order -> exceptM 'action_ msg
+   ; a_LinuxFence : Linux.linux_memory_order -> exceptM 'action_ msg
+   ; a_LinuxLoad : 'pexpr -> 'pexpr -> Linux.linux_memory_order -> exceptM 'action_ msg
+   ; a_LinuxStore : 'pexpr -> 'pexpr -> 'pexpr -> Linux.linux_memory_order -> exceptM 'action_ msg
+   ; a_LinuxRMW : 'pexpr -> 'pexpr -> 'pexpr -> Linux.linux_memory_order -> exceptM 'action_ msg
   |>
 
 let fold_action alg action = 
   let (Action l a action_) = action in
-  let wrap action_ = alg.a_Action l a action_ in
+  let wrap action_ = action_ >>= fun action_ -> alg.a_Action l a action_ in
   wrap
     match action_ with
     | Create pe1 pe2 p -> 
-       alg.a_Create
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2) 
-         p
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       alg.a_Create pe1 pe2 p
     | CreateReadOnly pe1 pe2 pe3 p ->
-       alg.a_CreateReadOnly 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         (fold_pexpr alg.apexpr_alg pe3) 
-         p
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       alg.a_CreateReadOnly pe1 pe2 pe3 p
     | Alloc pe1 pe2 p ->
-       alg.a_Alloc 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         p
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       alg.a_Alloc pe1 pe2 p
     | Kill b pe ->
-       alg.a_Kill 
-         b
-         (fold_pexpr alg.apexpr_alg pe)
+       (fold_pexpr alg.apexpr_alg pe) >>= fun pe ->
+       alg.a_Kill b pe
     | Store b pe1 pe2 pe3 mo ->
-       alg.a_Store 
-         b
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         (fold_pexpr alg.apexpr_alg pe3)
-         mo
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       alg.a_Store b pe1 pe2 pe3 mo
     | Load pe1 pe2 mo ->
-       alg.a_Load 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         mo
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       alg.a_Load pe1 pe2 mo
     | RMW pe1 pe2 pe3 pe4 mo1 mo2 ->
-       alg.a_RMW 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         (fold_pexpr alg.apexpr_alg pe3)
-         (fold_pexpr alg.apexpr_alg pe4)
-         mo1
-         mo2
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       (fold_pexpr alg.apexpr_alg pe4) >>= fun pe4 ->
+       alg.a_RMW pe1 pe2 pe3 pe3 mo1 mo2
     | Fence mo ->
-       alg.a_Fence 
-         mo
+       alg.a_Fence mo
     | CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2 ->
-       alg.a_CompareExchangeStrong 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2) 
-         (fold_pexpr alg.apexpr_alg pe3)
-         (fold_pexpr alg.apexpr_alg pe4)
-         mo1 
-         mo2
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       (fold_pexpr alg.apexpr_alg pe4) >>= fun pe4 ->
+       alg.a_CompareExchangeStrong pe1 pe2 pe3 pe4 mo1 mo2
     | CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2 ->
-       alg.a_CompareExchangeWeak 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2) 
-         (fold_pexpr alg.apexpr_alg pe3)
-         (fold_pexpr alg.apexpr_alg pe4)
-         mo1 
-         mo2
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       (fold_pexpr alg.apexpr_alg pe4) >>= fun pe4 ->
+       alg.a_CompareExchangeWeak pe1 pe2 pe3 pe4 mo1 mo2
     | LinuxFence mo ->
-       alg.a_LinuxFence 
-         mo
+       alg.a_LinuxFence mo
     | LinuxLoad pe1 pe2 mo ->
-       alg.a_LinuxLoad 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         mo
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       alg.a_LinuxLoad pe1 pe2 mo
     | LinuxStore pe1 pe2 pe3 mo ->
-       alg.a_LinuxStore 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         (fold_pexpr alg.apexpr_alg pe3)
-         mo
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       alg.a_LinuxStore pe1 pe2 pe3 mo
     | LinuxRMW pe1 pe2 pe3 mo ->
-       alg.a_LinuxRMW 
-         (fold_pexpr alg.apexpr_alg pe1)
-         (fold_pexpr alg.apexpr_alg pe2)
-         (fold_pexpr alg.apexpr_alg pe3)
-         mo
+       (fold_pexpr alg.apexpr_alg pe1) >>= fun pe1 ->
+       (fold_pexpr alg.apexpr_alg pe2) >>= fun pe2 ->
+       (fold_pexpr alg.apexpr_alg pe3) >>= fun pe3 ->
+       alg.a_LinuxRMW pe1 pe2 pe3 mo
     end
 
 let fold_paction alg (Paction polarity action) =
@@ -261,74 +292,106 @@ let fold_paction alg (Paction polarity action) =
 
 
 
-type expr_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr 'a 'action_ 'action 'paction 'expr_ 'expr =
-  <| action_alg : action_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr 'a 'action_ 'action 'paction
-   ; pexpr_alg : pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr_ 'pexpr
-   ; a_Expr : list annot -> 'expr_ -> 'expr
-   ; a_Epure : 'pexpr -> 'expr_
-   ; a_Ememop : Mem_common.memop -> list 'pexpr -> 'expr_
-   ; a_Eaction : 'paction -> 'expr_
-   ; a_Ecase : 'pexpr -> list ((generic_pattern 'bty 'sym) * 'expr) -> 'expr_
-   ; a_Elet : (generic_pattern 'bty 'sym) -> 'pexpr -> 'expr -> 'expr_
-   ; a_Eif : 'pexpr -> 'expr -> 'expr -> 'expr_
-   ; a_Eskip : 'expr_
-   ; a_Eccall : 'a -> 'pexpr -> 'pexpr -> list 'pexpr -> 'expr_
-   ; a_Eproc : 'a -> (generic_name 'sym) -> list 'pexpr -> 'expr_
-   ; a_Eunseq : list 'expr -> 'expr_
-   ; a_Ewseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> 'expr_
-   ; a_Esseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> 'expr_
-   ; a_Easeq : ('sym * core_base_type) -> (generic_action 'a 'bty 'sym) -> 'paction -> 'expr_
-   ; a_Eindet : nat -> 'expr -> 'expr_
-   ; a_Ebound : nat -> 'expr -> 'expr_
-   ; a_End : list 'expr -> 'expr_
-   ; a_Esave : ('sym * core_base_type) -> list ('sym * (core_base_type * generic_pexpr 'bty 'sym)) -> 'expr -> 'expr_
-   ; a_Erun : 'a -> 'sym -> list 'pexpr -> 'expr_
-   ; a_Epar : list 'expr -> 'expr_
-   ; a_Ewait : Mem_common.thread_id -> 'expr_
+type expr_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction 'expr_ 'expr =
+  <| action_alg : action_alg 'sym 'bty 'ov 'lv 'value 'pexpr 'a 'action_ 'action 'paction
+   ; pexpr_alg : pexpr_alg 'sym 'bty 'ov 'lv 'value 'pexpr
+   ; a_Expr : list annot -> 'expr_ -> exceptM 'expr msg
+   ; a_Epure : 'pexpr -> exceptM 'expr_ msg
+   ; a_Ememop : Mem_common.memop -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Eaction : 'paction -> exceptM 'expr_ msg
+   ; a_Ecase : 'pexpr -> list ((generic_pattern 'bty 'sym) * 'expr) -> exceptM 'expr_ msg
+   ; a_Elet : (generic_pattern 'bty 'sym) -> 'pexpr -> 'expr -> exceptM 'expr_ msg
+   ; a_Eif : 'pexpr -> 'expr -> 'expr -> exceptM 'expr_ msg
+   ; a_Eskip : exceptM 'expr_ msg
+   ; a_Eccall : 'a -> 'pexpr -> 'pexpr -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Eproc : 'a -> (generic_name 'sym) -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Eunseq : list 'expr -> exceptM 'expr_ msg
+   ; a_Ewseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> exceptM 'expr_ msg
+   ; a_Esseq : (generic_pattern 'bty 'sym) -> 'expr -> 'expr -> exceptM 'expr_ msg
+   ; a_Easeq : ('sym * core_base_type) -> (generic_action 'a 'bty 'sym) -> 'paction -> exceptM 'expr_ msg
+   ; a_Eindet : nat -> 'expr -> exceptM 'expr_ msg
+   ; a_Ebound : nat -> 'expr -> exceptM 'expr_ msg
+   ; a_End : list 'expr -> exceptM 'expr_ msg
+   ; a_Esave : ('sym * core_base_type) -> list ('sym * (core_base_type * generic_pexpr 'bty 'sym)) -> 'expr -> exceptM 'expr_ msg
+   ; a_Erun : 'a -> 'sym -> list 'pexpr -> exceptM 'expr_ msg
+   ; a_Epar : list 'expr -> exceptM 'expr_ msg
+   ; a_Ewait : Mem_common.thread_id -> exceptM 'expr_ msg
   |>
 
 let rec fold_expr alg e = 
   let Expr annots e_ = e in
-  let wrap e_ = alg.a_Expr annots e_ in
+  let wrap e_ = e_ >>= fun e_ -> alg.a_Expr annots e_ in
   match e_ with
   | Epure pe ->
-     wrap (alg.a_Epure (fold_pexpr alg.pexpr_alg pe))
+     (fold_pexpr alg.pexpr_alg pe) >>= fun pe ->
+     wrap (alg.a_Epure pe)
   | Ememop mop pes ->
-     wrap (alg.a_Ememop mop (List.map (fold_pexpr alg.pexpr_alg) pes))
+     (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
+     wrap (alg.a_Ememop mop pes)
   | Eaction a ->
-     wrap (alg.a_Eaction (fold_paction alg.action_alg a))
+     (fold_paction alg.action_alg a) >>= fun a ->
+     wrap (alg.a_Eaction a)
   | Ecase pe pats_pes ->
-     wrap (alg.a_Ecase (fold_pexpr alg.pexpr_alg pe) (mapsnd (fold_expr alg) pats_pes))
+     (fold_pexpr alg.pexpr_alg pe) >>= fun pe ->
+     (mapsndM (fold_expr alg) pats_pes) >>= fun pats_pes ->
+     wrap (alg.a_Ecase pe pats_pes)
   | Elet pat pe e ->
-     wrap (alg.a_Elet pat (fold_pexpr alg.pexpr_alg pe) (fold_expr alg e))
+     (fold_pexpr alg.pexpr_alg pe) >>= fun pe ->
+     (fold_expr alg e) >>= fun e ->
+     wrap (alg.a_Elet pat pe e)
   | Eif pe e1 e2 ->
-     wrap (alg.a_Eif (fold_pexpr alg.pexpr_alg pe) (fold_expr alg e1) (fold_expr alg e2))
+     (fold_pexpr alg.pexpr_alg pe) >>= fun pe ->
+     (fold_expr alg e1) >>= fun e1 ->
+     (fold_expr alg e2) >>= fun e2 ->
+     wrap (alg.a_Eif pe e1 e2)
   | Eskip ->
      wrap alg.a_Eskip
   | Eccall a pe1 pe2 pes ->
-     wrap (alg.a_Eccall a (fold_pexpr alg.pexpr_alg pe1) (fold_pexpr alg.pexpr_alg pe2) (List.map (fold_pexpr alg.pexpr_alg) pes))
+     (fold_pexpr alg.pexpr_alg pe1) >>= fun pe1 ->
+     (fold_pexpr alg.pexpr_alg pe2) >>= fun pe2 ->
+     (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
+     wrap (alg.a_Eccall a pe1 pe2 pes)
   | Eproc a n pes ->
-     wrap (alg.a_Eproc a n (List.map (fold_pexpr alg.pexpr_alg) pes))
+     (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
+     wrap (alg.a_Eproc a n pes)
   | Eunseq es ->
-     wrap (alg.a_Eunseq (List.map (fold_expr alg) es))
+     (mapM (fold_expr alg) es) >>= fun es ->
+     wrap (alg.a_Eunseq es)
   | Ewseq pat e1 e2 ->
-     wrap (alg.a_Ewseq pat (fold_expr alg e1) (fold_expr alg e2))
+     (fold_expr alg e1) >>= fun e1 ->
+     (fold_expr alg e2) >>= fun e2 ->
+     wrap (alg.a_Ewseq pat e1 e2)
   | Esseq pat e1 e2 ->
-     wrap (alg.a_Esseq pat (fold_expr alg e1) (fold_expr alg e2))
+     (fold_expr alg e1) >>= fun e1 ->
+     (fold_expr alg e2) >>= fun e2 ->
+     wrap (alg.a_Esseq pat e1 e2)
   | Easeq s a pa ->
-     wrap (alg.a_Easeq s (fold_action alg.action_alg a) (fold_paction alg.action_alg pa))
+     (fold_action alg.action_alg a) >>= fun a ->
+     (fold_paction alg.action_alg pa) >>= fun pa ->
+     wrap (alg.a_Easeq s a pa)
   | Eindet n e ->
-     wrap (alg.a_Eindet n (fold_expr alg e))
+     (fold_expr alg e) >>= fun e ->
+     wrap (alg.a_Eindet n e)
   | Ebound n e ->
-     wrap (alg.a_Ebound n (fold_expr alg e))
+     (fold_expr alg e) >>= fun e ->
+     wrap (alg.a_Ebound n e)
   | End es ->
-     wrap (alg.a_End (List.map (fold_expr alg) es))
+     (mapM (fold_expr alg) es) >>= fun es ->
+     wrap (alg.a_End es)
   | Esave s s_cbts_pes e ->
-     wrap (alg.a_Esave s (List.map (fun (s,(cbt,pe)) -> (s,(cbt,fold_pexpr alg.pexpr_alg pe))) s_cbts_pes) (fold_expr alg e))
+     (mapM (fun (s,(cbt,pe)) -> 
+          fold_pexpr alg.pexpr_alg pe >>= fun pe ->
+          return (s,(cbt,pe))
+        ) s_cbts_pes
+     ) >>= fun s_cbts_pes ->
+     (fold_expr alg e) >>= fun e ->
+     wrap (alg.a_Esave s s_cbts_pes e)
   | Erun a s pes ->
-     wrap (alg.a_Erun a s (List.map (fold_pexpr alg.pexpr_alg) pes))
+     (mapM (fold_pexpr alg.pexpr_alg) pes) >>= fun pes ->
+     wrap (alg.a_Erun a s pes)
   | Epar es ->
-     wrap (alg.a_Epar (List.map (fold_expr alg) es))
+     (mapM (fold_expr alg) es) >>= fun es ->
+     wrap (alg.a_Epar es)
   | Ewait tid ->
      wrap (alg.a_Ewait tid)
 end
@@ -336,108 +399,282 @@ end
 
 
 let id_object_and_loaded_value_alg = 
-  <| a_OVinteger = OVinteger
-   ; a_OVfloating = OVfloating
-   ; a_OVpointer = OVpointer
-   ; a_OVarray = OVarray
-   ; a_OVstruct = OVstruct
-   ; a_OVunion = OVunion 
-   ; a_LVspecified = LVspecified
-   ; a_LVunspecified = LVunspecified
+  <| a_OVinteger = fun a -> return (OVinteger a)
+   ; a_OVfloating = fun a -> return (OVfloating a)
+   ; a_OVpointer = fun a -> return (OVpointer a)
+   ; a_OVarray = fun a -> return (OVarray a)
+   ; a_OVstruct = fun a b -> return (OVstruct a b)
+   ; a_OVunion = fun a b c -> return (OVunion a b c)
+   ; a_LVspecified = fun a -> return (LVspecified a)
+   ; a_LVunspecified = fun a -> return (LVunspecified a)
   |>
 
 
-let id_value_alg = 
-  <| object_and_loaded_value_alg = id_object_and_loaded_value_alg
-   ; a_Vobject = Vobject
-   ; a_Vloaded = Vloaded
-   ; a_Vunit = Vunit
-   ; a_Vtrue = Vtrue
-   ; a_Vfalse = Vfalse
-   ; a_Vctype = Vctype
-   ; a_Vlist = Vlist
-   ; a_Vtuple = Vtuple
+let id_value_alg object_and_loaded_value_alg = 
+  <| object_and_loaded_value_alg = object_and_loaded_value_alg
+   ; a_Vobject = fun a -> return (Vobject a)
+   ; a_Vloaded = fun a -> return (Vloaded a)
+   ; a_Vunit = return Vunit
+   ; a_Vtrue = return Vtrue
+   ; a_Vfalse = return Vfalse
+   ; a_Vctype = fun a -> return (Vctype a)
+   ; a_Vlist = fun a b -> return (Vlist a b)
+   ; a_Vtuple = fun a -> return (Vtuple a)
   |>
 
-let id_pexpr_alg = 
-  <| value_alg = id_value_alg
-   ; a_Pexpr = Pexpr
-   ; a_PEsym = PEsym
-   ; a_PEimpl = PEimpl
-   ; a_PEval = PEval
-   ; a_PEconstrained = PEconstrained
-   ; a_PEundef = PEundef
-   ; a_PEerror = PEerror
-   ; a_PEctor = PEctor
-   ; a_PEcase = PEcase
-   ; a_PEarray_shift = PEarray_shift
-   ; a_PEmember_shift = PEmember_shift
-   ; a_PEnot = PEnot
-   ; a_PEop = PEop
-   ; a_PEstruct = PEstruct
-   ; a_PEunion = PEunion
-   ; a_PEcfunction = PEcfunction
-   ; a_PEmemberof = PEmemberof
-   ; a_PEcall = PEcall
-   ; a_PElet = PElet
-   ; a_PEif = PEif
-   ; a_PEis_scalar = PEis_scalar
-   ; a_PEis_integer = PEis_integer
-   ; a_PEis_signed = PEis_signed
-   ; a_PEis_unsigned = PEis_unsigned
-   ; a_PEbmc_assume = PEbmc_assume
-   ; a_PEare_compatible = PEare_compatible
-  |>
-
-
-let id_action_alg = 
-  <| apexpr_alg = id_pexpr_alg
-   ; a_Action = Action
-   ; a_Paction = Paction
-   ; a_Create = Create
-   ; a_CreateReadOnly = CreateReadOnly
-   ; a_Alloc = Alloc
-   ; a_Kill = Kill
-   ; a_Store = Store
-   ; a_Load = Load
-   ; a_RMW = RMW
-   ; a_Fence = Fence
-   ; a_CompareExchangeStrong = CompareExchangeStrong
-   ; a_CompareExchangeWeak = CompareExchangeWeak
-   ; a_LinuxFence = LinuxFence
-   ; a_LinuxLoad = LinuxLoad
-   ; a_LinuxStore = LinuxStore
-   ; a_LinuxRMW = LinuxRMW
+let id_pexpr_alg value_alg = 
+  <| value_alg = value_alg
+   ; a_PEsym = fun annots bty a -> return (Pexpr annots bty (PEsym a))
+   ; a_PEimpl = fun annots bty a -> return (Pexpr annots bty (PEimpl a))
+   ; a_PEval = fun annots bty a -> return (Pexpr annots bty (PEval a))
+   ; a_PEconstrained = fun annots bty a -> return (Pexpr annots bty (PEconstrained a))
+   ; a_PEundef = fun annots bty a b -> return (Pexpr annots bty (PEundef a b))
+   ; a_PEerror = fun annots bty a b -> return (Pexpr annots bty (PEerror a b))
+   ; a_PEctor = fun annots bty a b -> return (Pexpr annots bty (PEctor a b))
+   ; a_PEcase = fun annots bty a b -> return (Pexpr annots bty (PEcase a b))
+   ; a_PEarray_shift = fun annots bty a b c -> return (Pexpr annots bty (PEarray_shift a b c))
+   ; a_PEmember_shift = fun annots bty a b c -> return (Pexpr annots bty (PEmember_shift a b c))
+   ; a_PEnot = fun annots bty a -> return (Pexpr annots bty (PEnot a))
+   ; a_PEop = fun annots bty a b c -> return (Pexpr annots bty (PEop a b c))
+   ; a_PEstruct = fun annots bty a b -> return (Pexpr annots bty (PEstruct a b))
+   ; a_PEunion = fun annots bty a b c -> return (Pexpr annots bty (PEunion a b c))
+   ; a_PEcfunction = fun annots bty a -> return (Pexpr annots bty (PEcfunction a))
+   ; a_PEmemberof = fun annots bty a b c -> return (Pexpr annots bty (PEmemberof a b c))
+   ; a_PEcall = fun annots bty a b -> return (Pexpr annots bty (PEcall a b))
+   ; a_PElet = fun annots bty a b c -> return (Pexpr annots bty (PElet a b c))
+   ; a_PEif = fun annots bty a b c -> return (Pexpr annots bty (PEif a b c))
+   ; a_PEis_scalar = fun annots bty a -> return (Pexpr annots bty (PEis_scalar a))
+   ; a_PEis_integer = fun annots bty a -> return (Pexpr annots bty (PEis_integer a))
+   ; a_PEis_signed = fun annots bty a -> return (Pexpr annots bty (PEis_signed a))
+   ; a_PEis_unsigned = fun annots bty a -> return (Pexpr annots bty (PEis_unsigned a))
+   ; a_PEbmc_assume = fun annots bty a -> return (Pexpr annots bty (PEbmc_assume a))
+   ; a_PEare_compatible = fun annots bty a b -> return (Pexpr annots bty (PEare_compatible a b))
   |>
 
 
-
-
-let id_expr_alg =
-  <| action_alg = id_action_alg
-   ; pexpr_alg = id_pexpr_alg
-   ; a_Expr = Expr
-   ; a_Epure = Epure
-   ; a_Ememop = Ememop
-   ; a_Eaction = Eaction
-   ; a_Ecase = Ecase
-   ; a_Elet = Elet
-   ; a_Eif = Eif
-   ; a_Eskip = Eskip
-   ; a_Eccall = Eccall
-   ; a_Eproc = Eproc
-   ; a_Eunseq = Eunseq
-   ; a_Ewseq = Ewseq
-   ; a_Esseq = Esseq
-   ; a_Easeq = Easeq
-   ; a_Eindet = Eindet
-   ; a_Ebound = Ebound
-   ; a_End = End
-   ; a_Esave = Esave
-   ; a_Erun = Erun
-   ; a_Epar = Epar
-   ; a_Ewait = Ewait
+let id_action_alg pexpr_alg = 
+  <| apexpr_alg = pexpr_alg
+   ; a_Action = fun a b c -> return (Action a b c)
+   ; a_Paction = fun a b -> return (Paction a b)
+   ; a_Create = fun a b c -> return (Create a b c)
+   ; a_CreateReadOnly = fun a b c d -> return (CreateReadOnly a b c d)
+   ; a_Alloc = fun a b c -> return (Alloc a b c)
+   ; a_Kill = fun a b  -> return (Kill a b)
+   ; a_Store = fun a b c d e -> return (Store a b c d e)
+   ; a_Load = fun a b c -> return (Load a b c)
+   ; a_RMW = fun a b c d e f -> return (RMW a b c d e f)
+   ; a_Fence = fun a -> return (Fence a)
+   ; a_CompareExchangeStrong = fun a b c d e f -> return (CompareExchangeStrong a b c d e f)
+   ; a_CompareExchangeWeak = fun a b c d e f-> return (CompareExchangeWeak a b c d e f)
+   ; a_LinuxFence = fun a -> return (LinuxFence a)
+   ; a_LinuxLoad = fun a b c -> return (LinuxLoad a b c)
+   ; a_LinuxStore = fun a b c d -> return (LinuxStore a b c d)
+   ; a_LinuxRMW = fun a b c d -> return (LinuxRMW a b c d)
   |>
+
+let id_expr_alg action_alg pexpr_alg =
+  <| action_alg = action_alg
+   ; pexpr_alg = pexpr_alg
+   ; a_Expr = fun a b -> return (Expr a b)
+   ; a_Epure = fun a -> return (Epure a)
+   ; a_Ememop = fun a b -> return (Ememop a b)
+   ; a_Eaction = fun a -> return (Eaction a)
+   ; a_Ecase = fun a b -> return (Ecase a b)
+   ; a_Elet = fun a b c -> return (Elet a b c)
+   ; a_Eif = fun a b c -> return (Eif a b c)
+   ; a_Eskip = return (Eskip)
+   ; a_Eccall = fun a b c d -> return (Eccall a b c d)
+   ; a_Eproc = fun a b c -> return (Eproc a b c)
+   ; a_Eunseq = fun a -> return (Eunseq a)
+   ; a_Ewseq = fun a b c -> return (Ewseq a b c)
+   ; a_Esseq = fun a b c -> return (Esseq a b c)
+   ; a_Easeq = fun a b c -> return (Easeq a b c)
+   ; a_Eindet = fun a b -> return (Eindet a b)
+   ; a_Ebound = fun a b -> return (Ebound a b)
+   ; a_End = fun a -> return (End a)
+   ; a_Esave = fun a b c -> return (Esave a b c)
+   ; a_Erun = fun a b c -> return (Erun a b c)
+   ; a_Epar = fun a -> return (Epar a)
+   ; a_Ewait = fun a -> return (Ewait a)
+  |>
+
+
+
+
+
+
+
+let rapp x f = f x
+
+let is_ptrval pv =
+  Mem.case_ptrval pv
+    (fun _ -> false)
+    (fun f_sym -> true)
+    (fun _ _ -> false)
+    (fun _ -> false)
+  
+type pe_env 'sym 'bty = Map.map 'sym (generic_pexpr 'bty 'sym)
+type ce_generic_pexpr 'bty 'sym = 
+  pe_env 'sym 'bty ->
+  generic_pexpr 'bty 'sym
+
+let pfp_pexpr_alg 
+      (value_alg : 
+         value_alg 
+           (generic_object_value 'sym)
+           (generic_loaded_value 'sym)
+           (generic_value 'sym)
+      ) 
+    : pexpr_alg 
+        'sym 
+        'bty 
+        (generic_object_value 'sym) 
+        (generic_loaded_value 'sym) 
+        (generic_value 'sym)
+        (ce_generic_pexpr 'bty 'sym) = 
+  <| value_alg = value_alg
+   ; a_PEsym = 
+       fun annots bty sym ->
+       return (fun env ->
+       match Map.lookup sym env with
+         | Just f -> f
+         | Nothing -> Pexpr annots bty (PEsym sym)
+       end)
+   ; a_PEimpl = 
+       fun annots bty a -> 
+       return (fun _env -> Pexpr annots bty (PEimpl a))
+   ; a_PEval = 
+       fun annots bty a -> 
+       return (fun _env -> Pexpr annots bty (PEval a))
+   ; a_PEconstrained = 
+       fun annots bty ivs_pes -> 
+       return (fun env -> Pexpr annots bty (PEconstrained (mapsnd (rapp env) ivs_pes)))
+   ; a_PEundef = 
+       fun annots bty a b -> 
+       return (fun _env -> Pexpr annots bty (PEundef a b))
+   ; a_PEerror = 
+       fun annots bty a b -> 
+       return (fun env -> Pexpr annots bty (PEerror a (b env)))
+   ; a_PEctor = 
+       fun annots bty a pes -> 
+       return (fun env -> Pexpr annots bty (PEctor a (List.map (rapp env) pes)))
+   ; a_PEcase = 
+       fun annots bty pe pats_pes -> 
+       return (fun env -> Pexpr annots bty (PEcase (pe env) (mapsnd (rapp env) pats_pes)))
+   ; a_PEarray_shift = 
+       fun annots bty pe1 b pe2 -> 
+       return (fun env ->Pexpr annots bty (PEarray_shift (pe1 env) b (pe2 env)))
+   ; a_PEmember_shift = 
+       fun annots bty pe b c -> 
+       return (fun env -> Pexpr annots bty (PEmember_shift (pe env) b c))
+   ; a_PEnot = 
+       fun annots bty pe -> 
+       return (fun env -> Pexpr annots bty (PEnot (pe env)))
+   ; a_PEop = 
+       fun annots bty a pe1 pe2 -> 
+       return (fun env -> Pexpr annots bty (PEop a (pe1 env) (pe2 env)))
+   ; a_PEstruct = 
+       fun annots bty a fpes -> 
+       return (fun env -> Pexpr annots bty (PEstruct a (mapsnd (rapp env) fpes)))
+   ; a_PEunion = 
+       fun annots bty a b pe -> 
+       return (fun env -> Pexpr annots bty (PEunion a b (pe env)))
+   ; a_PEcfunction = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEcfunction (a env)))
+   ; a_PEmemberof = 
+       fun annots bty a b c -> 
+       return (fun env -> Pexpr annots bty (PEmemberof a b (c env)))
+   ; a_PEcall = 
+       fun annots bty a b -> 
+       return (fun env -> Pexpr annots bty (PEcall a (List.map (rapp env) b)))
+   ; a_PElet = 
+       fun annots bty pat bind body -> 
+       return (fun env ->
+       let (Pattern _ pat_) = pat in
+       let bind = bind env in
+       match (pat_, bind) with
+       | (CaseBase (Just sym, cbt),
+          Pexpr _ _ (PEval (Vloaded (LVspecified (OVpointer pv))))) ->
+          if is_ptrval pv 
+          then body (Map.insert sym bind)
+          else Pexpr annots bty (PElet pat bind (body env))
+       | _ -> Pexpr annots bty (PElet pat bind (body env))
+       end)       
+   ; a_PEif = 
+       fun annots bty a b c -> 
+       return (fun env -> Pexpr annots bty (PEif (a env) (b env) (c env)))
+   ; a_PEis_scalar = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEis_scalar (a env)))
+   ; a_PEis_integer = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEis_integer (a env)))
+   ; a_PEis_signed = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEis_signed (a env)))
+   ; a_PEis_unsigned = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEis_unsigned (a env)))
+   ; a_PEbmc_assume = 
+       fun annots bty a -> 
+       return (fun env -> Pexpr annots bty (PEbmc_assume (a env)))
+   ; a_PEare_compatible = 
+       fun annots bty a b -> 
+       return (fun env -> Pexpr annots bty (PEare_compatible (a env) (b env)))
+  |>
+
+
+let pfp_action_alg pexpr_alg = 
+  <| apexpr_alg = pexpr_alg
+   ; a_Action = fun a b c -> return (Action a b c)
+   ; a_Paction = fun a b -> return (Paction a b)
+   ; a_Create = fun a b c -> return (Create a b c)
+   ; a_CreateReadOnly = fun a b c d -> return (CreateReadOnly a b c d)
+   ; a_Alloc = fun a b c -> return (Alloc a b c)
+   ; a_Kill = fun a b  -> return (Kill a b)
+   ; a_Store = fun a b c d e -> return (Store a b c d e)
+   ; a_Load = fun a b c -> return (Load a b c)
+   ; a_RMW = fun a b c d e f -> return (RMW a b c d e f)
+   ; a_Fence = fun a -> return (Fence a)
+   ; a_CompareExchangeStrong = fun a b c d e f -> return (CompareExchangeStrong a b c d e f)
+   ; a_CompareExchangeWeak = fun a b c d e f-> return (CompareExchangeWeak a b c d e f)
+   ; a_LinuxFence = fun a -> return (LinuxFence a)
+   ; a_LinuxLoad = fun a b c -> return (LinuxLoad a b c)
+   ; a_LinuxStore = fun a b c d -> return (LinuxStore a b c d)
+   ; a_LinuxRMW = fun a b c d -> return (LinuxRMW a b c d)
+  |>
+
+let pfp_expr_alg action_alg pexpr_alg =
+  <| action_alg = action_alg
+   ; pexpr_alg = pexpr_alg
+   ; a_Expr = fun a b -> return (Expr a b)
+   ; a_Epure = fun a -> return (Epure a)
+   ; a_Ememop = fun a b -> return (Ememop a b)
+   ; a_Eaction = fun a -> return (Eaction a)
+   ; a_Ecase = fun a b -> return (Ecase a b)
+   ; a_Elet = fun a b c -> return (Elet a b c)
+   ; a_Eif = fun a b c -> return (Eif a b c)
+   ; a_Eskip = return (Eskip)
+   ; a_Eccall = fun a b c d -> return (Eccall a b c d)
+   ; a_Eproc = fun a b c -> return (Eproc a b c)
+   ; a_Eunseq = fun a -> return (Eunseq a)
+   ; a_Ewseq = fun a b c -> return (Ewseq a b c)
+   ; a_Esseq = fun a b c -> return (Esseq a b c)
+   ; a_Easeq = fun a b c -> return (Easeq a b c)
+   ; a_Eindet = fun a b -> return (Eindet a b)
+   ; a_Ebound = fun a b -> return (Ebound a b)
+   ; a_End = fun a -> return (End a)
+   ; a_Esave = fun a b c -> return (Esave a b c)
+   ; a_Erun = fun a b c -> return (Erun a b c)
+   ; a_Epar = fun a -> return (Epar a)
+   ; a_Ewait = fun a -> return (Ewait a)
+  |>
+
+
+
+
+
 
 
 
@@ -452,81 +689,121 @@ let rewriter_cfunction (funinfo : map Symbol.sym (Loc.t * Annot.attributes * cty
        let v_ctype = Vctype ctype in
        let v_is_variadic = mk_boolean_v is_variadic in
        let v_has_proto = mk_boolean_v has_proto in
-       PEval (Vtuple [v_ctype; v_args_ctypes; v_is_variadic; v_has_proto])
+       return (PEval (Vtuple [v_ctype; v_args_ctypes; v_is_variadic; v_has_proto]))
        
     | Nothing ->
-       let err  = "rewriter_cfunction: passing function pointers "
-                  ^ "not supported. Symbol: " ^ show sym
-       in
-       failwith err
+       fail ("rewriter_cfunction: passing function pointers "
+             ^ "not supported. Symbol: " ^ show sym)
     end 
   in
 
-  let a_PEcfunction pe = 
+  let a_PEcfunction pe =
     match pe with
-    | Pexpr _ _ (PEsym sym) -> 
-       make sym
+    (* | Pexpr _ _ (PEsym sym) -> 
+     *    make sym *)
     | Pexpr _ _ (PEval (Vloaded (LVspecified (OVpointer p)))) ->
        Mem.case_ptrval p
-         (fun _ -> failwith "null function pointer")
+         (fun _ -> fail "null function pointer")
          (fun sym -> make sym)
-         (fun _ -> failwith "concrete pointer")
-         (fun _ -> failwith "unspecified function pointer")
-    | Pexpr _ _ (PEval (Vobject (OVpointer p))) ->
-       Mem.case_ptrval p
-         (fun _ -> failwith "null function pointer")
-         (fun sym -> make sym)
-         (fun _ -> failwith "concrete pointer")
-         (fun _ -> failwith "unspecified function pointer")
+         (fun _ _ -> fail "concrete pointer")
+         (fun _ -> fail "unspecified function pointer")
+    (* | Pexpr _ _ (PEval (Vobject (OVpointer p))) ->
+     *    Mem.case_ptrval p
+     *      (fun _ -> fail "null function pointer")
+     *      (fun sym -> make sym)
+     *      (fun _ _ -> fail "concrete pointer")
+     *      (fun _ -> fail "unspecified function pointer") *)
     | Pexpr _ _ (PEval (Vloaded (LVunspecified))) ->
-       failwith "unspecified function pointer"
+       fail "unspecified function pointer"
     | _ -> 
-      let err  = "rewriter_cfunction: passing function pointers "
-                 ^ "not supported. Expression: " ^ Pp.stringFromCore_pexpr pe 
-      in
-      failwith err
+      fail ("rewriter_cfunction: passing function pointers "
+            ^ "not supported. Expression: " ^ Pp.stringFromCore_pexpr pe)
     end
   in
 
-  let pexpr_alg = <| id_pexpr_alg with a_PEcfunction = a_PEcfunction |> in
+  let id_value_alg = id_value_alg id_object_and_loaded_value_alg in
+  let id_pexpr_alg = id_pexpr_alg id_value_alg in
+  let id_action_alg = id_action_alg id_pexpr_alg in
+  let id_expr_alg = id_expr_alg id_action_alg id_pexpr_alg in
+
+  let pexpr_alg = 
+    <| id_pexpr_alg with a_PEcfunction = a_PEcfunction |> in
   let expr_alg = <| id_expr_alg with pexpr_alg = pexpr_alg |> in
-  expr_alg
+
+  let rw_expr e = fold_expr expr_alg e in
+  let rw_pexpr e = fold_pexpr pexpr_alg e in
+  (rw_expr, rw_pexpr)
 
 
-let rw_expr e = fold_expr id_expr_alg e
-let rw_pexpr e = fold_pexpr id_pexpr_alg e
-
-
-let rw_fun fn = 
+let rw_fun (rw_expr, rw_pexpr) fn = 
   match fn with
-  | Fun cbt args pe -> Fun cbt args (rw_pexpr pe)
-  | Proc loc cbt args e -> Proc loc cbt args (rw_expr e)
-  | _ -> fn
+  | Fun cbt args pe -> 
+     rw_pexpr pe >>= fun pe ->
+     return (Fun cbt args pe)
+  | Proc loc cbt args e -> 
+     rw_expr e >>= fun e ->
+     return (Proc loc cbt args e)
+  | _ -> 
+     return fn
   end
 
-let rw_impl i = 
+let rw_impl (rw_expr, rw_pexpr) i = 
   match i with
-  | IFun cbt args pe -> IFun cbt args (rw_pexpr pe)
-  | _ -> i
+  | IFun cbt args pe -> 
+     rw_pexpr pe >>= fun pe ->
+     return (IFun cbt args pe)
+  | _ -> 
+     return i
   end
 
-let rw_glob g = 
+let rw_glob (rw_expr, rw_pexpr) g = 
   match g with
-  | GlobalDef cbt e -> GlobalDef cbt (rw_expr e)
-  | _ -> g
+  | GlobalDef cbt e -> 
+     rw_expr e >>= fun e ->
+     return (GlobalDef cbt e)
+  | _ -> 
+     return g
   end
 
-let rw_fun_map m = Map.map rw_fun m
-let rw_impls m = Map.map rw_impl m
-let rw_globs m = mapsnd rw_glob m
+
+
+let map_foldM f m a = 
+  Map_extra.fold 
+    (fun k v a ->
+      a >>= fun a ->
+      f k v a
+    ) m (return a)
+
+let map_mapM f m = 
+  map_foldM (fun k v m -> 
+      f v >>= fun v -> 
+      return (Map.insert k v m)
+    ) 
+    m Map.empty
+
+
+let rw_fun_map (rw_expr, rw_pexpr) m =
+  map_mapM (rw_fun (rw_expr, rw_pexpr)) m
+let rw_impls (rw_expr, rw_pexpr) m =
+  map_mapM (rw_impl (rw_expr, rw_pexpr)) m
+let rw_globs (rw_expr, rw_pexpr) m =
+  mapsndM (rw_glob (rw_expr, rw_pexpr)) m
 
 let rw_file file = 
-  <| main    = file.main
-   ; tagDefs = file.tagDefs
-   ; stdlib  = rw_fun_map file.stdlib
-   ; impl    = rw_impls file.impl
-   ; globs   = rw_globs file.globs
-   ; funs    = rw_fun_map file.funs
-   ; extern  = file.extern
-   ; funinfo = file.funinfo
-  |>
+  let (rw_expr, rw_pexpr) = rewriter_cfunction file.funinfo in
+  rw_fun_map (rw_expr, rw_pexpr) file.stdlib >>= fun stdlib ->
+  rw_impls (rw_expr, rw_pexpr) file.impl >>= fun impl ->
+  rw_globs (rw_expr, rw_pexpr) file.globs >>= fun globs ->
+  rw_fun_map (rw_expr, rw_pexpr) file.funs >>= fun funs ->
+  let file = 
+    <| main    = file.main
+     ; tagDefs = file.tagDefs
+     ; stdlib  = stdlib
+     ; impl    = impl
+     ; globs   = globs
+     ; funs    = funs
+     ; extern  = file.extern
+     ; funinfo = file.funinfo
+    |>
+  in
+  return file
