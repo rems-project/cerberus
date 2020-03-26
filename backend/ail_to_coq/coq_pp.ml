@@ -145,8 +145,8 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
         pp_expr e pp_stmt stmt1 pp_stmt stmt2
   | Assert(e, stmt)        ->
       pp "assert: (%a) ;@;%a" pp_expr e pp_stmt stmt
-  | ExprS(attrs, e, stmt)  ->
-      (* TODO use attribute. *)
+  | ExprS(annot, e, stmt)  ->
+      Option.iter (Option.iter (pp "annot: (%s) ;@;")) annot;
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
 let pp_ast : Coq_ast.t pp = fun ff ast ->

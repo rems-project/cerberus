@@ -40,13 +40,14 @@ type coq_term  = string
 
 (** Identifier token (regexp ["[A-Za-z_]+"]). *)
 let ident : ident Earley.grammar =
-  let cs = Charset.from_string "A-Za-z_" in
+  let cs_first = Charset.from_string "A-Za-z_" in
+  let cs = Charset.from_string "A-Za-z_0-9" in
   let fn buf pos =
     let nb = ref 1 in
     while Charset.mem cs (Input.get buf (pos + !nb)) do incr nb done;
     (String.sub (Input.line buf) pos !nb, buf, pos + !nb)
   in
-  Earley.black_box fn cs false "<ident>"
+  Earley.black_box fn cs_first false "<ident>"
 
 (** Arbitrary ("well-bracketed") string delimited by ['['] and [']']. *)
 let iris_term : iris_term Earley.grammar =
@@ -158,8 +159,9 @@ let parser annot_ensures : constr Earley.grammar =
 
 (** {4 Annotations on statement expressions (ExprS)} *)
 
-let parser annot_subtype : type_expr Earley.grammar =
-  | ty:type_expr
+(*
+let parser annot : ... Earley.grammar =
+*)
 
 (** {4 Annotations on blocks} *)
 
@@ -183,8 +185,7 @@ type annot =
   | Annot_requires   of constr list
   | Annot_returns    of type_expr
   | Annot_ensures    of constr list
-  | Annot_subtype    of type_expr
-  | Annot_unlock
+  | Annot_annot      of string
   | Annot_inv        of constr
 
 exception Invalid_annot of string
@@ -220,6 +221,12 @@ let parse_attr : rc_attr -> annot = fun attr ->
     | _  -> c (List.map (parse gr) args)
   in
 
+  let raw_single_arg : (string -> annot) -> annot = fun c ->
+    match args with
+    | [s] -> c s
+    | _   -> error "should have exactly one argument"
+  in
+
   let no_args : annot -> annot = fun c ->
     match args with
     | [] -> c
@@ -241,8 +248,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "requires"   -> many_args annot_requires (fun l -> Annot_requires(l))
   | "returns"    -> single_arg annot_returns (fun e -> Annot_returns(e))
   | "ensures"    -> many_args annot_ensures (fun l -> Annot_ensures(l))
-  | "subtype"    -> single_arg annot_subtype (fun e -> Annot_subtype(e))
-  | "unlock"     -> no_args Annot_unlock
+  | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
   | "inv"        -> single_arg annot_inv (fun e -> Annot_inv(e))
   | _            -> error "undefined"
 
@@ -305,23 +311,19 @@ let field_annot : rc_attr list -> type_expr = fun attrs ->
   | None     -> raise (Invalid_annot "a field annotation is required")
   | Some(ty) -> ty
 
-type expr_annot =
-  | EA_none (* no annotation *)
-  | EA_subtype of type_expr
-  | EA_unlock
+type expr_annot = string option
 
 let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   let error msg =
     raise (Invalid_annot (Printf.sprintf "expression annotation %s" msg))
   in
   match attrs with
-  | []      -> EA_none
+  | []      -> None
   | _::_::_ -> error "carries more than one attributes"
   | [attr]  ->
   match parse_attr attr with
-  | Annot_subtype(ty) -> EA_subtype(ty)
-  | Annot_unlock      -> EA_unlock
-  | _                 -> error "is invalid (wrong kind)"
+  | Annot_annot(s) -> Some(s)
+  | _              -> error "is invalid (wrong kind)"
 
 type struct_annot = annot list (* FIXME *)
 
