@@ -211,7 +211,7 @@ $(OCAML_SRC)&: $(LEM_SRC)
 	@echo "[LEM] generating files in [$(PRELUDE_SRC_DIR)] (log in [ocaml_frontend/lem.log])"
 	$(Q)lem -wl ign -wl_rename warn -wl_pat_red err -wl_pat_exh warn \
     -outdir $(PRELUDE_SRC_DIR) -ocaml \
-    $(LEM_SRC) 2> ocaml_frontend/lem.log
+    $(LEM_SRC) 2> ocaml_frontend/lem.log || (>&2 cat ocaml_frontend/lem.log; exit 1)
 	@echo "[SED] patching things up in [$(PRELUDE_SRC_DIR)]"
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/core_run.ml
 	$(Q)$(SEDI) -e "s/open Operators//" $(PRELUDE_SRC_DIR)/driver.ml
