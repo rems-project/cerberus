@@ -3,8 +3,8 @@ From refinedc.lang Require Import tactics.
 From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
-(* Generated from [examples/array.c], entry point [main].*)
-Section examples_array_c.
+(* Generated from [examples/array.c]. *)
+Section code.
   (* Global variables. *)
   
   (* Functions. *)
@@ -69,4 +69,4 @@ Section examples_array_c.
       ]> $∅
     )%E
   |}.
-End examples_array_c.
+End code.

@@ -2,13 +2,6 @@ open Extra
 open Panic
 open Coq_ast
 
-(** [section_name fname] builds a reasonable Coq section name from a file. The
-    slash, dash and dot characters are replaced by underscores. Note that this
-    function will miserably fail on weird file names (e.g., ["A file.c"]). *)
-let section_name : string -> string = fun fname ->
-  let cleanup name c = String.concat "_" (String.split_on_char c name) in
-  List.fold_left cleanup fname ['/'; '-'; '.']
-
 let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   let pp fmt = Format.fprintf ff fmt in
   match it with
@@ -159,13 +152,11 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   pp "From refinedc.typing Require Import annotations.@;";
   pp "Set Default Proof Using \"Type\".@;@;";
 
-  (* Printing generation data and entry point in a comment. *)
-  let pp_entry ff = Option.iter (Format.fprintf ff ", entry point [%s]") in
-  pp "(* Generated from [%s]%a.*)@;" ast.source_file pp_entry ast.entry_point;
+  (* Printing generation data in a comment. *)
+  pp "(* Generated from [%s]. *)@;" ast.source_file;
 
   (* Opening the section. *)
-  let sect = section_name ast.source_file in
-  pp "@[<v 2>Section %s.@;" sect;
+  pp "@[<v 2>Section code.@;";
 
   (* Declaration of objects (global variable) in the context. *)
   pp "(* Global variables. *)@;";
@@ -266,7 +257,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   List.iter pp_function ast.functions;
 
   (* Closing the section. *)
-  pp "@]@;End %s.@]" sect
+  pp "@]@;End code.@]"
 
 let write_ast : string -> Coq_ast.t -> unit = fun fname ast ->
   let oc = open_out fname in
