@@ -142,7 +142,12 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       Option.iter (Option.iter (pp "annot: (%s) ;@;")) annot;
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
-let pp_ast : Coq_ast.t pp = fun ff ast ->
+type import = string * string
+
+let pp_import ff (from, mod_name) =
+  Format.fprintf ff "From %s Require Import %s.@;" from mod_name
+
+let pp_ast : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
 
@@ -150,6 +155,7 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   pp "@[<v 0>From refinedc.lang Require Export notation.@;";
   pp "From refinedc.lang Require Import tactics.@;";
   pp "From refinedc.typing Require Import annotations.@;";
+  List.iter (pp_import ff) imports;
   pp "Set Default Proof Using \"Type\".@;@;";
 
   (* Printing generation data in a comment. *)
@@ -259,8 +265,9 @@ let pp_ast : Coq_ast.t pp = fun ff ast ->
   (* Closing the section. *)
   pp "@]@;End code.@]"
 
-let write_ast : string -> Coq_ast.t -> unit = fun fname ast ->
+let write_ast : import list -> string -> Coq_ast.t -> unit =
+    fun imports fname ast ->
   let oc = open_out fname in
   let ff = Format.formatter_of_out_channel oc in
-  Format.fprintf ff "%a@." pp_ast ast;
+  Format.fprintf ff "%a@." (pp_ast imports) ast;
   close_out oc
