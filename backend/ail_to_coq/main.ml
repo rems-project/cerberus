@@ -30,11 +30,9 @@ let run : config -> string -> unit = fun cfg c_file ->
   let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
   let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
   (* Print the code, if necessary. *)
-  if cfg.gen_code then Coq_pp.write_ast cfg.imports code_file coq_ast;
+  if cfg.gen_code then Coq_pp.(write cfg.imports Code code_file coq_ast);
   (* Print the spec, if necessary. *)
-  if cfg.gen_spec then
-    Panic.panic_no_pos "File [%s] cannot be generated (spec generation not \
-      implemented)." spec_file (* TODO *)
+  if cfg.gen_spec then Coq_pp.(write cfg.imports Spec spec_file coq_ast)
 
 let output_dir =
   let doc =
