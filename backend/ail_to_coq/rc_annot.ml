@@ -82,6 +82,8 @@ and type_expr =
 
 let type_void : type_expr = Ty_direct "void"
 
+type type_expr_prio = PAtom | PCstr | PFull
+
 let parser coq_expr =
   | x:ident    -> Coq_ident(x)
   | s:coq_term -> Coq_all(s)
@@ -93,27 +95,36 @@ let parser constr =
   | c:coq_expr                                    -> Constr_Coq(c)
 
 and parser ptr_type =
-  | "&own<" ty:type_expr ">"                      -> (Own    , ty)
-  | "&shr<" ty:type_expr ">"                      -> (Shr    , ty)
-  | "&frac<" l:type_expr "," ty:type_expr ">"     -> (Frac(l), ty)
+  | "&own<" ty:(type_expr PFull) ">"                          -> (Own    , ty)
+  | "&shr<" ty:(type_expr PFull) ">"                          -> (Shr    , ty)
+  | "&frac<" l:(type_expr PFull) "," ty:(type_expr PFull) ">" -> (Frac(l), ty)
 
-and parser type_expr =
-  | c:coq_expr ty:{"@" type_expr}?                ->
-      begin
-        match (c, ty) with
-        | (Coq_ident(x), None    ) -> Ty_direct(x)
-        | (_           , None    ) -> Ty_Coq(c)
-        | (_           , Some(ty)) -> Ty_refine(c,ty)
-      end
-  | (k,ty):ptr_type                               -> Ty_ptr(k, ty)
-  | "..."                                         -> Ty_dots
-  | "∃" x:ident "." ty:type_expr                  -> Ty_exists(x,ty)
-  | ty:type_expr "&" c:constr                     -> Ty_constr(ty,c)
-  | id:ident "<" tys:type_args ">"                -> Ty_params(id,tys)
+and parser type_expr @(p : type_expr_prio) =
+  | c:coq_expr ty:{"@" (type_expr PAtom)}?
+      when p >= PAtom -> begin
+                           match (c, ty) with
+                           | (Coq_ident(x), None    ) -> Ty_direct(x)
+                           | (_           , None    ) -> Ty_Coq(c)
+                           | (_           , Some(ty)) -> Ty_refine(c,ty)
+                         end
+  | (k,ty):ptr_type
+      when p >= PAtom -> Ty_ptr(k, ty)
+  | id:ident "<" tys:type_args ">"
+      when p >= PAtom -> Ty_params(id,tys)
+  | "..."
+      when p >= PAtom -> Ty_dots
+  | "∃" x:ident "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_exists(x,ty)
+  | ty:(type_expr PCstr) "&" c:constr
+      when p >= PCstr -> Ty_constr(ty,c)
+  | "(" ty:(type_expr PFull) ")"
+      when p >= PAtom -> ty
 
 and parser type_args =
-  | EMPTY                           -> []
-  | e:type_expr es:{"," type_expr}* -> e::es
+  | EMPTY                                           -> []
+  | e:(type_expr PFull) es:{"," (type_expr PFull)}* -> e::es
+
+let type_expr = type_expr PFull
 
 (** {3 Entry points} *)
 
@@ -206,8 +217,9 @@ let parse_attr : rc_attr -> annot = fun attr ->
 
   let parse : type a.a grammar -> string -> a = fun gr s ->
     let parse_string = Earley.parse_string gr Blanks.default in
-    try parse_string s with Earley.Parse_error(_,i) ->
+    try parse_string s with Earley.Parse_error(buf,pos) ->
       let msg =
+        let i = Input.utf8_col_num buf pos in
         Printf.sprintf  "no parse in annotation \"%s\" at position %i" s i
       in
       raise (Invalid_annot msg)
