@@ -49,6 +49,7 @@ Section examples_int_c.
       ("si", it_layout i32);
       ("l", it_layout i64);
       ("ul", it_layout u64);
+      ("iptr", LPtr);
       ("st", it_layout size_t);
       ("ptr", it_layout ssize_t);
       ("b", it_layout bool_it)
@@ -95,6 +96,7 @@ Section examples_int_c.
               UnOp (CastOp $ IntOp u8) (IntOp i64) (use{it_layout i64} ("l"))  ] ;
         "i" <-{ it_layout i32 }
           UnOp (CastOp $ IntOp i32) (IntOp i64) ("$0") ;
+        expr: (UnOp (CastOp $ PtrOp) (PtrOp) (use{LPtr} ("iptr"))) ;
         Return (i2v 0 i32)
       ]> $∅
     )%E

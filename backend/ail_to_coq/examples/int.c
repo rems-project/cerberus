@@ -14,6 +14,7 @@ int main() {
     unsigned long long ull; signed long long sll; long long ll;
     _Bool b;
     size_t st; uintptr_t uptr; intptr_t ptr;
+    int *iptr;
 
     c = 0;
 
@@ -49,6 +50,8 @@ int main() {
 
     // test function call
     i = f(c, l);
+
+    (void *)iptr;
 
     return 0;
 }
