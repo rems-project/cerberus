@@ -1,0 +1,11 @@
+proc f() : eff loaded integer :=
+  pure(42)
+
+fun main() : ctype :=
+--  let (ty: ctype, tys: [ctype], b1: boolean, b2: boolean) =
+--    Cfunction(f) in
+--  let x: integer = 42 in
+--  let y: integer = x in y + 10
+--  ty
+--    Specified(Cfunction(f))
+    Cfunction(f)
