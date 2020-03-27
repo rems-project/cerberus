@@ -1,12 +1,12 @@
 int main() {
   int i;
 
-  [[rc::inv("xxx")]]
+  [[rc::inv_vars("i : int")]]
   while(1){
     i = i + 1;
   }
 
-  [[rc::inv("yyy")]]
+  [[rc::inv_vars("i : int")]]
   do {
     i = i + 1;
   } while(1);

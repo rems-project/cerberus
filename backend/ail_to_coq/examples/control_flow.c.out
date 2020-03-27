@@ -1,5 +1,6 @@
 From refinedc.lang Require Export notation.
 From refinedc.lang Require Import tactics.
+From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
 (* Generated from [examples/control_flow.c], entry point [main].*)
