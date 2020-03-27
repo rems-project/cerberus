@@ -389,7 +389,7 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
                              immovable := true
     | Annot_tunion        -> if !union then error "already specified";
                              union := true
-    | _                   -> error "is invalid for a function"
+    | _                   -> error "is invalid for a struct"
   in
   List.iter handle_attr attrs;
 
