@@ -5,14 +5,17 @@ type config =
   { output_dir : string option
   ; gen_code   : bool
   ; gen_spec   : bool
+  ; full_paths : bool
   ; imports    : (string * string) list }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
   (* Get an absolute path to the file, for better error reporting. *)
   let c_file =
-    try Filename.realpath c_file with Invalid_argument(_) ->
-      Panic.panic_no_pos "File [%s] disappeared..." c_file
+    if cfg.full_paths then
+      try Filename.realpath c_file with Invalid_argument(_) ->
+        Panic.panic_no_pos "File [%s] disappeared..." c_file
+    else c_file
   in
   (* Do the translation from C to Ail, and then to our AST. *)
   let ail_ast = Cerb_wrapper.c_file_to_ail c_file in
@@ -55,6 +58,12 @@ let no_spec =
   in
   Arg.(value & flag & info ["no-spec"] ~doc)
 
+let full_paths =
+  let doc =
+    "Use full, absolute file paths in generated files."
+  in
+  Arg.(value & flag & info ["full-paths"] ~doc)
+
 let imports =
   let doc =
     "Specifies a module to import at the beginning of every generated Coq \
@@ -66,10 +75,11 @@ let imports =
   Arg.(value & opt_all (pair ~sep:':' string string) [] & i)
 
 let opts : config Term.t =
-  let build output_dir no_code no_spec imports =
-    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec ; imports }
+  let build output_dir no_code no_spec full_paths imports =
+    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
+    ; full_paths ; imports }
   in
-  Term.(pure build $ output_dir $ no_code $ no_spec $ imports)
+  Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $ imports)
 
 let c_file =
   let doc = "C language source file." in
