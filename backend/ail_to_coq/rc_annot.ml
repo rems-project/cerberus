@@ -60,6 +60,10 @@ type coq_expr =
   | Coq_ident of string
   | Coq_all   of string
 
+type pattern =
+  | Pat_var   of ident
+  | Pat_tuple of pattern list
+
 type constr =
   | Constr_Iris  of string
   | Constr_exist of string * constr
@@ -75,6 +79,7 @@ and type_expr =
   | Ty_opt2   of type_expr * type_expr
   | Ty_dots
   | Ty_exists of ident * type_expr
+  | Ty_lambda of pattern * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
   | Ty_direct of ident
@@ -87,6 +92,10 @@ type type_expr_prio = PAtom | PCstr | PFull
 let parser coq_expr =
   | x:ident    -> Coq_ident(x)
   | s:coq_term -> Coq_all(s)
+
+let parser pattern =
+  | x:ident                             -> Pat_var(x)
+  | "(" p:pattern ps:{"," pattern}+ ")" -> Pat_tuple(p :: ps)
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
@@ -115,6 +124,8 @@ and parser type_expr @(p : type_expr_prio) =
       when p >= PAtom -> Ty_dots
   | "∃" x:ident "." ty:(type_expr PFull)
       when p >= PFull -> Ty_exists(x,ty)
+  | "λ" p:pattern "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_lambda(p,ty)
   | ty:(type_expr PCstr) "&" c:constr
       when p >= PCstr -> Ty_constr(ty,c)
   | "(" ty:(type_expr PFull) ")"
