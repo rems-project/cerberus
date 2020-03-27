@@ -56,4 +56,4 @@ let _ =
     let (docv, doc) = ("FILE", "source C file") in
     Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv ~doc)
   in
-  Term.(exit @@ eval (pure rustic $ file, info "Ail rustic"))
+  Term.(exit @@ eval (pure rustic $ file, info "ail_to_coq"))
