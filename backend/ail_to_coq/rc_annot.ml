@@ -358,6 +358,7 @@ type struct_annot =
   ; st_exists     : (ident * coq_expr) list
   ; st_constrs    : constr list
   ; st_size       : ident option
+  ; st_ptr_type   : (ident * type_expr) option
   ; st_immovable  : bool
   ; st_union      : bool }
 
@@ -367,6 +368,7 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   let exists = ref [] in
   let constrs = ref [] in
   let size = ref None in
+  let ptr = ref None in
   let immovable = ref false in
   let union = ref false in
 
@@ -381,6 +383,8 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
     | Annot_constraint(l) -> constrs := !constrs @ l
     | Annot_size(s)       -> if !size <> None then error "already specified";
                              size := Some(s)
+    | Annot_ptr_type(e)   -> if !ptr <> None then error "already specified";
+                             ptr := Some(e)
     | Annot_immovable     -> if !immovable then error "already specified";
                              immovable := true
     | Annot_tunion        -> if !union then error "already specified";
@@ -394,6 +398,7 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   ; st_exists     = !exists
   ; st_constrs    = !constrs
   ; st_size       = !size
+  ; st_ptr_type   = !ptr
   ; st_immovable  = !immovable
   ; st_union      = !union }
 
