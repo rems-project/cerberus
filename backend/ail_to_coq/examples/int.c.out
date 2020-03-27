@@ -3,8 +3,8 @@ From refinedc.lang Require Import tactics.
 From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
-(* Generated from [examples/int.c], entry point [main].*)
-Section examples_int_c.
+(* Generated from [examples/int.c]. *)
+Section code.
   (* Global variables. *)
   
   (* Functions. *)
@@ -101,4 +101,4 @@ Section examples_int_c.
       ]> $∅
     )%E
   |}.
-End examples_int_c.
+End code.
