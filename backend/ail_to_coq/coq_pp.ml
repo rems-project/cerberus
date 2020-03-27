@@ -147,7 +147,7 @@ type import = string * string
 let pp_import ff (from, mod_name) =
   Format.fprintf ff "From %s Require Import %s.@;" from mod_name
 
-let pp_ast : import list -> Coq_ast.t pp = fun imports ff ast ->
+let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
 
@@ -265,9 +265,41 @@ let pp_ast : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Closing the section. *)
   pp "@]@;End code.@]"
 
-let write_ast : import list -> string -> Coq_ast.t -> unit =
-    fun imports fname ast ->
+let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
+  (* Stuff for import of the code. *)
+  let basename =
+    let name = Filename.basename ast.source_file in
+    try Filename.chop_extension name with Invalid_argument(_) -> name
+  in
+  let import_path = "refinedc.examples." ^ basename in (* FIXME generic? *)
+
+  (* Formatting utilities. *)
+  let pp fmt = Format.fprintf ff fmt in
+
+  (* Printing some header. *)
+  pp "@[<v 0>From refinedc.typing Require Import typing.@;";
+  pp "From %s Require Import %s_code.@;" import_path basename;
+  List.iter (pp_import ff) imports;
+  pp "Set Default Proof Using \"Type\".@;@;";
+
+  (* Printing generation data in a comment. *)
+  pp "(* Generated from [%s]. *)@;" ast.source_file;
+
+  (* Opening the section. *)
+  pp "@[<v 2>Section spec.@;";
+
+  pp "(* Not yet implemented. *)";
+  (* TODO *)
+
+  (* Closing the section. *)
+  pp "@]@;End spec.@]"
+
+type mode = Code | Spec
+
+let write : import list -> mode -> string -> Coq_ast.t -> unit =
+    fun imports mode fname ast ->
   let oc = open_out fname in
   let ff = Format.formatter_of_out_channel oc in
-  Format.fprintf ff "%a@." (pp_ast imports) ast;
+  let pp = match mode with Code -> pp_code | Spec -> pp_spec in
+  Format.fprintf ff "%a@." (pp imports) ast;
   close_out oc
