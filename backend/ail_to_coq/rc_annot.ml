@@ -155,8 +155,8 @@ let parser annot_type : ident Earley.grammar =
 
 (** {4 Annotations on structs} *)
 
-let parser annot_size : ident Earley.grammar =
-  | id:ident
+let parser annot_size : coq_expr Earley.grammar =
+  | c:coq_expr
 
 let parser annot_exist : (ident * coq_expr) Earley.grammar =
   | id:ident ":" s:coq_expr
@@ -201,7 +201,7 @@ type annot =
   | Annot_refined_by of (ident * coq_expr) list
   | Annot_ptr_type   of (ident * type_expr)
   | Annot_type       of ident
-  | Annot_size       of ident
+  | Annot_size       of coq_expr
   | Annot_exist      of (ident * coq_expr) list
   | Annot_constraint of constr list
   | Annot_immovable
@@ -357,7 +357,7 @@ type struct_annot =
   ; st_refined_by : (ident * coq_expr) list
   ; st_exists     : (ident * coq_expr) list
   ; st_constrs    : constr list
-  ; st_size       : ident option
+  ; st_size       : coq_expr option
   ; st_ptr_type   : (ident * type_expr) option
   ; st_immovable  : bool
   ; st_union      : bool }
