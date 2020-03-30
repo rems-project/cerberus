@@ -3780,7 +3780,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   let core_tagDefs = translate_tag_definitions sigm.A.tag_definitions in
   (*let () = Core_ctype_aux.set_tagDefs core_tagDefs in*)
   
-  E.foldlM (fun (gacc, facc, finfoacc) (sym, (loc, decl)) ->
+  E.foldlM (fun (gacc, facc, finfoacc) (sym, (loc, _, decl)) ->
     (* for each Ail declaration *)
     match decl with
       | A.Decl_object _ qs ty ->

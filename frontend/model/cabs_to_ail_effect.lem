@@ -225,7 +225,7 @@ type state = <|
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
   function_declarations: map A.ail_identifier (
-    (*hasProto*)bool * Loc.t *
+    (*hasProto*)bool * Loc.t * Annot.attributes *
     ( (Ctype.qualifiers * Ctype.ctype)                     (* qualifier and return type *)
     * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) (* Nothing if there was no parameter type list,
                                                                 the boolean is the isRegister flag *)
@@ -1390,8 +1390,8 @@ let function_is_defined sym =
 
 
 val register_function_declaration:
-  Loc.t -> A.ail_identifier -> bool -> ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool) -> desugM unit
-let register_function_declaration loc sym is_proto decl =
+  Loc.t -> Annot.attributes -> A.ail_identifier -> bool -> ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool) -> desugM unit
+let register_function_declaration loc attrs sym is_proto decl =
   (* DEBUG *)
   let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
     let params' = Maybe.maybe [] id params_opt in
@@ -1409,7 +1409,7 @@ let register_function_declaration loc sym is_proto decl =
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just (prev_has_proto, _, prev_decl) ->
+    | Just (prev_has_proto, prev_loc, prev_attrs, prev_decl) ->
 (* KKK
         let () = Debug.print_debug 1 [] (fun () ->
           "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
@@ -1467,13 +1467,16 @@ AilTypesAux.make_composite
           constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
         else
           let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
-          return ()
+          (* NOTE: we concat the attributes from the previous declartion with the new ones *)
+          State_exception.update (fun st ->
+            <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, prev_decl) st.function_declarations |>
+          )
     | Nothing ->
         State_exception.update (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
            string_of_decl decl) in
-          <| st with function_declarations= Map.insert sym (is_proto, loc, decl) st.function_declarations |>
+          <| st with function_declarations= Map.insert sym (is_proto, loc, attrs, decl) st.function_declarations |>
         )
   end
 
@@ -1730,7 +1733,7 @@ let extract_program startup_str =
     map_union
       begin map_union
         begin
-          Map.map (fun (hasProto, loc, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, attrs, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
             let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
@@ -1738,7 +1741,7 @@ let extract_program startup_str =
               | Nothing -> []
               | Just z  -> z
             end in
-            (loc, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
+            (loc, attrs, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
@@ -1755,7 +1758,7 @@ let extract_program startup_str =
                 end
               else
                 ty in
-            (loc, A.Decl_object (dur, isRegister) qs ty')
+            (loc, Annot.no_attributes, A.Decl_object (dur, isRegister) qs ty')
           ) st.external_object_declarations
         end
       end
@@ -1764,9 +1767,9 @@ let extract_program startup_str =
         Map_extra.fold (fun ident (loc, dur, isRegister, qs, ty) acc ->
           match dur with
             | A.Static ->
-                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, Annot.no_attributes, A.Decl_object (dur, isRegister) qs ty) acc
             | A.Thread ->
-                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, Annot.no_attributes, A.Decl_object (dur, isRegister) qs ty) acc
             | _ ->
                 acc
           end
@@ -1894,7 +1897,7 @@ let get_sigma_sofar =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, loc, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, attrs, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
             let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
@@ -1903,12 +1906,12 @@ let get_sigma_sofar =
               | Nothing -> []
               | Just z  -> z
             end in
-            (loc, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
+            (loc, attrs, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
           Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
-            (loc, A.Decl_object ((dur, isRegister)) qs ty)
+            (loc, Annot.no_attributes, A.Decl_object ((dur, isRegister)) qs ty)
           ) st.external_object_declarations
         end
     ) in

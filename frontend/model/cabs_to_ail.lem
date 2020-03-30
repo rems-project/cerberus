@@ -3526,8 +3526,8 @@ and desugar_and_register_static_assert_declaration sa_decl =
 
 
 (* TODO: this is broken *)
-val desugar_declaration_base: specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit))
-let desugar_declaration_base specifs idecltors =
+val desugar_declaration_base: Annot.attributes -> specifiers -> list init_declarator -> E.desugM (list (ail_identifier * expression unit))
+let desugar_declaration_base attrs specifs idecltors =
   let () = Debug.print_debug 1 [] (fun () ->
     "BROKEN: desugar_declaration_base"
   ) in
@@ -3555,7 +3555,7 @@ let desugar_declaration_base specifs idecltors =
                   check_storage_class_specifiers loc Function_decl_context specifs.storage_classes >>= fun () ->
                   E.register_ordinary_identifier ident
                     E.OK_function specifs.storage_classes >>= fun (_, sym) ->
-                  E.register_function_declaration (Loc.locOf ident) sym true (
+                  E.register_function_declaration (Loc.locOf ident) attrs sym true (
                     return_qs_ty,
                     Just params, (* TODO: KKKK !!!! *)
                     is_variadic,
@@ -3706,13 +3706,13 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
           
           E.return (AilSblock bs d_ss')
       
-      | CabsSdecl (Declaration_base specifs idecltors) ->
+      | CabsSdecl (Declaration_base attrs specifs idecltors) ->
           function
             | [] ->
                 AilSskip
             | xs ->
                 AilSdeclaration xs
-          end <$> desugar_declaration_base specifs idecltors
+          end <$> desugar_declaration_base attrs specifs idecltors
       
       | CabsSdecl (Declaration_static_assert sa_decl) ->
           desugar_and_register_static_assert_declaration sa_decl >>
@@ -3769,7 +3769,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               end d_e
           end
       
-      | CabsSfor (Just (FC_decl ((Declaration_base specifs idecltors)))) e2_opt e3_opt s ->
+      | CabsSfor (Just (FC_decl ((Declaration_base _ specifs idecltors)))) e2_opt e3_opt s ->
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
@@ -3911,8 +3911,8 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                   AilSblock [] [ d_s_e1
                                ; AnnotatedStatement loc Annot.no_attributes (AilSwhile d_e2 d_s_body) ]
                 end
-            | Just (FC_decl (Declaration_base _ _)) ->
-                error "desugar_statement_aux: Just (FC_decl (Declaration_base __)), _)"
+            | Just (FC_decl (Declaration_base _ _ _)) ->
+                error "desugar_statement_aux: Just (FC_decl (Declaration_base _ _ _)), _)"
             | Just (FC_decl (Declaration_static_assert sa_decl)) ->
                 (* for (_Static_assert(...); E2; E3) S ==> while(E2) { S'; cont: E3 } *)
                 (* for (_Static_assert(...); E2; ) S ==> while(E2) { S'; cont: skip } *)
@@ -4030,7 +4030,7 @@ let rec register_labels (CabsStatement _ _ stmt_) =
 
 (* TODO: check + annotate with STD *)
 val desugar_and_register_function_definition: function_definition -> E.desugM unit
-let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
+let desugar_and_register_function_definition (FunDef fundef_loc fundef_attrs specifs (Declarator ptr_decltor_opt ddecltor as decltor) stmt) =
   if List.any (fun sc -> SC_extern <> sc && SC_static <> sc) specifs.storage_classes then
     E.constraint_violation fundef_loc IllegalStorageClassFunctionDefinition
   else
@@ -4083,7 +4083,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
                 | false -> E.return ()
               end >>
               
-              E.register_function_declaration (Loc.locOf fun_ident) fun_sym false (
+              E.register_function_declaration (Loc.locOf fun_ident) fundef_attrs fun_sym false (
                 (return_qs, return_ty),
                 Just params, (* TODO: KKKK !!!! *)
                 isVariadic,
@@ -4103,7 +4103,7 @@ let desugar_and_register_function_definition (FunDef fundef_loc attrs specifs (D
       E.register_function_definition fun_sym
       (* NOTE: the Cabs parser can't easily find the location of the
          function identifier, so add it here *)
-      (Loc.with_cursor_from fundef_loc loc, attrs, List.map fst bindings, d_stmt)
+      (Loc.with_cursor_from fundef_loc loc, fundef_attrs, List.map fst bindings, d_stmt)
     end
 
 
@@ -4121,7 +4121,7 @@ let desugar_and_register_external_declaration edecl =
         desugar_and_register_function_definition fdef
     
     (* struct-or-union identifier ; *)
-    | EDecl_decl (Declaration_base <|
+    | EDecl_decl (Declaration_base _ <|
         storage_classes= [];
         type_specifiers= [TSpec _ (TSpec_struct attrs (Just ident) Nothing)];
         type_qualifiers= [];
@@ -4137,7 +4137,7 @@ let desugar_and_register_external_declaration edecl =
         E.void (E.register_tag E.Kind_struct (Just ident))
     
     (* struct-or-union identifier ; *)
-    | EDecl_decl (Declaration_base <|
+    | EDecl_decl (Declaration_base _ <|
         storage_classes= [];
         type_specifiers= [TSpec _ (TSpec_union attrs (Just ident) Nothing)];
         type_qualifiers= [];
@@ -4148,7 +4148,7 @@ let desugar_and_register_external_declaration edecl =
         E.void (E.register_tag E.Kind_union (Just ident))
     
     (* enum identifier ; *)
-    | EDecl_decl (Declaration_base <|
+    | EDecl_decl (Declaration_base _ <|
         storage_classes= [];
         type_specifiers= [TSpec _ (TSpec_enum (Just ident) Nothing)];
         type_qualifiers= [];
@@ -4158,7 +4158,7 @@ let desugar_and_register_external_declaration edecl =
         E.fail (Loc.locOf ident) (Errors.Desugar_MiscViolation Errors.EnumSimpleDeclarationConstruction)
     
     (* TODO: check *)
-    | EDecl_decl (Declaration_base specifs idecltors) ->
+    | EDecl_decl (Declaration_base attrs specifs idecltors) ->
         desugar_type_specifiers specifs.type_specifiers >>= fun (specs_qs, base_ty)  ->
         let (isAtomic, tquals_qs) = translate_type_qualifiers specifs.type_qualifiers in
         let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
@@ -4179,7 +4179,7 @@ let desugar_and_register_external_declaration edecl =
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
                 | Ctype.Ctype _ (Ctype.Function _ return_ty params is_variadic) ->
-                    E.register_function_declaration ident_loc sym true (
+                    E.register_function_declaration ident_loc attrs sym true (
                       return_ty,
                       Just params, (* TODO: KKKK !!!! *)
                       is_variadic,

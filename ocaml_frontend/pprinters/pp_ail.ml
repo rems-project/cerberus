@@ -742,7 +742,7 @@ let pp_program_aux pp_annot (startup, sigm) =
         P.separate_map (P.break 1 ^^ P.break 1) pp_tag_definition xs ^^ P.break 1 ^^ P.break 1 ^^ P.break 1
   end ^^
   
-  P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, decl)) ->
+  P.separate_map (P.break 1 ^^ P.hardline) (fun (sym, (_, _, decl)) ->
     match decl with
       | Decl_object (sd, qs, ty) ->
           (* first pprinting in comments, some human-readably declarations *)
@@ -884,7 +884,7 @@ let pp_annot gtc doc =
         P.parens (!^ "/*" ^^^ pp_genType gty ^^^ !^ "*/" ^^^ doc)
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 let pp_program do_colour show_include ail_prog =

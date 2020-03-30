@@ -223,7 +223,7 @@ type id_kind =
   | IK_definition
 
 type sigma 'a = <|
-  declarations: list (ail_identifier * (Loc.t * declaration));
+  declarations: list (ail_identifier * (Loc.t * Annot.attributes * declaration));
   object_definitions: list (ail_identifier * (expression 'a));
   (* the list of identifiers are the parameter names used in the body *)
   function_definitions: list (ail_identifier * (Loc.t * Annot.attributes * list ail_identifier * statement 'a));

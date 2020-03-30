@@ -752,10 +752,10 @@ constant_expression:
 no_leading_attribute_declaration:
 | decspecs= declaration_specifiers
     idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | decspecs= declaration_specifiers_typedef
     idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (Annot.no_attributes, decspecs, option [] List.rev idecls_opt) }
 | sa= static_assert_declaration
     { Declaration_static_assert sa }
 ;
@@ -763,16 +763,16 @@ no_leading_attribute_declaration:
 declaration:
 | decl= no_leading_attribute_declaration
     { decl }
-| attribute_specifier_sequence decspecs= declaration_specifiers
+| attr= attribute_specifier_sequence decspecs= declaration_specifiers
     idecls_opt= init_declarator_list(declarator_varname)? SEMICOLON
-    { Declaration_base (decspecs, option [] List.rev idecls_opt) }
-| attribute_specifier_sequence decspecs= declaration_specifiers_typedef
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
+| attr= attribute_specifier_sequence decspecs= declaration_specifiers_typedef
     idecls_opt= init_declarator_list(declarator_typedefname)? SEMICOLON
-    { Declaration_base (decspecs, option [] List.rev idecls_opt) }
+    { Declaration_base (to_attrs (Some attr), decspecs, option [] List.rev idecls_opt) }
 | attribute_declaration
     { (*TODO: this is a dummy declaration*)
       let loc = Location_ocaml.region($startpos, $endpos) (Some $startpos) in
-      Declaration_base (empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
+      Declaration_base (Annot.no_attributes, empty_specs, [InitDecl (loc, Declarator (None, DDecl_identifier (Annot.no_attributes, Symbol.Identifier (loc, "test"))), None)]) }
 ;
 
 declaration_specifier:
