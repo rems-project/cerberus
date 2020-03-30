@@ -70,13 +70,11 @@ type constr =
   | Constr_own   of string * ptr_kind * type_expr
   | Constr_Coq   of coq_expr
 
-and ptr_kind = Own | Shr | Frac of type_expr
+and ptr_kind = Own | Shr | Frac of coq_expr
 
 and type_expr =
   | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
-  | Ty_opt1   of type_expr
-  | Ty_opt2   of type_expr * type_expr
   | Ty_dots
   | Ty_exists of ident * type_expr
   | Ty_lambda of pattern * type_expr
@@ -104,9 +102,9 @@ let parser constr =
   | c:coq_expr                                    -> Constr_Coq(c)
 
 and parser ptr_type =
-  | "&own<" ty:(type_expr PFull) ">"                          -> (Own    , ty)
-  | "&shr<" ty:(type_expr PFull) ">"                          -> (Shr    , ty)
-  | "&frac<" l:(type_expr PFull) "," ty:(type_expr PFull) ">" -> (Frac(l), ty)
+  | "&own<" ty:(type_expr PFull) ">"                 -> (Own    , ty)
+  | "&shr<" ty:(type_expr PFull) ">"                 -> (Shr    , ty)
+  | "&frac<" e:coq_expr "," ty:(type_expr PFull) ">" -> (Frac(e), ty)
 
 and parser type_expr @(p : type_expr_prio) =
   | c:coq_expr ty:{"@" (type_expr PAtom)}?
