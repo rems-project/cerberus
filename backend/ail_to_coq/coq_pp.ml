@@ -365,24 +365,24 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Opening the section. *)
   pp "@[<v 2>Section spec.@;";
-  pp "Context `{typeG Σ}.\n";
+  pp "Context `{typeG Σ}.";
 
   (* Definition of types. *)
   let pp_struct s =
-    pp "(* Not implemented. *)\n" (* TODO *)
+    pp "(* Not implemented. *)" (* TODO *)
   in
   let pp_union s =
-    pp "(* Not implemented. *)\n" (* TODO *)
+    pp "(* Not implemented. *)" (* TODO *)
   in
   let pp_struct_union ((_, {struct_is_union; struct_name; _}) as s) =
-    pp "@;(* Definition of type [%s]. *)@;" struct_name;
+    pp "\n@;(* Definition of type [%s]. *)@;" struct_name;
     if struct_is_union then pp_union s else pp_struct s
   in
   List.iter pp_struct_union ast.structs;
 
   (* Function specs. *)
-  pp "@;(* Function specifications. *)";
   let pp_spec (id, def) =
+    pp "\n@;(* Specifications for function [%s]. *)" id;
     match def.func_annot with None -> assert false | Some(annot) ->
     let (param_names, param_types) = List.split annot.fa_parameters in
     let (exist_names, exist_types) = List.split annot.fa_exists in
@@ -391,8 +391,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | [] -> ()
       | _  -> pp "; "; pp_sep ", " pp_type_expr ff tys
     in
-    pp "@;Definition type_of_%s := fn(∀ %a : %a%a; %a) → ∃ %a : %a, %a; %a."
-      id (pp_as_tuple pp_print_string) param_names
+    pp "@;Definition type_of_%s :=@;  @[<hov 2>" id;
+    pp "fn(∀ %a : %a%a; %a)@;→ ∃ %a : %a, %a; %a.@]"
+      (pp_as_tuple pp_print_string) param_names
       (pp_as_prod pp_coq_expr) param_types pp_args annot.fa_args
       pp_constrs annot.fa_requires (pp_as_tuple pp_print_string) exist_names
       (pp_as_prod pp_coq_expr) exist_types pp_type_expr annot.fa_returns
