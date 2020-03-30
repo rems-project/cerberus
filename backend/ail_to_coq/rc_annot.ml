@@ -80,10 +80,9 @@ and type_expr =
   | Ty_lambda of pattern * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
-  | Ty_direct of ident
   | Ty_Coq    of coq_expr
 
-let type_void : type_expr = Ty_direct "void"
+let type_void : type_expr = Ty_params("void", [])
 
 type type_expr_prio = PAtom | PCstr | PFull
 
@@ -110,7 +109,7 @@ and parser type_expr @(p : type_expr_prio) =
   | c:coq_expr ty:{"@" (type_expr PAtom)}?
       when p >= PAtom -> begin
                            match (c, ty) with
-                           | (Coq_ident(x), None    ) -> Ty_direct(x)
+                           | (Coq_ident(x), None    ) -> Ty_params(x,[])
                            | (_           , None    ) -> Ty_Coq(c)
                            | (_           , Some(ty)) -> Ty_refine(c,ty)
                          end
