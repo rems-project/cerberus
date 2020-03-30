@@ -14,7 +14,7 @@ let pp_as_tuple : 'a pp -> 'a list pp = fun pp ff xs ->
 
 let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
   match xs with
-  | []      -> invalid_arg "Coq_pp.pp_sep"
+  | []      -> ()
   | x :: xs -> pp ff x; List.iter (fprintf ff "%s%a" sep pp) xs
 
 let pp_as_prod : 'a pp -> 'a list pp = fun pp ff xs ->
@@ -391,7 +391,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | [] -> ()
       | _  -> pp "; "; pp_sep ", " pp_type_expr ff tys
     in
-    pp "@;Definition type_of_%s :=@;  @[<hov 2>" id;
+    pp "@;Definition type_of_%s " id;
+    List.iter (pp "%s ") (fst def.func_deps);
+    pp ":=@;  @[<hov 2>";
     pp "fn(∀ %a : %a%a; %a)@;→ ∃ %a : %a, %a; %a.@]"
       (pp_as_tuple pp_print_string) param_names
       (pp_as_prod pp_coq_expr) param_types pp_args annot.fa_args
@@ -403,8 +405,67 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Typing proofs. *)
   let pp_proof (id, def) =
+    match def.func_annot with None -> assert false | Some(annot) ->
+    let (used_globals, used_functions) = def.func_deps in
+    let deps =
+      (* This includes global variables on which the used function depend. *)
+      let fn acc (id, def) =
+        if List.mem id used_functions then fst def.func_deps @ acc else acc
+      in
+      let all_used_globals = List.fold_left fn used_globals ast.functions in
+      let transitive_used_globals =
+        (* Use filter to preserve definition order. *)
+        List.filter (fun x -> List.mem x all_used_globals) ast.global_vars
+      in
+      transitive_used_globals @ used_functions
+    in
+    let pp_args ff xs =
+      match xs with
+      | [] -> ()
+      | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_print_string) xs
+    in
     pp "\n@;(* Typing proof for [%s]. *)@;" id;
-    pp "(* Not implemented. *)" (* TODO *)
+    pp "@[<v 2>Lemma type_%s%a :@;" id pp_args deps;
+    begin
+      match used_functions with
+      | [] -> pp "⊢ typed_function impl_%s type_of_%s." id id
+      | _  ->
+      let pp_impl ff id =
+        let wrap = used_globals <> [] || used_functions <> [] in
+        if wrap then fprintf ff "(";
+        fprintf ff "impl_%s" id;
+        List.iter (fprintf ff " %s") used_globals;
+        List.iter (fprintf ff " %s") used_functions;
+        if wrap then fprintf ff ")"
+      in
+      let pp_type ff id =
+        let used_globals =
+          try fst (List.assoc id ast.functions).func_deps
+          with Not_found -> assert false
+        in
+        if used_globals <> [] then fprintf ff "(";
+        fprintf ff "type_of_%s" id;
+        List.iter (fprintf ff " %s") used_globals;
+        if used_globals <> [] then fprintf ff ")"
+      in
+      let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr %a -∗@;" f f pp_type f in
+      List.iter pp_dep used_functions;
+      pp "typed_function %a %a." pp_impl id pp_type id
+    end;
+    let pp_intros ff xs =
+      let pp_intro ff (x,_) = pp_print_string ff x in
+      match xs with
+      | [x] -> pp_intro ff x
+      | _   -> fprintf ff "[%a]" (pp_sep " " pp_intro) xs
+    in
+    let pp_local_vars ff = List.iter (fun (x,_) -> pp " %s" x) in
+    pp "@]@;@[<v 2>Proof.@;";
+    pp "start_function (%a) =>%a.@;" pp_intros annot.fa_parameters
+      pp_local_vars def.func_vars;
+    pp "split_blocks (∅ : gmap block_id (iProp Σ)).@;";
+    pp "repeat do_step; do_finish.@;";
+    pp "Unshelve. all: try solve_goal.";
+    pp "@]@;Qed."
   in
   List.iter pp_proof ast.functions;
 
