@@ -70,13 +70,11 @@ type constr =
   | Constr_own   of string * ptr_kind * type_expr
   | Constr_Coq   of coq_expr
 
-and ptr_kind = Own | Shr | Frac of type_expr
+and ptr_kind = Own | Shr | Frac of coq_expr
 
 and type_expr =
   | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
-  | Ty_opt1   of type_expr
-  | Ty_opt2   of type_expr * type_expr
   | Ty_dots
   | Ty_exists of ident * type_expr
   | Ty_lambda of pattern * type_expr
@@ -104,9 +102,9 @@ let parser constr =
   | c:coq_expr                                    -> Constr_Coq(c)
 
 and parser ptr_type =
-  | "&own<" ty:(type_expr PFull) ">"                          -> (Own    , ty)
-  | "&shr<" ty:(type_expr PFull) ">"                          -> (Shr    , ty)
-  | "&frac<" l:(type_expr PFull) "," ty:(type_expr PFull) ">" -> (Frac(l), ty)
+  | "&own<" ty:(type_expr PFull) ">"                 -> (Own    , ty)
+  | "&shr<" ty:(type_expr PFull) ">"                 -> (Shr    , ty)
+  | "&frac<" e:coq_expr "," ty:(type_expr PFull) ">" -> (Frac(e), ty)
 
 and parser type_expr @(p : type_expr_prio) =
   | c:coq_expr ty:{"@" (type_expr PAtom)}?
@@ -155,8 +153,8 @@ let parser annot_type : ident Earley.grammar =
 
 (** {4 Annotations on structs} *)
 
-let parser annot_size : ident Earley.grammar =
-  | id:ident
+let parser annot_size : coq_expr Earley.grammar =
+  | c:coq_expr
 
 let parser annot_exist : (ident * coq_expr) Earley.grammar =
   | id:ident ":" s:coq_expr
@@ -191,8 +189,8 @@ let parser annot : ... Earley.grammar =
 
 (** {4 Annotations on blocks} *)
 
-let parser annot_inv : constr Earley.grammar =
-  | c:constr
+let parser annot_inv_var : (ident * type_expr) Earley.grammar =
+  | id:ident ":" ty:type_expr
 
 (** {3 Parsing of attributes} *)
 
@@ -201,7 +199,7 @@ type annot =
   | Annot_refined_by of (ident * coq_expr) list
   | Annot_ptr_type   of (ident * type_expr)
   | Annot_type       of ident
-  | Annot_size       of ident
+  | Annot_size       of coq_expr
   | Annot_exist      of (ident * coq_expr) list
   | Annot_constraint of constr list
   | Annot_immovable
@@ -212,7 +210,7 @@ type annot =
   | Annot_returns    of type_expr
   | Annot_ensures    of constr list
   | Annot_annot      of string
-  | Annot_inv        of constr
+  | Annot_inv_vars   of (ident * type_expr) list
 
 exception Invalid_annot of string
 
@@ -276,7 +274,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "returns"    -> single_arg annot_returns (fun e -> Annot_returns(e))
   | "ensures"    -> many_args annot_ensures (fun l -> Annot_ensures(l))
   | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
-  | "inv"        -> single_arg annot_inv (fun e -> Annot_inv(e))
+  | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
   | _            -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -352,21 +350,81 @@ let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   | Annot_annot(s) -> Some(s)
   | _              -> error "is invalid (wrong kind)"
 
-type struct_annot = annot list (* FIXME *)
+type struct_annot =
+  { st_parameters : (ident * coq_expr) list
+  ; st_refined_by : (ident * coq_expr) list
+  ; st_exists     : (ident * coq_expr) list
+  ; st_constrs    : constr list
+  ; st_size       : coq_expr option
+  ; st_ptr_type   : (ident * type_expr) option
+  ; st_immovable  : bool
+  ; st_union      : bool }
 
 let struct_annot : rc_attr list -> struct_annot = fun attrs ->
-  List.map parse_attr attrs (* FIXME *)
+  let parameters = ref [] in
+  let refined_by = ref [] in
+  let exists = ref [] in
+  let constrs = ref [] in
+  let size = ref None in
+  let ptr = ref None in
+  let immovable = ref false in
+  let union = ref false in
 
-type block_annot = constr option
+  let handle_attr ({rc_attr_id = id; _} as attr) =
+    let error msg =
+      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+    in
+    match parse_attr attr with
+    | Annot_parameters(l) -> parameters := !parameters @ l
+    | Annot_refined_by(l) -> refined_by := !refined_by @ l
+    | Annot_exist(l)      -> exists := !exists @ l
+    | Annot_constraint(l) -> constrs := !constrs @ l
+    | Annot_size(s)       -> if !size <> None then error "already specified";
+                             size := Some(s)
+    | Annot_ptr_type(e)   -> if !ptr <> None then error "already specified";
+                             ptr := Some(e)
+    | Annot_immovable     -> if !immovable then error "already specified";
+                             immovable := true
+    | Annot_tunion        -> if !union then error "already specified";
+                             union := true
+    | _                   -> error "is invalid for a struct"
+  in
+  List.iter handle_attr attrs;
+
+  { st_parameters = !parameters
+  ; st_refined_by = !refined_by
+  ; st_exists     = !exists
+  ; st_constrs    = !constrs
+  ; st_size       = !size
+  ; st_ptr_type   = !ptr
+  ; st_immovable  = !immovable
+  ; st_union      = !union }
+
+type block_annot =
+  { bl_exists   : (ident * coq_expr) list
+  ; bl_constrs  : constr list
+  ; bl_inv_vars : (ident * type_expr) list }
+
+let no_block_annot : block_annot =
+  { bl_exists = [] ; bl_constrs = [] ; bl_inv_vars = [] }
 
 let block_annot : rc_attr list -> block_annot = fun attrs ->
-  let error msg =
-    raise (Invalid_annot (Printf.sprintf "block annotation %s" msg))
+  let exists = ref [] in
+  let constrs = ref [] in
+  let vars = ref [] in
+
+  let handle_attr ({rc_attr_id = id; _} as attr) =
+    let error msg =
+      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+    in
+    match parse_attr attr with
+    | Annot_exist(l)      -> exists := !exists @ l
+    | Annot_constraint(l) -> constrs := !constrs @ l
+    | Annot_inv_vars(l)   -> vars := !vars @ l
+    | _                   -> error "is invalid (wrong kind)"
   in
-  match attrs with
-  | []      -> None
-  | _::_::_ -> error "carries more than one attributes"
-  | [attr]  ->
-  match parse_attr attr with
-  | Annot_inv(c) -> Some(c)
-  | _            -> error "is invalid (wrong kind)"
+  List.iter handle_attr attrs;
+
+  { bl_exists =  !exists
+  ; bl_constrs = !constrs
+  ; bl_inv_vars = !vars }

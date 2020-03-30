@@ -51,5 +51,15 @@ module Option =
       | Some e -> pp_elt oc e
   end
 
+module Filename =
+  struct
+    include Filename
+
+    (** [realpath path] returns the absolute canonical path to file [path]. If
+        [path] is invalid (i.e., it does not describe an existing file),  then
+        the exception [Invalid_argument] is raised. *)
+    external realpath : string -> string = "c_realpath"
+  end
+
 module SMap = Map.Make(String)
 module IMap = Map.Make(Int)
