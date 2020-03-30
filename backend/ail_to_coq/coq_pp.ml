@@ -4,13 +4,15 @@ open Panic
 open Coq_ast
 open Rc_annot
 
+let pp_str = pp_print_string
+
 let pp_as_tuple : 'a pp -> 'a list pp = fun pp ff xs ->
   match xs with
-  | []      -> pp_print_string ff "()"
+  | []      -> pp_str ff "()"
   | [x]     -> pp ff x
   | x :: xs -> fprintf ff "(%a" pp x;
                List.iter (fprintf ff ", %a" pp) xs;
-               pp_print_string ff ")"
+               pp_str ff ")"
 
 let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
   match xs with
@@ -19,7 +21,7 @@ let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
 
 let pp_as_prod : 'a pp -> 'a list pp = fun pp ff xs ->
   match xs with
-  | [] -> pp_print_string ff "()"
+  | [] -> pp_str ff "()"
   | _  -> pp_sep " * " pp ff xs
 
 let pp_int_type : Coq_ast.int_type pp = fun ff it ->
@@ -62,7 +64,7 @@ let pp_un_op : Coq_ast.un_op pp = fun ff op ->
   | CastOp(ty) -> pp "(CastOp $ %a)" pp_op_type ty
 
 let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
-  Format.pp_print_string ff @@
+  pp_str ff @@
   match op with
   | AddOp       -> "+"
   | SubOp       -> "-"
@@ -89,8 +91,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   | Var(None   ,_)                ->
       pp "\"_\""
   | Var(Some(x),g)                ->
-      let x = if g then x else Printf.sprintf "\"%s\"" x in
-      Format.pp_print_string ff x
+      if g then pp_str ff x else fprintf ff "\"%s\"" x
   | Val(Null)                     ->
       pp "NULL"
   | Val(Void)                     ->
@@ -287,18 +288,18 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
 
 let pp_coq_expr : coq_expr pp = fun ff e ->
   match e with
-  | Coq_ident(x) -> pp_print_string ff x
+  | Coq_ident(x) -> pp_str ff x
   | Coq_all(s)   -> fprintf ff "(%s)" s
 
 let rec pp_constr : constr pp = fun ff c ->
   let pp_kind ff k =
     match k with
-    | Own     -> pp_print_string ff "◁ₗ"
-    | Shr     -> pp_print_string ff "◁ₗ{Shr}"
+    | Own     -> pp_str ff "◁ₗ"
+    | Shr     -> pp_str ff "◁ₗ{Shr}"
     | Frac(e) -> fprintf ff "◁ₗ{%a}" pp_coq_expr e
   in
   match c with
-  | Constr_Iris(s)     -> pp_print_string ff s
+  | Constr_Iris(s)     -> pp_str ff s
   | Constr_exist(x,c)  -> fprintf ff "(∃ %s, %a)" x pp_constr c
   | Constr_own(x,k,ty) -> fprintf ff "%s %a %a" x pp_kind k pp_type_expr ty
   | Constr_Coq(e)      -> fprintf ff "⌜%a⌝" pp_coq_expr e
@@ -306,21 +307,21 @@ let rec pp_constr : constr pp = fun ff c ->
 and pp_type_expr : type_expr pp = fun ff ty ->
   let pp_kind ff k =
     match k with
-    | Own     -> pp_print_string ff "&own"
-    | Shr     -> pp_print_string ff "&shr"
+    | Own     -> pp_str ff "&own"
+    | Shr     -> pp_str ff "&shr"
     | Frac(e) -> fprintf ff "&frac{%a}" pp_coq_expr e
   in
   let rec pp_patt ff p =
     match p with
-    | Pat_var(x)    -> pp_print_string ff x
+    | Pat_var(x)    -> pp_str ff x
     | Pat_tuple(ps) -> fprintf ff "`%a" (pp_as_tuple pp_patt) ps
   in
   let rec pp wrap ff ty =
     match ty with
     (* Don't need wrapping. *)
-    | Ty_direct(id)     -> pp_print_string ff id
     | Ty_Coq(e)         -> pp_coq_expr ff e
     | Ty_dots           -> Panic.panic_no_pos "Unexpected ellipsis."
+    | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
     | Ty_lambda(p,ty)   -> fprintf ff "(λ %a, %a)" pp_patt p (pp false) ty
     (* Insert wrapping if needed. *)
@@ -331,7 +332,7 @@ and pp_type_expr : type_expr pp = fun ff ty ->
     | Ty_exists(x,ty)   -> fprintf ff "∃ %s, %a" x (pp false) ty
     | Ty_constr(ty,c)   -> assert false
     | Ty_params(id,tys) ->
-    pp_print_string ff id;
+    pp_str ff id;
     match (id, tys) with
     | ("optional", [ty]) -> fprintf ff " %a null" (pp true) ty
     | (_         , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
@@ -340,8 +341,26 @@ and pp_type_expr : type_expr pp = fun ff ty ->
 
 let pp_constrs : constr list pp = fun ff cs ->
   match cs with
-  | []      -> pp_print_string ff "True"
+  | []      -> pp_str ff "True"
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff ", %a" pp_constr) cs
+
+(* Functions for looking for recursive occurences of a type. *)
+
+let in_coq_expr : string -> coq_expr -> bool = fun s e ->
+  match e with
+  | Coq_ident(x) -> x = s
+  | Coq_all(e)   -> e = s (* In case of [{s}]. *)
+
+let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
+  match ty with
+  | Ty_refine(e,ty)  -> in_coq_expr s e || in_type_expr s ty
+  | Ty_ptr(_,ty)     -> in_type_expr s ty
+  | Ty_dots          -> false
+  | Ty_exists(x,ty)  -> x <> s && in_type_expr s ty
+  | Ty_lambda(p,ty)  -> assert false
+  | Ty_constr(ty,c)  -> assert false
+  | Ty_params(x,tys) -> x = s || List.exists (in_type_expr s) tys
+  | Ty_Coq(e)        -> in_coq_expr s e
 
 let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Stuff for import of the code. *)
@@ -368,11 +387,47 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "Context `{typeG Σ}.";
 
   (* Definition of types. *)
-  let pp_struct s =
-    pp "(* Not implemented. *)" (* TODO *)
+  let pp_struct (id, s) =
+    match s.struct_annot with None -> assert false | Some(annot) ->
+    let fields =
+      let fn (x, (ty_opt, _)) =
+        match ty_opt with
+        | Some(ty) -> (x, ty)
+        | None     -> assert false
+      in
+      List.map fn s.struct_members
+    in
+    let (ref_names, ref_types) = List.split annot.st_refined_by in
+    let is_rec = List.exists (fun (_,ty) -> in_type_expr id ty) fields in
+    if is_rec then
+      begin
+        pp "(* Recursive structs not implemented. *)" (* TODO *)
+      end
+    else
+      begin
+        (* Definition of the [rtype]. *)
+        pp "@[<v 2>Definition %s : rtype := {|@;" id;
+        pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
+        pp "@[<hov 2>rty %a := struct struct_%s ["
+          (pp_as_tuple pp_str) ref_names id;
+        begin
+          match fields with
+          | []               -> ()
+          | (_,ty) :: fields ->
+          pp "@;%a" pp_type_expr ty;
+          List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
+        end;
+        pp "@]@;]%%I@]@;|}\n";
+        (* Typeclass stuff. *)
+        pp "@;Global Program Instance %s_movable : RMovable %s :=" id id;
+        pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
+        pp "@;Next Obligation. unfold with_refinement => /= ?. ";
+        pp "apply _. Defined.";
+        pp "@;Next Obligation. solve_typing. Qed."
+      end
   in
   let pp_union s =
-    pp "(* Not implemented. *)" (* TODO *)
+    pp "(* Printing for Unions not implemented. *)" (* TODO *)
   in
   let pp_struct_union ((_, {struct_is_union; struct_name; _}) as s) =
     pp "\n@;(* Definition of type [%s]. *)@;" struct_name;
@@ -395,11 +450,10 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     List.iter (pp "%s ") (fst def.func_deps);
     pp ":=@;  @[<hov 2>";
     pp "fn(∀ %a : %a%a; %a)@;→ ∃ %a : %a, %a; %a.@]"
-      (pp_as_tuple pp_print_string) param_names
-      (pp_as_prod pp_coq_expr) param_types pp_args annot.fa_args
-      pp_constrs annot.fa_requires (pp_as_tuple pp_print_string) exist_names
-      (pp_as_prod pp_coq_expr) exist_types pp_type_expr annot.fa_returns
-      pp_constrs annot.fa_ensures
+      (pp_as_tuple pp_str) param_names (pp_as_prod pp_coq_expr) param_types
+      pp_args annot.fa_args pp_constrs annot.fa_requires (pp_as_tuple pp_str)
+      exist_names (pp_as_prod pp_coq_expr) exist_types pp_type_expr
+      annot.fa_returns pp_constrs annot.fa_ensures
   in
   List.iter pp_spec ast.functions;
 
@@ -422,7 +476,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     let pp_args ff xs =
       match xs with
       | [] -> ()
-      | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_print_string) xs
+      | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_str) xs
     in
     pp "\n@;(* Typing proof for [%s]. *)@;" id;
     pp "@[<v 2>Lemma type_%s%a :@;" id pp_args deps;
@@ -453,7 +507,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "typed_function %a %a." pp_impl id pp_type id
     end;
     let pp_intros ff xs =
-      let pp_intro ff (x,_) = pp_print_string ff x in
+      let pp_intro ff (x,_) = pp_str ff x in
       match xs with
       | [x] -> pp_intro ff x
       | _   -> fprintf ff "[%a]" (pp_sep " " pp_intro) xs
