@@ -8,53 +8,70 @@ open Sexplib
 open Printf
 
 
+module List = struct
 
+  include List
+        
+  let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
+    List.concat (List.map f xs)
+
+  let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
+    match xs with
+    | [] -> []
+    | x :: xs ->
+       match f x with
+       | None -> filter_map f xs
+       | Some y -> y :: filter_map f xs
+
+end
+
+
+let uncurry f (a,b)  = f a b
+let curry f a b = f (a,b)
 let flip f a b = f b a
 
 
 type num = Nat_big_num.num
 
-let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
-  List.concat (List.map f xs)
-
-let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
-  match xs with
-  | [] -> []
-  | x :: xs ->
-     match f x with
-     | None -> filter_map f xs
-     | Some y -> y :: filter_map f xs
-
-
-
 
 (* error monad *)
 
 module Ex = struct
-
-  type ('a,'e) m = ('a,'e) Exception.exceptM
-  let return : 'a -> ('a,'e) m = Exception.except_return
-  let fail : 'e -> ('a,'e) m = Exception.fail
-  let (>>=) = Exception.except_bind
+  open Exception
+  type ('a,'e) m = ('a,'e) exceptM
+  let return : 'a -> ('a,'e) m = except_return
+  let fail : 'e -> ('a,'e) m = fail
+  let (>>=) = except_bind
   let (>>) m m' = m >>= fun _ -> m'
-  let liftM = Exception.except_fmap
-  let seq = Exception.except_sequence
-  let of_maybe = Exception.of_maybe
-  let to_bool = Exception.to_bool
+  let liftM = except_fmap
+  let seq = except_sequence
+  let of_maybe = of_maybe
+  let to_bool = to_bool
   let mapM : ('a -> ('b,'e) m) -> 'a list -> ('b list, 'e) m = 
-    Exception.except_mapM
+    except_mapM
   let concatmapM f l = 
     seq (List.map f l) >>= fun xs ->
     return (List.concat xs)
-
+  let fold_leftM (f : 'a -> 'b -> ('c,'e) m) (a : 'a) (bs : 'b list) =
+    List.fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs
   let pmap_foldM 
         (f : 'k -> 'x -> 'y -> ('y,'e) m)
         (map : ('k,'x) Pmap.map) (init: 'y) : ('y,'e) m =
     Pmap.fold (fun k v a -> a >>= f k v) map (return init)
-
   let pmap_iterM f m = 
     Pmap.fold (fun k v a -> a >> f k v) 
       m (return ())
+
+  let tryM (m : ('a,'e1) exceptM) (m' : unit -> ('a,'e2) exceptM) =
+    match m with
+    | Result a -> Result a
+    | Exception _ -> m' ()
+
+  let rec tryMs (m : ('a,'e1) exceptM) (ms : (unit -> ('a,'e2) exceptM) list) =
+    match m, ms with
+    | Result a, _ -> Result a
+    | Exception _, m' :: ms' -> tryMs (m' ()) ms'
+    | Exception e, [] -> Exception e
 
 end
 
@@ -90,40 +107,171 @@ module Sym = struct
 
   let compare = Symbol.symbol_compare
 
-  let parse (env : t StringMap.t) name = 
-    match StringMap.find_opt name env with
-    | Some sym -> return sym
-    | None -> fail (sprintf "unbound variable %s" name)
+  let parse loc (names : (t * Loc.t) StringMap.t) name = 
+    match StringMap.find_opt name names with
+    | Some (sym,_) -> return sym
+    | None -> fail (sprintf "%s. Unbound variable %s" (Loc.pp loc) name)
 
-  let subst sym sym' symbol : t = 
-    if symbol = sym then sym' else symbol
+  (* let subst sym sym' symbol : t = 
+   *   if symbol = sym then sym' else symbol *)
 
+end
+
+module NameMap = struct
+  include StringMap
+  type t = (Sym.t * Loc.t) StringMap.t
 end
 
 module Id = struct
-  type id = Symbol.identifier
-  type mid = id option
-  let pp_id (Symbol.Identifier (_,s)) = s
+  type t= Symbol.identifier
+  let s (Symbol.Identifier (_,s)) = s
+  let pp = s
+  let compare id id' = 
+    String.compare (s id) (s id')
+  let parse loc id = 
+    Symbol.Identifier (loc,id)
 end
 
 
-module SymMap = struct
-  include Map.Make(Sym)
-  let find_first (p : 'k -> 'v -> bool) (m : 'v t) : ('k * 'v) option =
-    fold (fun k v acc ->
-        match acc with
-        | Some _ -> acc
-        | None -> if p k v then Some (k,v) else None
-      ) m None
-end
+(* module Name = struct
+ * 
+ *   type t = 
+ *     | S of Sym.t
+ *     | I of Id.t
+ * 
+ *   let fresh () = S (Symbol.fresh ())
+ *   let fresh_pretty s = S (Symbol.fresh_pretty s)
+ *   let pp = function
+ *     | S sym -> Sym.pp sym
+ *     | I id -> Id.pp id
+ *   let of_tsymbol (s : 'bty Mucore.tsymbol) = 
+ *     let (TSym (_, _, sym)) = s in 
+ *     S sym
+ * 
+ *   let lof_tsymbol (s : 'bty Mucore.tsymbol) = 
+ *     let (TSym (annots, _, sym)) = s in 
+ *     (S sym, Annot.get_loc_ annots)
+ * 
+ *   let compare id id' = 
+ *     match id, id' with
+ *     | S sym, S sym' -> Symbol.symbol_compare sym sym'
+ *     | I id, I id' -> Id.compare id id'
+ *     | S _, I _ -> -1
+ *     | I _, S _ -> 1
+ * 
+ *   let parse loc (env : Sym.t StringMap.t) name = 
+ *     match StringMap.find_opt name env with
+ *     | Some sym -> S sym
+ *     | None -> I (Id.parse loc name)
+ * 
+ *   let subst sym name id : to = 
+ *     match id with
+ *     | S symbol -> 
+ *        if symbol = sym then name else S symbol
+ *     | I id -> I id
+ * 
+ * end *)
 
 
+module SymMap = Map.Make(Sym)
 
 
 
 let parse_error (t : string) (sx : Sexp.t) = 
   let err = sprintf "unexpected %s: %s" t (Sexp.to_string sx) in
   fail err
+
+
+
+
+
+
+
+module BT = struct
+
+  type t =
+    | Unit 
+    | Bool
+    | Int
+    | Loc
+    | Array
+    | List of t
+    | Tuple of t list
+    | Struct of Sym.t
+
+  let rec pp = function
+    | Unit -> "unit"
+    | Bool -> "bool"
+    | Int -> "int"
+    | Loc -> "loc"
+    | Array -> "array"
+    | List bt -> sprintf "(list %s)" (pp bt)
+    | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (List.map pp bts))
+    | Struct id -> sprintf "(struct %s)" (Sym.pp id)
+  
+  let rec parse_sexp loc (names : NameMap.t) sx = 
+    match sx with
+    | Sexp.Atom "unit" -> 
+       return Unit
+    | Sexp.Atom "bool" -> 
+       return Bool
+    | Sexp.Atom "int" -> 
+       return Int
+    | Sexp.Atom "loc" -> 
+       return Loc
+    | Sexp.Atom "array" -> 
+       return Array
+    | Sexp.List [Sexp.Atom "list"; bt] -> 
+       parse_sexp loc names bt >>= fun bt -> 
+       return (List bt)
+    | Sexp.List [Sexp.Atom "tuple"; Sexp.List bts] -> 
+       mapM (parse_sexp loc names) bts >>= fun bts ->
+       return (Tuple bts)
+    | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
+       Sym.parse loc names id >>= fun sym ->
+       return (Struct sym)
+    | a -> parse_error "base type" a
+
+  let type_equal env t1 t2 = 
+    t1 = t2                       (* todo: maybe up to variable
+                                     instantiation, etc. *)
+  let types_equal env ts1 ts2 = 
+    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
+      (List.combine ts1 ts2)
+
+  let subst _sym _neu bt = bt
+
+end
+
+
+
+module LS = struct
+
+  type t = 
+    | Base of BT.t
+
+  let pp = function
+    | Base bt -> BT.pp bt
+  
+  let parse_sexp loc (names : NameMap.t) sx =
+    match sx with
+    | sx ->
+       BT.parse_sexp loc names sx >>= fun bt ->
+       return (Base bt)
+
+  let type_equal env t1 t2 = 
+    t1 = t2                       (* todo: maybe up to variable
+                                     instantiation, etc. *)
+
+  let types_equal env ts1 ts2 = 
+    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
+      (List.combine ts1 ts2)
+
+  let subst _sym _neu ls = ls
+
+
+end
+
 
 
 module IT = struct
@@ -153,10 +301,9 @@ module IT = struct
     | Or of t * t
     | Not of t
 
-    | List of t list
+    | List of t * t list
 
-    | V of Sym.t
-    | F of Id.id
+    | S of Sym.t
 
   let (%+) t1 t2 = Add (t1,t2)
   let (%-) t1 t2 = Sub (t1,t2)
@@ -199,202 +346,205 @@ module IT = struct
     | Or (o1,o2) -> sprintf "(%s | %s)" (pp o1) (pp o2)
     | Not (o1) -> sprintf "(not %s)" (pp o1)
 
-    | List its -> sprintf "(list (%s))" 
-                    (String.concat " " (List.map pp its))
+    | List (it, its) -> sprintf "(list (%s))" 
+                    (String.concat " " (List.map pp (it :: its)))
 
-    | F id -> Id.pp_id id
-    | V sym -> Sym.pp sym
-
+    | S sym -> Sym.pp sym
 
 
-  let rec parse_sexp (env : Sym.t StringMap.t) sx = 
+
+  let rec parse_sexp loc (names : NameMap.t) sx = 
     match sx with
-
+    
     | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
        return (Num (Nat_big_num.of_string str))
     | Sexp.Atom "true" -> 
        return (Bool true)
     | Sexp.Atom "false" -> 
        return (Bool false)
-
+    
     | Sexp.List [o1;Sexp.Atom "+";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Add (o1, o2))
     | Sexp.List [o1;Sexp.Atom "-";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Sub (o1, o2))
     | Sexp.List [o1;Sexp.Atom "*";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Mul (o1, o2))
     | Sexp.List [o1;Sexp.Atom "/";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Div (o1, o2))
     | Sexp.List [o1;Sexp.Atom "^";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 -> 
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 -> 
        return (Exp (o1, o2))
     | Sexp.List [Sexp.Atom "app"; o1;o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (App (o1, o2))
     | Sexp.List [Sexp.Atom "rem_t";o1;o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Rem_t (o1, o2))
     | Sexp.List [Sexp.Atom "rem_f";o1;o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Rem_f (o1, o2))
     | Sexp.List [o1;Sexp.Atom "=";o2]  -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (EQ (o1, o2))
     | Sexp.List [o1;Sexp.Atom "<>";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (NE (o1, o2))
     | Sexp.List [o1;Sexp.Atom "<";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (LT (o1, o2))
     | Sexp.List [o1;Sexp.Atom ">";o2]  -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (GT (o1, o2))
     | Sexp.List [o1;Sexp.Atom "<=";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (LE (o1, o2))
     | Sexp.List [o1;Sexp.Atom ">=";o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (GE (o1, o2))
-
+    
     | Sexp.List [Sexp.Atom "null"; o1] -> 
-       parse_sexp env o1 >>= fun o1 ->
+       parse_sexp loc names o1 >>= fun o1 ->
        return (Null o1)
     | Sexp.List [o1; Sexp.Atom "&"; o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (And (o1, o2))
     | Sexp.List [o1; Sexp.Atom "|"; o2] -> 
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
+       parse_sexp loc names o1 >>= fun o1 ->
+       parse_sexp loc names o2 >>= fun o2 ->
        return (Or (o1, o2))
     | Sexp.List [Sexp.Atom "not"; o1] -> 
-       parse_sexp env o1 >>= fun o1 ->
+       parse_sexp loc names o1 >>= fun o1 ->
        return (Not o1)
-
-    | Sexp.List [Sexp.Atom "list"; List its] -> 
-       mapM (parse_sexp env) its >>= fun its ->
-       return (List its)
-
+    
+    | Sexp.List [Sexp.Atom "list"; List (it :: its)] -> 
+       parse_sexp loc names it >>= fun it ->
+       mapM (parse_sexp loc names) its >>= fun its ->
+       return (List (it, its))
+    
     | Sexp.Atom str -> 
-       begin match Sym.parse env str with
-       | Result sym -> return (V sym)
-       | _ -> return (F (Identifier (Location_ocaml.unknown, str)))
-       end
-
+       Sym.parse loc names str >>= fun sym ->
+       return (S sym)
+    
     | t -> 
        parse_error "index term" t
 
 
-  let rec subst (sym : Sym.t) (sym' : Sym.t) it : t = 
+  let rec subst (sym : Sym.t) (neu : t) it : t = 
     match it with
     | Num _ -> it
     | Bool _ -> it
 
-    | Add (it, it') -> Add (subst sym sym' it, subst sym sym' it')
-    | Sub (it, it') -> Sub (subst sym sym' it, subst sym sym' it')
-    | Mul (it, it') -> Mul (subst sym sym' it, subst sym sym' it')
-    | Div (it, it') -> Div (subst sym sym' it, subst sym sym' it')
-    | Exp (it, it') -> Exp (subst sym sym' it, subst sym sym' it')
-    | App (it, it') -> App (subst sym sym' it, subst sym sym' it')
-    | Rem_t (it, it') -> Rem_t (subst sym sym' it, subst sym sym' it')
-    | Rem_f (it, it') -> Rem_f (subst sym sym' it, subst sym sym' it')
+    | Add (it, it') -> Add (subst sym neu it, subst sym neu it')
+    | Sub (it, it') -> Sub (subst sym neu it, subst sym neu it')
+    | Mul (it, it') -> Mul (subst sym neu it, subst sym neu it')
+    | Div (it, it') -> Div (subst sym neu it, subst sym neu it')
+    | Exp (it, it') -> Exp (subst sym neu it, subst sym neu it')
+    | App (it, it') -> App (subst sym neu it, subst sym neu it')
+    | Rem_t (it, it') -> Rem_t (subst sym neu it, subst sym neu it')
+    | Rem_f (it, it') -> Rem_f (subst sym neu it, subst sym neu it')
 
-    | EQ (it, it') -> EQ (subst sym sym' it, subst sym sym' it')
-    | NE (it, it') -> NE (subst sym sym' it, subst sym sym' it')
-    | LT (it, it') -> LT (subst sym sym' it, subst sym sym' it')
-    | GT (it, it') -> GT (subst sym sym' it, subst sym sym' it')
-    | LE (it, it') -> LE (subst sym sym' it, subst sym sym' it')
-    | GE (it, it') -> GE (subst sym sym' it, subst sym sym' it')
+    | EQ (it, it') -> EQ (subst sym neu it, subst sym neu it')
+    | NE (it, it') -> NE (subst sym neu it, subst sym neu it')
+    | LT (it, it') -> LT (subst sym neu it, subst sym neu it')
+    | GT (it, it') -> GT (subst sym neu it, subst sym neu it')
+    | LE (it, it') -> LE (subst sym neu it, subst sym neu it')
+    | GE (it, it') -> GE (subst sym neu it, subst sym neu it')
 
-    | Null it -> Null (subst sym sym' it)
-    | And (it, it') -> And (subst sym sym' it, subst sym sym' it')
-    | Or (it, it') -> Or (subst sym sym' it, subst sym sym' it')
-    | Not it -> Not (subst sym sym' it)
+    | Null it -> Null (subst sym neu it)
+    | And (it, it') -> And (subst sym neu it, subst sym neu it')
+    | Or (it, it') -> Or (subst sym neu it, subst sym neu it')
+    | Not it -> Not (subst sym neu it)
 
 
-    | List its -> List (List.map (fun it -> subst sym sym' it) its)
+    | List (it, its) -> 
+       List (subst sym neu it,
+             List.map (fun it -> subst sym neu it) its)
 
-    | V symbol -> V (Sym.subst sym sym' symbol)
-    | F id -> F id
+    | S symbol when symbol = sym -> neu
+    | S symbol -> S symbol
+
+  let rec unify it it' (res : ('a * t option) SymMap.t) = 
+    match it, it' with
+    | Num n, Num n' when n = n' -> return res
+    | Bool b, Bool b' when b = b' -> return res
+
+    | Add (it1, it2), Add (it1', it2')
+    | Sub (it1, it2), Sub (it1', it2')
+    | Mul (it1, it2), Mul (it1', it2')
+    | Div (it1, it2), Div (it1', it2')
+    | Exp (it1, it2), Exp (it1', it2')
+    | App (it1, it2), App (it1', it2')
+    | Rem_t (it1, it2), Rem_t (it1', it2')
+    | Rem_f (it1, it2), Rem_f (it1', it2')
+
+    | EQ (it1, it2), EQ (it1', it2')
+    | NE (it1, it2), NE (it1', it2')
+    | LT (it1, it2), LT (it1', it2')
+    | GT (it1, it2), GT (it1', it2')
+    | LE (it1, it2), LE (it1', it2')
+    | GE (it1, it2), GE (it1', it2')
+
+    | And (it1, it2), And (it1', it2')
+    | Or (it1, it2), Or (it1', it2')
+      ->
+       unify it1 it1' res >>= fun res ->
+       unify it2 it2' res
+
+    | Null it, Null it'
+    | Not it, Not it' 
+      -> 
+       unify it it' res
+
+    | List (it,its), List (it',its') -> 
+       unify_list (it::its) (it'::its') res
+
+    | S sym, S sym' when sym = sym' ->
+       return res
+
+    | S sym, it' ->
+       begin match SymMap.find_opt sym res with
+       | None -> fail ()
+       | Some (_, Some it) ->
+          if it = it' then return res else fail ()
+       | Some (spec, None) -> 
+          return (SymMap.add sym (spec, Some it') res)
+       end
+
+    | _, _ ->
+       fail ()
+
+  and unify_list its its' res =
+    match its, its' with
+    | [], [] -> return res
+    | (it :: its), (it' :: its') ->
+       unify it it' res >>= fun res ->
+       unify_list its its' res
+    | _, _ ->
+       fail ()
 
 end
 
 
 open IT
-
-module BT = struct
-
-  type t =
-    | Unit 
-    | Bool
-    | Int
-    | Loc
-    | Array
-    | List of t
-    | Tuple of t list
-    | Struct of Sym.t
-
-  let rec pp = function
-    | Unit -> "unit"
-    | Bool -> "bool"
-    | Int -> "int"
-    | Loc -> "loc"
-    | Array -> "array"
-    | List bt -> sprintf "(list %s)" (pp bt)
-    | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (List.map pp bts))
-    | Struct sym -> sprintf "(struct %s)" (Sym.pp sym)
-  
-  let rec parse_sexp (env : Sym.t StringMap.t) sx = 
-    match sx with
-    | Sexp.Atom "unit" -> 
-       return Unit
-    | Sexp.Atom "bool" -> 
-       return Bool
-    | Sexp.Atom "int" -> 
-       return Int
-    | Sexp.Atom "loc" -> 
-       return Loc
-    | Sexp.Atom "array" -> 
-       return Array
-    | Sexp.List [Sexp.Atom "list"; bt] -> 
-       parse_sexp env bt >>= fun bt -> 
-       return (List bt)
-    | Sexp.List [Sexp.Atom "tuple"; Sexp.List bts] -> 
-       mapM (parse_sexp env) bts >>= fun bts ->
-       return (Tuple bts)
-    | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
-       Sym.parse env id >>= fun id ->
-       return (Struct id)
-    | a -> parse_error "base type" a
-
-  let subst _sym _sym' t = t
-
-  let type_equal env t1 t2 = 
-    t1 = t2                       (* todo: maybe up to variable
-                                     instantiation, etc. *)
-  let types_equal env ts1 ts2 = 
-    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
-      (List.combine ts1 ts2)
-
-end
 
 
 open BT
@@ -406,7 +556,7 @@ module RE = struct
     | Int of IT.t * IT.t (* location and value *)
     | Points of IT.t * IT.t
     | Array of IT.t * IT.t
-   (* Array (pointer, list pointer) *)
+    | Pred of string * IT.t list
 
   let pp = function
     | Block (it1,it2) -> 
@@ -425,82 +575,47 @@ module RE = struct
        sprintf "(points %s %s)" 
          (IT.pp it1)
          (IT.pp it2)
+    | Pred (p,its) ->
+       sprintf "(%s %s)" 
+         p
+         (String.concat " " (List.map IT.pp its))
 
   
-  let parse_sexp (env : Sym.t StringMap.t) sx = 
+  let parse_sexp loc (names : NameMap.t) sx = 
     match sx with 
     | Sexp.List [Sexp.Atom "block";it1;it2] -> 
-       IT.parse_sexp env it1 >>= fun it1 ->
-       IT.parse_sexp env it2 >>= fun it2 ->
+       IT.parse_sexp loc names it1 >>= fun it1 ->
+       IT.parse_sexp loc names it2 >>= fun it2 ->
        return (Block (it1, it2))
     | Sexp.List [Sexp.Atom "int"; it1; it2] ->
-       IT.parse_sexp env it1 >>= fun it1 ->
-       IT.parse_sexp env it2 >>= fun it2 ->
+       IT.parse_sexp loc names it1 >>= fun it1 ->
+       IT.parse_sexp loc names it2 >>= fun it2 ->
        return (Int (it1, it2))
     | Sexp.List [Sexp.Atom "array"; it1; it2] ->
-       IT.parse_sexp env it1 >>= fun it1 ->
-       IT.parse_sexp env it2 >>= fun it2 ->
+       IT.parse_sexp loc names it1 >>= fun it1 ->
+       IT.parse_sexp loc names it2 >>= fun it2 ->
        return (Array (it1, it2))
     | Sexp.List [Sexp.Atom "points"; it1; it2] ->
-       IT.parse_sexp env it1 >>= fun it1 ->
-       IT.parse_sexp env it2 >>= fun it2 ->
+       IT.parse_sexp loc names it1 >>= fun it1 ->
+       IT.parse_sexp loc names it2 >>= fun it2 ->
        return (Points (it1, it2))
+    | Sexp.List (Sexp.Atom p :: its) ->
+       mapM (IT.parse_sexp loc names) its >>= fun its ->
+       return (Pred (p, its))
     | t -> parse_error "resource type" t
 
-  let subst sym sym' t = 
+  let subst sym neu t = 
     match t with
     | Block (it, it') -> 
-       Block (IT.subst sym sym' it, IT.subst sym sym' it')
+       Block (IT.subst sym neu it, IT.subst sym neu it')
     | Int (it, it') -> 
-       Int (IT.subst sym sym' it, IT.subst sym sym' it')
+       Int (IT.subst sym neu it, IT.subst sym neu it')
     | Points (it, it') -> 
-       Points (IT.subst sym sym' it, IT.subst sym sym' it')
+       Points (IT.subst sym neu it, IT.subst sym neu it')
     | Array (it, it') -> 
-       Array (IT.subst sym sym' it, IT.subst sym sym' it')
-
-  let type_equal env t1 t2 = 
-    t1 = t2                       (* todo: maybe up to variable
-                                     instantiation, etc. *)
-
-  let types_equal env ts1 ts2 = 
-    List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
-      (List.combine ts1 ts2)
-end
-
-
-module LS = struct
-
-  type t = 
-    | Base of BT.t
-    | List of BT.t
-    | Fun of t * t
-
-
-  let rec pp = function
-    | List ls -> 
-       sprintf "(list %s)" 
-         (BT.pp ls)
-    | Fun (ls1,ls2) -> 
-       sprintf "(%s -> %s)" 
-         (pp ls1)
-         (pp ls2)
-    | Base bt -> 
-         BT.pp bt
-  
-  let rec parse_sexp (env : Sym.t StringMap.t) sx =
-    match sx with
-    | Sexp.List [Sexp.Atom "list"; a] ->
-       BT.parse_sexp env a >>= fun a ->
-       return (List a)
-    | Sexp.List [o1; Sexp.Atom "->"; o2] ->
-       parse_sexp env o1 >>= fun o1 ->
-       parse_sexp env o2 >>= fun o2 ->
-       return (Fun (o1, o2))
-    | sx ->
-       BT.parse_sexp env sx >>= fun bt ->
-       return (Base bt)
-
-  let subst _sym _sym' t = t
+       Array (IT.subst sym neu it, IT.subst sym neu it')
+    | Pred (p, its) ->
+       Pred (p, List.map (IT.subst sym neu) its)
 
   let type_equal env t1 t2 = 
     t1 = t2                       (* todo: maybe up to variable
@@ -510,6 +625,23 @@ module LS = struct
     List.for_all (fun (t1,t2) -> type_equal env t1 t2) 
       (List.combine ts1 ts2)
 
+  let unify r1 r2 res = 
+    match r1, r2 with
+    | Block (it1, it2), Block (it1', it2') ->
+       IT.unify it1 it1' res >>= fun res ->
+       IT.unify it2 it2' res
+    | Int (it1, it2), Int (it1', it2') -> 
+       IT.unify it1 it1' res >>= fun res ->
+       IT.unify it2 it2' res
+    | Points (it1, it2), Points (it1', it2') -> 
+       IT.unify it1 it1' res >>= fun res ->
+       IT.unify it2 it2' res
+    | Array (it1, it2), Array (it1', it2') -> 
+       IT.unify it1 it1' res >>= fun res ->
+       IT.unify it2 it2' res
+    | Pred (p, its), Pred (p', its') when p = p' ->
+       IT.unify_list its its' res
+    | _, _ -> fail ()
 
 end
 
@@ -520,8 +652,8 @@ module LC = struct
 
   let pp (LC c) = IT.pp c
 
-  let parse_sexp env s = 
-    IT.parse_sexp env s >>= fun it ->
+  let parse_sexp loc env s = 
+    IT.parse_sexp loc env s >>= fun it ->
     return (LC it)
 
   let subst sym sym' (LC c) = 
@@ -586,33 +718,33 @@ module B = struct
     | (id, C lc) -> 
        sprintf "(Constraint %s : %s)" (Sym.pp id) (LC.pp lc)
 
-  let parse_sexp (env : Sym.t StringMap.t) s = 
+  let parse_sexp loc (names : NameMap.t) s = 
     match s with
     | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
        let sym = Sym.fresh_pretty id in
-       let env = StringMap.add id sym env in
-       BT.parse_sexp env t >>= fun bt ->
-       return ((sym, A bt), env)
+       let names = NameMap.add id (sym,loc) names in
+       BT.parse_sexp loc names t >>= fun bt ->
+       return ((sym, A bt), names)
     | Sexp.List [Sexp.Atom "Logical"; Sexp.Atom id; Sexp.Atom ":"; ls] ->
        let sym = Sym.fresh_pretty id in
-       let env = StringMap.add id sym env in
-       LS.parse_sexp env ls >>= fun ls ->
-       return ((sym, L ls), env)
+       let names = NameMap.add id (sym,loc) names in
+       LS.parse_sexp loc names ls >>= fun ls ->
+       return ((sym, L ls), names)
     | Sexp.List [Sexp.Atom "Resource"; Sexp.Atom id; Sexp.Atom ":"; re] ->
        let sym = Sym.fresh_pretty id in
-       let env = StringMap.add id sym env in
-       RE.parse_sexp env re >>= fun re ->
-       return ((sym, R re), env)
+       let names = NameMap.add id (sym,loc) names in
+       RE.parse_sexp loc names re >>= fun re ->
+       return ((sym, R re), names)
     | Sexp.List [Sexp.Atom "Constraint"; Sexp.Atom id; Sexp.Atom ":"; lc] ->
        let sym = Sym.fresh_pretty id in
-       let env = StringMap.add id sym env in
-       LC.parse_sexp env lc >>= fun lc ->
-       return ((sym, C lc), env)
+       let names = NameMap.add id (sym,loc) names in
+       LC.parse_sexp loc names lc >>= fun lc ->
+       return ((sym, C lc), names)
     | t -> 
        parse_error "return type" t
          
-  let subst sym sym' (symbol, t) = 
-    (Sym.subst sym sym' symbol, T.subst sym sym' t)
+  let subst sym (neu : IT.t) (symbol, t) = 
+    (symbol, T.subst sym neu t)
 
 end
 
@@ -624,16 +756,16 @@ module Bs = struct
   let pp ts = 
     String.concat " , " (List.map B.pp ts)
 
-  let parse_sexp fstr (env : Sym.t StringMap.t) s = 
-    let rec aux (env : Sym.t StringMap.t) acc ts = 
+  let parse_sexp fstr loc (names : NameMap.t) s = 
+    let rec aux (names : NameMap.t) acc ts = 
       match ts with
-      | [] -> return (List.rev acc, env)
+      | [] -> return (List.rev acc, names)
       | b :: bs ->
-         B.parse_sexp env b >>= fun (b, env) ->
-         aux env (b :: acc) bs
+         B.parse_sexp loc names b >>= fun (b, names) ->
+         aux names (b :: acc) bs
     in
     match s with
-    | Sexp.List ts -> aux env [] ts
+    | Sexp.List ts -> aux names [] ts
     | t -> parse_error fstr t
 
   let subst sym sym' bs = 
@@ -642,16 +774,12 @@ module Bs = struct
 end
 
 
-type fbinding = Id.mid * T.t
-type fbindings = fbinding list
-
-
 module A = struct
   type t = A of Bs.t
   let pp (A ts) = Bs.pp ts
-  let parse_sexp env s = 
-    Bs.parse_sexp "argument type" env s >>= fun (bs, env) ->
-    return (A bs, env)
+  let parse_sexp loc names s = 
+    Bs.parse_sexp "argument type" loc names s >>= fun (bs, names) ->
+    return (A bs, names)
   let subst sym sym' (A ts) = 
     A (Bs.subst sym sym' ts)
 end
@@ -660,9 +788,9 @@ end
 module R = struct
   type t = R of Bs.t
   let pp (R ts) = Bs.pp ts
-  let parse_sexp env s = 
-    Bs.parse_sexp "return type" env s >>= fun (bs, env) ->
-    return (R bs, env)
+  let parse_sexp loc names s = 
+    Bs.parse_sexp "return type" loc names s >>= fun (bs, names) ->
+    return (R bs, names)
   let subst sym sym' (R ts) = 
     R (Bs.subst sym sym' ts)
 end
@@ -691,16 +819,21 @@ module Err = struct
     | Surplus_R of { surplus : Sym.t * RE.t }
     | Missing_A of { missing : Sym.t * BT.t }
     | Missing_L of { missing : Sym.t * LS.t }
-    | Missing_R of { missing:  Sym.t * RE.t }
+    | Missing_R of { missing : Sym.t * RE.t }
     | Mismatch of { has : B.t; expected: B.t; }
     | Unsat_constraint of { unsat : Sym.t * LC.t }
+    | Unconstrained_l of { v : Sym.t * LS.t } 
 
   type type_error = 
+    | Illtyped_it of {
+        loc: Loc.t;
+        it: IT.t;
+      }
     | Unsupported of { 
         loc: Loc.t;
         unsupported: string; 
       }
-    | Unbound_symbol of {
+    | Unbound_name of {
         loc: Loc.t; 
         unbound: Sym.t
       }
@@ -728,18 +861,22 @@ module Err = struct
         Loc.t
 
 
+  let illtyped_it loc it = 
+    Illtyped_it {loc; it}
+
+
   let unsupported loc s = 
-    fail (Unsupported { loc = loc; unsupported = s })
+    Unsupported { loc = loc; unsupported = s }
 
   let wrong_bt (sym, has, loc) (expected, kloc) = 
-    fail (Wrong_bt { e = sym; e_has = has; e_loc = loc; 
-                     expected = expected; context_loc = kloc })
+    Wrong_bt { e = sym; e_has = has; e_loc = loc; 
+               expected = expected; context_loc = kloc }
 
 
   let return_error loc se = 
-    fail (Return_error (se, loc))
+    Return_error (se, loc)
   let call_error loc se = 
-    fail (Call_error (se, loc))
+    Call_error (se, loc)
 
 
   let return_surplus_A loc n t = 
@@ -758,6 +895,8 @@ module Err = struct
     return_error loc (Mismatch { has = b; expected = b' })
   let return_unsat_constraint loc sym lc = 
     return_error loc (Unsat_constraint { unsat = (sym, lc) })
+  let return_unconstrained_l loc sym lc = 
+    return_error loc (Unconstrained_l { v = (sym,lc) } )
 
   let call_surplus_A loc n t = 
     call_error loc (Surplus_A { surplus = (n,t) })
@@ -775,15 +914,17 @@ module Err = struct
     call_error loc (Mismatch { has = b; expected = b' })
   let call_unsat_constraint loc sym lc = 
     call_error loc (Unsat_constraint { unsat = (sym, lc) })
+  let call_unconstrained_l loc sym lc = 
+    call_error loc (Unconstrained_l { v = (sym,lc) } )
 
   let inconsistent_fundef loc decl defn = 
-    fail (Inconsistent_fundef {loc = loc; decl = decl; defn = defn})
+    Inconsistent_fundef {loc = loc; decl = decl; defn = defn}
 
   let variadic_function loc fn = 
-    fail (Variadic_function {loc = loc; fn = fn})
+    Variadic_function {loc = loc; fn = fn}
 
-  let unbound_symbol loc sym = 
-    fail (Unbound_symbol {loc = loc; unbound = sym})
+  let unbound_name loc name = 
+    Unbound_name {loc = loc; unbound = name}
 
   let pp_return_error loc = function
     | Surplus_A {surplus} ->
@@ -829,6 +970,10 @@ module Err = struct
     | Unsat_constraint {unsat} ->
        sprintf "%s. Unsatisfied return constraint %s: %s" 
          (Loc.pp loc) (Sym.pp (fst unsat)) (LC.pp (snd unsat))
+    | Unconstrained_l { v } ->
+       sprintf "%s. Unconstrained logical variable %s: %s" 
+         (Loc.pp loc) (Sym.pp (fst v)) (LS.pp (snd v))
+    
 
   let pp_call_error loc = function
     | Surplus_A {surplus} ->
@@ -874,12 +1019,18 @@ module Err = struct
     | Unsat_constraint {unsat} ->
        sprintf "%s. Unsatisfied return constraint %s: %s" 
          (Loc.pp loc) (Sym.pp (fst unsat)) (LC.pp (snd unsat))
+    | Unconstrained_l { v } ->
+       sprintf "%s. Unconstrained logical variable %s: %s" 
+         (Loc.pp loc) (Sym.pp (fst v)) (LS.pp (snd v))
 
   let pp = function 
+    | Illtyped_it {loc; it} ->
+       sprintf "%s. Illtyped index term: %s" 
+         (Loc.pp loc) (IT.pp it)
     | Unsupported {loc; unsupported} ->
        sprintf "%s. Unsupported feature: %s" 
          (Loc.pp loc) unsupported
-    | Unbound_symbol {loc; unbound} ->
+    | Unbound_name {loc; unbound} ->
        sprintf "%s. Unbound symbol %s"
          (Loc.pp loc) (Sym.pp unbound)
     | Wrong_bt {e; e_has; e_loc; expected; context_loc} ->
@@ -906,9 +1057,13 @@ end
 open Err
 
 
+
+
 type global_env = 
-  { struct_decls : fbindings SymMap.t ; 
-    fun_decls : (Loc.t * F.t * Sym.t) SymMap.t } (* third item is return name *)
+  { struct_decls : Bs.t SymMap.t ; 
+    fun_decls : (Loc.t * F.t * Sym.t) SymMap.t; (* third item is return name *)
+    names : NameMap.t
+  } 
 
 type local_env = 
   { a: BT.t SymMap.t; 
@@ -922,7 +1077,8 @@ type env =
 
 let empty_global = 
   { struct_decls = SymMap.empty; 
-    fun_decls = SymMap.empty }
+    fun_decls = SymMap.empty;
+    names = NameMap.empty }
 
 let empty_local = 
   { a = SymMap.empty;
@@ -971,8 +1127,85 @@ let add_var env (sym, t) =
 let add_vars env bindings = 
   List.fold_left add_var env bindings
 
-let lookup (loc : Loc.t) (env: 'v SymMap.t) (sym: Sym.t) : ('v,type_error) m =
-  of_maybe (Unbound_symbol {loc; unbound = sym}) (SymMap.find_opt sym env)
+(* fix this up to make sure when looking up resources we also return
+   the reduced environment *)
+let lookup (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) : ('v,type_error) m =
+  of_maybe (unbound_name loc name) (SymMap.find_opt name env)
+
+let lookup_any (loc : Loc.t) (env: local_env) (name: Sym.t) : ('v,type_error) m =
+  tryMs (lookup loc env.a name >>= fun t -> return (T.A t))
+    [(fun () -> lookup loc env.l name >>= fun t -> return (T.L t));
+     (fun () -> lookup loc env.r name >>= fun t -> return (T.R t));
+     (fun () -> lookup loc env.c name >>= fun t -> return (T.C t));]
+
+
+
+
+let rec infer_bt loc env it = 
+  match it with
+  | Num _ -> return BT.Int
+  | Bool _ -> return BT.Bool
+
+  | Add (it,it')
+  | Sub (it,it')
+  | Mul (it,it')
+  | Div (it,it')
+  | Exp (it,it')
+  | App (it,it')
+  | Rem_t (it,it')
+  | Rem_f (it,it') ->
+     check_bt loc env it BT.Int >>
+     check_bt loc env it' BT.Int >>
+     return BT.Int
+
+  | EQ (it,it')
+  | NE (it,it')
+  | LT (it,it')
+  | GT (it,it')
+  | LE (it,it')
+  | GE (it,it') ->
+     check_bt loc env it BT.Int >>
+     check_bt loc env it' BT.Int >>
+     return BT.Bool
+
+  | Null it ->
+     check_bt loc env it BT.Loc >>
+     return BT.Bool
+
+  | And (it,it')
+  | Or (it,it') ->
+     check_bt loc env it BT.Int >>
+     check_bt loc env it' BT.Int >>
+     return BT.Bool
+
+  | Not it ->
+     check_bt loc env it BT.Bool >>
+     return BT.Bool
+
+  | List (it, its) ->
+     infer_bt loc env it >>= fun bt ->
+     check_bt loc env it bt >>
+     return (List bt)
+
+  | S sym ->
+     lookup_any loc env.local sym >>= function
+     | T.A t -> return t
+     | T.L (LS.Base t) -> return t
+     | T.R _ -> fail (illtyped_it loc it)
+     | T.C _ -> fail (illtyped_it loc it)
+
+
+and check_bt loc env it bt =
+  infer_bt loc env it >>= fun bt' ->
+  if bt = bt' then return ()
+  else fail (illtyped_it loc it)
+
+and check_bts loc env its bt = 
+  match its with
+  | [] -> return ()
+  | it :: its -> 
+     check_bt loc env it bt >>
+     check_bts loc env its bt
 
 
 
@@ -983,26 +1216,13 @@ let constraint_holds env (LC c) =
   true                          (* todo: call z3 *)
 
 
-let get_resource env r = 
-  match SymMap.find_first (fun _ r' -> RE.type_equal env r' r) env.local.r with
-  | None -> None
-  | Some (n,r) -> 
-     let env = remove_rvar env n in
-     Some (env, n)
-
-(* todo: which one should we pick if there's multiple options? *)
-let find_logical_var env ls = 
-  match SymMap.find_first (fun _ ls' -> LS.type_equal env ls' ls) env.local.l with
-  | None -> None
-  | Some (n,r) -> 
-     Some (env, n)
 
 
 
-let core_type_value ov = 
-  Core_typing.typeof_object_value 
-    Location_ocaml.unknown 
-    Core_typing_aux.empty_env ov
+(* let core_type_value ov = 
+ *   Core_typing.typeof_object_value 
+ *     Location_ocaml.unknown 
+ *     Core_typing_aux.empty_env ov *)
 
 (* let rec sizeof_ov ov = 
  *   Impl_mem.sizeof_ival (core_type_value ov) *)
@@ -1015,7 +1235,7 @@ let make_binop op (v1 : IT.t) (v2 : IT.t) =
   | OpAdd -> Add (v1, v2)
   | OpSub -> Sub (v1, v2)
   | OpMul -> Mul (v1, v2)
-  | OpDiv -> Div (v1, v2)
+  | OpDiv -> Div (v1, v2) 
   | OpRem_t -> Rem_t (v1, v2)
   | OpRem_f -> Rem_f (v1, v2)
   | OpExp -> Exp (v1, v2)
@@ -1051,7 +1271,7 @@ let bt_of_core_object_type loc = function
   | OTy_integer -> 
      return BT.Int
   | OTy_floating -> 
-     unsupported loc "float"
+     fail (unsupported loc "float")
   | OTy_pointer -> 
      return BT.Loc
   | OTy_array cbt -> 
@@ -1059,7 +1279,7 @@ let bt_of_core_object_type loc = function
   | OTy_struct sym -> 
      return (Struct sym)
   | OTy_union _sym -> 
-     unsupported loc "union types"
+     fail (unsupported loc "union types")
 
 let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m = 
   match cbt with
@@ -1068,7 +1288,7 @@ let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m =
   | Core.BTy_boolean -> 
      return BT.Bool
   | Core.BTy_ctype -> 
-     unsupported loc "ctype"
+     fail (unsupported loc "ctype")
   | Core.BTy_list bt -> 
      bt_of_core_base_type loc bt >>= fun bt ->
      return (BT.List bt)
@@ -1080,7 +1300,7 @@ let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m =
   | Core.BTy_loaded ot -> 
      bt_of_core_object_type loc ot
   | Core.BTy_storable -> 
-     unsupported loc "BTy_storable"
+     fail (unsupported loc "BTy_storable")
 
 let binding_of_core_base_type loc (sym,ctype) = 
   bt_of_core_base_type loc ctype >>= fun bt ->
@@ -1102,29 +1322,29 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 let integer_value_to_num loc iv = 
   of_maybe (Integer_value_error loc) (Impl_mem.eval_integer_value iv)
 
-let infer_object_value loc name ov = 
+let infer_object_value env loc name ov = 
   match ov with
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
-     let constr = LC (V name %= Num i) in
-     let t = R [(name, A BT.Int); (Sym.fresh (), C constr)] in
-     return t
+     let t = (name, T.A BT.Int) in
+     let constr = (Sym.fresh (), T.C (LC (S name %= Num i))) in
+     return [t; constr]
   | M_OVfloating iv ->
-     unsupported loc "floats"
+     fail (unsupported loc "floats")
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
-         let constr = LC (Null (V name)) in
-         let t = R [(name, A (BT.Loc)); (Sym.fresh (), C constr)] in
-         return t )
+         let t = (name, T.A BT.Loc) in
+         let constr = (Sym.fresh (), T.C (LC (Null (S name)))) in
+         return [t; constr] )
        ( fun sym -> 
-         unsupported loc "function pointers" )
+         fail (unsupported loc "function pointers") )
        ( fun _prov loc ->
-         let constr = LC (V name %= Num loc) in
-         let t = R [(name, A (BT.Loc)); (Sym.fresh (), C constr)] in
-         return t )
+         let t = (name, T.A BT.Loc) in
+         let constr = (Sym.fresh (), T.C (LC (S name %= Num loc))) in
+         return [t; constr] )
        ( fun _ ->
-         unsupported loc "unspecified pointer value" )
+         fail (unsupported loc "unspecified pointer value") )
   | M_OVarray _ ->
      failwith "todo: array"
   | M_OVstruct (sym, fields) ->
@@ -1132,10 +1352,10 @@ let infer_object_value loc name ov =
   | M_OVunion _ -> 
      failwith "todo: union types"
 
-let infer_loaded_value loc name lv = 
+let infer_loaded_value env loc name lv = 
   match lv with
  | M_LVspecified ov ->
-    infer_object_value loc name ov 
+    infer_object_value env loc name ov 
  | M_LVunspecified _ct ->
     failwith "todo: LV unspecified"
 
@@ -1144,25 +1364,26 @@ let infer_loaded_value loc name lv =
 let ensure_type env (sym, has, loc) (expected, kloc) : (unit, type_error) Ex.m = 
   if BT.type_equal env has expected 
   then return ()
-  else wrong_bt (sym, has, loc) (expected, kloc)
+  else fail (wrong_bt (sym, has, loc) (expected, kloc))
 
 
-let infer_value loc name env v : (R.t, type_error) m = 
+let infer_value loc name env v = 
   match v with
   | M_Vobject ov ->
-     infer_object_value loc name ov
+     infer_object_value env loc name ov
   | M_Vloaded lv ->
-     infer_loaded_value loc name lv
+     infer_loaded_value env loc name lv
   | M_Vunit ->
-     return (R [(name, A BT.Unit)])
+     let t = (name, T.A BT.Unit) in
+     return [t]
   | M_Vtrue ->
-     let constr = LC (V name) in
-     let t = R [(name, A BT.Bool); (Sym.fresh (), C constr)] in
-     return t
+     let t = (name, T.A BT.Bool) in
+     let constr = (Sym.fresh (), T.C (LC (S name))) in
+     return [t; constr]
   | M_Vfalse -> 
-     let constr = LC (Not (V name)) in
-     let t = R [(name, A BT.Bool); (Sym.fresh (), C constr)] in
-     return t
+     let t = (name, T.A BT.Bool) in
+     let constr = (Sym.fresh (), T.C (LC (Not (S name)))) in
+     return [t; constr]
   | M_Vctype ct ->
      failwith "todo ctype"
   | M_Vlist (cbt, tsyms) ->
@@ -1173,26 +1394,41 @@ let infer_value loc name env v : (R.t, type_error) m =
        ensure_type env (sym, typ, iloc) (i_t, loc) 
      ) >>
      (* maybe record list length? *)
-     let t = R [(name, A (BT.List i_t))] in
-     return t
+     let t = (name, T.A (BT.List i_t)) in
+     return [t]
   | M_Vtuple tsyms ->
      let syms = List.map Sym.of_tsymbol tsyms in
      mapM (lookup loc env.local.a) syms >>= fun ts ->
-     let t = R [(name, A (BT.Tuple ts))] in
-     return t
+     let t = (name, T.A (BT.Tuple ts)) in
+     return [t]
 
 
-let call_typ loc_call env name args =
+let call_typ loc_call env name args =    
 
-  let rec check_and_refine env tsyms (F (A.A args, ret)) = 
+  let rec check_and_refine env tsyms ftyp res = 
+    let (F (A.A args, ret)) = ftyp in
     match args with
     | [] -> 
        begin match tsyms with
-         | [] -> return (env, ret)
-         | tsym :: _ -> 
-            let (sym,loc) = Sym.lof_tsymbol tsym in
-            lookup loc env.local.a sym >>= fun t' ->
-            call_surplus_A loc sym t'
+       | [] -> 
+          SymMap.fold
+            (fun usym ((specsym,ls),r) ret ->
+              ret >>= fun ret ->
+              match r with
+              | None -> 
+                 fail (call_unconstrained_l loc_call specsym ls)
+              | Some it -> 
+                 let (Base bt) = ls in
+                 check_bt loc_call env it bt >>
+                 return (R.subst usym it ret)
+            ) res (return ret)
+       | tsym :: tsyms' -> 
+          let (sym,loc) = Sym.lof_tsymbol tsym in
+          lookup_any loc env.local sym >>= function
+          | T.A t' -> fail (call_surplus_A loc sym t')
+          | T.L t' -> fail (call_surplus_L loc sym t')
+          | T.R t' -> fail (call_surplus_R loc sym t')
+          | T.C t' -> check_and_refine env tsyms' ftyp res
        end
 
     | (n, T.A t) :: args' ->
@@ -1201,32 +1437,38 @@ let call_typ loc_call env name args =
           let (sym,loc) = Sym.lof_tsymbol tsym in
           lookup loc env.local.a sym >>= fun t' ->
           if BT.type_equal env t' t
-          then check_and_refine env tsyms' (F.subst n sym (F (A.A args', ret)))
-          else call_mismatch loc (sym, T.A t') (n, T.A t)
+          then check_and_refine env tsyms' (F.subst n (S sym) (F (A.A args', ret))) res
+          else fail (call_mismatch loc (sym, T.A t') (n, T.A t))
        | [] ->
-          call_missing_A loc_call n t
+          fail (call_missing_A loc_call n t)
        end
 
     | (n, T.L t) :: args' -> 
-       begin match find_logical_var env t with
-       | Some (env,sym) -> 
-          check_and_refine env tsyms (F.subst n sym (F (A.A args', ret)))
-       | None -> 
-          call_missing_L loc_call n t
-       end
+
+       let sym = Sym.fresh () in
+       check_and_refine env tsyms (F.subst n (S sym) (F (A.A args', ret))) 
+         (SymMap.add sym ((n,t), None) res)
 
     | (n, T.R t) :: args' -> 
-       begin match get_resource env t with
-       | Some (env,sym) -> 
-          check_and_refine env tsyms (F (A.A args', ret))
-       | None -> 
-          call_missing_R loc_call n t
+
+       begin match tsyms with
+       | tsym :: _ -> 
+          let (sym,loc) = Sym.lof_tsymbol tsym in 
+          lookup loc env.local.r sym >>= fun t' ->
+          tryM (RE.unify t t' res)
+            (fun () -> fail (call_mismatch loc (sym, T.R t') (n, T.R t)))
+          >>= fun res ->
+          check_and_refine env tsyms (F (A.A args', ret)) res
+       | [] -> 
+          fail (call_missing_R loc_call n t)
        end
+
+
 
     | (n, T.C t) :: args' -> 
        if constraint_holds env t 
-       then check_and_refine env tsyms (F (A.A args', ret))
-       else call_unsat_constraint loc_call n t
+       then check_and_refine env tsyms (F (A.A args', ret)) res
+       else fail (call_unsat_constraint loc_call n t)
 
   in
 
@@ -1236,7 +1478,7 @@ let call_typ loc_call env name args =
   | Core.Sym sym ->
      lookup loc_call env.global.fun_decls sym >>= fun decl ->
      let (loc,decl_typ,_ret_name) = decl in 
-     check_and_refine env args decl_typ
+     check_and_refine env args decl_typ SymMap.empty
 
 
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
@@ -1244,7 +1486,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   match pe with
   | M_PEsym sym ->
      lookup loc env.local.a sym >>= fun b ->
-     return (env, R [(name, T.A b)])
+     let t = (name, T.A b) in
+     return (env, [t])
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -1268,9 +1511,10 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let (sym,a_loc) = Sym.lof_tsymbol sym in
      lookup loc env.local.a sym >>= fun t ->
      ensure_type env (sym, t, a_loc) (BT.Bool, loc) >>
-     let constr = LC ((V name) %= Not (V sym)) in
-     let t = R [(name, A t); (name, C constr)] in
-     return (env, t)
+     let constr = LC ((S name) %= Not (S sym)) in
+     let env = add_cvar env (name, constr) in
+     let t = (name, T.A t) in
+     return (env, [t])
   | M_PEop (op,sym1,sym2) ->
      let (sym1, loc1) = Sym.lof_tsymbol sym1 in
      let (sym2, loc2) = Sym.lof_tsymbol sym2 in
@@ -1279,9 +1523,10 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let ((st1,st2),rt) = bt_of_binop op in
      ensure_type env (sym1, t1, loc1) (st1, loc) >>
      ensure_type env (sym2, t2, loc2) (st2, loc) >>
-     let constr = LC (V name %= (make_binop op (V sym1) (V sym2))) in
-     let t = R [(name, A rt); (Sym.fresh (), C constr)] in
-     return (env, t)
+     let constr = LC (S name %= (make_binop op (S sym1) (S sym2))) in
+     let env = add_cvar env (Sym.fresh (), constr) in
+     let t = (name, T.A rt) in
+     return (env, [t])
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -1291,13 +1536,16 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PEmemberof _ ->
      failwith "todo M_PEmemberof"
   | M_PEcall (mu_name, tsyms) ->
-     call_typ loc env mu_name tsyms
+     (* include the resource arguments into tsyms *)
+     (* let env = call_resources annots env in *)
+     call_typ loc env mu_name tsyms >>= fun (R.R t) ->
+     return (env, t)
   | M_PElet (p, e1, e2) ->
      (* todo: check against cbt? *)
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (env, R rt) ->
+        infer_pexpr name2 env e1 >>= fun (env, rt) ->
         infer_pexpr name (add_vars env rt) e1
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1312,11 +1560,12 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      ensure_type env (sym1, t1, loc1) (BT.Bool, loc) >>
      ensure_type env (sym3, t3, loc3) (t2, loc) >>
      let constr = 
-       LC ( (V sym1 %& (V name %= V sym2)) %| 
-              ((Not (V sym1)) %& (V name %= V sym3)) )
+       (Sym.fresh (), 
+        T.C (LC ( (S sym1 %& (S name %= S sym2)) %| 
+                    ((Not (S sym1)) %& (S name %= S sym3)) ) ))
      in
-     let t = R [(name, A t2); (Sym.fresh (), C constr)] in
-     return (env, t)
+     let t = (name, T.A t2) in
+     return (env, [t; constr])
   | M_PEis_scalar _ ->
      failwith "todo M_PEis_scalar"
   | M_PEis_integer _ ->
@@ -1331,56 +1580,12 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo M_PEare_compatible"
 
 
-let subtype loc env (R.R r1) (R.R r2) = 
 
-  let rec check env rt1 rt2 =
-    match rt1, rt2 with
-    | [], [] -> 
-       return env
-    | (n, T.A r1) :: _, [] -> 
-       return_surplus_A loc n r1
-    | (n, T.L r1) :: _, [] -> 
-       return_surplus_L loc n r1
-    | (n, T.R r1) :: _, [] -> 
-       return_surplus_R loc n r1
-    | [], (n, T.A r2) :: _ -> 
-       return_missing_A loc n r2
-    | [], (n, T.L r2) :: _ -> 
-       return_missing_L loc n r2
-    | [], (n, T.R r2) :: _ -> 
-       return_missing_R loc n r2
-    | ((_, T.C c1) as r1) :: rt1', _ ->
-       check (add_var env r1) rt1' rt2
-    | _, (n2, T.C c2) :: rt2' ->
-       if constraint_holds env c2 
-       then check env rt1 rt2'
-       else return_unsat_constraint loc n2 c2
-    | ((_, T.A t1) as r1) :: rt1', (_, T.A t2) :: rt2'
-           when BT.type_equal env t1 t2 ->
-       check (add_var env r1) rt1 rt2
-    | ((_, T.L t1) as r1) :: rt1', (_, T.L t2) :: rt2'
-         when LS.type_equal env t1 t2 ->
-       check (add_var env r1) rt1 rt2
-    | (_, T.R t1) :: rt1', (_,T.R t2) :: rt2'
-         when RE.type_equal env t1 t2 ->
-       check env rt1 rt2
-    | r1 :: _, r2 :: _ ->
-       return_mismatch loc r1 r2
-  in
-
-  check env r1 r2
-
-
-
-
-let check_expr fname env (M_Expr (annots, e)) ret = 
-  let loc = Annot.get_loc_ annots in
-  let name = Sym.fresh () in    (* fix *)
-  match e with
+let infer_expr name env (M_Expr (annots, e_)) = 
+  (* let loc = Annot.get_loc_ annots in *)
+  match e_ with
   | M_Epure pe -> 
-     infer_pexpr name env pe >>= fun (env, t) ->
-     subtype loc env t ret >>= fun env ->
-     return env
+     infer_pexpr name env pe
   | M_Ememop _ ->
      failwith "todo ememop"
   | M_Eaction _ ->
@@ -1409,7 +1614,58 @@ let check_expr fname env (M_Expr (annots, e)) ret =
      failwith "todo esave"
   | M_Erun _ ->
      failwith "todo erun"
-     
+
+
+
+
+let subtype loc env rt1 (R.R rt2) = 
+
+  let rec check env rt1 rt2 =
+    match rt1, rt2 with
+    | [], [] -> 
+       return env
+    | (n, T.A r1) :: _, [] -> 
+       fail (return_surplus_A loc n r1)
+    | (n, T.L r1) :: _, [] -> 
+       fail (return_surplus_L loc n r1)
+    | (n, T.R r1) :: _, [] -> 
+       fail (return_surplus_R loc n r1)
+
+    | [], (n, T.A r2) :: _ -> 
+       fail (return_missing_A loc n r2)
+    | [], (n, T.L r2) :: _ -> 
+       fail (return_missing_L loc n r2)
+    | [], (n, T.R r2) :: _ -> 
+       fail (return_missing_R loc n r2)
+    | ((_, T.C c1) as r1) :: rt1', _ ->
+       check (add_var env r1) rt1' rt2
+    | _, (n2, T.C c2) :: rt2' ->
+       if constraint_holds env c2 
+       then check env rt1 rt2'
+       else fail (return_unsat_constraint loc n2 c2)
+    | (r1 :: rt1'), (r2 :: rt2') ->
+       match r1, r2 with
+       | (n1, T.A t1), (n2, T.A t2) when BT.type_equal env t1 t2 ->
+          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
+       | (n1, T.L t1), (n2, T.L t2) when LS.type_equal env t1 t2 ->
+          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
+       | (n1, T.R t1), (n2, T.R t2) when RE.type_equal env t1 t2 ->
+          check env rt1 rt2
+       | _, _ ->
+          fail (return_mismatch loc r1 r2)
+  in
+
+  check env rt1 rt2
+
+
+
+let check_expr fname env e ret = 
+  let (M_Expr (annots, _)) = e in
+  let loc = Annot.get_loc_ annots in
+  let name = Sym.fresh () in    (* fix *)
+  infer_expr name env e >>= fun (env,t) ->
+  subtype loc env t ret >>= fun env ->
+  return env
 
 
 let test_infer_expr () = 
@@ -1437,7 +1693,8 @@ let embed_fun_proc body =
 
 let check_function genv fsym fn = 
 
-  let forget = filter_map (function (_,T.A t) -> Some t | _ -> None) in
+  let forget = 
+    List.filter_map (function (_,T.A t) -> Some t | _ -> None) in
 
   let check_consistent loc decl_typ args ret = 
     mapM (binding_of_core_base_type loc) args >>= fun args ->
@@ -1447,7 +1704,7 @@ let check_function genv fsym fn =
     if BT.types_equal env (forget decl_args) (forget args) &&
          BT.types_equal env (forget decl_ret) (forget [ret])
     then return ()
-    else inconsistent_fundef loc decl_typ (F (A args,R [ret]))
+    else fail (inconsistent_fundef loc decl_typ (F (A args,R [ret])))
   in
 
   match fn with
@@ -1475,7 +1732,8 @@ let check_functions env fns =
 
 
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
-(* todo: check *)
+(* and *)
+(* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
 let bt_and_constr_of_integerBaseType signed ibt = 
   let make = make_int_type in
   match signed, ibt with
@@ -1489,8 +1747,22 @@ let bt_and_constr_of_integerBaseType signed ibt =
   | false, Ctype.Int_     -> make "0" "65535"
   | false, Ctype.Long     -> make "0" "4294967295"
   | false, Ctype.LongLong -> make "0" "18446744073709551615"
-  | _, Ctype.IntN_t n -> 
-     failwith "todo standard library types"
+  | true, Ctype.IntN_t n -> 
+     begin match n with
+     | 8 ->  make "-127" "127"
+     | 16 -> make "-32768" "32767"
+     | 32 -> make "-2147483648" "2147483647"
+     | 64 -> make "-9223372036854775808" "9223372036854775807"
+     | _ -> failwith (sprintf "IntN_t %d" n)
+     end
+  | false, Ctype.IntN_t n -> 
+     begin match n with
+     | 8 ->  make "0" "255"
+     | 16 -> make "0" "65535"
+     | 32 -> make "0" "4294967295"
+     | 64 -> make "0" "18446744073709551615"
+     | _ -> failwith (sprintf "UIntN_t %d" n)
+     end
   | _, Ctype.Int_leastN_t n -> 
      failwith "todo standard library types"
   | _, Ctype.Int_fastN_t n -> 
@@ -1531,11 +1803,11 @@ let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) =
   | Basic (Integer it) -> 
      return (bt_and_constr_of_integerType it)
   | Basic (Floating _) -> 
-     unsupported loc "floats"
+     fail (unsupported loc "floats")
   | Array (ct, _maybe_integer) -> 
      return (Array, None)
   | Function _ -> 
-     unsupported loc "function pointers"
+     fail (unsupported loc "function pointers")
   | Pointer (_qualifiers, ctype) ->
      return (Loc, None)
   | Atomic ct ->              (* check *)
@@ -1551,16 +1823,16 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
   let binding_of_ctype ctype name = 
     bt_and_constr_of_ctype ctype >>= function
     | (bt, Some c) -> 
-       return [(name, T.A bt); (Sym.fresh (), T.C (LC (c (V name))))]
+       return [(name, T.A bt); (Sym.fresh (), T.C (LC (c (S name))))]
     | (bt, None) -> 
        return [(name, T.A bt)]
   in
 
   let make_arg_t (msym,ctype) = binding_of_ctype ctype (sym_or_fresh msym) in
   if is_variadic 
-  then variadic_function loc sym
+  then fail (variadic_function loc sym)
   else 
-    let ret_name = Sym.fresh_pretty "__return_val__" in
+    let ret_name = Sym.fresh () in
     mapM make_arg_t args >>= fun args_types ->
     let args_type = List.concat args_types in
     binding_of_ctype ret_ctype ret_name >>= fun ret_type ->
@@ -1574,28 +1846,33 @@ let record_funinfo genv funinfo =
 
 
 
-let record_tagDef sym def (struct_decls : fbindings SymMap.t)=
+let record_tagDef sym def genv =
 
-  let fbinding_of_ctype ctype (id : Id.id) = 
-    bt_and_constr_of_ctype ctype >>= function
-    | (bt, Some c) -> 
-       return [(Some id, T.A bt); (None, T.C (LC (c (F id))))]
-    | (bt, None) -> 
-       return [(Some id, T.A bt)]
-  in
-
-  let make_field_and_constraint (id, (_attributes, _qualifier, ctype)) =
-    fbinding_of_ctype ctype id in
   match def with
   | Ctype.UnionDef _ -> 
      failwith "todo: union types"
   | Ctype.StructDef fields ->
-     concatmapM make_field_and_constraint fields >>= fun fields ->
-     return (SymMap.add sym fields struct_decls)
+
+     fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ctype)) ->
+       let name = Id.s id in
+       let sym = Sym.fresh_pretty name in
+       let names = (name, (sym, Loc.unknown)) :: names in
+       bt_and_constr_of_ctype ctype >>= fun bt_constr ->
+       let fields = match bt_constr with
+         | (bt, Some c) -> 
+            fields @ [(sym, T.A bt); (Sym.fresh (), T.C (LC (c (S sym))))]
+         | (bt, None) -> 
+            fields @ [(sym, T.A bt)]
+       in
+       return (names, fields)
+     ) ([],[]) fields >>= fun (names,fields) ->
+
+     let struct_decls = SymMap.add sym fields genv.struct_decls in
+     let names = List.fold_left (fun m (k,v) -> NameMap.add k v m) genv.names names in
+     return { genv with names = names; struct_decls = struct_decls }
 
 let record_tagDefs genv tagDefs = 
-  pmap_foldM record_tagDef tagDefs genv.struct_decls >>= fun struct_decls ->
-  return { genv with struct_decls = struct_decls }
+  pmap_foldM record_tagDef tagDefs genv
 
 
 
