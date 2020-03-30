@@ -123,8 +123,6 @@ let layout_of_tc : GenTypes.typeCategory -> Coq_ast.layout = fun tc ->
   | GenTypes.LValueType(_,c_ty,_) -> layout_of false c_ty
   | GenTypes.RValueType(c_ty)     -> layout_of false c_ty
 
-let translate_gen_type ty = layout_of_tc (to_type_cat ty)
-
 let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
 
 let is_const_0 (AilSyntax.AnnotatedExpression(_, _, _, e)) =
@@ -503,7 +501,9 @@ let translate_block stmts blocks ret_ty =
             (* Statements after the if in their own block. *)
             let (stmt, blocks) = trans break continue final stmts blocks in
             let block_id = fresh_block_id () in
-            let blocks = SMap.add block_id (Some(None), stmt) blocks in
+            let blocks =
+              SMap.add block_id (Some(no_block_annot), stmt) blocks
+            in
             (Some(Goto(block_id)), blocks)
           in
           let (s1, blocks) = trans break continue final [s1] blocks in
@@ -521,7 +521,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(None), stmt) blocks
+            SMap.add id_cont (Some(no_block_annot), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
@@ -550,7 +550,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(None), stmt) blocks
+            SMap.add id_cont (Some(no_block_annot), stmt) blocks
           in
           (* Translate the body. *)
           let blocks =
@@ -582,7 +582,9 @@ let translate_block stmts blocks ret_ty =
           let (stmt, blocks) =
             trans break continue final (s :: stmts) blocks
           in
-          let blocks = SMap.add (sym_to_str l) (Some(None), stmt) blocks in
+          let blocks =
+            SMap.add (sym_to_str l) (Some(no_block_annot), stmt) blocks
+          in
           (Goto(sym_to_str l), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) = trans break continue final stmts blocks in
@@ -753,8 +755,3 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   { source_file ; entry_point ; global_vars ; structs ; functions }
 
-(** [run fname ail] translates typed ail AST to Coq AST and then pretty prints
-    the result on the standard output. *)
-let run : string -> typed_ail -> unit = fun fname ail ->
-  let coq = translate fname ail in
-  Format.printf "%a@." Coq_pp.pp_ast coq

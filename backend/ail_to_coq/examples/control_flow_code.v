@@ -1,9 +1,10 @@
 From refinedc.lang Require Export notation.
 From refinedc.lang Require Import tactics.
+From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
-(* Generated from [examples/control_flow.c], entry point [main].*)
-Section examples_control_flow_c.
+(* Generated from [examples/control_flow.c]. *)
+Section code.
   (* Global variables. *)
   
   (* Functions. *)
@@ -65,4 +66,4 @@ Section examples_control_flow_c.
       ]> $∅
     )%E
   |}.
-End examples_control_flow_c.
+End code.

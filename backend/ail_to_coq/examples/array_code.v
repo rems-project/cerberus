@@ -1,9 +1,10 @@
 From refinedc.lang Require Export notation.
 From refinedc.lang Require Import tactics.
+From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
-(* Generated from [examples/array.c], entry point [main].*)
-Section examples_array_c.
+(* Generated from [examples/array.c]. *)
+Section code.
   (* Global variables. *)
   
   (* Functions. *)
@@ -27,12 +28,12 @@ Section examples_array_c.
     f_args := [
     ];
     f_local_vars := [
-      ("nested", mk_array_layout (mk_array_layout (layout_of struct_S) 2) 1);
-      ("a", mk_array_layout (layout_of struct_S) 5);
-      ("b", layout_of struct_S);
       ("c", LPtr);
+      ("f", LPtr);
       ("d", LPtr);
-      ("f", LPtr)
+      ("b", layout_of struct_S);
+      ("nested", mk_array_layout (mk_array_layout (layout_of struct_S) 2) 1);
+      ("a", mk_array_layout (layout_of struct_S) 5)
     ];
     f_init := "#0";
     f_code := (
@@ -68,4 +69,4 @@ Section examples_array_c.
       ]> $∅
     )%E
   |}.
-End examples_array_c.
+End code.

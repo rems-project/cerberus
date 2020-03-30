@@ -1,9 +1,10 @@
 From refinedc.lang Require Export notation.
 From refinedc.lang Require Import tactics.
+From refinedc.typing Require Import annotations.
 Set Default Proof Using "Type".
 
-(* Generated from [examples/int.c], entry point [main].*)
-Section examples_int_c.
+(* Generated from [examples/int.c]. *)
+Section code.
   (* Global variables. *)
   
   (* Functions. *)
@@ -32,25 +33,26 @@ Section examples_int_c.
     f_args := [
     ];
     f_local_vars := [
-      ("uc", it_layout u8);
-      ("sc", it_layout i8);
-      ("c", it_layout u8);
-      ("us", it_layout u16);
-      ("ss", it_layout i16);
-      ("s", it_layout i16);
-      ("ui", it_layout u32);
-      ("si", it_layout i32);
       ("i", it_layout i32);
-      ("ul", it_layout u64);
-      ("sl", it_layout i64);
-      ("l", it_layout i64);
+      ("c", it_layout u8);
       ("ull", it_layout u64);
+      ("sc", it_layout i8);
       ("sll", it_layout i64);
-      ("ll", it_layout i64);
-      ("b", it_layout bool_it);
-      ("st", it_layout size_t);
+      ("uc", it_layout u8);
+      ("us", it_layout u16);
+      ("ui", it_layout u32);
       ("uptr", it_layout size_t);
-      ("ptr", it_layout ssize_t)
+      ("s", it_layout i16);
+      ("sl", it_layout i64);
+      ("ll", it_layout i64);
+      ("ss", it_layout i16);
+      ("si", it_layout i32);
+      ("l", it_layout i64);
+      ("ul", it_layout u64);
+      ("iptr", LPtr);
+      ("st", it_layout size_t);
+      ("ptr", it_layout ssize_t);
+      ("b", it_layout bool_it)
     ];
     f_init := "#0";
     f_code := (
@@ -94,8 +96,9 @@ Section examples_int_c.
               UnOp (CastOp $ IntOp u8) (IntOp i64) (use{it_layout i64} ("l"))  ] ;
         "i" <-{ it_layout i32 }
           UnOp (CastOp $ IntOp i32) (IntOp i64) ("$0") ;
+        expr: (UnOp (CastOp $ PtrOp) (PtrOp) (use{LPtr} ("iptr"))) ;
         Return (i2v 0 i32)
       ]> $∅
     )%E
   |}.
-End examples_int_c.
+End code.
