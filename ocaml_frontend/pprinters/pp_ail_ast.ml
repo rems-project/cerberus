@@ -431,27 +431,29 @@ let pp_storageDuration = function
   | Automatic -> pp_type_keyword "automatic"
   | Allocated -> pp_type_keyword "allocated"
 
-let dtree_of_declaration (i, (_, decl)) =
+let dtree_of_declaration (i, (_, decl_attrs, decl)) =
   let pp_storage (sd, isRegister) =
     pp_storageDuration sd ^^
     (if isRegister then P.space ^^ pp_type_keyword "register" else P.empty)
   in
-  match decl with
-  | Decl_object (msd, qs, cty) ->
-    Dleaf (pp_decl_ctor "Decl_object" ^^^
-           Pp_ail.pp_id_obj i  ^^^
-           P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
-  | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
-    Dleaf (pp_decl_ctor "Decl_function" ^^^
-           Pp_ail.pp_id_func i ^^^
-           Colour.pp_ansi_format [Green] begin
-             P.squotes (
-               (pp_cond is_inline !^"inline"
-               (pp_cond is_noreturn !^"_Noreturn"
-               (pp_ctype_human empty_qs
-                  (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
-             )
-           end)
+  with_attributes decl_attrs begin
+    match decl with
+    | Decl_object (msd, qs, cty) ->
+        Dleaf (pp_decl_ctor "Decl_object" ^^^
+               Pp_ail.pp_id_obj i  ^^^
+               P.squotes (pp_storage msd ^^^ pp_ctype qs cty))
+    | Decl_function (has_proto, (qs, cty), params, is_var, is_inline, is_noreturn) ->
+        Dleaf (pp_decl_ctor "Decl_function" ^^^
+               Pp_ail.pp_id_func i ^^^
+               Colour.pp_ansi_format [Green] begin
+                 P.squotes (
+                   (pp_cond is_inline !^"inline"
+                   (pp_cond is_noreturn !^"_Noreturn"
+                   (pp_ctype_human empty_qs
+                      (Ctype ([], Function (has_proto, (qs, cty), params, is_var))))))
+                 )
+               end)
+  end
 
 
 let dtree_of_tag_definition (i, (def_attrs, tag)) =
@@ -517,7 +519,7 @@ let pp_annot gtc =
        )
 
 let filter_external_decl (id, sigma) =
-  let pred (_, (loc, _)) = Location_ocaml.from_main_file loc in
+  let pred (_, (loc, _, _)) = Location_ocaml.from_main_file loc in
   (id, { sigma with declarations = List.filter pred sigma.declarations} )
 
 let pp_program do_colour show_include ail_prog =

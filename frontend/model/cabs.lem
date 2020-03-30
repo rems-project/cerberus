@@ -143,7 +143,7 @@ and cabs_assignment_operator =
 
 (* §6.7 Declarations, Syntax *)
 and declaration =
-  | Declaration_base of specifiers * list init_declarator
+  | Declaration_base of Annot.attributes * specifiers * list init_declarator
   | Declaration_static_assert of static_assert_declaration
 
 and specifiers = <|
@@ -391,7 +391,7 @@ instance (Located external_declaration)
     match edecl with
       | EDecl_func (FunDef _ _ _ decl _) ->
           locOf decl
-      | EDecl_decl (Declaration_base _ idecls) ->
+      | EDecl_decl (Declaration_base _ _ idecls) ->
           (* NOTE: Return just the first InitDecl location *)
           match idecls with
             | [] -> Loc.unknown

@@ -42,7 +42,7 @@ val specifiers_of_external_declaration: external_declaration -> maybe specifiers
 let specifiers_of_external_declaration = function
   | EDecl_func (FunDef _ _ specifs _ _) ->
       Just specifs
-  | EDecl_decl (Declaration_base specifs _) ->
+  | EDecl_decl (Declaration_base _ specifs _) ->
       Just specifs
   | EDecl_decl (Declaration_static_assert _) ->
       Nothing

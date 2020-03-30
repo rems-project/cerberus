@@ -324,11 +324,15 @@ and pp_cabs_assignment_operator = function
       !^ "|="
 
 and dtree_of_declaration = function
-  | Declaration_base (specifs, []) ->
-      Dnode (pp_decl_ctor "Declaration_base", [dtree_of_specifiers specifs])
-  | Declaration_base (specifs, idecls) ->
-      Dnode ( pp_decl_ctor "Declaration_base"
-            , (dtree_of_specifiers specifs) :: List.map dtree_of_init_declarator idecls )
+  | Declaration_base (attrs, specifs, []) ->
+      with_attributes attrs begin
+        Dnode (pp_decl_ctor "Declaration_base", [dtree_of_specifiers specifs])
+      end
+  | Declaration_base (attrs, specifs, idecls) ->
+      with_attributes attrs begin
+        Dnode ( pp_decl_ctor "Declaration_base"
+              , (dtree_of_specifiers specifs) :: List.map dtree_of_init_declarator idecls )
+      end
   | Declaration_static_assert sa_decl ->
       Dnode ( pp_decl_ctor "Declaration_static_assert"
             , [dtree_of_static_assert_declaration sa_decl] )
@@ -647,9 +651,9 @@ let filter_external_decl =
   let pred = function
     | EDecl_func (FunDef (loc, _, _, _, _))
     | EDecl_decl (Declaration_static_assert (Static_assert (CabsExpression (loc, _), _)))
-    | EDecl_decl (Declaration_base (_, InitDecl(loc, _, _)::_)) ->
+    | EDecl_decl (Declaration_base (_, _, InitDecl(loc, _, _)::_)) ->
       Location_ocaml.from_main_file loc
-    | EDecl_decl (Declaration_base (_, [])) -> true
+    | EDecl_decl (Declaration_base (_, _, [])) -> true
   in List.filter pred
 
 let pp_translation_unit show_include do_colour (TUnit edecls) =
