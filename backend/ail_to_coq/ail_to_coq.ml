@@ -99,6 +99,12 @@ let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
 
+(* Hashtable of global variables used. *)
+let used_globals = Hashtbl.create 5
+
+(* Hashtable of used function. *)
+let used_functions = Hashtbl.create 5
+
 let (fresh_ret_id, reset_ret_id) =
   let counter = ref (-1) in
   let fresh () = incr counter; Printf.sprintf "$%i" !counter in
@@ -194,8 +200,8 @@ let rec will_decay : ail_expr -> bool = fun e ->
 let rec find_function_decl fname decls =
   let open AilSyntax in
   match decls with
-  | []                         -> assert false
-  | (id_decl, (_, d)) :: decls ->
+  | []                            -> assert false
+  | (id_decl, (_, _, d)) :: decls ->
   if sym_to_str id_decl <> fname then find_function_decl fname decls else
   match d with
   | Decl_function(_,(_, ty),args,_,_,_) -> (ty, args)
@@ -298,6 +304,7 @@ let rec translate_expr lval goal_ty e =
           (List.map fst es_ls, List.concat (List.map snd es_ls))
         in
         let ret_id = Some(fresh_ret_id ()) in
+        Hashtbl.add used_functions fun_id ();
         let call = (ret_id, Var(Some(fun_id), true), es) in
         (Var(ret_id, false), l @ [call])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
@@ -344,7 +351,9 @@ let rec translate_expr lval goal_ty e =
         (Val(c), [])
     | AilEident(sym)               ->
         let id = sym_to_str sym in
-        (Var(Some(id), not (Hashtbl.mem local_vars id)), [])
+        let global = not (Hashtbl.mem local_vars id) in
+        if global then Hashtbl.add used_globals id ();
+        (Var(Some(id), global), [])
     | AilEsizeof(q,c_ty)           -> not_impl loc "expr sizeof"
     | AilEsizeof_expr(e)           -> not_impl loc "expr sizeof_expr"
     | AilEalignof(q,c_ty)          -> not_impl loc "expr alignof"
@@ -482,6 +491,7 @@ let translate_block stmts blocks ret_ty =
                   let es_ls = List.map translate es in
                   (List.map fst es_ls, List.concat (List.map snd es_ls))
                 in
+                Hashtbl.add used_functions fun_id ();
                 let stmt = Call(None, Var(Some(fun_id), true), es, stmt) in
                 let fn (id, e, es) stmt = Call(id, e, es, stmt) in
                 List.fold_right fn l stmt
@@ -647,7 +657,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the global variables. *)
   let global_vars =
-    let fn (id, (_, decl)) acc =
+    let fn (id, (_, _, decl)) acc =
       match decl with
       | AilSyntax.Decl_object _ -> sym_to_str id :: acc
       | _                       -> acc
@@ -708,6 +718,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     let open AilSyntax in
     let build (id, (_, attrs, args, AnnotatedStatement(loc, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
+      Hashtbl.reset used_globals; Hashtbl.reset used_functions;
       let func_name = sym_to_str id in
       let func_annot =
         try Some(function_annot (collect_rc_attrs attrs))
@@ -745,8 +756,21 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         SMap.add func_init (annots, stmt) blocks
       in
       let func_vars = collect_bindings () in
+      let func_deps =
+        let globals_used =
+          (* We preserve order of declaration. *)
+          List.filter (Hashtbl.mem used_globals) global_vars
+        in
+        let func_used =
+          (* We preserve order of declaration. *)
+          let potential = List.map (fun (id, _) -> sym_to_str id) fun_defs in
+          List.filter (Hashtbl.mem used_functions) potential
+        in
+        (globals_used, func_used)
+      in
       let func =
-        {func_name; func_annot; func_args; func_vars; func_init; func_blocks}
+        { func_name ; func_annot ; func_args ; func_vars ; func_init
+        ; func_deps ; func_blocks }
       in
       (func_name, func)
     in

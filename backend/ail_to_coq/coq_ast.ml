@@ -72,6 +72,7 @@ type func_def =
   ; func_args   : (string * layout) list
   ; func_vars   : (string * layout) list
   ; func_init   : string
+  ; func_deps   : string list * string list (* global vars/functions used. *)
   ; func_blocks : (block_annot option * stmt) SMap.t }
 
 type t =
