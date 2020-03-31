@@ -220,7 +220,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     pp "Solve Obligations with solve_struct_obligations."
   in
   let pp_union (id, decl) =
-    pp "@;(* Definition of union [%s]. *)@;" id;
+    pp "\n@;(* Definition of union [%s]. *)@;" id;
     pp "@[<v 2>Program Definition union_%s := {|@;" id;
 
     pp "@[<v 2>ul_members := [";
