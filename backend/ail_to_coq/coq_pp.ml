@@ -190,13 +190,13 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "@[<v 2>Section code.@;";
 
   (* Declaration of objects (global variable) in the context. *)
-  pp "(* Global variables. *)@;";
-  let pp_global_var = pp "Context (%s : loc).@;" in
+  pp "(* Global variables. *)";
+  let pp_global_var = pp "@;Context (%s : loc)." in
   List.iter pp_global_var ast.global_vars;
 
   (* Declaration of functions in the context. *)
-  pp "@;(* Functions. *)@;";
-  let pp_func_decl (id, _) = pp "Context (%s : loc).@;" id in
+  pp "\n@;(* Functions. *)";
+  let pp_func_decl (id, _) = pp "@;Context (%s : loc)." id in
   List.iter pp_func_decl ast.functions;
 
   (* Printing for struct/union members. *)
@@ -211,13 +211,13 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Definition of structs/unions. *)
   let pp_struct (id, decl) =
-    pp "@;(* Definition of struct [%s]. *)@;" id;
+    pp "\n@;(* Definition of struct [%s]. *)@;" id;
     pp "@[<v 2>Program Definition struct_%s := {|@;" id;
 
     pp "@[<v 2>sl_members := [";
     pp_members decl.struct_members;
     pp "@]@;];@]@;|}.@;";
-    pp "Solve Obligations with solve_struct_obligations.@;"
+    pp "Solve Obligations with solve_struct_obligations."
   in
   let pp_union (id, decl) =
     pp "@;(* Definition of union [%s]. *)@;" id;
@@ -226,7 +226,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     pp "@[<v 2>ul_members := [";
     pp_members decl.struct_members;
     pp "@]@;];@]@;|}.@;";
-    pp "Solve Obligations with solve_struct_obligations.@;"
+    pp "Solve Obligations with solve_struct_obligations."
   in
   let rec sort_structs found strs =
     match strs with
