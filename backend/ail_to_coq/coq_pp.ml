@@ -14,6 +14,10 @@ let pp_as_tuple : 'a pp -> 'a list pp = fun pp ff xs ->
                List.iter (fprintf ff ", %a" pp) xs;
                pp_str ff ")"
 
+let pp_as_tuple_pat : 'a pp -> 'a list pp = fun pp ff xs ->
+  if List.length xs > 1 then pp_str ff "'";
+  pp_as_tuple pp ff xs
+
 let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
   match xs with
   | []      -> ()
@@ -286,6 +290,13 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Closing the section. *)
   pp "@]@;End code.@]"
 
+type guard_mode =
+  | Guard_none
+  | Guard_in_def of string
+  | Guard_in_lem of string
+
+let guard_mode = ref Guard_none
+
 let pp_coq_expr : coq_expr pp = fun ff e ->
   match e with
   | Coq_ident(x) -> pp_str ff x
@@ -314,7 +325,7 @@ and pp_type_expr : type_expr pp = fun ff ty ->
   let rec pp_patt ff p =
     match p with
     | Pat_var(x)    -> pp_str ff x
-    | Pat_tuple(ps) -> fprintf ff "`%a" (pp_as_tuple pp_patt) ps
+    | Pat_tuple(ps) -> fprintf ff "%a" (pp_as_tuple_pat pp_patt) ps
   in
   let rec pp wrap ff ty =
     match ty with
@@ -327,7 +338,19 @@ and pp_type_expr : type_expr pp = fun ff ty ->
     (* Insert wrapping if needed. *)
     | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
-    | Ty_refine(e,ty)   -> fprintf ff "%a @@ %a" pp_coq_expr e (pp true) ty
+    | Ty_refine(e,ty)   ->
+        begin
+          let normal () = fprintf ff "%a @@ %a" pp_coq_expr e (pp true) ty in
+          match (!guard_mode, ty) with
+          | (Guard_in_def(s), Ty_params(c,tys)) when c = s ->
+              assert (tys = []); (* FIXME *)
+              fprintf ff "guarded (nroot.@%S) " s;
+              fprintf ff "(apply_dfun self %a)" pp_coq_expr e
+          | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
+              assert (tys = []); (* FIXME *)
+              fprintf ff "guarded (nroot.@%S) (" s; normal (); pp_str ff ")"
+          | (_              , _               )            -> normal ()
+        end
     | Ty_ptr(k,ty)      -> fprintf ff "%a %a" pp_kind k (pp true) ty
     | Ty_exists(x,ty)   -> fprintf ff "∃ %s, %a" x (pp false) ty
     | Ty_constr(ty,c)   -> assert false
@@ -399,32 +422,95 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     in
     let (ref_names, ref_types) = List.split annot.st_refined_by in
     let is_rec = List.exists (fun (_,ty) -> in_type_expr id ty) fields in
-    if is_rec then
+    if is_rec then begin
+      pp "@[<v 2>Definition %s_rec : (%a -d> typeO) → (%a -d> typeO) := " id
+        (pp_as_prod pp_coq_expr) ref_types (pp_as_prod pp_coq_expr) ref_types;
+      pp "(λ self %a,@;@[<hov 2>" (pp_as_tuple pp_print_string) ref_names;
+      Option.iter (fun _ -> pp "padded (") annot.st_size;
+      pp "struct struct_%s [" id;
       begin
-        pp "(* Recursive structs not implemented. *)" (* TODO *)
-      end
-    else
+        match fields with
+        | []               -> ()
+        | (_,ty) :: fields ->
+        guard_mode := Guard_in_def(id);
+        pp "@;%a" pp_type_expr ty;
+        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields;
+        guard_mode := Guard_none
+      end;
+      pp "@]@;]";
+      Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
+      pp "@]@;)%%I.@;Arguments %s_rec /.\n" id;
+
+      pp "@;Global Instance %s_rec_ne : Contractive %s_rec." id id;
+      pp "@;Proof. solve_type_proper. Qed.\n@;";
+
+      pp "@[<v 2>Definition %s : rtype := {|@;" id;
+      pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
+      pp "rty := fixp %s_rec" id;
+      pp "@]@;|}\n";
+
+      (* Generation of the unfolding lemma. *)
+      pp "@;@[<v 2>Lemma %s_unfold" id;
+      List.iter (pp " %s") ref_names; pp " : (@;";
+      pp "%a @@ %s ≡@@{type}@;" (pp_as_tuple pp_print_string) ref_names id;
+      pp "@[<v 2>";
+      Option.iter (fun _ -> pp "padded (") annot.st_size;
+      pp "struct struct_%s [" id;
       begin
-        (* Definition of the [rtype]. *)
-        pp "@[<v 2>Definition %s : rtype := {|@;" id;
-        pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
-        pp "@[<hov 2>rty %a := struct struct_%s ["
-          (pp_as_tuple pp_str) ref_names id;
-        begin
-          match fields with
-          | []               -> ()
-          | (_,ty) :: fields ->
-          pp "@;%a" pp_type_expr ty;
-          List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
-        end;
-        pp "@]@;]%%I@]@;|}\n";
-        (* Typeclass stuff. *)
-        pp "@;Global Program Instance %s_movable : RMovable %s :=" id id;
-        pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
-        pp "@;Next Obligation. unfold with_refinement => /= ?. ";
-        pp "apply _. Defined.";
-        pp "@;Next Obligation. solve_typing. Qed."
-      end
+        match fields with
+        | []               -> ()
+        | (_,ty) :: fields ->
+        guard_mode := Guard_in_lem(id);
+        pp "@;%a" pp_type_expr ty;
+        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields;
+        guard_mode := Guard_none
+      end;
+      pp "@]@;]";
+      Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
+      pp "@]@;)%%I.@;";
+      pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
+
+      (* Generation of the global instances. *)
+      let pp_instance inst_name type_name =
+        pp "@;Global Instance %s_%s_inst l β" id inst_name;
+        List.iter (pp " %s") ref_names; pp " :@;";
+        pp "  %s l β (%a @@ %s)%%I (Some 100%%N) :=@;" type_name
+          (pp_as_tuple pp_print_string) ref_names id;
+        pp "  λ T, i2p (simplify_goal_place_eq l β _ _ T (%s_unfold" id;
+        List.iter (fun _ -> pp " _") ref_names; pp "))."
+      in
+      pp_instance "simplify_hyp_place" "SimplifyHypPlace";
+      pp_instance "simplify_goal_place" "SimplifyGoalPlace";
+
+
+      pp "\n@;Global Program Instance %s_rmovable : RMovable (%s) :=@;" id id;
+      pp "  {| rmovable arg := movable_eq _ _ (%s_unfold" id;
+      List.iter (fun _ -> pp " _") ref_names; pp ")).";
+      pp ") |}.@;Next Obligation. done. Qed."
+    end else begin
+      (* Definition of the [rtype]. *)
+      pp "@[<v 2>Definition %s : rtype := {|@;" id;
+      pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
+      pp "@[<hov 2>rty %a := " (pp_as_tuple_pat pp_str) ref_names;
+      Option.iter (fun _ -> pp "(padded (") annot.st_size;
+      pp "struct struct_%s [" id;
+      begin
+        match fields with
+        | []               -> ()
+        | (_,ty) :: fields ->
+        pp "@;%a" pp_type_expr ty;
+        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
+      end;
+      pp "@]@;]";
+      Option.iter (pp ") struct_%s %a)" id pp_coq_expr) annot.st_size;
+      pp "%%I@]@;|}\n";
+      (* Typeclass stuff. *)
+      pp "@;Global Program Instance %s_movable : RMovable %s :=" id id;
+      pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
+      pp "@;Next Obligation. unfold with_refinement => /= ?. ";
+      pp "apply _. Defined.";
+      pp "@;Next Obligation. solve_typing. Qed."
+    end
   in
   let pp_union s =
     pp "(* Printing for Unions not implemented. *)" (* TODO *)
