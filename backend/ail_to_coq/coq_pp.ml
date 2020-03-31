@@ -365,7 +365,7 @@ and pp_type_expr : type_expr pp = fun ff ty ->
 let pp_constrs : constr list pp = fun ff cs ->
   match cs with
   | []      -> pp_str ff "True"
-  | c :: cs -> pp_constr ff c; List.iter (fprintf ff ", %a" pp_constr) cs
+  | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
 (* Functions for looking for recursive occurences of a type. *)
 
@@ -447,7 +447,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "@[<v 2>Definition %s : rtype := {|@;" id;
       pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
       pp "rty := fixp %s_rec" id;
-      pp "@]@;|}\n";
+      pp "@]@;|}.\n";
 
       (* Generation of the unfolding lemma. *)
       pp "@;@[<v 2>Lemma %s_unfold" id;
@@ -476,7 +476,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         List.iter (pp " %s") ref_names; pp " :@;";
         pp "  %s l β (%a @@ %s)%%I (Some 100%%N) :=@;" type_name
           (pp_as_tuple pp_print_string) ref_names id;
-        pp "  λ T, i2p (simplify_goal_place_eq l β _ _ T (%s_unfold" id;
+        pp "  λ T, i2p (%s_eq l β _ _ T (%s_unfold" inst_name id;
         List.iter (fun _ -> pp " _") ref_names; pp "))."
       in
       pp_instance "simplify_hyp_place" "SimplifyHypPlace";
@@ -485,7 +485,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
       pp "\n@;Global Program Instance %s_rmovable : RMovable (%s) :=@;" id id;
       pp "  {| rmovable arg := movable_eq _ _ (%s_unfold" id;
-      List.iter (fun _ -> pp " _") ref_names; pp ")).";
+      List.iter (fun _ -> pp " _") ref_names;
       pp ") |}.@;Next Obligation. done. Qed."
     end else begin
       (* Definition of the [rtype]. *)
@@ -503,7 +503,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       end;
       pp "@]@;]";
       Option.iter (pp ") struct_%s %a)" id pp_coq_expr) annot.st_size;
-      pp "%%I@]@;|}\n";
+      pp "%%I@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Program Instance %s_movable : RMovable %s :=" id id;
       pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
@@ -598,13 +598,17 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | [x] -> pp_intro ff x
       | _   -> fprintf ff "[%a]" (pp_sep " " pp_intro) xs
     in
-    let pp_local_vars ff = List.iter (fun (x,_) -> pp " %s" x) in
     pp "@]@;@[<v 2>Proof.@;";
-    pp "start_function (%a) =>%a.@;" pp_intros annot.fa_parameters
-      pp_local_vars def.func_vars;
-    pp "split_blocks (∅ : gmap block_id (iProp Σ)).@;";
-    pp "repeat do_step; do_finish.@;";
-    pp "Unshelve. all: try solve_goal.";
+    pp "start_function (%a)" pp_intros annot.fa_parameters;
+    if def.func_vars <> [] || def.func_args <> [] then
+      begin
+        pp " =>";
+        List.iter (fun (x,_) -> pp " arg_%s" x) def.func_args;
+        List.iter (fun (x,_) -> pp " local_%s" x) def.func_vars
+      end;
+    pp ".@;split_blocks (∅ : gmap block_id (iProp Σ)).";
+    pp "@;repeat do_step; do_finish.";
+    pp "@;Unshelve. all: try solve_goal.";
     pp "@]@;Qed."
   in
   List.iter pp_proof ast.functions;
