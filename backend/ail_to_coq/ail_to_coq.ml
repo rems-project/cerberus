@@ -480,21 +480,14 @@ let translate_block stmts blocks ret_ty =
                   | _        -> None
                 in
                 trans_expr e2 goal_ty (fun e2 -> Assign(layout, e1, e2, stmt))
-            | AilEcall(e,es)    ->
-                let translate = translate_expr false None in
-                let fun_id =
-                  match ident_of_expr e with
-                  | None     -> not_impl loc "expr complicated call"
-                  | Some(id) -> id
+            | AilEcall(_,_)     ->
+                let (stmt, calls) =
+                  match snd (translate_expr false None e) with
+                  | []                -> assert false
+                  | (_,e,es) :: calls -> (Call(None, e, es, stmt), calls)
                 in
-                let (es, l) =
-                  let es_ls = List.map translate es in
-                  (List.map fst es_ls, List.concat (List.map snd es_ls))
-                in
-                Hashtbl.add used_functions fun_id ();
-                let stmt = Call(None, Var(Some(fun_id), true), es, stmt) in
                 let fn (id, e, es) stmt = Call(id, e, es, stmt) in
-                List.fold_right fn l stmt
+                List.fold_right fn calls stmt
             | _                 ->
                 attrs_used := true;
                 let annots =
