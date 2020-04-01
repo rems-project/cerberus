@@ -187,17 +187,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "(* Generated from [%s]. *)@;" ast.source_file;
 
   (* Opening the section. *)
-  pp "@[<v 2>Section code.@;";
-
-  (* Declaration of objects (global variable) in the context. *)
-  pp "(* Global variables. *)";
-  let pp_global_var = pp "@;Context (%s : loc)." in
-  List.iter pp_global_var ast.global_vars;
-
-  (* Declaration of functions in the context. *)
-  pp "\n@;(* Functions. *)";
-  let pp_func_decl (id, _) = pp "@;Context (%s : loc)." id in
-  List.iter pp_func_decl ast.functions;
+  pp "@[<v 2>Section code.";
 
   (* Printing for struct/union members. *)
   let pp_members members =
@@ -244,8 +234,15 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Definition of functions. *)
   let pp_function (id, def) =
+    let deps = fst def.func_deps @ snd def.func_deps in
     pp "\n@;(* Definition of function [%s]. *)@;" id;
-    pp "@[<v 2>Definition impl_%s : function := {|@;" id;
+    pp "@[<v 2>Definition impl_%s " id;
+    if deps <> [] then begin
+      pp "(";
+      List.iter (pp "%s ") deps;
+      pp ": loc)";
+    end;
+    pp ": function := {|@;";
 
     pp "@[<v 2>f_args := [";
     begin
