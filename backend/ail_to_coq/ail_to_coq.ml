@@ -763,7 +763,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let func_used =
           (* We preserve order of declaration. *)
-          let potential = List.map (fun (id, _) -> sym_to_str id) fun_defs in
+          let potential = List.map (fun (id, _) -> sym_to_str id) decls in
           List.filter (Hashtbl.mem used_functions) potential
         in
         (globals_used, func_used)
@@ -778,4 +778,3 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   in
 
   { source_file ; entry_point ; global_vars ; structs ; functions }
-
