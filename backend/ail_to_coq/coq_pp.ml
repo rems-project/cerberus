@@ -28,6 +28,11 @@ let pp_as_prod : 'a pp -> 'a list pp = fun pp ff xs ->
   | [] -> pp_str ff "()"
   | _  -> pp_sep " * " pp ff xs
 
+let pp_coq_expr : coq_expr pp = fun ff e ->
+  match e with
+  | Coq_ident(x) -> pp_str ff x
+  | Coq_all(s)   -> fprintf ff "(%s)" s
+
 let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   let pp fmt = Format.fprintf ff fmt in
   match it with
@@ -134,6 +139,8 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
       pp "(%a) at{struct_%s} %S" pp_expr e name field
   | GetMember(e,name,true ,field) ->
       pp "(%a) at_union{union_%s} %S" pp_expr e name field
+  | AnnotExpr(i,coq_e,e)          ->
+      pp "AnnotExpr %i%%nat %a (%a)" i pp_coq_expr coq_e pp_expr e
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
@@ -149,12 +156,11 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       let pp_args _ es =
         let n = List.length es in
         let fn i e =
-          let sc = if i = n - 1 then "" else " ;" in
-          pp "%a%s@;" pp_expr e sc
+          pp (if i = n - 1 then "%a" else "%a ;@;") pp_expr e
         in
         List.iteri fn es
       in
-      pp "@[<hov 2>%S <- %a with@ [ @[<hov 2>%a@] ] ;@]@;%a"
+      pp "@[<hov 2>%S <- %a with@ [ %a ] ;@]@;%a"
         (Option.get "_" ret_id) pp_expr e pp_args es pp_stmt stmt
   | SkipS(stmt)            ->
       pp_stmt ff stmt
@@ -293,11 +299,6 @@ type guard_mode =
   | Guard_in_lem of string
 
 let guard_mode = ref Guard_none
-
-let pp_coq_expr : coq_expr pp = fun ff e ->
-  match e with
-  | Coq_ident(x) -> pp_str ff x
-  | Coq_all(s)   -> fprintf ff "(%s)" s
 
 let rec pp_constr : constr pp = fun ff c ->
   let pp_kind ff k =
