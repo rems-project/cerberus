@@ -1193,7 +1193,7 @@ let rec constraints_hold loc env = function
 
 
 
-let make_binop op (v1 : IT.t) (v2 : IT.t) =
+let make_binop_constr op (v1 : IT.t) (v2 : IT.t) =
   match op with
   | OpAdd -> Add (v1, v2)
   | OpSub -> Sub (v1, v2)
@@ -1209,6 +1209,9 @@ let make_binop op (v1 : IT.t) (v2 : IT.t) =
   | OpLe -> LE (v1, v2)
   | OpAnd -> And (v1, v2)
   | OpOr -> Or (v1, v2)
+
+
+
 
 let bt_of_binop (op : Core.binop) : ((BT.t * BT.t) * BT.t) = 
   match op with
@@ -1227,7 +1230,6 @@ let bt_of_binop (op : Core.binop) : ((BT.t * BT.t) * BT.t) =
   | OpAnd -> ((BT.Bool, BT.Bool), BT.Bool)
   | OpOr -> ((BT.Bool, BT.Bool), BT.Bool)
 
-          
 
 
 let bt_of_core_object_type loc = function
@@ -1481,8 +1483,6 @@ let call_typ_fn loc_call name env args =
      call_typ loc_call env decl_typ args
 
 
-
-
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
   let loc = Annot.get_loc_ annots in
   match pe with
@@ -1562,7 +1562,15 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      | Civfromfloat -> 
         fail (Unsupported {loc; unsupported = "floats"})
      end
-  | M_PEcase _ ->
+  | M_PEcase (tsym, pats_es) ->
+     (* let (esym,eloc) = Sym.lof_tsymbol tsym in
+      * lookup eloc env.local.a sym >>= fun t ->
+      * fold_leftM (fun bt (pat,psym) ->
+      *     let (psym,ploc) = Sym.lof_tsymbol psym in
+      *     lookup ploc env.local.a sym >>= fun t ->
+      *        ensure_type 
+      *        return ()
+      *   ) () pats_es *)
      failwith "todo PEcase"
   | M_PEarray_shift _ ->
      failwith "todo PEarray_shift"
@@ -1584,7 +1592,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let ((st1,st2),rt) = bt_of_binop op in
      ensure_type loc1 (sym1, T.A t1) (sym1, T.A st1) >>
      ensure_type loc2 (sym2, T.A t2) (sym1, T.A st2) >>
-     let constr = LC (S name %= (make_binop op (S sym1) (S sym2))) in
+     let constr = LC (S name %= (make_binop_constr op (S sym1) (S sym2))) in
      let env = add_cvar env (Sym.fresh (), constr) in
      let t = (name, T.A rt) in
      return (env, [t])
@@ -1710,10 +1718,24 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      failwith "todo eccall"
   | M_Eproc _ ->
      failwith "todo eproc"
-  | M_Ewseq _ ->
-     failwith "todo ewseq"
-  | M_Esseq _ ->
-     failwith "todo esseq"
+  | M_Ewseq (p, e1, e2) ->      (* for now, the same as Esseq *)
+     begin match p with 
+     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
+        let name2 = sym_or_fresh mname2 in
+        infer_expr name2 env e1 >>= fun (env, rt) ->
+        infer_expr name (add_vars env rt) e2
+     | Pattern (_annot, CaseCtor _) ->
+        failwith "todo ctor pattern"
+     end
+  | M_Esseq (p, e1, e2) ->
+     begin match p with 
+     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
+        let name2 = sym_or_fresh mname2 in
+        infer_expr name2 env e1 >>= fun (env, rt) ->
+        infer_expr name (add_vars env rt) e2
+     | Pattern (_annot, CaseCtor _) ->
+        failwith "todo ctor pattern"
+     end
   | M_Ebound (n, e) ->
      infer_expr name env e
   | M_End _ ->

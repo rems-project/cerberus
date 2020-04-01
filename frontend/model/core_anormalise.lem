@@ -58,8 +58,6 @@ let var_pexpr sym annots bty =
 
 
 
-(* type letbinder 'bound 'in = 'bound -> (tsymbol -> 'in) -> 'in *)
-
 type letbinder 'bound 'body = annots -> pattern -> 'bound -> 'body -> 'body
 
 val letbinder_pexpr_in_pexpr : letbinder mu_pexpr mu_pexpr
@@ -69,14 +67,6 @@ let letbinder_pexpr_in_pexpr annots pat pexpr body : mu_pexpr =
 val letbinder_pexpr_in_expr : forall 'a. letbinder mu_pexpr (mu_expr 'a)
 let letbinder_pexpr_in_expr annots pat pexpr body : mu_expr 'a = 
   M_Expr annots (M_Elet pat pexpr body)
-
-(* class (LB 'a)
- *   val letbind_pexpr_in : letbinder mu_pexpr 'a
- * end *)
-
-(* instance (LB mu_pexpr)
- *   let letbind_pexpr_in = letbind_pexpr_in_pexpr
- * end *)
 
 
 
@@ -120,38 +110,19 @@ val n_val_names :
   (tsymbols -> 'a) -> 
   'a
 
-val n_pexpr :
-  forall 'a.
-  letbinder mu_pexpr 'a ->
-  pexpr -> 
-  (mu_pexpr -> 'a) -> 
-  'a
 
-val n_pexpr_name : 
-  forall 'a.
-  letbinder mu_pexpr 'a ->
-  pexpr -> 
-  (tsymbol -> 'a) -> 
-  'a
 
-(* val n_pexpr_no_let : pexpr -> (mu_pexpr -> mu_pexpr) -> mu_pexpr *)
 
-val n_pexpr_names :   
-  forall 'a.
-  letbinder mu_pexpr 'a ->
-  pexprs -> 
-  (tsymbols -> 'a) -> 
-  'a
 
-val normalise_pexpr : 
-  pexpr -> 
-  mu_pexpr
+val n_pexpr : pexpr -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : pexpr -> (tsymbol -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : pexprs -> (tsymbols -> mu_pexpr) -> mu_pexpr
+val normalise_pexpr : pexpr -> mu_pexpr
 
-(* val normalise_pexpr_name : 
- *   forall 'a.
- *   letbinder mu_pexpr 'a ->
- *   pexpr -> 
- *   'a *)
+val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. pexpr -> (tsymbol -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. pexprs -> (tsymbols -> mu_expr 'a) -> mu_expr 'a
+val normalise_pexpr_in_expr : forall 'a. pexpr -> mu_expr 'a
 
 
 let typeof_value v = 
@@ -214,28 +185,40 @@ and n_val_names lb annots vs k =
   end
 
 
-let rec n_pexpr_name (lb : letbinder mu_pexpr 'a) (e : pexpr) (k : tsymbol -> 'a) : 'a = 
-  n_pexpr lb e (fun e -> 
+
+
+
+
+(* This code now twice, once for m_pexpr, once for embedding into
+   expr. This could be done parameterically with letbinder as before,
+   but that probably needs polymorphic recursion that Lem doesn't seem
+   to have. *)
+
+
+(* 1 begin *)
+
+let rec n_pexpr_name (e : pexpr) (k : tsymbol -> mu_pexpr) : mu_pexpr = 
+  n_pexpr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
-  | Nothing -> letbind_pexpr lb e k
+  | Nothing -> letbind_pexpr letbinder_pexpr_in_pexpr e k
   end)
 
-and n_pexpr_name_2 lb (e,e') k = 
-  n_pexpr_name lb e (fun e -> 
-  n_pexpr_name lb e' (fun e' ->
+and n_pexpr_name_2 (e,e') k = 
+  n_pexpr_name e (fun e -> 
+  n_pexpr_name e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_names lb (es : list pexpr) (k : tsymbols -> 'a) : 'a =
+and n_pexpr_names (es : list pexpr) k =
   match es with
   | [] -> k []
   | e :: es -> 
-     n_pexpr_name lb e (fun e -> 
-     n_pexpr_names lb es (fun es ->
+     n_pexpr_name e (fun e -> 
+     n_pexpr_names es (fun es ->
      k (e :: es)))
   end
 
-and n_pexpr (lb : letbinder mu_pexpr 'a) (e : pexpr) (k : mu_pexpr -> 'a) : 'a = 
+and n_pexpr (e : pexpr) k = 
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
@@ -246,162 +229,286 @@ and n_pexpr (lb : letbinder mu_pexpr 'a) (e : pexpr) (k : mu_pexpr -> 'a) : 'a =
   | PEimpl i -> 
      k (annotate (M_PEimpl i))
   | PEval v -> 
-     n_val lb annots v (fun v ->
+     n_val letbinder_pexpr_in_pexpr annots v (fun v ->
      k (annotate (M_PEval v)))
   | PEconstrained l -> 
      let (constraints,exprs) = List.unzip l in
-     n_pexpr_names lb exprs (fun exprs ->
+     n_pexpr_names exprs (fun exprs ->
      let l = List.zip constraints exprs in
      k (annotate (M_PEconstrained l)))
   | PEundef l u -> 
      k (annotate (M_PEundef l u))
   | PEerror err e' ->
-     n_pexpr_name lb e' (fun e' -> 
+     n_pexpr_name e' (fun e' -> 
      k (annotate (M_PEerror err e')))
   | PEctor ctor args ->
-     n_pexpr_names lb args (fun args -> 
+     n_pexpr_names args (fun args -> 
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
-     n_pexpr_name lb e' (fun e' -> 
+     n_pexpr_name e' (fun e' -> 
      let (pats,pes) = List.unzip pats_pes in
-     n_pexpr_names lb pes (fun pes ->
+     let pes = List.map (fun e -> n_pexpr e (fun e -> e)) pes in
      let pats_pes = List.zip pats pes in
-     k (annotate (M_PEcase e' pats_pes))))
+     k (annotate (M_PEcase e' pats_pes)))
   | PEarray_shift e' ctype e'' ->
-     n_pexpr_name_2 lb (e',e'') (fun (e',e'') -> 
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEarray_shift e' ctype e'')))
   | PEmember_shift e' sym id ->
-     n_pexpr_name lb e' (fun e' -> 
+     n_pexpr_name e' (fun e' -> 
      k (annotate (M_PEmember_shift e' sym id)))
   | PEnot e' -> 
-     n_pexpr_name lb e' (fun e' -> 
+     n_pexpr_name e' (fun e' -> 
      k (annotate (M_PEnot e')))
   | PEop binop e' e'' ->
-     n_pexpr_name_2 lb (e',e'') (fun (e',e'') -> 
+     n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEop binop e' e'')))
   | PEstruct sym fields ->
      let (fnames, pes) = List.unzip fields in
-     n_pexpr_names lb pes (fun pes ->
+     n_pexpr_names pes (fun pes ->
      let fields = List.zip fnames pes in
      k (annotate (M_PEstruct sym fields)))
   | PEunion sym id e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEunion sym id e')))
   | PEcfunction e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEcfunction e')))
   | PEmemberof sym id e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEmemberof sym id e')))
   | PEcall sym args ->
-     n_pexpr_names lb args (fun args ->
+     n_pexpr_names args (fun args ->
      k (annotate (M_PEcall sym args)))
   | PElet pat e' e'' ->
-     n_pexpr lb e' (fun e' ->
-     lb annots pat e' (n_pexpr lb e'' k))
+     n_pexpr e' (fun e' ->
+     letbinder_pexpr_in_pexpr annots pat e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
-     n_pexpr_name lb e' (fun e' ->
-     n_pexpr_name lb e'' (fun e'' ->
-     n_pexpr_name lb e''' (fun e''' ->
+     n_pexpr_name e' (fun e' ->
+     n_pexpr_name e'' (fun e'' ->
+     n_pexpr_name e''' (fun e''' ->
      k (annotate (M_PEif e' e'' e''')))))
   | PEis_scalar e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEis_scalar e')))
   | PEis_integer e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEis_integer e')))
   | PEis_signed e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEis_signed e')))
   | PEis_unsigned e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEis_unsigned e')))
   | PEbmc_assume e' ->
-     n_pexpr_name lb e' (fun e' ->
+     n_pexpr_name e' (fun e' ->
      k (annotate (M_PEbmc_assume e')))
   | PEare_compatible e' e'' ->
-     n_pexpr_name_2 lb (e',e'') (fun (e',e'') ->
+     n_pexpr_name_2 (e',e'') (fun (e',e'') ->
+     k (annotate (M_PEare_compatible e' e'')))
+  end
+
+(* 1 end *)
+
+
+(* 2 begin *)
+
+let rec n_pexpr_in_expr_name (e : pexpr) (k : tsymbol -> mu_expr 'a) : mu_expr 'a = 
+  n_pexpr_in_expr e (fun e -> 
+  match is_symbol e with
+  | Just sym -> k sym
+  | Nothing -> letbind_pexpr letbinder_pexpr_in_expr e k
+  end)
+
+and n_pexpr_in_expr_name_2 (e,e') k : mu_expr 'a = 
+  n_pexpr_in_expr_name e (fun e -> 
+  n_pexpr_in_expr_name e' (fun e' ->
+  k (e,e')))
+
+and n_pexpr_in_expr_names (es : list pexpr) k : mu_expr 'a =
+  match es with
+  | [] -> k []
+  | e :: es -> 
+     n_pexpr_in_expr_name e (fun e -> 
+     n_pexpr_in_expr_names es (fun es ->
+     k (e :: es)))
+  end
+
+and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+
+  let (Pexpr annots bty pe) = e in
+  let annotate pe = M_Pexpr annots bty pe in
+
+  match pe with
+  | PEsym sym -> 
+     k (annotate (M_PEsym sym))
+  | PEimpl i -> 
+     k (annotate (M_PEimpl i))
+  | PEval v -> 
+     n_val letbinder_pexpr_in_expr annots v (fun v ->
+     k (annotate (M_PEval v)))
+  | PEconstrained l -> 
+     let (constraints,exprs) = List.unzip l in
+     n_pexpr_in_expr_names exprs (fun exprs ->
+     let l = List.zip constraints exprs in
+     k (annotate (M_PEconstrained l)))
+  | PEundef l u -> 
+     k (annotate (M_PEundef l u))
+  | PEerror err e' ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEerror err e')))
+  | PEctor ctor args ->
+     n_pexpr_in_expr_names args (fun args -> 
+     k (annotate (M_PEctor ctor args)))
+  | PEcase e' pats_pes ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+     let (pats,pes) = List.unzip pats_pes in
+     (* the line below is where we'd need polymorphic recursion *)
+     let pes = List.map (fun e -> n_pexpr e (fun e -> e)) pes in 
+     let pats_pes = List.zip pats pes in
+     k (annotate (M_PEcase e' pats_pes)))
+  | PEarray_shift e' ctype e'' ->
+     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEarray_shift e' ctype e'')))
+  | PEmember_shift e' sym id ->
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEmember_shift e' sym id)))
+  | PEnot e' -> 
+     n_pexpr_in_expr_name e' (fun e' -> 
+     k (annotate (M_PEnot e')))
+  | PEop binop e' e'' ->
+     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
+     k (annotate (M_PEop binop e' e'')))
+  | PEstruct sym fields ->
+     let (fnames, pes) = List.unzip fields in
+     n_pexpr_in_expr_names pes (fun pes ->
+     let fields = List.zip fnames pes in
+     k (annotate (M_PEstruct sym fields)))
+  | PEunion sym id e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEunion sym id e')))
+  | PEcfunction e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEcfunction e')))
+  | PEmemberof sym id e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEmemberof sym id e')))
+  | PEcall sym args ->
+     n_pexpr_in_expr_names args (fun args ->
+     k (annotate (M_PEcall sym args)))
+  | PElet pat e' e'' ->
+     n_pexpr_in_expr e' (fun e' ->
+     letbinder_pexpr_in_expr annots pat e' (n_pexpr_in_expr e'' k))
+  | PEif e' e'' e''' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     n_pexpr_in_expr_name e'' (fun e'' ->
+     n_pexpr_in_expr_name e''' (fun e''' ->
+     k (annotate (M_PEif e' e'' e''')))))
+  | PEis_scalar e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEis_scalar e')))
+  | PEis_integer e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEis_integer e')))
+  | PEis_signed e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEis_signed e')))
+  | PEis_unsigned e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEis_unsigned e')))
+  | PEbmc_assume e' ->
+     n_pexpr_in_expr_name e' (fun e' ->
+     k (annotate (M_PEbmc_assume e')))
+  | PEare_compatible e' e'' ->
+     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') ->
      k (annotate (M_PEare_compatible e' e'')))
   end
 
 
+
+
+(* 2 end *)
+
+
 let normalise_pexpr (e : pexpr) = 
-  n_pexpr letbinder_pexpr_in_pexpr e (fun e -> e)
+  n_pexpr e (fun e -> e)
 
 
-val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
-let n_pexpr_in_expr p k = n_pexpr letbinder_pexpr_in_expr p k
+(* val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_in_expr p k = n_pexpr letbinder_pexpr_in_expr p k
+ * 
+ * val n_pexpr_name_in_expr : forall 'a. pexpr -> (tsymbol -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_name_in_expr p k = n_pexpr_name letbinder_pexpr_in_expr p k
+ * 
+ * val n_pexpr_names_in_expr : forall 'a. pexprs -> (tsymbols -> mu_expr 'a) -> mu_expr 'a
+ * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
 
-val n_pexpr_name_in_expr : forall 'a. pexpr -> (tsymbol -> mu_expr 'a) -> mu_expr 'a
-let n_pexpr_name_in_expr p k = n_pexpr_name letbinder_pexpr_in_expr p k
 
-val n_pexpr_names_in_expr : forall 'a. pexprs -> (tsymbols -> mu_expr 'a) -> mu_expr 'a
-let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k
+
 
 let n_action (action : action 'a) (k : mu_action 'a -> mu_expr 'a) = 
   let (Action t an a) = action in
   let wrap a = M_Action t an a in
   match a with
   | Create e1 e2 sym ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Create e1 e2 sym))))
   | CreateReadOnly e1 e2 e3 sym ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_CreateReadOnly e1 e2 e3 sym)))))
   | Alloc e1 e2 sym ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Alloc e1 e2 sym))))
   | Kill b e1 ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
      k (wrap (M_Kill b e1)))
   | Store b e1 e2 e3 mo ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_Store b e1 e2 e3 mo)))))
   | Load e1 e2 mo ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_Load e1 e2 mo))))
   | RMW e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
-     n_pexpr_name_in_expr e4 (fun e4 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
      k (wrap (M_RMW e1 e2 e3 e4 mo1 mo2))))))
   | Fence mo -> 
      k (wrap (M_Fence mo))
   | CompareExchangeStrong e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
-     n_pexpr_name_in_expr e4 (fun e4 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
      k (wrap (M_CompareExchangeStrong e1 e2 e3 e4 mo1 mo2))))))
   | CompareExchangeWeak e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
-     n_pexpr_name_in_expr e4 (fun e4 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
+     n_pexpr_in_expr_name e4 (fun e4 ->
      k (wrap (M_CompareExchangeWeak e1 e2 e3 e4 mo1 mo2))))))
   | LinuxFence lmo ->
      k (wrap (M_LinuxFence lmo))
   | LinuxLoad e1 e2 lmo ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
      k (wrap (M_LinuxLoad e1 e2 lmo))))
   | LinuxStore e1 e2 e3 lmo ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_LinuxStore e1 e2 e3 lmo)))))
   | LinuxRMW e1 e2 e3 lmo ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_name_in_expr e3 (fun e3 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_name e3 (fun e3 ->
      k (wrap (M_LinuxRMW e1 e2 e3 lmo)))))
   end
      
@@ -427,32 +534,32 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
      n_pexpr_in_expr pexpr (fun e -> 
      k (wrap (M_Epure e)))
   | Ememop memop pexprs -> 
-     n_pexpr_names_in_expr pexprs (fun pexprs -> 
+     n_pexpr_in_expr_names pexprs (fun pexprs -> 
      k (wrap (M_Ememop memop pexprs)))
   | Eaction paction ->
      n_paction paction (fun paction ->
      k (wrap (M_Eaction paction)))
   | Ecase pexpr pats_es ->
-     n_pexpr_name_in_expr pexpr (fun pexpr ->
+     n_pexpr_in_expr_name pexpr (fun pexpr ->
      let pats_es = mapsnd (fun expr -> normalise_expr expr) pats_es in
      k (wrap (M_Ecase pexpr pats_es)))
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
      wrap (M_Elet pat e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
      let e2 = normalise_expr e2 in
      let e3 = normalise_expr e3 in
      k (wrap (M_Eif e1 e2 e3)))
   | Eskip ->
      k (wrap (M_Eskip))
   | Eccall a e1 e2 es ->
-     n_pexpr_name_in_expr e1 (fun e1 ->
-     n_pexpr_name_in_expr e2 (fun e2 ->
-     n_pexpr_names_in_expr es (fun es ->
+     n_pexpr_in_expr_name e1 (fun e1 ->
+     n_pexpr_in_expr_name e2 (fun e2 ->
+     n_pexpr_in_expr_names es (fun es ->
      k (wrap (M_Eccall a e1 e2 es)))))
   | Eproc a name es ->
-     n_pexpr_names_in_expr es (fun es ->
+     n_pexpr_in_expr_names es (fun es ->
      k (wrap (M_Eproc a name es)))
   | Eunseq es ->
      failwith "todo Eunseq"
@@ -474,13 +581,13 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
   | Esave b syms_typs_pes e ->  (* have to check *)
      let (syms,typs_pes) = List.unzip syms_typs_pes in
      let (typs,pes) = List.unzip typs_pes in
-     n_pexpr_names_in_expr pes (fun pes ->
+     n_pexpr_in_expr_names pes (fun pes ->
      let typs_pes = List.zip typs pes in
      let syms_typs_pes = List.zip syms typs_pes in
      let e = normalise_expr e in
      k (wrap (M_Esave b syms_typs_pes e)))
   | Erun a sym pes ->
-     n_pexpr_names_in_expr pes (fun pes ->
+     n_pexpr_in_expr_names pes (fun pes ->
      k (wrap (M_Erun a sym pes)))
   | Epar es -> 
      failwith "todo Epar"
