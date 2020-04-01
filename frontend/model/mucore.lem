@@ -11,23 +11,27 @@ open import Assert_extra
 
 
 
+
+
 type symbol = Symbol.sym
 type mu_object_type = Core.core_object_type
 type mu_base_type = Core.core_base_type
 type bty = mu_base_type
 type mu_name = Core.generic_name symbol
-type tsymbol 'bty = TSym of list Annot.annot * 'bty * Symbol.sym 
+type annotated 'a 'bty = Annotated of list Annot.annot * 'bty * 'a
+type asym 'bty = annotated Symbol.sym 'bty
+
 (* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
-type ov_tsymbol 'bty = tsymbol 'bty       (* object_value *)
-type lv_tsymbol 'bty = tsymbol 'bty       (* loaded_value *)
-type va_tsymbol 'bty = tsymbol 'bty       (* value *)
+type ov_asym 'bty = asym 'bty       (* object_value *)
+type lv_asym 'bty = asym 'bty       (* loaded_value *)
+type va_asym 'bty = asym 'bty       (* value *)
 
 
 type mu_object_value 'bty =  (* C object values *)
  | M_OVinteger of Mem.integer_value (* integer value *)
  | M_OVfloating of Mem.floating_value (* floating-point value *)
  | M_OVpointer of Mem.pointer_value (* pointer value *)
- | M_OVarray of list (lv_tsymbol 'bty) (* C array value *)
+ | M_OVarray of list (lv_asym 'bty) (* C array value *)
  | M_OVstruct of symbol * list (Symbol.identifier * ctype * Mem.mem_value) (* C struct value *)
  | M_OVunion of symbol * Symbol.identifier * Mem.mem_value (* C union value *)
 
@@ -44,9 +48,9 @@ type mu_value 'bty =  (* Core values *)
  | M_Vunit
  | M_Vtrue
  | M_Vfalse
- | M_Vctype of ctype (* C type as value *)
- | M_Vlist of Core.core_base_type * list (tsymbol 'bty)
- | M_Vtuple of list (tsymbol 'bty) (* tuple *)
+ (* | M_Vctype of ctype (\* C type as value *\) *)
+ | M_Vlist of Core.core_base_type * list (asym 'bty)
+ | M_Vtuple of list (asym 'bty) (* tuple *)
 
 
 
@@ -59,48 +63,48 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEsym of symbol
  | M_PEimpl of Implementation.implementation_constant (* implementation-defined constant *)
  | M_PEval of mu_value 'bty
- | M_PEconstrained of list (Mem.mem_iv_constraint * tsymbol 'bty) (* constrained value *)
+ | M_PEconstrained of list (Mem.mem_iv_constraint * asym 'bty) (* constrained value *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
- | M_PEerror of string * tsymbol 'bty (* impl-defined static error *)
- | M_PEctor of mu_ctor 'bty * list (tsymbol 'bty) (* data constructor application *)
- | M_PEcase of (tsymbol 'bty) * list ((mu_pattern 'bty) * mu_pexpr 'bty) (* pattern matching *)
- | M_PEarray_shift of (tsymbol 'bty) * ctype * (tsymbol 'bty) (* pointer array shift *)
- | M_PEmember_shift of (tsymbol 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
- | M_PEnot of tsymbol 'bty (* boolean not *)
- | M_PEop of Core.binop * (tsymbol 'bty) * (tsymbol 'bty)
- | M_PEstruct of symbol * list (Symbol.identifier * tsymbol 'bty) (* C struct expression *)
- | M_PEunion of symbol * Symbol.identifier * tsymbol 'bty (* C union expression *)
- | M_PEcfunction of tsymbol 'bty (* C function pointer expression *)
- | M_PEmemberof of symbol * Symbol.identifier * tsymbol 'bty (* C struct/union member access *)
- | M_PEcall of mu_name * list (tsymbol 'bty) (* pure function call *)
+ | M_PEerror of string * asym 'bty (* impl-defined static error *)
+ | M_PEctor of mu_ctor 'bty * list (asym 'bty) (* data constructor application *)
+ | M_PEcase of (asym 'bty) * list ((mu_pattern 'bty) * mu_pexpr 'bty) (* pattern matching *)
+ | M_PEarray_shift of (asym 'bty) * ctype * (asym 'bty) (* pointer array shift *)
+ | M_PEmember_shift of (asym 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
+ | M_PEnot of asym 'bty (* boolean not *)
+ | M_PEop of Core.binop * (asym 'bty) * (asym 'bty)
+ | M_PEstruct of symbol * list (Symbol.identifier * asym 'bty) (* C struct expression *)
+ | M_PEunion of symbol * Symbol.identifier * asym 'bty (* C union expression *)
+ (* | M_PEcfunction of asym 'bty (\* C function pointer expression *\) *)
+ | M_PEmemberof of symbol * Symbol.identifier * asym 'bty (* C struct/union member access *)
+ | M_PEcall of mu_name * list (asym 'bty) (* pure function call *)
  | M_PElet of (mu_pattern 'bty) * (mu_pexpr 'bty) * (mu_pexpr 'bty) (* pure let *)
- | M_PEif of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty (* pure if *)
- | M_PEis_scalar of tsymbol 'bty
- | M_PEis_integer of tsymbol 'bty
- | M_PEis_signed of tsymbol 'bty
- | M_PEbmc_assume of tsymbol 'bty
- | M_PEis_unsigned of tsymbol 'bty
- | M_PEare_compatible of tsymbol 'bty * tsymbol 'bty
+ | M_PEif of asym 'bty * asym 'bty * asym 'bty (* pure if *)
+ (* | M_PEis_scalar of asym 'bty
+  * | M_PEis_integer of asym 'bty
+  * | M_PEis_signed of asym 'bty
+  * | M_PEbmc_assume of asym 'bty
+  * | M_PEis_unsigned of asym 'bty
+  * | M_PEare_compatible of asym 'bty * asym 'bty *)
 
 and mu_pexpr 'bty = 
  | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
 
 
 type mu_action_ 'bty =  (* memory actions *)
- | M_Create of tsymbol 'bty * tsymbol 'bty * Symbol.prefix
- | M_CreateReadOnly of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Symbol.prefix
- | M_Alloc of tsymbol 'bty * tsymbol 'bty * Symbol.prefix
- | M_Kill of bool * tsymbol 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of tsymbol 'bty * tsymbol 'bty * Cmm_csem.memory_order
- | M_RMW of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Create of asym 'bty * asym 'bty * Symbol.prefix
+ | M_CreateReadOnly of asym 'bty * asym 'bty * asym 'bty * Symbol.prefix
+ | M_Alloc of asym 'bty * asym 'bty * Symbol.prefix
+ | M_Kill of bool * asym 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
+ | M_Store of bool * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+ | M_Load of asym 'bty * asym 'bty * Cmm_csem.memory_order
+ | M_RMW of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeStrong of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of tsymbol 'bty * tsymbol 'bty * Linux.linux_memory_order
- | M_LinuxStore of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Linux.linux_memory_order
- | M_LinuxRMW of tsymbol 'bty * tsymbol 'bty * tsymbol 'bty * Linux.linux_memory_order
+ | M_LinuxLoad of asym 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxStore of asym 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxRMW of asym 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
 
 
 type mu_action 'a 'bty = 
@@ -112,14 +116,14 @@ type mu_paction 'a 'bty =  (* memory actions with Core.polarity *)
 
 type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  | M_Epure of (mu_pexpr 'bty)
- | M_Ememop of Mem_common.memop * list (tsymbol 'bty) (* pointer op involving memory *)
+ | M_Ememop of Mem_common.memop * list (asym 'bty) (* pointer op involving memory *)
  | M_Eaction of (mu_paction 'a 'bty) (* memory action *)
- | M_Ecase of tsymbol 'bty * list ((mu_pattern 'bty) * (mu_expr 'a 'bty)) (* pattern matching *)
+ | M_Ecase of asym 'bty * list ((mu_pattern 'bty) * (mu_expr 'a 'bty)) (* pattern matching *)
  | M_Elet of (mu_pattern 'bty) * (mu_pexpr 'bty) * (mu_expr 'a 'bty)
- | M_Eif of tsymbol 'bty * (mu_expr 'a 'bty) * (mu_expr 'a 'bty)
+ | M_Eif of asym 'bty * (mu_expr 'a 'bty) * (mu_expr 'a 'bty)
  | M_Eskip
- | M_Eccall of 'a * tsymbol 'bty * tsymbol 'bty * list (tsymbol 'bty) (* C function call *)
- | M_Eproc of 'a * mu_name * list (tsymbol 'bty) (* Core procedure call *)
+ | M_Eccall of 'a * (annotated ctype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
+ | M_Eproc of 'a * mu_name * list (asym 'bty) (* Core procedure call *)
  (* | M_Eunseq of list (mu_expr 'a 'bty) (\* unsequenced expressions *\) *)
  | M_Ewseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
  | M_Esseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* strong sequencing *)
@@ -127,8 +131,8 @@ type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  (* | M_Eindet of nat * (mu_expr 'a 'bty) (\* indeterminately sequenced expr *)
  | M_Ebound of nat * (mu_expr 'a 'bty) (* $\ldots$and boundary *)
  | M_End of list (mu_expr 'a 'bty) (* nondeterministic choice *)
- | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * tsymbol 'bty)) * (mu_expr 'a 'bty) (* save label *)
- | M_Erun of 'a * symbol * list (tsymbol 'bty) (* run from label *)
+ | M_Esave of (symbol * mu_base_type) * list (symbol * (mu_base_type * asym 'bty)) * (mu_expr 'a 'bty) (* save label *)
+ | M_Erun of 'a * symbol * list (asym 'bty) (* run from label *)
  (* | M_Epar of list (mu_expr 'a 'bty) (\* cppmem-like thread creation *\) *)
  (* | M_Ewait of Mem_common.thread_id (\* wait for thread termination *\) *)
 
@@ -194,12 +198,15 @@ let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) =
   List.map (fun (a,b) -> (a, f b)) l
 
 
-let make_symbol_pexpr (TSym annots bty sym) : Core.generic_pexpr 'bty symbol =
+let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEsym sym)
 
-type symbol_env 'bty = map symbol (mu_pexpr 'bty)
+type env 'bty = map symbol (mu_pexpr 'bty)
 
-let lookup_tsymbol env (TSym _ _ sym) = 
+let insert_symbol sym v env =
+  Map.insert sym v env
+
+let lookup_asym env (Annotated _ _ sym) = 
   match Map.lookup sym env with
   | Just v -> v
   | Nothing -> 
@@ -208,25 +215,24 @@ let lookup_tsymbol env (TSym _ _ sym) =
   end
 
 let get_loaded_value env sym = 
-  match lookup_tsymbol env sym with
+  match lookup_asym env sym with
   | M_Pexpr _ _ (M_PEval (M_Vloaded lv)) -> lv
   | _ -> failwith "not a loaded value"
   end
 
 let get_object_value env sym = 
-  match lookup_tsymbol env sym with
+  match lookup_asym env sym with
   | M_Pexpr _ _ (M_PEval (M_Vobject ov)) -> ov
   | _ -> failwith "not an object value"
   end
 
 let get_value env sym = 
-  match lookup_tsymbol env sym with
+  match lookup_asym env sym with
   | M_Pexpr _ _ (M_PEval v) -> v
   | _ -> failwith "not an object value"
   end
 
-
-let rec mu_to_core__object_value (env : symbol_env 'bty) ov = 
+let rec mu_to_core__object_value (env : env 'bty) ov = 
   match ov with
   | M_OVinteger iv -> Core.OVinteger iv
   | M_OVfloating fv -> Core.OVfloating fv
@@ -238,7 +244,7 @@ let rec mu_to_core__object_value (env : symbol_env 'bty) ov =
      Core.OVarray (List.map (mu_to_core__loaded_value env) is)
   end
 
-and mu_to_core__loaded_value (env : symbol_env 'bty) lv = 
+and mu_to_core__loaded_value (env : env 'bty) lv = 
   match lv with
   | M_LVspecified ov ->
      Core.LVspecified (mu_to_core__object_value env ov)
@@ -246,7 +252,7 @@ and mu_to_core__loaded_value (env : symbol_env 'bty) lv =
   end
 
 
-let rec mu_to_core__value (env : symbol_env 'bty) (v : mu_value 'bty)
+let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
         : Core.generic_value symbol =
   match v with
   | M_Vobject ov -> Core.Vobject (mu_to_core__object_value env ov)
@@ -254,7 +260,7 @@ let rec mu_to_core__value (env : symbol_env 'bty) (v : mu_value 'bty)
   | M_Vunit -> Core.Vunit
   | M_Vtrue -> Core.Vtrue
   | M_Vfalse -> Core.Vfalse
-  | M_Vctype ct -> Core.Vctype ct
+  (* | M_Vctype ct -> Core.Vctype ct *)
   | M_Vlist cbt is -> 
      let is = List.map (get_value env) is in
      Core.Vlist cbt (List.map (mu_to_core__value env) is)
@@ -264,15 +270,15 @@ let rec mu_to_core__value (env : symbol_env 'bty) (v : mu_value 'bty)
   end
   
 
-let maybe_extend_env (env : symbol_env 'bty) pat (pe : mu_pexpr 'bty) = 
+let maybe_extend_env (env : env 'bty) pat (pe : mu_pexpr 'bty) = 
   let (Core.Pattern _ p) = pat in
   match p with
   | Core.CaseBase (Just sym, _cbt)  ->
-     Map.insert sym pe env
+     insert_symbol sym pe env
   | _ -> env
   end
 
-let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
+let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
         : Core.generic_pexpr 'bty symbol =
   let (M_Pexpr annots bty pexpr_) = pexpr in
   let pexpr_ = match pexpr_ with
@@ -307,8 +313,8 @@ let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
        Core.PEstruct sym fields
     | M_PEunion sym id p ->
        Core.PEunion sym id (make_symbol_pexpr p)
-    | M_PEcfunction f ->
-       Core.PEcfunction (make_symbol_pexpr f)
+    (* | M_PEcfunction f ->
+     *    Core.PEcfunction (make_symbol_pexpr f) *)
     | M_PEmemberof sym id p ->
        Core.PEmemberof sym id (make_symbol_pexpr p)
     | M_PEcall name args ->
@@ -323,18 +329,18 @@ let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
          (make_symbol_pexpr p0)
          (make_symbol_pexpr p1)
          (make_symbol_pexpr p2)
-    | M_PEis_scalar p ->
-       Core.PEis_scalar (make_symbol_pexpr p)
-    | M_PEis_integer p ->
-       Core.PEis_integer (make_symbol_pexpr p)
-    | M_PEis_signed p ->
-       Core.PEis_signed (make_symbol_pexpr p)
-    | M_PEis_unsigned p ->
-       Core.PEis_unsigned (make_symbol_pexpr p)
-    | M_PEbmc_assume e ->
-       Core.PEbmc_assume (make_symbol_pexpr e)
-    | M_PEare_compatible p1 p2 ->
-       Core.PEare_compatible (make_symbol_pexpr p1) (make_symbol_pexpr p2)
+    (* | M_PEis_scalar p ->
+     *    Core.PEis_scalar (make_symbol_pexpr p)
+     * | M_PEis_integer p ->
+     *    Core.PEis_integer (make_symbol_pexpr p)
+     * | M_PEis_signed p ->
+     *    Core.PEis_signed (make_symbol_pexpr p)
+     * | M_PEis_unsigned p ->
+     *    Core.PEis_unsigned (make_symbol_pexpr p)
+     * | M_PEbmc_assume e ->
+     *    Core.PEbmc_assume (make_symbol_pexpr e)
+     * | M_PEare_compatible p1 p2 ->
+     *    Core.PEare_compatible (make_symbol_pexpr p1) (make_symbol_pexpr p2) *)
   end in
   Core.Pexpr annots bty pexpr_
 
@@ -405,8 +411,10 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                 (mu_to_core__expr env e2)
     | M_Eskip ->
        Core.Eskip
-    | M_Eccall a pe1 pe2 pes ->
-       Core.Eccall a (make_symbol_pexpr pe1) (make_symbol_pexpr pe2) 
+    | M_Eccall a (Annotated annots bty ct) pe2 pes ->
+       Core.Eccall a 
+         (Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)))
+         (make_symbol_pexpr pe2) 
          (map make_symbol_pexpr pes)
     | M_Eproc a name pes ->
        Core.Eproc a name (map make_symbol_pexpr pes)
