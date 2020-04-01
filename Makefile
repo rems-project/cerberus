@@ -58,29 +58,8 @@ cerberus-bmc: prelude-src
 LIBC_TARGETS = runtime/libc/libc.co runtime/libc/libm.co
 
 .PHONY: libc
-libc: $(LIBC_TARGETS)
-
-$(LIBC_TARGETS): export CERB_PATH := $(shell pwd)
-
-LIBC_SRC = runtime/libc/src/ctype.c runtime/libc/src/stdio.c \
-           runtime/libc/src/stdlib.c runtime/libc/src/string.c \
-           runtime/libc/src/time.c runtime/libc/src/utime.c \
-           runtime/libc/src/unistd.c runtime/libc/src/stat.c \
-           runtime/libc/src/uio.c runtime/libc/src/internal.c \
-           runtime/libc/src/vfscanf.c runtime/libc/src/signal.c
-LIBM_SRC = runtime/libc/src/math.c
-
-runtime/libc/libc.co: cerberus-concrete $(LIBC_SRC)
-	@echo "[CERB] $@"
-	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
-    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
-    $(LIBC_SRC)
-
-runtime/libc/libm.co: cerberus-concrete $(LIBM_SRC)
-	@echo "[CERB] $@"
-	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
-    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
-    $(LIBM_SRC)
+libc: prelude-src
+	$(Q)dune build $(addprefix _build/default/,$(LIBC_TARGETS))
 
 .PHONY: ail_playground
 ail_playground: prelude-src
@@ -124,11 +103,6 @@ cerberus-ocaml: prelude-src
 	#@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
 	#@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
 	#@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
-
-.PHONY: cbuild
-cbuild: tools/cbuild.ml
-	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/tools/cbuild.exe
 
 tmp/:
 	@echo "[MKDIR] tmp"

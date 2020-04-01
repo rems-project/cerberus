@@ -29,12 +29,12 @@ let run_pp with_ext doc =
   Colour.do_colour := saved
 
 (* The path to the Core standard library *)
-let core_stdlib_path =
-  Filename.concat Global_ocaml.cerb_path "runtime/libcore"
+let core_stdlib_path () =
+  Filename.concat (Cerb_runtime.runtime ()) "libcore"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
-  let filepath = Filename.concat core_stdlib_path "std.core" in
+  let filepath = Filename.concat (core_stdlib_path ()) "std.core" in
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
@@ -46,7 +46,7 @@ let load_core_stdlib () =
 
 (* == load the implementation file ============================================================== *)
 let load_core_impl core_stdlib impl_name =
-  let iname = Filename.concat core_stdlib_path ("impls/" ^ impl_name ^ ".impl") in
+  let iname = Filename.concat (core_stdlib_path ()) ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
     error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
