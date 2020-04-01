@@ -8,6 +8,7 @@
 (executable
  (name instance)
  (public_name instance-concrete)
+ (package cerberus-web)
  (flags (:standard -w -27))
  (modules instance)
  (libraries str lwt cohttp-lwt-unix ezgzip
@@ -16,6 +17,7 @@
 (executable
  (name instance_symbolic)
  (public_name instance-symbolic)
+ (package cerberus-web)
  (flags (:standard -w -27))
  (modules instance_symbolic)
  (libraries str lwt cohttp-lwt-unix ezgzip
@@ -24,6 +26,7 @@
 (executable
  (name web)
  (public_name web)
+ (package cerberus-web)
  (flags (:standard -w -27))
  (modules web)
  (libraries lwt cohttp-lwt-unix ezgzip
