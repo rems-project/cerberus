@@ -5,3 +5,13 @@
  (modules :standard)
  (wrapped false)
  (libraries lem pprint yojson))
+
+(rule
+ (target n1570.ml)
+ (deps ../tools/n1570.json)
+ (action
+  (with-stdout-to n1570.ml (progn
+   (echo "let data : Yojson.Basic.t Lazy.t =\n")
+   (echo "  lazy (Yojson.Basic.from_string  {json|\n")
+   (cat ../tools/n1570.json)
+   (echo "\n|json})")))))

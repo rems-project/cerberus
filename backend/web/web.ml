@@ -56,9 +56,6 @@ let print_webconf () =
     w.tmp_path;
   flush stdout
 
-(* NOTE: Marshalling this to each instance is faster than reading there ... *)
-let n1570 = Yojson.Basic.from_file (Global_ocaml.cerb_path ^ "/tools/n1570.json")
-
 let set_webconf cfg_file timeout core_impl tcp_port docroot cerb_debug_level =
   let cerb_path =
     try Sys.getenv "CERB_PATH"
@@ -163,7 +160,7 @@ let create_conf w =
     core_impl = w.core_impl;
     timeout = w.timeout;
     cerb_debug_level = w.cerb_debug_level;
-    n1570;
+    n1570 = Lazy.force N1570.data;
   }
 
 (* Misc *)
