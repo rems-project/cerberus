@@ -63,7 +63,7 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * tsymbol 'bty (* impl-defined static error *)
  | M_PEctor of mu_ctor 'bty * list (tsymbol 'bty) (* data constructor application *)
- | M_PEcase of (tsymbol 'bty) * list ((mu_pattern 'bty) * (tsymbol 'bty)) (* pattern matching *)
+ | M_PEcase of (tsymbol 'bty) * list ((mu_pattern 'bty) * mu_pexpr 'bty) (* pattern matching *)
  | M_PEarray_shift of (tsymbol 'bty) * ctype * (tsymbol 'bty) (* pointer array shift *)
  | M_PEmember_shift of (tsymbol 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of tsymbol 'bty (* boolean not *)
@@ -292,9 +292,7 @@ let rec mu_to_core__pexpr (env : symbol_env 'bty) (pexpr : mu_pexpr 'bty)
     | M_PEctor ctor pes -> 
        Core.PEctor ctor (map make_symbol_pexpr pes)
     | M_PEcase p pats_pes ->
-       let (pats,pes) = List.unzip pats_pes in
-       let pes = List.map make_symbol_pexpr pes in
-       let pats_pes = List.zip pats pes in
+       let pats_pes = mapsnd (mu_to_core__pexpr env) pats_pes in
        Core.PEcase (make_symbol_pexpr p) pats_pes
     | M_PEarray_shift pe1 ctype pe2 ->
        Core.PEarray_shift (make_symbol_pexpr pe1) ctype (make_symbol_pexpr pe2)
