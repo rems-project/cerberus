@@ -236,3 +236,13 @@ clean:
 .PHONY: distclean
 distclean: clean clean-prelude-src clean-sibylfs-src
 	$(Q)rm -rf tmp config.json
+
+.PHONY: install
+install: cerberus
+	@echo "[DUNE] install cerberus"
+	$(Q)dune install cerberus
+
+.PHONY: uninstall
+uninstall: cerberus
+	@echo "[DUNE] install cerberus"
+	$(Q)dune uninstall cerberus
