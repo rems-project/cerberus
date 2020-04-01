@@ -449,7 +449,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       (* Generation of the unfolding lemma. *)
       pp "@;@[<v 2>Lemma %s_unfold" id;
       List.iter (pp " %s") ref_names; pp " : (@;";
-      pp "%a @@ %s ≡@@{type}@;" (pp_as_tuple pp_print_string) ref_names id;
+      pp "(%a @@ %s)%%I ≡@@{type} (@;" (pp_as_tuple pp_print_string) ref_names id;
       pp "@[<v 2>";
       Option.iter (fun _ -> pp "padded (") annot.st_size;
       pp "struct struct_%s [" id;
@@ -464,7 +464,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       end;
       pp "@]@;]";
       Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
-      pp "@]@;)%%I.@;";
+      pp "@]@;)%%I).@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
       (* Generation of the global instances. *)
