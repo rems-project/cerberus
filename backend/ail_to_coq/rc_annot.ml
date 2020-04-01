@@ -46,6 +46,16 @@ let ident : ident Earley.grammar =
   in
   Earley.black_box fn cs_first false "<ident>"
 
+(** Integer token (regexp ["[0-9]+"]). *)
+let integer : int Earley.grammar =
+  let cs = Charset.from_string "0-9" in
+  let fn buf pos =
+    let nb = ref 1 in
+    while Charset.mem cs (Input.get buf (pos + !nb)) do incr nb done;
+    (int_of_string (String.sub (Input.line buf) pos !nb), buf, pos + !nb)
+  in
+  Earley.black_box fn cs false "<integer>"
+
 (** Arbitrary ("well-bracketed") string delimited by ['['] and [']']. *)
 let iris_term : iris_term Earley.grammar =
   well_bracketed '[' ']'
@@ -83,6 +93,8 @@ and type_expr =
   | Ty_Coq    of coq_expr
 
 let type_void : type_expr = Ty_params("void", [])
+
+type annot_arg = int * int * coq_expr
 
 type type_expr_prio = PAtom | PCstr | PFull
 
@@ -180,6 +192,10 @@ let parser annot_returns : type_expr Earley.grammar =
 let parser annot_ensures : constr Earley.grammar =
   | c:constr
 
+let parser annot_args : annot_arg Earley.grammar =
+  | integer ":" integer coq_expr
+
+
 (** {4 Annotations on statement expressions (ExprS)} *)
 
 (*
@@ -210,6 +226,7 @@ type annot =
   | Annot_ensures    of constr list
   | Annot_annot      of string
   | Annot_inv_vars   of (ident * type_expr) list
+  | Annot_annot_args of annot_arg list
 
 exception Invalid_annot of string
 
@@ -274,6 +291,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "ensures"    -> many_args annot_ensures (fun l -> Annot_ensures(l))
   | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
   | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
+  | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
   | _            -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -306,6 +324,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_requires(l)  , _   ) -> requires := !requires @ l
     | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
+    | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -316,6 +335,19 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   ; fa_exists     = !exists
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures }
+
+let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
+  let annot_args = ref [] in
+
+  let handle_attr ({rc_attr_id = id; _} as attr) =
+    if id <> "annot_args" then () else
+    match parse_attr attr with
+    | Annot_annot_args(l) -> annot_args := !annot_args @ l
+    | _                   -> assert false (* Unreachable. *)
+  in
+  List.iter handle_attr attrs;
+
+  !annot_args
 
 let field_annot : rc_attr list -> type_expr = fun attrs ->
   let field = ref None in

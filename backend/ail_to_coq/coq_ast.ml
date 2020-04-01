@@ -46,7 +46,7 @@ type expr =
   | Use       of layout * expr
   | AddrOf    of expr
   | GetMember of expr * string * bool (* From_union? *) * string
-(*| AnnotExpr (n : nat) {A} (a : A) (e : expr)*)
+  | AnnotExpr of int * coq_expr * expr
 
 type stmt =
   | Goto   of string (* Block index in the [IMap.t]. *)

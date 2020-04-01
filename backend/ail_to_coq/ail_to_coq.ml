@@ -293,8 +293,19 @@ let rec translate_expr lval goal_ty e =
           | Some(id) -> id
         in
         let (_, args, attrs) = find_function_decl fun_id !global_decls in
-        ignore attrs;
-        (* FIXME handle [rc::annot_args(<int> : <int> <coq_expr>)] *)
+        let attrs = collect_rc_attrs attrs in
+        let annot_args =
+          try function_annot_args attrs with Invalid_annot(msg) ->
+          Panic.wrn (Some(loc))
+            "Unusable argument annotation for function [%s]." fun_id; []
+        in
+        let nb_args = List.length es in
+        let check_useful (i, _, _) =
+          if i >= nb_args then
+            Panic.wrn (Some(loc))
+              "Argument annotation not usable (not enough arguments)."
+        in
+        List.iter check_useful annot_args;
         let (es, l) =
           let fn i e =
             let (_, ty, _) = List.nth args i in
@@ -305,6 +316,12 @@ let rec translate_expr lval goal_ty e =
           let es_ls = List.mapi fn es in
           (List.map fst es_ls, List.concat (List.map snd es_ls))
         in
+        let annotate i e =
+          let annot_args = List.filter (fun (n, _, _) -> n = i) annot_args in
+          let fn (_, k, coq_e) acc = AnnotExpr(k, coq_e, e) in
+          List.fold_right fn annot_args e
+        in
+        let es = List.mapi annotate es in
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
         let call = (ret_id, Var(Some(fun_id), true), es) in
