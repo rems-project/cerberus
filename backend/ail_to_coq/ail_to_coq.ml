@@ -200,11 +200,11 @@ let rec will_decay : ail_expr -> bool = fun e ->
 let rec find_function_decl fname decls =
   let open AilSyntax in
   match decls with
-  | []                            -> assert false
-  | (id_decl, (_, _, d)) :: decls ->
+  | []                                -> assert false
+  | (id_decl, (_, attrs, d)) :: decls ->
   if sym_to_str id_decl <> fname then find_function_decl fname decls else
   match d with
-  | Decl_function(_,(_, ty),args,_,_,_) -> (ty, args)
+  | Decl_function(_,(_, ty),args,_,_,_) -> (ty, args, attrs)
   | Decl_object(_,_,_)                  -> assert false
 
 let global_decls = ref []
@@ -292,7 +292,9 @@ let rec translate_expr lval goal_ty e =
           | None     -> not_impl loc "expr complicated call"
           | Some(id) -> id
         in
-        let (_, args) = find_function_decl fun_id !global_decls in
+        let (_, args, attrs) = find_function_decl fun_id !global_decls in
+        ignore attrs;
+        (* FIXME handle [rc::annot_args(<int> : <int> <coq_expr>)] *)
         let (es, l) =
           let fn i e =
             let (_, ty, _) = List.nth args i in
@@ -709,15 +711,15 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of functions. *)
   let functions =
     let open AilSyntax in
-    let build (id, (_, attrs, args, AnnotatedStatement(loc, s_attrs, stmt))) =
+    let build (id, (_, _, args, AnnotatedStatement(loc, s_attrs, stmt))) =
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       Hashtbl.reset used_globals; Hashtbl.reset used_functions;
       let func_name = sym_to_str id in
+      let (ret_ty, args_decl, attrs) = find_function_decl func_name decls in
       let func_annot =
         try Some(function_annot (collect_rc_attrs attrs))
         with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
       in
-      let (ret_ty, args_decl) = find_function_decl func_name decls in
       let func_args =
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
