@@ -7,6 +7,13 @@ open import Core
 open import Mucore
      import Core_typing Core_typing_aux
 
+(* The a-normalisation should happen after some partial evaluation and
+   rewrites that remove expressions passing ctypes and function
+   pointers as values. The embedding into mucore then is partial in
+   those places. *)
+
+
+
 type bty = core_base_type
 type value = generic_value Symbol.sym
 type values = list value
@@ -28,8 +35,8 @@ type mu_pattern = Mucore.mu_pattern bty
 type mu_action 'a = Mucore.mu_action 'a bty
 type mu_paction 'a = Mucore.mu_paction 'a bty
 
-type tsymbol = Mucore.tsymbol Mucore.mu_base_type
-type tsymbols = list tsymbol
+type asym = Mucore.asym Mucore.mu_base_type
+type asyms = list asym
 
 
 
@@ -44,7 +51,7 @@ let bty_of_mu_pexpr (M_Pexpr _ bty _) = bty
 
 let is_symbol (M_Pexpr annots bty e) = 
   match e with
-  | M_PEsym sym -> Just (TSym annots bty sym)
+  | M_PEsym sym -> Just (Annotated annots bty sym)
   | _ -> Nothing
   end
 
@@ -74,14 +81,14 @@ val letbind_pexpr :
   forall 'a.
   letbinder mu_pexpr 'a -> 
   mu_pexpr -> 
-  (tsymbol -> 'a) -> 
+  (asym -> 'a) -> 
   'a
 
 let letbind_pexpr letbinder pexpr ctxt = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
   let pat = var_pat sym annots bty in
-  let body = ctxt (TSym annots bty sym) in
+  let body = ctxt (Annotated annots bty sym) in
   letbinder annots pat pexpr body
 
 
@@ -99,7 +106,7 @@ val n_val_name :
   letbinder mu_pexpr 'a -> 
   annots -> 
   value -> 
-  (tsymbol -> 'a) -> 
+  (asym -> 'a) -> 
   'a
 
 val n_val_names :     
@@ -107,7 +114,7 @@ val n_val_names :
   letbinder mu_pexpr 'a -> 
   annots -> 
   values -> 
-  (tsymbols -> 'a) -> 
+  (asyms -> 'a) -> 
   'a
 
 
@@ -115,13 +122,13 @@ val n_val_names :
 
 
 val n_pexpr : pexpr -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
-val n_pexpr_name : pexpr -> (tsymbol -> mu_pexpr) -> mu_pexpr
-val n_pexpr_names : pexprs -> (tsymbols -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : pexpr -> (asym -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : pexprs -> (asyms -> mu_pexpr) -> mu_pexpr
 val normalise_pexpr : pexpr -> mu_pexpr
 
 val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_name_in_expr : forall 'a. pexpr -> (tsymbol -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_names_in_expr : forall 'a. pexprs -> (tsymbols -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. pexpr -> (asym -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
 val normalise_pexpr_in_expr : forall 'a. pexpr -> mu_expr 'a
 
 
@@ -163,7 +170,8 @@ and n_val lb annots v k =
   | Vunit -> k M_Vunit
   | Vtrue -> k M_Vtrue
   | Vfalse -> k M_Vfalse
-  | Vctype ct -> k (M_Vctype ct)
+  | Vctype ct -> failwith "core_anormalisation: Vctype"
+  (* | Vctype ct -> k (M_Vctype ct) *)
   | Vlist cbt vs -> n_val_names lb annots vs (fun vs -> k (M_Vlist cbt vs))
   | Vtuple vs -> n_val_names lb annots vs (fun vs -> k (M_Vtuple vs))
   end
@@ -197,7 +205,7 @@ and n_val_names lb annots vs k =
 
 (* 1 begin *)
 
-let rec n_pexpr_name (e : pexpr) (k : tsymbol -> mu_pexpr) : mu_pexpr = 
+let rec n_pexpr_name (e : pexpr) (k : asym -> mu_pexpr) : mu_pexpr = 
   n_pexpr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
@@ -271,8 +279,9 @@ and n_pexpr (e : pexpr) k =
      n_pexpr_name e' (fun e' ->
      k (annotate (M_PEunion sym id e')))
   | PEcfunction e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEcfunction e')))
+     failwith "core_anormalisation: PEcfunction"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEcfunction e'))) *)
   | PEmemberof sym id e' ->
      n_pexpr_name e' (fun e' ->
      k (annotate (M_PEmemberof sym id e')))
@@ -288,23 +297,29 @@ and n_pexpr (e : pexpr) k =
      n_pexpr_name e''' (fun e''' ->
      k (annotate (M_PEif e' e'' e''')))))
   | PEis_scalar e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEis_scalar e')))
+     failwith "core_anormalisation: PEis_scalar"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_scalar e'))) *)
   | PEis_integer e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEis_integer e')))
+     failwith "core_anormalisation: PEis_integer"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_integer e'))) *)
   | PEis_signed e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEis_signed e')))
+     failwith "core_anormalisation: PEis_signed"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_signed e'))) *)
   | PEis_unsigned e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEis_unsigned e')))
+     failwith "core_anormalisation: PEis_unsigned"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEis_unsigned e'))) *)
   | PEbmc_assume e' ->
-     n_pexpr_name e' (fun e' ->
-     k (annotate (M_PEbmc_assume e')))
+     failwith "core_anormalisation: PEbmc_assume"
+     (* n_pexpr_name e' (fun e' ->
+      * k (annotate (M_PEbmc_assume e'))) *)
   | PEare_compatible e' e'' ->
-     n_pexpr_name_2 (e',e'') (fun (e',e'') ->
-     k (annotate (M_PEare_compatible e' e'')))
+     failwith "core_anormalisation: PEare_compatible"
+     (* n_pexpr_name_2 (e',e'') (fun (e',e'') ->
+      * k (annotate (M_PEare_compatible e' e''))) *)
   end
 
 (* 1 end *)
@@ -312,7 +327,7 @@ and n_pexpr (e : pexpr) k =
 
 (* 2 begin *)
 
-let rec n_pexpr_in_expr_name (e : pexpr) (k : tsymbol -> mu_expr 'a) : mu_expr 'a = 
+let rec n_pexpr_in_expr_name (e : pexpr) (k : asym -> mu_expr 'a) : mu_expr 'a = 
   n_pexpr_in_expr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
@@ -387,8 +402,9 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      n_pexpr_in_expr_name e' (fun e' ->
      k (annotate (M_PEunion sym id e')))
   | PEcfunction e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEcfunction e')))
+     failwith "core_anormalisation: PEcfunction"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEcfunction e'))) *)
   | PEmemberof sym id e' ->
      n_pexpr_in_expr_name e' (fun e' ->
      k (annotate (M_PEmemberof sym id e')))
@@ -404,23 +420,29 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      n_pexpr_in_expr_name e''' (fun e''' ->
      k (annotate (M_PEif e' e'' e''')))))
   | PEis_scalar e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEis_scalar e')))
+     failwith "core_anormalisation: PEis_scalar"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_scalar e'))) *)
   | PEis_integer e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEis_integer e')))
+     failwith "core_anormalisation: PEis_integer"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_integer e'))) *)
   | PEis_signed e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEis_signed e')))
+     failwith "core_anormalisation: PEis_signed"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_signed e'))) *)
   | PEis_unsigned e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEis_unsigned e')))
+     failwith "core_anormalisation: PEis_unsigned"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEis_unsigned e'))) *)
   | PEbmc_assume e' ->
-     n_pexpr_in_expr_name e' (fun e' ->
-     k (annotate (M_PEbmc_assume e')))
+     failwith "core_anormalisation: PEbmc_assume"
+     (* n_pexpr_in_expr_name e' (fun e' ->
+      * k (annotate (M_PEbmc_assume e'))) *)
   | PEare_compatible e' e'' ->
-     n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') ->
-     k (annotate (M_PEare_compatible e' e'')))
+     failwith "core_anormalisation: PEare_compatible"
+     (* n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') ->
+      * k (annotate (M_PEare_compatible e' e''))) *)
   end
 
 
@@ -436,10 +458,10 @@ let normalise_pexpr (e : pexpr) =
 (* val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_in_expr p k = n_pexpr letbinder_pexpr_in_expr p k
  * 
- * val n_pexpr_name_in_expr : forall 'a. pexpr -> (tsymbol -> mu_expr 'a) -> mu_expr 'a
+ * val n_pexpr_name_in_expr : forall 'a. pexpr -> (asym -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_name_in_expr p k = n_pexpr_name letbinder_pexpr_in_expr p k
  * 
- * val n_pexpr_names_in_expr : forall 'a. pexprs -> (tsymbols -> mu_expr 'a) -> mu_expr 'a
+ * val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
 
 
@@ -553,11 +575,16 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
      k (wrap (M_Eif e1 e2 e3)))
   | Eskip ->
      k (wrap (M_Eskip))
-  | Eccall a e1 e2 es ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+  | Eccall a ct e2 es ->
+     let ct = match ct with
+       | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
+          (Annotated annots bty ct)
+       | _ -> failwith "core_anormalisation: Eccall with non-ctype first argument"
+     end in
+     (* n_pexpr_in_expr_name e1 (fun e1 -> *)
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_names es (fun es ->
-     k (wrap (M_Eccall a e1 e2 es)))))
+     k (wrap (M_Eccall a ct e2 es))))
   | Eproc a name es ->
      n_pexpr_in_expr_names es (fun es ->
      k (wrap (M_Eproc a name es)))

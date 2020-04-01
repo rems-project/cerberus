@@ -100,11 +100,11 @@ module Sym = struct
   let fresh_pretty = Symbol.fresh_pretty
   let pp = Pp_symbol.to_string_pretty
 
-  let of_tsymbol (s : 'bty Mucore.tsymbol) = 
-    let (TSym (_, _, sym)) = s in sym
+  let of_asym (s : 'bty Mucore.asym) = 
+    let (Annotated (_, _, sym)) = s in sym
 
-  let lof_tsymbol (s : 'bty Mucore.tsymbol) = 
-    let (TSym (annots, _, sym)) = s in 
+  let lof_asym (s : 'bty Mucore.asym) = 
+    let (Annotated (annots, _, sym)) = s in 
     (sym, Annot.get_loc_ annots)
 
   let compare = Symbol.symbol_compare
@@ -1296,15 +1296,15 @@ let integer_value_to_num loc iv =
 
 
 let infer_tuple name loc env args =
-  let syms = map Sym.of_tsymbol args in
+  let syms = map Sym.of_asym args in
   mapM (lookup loc env.local.a) syms >>= fun ts ->
   let t = (name, T.A (BT.Tuple ts)) in
   return t
 
 let infer_array name loc env items = 
   let t = (name, T.A BT.Array) in
-  fold_leftM (fun mt tsym ->
-      let (sym,loc) = Sym.lof_tsymbol tsym in
+  fold_leftM (fun mt asym ->
+      let (sym,loc) = Sym.lof_asym asym in
       lookup loc env.local.a sym >>= fun bt ->
       match mt with
       | None -> return (Some bt)
@@ -1371,15 +1371,13 @@ let infer_value loc name env v =
      let t = (name, T.A BT.Bool) in
      let constr = (Sym.fresh (), T.C (LC (Not (S name)))) in
      return [t; constr]
-  | M_Vctype ct ->
-     fail (Unreachable {loc; unreachable = "Vctype"})
-  | M_Vlist (cbt, tsyms) ->
+  | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun i_t ->
-     mapM (fun tsym ->
-       let (sym,iloc) = Sym.lof_tsymbol tsym in
+     mapM (fun asym ->
+       let (sym,iloc) = Sym.lof_asym asym in
        lookup loc env.local.a sym >>= fun typ ->
        ensure_type iloc (sym, T.A typ) (sym, T.A i_t)
-     ) tsyms >>
+     ) asyms >>
      (* maybe record list length? *)
      let t = (name, T.A (BT.List i_t)) in
      return [t]
@@ -1403,11 +1401,11 @@ let call_typ loc_call env decl_typ args =
       ) unis []
   in
 
-  let rec check_and_refine env tsyms ftyp unis constrs = 
+  let rec check_and_refine env asyms ftyp unis constrs = 
     let (F (A.A args, ret)) = ftyp in
     match args with
     | [] -> 
-       begin match tsyms with
+       begin match asyms with
        | [] -> 
           logical_variables_resolved env unis >>= fun substs ->
           let ret = 
@@ -1422,24 +1420,24 @@ let call_typ loc_call env decl_typ args =
           constraints_hold loc_call env constrs >>
           return ret
           
-       | tsym :: tsyms' -> 
-          let (sym,loc) = Sym.lof_tsymbol tsym in
+       | asym :: asyms' -> 
+          let (sym,loc) = Sym.lof_asym asym in
           lookup_any loc env.local sym >>= function
           | T.A t' -> fail (call_surplus_A loc sym t')
           | T.L t' -> fail (call_surplus_L loc sym t')
           | T.R t' -> fail (call_surplus_R loc sym t')
           | T.C t' -> check_and_refine (add_cvar env (sym, t')) 
-                        tsyms' ftyp unis constrs
+                        asyms' ftyp unis constrs
        end
 
     | (n, T.A t) :: args' ->
-       begin match tsyms with
-       | tsym :: tsyms' ->
-          let (sym,loc) = Sym.lof_tsymbol tsym in
+       begin match asyms with
+       | asym :: asyms' ->
+          let (sym,loc) = Sym.lof_asym asym in
           lookup loc env.local.a sym >>= fun t' ->
           let ftyp = F.subst n (S sym) (F (A.A args', ret)) in
           if BT.type_equal t' t
-          then check_and_refine env tsyms' ftyp unis constrs
+          then check_and_refine env asyms' ftyp unis constrs
           else fail (call_mismatch loc (sym, T.A t') (n, T.A t))
        | [] ->
           fail (call_missing_A loc_call n t)
@@ -1447,14 +1445,14 @@ let call_typ loc_call env decl_typ args =
 
     | (n, T.R t) :: args' -> 
 
-       begin match tsyms with
-       | tsym :: _ -> 
-          let (sym,loc) = Sym.lof_tsymbol tsym in 
+       begin match asyms with
+       | asym :: _ -> 
+          let (sym,loc) = Sym.lof_asym asym in 
           lookup loc env.local.r sym >>= fun t' ->
           tryM (RE.unify t t' unis)
             (fun () -> fail (call_mismatch loc (sym, T.R t') (n, T.R t)))
           >>= fun res ->
-          check_and_refine env tsyms (F (A.A args', ret)) unis constrs
+          check_and_refine env asyms (F (A.A args', ret)) unis constrs
        | [] -> 
           fail (call_missing_R loc_call n t)
        end
@@ -1464,14 +1462,15 @@ let call_typ loc_call env decl_typ args =
        let uni = { spec_name = n; spec = t; resolved = None } in
        let unis' = SymMap.add sym uni unis in
        let ftyp' = F.subst n (S sym) (F (A.A args', ret)) in
-       check_and_refine env tsyms ftyp' unis' constrs
+       check_and_refine env asyms ftyp' unis' constrs
 
     | (n, T.C t) :: args' ->        
        let constrs' = (constrs @ [(n, t)]) in
-       check_and_refine env tsyms (F (A.A args', ret)) unis constrs'
+       check_and_refine env asyms (F (A.A args', ret)) unis constrs'
 
   in
   check_and_refine env args decl_typ SymMap.empty []
+
 
 let call_typ_fn loc_call name env args =
   match name with
@@ -1517,8 +1516,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      | Ccons ->
         begin match args with
         | [hd; tl] ->
-           let hd_sym, hd_loc = Sym.lof_tsymbol hd in
-           let tl_sym, tl_loc = Sym.lof_tsymbol tl in
+           let hd_sym, hd_loc = Sym.lof_asym hd in
+           let tl_sym, tl_loc = Sym.lof_asym tl in
            lookup hd_loc env.local.a hd_sym >>= fun hd_bt ->
            lookup tl_loc env.local.a tl_sym >>= fun tl_bt ->
            ensure_type tl_loc (tl_sym, T.A tl_bt) (tl_sym, T.A (List hd_bt)) >>
@@ -1545,8 +1544,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      | CivXOR -> failwith "todo"
      | Cspecified ->
        begin match args with
-       | [tsym] ->
-          let (sym,loc) = Sym.lof_tsymbol tsym in
+       | [asym] ->
+          let (sym,loc) = Sym.lof_asym asym in
           lookup loc env.local.a sym >>= fun bt ->
           let t = (name, T.A bt) in
           return (env, [t])
@@ -1562,11 +1561,11 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      | Civfromfloat -> 
         fail (Unsupported {loc; unsupported = "floats"})
      end
-  | M_PEcase (tsym, pats_es) ->
-     (* let (esym,eloc) = Sym.lof_tsymbol tsym in
+  | M_PEcase (asym, pats_es) ->
+     (* let (esym,eloc) = Sym.lof_asym asym in
       * lookup eloc env.local.a sym >>= fun t ->
       * fold_leftM (fun bt (pat,psym) ->
-      *     let (psym,ploc) = Sym.lof_tsymbol psym in
+      *     let (psym,ploc) = Sym.lof_asym psym in
       *     lookup ploc env.local.a sym >>= fun t ->
       *        ensure_type 
       *        return ()
@@ -1577,7 +1576,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PEmember_shift _ ->
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
-     let (sym,a_loc) = Sym.lof_tsymbol sym in
+     let (sym,a_loc) = Sym.lof_asym sym in
      lookup loc env.local.a sym >>= fun t ->
      ensure_type a_loc (sym, T.A t) (sym, T.A BT.Bool) >>
      let constr = LC ((S name) %= Not (S sym)) in
@@ -1585,8 +1584,8 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let t = (name, T.A t) in
      return (env, [t])
   | M_PEop (op,sym1,sym2) ->
-     let (sym1, loc1) = Sym.lof_tsymbol sym1 in
-     let (sym2, loc2) = Sym.lof_tsymbol sym2 in
+     let (sym1, loc1) = Sym.lof_asym sym1 in
+     let (sym2, loc2) = Sym.lof_asym sym2 in
      lookup loc env.local.a sym1 >>= fun t1 ->
      lookup loc env.local.a sym2 >>= fun t2 ->
      let ((st1,st2),rt) = bt_of_binop op in
@@ -1602,10 +1601,10 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo PEunion"
   | M_PEmemberof _ ->
      failwith "todo M_PEmemberof"
-  | M_PEcall (mu_name, tsyms) ->
-     (* include the resource arguments into tsyms *)
+  | M_PEcall (mu_name, asyms) ->
+     (* include the resource arguments into asyms *)
      (* let env = call_resources annots env in *)
-     call_typ_fn loc mu_name env tsyms >>= fun (R.R t) ->
+     call_typ_fn loc mu_name env asyms >>= fun (R.R t) ->
      return (env, t)
   | M_PElet (p, e1, e2) ->
      (* todo: check against cbt? *)
@@ -1618,9 +1617,9 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
         failwith "todo ctor pattern"
      end
   | M_PEif (sym1,sym2,sym3) ->
-     let sym1, loc1 = Sym.lof_tsymbol sym1 in
-     let sym2, loc2 = Sym.lof_tsymbol sym2 in
-     let sym3, loc3 = Sym.lof_tsymbol sym3 in
+     let sym1, loc1 = Sym.lof_asym sym1 in
+     let sym2, loc2 = Sym.lof_asym sym2 in
+     let sym3, loc3 = Sym.lof_asym sym3 in
      lookup loc env.local.a sym1 >>= fun t1 ->
      lookup loc env.local.a sym2 >>= fun t2 ->
      lookup loc env.local.a sym3 >>= fun t3 ->
@@ -1633,20 +1632,6 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      in
      let t = (name, T.A t2) in
      return (env, [t; constr])
-  | M_PEcfunction _ ->
-     fail (Unsupported {loc; unsupported = "PEcfunction"})
-  | M_PEis_scalar _ ->
-     fail (Unreachable {loc; unreachable = "M_PEis_scalar"})
-  | M_PEis_integer _ ->
-     fail (Unreachable {loc; unreachable = "M_PEis_integer"})
-  | M_PEis_signed _ ->
-     fail (Unreachable {loc; unreachable = "M_PEis_signed"})
-  | M_PEis_unsigned _ ->
-     fail (Unreachable {loc; unreachable = "M_PEis_unsigned"})
-  | M_PEbmc_assume _ ->
-     fail (Unreachable {loc; unreachable = "M_PEbmc_assume"})
-  | M_PEare_compatible _ ->
-     fail (Unreachable {loc; unreachable = "M_PEare_compatible"})
 
 
 let subtype loc env rt1 (R.R rt2) = 
@@ -1714,7 +1699,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      failwith "todo eif"
   | M_Eskip -> 
      failwith "todo eskip" 
-  | M_Eccall (_a, tsym, asd, tsyms) ->
+  | M_Eccall (_a, asym, asd, asyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
      failwith "todo eproc"
