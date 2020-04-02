@@ -68,6 +68,59 @@ let cpp_str =
   ^ " -DHEAP_PAGES=10"
 
 
+let playground_core filename =
+  let frontend cpp_str filename =
+    let conf = {
+        debug_level= 0
+      ; pprints= []
+      ; astprints= []
+      ; ppflags= []
+      ; typecheck_core= false
+      ; rewrite_core= false
+      ; sequentialise_core= false
+      ; cpp_cmd= cpp_str
+      ; cpp_stderr= true
+    } in
+    Global_ocaml.(set_cerb_conf false Random false Basic false false false);
+    load_core_stdlib ()                                  >>= fun stdlib ->
+    load_core_impl stdlib impl_name                      >>= fun impl   ->
+    core_frontend (conf, io) (stdlib, impl) ~filename in
+  match frontend cpp_str filename with
+    | Exception.Exception err ->
+        prerr_endline (Pp_errors.to_string err)
+    | Exception.Result file ->
+        begin match file.Core.main with
+          | None ->
+              assert false
+          | Some sym ->
+              begin match Pmap.lookup sym file.funs with
+                | Some (Core.Proc (_, _, _, e)) ->
+(*
+                    print_endline "===== BEFORE =====";
+                    PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
+                      (Pp_core.Basic.pp_pexpr pe);
+                    print_endline "\n===== AFTER =====";
+                    Core_peval.foo (fun z -> PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout z) pe
+*)
+                    let rec loop e =
+                      print_endline "===== BEFORE =====";
+                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
+                        (Pp_core.Basic.pp_expr e);
+                      flush_all ();
+                      let e' = Core_peval.step_peval_expr file e in
+                      print_endline "\n===== AFTER =====";
+                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
+                        (Pp_core.Basic.pp_expr e');
+                      flush_all ();
+                      Scanf.scanf "%s\n" (fun _ ->
+                        loop e'
+                      )
+                    in loop e
+
+                | _ ->
+                    assert false
+              end
+        end
 
 
 let playground filename =
@@ -79,17 +132,28 @@ let playground filename =
           | None ->
               assert false
           | Some sym ->
+              Tags.set_tagDefs file.tagDefs;
               begin match Pmap.lookup sym file.funs with
                 | Some (Core.Proc (_, _, _, e)) ->
-                    print_endline "===== BEFORE =====";
-                    PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                      (Pp_core.Basic.pp_expr e);
-                    print_endline "\n===== AFTER =====";
-                    PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
-                      (Pp_core.Basic.pp_expr (Simpl.test file e))
+                    let rec loop e =
+                      print_endline "===== BEFORE =====";
+                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
+                        (Pp_core.Basic.pp_expr e);
+                      flush_all ();
+                      let e' = Core_peval.step_peval_expr file e in
+                      print_endline "\n===== AFTER =====";
+                      PPrint.ToChannel.pretty 1.0 80 Stdlib.stdout 
+                        (Pp_core.Basic.pp_expr e');
+                      flush_all ();
+                      Scanf.scanf "%s\n" (fun _ ->
+                        loop e'
+                      )
+                    in loop e
                 | _ ->
                     assert false
               end
+(*              Core_peval.boom file *)
+              
         end
 
 
@@ -101,5 +165,5 @@ let file =
 
 
 let () =
-  let playground_t = Term.(pure playground $ file) in
+  let playground_t = Term.(pure playground(*_core*) $ file) in
   Term.exit @@ Term.eval (playground_t, Term.info "Core playground")

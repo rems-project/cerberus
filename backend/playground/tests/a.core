@@ -1,3 +1,4 @@
+{-
 proc f() : eff loaded integer :=
   pure(42)
 
@@ -9,3 +10,17 @@ fun main() : ctype :=
 --  ty
 --    Specified(Cfunction(f))
     Cfunction(f)
+-}
+
+proc main() : eff integer :=
+  let n: integer = 0 in
+  if False then
+    pure (1 / n)
+  else
+    pure(42)
+{-
+pure(
+  let (x: integer, (y: integer, z: integer)) = (1, (undef(<<DUMMY(WIP)>>), undef(<<DUMMY(WIP2)>>))) in
+  x+y+z
+)
+-}

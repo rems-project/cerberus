@@ -14,14 +14,28 @@ end
 
 module Rewriter = functor (Eff: Monad) -> struct
   include Eff
+  
+  let has_changed =
+    ref false
+  
+  let rec repeat n m z =
+    if n = 0 then
+      return z
+    else begin
+      has_changed := false;
+      m z >>= fun z' ->
+      if !has_changed then
+        repeat (n-1) m z'
+      else
+        return z'
+    end
+  
   type 'a action =
     | Unchanged
     | Update of 'a Eff.t
     | Traverse
+    | DoChildrenPost of ('a -> 'a Eff.t)
     | ChangeDoChildrenPost of ('a Eff.t) * ('a -> 'a Eff.t) (* NOTE: the name comes from CIL *)
-(*
-    | FOO of ('a Eff.t) * ('a -> 'a  Eff.t)
-*)
   
   type 'a rw =
     | RW of ('a -> 'a action)
@@ -48,33 +62,18 @@ module Rewriter = functor (Eff: Monad) -> struct
       | Unchanged ->
           return node
       | Update node' ->
+          has_changed := true;
           node'
       | Traverse ->
           children rw node
+      | DoChildrenPost post ->
+          children rw node >>= fun ch ->
+          post ch
       | ChangeDoChildrenPost (m_node', post) ->
+          has_changed := true;
           m_node' >>= fun node' ->
           children rw node' >>= fun ch ->
           post ch
-(*
-      | FOO (m_node', post) ->
-          m_node' >>= fun node' ->
-          children rw node' >>= fun ch ->
-          post ch >>= fun ch' ->
-          begin match start ch' with
-            | Unchanged ->
-                return ch'
-            | Update node' ->
-                node'
-            | Traverse ->
-                children rw ch'
-            | ChangeDoChildrenPost (m_node', post) ->
-                m_node' >>= fun node' ->
-                children rw node' >>= fun ch ->
-                post ch
-            | FOO _ ->
-                failwith "FOO"
-          end
-*)
   
   
   let rec rewritePexpr (rw: 'bty rewriter) (pe: ('bty, Symbol.sym) C.generic_pexpr) : (('bty, Symbol.sym) C.generic_pexpr) Eff.t =
