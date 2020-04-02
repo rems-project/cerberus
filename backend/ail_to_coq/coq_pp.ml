@@ -365,6 +365,24 @@ let pp_constrs : constr list pp = fun ff cs ->
   | []      -> pp_str ff "True"
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
+let pp_struct_def guard annot fields ff id =
+  let pp fmt = Format.fprintf ff fmt in
+  pp "@[<hov 2>";
+  Option.iter (fun _ -> pp "padded (") annot.st_size;
+  pp "struct struct_%s [" id;
+  begin
+    match fields with
+    | []               -> ()
+    | (_,ty) :: fields ->
+    guard_mode := guard;
+    pp "@;%a" pp_type_expr ty;
+    List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields;
+    guard_mode := Guard_none
+  end;
+  pp "@]@;]";
+  Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
+  pp "@]"
+
 (* Functions for looking for recursive occurences of a type. *)
 
 let in_coq_expr : string -> coq_expr -> bool = fun s e ->
@@ -423,21 +441,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     if is_rec then begin
       pp "@[<v 2>Definition %s_rec : (%a -d> typeO) → (%a -d> typeO) := " id
         (pp_as_prod pp_coq_expr) ref_types (pp_as_prod pp_coq_expr) ref_types;
-      pp "(λ self %a,@;@[<hov 2>" (pp_as_tuple pp_print_string) ref_names;
-      Option.iter (fun _ -> pp "padded (") annot.st_size;
-      pp "struct struct_%s [" id;
-      begin
-        match fields with
-        | []               -> ()
-        | (_,ty) :: fields ->
-        guard_mode := Guard_in_def(id);
-        pp "@;%a" pp_type_expr ty;
-        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields;
-        guard_mode := Guard_none
-      end;
-      pp "@]@;]";
-      Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
-      pp "@]@;)%%I.@;Arguments %s_rec /.\n" id;
+      pp "(λ self %a,@;" (pp_as_tuple pp_print_string) ref_names;
+      pp_struct_def (Guard_in_def(id)) annot fields ff id;
+      pp "@;)%%I.@;Arguments %s_rec /.\n" id;
 
       pp "@;Global Instance %s_rec_ne : Contractive %s_rec." id id;
       pp "@;Proof. solve_type_proper. Qed.\n@;";
@@ -451,21 +457,8 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "@;@[<v 2>Lemma %s_unfold" id;
       List.iter (pp " %s") ref_names; pp " : (@;";
       pp "(%a @@ %s)%%I ≡@@{type} (@;" (pp_as_tuple pp_print_string) ref_names id;
-      pp "@[<v 2>";
-      Option.iter (fun _ -> pp "padded (") annot.st_size;
-      pp "struct struct_%s [" id;
-      begin
-        match fields with
-        | []               -> ()
-        | (_,ty) :: fields ->
-        guard_mode := Guard_in_lem(id);
-        pp "@;%a" pp_type_expr ty;
-        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields;
-        guard_mode := Guard_none
-      end;
-      pp "@]@;]";
-      Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
-      pp "@]@;)%%I).@;";
+      pp_struct_def (Guard_in_lem(id)) annot fields ff id;
+      pp "@;)%%I).@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
       (* Generation of the global instances. *)
@@ -489,19 +482,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       (* Definition of the [rtype]. *)
       pp "@[<v 2>Definition %s : rtype := {|@;" id;
       pp "rty_type := %a;@;" (pp_as_prod pp_coq_expr) ref_types;
-      pp "@[<hov 2>rty %a := " (pp_as_tuple_pat pp_str) ref_names;
-      Option.iter (fun _ -> pp "(padded (") annot.st_size;
-      pp "struct struct_%s [" id;
-      begin
-        match fields with
-        | []               -> ()
-        | (_,ty) :: fields ->
-        pp "@;%a" pp_type_expr ty;
-        List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
-      end;
-      pp "@]@;]";
-      Option.iter (pp ") struct_%s %a)" id pp_coq_expr) annot.st_size;
-      pp "%%I@]@;|}.\n";
+      pp "rty %a := (@;  @[<hov 0>" (pp_as_tuple_pat pp_str) ref_names;
+      pp_struct_def Guard_none annot fields ff id;
+      pp "@;)%%I@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Program Instance %s_movable : RMovable %s :=" id id;
       pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
