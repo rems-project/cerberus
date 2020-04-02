@@ -2180,7 +2180,7 @@ let combine_prov prov1 prov2 =
       | IntMul ->
           IV (combine_prov prov1 prov2, Nat_big_num.mul n1 n2)
       | IntDiv ->
-          IV (combine_prov prov1 prov2, Nat_big_num.integerDiv_t n1 n2)
+          IV (combine_prov prov1 prov2, Nat_big_num.(if equal n2 zero then zero else integerDiv_t n1 n2))
       | IntRem_t ->
           IV (combine_prov prov1 prov2, Nat_big_num.integerRem_t n1 n2)
       | IntRem_f ->

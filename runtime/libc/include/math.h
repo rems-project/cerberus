@@ -61,7 +61,9 @@ long double atanl(long double x);
 double atan2(double y, double x);
 float atan2f(float y, float x);
 long double atan2l(long double y, long double x);
+*/
 double cos(double x);
+/*
 float cosf(float x);
 long double cosl(long double x);
 double sin(double x);
@@ -88,7 +90,9 @@ long double sinhl(long double x);
 double tanh(double x);
 float tanhf(float x);
 long double tanhl(long double x);
+*/
 double exp(double x);
+/*
 float expf(float x);
 long double expl(long double x);
 double exp2(double x);
@@ -109,7 +113,9 @@ long double ldexpl(long double x, int exp);
 double log(double x);
 float logf(float x);
 long double logl(long double x);
+*/
 double log10(double x);
+/*
 float log10f(float x);
 long double log10l(long double x);
 double log1p(double x);
