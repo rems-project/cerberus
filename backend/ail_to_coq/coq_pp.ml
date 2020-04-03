@@ -303,6 +303,12 @@ type guard_mode =
   | Guard_in_def of string
   | Guard_in_lem of string
 
+let (reset_nroot_counter, with_uid) : (unit -> unit) * string pp =
+  let counter = ref (-1) in
+  let with_uid ff s = incr counter; fprintf ff "\"%s_%i\"" s !counter in
+  let reset _ = counter := -1 in
+  (reset, with_uid)
+
 let rec pp_constr_guard : guard_mode -> bool -> constr pp =
     fun guard wrap ff c ->
   let pp_type_expr = pp_type_expr_guard guard in
@@ -355,11 +361,12 @@ and pp_type_expr_guard : guard_mode -> type_expr pp = fun guard ff ty ->
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,tys)) when c = s ->
               assert (tys = []); (* FIXME *)
-              fprintf ff "guarded (nroot.@%S) " s;
+              fprintf ff "guarded (nroot.@%a) " with_uid s;
               fprintf ff "(apply_dfun self %a)" (pp_coq_expr true) e
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
               assert (tys = []); (* FIXME *)
-              fprintf ff "guarded (nroot.@%S) (" s; normal (); pp_str ff ")"
+              fprintf ff "guarded (nroot.@%a) (" with_uid s;
+              normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
     | Ty_ptr(k,ty)      -> fprintf ff "%a %a" pp_kind k (pp true) ty
@@ -404,6 +411,7 @@ let pp_struct_def guard annot fields ff id =
     match fields with
     | []               -> ()
     | (_,ty) :: fields ->
+    reset_nroot_counter ();
     let pp_type_expr = pp_type_expr_guard guard in
     pp "@;%a" pp_type_expr ty;
     List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
@@ -482,17 +490,15 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     in
     let params = annot.st_parameters in
     let param_names = List.map fst params in
-    let is_rec =
-      let id = match annot.st_ptr_type with None -> id | Some(id,_) -> id in
-      List.exists (fun (_,ty) -> in_type_expr id ty) fields
-    in
+    let rec_id = match annot.st_ptr_type with None -> id | Some(id,_) -> id in
+    let is_rec = List.exists (fun (_,ty) -> in_type_expr rec_id ty) fields in
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     if is_rec then begin
       pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
       pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
         ref_types (pp_as_prod (pp_coq_expr true)) ref_types;
       pp "(λ self %a,@;" (pp_as_tuple pp_str) ref_names;
-      pp_struct_def (Guard_in_def(id)) annot fields ff id;
+      pp_struct_def (Guard_in_def(rec_id)) annot fields ff id;
       pp "@;)%%I.@;Arguments %s_rec /.\n" id;
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
@@ -510,7 +516,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         id pp_params params pp_params annot.st_refined_by;
       pp "(%a @@ %a)%%I ≡@@{type}@;(" (pp_as_tuple pp_str) ref_names
         (pp_id_args false id) param_names;
-      pp_struct_def (Guard_in_lem(id)) annot fields ff id;
+      pp_struct_def (Guard_in_lem(rec_id)) annot fields ff id;
       pp ")%%I.@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
