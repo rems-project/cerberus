@@ -381,7 +381,7 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_params(id,tys) ->
     pp_str ff id;
     match (id, tys) with
-    | ("optional", [ty]) -> fprintf ff " %a null" (pp true) ty
+    | ("optional", [ty]) | ("optionalO", [ty]) -> fprintf ff " %a null" (pp true) ty
     | (_         , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
   in
   pp true ff ty
@@ -421,7 +421,7 @@ let pp_struct_def guard annot fields ff id =
       | (_,ty) :: fields ->
       reset_nroot_counter ();
       let pp_type_expr = pp_type_expr_guard None guard in
-      pp "@;%a" pp_type_expr ty;
+      pp "@;%a : type" pp_type_expr ty;
       List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
     end;
     pp "@]@;]"; (* Close box for struct fields. *)
@@ -540,11 +540,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
       (* Generation of the global instances. *)
       let pp_instance inst_name type_name =
-        pp "@;Global Instance %s_%s_inst l β %a%a:@;" id inst_name
+        pp "@;Global Instance %s_%s_inst l_ β_ %a%a:@;" id inst_name
           pp_params params pp_params annot.st_refined_by;
-        pp "  %s l β (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
+        pp "  %s l_ β_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
           (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
-        pp "  λ T, i2p (%s_eq l β _ _ T (%s_unfold" inst_name id;
+        pp "  λ T, i2p (%s_eq l_ β_ _ _ T (%s_unfold" inst_name id;
         List.iter (fun _ -> pp " _") param_names;
         List.iter (fun _ -> pp " _") ref_names; pp "))."
       in
