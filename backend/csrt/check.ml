@@ -64,15 +64,15 @@ module Ex = struct
     Pmap.fold (fun k v a -> a >> f k v) 
       m (return ())
 
-  let tryM (m : ('a,'e1) exceptM) (m' : unit -> ('a,'e2) exceptM) =
+  let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
     match m with
     | Result a -> Result a
-    | Exception _ -> m' ()
+    | Exception _ -> m'
 
-  let rec tryMs (m : ('a,'e1) exceptM) (ms : (unit -> ('a,'e2) exceptM) list) =
+  let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
     match m, ms with
     | Result a, _ -> Result a
-    | Exception _, m' :: ms' -> tryMs (m' ()) ms'
+    | Exception _, m' :: ms' -> tryMs m' ms'
     | Exception e, [] -> Exception e
 
 end
@@ -790,6 +790,12 @@ module Err = struct
     | Unconstrained_l of Sym.t * LS.t
 
   type type_error = 
+    | Var_kind_error of {
+        loc : Loc.t;
+        sym: Sym.t;
+        expected : T.kind;
+        has : T.kind;
+      }
     | Name_bound_twice of {
         loc : Loc.t;
         name: Sym.t
@@ -808,7 +814,7 @@ module Err = struct
       }
     | Unbound_name of {
         loc: Loc.t; 
-        unbound: Sym.t
+        unbound: Sym.t;
       }
     | Inconsistent_fundef of {
         loc: Loc.t;
@@ -927,6 +933,9 @@ module Err = struct
          (Loc.pp loc) (Sym.pp name) (LS.pp ls)
 
   let pp = function 
+    | Var_kind_error err ->
+       sprintf "%s. Expected kind %s but found kind %s"
+         (Loc.pp err.loc) (T.pp_kind err.expected) (T.pp_kind err.has)
     | Name_bound_twice err ->
        sprintf "%s. Name bound twice: %s" 
          (Loc.pp err.loc) (Sym.pp err.name)
@@ -976,11 +985,7 @@ module Env = struct
       names : NameMap.t
     } 
 
-  type local_env = 
-    { a: BT.t SymMap.t; 
-      l: LS.t SymMap.t; 
-      r: RE.t SymMap.t; 
-      c: LC.t SymMap.t; }
+  type local_env = T.t SymMap.t
 
   type env = 
     { local : local_env ; 
@@ -991,11 +996,7 @@ module Env = struct
       fun_decls = SymMap.empty;
       names = NameMap.empty }
 
-  let empty_local = 
-    { a = SymMap.empty;
-      l = SymMap.empty;
-      r = SymMap.empty;
-      c = SymMap.empty; }
+  let empty_local = SymMap.empty
 
   let empty_env = 
     { local = empty_local; 
@@ -1005,53 +1006,58 @@ module Env = struct
     { global = global_env; 
       local = empty_local }
 
-
-  let add_avar env (sym, t) = 
-    { env with local = { env.local with a = SymMap.add sym t env.local.a } }
-  let add_lvar env (sym, t) = 
-    { env with local = { env.local with l = SymMap.add sym t env.local.l } }
-  let add_rvar env (sym, t) = 
-    { env with local = { env.local with r = SymMap.add sym t env.local.r } }
-  let add_cvar env (sym, t) = 
-    { env with local = { env.local with c = SymMap.add sym t env.local.c } }
-
-  let remove_avar env sym = 
-    { env with local = { env.local with a = SymMap.remove sym env.local.a } }
-  let remove_lvar env sym = 
-    { env with local = { env.local with l = SymMap.remove sym env.local.l } }
-  let remove_rvar env sym = 
-    { env with local = { env.local with r = SymMap.remove sym env.local.r } }
-  let remove_cvar env sym = 
-    { env with local = { env.local with c = SymMap.remove sym env.local.c } }
-
-
-  let add_avars env bindings = 
-    fold_left add_avar env bindings
-
-  let add_var env (sym, t) = 
-    match t with
-    | T.A t -> add_avar env (sym, t)
-    | T.L t -> add_lvar env (sym, t)
-    | T.R t -> add_rvar env (sym, t)
-    | T.C t -> add_cvar env (sym, t)
+  let add_var (env : env) (sym, t) = 
+    { env with local = SymMap.add sym t env.local }
 
   let add_vars env bindings = 
     fold_left add_var env bindings
 
-  (* fix this up to make sure when looking up resources we also return
-     the reduced environment *)
-  let lookup (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) : ('v,type_error) m =
-    of_maybe (Unbound_name {loc; unbound = name}) (SymMap.find_opt name env)
+  let add_Avar env (sym, t) = add_var env (sym, T.A t)
+  let add_Lvar env (sym, t) = add_var env (sym, T.L t)
+  let add_Rvar env (sym, t) = add_var env (sym, T.R t)
+  let add_Cvar env (sym, t) = add_var env (sym, T.C t)
 
-  let lookup_asym (env: 'v SymMap.t) name : ('v,type_error) m =
-    let (sym, loc) = Sym.lof_asym name in
-    lookup loc env sym
+  let remove_var env sym = 
+    { env with local = SymMap.remove sym env.local }
 
-  let lookup_any (loc : Loc.t) (env: local_env) (name: Sym.t) : ('v,type_error) m =
-    tryMs (lookup loc env.a name >>= fun t -> return (T.A t))
-      [(fun () -> lookup loc env.l name >>= fun t -> return (T.L t));
-       (fun () -> lookup loc env.r name >>= fun t -> return (T.R t));
-       (fun () -> lookup loc env.c name >>= fun t -> return (T.C t));]
+  let lookup (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
+    match SymMap.find_opt name env with
+    | None -> fail (Unbound_name {loc; unbound = name})
+    | Some v -> return v
+
+  let get_var (loc : Loc.t) (env: env) (name: Sym.t) =
+    lookup loc env.local name >>= function
+    | T.A t -> return (`A t)
+    | T.L t -> return (`L t)
+    | T.R t -> return (`R (t, remove_var env name))
+    | T.C t -> return (`C t)
+
+
+  let kind = function
+    | `A _ -> T.Argument
+    | `L _ -> T.Logical
+    | `R _ -> T.Resource
+    | `C _ -> T.Constraint
+
+  let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
+    get_var loc env sym >>= function
+    | `A t -> return t
+    | t -> fail (Var_kind_error {loc; sym; expected = T.Argument; has = kind t})
+
+  let get_Lvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
+    get_var loc env sym >>= function
+    | `L t -> return t
+    | t -> fail (Var_kind_error {loc; sym; expected = T.Logical; has = kind t})
+
+  let get_Rvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
+    get_var loc env sym >>= function
+    | `R (t, env) -> return (t, env)
+    | t -> fail (Var_kind_error {loc; sym; expected = T.Resource; has = kind t})
+
+  let get_Cvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
+    get_var loc env sym >>= function
+    | `C t -> return t
+    | t -> fail (Var_kind_error {loc; sym; expected = T.Constraint; has = kind t})
 
 end
 
@@ -1106,11 +1112,11 @@ let rec infer_it loc env it =
      return (List bt)
 
   | S sym ->
-     lookup_any loc env.local sym >>= function
-     | T.A t -> return t
-     | T.L (LS.Base t) -> return t
-     | T.R _ -> fail (Illtyped_it {loc; it})
-     | T.C _ -> fail (Illtyped_it {loc; it})
+     get_var loc env sym >>= function
+     | `A t -> return t
+     | `L (LS.Base t) -> return t
+     | `R _ -> fail (Illtyped_it {loc; it})
+     | `C _ -> fail (Illtyped_it {loc; it})
 
 
 and check_it loc env it bt =
@@ -1205,10 +1211,10 @@ let args_same_typ (mtyp : BT.t option) (args_bts : (BT.t * Loc.t) list) =
     ) mtyp args_bts
 
 
-let make_args_bts env tsyms = 
+let make_Aargs_bts env tsyms = 
   mapM (fun tsym ->
       let (sym, loc) = Sym.lof_asym tsym in
-      lookup loc env sym >>= fun t ->
+      get_Avar loc env sym >>= fun t ->
       return (t, loc)) tsyms
 
 
@@ -1243,7 +1249,7 @@ let infer_object_value (env : env) loc name ov =
        ( fun _ ->
          fail (Unsupported {loc; unsupported = "unspecified pointer value"}) )
   | M_OVarray items ->
-     make_args_bts env.local.a items >>= fun args_bts ->
+     make_Aargs_bts env items >>= fun args_bts ->
      args_same_typ None args_bts >>
      return [(name,T.A BT.Array)]
   | M_OVstruct (sym, fields) ->
@@ -1278,14 +1284,14 @@ let infer_value loc name env v =
      return [t; constr]
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun i_t ->
-     make_args_bts env.local.a asyms >>= fun args_bts ->
+     make_Aargs_bts env asyms >>= fun args_bts ->
      args_same_typ (Some i_t) args_bts >>
      (* maybe record list length? *)
      let t = (name, T.A (BT.List i_t)) in
      return [t]
   | M_Vtuple args ->
-     mapM (lookup_asym env.local.a) args >>= fun ts ->
-     let t = (name, T.A (BT.Tuple ts)) in
+     make_Aargs_bts env args >>= fun args_bts ->
+     let t = (name, T.A (BT.Tuple (List.map fst args_bts))) in
      return [t]
 
 
@@ -1321,15 +1327,15 @@ let call_typ loc_call env decl_typ args =
               constrs substs
           in
           constraints_hold loc_call env constrs >>
-          return ret
+          return (ret,env)
           
        | asym :: asyms' -> 
           let (sym,loc) = Sym.lof_asym asym in
-          lookup_any loc env.local sym >>= function
-          | T.A t' -> fail (Call_error (loc, Surplus_A (sym, t')))
-          | T.L t' -> fail (Call_error (loc, Surplus_L (sym, t')))
-          | T.R t' -> fail (Call_error (loc, Surplus_R (sym, t')))
-          | T.C t' -> check_and_refine (add_cvar env (sym, t')) 
+          get_var loc env sym >>= function
+          | `A t' -> fail (Call_error (loc, Surplus_A (sym, t')))
+          | `L t' -> fail (Call_error (loc, Surplus_L (sym, t')))
+          | `R (t',_) -> fail (Call_error (loc, Surplus_R (sym, t')))
+          | `C t' -> check_and_refine (add_Cvar env (sym, t')) 
                         asyms' ftyp unis constrs
        end
 
@@ -1337,7 +1343,7 @@ let call_typ loc_call env decl_typ args =
        begin match asyms with
        | asym :: asyms' ->
           let (sym,loc) = Sym.lof_asym asym in
-          lookup loc env.local.a sym >>= fun t' ->
+          get_Avar loc env sym >>= fun t' ->
           let ftyp = F.subst n (S sym) (F (A.A args', ret)) in
           if BT.type_equal t' t
           then check_and_refine env asyms' ftyp unis constrs
@@ -1351,10 +1357,10 @@ let call_typ loc_call env decl_typ args =
        begin match asyms with
        | asym :: _ -> 
           let (sym,loc) = Sym.lof_asym asym in 
-          lookup loc env.local.r sym >>= fun t' ->
+          get_Rvar loc env sym >>= fun (t',env) ->
           tryM (RE.unify t t' unis)
-            (fun () -> fail (Call_error (loc, Mismatch {has = (sym, T.R t'); expected = (n, T.R t)})))
-          >>= fun res ->
+            (let err = Mismatch {has = (sym, T.R t'); expected = (n, T.R t)} in
+             fail (Call_error (loc, err))) >>= fun res ->
           check_and_refine env asyms (F (A.A args', ret)) unis constrs
        | [] -> 
           fail (Call_error (loc_call, (Missing_R (n, t))))
@@ -1568,29 +1574,29 @@ let infer_binop name env loc op sym1 sym2 =
 
   let (sym1, loc1) = Sym.lof_asym sym1 in
   let (sym2, loc2) = Sym.lof_asym sym2 in
-  lookup loc env.local.a sym1 >>= fun t1 ->
-  lookup loc env.local.a sym2 >>= fun t2 ->
+  get_Avar loc env sym1 >>= fun t1 ->
+  get_Avar loc env sym2 >>= fun t2 ->
   let ((st1,st2),rt) = bt_of_binop in
   ensure_type loc1 (sym1, T.A t1) (sym1, T.A st1) >>
   ensure_type loc2 (sym2, T.A t2) (sym1, T.A st2) >>
   let constr = LC (S name %= (make_binop_constr (S sym1) (S sym2))) in
-  let env = add_cvar env (Sym.fresh (), constr) in
+  let env = add_Cvar env (Sym.fresh (), constr) in
   let t = (name, T.A rt) in
-  return (env, [t])
+  return ([t], env)
 
 
 let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
   let loc = Annot.get_loc_ annots in
   match pe with
   | M_PEsym sym ->
-     lookup loc env.local.a sym >>= fun b ->
+     get_Avar loc env sym >>= fun b ->
      let t = (name, T.A b) in
-     return (env, [t])
+     return ([t], env)
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
      infer_value loc name env v >>= fun t ->
-     return (env, t)
+     return (t, env)
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
   | M_PEundef _ ->
@@ -1598,9 +1604,9 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PEerror _ ->
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
-     make_args_bts env.local.a args >>= fun args_bts ->
+     make_Aargs_bts env args >>= fun args_bts ->
      ctor_typ loc ctor args_bts >>= fun t ->
-     return (env, [(name, T.A t)])
+     return ([(name, T.A t)], env)
   | M_PEcase (asym, pats_es) ->
      (* let (esym,eloc) = Sym.lof_asym asym in
       * lookup eloc env.local.a esym >>= fun bt ->
@@ -1626,12 +1632,12 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
      let (sym,a_loc) = Sym.lof_asym sym in
-     lookup loc env.local.a sym >>= fun t ->
+     get_Avar loc env sym >>= fun t ->
      ensure_type a_loc (sym, T.A t) (sym, T.A BT.Bool) >>
      let constr = LC ((S name) %= Not (S sym)) in
-     let env = add_cvar env (name, constr) in
+     let env = add_Cvar env (name, constr) in
      let t = (name, T.A t) in
-     return (env, [t])
+     return ([t], env)
   | M_PEop (op,sym1,sym2) ->
      infer_binop name env loc op sym1 sym2
   | M_PEstruct _ ->
@@ -1643,14 +1649,14 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PEcall (mu_name, asyms) ->
      (* include the resource arguments into asyms *)
      (* let env = call_resources annots env in *)
-     call_typ_fn loc mu_name env asyms >>= fun (R.R t) ->
-     return (env, t)
+     call_typ_fn loc mu_name env asyms >>= fun (R.R t, env) ->
+     return (t, env)
   | M_PElet (p, e1, e2) ->
      (* todo: check against cbt? *)
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (env, rt) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
         infer_pexpr name (add_vars env rt) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1659,9 +1665,9 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
      let sym1, loc1 = Sym.lof_asym sym1 in
      let sym2, loc2 = Sym.lof_asym sym2 in
      let sym3, loc3 = Sym.lof_asym sym3 in
-     lookup loc env.local.a sym1 >>= fun t1 ->
-     lookup loc env.local.a sym2 >>= fun t2 ->
-     lookup loc env.local.a sym3 >>= fun t3 ->
+     get_Avar loc env sym1 >>= fun t1 ->
+     get_Avar loc env sym2 >>= fun t2 ->
+     get_Avar loc env sym3 >>= fun t3 ->
      ensure_type loc1 (sym1, T.A t1) (sym1, T.A BT.Bool) >>
      ensure_type loc3 (sym3, T.A t3) (sym1, T.A t2) >>
      let constr = 
@@ -1670,7 +1676,7 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
                     ((Not (S sym1)) %& (S name %= S sym3)) ) ))
      in
      let t = (name, T.A t2) in
-     return (env, [t; constr])
+     return ([t; constr], env)
 
 
 let subtype loc env rt1 (R.R rt2) = 
@@ -1729,7 +1735,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (env, rt) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
         infer_expr name (add_vars env rt) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1737,7 +1743,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
   | M_Eif _ ->
      failwith "todo eif"
   | M_Eskip -> 
-     failwith "todo eskip" 
+     return ([], env)
   | M_Eccall (_a, asym, asd, asyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
@@ -1746,7 +1752,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_expr name2 env e1 >>= fun (env, rt) ->
+        infer_expr name2 env e1 >>= fun (rt, env) ->
         infer_expr name (add_vars env rt) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1755,7 +1761,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      begin match p with 
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
-        infer_expr name2 env e1 >>= fun (env, rt) ->
+        infer_expr name2 env e1 >>= fun (rt, env) ->
         infer_expr name (add_vars env rt) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1774,7 +1780,7 @@ let check_expr fname env e ret =
   let (M_Expr (annots, _)) = e in
   let loc = Annot.get_loc_ annots in
   let name = Sym.fresh () in    (* fix *)
-  infer_expr name env e >>= fun (env,t) ->
+  infer_expr name env e >>= fun (t, env) ->
   subtype loc env t ret >>= fun env ->
   return env
 
