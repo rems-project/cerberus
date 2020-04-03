@@ -372,6 +372,16 @@ let pp_constrs : constr list pp = fun ff cs ->
 
 let pp_struct_def guard annot fields ff id =
   let pp fmt = Format.fprintf ff fmt in
+  (* Printing of the "exists". *)
+  if annot.st_exists <> [] then
+    begin
+      pp "@[<v 0>";
+      let pp_exist (x, e) = pp "tyexists (λ %s : %a,@;" x pp_coq_expr e in
+      List.iter pp_exist annot.st_exists;
+    end;
+  (* Opening the "constrained". *)
+  if annot.st_constrs <> [] then pp "constrained (@;";
+  (* ... *)
   pp "@[<hov 2>";
   Option.iter (fun _ -> pp "padded (") annot.st_size;
   pp "struct struct_%s [" id;
@@ -386,6 +396,21 @@ let pp_struct_def guard annot fields ff id =
   end;
   pp "@]@;]";
   Option.iter (pp ") struct_%s %a" id pp_coq_expr) annot.st_size;
+  (* Printing of constraints. *)
+  if annot.st_constrs <> [] then
+    begin
+      pp ") (@;  @[<v 0>";
+      let (c, cs) = (List.hd annot.st_constrs, List.tl annot.st_constrs) in
+      pp "%a" pp_constr c;
+      List.iter (pp " ∗@;%a" pp_constr) annot.st_constrs;
+      pp "@]@;"
+    end;
+  (* Closing the "exists". *)
+  if annot.st_exists <> [] then
+    begin
+      List.iter (fun _ -> pp ")") annot.st_exists;
+      pp "@]"
+    end;
   pp "@]"
 
 (* Functions for looking for recursive occurences of a type. *)
