@@ -34,6 +34,7 @@ module Rewriter = functor (Eff: Monad) -> struct
     | Unchanged
     | Update of 'a Eff.t
     | Traverse
+    | PostTraverseAction of (unit -> unit Eff.t)
     | DoChildrenPost of ('a -> 'a Eff.t)
     | ChangeDoChildrenPost of ('a Eff.t) * ('a -> 'a Eff.t) (* NOTE: the name comes from CIL *)
   
@@ -66,6 +67,10 @@ module Rewriter = functor (Eff: Monad) -> struct
           node'
       | Traverse ->
           children rw node
+      | PostTraverseAction a ->
+          children rw node >>= fun ch ->
+          a () >>= fun () ->
+          return ch
       | DoChildrenPost post ->
           children rw node >>= fun ch ->
           post ch
