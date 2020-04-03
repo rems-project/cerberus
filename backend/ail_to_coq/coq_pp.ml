@@ -309,10 +309,10 @@ let (reset_nroot_counter, with_uid) : (unit -> unit) * string pp =
   let reset _ = counter := -1 in
   (reset, with_uid)
 
-let rec pp_constr_guard : guard_mode -> bool -> constr pp =
-    fun guard wrap ff c ->
-  let pp_type_expr = pp_type_expr_guard guard in
-  let pp_constr = pp_constr_guard guard in
+let rec pp_constr_guard : unit pp option -> guard_mode -> bool -> constr pp =
+    fun pp_dots guard wrap ff c ->
+  let pp_type_expr = pp_type_expr_guard pp_dots guard in
+  let pp_constr = pp_constr_guard pp_dots guard in
   let pp_kind ff k =
     match k with
     | Own     -> pp_str ff "◁ₗ"
@@ -329,8 +329,9 @@ let rec pp_constr_guard : guard_mode -> bool -> constr pp =
   | Constr_exist(x,c)  -> fprintf ff "∃ %s, %a" x (pp_constr false) c
   | Constr_own(x,k,ty) -> fprintf ff "%s %a %a" x pp_kind k pp_type_expr ty
 
-and pp_type_expr_guard : guard_mode -> type_expr pp = fun guard ff ty ->
-  let pp_constr = pp_constr_guard guard in
+and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
+    fun pp_dots guard ff ty ->
+  let pp_constr = pp_constr_guard pp_dots guard in
   let pp_kind ff k =
     match k with
     | Own     -> pp_str ff "&own"
@@ -346,43 +347,48 @@ and pp_type_expr_guard : guard_mode -> type_expr pp = fun guard ff ty ->
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)         -> (pp_coq_expr wrap) ff e
-    | Ty_dots           -> Panic.panic_no_pos "Unexpected ellipsis."
     | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
     | Ty_lambda(p,ty)   -> fprintf ff "(λ %a, %a)" pp_patt p (pp false) ty
     (* Insert wrapping if needed. *)
     | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
+    | Ty_dots           ->
+        begin
+          match pp_dots with
+          | None     -> Panic.panic_no_pos "Unexpected ellipsis."
+          | Some(pp) -> pp ff ()
+        end
     | Ty_refine(e,ty)   ->
         begin
           let normal () =
             fprintf ff "%a @@ %a" (pp_coq_expr true) e (pp true) ty
           in
           match (guard, ty) with
-          | (Guard_in_def(s), Ty_params(c,tys)) when c = s ->
-              assert (tys = []); (* FIXME *)
+          | (Guard_in_def(s), Ty_params(c,_)) when c = s ->
               fprintf ff "guarded (nroot.@%a) " with_uid s;
               fprintf ff "(apply_dfun self %a)" (pp_coq_expr true) e
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
-              assert (tys = []); (* FIXME *)
               fprintf ff "guarded (nroot.@%a) (" with_uid s;
               normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
     | Ty_ptr(k,ty)      -> fprintf ff "%a %a" pp_kind k (pp true) ty
-    | Ty_exists(x,ty)   -> fprintf ff "∃ %s, %a" x (pp false) ty
+    | Ty_exists(x,ty)   ->
+        fprintf ff "tyexists (λ %s, %a)" x (pp false) ty
     | Ty_constr(ty,c)   ->
         fprintf ff "constrained %a %a" (pp true) ty (pp_constr true) c
     | Ty_params(id,tys) ->
     pp_str ff id;
     match (id, tys) with
-    | ("optional", [ty]) -> fprintf ff " %a null" (pp true) ty
-    | (_         , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
+    | ("optional" , [ty])
+    | ("optionalO", [ty]) -> fprintf ff " %a null" (pp true) ty
+    | (_          , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
   in
   pp true ff ty
 
-let pp_type_expr = pp_type_expr_guard Guard_none
-let pp_constr = pp_constr_guard Guard_none true
+let pp_type_expr = pp_type_expr_guard None Guard_none
+let pp_constr = pp_constr_guard None Guard_none true
 
 let pp_constrs : constr list pp = fun ff cs ->
   match cs with
@@ -390,7 +396,7 @@ let pp_constrs : constr list pp = fun ff cs ->
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
 let pp_struct_def guard annot fields ff id =
-  let pp fmt = Format.fprintf ff fmt in
+  let pp fmt = fprintf ff fmt in
   (* Printing of the "exists". *)
   pp "@[<v 0>";
   if annot.st_exists <> [] then
@@ -403,32 +409,41 @@ let pp_struct_def guard annot fields ff id =
   (* Opening the "constrained". *)
   pp "@[<v 2>"; (* Open box for struct fields. *)
   if annot.st_constrs <> [] then pp "constrained (";
-  (* Printing the "padded". *)
-  Option.iter (fun _ -> pp "padded (") annot.st_size;
-  (* Printing the struct fields. *)
-  pp "struct struct_%s [" id;
+  (* Part that may stand for dots in case of "ptr_type". *)
+  let pp_dots ff () =
+    let pp fmt = fprintf ff fmt in
+    (* Printing the "padded". *)
+    Option.iter (fun _ -> pp "padded (") annot.st_size;
+    (* Printing the struct fields. *)
+    pp "struct struct_%s [" id;
+    begin
+      match fields with
+      | []               -> ()
+      | (_,ty) :: fields ->
+      reset_nroot_counter ();
+      let pp_type_expr = pp_type_expr_guard None guard in
+      pp "@;%a : type" pp_type_expr ty;
+      List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
+    end;
+    pp "@]@;]"; (* Close box for struct fields. *)
+    Option.iter (pp ") struct_%s %a" id (pp_coq_expr true)) annot.st_size;
+  in
   begin
-    match fields with
-    | []               -> ()
-    | (_,ty) :: fields ->
-    reset_nroot_counter ();
-    let pp_type_expr = pp_type_expr_guard guard in
-    pp "@;%a" pp_type_expr ty;
-    List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
+    match annot.st_ptr_type with
+    | None        -> pp_dots ff ()
+    | Some(_, ty) -> pp_type_expr_guard (Some(pp_dots)) Guard_none ff ty
   end;
-  pp "@]@;]"; (* Close box for struct fields. *)
-  Option.iter (pp ") struct_%s %a" id (pp_coq_expr true)) annot.st_size;
   (* Printing of constraints. *)
   if annot.st_constrs <> [] then
     begin
       pp ") (@;  @[<v 0>";
       let (c, cs) = (List.hd annot.st_constrs, List.tl annot.st_constrs) in
       pp "%a" pp_constr c;
-      List.iter (pp " ∗@;%a" pp_constr) annot.st_constrs;
-      pp "@]@;"
+      List.iter (pp " ∗@;%a" pp_constr) cs;
+      pp "@]@;)"
     end;
   (* Closing the "exists". *)
-  if annot.st_exists <> [] then List.iter (fun _ -> pp ")") annot.st_exists;
+  List.iter (fun _ -> pp ")") annot.st_exists;
   pp "@]@]"
 
 (* Functions for looking for recursive occurences of a type. *)
@@ -438,16 +453,28 @@ let in_coq_expr : string -> coq_expr -> bool = fun s e ->
   | Coq_ident(x) -> x = s
   | Coq_all(e)   -> e = s (* In case of [{s}]. *)
 
+let rec in_patt : string -> pattern -> bool = fun s p ->
+  match p with
+  | Pat_var(x)    -> x = s
+  | Pat_tuple(ps) -> List.exists (in_patt s) ps
+
 let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   match ty with
   | Ty_refine(e,ty)  -> in_coq_expr s e || in_type_expr s ty
   | Ty_ptr(_,ty)     -> in_type_expr s ty
   | Ty_dots          -> false
   | Ty_exists(x,ty)  -> x <> s && in_type_expr s ty
-  | Ty_lambda(p,ty)  -> assert false
-  | Ty_constr(ty,c)  -> assert false
+  | Ty_lambda(p,ty)  -> not (in_patt s p) && in_type_expr s ty
+  | Ty_constr(ty,c)  -> in_type_expr s ty || in_constr s c
   | Ty_params(x,tys) -> x = s || List.exists (in_type_expr s) tys
   | Ty_Coq(e)        -> in_coq_expr s e
+
+and in_constr : string -> constr -> bool = fun s c ->
+  match c with
+  | Constr_Coq(e)      -> in_coq_expr s e
+  | Constr_Iris(s)     -> false
+  | Constr_exist(x,c)  -> x <> s && in_constr s c
+  | Constr_own(_,_,ty) -> in_type_expr s ty
 
 let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Stuff for import of the code. *)
@@ -474,13 +501,20 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "Context `{typeG Σ}.";
 
   (* Definition of types. *)
-  let pp_struct (id, s) =
-    match s.struct_annot with None -> assert false | Some(annot) ->
+  let pp_struct (struct_id, s) =
+    let annot =
+      match s.struct_annot with
+      | Some(annot) -> annot
+      | None        ->
+      Panic.panic_no_pos "Annotations on struct [%s] are invalid." struct_id
+    in
     let fields =
       let fn (x, (ty_opt, _)) =
         match ty_opt with
         | Some(ty) -> (x, ty)
-        | None     -> assert false
+        | None     ->
+        Panic.panic_no_pos
+          "Annotation on field [%s] (struct [%s])] is invalid." x struct_id
       in
       List.map fn s.struct_members
     in
@@ -490,15 +524,19 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     in
     let params = annot.st_parameters in
     let param_names = List.map fst params in
-    let rec_id = match annot.st_ptr_type with None -> id | Some(id,_) -> id in
-    let is_rec = List.exists (fun (_,ty) -> in_type_expr rec_id ty) fields in
+    let id =
+      match annot.st_ptr_type with
+      | None       -> struct_id
+      | Some(id,_) -> id
+    in
+    let is_rec = List.exists (fun (_,ty) -> in_type_expr id ty) fields in
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     if is_rec then begin
       pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
       pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
         ref_types (pp_as_prod (pp_coq_expr true)) ref_types;
       pp "(λ self %a,@;" (pp_as_tuple pp_str) ref_names;
-      pp_struct_def (Guard_in_def(rec_id)) annot fields ff id;
+      pp_struct_def (Guard_in_def(id)) annot fields ff struct_id;
       pp "@;)%%I.@;Arguments %s_rec /.\n" id;
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
@@ -516,17 +554,18 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         id pp_params params pp_params annot.st_refined_by;
       pp "(%a @@ %a)%%I ≡@@{type}@;(" (pp_as_tuple pp_str) ref_names
         (pp_id_args false id) param_names;
-      pp_struct_def (Guard_in_lem(rec_id)) annot fields ff id;
+      pp_struct_def (Guard_in_lem(id)) annot fields ff struct_id;
       pp ")%%I.@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
       (* Generation of the global instances. *)
       let pp_instance inst_name type_name =
-        pp "@;Global Instance %s_%s_inst l β %a%a:@;" id inst_name
+        pp "@;Global Instance %s_%s_inst l_ β_ %a%a:@;" id inst_name
           pp_params params pp_params annot.st_refined_by;
-        pp "  %s l β (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
+        pp "  %s l_ β_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
           (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
-        pp "  λ T, i2p (%s_eq l β _ _ T (%s_unfold" inst_name id;
+        pp "  λ T, i2p (%s_eq l_ β_ _ _ T (%s_unfold" inst_name id;
+        List.iter (fun _ -> pp " _") param_names;
         List.iter (fun _ -> pp " _") ref_names; pp "))."
       in
       pp_instance "simplify_hyp_place" "SimplifyHypPlace";
@@ -566,7 +605,12 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Function specs. *)
   let pp_spec (id, def) =
     pp "\n@;(* Specifications for function [%s]. *)" id;
-    match def.func_annot with None -> assert false | Some(annot) ->
+    let annot =
+      match def.func_annot with
+      | Some(annot) -> annot
+      | None        ->
+      Panic.panic_no_pos "Annotations on function [%s] are invalid." id
+    in
     let (param_names, param_types) = List.split annot.fa_parameters in
     let (exist_names, exist_types) = List.split annot.fa_exists in
     let pp_args ff tys =
@@ -588,7 +632,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Typing proofs. *)
   let pp_proof (id, def) =
-    match def.func_annot with None -> assert false | Some(annot) ->
+    let annot =
+      match def.func_annot with
+      | Some(annot) -> annot
+      | None        -> assert false (* Unreachable. *)
+    in
     let (used_globals, used_functions) = def.func_deps in
     let deps =
       (* This includes global variables on which the used function depend. *)
@@ -624,7 +672,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       let pp_type ff id =
         let used_globals =
           try fst (List.assoc id ast.functions).func_deps
-          with Not_found -> assert false
+          with Not_found -> assert false (* Unreachable. *)
         in
         if used_globals <> [] then fprintf ff "(";
         fprintf ff "type_of_%s" id;
@@ -638,8 +686,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     let pp_intros ff xs =
       let pp_intro ff (x,_) = pp_str ff x in
       match xs with
-      | [x] -> pp_intro ff x
-      | _   -> fprintf ff "[%a]" (pp_sep " " pp_intro) xs
+      | []      -> fprintf ff "[]"
+      | [x]     -> pp_intro ff x
+      | x :: xs -> List.iter (fun _ -> pp_str ff "[") xs;
+                   pp_intro ff x;
+                   List.iter (fprintf ff " %a]" pp_intro) xs
     in
     pp "@]@;@[<v 2>Proof.@;";
     pp "start_function (%a)" pp_intros annot.fa_parameters;
