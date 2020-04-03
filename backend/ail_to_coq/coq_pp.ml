@@ -381,8 +381,9 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_params(id,tys) ->
     pp_str ff id;
     match (id, tys) with
-    | ("optional", [ty]) | ("optionalO", [ty]) -> fprintf ff " %a null" (pp true) ty
-    | (_         , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
+    | ("optional" , [ty])
+    | ("optionalO", [ty]) -> fprintf ff " %a null" (pp true) ty
+    | (_          , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
   in
   pp true ff ty
 
