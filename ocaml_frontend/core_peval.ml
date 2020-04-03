@@ -413,29 +413,34 @@ let apply_substs_expr xs e =
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 let core_peval file : 'bty RW.rewriter =
+
+  let stdlib_unfold_pred  _ fdecl =
+    match fdecl with
+    | Fun (_, sym_bTys, _) ->
+       List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
+    | _ ->
+       false
+  in
+
+  let impl_unfold_pred _ fdecl =
+    match fdecl with
+    | IFun (_, sym_bTys, _) ->
+       List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
+    | _ ->
+       false
+  in
+
   let eval_pexpr pexpr =
     let emp = Pmap.empty Symbol.instance_Basic_classes_Ord_Symbol_sym_dict.compare_method in
     Core_eval.eval_pexpr Location_ocaml.unknown emp [] None file pexpr in
   
   let to_unfold_funs =
     (* The list of stdlib functions to be unfolded (see PEcall) *)
-    Pmap.filter (fun _ fdecl ->
-      match fdecl with
-        | Fun (_, sym_bTys, _) ->
-            List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
-        | _ ->
-            false
-    ) file.stdlib in
+    Pmap.filter stdlib_unfold_pred file.stdlib in
   
   let to_unfold_impls =
     (* The list of impl-def functions to be unfolded (see PEcall) *)
-    Pmap.filter (fun _ fdecl ->
-      match fdecl with
-        | IFun (_, sym_bTys, _) ->
-            List.exists (function (_, BTy_ctype) -> true | _ -> false) sym_bTys
-        | _ ->
-            false
-    ) file.impl in
+    Pmap.filter impl_unfold_pred file.impl in
   
   let check_unfold = function
     | Sym sym ->
@@ -692,10 +697,89 @@ let core_peval file : 'bty RW.rewriter =
 let step_peval_expr file expr =
   Identity.unwrap RW.(rewriteExpr (core_peval file) expr)
 
+(* This does one step of partial evaluation on an expression *)
+let step_peval_pexpr file expr =
+  Identity.unwrap RW.(rewritePexpr (core_peval file) expr)
+
 (* CURRENTLY BROKEN, this fully applies the partial evaluator on an expression *)
 let steps_peval_expr file expr =
   (* HACK: this currently only tried up to 100 steps *)
   Identity.unwrap RW.(repeat (100) (rewriteExpr (core_peval file)) expr)
+
+(* CURRENTLY BROKEN, this fully applies the partial evaluator on an expression *)
+let steps_peval_pexpr file expr =
+  (* HACK: this currently only tried up to 100 steps *)
+  Identity.unwrap RW.(repeat (100) (rewritePexpr (core_peval file)) expr)
+
+
+
+(* let rewrite_impl_decl file (i : 'bty generic_impl_decl) : 'bty generic_impl_decl =
+ *   match i with
+ *   | Def (bt, p) -> Def (bt, p)
+ *   | IFun (bt, args, body) -> M_IFun (bt, args, body)
+ *   end *)
+
+
+
+let normalise_file file = 
+
+  let rw_pexpr = steps_peval_pexpr file in
+  let rw_expr = steps_peval_expr file in
+
+
+  let rewrite_impl_decl (is : 'bty generic_impl_decl) : 'bty generic_impl_decl =
+    match is with
+    | Def (cbt, pe) -> Def (cbt, rw_pexpr pe)
+    | IFun (cbt, args, pe) -> IFun (cbt, args, rw_pexpr pe)
+  in
+
+  let rewrite_impl (is : 'bty generic_impl) : 'bty generic_impl =
+    Pmap.map (fun v -> rewrite_impl_decl v) is
+  in
+
+  let rewrite_fun_map_decl (d : ('bty, 'a) generic_fun_map_decl)
+      : ('bty, 'a) generic_fun_map_decl =
+    match d with
+    | Fun (bt, args, pe) -> Fun (bt, args, rw_pexpr pe)
+    | Proc (loc, bt, args, e) -> Proc (loc, bt, args, rw_expr e)
+    | ProcDecl (loc, bt, bts) -> ProcDecl (loc, bt, bts)
+    | BuiltinDecl (loc, bt, bts) -> BuiltinDecl (loc, bt, bts)
+  in
+
+
+  let rewrite_fun_map (fmap : ('bty,'a) generic_fun_map) 
+      : ('bty, 'a) generic_fun_map = 
+    Pmap.map (rewrite_fun_map_decl) fmap
+  in
+
+
+  let rewrite_globs (g : ('a, 'bty) generic_globs) : ('a, 'bty) generic_globs = 
+    match g with
+    | GlobalDef (bt, e) -> GlobalDef (bt, rw_expr e)
+    | GlobalDecl bt -> GlobalDecl bt 
+  in
+
+
+  let rewrite_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list )
+      : (Symbol.sym * ('a, 'bty) generic_globs) list = 
+    List.map (fun (sym,g) -> (sym, rewrite_globs g)) gs
+  in
+
+  { main = file.main
+  ; tagDefs = file.tagDefs
+  ; stdlib = rewrite_fun_map file.stdlib
+  ; impl = rewrite_impl file.impl
+  ; globs = rewrite_globs_list file.globs
+  ; funs = rewrite_fun_map file.funs
+  ; extern = file.extern
+  ; funinfo = file.funinfo
+  }
+
+
+
+
+
+
 
 
 

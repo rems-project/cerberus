@@ -2033,6 +2033,8 @@ let init core_file mu_file =
   
 
 let check (core_file : unit Core.typed_file) =
+
+  let core_file = Core_peval.step_peval_expr file e in
   let mu_file = Core_anormalise.normalise_file core_file in
   let () = init core_file mu_file in
   let env = empty_global in
