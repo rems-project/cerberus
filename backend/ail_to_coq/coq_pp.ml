@@ -452,16 +452,28 @@ let in_coq_expr : string -> coq_expr -> bool = fun s e ->
   | Coq_ident(x) -> x = s
   | Coq_all(e)   -> e = s (* In case of [{s}]. *)
 
+let rec in_patt : string -> pattern -> bool = fun s p ->
+  match p with
+  | Pat_var(x)    -> x = s
+  | Pat_tuple(ps) -> List.exists (in_patt s) ps
+
 let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   match ty with
   | Ty_refine(e,ty)  -> in_coq_expr s e || in_type_expr s ty
   | Ty_ptr(_,ty)     -> in_type_expr s ty
   | Ty_dots          -> false
   | Ty_exists(x,ty)  -> x <> s && in_type_expr s ty
-  | Ty_lambda(p,ty)  -> assert false
-  | Ty_constr(ty,c)  -> assert false
+  | Ty_lambda(p,ty)  -> not (in_patt s p) && in_type_expr s ty
+  | Ty_constr(ty,c)  -> in_type_expr s ty || in_constr s c
   | Ty_params(x,tys) -> x = s || List.exists (in_type_expr s) tys
   | Ty_Coq(e)        -> in_coq_expr s e
+
+and in_constr : string -> constr -> bool = fun s c ->
+  match c with
+  | Constr_Coq(e)      -> in_coq_expr s e
+  | Constr_Iris(s)     -> false
+  | Constr_exist(x,c)  -> x <> s && in_constr s c
+  | Constr_own(_,_,ty) -> in_type_expr s ty
 
 let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Stuff for import of the code. *)
@@ -489,12 +501,19 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Definition of types. *)
   let pp_struct (struct_id, s) =
-    match s.struct_annot with None -> assert false | Some(annot) ->
+    let annot =
+      match s.struct_annot with
+      | Some(annot) -> annot
+      | None        ->
+      Panic.panic_no_pos "Annotations on struct [%s] are invalid." struct_id
+    in
     let fields =
       let fn (x, (ty_opt, _)) =
         match ty_opt with
         | Some(ty) -> (x, ty)
-        | None     -> assert false
+        | None     ->
+        Panic.panic_no_pos
+          "Annotation on field [%s] (struct [%s])] is invalid." x struct_id
       in
       List.map fn s.struct_members
     in
@@ -585,7 +604,12 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Function specs. *)
   let pp_spec (id, def) =
     pp "\n@;(* Specifications for function [%s]. *)" id;
-    match def.func_annot with None -> assert false | Some(annot) ->
+    let annot =
+      match def.func_annot with
+      | Some(annot) -> annot
+      | None        ->
+      Panic.panic_no_pos "Annotations on function [%s] are invalid." id
+    in
     let (param_names, param_types) = List.split annot.fa_parameters in
     let (exist_names, exist_types) = List.split annot.fa_exists in
     let pp_args ff tys =
@@ -607,7 +631,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Typing proofs. *)
   let pp_proof (id, def) =
-    match def.func_annot with None -> assert false | Some(annot) ->
+    let annot =
+      match def.func_annot with
+      | Some(annot) -> annot
+      | None        -> assert false (* Unreachable. *)
+    in
     let (used_globals, used_functions) = def.func_deps in
     let deps =
       (* This includes global variables on which the used function depend. *)
@@ -643,7 +671,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       let pp_type ff id =
         let used_globals =
           try fst (List.assoc id ast.functions).func_deps
-          with Not_found -> assert false
+          with Not_found -> assert false (* Unreachable. *)
         in
         if used_globals <> [] then fprintf ff "(";
         fprintf ff "type_of_%s" id;
