@@ -508,11 +508,15 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | None        ->
       Panic.panic_no_pos "Annotations on struct [%s] are invalid." struct_id
     in
+    (* Check if a type must be generated. *)
+    if annot.st_refined_by = [] && annot.st_ptr_type = None then () else
+    (* Gather the field annotations. *)
     let fields =
       let fn (x, (ty_opt, _)) =
         match ty_opt with
-        | Some(ty) -> (x, ty)
-        | None     ->
+        | Some(Some(ty)) -> (x, ty)
+        | Some(None)     -> assert false
+        | None           ->
         Panic.panic_no_pos
           "Annotation on field [%s] (struct [%s])] is invalid." x struct_id
       in
@@ -529,6 +533,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | None       -> struct_id
       | Some(id,_) -> id
     in
+    pp "\n@;(* Definition of type [%s]. *)@;" id;
     let is_rec = List.exists (fun (_,ty) -> in_type_expr id ty) fields in
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     if is_rec then begin
@@ -593,11 +598,10 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "@;Next Obligation. solve_typing. Qed."
     end
   in
-  let pp_union s =
-    pp "(* Printing for Unions not implemented. *)" (* TODO *)
+  let pp_union (id, _) =
+    pp "\n@;(* Printing for Unions not implemented [%s]. *)" id (* TODO *)
   in
   let pp_struct_union ((_, {struct_is_union; struct_name; _}) as s) =
-    pp "\n@;(* Definition of type [%s]. *)@;" struct_name;
     if struct_is_union then pp_union s else pp_struct s
   in
   List.iter pp_struct_union ast.structs;
