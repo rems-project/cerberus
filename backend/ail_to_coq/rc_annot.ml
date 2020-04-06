@@ -393,6 +393,16 @@ type struct_annot =
   ; st_immovable  : bool
   ; st_union      : bool }
 
+let no_struct_annot =
+  { st_parameters = []
+  ; st_refined_by = []
+  ; st_exists     = []
+  ; st_constrs    = []
+  ; st_size       = None
+  ; st_ptr_type   = None
+  ; st_immovable  = false
+  ; st_union      = false }
+
 let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   let parameters = ref [] in
   let refined_by = ref [] in

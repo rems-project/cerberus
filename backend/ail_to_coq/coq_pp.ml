@@ -395,7 +395,19 @@ let pp_constrs : constr list pp = fun ff cs ->
   | []      -> pp_str ff "True"
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
-let pp_struct_def guard annot fields ff id =
+let gather_fields s_id s =
+  let fn (x, (ty_opt, layout)) =
+    match ty_opt with
+    | Some(Some(ty)) -> (x, ty, layout)
+    | Some(None)     ->
+        Panic.panic_no_pos "Weird error on field [%s] of struct [%s]." x s_id
+    | None           ->
+    Panic.panic_no_pos
+      "Annotation on field [%s] (struct [%s])] is invalid." x s_id
+  in
+  List.map fn s.struct_members
+
+let rec pp_struct_def structs guard annot fields ff id =
   let pp fmt = fprintf ff fmt in
   (* Printing of the "exists". *)
   pp "@[<v 0>";
@@ -416,14 +428,41 @@ let pp_struct_def guard annot fields ff id =
     Option.iter (fun _ -> pp "padded (") annot.st_size;
     (* Printing the struct fields. *)
     pp "struct struct_%s [" id;
+    let pp_field ff (_, ty, layout) =
+      match layout with
+      | LStruct(s_id, false) ->
+          let (s, structs) =
+            try (List.assoc s_id structs, List.remove_assoc s_id structs)
+            with Not_found -> Panic.panic_no_pos "Unknown struct [%s]." s_id
+          in
+          let annot =
+            match s.struct_annot with
+            | Some(annot) -> annot
+            | None        ->
+            Panic.panic_no_pos "Annotations on struct [%s] are invalid." s_id
+          in
+          if annot = no_struct_annot then
+            (* Fall back to normal printing in case of unannotated struct. *)
+            pp_type_expr_guard None guard ff ty
+          else
+          let annot =
+            match annot.st_ptr_type with
+            | None    -> {annot with st_ptr_type = Some((s_id,ty))}
+            | Some(_) ->
+            Panic.panic_no_pos "[rc::ptr_type] in nested struct [%s]." s_id
+          in
+          let fields = gather_fields s_id s in
+          pp "(%a)" (pp_struct_def structs Guard_none annot fields) id
+      | LStruct(_   , true ) -> assert false (* TODO *)
+      | _                    -> pp_type_expr_guard None guard ff ty
+    in
     begin
       match fields with
-      | []               -> ()
-      | (_,ty) :: fields ->
+      | []              -> ()
+      | field :: fields ->
       reset_nroot_counter ();
-      let pp_type_expr = pp_type_expr_guard None guard in
-      pp "@;%a : type" pp_type_expr ty;
-      List.iter (fun (_,ty) -> pp " ;@;%a" pp_type_expr ty) fields
+      pp "@;%a : type" pp_field field;
+      List.iter (pp " ;@;%a" pp_field) fields
     end;
     pp "@]@;]"; (* Close box for struct fields. *)
     Option.iter (pp ") struct_%s %a" id (pp_coq_expr true)) annot.st_size;
@@ -511,17 +550,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     (* Check if a type must be generated. *)
     if annot.st_refined_by = [] && annot.st_ptr_type = None then () else
     (* Gather the field annotations. *)
-    let fields =
-      let fn (x, (ty_opt, _)) =
-        match ty_opt with
-        | Some(Some(ty)) -> (x, ty)
-        | Some(None)     -> assert false
-        | None           ->
-        Panic.panic_no_pos
-          "Annotation on field [%s] (struct [%s])] is invalid." x struct_id
-      in
-      List.map fn s.struct_members
-    in
+    let fields = gather_fields struct_id s in
     let (ref_names, ref_types) = List.split annot.st_refined_by in
     let pp_params ff =
       List.iter (fun (x,e) -> fprintf ff "(%s : %a) " x (pp_coq_expr false) e)
@@ -534,14 +563,14 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | Some(id,_) -> id
     in
     pp "\n@;(* Definition of type [%s]. *)@;" id;
-    let is_rec = List.exists (fun (_,ty) -> in_type_expr id ty) fields in
+    let is_rec = List.exists (fun (_,ty, _) -> in_type_expr id ty) fields in
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     if is_rec then begin
       pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
       pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
         ref_types (pp_as_prod (pp_coq_expr true)) ref_types;
       pp "(λ self %a,@;" (pp_as_tuple pp_str) ref_names;
-      pp_struct_def (Guard_in_def(id)) annot fields ff struct_id;
+      pp_struct_def ast.structs (Guard_in_def(id)) annot fields ff struct_id;
       pp "@;)%%I.@;Arguments %s_rec /.\n" id;
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
@@ -559,7 +588,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         id pp_params params pp_params annot.st_refined_by;
       pp "(%a @@ %a)%%I ≡@@{type}@;(" (pp_as_tuple pp_str) ref_names
         (pp_id_args false id) param_names;
-      pp_struct_def (Guard_in_lem(id)) annot fields ff struct_id;
+      pp_struct_def ast.structs (Guard_in_lem(id)) annot fields ff struct_id;
       pp ")%%I.@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
@@ -587,7 +616,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
       pp "rty_type := %a;@;" pp_prod ref_types;
       pp "rty %a := (@;  @[<hov 0>" (pp_as_tuple_pat pp_str) ref_names;
-      pp_struct_def Guard_none annot fields ff id;
+      pp_struct_def ast.structs Guard_none annot fields ff id;
       pp "@;)%%I@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Instance %s_movable %a:" id pp_params params;
@@ -673,7 +702,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       let pp_type ff id =
         let used_globals =
           try fst (List.assoc id ast.functions).func_deps
-          with Not_found -> assert false (* Unreachable. *)
+          with Not_found -> [] (* FIXME type of prototype only functions. *)
         in
         if used_globals <> [] then fprintf ff "(";
         fprintf ff "type_of_%s" id;
