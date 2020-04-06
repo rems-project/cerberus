@@ -1,0 +1,145 @@
+(include_subdirs unqualified)
+
+(rule
+ (target libm.co)
+ (deps src/math.c include/math.h include/stdint.h include/limits.h)
+ (action
+  (run cerberus --nolibc -I include -I include/posix --sequentialise
+                --rewrite -o libm.co src/math.c)))
+
+(rule
+ (target libc.co)
+ (deps src/ctype.c src/stdio.c src/stdlib.c src/string.c src/time.c
+       src/utime.c src/unistd.c src/stat.c src/uio.c src/internal.c
+       src/vfscanf.c src/signal.c src/internal.h
+       ../libcore/std.core
+       ../libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl
+       ../libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl
+       ; generated with [find * -name "*.h"]
+       include/stdlib.h
+       include/float.h
+       include/fenv.h
+       include/stddef.h
+       include/threads.h
+       include/assert.h
+       include/wctype.h
+       include/time.h
+       include/limits.h
+       include/inttypes.h
+       include/math.h
+       include/uchar.h
+       include/errno.h
+       include/stdnoreturn.h
+       include/stdalign.h
+       include/signal.h
+       include/stdio.h
+       include/tgmath.h
+       include/stdbool.h
+       include/cerberus/any.h
+       include/posix/mqueue.h
+       include/posix/unistd.h
+       include/posix/fnmatch.h
+       include/posix/stdlib.h
+       include/posix/termios.h
+       include/posix/float.h
+       include/posix/fenv.h
+       include/posix/ndbm.h
+       include/posix/net/if.h
+       include/posix/monetary.h
+       include/posix/stddef.h
+       include/posix/pwd.h
+       include/posix/grp.h
+       include/posix/fmtmsg.h
+       include/posix/utmpx.h
+       include/posix/tar.h
+       include/posix/assert.h
+       include/posix/poll.h
+       include/posix/wctype.h
+       include/posix/glob.h
+       include/posix/time.h
+       include/posix/limits.h
+       include/posix/wordexp.h
+       include/posix/utime.h
+       include/posix/ulimit.h
+       include/posix/regex.h
+       include/posix/netinet/in.h
+       include/posix/netinet/tcp.h
+       include/posix/cpio.h
+       include/posix/inttypes.h
+       include/posix/math.h
+       include/posix/dirent.h
+       include/posix/sys/ipc.h
+       include/posix/sys/ioctl.h
+       include/posix/sys/socket.h
+       include/posix/sys/cdefs.h
+       include/posix/sys/uio.h
+       include/posix/sys/un.h
+       include/posix/sys/times.h
+       include/posix/sys/wait.h
+       include/posix/sys/time.h
+       include/posix/sys/resource.h
+       include/posix/sys/msg.h
+       include/posix/sys/shm.h
+       include/posix/sys/stat.h
+       include/posix/sys/types.h
+       include/posix/sys/select.h
+       include/posix/sys/mman.h
+       include/posix/sys/sem.h
+       include/posix/sys/statvfs.h
+       include/posix/sys/utsname.h
+       include/posix/pthread.h
+       include/posix/fcntl.h
+       include/posix/arpa/inet.h
+       include/posix/syslog.h
+       include/posix/libgen.h
+       include/posix/errno.h
+       include/posix/semaphore.h
+       include/posix/nl_types.h
+       include/posix/trace.h
+       include/posix/signal.h
+       include/posix/netdb.h
+       include/posix/langinfo.h
+       include/posix/stdio.h
+       include/posix/tgmath.h
+       include/posix/ftw.h
+       include/posix/dlfcn.h
+       include/posix/stdbool.h
+       include/posix/aio.h
+       include/posix/strings.h
+       include/posix/iconv.h
+       include/posix/sched.h
+       include/posix/locale.h
+       include/posix/iso646.h
+       include/posix/wchar.h
+       include/posix/stdint.h
+       include/posix/ctype.h
+       include/posix/setjmp.h
+       include/posix/search.h
+       include/posix/spawn.h
+       include/posix/stdarg.h
+       include/posix/complex.h
+       include/posix/string.h
+       include/posix/stropts.h
+       include/locale.h
+       include/iso646.h
+       include/wchar.h
+       include/stdint.h
+       include/ctype.h
+       include/stdatomic.h
+       include/setjmp.h
+       include/stdarg.h
+       include/complex.h
+       include/string.h
+       src/internal.h)
+ (action
+  (run cerberus --nolibc -I include -I include/posix --sequentialise
+                --rewrite -o libc.co src/ctype.c src/stdio.c src/stdlib.c
+                src/string.c src/time.c src/utime.c src/unistd.c src/stat.c
+                src/uio.c src/internal.c src/vfscanf.c src/signal.c)))
+
+(install
+ (files
+  (libm.co as runtime/libc/libm.co)
+  (libc.co as runtime/libc/libc.co))
+ (section lib)
+ (package cerberus))

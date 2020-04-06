@@ -18,14 +18,14 @@ endif
 Q = @
 
 .PHONY: normal
-normal: cerberus-concrete libc
+normal: cerberus
 
 .PHONY: all
-all: cerberus-concrete cerberus-symbolic cerberus-bmc libc web
+all: cerberus cerberus-bmc cerberus-web ail_to_coq csrt rustic
 
 .PHONY: full-build
 full-build: prelude-src
-	@echo "[DUNE] full build (no libc)"
+	@echo "[DUNE] full build"
 	$(Q)dune build
 
 .PHONY: util
@@ -38,80 +38,37 @@ sibylfs: sibylfs-src
 	@echo "[DUNE] library [$@]"
 	$(Q)dune build _build/default/$@/$@.cma _build/default/$@/$@.cmxa
 
-.PHONY: cerberus-concrete
-cerberus-concrete: prelude-src
-	@echo "[DUNE] cerberus (concrete)"
-	$(Q)dune build _build/default/backend/driver/main.exe
-
-.PHONY: cerberus-symbolic
-cerberus-symbolic: prelude-src
-	@echo "[DUNE] cerberus-symbolic"
-	$(Q)dune build _build/default/backend/driver/main_symbolic.exe
+.PHONY: cerberus
+cerberus: prelude-src
+	@echo "[DUNE] cerberus"
+	$(Q)dune build cerberus.install
 
 .PHONY: cerberus-bmc bmc
 bmc: cerberus-bmc
 cerberus-bmc: prelude-src
 	@echo "[DUNE] cerberus-bmc"
-	$(Q)dune build _build/default/backend/bmc/main.exe
-	# FIXME does not compile
-
-LIBC_TARGETS = runtime/libc/libc.co runtime/libc/libm.co
-
-.PHONY: libc
-libc: $(LIBC_TARGETS)
-
-$(LIBC_TARGETS): export CERB_PATH := $(shell pwd)
-
-LIBC_SRC = runtime/libc/src/ctype.c runtime/libc/src/stdio.c \
-           runtime/libc/src/stdlib.c runtime/libc/src/string.c \
-           runtime/libc/src/time.c runtime/libc/src/utime.c \
-           runtime/libc/src/unistd.c runtime/libc/src/stat.c \
-           runtime/libc/src/uio.c runtime/libc/src/internal.c \
-           runtime/libc/src/vfscanf.c runtime/libc/src/signal.c
-LIBM_SRC = runtime/libc/src/math.c
-
-runtime/libc/libc.co: cerberus-concrete $(LIBC_SRC)
-	@echo "[CERB] $@"
-	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
-    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
-    $(LIBC_SRC)
-
-runtime/libc/libm.co: cerberus-concrete $(LIBM_SRC)
-	@echo "[CERB] $@"
-	$(Q)dune exec -- cerberus --nolibc -I runtime/libc/include \
-    -I runtime/libc/include/posix --sequentialise --rewrite -o $@ \
-    $(LIBM_SRC)
-
-.PHONY: ail_playground
-ail_playground: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/$@/main.exe
+	$(Q)dune build cerberus.install cerberus-bmc.install
 
 .PHONY: ail_to_coq
 ail_to_coq: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/$@/main.exe
+	$(Q)dune build cerberus.install ail_to_coq.install
 
 .PHONY: rustic
 rustic: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/$@/main.exe
-
-.PHONY: absint
-absint: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/$@/main.exe
+	$(Q)dune build cerberus.install rustic.install
 
 .PHONY: csrt
 csrt: prelude-src
 	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/$@/main.exe
+	$(Q)dune build cerberus.install csrt.install
 
-.PHONY: cerberus-ocaml ocaml
-ocaml: cerberus-ocaml
-cerberus-ocaml: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
+#.PHONY: cerberus-ocaml ocaml
+#ocaml: cerberus-ocaml
+#cerberus-ocaml: prelude-src
+#	@echo "[DUNE] $@"
+#	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
 	# FIXME does not compile
 	# FIXME should generate rt-ocaml as a library
 	#@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
@@ -125,11 +82,6 @@ cerberus-ocaml: prelude-src
 	#@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
 	#@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
 
-.PHONY: cbuild
-cbuild: tools/cbuild.ml
-	@echo "[DUNE] $@"
-	$(Q)dune build _build/default/tools/cbuild.exe
-
 tmp/:
 	@echo "[MKDIR] tmp"
 	$(Q)mkdir -p tmp
@@ -138,12 +90,11 @@ config.json: tools/config.json
 	@echo "[CP] $< → $@"
 	@cp $< $@
 
-.PHONY: web
-web: prelude-src config.json tmp/
+.PHONY: cerberus-web web
+web: cerberus-web
+cerberus-web: prelude-src config.json tmp/
 	@echo "[DUNE] web"
-	$(Q)dune build _build/default/backend/web/web.exe
-	$(Q)dune build _build/default/backend/web/instance.exe
-	$(Q)dune build _build/default/backend/web/instance_symbolic.exe
+	$(Q)dune build cerberus.install cerberus-web.install
 	@cp -L _build/default/backend/web/instance.exe webcerb.concrete
 	@cp -L _build/default/backend/web/instance_symbolic.exe webcerb.symbolic
 	@cp -L _build/default/backend/web/web.exe cerberus-webserver
@@ -285,3 +236,13 @@ clean:
 .PHONY: distclean
 distclean: clean clean-prelude-src clean-sibylfs-src
 	$(Q)rm -rf tmp config.json
+
+.PHONY: install
+install: cerberus
+	@echo "[DUNE] install cerberus"
+	$(Q)dune install cerberus
+
+.PHONY: uninstall
+uninstall: cerberus
+	@echo "[DUNE] install cerberus"
+	$(Q)dune uninstall cerberus

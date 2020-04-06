@@ -1,6 +1,6 @@
 (library
  (name bmc)
- (public_name cerberus.bmc)
+ (public_name cerberus-bmc)
  (flags (:standard -w -27))
  (wrapped false)
  (modules :standard \ main)
@@ -10,6 +10,7 @@
 (executable
  (name main)
  (public_name cerberus-bmc)
+ (package cerberus-bmc)
  (flags (:standard -w -27))
  (modules main)
  (libraries cmdliner str unix
