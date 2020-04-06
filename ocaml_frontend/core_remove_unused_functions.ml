@@ -70,7 +70,7 @@ module State = struct
       }
   end
 
-  include S
+  open S
   include STATE(S)
 
   let record_dep sym sym' : unit t = 
@@ -446,7 +446,7 @@ let called_names_file file =
 
 let remove_unused_functions file = 
 
-  let ((fun_names,stdlib_names),s) = called_names_file file State.empty in
+  let ((fun_names,stdlib_names),s) = called_names_file file State.S.empty in
 
   (* transitively close deps first? *)
 
