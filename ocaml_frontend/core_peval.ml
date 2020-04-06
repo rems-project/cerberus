@@ -721,7 +721,7 @@ let steps_peval_pexpr file expr =
 
 
 
-let normalise_file file = 
+let rewrite_file file = 
 
   let rw_pexpr = steps_peval_pexpr file in
   let rw_expr = steps_peval_expr file in
