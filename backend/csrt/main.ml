@@ -54,16 +54,23 @@ let conf cpp_str = {
 
 
 let frontend conf filename = 
+  Colour.do_colour := false;
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
   match Filename.extension filename with
   | ".c" ->
      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
+     Tags.set_tagDefs core_file.tagDefs;
+     let core_file = Core_peval.rewrite_file core_file in
+     let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
      typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
      return typed_core_file
   | ".core" ->
      core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
+     Tags.set_tagDefs core_file.tagDefs;
+     let core_file = Core_peval.rewrite_file core_file in
+     let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
      typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
      return typed_core_file
   | ext ->

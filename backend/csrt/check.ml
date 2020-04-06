@@ -2025,15 +2025,13 @@ let print_core_file core_file filename =
 
 
 let init core_file mu_file = 
-  Colour.do_colour := false;
-  Tags.set_tagDefs core_file.tagDefs;
+  (* Tags.set_tagDefs core_file.tagDefs; *)
   pp_fun_map_decl core_file.funinfo;
   print_core_file core_file "out1";
   print_core_file (mu_to_core__file mu_file) "out2"
   
 
 let check (core_file : unit Core.typed_file) =
-  (* let core_file = Core_peval.step_peval_expr file core_filee in *)
   let mu_file = Core_anormalise.normalise_file core_file in
   let () = init core_file mu_file in
   let env = empty_global in
