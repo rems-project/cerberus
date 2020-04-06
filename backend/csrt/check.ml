@@ -121,7 +121,7 @@ end
 
 module NameMap = struct
   include StringMap
-  type t = (Sym.t * Loc.t) StringMap.t
+  type map = (Sym.t * Loc.t) StringMap.t
 end
 
 module Id = struct
@@ -186,7 +186,7 @@ module BT = struct
     | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (map pp bts))
     | Struct id -> sprintf "(struct %s)" (Sym.pp id)
   
-  let rec parse_sexp loc (names : NameMap.t) sx = 
+  let rec parse_sexp loc (names : NameMap.map) sx = 
     match sx with
     | Sexp.Atom "unit" -> 
        return Unit
@@ -228,7 +228,7 @@ module LS = struct
   let pp = function
     | Base bt -> BT.pp bt
   
-  let parse_sexp loc (names : NameMap.t) sx =
+  let parse_sexp loc (names : NameMap.map) sx =
     match sx with
     | sx ->
        BT.parse_sexp loc names sx >>= fun bt ->
@@ -325,7 +325,7 @@ module IT = struct
 
 
 
-  let rec parse_sexp loc (names : NameMap.t) sx = 
+  let rec parse_sexp loc (names : NameMap.map) sx = 
     match sx with
     
     | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
@@ -547,7 +547,7 @@ module RE = struct
          (String.concat " " (map IT.pp its))
 
   
-  let parse_sexp loc (names : NameMap.t) sx = 
+  let parse_sexp loc (names : NameMap.map) sx = 
     match sx with 
     | Sexp.List [Sexp.Atom "block";it1;it2] -> 
        IT.parse_sexp loc names it1 >>= fun it1 ->
@@ -683,7 +683,7 @@ module B = struct
     | (id, C lc) -> 
        sprintf "(Constraint %s : %s)" (Sym.pp id) (LC.pp lc)
 
-  let parse_sexp loc (names : NameMap.t) s = 
+  let parse_sexp loc (names : NameMap.map) s = 
     match s with
     | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
        let sym = Sym.fresh_pretty id in
@@ -721,8 +721,8 @@ module Bs = struct
   let pp ts = 
     String.concat " , " (map B.pp ts)
 
-  let parse_sexp fstr loc (names : NameMap.t) s = 
-    let rec aux (names : NameMap.t) acc ts = 
+  let parse_sexp fstr loc (names : NameMap.map) s = 
+    let rec aux (names : NameMap.map) acc ts = 
       match ts with
       | [] -> return (rev acc, names)
       | b :: bs ->
@@ -982,7 +982,7 @@ module Env = struct
   type global_env = 
     { struct_decls : Bs.t SymMap.t ; 
       fun_decls : (Loc.t * F.t * Sym.t) SymMap.t; (* third item is return name *)
-      names : NameMap.t
+      names : NameMap.map
     } 
 
   type local_env = T.t SymMap.t
