@@ -73,9 +73,6 @@ module State = struct
   include S
   include STATE(S)
 
-  type s = STATE(S).s
-  type 'a t = 'a STATE(S).t
-
   let record_dep sym sym' : unit t = 
     get () >>= fun s ->
     put { s with deps = Symrel.add (sym, sym') s.deps }
