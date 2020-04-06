@@ -427,7 +427,7 @@ let rec pp_struct_def structs guard annot fields ff id =
     (* Printing the "padded". *)
     Option.iter (fun _ -> pp "padded (") annot.st_size;
     (* Printing the struct fields. *)
-    pp "struct struct_%s [" id;
+    pp "struct struct_%s [@@{type}" id;
     let pp_field ff (_, ty, layout) =
       match layout with
       | LStruct(s_id, false) ->
@@ -461,7 +461,7 @@ let rec pp_struct_def structs guard annot fields ff id =
       | []              -> ()
       | field :: fields ->
       reset_nroot_counter ();
-      pp "@;%a : type" pp_field field;
+      pp "@;%a" pp_field field;
       List.iter (pp " ;@;%a" pp_field) fields
     end;
     pp "@]@;]"; (* Close box for struct fields. *)
