@@ -197,17 +197,16 @@ let rec will_decay : ail_expr -> bool = fun e ->
   | AilEbinary(e,_,_)  -> will_decay e
   | _                  -> false (* FIXME *)
 
-let rec find_function_decl fname decls =
+let rec function_decls decls =
   let open AilSyntax in
   match decls with
-  | []                                -> assert false
-  | (id_decl, (_, attrs, d)) :: decls ->
-  if sym_to_str id_decl <> fname then find_function_decl fname decls else
-  match d with
-  | Decl_function(_,(_, ty),args,_,_,_) -> (ty, args, attrs)
-  | Decl_object(_,_,_)                  -> assert false
+  | []                                                           -> []
+  | (id, (_, attrs, Decl_function(_,(_,ty),args,_,_,_))) :: decls ->
+      (sym_to_str id, (ty, args, attrs)) :: function_decls decls
+  | (_ , (_, _    , Decl_object(_,_,_)                )) :: decls ->
+      function_decls decls
 
-let global_decls = ref []
+let global_fun_decls = ref []
 
 let rec translate_expr lval goal_ty e =
   let open AilSyntax in
@@ -292,7 +291,7 @@ let rec translate_expr lval goal_ty e =
           | None     -> not_impl loc "expr complicated call"
           | Some(id) -> id
         in
-        let (_, args, attrs) = find_function_decl fun_id !global_decls in
+        let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
         let attrs = collect_rc_attrs attrs in
         let annot_args =
           try function_annot_args attrs with Invalid_annot(msg) ->
@@ -665,7 +664,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (*let ext_idmap  = sigma.extern_idmap         in*)
 
   (* Give global access to declarations. *)
-  global_decls := decls;
+  let fun_decls = function_decls decls in
+  global_fun_decls := fun_decls;
 
   (* Get the global variables. *)
   let global_vars =
@@ -729,15 +729,22 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of functions. *)
   let functions =
     let open AilSyntax in
-    let build (id, (_, _, args, AnnotatedStatement(loc, s_attrs, stmt))) =
+    let build (func_name, (ret_ty, args_decl, attrs)) =
+      (* Initialise all state. *)
       Hashtbl.reset local_vars; reset_ret_id (); reset_block_id ();
       Hashtbl.reset used_globals; Hashtbl.reset used_functions;
-      let func_name = sym_to_str id in
-      let (ret_ty, args_decl, attrs) = find_function_decl func_name decls in
+      (* Fist parse that annotations. *)
       let func_annot =
         try Some(function_annot (collect_rc_attrs attrs))
         with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
       in
+      (* Then find out if the function is defined or just declared. *)
+      match List.find (fun (id, _) -> sym_to_str id = func_name) fun_defs with
+      | exception Not_found                                       ->
+          (* Function is only declared. *)
+          (func_name, FDec(func_annot))
+      | (_, (_, _, args, AnnotatedStatement(loc, s_attrs, stmt))) ->
+      (* Function is defined. *)
       let func_args =
         let fn i (_, c_ty, _) =
           let id = sym_to_str (List.nth args i) in
@@ -785,9 +792,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         { func_name ; func_annot ; func_args ; func_vars ; func_init
         ; func_deps ; func_blocks }
       in
-      (func_name, func)
+      (func_name, FDef(func))
     in
-    List.map build fun_defs
+    List.map build fun_decls
   in
 
   { source_file ; entry_point ; global_vars ; structs ; functions }
