@@ -590,12 +590,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp_struct_def Guard_none annot fields ff id;
       pp "@;)%%I@]@;|}.\n";
       (* Typeclass stuff. *)
-      pp "@;Global Program Instance %s_movable %a:" id pp_params params;
-      pp " RMovable %a :=" (pp_id_args true id) param_names;
-      pp "@;  {| rmovable %a := _ |}." (pp_as_tuple pp_str) ref_names;
-      pp "@;Next Obligation. unfold with_refinement => /= ?. ";
-      pp "apply _. Defined.";
-      pp "@;Next Obligation. solve_typing. Qed."
+      pp "@;Global Instance %s_movable %a:" id pp_params params;
+      pp " RMovable %a." (pp_id_args true id) param_names;
+      pp "@;Proof. solve_rmovable. Defined."
     end
   in
   let pp_union (id, _) =
