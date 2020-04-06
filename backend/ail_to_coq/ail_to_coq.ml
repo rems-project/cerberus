@@ -680,10 +680,11 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of structs/unions. *)
   let structs =
     let build (id, (attrs, def)) =
-      let struct_annot =
-        try Some(struct_annot (collect_rc_attrs attrs))
+      let (struct_annot, needs_field_annot) =
+        let annots = collect_rc_attrs attrs in
+        try (Some(struct_annot annots), annots <> [])
         with Invalid_annot(msg) ->
-          Panic.wrn None "Warning: %s." msg; None
+          Panic.wrn None "Warning: %s." msg; (None, true)
       in
       let struct_name = sym_to_str id in
       let (struct_members, struct_is_union) =
@@ -694,7 +695,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
-            try Some(field_annot (collect_rc_attrs attrs))
+            try Some(field_annot needs_field_annot (collect_rc_attrs attrs))
             with Invalid_annot(msg) ->
               Panic.wrn (Some(loc_of_id id)) "Warning: %s." msg; None
           in

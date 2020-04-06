@@ -349,7 +349,7 @@ let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
 
   !annot_args
 
-let field_annot : rc_attr list -> type_expr = fun attrs ->
+let field_annot : bool -> rc_attr list -> type_expr option = fun need attrs ->
   let field = ref None in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
@@ -363,9 +363,11 @@ let field_annot : rc_attr list -> type_expr = fun attrs ->
   in
   List.iter handle_attr attrs;
 
-  match !field with
-  | None     -> raise (Invalid_annot "a field annotation is required")
-  | Some(ty) -> ty
+  match (!field, need) with
+  | (None    , false) -> None
+  | (None    , true ) -> raise (Invalid_annot "field annotation required")
+  | (Some(ty), true ) -> Some(ty)
+  | (Some(_ ), false) -> raise (Invalid_annot "field annotation forbidden")
 
 type expr_annot = string option
 

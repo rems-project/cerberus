@@ -64,7 +64,7 @@ type struct_decl =
   ; struct_annot    : struct_annot option
   ; struct_deps     : string list
   ; struct_is_union : bool
-  ; struct_members  : (string * (type_expr option * layout)) list }
+  ; struct_members  : (string * (type_expr option option * layout)) list }
 
 type func_def =
   { func_name   : string
