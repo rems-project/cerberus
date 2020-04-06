@@ -1,5 +1,6 @@
 open Cerb_frontend
 open Cerb_backend
+open Cerb_runtime
 open Util
 open Instance_api
 open Pipeline
@@ -209,7 +210,7 @@ let execute ~conf ~filename (mode: Global_ocaml.execution_mode) =
     elaborate ~conf ~filename
     >>= fun (core_std, core_lib, cabs, ail, core) ->
     begin if conf.instance.link_libc then
-      let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/runtime/libc/libc.co" in
+      let libc = Pipeline.read_core_object (core_std, core_lib) @@ in_runtime "libc/libc.co" in
       Core_linking.link [core; libc]
     else
       return core
@@ -542,7 +543,7 @@ let step ~conf ~filename (active_node_opt: Instance_api.active_node option) =
     let core     = set_uid core in
     let ranges   = create_expr_range_list core in
     begin if conf.instance.link_libc then
-      let libc = Pipeline.read_core_object (core_std, core_lib) @@ Global_ocaml.cerb_path ^ "/runtime/libc/libc.co" in
+      let libc = Pipeline.read_core_object (core_std, core_lib) @@ in_runtime "libc/libc.co" in
       Core_linking.link [core; libc]
     else
       return core

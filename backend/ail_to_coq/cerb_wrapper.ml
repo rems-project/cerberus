@@ -38,10 +38,10 @@ let hafnium_path =
 
 let cpp_cmd =
   Printf.sprintf
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I%s/runtime/libc/include \
+    "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I%s/libc/include \
     -I%s/inc -I%s/inc/vmapi -I%s/src/arch/aarch64/inc \
     -DDEBUG -DMAX_CPUS=4 -DMAX_VMS=2 -DHEAP_PAGES=10"
-    Global_ocaml.cerb_path hafnium_path hafnium_path hafnium_path
+    (Cerb_runtime.runtime ()) hafnium_path hafnium_path hafnium_path
 
 let c_file_to_ail filename =
   (* Check a couple of things that the frontend does not seem to check. *)

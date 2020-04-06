@@ -1,6 +1,7 @@
 (executable
  (name main)
  (public_name csrt)
+ (package csrt)
  (modules main check)
  (flags (:standard -w -27))
  (libraries cmdliner str unix

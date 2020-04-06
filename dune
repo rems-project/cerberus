@@ -3,4 +3,4 @@
  (dev     (flags :standard -bin-annot))
  (release (flags :standard -bin-annot)))
 
-(dirs util sibylfs ocaml_frontend memory parsers backend tools)
+(dirs util sibylfs ocaml_frontend memory parsers backend tools runtime)
