@@ -571,7 +571,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         ref_types (pp_as_prod (pp_coq_expr true)) ref_types;
       pp "(λ self %a,@;" (pp_as_tuple pp_str) ref_names;
       pp_struct_def ast.structs (Guard_in_def(id)) annot fields ff struct_id;
-      pp "@;)%%I.@;Arguments %s_rec /.\n" id;
+      pp "@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
         (pp_id_args true (id ^ "_rec")) param_names;
