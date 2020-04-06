@@ -75,9 +75,13 @@ type func_def =
   ; func_deps   : string list * string list (* global vars/functions used. *)
   ; func_blocks : (block_annot option * stmt) SMap.t }
 
+type func_def_or_decl =
+  | FDef of func_def
+  | FDec of function_annot option
+
 type t =
   { source_file : string
   ; entry_point : string option
   ; global_vars : string list
   ; structs     : (string * struct_decl) list
-  ; functions   : (string * func_def   ) list }
+  ; functions   : (string * func_def_or_decl) list }
