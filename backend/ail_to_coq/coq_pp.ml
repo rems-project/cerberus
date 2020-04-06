@@ -244,7 +244,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   List.iter pp_struct_union (sort_structs [] ast.structs);
 
   (* Definition of functions. *)
-  let pp_function (id, def) =
+  let pp_function_def (id, def) =
     let deps = fst def.func_deps @ snd def.func_deps in
     pp "\n@;(* Definition of function [%s]. *)@;" id;
     pp "@[<v 2>Definition impl_%s " id;
@@ -292,6 +292,11 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     end;
     pp "@]@;)%%E";
     pp "@]@;|}.";
+  in
+  let pp_function (id, def_or_decl) =
+    match def_or_decl with
+    | FDef(def) -> pp_function_def (id, def)
+    | _         -> ()
   in
   List.iter pp_function ast.functions;
 
@@ -631,12 +636,13 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   List.iter pp_struct_union ast.structs;
 
   (* Function specs. *)
-  let pp_spec (id, def) =
+  let pp_spec (id, def_or_decl) =
     pp "\n@;(* Specifications for function [%s]. *)" id;
-    let annot =
-      match def.func_annot with
-      | Some(annot) -> annot
-      | None        ->
+    let (annot, deps) =
+      match def_or_decl with
+      | FDef({func_annot=Some(annot); func_deps=(deps,_); _}) -> (annot, deps)
+      | FDec(Some(annot))                                     -> (annot, []  )
+      | _                                                     ->
       Panic.panic_no_pos "Annotations on function [%s] are invalid." id
     in
     let (param_names, param_types) = List.split annot.fa_parameters in
@@ -647,7 +653,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       | _  -> pp "; "; pp_sep ", " pp_type_expr ff tys
     in
     pp "@;Definition type_of_%s " id;
-    List.iter (pp "%s ") (fst def.func_deps);
+    List.iter (pp "%s ") deps;
     pp ":=@;  @[<hov 2>";
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     pp "fn(∀ %a : %a%a; %a)@;→ ∃ %a : %a, %a; %a.@]"
@@ -668,8 +674,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     let (used_globals, used_functions) = def.func_deps in
     let deps =
       (* This includes global variables on which the used function depend. *)
-      let fn acc (id, def) =
-        if List.mem id used_functions then fst def.func_deps @ acc else acc
+      let fn acc (id, def_or_decl) =
+        if not (List.mem id used_functions) then acc else
+        match def_or_decl with
+        | FDef(def) -> fst def.func_deps @ acc
+        | FDec(_)   -> acc
       in
       let all_used_globals = List.fold_left fn used_globals ast.functions in
       let transitive_used_globals =
@@ -699,8 +708,10 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       in
       let pp_type ff id =
         let used_globals =
-          try fst (List.assoc id ast.functions).func_deps
-          with Not_found -> [] (* FIXME type of prototype only functions. *)
+          match List.assoc id ast.functions with
+          | FDef(def)           -> fst def.func_deps
+          | FDec(_)             -> []
+          | exception Not_found -> assert false (* Unreachable. *)
         in
         if used_globals <> [] then fprintf ff "(";
         fprintf ff "type_of_%s" id;
@@ -732,6 +743,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
     pp "@;repeat do_step; do_finish.";
     pp "@;Unshelve. all: try solve_goal.";
     pp "@]@;Qed."
+  in
+  let pp_proof (id, def_or_decl) =
+    match def_or_decl with
+    | FDef(def) -> pp_proof (id, def)
+    | FDec(_)   -> ()
   in
   List.iter pp_proof ast.functions;
 
