@@ -350,15 +350,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
     | Ty_lambda(p,ty)   -> fprintf ff "(λ %a, %a)" pp_patt p (pp false) ty
-    (* Insert wrapping if needed. *)
-    | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
-    (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots           ->
         begin
           match pp_dots with
           | None     -> Panic.panic_no_pos "Unexpected ellipsis."
-          | Some(pp) -> pp ff ()
+          | Some(pp) -> fprintf ff "(@;  @[<v 0>%a@;)@]" pp ()
         end
+    (* Insert wrapping if needed. *)
+    | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
+    (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_refine(e,ty)   ->
         begin
           let normal () =
@@ -409,20 +409,20 @@ let gather_fields s_id s =
 
 let rec pp_struct_def structs guard annot fields ff id =
   let pp fmt = fprintf ff fmt in
-  (* Printing of the "exists". *)
-  pp "@[<v 0>";
-  if annot.st_exists <> [] then
-    begin
-      let pp_exist (x, e) =
-        pp "tyexists (λ %s : %a,@;" x (pp_coq_expr false) e
-      in
-      List.iter pp_exist annot.st_exists;
-    end;
-  (* Opening the "constrained". *)
-  pp "@[<v 2>"; (* Open box for struct fields. *)
-  if annot.st_constrs <> [] then pp "constrained (";
-  (* Part that may stand for dots in case of "ptr_type". *)
+  (* Print the part that may stand for dots in case of "ptr_type". *)
   let pp_dots ff () =
+    (* Printing of the "exists". *)
+    pp "@[<v 0>";
+    if annot.st_exists <> [] then
+      begin
+        let pp_exist (x, e) =
+          pp "tyexists (λ %s : %a,@;" x (pp_coq_expr false) e
+        in
+        List.iter pp_exist annot.st_exists;
+      end;
+    (* Opening the "constrained". *)
+    pp "@[<v 2>"; (* Open box for struct fields. *)
+    if annot.st_constrs <> [] then pp "constrained (";
     let pp fmt = fprintf ff fmt in
     (* Printing the "padded". *)
     Option.iter (fun _ -> pp "padded (") annot.st_size;
@@ -466,24 +466,22 @@ let rec pp_struct_def structs guard annot fields ff id =
     end;
     pp "@]@;]"; (* Close box for struct fields. *)
     Option.iter (pp ") struct_%s %a" id (pp_coq_expr true)) annot.st_size;
+    (* Printing of constraints. *)
+    if annot.st_constrs <> [] then
+      begin
+        pp ") (@;  @[<v 0>";
+        let (c, cs) = (List.hd annot.st_constrs, List.tl annot.st_constrs) in
+        pp "%a" pp_constr c;
+        List.iter (pp " ∗@;%a" pp_constr) cs;
+        pp "@]@;)"
+      end;
+    (* Closing the "exists". *)
+    List.iter (fun _ -> pp ")") annot.st_exists;
+    pp "@]@]"
   in
-  begin
-    match annot.st_ptr_type with
-    | None        -> pp_dots ff ()
-    | Some(_, ty) -> pp_type_expr_guard (Some(pp_dots)) Guard_none ff ty
-  end;
-  (* Printing of constraints. *)
-  if annot.st_constrs <> [] then
-    begin
-      pp ") (@;  @[<v 0>";
-      let (c, cs) = (List.hd annot.st_constrs, List.tl annot.st_constrs) in
-      pp "%a" pp_constr c;
-      List.iter (pp " ∗@;%a" pp_constr) cs;
-      pp "@]@;)"
-    end;
-  (* Closing the "exists". *)
-  List.iter (fun _ -> pp ")") annot.st_exists;
-  pp "@]@]"
+  match annot.st_ptr_type with
+  | None        -> pp_dots ff ()
+  | Some(_, ty) -> pp_type_expr_guard (Some(pp_dots)) Guard_none ff ty
 
 (* Functions for looking for recursive occurences of a type. *)
 
