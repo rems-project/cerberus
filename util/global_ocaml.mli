@@ -20,8 +20,6 @@ type cerberus_conf = {
 
 val (!!): (unit -> 'a) ref -> 'a
 
-val cerb_path: string
-
 val cerb_conf: (unit -> cerberus_conf) ref
 
 val set_cerb_conf:

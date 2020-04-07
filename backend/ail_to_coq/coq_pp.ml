@@ -14,9 +14,26 @@ let pp_as_tuple : 'a pp -> 'a list pp = fun pp ff xs ->
                List.iter (fprintf ff ", %a" pp) xs;
                pp_str ff ")"
 
-let pp_as_tuple_pat : 'a pp -> 'a list pp = fun pp ff xs ->
-  if List.length xs > 1 then pp_str ff "'";
-  pp_as_tuple pp ff xs
+let pp_encoded_patt_name : string list pp = fun ff xs ->
+  match xs with
+  | []  -> pp_str ff "_"
+  | [x] -> pp_str ff x
+  | _   -> pp_str ff "patt__"
+
+(* Print projection to get the [i]-th element of a tuple with [n] elements. *)
+let rec pp_projection : int -> int pp = fun n ff i ->
+  match n with
+  | 1                -> ()
+  | _ when i = n - 1 -> fprintf ff ".2"
+  | _                -> fprintf ff ".1%a" (pp_projection (n - 1)) i
+
+let pp_encoded_patt_bindings : string list pp = fun ff xs ->
+  let nb = List.length xs in
+  if nb <= 1 then () else
+  let pp_let i x =
+    fprintf ff "let %s := patt__%a in@;" x (pp_projection nb) i
+  in
+  List.iteri pp_let xs
 
 let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
   match xs with
@@ -343,18 +360,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Shr     -> pp_str ff "&shr"
     | Frac(e) -> fprintf ff "&frac{%a}" (pp_coq_expr false) e
   in
-  let rec pp_patt ff p =
-    match p with
-    | Pat_var(x)    -> pp_str ff x
-    | Pat_tuple(ps) -> fprintf ff "%a" (pp_as_tuple_pat pp_patt) ps
-  in
   let rec pp wrap ff ty =
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)         -> (pp_coq_expr wrap) ff e
     | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
-    | Ty_lambda(p,ty)   -> fprintf ff "(λ %a, %a)" pp_patt p (pp false) ty
+    | Ty_lambda(xs,ty)  ->
+        fprintf ff "(λ %a, @[<v 0>%a%a@])" pp_encoded_patt_name xs
+          pp_encoded_patt_bindings xs (pp false) ty
     | Ty_dots           ->
         begin
           match pp_dots with
@@ -412,7 +426,7 @@ let gather_fields s_id s =
   in
   List.map fn s.struct_members
 
-let rec pp_struct_def structs guard annot fields ff id =
+let rec pp_struct_def_np structs guard annot fields ff id =
   let pp fmt = fprintf ff fmt in
   (* Print the part that may stand for dots in case of "ptr_type". *)
   let pp_dots ff () =
@@ -457,7 +471,7 @@ let rec pp_struct_def structs guard annot fields ff id =
             Panic.panic_no_pos "[rc::ptr_type] in nested struct [%s]." s_id
           in
           let fields = gather_fields s_id s in
-          pp "(%a)" (pp_struct_def structs Guard_none annot fields) id
+          pp "(%a)" (pp_struct_def_np structs Guard_none annot fields) s_id
       | LStruct(_   , true ) -> assert false (* TODO *)
       | _                    -> pp_type_expr_guard None guard ff ty
     in
@@ -482,11 +496,16 @@ let rec pp_struct_def structs guard annot fields ff id =
       end;
     (* Closing the "exists". *)
     List.iter (fun _ -> pp ")") annot.st_exists;
-    pp "@]@]"
+    pp "@]"
   in
   match annot.st_ptr_type with
   | None        -> pp_dots ff ()
   | Some(_, ty) -> pp_type_expr_guard (Some(pp_dots)) Guard_none ff ty
+
+(* Wrapper to print pattern desugaring. *)
+let pp_struct_def ref_names structs guard annot fields ff id =
+  pp_encoded_patt_bindings ff ref_names;
+  pp_struct_def_np structs guard annot fields ff id
 
 (* Functions for looking for recursive occurences of a type. *)
 
@@ -495,10 +514,7 @@ let in_coq_expr : string -> coq_expr -> bool = fun s e ->
   | Coq_ident(x) -> x = s
   | Coq_all(e)   -> e = s (* In case of [{s}]. *)
 
-let rec in_patt : string -> pattern -> bool = fun s p ->
-  match p with
-  | Pat_var(x)    -> x = s
-  | Pat_tuple(ps) -> List.exists (in_patt s) ps
+let in_patt : string -> pattern -> bool = List.mem
 
 let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   match ty with
@@ -572,9 +588,10 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
       pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
         ref_types (pp_as_prod (pp_coq_expr true)) ref_types;
-      pp "(λ self %a,@;" (pp_as_tuple pp_str) ref_names;
-      pp_struct_def ast.structs (Guard_in_def(id)) annot fields ff struct_id;
-      pp "@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
+      pp "(λ self %a,@;" pp_encoded_patt_name ref_names;
+      let guard = Guard_in_def(id) in
+      pp_struct_def ref_names ast.structs guard annot fields ff struct_id;
+      pp "@]@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
         (pp_id_args true (id ^ "_rec")) param_names;
@@ -591,8 +608,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         id pp_params params pp_params annot.st_refined_by;
       pp "(%a @@ %a)%%I ≡@@{type}@;(" (pp_as_tuple pp_str) ref_names
         (pp_id_args false id) param_names;
-      pp_struct_def ast.structs (Guard_in_lem(id)) annot fields ff struct_id;
-      pp ")%%I.@;";
+      let guard = Guard_in_lem(id) in
+      pp_struct_def_np ast.structs guard annot fields ff struct_id;
+      pp "@;@])%%I.@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
       (* Generation of the global instances. *)
@@ -618,9 +636,9 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       (* Definition of the [rtype]. *)
       pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
       pp "rty_type := %a;@;" pp_prod ref_types;
-      pp "rty %a := (@;  @[<hov 0>" (pp_as_tuple_pat pp_str) ref_names;
-      pp_struct_def ast.structs Guard_none annot fields ff id;
-      pp "@;)%%I@]@;|}.\n";
+      pp "rty %a := (@;  @[<v 0>%a@]@;)%%I" pp_encoded_patt_name ref_names
+        (pp_struct_def ref_names ast.structs Guard_none annot fields) id;
+      pp "@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Instance %s_movable %a:" id pp_params params;
       pp " RMovable %a." (pp_id_args true id) param_names;

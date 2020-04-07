@@ -29,25 +29,14 @@ let (!!) z = !z()
 let cerb_conf =
   ref (fun () -> failwith "cerb_conf is Undefined")
 
-(* print an error fatal message and exit with a given code *)
-let error ?(code = 1) msg =
-  prerr_endline Colour.(ansi_format [Red] @@ "ERROR: " ^ msg);
-  exit code
-
-let cerb_path =
-    try
-      Sys.getenv "CERB_PATH"
-    with Not_found ->
-      error "expecting the environment variable CERB_PATH set to point to the location of Cerberus."
-
-
 let set_cerb_conf exec exec_mode concurrency error_verbosity defacto agnostic _bmc =
-  let conf = { defacto; concurrency; error_verbosity; agnostic;
-    exec_mode_opt= if exec then Some exec_mode else None;
-    n1570=         if error_verbosity = QuoteStd then
-                     Some (Yojson.Basic.from_file (cerb_path ^ "/tools/n1570.json"))
-                   else None;
-  } in
+  let exec_mode_opt = if exec then Some exec_mode else None in
+  let n1570 =
+    if error_verbosity <> QuoteStd then None else Some (Lazy.force N1570.data)
+  in
+  let conf =
+    {defacto; concurrency; error_verbosity; agnostic; exec_mode_opt; n1570}
+  in
   cerb_conf := fun () -> conf
 
 let concurrency_mode () =

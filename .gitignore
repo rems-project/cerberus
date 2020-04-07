@@ -10,5 +10,4 @@ sibylfs/lem.log
 ocaml_frontend/generated
 sibylfs/generated
 
-runtime/libc/*.co
 *~

@@ -103,7 +103,7 @@ let add_right id y m =
   | Some (x, _) -> String_map.add id (x, Some y) m
 
 let collect_functions s =
-  let ds = map_option (function (id, (_, Decl_function (a, b, c, d, e, f))) -> Some (id, (b, c)) | (_, (_, Decl_object _)) -> None) s.declarations in
+  let ds = map_option (function (id, (_, _, Decl_function (a, b, c, d, e, f))) -> Some (id, (b, c)) | (_, (_, _, Decl_object _)) -> None) s.declarations in
   let fs = s.function_definitions in
   let m = String_map.empty in
   (* this may discard stuff *)

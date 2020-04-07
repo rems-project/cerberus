@@ -6,11 +6,10 @@ Set Default Proof Using "Type".
 (* Generated from [examples/int.c]. *)
 Section code.
   (* Global variables. *)
-  
+
   (* Functions. *)
   Context (f : loc).
   Context (main : loc).
-  
 
   (* Definition of function [f]. *)
   Definition impl_f : function := {|
