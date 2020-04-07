@@ -35,10 +35,6 @@ let pp_encoded_patt_bindings : string list pp = fun ff xs ->
   in
   List.iteri pp_let xs
 
-let pp_as_tuple_pat : 'a pp -> 'a list pp = fun pp ff xs ->
-  if List.length xs > 1 then pp_str ff "'";
-  pp_as_tuple pp ff xs
-
 let pp_sep : string -> 'a pp -> 'a list pp = fun sep pp ff xs ->
   match xs with
   | []      -> ()
@@ -364,18 +360,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Shr     -> pp_str ff "&shr"
     | Frac(e) -> fprintf ff "&frac{%a}" (pp_coq_expr false) e
   in
-  let rec pp_patt ff p =
-    match p with
-    | Pat_var(x)    -> pp_str ff x
-    | Pat_tuple(ps) -> fprintf ff "%a" (pp_as_tuple_pat pp_patt) ps
-  in
   let rec pp wrap ff ty =
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)         -> (pp_coq_expr wrap) ff e
     | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
-    | Ty_lambda(p,ty)   -> fprintf ff "(λ %a, %a)" pp_patt p (pp false) ty
+    | Ty_lambda(xs,ty)  ->
+        fprintf ff "(λ %a, @[<v 0>%a%a@])" pp_encoded_patt_name xs
+          pp_encoded_patt_bindings xs (pp false) ty
     | Ty_dots           ->
         begin
           match pp_dots with
@@ -521,10 +514,7 @@ let in_coq_expr : string -> coq_expr -> bool = fun s e ->
   | Coq_ident(x) -> x = s
   | Coq_all(e)   -> e = s (* In case of [{s}]. *)
 
-let rec in_patt : string -> pattern -> bool = fun s p ->
-  match p with
-  | Pat_var(x)    -> x = s
-  | Pat_tuple(ps) -> List.exists (in_patt s) ps
+let in_patt : string -> pattern -> bool = List.mem
 
 let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   match ty with

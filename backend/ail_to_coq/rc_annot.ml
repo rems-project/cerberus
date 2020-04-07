@@ -70,9 +70,7 @@ type coq_expr =
   | Coq_ident of string
   | Coq_all   of string
 
-type pattern =
-  | Pat_var   of ident
-  | Pat_tuple of pattern list
+type pattern = ident list
 
 type constr =
   | Constr_Iris  of string
@@ -103,8 +101,9 @@ let parser coq_expr =
   | s:coq_term -> Coq_all(s)
 
 let parser pattern =
-  | x:ident                             -> Pat_var(x)
-  | "(" p:pattern ps:{"," pattern}+ ")" -> Pat_tuple(p :: ps)
+  | "(" ")"                         -> []
+  | x:ident                         -> [x]
+  | "(" x:ident xs:{"," ident}+ ")" -> x :: xs
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
