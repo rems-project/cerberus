@@ -1282,13 +1282,17 @@ let infer_value loc name env v =
      let t = (name, T.A BT.Bool) in
      let constr = (Sym.fresh (), T.C (LC (Not (S name)))) in
      return [t; constr]
-  | M_Vlist (cbt, asyms) ->
-     bt_of_core_base_type loc cbt >>= fun i_t ->
-     make_Aargs_bts env asyms >>= fun args_bts ->
-     args_same_typ (Some i_t) args_bts >>
-     (* maybe record list length? *)
-     let t = (name, T.A (BT.List i_t)) in
-     return [t]
+  | M_Vlist (_, asyms) ->
+     (* bt_of_core_base_type loc cbt >>= fun i_t -> *)
+     begin make_Aargs_bts env asyms >>= function
+     | [] ->
+        failwith "empty list case"
+     | (bt, _) :: args_bts ->
+        args_same_typ (Some bt) args_bts >>= fun i_t ->
+        (* maybe record list length? *)
+        let t = (name, T.A (BT.List bt)) in
+        return [t]
+     end
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
      let t = (name, T.A (BT.Tuple (List.map fst args_bts))) in
@@ -1393,12 +1397,13 @@ let call_typ_fn loc_call name env args =
 
 let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) = 
   match ctor with
-  | Cnil cbt ->
+  | Cnil _ ->
     begin match args_bts with 
     | [] -> 
-       bt_of_core_base_type loc cbt >>= fun bt ->
-       let t = BT.List bt in
-       return t
+       failwith "nil case"
+       (* bt_of_core_base_type loc cbt >>= fun bt ->
+        * let t = BT.List bt in
+        * return t *)
     | args ->
        let err = sprintf "Cons applied to %d argument(s)" 
                    (List.length args) in
@@ -1585,9 +1590,10 @@ let infer_binop name env loc op sym1 sym2 =
   return ([t], env)
 
 
-let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) = 
+let rec infer_pexpr name env (pe : 'bty mu_pexpr) = 
+  let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Annot.get_loc_ annots in
-  match pe with
+  match pe_ with
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun b ->
      let t = (name, T.A b) in
@@ -1654,11 +1660,14 @@ let rec infer_pexpr name env (M_Pexpr (annots, _bty, pe)) =
   | M_PElet (p, e1, e2) ->
      (* todo: check against cbt? *)
      begin match p with 
-     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
+     | M_symbol (Annotated (_annots, _, name2)) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        infer_pexpr name (add_vars env rt) e2
+     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
         let name2 = sym_or_fresh mname2 in
         infer_pexpr name2 env e1 >>= fun (rt, env) ->
         infer_pexpr name (add_vars env rt) e2
-     | Pattern (_annot, CaseCtor _) ->
+     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | M_PEif (sym1,sym2,sym3) ->
@@ -1720,7 +1729,8 @@ let subtype loc env rt1 (R.R rt2) =
 
 
 
-let rec infer_expr name env (M_Expr (annots, e_)) = 
+let rec infer_expr name env (e : ('a,'bty) mu_expr) = 
+  let (M_Expr (annots, e_)) = e in
   (* let loc = Annot.get_loc_ annots in *)
   match e_ with
   | M_Epure pe -> 
@@ -1733,11 +1743,14 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      failwith "todo ecase"
   | M_Elet (p, e1, e2) ->
      begin match p with 
-     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
+     | M_symbol (Annotated (_annots, _, name2)) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        infer_expr name (add_vars env rt) e2
+     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
         let name2 = sym_or_fresh mname2 in
         infer_pexpr name2 env e1 >>= fun (rt, env) ->
         infer_expr name (add_vars env rt) e2
-     | Pattern (_annot, CaseCtor _) ->
+     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | M_Eif _ ->
@@ -1776,7 +1789,7 @@ let rec infer_expr name env (M_Expr (annots, e_)) =
      failwith "todo erun"
 
 
-let check_expr fname env e ret = 
+let check_expr (type a bty) fname env (e : (a,bty) mu_expr) ret = 
   let (M_Expr (annots, _)) = e in
   let loc = Annot.get_loc_ annots in
   let name = Sym.fresh () in    (* fix *)
@@ -1789,7 +1802,7 @@ let check_expr fname env e ret =
 
 
 
-let check_function_body genv name body decl_typ = 
+let check_function_body (type a bty) genv name (body : (a,bty) mu_expr) decl_typ = 
   let (F (A args, ret)) = decl_typ in
   let env = with_fresh_local genv in
   let env = add_vars env args in
@@ -1804,7 +1817,7 @@ let embed_fun_proc body =
 
 
 
-let check_function genv fsym fn = 
+let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) = 
 
   let forget = 
     filter_map (function (_,T.A t) -> Some t | _ -> None) in
@@ -1844,7 +1857,7 @@ let check_function genv fsym fn =
      return ()
 
 
-let check_functions env fns =
+let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
   pmap_iterM (check_function env) fns
 
                              
@@ -2031,7 +2044,7 @@ let init core_file mu_file =
   print_core_file (mu_to_core__file mu_file) "out2"
   
 
-let check (core_file : unit Core.typed_file) =
+let check (core_file : unit Core.file) =
   let mu_file = Core_anormalise.normalise_file core_file in
   let () = init core_file mu_file in
   let env = empty_global in

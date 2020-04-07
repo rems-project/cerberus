@@ -14,28 +14,29 @@ open import Mucore
 
 
 
-type bty = core_base_type
+(* type bty = core_base_type *)
 type value = generic_value Symbol.sym
 type values = list value
-type pexpr = generic_pexpr bty Symbol.sym
-type pexprs = list pexpr
-type expr 'a = generic_expr 'a bty Symbol.sym
-type pattern = generic_pattern bty Symbol.sym
+type pexpr 'bty = generic_pexpr 'bty Symbol.sym
+type pexprs 'bty = list (pexpr 'bty)
+type expr 'a 'bty = generic_expr 'a 'bty Symbol.sym
+type pattern 'bty = mu_pattern 'bty
 type annot = Annot.annot
 type annots = list annot
-type action 'a = generic_action 'a bty Symbol.sym
-type paction 'a = generic_paction 'a bty Symbol.sym
+type action 'a 'bty = generic_action 'a 'bty Symbol.sym
+type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
-type mu_value = Mucore.mu_value bty
+type mu_value = Mucore.mu_value unit
 type mu_values = list mu_value
-type mu_pexpr = Mucore.mu_pexpr bty
+type mu_pexpr = Mucore.mu_pexpr unit
 type mu_pexprs = list mu_pexpr
-type mu_expr 'a = Mucore.mu_expr 'a bty
-type mu_pattern = Mucore.mu_pattern bty
-type mu_action 'a = Mucore.mu_action 'a bty
-type mu_paction 'a = Mucore.mu_paction 'a bty
+type mu_expr 'a = Mucore.mu_expr 'a unit
+type mu_pattern = Mucore.mu_pattern unit
+type mu_action 'a = Mucore.mu_action 'a unit
+type mu_paction 'a = Mucore.mu_paction 'a unit
+type mu_sym_or_pattern = Mucore.mu_sym_or_pattern unit
 
-type asym = Mucore.asym Mucore.mu_base_type
+type asym = Mucore.asym unit
 type asyms = list asym
 
 
@@ -56,8 +57,6 @@ let is_symbol (M_Pexpr annots bty e) =
   end
 
 (* Here we depend on bty being of type core_base_type *)
-let var_pat sym annots bty = 
-  Pattern annots (CaseBase (Just sym, bty))
 let var_pexpr sym annots bty = 
   M_Pexpr annots bty (M_PEsym sym) 
 
@@ -65,7 +64,8 @@ let var_pexpr sym annots bty =
 
 
 
-type letbinder 'bound 'body = annots -> pattern -> 'bound -> 'body -> 'body
+type letbinder 'bound 'body = 
+  annots -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
 
 val letbinder_pexpr_in_pexpr : letbinder mu_pexpr mu_pexpr
 let letbinder_pexpr_in_pexpr annots pat pexpr body : mu_pexpr = 
@@ -87,8 +87,9 @@ val letbind_pexpr :
 let letbind_pexpr letbinder pexpr ctxt = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
-  let pat = var_pat sym annots bty in
-  let body = ctxt (Annotated annots bty sym) in
+  let asym = Annotated annots bty sym in
+  let pat = M_symbol asym in
+  let body = ctxt asym in
   letbinder annots pat pexpr body
 
 
@@ -121,22 +122,21 @@ val n_val_names :
 
 
 
-val n_pexpr : pexpr -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
-val n_pexpr_name : pexpr -> (asym -> mu_pexpr) -> mu_pexpr
-val n_pexpr_names : pexprs -> (asyms -> mu_pexpr) -> mu_pexpr
-val normalise_pexpr : pexpr -> mu_pexpr
+val n_pexpr : pexpr unit -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : forall 'bty. pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : forall 'bty. pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
+val normalise_pexpr : forall 'bty. pexpr unit -> mu_pexpr
 
-val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_name_in_expr : forall 'a. pexpr -> (asym -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
-val normalise_pexpr_in_expr : forall 'a. pexpr -> mu_expr 'a
+val n_pexpr_in_expr : forall 'a. pexpr unit -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
 
 
-let typeof_value v = 
-  match Core_typing.typeof_value Loc.unknown Core_typing_aux.empty_env v with
-  | Exception.Result bty -> bty
-  | Exception.Exception msg -> failwith "msg"
-  end
+(* let typeof_value v = 
+ *   match Core_typing.typeof_value Loc.unknown Core_typing_aux.empty_env v with
+ *   | Exception.Result bty -> bty
+ *   | Exception.Exception msg -> failwith "msg"
+ *   end *)
 
 
 let rec n_ov lb annots v k = 
@@ -145,7 +145,7 @@ let rec n_ov lb annots v k =
   | Core.OVfloating fv -> k (M_OVfloating fv)
   | Core.OVpointer pv -> k (M_OVpointer pv)
   | Core.OVarray is -> 
-     let vs = List.map Vloaded is in
+     let vs = map Vloaded is in
      n_val_names lb annots vs (fun syms ->
      k (M_OVarray syms))
   | Core.OVstruct sym is ->
@@ -176,8 +176,9 @@ and n_val lb annots v k =
   | Vtuple vs -> n_val_names lb annots vs (fun vs -> k (M_Vtuple vs))
   end
 
+ (* here we make explicit unit btys *)
 and n_val_name lb annots v k = 
-  let bty = typeof_value v in
+  let bty = () in (* typeof_value v in *)
   n_val lb annots v (fun v -> 
   let pe = M_Pexpr annots bty (M_PEval v) in
   letbind_pexpr lb pe (fun sym -> 
@@ -205,7 +206,7 @@ and n_val_names lb annots vs k =
 
 (* 1 begin *)
 
-let rec n_pexpr_name (e : pexpr) (k : asym -> mu_pexpr) : mu_pexpr = 
+let rec n_pexpr_name (e : pexpr unit) (k : asym -> mu_pexpr) : mu_pexpr = 
   n_pexpr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
@@ -217,7 +218,7 @@ and n_pexpr_name_2 (e,e') k =
   n_pexpr_name e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_names (es : list pexpr) k =
+and n_pexpr_names (es : list (pexpr unit)) k =
   match es with
   | [] -> k []
   | e :: es -> 
@@ -226,7 +227,7 @@ and n_pexpr_names (es : list pexpr) k =
      k (e :: es)))
   end
 
-and n_pexpr (e : pexpr) k = 
+and n_pexpr (e : pexpr unit) k = 
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
@@ -240,9 +241,9 @@ and n_pexpr (e : pexpr) k =
      n_val letbinder_pexpr_in_pexpr annots v (fun v ->
      k (annotate (M_PEval v)))
   | PEconstrained l -> 
-     let (constraints,exprs) = List.unzip l in
+     let (constraints,exprs) = unzip l in
      n_pexpr_names exprs (fun exprs ->
-     let l = List.zip constraints exprs in
+     let l = zip constraints exprs in
      k (annotate (M_PEconstrained l)))
   | PEundef l u -> 
      k (annotate (M_PEundef l u))
@@ -254,9 +255,9 @@ and n_pexpr (e : pexpr) k =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
-     let (pats,pes) = List.unzip pats_pes in
-     let pes = List.map (fun e -> n_pexpr e (fun e -> e)) pes in
-     let pats_pes = List.zip pats pes in
+     let (pats,pes) = unzip pats_pes in
+     let pes = map (fun e -> n_pexpr e (fun e -> e)) pes in
+     let pats_pes = zip pats pes in
      k (annotate (M_PEcase e' pats_pes)))
   | PEarray_shift e' ctype e'' ->
      n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
@@ -271,9 +272,9 @@ and n_pexpr (e : pexpr) k =
      n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEop binop e' e'')))
   | PEstruct sym fields ->
-     let (fnames, pes) = List.unzip fields in
+     let (fnames, pes) = unzip fields in
      n_pexpr_names pes (fun pes ->
-     let fields = List.zip fnames pes in
+     let fields = zip fnames pes in
      k (annotate (M_PEstruct sym fields)))
   | PEunion sym id e' ->
      n_pexpr_name e' (fun e' ->
@@ -290,7 +291,9 @@ and n_pexpr (e : pexpr) k =
      k (annotate (M_PEcall sym args)))
   | PElet pat e' e'' ->
      n_pexpr e' (fun e' ->
-     letbinder_pexpr_in_pexpr annots pat e' (n_pexpr e'' k))
+     letbinder_pexpr_in_pexpr annots 
+       (M_normal_pattern pat)
+       e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
      n_pexpr_name e' (fun e' ->
      n_pexpr_name e'' (fun e'' ->
@@ -327,7 +330,7 @@ and n_pexpr (e : pexpr) k =
 
 (* 2 begin *)
 
-let rec n_pexpr_in_expr_name (e : pexpr) (k : asym -> mu_expr 'a) : mu_expr 'a = 
+let rec n_pexpr_in_expr_name (e : pexpr unit) (k : asym -> mu_expr 'a) : mu_expr 'a = 
   n_pexpr_in_expr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
@@ -339,7 +342,7 @@ and n_pexpr_in_expr_name_2 (e,e') k : mu_expr 'a =
   n_pexpr_in_expr_name e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_in_expr_names (es : list pexpr) k : mu_expr 'a =
+and n_pexpr_in_expr_names (es : list (pexpr unit)) k : mu_expr 'a =
   match es with
   | [] -> k []
   | e :: es -> 
@@ -348,7 +351,7 @@ and n_pexpr_in_expr_names (es : list pexpr) k : mu_expr 'a =
      k (e :: es)))
   end
 
-and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
@@ -362,9 +365,9 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      n_val letbinder_pexpr_in_expr annots v (fun v ->
      k (annotate (M_PEval v)))
   | PEconstrained l -> 
-     let (constraints,exprs) = List.unzip l in
+     let (constraints,exprs) = unzip l in
      n_pexpr_in_expr_names exprs (fun exprs ->
-     let l = List.zip constraints exprs in
+     let l = zip constraints exprs in
      k (annotate (M_PEconstrained l)))
   | PEundef l u -> 
      k (annotate (M_PEundef l u))
@@ -376,10 +379,10 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_in_expr_name e' (fun e' -> 
-     let (pats,pes) = List.unzip pats_pes in
+     let (pats,pes) = unzip pats_pes in
      (* the line below is where we'd need polymorphic recursion *)
-     let pes = List.map (fun e -> n_pexpr e (fun e -> e)) pes in 
-     let pats_pes = List.zip pats pes in
+     let pes = map (fun e -> n_pexpr e (fun e -> e)) pes in 
+     let pats_pes = zip pats pes in
      k (annotate (M_PEcase e' pats_pes)))
   | PEarray_shift e' ctype e'' ->
      n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
@@ -394,9 +397,9 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEop binop e' e'')))
   | PEstruct sym fields ->
-     let (fnames, pes) = List.unzip fields in
+     let (fnames, pes) = unzip fields in
      n_pexpr_in_expr_names pes (fun pes ->
-     let fields = List.zip fnames pes in
+     let fields = zip fnames pes in
      k (annotate (M_PEstruct sym fields)))
   | PEunion sym id e' ->
      n_pexpr_in_expr_name e' (fun e' ->
@@ -413,7 +416,9 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEcall sym args)))
   | PElet pat e' e'' ->
      n_pexpr_in_expr e' (fun e' ->
-     letbinder_pexpr_in_expr annots pat e' (n_pexpr_in_expr e'' k))
+     letbinder_pexpr_in_expr annots 
+       (M_normal_pattern pat) 
+       e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
      n_pexpr_in_expr_name e' (fun e' ->
      n_pexpr_in_expr_name e'' (fun e'' ->
@@ -451,7 +456,7 @@ and n_pexpr_in_expr (e : pexpr) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
 (* 2 end *)
 
 
-let normalise_pexpr (e : pexpr) = 
+let normalise_pexpr (e : pexpr unit) = 
   n_pexpr e (fun e -> e)
 
 
@@ -467,7 +472,7 @@ let normalise_pexpr (e : pexpr) =
 
 
 
-let n_action (action : action 'a) (k : mu_action 'a -> mu_expr 'a) = 
+let n_action (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
   let (Action t an a) = action in
   let wrap a = M_Action t an a in
   match a with
@@ -546,7 +551,7 @@ let rec normalise_expr e =
   n_expr e (fun e -> e)
 
 
-and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a) 
+and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
         : mu_expr 'a = 
   let (Expr annot pe) = e in
   let wrap pe : mu_expr 'a = M_Expr annot pe in
@@ -567,7 +572,7 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
      k (wrap (M_Ecase pexpr pats_es)))
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
-     wrap (M_Elet pat e1 (n_expr e2 k)))
+     wrap (M_Elet (M_normal_pattern pat) e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
      n_pexpr_in_expr_name e1 (fun e1 ->
      let e2 = normalise_expr e2 in
@@ -603,14 +608,14 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
   | Ebound n e ->
      wrap (M_Ebound n (n_expr e k))
   | End es ->
-     let es = List.map normalise_expr es in
+     let es = map normalise_expr es in
      k (wrap (M_End es))
   | Esave b syms_typs_pes e ->  (* have to check *)
-     let (syms,typs_pes) = List.unzip syms_typs_pes in
-     let (typs,pes) = List.unzip typs_pes in
+     let (syms,typs_pes) = unzip syms_typs_pes in
+     let (typs,pes) = unzip typs_pes in
      n_pexpr_in_expr_names pes (fun pes ->
-     let typs_pes = List.zip typs pes in
-     let syms_typs_pes = List.zip syms typs_pes in
+     let typs_pes = zip typs pes in
+     let syms_typs_pes = zip syms typs_pes in
      let e = normalise_expr e in
      k (wrap (M_Esave b syms_typs_pes e)))
   | Erun a sym pes ->
@@ -625,17 +630,17 @@ and n_expr (e : expr 'a) (k : mu_expr 'a -> mu_expr 'a)
 
 
 
-let normalise_impl_decl (i : generic_impl_decl bty) : mu_impl_decl bty =
+let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl unit =
   match i with
   | Def bt p -> M_Def bt (normalise_pexpr p)
   | IFun bt args body -> M_IFun bt args (normalise_pexpr body)
   end
 
-let normalise_impl (i : generic_impl bty) : mu_impl bty =
+let normalise_impl (i : generic_impl unit) : mu_impl unit =
   Map.map normalise_impl_decl i
 
-let normalise_fun_map_decl (d : generic_fun_map_decl bty 'a) 
-    : mu_fun_map_decl bty 'a =
+let normalise_fun_map_decl (d : generic_fun_map_decl unit 'a) 
+    : mu_fun_map_decl unit 'a =
   match d with
   | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
   | Proc loc bt args e -> M_Proc loc bt args (normalise_expr e)
@@ -643,19 +648,19 @@ let normalise_fun_map_decl (d : generic_fun_map_decl bty 'a)
   | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
   end
 
-let normalise_fun_map (fmap : generic_fun_map bty 'a) : mu_fun_map bty 'a = 
+let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map unit 'a = 
   Map.map normalise_fun_map_decl fmap
   
 
-let normalise_globs (g : generic_globs 'a bty) : mu_globs 'a bty = 
+let normalise_globs (g : generic_globs 'a unit) : mu_globs 'a unit = 
   match g with
   | GlobalDef bt e -> M_GlobalDef bt (normalise_expr e)
   | GlobalDecl bt -> M_GlobalDecl bt 
   end
 
-let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a bty) )
-    : list (Symbol.sym * mu_globs 'a bty) = 
-  List.map (fun (sym,g) -> (sym, normalise_globs g)) gs
+let normalise_globs_list (gs : list (Symbol.sym * generic_globs 'a unit) )
+    : list (Symbol.sym * mu_globs 'a unit) = 
+  map (fun (sym,g) -> (sym, normalise_globs g)) gs
 
 
 let normalise_file file = 
