@@ -534,6 +534,16 @@ and in_constr : string -> constr -> bool = fun s c ->
   | Constr_exist(x,c)  -> x <> s && in_constr s c
   | Constr_own(_,_,ty) -> in_type_expr s ty
 
+let collect_invs : func_def -> (string * block_annot) list = fun def ->
+  let fn id (annot, _) acc =
+    match annot with
+    | Some(annot) when annot = no_block_annot -> acc
+    | Some(annot)                             -> (id, annot) :: acc
+    | None                                    ->
+    Panic.panic_no_pos "Bad block annotation in function [%s]." def.func_name
+  in
+  SMap.fold fn def.func_blocks []
+
 let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Stuff for import of the code. *)
   let basename =
@@ -757,8 +767,67 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
         List.iter (fun (x,_) -> pp " arg_%s" x) def.func_args;
         List.iter (fun (x,_) -> pp " local_%s" x) def.func_vars
       end;
-    pp ".@;split_blocks (∅ : gmap block_id (iProp Σ)).";
-    pp "@;repeat do_step; do_finish.";
+    pp ".@;@[<v 2>split_blocks ((";
+    let pp_inv (id, annot) =
+      (* Opening a box and printing the existentials. *)
+      pp "@;@[<v 2><[ \"%s\" :=" id;
+      let pp_exists (id, e) = pp "@;∃ %s : %a," id (pp_coq_expr false) e in
+      List.iter pp_exists annot.bl_exists;
+      (* Compute the used and unused arguments and variables. *)
+      let used =
+        let fn (id, ty) =
+          let eq (id_var, _) = id_var = id in
+          let is_arg = List.exists eq def.func_args in
+          let is_var = List.exists eq def.func_vars in
+          if is_arg && is_var then
+            Panic.panic_no_pos "[%s] denotes both a local variable and an \
+              argument of function [%s]." id def.func_name;
+          if is_var then ("local_" ^ id, Some(ty)) else
+          if is_arg then ("arg_"   ^ id, Some(ty)) else
+          Panic.panic_no_pos "[%s] is neither a local variable nor an \
+            argument." id
+        in
+        List.map fn annot.bl_inv_vars
+      in
+      let unused =
+        let fn prefix (id, _) = prefix ^ id in
+        let args = List.map (fn "arg_")   def.func_args in
+        let vars = List.map (fn "local_") def.func_vars in
+        let pred id = List.for_all (fun (id_var, _) -> id <> id_var) used in
+        let unused = List.filter pred args @ List.filter pred vars in
+        List.map (fun id -> (id, None)) unused
+      in
+      let all_vars = unused @ used in
+      let pp_var ff (id, ty_opt) =
+        match ty_opt with
+        | None     -> fprintf ff "%s ◁ₗ uninit LPtr" id
+        | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
+      in
+      begin
+        match (all_vars, annot.bl_constrs) with
+        | ([]     , []     ) ->
+            Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
+              def.func_name
+        | ([]     , c :: cs) ->
+            pp "@;%a" pp_constr c;
+            List.iter (pp " ∗@;%a" pp_constr) cs
+        | (v :: vs, cs     ) ->
+            pp "@;%a" pp_var v;
+            List.iter (pp " ∗@;%a" pp_var) vs;
+            List.iter (pp " ∗@;%a" pp_constr) cs
+      end;
+      (* Closing the box. *)
+      pp "@]@;]> $"
+    in
+    let invs = collect_invs def in
+    List.iter pp_inv invs;
+    pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
+    let pp_selector ff l =
+      match l with
+      | [] -> ()
+      | _  -> fprintf ff "1-%i: " (List.length l + 1)
+    in
+    pp "@;%arepeat do_step; do_finish." pp_selector invs;
     pp "@;Unshelve. all: try solve_goal.";
     pp "@]@;Qed."
   in
