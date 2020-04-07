@@ -64,15 +64,15 @@ let frontend conf filename =
      Tags.set_tagDefs core_file.tagDefs;
      let core_file = Core_peval.rewrite_file core_file in
      let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
-     typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
-     return typed_core_file
+     (* typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) -> *)
+     return core_file
   | ".core" ->
      core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
      Tags.set_tagDefs core_file.tagDefs;
      let core_file = Core_peval.rewrite_file core_file in
      let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
-     typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) ->
-     return typed_core_file
+     (* typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) -> *)
+     return core_file
   | ext ->
      failwith (Printf.sprintf "wrong file extension %s" ext)
 
