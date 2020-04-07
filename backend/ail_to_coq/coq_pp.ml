@@ -457,7 +457,7 @@ let rec pp_struct_def structs guard annot fields ff id =
             Panic.panic_no_pos "[rc::ptr_type] in nested struct [%s]." s_id
           in
           let fields = gather_fields s_id s in
-          pp "(%a)" (pp_struct_def structs Guard_none annot fields) id
+          pp "(%a)" (pp_struct_def structs Guard_none annot fields) s_id
       | LStruct(_   , true ) -> assert false (* TODO *)
       | _                    -> pp_type_expr_guard None guard ff ty
     in
