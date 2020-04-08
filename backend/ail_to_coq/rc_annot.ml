@@ -14,16 +14,38 @@ let well_bracketed : char -> char -> string Earley.grammar = fun c_op c_cl ->
   let fn buf pos =
     let str = Buffer.create 20 in
     let rec loop nb_op buf pos =
-      let c = Input.get buf pos in
-      if c = '\255' then
-        Earley.give_up ()
-      else if c = c_op then
-        (Buffer.add_char str c; loop (nb_op + 1) buf (pos+1))
-      else if c = c_cl then
-        if nb_op = 1 then (buf, pos+1) else
-        (Buffer.add_char str c; loop (nb_op - 1) buf (pos+1))
-      else
-        (Buffer.add_char str c; loop nb_op buf (pos+1))
+      let (c, buf, pos) = Input.read buf pos in
+      match c with
+      (* Opening/closing character. *)
+      | _ when c = c_op              ->
+          Buffer.add_char str c;
+          loop (nb_op + 1) buf pos
+      | _ when c = c_cl && nb_op = 1 ->
+          (buf, pos) (* Done. *)
+      | _ when c = c_cl              ->
+          Buffer.add_char str c;
+          loop (nb_op - 1) buf pos
+      (* EOF: error. *)
+      | '\255'                       ->
+          Earley.give_up ()
+      (* Interpret some escape sequences. *)
+      | '\\'                         ->
+          let (c, buf, pos) = Input.read buf pos in
+          let c =
+            match c with
+            | '\255' -> Earley.give_up () (* EOF: error. *)
+            | '"'    -> '"'
+            | '\\'   -> '\\'
+            | 'n'    -> '\n'
+            | 't'    -> '\t'
+            | _      -> Earley.give_up () (* Bad escape sequence. *)
+          in
+          Buffer.add_char str c;
+          loop nb_op buf pos
+      (* Anything else is just taken. *)
+      | _                            ->
+          Buffer.add_char str c;
+          loop nb_op buf pos
     in
     let (buf, pos) = loop 1 buf (pos + 1) in
     (Buffer.contents str, buf, pos)
