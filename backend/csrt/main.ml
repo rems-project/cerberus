@@ -60,12 +60,12 @@ let print_core_file core_file filename =
 
 let process core_file0 =
   Tags.set_tagDefs core_file0.Core.tagDefs;
-  let core_file1 = Core_peval.rewrite_file core_file0 in
-  let core_file2 = Core_remove_unused_functions.remove_unused_functions core_file1 in
-  let mu_file3 = Core_anormalise.normalise_file core_file2 in
   print_core_file core_file0 "0_original";
+  let core_file1 = Core_peval.rewrite_file core_file0 in
   print_core_file core_file1 "1_after_peval";
+  let core_file2 = Core_remove_unused_functions.remove_unused_functions core_file1 in
   print_core_file core_file2 "2_after_removing_unused_functions";
+  let mu_file3 = Core_anormalise.normalise_file core_file2 in
   print_core_file (Mucore.mu_to_core__file mu_file3) "3_after_removing_unused_functions";
   return mu_file3
 

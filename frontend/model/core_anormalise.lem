@@ -40,6 +40,10 @@ type asym = Mucore.asym unit
 type asyms = list asym
 
 
+val better_error_messages : forall 'a. string -> 'a -> 'a
+declare ocaml target_rep function better_error_messages message a = 
+  `try` a `with | Failure error -> failwith (` message ` ^ error) `
+
 
 (* ... adapting the algorithm from
    http://matt.might.net/articles/a-normalization/ for core *)
@@ -639,17 +643,18 @@ let normalise_impl_decl (i : generic_impl_decl unit) : mu_impl_decl unit =
 let normalise_impl (i : generic_impl unit) : mu_impl unit =
   Map.map normalise_impl_decl i
 
-let normalise_fun_map_decl (d : generic_fun_map_decl unit 'a) 
+let normalise_fun_map_decl name (d : generic_fun_map_decl unit 'a) 
     : mu_fun_map_decl unit 'a =
-  match d with
-  | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
-  | Proc loc bt args e -> M_Proc loc bt args (normalise_expr e)
-  | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
-  | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
-  end
+  better_error_messages (show name)
+    (match d with
+     | Fun bt args pe -> M_Fun bt args (normalise_pexpr pe)
+     | Proc loc bt args e -> M_Proc loc bt args (normalise_expr e)
+     | ProcDecl loc bt bts -> M_ProcDecl loc bt bts
+     | BuiltinDecl loc bt bts -> M_BuiltinDecl loc bt bts
+     end)
 
 let normalise_fun_map (fmap : generic_fun_map unit 'a) : mu_fun_map unit 'a = 
-  Map.map normalise_fun_map_decl fmap
+  Map.mapi normalise_fun_map_decl fmap
   
 
 let normalise_globs (g : generic_globs 'a unit) : mu_globs 'a unit = 
