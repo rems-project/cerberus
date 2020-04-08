@@ -1,5 +1,5 @@
 open Cerb_frontend
-open Cerb_backend
+(* open Cerb_backend *)
 (* open Lem_pervasives  *)
 open Core 
 open Mucore
@@ -2027,26 +2027,14 @@ let test_infer_expr () =
   failwith "not implemented"
 
 
-let pp_fun_map_decl f = 
-  let pp = Pp_core.All.pp_funinfo_with_attributes f in
+let pp_fun_map_decl funinfo = 
+  let pp = Pp_core.All.pp_funinfo_with_attributes funinfo in
   print_string (Pp_utils.to_plain_string pp)
 
 
-let print_core_file core_file filename = 
-  let pp = Pp_core.Basic.pp_file core_file in
-  Pipeline.run_pp (Some (filename,"core")) pp
 
 
-let init core_file mu_file = 
-  (* Tags.set_tagDefs core_file.tagDefs; *)
-  pp_fun_map_decl core_file.funinfo;
-  print_core_file core_file "out1";
-  print_core_file (mu_to_core__file mu_file) "out2"
-  
-
-let check (core_file : unit Core.file) =
-  let mu_file = Core_anormalise.normalise_file core_file in
-  let () = init core_file mu_file in
+let check mu_file =
   let env = empty_global in
   record_tagDefs env mu_file.mu_tagDefs >>= fun env ->
   record_funinfo env mu_file.mu_funinfo >>= fun env ->

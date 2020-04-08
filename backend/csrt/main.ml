@@ -53,6 +53,22 @@ let conf cpp_str = {
 
 
 
+
+let print_core_file core_file filename = 
+  let pp = Pp_core.Basic.pp_file core_file in
+  Pipeline.run_pp (Some (filename,"core")) pp
+
+let process core_file0 =
+  Tags.set_tagDefs core_file0.Core.tagDefs;
+  let core_file1 = Core_peval.rewrite_file core_file0 in
+  let core_file2 = Core_remove_unused_functions.remove_unused_functions core_file1 in
+  let mu_file3 = Core_anormalise.normalise_file core_file2 in
+  print_core_file core_file0 "0_original";
+  print_core_file core_file1 "1_after_peval";
+  print_core_file core_file2 "2_after_removing_unused_functions";
+  print_core_file (Mucore.mu_to_core__file mu_file3) "3_after_removing_unused_functions";
+  return mu_file3
+
 let frontend conf filename = 
   Colour.do_colour := false;
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
@@ -61,18 +77,10 @@ let frontend conf filename =
   match Filename.extension filename with
   | ".c" ->
      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
-     Tags.set_tagDefs core_file.tagDefs;
-     let core_file = Core_peval.rewrite_file core_file in
-     let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
-     (* typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) -> *)
-     return core_file
+     process core_file
   | ".core" ->
      core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
-     Tags.set_tagDefs core_file.tagDefs;
-     let core_file = Core_peval.rewrite_file core_file in
-     let core_file = Core_remove_unused_functions.remove_unused_functions core_file in
-     (* typed_core_passes (conf,io) core_file >>= fun (_,typed_core_file) -> *)
-     return core_file
+     process core_file
   | ext ->
      failwith (Printf.sprintf "wrong file extension %s" ext)
 
