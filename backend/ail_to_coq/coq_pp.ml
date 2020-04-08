@@ -331,6 +331,9 @@ let (reset_nroot_counter, with_uid) : (unit -> unit) * string pp =
   let reset _ = counter := -1 in
   (reset, with_uid)
 
+let pp_type_annot : coq_expr option pp = fun ff eo ->
+  Option.iter (fprintf ff " : %a" (pp_coq_expr false)) eo
+
 let rec pp_constr_guard : unit pp option -> guard_mode -> bool -> constr pp =
     fun pp_dots guard wrap ff c ->
   let pp_type_expr = pp_type_expr_guard pp_dots guard in
@@ -343,13 +346,18 @@ let rec pp_constr_guard : unit pp option -> guard_mode -> bool -> constr pp =
   in
   match c with
   (* Needs no wrapping. *)
-  | Constr_Coq(e)      -> fprintf ff "⌜%a⌝" (pp_coq_expr false) e
+  | Constr_Coq(e)       ->
+      fprintf ff "⌜%a⌝" (pp_coq_expr false) e
   (* Apply wrapping. *)
-  | _ when wrap        -> fprintf ff "(%a)" (pp_constr false) c
+  | _ when wrap         ->
+      fprintf ff "(%a)" (pp_constr false) c
   (* No need for wrappin now. *)
-  | Constr_Iris(s)     -> pp_str ff s
-  | Constr_exist(x,c)  -> fprintf ff "∃ %s, %a" x (pp_constr false) c
-  | Constr_own(x,k,ty) -> fprintf ff "%s %a %a" x pp_kind k pp_type_expr ty
+  | Constr_Iris(s)      ->
+      pp_str ff s
+  | Constr_exist(x,a,c) ->
+      fprintf ff "∃ %s%a, %a" x pp_type_annot a (pp_constr false) c
+  | Constr_own(x,k,ty)  ->
+      fprintf ff "%s %a %a" x pp_kind k pp_type_expr ty
 
 and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     fun pp_dots guard ff ty ->
@@ -363,14 +371,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
   let rec pp wrap ff ty =
     match ty with
     (* Don't need explicit wrapping. *)
-    | Ty_Coq(e)         -> (pp_coq_expr wrap) ff e
-    | Ty_params(id,[])  -> pp_str ff id
+    | Ty_Coq(e)          -> (pp_coq_expr wrap) ff e
+    | Ty_params(id,[])   -> pp_str ff id
     (* Always wrapped. *)
-    | Ty_lambda(xs,ty)  ->
-        fprintf ff "(λ %a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
+    | Ty_lambda(xs,a,ty) ->
+        fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
+          pp_type_annot a
           pp_encoded_patt_bindings xs (pp false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
-    | Ty_dots           ->
+    | Ty_dots            ->
         begin
           match pp_dots with
           | None     -> Panic.panic_no_pos "Unexpected ellipsis."
@@ -378,8 +387,8 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
           fprintf ff (if wrap then "(@;  %a@;)" else "%a") pp ()
         end
     (* Insert wrapping if needed. *)
-    | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
-    | Ty_refine(e,ty)   ->
+    | _ when wrap        -> fprintf ff "(%a)" (pp false) ty
+    | Ty_refine(e,ty)    ->
         begin
           let normal () =
             fprintf ff "%a @@ %a" (pp_coq_expr true) e (pp true) ty
@@ -393,12 +402,12 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
               normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
-    | Ty_ptr(k,ty)      -> fprintf ff "%a %a" pp_kind k (pp true) ty
-    | Ty_exists(x,ty)   ->
-        fprintf ff "tyexists (λ %s, %a)" x (pp false) ty
-    | Ty_constr(ty,c)   ->
+    | Ty_ptr(k,ty)       -> fprintf ff "%a %a" pp_kind k (pp true) ty
+    | Ty_exists(x,a,ty)  ->
+        fprintf ff "tyexists (λ %s%a, %a)" x pp_type_annot a (pp false) ty
+    | Ty_constr(ty,c)    ->
         fprintf ff "constrained %a %a" (pp true) ty (pp_constr true) c
-    | Ty_params(id,tys) ->
+    | Ty_params(id,tys)  ->
     pp_str ff id;
     match (id, tys) with
     | ("optional" , [ty])
@@ -515,25 +524,31 @@ let in_coq_expr : string -> coq_expr -> bool = fun s e ->
   | Coq_ident(x) -> x = s
   | Coq_all(e)   -> e = s (* In case of [{s}]. *)
 
+let in_type_annot : string -> coq_expr option -> bool = fun s a ->
+  match a with
+  | None    -> false
+  | Some(e) -> in_coq_expr s e
+
 let in_patt : string -> pattern -> bool = List.mem
 
 let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   match ty with
-  | Ty_refine(e,ty)  -> in_coq_expr s e || in_type_expr s ty
-  | Ty_ptr(_,ty)     -> in_type_expr s ty
-  | Ty_dots          -> false
-  | Ty_exists(x,ty)  -> x <> s && in_type_expr s ty
-  | Ty_lambda(p,ty)  -> not (in_patt s p) && in_type_expr s ty
-  | Ty_constr(ty,c)  -> in_type_expr s ty || in_constr s c
-  | Ty_params(x,tys) -> x = s || List.exists (in_type_expr s) tys
-  | Ty_Coq(e)        -> in_coq_expr s e
+  | Ty_refine(e,ty)   -> in_coq_expr s e || in_type_expr s ty
+  | Ty_ptr(_,ty)      -> in_type_expr s ty
+  | Ty_dots           -> false
+  | Ty_exists(x,a,ty) -> in_type_annot s a || (x <> s && in_type_expr s ty)
+  | Ty_lambda(p,a,ty) -> in_type_annot s a ||
+                         (not (in_patt s p) && in_type_expr s ty)
+  | Ty_constr(ty,c)   -> in_type_expr s ty || in_constr s c
+  | Ty_params(x,tys)  -> x = s || List.exists (in_type_expr s) tys
+  | Ty_Coq(e)         -> in_coq_expr s e
 
 and in_constr : string -> constr -> bool = fun s c ->
   match c with
-  | Constr_Coq(e)      -> in_coq_expr s e
-  | Constr_Iris(s)     -> false
-  | Constr_exist(x,c)  -> x <> s && in_constr s c
-  | Constr_own(_,_,ty) -> in_type_expr s ty
+  | Constr_Coq(e)       -> in_coq_expr s e
+  | Constr_Iris(s)      -> false
+  | Constr_exist(x,a,c) -> in_type_annot s a || (x <> s && in_constr s c)
+  | Constr_own(_,_,ty)  -> in_type_expr s ty
 
 let collect_invs : func_def -> (string * block_annot) list = fun def ->
   let fn id (annot, _) acc =

@@ -96,7 +96,7 @@ type pattern = ident list
 
 type constr =
   | Constr_Iris  of string
-  | Constr_exist of string * constr
+  | Constr_exist of string * coq_expr option * constr
   | Constr_own   of string * ptr_kind * type_expr
   | Constr_Coq   of coq_expr
 
@@ -106,8 +106,8 @@ and type_expr =
   | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
   | Ty_dots
-  | Ty_exists of ident * type_expr
-  | Ty_lambda of pattern * type_expr
+  | Ty_exists of ident * coq_expr option * type_expr
+  | Ty_lambda of pattern * coq_expr option * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
   | Ty_Coq    of coq_expr
@@ -129,7 +129,7 @@ let parser pattern =
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
-  | "∃" x:ident "." c:constr                      -> Constr_exist(x,c)
+  | "∃" x:ident a:{":" coq_expr}? "." c:constr    -> Constr_exist(x,a,c)
   | x:ident "@" (k,ty):ptr_type                   -> Constr_own(x,k,ty)
   | c:coq_expr                                    -> Constr_Coq(c)
 
@@ -152,10 +152,10 @@ and parser type_expr @(p : type_expr_prio) =
       when p >= PAtom -> Ty_params(id,tys)
   | "..."
       when p >= PAtom -> Ty_dots
-  | "∃" x:ident "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_exists(x,ty)
-  | "λ" p:pattern "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_lambda(p,ty)
+  | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_exists(x,a,ty)
+  | "λ" p:pattern a:{":" coq_expr}? "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_lambda(p,a,ty)
   | ty:(type_expr PCstr) "&" c:constr
       when p >= PCstr -> Ty_constr(ty,c)
   | "(" ty:(type_expr PFull) ")"
