@@ -862,9 +862,12 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
     pp "@;Unshelve. all: try solve_goal.";
     let tactics_items =
       let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
-      match annot.fa_tactics with
-      | t :: ts when is_all t -> pp "@;%s" t; ts
-      | ts                    -> ts
+      let rec pp_tactics_all tactics =
+        match tactics with
+        | t :: ts when is_all t -> pp "@;%s" t; pp_tactics_all ts
+        | ts                    -> ts
+      in
+      pp_tactics_all annot.fa_tactics
     in
     List.iter (pp "@;- %s") tactics_items;
     pp "@]@;Qed."
