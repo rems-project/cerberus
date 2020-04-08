@@ -367,17 +367,18 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_params(id,[])  -> pp_str ff id
     (* Always wrapped. *)
     | Ty_lambda(xs,ty)  ->
-        fprintf ff "(λ %a, @[<v 0>%a%a@])" pp_encoded_patt_name xs
+        fprintf ff "(λ %a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
           pp_encoded_patt_bindings xs (pp false) ty
+    (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots           ->
         begin
           match pp_dots with
           | None     -> Panic.panic_no_pos "Unexpected ellipsis."
-          | Some(pp) -> fprintf ff "(@;  @[<v 0>%a@;)@]" pp ()
+          | Some(pp) ->
+          fprintf ff (if wrap then "(@;  %a@;)" else "%a") pp ()
         end
     (* Insert wrapping if needed. *)
     | _ when wrap       -> fprintf ff "(%a)" (pp false) ty
-    (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_refine(e,ty)   ->
         begin
           let normal () =
@@ -616,11 +617,11 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
       (* Generation of the unfolding lemma. *)
       pp "@;@[<v 2>Lemma %s_unfold %a%a:@;"
         id pp_params params pp_params annot.st_refined_by;
-      pp "(%a @@ %a)%%I ≡@@{type}@;(" (pp_as_tuple pp_str) ref_names
+      pp "@[<v 2>(%a @@ %a)%%I ≡@@{type} (@;" (pp_as_tuple pp_str) ref_names
         (pp_id_args false id) param_names;
       let guard = Guard_in_lem(id) in
       pp_struct_def_np ast.structs guard annot fields ff struct_id;
-      pp "@;@])%%I.@;";
+      pp "@]@;)%%I.@]@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
       (* Generation of the global instances. *)
