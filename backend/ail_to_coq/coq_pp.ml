@@ -573,7 +573,8 @@ let collect_invs : func_def -> (string * block_annot) list = fun def ->
   in
   SMap.fold fn def.func_blocks []
 
-let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
+let pp_spec : import list -> string list -> Coq_ast.t pp =
+    fun imports ctxt ff ast ->
   (* Stuff for import of the code. *)
   let basename =
     let name = Filename.basename ast.source_file in
@@ -596,6 +597,7 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Opening the section. *)
   pp "@[<v 2>Section spec.@;";
   pp "Context `{typeG Σ}.";
+  List.iter (pp "@;%s.") ctxt;
 
   (* Definition of types. *)
   let pp_struct (struct_id, s) =
@@ -870,12 +872,17 @@ let pp_spec : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Closing the section. *)
   pp "@]@;End spec.@]"
 
-type mode = Code | Spec
+type mode =
+  | Code of import list
+  | Spec of import list * string list
 
-let write : import list -> mode -> string -> Coq_ast.t -> unit =
-    fun imports mode fname ast ->
+let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let oc = open_out fname in
   let ff = Format.formatter_of_out_channel oc in
-  let pp = match mode with Code -> pp_code | Spec -> pp_spec in
-  Format.fprintf ff "%a@." (pp imports) ast;
+  let pp =
+    match mode with
+    | Code(imports)       -> pp_code imports
+    | Spec(imports, ctxt) -> pp_spec imports ctxt
+  in
+  Format.fprintf ff "%a@." pp ast;
   close_out oc
