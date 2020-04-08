@@ -368,7 +368,7 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Shr     -> pp_str ff "&shr"
     | Frac(e) -> fprintf ff "&frac{%a}" (pp_coq_expr false) e
   in
-  let rec pp wrap ff ty =
+  let rec pp wrap rfnd ff ty =
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)          -> (pp_coq_expr wrap) ff e
@@ -376,7 +376,7 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     (* Always wrapped. *)
     | Ty_lambda(xs,a,ty) ->
         fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
-          pp_type_annot a pp_encoded_patt_bindings xs (pp false) ty
+          pp_type_annot a pp_encoded_patt_bindings xs (pp false false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots            ->
         begin
@@ -386,11 +386,11 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
           fprintf ff (if wrap then "(@;  %a@;)" else "%a") pp ()
         end
     (* Insert wrapping if needed. *)
-    | _ when wrap        -> fprintf ff "(%a)" (pp false) ty
+    | _ when wrap        -> fprintf ff "(%a)" (pp false rfnd) ty
     | Ty_refine(e,ty)    ->
         begin
           let normal () =
-            fprintf ff "%a @@ %a" (pp_coq_expr true) e (pp true) ty
+            fprintf ff "%a @@ %a" (pp_coq_expr true) e (pp true true) ty
           in
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,_)) when c = s ->
@@ -401,33 +401,39 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
               normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
-    | Ty_ptr(k,ty)       -> fprintf ff "%a %a" pp_kind k (pp true) ty
+    | Ty_ptr(k,ty)       -> fprintf ff "%a %a" pp_kind k (pp true false) ty
     | Ty_exists(x,a,ty)  ->
-        fprintf ff "tyexists (λ %s%a, %a)" x pp_type_annot a (pp false) ty
+        fprintf ff "tyexists (λ %s%a, %a)" x pp_type_annot a
+          (pp false false) ty
     | Ty_constr(ty,c)    ->
-        fprintf ff "constrained %a %a" (pp true) ty (pp_constr true) c
+        fprintf ff "constrained %a %a" (pp true false) ty (pp_constr true) c
     | Ty_params(id,tys)  ->
-        pp_str ff id;
         match id with
+        | "optional" when not rfnd ->
+            let ty =
+              match tys with [ty] -> ty | _    ->
+              Panic.panic_no_pos "[%s] expects exactly one argument." id
+            in
+            let ty = Ty_lambda([], Some(Coq_ident("unit")), ty) in
+            fprintf ff "optionalO %a null" (pp true false) ty
         | "optional" | "optionalO" ->
-            begin
-              match tys with
-              | [ty] -> fprintf ff " %a null" (pp true) ty
-              | _    ->
-                  Panic.panic_no_pos "[%s] expects exactly one argument." id
-            end
+            let ty =
+              match tys with [ty] -> ty | _    ->
+              Panic.panic_no_pos "[%s] expects exactly one argument." id
+            in
+            fprintf ff "%s %a null" id (pp true false) ty
         | "struct"                 ->
-            begin
-              match tys with
-              | ty :: tys -> fprintf ff " %a [@@{type} %a ]" (pp true) ty
-                               (pp_sep " ; " (pp false)) tys
-              | []        ->
+            let (ty, tys) =
+              match tys with ty :: tys -> (ty, tys) | [] ->
               Panic.panic_no_pos "[%s] expects at least one argument." id
-            end
+            in
+            fprintf ff "struct %a [@@{type} %a ]" (pp true false) ty
+              (pp_sep " ; " (pp false false)) tys
         | _                        ->
-            List.iter (fprintf ff " %a" (pp true)) tys
+            pp_str ff id;
+            List.iter (fprintf ff " %a" (pp true false)) tys
   in
-  pp true ff ty
+  pp true false ff ty
 
 let pp_type_expr = pp_type_expr_guard None Guard_none
 let pp_constr = pp_constr_guard None Guard_none true
