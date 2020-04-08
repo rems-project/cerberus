@@ -14,16 +14,38 @@ let well_bracketed : char -> char -> string Earley.grammar = fun c_op c_cl ->
   let fn buf pos =
     let str = Buffer.create 20 in
     let rec loop nb_op buf pos =
-      let c = Input.get buf pos in
-      if c = '\255' then
-        Earley.give_up ()
-      else if c = c_op then
-        (Buffer.add_char str c; loop (nb_op + 1) buf (pos+1))
-      else if c = c_cl then
-        if nb_op = 1 then (buf, pos+1) else
-        (Buffer.add_char str c; loop (nb_op - 1) buf (pos+1))
-      else
-        (Buffer.add_char str c; loop nb_op buf (pos+1))
+      let (c, buf, pos) = Input.read buf pos in
+      match c with
+      (* Opening/closing character. *)
+      | _ when c = c_op              ->
+          Buffer.add_char str c;
+          loop (nb_op + 1) buf pos
+      | _ when c = c_cl && nb_op = 1 ->
+          (buf, pos) (* Done. *)
+      | _ when c = c_cl              ->
+          Buffer.add_char str c;
+          loop (nb_op - 1) buf pos
+      (* EOF: error. *)
+      | '\255'                       ->
+          Earley.give_up ()
+      (* Interpret some escape sequences. *)
+      | '\\'                         ->
+          let (c, buf, pos) = Input.read buf pos in
+          let c =
+            match c with
+            | '\255' -> Earley.give_up () (* EOF: error. *)
+            | '"'    -> '"'
+            | '\\'   -> '\\'
+            | 'n'    -> '\n'
+            | 't'    -> '\t'
+            | _      -> Earley.give_up () (* Bad escape sequence. *)
+          in
+          Buffer.add_char str c;
+          loop nb_op buf pos
+      (* Anything else is just taken. *)
+      | _                            ->
+          Buffer.add_char str c;
+          loop nb_op buf pos
     in
     let (buf, pos) = loop 1 buf (pos + 1) in
     (Buffer.contents str, buf, pos)
@@ -74,7 +96,7 @@ type pattern = ident list
 
 type constr =
   | Constr_Iris  of string
-  | Constr_exist of string * constr
+  | Constr_exist of string * coq_expr option * constr
   | Constr_own   of string * ptr_kind * type_expr
   | Constr_Coq   of coq_expr
 
@@ -84,8 +106,8 @@ and type_expr =
   | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
   | Ty_dots
-  | Ty_exists of ident * type_expr
-  | Ty_lambda of pattern * type_expr
+  | Ty_exists of ident * coq_expr option * type_expr
+  | Ty_lambda of pattern * coq_expr option * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr list
   | Ty_Coq    of coq_expr
@@ -107,7 +129,7 @@ let parser pattern =
 
 let parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
-  | "∃" x:ident "." c:constr                      -> Constr_exist(x,c)
+  | "∃" x:ident a:{":" coq_expr}? "." c:constr    -> Constr_exist(x,a,c)
   | x:ident "@" (k,ty):ptr_type                   -> Constr_own(x,k,ty)
   | c:coq_expr                                    -> Constr_Coq(c)
 
@@ -130,10 +152,10 @@ and parser type_expr @(p : type_expr_prio) =
       when p >= PAtom -> Ty_params(id,tys)
   | "..."
       when p >= PAtom -> Ty_dots
-  | "∃" x:ident "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_exists(x,ty)
-  | "λ" p:pattern "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_lambda(p,ty)
+  | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_exists(x,a,ty)
+  | "λ" p:pattern a:{":" coq_expr}? "." ty:(type_expr PFull)
+      when p >= PFull -> Ty_lambda(p,a,ty)
   | ty:(type_expr PCstr) "&" c:constr
       when p >= PCstr -> Ty_constr(ty,c)
   | "(" ty:(type_expr PFull) ")"
@@ -226,6 +248,7 @@ type annot =
   | Annot_annot      of string
   | Annot_inv_vars   of (ident * type_expr) list
   | Annot_annot_args of annot_arg list
+  | Annot_tactics    of string list
 
 exception Invalid_annot of string
 
@@ -267,6 +290,12 @@ let parse_attr : rc_attr -> annot = fun attr ->
     | _   -> error "should have exactly one argument"
   in
 
+  let raw_many_args : (string list -> annot) -> annot = fun c ->
+    match args with
+    | [] -> error "should have at least one argument"
+    | _  -> c args
+  in
+
   let no_args : annot -> annot = fun c ->
     match args with
     | [] -> c
@@ -291,6 +320,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
   | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
   | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
+  | "tactics"    -> raw_many_args (fun l -> Annot_tactics(l))
   | _            -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -301,7 +331,8 @@ type function_annot =
   ; fa_returns    : type_expr
   ; fa_exists     : (ident * coq_expr) list
   ; fa_requires   : constr list
-  ; fa_ensures    : constr list }
+  ; fa_ensures    : constr list
+  ; fa_tactics    : string list }
 
 let function_annot : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
@@ -310,6 +341,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   let returns = ref None in
   let requires = ref [] in
   let ensures = ref [] in
+  let tactics = ref [] in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
@@ -324,6 +356,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
+    | (Annot_tactics(l)   , _   ) -> tactics := !tactics @ l
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -333,7 +366,8 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   ; fa_returns    = Option.get type_void !returns
   ; fa_exists     = !exists
   ; fa_requires   = !requires
-  ; fa_ensures    = !ensures }
+  ; fa_ensures    = !ensures
+  ; fa_tactics    = !tactics }
 
 let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
   let annot_args = ref [] in
