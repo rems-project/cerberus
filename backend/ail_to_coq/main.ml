@@ -6,7 +6,8 @@ type config =
   ; gen_code   : bool
   ; gen_spec   : bool
   ; full_paths : bool
-  ; imports    : (string * string) list }
+  ; imports    : (string * string) list
+  ; spec_ctxt  : string list }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
@@ -33,9 +34,11 @@ let run : config -> string -> unit = fun cfg c_file ->
   let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
   let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
   (* Print the code, if necessary. *)
-  if cfg.gen_code then Coq_pp.(write cfg.imports Code code_file coq_ast);
+  if cfg.gen_code then
+    Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
   (* Print the spec, if necessary. *)
-  if cfg.gen_spec then Coq_pp.(write cfg.imports Spec spec_file coq_ast)
+  if cfg.gen_spec then
+    Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast)
 
 let output_dir =
   let doc =
@@ -74,12 +77,22 @@ let imports =
   let i = Arg.(info ["import"] ~docv:"FROM:MOD" ~doc) in
   Arg.(value & opt_all (pair ~sep:':' string string) [] & i)
 
-let opts : config Term.t =
-  let build output_dir no_code no_spec full_paths imports =
-    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports }
+let spec_ctxt =
+  let doc =
+    "Specifies a Coq vernacular command to insert at the beginning of the \
+     section generated for specification file. The can typically used with \
+     an argument of the form $(b,\"Context \\\\`{!lockG Sigma}\")."
   in
-  Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $ imports)
+  let i = Arg.(info ["spec-context"] ~docv:"CMD" ~doc) in
+  Arg.(value & opt_all string [] & i)
+
+let opts : config Term.t =
+  let build output_dir no_code no_spec full_paths imports spec_ctxt =
+    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
+    ; full_paths ; imports ; spec_ctxt }
+  in
+  Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
+          imports $ spec_ctxt)
 
 let c_file =
   let doc = "C language source file." in
