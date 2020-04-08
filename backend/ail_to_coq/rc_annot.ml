@@ -248,6 +248,7 @@ type annot =
   | Annot_annot      of string
   | Annot_inv_vars   of (ident * type_expr) list
   | Annot_annot_args of annot_arg list
+  | Annot_tactics    of string list
 
 exception Invalid_annot of string
 
@@ -289,6 +290,12 @@ let parse_attr : rc_attr -> annot = fun attr ->
     | _   -> error "should have exactly one argument"
   in
 
+  let raw_many_args : (string list -> annot) -> annot = fun c ->
+    match args with
+    | [] -> error "should have at least one argument"
+    | _  -> c args
+  in
+
   let no_args : annot -> annot = fun c ->
     match args with
     | [] -> c
@@ -313,6 +320,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
   | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
   | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
+  | "tactics"    -> raw_many_args (fun l -> Annot_tactics(l))
   | _            -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -323,7 +331,8 @@ type function_annot =
   ; fa_returns    : type_expr
   ; fa_exists     : (ident * coq_expr) list
   ; fa_requires   : constr list
-  ; fa_ensures    : constr list }
+  ; fa_ensures    : constr list
+  ; fa_tactics    : string list }
 
 let function_annot : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
@@ -332,6 +341,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   let returns = ref None in
   let requires = ref [] in
   let ensures = ref [] in
+  let tactics = ref [] in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
@@ -346,6 +356,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_ensures(l)   , _   ) -> ensures := !ensures @ l
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
+    | (Annot_tactics(l)   , _   ) -> tactics := !tactics @ l
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -355,7 +366,8 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   ; fa_returns    = Option.get type_void !returns
   ; fa_exists     = !exists
   ; fa_requires   = !requires
-  ; fa_ensures    = !ensures }
+  ; fa_ensures    = !ensures
+  ; fa_tactics    = !tactics }
 
 let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
   let annot_args = ref [] in
