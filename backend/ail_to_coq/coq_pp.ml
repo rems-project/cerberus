@@ -376,8 +376,7 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     (* Always wrapped. *)
     | Ty_lambda(xs,a,ty) ->
         fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
-          pp_type_annot a
-          pp_encoded_patt_bindings xs (pp false) ty
+          pp_type_annot a pp_encoded_patt_bindings xs (pp false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots            ->
         begin
@@ -408,11 +407,25 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_constr(ty,c)    ->
         fprintf ff "constrained %a %a" (pp true) ty (pp_constr true) c
     | Ty_params(id,tys)  ->
-    pp_str ff id;
-    match (id, tys) with
-    | ("optional" , [ty])
-    | ("optionalO", [ty]) -> fprintf ff " %a null" (pp true) ty
-    | (_          , _   ) -> List.iter (fprintf ff " %a" (pp true)) tys
+        pp_str ff id;
+        match id with
+        | "optional" | "optionalO" ->
+            begin
+              match tys with
+              | [ty] -> fprintf ff " %a null" (pp true) ty
+              | _    ->
+                  Panic.panic_no_pos "[%s] expects exactly one argument." id
+            end
+        | "struct"                 ->
+            begin
+              match tys with
+              | ty :: tys -> fprintf ff " %a [@@{type} %a ]" (pp true) ty
+                               (pp_sep " ; " (pp false)) tys
+              | []        ->
+              Panic.panic_no_pos "[%s] expects at least one argument." id
+            end
+        | _                        ->
+            List.iter (fprintf ff " %a" (pp true)) tys
   in
   pp true ff ty
 
