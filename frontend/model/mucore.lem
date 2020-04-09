@@ -2,7 +2,7 @@ open import Pervasives
 
 open import Ctype Annot Loc
 import Symbol Implementation Undefined Cmm_csem
-import Mem Mem_common
+open import Mem Mem_common
 (* import Linux *)
 
 import Core
@@ -20,6 +20,7 @@ type mu_base_type = Core.core_base_type
 type mu_name = Core.generic_name symbol
 type annotated 'a 'bty = Annotated of list Annot.annot * 'bty * 'a
 type asym 'bty = annotated Symbol.sym 'bty
+type actype 'bty = annotated ctype 'bty
 
 (* type mv_tsymbol = tsymbol       (\* Mem.mem_value *\) *)
 type ov_asym 'bty = asym 'bty       (* object_value *)
@@ -97,20 +98,20 @@ and mu_pexpr 'bty =
 
 
 type mu_action_ 'bty =  (* memory actions *)
- | M_Create of asym 'bty * asym 'bty * Symbol.prefix
- | M_CreateReadOnly of asym 'bty * asym 'bty * asym 'bty * Symbol.prefix
- | M_Alloc of asym 'bty * asym 'bty * Symbol.prefix
+ | M_Create of asym 'bty * actype 'bty * Symbol.prefix
+ | M_CreateReadOnly of asym 'bty * actype 'bty * asym 'bty * Symbol.prefix
+ | M_Alloc of actype 'bty * asym 'bty * Symbol.prefix
  | M_Kill of bool * asym 'bty (* the boolean indicates whether the action is dynamic (i.e. free()) *)
- | M_Store of bool * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
- | M_Load of asym 'bty * asym 'bty * Cmm_csem.memory_order
- | M_RMW of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_Store of bool * actype 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order (* the boolean indicates whether the store is locking *)
+ | M_Load of actype 'bty * asym 'bty * Cmm_csem.memory_order
+ | M_RMW of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_Fence of Cmm_csem.memory_order
- | M_CompareExchangeStrong of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
- | M_CompareExchangeWeak of asym 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeStrong of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
+ | M_CompareExchangeWeak of actype 'bty * asym 'bty * asym 'bty * asym 'bty * Cmm_csem.memory_order * Cmm_csem.memory_order
  | M_LinuxFence of Linux.linux_memory_order
- | M_LinuxLoad of asym 'bty * asym 'bty * Linux.linux_memory_order
- | M_LinuxStore of asym 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
- | M_LinuxRMW of asym 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxLoad of actype 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxStore of actype 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
+ | M_LinuxRMW of actype 'bty * asym 'bty * asym 'bty * Linux.linux_memory_order
 
 
 type mu_action 'a 'bty = 
@@ -120,15 +121,36 @@ type mu_action 'a 'bty =
 type mu_paction 'a 'bty =  (* memory actions with Core.polarity *)
  | M_Paction of Core.polarity * (mu_action 'a 'bty)
 
+type mu_memop 'bty =
+  | M_PtrEq of (asym 'bty * asym 'bty)
+  | M_PtrNe of (asym 'bty * asym 'bty)
+  | M_PtrLt of (asym 'bty * asym 'bty)
+  | M_PtrGt of (asym 'bty * asym 'bty)
+  | M_PtrLe of (asym 'bty * asym 'bty)
+  | M_PtrGe of (asym 'bty * asym 'bty)
+  | M_Ptrdiff of (actype 'bty * asym 'bty * asym 'bty)
+  | M_IntFromPtr of (actype 'bty * asym 'bty)
+  | M_PtrFromInt of (actype 'bty * asym 'bty)
+  | M_PtrValidForDeref of (actype 'bty * asym 'bty  )
+  | M_PtrWellAligned of (actype 'bty * asym 'bty  )
+  | M_PtrArrayShift of (asym 'bty * actype 'bty * asym 'bty  )
+  | M_Memcpy of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Memcmp of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Realloc of (asym 'bty * asym 'bty * asym 'bty)
+  | M_Va_start  of (asym 'bty * asym 'bty)
+  | M_Va_copy of (asym 'bty)
+  | M_Va_arg of (asym 'bty * actype 'bty)
+  | M_Va_end of (asym 'bty)
+
 type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  | M_Epure of (mu_pexpr 'bty)
- | M_Ememop of Mem_common.memop * list (asym 'bty) (* pointer op involving memory *)
+ | M_Ememop of mu_memop 'bty
  | M_Eaction of (mu_paction 'a 'bty) (* memory action *)
  | M_Ecase of asym 'bty * list ((mu_pattern 'bty) * (mu_expr 'a 'bty)) (* pattern matching *)
  | M_Elet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_expr 'a 'bty)
  | M_Eif of asym 'bty * (mu_expr 'a 'bty) * (mu_expr 'a 'bty)
  | M_Eskip
- | M_Eccall of 'a * (annotated ctype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
+ | M_Eccall of 'a * (actype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
  | M_Eproc of 'a * mu_name * list (asym 'bty) (* Core procedure call *)
  (* | M_Eunseq of list (mu_expr 'a 'bty) (\* unsequenced expressions *\) *)
  | M_Ewseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
@@ -206,6 +228,9 @@ let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) =
 
 let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
   Core.Pexpr annots bty (Core.PEsym sym)
+let make_ctype_pexpr (Annotated annots bty ctype) : Core.generic_pexpr 'bty symbol =
+  Core.Pexpr annots bty (Core.PEval (Core.Vctype ctype))
+
 
 type env 'bty = map symbol (mu_pexpr 'bty)
 
@@ -370,39 +395,39 @@ let mu_to_core__action_ (action_ : mu_action_ 'bty)
         : Core.generic_action_ 'bty symbol =
   match action_ with
   | M_Create p1 p2 prefix ->
-     Core.Create (make_symbol_pexpr p1) (make_symbol_pexpr p2) prefix
+     Core.Create (make_symbol_pexpr p1) (make_ctype_pexpr p2) prefix
   | M_CreateReadOnly p1 p2 p3 prefix ->
-     Core.CreateReadOnly (make_symbol_pexpr p2) (make_symbol_pexpr p2) 
+     Core.CreateReadOnly (make_symbol_pexpr p1) (make_ctype_pexpr p2)
        (make_symbol_pexpr p3) prefix
   | M_Alloc p1 p2 prefix ->
-     Core.Alloc (make_symbol_pexpr p1) (make_symbol_pexpr p2) prefix
+     Core.Alloc (make_ctype_pexpr p1) (make_symbol_pexpr p2) prefix
   | M_Kill b p ->
      Core.Kill b (make_symbol_pexpr p)
   | M_Store b p1 p2 p3 mo ->
-     Core.Store b (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.Store b (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) mo
   | M_Load p1 p2 mo ->
-     Core.Load (make_symbol_pexpr p1) (make_symbol_pexpr p2) mo
+     Core.Load (make_ctype_pexpr p1) (make_symbol_pexpr p2) mo
   | M_RMW p1 p2 p3 p4 mo1 mo2 ->
-     Core.RMW (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.RMW (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
   | M_Fence mo ->
      Core.Fence mo
   | M_CompareExchangeStrong p1 p2 p3 p4 mo1 mo2 ->
-     Core.CompareExchangeStrong (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.CompareExchangeStrong (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
   | M_CompareExchangeWeak p1 p2 p3 p4 mo1 mo2 ->
-     Core.CompareExchangeWeak (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.CompareExchangeWeak (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
   | M_LinuxFence mo ->
      Core.LinuxFence mo
   | M_LinuxLoad p1 p2 mo ->
-     Core.LinuxLoad (make_symbol_pexpr p1) (make_symbol_pexpr p2) mo
+     Core.LinuxLoad (make_ctype_pexpr p1) (make_symbol_pexpr p2) mo
   | M_LinuxStore p1 p2 p3 mo ->
-     Core.LinuxStore (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.LinuxStore (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) mo
   | M_LinuxRMW p1 p2 p3 mo ->
-     Core.LinuxRMW (make_symbol_pexpr p1) (make_symbol_pexpr p2) 
+     Core.LinuxRMW (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
        (make_symbol_pexpr p3) mo
   end
 
@@ -412,6 +437,69 @@ let mu_to_core__action (M_Action t a action_) =
 let mu_to_core__paction (M_Paction p action) = 
   Core.Paction p (mu_to_core__action action)
 
+let mu_to_core__memop memop = 
+  let mctype = make_ctype_pexpr in
+  let msym = make_symbol_pexpr in
+  match memop with
+  | M_PtrEq (sym1,sym2) ->
+     (PtrEq, 
+      [msym sym1; msym sym2])
+  | M_PtrNe (sym1,sym2) ->
+     (PtrNe, 
+      [msym sym1; msym sym2])
+  | M_PtrLt (sym1,sym2) ->
+     (PtrLt, 
+      [msym sym1; msym sym2])
+  | M_PtrGt (sym1,sym2) ->
+     (PtrGt, 
+      [msym sym1; msym sym2])
+  | M_PtrLe (sym1,sym2) ->
+     (PtrLe, 
+      [msym sym1; msym sym2])
+  | M_PtrGe (sym1,sym2) ->
+     (PtrGe, 
+      [msym sym1; msym sym2])
+  | M_Ptrdiff (ct,sym1,sym2) ->
+     (Ptrdiff, 
+      [mctype ct; msym sym1; msym sym2])
+  | M_IntFromPtr (ct,sym) ->
+     (IntFromPtr, 
+      [mctype ct; msym sym])
+  | M_PtrFromInt (ct,sym) ->
+     (PtrFromInt, 
+      [mctype ct; msym sym])
+  | M_PtrValidForDeref (ct,sym) ->
+     (PtrValidForDeref, 
+      [mctype ct; msym sym])
+  | M_PtrWellAligned (ct,sym) ->
+     (PtrWellAligned, 
+      [mctype ct; msym sym])
+  | M_PtrArrayShift (sym1,ct,sym2) ->
+     (PtrArrayShift, 
+      [msym sym1; mctype ct; msym sym2])
+  | M_Memcpy (sym1,sym2,sym3) ->
+     (Memcpy, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Memcmp (sym1,sym2,sym3) ->
+     (Memcmp, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Realloc (sym1,sym2,sym3) ->
+     (Realloc, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Va_start (sym1,sym2) ->
+     (Va_start, 
+      [msym sym1; msym sym2])
+  | M_Va_copy sym ->
+     (Va_copy, 
+      [msym sym])
+  | M_Va_arg (sym,ct) ->
+     (Va_arg, 
+      [msym sym; mctype ct])
+  | M_Va_end sym ->
+     (Va_end, 
+      [msym sym])
+  end
+
 let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
         : Core.generic_expr 'a 'bty symbol =
   let (M_Expr annots expr_) = expr in
@@ -419,8 +507,9 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
   match expr_ with
     | M_Epure p -> 
        wrap (Core.Epure (mu_to_core__pexpr env p))
-    | M_Ememop memop pexprs ->
-       wrap (Core.Ememop memop (map make_symbol_pexpr pexprs))
+    | M_Ememop memop ->
+       let (memop,args) = mu_to_core__memop memop in
+       wrap (Core.Ememop memop args)
     | M_Eaction pa ->
        wrap (Core.Eaction (mu_to_core__paction pa))
     | M_Ecase pe es ->
