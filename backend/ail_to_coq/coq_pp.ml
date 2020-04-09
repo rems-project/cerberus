@@ -859,13 +859,12 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
     let invs = collect_invs def in
     List.iter pp_inv invs;
     pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
-    let pp_selector ff l =
-      match l with
-      | [] -> ()
-      | _  -> fprintf ff "1-%i: " (List.length l + 1)
+    let pp_do_step id =
+      pp "@;- repeat do_step; do_finish.";
+      pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
     in
-    pp "@;%arepeat do_step; do_finish." pp_selector invs;
-    pp "@;Unshelve. all: try solve_goal.";
+    List.iter pp_do_step (List.cons "#0" (List.map fst invs));
+    pp "@;Unshelve. all: prepare_sideconditions; try solve_goal.";
     let tactics_items =
       let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
       let rec pp_tactics_all tactics =
@@ -875,7 +874,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       in
       pp_tactics_all annot.fa_tactics
     in
-    List.iter (pp "@;- %s") tactics_items;
+    List.iter (pp "@;+ %s") tactics_items;
+    pp "@;all: print_sidecondition_goal \"%s\"." def.func_name;
     pp "@]@;Qed."
   in
   let pp_proof (id, def_or_decl) =
