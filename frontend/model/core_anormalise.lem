@@ -15,18 +15,32 @@ open import Mucore
 
 let remove_unspecified = true
 
-let is_specified_pattern = function
-  | Pattern _annots (CaseCtor Cspecified _args) -> true
-  | _ -> false
-end
+(* let is_specified_pattern = function
+ *   | Pattern _ (CaseCtor Cspecified [arg]) -> Some arg
+ *   | _ -> None
+ * end
+ * 
+ * let is_unspecified_pattern = function
+ *   | Pattern _ (CaseCtor Cunspecified [arg]) -> Some arg
+ *   | _ -> false
+ * end *)
 
-let is_unspecified_pattern = function
-  | Pattern _annots (CaseCtor Cunspecified _args) -> true
-  | _ -> false
-end
 
-
-let unspec_undef = Undefined.DUMMY "unspecified value"
+(* 'bty = unit *)
+let is_spec_unspec_case remove_unspecified cases = 
+  if remove_unspecified then
+    match cases with
+    | [(Pattern annots (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1); 
+       (Pattern _ (CaseCtor Cunspecified _args),e2)] ->
+       Just ((Annotated annots () sym,e1, bt), e2)
+    | [(Pattern annots (CaseCtor Cunspecified _args),e2);
+       (Pattern _ (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1)] ->
+       Just ((Annotated annots () sym,e1, bt), e2)
+    | _ -> 
+       Nothing
+    end
+  else 
+    Nothing
 
 let replace_unspec_undef__pe ((Core.Pexpr annots bty _) as pe) = 
   M_Pexpr annots bty (M_PEundef (Loc.locOf pe) unspec_undef)
@@ -124,15 +138,13 @@ val letbind_pexpr :
   (asym -> 'a) -> 
   'a
 
-let letbind_pexpr letbinder pexpr ctxt = 
+let letbind_pexpr letbinder pexpr ctxt  = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
   let asym = Annotated annots bty sym in
   let pat = M_symbol asym in
   let body = ctxt asym in
   letbinder annots pat pexpr body
-
-
 
 val n_val : 
   forall 'a.
@@ -301,15 +313,16 @@ and n_pexpr (e : pexpr unit) k =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
-     let pats_pes = map (fun (pat,pe) -> 
-         let pe = 
-           if remove_unspecified && is_unspecified_pattern pat
-           then replace_unspec_undef__pe pe
-           else n_pexpr pe k in
-         (pat, pe)
-       ) pats_pes
-     in
-     annotate (M_PEcase e' pats_pes))
+     match is_spec_unspec_case remove_unspecified pats_pes with
+       | Just ((asym,e1,bt),_e2) ->
+          letbinder_pexpr_in_pexpr annots 
+            (M_symbol asym)
+            (annotate (M_PEensure_specified e' bt))
+            (n_pexpr e1 k)
+       | Nothing -> 
+          let pats_pes = map (fun (pat,pe) -> (pat, n_pexpr pe k)) pats_pes in
+          annotate (M_PEcase e' pats_pes)
+     end)
   | PEarray_shift e' ctype e'' ->
      n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEarray_shift e' ctype e'')))
@@ -436,15 +449,16 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_in_expr_name e' (fun e' -> 
-     let pats_pes = map (fun (pat,pe) -> 
-         let pe = 
-           if remove_unspecified && is_unspecified_pattern pat
-           then embed_pexpr_expr (replace_unspec_undef__pe pe)
-           else n_pexpr_in_expr pe k in
-         (pat, pe)
-       ) pats_pes
-     in
-     M_Expr annots (M_Ecase e' pats_pes))
+     match is_spec_unspec_case remove_unspecified pats_pes with
+       | Just ((asym,e1,bt),_e2) ->
+          letbinder_pexpr_in_expr annots 
+            (M_symbol asym)
+            (annotate (M_PEensure_specified e' bt))
+            (n_pexpr_in_expr e1 k)
+       | Nothing -> 
+          let pats_pes = map (fun (pat,pe) -> (pat, n_pexpr_in_expr pe k)) pats_pes in
+          M_Expr annots (M_Ecase e' pats_pes)
+     end)
      (* annotate (M_PEcase e' pats_pes)) *)
   | PEarray_shift e' ctype e'' ->
      n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
@@ -698,15 +712,17 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      k (wrap (M_Eaction paction)))
   | Ecase pexpr pats_es ->
      n_pexpr_in_expr_name pexpr (fun pexpr ->
-     let pats_es = map (fun (pat,e) -> 
-         let e = 
-           if remove_unspecified && is_unspecified_pattern pat
-           then replace_unspec_undef__e e
-           else n_expr e k in
-         (pat, e)
-       ) pats_es
-     in
-     wrap (M_Ecase pexpr pats_es))
+     match is_spec_unspec_case remove_unspecified pats_es with
+       | Just ((asym,e1,bt),_e2) ->
+          letbinder_pexpr_in_expr annots 
+            (M_symbol asym)
+            (* 'bty = unit *)
+            (M_Pexpr annots () (M_PEensure_specified pexpr bt))
+            (n_expr e1 k)
+       | Nothing -> 
+          let pats_es = map (fun (pat,e) -> (pat, n_expr e k)) pats_es in
+          wrap (M_Ecase pexpr pats_es)
+     end)
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
      wrap (M_Elet (M_normal_pattern pat) e1 (n_expr e2 k)))

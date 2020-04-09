@@ -6,6 +6,7 @@ open import Mem Mem_common
 (* import Linux *)
 
 import Core
+open import Core_aux
 
 open import Assert_extra
 
@@ -26,6 +27,12 @@ type actype 'bty = annotated ctype 'bty
 type ov_asym 'bty = asym 'bty       (* object_value *)
 type lv_asym 'bty = asym 'bty       (* loaded_value *)
 type va_asym 'bty = asym 'bty       (* value *)
+
+
+
+
+let unspec_undef = Undefined.DUMMY "unspecified value"
+
 
 
 type mu_object_value 'bty =  (* C object values *)
@@ -93,8 +100,11 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
   * | M_PEis_unsigned of asym 'bty
   * | M_PEare_compatible of asym 'bty * asym 'bty *)
 
+ | M_PEensure_specified of asym 'bty * mu_base_type
+
 and mu_pexpr 'bty = 
  | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
+
 
 
 type mu_action_ 'bty =  (* memory actions *)
@@ -326,6 +336,31 @@ let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
  *      Core.Pattern annots (Core.CaseCtor ctor pats)
  *   end *)
 
+
+(* let replace_ensure_specified annots asym pat_bty 
+ * 
+ *  (sym, pat_annots, pat_cbt) (e_spec, e_annots, e_cbt) = 
+ *   let sym_pat = mk_sym_pat_ pat_annots (Just sym) pat_cbt in
+ *   let spec_pat = mk_specified_pat_ pat_annots sym_pat in
+ *   let wild_card = mk_sym_pat_ pat_annots Nothing pat_cbt in
+ *   let unspec_pat = mk_unspecified_pat_ pat_annots wild_card in
+ *   let e_unspec = Core.Pexpr e_annots e_cbt (Core.PEundef (Annot.get_loc_ e_annots) unspec_undef) in
+ *   let pats_pes = [(spec_pat, e_spec); (unspec_pat, e_unspec)] in
+ *   pats_pes
+ * 
+ * 
+ *         (\* let sym1_pat = Core.Pattern annots1 (Core.CaseBase (Just sym1, cbt)) in
+ *          * let spec_pat = Core.Pattern annots1 (Core.CaseCtor Core.Cspecified [sym1_pat]) in
+ *          * let wild_card = Core.Pattern annots1 (Core.CaseBase (Nothing, cbt)) in
+ *          * let unspec_pat = Core.Pattern annots1 (Core.CaseCtor Core.Cunspecified [wild_card]) in
+ *          * let undef_e = Core.Pexpr annots1 bty1 (Core.PEundef (locOf pexpr) unspec_undef) in
+ *          * let p2 = mu_to_core__pexpr env p2 in
+ *          * let pats_pes = [(spec_pat, p2); (unspec_pat, undef_e)] in *\)
+ *         let e = make_symbol_pexpr asym2 in
+ *         wrap (Core.PEcase e pats_pes) *)
+
+
+
 let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
         : Core.generic_pexpr 'bty symbol =
   let (M_Pexpr annots bty pexpr_) = pexpr in
@@ -397,6 +432,21 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
    *    Core.PEbmc_assume (make_symbol_pexpr e)
    * | M_PEare_compatible p1 p2 ->
    *    Core.PEare_compatible (make_symbol_pexpr p1) (make_symbol_pexpr p2) *)
+  | M_PEensure_specified asym cbt ->
+     let pats_pes = 
+       let newsym = Symbol.fresh () in
+       let sym_pat = mk_sym_pat_ annots (Just newsym) cbt in
+       let wild_pat = mk_sym_pat_ annots Nothing cbt in
+       let spec_pat = mk_specified_pat_ annots sym_pat in
+       let unspec_pat = mk_unspecified_pat_ annots wild_pat in
+       let e_unspec = Core.Pexpr annots bty 
+                        (Core.PEundef (Annot.get_loc_ annots) unspec_undef) in
+       let e_spec = make_symbol_pexpr (Annotated annots bty newsym) in
+       [(spec_pat, e_spec); (unspec_pat, e_unspec)]
+     in
+     wrap (Core.PEcase (make_symbol_pexpr asym) pats_pes)
+
+
   end
 
 let mu_to_core__action_ (action_ : mu_action_ 'bty)

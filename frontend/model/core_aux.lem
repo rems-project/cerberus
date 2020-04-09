@@ -194,9 +194,12 @@ val mk_empty_pat: core_base_type -> pattern
 let mk_empty_pat bTy =
   Pattern [] (CaseBase (Nothing, bTy))
 
+val mk_sym_pat_: forall 'bty 'sym. list Annot.annot -> maybe 'sym -> core_base_type -> generic_pattern 'bty 'sym
+let mk_sym_pat_ annots msym bTy =
+  Pattern annots (CaseBase (msym, bTy))
+
 val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
-let mk_sym_pat sym bTy =
-  Pattern [] (CaseBase (Just sym, bTy))
+let mk_sym_pat sym bty = mk_sym_pat_ [] (Just sym) bty
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
@@ -208,13 +211,19 @@ let mk_tuple_pat = function
       Pattern [] (CaseCtor Ctuple pats)
 end
 
+val mk_specified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'bty 'sym -> generic_pattern 'bty 'sym
+let mk_specified_pat_ annots pat =
+  Pattern annots (CaseCtor Cspecified [pat])
+
 val mk_specified_pat: pattern -> pattern
-let mk_specified_pat pat =
-  Pattern [] (CaseCtor Cspecified [pat])
+let mk_specified_pat pat = mk_specified_pat_ [] pat
+
+val mk_unspecified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'bty 'sym -> generic_pattern 'bty 'sym
+let mk_unspecified_pat_ annots pat =
+  Pattern annots (CaseCtor Cunspecified [pat])
 
 val mk_unspecified_pat: pattern -> pattern
-let mk_unspecified_pat pat =
-  Pattern [] (CaseCtor Cunspecified [pat])
+let mk_unspecified_pat pat = mk_unspecified_pat_ [] pat
 
 
 (* Core pexpr builders  ***************************************************** *)
