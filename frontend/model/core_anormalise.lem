@@ -68,6 +68,19 @@ let var_pexpr sym annots bty =
 
 
 
+let ensure_ctype__pexpr = function
+  | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
+     Just (Annotated annots bty ct)
+  | _ -> Nothing
+end
+
+let fensure_ctype__pexpr err pe = 
+  match ensure_ctype__pexpr pe with
+  | Just ctype -> ctype
+  | Nothing -> failwith err
+end
+
+
 type letbinder 'bound 'body = 
   annots -> mu_sym_or_pattern -> 'bound -> 'body -> 'body
 
@@ -222,6 +235,12 @@ and n_pexpr_name_2 (e,e') k =
   n_pexpr_name e' (fun e' ->
   k (e,e')))
 
+and n_pexpr_name_3 (e,e',e'') k = 
+  n_pexpr_name e (fun e -> 
+  n_pexpr_name e' (fun e' ->
+  n_pexpr_name e'' (fun e'' ->
+  k (e,e',e''))))
+
 and n_pexpr_names (es : list (pexpr unit)) k =
   match es with
   | [] -> k []
@@ -345,6 +364,12 @@ and n_pexpr_in_expr_name_2 (e,e') k : mu_expr 'a =
   n_pexpr_in_expr_name e (fun e -> 
   n_pexpr_in_expr_name e' (fun e' ->
   k (e,e')))
+
+and n_pexpr_in_expr_name_3 (e,e',e'') k = 
+  n_pexpr_in_expr_name e (fun e -> 
+  n_pexpr_in_expr_name e' (fun e' ->
+  n_pexpr_in_expr_name e'' (fun e'' ->
+  k (e,e',e''))))
 
 and n_pexpr_in_expr_names (es : list (pexpr unit)) k : mu_expr 'a =
   match es with
@@ -473,74 +498,71 @@ let normalise_pexpr (e : pexpr unit) =
  * val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
 
-
-
-
 let n_action (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
   let (Action t an a) = action in
   let wrap a = M_Action t an a in
   match a with
   | Create e1 e2 sym ->
+     let ctype = fensure_ctype__pexpr "Create: not a ctype" e2 in
      n_pexpr_in_expr_name e1 (fun e1 ->
-     n_pexpr_in_expr_name e2 (fun e2 ->
-     k (wrap (M_Create e1 e2 sym))))
+     k (wrap (M_Create e1 ctype sym)))
   | CreateReadOnly e1 e2 e3 sym ->
+     let ctype = fensure_ctype__pexpr "CreateReadOnly: not a ctype" e1 in
      n_pexpr_in_expr_name e1 (fun e1 ->
-     n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
-     k (wrap (M_CreateReadOnly e1 e2 e3 sym)))))
+     k (wrap (M_CreateReadOnly e1 ctype e3 sym))))
   | Alloc e1 e2 sym ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "Alloc: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
-     k (wrap (M_Alloc e1 e2 sym))))
+     k (wrap (M_Alloc ctype e2 sym)))
   | Kill b e1 ->
      n_pexpr_in_expr_name e1 (fun e1 ->
      k (wrap (M_Kill b e1)))
   | Store b e1 e2 e3 mo ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "Store: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
-     k (wrap (M_Store b e1 e2 e3 mo)))))
+     k (wrap (M_Store b ctype e2 e3 mo))))
   | Load e1 e2 mo ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "Load: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
-     k (wrap (M_Load e1 e2 mo))))
+     k (wrap (M_Load ctype e2 mo)))
   | RMW e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "RMW: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
-     k (wrap (M_RMW e1 e2 e3 e4 mo1 mo2))))))
+     k (wrap (M_RMW ctype e2 e3 e4 mo1 mo2)))))
   | Fence mo -> 
      k (wrap (M_Fence mo))
   | CompareExchangeStrong e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "CompareExchangeStrong: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
-     k (wrap (M_CompareExchangeStrong e1 e2 e3 e4 mo1 mo2))))))
+     k (wrap (M_CompareExchangeStrong ctype e2 e3 e4 mo1 mo2)))))
   | CompareExchangeWeak e1 e2 e3 e4 mo1 mo2 ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "CompareExchangeWeak: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
      n_pexpr_in_expr_name e4 (fun e4 ->
-     k (wrap (M_CompareExchangeWeak e1 e2 e3 e4 mo1 mo2))))))
+     k (wrap (M_CompareExchangeWeak ctype e2 e3 e4 mo1 mo2)))))
   | LinuxFence lmo ->
      k (wrap (M_LinuxFence lmo))
   | LinuxLoad e1 e2 lmo ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "LinuxLoad: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
-     k (wrap (M_LinuxLoad e1 e2 lmo))))
+     k (wrap (M_LinuxLoad ctype e2 lmo)))
   | LinuxStore e1 e2 e3 lmo ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "LinuxStore: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
-     k (wrap (M_LinuxStore e1 e2 e3 lmo)))))
+     k (wrap (M_LinuxStore ctype e2 e3 lmo))))
   | LinuxRMW e1 e2 e3 lmo ->
-     n_pexpr_in_expr_name e1 (fun e1 ->
+     let ctype = fensure_ctype__pexpr "LinuxRMW: not a ctype" e1 in
      n_pexpr_in_expr_name e2 (fun e2 ->
      n_pexpr_in_expr_name e3 (fun e3 ->
-     k (wrap (M_LinuxRMW e1 e2 e3 lmo)))))
+     k (wrap (M_LinuxRMW ctype e2 e3 lmo))))
   end
      
 
@@ -555,6 +577,77 @@ let rec normalise_expr e =
   n_expr e (fun e -> e)
 
 
+and n_memop memop pexprs k = 
+  match (memop, pexprs) with
+  | (Mem_common.PtrEq, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrEq (sym1, sym2)))
+  | (Mem_common.PtrNe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrNe (sym1, sym2)))
+  | (Mem_common.PtrLt, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrLt (sym1, sym2)))
+  | (Mem_common.PtrGt, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrGt (sym1, sym2)))
+  | (Mem_common.PtrLe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrLe (sym1, sym2)))
+  | (Mem_common.PtrGe, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrGe (sym1, sym2)))
+  | (Mem_common.Ptrdiff, [ct;pe1;pe2]) ->
+     let ct = fensure_ctype__pexpr "Ptrdiff: not a ctype" ct in
+     n_pexpr_in_expr_name_2 (pe1, pe2) (fun (sym1,sym2) ->
+     k (M_Ptrdiff (ct, sym1, sym2)))
+  | (Mem_common.IntFromPtr, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "IntFromPtr: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_IntFromPtr (ct, sym)))
+  | (Mem_common.PtrFromInt, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrFromInt: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrFromInt (ct, sym)))
+  | (Mem_common.PtrValidForDeref, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrValidForDeref: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrValidForDeref (ct, sym)))
+  | (Mem_common.PtrWellAligned, [ct;pe]) ->
+     let ct = fensure_ctype__pexpr "PtrWellAligned: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_PtrWellAligned (ct, sym)))
+  | (Mem_common.PtrArrayShift, [pe1;ct;pe2]) ->
+     let ct = fensure_ctype__pexpr "PtrArrayShift: not a ctype" ct in
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_PtrArrayShift (sym1 ,ct, sym2)))
+  | (Mem_common.Memcpy, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Memcpy (sym1 ,sym2, sym3)))
+  | (Mem_common.Memcmp, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Memcmp (sym1 ,sym2, sym3)))
+  | (Mem_common.Realloc, [pe1;pe2;pe3]) ->
+     n_pexpr_in_expr_name_3 (pe1,pe2,pe3) (fun (sym1,sym2,sym3) ->
+     k (M_Realloc (sym1 ,sym2, sym3)))
+  | (Mem_common.Va_start, [pe1;pe2]) ->
+     n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
+     k (M_Va_start (sym1 ,sym2)))
+  | (Mem_common.Va_copy, [pe]) ->
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_copy sym))
+  | (Mem_common.Va_arg, [pe;ct]) ->
+     let ct = fensure_ctype__pexpr "Va_arg: not a ctype" ct in
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_arg (sym ,ct)))
+  | (Mem_common.Va_end, [pe]) ->
+     n_pexpr_in_expr_name pe (fun sym ->
+     k (M_Va_end sym))
+  | (memop, pexprs) ->
+     failwith (show memop ^ " applied to " ^ 
+                 show (List.length pexprs) ^ " arguments")
+  end
+
 and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
         : mu_expr 'a = 
   let (Expr annot pe) = e in
@@ -565,8 +658,8 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      n_pexpr_in_expr pexpr (fun e -> 
      k (wrap (M_Epure e)))
   | Ememop memop pexprs -> 
-     n_pexpr_in_expr_names pexprs (fun pexprs -> 
-     k (wrap (M_Ememop memop pexprs)))
+     n_memop memop pexprs (fun memop ->
+     k (wrap (M_Ememop memop)))
   | Eaction paction ->
      n_paction paction (fun paction ->
      k (wrap (M_Eaction paction)))
