@@ -1686,6 +1686,10 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      in
      let t = (name, T.A t2) in
      return ([t; constr], env)
+  | M_PEensure_specified (asym1, _ct) ->
+     let sym1, loc1 = Sym.lof_asym asym1 in
+     get_Avar loc env sym1 >>= fun t1 ->
+     return ([(sym1, T.A t1)], env)
 
 
 let subtype loc env rt1 (R.R rt2) = 
