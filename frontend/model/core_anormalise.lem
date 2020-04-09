@@ -13,6 +13,29 @@ open import Mucore
    those places. *)
 
 
+let remove_unspecified = true
+
+let is_specified_pattern = function
+  | Pattern _annots (CaseCtor Cspecified _args) -> true
+  | _ -> false
+end
+
+let is_unspecified_pattern = function
+  | Pattern _annots (CaseCtor Cunspecified _args) -> true
+  | _ -> false
+end
+
+
+let unspec_undef = Undefined.DUMMY "unspecified value"
+
+let replace_unspec_undef__pe ((Core.Pexpr annots bty _) as pe) = 
+  M_Pexpr annots bty (M_PEundef (Loc.locOf pe) unspec_undef)
+
+(* 'bty = unit *)
+let replace_unspec_undef__e ((Core.Expr annots _) as e) = 
+  let pe = M_Pexpr annots () (M_PEundef (Loc.locOf e) unspec_undef) in
+  embed_pexpr_expr pe
+
 
 (* type bty = core_base_type *)
 type value = generic_value Symbol.sym
@@ -278,10 +301,15 @@ and n_pexpr (e : pexpr unit) k =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
-     let (pats,pes) = unzip pats_pes in
-     let pes = map (fun e -> n_pexpr e (fun e -> e)) pes in
-     let pats_pes = zip pats pes in
-     k (annotate (M_PEcase e' pats_pes)))
+     let pats_pes = map (fun (pat,pe) -> 
+         let pe = 
+           if remove_unspecified && is_unspecified_pattern pat
+           then replace_unspec_undef__pe pe
+           else n_pexpr pe k in
+         (pat, pe)
+       ) pats_pes
+     in
+     annotate (M_PEcase e' pats_pes))
   | PEarray_shift e' ctype e'' ->
      n_pexpr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEarray_shift e' ctype e'')))
@@ -408,11 +436,16 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEctor ctor args)))
   | PEcase e' pats_pes ->
      n_pexpr_in_expr_name e' (fun e' -> 
-     let (pats,pes) = unzip pats_pes in
-     (* the line below is where we'd need polymorphic recursion *)
-     let pes = map (fun e -> n_pexpr e (fun e -> e)) pes in 
-     let pats_pes = zip pats pes in
-     k (annotate (M_PEcase e' pats_pes)))
+     let pats_pes = map (fun (pat,pe) -> 
+         let pe = 
+           if remove_unspecified && is_unspecified_pattern pat
+           then embed_pexpr_expr (replace_unspec_undef__pe pe)
+           else n_pexpr_in_expr pe k in
+         (pat, pe)
+       ) pats_pes
+     in
+     M_Expr annots (M_Ecase e' pats_pes))
+     (* annotate (M_PEcase e' pats_pes)) *)
   | PEarray_shift e' ctype e'' ->
      n_pexpr_in_expr_name_2 (e',e'') (fun (e',e'') -> 
      k (annotate (M_PEarray_shift e' ctype e'')))
@@ -650,8 +683,8 @@ and n_memop memop pexprs k =
 
 and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
         : mu_expr 'a = 
-  let (Expr annot pe) = e in
-  let wrap pe : mu_expr 'a = M_Expr annot pe in
+  let (Expr annots pe) = e in
+  let wrap pe : mu_expr 'a = M_Expr annots pe in
   
   match pe with
   | Epure pexpr -> 
@@ -665,16 +698,23 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      k (wrap (M_Eaction paction)))
   | Ecase pexpr pats_es ->
      n_pexpr_in_expr_name pexpr (fun pexpr ->
-     let pats_es = mapsnd (fun expr -> normalise_expr expr) pats_es in
-     k (wrap (M_Ecase pexpr pats_es)))
+     let pats_es = map (fun (pat,e) -> 
+         let e = 
+           if remove_unspecified && is_unspecified_pattern pat
+           then replace_unspec_undef__e e
+           else n_expr e k in
+         (pat, e)
+       ) pats_es
+     in
+     wrap (M_Ecase pexpr pats_es))
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
      wrap (M_Elet (M_normal_pattern pat) e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
      n_pexpr_in_expr_name e1 (fun e1 ->
-     let e2 = normalise_expr e2 in
-     let e3 = normalise_expr e3 in
-     k (wrap (M_Eif e1 e2 e3)))
+     let e2 = n_expr e2 k in
+     let e3 = n_expr e3 k in
+     wrap (M_Eif e1 e2 e3))
   | Eskip ->
      k (wrap (M_Eskip))
   | Eccall a ct e2 es ->

@@ -167,6 +167,14 @@ type mu_expr_ 'a 'bty =  (* (effectful) expression *)
 and mu_expr 'a 'bty = 
  | M_Expr of list annot * (mu_expr_ 'a 'bty)
 
+
+
+
+let embed_pexpr_expr pe = 
+  let (M_Pexpr annots _bty _) = pe in
+  M_Expr annots (M_Epure pe)
+
+
 type mu_impl_decl 'bty =
   | M_Def of mu_base_type * mu_pexpr 'bty
   | M_IFun of mu_base_type * list (symbol * mu_base_type) * mu_pexpr 'bty
