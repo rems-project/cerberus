@@ -1,9 +1,10 @@
 (* Created by Victor Gomes 2017-03-10 *)
 
 open Util
+open Cerb_frontend
+
 module M = Impl_mem
-module T = AilTypes
-module C = Core_ctype
+module C = Ctype
 
 (* Undefined Behaviour *)
 exception Undefined of string
@@ -44,27 +45,27 @@ let unknown = Location_ocaml.unknown
 let sym (n, s) = Symbol.Symbol ("", n, Some s)
 let cabsid pos id =
   let mkloc x = x in
-  Cabs.CabsIdentifier (mkloc pos, id)
+  Symbol.Identifier (mkloc pos, id)
 
 (* Helper Types *)
 
-let char_t = C.Basic0 (T.Integer T.Char)
-let bool_t = C.Basic0 (T.Integer T.Bool)
-let schar_t = C.Basic0 (T.Integer (T.Signed T.Ichar))
-let uchar_t = C.Basic0 (T.Integer (T.Unsigned T.Ichar))
-let int_t = C.Basic0 (T.Integer (T.Signed T.Int_))
-let uint_t = C.Basic0 (T.Integer (T.Unsigned T.Int_))
-let short_t = C.Basic0 (T.Integer (T.Signed T.Short))
-let ushort_t = C.Basic0 (T.Integer (T.Unsigned T.Short))
-let long_t = C.Basic0 (T.Integer (T.Signed T.Long))
-let ulong_t = C.Basic0 (T.Integer (T.Unsigned T.Long))
-let longlong_t = C.Basic0 (T.Integer (T.Signed T.LongLong))
-let ulonglong_t = C.Basic0 (T.Integer (T.Unsigned T.LongLong))
-let size_t = C.Basic0 (T.Integer T.Size_t)
-let ptrdiff_t = C.Basic0 (T.Integer T.Ptrdiff_t)
-let float_t = C.Basic0 (T.Floating (T.RealFloating T.Float))
-let double_t = C.Basic0 (T.Floating (T.RealFloating T.Double))
-let longdouble_t = C.Basic0 (T.Floating (T.RealFloating T.LongDouble))
+let char_t = C.Basic (C.Integer C.Char)
+let bool_t = C.Basic (C.Integer C.Bool)
+let schar_t = C.Basic (C.Integer (C.Signed C.Ichar))
+let uchar_t = C.Basic (C.Integer (C.Unsigned C.Ichar))
+let int_t = C.Basic (C.Integer (C.Signed C.Int_))
+let uint_t = C.Basic (C.Integer (C.Unsigned C.Int_))
+let short_t = C.Basic (C.Integer (C.Signed C.Short))
+let ushort_t = C.Basic (C.Integer (C.Unsigned C.Short))
+let long_t = C.Basic (C.Integer (C.Signed C.Long))
+let ulong_t = C.Basic (C.Integer (C.Unsigned C.Long))
+let longlong_t = C.Basic (C.Integer (C.Signed C.LongLong))
+let ulonglong_t = C.Basic (C.Integer (C.Unsigned C.LongLong))
+let size_t = C.Basic (C.Integer C.Size_t)
+let ptrdiff_t = C.Basic (C.Integer C.Ptrdiff_t)
+let float_t = C.Basic (C.Floating (C.RealFloating C.Float))
+let double_t = C.Basic (C.Floating (C.RealFloating C.Double))
+let longdouble_t = C.Basic (C.Floating (C.RealFloating C.LongDouble))
 
 
 let are_compatible _ _ = false
@@ -78,7 +79,7 @@ let nd n xs =
 (* IV wraps *)
 
 let ivctor memf errmsg = function
-  | C.Basic0 (T.Integer it) -> memf it
+  | C.Basic (C.Integer it) -> memf it
   | _ -> raise (Error errmsg)
 
 let ivmin   = ivctor M.min_ival "ivmin"
@@ -91,20 +92,20 @@ let ivxor   = ivctor M.bitwise_xor_ival "ivxor"
 let fvfromint = M.fvfromint
 let ivfromfloat (cty, x) =
   match cty with
-  | C.Basic0 (T.Integer it) -> M.ivfromfloat it x
+  | C.Basic (C.Integer it) -> M.ivfromfloat it x
   | _ -> raise (Error "ivfromfloat")
 
 let intcast_ptrval cty itarget x =
   match itarget with
-  | C.Basic0 (T.Integer it) -> M.intcast_ptrval cty it x
+  | C.Basic (C.Integer it) -> M.intcast_ptrval cty it x
   | _ -> raise (Error "intcast_ptrval")
 
 (* Ail types *)
 
 let ail_qualifier (c, r, v) =
-  { AilTypes.const = c;
-    AilTypes.restrict = r;
-    AilTypes.volatile = v
+  { C.const = c;
+    C.restrict = r;
+    C.volatile = v
   }
 
 let is_scalar ty =
@@ -226,10 +227,10 @@ let load cty ret e =
   M.load Location_ocaml.unknown cty e >>= return % ret % snd
 
 let load_integer ity =
-  load (C.Basic0 (T.Integer ity)) get_integer
+  load (C.Basic (C.Integer ity)) get_integer
 
 let load_float fty =
-  load (C.Basic0 (T.Floating fty)) get_float
+  load (C.Basic (C.Floating fty)) get_float
 
 let load_pointer q cty =
   load (C.Pointer0 (q, cty)) get_pointer
@@ -248,7 +249,7 @@ let store f ty b e1 e2 =
   M.store Location_ocaml.unknown ty b e1 @@ case_loaded_mval f e2
 
 let store_integer ity =
-  store (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
+  store (M.integer_value_mval ity) (C.Basic (C.Integer ity))
 
 let store_pointer q cty =
   store (M.pointer_mval cty) (C.Pointer0 (q, cty))
@@ -264,10 +265,10 @@ let store_array_of conv cty size =
   in store array_mval (C.Array0 (cty, size))
 
 let store_array_of_int ity =
-  store_array_of (M.integer_value_mval ity) (C.Basic0 (T.Integer ity))
+  store_array_of (M.integer_value_mval ity) (C.Basic (C.Integer ity))
 
 let store_array_of_float fty =
-  store_array_of (M.floating_value_mval fty) (C.Basic0 (T.Floating fty))
+  store_array_of (M.floating_value_mval fty) (C.Basic (C.Floating fty))
 
 let store_array_of_ptr q cty =
   store_array_of (M.pointer_mval cty) (C.Pointer0 (q, cty))

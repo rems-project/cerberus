@@ -1,2 +1,0 @@
-(dirs absint ail_playground ail_to_coq bmc common csrt driver rustic web playground)
-; FIXME remove file one [ocaml] builds.
