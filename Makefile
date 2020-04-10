@@ -64,23 +64,24 @@ csrt: prelude-src
 	@echo "[DUNE] $@"
 	$(Q)dune build cerberus.install csrt.install
 
-#.PHONY: cerberus-ocaml ocaml
-#ocaml: cerberus-ocaml
-#cerberus-ocaml: prelude-src
-#	@echo "[DUNE] $@"
-#	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
-	# FIXME does not compile
-	# FIXME should generate rt-ocaml as a library
-	#@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
-	#@mkdir -p _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/META _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/_build/rt_ocaml.a \
-		   backend/ocaml/runtime/_build/rt_ocaml.cma \
-			 backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
-	#@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
+
+# .PHONY: cerberus-ocaml ocaml
+# ocaml: cerberus-ocaml
+# cerberus-ocaml: prelude-src
+# 	@echo "[DUNE] $@"
+# 	$(Q)dune build _build/default/backend/ocaml/driver/main.exe
+# 	FIXME does not compile
+# 	FIXME should generate rt-ocaml as a library
+# 	@echo $(BOLD)INSTALLING Ocaml Runtime in ./_lib$(RESET)
+# 	@mkdir -p _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/META _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/_build/rt_ocaml.a \
+# 		   backend/ocaml/runtime/_build/rt_ocaml.cma \
+# 			 backend/ocaml/runtime/_build/rt_ocaml.cmxa _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/_build/*.cmi _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/_build/*.cmx _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/_build/src/*.cmi _lib/rt-ocaml
+# 	@cp backend/ocaml/runtime/_build/src/*.cmx _lib/rt-ocaml
 
 tmp/:
 	@echo "[MKDIR] tmp"
