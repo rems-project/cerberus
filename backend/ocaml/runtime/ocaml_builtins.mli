@@ -1,4 +1,4 @@
-module M = Impl_mem
+module M = Cerb_frontend.Impl_mem
 
 (* TODO: not sure about these types yet *)
 
