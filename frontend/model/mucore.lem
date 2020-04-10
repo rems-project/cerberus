@@ -244,13 +244,7 @@ let mapsnd (f : 'b -> 'c) (l : list ('a * 'b)) : list ('a * 'c) =
   map (fun (a,b) -> (a, f b)) l
 
 
-let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
-  Core.Pexpr annots bty (Core.PEsym sym)
-let make_ctype_pexpr (Annotated annots bty ctype) : Core.generic_pexpr 'bty symbol =
-  Core.Pexpr annots bty (Core.PEval (Core.Vctype ctype))
-
-
-type env 'bty = map symbol (mu_pexpr 'bty)
+type env 'bty = map symbol (Core.generic_pexpr 'bty symbol)
 
 let insert_symbol sym v env =
   Map.insert sym v env
@@ -265,21 +259,34 @@ let lookup_asym env (Annotated _ _ sym) =
 
 let get_loaded_value env sym = 
   match lookup_asym env sym with
-  | M_Pexpr _ _ (M_PEval (M_Vloaded lv)) -> lv
+  | Core.Pexpr _ _ (Core.PEval (Core.Vloaded lv)) -> lv
   | _ -> failwith "not a loaded value"
   end
 
 let get_object_value env sym = 
   match lookup_asym env sym with
-  | M_Pexpr _ _ (M_PEval (M_Vobject ov)) -> ov
+  | Core.Pexpr _ _ (Core.PEval (Core.Vobject ov)) -> ov
   | _ -> failwith "not an object value"
   end
 
 let get_value env sym = 
   match lookup_asym env sym with
-  | M_Pexpr _ _ (M_PEval v) -> v
+  | Core.Pexpr _ _ (Core.PEval v) -> v
   | _ -> failwith "not an object value"
   end
+
+
+
+let get_pexpr env asym : Core.generic_pexpr 'bty symbol =
+  lookup_asym env asym
+
+
+let make_symbol_pexpr (Annotated annots bty sym) : Core.generic_pexpr 'bty symbol =
+  Core.Pexpr annots bty (Core.PEsym sym)
+
+let make_ctype_pexpr (Annotated annots bty ctype) : Core.generic_pexpr 'bty symbol =
+  Core.Pexpr annots bty (Core.PEval (Core.Vctype ctype))
+
 
 let rec mu_to_core__object_value (env : env 'bty) ov = 
   match ov with
@@ -290,7 +297,7 @@ let rec mu_to_core__object_value (env : env 'bty) ov =
   | M_OVunion s i mv -> Core.OVunion s i mv
   | M_OVarray is ->
      let is = map (get_loaded_value env) is in
-     Core.OVarray (map (mu_to_core__loaded_value env) is)
+     Core.OVarray is
   end
 
 and mu_to_core__loaded_value (env : env 'bty) lv = 
@@ -312,10 +319,10 @@ let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
   (* | M_Vctype ct -> Core.Vctype ct *)
   | M_Vlist cbt is -> 
      let is = map (get_value env) is in
-     Core.Vlist cbt (map (mu_to_core__value env) is)
+     Core.Vlist cbt is
   | M_Vtuple is ->
      let is = map (get_value env) is in
-     Core.Vtuple (map (mu_to_core__value env) is)
+     Core.Vtuple is
   end
   
 
@@ -356,7 +363,7 @@ let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
  *          * let undef_e = Core.Pexpr annots1 bty1 (Core.PEundef (locOf pexpr) unspec_undef) in
  *          * let p2 = mu_to_core__pexpr env p2 in
  *          * let pats_pes = [(spec_pat, p2); (unspec_pat, undef_e)] in *\)
- *         let e = make_symbol_pexpr asym2 in
+ *         let e = get_pexpr asym2 in
  *         wrap (Core.PEcase e pats_pes) *)
 
 
@@ -373,40 +380,46 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
   | M_PEval v -> 
      wrap (Core.PEval (mu_to_core__value env v))
   | M_PEconstrained l -> 
-     let l = mapsnd make_symbol_pexpr l in
+     let l = mapsnd (get_pexpr env) l in
      wrap (Core.PEconstrained l)
   | M_PEundef loc undef ->
      wrap (Core.PEundef loc undef)
   | M_PEerror err p -> 
-     wrap (Core.PEerror err (make_symbol_pexpr p))
+     wrap (Core.PEerror err (get_pexpr env p))
   | M_PEctor ctor pes -> 
-     wrap (Core.PEctor ctor (map make_symbol_pexpr pes))
+     wrap (Core.PEctor ctor (map (get_pexpr env) pes))
   | M_PEcase p pats_pes ->
      let pats_pes = 
        map (fun (pat,e) -> (pat, mu_to_core__pexpr env e)) pats_pes in
-     wrap (Core.PEcase (make_symbol_pexpr p) pats_pes)
+     wrap (Core.PEcase (get_pexpr env p) pats_pes)
   | M_PEarray_shift pe1 ctype pe2 ->
-     wrap (Core.PEarray_shift (make_symbol_pexpr pe1) ctype (make_symbol_pexpr pe2))
+     wrap (Core.PEarray_shift 
+             (get_pexpr env pe1) 
+             ctype 
+             (get_pexpr env pe2))
   | M_PEmember_shift p s id  ->
-     wrap (Core.PEmember_shift (make_symbol_pexpr p) s id)
+     wrap (Core.PEmember_shift (get_pexpr env p) s id)
   | M_PEnot p ->
-     wrap (Core.PEnot (make_symbol_pexpr p))
+     wrap (Core.PEnot (get_pexpr env p))
   | M_PEop binop p1 p2 ->
-     wrap (Core.PEop binop (make_symbol_pexpr p1) (make_symbol_pexpr p2))
+     wrap (Core.PEop binop 
+             (get_pexpr env p1) 
+             (get_pexpr env p2))
   | M_PEstruct sym fields ->
-     let fields = mapsnd make_symbol_pexpr fields in
+     let fields = mapsnd (get_pexpr env) fields in
      wrap (Core.PEstruct sym fields)
   | M_PEunion sym id p ->
-     wrap (Core.PEunion sym id (make_symbol_pexpr p))
+     wrap (Core.PEunion sym id (get_pexpr env p))
   (* | M_PEcfunction f ->
-   *    Core.PEcfunction (make_symbol_pexpr f) *)
+   *    Core.PEcfunction (get_pexpr f) *)
   | M_PEmemberof sym id p ->
-     wrap (Core.PEmemberof sym id (make_symbol_pexpr p))
+     wrap (Core.PEmemberof sym id (get_pexpr env p))
   | M_PEcall name args ->
-     wrap (Core.PEcall name (map make_symbol_pexpr args))
+     wrap (Core.PEcall name (map (get_pexpr env) args))
   | M_PElet pat p1 p2 ->
      match pat with
      | M_symbol (Annotated _ _ sym) ->
+        let p1 = mu_to_core__pexpr env p1 in
         let env' = insert_symbol sym p1 env in
         mu_to_core__pexpr env' p2
      | M_normal_pattern pat ->
@@ -417,21 +430,21 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
      end
   | M_PEif p0 p1 p2 ->
      wrap (Core.PEif 
-             (make_symbol_pexpr p0)
-             (make_symbol_pexpr p1)
-             (make_symbol_pexpr p2))
+             (get_pexpr env p0)
+             (get_pexpr env p1)
+             (get_pexpr env p2))
   (* | M_PEis_scalar p ->
-   *    Core.PEis_scalar (make_symbol_pexpr p)
+   *    Core.PEis_scalar (get_pexpr p)
    * | M_PEis_integer p ->
-   *    Core.PEis_integer (make_symbol_pexpr p)
+   *    Core.PEis_integer (get_pexpr p)
    * | M_PEis_signed p ->
-   *    Core.PEis_signed (make_symbol_pexpr p)
+   *    Core.PEis_signed (get_pexpr p)
    * | M_PEis_unsigned p ->
-   *    Core.PEis_unsigned (make_symbol_pexpr p)
+   *    Core.PEis_unsigned (get_pexpr p)
    * | M_PEbmc_assume e ->
-   *    Core.PEbmc_assume (make_symbol_pexpr e)
+   *    Core.PEbmc_assume (get_pexpr e)
    * | M_PEare_compatible p1 p2 ->
-   *    Core.PEare_compatible (make_symbol_pexpr p1) (make_symbol_pexpr p2) *)
+   *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
   | M_PEensure_specified asym cbt ->
      let pats_pes = 
        let newsym = Symbol.fresh () in
@@ -444,60 +457,124 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
        let e_spec = make_symbol_pexpr (Annotated annots bty newsym) in
        [(spec_pat, e_spec); (unspec_pat, e_unspec)]
      in
-     wrap (Core.PEcase (make_symbol_pexpr asym) pats_pes)
+     wrap (Core.PEcase (get_pexpr env asym) pats_pes)
 
 
   end
 
-let mu_to_core__action_ (action_ : mu_action_ 'bty)
+let mu_to_core__action_ env (action_ : mu_action_ 'bty)
         : Core.generic_action_ 'bty symbol =
   match action_ with
   | M_Create p1 p2 prefix ->
-     Core.Create (make_symbol_pexpr p1) (make_ctype_pexpr p2) prefix
+     Core.Create (get_pexpr env p1) (make_ctype_pexpr p2) prefix
   | M_CreateReadOnly p1 p2 p3 prefix ->
-     Core.CreateReadOnly (make_symbol_pexpr p1) (make_ctype_pexpr p2)
-       (make_symbol_pexpr p3) prefix
+     Core.CreateReadOnly (get_pexpr env p1) (make_ctype_pexpr p2)
+       (get_pexpr env p3) prefix
   | M_Alloc p1 p2 prefix ->
-     Core.Alloc (make_ctype_pexpr p1) (make_symbol_pexpr p2) prefix
+     Core.Alloc (make_ctype_pexpr p1) (get_pexpr env p2) prefix
   | M_Kill b p ->
-     Core.Kill b (make_symbol_pexpr p)
+     Core.Kill b (get_pexpr env p)
   | M_Store b p1 p2 p3 mo ->
-     Core.Store b (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) mo
+     Core.Store b (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) mo
   | M_Load p1 p2 mo ->
-     Core.Load (make_ctype_pexpr p1) (make_symbol_pexpr p2) mo
+     Core.Load (make_ctype_pexpr p1) (get_pexpr env p2) mo
   | M_RMW p1 p2 p3 p4 mo1 mo2 ->
-     Core.RMW (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
+     Core.RMW (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) (get_pexpr env p4) mo1 mo2
   | M_Fence mo ->
      Core.Fence mo
   | M_CompareExchangeStrong p1 p2 p3 p4 mo1 mo2 ->
-     Core.CompareExchangeStrong (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
+     Core.CompareExchangeStrong (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) (get_pexpr env p4) mo1 mo2
   | M_CompareExchangeWeak p1 p2 p3 p4 mo1 mo2 ->
-     Core.CompareExchangeWeak (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) (make_symbol_pexpr p4) mo1 mo2
+     Core.CompareExchangeWeak (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) (get_pexpr env p4) mo1 mo2
   | M_LinuxFence mo ->
      Core.LinuxFence mo
   | M_LinuxLoad p1 p2 mo ->
-     Core.LinuxLoad (make_ctype_pexpr p1) (make_symbol_pexpr p2) mo
+     Core.LinuxLoad (make_ctype_pexpr p1) (get_pexpr env p2) mo
   | M_LinuxStore p1 p2 p3 mo ->
-     Core.LinuxStore (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) mo
+     Core.LinuxStore (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) mo
   | M_LinuxRMW p1 p2 p3 mo ->
-     Core.LinuxRMW (make_ctype_pexpr p1) (make_symbol_pexpr p2) 
-       (make_symbol_pexpr p3) mo
+     Core.LinuxRMW (make_ctype_pexpr p1) (get_pexpr env p2) 
+       (get_pexpr env p3) mo
   end
 
-let mu_to_core__action (M_Action t a action_) = 
-  Core.Action t a (mu_to_core__action_ action_)
+let mu_to_core__action env (M_Action t a action_) = 
+  Core.Action t a (mu_to_core__action_ env action_)
 
-let mu_to_core__paction (M_Paction p action) = 
-  Core.Paction p (mu_to_core__action action)
+let mu_to_core__paction env (M_Paction p action) = 
+  Core.Paction p (mu_to_core__action env action)
 
-let mu_to_core__memop memop = 
+let mu_to_core__memop__ memop = 
+  let mctype ct = Left ct in
+  let msym sym = Right sym in
+  match memop with
+  | M_PtrEq (sym1,sym2) ->
+     (PtrEq, 
+      [msym sym1; msym sym2])
+  | M_PtrNe (sym1,sym2) ->
+     (PtrNe, 
+      [msym sym1; msym sym2])
+  | M_PtrLt (sym1,sym2) ->
+     (PtrLt, 
+      [msym sym1; msym sym2])
+  | M_PtrGt (sym1,sym2) ->
+     (PtrGt, 
+      [msym sym1; msym sym2])
+  | M_PtrLe (sym1,sym2) ->
+     (PtrLe, 
+      [msym sym1; msym sym2])
+  | M_PtrGe (sym1,sym2) ->
+     (PtrGe, 
+      [msym sym1; msym sym2])
+  | M_Ptrdiff (ct,sym1,sym2) ->
+     (Ptrdiff, 
+      [mctype ct; msym sym1; msym sym2])
+  | M_IntFromPtr (ct,sym) ->
+     (IntFromPtr, 
+      [mctype ct; msym sym])
+  | M_PtrFromInt (ct,sym) ->
+     (PtrFromInt, 
+      [mctype ct; msym sym])
+  | M_PtrValidForDeref (ct,sym) ->
+     (PtrValidForDeref, 
+      [mctype ct; msym sym])
+  | M_PtrWellAligned (ct,sym) ->
+     (PtrWellAligned, 
+      [mctype ct; msym sym])
+  | M_PtrArrayShift (sym1,ct,sym2) ->
+     (PtrArrayShift, 
+      [msym sym1; mctype ct; msym sym2])
+  | M_Memcpy (sym1,sym2,sym3) ->
+     (Memcpy, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Memcmp (sym1,sym2,sym3) ->
+     (Memcmp, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Realloc (sym1,sym2,sym3) ->
+     (Realloc, 
+      [msym sym1; msym sym2; msym sym3])
+  | M_Va_start (sym1,sym2) ->
+     (Va_start, 
+      [msym sym1; msym sym2])
+  | M_Va_copy sym ->
+     (Va_copy, 
+      [msym sym])
+  | M_Va_arg (sym,ct) ->
+     (Va_arg, 
+      [msym sym; mctype ct])
+  | M_Va_end sym ->
+     (Va_end, 
+      [msym sym])
+  end
+
+
+let mu_to_core__memop env memop = 
   let mctype = make_ctype_pexpr in
-  let msym = make_symbol_pexpr in
+  let msym = get_pexpr env in
   match memop with
   | M_PtrEq (sym1,sym2) ->
      (PtrEq, 
@@ -566,16 +643,17 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
     | M_Epure p -> 
        wrap (Core.Epure (mu_to_core__pexpr env p))
     | M_Ememop memop ->
-       let (memop,args) = mu_to_core__memop memop in
+       let (memop,args) = mu_to_core__memop env memop in
        wrap (Core.Ememop memop args)
     | M_Eaction pa ->
-       wrap (Core.Eaction (mu_to_core__paction pa))
+       wrap (Core.Eaction (mu_to_core__paction env pa))
     | M_Ecase pe es ->
-       wrap (Core.Ecase (make_symbol_pexpr pe) 
+       wrap (Core.Ecase (get_pexpr env pe) 
                (map (fun (pat,e) -> (pat, mu_to_core__expr env e)) es))
     | M_Elet pat pe e ->
        match pat with
        | M_symbol (Annotated _ _ sym) ->
+          let pe = mu_to_core__pexpr env pe in
           let env' = insert_symbol sym pe env in
           mu_to_core__expr env' e
        | M_normal_pattern pat ->
@@ -585,7 +663,7 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
                   (mu_to_core__expr env e))
        end
     | M_Eif pe e1 e2 ->
-       wrap (Core.Eif (make_symbol_pexpr pe)
+       wrap (Core.Eif (get_pexpr env pe)
                (mu_to_core__expr env e1)
                (mu_to_core__expr env e2))
     | M_Eskip ->
@@ -593,10 +671,10 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
     | M_Eccall a (Annotated annots bty ct) pe2 pes ->
        wrap (Core.Eccall a 
                (Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)))
-               (make_symbol_pexpr pe2) 
-               (map make_symbol_pexpr pes))
+               (get_pexpr env pe2) 
+               (map (get_pexpr env) pes))
     | M_Eproc a name pes ->
-       wrap (Core.Eproc a name (map make_symbol_pexpr pes))
+       wrap (Core.Eproc a name (map (get_pexpr env) pes))
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     | M_Ewseq pat e1 e2 ->
@@ -617,10 +695,10 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
        wrap (Core.End (map (mu_to_core__expr env) es))
     | M_Esave (sym,bt) sbp e ->
        let sbp = 
-         map (fun (sym,(bt,pe)) -> (sym,(bt,make_symbol_pexpr pe))) sbp in
+         map (fun (sym,(bt,pe)) -> (sym,(bt,get_pexpr env pe))) sbp in
        wrap (Core.Esave (sym,bt) sbp (mu_to_core__expr env e))
     | M_Erun a sym pes ->
-       wrap (Core.Erun a sym (map make_symbol_pexpr pes))
+       wrap (Core.Erun a sym (map (get_pexpr env) pes))
     (* | M_Epar es ->
      *    Core.Epar (map (mu_to_core__expr env) es) *)
     (* | M_Ewait tid -> 
