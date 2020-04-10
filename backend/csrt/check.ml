@@ -1146,6 +1146,51 @@ let rec constraints_hold loc env = function
 
 
 
+
+let subtype loc env rt1 (R.R rt2) = 
+
+  let rec check env rt1 rt2 =
+    match rt1, rt2 with
+    | [], [] -> 
+       return env
+    | (n, T.A r1) :: _, [] -> 
+       fail (Return_error (loc, Surplus_A (n, r1)))
+    | (n, T.L r1) :: _, [] -> 
+       fail (Return_error (loc, Surplus_L (n, r1)))
+    | (n, T.R r1) :: _, [] -> 
+       fail (Return_error (loc, Surplus_R (n, r1)))
+
+    | [], (n, T.A r2) :: _ -> 
+       fail (Return_error (loc, Missing_A (n, r2)))
+    | [], (n, T.L r2) :: _ -> 
+       fail (Return_error (loc, Missing_L (n, r2)))
+    | [], (n, T.R r2) :: _ -> 
+       fail (Return_error (loc, Missing_R (n, r2)))
+    | ((_, T.C c1) as r1) :: rt1', _ ->
+       check (add_var env r1) rt1' rt2
+    | _, (n2, T.C c2) :: rt2' ->
+       if constraint_holds loc env c2 
+       then check env rt1 rt2'
+       else fail (Return_error (loc, Unsat_constraint (n2, c2)))
+    | (r1 :: rt1), (r2 :: rt2) ->
+       match r1, r2 with
+       | (n1, T.A t1), (n2, T.A t2) when BT.type_equal t1 t2 ->
+          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
+       | (n1, T.L t1), (n2, T.L t2) when LS.type_equal t1 t2 ->
+          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
+       | (n1, T.R t1), (n2, T.R t2) when RE.type_equal env t1 t2 ->
+          check env rt1 rt2
+       | _, _ ->
+          fail (Return_error (loc, Mismatch {has = r1; expected = r2}))
+  in
+
+  check env rt1 rt2
+
+
+
+
+
+
 let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m = 
 
   let bt_of_core_object_type loc = function
@@ -1182,6 +1227,10 @@ let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m =
      bt_of_core_object_type loc ot
   | Core.BTy_storable -> 
      fail (Unsupported {loc; unsupported = "BTy_storable"})
+
+
+
+
 
 
 
@@ -1658,7 +1707,6 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      call_typ_fn loc mu_name env asyms >>= fun (R.R t, env) ->
      return (t, env)
   | M_PElet (p, e1, e2) ->
-     (* todo: check against cbt? *)
      begin match p with 
      | M_symbol (Annotated (_annots, _, name2)) ->
         infer_pexpr name2 env e1 >>= fun (rt, env) ->
@@ -1690,46 +1738,6 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      let sym1, loc1 = Sym.lof_asym asym1 in
      get_Avar loc env sym1 >>= fun t1 ->
      return ([(sym1, T.A t1)], env)
-
-
-let subtype loc env rt1 (R.R rt2) = 
-
-  let rec check env rt1 rt2 =
-    match rt1, rt2 with
-    | [], [] -> 
-       return env
-    | (n, T.A r1) :: _, [] -> 
-       fail (Return_error (loc, Surplus_A (n, r1)))
-    | (n, T.L r1) :: _, [] -> 
-       fail (Return_error (loc, Surplus_L (n, r1)))
-    | (n, T.R r1) :: _, [] -> 
-       fail (Return_error (loc, Surplus_R (n, r1)))
-
-    | [], (n, T.A r2) :: _ -> 
-       fail (Return_error (loc, Missing_A (n, r2)))
-    | [], (n, T.L r2) :: _ -> 
-       fail (Return_error (loc, Missing_L (n, r2)))
-    | [], (n, T.R r2) :: _ -> 
-       fail (Return_error (loc, Missing_R (n, r2)))
-    | ((_, T.C c1) as r1) :: rt1', _ ->
-       check (add_var env r1) rt1' rt2
-    | _, (n2, T.C c2) :: rt2' ->
-       if constraint_holds loc env c2 
-       then check env rt1 rt2'
-       else fail (Return_error (loc, Unsat_constraint (n2, c2)))
-    | (r1 :: rt1), (r2 :: rt2) ->
-       match r1, r2 with
-       | (n1, T.A t1), (n2, T.A t2) when BT.type_equal t1 t2 ->
-          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
-       | (n1, T.L t1), (n2, T.L t2) when LS.type_equal t1 t2 ->
-          check (add_var env r1) rt1 (Bs.subst n2 (S n1) rt2)
-       | (n1, T.R t1), (n2, T.R t2) when RE.type_equal env t1 t2 ->
-          check env rt1 rt2
-       | _, _ ->
-          fail (Return_error (loc, Mismatch {has = r1; expected = r2}))
-  in
-
-  check env rt1 rt2
 
 
 
@@ -1792,9 +1800,8 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
   | M_Erun _ ->
      failwith "todo erun"
 
-
 let check_expr (type a bty) fname env (e : (a,bty) mu_expr) ret = 
-  let (M_Expr (annots, _)) = e in
+  let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
   let name = Sym.fresh () in    (* fix *)
   infer_expr name env e >>= fun (t, env) ->
