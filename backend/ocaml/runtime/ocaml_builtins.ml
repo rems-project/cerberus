@@ -1,5 +1,5 @@
 (* Cerberus builtin functions *)
-module M = Impl_mem
+module M = Cerb_frontend.Impl_mem
 
 let builtin_any_bounded_int _ = failwith "builtin any bounded int"
 let builtin_errno _ = failwith "builtin errno"
