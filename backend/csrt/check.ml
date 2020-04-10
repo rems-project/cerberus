@@ -1017,6 +1017,9 @@ module Env = struct
   let add_Rvar env (sym, t) = add_var env (sym, T.R t)
   let add_Cvar env (sym, t) = add_var env (sym, T.C t)
 
+  let add_Avars env vars = List.fold_left add_Avar env vars
+
+
   let remove_var env sym = 
     { env with local = SymMap.remove sym env.local }
 
@@ -1539,55 +1542,6 @@ let infer_pat pat =
 
      
 
-(* let cases_union_rt env (loc1, rt1, cs1) (loc2, rt2, cs2) =
- * 
- *   let rec it_ands = function
- *     | [] -> IT.Bool true
- *     | [it] -> it
- *     | it :: its -> IT.And (it, it_ands its)
- *   in
- * 
- *   let rec aux (acc : Bs.t) (rt1, cs1) (rt2, cs2) =
- * 
- *     match rt1, rt2 with
- *     | [], [] -> 
- *        let cnstr = IT.Or (it_ands cs1, it_ands cs2) in
- *        let rt = ((List.rev acc) @ [(Sym.fresh (), T.C (LC.LC cnstr))]) in
- *        return rt
- * 
- *     | (n, T.C (LC.LC t)) :: rt1, rt2 ->
- *        aux acc (rt1, t :: cs1) (rt2, cs2)
- *     | rt1, (n, T.C (LC.LC t)) :: rt2 ->
- *        aux acc (rt1, cs1) (rt2, t :: cs2)
- *     | (n, t) :: _, []
- *     | [], (n, t) :: _ ->
- *        fail (Generic_error (loc2, "case switch: different number of return values"))
- * 
- * 
- *     | (r1 :: rt1), (r2 :: rt2) ->
- *        begin match r1, r2 with
- *        | (n1, T.A t1), (n2, T.A t2) when BT.type_equal t1 t2 ->
- *           let rt2 = Bs.subst n2 (S n1) rt2 in
- *           let cs2 = List.map (IT.subst n2 (S n1)) cs2 in
- *           aux ((n1, T.A t1) :: acc) (rt1, cs1) (rt2, cs2)
- *        | (n1, T.L t1), (n2, T.L t2) when LS.type_equal t1 t2 ->
- *           let rt2 = Bs.subst n2 (S n1) rt2 in
- *           let cs2 = List.map (IT.subst n2 (S n1)) cs2 in
- *           aux ((n1, T.L t1) :: acc) (rt1, cs1) (rt2, cs2)
- *        | (n1, T.R t1), (n2, T.R t2) when RE.type_equal env t1 t2 ->
- *           let rt2 = Bs.subst n2 (S n1) rt2 in
- *           let cs2 = List.map (IT.subst n2 (S n1)) cs2 in
- *           aux ((n1, T.R t1) :: acc) (rt1, cs1) (rt2, cs2)
- *        | _, _ ->
- *           fail (Switch_error (loc2, Mismatch {has = r1; expected = r2}))
- *        end
- * 
- *   in
- * 
- *   aux [] (rt1, cs1) (rt2, cs2) *)
-    
-
-
 let infer_binop name env loc op sym1 sym2 = 
 
   let make_binop_constr (v1 : IT.t) (v2 : IT.t) =
@@ -1663,24 +1617,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      ctor_typ loc ctor args_bts >>= fun t ->
      return ([(name, T.A t)], env)
   | M_PEcase (asym, pats_es) ->
-     (* let (esym,eloc) = Sym.lof_asym asym in
-      * lookup eloc env.local.a esym >>= fun bt ->
-      * fold_leftM (fun (pat_bt,m_body_bt) (pat,pe) ->
-      *     (\* check pattern type against bt *\)
-      *     infer_pat pat >>= fun (bindings, bt', ploc) ->
-      *     let n = Sym.fresh () in
-      *     ensure_type ploc (n, T.A bt') (n, T.A bt) >>
-      *     (\* check body type against that of other cases and union *\)
-      *     let env' = add_avars env bindings in
-      *     infer_pexpr (Sym.fresh ()) env' pe >>= fun (env',body_t') ->
-      *     match m_body_bt with
-      *     | None -> return (pat_bt, Some body_t')
-      *     | Some body_t ->
-      *        cases_union_rt env body_t body_t' >>= fun body_t'' ->
-      *        return (Some body_t'')
-      *   ) (bt,None) pats_es >>= fun (_, Some body_t) ->
-      * return (env, body_t) *)
-     failwith "todo"
+     failwith "PEcase in inferring position"
   | M_PEarray_shift _ ->
      failwith "todo PEarray_shift"
   | M_PEmember_shift _ ->
@@ -1740,6 +1677,30 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      return ([(sym1, T.A t1)], env)
 
 
+and check_pexpr fname env (e : 'bty mu_pexpr) ret = 
+  let (M_Pexpr (annots, _, e_)) = e in
+  let loc = Annot.get_loc_ annots in
+  match e_ with
+  | M_PEcase (asym, pats_es) ->
+     let (esym,eloc) = Sym.lof_asym asym in
+     get_Avar eloc env esym >>= fun bt ->
+     mapM (fun (pat,pe) ->
+         (* check pattern type against bt *)
+         infer_pat pat >>= fun (bindings, bt', ploc) ->
+         let n = Sym.fresh () in
+         ensure_type ploc (n, T.A bt') (n, T.A bt) >>
+         (* check body type against spec *)
+         let env' = add_Avars env bindings in
+         check_pexpr fname env' pe ret
+       ) pats_es >>
+     return env     
+  | _ ->
+     let name = Sym.fresh () in    (* fix *)
+     infer_pexpr name env e >>= fun (t, env) ->
+     subtype loc env t ret >>= fun env ->
+     return env
+
+
 
 let rec infer_expr name env (e : ('a,'bty) mu_expr) = 
   let (M_Expr (annots, e_)) = e in
@@ -1749,8 +1710,37 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
      infer_pexpr name env pe
   | M_Ememop _ ->
      failwith "todo ememop"
-  | M_Eaction _ ->
-     failwith "todo eaction"
+  | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
+     begin match action_ with
+     | M_Create (sym1,ct,_prefix) -> 
+        failwith "Create"
+     | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
+        failwith "CreateReadOnly"
+     | M_Alloc (ct, sym, _prefix) -> 
+        failwith "Alloc"
+     | M_Kill (_is_dynamic, sym) -> 
+        failwith "Kill"
+     | M_Store (_is_locking,ct, sym1, sym2, mo) -> 
+        failwith "Store"
+     | M_Load (ct, sym, mo) -> 
+        failwith "Load"
+     | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
+        failwith "RMW"
+     | M_Fence mo -> 
+        failwith "Fence"
+     | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
+        failwith "CompareExchangeStrong"
+     | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
+        failwith "CompareExchangeWeak"
+     | M_LinuxFence mo -> 
+        failwith "LinuxFemce"
+     | M_LinuxLoad (ct, sym1, mo) -> 
+        failwith "LinuxLoad"
+     | M_LinuxStore (ct, sym1, sym2, mo) -> 
+        failwith "LinuxStore"
+     | M_LinuxRMW (ct, sym1, sym2, mo) -> 
+failwith "LinuxRMW"
+     end
   | M_Ecase _ ->
      failwith "todo ecase"
   | M_Elet (p, e1, e2) ->
@@ -1800,14 +1790,44 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
   | M_Erun _ ->
      failwith "todo erun"
 
-let check_expr (type a bty) fname env (e : (a,bty) mu_expr) ret = 
+(* let check_expr (type a bty) fname env (e : (a,bty) mu_expr) ret = 
+ *   let (M_Expr (annots, e_)) = e in
+ *   let loc = Annot.get_loc_ annots in
+ *   let name = Sym.fresh () in    (\* fix *\)
+ *   infer_expr name env e >>= fun (t, env) ->
+ *   subtype loc env t ret >>= fun env ->
+ *   return env *)
+
+and check_expr fname env (e : ('a,'bty) mu_expr) ret = 
   let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
-  let name = Sym.fresh () in    (* fix *)
-  infer_expr name env e >>= fun (t, env) ->
-  subtype loc env t ret >>= fun env ->
-  return env
-
+  match e_ with
+  | M_Eif (asym1, e2, e3) ->
+     let sym1, loc1 = Sym.lof_asym asym1 in
+     get_Avar loc env sym1 >>= fun t1 -> 
+     ensure_type loc1 (sym1, T.A t1) (sym1, T.A BT.Bool) >>
+     let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
+     let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
+     check_expr fname (add_Cvar env then_constr) e2 ret >>
+     check_expr fname (add_Cvar env else_constr) e3 ret
+  | M_Ecase (asym, pats_es) ->
+     let (esym,eloc) = Sym.lof_asym asym in
+     get_Avar eloc env esym >>= fun bt ->
+     mapM (fun (pat,pe) ->
+         (* check pattern type against bt *)
+         infer_pat pat >>= fun (bindings, bt', ploc) ->
+         let n = Sym.fresh () in
+         ensure_type ploc (n, T.A bt') (n, T.A bt) >>
+         (* check body type against spec *)
+         let env' = add_Avars env bindings in
+         check_expr fname env' pe ret
+       ) pats_es >>
+     return env     
+  | _ ->
+     let name = Sym.fresh () in    (* fix *)
+     infer_expr name env e >>= fun (t, env) ->
+     subtype loc env t ret >>= fun env ->
+     return env
 
 
 
