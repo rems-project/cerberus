@@ -77,11 +77,6 @@ type asym = Mucore.asym unit
 type asyms = list asym
 
 
-val better_error_messages : forall 'a. string -> 'a -> 'a
-declare ocaml target_rep function better_error_messages message a = 
-  `try` a `with | Failure error -> failwith (` message ` ^ error) `
-
-
 (* ... adapting the algorithm from
    http://matt.might.net/articles/a-normalization/ for core *)
 
