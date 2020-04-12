@@ -141,6 +141,7 @@ module SymMap = struct
         (f : key -> 'x -> 'y -> ('y,'e) m)
         (map : 'x t) (init: 'y) : ('y,'e) m =
     fold (fun k v a -> a >>= f k v) map (return init)
+
 end
 
 module SymSet = Set.Make(Sym)
@@ -814,6 +815,7 @@ module Err = struct
       }
     | Unbound_name of {
         loc: Loc.t; 
+        is_function: bool;
         unbound: Sym.t;
       }
     | Inconsistent_fundef of {
@@ -951,9 +953,9 @@ module Err = struct
     | Unsupported {loc; unsupported} ->
        sprintf "%s. Unsupported feature: %s" 
          (Loc.pp loc) unsupported
-    | Unbound_name {loc; unbound} ->
-       sprintf "%s. Unbound symbol %s"
-         (Loc.pp loc) (Sym.pp unbound)
+    | Unbound_name {loc; is_function; unbound} ->
+       sprintf "%s. Unbound %s %s"
+         (Loc.pp loc) (if is_function then "function" else "symbol") (Sym.pp unbound)
     | Inconsistent_fundef {loc; decl; defn} ->
        sprintf "%s. Function definition inconsistent. Should be %s, is %s"
          (Loc.pp loc) (F.pp decl) (F.pp defn)
@@ -977,36 +979,69 @@ open Err
 
 
 
-module Env = struct
 
-  type global_env = 
+
+module GEnv = struct 
+
+  type t = 
     { struct_decls : Bs.t SymMap.t ; 
       fun_decls : (Loc.t * F.t * Sym.t) SymMap.t; (* third item is return name *)
       names : NameMap.map
     } 
+  type genv = t
 
-  type local_env = T.t SymMap.t
 
-  type env = 
-    { local : local_env ; 
-      global : global_env }
-
-  let empty_global = 
+  let empty = 
     { struct_decls = SymMap.empty; 
       fun_decls = SymMap.empty;
       names = NameMap.empty }
 
-  let empty_local = SymMap.empty
+  let pp_list pp l = String.concat "\n" (map pp l)
 
-  let empty_env = 
-    { local = empty_local; 
-      global = empty_global }
+  let pp_struct_decls decls = 
+    let pp_entry (sym, bs) = sprintf "%s: %s" (Sym.pp sym) (Bs.pp bs) in
+    pp_list pp_entry (SymMap.bindings decls)
 
-  let with_fresh_local global_env = 
-    { global = global_env; 
-      local = empty_local }
+  let pp_fun_decls decls = 
+    let pp_entry (sym, (_, t, _ret)) = sprintf "%s: %s" (Sym.pp sym) (F.pp t) in
+    pp_list pp_entry (SymMap.bindings decls)
 
-  let add_var (env : env) (sym, t) = 
+  let pp_name_map m = 
+    let pp_entry (name,(sym,_)) = sprintf "%s: %s" name (Sym.pp sym) in
+    pp_list pp_entry (NameMap.bindings m)
+
+  let pp genv = 
+    sprintf ("\nStructs\n-------\n%s\n\nFunctions\n---------\n%s\n\nNames\n-----\n%s\n")
+      (pp_struct_decls genv.struct_decls)
+      (pp_fun_decls genv.fun_decls)
+      (pp_name_map genv.names)
+
+end
+
+module LEnv = struct
+  type t = T.t SymMap.t
+  type lenv = t
+  let empty = SymMap.empty
+end
+
+module Env = struct
+
+
+  type t = 
+    { local : LEnv.t ; 
+      global : GEnv.t }
+
+  type env = t
+
+  let empty = 
+    { local = LEnv.empty; 
+      global = GEnv.empty }
+
+  let with_fresh_local genv = 
+    { global = genv; 
+      local = LEnv.empty }
+
+  let add_var (env : t) (sym, t) = 
     { env with local = SymMap.add sym t env.local }
 
   let add_vars env bindings = 
@@ -1023,12 +1058,12 @@ module Env = struct
   let remove_var env sym = 
     { env with local = SymMap.remove sym env.local }
 
-  let lookup (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
+  let lookup ?is_function:(is_function=false) (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
     match SymMap.find_opt name env with
-    | None -> fail (Unbound_name {loc; unbound = name})
+    | None -> fail (Unbound_name {loc; is_function; unbound = name})
     | Some v -> return v
 
-  let get_var (loc : Loc.t) (env: env) (name: Sym.t) =
+  let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
     lookup loc env.local name >>= function
     | T.A t -> return (`A t)
     | T.L t -> return (`L t)
@@ -1442,7 +1477,7 @@ let call_typ_fn loc_call name env args =
   | Core.Impl _ -> 
      failwith "todo implementation-defined constrant"
   | Core.Sym sym ->
-     lookup loc_call env.global.fun_decls sym >>= fun decl ->
+     lookup ~is_function:true loc_call env.global.fun_decls sym >>= fun decl ->
      let (_loc,decl_typ,_ret_name) = decl in 
      call_typ loc_call env decl_typ args
 
@@ -1874,12 +1909,12 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
   match fn with
   | M_Fun (ret, args, body) ->
      let loc = Loc.unknown in
-     lookup loc genv.fun_decls fsym >>= fun decl ->
+     lookup ~is_function:true loc genv.GEnv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
      check_function_body genv fsym (embed_fun_proc body) decl_typ
   | M_Proc (loc, ret, args, body) ->
-     lookup loc genv.fun_decls fsym >>= fun decl ->
+     lookup ~is_function:true loc genv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
      check_function_body genv fsym body decl_typ
@@ -2012,8 +2047,8 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
     return fun_decls
 
 let record_funinfo genv funinfo = 
-  pmap_foldM record_fun funinfo genv.fun_decls >>= fun fun_decls ->
-  return { genv with fun_decls = fun_decls }
+  pmap_foldM record_fun funinfo genv.GEnv.fun_decls >>= fun fun_decls ->
+  return { genv with GEnv.fun_decls = fun_decls }
 
 
 
@@ -2038,7 +2073,7 @@ let record_tagDef sym def genv =
        return (names, fields)
      ) ([],[]) fields >>= fun (names,fields) ->
 
-     let struct_decls = SymMap.add sym fields genv.struct_decls in
+     let struct_decls = SymMap.add sym fields genv.GEnv.struct_decls in
      let names = fold_left (fun m (k,v) -> NameMap.add k v m) genv.names names in
      return { genv with names = names; struct_decls = struct_decls }
 
@@ -2066,9 +2101,10 @@ let pp_fun_map_decl funinfo =
 
 
 let check mu_file =
-  let env = empty_global in
+  let env = GEnv.empty in
   record_tagDefs env mu_file.mu_tagDefs >>= fun env ->
   record_funinfo env mu_file.mu_funinfo >>= fun env ->
+  let () = print_endline (GEnv.pp env) in
   check_functions env mu_file.mu_funs
 
 let check_and_report core_file = 
