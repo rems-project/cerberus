@@ -261,6 +261,10 @@ let get_pexpr _where env asym =
   let (Annotated annots bty sym) = asym in
   match Map.lookup sym env with
   | Just pexpr -> pexpr
+  (* Maybe there was already a symbol before a-normalisation. Then the
+     a-normalisation would not have added a new let-expression. So
+     when reverting, we have to turn those symbols into PEsym
+     expressions. *)
   | Nothing -> Core.Pexpr annots bty (Core.PEsym sym)
   end
 

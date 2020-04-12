@@ -63,8 +63,12 @@ let print_mu_core_file mu_file filename =
   Pipeline.run_pp (Some (filename,"core")) pp
 
 
+(* let pcff core_file_name core_file = 
+ *   print_endline (Printf.sprintf "%s.funinfo: %d entries" 
+ *     core_file_name
+ *     (List.length (Pmap.bindings_list core_file.Core.funinfo))) *)
+
 let process core_file0 =
-  Tags.set_tagDefs core_file0.Core.tagDefs;
   print_core_file core_file0 "0_original";
   let core_file1 = Core_peval.rewrite_file core_file0 in
   print_core_file core_file1 "1_after_peval";
@@ -83,6 +87,7 @@ let frontend conf filename =
   match Filename.extension filename with
   | ".c" ->
      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
+     Tags.set_tagDefs core_file.Core.tagDefs;
      process core_file
   | ".core" ->
      core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
