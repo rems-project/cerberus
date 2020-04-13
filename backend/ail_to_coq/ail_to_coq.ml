@@ -527,47 +527,69 @@ let translate_block stmts blocks ret_ty =
             in
             (Some(Goto(block_id)), blocks)
           in
-          let (s1, blocks) = trans break continue final [s1] blocks in
-          let (s2, blocks) = trans break continue final [s2] blocks in
+          let then_id = fresh_block_id () in
+          let else_id = fresh_block_id () in
+          (* Translate the two branches. *)
+          let blocks =
+            let (s, blocks) = trans break continue final [s1] blocks in
+            SMap.add then_id (Some(no_block_annot), s) blocks
+          in
+          let blocks =
+            let (s, blocks) = trans break continue final [s2] blocks in
+            SMap.add else_id (Some(no_block_annot), s) blocks
+          in
           begin
             match bool_expr e with
             | BE_leaf(e) ->
-                (trans_bool_expr e (fun e -> If(e, s1, s2)), blocks)
+                (trans_bool_expr e (fun e -> If(e, Goto(then_id), Goto(else_id))), blocks)
             | _          ->
                 not_impl loc "conditional with || or &&" (* TODO *)
           end
       | AilSwhile(e,s)      ->
+          let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
           let id_cont = fresh_block_id () in
+          (* Translate the body. *)
+          let blocks =
+            let break    = Some(Goto(id_cont)) in
+            let continue = Some(Goto(id_cond)) in
+            let (s, blocks) = trans break continue continue [s] blocks in
+            SMap.add id_body (Some(no_block_annot), s) blocks
+          in
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
             SMap.add id_cont (Some(no_block_annot), stmt) blocks
           in
-          (* Translate the body. *)
+          (* Translate the condition. *)
           let blocks =
             let annot =
               attrs_used := true;
               try Some(block_annot attrs) with Invalid_annot(msg) ->
                 Panic.wrn (Some(loc)) "Warning: %s." msg; None
             in
-            let break    = Some(Goto(id_cont)) in
-            let continue = Some(Goto(id_body)) in
-            let (stmt, blocks) = trans break continue continue [s] blocks in
             let e =
               match bool_expr e with
               | BE_leaf(e) -> e
               | _          -> not_impl loc "while with || or &&" (* TODO *)
             in
             let stmt =
-              trans_bool_expr e (fun e -> If(e, stmt, Goto(id_cont)))
+              trans_bool_expr e (fun e -> If(e, Goto(id_body), Goto(id_cont)))
             in
-            SMap.add id_body (annot, stmt) blocks
+            SMap.add id_cond (annot, stmt) blocks
           in
-          (Goto(id_body), blocks)
+          (Goto(id_cond), blocks)
       | AilSdo(s,e)         ->
+          let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
           let id_cont = fresh_block_id () in
+          (* Translate the body. *)
+          let blocks =
+            let break    = Some(Goto(id_cont)) in
+            let continue = Some(Goto(id_cond)) in
+            let (s, blocks) = trans break continue continue [s] blocks in
+            SMap.add id_body (Some(no_block_annot), s) blocks
+          in
           (* Translate the continuation. *)
           let blocks =
             let (stmt, blocks) = trans break continue final stmts blocks in
@@ -580,8 +602,6 @@ let translate_block stmts blocks ret_ty =
               try Some(block_annot attrs) with Invalid_annot(msg) ->
                 Panic.wrn (Some(loc)) "Warning: %s." msg; None
             in
-            let break    = Some(Goto(id_cont)) in
-            let continue = Some(Goto(id_body)) in
             let stmt =
               let e =
                 match bool_expr e with
@@ -590,10 +610,7 @@ let translate_block stmts blocks ret_ty =
               in
               trans_bool_expr e (fun e -> If(e, Goto(id_body), Goto(id_cont)))
             in
-            let (stmt, blocks) =
-              trans break continue (Some stmt) [s] blocks
-            in
-            SMap.add id_body (annot, stmt) blocks
+            SMap.add id_cond (annot, stmt) blocks
           in
           (Goto(id_body), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
