@@ -41,10 +41,7 @@ let cpp_cmd includes nostd =
   let includes = List.map (fun dir -> "-I" ^ dir) includes in
   let includes = String.concat " " includes in
   let defs = "-D__cerb__ -DDEBUG -DMAX_CPUS=4 -DMAX_VMS=2 -DHEAP_PAGES=10" in
-  let res =
   "cc -E -C -Werror -nostdinc -undef " ^ defs ^ " " ^ includes
-  in
-  Printf.printf "CPP = %s\n%!" res; res
 
 let c_file_to_ail cpp_includes cpp_nostd filename =
   (* Check a couple of things that the frontend does not seem to check. *)
