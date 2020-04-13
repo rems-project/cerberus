@@ -743,6 +743,8 @@ module Err = struct
         Loc.t * call_return_switch_error
     | Integer_value_error of 
         Loc.t
+    | Undefined_behaviour of
+        Loc.t * Undefined.undefined_behaviour
     | Generic_error of Loc.t * string
 
   let pp_return_error loc = function
@@ -879,6 +881,11 @@ module Err = struct
     | Integer_value_error loc ->
        sprintf "%s. integer_value_to_num return None"
          (Loc.pp loc)
+    | Undefined_behaviour (loc, undef) ->
+       sprintf "%s. Undefined behaviour: %s"
+         (Loc.pp loc)
+         (Undefined.pretty_string_of_undefined_behaviour undef)
+
 
 
 end
@@ -1552,7 +1559,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
   | M_PEundef _ ->
-     failwith "todo PEundef"
+     failwith "PEundef in inferring position"
   | M_PEerror _ ->
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
@@ -1620,7 +1627,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      return ([(sym1, T.A t1)], env)
 
 
-and check_pexpr fname env (e : 'bty mu_pexpr) ret = 
+and check_pexpr env (e : 'bty mu_pexpr) ret = 
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
@@ -1634,9 +1641,13 @@ and check_pexpr fname env (e : 'bty mu_pexpr) ret =
          ensure_type ploc (n, T.A bt') (n, T.A bt) >>
          (* check body type against spec *)
          let env' = add_Avars env bindings in
-         check_pexpr fname env' pe ret
+         check_pexpr env' pe ret
        ) pats_es >>
-     return env     
+     return env
+  | M_PEundef (loc, undef) ->
+     if constraint_holds loc env (LC (Bool false)) 
+     then return env
+     else fail (Undefined_behaviour (loc, undef))
   | _ ->
      let name = Sym.fresh () in    (* fix *)
      infer_pexpr name env e >>= fun (t, env) ->
@@ -1733,15 +1744,7 @@ failwith "LinuxRMW"
   | M_Erun _ ->
      failwith "todo erun"
 
-(* let check_expr (type a bty) fname env (e : (a,bty) mu_expr) ret = 
- *   let (M_Expr (annots, e_)) = e in
- *   let loc = Annot.get_loc_ annots in
- *   let name = Sym.fresh () in    (\* fix *\)
- *   infer_expr name env e >>= fun (t, env) ->
- *   subtype loc env t ret >>= fun env ->
- *   return env *)
-
-and check_expr fname env (e : ('a,'bty) mu_expr) ret = 
+and check_expr env (e : ('a,'bty) mu_expr) ret = 
   let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
@@ -1751,8 +1754,8 @@ and check_expr fname env (e : ('a,'bty) mu_expr) ret =
      ensure_type loc1 (sym1, T.A t1) (sym1, T.A BT.Bool) >>
      let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
      let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
-     check_expr fname (add_Cvar env then_constr) e2 ret >>
-     check_expr fname (add_Cvar env else_constr) e3 ret
+     check_expr (add_Cvar env then_constr) e2 ret >>
+     check_expr (add_Cvar env else_constr) e3 ret
   | M_Ecase (asym, pats_es) ->
      let (esym,eloc) = Sym.lof_asym asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -1763,9 +1766,11 @@ and check_expr fname env (e : ('a,'bty) mu_expr) ret =
          ensure_type ploc (n, T.A bt') (n, T.A bt) >>
          (* check body type against spec *)
          let env' = add_Avars env bindings in
-         check_expr fname env' pe ret
+         check_expr env' pe ret
        ) pats_es >>
      return env     
+  | M_Epure pe -> 
+     check_pexpr env pe ret
   | _ ->
      let name = Sym.fresh () in    (* fix *)
      infer_expr name env e >>= fun (t, env) ->
@@ -1780,7 +1785,7 @@ let check_function_body (type a bty) genv name (body : (a,bty) mu_expr) decl_typ
   let (F (A args, ret)) = decl_typ in
   let env = with_fresh_local genv in
   let env = add_vars env args in
-  check_expr name env body ret >>= fun _env ->
+  check_expr (* name *) env body ret >>= fun _env ->
   return ()
 
 
