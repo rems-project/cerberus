@@ -1,31 +1,15 @@
+open List
 open Cerb_frontend
 (* open Cerb_backend *)
-(* open Lem_pervasives  *)
 open Core 
 open Mucore
+open Except
 open Nat_big_num
 open Sexplib
 open Printf
+open Sym
 
-
-module List = struct
-
-  include List
-        
-  let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
-    List.concat (List.map f xs)
-
-  let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
-    match xs with
-    | [] -> []
-    | x :: xs ->
-       match f x with
-       | None -> filter_map f xs
-       | Some y -> y :: filter_map f xs
-
-end
-
-open List
+module Loc = Location
 
 
 let uncurry f (a,b)  = f a b
@@ -33,107 +17,28 @@ let curry f a b = f (a,b)
 let flip f a b = f b a
 
 
+let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
+    List.concat (List.map f xs)
+
+let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
+  match xs with
+  | [] -> []
+  | x :: xs ->
+     match f x with
+     | None -> filter_map f xs
+     | Some y -> y :: filter_map f xs
+
+
+
+
 type num = Nat_big_num.num
 
 
-(* error monad *)
-
-module Ex = struct
-  open Exception
-  type ('a,'e) m = ('a,'e) exceptM
-  let return : 'a -> ('a,'e) m = except_return
-  let fail : 'e -> ('a,'e) m = fail
-  let (>>=) = except_bind
-  let (>>) m m' = m >>= fun _ -> m'
-  let liftM = except_fmap
-  let seq = except_sequence
-  let of_maybe = of_maybe
-  let to_bool = to_bool
-  let mapM : ('a -> ('b,'e) m) -> 'a list -> ('b list, 'e) m = 
-    except_mapM
-  let concatmapM f l = 
-    seq (map f l) >>= fun xs ->
-    return (concat xs)
-  let fold_leftM (f : 'a -> 'b -> ('c,'e) m) (a : 'a) (bs : 'b list) =
-    fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs
-  let pmap_foldM 
-        (f : 'k -> 'x -> 'y -> ('y,'e) m)
-        (map : ('k,'x) Pmap.map) (init: 'y) : ('y,'e) m =
-    Pmap.fold (fun k v a -> a >>= f k v) map (return init)
-  let pmap_iterM f m = 
-    Pmap.fold (fun k v a -> a >> f k v) 
-      m (return ())
-
-  let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
-    match m with
-    | Result a -> Result a
-    | Exception _ -> m'
-
-  let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
-    match m, ms with
-    | Result a, _ -> Result a
-    | Exception _, m' :: ms' -> tryMs m' ms'
-    | Exception e, [] -> Exception e
-
-end
-
-
-open Ex
-
-
-module Loc = struct
-  include Location_ocaml
-  let pp loc = 
-    Pp_utils.to_plain_string (Location_ocaml.pp_location loc)
-end
-
-
-module StringMap = Map.Make(String)
-
-
-
-module Sym = struct
-
-  type t = Symbol.sym
-
-  let fresh = Symbol.fresh
-  let fresh_pretty = Symbol.fresh_pretty
-  let pp = Pp_symbol.to_string_pretty
-
-  let of_asym (s : 'bty Mucore.asym) = 
-    let (Annotated (_, _, sym)) = s in sym
-
-  let lof_asym (s : 'bty Mucore.asym) = 
-    let (Annotated (annots, _, sym)) = s in 
-    (sym, Annot.get_loc_ annots)
-
-  let compare = Symbol.symbol_compare
-
-  let parse loc (names : (t * Loc.t) StringMap.t) name = 
-    match StringMap.find_opt name names with
-    | Some (sym,_) -> return sym
-    | None -> fail (sprintf "%s. Unbound variable %s" (Loc.pp loc) name)
-
-  (* let subst sym sym' symbol : t = 
-   *   if symbol = sym then sym' else symbol *)
-
-end
 
 module NameMap = struct
+  type map = (t * Location.t) StringMap.t
   include StringMap
-  type map = (Sym.t * Loc.t) StringMap.t
 end
-
-module Id = struct
-  type t= Symbol.identifier
-  let s (Symbol.Identifier (_,s)) = s
-  let pp = s
-  let compare id id' = 
-    String.compare (s id) (s id')
-  let parse loc id = 
-    Symbol.Identifier (loc,id)
-end
-
 
 module SymMap = struct
   include Map.Make(Sym)
@@ -145,6 +50,9 @@ module SymMap = struct
 end
 
 module SymSet = Set.Make(Sym)
+
+
+
 
 
 
@@ -1280,7 +1188,7 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 
 
 
-let ensure_type loc has expected : (unit, type_error) Ex.m = 
+let ensure_type loc has expected : (unit, type_error) m = 
   if BT.type_equal has expected 
   then return ()
   else fail (Call_error (loc, Mismatch {has; expected}))
@@ -2084,13 +1992,6 @@ let record_tagDefs genv tagDefs =
 
 
 
-
-
-
-
-
-let test_infer_expr () = 
-  failwith "not implemented"
 
 
 let pp_fun_map_decl funinfo = 
