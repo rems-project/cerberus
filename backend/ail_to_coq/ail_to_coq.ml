@@ -31,6 +31,16 @@ let id_to_str : Symbol.identifier -> string =
 let loc_of_id : Symbol.identifier -> loc =
   fun Symbol.(Identifier(loc,id)) -> loc
 
+(* Register a location. *)
+let register_loc : Location_ocaml.t -> Loc.t = fun loc ->
+  match Location_ocaml.(get_filename loc, to_cartesian loc) with
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Loc.make f l1 c1 l2 c2
+  | (_      , _                    ) -> Loc.none ()
+
+let mkloc elt loc = { elt ; loc }
+
+let noloc elt = mkloc elt (Loc.none ())
+
 (* Extract attributes with namespace ["rc"]. *)
 let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
@@ -212,17 +222,18 @@ let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
+  let locate e = mkloc e (register_loc loc) in
   let translate = translate_expr lval None in
   let (e, l) as res =
     match e with
     | AilEunary(Address,e)         ->
         let (e, l) = translate_expr true None e in
-        (AddrOf(e), l)
+        (locate (AddrOf(e)), l)
     | AilEunary(Indirection,e)     ->
         if will_decay e then translate e else
         let layout = layout_of_tc (tc_of e) in
         let (e, l) = translate e in
-        (Deref(layout, e), l)
+        (locate (Deref(layout, e)), l)
     | AilEunary(op,e)              ->
         let ty = op_type_of_tc (tc_of e) in
         let (e, l) = translate e in
@@ -236,7 +247,7 @@ let rec translate_expr lval goal_ty e =
           | PostfixIncr -> not_impl loc "unary operator (PostfixIncr)"
           | PostfixDecr -> not_impl loc "unary operator (PostfixDecr)"
         in
-        (UnOp(op, ty, e), l)
+        (locate (UnOp(op, ty, e)), l)
     | AilEbinary(e1,op,e2)         ->
         let ty1 = op_type_of_tc (tc_of e1) in
         let ty2 = op_type_of_tc (tc_of e2) in
@@ -270,7 +281,7 @@ let rec translate_expr lval goal_ty e =
         in
         let (e1, l1) = translate_expr lval  goal_ty e1 in
         let (e2, l2) = translate_expr false goal_ty e2 in
-        (BinOp(op, ty1, ty2, e1, e2), l1 @ l2)
+        (locate (BinOp(op, ty1, ty2, e1, e2)), l1 @ l2)
     | AilEassign(e1,e2)            -> not_impl loc "nested assignment"
     | AilEcompoundAssign(e1,op,e2) -> not_impl loc "expr compound assign"
     | AilEcond(e1,e2,e3)           -> not_impl loc "expr cond"
@@ -278,12 +289,13 @@ let rec translate_expr lval goal_ty e =
         begin
           match c_ty with
           | Ctype(_,Pointer(_,Ctype(_,Void))) when is_const_0 e ->
-              (Val(Null), [])
+              let AnnotatedExpression(_, _, loc, _) = e in
+              ({ elt = Val(Null) ; loc = register_loc loc }, [])
           | _                                                   ->
           let ty = op_type_of_tc (tc_of e) in
           let op_ty = op_type_of Location_ocaml.unknown c_ty in
           let (e, l) = translate e in
-          (UnOp(CastOp(op_ty), ty, e), l)
+          (locate (UnOp(CastOp(op_ty), ty, e)), l)
         end
     | AilEcall(e,es)               ->
         let fun_id =
@@ -317,14 +329,14 @@ let rec translate_expr lval goal_ty e =
         in
         let annotate i e =
           let annot_args = List.filter (fun (n, _, _) -> n = i) annot_args in
-          let fn (_, k, coq_e) acc = AnnotExpr(k, coq_e, e) in
+          let fn (_, k, coq_e) acc = mkloc (AnnotExpr(k, coq_e, e)) e.loc in
           List.fold_right fn annot_args e
         in
         let es = List.mapi annotate es in
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
-        let call = (ret_id, Var(Some(fun_id), true), es) in
-        (Var(ret_id, false), l @ [call])
+        let e_call = mkloc (Var(Some(fun_id), true)) (Loc.none ()) in
+        (locate (Var(ret_id, false)), l @ [(ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
@@ -336,11 +348,12 @@ let rec translate_expr lval goal_ty e =
         if not lval then assert false;
         let (struct_name, from_union) = struct_data e in
         let (e, l) = translate e in
-        (GetMember(e, struct_name, from_union, id_to_str id), l)
+        (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEmemberofptr(e,id)        ->
         let (struct_name, from_union) = struct_data e in
         let (e, l) = translate e in
-        (GetMember(Deref(LPtr, e), struct_name, from_union, id_to_str id), l)
+        let e = locate (Deref(LPtr, e)) in
+        (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEbuiltin(b)               -> not_impl loc "expr builtin"
     | AilEstr(s)                   -> not_impl loc "expr str"
     | AilEconst(c)                 ->
@@ -366,12 +379,12 @@ let rec translate_expr lval goal_ty e =
           | ConstantStruct(_,_)         -> not_impl loc "constant struct"
           | ConstantUnion(_,_,_)        -> not_impl loc "constant union"
         in
-        (Val(c), [])
+        (locate (Val(c)), [])
     | AilEident(sym)               ->
         let id = sym_to_str sym in
         let global = not (Hashtbl.mem local_vars id) in
         if global then Hashtbl.add used_globals id ();
-        (Var(Some(id), global), [])
+        (locate (Var(Some(id), global)), [])
     | AilEsizeof(q,c_ty)           -> not_impl loc "expr sizeof"
     | AilEsizeof_expr(e)           -> not_impl loc "expr sizeof_expr"
     | AilEalignof(q,c_ty)          -> not_impl loc "expr alignof"
@@ -387,7 +400,7 @@ let rec translate_expr lval goal_ty e =
     | AilErvalue(e)                ->
         let layout = layout_of_tc (tc_of e) in
         let (e, l) = translate_expr true None e in
-        (Use(layout, e), l)
+        (locate (Use(layout, e)), l)
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
     | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
   in
@@ -396,7 +409,7 @@ let rec translate_expr lval goal_ty e =
   | (_            , None        ) -> res
   | (Some(goal_ty), Some(res_ty)) ->
       if goal_ty = res_ty then res
-      else (UnOp(CastOp(goal_ty), res_ty, e), l)
+      else (mkloc (UnOp(CastOp(goal_ty), res_ty, e)) e.loc, l)
 
 type bool_expr =
   | BE_leaf of ail_expr
@@ -427,7 +440,7 @@ type op_ty_opt = Coq_ast.op_type option
 let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
-  let fn (id, e, es) stmt = Call(id, e, es, stmt) in
+  let fn (id, e, es) stmt = mkloc (Call(id, e, es, stmt)) (Loc.none ()) in
   List.fold_right fn calls (e_stmt e)
 
 let trans_bool_expr : ail_expr -> (expr -> stmt) -> stmt = fun e e_stmt ->
@@ -437,7 +450,9 @@ let translate_bool_expr then_id else_id blocks e =
   let rec translate then_id else_id blocks be =
     match be with
     | BE_leaf(e)      ->
-        let fn e = If(e, Goto(then_id), Goto(else_id)) in
+        let fn e =
+          noloc (If(e, noloc (Goto(then_id)), noloc (Goto(else_id))))
+        in
         (trans_bool_expr e fn, blocks)
     | BE_neg(be)      ->
         translate else_id then_id blocks be
@@ -488,6 +503,7 @@ let translate_block stmts blocks ret_ty =
     match stmts with
     | []                                           -> (resume final, blocks)
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
+    let locate e = mkloc e (register_loc loc) in
     let attrs = collect_rc_attrs attrs in
     let attrs_used = ref false in
     let res =
@@ -496,8 +512,9 @@ let translate_block stmts blocks ret_ty =
       | AilSblock(bs, ss)   -> insert_bindings bs;
                                trans break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
-      | AilSgoto(l)         -> (Goto(sym_to_str l), blocks)
-      | AilSreturnVoid      -> (Return(Val(Void)) , blocks)
+      | AilSgoto(l)         -> (locate (Goto(sym_to_str l)), blocks)
+      | AilSreturnVoid      ->
+          (locate (Return(noloc (Val(Void)))), blocks)
       | AilSbreak           -> (resume break      , blocks)
       | AilScontinue        -> (resume continue   , blocks)
       | AilSreturn(e)       ->
@@ -506,7 +523,7 @@ let translate_block stmts blocks ret_ty =
             | Some(OpInt(_)) -> ret_ty
             | _              -> None
           in
-          (trans_expr e goal_ty (fun e -> Return(e)), blocks)
+          (trans_expr e goal_ty (fun e -> locate (Return(e))), blocks)
       (* All the other constructors. *)
       | AilSskip            -> trans break continue final stmts blocks
       | AilSexpr(e)         ->
@@ -514,7 +531,7 @@ let translate_block stmts blocks ret_ty =
           let stmt =
             match strip_expr e with
             | AilEassert(e)     ->
-                trans_bool_expr e (fun e -> Assert(e, stmt))
+                trans_bool_expr e (fun e -> locate (Assert(e, stmt)))
             | AilEassign(e1,e2) ->
                 let e1 = trans_lval e1 in
                 let layout = layout_of_tc (tc_of e) in
@@ -524,14 +541,18 @@ let translate_block stmts blocks ret_ty =
                   | OpInt(_) -> Some(ty)
                   | _        -> None
                 in
-                trans_expr e2 goal_ty (fun e2 -> Assign(layout, e1, e2, stmt))
+                let fn e2 = locate (Assign(layout, e1, e2, stmt)) in
+                trans_expr e2 goal_ty fn
             | AilEcall(_,_)     ->
                 let (stmt, calls) =
                   match snd (translate_expr false None e) with
                   | []                -> assert false
-                  | (_,e,es) :: calls -> (Call(None, e, es, stmt), calls)
+                  | (_,e,es) :: calls ->
+                      (locate (Call(None, e, es, stmt)), calls)
                 in
-                let fn (id, e, es) stmt = Call(id, e, es, stmt) in
+                let fn (id, e, es) stmt =
+                  mkloc (Call(id, e, es, stmt)) e.loc
+                in
                 List.fold_right fn calls stmt
             | _                 ->
                 attrs_used := true;
@@ -539,7 +560,7 @@ let translate_block stmts blocks ret_ty =
                   try Some(expr_annot attrs) with Invalid_annot(msg) ->
                     Panic.wrn (Some(loc)) "Warning: %s." msg; None
                 in
-                trans_expr e None (fun e -> ExprS(annots, e, stmt))
+                trans_expr e None (fun e -> locate (ExprS(annots, e, stmt)))
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
@@ -552,7 +573,7 @@ let translate_block stmts blocks ret_ty =
             let blocks =
               SMap.add block_id (Some(no_block_annot), stmt) blocks
             in
-            (Some(Goto(block_id)), blocks)
+            (Some(noloc (Goto(block_id))), blocks)
           in
           let then_id = fresh_block_id () in
           let else_id = fresh_block_id () in
@@ -572,8 +593,8 @@ let translate_block stmts blocks ret_ty =
           let id_cont = fresh_block_id () in
           (* Translate the body. *)
           let blocks =
-            let break    = Some(Goto(id_cont)) in
-            let continue = Some(Goto(id_cond)) in
+            let break    = Some(noloc (Goto(id_cont))) in
+            let continue = Some(noloc (Goto(id_cond))) in
             let (s, blocks) = trans break continue continue [s] blocks in
             SMap.add id_body (Some(no_block_annot), s) blocks
           in
@@ -592,15 +613,15 @@ let translate_block stmts blocks ret_ty =
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (Goto(id_cond), blocks)
+          (noloc (Goto(id_cond)), blocks)
       | AilSdo(s,e)         ->
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
           let id_cont = fresh_block_id () in
           (* Translate the body. *)
           let blocks =
-            let break    = Some(Goto(id_cont)) in
-            let continue = Some(Goto(id_cond)) in
+            let break    = Some(noloc (Goto(id_cont))) in
+            let continue = Some(noloc (Goto(id_cond))) in
             let (s, blocks) = trans break continue continue [s] blocks in
             SMap.add id_body (Some(no_block_annot), s) blocks
           in
@@ -619,7 +640,7 @@ let translate_block stmts blocks ret_ty =
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (Goto(id_body), blocks)
+          (noloc (Goto(id_body)), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
       | AilScase(_,_)       -> not_impl loc "statement case"
       | AilSdefault(_)      -> not_impl loc "statement default"
@@ -630,7 +651,7 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             SMap.add (sym_to_str l) (Some(no_block_annot), stmt) blocks
           in
-          (Goto(sym_to_str l), blocks)
+          (locate (Goto(sym_to_str l)), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) = trans break continue final stmts blocks in
           let add_decl (id, e) stmt =
@@ -646,7 +667,9 @@ let translate_block stmts blocks ret_ty =
               | OpInt(_) -> Some(ty)
               | _        -> None
             in
-            let fn e = Assign(layout, Var(Some(id), false), e, stmt) in
+            let fn e =
+              noloc (Assign(layout, noloc (Var(Some(id), false)), e, stmt))
+            in
             trans_expr e goal_ty fn
           in
           (List.fold_right add_decl ls stmt, blocks)
@@ -668,7 +691,7 @@ let translate_block stmts blocks ret_ty =
       end;
     res
   in
-  trans None None (Some(Return(Val(Void)))) stmts blocks
+  trans None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
 
 (** [translate fname ail] translates typed Ail AST to Coq AST. *)
 let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
