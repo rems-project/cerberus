@@ -254,7 +254,7 @@ exception Invalid_annot of string
 
 type rc_attr =
   { rc_attr_id   : string
-  ; rc_attr_args : string list }
+  ; rc_attr_args : string Location.located list }
 
 let parse_attr : rc_attr -> annot = fun attr ->
   let {rc_attr_id = id; rc_attr_args = args} = attr in
@@ -262,12 +262,12 @@ let parse_attr : rc_attr -> annot = fun attr ->
     raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
   in
 
-  let parse : type a.a grammar -> string -> a = fun gr s ->
+  let parse : type a.a grammar -> string Location.located -> a = fun gr s ->
     let parse_string = Earley.parse_string gr Blanks.default in
-    try parse_string s with Earley.Parse_error(buf,pos) ->
+    try parse_string s.elt with Earley.Parse_error(buf,pos) ->
       let msg =
         let i = Input.utf8_col_num buf pos in
-        Printf.sprintf  "no parse in annotation \"%s\" at position %i" s i
+        Printf.sprintf  "no parse in annotation \"%s\" at position %i" s.elt i
       in
       raise (Invalid_annot msg)
   in
@@ -286,14 +286,14 @@ let parse_attr : rc_attr -> annot = fun attr ->
 
   let raw_single_arg : (string -> annot) -> annot = fun c ->
     match args with
-    | [s] -> c s
+    | [s] -> c s.elt
     | _   -> error "should have exactly one argument"
   in
 
   let raw_many_args : (string list -> annot) -> annot = fun c ->
     match args with
     | [] -> error "should have at least one argument"
-    | _  -> c args
+    | _  -> c (List.map (fun a -> Location.(a.elt)) args)
   in
 
   let no_args : annot -> annot = fun c ->
