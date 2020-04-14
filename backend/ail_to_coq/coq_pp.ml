@@ -119,7 +119,7 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
-  match e with
+  match e.elt with
   | Var(None   ,_)                ->
       pp "\"_\""
   | Var(Some(x),g)                ->
@@ -167,7 +167,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
-  match stmt with
+  match stmt.elt with
   | Goto(id)               ->
       pp "Goto %S" id
   | Return(e)              ->
