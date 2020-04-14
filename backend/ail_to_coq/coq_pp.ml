@@ -814,30 +814,47 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       (* Compute the used and unused arguments and variables. *)
       let used =
         let fn (id, ty) =
-          let eq (id_var, _) = id_var = id in
-          let is_arg = List.exists eq def.func_args in
-          let is_var = List.exists eq def.func_vars in
-          if is_arg && is_var then
-            Panic.panic_no_pos "[%s] denotes both a local variable and an \
-              argument of function [%s]." id def.func_name;
-          if is_var then ("local_" ^ id, Some(ty)) else
-          if is_arg then ("arg_"   ^ id, Some(ty)) else
-          Panic.panic_no_pos "[%s] is neither a local variable nor an \
-            argument." id
+          (* Check if [id_var] is a function argument. *)
+          try
+            let layout = List.assoc id def.func_args in
+            (* Check for name clash with local variables. *)
+            if List.mem_assoc id def.func_vars then
+              Panic.panic_no_pos "[%s] denotes both an argument and a local \
+                variable of function [%s]." id def.func_name;
+            ("arg_" ^ id, (layout, Some(ty)))
+          with Not_found ->
+          (* Not a function argument, check that it is a local variable. *)
+          try
+            let layout = List.assoc id def.func_vars in
+            ("local_" ^ id, (layout, Some(ty)))
+          with Not_found ->
+            Panic.panic_no_pos "[%s] is neither a local variable nor an \
+              argument." id
         in
         List.map fn annot.bl_inv_vars
       in
       let unused =
-        let fn prefix (id, _) = prefix ^ id in
-        let args = List.map (fn "arg_")   def.func_args in
-        let vars = List.map (fn "local_") def.func_vars in
-        let pred id = List.for_all (fun (id_var, _) -> id <> id_var) used in
-        let unused = List.filter pred args @ List.filter pred vars in
-        List.map (fun id -> (id, None)) unused
+        let unused_args =
+          let pred (id, _) =
+            let id = "arg_" ^ id in
+            List.for_all (fun (id_var, _) -> id <> id_var) used
+          in
+          let args = List.filter pred def.func_args in
+          List.map (fun (id, layout) -> ("arg_" ^ id, layout)) args
+        in
+        let unused_vars =
+          let pred (id, _) =
+            let id = "local_" ^ id in
+            List.for_all (fun (id_var, _) -> id <> id_var) used
+          in
+          let vars = List.filter pred def.func_vars in
+          List.map (fun (id, layout) -> ("local_" ^ id, layout)) vars
+        in
+        let unused = unused_args @ unused_vars in
+        List.map (fun (id, layout) -> (id, (layout, None))) unused
       in
       let all_vars = unused @ used in
-      let pp_var ff (id, ty_opt) =
-        let layout = LPtr in (* TODO layout of variable instead of LPtr. *)
+      let pp_var ff (id, (layout, ty_opt)) =
         match ty_opt with
         | None     -> fprintf ff "%s ◁ₗ uninit %a" id (pp_layout true) layout
         | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
