@@ -33,7 +33,13 @@ let is_spec_unspec_case remove_unspecified cases =
     | [(Pattern annots (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1); 
        (Pattern _ (CaseCtor Cunspecified _args),e2)] ->
        Just ((Annotated annots () sym,e1, bt), e2)
+    | [(Pattern annots (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1); 
+       (Pattern _ (CaseBase (Nothing, _)),e2)] ->
+       Just ((Annotated annots () sym,e1, bt), e2)
     | [(Pattern annots (CaseCtor Cunspecified _args),e2);
+       (Pattern _ (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1)] ->
+       Just ((Annotated annots () sym,e1, bt), e2)
+    | [(Pattern annots (CaseBase (Nothing, _)),e2);
        (Pattern _ (CaseCtor Cspecified [Pattern _ (CaseBase (Just sym, bt))]),e1)] ->
        Just ((Annotated annots () sym,e1, bt), e2)
     | _ -> 
