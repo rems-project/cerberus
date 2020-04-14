@@ -107,7 +107,7 @@ type ('a,'bty,'sym) name_collector =
     names_in_core_object_type : core_object_type -> unit t;
     names_in_core_base_type : core_base_type -> unit t;
     names_in_value : 'sym generic_value -> unit t;
-    names_in_pattern : ('bty,'sym) generic_pattern -> unit t;
+    names_in_pattern : 'sym generic_pattern -> unit t;
     names_in_name : 'sym generic_name -> unit t;
     names_in_pexpr : ('bty,'sym) generic_pexpr -> unit t;
     names_in_expr : ('a,'bty,'sym) generic_expr -> unit t}

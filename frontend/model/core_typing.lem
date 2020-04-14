@@ -35,9 +35,11 @@ let rec infer_pattern (Pattern annots pat) =
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), toInferred bTy, Pattern annots (CaseBase (Just sym, bTy)))
   | CaseCtor ctor pats ->
       match (ctor, pats) with
-        | (Cnil _, []) ->
-            let infer = InferredType_list InferredUnknown in
-            E.return (empty_env, infer, Pattern annots (CaseCtor (Cnil infer) []))
+        | (Cnil ((BTy_list _) as bTy) , []) ->
+            let infer = toInferred bTy in
+            E.return (empty_env, infer, Pattern annots (CaseCtor (Cnil bTy) []))
+        | (Cnil bTy, []) ->
+           E.fail loc (MismatchExpected "Cnil" bTy "list")
         | (Cnil _, _) ->
             error "infer_pattern: Cnil: wrong number of arguments"
         | (Ccons, [pat1; pat2]) ->
@@ -156,8 +158,10 @@ and typecheck_pattern expected_bTy (Pattern annots pat) =
       E.return (singleton_tdecl_env (Sym sym) (TDsym bTy), Pattern annots (CaseBase (Just sym, bTy)))
   | CaseCtor ctor pats ->
       match (ctor, expected_bTy, pats) with
-        | (Cnil _, BTy_list elem_bTy, []) ->
-            E.return (empty_env, Pattern annots (CaseCtor (Cnil (toInferred elem_bTy)) []))
+        | (Cnil ((BTy_list _) as bTy), BTy_list _, []) ->
+           if bTy = expected_bTy 
+           then E.return (empty_env, Pattern annots (CaseCtor (Cnil bTy) []))
+           else error "typecheck_pattern: Cnil: element type mismatch"
         | (Cnil _, _, []) ->
             E.fail loc (MismatchExpected "Cnil" expected_bTy "list")
         | (Cnil _, _, _) ->
@@ -410,8 +414,11 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
     | PEctor ctor pes ->
         let ret_ctor bTy ctor pes = E.return (Pexpr annot bTy (PEctor ctor pes)) in
         match (ctor, pes) with
-          | (Cnil _, []) ->
-              E.return (Pexpr annot InferredUnknown (PEctor (Cnil InferredUnknown) []))
+          | (Cnil ((BTy_list _) as bTy), []) ->
+              let infer = toInferred bTy in
+              E.return (Pexpr annot infer (PEctor (Cnil bTy) []))
+          | (Cnil bTy, []) ->
+              E.fail loc (MismatchExpected "Cnil" bTy "list")
           | (Cnil _, _) ->
               error "infer_pexpr: Cnil: wrong number of arguments"
           | (Ccons, [pe1; pe2]) ->
@@ -800,9 +807,11 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEctor ctor pes ->
         let ret_ctor ctor pe = PEctor ctor [pe] in
         match (ctor, bTy, pes) with
-          | (Cnil _, BTy_list elem_bTy, []) ->
-              E.return (PEctor (Cnil (toInferred elem_bTy)) [])
-          | (Cnil _, _, _) ->
+          | (Cnil ((BTy_list _) as cnil_bTy), BTy_list elem_bTy, []) ->
+             if cnil_bTy = bTy 
+             then E.return (PEctor (Cnil cnil_bTy) [])
+             else error "typecheck_pattern: Cnil: element type mismatch"
+          | (Cnil _, _, []) ->
               E.fail loc (MismatchExpected "Cnil" bTy "list")
           | (Ccons, BTy_list elem_bTy, [pe]) ->
               ret_ctor Ccons <$> typecheck_pexpr tagDefs env elem_bTy pe

@@ -70,15 +70,15 @@ type mu_value 'bty =  (* Core values *)
 
 
 
-type mu_ctor 'bty = Core.generic_ctor 'bty
+type mu_ctor = Core.generic_ctor
 
 
-type mu_pattern_ 'bty = Core.generic_pattern_ 'bty symbol
-type mu_pattern 'bty = Core.generic_pattern 'bty symbol
+type mu_pattern_ = Core.generic_pattern_ symbol
+type mu_pattern = Core.generic_pattern symbol
 
 type mu_sym_or_pattern 'bty = 
   | M_symbol of annotated symbol 'bty
-  | M_normal_pattern of mu_pattern 'bty
+  | M_normal_pattern of mu_pattern
 
 
 type mu_pexpr_ 'bty =  (* Core pure expressions *)
@@ -88,8 +88,8 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
  | M_PEconstrained of list (Mem.mem_iv_constraint * asym 'bty) (* constrained value *)
  | M_PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | M_PEerror of string * asym 'bty (* impl-defined static error *)
- | M_PEctor of mu_ctor 'bty * list (asym 'bty) (* data constructor application *)
- | M_PEcase of (asym 'bty) * list ((mu_pattern 'bty) * mu_pexpr 'bty) (* pattern matching *)
+ | M_PEctor of mu_ctor * list (asym 'bty) (* data constructor application *)
+ | M_PEcase of (asym 'bty) * list (mu_pattern * mu_pexpr 'bty) (* pattern matching *)
  | M_PEarray_shift of (asym 'bty) * ctype * (asym 'bty) (* pointer array shift *)
  | M_PEmember_shift of (asym 'bty) * symbol * Symbol.identifier (* pointer struct/union member shift *)
  | M_PEnot of asym 'bty (* boolean not *)
@@ -164,15 +164,15 @@ type mu_expr_ 'a 'bty =  (* (effectful) expression *)
  | M_Epure of (mu_pexpr 'bty)
  | M_Ememop of mu_memop 'bty
  | M_Eaction of (mu_paction 'a 'bty) (* memory action *)
- | M_Ecase of asym 'bty * list ((mu_pattern 'bty) * (mu_expr 'a 'bty)) (* pattern matching *)
+ | M_Ecase of asym 'bty * list (mu_pattern * (mu_expr 'a 'bty)) (* pattern matching *)
  | M_Elet of (mu_sym_or_pattern 'bty) * (mu_pexpr 'bty) * (mu_expr 'a 'bty)
  | M_Eif of asym 'bty * (mu_expr 'a 'bty) * (mu_expr 'a 'bty)
  | M_Eskip
  | M_Eccall of 'a * (actype 'bty) * asym 'bty * list (asym 'bty) (* C function call *)
  | M_Eproc of 'a * mu_name * list (asym 'bty) (* Core procedure call *)
  (* | M_Eunseq of list (mu_expr 'a 'bty) (\* unsequenced expressions *\) *)
- | M_Ewseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
- | M_Esseq of (mu_pattern 'bty) * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* strong sequencing *)
+ | M_Ewseq of mu_pattern * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* weak sequencing *)
+ | M_Esseq of mu_pattern * (mu_expr 'a 'bty) * (mu_expr 'a 'bty) (* strong sequencing *)
  (* | M_Easeq of (symbol * mu_base_type) * (mu_action 'a 'bty) * (mu_paction 'a 'bty) (\* atomic sequencing *\) *)
  (* | M_Eindet of nat * (mu_expr 'a 'bty) (\* indeterminately sequenced expr *)
  | M_Ebound of nat * (mu_expr 'a 'bty) (* $\ldots$and boundary *)

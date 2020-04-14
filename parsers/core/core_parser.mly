@@ -49,17 +49,17 @@ let hasAilname: attribute list -> string option = function
 
 
 (* TODO: move to Caux *)
-let rec mk_list_pe = function
+let rec mk_list_pe bTy = function
   | [] ->
-      Pexpr ([], (), PEctor (Cnil (), []))
+      Pexpr ([], (), PEctor (Cnil bTy, []))
   | _pe::_pes ->
-      Pexpr ([], (), PEctor (Ccons, [_pe; mk_list_pe _pes]))
+      Pexpr ([], (), PEctor (Ccons, [_pe; mk_list_pe bTy _pes]))
 
-let rec mk_list_pat = function
+let rec mk_list_pat bTy = function
   | [] ->
-      Pattern ([], CaseCtor (Cnil (), []))
+      Pattern ([], CaseCtor (Cnil bTy, []))
   | _pat::_pats ->
-      Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat _pats]))
+      Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat bTy _pats]))
 
 
 type symbolify_state = {
@@ -286,7 +286,8 @@ let symbolify_value _cval =
    | _ ->
        assert false
 
-let convert_ctor : unit generic_ctor -> ctor = function
+let convert_ctor : generic_ctor -> ctor = fun ctor -> ctor
+(*  function
  | Cnil ()      -> Cnil ()
  | Ccons        -> Ccons
  | Ctuple       -> Ctuple
@@ -302,7 +303,7 @@ let convert_ctor : unit generic_ctor -> ctor = function
  | Cspecified   -> Cspecified
  | Cunspecified -> Cunspecified
  | Cfvfromint   -> Cfvfromint
- | Civfromfloat -> Civfromfloat
+ | Civfromfloat -> Civfromfloat *)
 
 let rec symbolify_pattern (Pattern (annots, _pat)) : pattern Eff.t =
   Eff.get >>= fun st ->
@@ -359,10 +360,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEerror (str, _pe) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr (annot, (), PEerror (str, pe)))
-    | PEctor (Cnil (), _pes) ->
+    | PEctor (Cnil bTy, _pes) ->
         begin match _pes with
           | [] ->
-              Eff.return (Pexpr (annot, (), PEctor (Cnil (), [])))
+              Eff.return (Pexpr (annot, (), PEctor (Cnil bTy, [])))
           | _ ->
               Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
         end
@@ -1386,12 +1387,12 @@ ctor:
 
 
 list_pattern:
-| BRACKETS
-  { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Cnil (), [])) }
+| BRACKETS COLON bTy= core_base_type
+  { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Cnil bTy, [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
   { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Ccons, [_pat1; _pat2])) }
-| _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET)
-    { mk_list_pat _pats }
+| _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
+    { mk_list_pat bTy _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
@@ -1446,12 +1447,12 @@ value:
 
 
 list_pexpr:
-| BRACKETS
-    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Cnil (), [])) }
+| BRACKETS COLON bTy= core_base_type
+    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Cnil bTy, [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Ccons, [_pe1; _pe2])) }
-| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
-    { mk_list_pe _pes }
+| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET) COLON bTy= core_base_type
+    { mk_list_pe bTy _pes }
 
 member:
 | DOT cid=cabs_id EQ _pe=pexpr
