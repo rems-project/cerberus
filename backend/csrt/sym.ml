@@ -6,6 +6,9 @@ module StringMap = Map.Make(String)
 
 type t = Symbol.sym
 
+type namemap = (t * Location.t) StringMap.t
+
+
 let fresh = Symbol.fresh
 let fresh_pretty = Symbol.fresh_pretty
 let pp = Pp_symbol.to_string_pretty
