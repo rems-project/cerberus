@@ -32,18 +32,18 @@ let frontend cpp_cmd filename =
   load_core_impl stdlib impl_name >>= fun impl ->
   c_frontend (conf, io) (stdlib, impl) ~filename
 
-let hafnium_path =
-  try Sys.getenv "HAFNIUM_PATH" with Not_found ->
-    Pp_errors.fatal "environment variable HAFNIUM_PATH not set"
+let cpp_cmd includes nostd =
+  let includes =
+    if nostd then includes else
+    let cerb_runtime = Cerb_runtime.runtime () in
+    Filename.concat cerb_runtime "libc/include" :: includes
+  in
+  let includes = List.map (fun dir -> "-I" ^ dir) includes in
+  let includes = String.concat " " includes in
+  let defs = "-D__cerb__ -DDEBUG -DMAX_CPUS=4 -DMAX_VMS=2 -DHEAP_PAGES=10" in
+  "cc -E -C -Werror -nostdinc -undef " ^ defs ^ " " ^ includes
 
-let cpp_cmd =
-  Printf.sprintf
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__ -I%s/libc/include \
-    -I%s/inc -I%s/inc/vmapi -I%s/src/arch/aarch64/inc \
-    -DDEBUG -DMAX_CPUS=4 -DMAX_VMS=2 -DHEAP_PAGES=10"
-    (Cerb_runtime.runtime ()) hafnium_path hafnium_path hafnium_path
-
-let c_file_to_ail filename =
+let c_file_to_ail cpp_includes cpp_nostd filename =
   (* Check a couple of things that the frontend does not seem to check. *)
   if not (Sys.file_exists filename) then
     Panic.panic_no_pos "File [%s] does not exist." filename;
@@ -52,7 +52,7 @@ let c_file_to_ail filename =
   if not (Filename.check_suffix filename ".c") then
     Panic.panic_no_pos "File [%s] does not have the [.c] extension." filename;
   let open Exception in
-  match frontend cpp_cmd filename with
+  match frontend (cpp_cmd cpp_includes cpp_nostd) filename with
   | Result(_, Some(ast), _) -> ast
   | Result(_, None     , _) ->
       Panic.panic_no_pos "Unexpected frontend error."
