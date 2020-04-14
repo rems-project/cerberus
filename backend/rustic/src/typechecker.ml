@@ -35,7 +35,8 @@ let plop2 = function
 | _ :: _ as l -> "(" ^ String.concat ", " l ^ ")"
 
 let string_of_attr attr =
-  string_of_identifier attr.Annot.attr_id ^ plop2 attr.Annot.attr_args
+  let attr_args = List.map snd attr.Annot.attr_args in
+  string_of_identifier attr.Annot.attr_id ^ plop2 attr_args
 
 let string_of_attrs attrs =
   String.concat ", " (List.map string_of_attr attrs)
@@ -181,7 +182,7 @@ let fun_spec_of def  : fun_spec_t option =
         | Some ns ->
           if string_of_identifier ns = "rc" && string_of_identifier a.Annot.attr_id = "fun_spec" then
             (match a.Annot.attr_args with
-             | [s] ->
+             | [(_,s)] ->
                (match Opal.parse_string fun_spec s with
                | Some s -> Some s
                | None -> print_string "couldn't parse spec :-("; None)

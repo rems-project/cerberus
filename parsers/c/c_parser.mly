@@ -1430,14 +1430,20 @@ balanced_token_sequence: (* NOTE: the list is in reverse *)
     { tk :: tks }
 ;
 
+located_string_literal:
+| STRING_LITERAL
+    { let loc = Location_ocaml.region ($startpos, $endpos) None in
+      (loc, String.concat "" (snd $1)) }
+;
+
 balanced_token:
 | LPAREN balanced_token_sequence RPAREN
 | LBRACK balanced_token_sequence RBRACK
 | LBRACE balanced_token_sequence RBRACE
     { [] }
 (* NOTE: add attribute arguments here *)
-| strs= separated_nonempty_list(COMMA, STRING_LITERAL)
-   { List.map (fun (_, strs) -> String.concat "" strs) strs }
+| strs= separated_nonempty_list(COMMA, located_string_literal)
+   { strs }
 ;
 
 

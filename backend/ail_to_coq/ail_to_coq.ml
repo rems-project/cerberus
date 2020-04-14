@@ -47,7 +47,8 @@ let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
     | Some("rc") -> let rc_attr_id = id_to_str attr_id in
-                    {rc_attr_id; rc_attr_args = attr_args} :: acc
+                    let rc_attr_args = List.map snd attr_args in
+                    {rc_attr_id; rc_attr_args} :: acc
     | _          -> acc
   in
   fun (Annot.Attrs(attrs)) -> List.rev (List.fold_left fn [] attrs)
