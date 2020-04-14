@@ -34,6 +34,7 @@ let loc_of_id : Symbol.identifier -> loc =
 (* Register a location. *)
 let register_loc : Location_ocaml.t -> Loc.t = fun loc ->
   match Location_ocaml.(get_filename loc, to_cartesian loc) with
+  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Loc.make f l1 c1 l1 c1
   | (Some(f), Some((l1,c1),(l2,c2))) -> Loc.make f l1 c1 l2 c2
   | (_      , _                    ) -> Loc.none ()
 
