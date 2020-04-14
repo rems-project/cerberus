@@ -70,15 +70,16 @@ let pp_int_type : Coq_ast.int_type pp = fun ff it ->
   | ItI64(false)        -> pp "u64"
   | ItBool              -> pp "bool_it"
 
-let rec pp_layout : Coq_ast.layout pp = fun ff layout ->
+let rec pp_layout : bool -> Coq_ast.layout pp = fun wrap ff layout ->
   let pp fmt = Format.fprintf ff fmt in
   match layout with
   | LVoid              -> pp "LVoid"
   | LPtr               -> pp "LPtr"
+  | _ when wrap        -> pp "(%a)" (pp_layout false) layout
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
-  | LArray(layout, n)  -> pp "mk_array_layout (%a) %s" pp_layout layout n
+  | LArray(layout, n)  -> pp "mk_array_layout %a %s" (pp_layout true) layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
   let pp fmt = Format.fprintf ff fmt in
@@ -136,7 +137,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         match (ty1, ty2, op) with
         | (OpPtr(l), OpInt(_), AddOp) ->
             pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
-              pp_layout l pp_op_type ty2 pp_expr e2
+              (pp_layout false) l pp_op_type ty2 pp_expr e2
         | (OpPtr(_), OpInt(_), _) ->
             panic_no_pos "Binop [%a] not supported on pointers." pp_bin_op op
         | (OpInt(_), OpPtr(_), _) ->
@@ -147,14 +148,14 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
               pp_op_type ty1 pp_op_type ty2 pp_expr e2
       end
   | Deref(lay,e)                  ->
-      pp "!{%a} (%a)" pp_layout lay pp_expr e
+      pp "!{%a} (%a)" (pp_layout false) lay pp_expr e
   | CAS(ty,e1,e2,e3)              ->
       pp "CAS@ (%a)@ (%a)@ (%a)@ (%a)" pp_op_type ty
         pp_expr e1 pp_expr e2 pp_expr e3
   | SkipE(e)                      ->
       pp "SkipE (%a)" pp_expr e
   | Use(lay,e)                    ->
-      pp "use{%a} (%a)" pp_layout lay pp_expr e
+      pp "use{%a} (%a)" (pp_layout false) lay pp_expr e
   | AddrOf(e)                     ->
       pp "&(%a)" pp_expr e
   | GetMember(e,name,false,field) ->
@@ -173,7 +174,7 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       pp "Return @[<hov 0>(%a)@]" pp_expr e
   | Assign(lay,e1,e2,stmt) ->
       pp "@[<hov 2>%a <-{ %a }@ %a ;@]@;%a"
-        pp_expr e1 pp_layout lay pp_expr e2 pp_stmt stmt
+        pp_expr e1 (pp_layout false) lay pp_expr e2 pp_stmt stmt
   | Call(ret_id,e,es,stmt) ->
       let pp_args _ es =
         let n = List.length es in
@@ -222,7 +223,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     let n = List.length members in
     let fn i (id, (attrs, layout)) =
       let sc = if i = n - 1 then "" else ";" in
-      pp "@;(%S, %a)%s" id pp_layout layout sc
+      pp "@;(%S, %a)%s" id (pp_layout false) layout sc
     in
     List.iteri fn members
   in
@@ -277,7 +278,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
       let n = List.length def.func_args in
       let fn i (id, layout) =
         let sc = if i = n - 1 then "" else ";" in
-        pp "@;(%S, %a)%s" id pp_layout layout sc
+        pp "@;(%S, %a)%s" id (pp_layout false) layout sc
       in
       List.iteri fn def.func_args
     end;
@@ -288,7 +289,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
       let n = List.length def.func_vars in
       let fn i (id, layout) =
         let sc = if i = n - 1 then "" else ";" in
-        pp "@;(%S, %a)%s" id pp_layout layout sc
+        pp "@;(%S, %a)%s" id (pp_layout false) layout sc
       in
       List.iteri fn def.func_vars
     end;
@@ -836,9 +837,9 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       in
       let all_vars = unused @ used in
       let pp_var ff (id, ty_opt) =
+        let layout = LPtr in (* TODO layout of variable instead of LPtr. *)
         match ty_opt with
-        (* TODO: use the layout of the variable instead of LPtr here *)
-        | None     -> fprintf ff "%s ◁ₗ uninit LPtr" id
+        | None     -> fprintf ff "%s ◁ₗ uninit %a" id (pp_layout true) layout
         | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
       in
       begin
