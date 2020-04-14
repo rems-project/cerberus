@@ -32,23 +32,27 @@ let loc_of_id : Symbol.identifier -> loc =
   fun Symbol.(Identifier(loc,id)) -> loc
 
 (* Register a location. *)
-let register_loc : Location_ocaml.t -> Loc.t = fun loc ->
+let register_loc : Location_ocaml.t -> Location.t = fun loc ->
   match Location_ocaml.(get_filename loc, to_cartesian loc) with
-  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Loc.make f l1 c1 l1 c1
-  | (Some(f), Some((l1,c1),(l2,c2))) -> Loc.make f l1 c1 l2 c2
-  | (_      , _                    ) -> Loc.none ()
+  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Location.make f l1 c1 l1 c1
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 c1 l2 c2
+  | (_      , _                    ) -> Location.none ()
 
-let mkloc elt loc = { elt ; loc }
+let mkloc elt loc = Location.{ elt ; loc }
 
-let noloc elt = mkloc elt (Loc.none ())
+let noloc elt = mkloc elt (Location.none ())
 
 (* Extract attributes with namespace ["rc"]. *)
 let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
-    | Some("rc") -> let rc_attr_id = id_to_str attr_id in
-                    let rc_attr_args = List.map snd attr_args in
-                    {rc_attr_id; rc_attr_args} :: acc
+    | Some("rc") ->
+        let rc_attr_id = id_to_str attr_id in
+        let rc_attr_args =
+          let fn (loc, s) = mkloc s (register_loc loc) in
+          List.map fn attr_args
+        in
+        {rc_attr_id; rc_attr_args} :: acc
     | _          -> acc
   in
   fun (Annot.Attrs(attrs)) -> List.rev (List.fold_left fn [] attrs)
@@ -337,7 +341,7 @@ let rec translate_expr lval goal_ty e =
         let es = List.mapi annotate es in
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
-        let e_call = mkloc (Var(Some(fun_id), true)) (Loc.none ()) in
+        let e_call = mkloc (Var(Some(fun_id), true)) (Location.none ()) in
         (locate (Var(ret_id, false)), l @ [(ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
@@ -442,7 +446,9 @@ type op_ty_opt = Coq_ast.op_type option
 let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
-  let fn (id, e, es) stmt = mkloc (Call(id, e, es, stmt)) (Loc.none ()) in
+  let fn (id, e, es) stmt =
+    mkloc (Call(id, e, es, stmt)) (Location.none ())
+  in
   List.fold_right fn calls (e_stmt e)
 
 let trans_bool_expr : ail_expr -> (expr -> stmt) -> stmt = fun e e_stmt ->
@@ -683,10 +689,13 @@ let translate_block stmts blocks ret_ty =
         let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
           Format.fprintf ff "%s(" id;
           match args with
-          | arg :: args -> Format.fprintf ff "%s" arg;
-                           List.iter (Format.fprintf ff ", %s") args;
-                           Format.fprintf ff ")"
-          | []          -> Format.fprintf ff ")"
+          | arg :: args ->
+              let open Location in
+              Format.fprintf ff "%s" arg.elt;
+              List.iter (fun arg -> Format.fprintf ff ", %s" arg.elt) args;
+              Format.fprintf ff ")"
+          | []          ->
+              Format.fprintf ff ")"
         in
         let fn = Panic.wrn None "Ignored attribute [%a]." pp_rc in
         List.iter fn attrs;

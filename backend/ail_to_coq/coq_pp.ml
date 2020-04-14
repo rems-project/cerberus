@@ -119,7 +119,7 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
-  (* pp "(* expr pos: %a *)@;" Loc.pp e.loc; *)
+  (* pp "(* expr pos: %a *)@;" Location.pp e.loc; *)
   match e.elt with
   | Var(None   ,_)                ->
       pp "\"_\""
@@ -168,7 +168,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
-  (* pp "(* stmt pos: %a *)@;" Loc.pp stmt.loc; *)
+  (* pp "(* stmt pos: %a *)@;" Location.pp stmt.loc; *)
   match stmt.elt with
   | Goto(id)               ->
       pp "Goto %S" id
