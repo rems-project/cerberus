@@ -837,6 +837,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       let all_vars = unused @ used in
       let pp_var ff (id, ty_opt) =
         match ty_opt with
+        (* TODO: use the layout of the variable instead of LPtr here *)
         | None     -> fprintf ff "%s ◁ₗ uninit LPtr" id
         | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
       in

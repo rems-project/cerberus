@@ -7,7 +7,9 @@ type config =
   ; gen_spec   : bool
   ; full_paths : bool
   ; imports    : (string * string) list
-  ; spec_ctxt  : string list }
+  ; spec_ctxt  : string list
+  ; cpp_I      : string list
+  ; cpp_nostd  : bool }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
@@ -19,7 +21,7 @@ let run : config -> string -> unit = fun cfg c_file ->
     else c_file
   in
   (* Do the translation from C to Ail, and then to our AST. *)
-  let ail_ast = Cerb_wrapper.c_file_to_ail c_file in
+  let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Compute the path to the output files. *)
   let output_dir =
@@ -86,13 +88,28 @@ let spec_ctxt =
   let i = Arg.(info ["spec-context"] ~docv:"CMD" ~doc) in
   Arg.(value & opt_all string [] & i)
 
+let cpp_I =
+  let doc =
+    "Add the directory $(docv) to the list of directories to be searched for \
+     header files during preprocessing."
+  in
+  let i = Arg.(info ["I"] ~docv:"DIR" ~doc) in
+  Arg.(value & opt_all dir [] & i)
+
+let cpp_nostd =
+  let doc =
+    "Do not search the standard system directories for header files. Only \
+     the directories explicitly specified with $(b,-I) options are searched."
+  in
+  Arg.(value & flag & info ["nostdinc"] ~doc)
+
 let opts : config Term.t =
-  let build output_dir no_code no_spec full_paths imports spec_ctxt =
-    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports ; spec_ctxt }
+  let build dir no_code no_spec full_paths imports spec_ctxt cpp_I cpp_nostd =
+    { output_dir = dir ; gen_code = not no_code ; gen_spec = not no_spec
+    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
-          imports $ spec_ctxt)
+          imports $ spec_ctxt $ cpp_I $ cpp_nostd)
 
 let c_file =
   let doc = "C language source file." in
