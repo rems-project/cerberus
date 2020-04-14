@@ -27,7 +27,7 @@ let add_dtree_of_attributes (Annot.Attrs xs) dtrees =
                       | None ->
                           ""
                     end ^ string_of_ident attr.attr_id ^
-                    "(" ^ String.concat ", " (List.map (fun z -> "\"" ^ String.escaped z ^ "\"") attr.attr_args) ^  ")" in
+                    "(" ^ String.concat ", " (List.map (fun (_, z) -> "\"" ^ String.escaped z ^ "\"") attr.attr_args) ^  ")" in
                   Dleaf (!^ str)
                 ) xs )
         :: dtrees

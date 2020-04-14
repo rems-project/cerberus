@@ -9,7 +9,7 @@ type bmc_annot =
 type attribute = <|
   attr_ns: maybe Symbol.identifier;
   attr_id: Symbol.identifier;
-  attr_args: list string;
+  attr_args: list (Loc.t * string);
 |>
 
 type attributes =
