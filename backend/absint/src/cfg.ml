@@ -108,7 +108,7 @@ type ('a, 'bty) texpr =
   | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
   | TEundef of Location_ocaml.t * Undefined.undefined_behaviour
   | TEerror of string * ('a, 'bty) texpr
-  | TEctor of 'bty generic_ctor * ('a, 'bty) texpr list
+  | TEctor of generic_ctor * ('a, 'bty) texpr list
   | TEarray_shift of ('a, 'bty) texpr * ctype * ('a, 'bty) texpr
   | TEmember_shift of ('a, 'bty) texpr * Symbol.sym * Symbol.identifier
   | TEnot of ('a, 'bty) texpr
@@ -137,7 +137,7 @@ type ('a, 'bty) cond =
   | Cval of Symbol.sym generic_value
   | Cop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
   | Cnot of ('a, 'bty) cond
-  | Cmatch of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
+  | Cmatch of (Symbol.sym) generic_pattern * ('a, 'bty) texpr
   | Cis_scalar of ('a, 'bty) texpr
   | Cis_integer of ('a, 'bty) texpr
   | Cis_signed of ('a, 'bty) texpr
@@ -148,8 +148,8 @@ type ('a, 'bty) cond =
 type ('a, 'bty) transfer =
   | Tskip
   | Tcond of ('a, 'bty) cond
-  | Tassign of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
-  | Tcall of ('a, Symbol.sym) generic_pattern
+  | Tassign of (Symbol.sym) generic_pattern * ('a, 'bty) texpr
+  | Tcall of (Symbol.sym) generic_pattern
              * ('a, 'bty) texpr * ('a, 'bty) texpr list
 
 type 'a fun_map_decl =

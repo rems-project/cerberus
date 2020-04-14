@@ -259,25 +259,26 @@ let core_rewrite (conf, io) core_file =
 
 let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let open Core in
-  let untype_ctor = function
-    | Cnil _ ->
-        Cnil ()
-    | (Ccons as ctor)
-    | (Ctuple as ctor)
-    | (Carray as ctor)
-    | (Civmax as ctor)
-    | (Civmin as ctor)
-    | (Civsizeof as ctor)
-    | (Civalignof as ctor)
-    | (CivCOMPL as ctor)
-    | (CivAND as ctor)
-    | (CivOR as ctor)
-    | (CivXOR as ctor)
-    | (Cspecified as ctor)
-    | (Cunspecified as ctor)
-    | (Cfvfromint as ctor)
-    | (Civfromfloat as ctor) ->
-        ctor in
+  let untype_ctor = fun ctor -> ctor (* function
+     * | Cnil _ ->
+     *     Cnil ()
+     * | (Ccons as ctor)
+     * | (Ctuple as ctor)
+     * | (Carray as ctor)
+     * | (Civmax as ctor)
+     * | (Civmin as ctor)
+     * | (Civsizeof as ctor)
+     * | (Civalignof as ctor)
+     * | (CivCOMPL as ctor)
+     * | (CivAND as ctor)
+     * | (CivOR as ctor)
+     * | (CivXOR as ctor)
+     * | (Cspecified as ctor)
+     * | (Cunspecified as ctor)
+     * | (Cfvfromint as ctor)
+     * | (Civfromfloat as ctor) ->
+     *     ctor in *)
+  in
   let rec untype_pattern (Pattern (annots, pat_)) =
     Pattern ( annots
             , match pat_ with

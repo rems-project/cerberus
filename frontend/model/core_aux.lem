@@ -194,7 +194,7 @@ val mk_empty_pat: core_base_type -> pattern
 let mk_empty_pat bTy =
   Pattern [] (CaseBase (Nothing, bTy))
 
-val mk_sym_pat_: forall 'bty 'sym. list Annot.annot -> maybe 'sym -> core_base_type -> generic_pattern 'bty 'sym
+val mk_sym_pat_: forall 'sym. list Annot.annot -> maybe 'sym -> core_base_type -> generic_pattern 'sym
 let mk_sym_pat_ annots msym bTy =
   Pattern annots (CaseBase (msym, bTy))
 
@@ -211,19 +211,27 @@ let mk_tuple_pat = function
       Pattern [] (CaseCtor Ctuple pats)
 end
 
-val mk_specified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'bty 'sym -> generic_pattern 'bty 'sym
+val mk_specified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'sym -> generic_pattern 'sym
 let mk_specified_pat_ annots pat =
   Pattern annots (CaseCtor Cspecified [pat])
 
 val mk_specified_pat: pattern -> pattern
 let mk_specified_pat pat = mk_specified_pat_ [] pat
 
-val mk_unspecified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'bty 'sym -> generic_pattern 'bty 'sym
+val mk_unspecified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'sym -> generic_pattern 'sym
 let mk_unspecified_pat_ annots pat =
   Pattern annots (CaseCtor Cunspecified [pat])
 
 val mk_unspecified_pat: pattern -> pattern
 let mk_unspecified_pat pat = mk_unspecified_pat_ [] pat
+
+let rec mk_list_pat bTy pats = 
+  match pats with
+  | [] ->
+      Pattern [] (CaseCtor (Cnil bTy) [])
+  | _pat::_pats ->
+      Pattern [] (CaseCtor Ccons [_pat; mk_list_pat bTy _pats])
+  end
 
 
 (* Core pexpr builders  ***************************************************** *)
@@ -283,13 +291,13 @@ val mk_ctype_pe: ctype -> pexpr
 let mk_ctype_pe ty =
   Pexpr [] () (PEval (Vctype ty))
 
-val     mk_list_pe: list pexpr -> pexpr
-let rec mk_list_pe pes =
+val     mk_list_pe: core_base_type -> list pexpr -> pexpr
+let rec mk_list_pe bTy pes =
   Pexpr [] () match pes with
     | [] ->
-        PEctor (Cnil ()) []
+        PEctor (Cnil bTy) []
     | pe :: pes' ->
-        PEctor Ccons [pe; mk_list_pe pes']
+        PEctor Ccons [pe; mk_list_pe bTy pes']
   end
 
 val mk_tuple_pe: list pexpr -> pexpr
@@ -994,7 +1002,7 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
     | (CaseBase (Just sym, _), _) ->
         (* e[sym \ v] *)
         subst_sym_expr sym cval expr
-    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+    | (CaseCtor (Cnil _) [], Vlist _ []) ->
         (* empty list (value) *)
         expr
     | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->
@@ -1262,7 +1270,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
         expr
     | (CaseBase (Just sym, _), _) ->
         unsafe_subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         expr
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
@@ -1341,7 +1349,7 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
         Just expr
     | (CaseBase (Just sym, _), _) ->
         Just $ unsafe_subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         Just expr
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
@@ -2238,7 +2246,7 @@ let rec update_env_aux (Pattern _ pat) cval env =
     | (CaseBase (Just sym, _), _) ->
         (* e[sym \ v] *)
         Map.insert sym cval env
-    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+    | (CaseCtor (Cnil _) [], Vlist _ []) ->
         (* empty list (value) *)
         env
     | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->

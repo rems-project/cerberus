@@ -162,16 +162,18 @@ let is_inferred_storable ity =
   end
 
 
-type inferred_pattern    = generic_pattern inferred Symbol.sym
+type inferred_pattern    = generic_pattern Symbol.sym
 type inferred_pexpr      = generic_pexpr   inferred Symbol.sym
 type inferred_paction 'a = generic_paction 'a inferred Symbol.sym
 type inferred_expr 'a    = generic_expr 'a inferred Symbol.sym
 
 
+(* TODO: can maybe be removed, doesn't seem to do anything any more *)
 let export_ctor loc = function
- | Cnil infer ->
-     maybe (E.fail loc (CoreTyping_TODO "export_ctor"))
-       (E.return -| Cnil) (toCoreBaseType infer)
+ | Cnil bty ->
+    E.return (Cnil bty)
+     (* maybe (E.fail loc (CoreTyping_TODO "export_ctor"))
+      *   (E.return -| Cnil) (toCoreBaseType infer) *)
  | Ccons ->
      E.return Ccons
  | Ctuple ->

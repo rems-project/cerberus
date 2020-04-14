@@ -2479,8 +2479,10 @@ begin if expect_is_variadic then
                         (let (arg_pes, vararg_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
                          let varargs_ty_pes =
                             List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
-                                     (List.zip (List.reverse rev_arg_ty_pes) vararg_pes)
-                         in arg_pes ++ [Caux.mk_list_pe varargs_ty_pes]
+                                     (List.zip (List.reverse rev_arg_ty_pes) vararg_pes) in
+                         let varargs_ty_pes_type = 
+                           C.BTy_list (C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)]) in
+                         arg_pes ++ [Caux.mk_list_pe varargs_ty_pes_type varargs_ty_pes]
                         )
                       )
                       (Caux.mk_sseq_e killall_pat
