@@ -141,10 +141,10 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,_,e)) =
+let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,loc,e)) =
   let open AilSyntax in
   match e with
-  | AilEident(sym)        -> Some(sym_to_str sym)
+  | AilEident(sym)        -> Some(loc, sym_to_str sym)
   | AilEfunction_decay(e) -> ident_of_expr e
   | _                     -> None
 
@@ -325,7 +325,7 @@ let rec translate_expr lval goal_ty e =
           (locate (UnOp(CastOp(op_ty), ty, e)), l)
         end
     | AilEcall(e,es)               ->
-        let fun_id =
+        let (fun_loc, fun_id) =
           match ident_of_expr e with
           | None     -> not_impl loc "expr complicated call"
           | Some(id) -> id
@@ -361,7 +361,7 @@ let rec translate_expr lval goal_ty e =
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
         let e_call =
-          mkloc (Var(Some(fun_id), true)) (Location.none coq_locs)
+          mkloc (Var(Some(fun_id), true)) (register_loc coq_locs fun_loc)
         in
         (locate (Var(ret_id, false)), l @ [(coq_loc, ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
