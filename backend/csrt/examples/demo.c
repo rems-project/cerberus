@@ -4,6 +4,11 @@ struct s {
   struct s2 *f3;
 };
 
+/* void h(int x) { */
+/*   int y = 0; */
+/*   y = x + y; */
+/* } */
+
 void f(struct s *p) {
   p->f1 = 1;
 }

@@ -235,6 +235,10 @@ let rec mk_list_pat bTy pats =
 
 
 (* Core pexpr builders  ***************************************************** *)
+val mk_sym_pe_ : forall 'bty. list Annot.annot -> 'bty -> Symbol.sym -> generic_pexpr 'bty Symbol.sym
+let mk_sym_pe_ annots bty sym =
+  Pexpr annots bty (PEsym sym)
+
 val mk_sym_pe: Symbol.sym -> pexpr
 let mk_sym_pe sym =
   Pexpr [] () (PEsym sym)
@@ -341,6 +345,10 @@ let mk_op_pe bop pe1 pe2 =
 val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
 let mk_let_pe pat pe1 pe2 =
   Pexpr [] () (PElet pat pe1 pe2)
+
+val mk_if_pe_ : forall 'bty. list Annot.annot -> 'bty -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym
+let mk_if_pe_ annots bty pe1 pe2 pe3 =
+  Pexpr annots bty (PEif pe1 pe2 pe3)
 
 val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
 let mk_if_pe pe1 pe2 pe3 =
