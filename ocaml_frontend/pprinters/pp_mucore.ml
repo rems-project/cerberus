@@ -515,8 +515,8 @@ let pp_pexpr pe =
         | M_PEif (pe1, pe2, pe3) ->
             P.group (
               pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
-              P.nest 2 (P.break 1 ^^ pp_asym pe2) ^^ P.break 1 ^^
-              pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp_asym pe3)
+              P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
+              pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
             )
         | M_PEensure_specified (sym,_) ->
            pp_keyword "ensure_specified" ^^ pp_asym sym
