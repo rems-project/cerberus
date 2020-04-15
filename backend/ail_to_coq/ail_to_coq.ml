@@ -248,7 +248,8 @@ let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
-  let locate e = mkloc e (register_loc coq_locs loc) in
+  let coq_loc = lazy (register_loc coq_locs loc) in
+  let locate e = mkloc e (Lazy.force coq_loc) in
   let translate = translate_expr lval None in
   let (e, l) as res =
     match e with
@@ -362,7 +363,7 @@ let rec translate_expr lval goal_ty e =
         let e_call =
           mkloc (Var(Some(fun_id), true)) (Location.none coq_locs)
         in
-        (locate (Var(ret_id, false)), l @ [(ret_id, e_call, es)])
+        (locate (Var(ret_id, false)), l @ [(coq_loc, ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
@@ -466,8 +467,8 @@ type op_ty_opt = Coq_ast.op_type option
 let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
-  let fn (id, e, es) stmt =
-    mkloc (Call(id, e, es, stmt)) (Location.none coq_locs)
+  let fn (loc, id, e, es) stmt =
+    mkloc (Call(id, e, es, stmt)) (Lazy.force loc)
   in
   List.fold_right fn calls (e_stmt e)
 
@@ -574,12 +575,12 @@ let translate_block stmts blocks ret_ty =
             | AilEcall(_,_)     ->
                 let (stmt, calls) =
                   match snd (translate_expr false None e) with
-                  | []                -> assert false
-                  | (_,e,es) :: calls ->
+                  | []                  -> assert false
+                  | (_,_,e,es) :: calls ->
                       (locate (Call(None, e, es, stmt)), calls)
                 in
-                let fn (id, e, es) stmt =
-                  mkloc (Call(id, e, es, stmt)) e.loc
+                let fn (loc, id, e, es) stmt =
+                  mkloc (Call(id, e, es, stmt)) (Lazy.force loc)
                 in
                 List.fold_right fn calls stmt
             | _                 ->
