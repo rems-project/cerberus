@@ -29,27 +29,35 @@ let id_to_str : Symbol.identifier -> string =
   fun Symbol.(Identifier(_,id)) -> id
 
 let loc_of_id : Symbol.identifier -> loc =
-  fun Symbol.(Identifier(loc,id)) -> loc
+  fun Symbol.(Identifier(loc,_)) -> loc
 
 (* Register a location. *)
-let register_loc : Location_ocaml.t -> Location.t = fun loc ->
+let register_loc : Location.Pool.t -> loc -> Location.t = fun p loc ->
   match Location_ocaml.(get_filename loc, to_cartesian loc) with
-  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Location.make f l1 c1 l1 c1
-  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 c1 l2 c2
-  | (_      , _                    ) -> Location.none ()
+  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Location.make f l1 c1 l1 c1 p
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 c1 l2 c2 p
+  | (_      , _                    ) -> Location.none coq_locs
+
+let register_str_loc : Location.Pool.t -> loc -> Location.t = fun p loc ->
+  match Location_ocaml.(get_filename loc, to_cartesian loc) with
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 (c1+1) l2 (c2-1) p
+  | (_      , _                    ) -> Location.none coq_locs
 
 let mkloc elt loc = Location.{ elt ; loc }
 
-let noloc elt = mkloc elt (Location.none ())
+let noloc elt = mkloc elt (Location.none coq_locs)
 
 (* Extract attributes with namespace ["rc"]. *)
 let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
     | Some("rc") ->
-        let rc_attr_id = id_to_str attr_id in
+        let rc_attr_id =
+          let Symbol.(Identifier(loc, id)) = attr_id in
+          mkloc id (register_loc rc_locs loc)
+        in
         let rc_attr_args =
-          let fn (loc, s) = mkloc s (register_loc loc) in
+          let fn (loc, s) = mkloc s (register_str_loc rc_locs loc) in
           List.map fn attr_args
         in
         {rc_attr_id; rc_attr_args} :: acc
@@ -133,10 +141,10 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,_,e)) =
+let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,loc,e)) =
   let open AilSyntax in
   match e with
-  | AilEident(sym)        -> Some(sym_to_str sym)
+  | AilEident(sym)        -> Some(loc, sym_to_str sym)
   | AilEfunction_decay(e) -> ident_of_expr e
   | _                     -> None
 
@@ -224,11 +232,24 @@ let rec function_decls decls =
 
 let global_fun_decls = ref []
 
+let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
+    fun ?loc default f a ->
+  try f a with Invalid_annot(err_loc, msg) ->
+  begin
+    match Location.get err_loc with
+    | None    ->
+        Panic.wrn loc "Invalid annotation (ignored).\n  → %s" msg
+    | Some(d) ->
+        Panic.wrn None "[%a] Invalid annotation (ignored).\n  → %s"
+          Location.pp_data d msg
+  end; default
+
 let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
-  let locate e = mkloc e (register_loc loc) in
+  let coq_loc = register_loc coq_locs loc in
+  let locate e = mkloc e coq_loc in
   let translate = translate_expr lval None in
   let (e, l) as res =
     match e with
@@ -296,7 +317,7 @@ let rec translate_expr lval goal_ty e =
           match c_ty with
           | Ctype(_,Pointer(_,Ctype(_,Void))) when is_const_0 e ->
               let AnnotatedExpression(_, _, loc, _) = e in
-              ({ elt = Val(Null) ; loc = register_loc loc }, [])
+              ({ elt = Val(Null) ; loc = register_loc coq_locs loc }, [])
           | _                                                   ->
           let ty = op_type_of_tc (tc_of e) in
           let op_ty = op_type_of Location_ocaml.unknown c_ty in
@@ -304,7 +325,7 @@ let rec translate_expr lval goal_ty e =
           (locate (UnOp(CastOp(op_ty), ty, e)), l)
         end
     | AilEcall(e,es)               ->
-        let fun_id =
+        let (fun_loc, fun_id) =
           match ident_of_expr e with
           | None     -> not_impl loc "expr complicated call"
           | Some(id) -> id
@@ -312,9 +333,7 @@ let rec translate_expr lval goal_ty e =
         let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
         let attrs = collect_rc_attrs attrs in
         let annot_args =
-          try function_annot_args attrs with Invalid_annot(msg) ->
-          Panic.wrn (Some(loc))
-            "Unusable argument annotation for function [%s]." fun_id; []
+          handle_invalid_annot ~loc [] function_annot_args attrs
         in
         let nb_args = List.length es in
         let check_useful (i, _, _) =
@@ -341,8 +360,10 @@ let rec translate_expr lval goal_ty e =
         let es = List.mapi annotate es in
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
-        let e_call = mkloc (Var(Some(fun_id), true)) (Location.none ()) in
-        (locate (Var(ret_id, false)), l @ [(ret_id, e_call, es)])
+        let e_call =
+          mkloc (Var(Some(fun_id), true)) (register_loc coq_locs fun_loc)
+        in
+        (locate (Var(ret_id, false)), l @ [(coq_loc, ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
@@ -446,42 +467,42 @@ type op_ty_opt = Coq_ast.op_type option
 let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
-  let fn (id, e, es) stmt =
-    mkloc (Call(id, e, es, stmt)) (Location.none ())
+  let fn (loc, id, e, es) stmt =
+    mkloc (Call(id, e, es, stmt)) loc
   in
   List.fold_right fn calls (e_stmt e)
 
 let trans_bool_expr : ail_expr -> (expr -> stmt) -> stmt = fun e e_stmt ->
   trans_expr e (Some(OpInt(ItBool))) e_stmt
 
-let translate_bool_expr then_id else_id blocks e =
-  let rec translate then_id else_id blocks be =
+let translate_bool_expr then_goto else_goto blocks e =
+  let rec translate then_goto else_goto blocks be =
     match be with
     | BE_leaf(e)      ->
-        let fn e =
-          noloc (If(e, noloc (Goto(then_id)), noloc (Goto(else_id))))
-        in
+        let fn e = noloc (If(e, then_goto, else_goto)) in
         (trans_bool_expr e fn, blocks)
     | BE_neg(be)      ->
-        translate else_id then_id blocks be
+        translate else_goto then_goto blocks be
     | BE_and(be1,be2) ->
         let id = fresh_block_id () in
-        let (s, blocks) = translate id else_id blocks be1 in
+        let id_goto = noloc (Goto(id)) in (* FIXME loc *)
+        let (s, blocks) = translate id_goto else_goto blocks be1 in
         let blocks =
-          let (s, blocks) = translate then_id else_id blocks be2 in
+          let (s, blocks) = translate then_goto else_goto blocks be2 in
           SMap.add id (None, s) blocks
         in
         (s, blocks)
     | BE_or (be1,be2) ->
         let id = fresh_block_id () in
-        let (s, blocks) = translate then_id id blocks be1 in
+        let id_goto = noloc (Goto(id)) in (* FIXME loc *)
+        let (s, blocks) = translate then_goto id_goto blocks be1 in
         let blocks =
-          let (s, blocks) = translate then_id else_id blocks be2 in
+          let (s, blocks) = translate then_goto else_goto blocks be2 in
           SMap.add id (None, s) blocks
         in
         (s, blocks)
   in
-  translate then_id else_id blocks (bool_expr e)
+  translate then_goto else_goto blocks (bool_expr e)
 
 let trans_lval e : expr =
   let (e, calls) = translate_expr true None e in
@@ -511,7 +532,8 @@ let translate_block stmts blocks ret_ty =
     match stmts with
     | []                                           -> (resume final, blocks)
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
-    let locate e = mkloc e (register_loc loc) in
+    let coq_loc = register_loc coq_locs loc in
+    let locate e = mkloc e coq_loc in
     let attrs = collect_rc_attrs attrs in
     let attrs_used = ref false in
     let res =
@@ -554,101 +576,106 @@ let translate_block stmts blocks ret_ty =
             | AilEcall(_,_)     ->
                 let (stmt, calls) =
                   match snd (translate_expr false None e) with
-                  | []                -> assert false
-                  | (_,e,es) :: calls ->
+                  | []                  -> assert false
+                  | (_,_,e,es) :: calls ->
                       (locate (Call(None, e, es, stmt)), calls)
                 in
-                let fn (id, e, es) stmt =
-                  mkloc (Call(id, e, es, stmt)) e.loc
+                let fn (loc, id, e, es) stmt =
+                  mkloc (Call(id, e, es, stmt)) loc
                 in
                 List.fold_right fn calls stmt
             | _                 ->
                 attrs_used := true;
                 let annots =
-                  try Some(expr_annot attrs) with Invalid_annot(msg) ->
-                    Panic.wrn (Some(loc)) "Warning: %s." msg; None
+                  let fn () = Some(expr_annot attrs) in
+                  handle_invalid_annot ~loc None fn ()
                 in
                 trans_expr e None (fun e -> locate (ExprS(annots, e, stmt)))
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
-          let (final, blocks) =
-            (* Last statement, keep the final goto. *)
-            if stmts = [] then (final, blocks) else
-            (* Statements after the if in their own block. *)
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            let block_id = fresh_block_id () in
-            let blocks =
-              SMap.add block_id (Some(no_block_annot), stmt) blocks
-            in
-            (Some(noloc (Goto(block_id))), blocks)
+          (* Translate the continuation. *)
+          let (blocks, final) =
+            if stmts = [] then (blocks, final) else
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, Some(mkloc (Goto(id_cont)) s.loc))
           in
-          let then_id = fresh_block_id () in
-          let else_id = fresh_block_id () in
           (* Translate the two branches. *)
-          let blocks =
+          let (blocks, then_goto) =
+            let id_then = fresh_block_id () in
             let (s, blocks) = trans break continue final [s1] blocks in
-            SMap.add then_id (Some(no_block_annot), s) blocks
+            let blocks = SMap.add id_then (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_then)) s.loc)
           in
-          let blocks =
+          let (blocks, else_goto) =
+            let id_else = fresh_block_id () in
             let (s, blocks) = trans break continue final [s2] blocks in
-            SMap.add else_id (Some(no_block_annot), s) blocks
+            let blocks = SMap.add id_else (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_else)) s.loc)
           in
-          translate_bool_expr then_id else_id blocks e
+          translate_bool_expr then_goto else_goto blocks e
       | AilSwhile(e,s)      ->
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
-          let id_cont = fresh_block_id () in
-          (* Translate the body. *)
-          let blocks =
-            let break    = Some(noloc (Goto(id_cont))) in
-            let continue = Some(noloc (Goto(id_cond))) in
-            let (s, blocks) = trans break continue continue [s] blocks in
-            SMap.add id_body (Some(no_block_annot), s) blocks
-          in
           (* Translate the continuation. *)
-          let blocks =
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(no_block_annot), stmt) blocks
+          let (blocks, goto_cont) =
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_cont)) s.loc)
+          in
+          (* Translate the body. *)
+          let (blocks, goto_body) =
+            let break    = Some(goto_cont) in
+            let continue = Some(locate (Goto(id_cond))) in
+            let (s, blocks) = trans break continue continue [s] blocks in
+            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_body)) s.loc)
           in
           (* Translate the condition. *)
-          let (s, blocks) = translate_bool_expr id_body id_cont blocks e in
+          let (s, blocks) =
+            translate_bool_expr goto_body goto_cont blocks e
+          in
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(msg) ->
-                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+              let fn () = Some(block_annot attrs) in
+              handle_invalid_annot ~loc None fn ()
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (noloc (Goto(id_cond)), blocks)
+          (locate (Goto(id_cond)), blocks)
       | AilSdo(s,e)         ->
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
-          let id_cont = fresh_block_id () in
-          (* Translate the body. *)
-          let blocks =
-            let break    = Some(noloc (Goto(id_cont))) in
-            let continue = Some(noloc (Goto(id_cond))) in
-            let (s, blocks) = trans break continue continue [s] blocks in
-            SMap.add id_body (Some(no_block_annot), s) blocks
-          in
           (* Translate the continuation. *)
-          let blocks =
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(no_block_annot), stmt) blocks
+          let (blocks, goto_cont) =
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_cont)) s.loc)
+          in
+          (* Translate the body. *)
+          let (blocks, goto_body) =
+            let break    = Some(goto_cont) in
+            let continue = Some(noloc (Goto(id_cond))) in (* FIXME loc *)
+            let (s, blocks) = trans break continue continue [s] blocks in
+            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            (blocks, locate (Goto(id_body)))
           in
           (* Translate the condition. *)
-          let (s, blocks) = translate_bool_expr id_body id_cont blocks e in
+          let (s, blocks) = translate_bool_expr goto_body goto_cont blocks e in
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(msg) ->
-                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+              let fn () = Some(block_annot attrs) in
+              handle_invalid_annot ~loc None fn ()
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (noloc (Goto(id_body)), blocks)
+          (locate (Goto(id_body)), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
       | AilScase(_,_)       -> not_impl loc "statement case"
       | AilSdefault(_)      -> not_impl loc "statement default"
@@ -687,7 +714,7 @@ let translate_block stmts blocks ret_ty =
     if not !attrs_used then
       begin
         let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
-          Format.fprintf ff "%s(" id;
+          Format.fprintf ff "%s(" id.elt;
           match args with
           | arg :: args ->
               let open Location in
@@ -740,9 +767,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     let build (id, (attrs, def)) =
       let (struct_annot, needs_field_annot) =
         let annots = collect_rc_attrs attrs in
-        try (Some(struct_annot annots), annots <> [])
-        with Invalid_annot(msg) ->
-          Panic.wrn None "Warning: %s." msg; (None, true)
+        let fn () = (Some(struct_annot annots), annots <> []) in
+        handle_invalid_annot (None, true) fn ()
       in
       let struct_name = sym_to_str id in
       let (struct_members, struct_is_union) =
@@ -753,9 +779,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
-            try Some(field_annot needs_field_annot (collect_rc_attrs attrs))
-            with Invalid_annot(msg) ->
-              Panic.wrn (Some(loc_of_id id)) "Warning: %s." msg; None
+            let annots = collect_rc_attrs attrs in
+            let fn () = Some(field_annot needs_field_annot annots) in
+            let loc = loc_of_id id in
+            handle_invalid_annot ~loc None fn ()
           in
           (id_to_str id, (ty, layout_of false c_ty))
         in
@@ -793,8 +820,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       Hashtbl.reset used_globals; Hashtbl.reset used_functions;
       (* Fist parse that annotations. *)
       let func_annot =
-        try Some(function_annot (collect_rc_attrs attrs))
-        with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
+        let fn () = Some(function_annot (collect_rc_attrs attrs)) in
+        handle_invalid_annot None fn ()
       in
       (* Then find out if the function is defined or just declared. *)
       match List.find (fun (id, _) -> sym_to_str id = func_name) fun_defs with
@@ -827,9 +854,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
-          try Some(block_annot (collect_rc_attrs s_attrs))
-          with Invalid_annot(msg) ->
-            Panic.wrn None "Warning: %s." msg; None
+          let fn () = Some(block_annot (collect_rc_attrs s_attrs)) in
+          handle_invalid_annot None fn ()
         in
         SMap.add func_init (annots, stmt) blocks
       in

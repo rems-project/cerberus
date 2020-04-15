@@ -173,7 +173,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   in
   match Location.get e.loc with
   | Some(d) when !print_expr_locs ->
-      pp "LocInfo loc_%i (%a)" d.loc_key pp_expr_body e
+      pp "LocInfoE loc_%i (%a)" d.loc_key pp_expr_body e
   | _                             ->
       pp "%a" pp_expr_body e
 
@@ -239,7 +239,6 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   (* Printing of location data. *)
   if !print_expr_locs || !print_stmt_locs then
     begin
-      pp "@;Definition location : Type := string * Z * Z * Z * Z.";
       let (all_locations, all_files) =
         let open Location in
         let locs = ref [] in
@@ -248,7 +247,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
           locs := d :: !locs;
           if not (List.mem file !files) then files := file :: !files
         in
-        Location.iter fn;
+        Location.Pool.iter fn coq_locs;
         let locs = List.sort (fun d1 d2 -> d1.loc_key - d2.loc_key) !locs in
         let files = List.mapi (fun i s -> (s, i)) !files in
         (locs, files)
@@ -260,7 +259,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
       let pp_loc_def d =
         let open Location in
         let file_key = List.assoc d.loc_file all_files in
-        pp "@;Definition loc_%i : location := (file_%i, %i, %i, %i, %i)."
+        pp "@;Definition loc_%i : location_info := LocationInfo file_%i %i %i %i %i."
           d.loc_key file_key d.loc_line1 d.loc_col1 d.loc_line2 d.loc_col2
       in
       List.iter pp_loc_def all_locations;
