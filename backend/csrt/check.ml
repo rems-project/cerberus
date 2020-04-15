@@ -1265,17 +1265,18 @@ let infer_value loc name env v =
      let t = {name; bound = A Bool} in
      let constr = {name = fresh (); bound = C (LC (Not (S name)))} in
      return [t; constr]
-  | M_Vlist (_, asyms) ->
-     (* bt_of_core_base_type loc cbt >>= fun i_t -> *)
-     begin make_Aargs_bts env asyms >>= function
-     | [] ->
-        failwith "empty list case"
-     | (bt, _) :: args_bts ->
-        args_same_typ (Some bt) args_bts >>= fun i_t ->
+  | M_Vlist (cbt, asyms) ->
+     bt_of_core_base_type loc cbt >>= fun bt ->
+     begin match bt with
+     | List i_t ->
+        make_Aargs_bts env asyms >>= fun args_bts ->
+        args_same_typ (Some i_t) args_bts >>
         (* maybe record list length? *)
-        let t = {name; bound = A (List bt)} in
+        let t = {name; bound = A (List i_t)} in
         return [t]
-     end
+     | bt ->
+        fail (Generic_error (loc, "Cnil without list type"))
+     end 
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
      let t = {name; bound = A (Tuple (List.map fst args_bts))} in
@@ -1382,18 +1383,17 @@ let call_typ_fn loc_call name env args =
 
 let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) = 
   match ctor with
-  | Cnil _ ->
-    begin match args_bts with 
-    | [] -> 
-       failwith "nil case"
-       (* bt_of_core_base_type loc cbt >>= fun bt ->
-        * let t = BaseTypes.List bt in
-        * return t *)
-    | args ->
-       let err = sprintf "Cons applied to %d argument(s)" 
-                   (List.length args) in
-       fail (Generic_error (loc, err))
-    end
+  | Cnil cbt ->
+     bt_of_core_base_type loc cbt >>= fun bt ->
+     begin match bt, args_bts with
+     | List _, [] ->
+        return bt
+     | _, [] ->
+        fail (Generic_error (loc, "Cnil without list type"))
+     | _, args -> 
+        let err = sprintf "Cons applied to %d argument(s)" (List.length args) in
+        fail (Generic_error (loc, err))
+     end
   | Ccons ->
      begin match args_bts with
      | [(hd_bt,hd_loc); (tl_bt,tl_loc)] ->
