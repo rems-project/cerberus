@@ -248,8 +248,8 @@ let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
-  let coq_loc = lazy (register_loc coq_locs loc) in
-  let locate e = mkloc e (Lazy.force coq_loc) in
+  let coq_loc = register_loc coq_locs loc in
+  let locate e = mkloc e coq_loc in
   let translate = translate_expr lval None in
   let (e, l) as res =
     match e with
@@ -468,7 +468,7 @@ let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
   let fn (loc, id, e, es) stmt =
-    mkloc (Call(id, e, es, stmt)) (Lazy.force loc)
+    mkloc (Call(id, e, es, stmt)) loc
   in
   List.fold_right fn calls (e_stmt e)
 
@@ -580,7 +580,7 @@ let translate_block stmts blocks ret_ty =
                       (locate (Call(None, e, es, stmt)), calls)
                 in
                 let fn (loc, id, e, es) stmt =
-                  mkloc (Call(id, e, es, stmt)) (Lazy.force loc)
+                  mkloc (Call(id, e, es, stmt)) loc
                 in
                 List.fold_right fn calls stmt
             | _                 ->
