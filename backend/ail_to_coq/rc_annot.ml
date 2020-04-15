@@ -250,16 +250,24 @@ type annot =
   | Annot_annot_args of annot_arg list
   | Annot_tactics    of string list
 
-exception Invalid_annot of string
+let rc_locs : Location.Pool.t = Location.Pool.make ()
+
+exception Invalid_annot of Location.t * string
+
+let invalid_annot : type a. Location.t -> string -> a = fun loc msg ->
+  raise (Invalid_annot(loc, msg))
+
+let invalid_annot_no_pos : type a. string -> a = fun msg ->
+  invalid_annot (Location.none rc_locs) msg
 
 type rc_attr =
-  { rc_attr_id   : string
+  { rc_attr_id   : string Location.located
   ; rc_attr_args : string Location.located list }
 
 let parse_attr : rc_attr -> annot = fun attr ->
   let {rc_attr_id = id; rc_attr_args = args} = attr in
   let error msg =
-    raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+    invalid_annot id.loc (Printf.sprintf "annotation [%s] %s" id.elt msg)
   in
 
   let parse : type a.a grammar -> string Location.located -> a = fun gr s ->
@@ -267,9 +275,9 @@ let parse_attr : rc_attr -> annot = fun attr ->
     try parse_string s.elt with Earley.Parse_error(buf,pos) ->
       let msg =
         let i = Input.utf8_col_num buf pos in
-        Printf.sprintf  "no parse in annotation \"%s\" at position %i" s.elt i
+        Printf.sprintf "no parse in annotation at position %i" i
       in
-      raise (Invalid_annot msg)
+      invalid_annot s.loc msg
   in
 
   let single_arg : type a.a grammar -> (a -> annot) -> annot = fun gr c ->
@@ -302,7 +310,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
     | _  -> error "should not have arguments"
   in
 
-  match id with
+  match id.elt with
   | "parameters" -> many_args annot_parameter (fun l -> Annot_parameters(l))
   | "refined_by" -> many_args annot_refine (fun l -> Annot_refined_by(l))
   | "ptr_type"   -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
@@ -345,7 +353,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
-      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+      invalid_annot id.loc (Printf.sprintf "annotation [%s] %s" id.elt msg)
     in
     match (parse_attr attr, !returns) with
     | (Annot_parameters(l), _   ) -> parameters := !parameters @ l
@@ -373,7 +381,7 @@ let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
   let annot_args = ref [] in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
-    if id <> "annot_args" then () else
+    if id.elt <> "annot_args" then () else
     match parse_attr attr with
     | Annot_annot_args(l) -> annot_args := !annot_args @ l
     | _                   -> assert false (* Unreachable. *)
@@ -387,7 +395,7 @@ let field_annot : bool -> rc_attr list -> type_expr option = fun need attrs ->
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
-      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+      invalid_annot id.loc (Printf.sprintf "annotation [%s] %s" id.elt msg)
     in
     match (parse_attr attr, !field) with
     | (Annot_field(ty), None) -> field := Some(ty)
@@ -398,15 +406,15 @@ let field_annot : bool -> rc_attr list -> type_expr option = fun need attrs ->
 
   match (!field, need) with
   | (None    , false) -> None
-  | (None    , true ) -> raise (Invalid_annot "field annotation required")
+  | (None    , true ) -> invalid_annot_no_pos "field annotation required"
   | (Some(ty), true ) -> Some(ty)
-  | (Some(_ ), false) -> raise (Invalid_annot "field annotation forbidden")
+  | (Some(_ ), false) -> invalid_annot_no_pos "field annotation forbidden"
 
 type expr_annot = string option
 
 let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   let error msg =
-    raise (Invalid_annot (Printf.sprintf "expression annotation %s" msg))
+    invalid_annot_no_pos (Printf.sprintf "expression annotation %s" msg)
   in
   match attrs with
   | []      -> None
@@ -448,7 +456,7 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
-      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+      invalid_annot id.loc (Printf.sprintf "annotation [%s] %s" id.elt msg)
     in
     match parse_attr attr with
     | Annot_parameters(l) -> parameters := !parameters @ l
@@ -491,7 +499,7 @@ let block_annot : rc_attr list -> block_annot = fun attrs ->
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
-      raise (Invalid_annot (Printf.sprintf "annotation [%s] %s" id msg))
+      invalid_annot id.loc (Printf.sprintf "annotation [%s] %s" id.elt msg)
     in
     match parse_attr attr with
     | Annot_exist(l)      -> exists := !exists @ l

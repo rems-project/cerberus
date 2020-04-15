@@ -10,11 +10,17 @@ type loc_data =
   ; loc_line2 : int
   ; loc_col2  : int }
 
-val none : unit -> t
-val make : string -> int -> int -> int -> int -> t
-val get : t -> loc_data option
+module Pool :
+  sig
+    type t
 
-val iter : (loc_data -> unit) -> unit
+    val make : unit -> t
+    val iter : (loc_data -> unit) -> t -> unit
+  end
+
+val none : Pool.t -> t
+val make : string -> int -> int -> int -> int -> Pool.t -> t
+val get : t -> loc_data option
 
 val pp_data : loc_data pp
 val pp_loc : t pp
