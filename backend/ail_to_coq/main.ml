@@ -2,14 +2,16 @@ open Cmdliner
 open Extra
 
 type config =
-  { output_dir : string option
-  ; gen_code   : bool
-  ; gen_spec   : bool
-  ; full_paths : bool
-  ; imports    : (string * string) list
-  ; spec_ctxt  : string list
-  ; cpp_I      : string list
-  ; cpp_nostd  : bool }
+  { output_dir  : string option
+  ; gen_code    : bool
+  ; gen_spec    : bool
+  ; full_paths  : bool
+  ; imports     : (string * string) list
+  ; spec_ctxt   : string list
+  ; cpp_I       : string list
+  ; cpp_nostd   : bool
+  ; no_expr_loc : bool
+  ; no_stmt_loc : bool }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
@@ -35,6 +37,9 @@ let run : config -> string -> unit = fun cfg c_file ->
   in
   let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
   let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
+  (* Set the printing flags. *)
+  if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
+  if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
   (* Print the code, if necessary. *)
   if cfg.gen_code then
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
@@ -103,13 +108,39 @@ let cpp_nostd =
   in
   Arg.(value & flag & info ["nostdinc"] ~doc)
 
+let no_expr_loc =
+  let doc =
+    "Do not output location information for expressions in the generated \
+     Coq files."
+  in
+  Arg.(value & flag & info ["no-expr-loc"] ~doc)
+
+let no_stmt_loc =
+  let doc =
+    "Do not output location information for statements in the generated \
+     Coq files."
+  in
+  Arg.(value & flag & info ["no-stmt-loc"] ~doc)
+
+let no_loc =
+  let doc =
+    "Do not output any location information in the generated Coq files. This \
+     flag subsumes both $(b,--no-expr-loc) and $(b,--no-stmt-loc)."
+  in
+  Arg.(value & flag & info ["no-loc"] ~doc)
+
 let opts : config Term.t =
-  let build dir no_code no_spec full_paths imports spec_ctxt cpp_I cpp_nostd =
-    { output_dir = dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd }
+  let build output_dir no_code no_spec full_paths imports spec_ctxt cpp_I
+      cpp_nostd no_expr_loc no_stmt_loc no_loc =
+    let no_expr_loc = no_expr_loc || no_loc in
+    let no_stmt_loc = no_stmt_loc || no_loc in
+    { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
+    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; no_stmt_loc
+    ; no_expr_loc }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
-          imports $ spec_ctxt $ cpp_I $ cpp_nostd)
+          imports $ spec_ctxt $ cpp_I $ cpp_nostd $ no_expr_loc $
+          no_stmt_loc $ no_loc)
 
 let c_file =
   let doc = "C language source file." in

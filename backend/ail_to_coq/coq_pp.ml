@@ -4,9 +4,9 @@ open Panic
 open Coq_ast
 open Rc_annot
 
-(* Should we print location information? *)
-let print_expr_locs = false
-let print_stmt_locs = false
+(* Flags set by CLI. *)
+let print_expr_locs = ref true
+let print_stmt_locs = ref true
 
 let pp_str = pp_print_string
 
@@ -172,14 +172,14 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
   in
   match Location.get e.loc with
-  | Some(d) when print_expr_locs ->
+  | Some(d) when !print_expr_locs ->
       pp "LocInfo loc_%i (%a)" d.loc_key pp_expr_body e
-  | _                            ->
+  | _                             ->
       pp "%a" pp_expr_body e
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
-  if print_stmt_locs then
+  if !print_stmt_locs then
     begin
       match Location.get stmt.loc with
       | None    -> ()
@@ -237,7 +237,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "@[<v 2>Section code.";
 
   (* Printing of location data. *)
-  if print_expr_locs || print_stmt_locs then
+  if !print_expr_locs || !print_stmt_locs then
     begin
       pp "@;Definition location : Type := string * Z * Z * Z * Z.";
       let (all_locations, all_files) =
