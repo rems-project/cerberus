@@ -1587,22 +1587,24 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
-  | M_PEif (sym1,sym2,sym3) ->
-     let sym1, loc1 = Sym.lof_asym sym1 in
-     let sym2, loc2 = Sym.lof_asym sym2 in
-     let sym3, loc3 = Sym.lof_asym sym3 in
-     get_Avar loc env sym1 >>= fun t1 ->
-     get_Avar loc env sym2 >>= fun t2 ->
-     get_Avar loc env sym3 >>= fun t3 ->
-     ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
-     ensure_type loc3 (Some sym3) (A t3) (A t2) >>
-     let constr = 
-       {name = Sym.fresh ();
-        bound = C (LC ( (S sym1 %& (S name %= S sym2)) %| 
-                        ((Not (S sym1)) %& (S name %= S sym3)) ) )}
-     in
-     let t = {name; bound = A t2} in
-     return ([t; constr], env)
+  | M_PEif _ ->
+     failwith "PEif in inferring position"
+  (* | M_PEif (sym1,sym2,sym3) ->
+   *    let sym1, loc1 = Sym.lof_asym sym1 in
+   *    let sym2, loc2 = Sym.lof_asym sym2 in
+   *    let sym3, loc3 = Sym.lof_asym sym3 in
+   *    get_Avar loc env sym1 >>= fun t1 ->
+   *    get_Avar loc env sym2 >>= fun t2 ->
+   *    get_Avar loc env sym3 >>= fun t3 ->
+   *    ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
+   *    ensure_type loc3 (Some sym3) (A t3) (A t2) >>
+   *    let constr = 
+   *      {name = Sym.fresh ();
+   *       bound = C (LC ( (S sym1 %& (S name %= S sym2)) %| 
+   *                       ((Not (S sym1)) %& (S name %= S sym3)) ) )}
+   *    in
+   *    let t = {name; bound = A t2} in
+   *    return ([t; constr], env) *)
   | M_PEensure_specified (asym1, _ct) ->
      let sym1, loc1 = Sym.lof_asym asym1 in
      get_Avar loc env sym1 >>= fun t1 ->
@@ -1613,6 +1615,14 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
+  | M_PEif (asym1, e2, e3) ->
+     let sym1, loc1 = Sym.lof_asym asym1 in
+     get_Avar loc env sym1 >>= fun t1 -> 
+     ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
+     let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
+     let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
+     check_pexpr (add_Cvar env then_constr) e2 ret >>
+     check_pexpr (add_Cvar env else_constr) e3 ret
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = Sym.lof_asym asym in
      get_Avar eloc env esym >>= fun bt ->

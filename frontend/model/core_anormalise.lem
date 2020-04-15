@@ -360,10 +360,11 @@ and n_pexpr (e : pexpr unit) k =
        (M_normal_pattern pat)
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
+     (* this changes the type of the PEif expression *)
      n_pexpr_name e' (fun e' ->
-     n_pexpr_name e'' (fun e'' ->
-     n_pexpr_name e''' (fun e''' ->
-     k (annotate (M_PEif e' e'' e''')))))
+     let e'' = n_pexpr e'' k in
+     let e''' = n_pexpr e''' k in
+     annotate (M_PEif e' e'' e'''))
   | PEis_scalar e' ->
      failwith "core_anormalisation: PEis_scalar"
      (* n_pexpr_name e' (fun e' ->
@@ -497,10 +498,11 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
        (M_normal_pattern pat) 
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
+     (* this changes the type of the PEif expression *)
      n_pexpr_in_expr_name e' (fun e' ->
-     n_pexpr_in_expr_name e'' (fun e'' ->
-     n_pexpr_in_expr_name e''' (fun e''' ->
-     k (annotate (M_PEif e' e'' e''')))))
+     let e'' = n_pexpr_in_expr e'' k in
+     let e''' = n_pexpr_in_expr e''' k in
+     M_Expr annots (M_Eif e' e'' e'''))
   | PEis_scalar e' ->
      failwith "core_anormalisation: PEis_scalar"
      (* n_pexpr_in_expr_name e' (fun e' ->
