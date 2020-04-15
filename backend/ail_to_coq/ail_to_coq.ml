@@ -54,10 +54,10 @@ let collect_rc_attrs : Annot.attributes -> rc_attr list =
     | Some("rc") ->
         let rc_attr_id =
           let Symbol.(Identifier(loc, id)) = attr_id in
-          mkloc id (register_str_loc rc_locs loc)
+          mkloc id (register_loc rc_locs loc)
         in
         let rc_attr_args =
-          let fn (loc, s) = mkloc s (register_loc rc_locs loc) in
+          let fn (loc, s) = mkloc s (register_str_loc rc_locs loc) in
           List.map fn attr_args
         in
         {rc_attr_id; rc_attr_args} :: acc
@@ -232,6 +232,18 @@ let rec function_decls decls =
 
 let global_fun_decls = ref []
 
+let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
+    fun ?loc default f a ->
+  try f a with Invalid_annot(err_loc, msg) ->
+  begin
+    match Location.get err_loc with
+    | None    ->
+        Panic.wrn loc "Invalid annotation (ignored).\nError: %s." msg
+    | Some(d) ->
+        Panic.wrn None "[%a] Invalid annotation (ignored).\nError: %s."
+          Location.pp_data d msg
+  end; default
+
 let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
@@ -320,9 +332,7 @@ let rec translate_expr lval goal_ty e =
         let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
         let attrs = collect_rc_attrs attrs in
         let annot_args =
-          try function_annot_args attrs with Invalid_annot(_, msg) ->
-          Panic.wrn (Some(loc))
-            "Unusable argument annotation for function [%s]." fun_id; []
+          handle_invalid_annot ~loc [] function_annot_args attrs
         in
         let nb_args = List.length es in
         let check_useful (i, _, _) =
@@ -575,8 +585,8 @@ let translate_block stmts blocks ret_ty =
             | _                 ->
                 attrs_used := true;
                 let annots =
-                  try Some(expr_annot attrs) with Invalid_annot(_, msg) ->
-                    Panic.wrn (Some(loc)) "Warning: %s." msg; None
+                  let fn () = Some(expr_annot attrs) in
+                  handle_invalid_annot ~loc None fn ()
                 in
                 trans_expr e None (fun e -> locate (ExprS(annots, e, stmt)))
           in
@@ -626,8 +636,8 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(_, msg) ->
-                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+              let fn () = Some(block_annot attrs) in
+              handle_invalid_annot ~loc None fn ()
             in
             SMap.add id_cond (annot, s) blocks
           in
@@ -653,8 +663,8 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(_, msg) ->
-                Panic.wrn (Some(loc)) "Warning: %s." msg; None
+              let fn () = Some(block_annot attrs) in
+              handle_invalid_annot ~loc None fn ()
             in
             SMap.add id_cond (annot, s) blocks
           in
@@ -750,9 +760,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
     let build (id, (attrs, def)) =
       let (struct_annot, needs_field_annot) =
         let annots = collect_rc_attrs attrs in
-        try (Some(struct_annot annots), annots <> [])
-        with Invalid_annot(_, msg) ->
-          Panic.wrn None "Warning: %s." msg; (None, true)
+        let fn () = (Some(struct_annot annots), annots <> []) in
+        handle_invalid_annot (None, true) fn ()
       in
       let struct_name = sym_to_str id in
       let (struct_members, struct_is_union) =
@@ -763,9 +772,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
-            try Some(field_annot needs_field_annot (collect_rc_attrs attrs))
-            with Invalid_annot(_, msg) ->
-              Panic.wrn (Some(loc_of_id id)) "Warning: %s." msg; None
+            let annots = collect_rc_attrs attrs in
+            let fn () = Some(field_annot needs_field_annot annots) in
+            let loc = loc_of_id id in
+            handle_invalid_annot ~loc None fn ()
           in
           (id_to_str id, (ty, layout_of false c_ty))
         in
@@ -803,8 +813,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       Hashtbl.reset used_globals; Hashtbl.reset used_functions;
       (* Fist parse that annotations. *)
       let func_annot =
-        try Some(function_annot (collect_rc_attrs attrs))
-        with Invalid_annot(_, msg) -> Panic.wrn None "Warning: %s." msg; None
+        let fn () = Some(function_annot (collect_rc_attrs attrs)) in
+        handle_invalid_annot None fn ()
       in
       (* Then find out if the function is defined or just declared. *)
       match List.find (fun (id, _) -> sym_to_str id = func_name) fun_defs with
@@ -837,9 +847,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
-          try Some(block_annot (collect_rc_attrs s_attrs))
-          with Invalid_annot(_, msg) ->
-            Panic.wrn None "Warning: %s." msg; None
+          let fn () = Some(block_annot (collect_rc_attrs s_attrs)) in
+          handle_invalid_annot None fn ()
         in
         SMap.add func_init (annots, stmt) blocks
       in
