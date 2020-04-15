@@ -238,9 +238,9 @@ let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
   begin
     match Location.get err_loc with
     | None    ->
-        Panic.wrn loc "Invalid annotation (ignored).\nError: %s." msg
+        Panic.wrn loc "Invalid annotation (ignored).\n  → %s" msg
     | Some(d) ->
-        Panic.wrn None "[%a] Invalid annotation (ignored).\nError: %s."
+        Panic.wrn None "[%a] Invalid annotation (ignored).\n  → %s"
           Location.pp_data d msg
   end; default
 
