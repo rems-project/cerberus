@@ -4,6 +4,9 @@ open Panic
 open Coq_ast
 open Rc_annot
 
+(* Should we print location information? *)
+let print_locs = false
+
 let pp_str = pp_print_string
 
 let pp_as_tuple : 'a pp -> 'a list pp = fun pp ff xs ->
@@ -119,7 +122,7 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
-  (* pp "(* expr pos: %a *)@;" Location.pp e.loc; *)
+  (* pp "(* expr pos: %a *)@;" Location.pp_loc e.loc; *)
   match e.elt with
   | Var(None   ,_)                ->
       pp "\"_\""
@@ -168,7 +171,12 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
-  (* pp "(* stmt pos: %a *)@;" Location.pp stmt.loc; *)
+  if print_locs then
+    begin
+      match Location.get stmt.loc with
+      | None    -> ()
+      | Some(d) -> pp "locinfo: loc_%i ;@;" d.loc_key
+    end;
   match stmt.elt with
   | Goto(id)               ->
       pp "Goto %S" id
@@ -219,6 +227,36 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Opening the section. *)
   pp "@[<v 2>Section code.";
+
+  (* Printing of location data. *)
+  if print_locs then
+    begin
+      pp "@;Definition location : Type := string * Z * Z * Z * Z.";
+      let (all_locations, all_files) =
+        let open Location in
+        let locs = ref [] in
+        let files = ref [] in
+        let fn ({loc_file = file; _} as d) =
+          locs := d :: !locs;
+          if not (List.mem file !files) then files := file :: !files
+        in
+        Location.iter fn;
+        let locs = List.sort (fun d1 d2 -> d1.loc_key - d2.loc_key) !locs in
+        let files = List.mapi (fun i s -> (s, i)) !files in
+        (locs, files)
+      in
+      let pp_file_def (file, key) =
+        fprintf ff "@;Definition file_%i : string := \"%s\"." key file
+      in
+      List.iter pp_file_def all_files;
+      let pp_loc_def d =
+        let open Location in
+        let file_key = List.assoc d.loc_file all_files in
+        pp "@;Definition loc_%i : location := (file_%i, %i, %i, %i, %i)."
+          d.loc_key file_key d.loc_line1 d.loc_col1 d.loc_line2 d.loc_col2
+      in
+      List.iter pp_loc_def all_locations;
+    end;
 
   (* Printing for struct/union members. *)
   let pp_members members =
