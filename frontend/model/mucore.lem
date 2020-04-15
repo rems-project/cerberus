@@ -40,6 +40,7 @@ type va_asym 'bty = asym 'bty       (* value *)
 
 
 let unspec_undef = Undefined.DUMMY "unspecified value"
+let unsatc_undef = Undefined.DUMMY "unsatisfied constraint"
 
 
 
@@ -107,8 +108,8 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
   * | M_PEbmc_assume of asym 'bty
   * | M_PEis_unsigned of asym 'bty
   * | M_PEare_compatible of asym 'bty * asym 'bty *)
- | M_PEensure_specified of asym 'bty * mu_base_type
- (* | M_PEensure asym 'bty *)
+ | M_PEensure_specified of asym 'bty * mu_base_type * annotated (Loc.t * Undefined.undefined_behaviour) 'bty
+ | M_PEensure of asym 'bty * asym 'bty * mu_pexpr 'bty
 
 and mu_pexpr 'bty = 
  | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
@@ -338,47 +339,6 @@ let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
   end
   
 
-(* let maybe_extend_env (env : env 'bty) sym (pe : mu_pexpr 'bty) = 
- *   match pat_ with
- *   | M_UT_CaseBase sym  -> insert_symbol sym pe env
- *   | _ -> env
- *   end *)
-
-(* let rec mu_to_core__pattern (M_Pattern annots pattern_) =
- *   match pattern_ with
- *   | M_CaseBase (sym, Just bty) -> 
- *      Core.Pattern annots (Core.CaseBase (sym, bty))
- *   | M_CaseBase (sym, nothing) -> 
- *      failwith "pattern with no core base type"
- *   | M_CaseCtor ctor pats ->
- *      let pats = map mu_to_core__pattern pats in
- *      Core.Pattern annots (Core.CaseCtor ctor pats)
- *   end *)
-
-
-(* let replace_ensure_specified annots asym pat_bty 
- * 
- *  (sym, pat_annots, pat_cbt) (e_spec, e_annots, e_cbt) = 
- *   let sym_pat = mk_sym_pat_ pat_annots (Just sym) pat_cbt in
- *   let spec_pat = mk_specified_pat_ pat_annots sym_pat in
- *   let wild_card = mk_sym_pat_ pat_annots Nothing pat_cbt in
- *   let unspec_pat = mk_unspecified_pat_ pat_annots wild_card in
- *   let e_unspec = Core.Pexpr e_annots e_cbt (Core.PEundef (Annot.get_loc_ e_annots) unspec_undef) in
- *   let pats_pes = [(spec_pat, e_spec); (unspec_pat, e_unspec)] in
- *   pats_pes
- * 
- * 
- *         (\* let sym1_pat = Core.Pattern annots1 (Core.CaseBase (Just sym1, cbt)) in
- *          * let spec_pat = Core.Pattern annots1 (Core.CaseCtor Core.Cspecified [sym1_pat]) in
- *          * let wild_card = Core.Pattern annots1 (Core.CaseBase (Nothing, cbt)) in
- *          * let unspec_pat = Core.Pattern annots1 (Core.CaseCtor Core.Cunspecified [wild_card]) in
- *          * let undef_e = Core.Pexpr annots1 bty1 (Core.PEundef (locOf pexpr) unspec_undef) in
- *          * let p2 = mu_to_core__pexpr env p2 in
- *          * let pats_pes = [(spec_pat, p2); (unspec_pat, undef_e)] in *\)
- *         let e = get_pexpr asym2 in
- *         wrap (Core.PEcase e pats_pes) *)
-
-
 
 let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
         : Core.generic_pexpr 'bty symbol =
@@ -457,20 +417,24 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
    *    Core.PEbmc_assume (get_pexpr e)
    * | M_PEare_compatible p1 p2 ->
    *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
-  | M_PEensure_specified asym cbt ->
+  | M_PEensure_specified asym cbt (Annotated annots bty (loc,undef)) ->
      let pats_pes = 
+       let undef_pe = Core.Pexpr annots bty (Core.PEundef loc undef) in
        let newsym = Symbol.fresh_pretty "eanf" in
        let sym_pat = mk_sym_pat_ annots (Just newsym) cbt in
        let wild_pat = mk_sym_pat_ annots Nothing cbt in
        let spec_pat = mk_specified_pat_ annots sym_pat in
        let unspec_pat = mk_unspecified_pat_ annots wild_pat in
-       let e_unspec = Core.Pexpr annots bty 
-                        (Core.PEundef (Annot.get_loc_ annots) unspec_undef) in
        let e_spec = make_symbol_pexpr (Annotated annots bty newsym) in
-       [(spec_pat, e_spec); (unspec_pat, e_unspec)]
+       [(spec_pat, e_spec); (unspec_pat, undef_pe)]
      in
      let pe = get_pexpr "ensure_specified" env asym in
      wrap (Core.PEcase pe pats_pes)
+  | M_PEensure asym1 asym2 undef_pe ->
+     let pe1 = get_pexpr "PEensure" env asym1 in
+     let pe2 = get_pexpr "PEensure" env asym2 in
+     let pe3 = mu_to_core__pexpr env undef_pe in
+     mk_if_pe_ annots bty pe1 pe2 pe3
 
 
   end

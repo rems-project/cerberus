@@ -175,6 +175,9 @@ module IndexTerms = struct
 
     | List of t * t list
 
+    (* | Specified of Sym.t
+     * | Unspecified of Sym.t *)
+
     | S of Sym.t
 
   let (%+) t1 t2 = Add (t1,t2)
@@ -218,8 +221,13 @@ module IndexTerms = struct
     | Or (o1,o2) -> sprintf "(%s | %s)" (pp o1) (pp o2)
     | Not (o1) -> sprintf "(not %s)" (pp o1)
 
-    | List (it, its) -> sprintf "(list (%s))" 
-                    (String.concat " " (map pp (it :: its)))
+    | List (it, its) -> 
+       sprintf "(list (%s))" (String.concat " " (map pp (it :: its)))
+
+    (* | Specified sym ->
+     *    sprintf "(specified (%s))" (Sym.pp sym)
+     * | Unspecified sym ->
+     *    sprintf "(unspecified (%s))" (Sym.pp sym) *)
 
     | S sym -> Sym.pp sym
 
@@ -342,8 +350,9 @@ module IndexTerms = struct
     | Not it -> Not (subst sym with_it it)
     | List (it, its) -> 
        List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
-    | S symbol when symbol = sym -> with_it
-    | S symbol -> S symbol
+    (* | Specified symbol -> Specified symbol (\* check *\)
+     * | Unspecified symbol -> Unspecified symbol (\* check *\) *)
+    | S symbol -> if symbol = sym then with_it else S symbol
 
   let rec unify it it' (res : ('a, t) uni SymMap.t) = 
     match it, it' with
@@ -379,6 +388,10 @@ module IndexTerms = struct
 
     | List (it,its), List (it',its') -> 
        unify_list (it::its) (it'::its') res
+
+    (* | Specified symbol, Specified symbol2 when symbol = symbol2 -> 
+     *    return res
+     * | Unspecified symbol, Unspecified symbol (\* check *\) *)
 
     | S sym, S sym' when sym = sym' ->
        return res
@@ -718,6 +731,8 @@ module Err = struct
         Loc.t
     | Undefined_behaviour of
         Loc.t * Undefined.undefined_behaviour
+    | Unspecified_value of
+        Loc.t
     | Generic_error of Loc.t * string
 
   let pp_return_error loc = function
@@ -858,6 +873,10 @@ module Err = struct
        sprintf "%s. Undefined behaviour: %s"
          (Loc.pp loc)
          (Undefined.pretty_string_of_undefined_behaviour undef)
+    | Unspecified_value loc ->
+       sprintf "%s. Unspecified value"
+         (Loc.pp loc)
+
 
 
 
@@ -1062,8 +1081,12 @@ and check_its loc env its bt =
 
 
 
-let constraint_holds loc env (LC c) = 
+let constraint_holds env loc (LC c) = 
   true                          (* todo: call z3 *)
+
+let is_unreachable env loc =
+  constraint_holds env loc (LC (Bool false))
+
 
 let rec constraints_hold loc env = function
   | [] -> return ()
@@ -1168,7 +1191,107 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 
 
 
+(* according to https://en.wikipedia.org/wiki/C_data_types *)
+(* and *)
+(* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
+let bt_and_constr_of_integerBaseType signed ibt = 
 
+  let make f t = 
+    let ft = IndexTerms.Num (of_string f) in
+    let tt = IndexTerms.Num (of_string t) in
+    let constr name = (name %>= ft) %& (name %<= tt) in
+    (BaseTypes.Int, constr)
+  in
+
+  match signed, ibt with
+  | true,  Ctype.Ichar    -> make "-127" "127"
+  | true,  Ctype.Short    -> make "-32767" "32767"
+  | true,  Ctype.Int_     -> make "-32767" "32767"
+  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
+  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
+  | false, Ctype.Ichar    -> make "0" "255"
+  | false, Ctype.Short    -> make "0" "65535"
+  | false, Ctype.Int_     -> make "0" "65535"
+  | false, Ctype.Long     -> make "0" "4294967295"
+  | false, Ctype.LongLong -> make "0" "18446744073709551615"
+  | true, Ctype.IntN_t n -> 
+     begin match n with
+     | 8 ->  make "-127" "127"
+     | 16 -> make "-32768" "32767"
+     | 32 -> make "-2147483648" "2147483647"
+     | 64 -> make "-9223372036854775808" "9223372036854775807"
+     | _ -> failwith (sprintf "IntN_t %d" n)
+     end
+  | false, Ctype.IntN_t n -> 
+     begin match n with
+     | 8 ->  make "0" "255"
+     | 16 -> make "0" "65535"
+     | 32 -> make "0" "4294967295"
+     | 64 -> make "0" "18446744073709551615"
+     | _ -> failwith (sprintf "UIntN_t %d" n)
+     end
+  | _, Ctype.Int_leastN_t n -> 
+     failwith "todo standard library types"
+  | _, Ctype.Int_fastN_t n -> 
+     failwith "todo standard library types"
+  | _, Ctype.Intmax_t -> 
+     failwith "todo standard library types"
+  | _, Ctype.Intptr_t -> 
+     failwith "todo standard library types"
+
+let bt_and_constr_of_integerType it = 
+  match it with
+  | Ctype.Char -> 
+     failwith "todo char"
+  | Ctype.Bool -> 
+     (BaseTypes.Bool, None)
+  | Ctype.Signed ibt -> 
+     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
+     (bt, Some constr)
+  | Ctype.Unsigned ibt -> 
+     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
+     (bt, Some constr)
+  | Ctype.Enum _sym -> 
+     failwith "todo enum"
+  | Ctype.Wchar_t ->
+     failwith "todo wchar_t"
+  | Ctype.Wint_t ->
+     failwith "todo wint_t"
+  | Ctype.Size_t ->
+     failwith "todo size_t"
+  | Ctype.Ptrdiff_t -> 
+     failwith "todo standard library types"
+
+let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) = 
+  let loc = Annot.get_loc_ annots in
+  match ct with
+  | Ctype.Void -> (* check *)
+     return (Unit, None)
+  | Ctype.Basic (Integer it) -> 
+     return (bt_and_constr_of_integerType it)
+  | Ctype.Basic (Floating _) -> 
+     fail (Unsupported {loc; unsupported = "floats"} )
+  | Ctype.Array (ct, _maybe_integer) -> 
+     return (BaseTypes.Array, None)
+  | Ctype.Function _ -> 
+     fail (Unsupported {loc; unsupported = "function pointers"})
+  | Ctype.Pointer (_qualifiers, ctype) ->
+     return (Loc, None)
+  | Ctype.Atomic ct ->              (* check *)
+     bt_and_constr_of_ctype ct
+  | Ctype.Struct sym -> 
+     return (Struct sym, None)
+  | Ctype.Union sym ->
+     failwith "todo: union types"
+
+
+
+let type_of_ctype name ctype = 
+  bt_and_constr_of_ctype ctype >>= function
+  | (bt, Some c) -> 
+     return [{name; bound = A bt}; {name = fresh (); bound = C (LC (c (S name)))}]
+  | (bt, None) -> 
+     return [{name; bound = A bt}]
 
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
@@ -1230,7 +1353,9 @@ let infer_object_value (env : env) loc name ov =
          let constr = {name = fresh (); bound = C (LC (S name %= Num loc))} in
          return [t; constr] )
        ( fun _ ->
-         fail (Unsupported {loc; unsupported = "unspecified pointer value"}) )
+         if is_unreachable env loc 
+         then return [{name; bound = A Loc}]
+         else fail (Unspecified_value loc) )
   | M_OVarray items ->
      make_Aargs_bts env items >>= fun args_bts ->
      args_same_typ None args_bts >>
@@ -1243,9 +1368,13 @@ let infer_object_value (env : env) loc name ov =
 let infer_loaded_value env loc name lv = 
   match lv with
  | M_LVspecified ov ->
-    infer_object_value env loc name ov 
- | M_LVunspecified _ct ->
-    failwith "todo: LV unspecified"
+    infer_object_value env loc name ov >>= fun rt ->
+    return rt
+ | M_LVunspecified ct ->
+    if is_unreachable env loc then
+      type_of_ctype name ct
+    else 
+      fail (Unspecified_value loc)
 
 
 let infer_value loc name env v = 
@@ -1428,7 +1557,7 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
        fail (Generic_error (loc, err))
     end
   | Cunspecified ->
-     failwith "todo: LV unspecified"
+     failwith "unspecified constructor"
   | Cfvfromint -> 
      fail (Unsupported {loc; unsupported = "floats"})
   | Civfromfloat -> 
@@ -1525,6 +1654,10 @@ let infer_binop name env loc op sym1 sym2 =
   return ([t], env)
 
 
+let check_undef env loc undef =
+  if is_unreachable env loc then return ()
+  else fail (Undefined_behaviour (loc, undef))
+  
 let rec infer_pexpr name env (pe : 'bty mu_pexpr) = 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Annot.get_loc_ annots in
@@ -1541,7 +1674,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
   | M_PEundef _ ->
-     failwith "PEundef in inferring position"
+     failwith "undef in inferring position"
   | M_PEerror _ ->
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
@@ -1605,10 +1738,14 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
    *    in
    *    let t = {name; bound = A t2} in
    *    return ([t; constr], env) *)
-  | M_PEensure_specified (asym1, _ct) ->
+  | M_PEensure_specified (asym1, _ct, Annotated (_,_,(loc,undef))) ->
      let sym1, loc1 = Sym.lof_asym asym1 in
-     get_Avar loc env sym1 >>= fun t1 ->
-     return ([{name = sym1; bound = A t1}], env)
+     (* if constraint_holds loc env (LC (Specified sym1)) then  *)
+       get_Avar loc env sym1 >>= fun t1 ->
+       return ([{name = sym1; bound = A t1}], env)
+     (* else
+      *   fail (Undefined_behaviour (loc,undef)) *)
+  | M_PEensure _ -> failwith "asd"
 
 
 and check_pexpr env (e : 'bty mu_pexpr) ret = 
@@ -1635,10 +1772,6 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
          check_pexpr env' pe ret
        ) pats_es >>
      return env
-  | M_PEundef (loc, undef) ->
-     if constraint_holds loc env (LC (Bool false)) 
-     then return env
-     else fail (Undefined_behaviour (loc, undef))
   | _ ->
      let name = Sym.fresh () in    (* fix *)
      infer_pexpr name env e >>= fun (t, env) ->
@@ -1832,118 +1965,19 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 
 
 
-(* according to https://en.wikipedia.org/wiki/C_data_types *)
-(* and *)
-(* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let bt_and_constr_of_integerBaseType signed ibt = 
 
-  let make f t = 
-    let ft = IndexTerms.Num (of_string f) in
-    let tt = IndexTerms.Num (of_string t) in
-    let constr name = (name %>= ft) %& (name %<= tt) in
-    (BaseTypes.Int, constr)
-  in
-
-  match signed, ibt with
-  | true,  Ctype.Ichar    -> make "-127" "127"
-  | true,  Ctype.Short    -> make "-32767" "32767"
-  | true,  Ctype.Int_     -> make "-32767" "32767"
-  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
-  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
-  | false, Ctype.Ichar    -> make "0" "255"
-  | false, Ctype.Short    -> make "0" "65535"
-  | false, Ctype.Int_     -> make "0" "65535"
-  | false, Ctype.Long     -> make "0" "4294967295"
-  | false, Ctype.LongLong -> make "0" "18446744073709551615"
-  | true, Ctype.IntN_t n -> 
-     begin match n with
-     | 8 ->  make "-127" "127"
-     | 16 -> make "-32768" "32767"
-     | 32 -> make "-2147483648" "2147483647"
-     | 64 -> make "-9223372036854775808" "9223372036854775807"
-     | _ -> failwith (sprintf "IntN_t %d" n)
-     end
-  | false, Ctype.IntN_t n -> 
-     begin match n with
-     | 8 ->  make "0" "255"
-     | 16 -> make "0" "65535"
-     | 32 -> make "0" "4294967295"
-     | 64 -> make "0" "18446744073709551615"
-     | _ -> failwith (sprintf "UIntN_t %d" n)
-     end
-  | _, Ctype.Int_leastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Int_fastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intmax_t -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intptr_t -> 
-     failwith "todo standard library types"
-
-let bt_and_constr_of_integerType it = 
-  match it with
-  | Ctype.Char -> 
-     failwith "todo char"
-  | Ctype.Bool -> 
-     (BaseTypes.Bool, None)
-  | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
-     (bt, Some constr)
-  | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
-     (bt, Some constr)
-  | Ctype.Enum _sym -> 
-     failwith "todo enum"
-  | Ctype.Wchar_t ->
-     failwith "todo wchar_t"
-  | Ctype.Wint_t ->
-     failwith "todo wint_t"
-  | Ctype.Size_t ->
-     failwith "todo size_t"
-  | Ctype.Ptrdiff_t -> 
-     failwith "todo standard library types"
-
-let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) = 
-  let loc = Annot.get_loc_ annots in
-  match ct with
-  | Ctype.Void -> (* check *)
-     return (Unit, None)
-  | Ctype.Basic (Integer it) -> 
-     return (bt_and_constr_of_integerType it)
-  | Ctype.Basic (Floating _) -> 
-     fail (Unsupported {loc; unsupported = "floats"} )
-  | Ctype.Array (ct, _maybe_integer) -> 
-     return (BaseTypes.Array, None)
-  | Ctype.Function _ -> 
-     fail (Unsupported {loc; unsupported = "function pointers"})
-  | Ctype.Pointer (_qualifiers, ctype) ->
-     return (Loc, None)
-  | Ctype.Atomic ct ->              (* check *)
-     bt_and_constr_of_ctype ct
-  | Ctype.Struct sym -> 
-     return (Struct sym, None)
-  | Ctype.Union sym ->
-     failwith "todo: union types"
 
 
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
 
-  let binding_of_ctype ctype name = 
-    bt_and_constr_of_ctype ctype >>= function
-    | (bt, Some c) -> 
-       return [{name; bound = A bt}; {name = fresh (); bound = C (LC (c (S name)))}]
-    | (bt, None) -> 
-       return [{name; bound = A bt}]
-  in
-
-  let make_arg_t (msym,ctype) = binding_of_ctype ctype (sym_or_fresh msym) in
+  let make_arg_t (msym,ctype) = type_of_ctype (sym_or_fresh msym) ctype in
   if is_variadic 
   then fail (Variadic_function {loc; fn = sym})
   else 
     let ret_name = Sym.fresh () in
     mapM make_arg_t args >>= fun args_types ->
     let arguments = concat args_types in
-    binding_of_ctype ret_ctype ret_name >>= fun ret ->
+    type_of_ctype ret_name ret_ctype >>= fun ret ->
     let ft = F {arguments; return = ret} in
     let fun_decls = SymMap.add sym (loc, ft, ret_name) fun_decls in
     return fun_decls
