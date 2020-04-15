@@ -5,7 +5,8 @@ open Coq_ast
 open Rc_annot
 
 (* Should we print location information? *)
-let print_locs = false
+let print_expr_locs = false
+let print_stmt_locs = false
 
 let pp_str = pp_print_string
 
@@ -122,56 +123,63 @@ let pp_bin_op : Coq_ast.bin_op pp = fun ff op ->
 
 let rec pp_expr : Coq_ast.expr pp = fun ff e ->
   let pp fmt = Format.fprintf ff fmt in
-  (* pp "(* expr pos: %a *)@;" Location.pp_loc e.loc; *)
-  match e.elt with
-  | Var(None   ,_)                ->
-      pp "\"_\""
-  | Var(Some(x),g)                ->
-      if g then pp_str ff x else fprintf ff "\"%s\"" x
-  | Val(Null)                     ->
-      pp "NULL"
-  | Val(Void)                     ->
-      pp "VOID"
-  | Val(Int(s,it))                ->
-      pp "i2v %s %a" s pp_int_type it
-  | UnOp(op,ty,e)                 ->
-      pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
-  | BinOp(op,ty1,ty2,e1,e2)       ->
-      begin
-        match (ty1, ty2, op) with
-        | (OpPtr(l), OpInt(_), AddOp) ->
-            pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
-              (pp_layout false) l pp_op_type ty2 pp_expr e2
-        | (OpPtr(_), OpInt(_), _) ->
-            panic_no_pos "Binop [%a] not supported on pointers." pp_bin_op op
-        | (OpInt(_), OpPtr(_), _) ->
-            panic_no_pos "Wrong ordering of integer pointer binop [%a]."
-              pp_bin_op op
-        | _                 ->
-            pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
-              pp_op_type ty1 pp_op_type ty2 pp_expr e2
-      end
-  | Deref(lay,e)                  ->
-      pp "!{%a} (%a)" (pp_layout false) lay pp_expr e
-  | CAS(ty,e1,e2,e3)              ->
-      pp "CAS@ (%a)@ (%a)@ (%a)@ (%a)" pp_op_type ty
-        pp_expr e1 pp_expr e2 pp_expr e3
-  | SkipE(e)                      ->
-      pp "SkipE (%a)" pp_expr e
-  | Use(lay,e)                    ->
-      pp "use{%a} (%a)" (pp_layout false) lay pp_expr e
-  | AddrOf(e)                     ->
-      pp "&(%a)" pp_expr e
-  | GetMember(e,name,false,field) ->
-      pp "(%a) at{struct_%s} %S" pp_expr e name field
-  | GetMember(e,name,true ,field) ->
-      pp "(%a) at_union{union_%s} %S" pp_expr e name field
-  | AnnotExpr(i,coq_e,e)          ->
-      pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
+  let pp_expr_body ff e =
+    match Location.(e.elt) with
+    | Var(None   ,_)                ->
+        pp "\"_\""
+    | Var(Some(x),g)                ->
+        if g then pp_str ff x else fprintf ff "\"%s\"" x
+    | Val(Null)                     ->
+        pp "NULL"
+    | Val(Void)                     ->
+        pp "VOID"
+    | Val(Int(s,it))                ->
+        pp "i2v %s %a" s pp_int_type it
+    | UnOp(op,ty,e)                 ->
+        pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
+    | BinOp(op,ty1,ty2,e1,e2)       ->
+        begin
+          match (ty1, ty2, op) with
+          | (OpPtr(l), OpInt(_), AddOp) ->
+              pp "(%a) at_offset{%a, PtrOp, %a} (%a)" pp_expr e1
+                (pp_layout false) l pp_op_type ty2 pp_expr e2
+          | (OpPtr(_), OpInt(_), _) ->
+              panic_no_pos "Binop [%a] not supported on pointers."
+                pp_bin_op op
+          | (OpInt(_), OpPtr(_), _) ->
+              panic_no_pos "Wrong ordering of integer pointer binop [%a]."
+                pp_bin_op op
+          | _                 ->
+              pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
+                pp_op_type ty1 pp_op_type ty2 pp_expr e2
+        end
+    | Deref(lay,e)                  ->
+        pp "!{%a} (%a)" (pp_layout false) lay pp_expr e
+    | CAS(ty,e1,e2,e3)              ->
+        pp "CAS@ (%a)@ (%a)@ (%a)@ (%a)" pp_op_type ty
+          pp_expr e1 pp_expr e2 pp_expr e3
+    | SkipE(e)                      ->
+        pp "SkipE (%a)" pp_expr e
+    | Use(lay,e)                    ->
+        pp "use{%a} (%a)" (pp_layout false) lay pp_expr e
+    | AddrOf(e)                     ->
+        pp "&(%a)" pp_expr e
+    | GetMember(e,name,false,field) ->
+        pp "(%a) at{struct_%s} %S" pp_expr e name field
+    | GetMember(e,name,true ,field) ->
+        pp "(%a) at_union{union_%s} %S" pp_expr e name field
+    | AnnotExpr(i,coq_e,e)          ->
+        pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
+  in
+  match Location.get e.loc with
+  | Some(d) when print_expr_locs ->
+      pp "LocInfo loc_%i (%a)" d.loc_key pp_expr_body e
+  | _                            ->
+      pp "%a" pp_expr_body e
 
 let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
   let pp fmt = Format.fprintf ff fmt in
-  if print_locs then
+  if print_stmt_locs then
     begin
       match Location.get stmt.loc with
       | None    -> ()
@@ -229,7 +237,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
   pp "@[<v 2>Section code.";
 
   (* Printing of location data. *)
-  if print_locs then
+  if print_expr_locs || print_stmt_locs then
     begin
       pp "@;Definition location : Type := string * Z * Z * Z * Z.";
       let (all_locations, all_files) =
