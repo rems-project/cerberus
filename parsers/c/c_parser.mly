@@ -362,7 +362,7 @@ typedef_name_spec:
 general_identifier:
 | i= typedef_name
 | i= var_name
-    { Symbol.Identifier (Location_ocaml.point $startpos, i) }
+    { Symbol.Identifier (Location_ocaml.region ($startpos, $endpos) None, i) }
 ;
 
 save_context:
