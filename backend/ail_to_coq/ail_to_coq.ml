@@ -475,34 +475,34 @@ let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
 let trans_bool_expr : ail_expr -> (expr -> stmt) -> stmt = fun e e_stmt ->
   trans_expr e (Some(OpInt(ItBool))) e_stmt
 
-let translate_bool_expr then_id else_id blocks e =
-  let rec translate then_id else_id blocks be =
+let translate_bool_expr then_goto else_goto blocks e =
+  let rec translate then_goto else_goto blocks be =
     match be with
     | BE_leaf(e)      ->
-        let fn e =
-          noloc (If(e, noloc (Goto(then_id)), noloc (Goto(else_id))))
-        in
+        let fn e = noloc (If(e, then_goto, else_goto)) in
         (trans_bool_expr e fn, blocks)
     | BE_neg(be)      ->
-        translate else_id then_id blocks be
+        translate else_goto then_goto blocks be
     | BE_and(be1,be2) ->
         let id = fresh_block_id () in
-        let (s, blocks) = translate id else_id blocks be1 in
+        let id_goto = noloc (Goto(id)) in (* FIXME loc *)
+        let (s, blocks) = translate id_goto else_goto blocks be1 in
         let blocks =
-          let (s, blocks) = translate then_id else_id blocks be2 in
+          let (s, blocks) = translate then_goto else_goto blocks be2 in
           SMap.add id (None, s) blocks
         in
         (s, blocks)
     | BE_or (be1,be2) ->
         let id = fresh_block_id () in
-        let (s, blocks) = translate then_id id blocks be1 in
+        let id_goto = noloc (Goto(id)) in (* FIXME loc *)
+        let (s, blocks) = translate then_goto id_goto blocks be1 in
         let blocks =
-          let (s, blocks) = translate then_id else_id blocks be2 in
+          let (s, blocks) = translate then_goto else_goto blocks be2 in
           SMap.add id (None, s) blocks
         in
         (s, blocks)
   in
-  translate then_id else_id blocks (bool_expr e)
+  translate then_goto else_goto blocks (bool_expr e)
 
 let trans_lval e : expr =
   let (e, calls) = translate_expr true None e in
@@ -532,7 +532,8 @@ let translate_block stmts blocks ret_ty =
     match stmts with
     | []                                           -> (resume final, blocks)
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
-    let locate e = mkloc e (register_loc coq_locs loc) in
+    let coq_loc = register_loc coq_locs loc in
+    let locate e = mkloc e coq_loc in
     let attrs = collect_rc_attrs attrs in
     let attrs_used = ref false in
     let res =
@@ -593,47 +594,50 @@ let translate_block stmts blocks ret_ty =
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
-          let (final, blocks) =
-            (* Last statement, keep the final goto. *)
-            if stmts = [] then (final, blocks) else
-            (* Statements after the if in their own block. *)
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            let block_id = fresh_block_id () in
-            let blocks =
-              SMap.add block_id (Some(no_block_annot), stmt) blocks
-            in
-            (Some(noloc (Goto(block_id))), blocks)
+          (* Translate the continuation. *)
+          let (blocks, final) =
+            if stmts = [] then (blocks, final) else
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, Some(mkloc (Goto(id_cont)) s.loc))
           in
-          let then_id = fresh_block_id () in
-          let else_id = fresh_block_id () in
           (* Translate the two branches. *)
-          let blocks =
+          let (blocks, then_goto) =
+            let id_then = fresh_block_id () in
             let (s, blocks) = trans break continue final [s1] blocks in
-            SMap.add then_id (Some(no_block_annot), s) blocks
+            let blocks = SMap.add id_then (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_then)) s.loc)
           in
-          let blocks =
+          let (blocks, else_goto) =
+            let id_else = fresh_block_id () in
             let (s, blocks) = trans break continue final [s2] blocks in
-            SMap.add else_id (Some(no_block_annot), s) blocks
+            let blocks = SMap.add id_else (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_else)) s.loc)
           in
-          translate_bool_expr then_id else_id blocks e
+          translate_bool_expr then_goto else_goto blocks e
       | AilSwhile(e,s)      ->
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
-          let id_cont = fresh_block_id () in
-          (* Translate the body. *)
-          let blocks =
-            let break    = Some(noloc (Goto(id_cont))) in
-            let continue = Some(noloc (Goto(id_cond))) in
-            let (s, blocks) = trans break continue continue [s] blocks in
-            SMap.add id_body (Some(no_block_annot), s) blocks
-          in
           (* Translate the continuation. *)
-          let blocks =
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(no_block_annot), stmt) blocks
+          let (blocks, goto_cont) =
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_cont)) s.loc)
+          in
+          (* Translate the body. *)
+          let (blocks, goto_body) =
+            let break    = Some(goto_cont) in
+            let continue = Some(locate (Goto(id_cond))) in
+            let (s, blocks) = trans break continue continue [s] blocks in
+            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_body)) s.loc)
           in
           (* Translate the condition. *)
-          let (s, blocks) = translate_bool_expr id_body id_cont blocks e in
+          let (s, blocks) =
+            translate_bool_expr goto_body goto_cont blocks e
+          in
           let blocks =
             let annot =
               attrs_used := true;
@@ -642,25 +646,27 @@ let translate_block stmts blocks ret_ty =
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (noloc (Goto(id_cond)), blocks)
+          (locate (Goto(id_cond)), blocks)
       | AilSdo(s,e)         ->
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
-          let id_cont = fresh_block_id () in
-          (* Translate the body. *)
-          let blocks =
-            let break    = Some(noloc (Goto(id_cont))) in
-            let continue = Some(noloc (Goto(id_cond))) in
-            let (s, blocks) = trans break continue continue [s] blocks in
-            SMap.add id_body (Some(no_block_annot), s) blocks
-          in
           (* Translate the continuation. *)
-          let blocks =
-            let (stmt, blocks) = trans break continue final stmts blocks in
-            SMap.add id_cont (Some(no_block_annot), stmt) blocks
+          let (blocks, goto_cont) =
+            let id_cont = fresh_block_id () in
+            let (s, blocks) = trans break continue final stmts blocks in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_cont)) s.loc)
+          in
+          (* Translate the body. *)
+          let (blocks, goto_body) =
+            let break    = Some(goto_cont) in
+            let continue = Some(noloc (Goto(id_cond))) in (* FIXME loc *)
+            let (s, blocks) = trans break continue continue [s] blocks in
+            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            (blocks, locate (Goto(id_body)))
           in
           (* Translate the condition. *)
-          let (s, blocks) = translate_bool_expr id_body id_cont blocks e in
+          let (s, blocks) = translate_bool_expr goto_body goto_cont blocks e in
           let blocks =
             let annot =
               attrs_used := true;
@@ -669,7 +675,7 @@ let translate_block stmts blocks ret_ty =
             in
             SMap.add id_cond (annot, s) blocks
           in
-          (noloc (Goto(id_body)), blocks)
+          (locate (Goto(id_body)), blocks)
       | AilSswitch(_,_)     -> not_impl loc "statement switch"
       | AilScase(_,_)       -> not_impl loc "statement case"
       | AilSdefault(_)      -> not_impl loc "statement default"
