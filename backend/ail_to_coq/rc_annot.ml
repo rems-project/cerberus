@@ -249,6 +249,7 @@ type annot =
   | Annot_inv_vars   of (ident * type_expr) list
   | Annot_annot_args of annot_arg list
   | Annot_tactics    of string list
+  | Annot_trust_me
 
 let rc_locs : Location.Pool.t = Location.Pool.make ()
 
@@ -329,6 +330,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
   | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
   | "tactics"    -> raw_many_args (fun l -> Annot_tactics(l))
+  | "trust_me"   -> no_args Annot_trust_me
   | _            -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -340,7 +342,8 @@ type function_annot =
   ; fa_exists     : (ident * coq_expr) list
   ; fa_requires   : constr list
   ; fa_ensures    : constr list
-  ; fa_tactics    : string list }
+  ; fa_tactics    : string list
+  ; fa_trust_me   : bool }
 
 let function_annot : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
@@ -350,6 +353,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   let requires = ref [] in
   let ensures = ref [] in
   let tactics = ref [] in
+  let trust_me = ref false in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
@@ -365,6 +369,8 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
     | (Annot_tactics(l)   , _   ) -> tactics := !tactics @ l
+    | (Annot_trust_me     , _   ) when !trust_me -> error "already specified"
+    | (Annot_trust_me     , _   ) -> trust_me := true
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -375,7 +381,8 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   ; fa_exists     = !exists
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures
-  ; fa_tactics    = !tactics }
+  ; fa_tactics    = !tactics
+  ; fa_trust_me   = !trust_me }
 
 let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
   let annot_args = ref [] in

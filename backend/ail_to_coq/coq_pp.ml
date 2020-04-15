@@ -784,6 +784,10 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       | Some(annot) -> annot
       | None        -> assert false (* Unreachable. *)
     in
+    pp "\n@;(* Typing proof for [%s]. *)@;" id;
+    if annot.fa_trust_me then
+      pp "(* Let's skip that, you seem to have some faith. *)"
+    else
     let (used_globals, used_functions) = def.func_deps in
     let deps =
       (* This includes global variables on which the used function depend. *)
@@ -805,7 +809,6 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       | [] -> ()
       | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_str) xs
     in
-    pp "\n@;(* Typing proof for [%s]. *)@;" id;
     pp "@[<v 2>Lemma type_%s%a :@;" id pp_args deps;
     begin
       match used_functions with
