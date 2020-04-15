@@ -247,7 +247,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
           locs := d :: !locs;
           if not (List.mem file !files) then files := file :: !files
         in
-        Location.iter fn;
+        Location.Pool.iter fn coq_locs;
         let locs = List.sort (fun d1 d2 -> d1.loc_key - d2.loc_key) !locs in
         let files = List.mapi (fun i s -> (s, i)) !files in
         (locs, files)

@@ -35,6 +35,8 @@ type value =
   | Void
   | Int of string * int_type
 
+let coq_locs : Location.Pool.t = Location.Pool.make ()
+
 type expr = expr_aux Location.located
 and expr_aux =
   | Var       of string option * bool (* Global? *)

@@ -29,27 +29,35 @@ let id_to_str : Symbol.identifier -> string =
   fun Symbol.(Identifier(_,id)) -> id
 
 let loc_of_id : Symbol.identifier -> loc =
-  fun Symbol.(Identifier(loc,id)) -> loc
+  fun Symbol.(Identifier(loc,_)) -> loc
 
 (* Register a location. *)
-let register_loc : Location_ocaml.t -> Location.t = fun loc ->
+let register_loc : Location.Pool.t -> loc -> Location.t = fun p loc ->
   match Location_ocaml.(get_filename loc, to_cartesian loc) with
-  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Location.make f l1 c1 l1 c1
-  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 c1 l2 c2
-  | (_      , _                    ) -> Location.none ()
+  | (Some(f), Some((l1,c1),(0 ,0 ))) -> Location.make f l1 c1 l1 c1 p
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 c1 l2 c2 p
+  | (_      , _                    ) -> Location.none coq_locs
+
+let register_str_loc : Location.Pool.t -> loc -> Location.t = fun p loc ->
+  match Location_ocaml.(get_filename loc, to_cartesian loc) with
+  | (Some(f), Some((l1,c1),(l2,c2))) -> Location.make f l1 (c1+1) l2 (c2-1) p
+  | (_      , _                    ) -> Location.none coq_locs
 
 let mkloc elt loc = Location.{ elt ; loc }
 
-let noloc elt = mkloc elt (Location.none ())
+let noloc elt = mkloc elt (Location.none coq_locs)
 
 (* Extract attributes with namespace ["rc"]. *)
 let collect_rc_attrs : Annot.attributes -> rc_attr list =
   let fn acc Annot.{attr_ns; attr_id; attr_args} =
     match Option.map id_to_str attr_ns with
     | Some("rc") ->
-        let rc_attr_id = id_to_str attr_id in
+        let rc_attr_id =
+          let Symbol.(Identifier(loc, id)) = attr_id in
+          mkloc id (register_str_loc rc_locs loc)
+        in
         let rc_attr_args =
-          let fn (loc, s) = mkloc s (register_loc loc) in
+          let fn (loc, s) = mkloc s (register_loc rc_locs loc) in
           List.map fn attr_args
         in
         {rc_attr_id; rc_attr_args} :: acc
@@ -228,7 +236,7 @@ let rec translate_expr lval goal_ty e =
   let open AilSyntax in
   let res_ty = op_type_tc_opt (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
-  let locate e = mkloc e (register_loc loc) in
+  let locate e = mkloc e (register_loc coq_locs loc) in
   let translate = translate_expr lval None in
   let (e, l) as res =
     match e with
@@ -296,7 +304,7 @@ let rec translate_expr lval goal_ty e =
           match c_ty with
           | Ctype(_,Pointer(_,Ctype(_,Void))) when is_const_0 e ->
               let AnnotatedExpression(_, _, loc, _) = e in
-              ({ elt = Val(Null) ; loc = register_loc loc }, [])
+              ({ elt = Val(Null) ; loc = register_loc coq_locs loc }, [])
           | _                                                   ->
           let ty = op_type_of_tc (tc_of e) in
           let op_ty = op_type_of Location_ocaml.unknown c_ty in
@@ -312,7 +320,7 @@ let rec translate_expr lval goal_ty e =
         let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
         let attrs = collect_rc_attrs attrs in
         let annot_args =
-          try function_annot_args attrs with Invalid_annot(msg) ->
+          try function_annot_args attrs with Invalid_annot(_, msg) ->
           Panic.wrn (Some(loc))
             "Unusable argument annotation for function [%s]." fun_id; []
         in
@@ -341,7 +349,9 @@ let rec translate_expr lval goal_ty e =
         let es = List.mapi annotate es in
         let ret_id = Some(fresh_ret_id ()) in
         Hashtbl.add used_functions fun_id ();
-        let e_call = mkloc (Var(Some(fun_id), true)) (Location.none ()) in
+        let e_call =
+          mkloc (Var(Some(fun_id), true)) (Location.none coq_locs)
+        in
         (locate (Var(ret_id, false)), l @ [(ret_id, e_call, es)])
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
@@ -447,7 +457,7 @@ let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
     fun e goal_ty e_stmt ->
   let (e, calls) = translate_expr false goal_ty e in
   let fn (id, e, es) stmt =
-    mkloc (Call(id, e, es, stmt)) (Location.none ())
+    mkloc (Call(id, e, es, stmt)) (Location.none coq_locs)
   in
   List.fold_right fn calls (e_stmt e)
 
@@ -511,7 +521,7 @@ let translate_block stmts blocks ret_ty =
     match stmts with
     | []                                           -> (resume final, blocks)
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
-    let locate e = mkloc e (register_loc loc) in
+    let locate e = mkloc e (register_loc coq_locs loc) in
     let attrs = collect_rc_attrs attrs in
     let attrs_used = ref false in
     let res =
@@ -565,7 +575,7 @@ let translate_block stmts blocks ret_ty =
             | _                 ->
                 attrs_used := true;
                 let annots =
-                  try Some(expr_annot attrs) with Invalid_annot(msg) ->
+                  try Some(expr_annot attrs) with Invalid_annot(_, msg) ->
                     Panic.wrn (Some(loc)) "Warning: %s." msg; None
                 in
                 trans_expr e None (fun e -> locate (ExprS(annots, e, stmt)))
@@ -616,7 +626,7 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(msg) ->
+              try Some(block_annot attrs) with Invalid_annot(_, msg) ->
                 Panic.wrn (Some(loc)) "Warning: %s." msg; None
             in
             SMap.add id_cond (annot, s) blocks
@@ -643,7 +653,7 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annot =
               attrs_used := true;
-              try Some(block_annot attrs) with Invalid_annot(msg) ->
+              try Some(block_annot attrs) with Invalid_annot(_, msg) ->
                 Panic.wrn (Some(loc)) "Warning: %s." msg; None
             in
             SMap.add id_cond (annot, s) blocks
@@ -687,7 +697,7 @@ let translate_block stmts blocks ret_ty =
     if not !attrs_used then
       begin
         let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
-          Format.fprintf ff "%s(" id;
+          Format.fprintf ff "%s(" id.elt;
           match args with
           | arg :: args ->
               let open Location in
@@ -741,7 +751,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let (struct_annot, needs_field_annot) =
         let annots = collect_rc_attrs attrs in
         try (Some(struct_annot annots), annots <> [])
-        with Invalid_annot(msg) ->
+        with Invalid_annot(_, msg) ->
           Panic.wrn None "Warning: %s." msg; (None, true)
       in
       let struct_name = sym_to_str id in
@@ -754,7 +764,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
             try Some(field_annot needs_field_annot (collect_rc_attrs attrs))
-            with Invalid_annot(msg) ->
+            with Invalid_annot(_, msg) ->
               Panic.wrn (Some(loc_of_id id)) "Warning: %s." msg; None
           in
           (id_to_str id, (ty, layout_of false c_ty))
@@ -794,7 +804,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       (* Fist parse that annotations. *)
       let func_annot =
         try Some(function_annot (collect_rc_attrs attrs))
-        with Invalid_annot(msg) -> Panic.wrn None "Warning: %s." msg; None
+        with Invalid_annot(_, msg) -> Panic.wrn None "Warning: %s." msg; None
       in
       (* Then find out if the function is defined or just declared. *)
       match List.find (fun (id, _) -> sym_to_str id = func_name) fun_defs with
@@ -828,7 +838,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
           try Some(block_annot (collect_rc_attrs s_attrs))
-          with Invalid_annot(msg) ->
+          with Invalid_annot(_, msg) ->
             Panic.wrn None "Warning: %s." msg; None
         in
         SMap.add func_init (annots, stmt) blocks
