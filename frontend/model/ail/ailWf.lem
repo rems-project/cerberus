@@ -74,7 +74,9 @@ let rec wf_type sigm (Ctype _ ty) =
       guard (Loc.locOf elem_ty) (TError_ConstraintViolation Constraint.ArrayDeclarationIncompleteType) (
         is_complete sigm elem_ty
       ) >>
-
+      guard (Loc.locOf elem_ty) (TError_ConstraintViolation Constraint.StructMemberFlexibleArrayInArray) (
+        not (has_flexible_array_member sigm elem_ty)
+      ) >>
       wf_type elem_ty
   | Function _ (ret_qs, ret_ty) params _ ->
       guard (Loc.locOf ret_ty) (TError_ConstraintViolation Constraint.IllegalReturnTypeFunctionDeclarator) (

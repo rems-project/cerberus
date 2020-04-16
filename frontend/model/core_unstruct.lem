@@ -25,7 +25,8 @@ let extract_ctype_pe (Pexpr _ _ pexpr_) =
           | Atomic (Ctype _ (Union _)) ->
               insupported "atomic union"
           | Struct tag_sym ->
-              Right (tag_sym, get_structDef tag_sym)
+              (* TODO(check) ignoring flexible array members *)
+              Right (tag_sym, fst (get_structDef tag_sym))
           | Union tag_sym ->
               (*let xs = get_unionDef tag_sym in*)
               insupported "(non atomic) union"

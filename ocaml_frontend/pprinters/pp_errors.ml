@@ -146,6 +146,11 @@ let string_of_constraint_violation = function
       "member '" ^ string_of_cid f ^ "' declared as a function"
   | StructMemberFlexibleArray ->
       "struct has a flexible array member"
+  | StructMemberFlexibleArrayInArray ->
+      "struct with a flexible array member found as element of an array"
+  | IllegalFlexibleArrayMember tag_ident ->
+      "found a flexible array member in a structure with less than one named member: " ^
+      string_of_cid tag_ident
   | NoTypeSpecifierInDeclaration ->
       "at least one type specifier should be given in the declaration"
   | IllegalTypeSpecifierInDeclaration ->

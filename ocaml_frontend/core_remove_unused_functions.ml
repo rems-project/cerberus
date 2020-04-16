@@ -406,9 +406,15 @@ let called_names_file file =
     let called_names_tagDef sym tagDef = 
       let name_collector = name_collector (Some sym) in
       match tagDef with
-      | Ctype.StructDef fields ->
+      | Ctype.StructDef (fields, flexible_opt) ->
          iterate fields (fun (_id, (_,_,ct)) -> 
-             name_collector.names_in_ctype ct)
+             name_collector.names_in_ctype ct) >>
+         begin match flexible_opt with
+           | None ->
+               return ()
+           | Some (FlexibleArrayMember (_, _, _, elem_ty)) ->
+               name_collector.names_in_ctype (Ctype ([], Array (elem_ty, None)))
+         end
       | Ctype.UnionDef d ->
          iterate d (fun (_id, (_,_,ct)) -> 
              name_collector.names_in_ctype ct)

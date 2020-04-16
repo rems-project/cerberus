@@ -1650,10 +1650,19 @@ def_fields:
 ;
 
 def_aggregate_declaration:
-| DEF STRUCT name=SYM COLON_EQ fds=def_fields
-  { Aggregate_decl (name, StructDef fds) }
+| DEF STRUCT name=SYM COLON_EQ fds_=def_fields
+  { (* NOTE: I don't like that this check is in the parser... *)
+    let (fds, flexible_opt) =
+      match Lem_list.dest_init fds_ with
+        | None ->
+            (fds_, None) (* TODO: technically this should be an error (we can't have empty structs), but
+                            this shouldn't be dealt with by the parser *)
+        | Some (xs, (ident, (attrs, qs, elem_ty))) ->
+            (xs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)))
+    in
+    Aggregate_decl (name, StructDef (fds, flexible_opt)) }
 | DEF UNION name=SYM COLON_EQ fds=def_fields
-  { Aggregate_decl (name, StructDef fds) }
+  { Aggregate_decl (name, UnionDef fds) }
 ;
 
 ifun_declaration:

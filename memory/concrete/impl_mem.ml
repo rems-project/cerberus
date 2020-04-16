@@ -89,7 +89,14 @@ end)
 (* NOTE: returns ([(memb_ident, type, offset)], last_offset) *)
 let rec offsetsof tagDefs tag_sym =
   match Pmap.find tag_sym tagDefs with
-    | StructDef membrs ->
+    | StructDef (membrs_, flexible_opt) ->
+        (* NOTE: the offset of a flexible array member is just like
+           that of any other member *)
+        let membrs = match flexible_opt with
+          | None ->
+              membrs_
+          | Some (FlexibleArrayMember (attrs, ident, qs, ty)) ->
+              membrs_ @ [(ident, (attrs, qs, ty))] in
         let (xs, maxoffset) =
           List.fold_left (fun (xs, last_offset) (membr, (_, _, ty)) ->
             let size = sizeof ~tagDefs ty in
@@ -133,6 +140,8 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
     | Atomic atom_ty ->
         sizeof ~tagDefs atom_ty
     | Struct tag_sym ->
+        (* TODO: need to add trailing padding for structs with a flexible array member *)
+        Debug_ocaml.warn [] (fun () -> "TODO: Concrete.sizeof doesn't add trailing padding for structs with a flexible array member");
         let (_, max_offset) = offsetsof tagDefs tag_sym in
         let align = alignof ~tagDefs cty in
         let x = max_offset mod align in
@@ -186,12 +195,19 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         begin match Pmap.find tag_sym tagDefs with
           | UnionDef _ ->
               assert false
-          | StructDef membrs  ->
+          | StructDef (membrs, flexible_opt)  ->
+              (* NOTE: we take into account the potential flexible array member by tweaking
+                 the accumulator init of the fold. *)
+              let init = match flexible_opt with
+                | None ->
+                    0
+                | Some (FlexibleArrayMember (_, _, _, elem_ty)) ->
+                    alignof ~tagDefs (Ctype ([], Array (elem_ty, None))) in
               (* NOTE: Structs (and unions) alignment is that of the maximum alignment
                  of any of their components. *)
               List.fold_left (fun acc (_, (_, _, ty)) ->
                 max (alignof ~tagDefs ty) acc
-              ) 0 membrs
+              ) init membrs
         end
     | Union tag_sym ->
         begin match Pmap.find tag_sym (Tags.tagDefs ()) with

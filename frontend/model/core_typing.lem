@@ -572,7 +572,9 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         E.return (Pexpr annot (InferredType_object OTy_pointer) (PEarray_shift pe1' cty pe2'))
     | PEmember_shift pe tag_sym memb_ident ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmember_shift" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef z -> z
+          | Cty.StructDef z Nothing -> z
+          | Cty.StructDef z (Just _) ->
+                error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
           | Cty.UnionDef  z -> z
         end in
         typecheck_pexpr tagDefs env (BTy_object OTy_pointer) pe >>= fun pe' ->
@@ -633,10 +635,11 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         match fromJust "Core_typing.infer_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
           | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Cty.StructDef xs ->
+          | Cty.StructDef xs _ ->
               E.mapM (fun (ident, pe) ->
                 match List.lookup ident xs with
                   | Nothing ->
+                      (* TODO(check) ignoring the potential flexible array member, because it shouldn't be visible in a struct as value *)
                       E.fail loc (InvalidMember tag_sym ident)
                   | Just (_, _, ty) ->
                       match core_object_type_of_ctype ty with
@@ -656,7 +659,7 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
         end
     | PEunion tag_sym ident pe ->
         match fromJust "Core_typing.infer_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef _ ->
+          | Cty.StructDef _ _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.UnionDef xs ->
               match List.lookup ident xs with
@@ -680,8 +683,10 @@ let rec infer_pexpr tagDefs env ((Pexpr annot _ pexpr_ as pexpr) : generic_pexpr
                                          InferredType_boolean; InferredType_boolean]) (PEcfunction pe')
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.infer_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef xs ->
+          | Cty.StructDef xs Nothing ->
               xs
+          | Cty.StructDef xs (Just _) ->
+                error "TODO: Core_typing, PEmemberof => struct with flexible array member"
           | Cty.UnionDef xs ->
               xs
         end in
@@ -915,7 +920,9 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
                        <*> typecheck_pexpr tagDefs env (BTy_object OTy_integer) pe2)
     | PEmember_shift pe tag_sym memb_ident ->
           let xs = match fromJust "Core_typing.typecheck_pexpr, PEmember_shift 1" (Map.lookup tag_sym tagDefs) with
-            | Cty.StructDef z -> z
+            | Cty.StructDef z Nothing -> z
+            | Cty.StructDef z (Just _) ->
+                error "TODO: Core_typing, PEmember_shift => struct with flexible array member"
             | Cty.UnionDef  z -> z
           end in
           match List.lookup memb_ident xs with
@@ -980,10 +987,11 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         match fromJust "Core_typing.typecheck_pexpr, PEstruct" (Map.lookup tag_sym tagDefs) with
           | Cty.UnionDef _ ->
               E.fail loc (InvalidTag tag_sym)
-          | Cty.StructDef xs ->
+          | Cty.StructDef xs flexible_opt ->
               E.mapM (fun (ident, pe) ->
                 match List.lookup ident xs with
                   | Nothing ->
+                      (* TODO(check) we ignore the potential flexible array member, because they should not exist in structs as value *)
                       E.fail loc (InvalidMember tag_sym ident)
                   | Just (_, _, ty) ->
                       match core_object_type_of_ctype ty with
@@ -1001,7 +1009,7 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
     | PEunion tag_sym ident pe ->
         guard_match loc "union()" bTy (BTy_object (OTy_union tag_sym)) >>
         match fromJust "Core_typing.typecheck_pexpr, PEunion" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef _ ->
+          | Cty.StructDef _ _ ->
               E.fail loc (InvalidTag tag_sym)
           | Cty.UnionDef xs ->
               match List.lookup ident xs with
@@ -1023,8 +1031,10 @@ and typecheck_pexpr tagDefs (env: typing_env) (bTy: core_base_type) (Pexpr annot
         (PEcfunction <$> typecheck_pexpr tagDefs env (BTy_loaded OTy_pointer) pe)
     | PEmemberof tag_sym memb_ident pe ->
         let xs = match fromJust "Core_typing.typecheck_pexpr, PEmemberof" (Map.lookup tag_sym tagDefs) with
-          | Cty.StructDef xs ->
+          | Cty.StructDef xs Nothing ->
               xs
+          | Cty.StructDef xs (Just _) ->
+              error "TODO: Core_typing, PEmemberof => struct with flexible array member"
           | Cty.UnionDef xs ->
               xs
         end in

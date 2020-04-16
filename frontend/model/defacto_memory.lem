@@ -348,7 +348,9 @@ let mk_op_ival_ iop ival_1 ival_2 =
 
 let mk_offsetof_ival_ acc tag_sym memb_ident =
   match Core_ctype_aux.get_membersDefs tag_sym with
-    | StructDef xs ->
+    | StructDef _ (Just _) ->
+        error "TODO: Defacto_memory.mk_offsetof_ival_ ==> for struct with flexible array member"
+    | StructDef xs Nothing ->
         (* we take the prefix the members before the one we want to offset to *)
         let prefix_xs =
           List.takeWhile (fun (ident, _) -> memb_ident <> ident) xs in
@@ -420,7 +422,8 @@ let rec mkUnspec (Ctype _ ty) =
     | Atomic _ ->
         error ("TODO: Defacto_memory.mkUnspec ==> " ^ stringFromCtype (Ctype [] ty))
     | Struct tag_sym ->
-        let xs = Core_ctype_aux.get_structDef tag_sym in
+        (* TODO(check) ignoring potential flexible array member, because we are dealing with a struct as value *)
+        let (xs, _) = Core_ctype_aux.get_structDef tag_sym in
         MVstruct tag_sym (
           List.map (fun (ident, (_, _, ty)) -> (ident, ty, mkUnspec ty)) xs
         )
@@ -1286,7 +1289,9 @@ let rec isBeginningShift sh =
             (return false)
     | (SPE_member tag_sym memb_ident) :: sh' ->
         let xs = match Core_ctype_aux.get_membersDefs tag_sym with
-          | StructDef z -> z
+          | StructDef z Nothing -> z
+          | StructDef _ (Just _) ->
+              error "TODO: Defacto_memory.isBeginningShift ==> for struct with flexible array member"
           | UnionDef  z -> z
         end in
         match xs with
@@ -2237,6 +2242,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
         if is_strong then
           match sh with
             | SPE_member tag_sym memb_ident :: sh' ->
+                (* TODO(check) ignoring potential flexible array member, because we are dealing with a struct as value *)
                 MVstruct tag_sym <$>
                   mapM (fun (ident, (_, _, ty)) ->
                     if ident = memb_ident then
@@ -2244,7 +2250,7 @@ let rec easy_update_mem_value_aux loc is_strong write_ty sh write_mval current_m
                       return (ident, ty, mval')
                     else
                       return (ident, ty, mkUnspec ty)
-                  ) (Core_ctype_aux.get_structDef tag_sym)
+                  ) (fst (Core_ctype_aux.get_structDef tag_sym))
             | _ ->
                 error "WIP: easy_update_mem_value_aux, _, is_strong"
           end
