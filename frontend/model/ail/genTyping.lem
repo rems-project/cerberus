@@ -197,7 +197,7 @@ let well_typed_assignment s f loc ty1 gty2 e2 =
     let () = Debug.print_debug 2 [Debug.DB_ail_typing] (fun () ->
       "[well_typed_assignment] before bullet 3: conv_ty1= " ^Pp.stringFromAil_ctype no_qualifiers conv_ty1  ^
       " -- gty2= " ^ Pp.stringFromAil_genType gty2) in
-    match (proj_ctype_ ty1, proj_ctype_ conv_ty1, gty2) with
+    match ((proj_ctype_ (unatomic ty1)), proj_ctype_ conv_ty1, gty2) with
       | (Pointer ref_qs1 _, Pointer _ conv_ref_ty1, GenPointer ref_qs2 ref_ty2) ->
           (* doing the "qualified or unqualified versions of" by checking the compatibility of
              the unqualified referenced type with no qualifiers *)
@@ -916,7 +916,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               match unatomic_ ty with
                 | Struct tag_sym ->
                     match lookup_tag_definition sigm tag_sym with
-                      | Just (StructDef membersDefs) ->
+                      | Just (StructDef membersDefs flexible_opt) ->
+                          let () = error "TODO: fix flexible" in
                           match List.lookup memb_ident membersDefs with
                             | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberof a_e memb_ident
@@ -951,7 +952,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  So the UB from §6.5.2.3#5, doesn't necessarily happens here *)
               let do_struct tag_sym =
                 match lookup_tag_definition sigm tag_sym with
-                  | Just (StructDef membersDefs) ->
+                  | Just (StructDef membersDefs flexible_opt) ->
+                      let () = error "TODO: fix flexible" in
                       match List.lookup memb_ident membersDefs with
                         | Just (_, _, memb_ty) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
@@ -1012,7 +1014,8 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
               end >>= function
                 | (ref_qs, Left tag_sym, ref_ty) ->
                     match lookup_tag_definition sigm tag_sym with
-                      | Just (StructDef membersDefs) ->
+                      | Just (StructDef membersDefs flexible_opt) ->
+                          let () = error "TODO: fix flexible" in
                           match List.lookup memb_ident membersDefs with
                             | Just (_, memb_qs, memb_ty) ->
                                 E.return ( AilEmemberofptr e' memb_ident
@@ -1988,7 +1991,8 @@ let annotate_sigma sigm =
       else
         E.return ()
     in match tag with
-    | (_, (_, StructDef xs)) ->
+    | (_, (_, StructDef xs flexible_opt)) ->
+        let () = error "TODO: fix flexible" in
         (* STD §6.7.2.1#3 *)
         match List.dest_init xs with
           | Nothing ->

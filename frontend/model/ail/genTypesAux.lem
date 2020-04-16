@@ -359,7 +359,9 @@ let is_complete sigm gty =
      (* STD §6.2.5#22, sentence 3-4 *)
    | GenStruct sym ->
        match List.lookup sym sigm.tag_definitions with
-         | Just (_, StructDef _) ->
+         | Just (_, StructDef _ _) ->
+             (* TODO[note]: as far as I can tell, a struct with a flexible array member
+                            is still a complete type *)
              true
          | _ ->
              let _ = Debug.print_debug 5 [Debug.DB_ail_typing]

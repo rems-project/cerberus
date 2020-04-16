@@ -462,9 +462,16 @@ let dtree_of_tag_definition (i, (def_attrs, tag)) =
       Dleaf (Pp_symbol.pp_identifier i ^^^ P.squotes (pp_ctype qs ty))
     end
   in with_attributes def_attrs begin match tag with
-    | StructDef fs ->
+    | StructDef (fs_, flexible_opt) ->
+        let fs = match flexible_opt with
+          | None ->
+              fs_
+          | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
+              fs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in
         Dnode (pp_ctor "StructDef" ^^^ Pp_ail.pp_id i
               , List.map dleaf_of_field fs)
+
+
     | UnionDef fs ->
         Dnode (pp_ctor "UnionDef" ^^^ Pp_ail.pp_id i
               , List.map dleaf_of_field fs)

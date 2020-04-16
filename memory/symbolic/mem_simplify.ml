@@ -170,7 +170,10 @@ let rec simplify_integer_value_base ival_ =
               simplify_integer_value_base (IVsizeof atom_ty)
           | Struct tag_sym ->
               let membrs = match Pmap.find tag_sym (Tags.tagDefs ()) with
-                | StructDef membrs -> membrs
+                | StructDef (membrs, None) ->
+                    membrs
+                | StructDef (membrs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty))) ->
+                    membrs @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))]
                 | _ -> assert false
               in
               simplify_integer_value_base begin

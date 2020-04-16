@@ -189,6 +189,11 @@ val has_flexible_array_member: forall 'a. sigma 'a -> ctype -> bool
 let has_flexible_array_member sigm = function
   | Ctype _ (Struct tag_sym) ->
       match List.lookup tag_sym sigm.tag_definitions with
+        | Just (_, StructDef _ Nothing) ->
+            false
+        | Just (_, StructDef _ (Just _)) ->
+            true
+(*
         | Just (_, StructDef membersDefs) ->
             match List.dest_init membersDefs with
               | Just (_, (_, (_, _, last_ty))) ->
@@ -198,11 +203,12 @@ let has_flexible_array_member sigm = function
               | Nothing ->
                   false
             end
+*)
         | _ ->
             error "AilTypesAux.has_flexible_array_member: Struct, UnionDef or Nothing"
       end
   | _ ->
-        false
+      false
 end
 
 
@@ -276,7 +282,9 @@ let is_complete sigm ty =
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match List.lookup sym sigm.tag_definitions with
-        | Just (_, StructDef _) ->
+        | Just (_, StructDef _ _) ->
+            (* TODO[note]: as far as I can tell, a struct with a flexible array member
+                           is still a complete type *)
             true
         | _ ->
             let _ = Debug.print_debug 5 [Debug.DB_ail_typing]

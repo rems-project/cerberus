@@ -729,8 +729,14 @@ let pp_tagDefinitions tagDefs =
   let tagDefs = Pmap.bindings_list tagDefs in
   let pp (sym, tagDef) =
     let (ty, tags) = match tagDef with
-      | Ctype.StructDef tags -> ("struct", tags)
-      | Ctype.UnionDef tags -> ("union", tags)
+      | Ctype.StructDef (membrs_, flexible_opt) ->
+          let membrs = match flexible_opt with
+            | None ->
+                membrs_
+            | Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)) ->
+                membrs_ @ [(ident, (attrs, qs, Ctype ([], Array (elem_ty, None))))] in
+          ("struct", membrs)
+      | Ctype.UnionDef membrs -> ("union", membrs)
     in
     let pp_tag (Symbol.Identifier (_, name), (_, _, ty)) =
       !^name ^^ P.colon ^^^ pp_ctype ty

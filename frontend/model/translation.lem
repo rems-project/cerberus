@@ -2622,8 +2622,9 @@ else (* is_pointer *)
              mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
       
       | A.AilEstruct tag_sym ident_e_opts ->
+          (* TODO(check) ignoring the potential flexible array member, because it should not be part of a struct as value *)
           let ident_tys = match Map.lookup tag_sym tagDefs with
-            | Just (Cty.StructDef z) ->
+            | Just (Cty.StructDef z _) ->
                 z
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEstruct"
@@ -2696,7 +2697,7 @@ else (* is_pointer *)
           match Map.lookup tag_sym tagDefs with
             | (*BISECT-IGNORE*) Nothing ->
                 illTypedAil loc "AilEunion: couldn't find the definition"
-            | (*BISECT-IGNORE*) Just (Cty.StructDef ident_tys) ->
+            | (*BISECT-IGNORE*) Just (Cty.StructDef _ _) ->
                 illTypedAil loc "AilEunion: found a struct definition"
             | Just (Cty.UnionDef ident_tys) ->
                 match List.lookup memb_ident ident_tys with

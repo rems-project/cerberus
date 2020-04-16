@@ -1111,7 +1111,9 @@ let get_anonymous_struct_or_union ty =
   match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Struct_definition _ isAnonymous membrs) ->
+          | Just (Struct_definition _ _ _ (Just _)) ->
+              fail (Loc.unknown) (Errors.Desugar_ConstraintViolation Constraint.StructMemberFlexibleArray)
+          | Just (Struct_definition _ isAnonymous membrs Nothing) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1852,8 +1854,8 @@ let extract_program startup_str =
      
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
-                           | Struct_definition attrs _ membersDefs ->
-                               (sym, (attrs, Ctype.StructDef membersDefs)) :: acc
+                           | Struct_definition attrs _ membersDefs flexible_opt ->
+                               (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
                            | Union_definition attrs _ membersDefs ->
                                (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
                            | Enum_definition _ ->
@@ -1925,8 +1927,8 @@ let get_sigma_sofar =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | Struct_definition attrs _ membersDefs ->
-                                 (sym, (attrs, Ctype.StructDef membersDefs)) :: acc
+                             | Struct_definition attrs _ membersDefs flexible_opt ->
+                                 (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
                              | Union_definition attrs _ membersDefs ->
                                  (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
                              | Enum_definition _ ->
@@ -1949,8 +1951,8 @@ let cabs_to_ail_effect_is_incomplete ty =
     A.tag_definitions=
       List.foldl (fun acc (ident, tagDef) ->
         match tagDef with
-          | Struct_definition attrs _ xs ->
-              (ident, (attrs, Ctype.StructDef xs)) :: acc
+          | Struct_definition attrs _ xs flexible_opt ->
+              (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
           | Union_definition attrs _ xs ->
               (ident, (attrs, Ctype.UnionDef xs)) :: acc
           | Enum_definition _ ->

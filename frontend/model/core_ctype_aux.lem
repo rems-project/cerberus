@@ -17,11 +17,11 @@ val get_membersDefs: Symbol.sym -> tag_definition
 let get_membersDefs tag_sym =
   fromJust "Core_ctype_aux.get_membersDefs" $ Map.lookup tag_sym (tagDefs ())
 
-val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+val get_structDef: Symbol.sym -> list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe Ctype.flexible_array_member
 let get_structDef tag_sym =
   match Map.lookup tag_sym (tagDefs ()) with
-    | Just (StructDef xs) ->
-        xs
+    | Just (StructDef xs flexible_opt) ->
+        (xs, flexible_opt)
     | Just _ ->
         error ("Core_type.aux.get_structDef (" ^ show tag_sym ^
                "): found a union definition instead of a struct")
@@ -89,13 +89,21 @@ let rec are_compatible (qs1, Ctype _ ty1) (qs2, Ctype _ ty2) =
           let Symbol.Symbol _ _ str_opt2 = tag2 in
           if str_opt1 = str_opt2 then
             match (get_membersDefs tag1, get_membersDefs tag2) with
-              | (StructDef xs1, StructDef xs2) ->
+              | (StructDef xs1 flexible_opt1, StructDef xs2 flexible_opt2) ->
                   if List.length xs1 <> List.length xs2 then
                     false
                   else
                     List.all (fun ((ident1, (_, qs1, ty1)), (ident2, (_, qs2, ty2))) ->
                       ident1 = ident2 && are_compatible (qs1, ty1) (qs2, ty2)
-                    ) (List.zip xs1 xs2)
+                    ) (List.zip xs1 xs2) &&
+                    match (flexible_opt1, flexible_opt2) with
+                      | (Nothing, Nothing) ->
+                          true
+                      | (Just (FlexibleArrayMember _ ident1 qs1 ty1), Just (FlexibleArrayMember _ ident2 qs2 ty2)) ->
+                          ident1 = ident2 && are_compatible (qs1, ty1) (qs2, ty2)
+                      | _ ->
+                          false
+                    end
 
               | _ ->
                   error "TODO(msg): impossible"

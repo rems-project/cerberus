@@ -707,14 +707,16 @@ let pp_static_assertion pp_annot (e, lit) =
 
 let pp_tag_definition (tag, (_, def)) =
   match def with
-    | StructDef ident_qs_tys ->
+    | StructDef (ident_qs_tys, flexible_opt) ->
         pp_keyword "struct" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (
             P.separate_map (P.semi ^^ P.break 1) (fun (ident, (_, qs, ty)) ->
               pp_ctype qs ty ^^^ Pp_symbol.pp_identifier ident
             ) ident_qs_tys
-          ) ^^ P.break 1
-        ) ^^ P.semi
+          ) ^^ P.break 1 ^^
+          P.optional (fun (FlexibleArrayMember (_, ident, qs, elem_ty)) ->
+            pp_ctype qs (Ctype ([], Array (elem_ty, None))) ^^^ Pp_symbol.pp_identifier ident ^^ P.semi ^^ P.break 1
+          ) flexible_opt        ) ^^ P.semi
     | UnionDef ident_qs_tys ->
         pp_keyword "union" ^^^ pp_id_type tag ^^^ P.braces (P.break 1 ^^
           P.nest 2 (

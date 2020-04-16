@@ -103,6 +103,8 @@ type violation =
   | StructMemberIncompleteType of qualifiers * ctype (* §6.7.2.1#3, sentence 1 *)
   | StructMemberFunctionType of identifier (* §6.7.2.1#3, sentence 1 *)
   | StructMemberFlexibleArray (* §6.7.2.1#3, sentence 2 *)
+  | StructMemberFlexibleArrayInArray (* §6.7.2.1#3, sentence 2, "element of array" *)
+  | IllegalFlexibleArrayMember of identifier (* §6.7.2.1#18 *)
   (* 6.7.2.1 Enum specifiers *)
   | WrongTypeEnumConstant (* §6.7.2.2#2 *)
   (* 6.7.2.3 Tags *)
@@ -315,6 +317,10 @@ let std_of_violation = function
       ["§6.7.2.1#3, sentence 1"]
   | StructMemberFlexibleArray ->
       ["§6.7.2.1#3, sentence 2"]
+  | StructMemberFlexibleArrayInArray ->
+      ["§6.7.2.1#3, sentence 2"]
+  | IllegalFlexibleArrayMember _ ->
+      ["§6.7.2.1#18"]
   | WrongTypeEnumConstant ->
       ["§6.7.2.2#2"]
   | TagRedefinition _ ->

@@ -92,8 +92,12 @@ instance (Located ctype)
     Annot.get_loc_ annots
 end
 
+type flexible_array_member =
+    (* NOTE: the last parameter is the element type of the array *)
+  | FlexibleArrayMember of Annot.attributes * Symbol.identifier * qualifiers * ctype
+
 type tag_definition =
-  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
+  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe flexible_array_member
   | UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
 
 (** Type class instances *)
@@ -376,8 +380,13 @@ instance (Show tag_definition)
       ) "[" tag_defs ^ "]"
     in
     match def with
-      | StructDef membrs -> string_of_identifiers membrs
-      | UnionDef  membrs -> string_of_identifiers membrs
+      | StructDef tag_defs Nothing ->
+          string_of_identifiers tag_defs
+      | StructDef tag_defs (Just (FlexibleArrayMember attrs ident qs elem_ty)) ->
+          let ty = Ctype [] (Array elem_ty Nothing) in
+          string_of_identifiers (tag_defs ++ [(ident, (attrs, qs, ty))])
+      | UnionDef tag_defs ->
+          string_of_identifiers tag_defs
     end
 end
 
