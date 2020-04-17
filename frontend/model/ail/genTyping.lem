@@ -915,16 +915,23 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  "atomic, qualified, or unqualified structure or union type" *)
               match unatomic_ ty with
                 | Struct tag_sym ->
+                    let do_fail =
+                      E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
+                        (MemberofNoMemberLvalue memb_ident qs ty) in
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
-                          let () = error "TODO: fix flexible" in
-                          match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_qs, memb_ty) ->
+                          match (List.lookup memb_ident membersDefs, flexible_opt) with
+                            | (Just (_, memb_qs, memb_ty), _) ->
                                 E.return ( AilEmemberof a_e memb_ident
                                          , GenLValueType (combine_qualifiers qs memb_qs) memb_ty false )
-                            | Nothing ->
-                                E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
-                                                       (MemberofNoMemberLvalue memb_ident qs ty)
+                            | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
+                                if memb_ident = flex_ident then
+                                  E.return ( AilEmemberof a_e memb_ident
+                                           , GenLValueType (combine_qualifiers qs flex_qs) (Ctype [] (Array flex_elem_ty Nothing)) false )
+                                else
+                                  do_fail
+                            | (Nothing, Nothing) ->
+                                do_fail
                           end
                       | _ ->
                           error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
@@ -951,15 +958,22 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  inside a sizeof(), and therefore not executed.
                  So the UB from §6.5.2.3#5, doesn't necessarily happens here *)
               let do_struct tag_sym =
+                let do_fail =
+                  E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident))
+                    (MemberofNoMemberRvalue memb_ident gty) in
                 match lookup_tag_definition sigm tag_sym with
                   | Just (StructDef membersDefs flexible_opt) ->
-                      let () = error "TODO: fix flexible" in
-                      match List.lookup memb_ident membersDefs with
-                        | Just (_, _, memb_ty) ->
+                      match (List.lookup memb_ident membersDefs, flexible_opt) with
+                        | (Just (_, _, memb_ty), _) ->
                             E.return (AilEmemberof a_e memb_ident, GenRValueType (GenTypes.inject_type memb_ty))
-                        | Nothing ->
-                            E.constraint_violation (Loc.with_cursor_from (Loc.locOf e) (Loc.locOf memb_ident) )
-                                                   (MemberofNoMemberRvalue memb_ident gty)
+                        | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
+                            if memb_ident = flex_ident then
+                              E.return ( AilEmemberof a_e memb_ident
+                                       , GenRValueType (GenTypes.inject_type (Ctype [] (Array flex_elem_ty Nothing))) )
+                            else
+                              do_fail
+                        | (Nothing, Nothing) ->
+                            do_fail
                       end
                   | _ ->
                       error "annotate_expression(AilEmemberof struct): failed to find a valid tag definition"
@@ -1013,16 +1027,23 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                     E.constraint_violation (with_cursor_from (locOf e) loc) (MemberofptrReferenceTypeNotPointer gty)
               end >>= function
                 | (ref_qs, Left tag_sym, ref_ty) ->
+                    let do_fail =
+                      E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
+                        (MemberofptrNoMember memb_ident ref_qs ref_ty) in
                     match lookup_tag_definition sigm tag_sym with
                       | Just (StructDef membersDefs flexible_opt) ->
-                          let () = error "TODO: fix flexible" in
-                          match List.lookup memb_ident membersDefs with
-                            | Just (_, memb_qs, memb_ty) ->
+                          match (List.lookup memb_ident membersDefs, flexible_opt) with
+                            | (Just (_, memb_qs, memb_ty), _) ->
                                 E.return ( AilEmemberofptr e' memb_ident
                                          , GenLValueType (combine_qualifiers ref_qs memb_qs) memb_ty false )
-                            | Nothing ->
-                                E.constraint_violation (with_cursor_from (locOf e) (locOf memb_ident))
-                                                       (MemberofptrNoMember memb_ident ref_qs ref_ty)
+                            | (Nothing, Just (FlexibleArrayMember attrs flex_ident flex_qs flex_elem_ty)) ->
+                                if memb_ident = flex_ident then
+                                  E.return ( AilEmemberofptr e' memb_ident
+                                           , GenLValueType (combine_qualifiers ref_qs flex_qs) (Ctype [] (Array flex_elem_ty Nothing)) false )
+                                else
+                                  do_fail
+                            | (Nothing, Nothing) ->
+                                do_fail
                           end
                       | _ ->
                           error "annotate_expression(AilEmemberofptr struct): failed to find a valid tag definition"
@@ -1979,45 +2000,31 @@ let annotate_sigma sigm =
     end
   ) sigm.function_definitions >>= fun function_defs' ->
   
-  E.mapM (fun tag ->
-    let check_member sigm (ident, (_, qs, ty)) =
-      E.add "§6.7.2.1#3" >>
-      if AilTypesAux.has_flexible_array_member sigm ty then
-        E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray
-      else if AilTypesAux.is_function ty then
-        E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
-      else if AilTypesAux.is_incomplete sigm ty then
-        E.constraint_violation (Loc.locOf ident) (StructMemberIncompleteType qs ty)
-      else
-        E.return ()
-    in match tag with
+  let check_member (ident, (_, qs, ty)) =
+    E.add "§6.7.2.1#3" >>
+    if AilTypesAux.has_flexible_array_member sigm ty then
+      E.constraint_violation (Loc.locOf ident) StructMemberFlexibleArray
+    else if AilTypesAux.is_function ty then
+      E.constraint_violation (Loc.locOf ident) (StructMemberFunctionType ident)
+    else if AilTypesAux.is_incomplete sigm ty then
+      E.constraint_violation (Loc.locOf ident) (StructMemberIncompleteType qs ty)
+    else
+      E.return () in
+  E.mapM (function
     | (_, (_, StructDef xs flexible_opt)) ->
-        let () = error "TODO: fix flexible" in
-        (* STD §6.7.2.1#3 *)
-        match List.dest_init xs with
-          | Nothing ->
-              (* NOTE: this should be dead code because of the C syntax *)
-              error "GenTyping.annotate_sigma, StructDef, empty sdecls_opt"
-          | Just ([], memb) ->
-              check_member sigm memb
-          | Just (xs', (last_ident, (_, last_qs, last_ty))) ->
-              E.mapM_ (check_member sigm) xs' >>
-              (* This allows flexible array members *)
-              if AilTypesAux.has_flexible_array_member sigm last_ty then
-                E.constraint_violation (Loc.locOf last_ident) StructMemberFlexibleArray
-              else if AilTypesAux.is_function last_ty then
-                E.constraint_violation (Loc.locOf last_ident) (StructMemberFunctionType last_ident)
-              else if AilTypesAux.is_incomplete sigm last_ty && not (AilTypesAux.is_array_unknown_size last_ty) then
-                E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType last_qs last_ty)
-              else
-                E.return ()
-        end >>
+        E.mapM_ check_member xs >>= fun () ->
         E.mapM_ (fun (_, (_, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
-        ) xs
+        ) xs >>= fun () ->
+        match flexible_opt with
+          | Nothing ->
+              E.return ()
+          | Just (FlexibleArrayMember _ _ flex_qs flex_elem_ty) ->
+              wf_lvalue sigm flex_qs (Ctype [] (Array flex_elem_ty Nothing))
+        end
     | (_, (_, UnionDef xs)) ->
-        E.mapM (check_member sigm) xs >>
+        E.mapM check_member xs >>
         E.mapM_ (fun (_, (_, qs, ty)) ->
           (* TODO: check that it is ok to use wf_lvalue (instead of just wf_type) *)
           wf_lvalue sigm qs ty
