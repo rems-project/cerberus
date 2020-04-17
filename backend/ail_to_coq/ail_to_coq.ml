@@ -775,7 +775,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let (l, is_union) =
           match def with
           | Ctype.UnionDef(l)  -> (l, true )
-          | Ctype.StructDef(l) -> (l, false)
+          | Ctype.StructDef(l, _) -> (l, false)
         in
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
