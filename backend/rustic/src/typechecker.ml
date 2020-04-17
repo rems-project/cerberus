@@ -366,7 +366,7 @@ let collect_structs s =
   let s =
     Rustic_types.map_option
       (function
-      | (id, (attrs, Ctype.StructDef xs)) -> Some (string_of_sym id, rc_types_of_fields xs)
+      | (id, (attrs, Ctype.StructDef (xs, _))) -> Some (string_of_sym id, rc_types_of_fields xs)
       | (_, (_, Ctype.UnionDef _)) -> (* TODO: let us not support unions for now *) None)
      s.tag_definitions in
   match Rustic_types.String_map_aux.of_list s with

@@ -92,7 +92,7 @@ let rec ctype_to_bmcz3sort (Ctype (_, ty) as cty)
       assert false
   | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
-      | Some (StructDef memlist) ->
+      | Some (StructDef (memlist, _)) ->
           CaseSortList (List.map (fun (_, (_, _, ty)) -> ctype_to_bmcz3sort ty file)
                                  memlist)
       | _ -> assert false
