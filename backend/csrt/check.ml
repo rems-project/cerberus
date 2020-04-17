@@ -1993,7 +1993,7 @@ let record_tagDef sym def genv =
   match def with
   | Ctype.UnionDef _ -> 
      failwith "todo: union types"
-  | Ctype.StructDef fields ->
+  | Ctype.StructDef (fields, _) ->
 
      fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ctype)) ->
        let name = Id.s id in
