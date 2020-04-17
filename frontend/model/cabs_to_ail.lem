@@ -1479,12 +1479,18 @@ let rec desugar_type_specifiers specs =
                   else
                     E.is_incomplete lastMemb_ty >>= function
                       | true ->
-                          if struct_or_union = STRUCT && AilTypesAux.is_array_unknown_size lastMemb_ty then
-                            if List.length all_membDefs = 1 then
-                              E.constraint_violation (Loc.locOf last_ident) (IllegalFlexibleArrayMember last_ident)
-                            else
-                              (*E.fail (Loc.locOf last_ident) (Errors.Desugar_NotYetSupported "flexible array members")*)
-                              E.return (Just (membDefs, Ctype.FlexibleArrayMember lastMemb_attrs last_ident lastMemb_qs lastMemb_ty))
+                          if struct_or_union = STRUCT then
+                            match lastMemb_ty with
+                              | Ctype.Ctype _ (Ctype.Array elem_ty Nothing) ->
+                                  (* if we have an array with unknown size *)
+                                  if List.length all_membDefs = 1 then
+                                    E.constraint_violation (Loc.locOf last_ident) (IllegalFlexibleArrayMember last_ident)
+                                  else
+                                    (*E.fail (Loc.locOf last_ident) (Errors.Desugar_NotYetSupported "flexible array members")*)
+                                    E.return (Just (membDefs, Ctype.FlexibleArrayMember lastMemb_attrs last_ident lastMemb_qs elem_ty))
+                              | _ ->
+                                  E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType lastMemb_qs lastMemb_ty)
+                            end
                           else
                             E.constraint_violation (Loc.locOf last_ident) (StructMemberIncompleteType lastMemb_qs lastMemb_ty)
                       | false ->
