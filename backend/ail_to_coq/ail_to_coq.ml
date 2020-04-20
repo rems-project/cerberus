@@ -65,7 +65,7 @@ let collect_rc_attrs : Annot.attributes -> rc_attr list =
   in
   fun (Annot.Attrs(attrs)) -> List.rev (List.fold_left fn [] attrs)
 
-let translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
+let rec translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
   let open Ctype in
   let open Ocaml_implementation in
   let size_of_base_type signed i =
@@ -92,7 +92,7 @@ let translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
   | Bool        -> ItBool
   | Signed(i)   -> size_of_base_type true  i
   | Unsigned(i) -> size_of_base_type false i
-  | Enum(_)     -> not_impl loc "layout_of (Enum)"
+  | Enum(s)     -> translate_int_type loc (HafniumImpl.typeof_enum s)
   (* Things defined in the standard libraries *)
   | Wchar_t     -> not_impl loc "layout_of (Wchar_t)"
   | Wint_t      -> not_impl loc "layout_of (Win_t)"
