@@ -62,4 +62,4 @@ let c_file_to_ail cpp_includes cpp_nostd filename =
   | _      ->
   let err = Pp_errors.short_message err in
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
-  Panic.panic loc "Frontend error: %s\n\027[0m%s%!" err pos
+  Panic.panic loc "Frontend error.\n%s\n\027[0m%s%!" err pos
