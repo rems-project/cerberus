@@ -25,7 +25,7 @@ let pp_qualifiers qs =
 
 
 
-let rec pp_ctype_human qs (Ctype (_, ty)) =
+let rec pp_ctype_human_aux qs (Ctype (_, ty)) =
   let prefix_pp_qs =
     if AilTypesAux.is_unqualified qs then
       P.empty
@@ -60,6 +60,24 @@ let rec pp_ctype_human qs (Ctype (_, ty)) =
         prefix_pp_qs ^^ !^ "struct" ^^^ Pp_ail.pp_id tag_sym
     | Union tag_sym ->
         prefix_pp_qs ^^ !^ "union" ^^^ Pp_ail.pp_id tag_sym
+
+and pp_ctype_human qs (Ctype (xs, _) as ty) =
+  let typedef_opt = List.fold_left (fun acc_opt x ->
+    match acc_opt, x with
+    | None, Annot.Atypedef sym ->
+        Some sym
+(*
+    | Some attrs1, Annot.Aattrs attrs2 ->
+        Some (Annot.combine_attributes attrs1 attrs2)
+*)
+    | _, _ ->
+        acc_opt
+  ) None xs in
+  match typedef_opt with
+    | None ->
+        pp_ctype_human_aux qs ty
+    | Some sym ->
+        pp_ctype_human_aux qs ty ^^^ P.parens (!^ "typedef: " ^^ pp_symbol sym)
 
 let rec pp_genIntegerType_raw = function
  | Concrete ity ->
@@ -112,6 +130,7 @@ let pp_genType = function
 
 let pp_ctype qs ty =
   pp_ctype_human qs ty
+
 (*
   let rec pp_ctype_aux pp_ident_opt qs ty =
     let precOf = function
@@ -431,6 +450,12 @@ let pp_storageDuration = function
   | Automatic -> pp_type_keyword "automatic"
   | Allocated -> pp_type_keyword "allocated"
 
+let dtree_of_typedef_attributes (sym, attrs) =
+  with_attributes attrs begin
+    Dleaf (pp_symbol sym)
+  end
+
+
 let dtree_of_declaration (i, (_, decl_attrs, decl)) =
   let pp_storage (sd, isRegister) =
     pp_storageDuration sd ^^
@@ -487,7 +512,9 @@ let dtree_of_static_assertions pp_annot (e, lit) =
 
 let dtree_of_program pp_annot (_, sigm) =
   Dnode ( pp_decl_ctor "AilSigma" ,
-          [ Dnode (pp_decl_ctor "AilDeclarations"
+          [ Dnode (pp_decl_ctor "AilTypedefAttributes"
+                  , List.map dtree_of_typedef_attributes (Pmap.bindings_list sigm.typedef_attributes))
+          ; Dnode (pp_decl_ctor "AilDeclarations"
                   , List.map dtree_of_declaration sigm.declarations)
           ; Dnode (pp_ctor "AilTagDefinitions"
                   , List.map dtree_of_tag_definition sigm.tag_definitions)

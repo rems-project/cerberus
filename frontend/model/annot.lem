@@ -33,6 +33,8 @@ type annot =
   | Auid of string (* Unique ID *)
   | Abmc of bmc_annot
   | Aattrs of attributes (* C2X attributes *)
+  | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
+                              must only be used on a ctype to indicate it is a unfolding of a typedef *)
 
 
 val     get_loc: list annot -> maybe Loc.t

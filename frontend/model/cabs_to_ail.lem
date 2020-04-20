@@ -935,6 +935,7 @@ val desugar_init_declarator_BROKEN:
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit))))
 
 val desugar_init_declarator:
+  Annot.attributes ->
   bool(* isAtomic *) -> Ctype.qualifiers -> Ctype.ctype ->
   list storage_class_specifier -> init_declarator ->
   E.desugM (maybe (Loc.t * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
@@ -1628,8 +1629,8 @@ let rec desugar_type_specifiers specs =
                     (* TODO: check the namespace *)
                     E.resolve_ordinary_identifier cid_loc ident >>= function
                       | Just (_, E.OReg_typedef sym) ->
-                          E.resolve_typedef sym >>= fun (qs, Ctype.Ctype _ ty) ->
-                          E.return (qs, Ctype.Ctype [Annot.Aloc cid_loc] ty)
+                          E.resolve_typedef sym >>= fun (attrs, qs, Ctype.Ctype _ ty) ->
+                          E.return (qs, Ctype.Ctype [Annot.Aloc cid_loc; Annot.Atypedef sym] ty)
                       | Just _ ->
                           E.fail cid_loc (Errors.Desugar_NotYetSupported "TODO: Tspec_name, not King_typedef")
                       | Nothing ->
@@ -2366,6 +2367,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
               end
             ) [] (Map_extra.toList ident_tagDefs);
           extern_idmap= Map.empty;
+          typedef_attributes= Map.empty;
         |> in
         if not (   AilTypesAux.is_array_unknown_size ty
                 || (AilTypesAux.is_complete_object fake_ail_sigma ty && not (AilTypesAux.is_vla ty)) ) then
@@ -2404,7 +2406,7 @@ and desugar_init_declarator_BROKEN base_qs base_ty (scs: list storage_class_spec
 
 
 
-and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_specifier) idecltor =
+and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_class_specifier) idecltor =
   (* NOTE: this function does NOT check the wf of the storage classes *)
   E.get_scope >>= fun scope ->
   match idecltor with
@@ -2422,7 +2424,7 @@ and desugar_init_declarator isAtomic base_qs base_ty (scs: list storage_class_sp
               false
         end in
         if scs = [SC_typedef] then
-          E.register_typedef ident (qs, ty) >>= fun () ->
+          E.register_typedef ident (attrs, qs, ty) >>= fun () ->
           E.return Nothing
         else
           let (ctx, ok) =
@@ -3576,7 +3578,7 @@ let desugar_declaration_base attrs specifs idecltors =
             
             else if specifs.storage_classes = [SC_typedef] then
               (* Case of a typedef *)
-              E.register_typedef ident (qs, cty) >>
+              E.register_typedef ident (attrs, qs, cty) >>
               E.return acc
               
             else match ty with
@@ -3617,6 +3619,7 @@ let desugar_declaration_base attrs specifs idecltors =
                         end
                       ) [] (Map_extra.toList ident_tagDefs);
                     extern_idmap= Map.empty;
+                    typedef_attributes= Map.empty;
                   |> in
                   let dur = determinate_storage_duration link specifs.storage_classes in
                   match link with
@@ -3798,7 +3801,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
               end d_e
           end
       
-      | CabsSfor (Just (FC_decl ((Declaration_base _ specifs idecltors)))) e2_opt e3_opt s ->
+      | CabsSfor (Just (FC_decl ((Declaration_base attrs specifs idecltors)))) e2_opt e3_opt s ->
           E.freshify (Symbol.Identifier loc "continue") >>= fun cont_ident ->
           E.register_label cont_ident >>
           E.resolve_label cont_ident >>= fun cont_sym ->
@@ -3813,7 +3816,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
             let base_qs = Ctype.combine_qualifiers specs_qs tquals_qs in
             E.mapM (fun (InitDecl loc _ _ as init) ->
               check_storage_class_specifiers loc Object_decl_context specifs.storage_classes >>= fun () ->
-              desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
+              desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
             ) idecltors  >>= fun xs ->
             (* for each [init_declarator] *)
             E.foldrM (fun opt (acc1, acc2) ->
@@ -4196,7 +4199,7 @@ let desugar_and_register_external_declaration edecl =
            (see suite/parsing/declarator_visibility.c) *)
         (* NOTE: `desugar_init_declarator' does register the identifier it finds *)
         E.mapM (fun init ->
-          desugar_init_declarator isAtomic base_qs base_ty specifs.storage_classes init
+          desugar_init_declarator attrs isAtomic base_qs base_ty specifs.storage_classes init
         ) idecltors >>= fun xs ->
         
         (* for each [init_declarator] *)
@@ -4241,6 +4244,7 @@ let desugar_and_register_external_declaration edecl =
                           ) [] (Map_extra.toList ident_tagDefs)
                         end;
                       extern_idmap= Map.empty;
+                      typedef_attributes= Map.empty;
                     |> in
                     
                     mk_desug_init () >>= function
@@ -4384,7 +4388,7 @@ let desugar core_eval_stuff startup_str (TUnit edecls) =
 *)
   E.eval core_eval_stuff (
     E.under_scope E.Scope_file (
-      E.mapM_ desugar_and_register_external_declaration edecls >>
+      E.mapM_ desugar_and_register_external_declaration edecls >>= fun () ->
       E.extract_program startup_str
     )
   )
