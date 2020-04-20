@@ -519,7 +519,7 @@ let pp_pexpr pe =
               pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
             )
         | M_PEensure_specified (sym,_,Annotated (annots,bty,(loc,undef))) ->
-           pp_keyword "ensure_specified" ^^ pp_asym sym ^^ 
+           pp_keyword "ensure_specified" ^^^ pp_asym sym ^^ 
              P.parens (pp (M_Pexpr (annots,bty, M_PEundef (loc,undef))))
     end
   in pp None pe

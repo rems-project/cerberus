@@ -29,6 +29,23 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | None -> filter_map f xs
      | Some y -> y :: filter_map f xs
 
+let list_of_maybe = function
+  | None -> []
+  | Some a -> [a]
+
+let pp_list pp sep l = String.concat sep (map pp l)
+
+
+
+
+let of_a a = 
+  let (Annotated (_, _, x)) = a in x
+
+let lof_a a = 
+  let (Annotated (annots, _, x)) = a in 
+  (x, Annot.get_loc_ annots)
+
+
 
 
 
@@ -45,6 +62,9 @@ module SymSet = Set.Make(Sym)
 
 
 
+
+let sym_subst replace with_sym symbol = 
+  if symbol = replace then with_sym else symbol
 
 
 
@@ -77,7 +97,7 @@ module BaseTypes = struct
     | Struct of Sym.t
 
   let rec pp = function
-    | Unit -> "unit"
+    | Unit -> "unit" 
     | Bool -> "bool"
     | Int -> "int"
     | Loc -> "loc"
@@ -114,7 +134,7 @@ module BaseTypes = struct
   let types_equal ts1 ts2 = 
     for_all (fun (t1,t2) -> type_equal t1 t2) (combine ts1 ts2)
 
-  let subst _sym _with_it bt = bt
+  let subst _sym _sym' bt = bt
 
 end
 
@@ -139,7 +159,7 @@ module LogicalSorts = struct
   let types_equal ts1 ts2 = 
     for_all (fun (t1,t2) -> type_equal t1 t2) (combine ts1 ts2)
 
-  let subst _sym _with_it ls = ls
+  let subst _sym _sym' ls = ls
 
 
 end
@@ -326,7 +346,7 @@ module IndexTerms = struct
        parse_error "index term" t loc
 
 
-  let rec subst (sym : Sym.t) (with_it : t) it : t = 
+  let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 
     match it with
     | Num _ -> it
     | Bool _ -> it
@@ -352,9 +372,9 @@ module IndexTerms = struct
        List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
     (* | Specified symbol -> Specified symbol (\* check *\)
      * | Unspecified symbol -> Unspecified symbol (\* check *\) *)
-    | S symbol -> if symbol = sym then with_it else S symbol
+    | S symbol -> S (sym_subst sym with_it symbol)
 
-  let rec unify it it' (res : ('a, t) uni SymMap.t) = 
+  let rec unify it it' (res : ('a, Sym.t) uni SymMap.t) = 
     match it, it' with
     | Num n, Num n' when n = n' -> return res
     | Bool b, Bool b' when b = b' -> return res
@@ -396,12 +416,12 @@ module IndexTerms = struct
     | S sym, S sym' when sym = sym' ->
        return res
 
-    | S sym, it' ->
+    | S sym, S it' ->
        begin match SymMap.find_opt sym res with
        | None -> fail ()
        | Some uni ->
           match uni.resolved with
-          | Some it when it = it'-> return res 
+          | Some it when it = it' -> return res 
           | Some it -> fail ()
           | None -> 
              let uni = { uni with resolved = Some it' } in
@@ -429,70 +449,88 @@ end
 module Resources = struct
 
   type t = 
-    | Block of IndexTerms.t * IndexTerms.t
-    | Int of IndexTerms.t * IndexTerms.t (* location and value *)
-    | Points of IndexTerms.t * IndexTerms.t
-    | Array of IndexTerms.t * IndexTerms.t
-    | Pred of string * IndexTerms.t list
+    (* | Block of IndexTerms.t * IndexTerms.t *)
+    (* | Bool of IndexTerms.t * IndexTerms.t (\* location and value *\)
+     * | Int of IndexTerms.t * IndexTerms.t (\* location and value *\)
+     * | Points of IndexTerms.t * IndexTerms.t
+     * | Array of IndexTerms.t * IndexTerms.t *)
+    (* | Pred of string * IndexTerms.t list *)
+    | Points of IndexTerms.t * BaseTypes.t * IndexTerms.t
 
   let pp = function
-    | Block (it1,it2) -> 
-       sprintf "(block %s %s)" 
+    (* | Block (it1,it2) -> 
+     *    sprintf "(block %s %s)" 
+     *      (IndexTerms.pp it1)
+     *      (IndexTerms.pp it2) *)
+    (* | Bool (it1,it2) -> 
+     *    sprintf "(bool %s %s)" 
+     *      (IndexTerms.pp it1) 
+     *      (IndexTerms.pp it2)
+     * | Int (it1,it2) -> 
+     *    sprintf "(int %s %s)" 
+     *      (IndexTerms.pp it1) 
+     *      (IndexTerms.pp it2)
+     * | Array (it1,it2) -> 
+     *    sprintf "(array %s %s)" 
+     *      (IndexTerms.pp it1)
+     *      (IndexTerms.pp it2) *)
+    | Points (it1,bt,it2) -> 
+       sprintf "(points %s %s %s)" 
          (IndexTerms.pp it1)
+         (BaseTypes.pp bt)
          (IndexTerms.pp it2)
-    | Int (it1,it2) -> 
-       sprintf "(int %s %s)" 
-         (IndexTerms.pp it1) 
-         (IndexTerms.pp it2)
-    | Array (it1,it2) -> 
-       sprintf "(array %s %s)" 
-         (IndexTerms.pp it1)
-         (IndexTerms.pp it2)
-    | Points (it1,it2) -> 
-       sprintf "(points %s %s)" 
-         (IndexTerms.pp it1)
-         (IndexTerms.pp it2)
-    | Pred (p,its) ->
-       sprintf "(%s %s)" 
-         p
-         (String.concat " " (map IndexTerms.pp its))
+    (* | Pred (p,its) ->
+     *    sprintf "(%s %s)" 
+     *      p
+     *      (String.concat " " (map IndexTerms.pp its)) *)
 
-  
+
   let parse_sexp loc (names : namemap) sx = 
     match sx with 
-    | Sexp.List [Sexp.Atom "block";it1;it2] -> 
+    (* | Sexp.List [Sexp.Atom "block";it1;it2] -> 
+     *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
+     *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
+     *    return (Block (it1, it2)) *)
+    (* | Sexp.List [Sexp.Atom "bool"; it1; it2] ->
+     *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
+     *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
+     *    return (Bool (it1, it2))
+     * | Sexp.List [Sexp.Atom "int"; it1; it2] ->
+     *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
+     *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
+     *    return (Int (it1, it2))
+     * | Sexp.List [Sexp.Atom "array"; it1; it2] ->
+     *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
+     *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
+     *    return (Array (it1, it2)) *)
+    | Sexp.List [Sexp.Atom "points"; it1; bt; it2] ->
        IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
+       BaseTypes.parse_sexp loc names bt >>= fun bt ->
        IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-       return (Block (it1, it2))
-    | Sexp.List [Sexp.Atom "int"; it1; it2] ->
-       IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-       IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-       return (Int (it1, it2))
-    | Sexp.List [Sexp.Atom "array"; it1; it2] ->
-       IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-       IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-       return (Array (it1, it2))
-    | Sexp.List [Sexp.Atom "points"; it1; it2] ->
-       IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-       IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-       return (Points (it1, it2))
-    | Sexp.List (Sexp.Atom p :: its) ->
-       mapM (IndexTerms.parse_sexp loc names) its >>= fun its ->
-       return (Pred (p, its))
+       return (Points (it1, bt, it2))
+    (* | Sexp.List (Sexp.Atom p :: its) ->
+     *    mapM (IndexTerms.parse_sexp loc names) its >>= fun its ->
+     *    return (Pred (p, its)) *)
     | t -> parse_error "resource type" t loc
 
   let subst sym with_it t = 
     match t with
-    | Block (it, it') -> 
-       Block (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-    | Int (it, it') -> 
-       Int (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-    | Points (it, it') -> 
-       Points (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-    | Array (it, it') -> 
-       Array (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-    | Pred (p, its) ->
-       Pred (p, map (IndexTerms.subst sym with_it) its)
+    (* | Block (it, it') -> 
+     *    Block (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it') *)
+    (* | Bool (it, it') -> 
+     *    Bool (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
+     * | Int (it, it') -> 
+     *    Int (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
+     * | Points (it, it') -> 
+     *    Points (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
+     * | Array (it, it') -> 
+     *    Array (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it') *)
+    | Points (it, bt, it') -> 
+       Points (IndexTerms.subst sym with_it it, 
+               bt, 
+               IndexTerms.subst sym with_it it')
+    (* | Pred (p, its) ->
+     *    Pred (p, map (IndexTerms.subst sym with_it) its) *)
 
   let type_equal env t1 t2 = 
     t1 = t2                       (* todo: maybe up to variable
@@ -503,21 +541,29 @@ module Resources = struct
 
   let unify r1 r2 res = 
     match r1, r2 with
-    | Block (it1, it2), Block (it1', it2') ->
+    (* | Block (it1, it2), Block (it1', it2') ->
+     *    IndexTerms.unify it1 it1' res >>= fun res ->
+     *    IndexTerms.unify it2 it2' res *)
+    (* | Bool (it1, it2), Bool (it1', it2') -> 
+     *    IndexTerms.unify it1 it1' res >>= fun res ->
+     *    IndexTerms.unify it2 it2' res
+     * | Int (it1, it2), Int (it1', it2') -> 
+     *    IndexTerms.unify it1 it1' res >>= fun res ->
+     *    IndexTerms.unify it2 it2' res *)
+    (* | Array (it1, it2), Array (it1', it2') -> 
+     *    IndexTerms.unify it1 it1' res >>= fun res ->
+     *    IndexTerms.unify it2 it2' res *)
+    | Points (it1, bt, it2), Points (it1', bt', it2') 
+         when BaseTypes.type_equal bt bt' -> 
        IndexTerms.unify it1 it1' res >>= fun res ->
        IndexTerms.unify it2 it2' res
-    | Int (it1, it2), Int (it1', it2') -> 
-       IndexTerms.unify it1 it1' res >>= fun res ->
-       IndexTerms.unify it2 it2' res
-    | Points (it1, it2), Points (it1', it2') -> 
-       IndexTerms.unify it1 it1' res >>= fun res ->
-       IndexTerms.unify it2 it2' res
-    | Array (it1, it2), Array (it1', it2') -> 
-       IndexTerms.unify it1 it1' res >>= fun res ->
-       IndexTerms.unify it2 it2' res
-    | Pred (p, its), Pred (p', its') when p = p' ->
-       IndexTerms.unify_list its its' res
+    (* | Pred (p, its), Pred (p', its') when p = p' ->
+     *    IndexTerms.unify_list its its' res *)
     | _, _ -> fail ()
+
+  let linked_var = function
+    | Points (S v, _, _) -> Some v
+    | Points (_, _, _) -> None
 
 end
 
@@ -587,13 +633,13 @@ module Binders = struct
   let pp {name;bound} = 
     match bound with
     | A t -> 
-       sprintf "(%s : %s)" (Sym.pp name) (BaseTypes.pp t)
+       sprintf "(A %s : %s)" (Sym.pp name) (BaseTypes.pp t)
     | L t  -> 
-       sprintf "(Logical %s : %s)" (Sym.pp name) (LogicalSorts.pp t)
+       sprintf "(L %s : %s)" (Sym.pp name) (LogicalSorts.pp t)
     | R t -> 
-       sprintf "(Resource %s : %s)" (Sym.pp name) (Resources.pp t)
+       sprintf "(R %s : %s)" (Sym.pp name) (Resources.pp t)
     | C t -> 
-       sprintf "(Constraint %s : %s)" (Sym.pp name) (LogicalConstraints.pp t)
+       sprintf "(C %s : %s)" (Sym.pp name) (LogicalConstraints.pp t)
 
 
   let parse_sexp loc (names : namemap) s = 
@@ -622,7 +668,8 @@ module Binders = struct
        parse_error "binders" t loc
 
       let subst sym with_it b = 
-        { b with bound = VarTypes.subst sym with_it b.bound }
+        { name = sym_subst sym with_it b.name;
+          bound = VarTypes.subst sym with_it b.bound }
         
 
 end
@@ -649,6 +696,8 @@ module Types = struct
 
   let subst sym with_it bs = 
     map (Binders.subst sym with_it) bs
+
+  let names t = List.map (fun {Binders.name; _} -> name) t
 
 end
 
@@ -901,19 +950,17 @@ module GEnv = struct
       fun_decls = SymMap.empty;
       names = StringMap.empty }
 
-  let pp_list pp l = String.concat "\n" (map pp l)
-
   let pp_struct_decls decls = 
     let pp_entry (sym, bs) = sprintf "%s: %s" (Sym.pp sym) (Types.pp bs) in
-    pp_list pp_entry (SymMap.bindings decls)
+    pp_list pp_entry "\n" (SymMap.bindings decls)
 
   let pp_fun_decls decls = 
     let pp_entry (sym, (_, t, _ret)) = sprintf "%s: %s" (Sym.pp sym) (FunctionTypes.pp t) in
-    pp_list pp_entry (SymMap.bindings decls)
+    pp_list pp_entry "\n" (SymMap.bindings decls)
 
   let pp_name_map m = 
     let pp_entry (name,(sym,_)) = sprintf "%s: %s" name (Sym.pp sym) in
-    pp_list pp_entry (StringMap.bindings m)
+    pp_list pp_entry "\n" (StringMap.bindings m)
 
   let pp genv = 
     sprintf ("\nStructs\n-------\n%s\n\nFunctions\n---------\n%s\n\nNames\n-----\n%s\n")
@@ -924,9 +971,21 @@ module GEnv = struct
 end
 
 module LEnv = struct
-  type t = VarTypes.t SymMap.t
+  type t = { vars : VarTypes.t SymMap.t }
   type lenv = t
-  let empty = SymMap.empty
+  let empty = { vars = SymMap.empty }
+
+  let pp_vars decls = 
+    let pp_entry (sym, t) = Binders.pp {name = sym; bound = t} in
+    pp_list pp_entry ", " (SymMap.bindings decls)
+
+  let pp_rmap decls = 
+    let pp_entry (sym, sym2) = sprintf "(%s,%s)" (Sym.pp sym) (Sym.pp sym2) in
+    pp_list pp_entry ", " (SymMap.bindings decls)
+
+  let pp lenv = 
+    sprintf "%s\n" (pp_vars lenv.vars)
+
 end
 
 module Env = struct
@@ -947,7 +1006,11 @@ module Env = struct
       local = LEnv.empty }
 
   let add_var (env : t) (sym, t) = 
-    { env with local = SymMap.add sym t env.local }
+    { env with local = { vars = SymMap.add sym t env.local.vars } }
+
+  let remove_var env sym = 
+    let vars = SymMap.remove sym env.local.vars in
+    { env with local = {vars} }
 
   let add_vars env bindings = 
     fold_left add_var env bindings
@@ -963,17 +1026,13 @@ module Env = struct
 
   let add_Avars env vars = List.fold_left add_Avar env vars
 
-
-  let remove_var env sym = 
-    { env with local = SymMap.remove sym env.local }
-
   let lookup ?is_function:(is_function=false) (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
     match SymMap.find_opt name env with
     | None -> fail (Unbound_name {loc; is_function; unbound = name})
     | Some v -> return v
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
-    lookup loc env.local name >>= function
+    lookup loc env.local.vars name >>= function
     | VarTypes.A t -> return (`A t)
     | VarTypes.L t -> return (`L t)
     | VarTypes.R t -> return (`R (t, remove_var env name))
@@ -1005,6 +1064,16 @@ module Env = struct
     get_var loc env sym >>= function
     | `C t -> return t
     | t -> fail (Var_kind_error {loc; sym; expected = VarTypes.Constraint; has = kind t})
+
+  let get_linked_resource env sym = 
+    let relevant = 
+      SymMap.filter (fun name b ->
+          match b with
+          | (R t) -> Resources.linked_var t = Some sym 
+          | _ -> false
+        ) env.local.vars 
+    in
+    SymMap.bindings relevant      
 
 end
 
@@ -1129,10 +1198,10 @@ let subtype loc env rt1 rt2 =
        match r1, r2 with
        | {name = n1; bound = A t1}, {name = n2; bound = VarTypes.A t2} 
             when BaseTypes.type_equal t1 t2 ->
-          check (add_var env (n1, A t1)) rt1 (Types.subst n2 (S n1) rt2)
+          check (add_var env (n1, A t1)) rt1 (Types.subst n2 n1 rt2)
        | {name = n1; bound = L t1}, {name = n2; bound = L t2} 
             when LogicalSorts.type_equal t1 t2 ->
-          check (add_var env (n1, L t1)) rt1 (Types.subst n2 (S n1) rt2)
+          check (add_var env (n1, L t1)) rt1 (Types.subst n2 n1 rt2)
        | {name = n1; bound = R t1}, {name = n2; bound = R t2} 
             when Resources.type_equal env t1 t2 ->
           check env rt1 rt2
@@ -1155,8 +1224,6 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
   let bt_of_core_object_type loc = function
     | OTy_integer -> 
        return BaseTypes.Int
-    | OTy_floating -> 
-       fail (Unsupported {loc; unsupported = "float"})
     | OTy_pointer -> 
        return BaseTypes.Loc
     | OTy_array cbt -> 
@@ -1165,6 +1232,9 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
        return (Struct sym)
     | OTy_union _sym -> 
        failwith "todo: union types"
+
+    | OTy_floating -> 
+       fail (Unsupported {loc; unsupported = "float"})
   in
 
   match cbt with
@@ -1172,8 +1242,6 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
      return BaseTypes.Unit
   | Core.BTy_boolean -> 
      return BaseTypes.Bool
-  | Core.BTy_ctype -> 
-     fail (Unsupported {loc; unsupported = "ctype"})
   | Core.BTy_list bt -> 
      bt_of_core_base_type loc bt >>= fun bt ->
      return (BaseTypes.List bt)
@@ -1184,8 +1252,11 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
      bt_of_core_object_type loc ot
   | Core.BTy_loaded ot -> 
      bt_of_core_object_type loc ot
+
   | Core.BTy_storable -> 
      fail (Unsupported {loc; unsupported = "BTy_storable"})
+  | Core.BTy_ctype -> 
+     fail (Unsupported {loc; unsupported = "ctype"})
 
 
 
@@ -1194,13 +1265,13 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
 (* and *)
 (* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let bt_and_constr_of_integerBaseType signed ibt = 
+let bt_and_constr_of_integerBaseType name signed ibt = 
 
   let make f t = 
     let ft = IndexTerms.Num (of_string f) in
     let tt = IndexTerms.Num (of_string t) in
-    let constr name = (name %>= ft) %& (name %<= tt) in
-    (BaseTypes.Int, constr)
+    let constr = (S name %>= ft) %& (S name %<= tt) in
+    (BaseTypes.Int, LC constr)
   in
 
   match signed, ibt with
@@ -1239,17 +1310,17 @@ let bt_and_constr_of_integerBaseType signed ibt =
   | _, Ctype.Intptr_t -> 
      failwith "todo standard library types"
 
-let bt_and_constr_of_integerType it = 
+let bt_and_constr_of_integerType name it = 
   match it with
   | Ctype.Char -> 
      failwith "todo char"
   | Ctype.Bool -> 
      (BaseTypes.Bool, None)
   | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType name true ibt in
      (bt, Some constr)
   | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType name false ibt in
      (bt, Some constr)
   | Ctype.Enum _sym -> 
      failwith "todo enum"
@@ -1262,36 +1333,80 @@ let bt_and_constr_of_integerType it =
   | Ctype.Ptrdiff_t -> 
      failwith "todo standard library types"
 
-let rec bt_and_constr_of_ctype (Ctype.Ctype (annots, ct)) = 
+
+let rec ctype_aux name (Ctype.Ctype (annots, ct)) = 
   let loc = Annot.get_loc_ annots in
   match ct with
   | Ctype.Void -> (* check *)
-     return (Unit, None)
+     return ((name, Unit), [])
   | Ctype.Basic (Integer it) -> 
-     return (bt_and_constr_of_integerType it)
-  | Ctype.Basic (Floating _) -> 
-     fail (Unsupported {loc; unsupported = "floats"} )
+     let (bt,mc) = bt_and_constr_of_integerType name it in
+     begin match mc with
+     | Some c -> 
+        return ((name, bt), [{name = Sym.fresh (); bound = C c}])
+     | None -> 
+        return ((name, bt), [])
+     end
   | Ctype.Array (ct, _maybe_integer) -> 
-     return (BaseTypes.Array, None)
-  | Ctype.Function _ -> 
-     fail (Unsupported {loc; unsupported = "function pointers"})
+     return ((name, Array), [])
   | Ctype.Pointer (_qualifiers, ctype) ->
-     return (Loc, None)
+     let lname = fresh () in
+     let rname = fresh () in
+     ctype_aux lname ctype >>= fun ((lname,bt), rt) ->
+     let rt = 
+       {name = lname; bound = L (Base bt)} ::
+       {name = rname; bound = R (Points (S name, bt, S lname))} :: 
+       rt 
+     in
+     return ((name, Loc), rt)
   | Ctype.Atomic ct ->              (* check *)
-     bt_and_constr_of_ctype ct
+     ctype_aux name ct >>= fun ((name, bt), rt) ->
+     return ((name, bt), rt)
   | Ctype.Struct sym -> 
-     return (Struct sym, None)
+     return ((name, Struct sym), [])
   | Ctype.Union sym ->
      failwith "todo: union types"
 
+  | Ctype.Basic (Floating _) -> 
+     fail (Unsupported {loc; unsupported = "floats"} )
+  | Ctype.Function _ -> 
+     fail (Unsupported {loc; unsupported = "function pointers"}) 
 
 
-let type_of_ctype name ctype = 
-  bt_and_constr_of_ctype ctype >>= function
-  | (bt, Some c) -> 
-     return [{name; bound = A bt}; {name = fresh (); bound = C (LC (c (S name)))}]
-  | (bt, None) -> 
-     return [{name; bound = A bt}]
+
+
+let strip_quantifiers t = 
+  List.filter_map (function {name; bound = L _} -> None | b -> Some b) t
+
+
+
+let make_pointer_type name ct : (FunctionTypes.t,'e) m = 
+  ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),rt) ->
+  let rname = fresh () in
+  let arguments = 
+    {name; bound = A Loc} :: 
+    {name = pointee_name; bound = L (Base bt)} ::
+    {name = rname; bound = R (Points (S name, bt, S pointee_name))} :: 
+    rt
+  in
+  let ret = 
+    {name = pointee_name; bound = A bt} ::
+    {name = rname; bound = R (Points (S name, bt, S pointee_name))} :: 
+    (strip_quantifiers rt)
+  in
+  let ftyp = FunctionTypes.F {arguments; return = ret} in
+  return ftyp
+
+
+
+let type_of_ctype name ct = 
+  ctype_aux name ct >>= fun ((name, bt), rt) ->
+  return ({name; bound = A bt} :: rt)
+
+(* fix *)
+let make_pointer_ctype ct = 
+  let q = {Ctype.const = false; Ctype.restrict = false; Ctype.volatile = false} in
+  Ctype.Ctype ([], Ctype.Pointer (q, ct))
 
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
@@ -1319,7 +1434,7 @@ let args_same_typ (mtyp : BaseTypes.t option) (args_bts : (BaseTypes.t * Loc.t) 
 
 let make_Aargs_bts env tsyms = 
   mapM (fun tsym ->
-      let (sym, loc) = Sym.lof_asym tsym in
+      let (sym, loc) = lof_a tsym in
       get_Avar loc env sym >>= fun t ->
       return (t, loc)) tsyms
 
@@ -1338,8 +1453,6 @@ let infer_object_value (env : env) loc name ov =
      let t = {name; bound = A Int} in
      let constr = {name = fresh (); bound = C (LC (S name %= Num i))} in
      return [t; constr]
-  | M_OVfloating iv ->
-     fail (Unsupported {loc; unsupported = "floats"})
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
@@ -1365,14 +1478,18 @@ let infer_object_value (env : env) loc name ov =
   | M_OVunion _ -> 
      failwith "todo: union types"
 
+  | M_OVfloating iv ->
+     fail (Unsupported {loc; unsupported = "floats"})
+
 let infer_loaded_value env loc name lv = 
   match lv with
  | M_LVspecified ov ->
     infer_object_value env loc name ov >>= fun rt ->
     return rt
  | M_LVunspecified ct ->
-    if is_unreachable env loc then
-      type_of_ctype name ct
+    if is_unreachable env loc then 
+      type_of_ctype name ct >>= fun rt ->
+      failwith "unspecified"
     else 
       fail (Unspecified_value loc)
 
@@ -1412,58 +1529,78 @@ let infer_value loc name env v =
      return [t]
 
 
-let call_typ loc_call env decl_typ args =    
 
-  let logical_variables_resolved env unis = 
+
+let pp_unis unis = 
+  let pp_entry (sym, {spec_name; spec; resolved}) =
+    match resolved with
+    | Some res -> 
+       sprintf "%s : %s resolved as %s" 
+         (Sym.pp sym) (LogicalSorts.pp spec) (Sym.pp res)
+    | None -> sprintf "%s : %s unresolved"
+         (Sym.pp sym) (LogicalSorts.pp spec) 
+  in
+  pp_list pp_entry ", " (SymMap.bindings unis)
+
+
+
+let call_typ loc_call env decl_typ args =
+
+  let find_resolved env unis = 
     SymMap.foldM
-      (fun usym {spec_name; spec; resolved} substs ->
+      (fun usym ({spec_name : Sym.t; spec; resolved} as uni) (unresolved,substs) ->
         match resolved with
-        | None -> 
-           fail (Call_error (loc_call, Unconstrained_l (spec_name,spec)))
-        | Some it -> 
-           let (Base bt) = spec in
-           check_it loc_call env it bt >>
-           return ((usym, it) :: substs)
-      ) unis []
+        | None ->
+           return (SymMap.add usym uni unresolved, substs)
+        | Some sym -> 
+           let (LogicalSorts.Base bt) = spec in
+           check_it loc_call env (S sym) bt >>
+           return (unresolved, (usym, sym) :: substs)
+      ) unis (SymMap.empty, [])
   in
 
-  let rec check_and_refine env asyms (F ftyp) unis constrs = 
+  let rec check_and_refine env args (F ftyp) unis constrs = 
+    
+    (* print_endline (sprintf "\n\nlenv before: %s" (LEnv.pp env.local));
+     * print_endline (sprintf "ftyp: %s" (FunctionTypes.pp (F ftyp)));
+     * print_endline (sprintf "args: %s" (pp_list (fun (a,_) -> Sym.pp a) ", " args));
+     * print_endline (sprintf "unis: %s" (pp_unis unis)); *)
+
+
     match ftyp.arguments with
     | [] -> 
-       begin match asyms with
+       begin match args with
        | [] -> 
-          logical_variables_resolved env unis >>= fun substs ->
-          let ret = 
-            fold_left (fun ret (s, subst) -> Types.subst s subst ret)
-              ftyp.return substs 
-          in
-          let constrs = 
-            fold_left (fun constrs (s, subst) -> 
-                map (fun (n,lc) -> (n, LogicalConstraints.subst s subst lc)) constrs)
-              constrs substs
-          in
-          constraints_hold loc_call env constrs >>
-          return (ret,env)
+          find_resolved env unis >>= fun (unresolved,substs) ->
+          if not (SymMap.is_empty unresolved) then
+            let (usym, {spec_name : Sym.t; spec; resolved}) =
+              SymMap.find_first (fun _ -> true) unresolved in
+            fail (Call_error (loc_call, Unconstrained_l (spec_name,spec)))
+          else
+            let ret = 
+              fold_left (fun ret (s, subst) -> Types.subst s subst ret)
+                ftyp.return substs 
+            in
+            let constrs = 
+              fold_left (fun constrs (s, subst) -> 
+                  map (fun (n,lc) -> (n, LogicalConstraints.subst s subst lc)) constrs)
+                 constrs substs
+            in
+            constraints_hold loc_call env constrs >>
+              return (ret,env)
           
-       | asym :: asyms' -> 
-          let (sym,loc) = Sym.lof_asym asym in
-          get_var loc env sym >>= function
-          | `A t' -> fail (Call_error (loc, Surplus_A (sym, t')))
-          | `L t' -> fail (Call_error (loc, Surplus_L (sym, t')))
-          | `R (t',_) -> fail (Call_error (loc, Surplus_R (sym, t')))
-          | `C t' -> check_and_refine (add_Cvar env (sym, t')) 
-                        asyms' (F ftyp) unis constrs
+       | (sym,loc) :: args -> 
+          get_Avar loc env sym >>= fun bt ->
+          fail (Call_error (loc, Surplus_A (sym, bt)))
        end
 
-    | {name = n; bound =  A t} :: args' ->
-       begin match asyms with
-       | asym :: asyms' ->
-          let (sym,loc) = Sym.lof_asym asym in
+    | {name = n; bound =  A t} :: decl_args ->
+       begin match args with
+       | (sym,loc) :: args ->
           get_Avar loc env sym >>= fun t' ->
-          let ftyp = FunctionTypes.subst n (S sym) 
-                       (F {ftyp with arguments = args'}) in
-          if BaseTypes.type_equal t' t
-          then check_and_refine env asyms' ftyp unis constrs
+          if BaseTypes.type_equal t' t then 
+            let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+            check_and_refine env args ftyp unis constrs
           else 
             let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
             fail (Call_error (loc, msm))
@@ -1471,32 +1608,37 @@ let call_typ loc_call env decl_typ args =
           fail (Call_error (loc_call, Missing_A (n, t)))
        end
 
-    | {name = n; bound = R t} :: args' -> 
-
-       begin match asyms with
-       | asym :: _ -> 
-          let (sym,loc) = Sym.lof_asym asym in 
-          get_Rvar loc env sym >>= fun (t',env) ->
-          tryM (Resources.unify t t' unis)
-            (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
-             fail (Call_error (loc, err))) >>= fun res ->
-          check_and_refine env asyms (F {ftyp with arguments = args'}) unis constrs
-       | [] -> 
-          fail (Call_error (loc_call, (Missing_R (n, t))))
+    | {name = n; bound = R t} :: decl_args -> 
+       begin match Resources.linked_var t with
+       | None -> fail (Call_error (loc_call, (Missing_R (n, t))))
+       | Some avar ->
+          match get_linked_resource env avar with
+          | [] -> fail (Call_error (loc_call, (Missing_R (n, t))))
+          | _ :: _ :: _ -> failwith "too many"
+          | [(sym, _)] -> 
+             get_Rvar loc_call env sym >>= fun (t',env) ->
+             tryM (Resources.unify t t' unis)
+               (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
+                fail (Call_error (loc_call, err))) >>= fun unis ->
+             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+             find_resolved env unis >>= fun (_,substs) ->
+             let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
+             check_and_refine env args ftyp unis constrs
        end
 
-    | {name = n; bound = L t} :: args' -> 
+    | {name = n; bound = L t} :: decl_args -> 
        let sym = Sym.fresh () in
        let uni = { spec_name = n; spec = t; resolved = None } in
        let unis' = SymMap.add sym uni unis in
-       let ftyp' = FunctionTypes.subst n (S sym) (F {ftyp with arguments = args'}) in
-       check_and_refine env asyms ftyp' unis' constrs
+       let ftyp' = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+       check_and_refine env args ftyp' unis' constrs
 
-    | {name = n; bound = C t} :: args' ->        
+    | {name = n; bound = C t} :: decl_args ->        
        let constrs' = (constrs @ [(n, t)]) in
-       check_and_refine env asyms (F {ftyp with arguments = args'}) unis constrs'
+       check_and_refine env args (F {ftyp with arguments = decl_args}) unis constrs'
 
   in
+
   check_and_refine env args decl_typ SymMap.empty []
 
 
@@ -1558,6 +1700,7 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
     end
   | Cunspecified ->
      failwith "unspecified constructor"
+
   | Cfvfromint -> 
      fail (Unsupported {loc; unsupported = "floats"})
   | Civfromfloat -> 
@@ -1641,8 +1784,8 @@ let infer_binop name env loc op sym1 sym2 =
     | OpOr -> ((BaseTypes.Bool, BaseTypes.Bool), BaseTypes.Bool)
   in
 
-  let (sym1, loc1) = Sym.lof_asym sym1 in
-  let (sym2, loc2) = Sym.lof_asym sym2 in
+  let (sym1, loc1) = lof_a sym1 in
+  let (sym2, loc2) = lof_a sym2 in
   get_Avar loc env sym1 >>= fun t1 ->
   get_Avar loc env sym2 >>= fun t2 ->
   let ((st1,st2),rt) = bt_of_binop in
@@ -1659,6 +1802,8 @@ let check_undef env loc undef =
   else fail (Undefined_behaviour (loc, undef))
   
 let rec infer_pexpr name env (pe : 'bty mu_pexpr) = 
+  print_endline (sprintf "\ninfer_pexpr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_pexpr pe)));
+  print_endline (sprintf "env: %s" (LEnv.pp env.local));
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Annot.get_loc_ annots in
   match pe_ with
@@ -1689,7 +1834,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
   | M_PEmember_shift _ ->
      failwith "todo PEmember_shift"
   | M_PEnot sym ->
-     let (sym,a_loc) = Sym.lof_asym sym in
+     let (sym,a_loc) = lof_a sym in
      get_Avar loc env sym >>= fun t ->
      ensure_type a_loc (Some sym) (A t) (A BaseTypes.Bool) >>
      let constr = LC ((S name) %= Not (S sym)) in
@@ -1707,7 +1852,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
   | M_PEcall (mu_name, asyms) ->
      (* include the resource arguments into asyms *)
      (* let env = call_resources annots env in *)
-     call_typ_fn loc mu_name env asyms
+     call_typ_fn loc mu_name env (List.map lof_a asyms)
   | M_PElet (p, e1, e2) ->
      begin match p with 
      | M_symbol (Annotated (_annots, _, name2)) ->
@@ -1722,24 +1867,8 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      end
   | M_PEif _ ->
      failwith "PEif in inferring position"
-  (* | M_PEif (sym1,sym2,sym3) ->
-   *    let sym1, loc1 = Sym.lof_asym sym1 in
-   *    let sym2, loc2 = Sym.lof_asym sym2 in
-   *    let sym3, loc3 = Sym.lof_asym sym3 in
-   *    get_Avar loc env sym1 >>= fun t1 ->
-   *    get_Avar loc env sym2 >>= fun t2 ->
-   *    get_Avar loc env sym3 >>= fun t3 ->
-   *    ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
-   *    ensure_type loc3 (Some sym3) (A t3) (A t2) >>
-   *    let constr = 
-   *      {name = Sym.fresh ();
-   *       bound = C (LC ( (S sym1 %& (S name %= S sym2)) %| 
-   *                       ((Not (S sym1)) %& (S name %= S sym3)) ) )}
-   *    in
-   *    let t = {name; bound = A t2} in
-   *    return ([t; constr], env) *)
   | M_PEensure_specified (asym1, _ct, Annotated (_,_,(loc,undef))) ->
-     let sym1, loc1 = Sym.lof_asym asym1 in
+     let sym1, loc1 = lof_a asym1 in
      (* if constraint_holds loc env (LC (Specified sym1)) then  *)
        get_Avar loc env sym1 >>= fun t1 ->
        return ([{name = sym1; bound = A t1}], env)
@@ -1749,11 +1878,13 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
 
 
 and check_pexpr env (e : 'bty mu_pexpr) ret = 
+  print_endline (sprintf "\ncheck_pexpr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_pexpr e)));
+  print_endline (sprintf "env: %s" (LEnv.pp env.local));
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
   | M_PEif (asym1, e2, e3) ->
-     let sym1, loc1 = Sym.lof_asym asym1 in
+     let sym1, loc1 = lof_a asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
      let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
@@ -1761,7 +1892,7 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
      check_pexpr (add_Cvar env then_constr) e2 ret >>
      check_pexpr (add_Cvar env else_constr) e3 ret
   | M_PEcase (asym, pats_es) ->
-     let (esym,eloc) = Sym.lof_asym asym in
+     let (esym,eloc) = lof_a asym in
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
@@ -1772,6 +1903,18 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
          check_pexpr env' pe ret
        ) pats_es >>
      return env
+  | M_PElet (p, e1, e2) ->
+     begin match p with 
+     | M_symbol (Annotated (_annots, _, name2)) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        check_pexpr (add_rt env rt ) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
+        let name2 = sym_or_fresh mname2 in
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        check_pexpr (add_rt env rt) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
+        failwith "todo ctor pattern"
+     end
   | _ ->
      let name = Sym.fresh () in    (* fix *)
      infer_pexpr name env e >>= fun (t, env) ->
@@ -1779,10 +1922,11 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
      return env
 
 
-
 let rec infer_expr name env (e : ('a,'bty) mu_expr) = 
+  print_endline (sprintf "\ninfer_expr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_expr e)));
+  print_endline (sprintf "env: %s" (LEnv.pp env.local));
   let (M_Expr (annots, e_)) = e in
-  (* let loc = Annot.get_loc_ annots in *)
+  let loc = Annot.get_loc_ annots in
   match e_ with
   | M_Epure pe -> 
      infer_pexpr name env pe
@@ -1790,8 +1934,12 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
      failwith "todo ememop"
   | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
      begin match action_ with
-     | M_Create (sym1,ct,_prefix) -> 
-        failwith "Create"
+     | M_Create (asym,a_ct,_prefix) -> 
+        let (ct, _ct_loc) = lof_a a_ct in
+        let arguments = [{name; bound = A Loc}] in
+        type_of_ctype name ct >>= fun return ->
+        let decl_typ = F {arguments; return} in
+        call_typ loc env decl_typ [lof_a asym]
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         failwith "CreateReadOnly"
      | M_Alloc (ct, sym, _prefix) -> 
@@ -1800,8 +1948,20 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
         failwith "Kill"
      | M_Store (_is_locking,ct, sym1, sym2, mo) -> 
         failwith "Store"
-     | M_Load (ct, sym, mo) -> 
-        failwith "Load"
+     | M_Load (a_ct, asym, _mo) -> 
+        let (ct, _ct_loc) = lof_a a_ct in
+        let (sym, loc) = lof_a asym in
+        (* get_linked_resource loc env sym >>= fun r -> *)
+        let args = [lof_a asym] in (* ; (r,loc)] in *)
+        (* decl_typ *)
+        make_pointer_type name ct >>= fun decl_typ ->
+        (* (\* end decl_typ *\)
+         *   get_Avar loc env sym >>= fun t ->
+         *   get_Rvar loc env r >>= fun (rt,_) ->
+         *   let () = print_endline (sprintf "arguments: %s" (Types.pp [{name=sym; bound = A t}; {name=r; bound = R rt}])) in
+         * print_endline (sprintf "spec: %s" (FunctionTypes.pp decl_typ));
+         * print_endline (sprintf "\n\n%s" (LEnv.pp env.local)); *)
+        call_typ loc env decl_typ args
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         failwith "RMW"
      | M_Fence mo -> 
@@ -1855,6 +2015,8 @@ failwith "LinuxRMW"
      | Pattern (_annot, CaseBase (mname2,_cbt)) ->
         let name2 = sym_or_fresh mname2 in
         infer_expr name2 env e1 >>= fun (rt, env) ->
+        print_endline (sprintf "env: %s" (LEnv.pp env.local));
+        print_endline (sprintf "rt: %s" (Types.pp rt));
         infer_expr name (add_rt env rt) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
@@ -1869,11 +2031,13 @@ failwith "LinuxRMW"
      failwith "todo erun"
 
 and check_expr env (e : ('a,'bty) mu_expr) ret = 
+  print_endline (sprintf "\ncheck_expr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_expr e)));
+  print_endline (sprintf "env: %s" (LEnv.pp env.local));
   let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
   | M_Eif (asym1, e2, e3) ->
-     let sym1, loc1 = Sym.lof_asym asym1 in
+     let sym1, loc1 = lof_a asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
      let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
@@ -1881,7 +2045,7 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      check_expr (add_Cvar env then_constr) e2 ret >>
      check_expr (add_Cvar env else_constr) e3 ret
   | M_Ecase (asym, pats_es) ->
-     let (esym,eloc) = Sym.lof_asym asym in
+     let (esym,eloc) = lof_a asym in
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
@@ -1894,6 +2058,21 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      return env     
   | M_Epure pe -> 
      check_pexpr env pe ret
+  | M_Elet (p, e1, e2) ->
+     begin match p with 
+     | M_symbol (Annotated (_annots, _, name2)) ->
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        check_expr (add_rt env rt) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
+        let name2 = sym_or_fresh mname2 in
+        infer_pexpr name2 env e1 >>= fun (rt, env) ->
+        check_expr (add_rt env rt) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
+        failwith "todo ctor pattern"
+     end
+  | M_Esave (_ret, _args, body) ->
+     (* fix this: this is ignoring Esave for now *)
+     check_expr env body ret
   | _ ->
      let name = Sym.fresh () in    (* fix *)
      infer_expr name env e >>= fun (t, env) ->
@@ -1970,7 +2149,9 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
 
-  let make_arg_t (msym,ctype) = type_of_ctype (sym_or_fresh msym) ctype in
+  let make_arg_t (msym,ctype) = 
+    type_of_ctype (sym_or_fresh msym) (make_pointer_ctype ctype) in
+
   if is_variadic 
   then fail (Variadic_function {loc; fn = sym})
   else 
@@ -1996,18 +2177,20 @@ let record_tagDef sym def genv =
   | Ctype.StructDef (fields, _) ->
 
      fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ctype)) ->
-       let name = Id.s id in
-       let sym = Sym.fresh_pretty name in
-       let names = (name, (sym, Loc.unknown)) :: names in
-       bt_and_constr_of_ctype ctype >>= fun bt_constr ->
-       let fields = match bt_constr with
-         | (bt, Some c) -> 
-            fields @ [{name = sym; bound = A bt}; 
-                      {name = fresh (); bound = C (LC (c (S sym)))}]
-         | (bt, None) -> 
-            fields @ [{name = sym; bound = A bt}]
-       in
-       return (names, fields)
+       let id = Id.s id in
+       let name = Sym.fresh_pretty id in
+       let names = (id, (name, Loc.unknown)) :: names in
+       type_of_ctype name ctype >>= fun newfields ->
+       return (names, fields @ newfields)
+       (* fun bt_constr ->
+        * let fields = match bt_constr with
+        *   | (bt, Some c) -> 
+        *      fields @ [{name = sym; bound = A bt}; 
+        *                {name = fresh (); bound = C (LC (c (S sym)))}]
+        *   | (bt, None) -> 
+        *      fields @ [{name = sym; bound = A bt}]
+        * in
+        * return (names, fields) *)
      ) ([],[]) fields >>= fun (names,fields) ->
 
      let struct_decls = SymMap.add sym fields genv.GEnv.struct_decls in
