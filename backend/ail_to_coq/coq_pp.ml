@@ -153,14 +153,16 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
               pp "(%a) %a{%a, %a} (%a)" pp_expr e1 pp_bin_op op
                 pp_op_type ty1 pp_op_type ty2 pp_expr e2
         end
-    | Deref(lay,e)                  ->
+    | Deref(atomic,lay,e)           ->
+        if atomic then panic_no_pos "Operations on atomics not supported.";
         pp "!{%a} (%a)" (pp_layout false) lay pp_expr e
     | CAS(ty,e1,e2,e3)              ->
         pp "CAS@ (%a)@ (%a)@ (%a)@ (%a)" pp_op_type ty
           pp_expr e1 pp_expr e2 pp_expr e3
     | SkipE(e)                      ->
         pp "SkipE (%a)" pp_expr e
-    | Use(lay,e)                    ->
+    | Use(atomic,lay,e)             ->
+        if atomic then panic_no_pos "Operations on atomics not supported.";
         pp "use{%a} (%a)" (pp_layout false) lay pp_expr e
     | AddrOf(e)                     ->
         pp "&(%a)" pp_expr e
@@ -186,14 +188,15 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       | Some(d) -> pp "locinfo: loc_%i ;@;" d.loc_key
     end;
   match stmt.elt with
-  | Goto(id)               ->
+  | Goto(id)                      ->
       pp "Goto %S" id
-  | Return(e)              ->
+  | Return(e)                     ->
       pp "Return @[<hov 0>(%a)@]" pp_expr e
-  | Assign(lay,e1,e2,stmt) ->
+  | Assign(atomic,lay,e1,e2,stmt) ->
+      if atomic then panic_no_pos "Operations on atomics not supported.";
       pp "@[<hov 2>%a <-{ %a }@ %a ;@]@;%a"
         pp_expr e1 (pp_layout false) lay pp_expr e2 pp_stmt stmt
-  | Call(ret_id,e,es,stmt) ->
+  | Call(ret_id,e,es,stmt)        ->
       let pp_args _ es =
         let n = List.length es in
         let fn i e =
@@ -203,14 +206,14 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       in
       pp "@[<hov 2>%S <- %a with@ [ %a ] ;@]@;%a"
         (Option.get "_" ret_id) pp_expr e pp_args es pp_stmt stmt
-  | SkipS(stmt)            ->
+  | SkipS(stmt)                   ->
       pp_stmt ff stmt
-  | If(e,stmt1,stmt2)      ->
+  | If(e,stmt1,stmt2)             ->
       pp "if: @[<hov 0>%a@]@;then@;@[<v 2>%a@]@;else@;@[<v 2>%a@]"
         pp_expr e pp_stmt stmt1 pp_stmt stmt2
-  | Assert(e, stmt)        ->
+  | Assert(e, stmt)               ->
       pp "assert: (%a) ;@;%a" pp_expr e pp_stmt stmt
-  | ExprS(annot, e, stmt)  ->
+  | ExprS(annot, e, stmt)         ->
       Option.iter (Option.iter (pp "annot: (%s) ;@;")) annot;
       pp "expr: (%a) ;@;%a" pp_expr e pp_stmt stmt
 
@@ -258,9 +261,10 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
       List.iter pp_file_def all_files;
       let pp_loc_def d =
         let open Location in
-        let file_key = List.assoc d.loc_file all_files in
-        pp "@;Definition loc_%i : location_info := LocationInfo file_%i %i %i %i %i."
-          d.loc_key file_key d.loc_line1 d.loc_col1 d.loc_line2 d.loc_col2
+        pp "@;Definition loc_%i : location_info := " d.loc_key;
+        pp "LocationInfo file_%i %i %i %i %i."
+          (List.assoc d.loc_file all_files)
+          d.loc_line1 d.loc_col1 d.loc_line2 d.loc_col2
       in
       List.iter pp_loc_def all_locations;
     end;
