@@ -230,6 +230,7 @@ type sigma 'a = <|
   static_assertions: list (expression 'a * stringLiteral);
   tag_definitions: list (ail_identifier * (Annot.attributes * tag_definition));
   extern_idmap: map Symbol.identifier (ail_identifier * id_kind);
+  typedef_attributes: map ail_identifier Annot.attributes;
 |>
 
 

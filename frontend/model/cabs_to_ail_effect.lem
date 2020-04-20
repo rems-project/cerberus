@@ -238,7 +238,7 @@ type state = <|
   global_object_definitions: map A.ail_identifier global_definition;
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
-  typedef_definitions: map A.ail_identifier (Ctype.qualifiers * Ctype.ctype);
+  typedef_definitions: map A.ail_identifier (Annot.attributes * Ctype.qualifiers * Ctype.ctype);
   
   static_assertions: list (A.expression unit * A.stringLiteral);
   
@@ -670,8 +670,8 @@ let internal_register_identifier if_found ident namespace kind link_opt =
         end
   end
 
-val register_typedef: Symbol.identifier -> Ctype.qualifiers * Ctype.ctype -> desugM unit
-let register_typedef ident (qs, ty) =
+val register_typedef: Symbol.identifier -> Annot.attributes * Ctype.qualifiers * Ctype.ctype -> desugM unit
+let register_typedef ident (attrs, qs, ty) =
   let loc = Loc.locOf ident in
   let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
     "registering typedef identifier: " ^ show ident ^
@@ -683,26 +683,30 @@ let register_typedef ident (qs, ty) =
     ident Namespace_ordinary (Kind_ordinary OK_typedef) Nothing >>= fun sym ->
   State_exception.get >>= fun st ->
   match Map.lookup sym st.typedef_definitions with
-    | Just (qs', ty') ->
+    | Just (attrs', qs', ty') ->
         (* STD §6.7#3, first bullet *)
         if AilTypesAux.variably_modified ty then
           constraint_violation loc Constraint.TypedefRedefinitionVariablyModifiedType
         else if qs <> qs' || ty <> ty' then
           constraint_violation loc Constraint.TypedefRedefinition
         else
-          return ()
+          (* TODO: we combine the attributes, not sure this is right thing to do *)
+          State_exception.put (<| st with
+            typedef_definitions= Map.insert sym (Annot.combine_attributes attrs attrs', qs', ty') st.typedef_definitions
+           |>)
+          (* return () *)
     | Nothing ->
         State_exception.put (<| st with
-          typedef_definitions= Map.insert sym (qs, ty) st.typedef_definitions
+          typedef_definitions= Map.insert sym (attrs, qs, ty) st.typedef_definitions
          |>)
   end
 
 
-val resolve_typedef: A.ail_identifier -> desugM (Ctype.qualifiers * Ctype.ctype)
+val resolve_typedef: A.ail_identifier -> desugM (Annot.attributes * Ctype.qualifiers * Ctype.ctype)
 let resolve_typedef sym =
   State_exception.read (fun st ->
     match Map.lookup sym st.typedef_definitions with
-      | Just qs_ty -> qs_ty
+      | Just attrs_qs_ty -> attrs_qs_ty
       | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
     end
   )
@@ -1863,6 +1867,7 @@ let extract_program startup_str =
                            end
                         ) [] $ Map_extra.toList st.tag_definitions;
     A.extern_idmap= extern_idmap;
+    A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
    |>)
 
 
@@ -1936,6 +1941,7 @@ let get_sigma_sofar =
                              end
                           ) [] $ Map_extra.toList st.tag_definitions;
        A.extern_idmap= Map.empty;
+       A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
      |>
   )
 
@@ -1960,6 +1966,7 @@ let cabs_to_ail_effect_is_incomplete ty =
         end
       ) [] (Map_extra.toList ident_tagDefs);
     A.extern_idmap= Map.empty;
+    A.typedef_attributes= Map.empty;
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 let inline is_incomplete = cabs_to_ail_effect_is_incomplete
