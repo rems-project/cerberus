@@ -43,10 +43,10 @@ and expr_aux =
   | Val       of value
   | UnOp      of un_op * op_type * expr
   | BinOp     of bin_op * op_type * op_type * expr * expr
-  | Deref     of layout * expr
+  | Deref     of bool (* Atomic? *) * layout * expr
   | CAS       of op_type * expr * expr * expr
   | SkipE     of expr
-  | Use       of layout * expr
+  | Use       of bool (* Atomic? *) * layout * expr
   | AddrOf    of expr
   | GetMember of expr * string * bool (* From_union? *) * string
   | AnnotExpr of int * coq_expr * expr
@@ -56,7 +56,7 @@ and stmt_aux =
   | Goto   of string (* Block index in the [IMap.t]. *)
   | Return of expr
 (*| Switch (it : int_type) (e : expr) (m : gmap Z nat) (bs : list stmt) (def : * stmt)*)
-  | Assign of layout * expr * expr * stmt
+  | Assign of bool (* Atomic? *) * layout * expr * expr * stmt
   | Call   of string option * expr * expr list * stmt
   | SkipS  of stmt
   | If     of expr * stmt * stmt

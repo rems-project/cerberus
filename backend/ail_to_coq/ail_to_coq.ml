@@ -114,7 +114,7 @@ let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
     | Array(c_ty,Some(n)) -> LArray(layout_of c_ty, Z.to_string n)
     | Function(_,_,_,_)   -> not_impl loc "layout_of (Function)"
     | Pointer(_,_)        -> LPtr
-    | Atomic(_)           -> not_impl loc "layout_of (Atomic)"
+    | Atomic(c_ty)        -> layout_of c_ty
     | Struct(sym)         -> LStruct(sym_to_str sym, false)
     | Union(syn)          -> LStruct(sym_to_str syn, true )
   in
@@ -152,6 +152,13 @@ let layout_of_tc : GenTypes.typeCategory -> Coq_ast.layout = fun tc ->
   match tc with
   | GenTypes.LValueType(_,c_ty,_) -> layout_of false c_ty
   | GenTypes.RValueType(c_ty)     -> layout_of false c_ty
+
+let is_atomic : c_type -> bool = AilTypesAux.is_atomic
+
+let is_atomic_tc : GenTypes.typeCategory -> bool = fun tc ->
+  match tc with
+  | GenTypes.LValueType(_,c_ty,_) -> is_atomic c_ty
+  | GenTypes.RValueType(c_ty)     -> is_atomic c_ty
 
 let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
 
@@ -259,8 +266,9 @@ let rec translate_expr lval goal_ty e =
     | AilEunary(Indirection,e)     ->
         if will_decay e then translate e else
         let layout = layout_of_tc (tc_of e) in
+        let atomic = is_atomic_tc (tc_of e) in
         let (e, l) = translate e in
-        (locate (Deref(layout, e)), l)
+        (locate (Deref(atomic, layout, e)), l)
     | AilEunary(op,e)              ->
         let ty = op_type_of_tc (tc_of e) in
         let (e, l) = translate e in
@@ -378,8 +386,9 @@ let rec translate_expr lval goal_ty e =
         (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEmemberofptr(e,id)        ->
         let (struct_name, from_union) = struct_data e in
+        let atomic = is_atomic_tc (tc_of e) in
         let (e, l) = translate e in
-        let e = locate (Deref(LPtr, e)) in
+        let e = locate (Deref(atomic, LPtr, e)) in
         (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEbuiltin(b)               -> not_impl loc "expr builtin"
     | AilEstr(s)                   -> not_impl loc "expr str"
@@ -426,8 +435,9 @@ let rec translate_expr lval goal_ty e =
     | AilErvalue(e) when lval      -> translate e
     | AilErvalue(e)                ->
         let layout = layout_of_tc (tc_of e) in
+        let atomic = is_atomic_tc (tc_of e) in
         let (e, l) = translate_expr true None e in
-        (locate (Use(layout, e)), l)
+        (locate (Use(atomic, layout, e)), l)
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
     | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
   in
@@ -563,6 +573,7 @@ let translate_block stmts blocks ret_ty =
             | AilEassert(e)     ->
                 trans_bool_expr e (fun e -> locate (Assert(e, stmt)))
             | AilEassign(e1,e2) ->
+                let atomic = is_atomic_tc (tc_of e1) in
                 let e1 = trans_lval e1 in
                 let layout = layout_of_tc (tc_of e) in
                 let goal_ty =
@@ -571,7 +582,7 @@ let translate_block stmts blocks ret_ty =
                   | OpInt(_) -> Some(ty)
                   | _        -> None
                 in
-                let fn e2 = locate (Assign(layout, e1, e2, stmt)) in
+                let fn e2 = locate (Assign(atomic, layout, e1, e2, stmt)) in
                 trans_expr e2 goal_ty fn
             | AilEcall(_,_)     ->
                 let (stmt, calls) =
@@ -696,6 +707,7 @@ let translate_block stmts blocks ret_ty =
               with Not_found -> assert false
             in
             let layout = layout_of false ty in
+            let atomic = is_atomic ty in
             let goal_ty =
               let ty = op_type_of Location_ocaml.unknown ty in
               match ty with
@@ -703,7 +715,8 @@ let translate_block stmts blocks ret_ty =
               | _        -> None
             in
             let fn e =
-              noloc (Assign(layout, noloc (Var(Some(id), false)), e, stmt))
+              let var = noloc (Var(Some(id), false)) in
+              noloc (Assign(atomic, layout, var, e, stmt))
             in
             trans_expr e goal_ty fn
           in
