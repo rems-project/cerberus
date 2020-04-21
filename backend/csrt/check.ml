@@ -13,7 +13,7 @@ module Loc = Location
 
 
 
-let debug_level = 3
+let debug_level = 1
 
 let debug_print_line level s = 
   if debug_level >= level 
@@ -1927,17 +1927,7 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
      (* let env = call_resources annots env in *)
      call_typ_fn loc fname env (List.map lof_a asyms)
   | M_PElet (p, e1, e2) ->
-     begin match p with 
-     | M_symbol (Annotated (_annots, _, newname)) ->
-        infer_pexpr env e1 >>= fun (rt, env) ->
-        infer_pexpr (add_rt env (rename newname rt)) e2
-     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
-        let newname = sym_or_fresh mnewname in
-        infer_pexpr env e1 >>= fun (rt, env) ->
-        infer_pexpr (add_rt env (rename newname rt)) e2
-     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
-        failwith "todo ctor pattern"
-     end
+     failwith "PElet in inferring position"
   | M_PEif _ ->
      failwith "PEif in inferring position"
   | M_PEensure_specified (asym1, _ct, Annotated (_,_,(loc,undef))) ->
@@ -2057,18 +2047,8 @@ failwith "LinuxRMW"
   | M_Ecase _ ->
      failwith "todo ecase"
   | M_Elet (p, e1, e2) ->
-     begin match p with 
-     | M_symbol (Annotated (_annots, _, newname)) ->
-        infer_pexpr env e1 >>= fun (rt, env) ->
-        infer_expr (add_rt env (rename newname rt)) e2
-     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
-        let newname = sym_or_fresh mnewname in
-        infer_pexpr env e1 >>= fun (rt, env) ->
-        infer_expr (add_rt env (rename newname rt)) e2
-     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
-        failwith "todo ctor pattern"
-     end
-  | M_Eif _ ->
+     failwith "Elet in inferring position"
+| M_Eif _ ->
      failwith "todo eif"
   | M_Eskip -> 
      return ([{name = fresh (); bound = A Unit}], env)
@@ -2077,23 +2057,9 @@ failwith "LinuxRMW"
   | M_Eproc _ ->
      failwith "todo eproc"
   | M_Ewseq (p, e1, e2) ->      (* for now, the same as Esseq *)
-     begin match p with 
-     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
-        let newname = sym_or_fresh mnewname in
-        infer_expr env e1 >>= fun (rt, env) ->
-        infer_expr (add_rt env (rename newname rt)) e2
-     | Pattern (_annot, CaseCtor _) ->
-        failwith "todo ctor pattern"
-     end
+     failwith "Ewseq in inferring position"
   | M_Esseq (p, e1, e2) ->
-     begin match p with 
-     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
-        let newname = sym_or_fresh mnewname in
-        infer_expr env e1 >>= fun (rt, env) ->
-        infer_expr (add_rt env (rename newname rt)) e2
-     | Pattern (_annot, CaseCtor _) ->
-        failwith "todo ctor pattern"
-     end
+     failwith "Esseq in inferring position"
   | M_Ebound (n, e) ->
      infer_expr env e
   | M_End _ ->
@@ -2149,8 +2115,22 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
-  | M_Esave (_ret, _args, body) ->
-     (* fix this: this is ignoring Esave for now *)
+  | M_Ewseq (p, e1, e2)      (* for now, the same as Esseq *)
+  | M_Esseq (p, e1, e2) ->
+     begin match p with 
+     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
+        let newname = sym_or_fresh mnewname in
+        infer_expr env e1 >>= fun (rt, env) ->
+        check_expr (add_rt env (rename newname rt)) e2 ret
+     | Pattern (_annot, CaseCtor _) ->
+        failwith "todo ctor pattern"
+     end
+  | M_Esave (_ret, args, body) ->
+     fold_leftM (fun env (sym, (_, asym)) ->
+         let (vsym,loc) = lof_a asym in
+         get_Avar loc env vsym >>= fun bt ->
+         return (add_Avar env (sym,bt))
+       ) env args >>= fun env ->
      check_expr env body ret
   | _ ->
      infer_expr env e >>= fun (t, env) ->
