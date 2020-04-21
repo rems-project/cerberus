@@ -581,9 +581,13 @@ module Resources = struct
      *    IndexTerms.unify_list its its' res *)
     | _, _ -> fail ()
 
-  let linked_var = function
-    | Points (S v, _, _) -> Some v
-    | Points (_, _, _) -> None
+  let owner = function
+    | Points (S v, _, _) -> v
+    | Points (_, _, _) -> failwith "no owner"
+
+  let owned = function
+    | Points (_, _, S v) -> [v]
+    | Points (_, _, _) -> failwith "nothing owned"
 
 end
 
@@ -1034,12 +1038,15 @@ module Env = struct
   let add_var (env : t) (sym, t) = 
     { env with local = { vars = SymMap.add sym t env.local.vars } }
 
+  let add_vars env bindings = 
+    fold_left add_var env bindings
+
   let remove_var env sym = 
     let vars = SymMap.remove sym env.local.vars in
     { env with local = {vars} }
 
-  let add_vars env bindings = 
-    fold_left add_var env bindings
+  let remove_vars env bindings = 
+    fold_left remove_var env bindings
 
   let add_rt env rt = 
     fold_left (fun env b -> 
@@ -1094,19 +1101,37 @@ module Env = struct
     | `C t -> return t
     | t -> fail (Var_kind_error {loc; sym; expected = VarTypes.Constraint; has = kind t})
 
-  let get_linked_resource env sym = 
+  let get_owned_resource loc env owner_sym = 
     let relevant = 
-      SymMap.filter (fun name b ->
+      SymMap.fold (fun name b acc ->
           match b with
-          | (R t) -> Resources.linked_var t = Some sym 
-          | _ -> false
-        ) env.local.vars 
+          | (R t) -> if Resources.owner t = owner_sym then (name,t) :: acc else acc
+          | _ -> acc
+        ) env.local.vars []
     in
-    SymMap.bindings relevant      
+    match relevant with
+    | [] -> 
+       return None
+    | [owned] -> 
+       return (Some owned)
+    | _ :: _ :: _ -> 
+       fail (Unreachable {loc; unreachable = "multiple owners of resource"})
 
 end
 
 open Env
+
+
+
+let rec recursively_owned_resources loc env owner_sym = 
+  get_owned_resource loc env owner_sym >>= function
+  | Some (res,t) -> 
+     let owned = Resources.owned t in
+     mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
+     return (res :: concat owneds)
+  | None -> 
+     return []
+
 
 
 
@@ -1426,6 +1451,7 @@ let make_create_type ct : (FunctionTypes.t,'e) m =
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
 
+
 let make_load_type ct : (FunctionTypes.t,'e) m = 
   let aname = fresh () in
   let rname = fresh () in
@@ -1652,21 +1678,18 @@ let call_typ loc_call env decl_typ args =
        end
 
     | {name = n; bound = R t} :: decl_args -> 
-       begin match Resources.linked_var t with
+       let owner = Resources.owner t in
+       get_owned_resource loc_call env owner >>= begin function
        | None -> fail (Call_error (loc_call, (Missing_R (n, t))))
-       | Some avar ->
-          match get_linked_resource env avar with
-          | [] -> fail (Call_error (loc_call, (Missing_R (n, t))))
-          | _ :: _ :: _ -> failwith "too many"
-          | [(sym, _)] -> 
-             get_Rvar loc_call env sym >>= fun (t',env) ->
-             tryM (Resources.unify t t' unis)
-               (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
-                fail (Call_error (loc_call, err))) >>= fun unis ->
-             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-             find_resolved env unis >>= fun (_,substs) ->
-             let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
-             check_and_refine env args ftyp unis constrs
+       | Some (sym, _) -> 
+          get_Rvar loc_call env sym >>= fun (t',env) ->
+          tryM (Resources.unify t t' unis)
+            (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
+             fail (Call_error (loc_call, err))) >>= fun unis ->
+          let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+          find_resolved env unis >>= fun (_,substs) ->
+          let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
+          check_and_refine env args ftyp unis constrs
        end
 
     | {name = n; bound = L t} :: decl_args -> 
@@ -2002,8 +2025,12 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
         failwith "CreateReadOnly"
      | M_Alloc (ct, sym, _prefix) -> 
         failwith "Alloc"
-     | M_Kill (_is_dynamic, sym) -> 
-        failwith "Kill"
+     | M_Kill (_is_dynamic, asym) -> 
+        let (sym,loc) = lof_a asym in
+        recursively_owned_resources loc env sym >>= fun resources ->
+        let env = remove_vars env resources in
+        let rt = [{name = fresh (); bound = A Unit}] in
+        return (rt, env)
      | M_Store (_is_locking,ct, sym1, sym2, mo) -> 
         failwith "Store"
      | M_Load (a_ct, asym, _mo) -> 
