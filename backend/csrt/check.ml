@@ -1407,6 +1407,11 @@ let type_of_ctype ct =
   ctype_aux ct >>= fun ((name, bt), rt) ->
   return ({name; bound = A bt} :: rt)
 
+let make_pointer_ctype ct = 
+  (* fix *)
+  let q = {Ctype.const = false; Ctype.restrict = false; Ctype.volatile = false} in
+  Ctype.Ctype ([], Ctype.Pointer (q, ct))
+
 
 
 
@@ -1417,7 +1422,7 @@ let strip_quantifiers t =
 
 let make_create_type ct : (FunctionTypes.t,'e) m = 
   let arguments = [{name = fresh (); bound = A Int}] in
-  type_of_ctype ct >>= fun rt ->
+  type_of_ctype (make_pointer_ctype ct) >>= fun rt ->
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
 
@@ -1438,11 +1443,6 @@ let make_load_type ct : (FunctionTypes.t,'e) m =
   in
   let ftyp = FunctionTypes.F {arguments; return = ret} in
   return ftyp
-
-(* fix *)
-let make_pointer_ctype ct = 
-  let q = {Ctype.const = false; Ctype.restrict = false; Ctype.volatile = false} in
-  Ctype.Ctype ([], Ctype.Pointer (q, ct))
 
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
