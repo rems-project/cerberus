@@ -135,6 +135,8 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         pp "VOID"
     | Val(Int(s,it))                ->
         pp "i2v %s %a" s pp_int_type it
+    | Val(SizeOf(ly))                ->
+        pp "i2v (%a).(ly_size) %a" (pp_layout false) ly pp_int_type (ItSize_t false)
     | UnOp(op,ty,e)                 ->
         pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
     | BinOp(op,ty1,ty2,e1,e2)       ->
