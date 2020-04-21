@@ -76,8 +76,12 @@ let c_file_to_ail cpp_includes cpp_nostd filename =
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
   Panic.panic loc "Frontend error.\n%s\n\027[0m%s%!" err pos
 
-let cpp_only cpp_includes cpp_nostd filename =
+let cpp_only cpp_includes cpp_nostd filename output_file =
   source_file_check filename;
-  match run_cpp (cpp_cmd cpp_includes cpp_nostd) filename with
-  | Result(str)  -> Printf.printf "%s\n%!" str
-  | Exception(_) -> () (* message given by the preprocessor. *)
+  let str =
+    match run_cpp (cpp_cmd cpp_includes cpp_nostd) filename with
+    | Result(str)  -> str
+    | Exception(_) -> Panic.panic_no_pos "Failed due to preprocessor error."
+  in
+  let oc = open_out output_file in
+  Printf.fprintf oc "%s\n%!" str; close_out oc

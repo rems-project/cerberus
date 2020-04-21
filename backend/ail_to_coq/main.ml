@@ -16,6 +16,9 @@ type config =
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
+  (* Set the printing flags. *)
+  if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
+  if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
   (* Get an absolute path to the file, for better error reporting. *)
   let c_file =
     if cfg.full_paths then
@@ -23,9 +26,6 @@ let run : config -> string -> unit = fun cfg c_file ->
         Panic.panic_no_pos "File [%s] disappeared..." c_file
     else c_file
   in
-  (* Do the translation from C to Ail, and then to our AST. *)
-  let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
-  let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Compute the path to the output files. *)
   let output_dir =
     match cfg.output_dir with
@@ -36,14 +36,16 @@ let run : config -> string -> unit = fun cfg c_file ->
     let name = Filename.basename c_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
+  let cppc_file = Filename.concat output_dir (base_name ^ ".cpp.c" ) in
   let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
   let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
-  (* Set the printing flags. *)
-  if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
-  if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
   (* Print the output of the preprocessor if necessary. *)
   if cfg.cpp_output then
-    Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file;
+    Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
+  (* Do the translation from C to Ail, and then to our AST. *)
+  if cfg.gen_code || cfg.gen_spec then (* Stop here if no generation. *)
+  let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
+  let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
   if cfg.gen_code then
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
