@@ -10,11 +10,15 @@ type config =
   ; spec_ctxt   : string list
   ; cpp_I       : string list
   ; cpp_nostd   : bool
+  ; cpp_output  : bool
   ; no_expr_loc : bool
   ; no_stmt_loc : bool }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
+  (* Set the printing flags. *)
+  if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
+  if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
   (* Get an absolute path to the file, for better error reporting. *)
   let c_file =
     if cfg.full_paths then
@@ -22,9 +26,6 @@ let run : config -> string -> unit = fun cfg c_file ->
         Panic.panic_no_pos "File [%s] disappeared..." c_file
     else c_file
   in
-  (* Do the translation from C to Ail, and then to our AST. *)
-  let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
-  let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Compute the path to the output files. *)
   let output_dir =
     match cfg.output_dir with
@@ -35,15 +36,20 @@ let run : config -> string -> unit = fun cfg c_file ->
     let name = Filename.basename c_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
+  let cppc_file = Filename.concat output_dir (base_name ^ ".cpp.c" ) in
   let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
   let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
-  (* Set the printing flags. *)
-  if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
-  if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
-  (* Print the code, if necessary. *)
+  (* Print the output of the preprocessor if necessary. *)
+  if cfg.cpp_output then
+    Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
+  (* Do the translation from C to Ail, and then to our AST. *)
+  if cfg.gen_code || cfg.gen_spec then (* Stop here if no generation. *)
+  let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
+  let coq_ast = Ail_to_coq.translate c_file ail_ast in
+  (* Generate the code, if necessary. *)
   if cfg.gen_code then
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
-  (* Print the spec, if necessary. *)
+  (* Generate the spec, if necessary. *)
   if cfg.gen_spec then
     Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast)
 
@@ -108,6 +114,12 @@ let cpp_nostd =
   in
   Arg.(value & flag & info ["nostdinc"] ~doc)
 
+let cpp_output =
+  let doc =
+    "Print the output of the preprocessor to STDOUT."
+  in
+  Arg.(value & flag & info ["cpp-output"] ~doc)
+
 let no_expr_loc =
   let doc =
     "Do not output location information for expressions in the generated \
@@ -131,16 +143,16 @@ let no_loc =
 
 let opts : config Term.t =
   let build output_dir no_code no_spec full_paths imports spec_ctxt cpp_I
-      cpp_nostd no_expr_loc no_stmt_loc no_loc =
+      cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc =
     let no_expr_loc = no_expr_loc || no_loc in
     let no_stmt_loc = no_stmt_loc || no_loc in
     { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; no_stmt_loc
-    ; no_expr_loc }
+    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; cpp_output
+    ; no_stmt_loc ; no_expr_loc }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
-          imports $ spec_ctxt $ cpp_I $ cpp_nostd $ no_expr_loc $
-          no_stmt_loc $ no_loc)
+          imports $ spec_ctxt $ cpp_I $ cpp_nostd $ cpp_output $
+          no_expr_loc $ no_stmt_loc $ no_loc)
 
 let c_file =
   let doc = "C language source file." in

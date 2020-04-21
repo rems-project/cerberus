@@ -638,7 +638,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
     let name = Filename.basename ast.source_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
-  let import_path = "refinedc.examples." ^ basename in (* FIXME generic? *)
+  let import_path = "refinedc" in (* FIXME generic? Do something smarter? *)
 
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
