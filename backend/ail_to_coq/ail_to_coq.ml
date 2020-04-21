@@ -148,17 +148,18 @@ let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,loc,e)) =
   | AilEfunction_decay(e) -> ident_of_expr e
   | _                     -> None
 
-let layout_of_tc : GenTypes.typeCategory -> Coq_ast.layout = fun tc ->
+let c_type_of_type_cat : type_cat -> c_type = fun tc ->
   match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> layout_of false c_ty
-  | GenTypes.RValueType(c_ty)     -> layout_of false c_ty
+  | GenTypes.LValueType(_,c_ty,_) -> c_ty
+  | GenTypes.RValueType(c_ty)     -> c_ty
+
+let layout_of_tc : type_cat -> Coq_ast.layout = fun tc ->
+  layout_of false (c_type_of_type_cat tc)
 
 let is_atomic : c_type -> bool = AilTypesAux.is_atomic
 
 let is_atomic_tc : GenTypes.typeCategory -> bool = fun tc ->
-  match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> is_atomic c_ty
-  | GenTypes.RValueType(c_ty)     -> is_atomic c_ty
+  is_atomic (c_type_of_type_cat tc)
 
 let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
 
@@ -188,9 +189,7 @@ let op_type_of loc Ctype.(Ctype(_, c_ty)) =
   | Union(_)            -> not_impl loc "op_type_of (Union)"
 
 let op_type_of_tc : loc -> type_cat -> Coq_ast.op_type = fun loc tc ->
-  match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> op_type_of loc c_ty
-  | GenTypes.RValueType(c_ty)     -> op_type_of loc c_ty
+  op_type_of loc (c_type_of_type_cat tc)
 
 (* We need similar function returning options for casts. *)
 let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
@@ -205,10 +204,8 @@ let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
   | Struct(_)           -> None
   | Union(_)            -> None
 
-let op_type_tc_opt loc tc =
-  match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> op_type_opt loc c_ty
-  | GenTypes.RValueType(c_ty)     -> op_type_opt loc c_ty
+let op_type_tc_opt : loc -> type_cat -> Coq_ast.op_type option = fun loc tc ->
+  op_type_opt loc (c_type_of_type_cat tc)
 
 let struct_data : ail_expr -> string * bool = fun e ->
   let AilSyntax.AnnotatedExpression(gtc,_,_,_) = e in
@@ -579,10 +576,10 @@ let translate_block stmts blocks ret_ty =
                 let e1 = trans_lval e1 in
                 let layout = layout_of_tc (tc_of e) in
                 let goal_ty =
-                  let ty = op_type_of_tc (loc_of e) (tc_of e) in
-                  match ty with
-                  | OpInt(_) -> Some(ty)
-                  | _        -> None
+                  let ty_opt = op_type_tc_opt (loc_of e) (tc_of e) in
+                  match ty_opt with
+                  | Some(OpInt(_)) -> ty_opt
+                  | _              -> None
                 in
                 let fn e2 = locate (Assign(atomic, layout, e1, e2, stmt)) in
                 trans_expr e2 goal_ty fn
