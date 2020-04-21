@@ -12,6 +12,26 @@ open Sym
 module Loc = Location
 
 
+
+let debug_level = 3
+
+let debug_print_line level s = 
+  if debug_level >= level 
+  then print_endline s 
+  else ()
+
+let debug_print level s = 
+  if debug_level >= level 
+  then print_endline ("\n" ^ (String.concat "\n" s)) 
+  else ()
+
+let underline c s = 
+  s ^ "\n" ^ (String.make (String.length s) c)
+
+let pps = Pp_utils.to_plain_pretty_string
+
+
+
 type num = Nat_big_num.num
 
 let uncurry f (a,b)  = f a b
@@ -694,10 +714,16 @@ module Types = struct
     | Sexp.List ts -> aux names [] ts
     | t -> parse_error "binders" t loc
 
-  let subst sym with_it bs = 
-    map (Binders.subst sym with_it) bs
+  let subst sym with_sym bs = 
+    map (Binders.subst sym with_sym) bs
 
   let names t = List.map (fun {Binders.name; _} -> name) t
+
+  let rename newname t = 
+    match t with
+    | [] -> print_endline "\n\nempty return type\n\n"; []
+    | {Binders.name; _} :: _ ->
+       subst name newname t
 
 end
 
@@ -717,7 +743,7 @@ end
 open FunctionTypes
 open VarTypes
 open Binders
-
+open Types
       
 
 module Err = struct
@@ -984,7 +1010,7 @@ module LEnv = struct
     pp_list pp_entry ", " (SymMap.bindings decls)
 
   let pp lenv = 
-    sprintf "%s\n" (pp_vars lenv.vars)
+    sprintf "%s" (pp_vars lenv.vars)
 
 end
 
@@ -1015,9 +1041,12 @@ module Env = struct
   let add_vars env bindings = 
     fold_left add_var env bindings
 
-  let add_rt env bindings = 
-    fold_left (fun env b -> add_var env (b.name, b.bound))
-      env bindings
+  let add_rt env rt = 
+    fold_left (fun env b -> 
+        print_endline (sprintf "adding %s" (Binders.pp b));
+        add_var env (b.name, b.bound)
+      )
+      env rt
 
   let add_Avar env (sym, t) = add_var env (sym, VarTypes.A t)
   let add_Lvar env (sym, t) = add_var env (sym, VarTypes.L t)
@@ -1265,7 +1294,9 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
 (* and *)
 (* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let bt_and_constr_of_integerBaseType name signed ibt = 
+let bt_and_constr_of_integerBaseType signed ibt = 
+
+  let name = fresh () in
 
   let make f t = 
     let ft = IndexTerms.Num (of_string f) in
@@ -1310,17 +1341,17 @@ let bt_and_constr_of_integerBaseType name signed ibt =
   | _, Ctype.Intptr_t -> 
      failwith "todo standard library types"
 
-let bt_and_constr_of_integerType name it = 
+let bt_and_constr_of_integerType it = 
   match it with
   | Ctype.Char -> 
      failwith "todo char"
   | Ctype.Bool -> 
      (BaseTypes.Bool, None)
   | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType name true ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
      (bt, Some constr)
   | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType name false ibt in
+     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
      (bt, Some constr)
   | Ctype.Enum _sym -> 
      failwith "todo enum"
@@ -1334,36 +1365,35 @@ let bt_and_constr_of_integerType name it =
      failwith "todo standard library types"
 
 
-let rec ctype_aux name (Ctype.Ctype (annots, ct)) = 
+let rec ctype_aux (Ctype.Ctype (annots, ct)) = 
   let loc = Annot.get_loc_ annots in
   match ct with
   | Ctype.Void -> (* check *)
-     return ((name, Unit), [])
+     return ((fresh (), Unit), [])
   | Ctype.Basic (Integer it) -> 
-     let (bt,mc) = bt_and_constr_of_integerType name it in
+     let (bt,mc) = bt_and_constr_of_integerType it in
      begin match mc with
      | Some c -> 
-        return ((name, bt), [{name = Sym.fresh (); bound = C c}])
+        return ((fresh (), bt), [{name = Sym.fresh (); bound = C c}])
      | None -> 
-        return ((name, bt), [])
+        return ((fresh (), bt), [])
      end
   | Ctype.Array (ct, _maybe_integer) -> 
-     return ((name, Array), [])
+     return ((fresh (), Array), [])
   | Ctype.Pointer (_qualifiers, ctype) ->
-     let lname = fresh () in
+     let aname = fresh () in
      let rname = fresh () in
-     ctype_aux lname ctype >>= fun ((lname,bt), rt) ->
+     ctype_aux ctype >>= fun ((lname,bt), rt) ->
      let rt = 
        {name = lname; bound = L (Base bt)} ::
-       {name = rname; bound = R (Points (S name, bt, S lname))} :: 
+       {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
        rt 
      in
-     return ((name, Loc), rt)
+     return ((aname, Loc), rt)
   | Ctype.Atomic ct ->              (* check *)
-     ctype_aux name ct >>= fun ((name, bt), rt) ->
-     return ((name, bt), rt)
+     ctype_aux ct
   | Ctype.Struct sym -> 
-     return ((name, Struct sym), [])
+     return ((fresh (), Struct sym), [])
   | Ctype.Union sym ->
      failwith "todo: union types"
 
@@ -1373,6 +1403,11 @@ let rec ctype_aux name (Ctype.Ctype (annots, ct)) =
      fail (Unsupported {loc; unsupported = "function pointers"}) 
 
 
+let type_of_ctype ct = 
+  ctype_aux ct >>= fun ((name, bt), rt) ->
+  return ({name; bound = A bt} :: rt)
+
+
 
 
 let strip_quantifiers t = 
@@ -1380,28 +1415,29 @@ let strip_quantifiers t =
 
 
 
-let make_pointer_type name ct : (FunctionTypes.t,'e) m = 
-  ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),rt) ->
+let make_create_type ct : (FunctionTypes.t,'e) m = 
+  let arguments = [{name = fresh (); bound = A Int}] in
+  type_of_ctype ct >>= fun rt ->
+  let ftyp = FunctionTypes.F {arguments; return = rt} in
+  return ftyp
+
+let make_load_type ct : (FunctionTypes.t,'e) m = 
+  let aname = fresh () in
   let rname = fresh () in
+  ctype_aux ct >>= fun ((lname,bt),rt) ->
   let arguments = 
-    {name; bound = A Loc} :: 
-    {name = pointee_name; bound = L (Base bt)} ::
-    {name = rname; bound = R (Points (S name, bt, S pointee_name))} :: 
+    {name = aname; bound = A Loc} :: 
+    {name = lname; bound = L (Base bt)} ::
+    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
     rt
   in
   let ret = 
-    {name = pointee_name; bound = A bt} ::
-    {name = rname; bound = R (Points (S name, bt, S pointee_name))} :: 
+    {name = lname; bound = A bt} ::
+    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
     (strip_quantifiers rt)
   in
   let ftyp = FunctionTypes.F {arguments; return = ret} in
   return ftyp
-
-
-
-let type_of_ctype name ct = 
-  ctype_aux name ct >>= fun ((name, bt), rt) ->
-  return ({name; bound = A bt} :: rt)
 
 (* fix *)
 let make_pointer_ctype ct = 
@@ -1440,12 +1476,14 @@ let make_Aargs_bts env tsyms =
 
 
 
-let infer_object_value (env : env) loc name ov = 
+let infer_object_value (env : env) loc ov = 
 
   let integer_value_to_num loc iv = 
     of_maybe (Integer_value_error loc) 
       (Impl_mem.eval_integer_value iv)
   in
+
+  let name = fresh () in
 
   match ov with
   | M_OVinteger iv ->
@@ -1481,33 +1519,35 @@ let infer_object_value (env : env) loc name ov =
   | M_OVfloating iv ->
      fail (Unsupported {loc; unsupported = "floats"})
 
-let infer_loaded_value env loc name lv = 
+let infer_loaded_value env loc lv = 
   match lv with
  | M_LVspecified ov ->
-    infer_object_value env loc name ov >>= fun rt ->
+    infer_object_value env loc ov >>= fun rt ->
     return rt
  | M_LVunspecified ct ->
     if is_unreachable env loc then 
-      type_of_ctype name ct >>= fun rt ->
+      type_of_ctype ct >>= fun rt ->
       failwith "unspecified"
     else 
       fail (Unspecified_value loc)
 
 
-let infer_value loc name env v = 
+let infer_value loc env v = 
   match v with
   | M_Vobject ov ->
-     infer_object_value env loc name ov
+     infer_object_value env loc ov
   | M_Vloaded lv ->
-     infer_loaded_value env loc name lv
+     infer_loaded_value env loc lv
   | M_Vunit ->
-     let t = {name; bound = A Unit} in
+     let t = {name = fresh (); bound = A Unit} in
      return [t]
   | M_Vtrue ->
+     let name = fresh () in
      let t = {name; bound = A Bool} in
      let constr = {name = fresh (); bound = C (LC (S name))} in
      return [t; constr]
   | M_Vfalse -> 
+     let name = fresh () in
      let t = {name; bound = A Bool} in
      let constr = {name = fresh (); bound = C (LC (Not (S name)))} in
      return [t; constr]
@@ -1518,14 +1558,14 @@ let infer_value loc name env v =
         make_Aargs_bts env asyms >>= fun args_bts ->
         args_same_typ (Some i_t) args_bts >>
         (* maybe record list length? *)
-        let t = {name; bound = A (List i_t)} in
+        let t = {name = fresh (); bound = A (List i_t)} in
         return [t]
      | bt ->
         fail (Generic_error (loc, "Cnil without list type"))
      end 
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
-     let t = {name; bound = A (Tuple (List.map fst args_bts))} in
+     let t = {name = fresh (); bound = A (Tuple (List.map fst args_bts))} in
      return [t]
 
 
@@ -1561,10 +1601,13 @@ let call_typ loc_call env decl_typ args =
 
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
-    (* print_endline (sprintf "\n\nlenv before: %s" (LEnv.pp env.local));
-     * print_endline (sprintf "ftyp: %s" (FunctionTypes.pp (F ftyp)));
-     * print_endline (sprintf "args: %s" (pp_list (fun (a,_) -> Sym.pp a) ", " args));
-     * print_endline (sprintf "unis: %s" (pp_unis unis)); *)
+    debug_print 2 
+      [underline '-' "check_and_refine"
+      ; sprintf "lenv: %s" (LEnv.pp env.local)
+      ; sprintf "ftyp: %s" (FunctionTypes.pp (F ftyp))
+      ; sprintf "args: %s" (pp_list (fun (a,_) -> Sym.pp a) ", " args)
+      ; sprintf "unis: %s" (pp_unis unis)
+      ];
 
 
     match ftyp.arguments with
@@ -1642,8 +1685,8 @@ let call_typ loc_call env decl_typ args =
   check_and_refine env args decl_typ SymMap.empty []
 
 
-let call_typ_fn loc_call name env args =
-  match name with
+let call_typ_fn loc_call fname env args =
+  match fname with
   | Core.Impl _ -> 
      failwith "todo implementation-defined constrant"
   | Core.Sym sym ->
@@ -1746,7 +1789,7 @@ let infer_pat pat =
 
      
 
-let infer_binop name env loc op sym1 sym2 = 
+let infer_binop env loc op sym1 sym2 = 
 
   let make_binop_constr (v1 : IndexTerms.t) (v2 : IndexTerms.t) =
     match op with
@@ -1791,6 +1834,7 @@ let infer_binop name env loc op sym1 sym2 =
   let ((st1,st2),rt) = bt_of_binop in
   ensure_type loc1 (Some sym1) (A t1) (A st1) >>
   ensure_type loc2 (Some sym2) (A t2) (A st2) >>
+  let name = fresh () in
   let constr = LC (S name %= (make_binop_constr (S sym1) (S sym2))) in
   let env = add_Cvar env (fresh (), constr) in
   let t = {name; bound = A rt} in
@@ -1801,20 +1845,25 @@ let check_undef env loc undef =
   if is_unreachable env loc then return ()
   else fail (Undefined_behaviour (loc, undef))
   
-let rec infer_pexpr name env (pe : 'bty mu_pexpr) = 
-  print_endline (sprintf "\ninfer_pexpr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_pexpr pe)));
-  print_endline (sprintf "env: %s" (LEnv.pp env.local));
+let rec infer_pexpr env (pe : 'bty mu_pexpr) = 
+
+  debug_print 1
+    [ underline '-' "infer_pexpr"
+    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_pexpr pe))
+    ; sprintf "env: %s" (LEnv.pp env.local)
+    ];
+
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = Annot.get_loc_ annots in
   match pe_ with
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun b ->
-     let t = {name; bound = A b} in
+     let t = {name = sym; bound = A b} in
      return ([t], env)
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
-     infer_value loc name env v >>= fun t ->
+     infer_value loc env v >>= fun t ->
      return (t, env)
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
@@ -1825,7 +1874,7 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
   | M_PEctor (ctor, args) ->
      make_Aargs_bts env args >>= fun args_bts ->
      ctor_typ loc ctor args_bts >>= fun t ->
-     let t = [{name; bound = A t}] in
+     let t = [{name = fresh (); bound = A t}] in
      return (t, env)
   | M_PEcase (asym, pats_es) ->
      failwith "PEcase in inferring position"
@@ -1837,31 +1886,32 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
      let (sym,a_loc) = lof_a sym in
      get_Avar loc env sym >>= fun t ->
      ensure_type a_loc (Some sym) (A t) (A BaseTypes.Bool) >>
+     let name = fresh () in
      let constr = LC ((S name) %= Not (S sym)) in
      let env = add_Cvar env (name, constr) in
      let t = {name; bound = A t} in
      return ([t], env)
   | M_PEop (op,sym1,sym2) ->
-     infer_binop name env loc op sym1 sym2
+     infer_binop env loc op sym1 sym2
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
      failwith "todo PEunion"
   | M_PEmemberof _ ->
      failwith "todo M_PEmemberof"
-  | M_PEcall (mu_name, asyms) ->
+  | M_PEcall (fname, asyms) ->
      (* include the resource arguments into asyms *)
      (* let env = call_resources annots env in *)
-     call_typ_fn loc mu_name env (List.map lof_a asyms)
+     call_typ_fn loc fname env (List.map lof_a asyms)
   | M_PElet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (_annots, _, name2)) ->
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        infer_pexpr name (add_rt env rt ) e2
-     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        infer_pexpr name (add_rt env rt) e2
+     | M_symbol (Annotated (_annots, _, newname)) ->
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        infer_pexpr (add_rt env (rename newname rt)) e2
+     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+        let newname = sym_or_fresh mnewname in
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        infer_pexpr (add_rt env (rename newname rt)) e2
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
@@ -1878,8 +1928,14 @@ let rec infer_pexpr name env (pe : 'bty mu_pexpr) =
 
 
 and check_pexpr env (e : 'bty mu_pexpr) ret = 
-  print_endline (sprintf "\ncheck_pexpr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_pexpr e)));
-  print_endline (sprintf "env: %s" (LEnv.pp env.local));
+
+  debug_print 1
+    [ underline '-' "check_pexpr"
+    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_pexpr e))
+    ; sprintf "env: %s" (LEnv.pp env.local)
+    ; sprintf "ret: %s" (Types.pp ret)
+    ];
+
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
@@ -1905,40 +1961,42 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
      return env
   | M_PElet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (_annots, _, name2)) ->
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        check_pexpr (add_rt env rt ) e2 ret
-     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        check_pexpr (add_rt env rt) e2 ret
+     | M_symbol (Annotated (_annots, _, newname)) ->
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        check_pexpr (add_rt env (rename newname rt)) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+        let newname = sym_or_fresh mnewname in
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        check_pexpr (add_rt env (rename newname rt)) e2 ret
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | _ ->
-     let name = Sym.fresh () in    (* fix *)
-     infer_pexpr name env e >>= fun (t, env) ->
+     infer_pexpr env e >>= fun (t, env) ->
      subtype loc env t ret >>= fun env ->
      return env
 
 
-let rec infer_expr name env (e : ('a,'bty) mu_expr) = 
-  print_endline (sprintf "\ninfer_expr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_expr e)));
-  print_endline (sprintf "env: %s" (LEnv.pp env.local));
+let rec infer_expr env (e : ('a,'bty) mu_expr) = 
+
+  debug_print 1
+    [ underline '-' "infer_expr"
+    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_expr e))
+    ; sprintf "env: %s" (LEnv.pp env.local)
+    ];
+
   let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
   | M_Epure pe -> 
-     infer_pexpr name env pe
+     infer_pexpr env pe
   | M_Ememop _ ->
      failwith "todo ememop"
   | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
      begin match action_ with
      | M_Create (asym,a_ct,_prefix) -> 
         let (ct, _ct_loc) = lof_a a_ct in
-        let arguments = [{name; bound = A Loc}] in
-        type_of_ctype name ct >>= fun return ->
-        let decl_typ = F {arguments; return} in
+        make_create_type ct >>= fun decl_typ ->
         call_typ loc env decl_typ [lof_a asym]
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         failwith "CreateReadOnly"
@@ -1950,18 +2008,8 @@ let rec infer_expr name env (e : ('a,'bty) mu_expr) =
         failwith "Store"
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
-        let (sym, loc) = lof_a asym in
-        (* get_linked_resource loc env sym >>= fun r -> *)
-        let args = [lof_a asym] in (* ; (r,loc)] in *)
-        (* decl_typ *)
-        make_pointer_type name ct >>= fun decl_typ ->
-        (* (\* end decl_typ *\)
-         *   get_Avar loc env sym >>= fun t ->
-         *   get_Rvar loc env r >>= fun (rt,_) ->
-         *   let () = print_endline (sprintf "arguments: %s" (Types.pp [{name=sym; bound = A t}; {name=r; bound = R rt}])) in
-         * print_endline (sprintf "spec: %s" (FunctionTypes.pp decl_typ));
-         * print_endline (sprintf "\n\n%s" (LEnv.pp env.local)); *)
-        call_typ loc env decl_typ args
+        make_load_type ct >>= fun decl_typ ->
+        call_typ loc env decl_typ [lof_a asym]
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         failwith "RMW"
      | M_Fence mo -> 
@@ -1983,46 +2031,44 @@ failwith "LinuxRMW"
      failwith "todo ecase"
   | M_Elet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (_annots, _, name2)) ->
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        infer_expr name (add_rt env rt) e2
-     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        infer_expr name (add_rt env rt) e2
+     | M_symbol (Annotated (_annots, _, newname)) ->
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        infer_expr (add_rt env (rename newname rt)) e2
+     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+        let newname = sym_or_fresh mnewname in
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        infer_expr (add_rt env (rename newname rt)) e2
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | M_Eif _ ->
      failwith "todo eif"
   | M_Eskip -> 
-     return ([], env)
+     return ([{name = fresh (); bound = A Unit}], env)
   | M_Eccall (_a, asym, asd, asyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
      failwith "todo eproc"
   | M_Ewseq (p, e1, e2) ->      (* for now, the same as Esseq *)
      begin match p with 
-     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_expr name2 env e1 >>= fun (rt, env) ->
-        infer_expr name (add_rt env rt) e2
+     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
+        let newname = sym_or_fresh mnewname in
+        infer_expr env e1 >>= fun (rt, env) ->
+        infer_expr (add_rt env (rename newname rt)) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
   | M_Esseq (p, e1, e2) ->
      begin match p with 
-     | Pattern (_annot, CaseBase (mname2,_cbt)) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_expr name2 env e1 >>= fun (rt, env) ->
-        print_endline (sprintf "env: %s" (LEnv.pp env.local));
-        print_endline (sprintf "rt: %s" (Types.pp rt));
-        infer_expr name (add_rt env rt) e2
+     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
+        let newname = sym_or_fresh mnewname in
+        infer_expr env e1 >>= fun (rt, env) ->
+        infer_expr (add_rt env (rename newname rt)) e2
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
   | M_Ebound (n, e) ->
-     infer_expr name env e
+     infer_expr env e
   | M_End _ ->
      failwith "todo end"
   | M_Esave _ ->
@@ -2031,8 +2077,14 @@ failwith "LinuxRMW"
      failwith "todo erun"
 
 and check_expr env (e : ('a,'bty) mu_expr) ret = 
-  print_endline (sprintf "\ncheck_expr %s" (Pp_utils.to_plain_pretty_string (Pp_mucore.Basic.pp_expr e)));
-  print_endline (sprintf "env: %s" (LEnv.pp env.local));
+
+  debug_print 1
+    [ underline '-' "check_expr"
+    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_expr e))
+    ; sprintf "env: %s" (LEnv.pp env.local)
+    ; sprintf "ret: %s" (Types.pp ret)
+    ];
+
   let (M_Expr (annots, e_)) = e in
   let loc = Annot.get_loc_ annots in
   match e_ with
@@ -2060,13 +2112,13 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      check_pexpr env pe ret
   | M_Elet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (_annots, _, name2)) ->
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        check_expr (add_rt env rt) e2 ret
-     | M_normal_pattern (Pattern (_annot, CaseBase (mname2,_cbt))) ->
-        let name2 = sym_or_fresh mname2 in
-        infer_pexpr name2 env e1 >>= fun (rt, env) ->
-        check_expr (add_rt env rt) e2 ret
+     | M_symbol (Annotated (_annots, _, newname)) ->
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        check_expr (add_rt env (rename newname rt)) e2 ret
+     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+        let newname = sym_or_fresh mnewname in
+        infer_pexpr env e1 >>= fun (rt, env) ->
+        check_expr (add_rt env (rename newname rt)) e2 ret
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
@@ -2074,8 +2126,7 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      (* fix this: this is ignoring Esave for now *)
      check_expr env body ret
   | _ ->
-     let name = Sym.fresh () in    (* fix *)
-     infer_expr name env e >>= fun (t, env) ->
+     infer_expr env e >>= fun (t, env) ->
      subtype loc env t ret >>= fun env ->
      return env
 
@@ -2150,7 +2201,9 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
 
   let make_arg_t (msym,ctype) = 
-    type_of_ctype (sym_or_fresh msym) (make_pointer_ctype ctype) in
+    type_of_ctype (make_pointer_ctype ctype) >>= fun rt ->
+    return (rename (sym_or_fresh msym) rt) 
+  in
 
   if is_variadic 
   then fail (Variadic_function {loc; fn = sym})
@@ -2158,8 +2211,8 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
     let ret_name = Sym.fresh () in
     mapM make_arg_t args >>= fun args_types ->
     let arguments = concat args_types in
-    type_of_ctype ret_name ret_ctype >>= fun ret ->
-    let ft = F {arguments; return = ret} in
+    type_of_ctype ret_ctype >>= fun ret ->
+    let ft = F {arguments; return = rename ret_name ret} in
     let fun_decls = SymMap.add sym (loc, ft, ret_name) fun_decls in
     return fun_decls
 
@@ -2180,7 +2233,8 @@ let record_tagDef sym def genv =
        let id = Id.s id in
        let name = Sym.fresh_pretty id in
        let names = (id, (name, Loc.unknown)) :: names in
-       type_of_ctype name ctype >>= fun newfields ->
+       type_of_ctype ctype >>= fun newfields ->
+       let newfields = rename name newfields in
        return (names, fields @ newfields)
        (* fun bt_constr ->
         * let fields = match bt_constr with
@@ -2223,4 +2277,5 @@ let check mu_file =
 let check_and_report core_file = 
   match check core_file with
   | Result () -> ()
-  | Exception err -> print_endline (pp err)
+  | Exception err -> 
+     print_endline ("\n" ^ underline '=' "Error!" ^ "\n" ^ pp err)
