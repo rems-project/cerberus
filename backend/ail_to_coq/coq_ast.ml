@@ -34,6 +34,7 @@ type value =
   | Null
   | Void
   | Int of string * int_type
+  | SizeOf of layout
 
 let coq_locs : Location.Pool.t = Location.Pool.make ()
 
