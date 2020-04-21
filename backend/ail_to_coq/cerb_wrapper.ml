@@ -32,6 +32,15 @@ let frontend cpp_cmd filename =
   load_core_impl stdlib impl_name >>= fun impl ->
   c_frontend (conf, io) (stdlib, impl) ~filename
 
+let run_cpp cpp_cmd filename =
+  let conf =
+    { debug_level = 0 ; pprints = [] ; astprints = [] ; ppflags = []
+    ; typecheck_core = false ; rewrite_core = false
+    ; sequentialise_core = false ; cpp_cmd ; cpp_stderr = true }
+  in
+  Global_ocaml.(set_cerb_conf false Random false Basic false false false);
+  cpp (conf, io) ~filename
+
 let cpp_cmd includes nostd =
   let includes =
     if nostd then includes else
@@ -43,15 +52,18 @@ let cpp_cmd includes nostd =
   let defs = "-D__cerb__ -DDEBUG -DMAX_CPUS=4 -DMAX_VMS=2 -DHEAP_PAGES=10" in
   "cc -E -C -Werror -nostdinc -undef " ^ defs ^ " " ^ includes
 
-let c_file_to_ail cpp_includes cpp_nostd filename =
-  (* Check a couple of things that the frontend does not seem to check. *)
+(* A couple of things that the frontend does not seem to check. *)
+let source_file_check filename =
   if not (Sys.file_exists filename) then
     Panic.panic_no_pos "File [%s] does not exist." filename;
   if Sys.is_directory filename then
     Panic.panic_no_pos "A file was expected, [%s] is a directory." filename;
   if not (Filename.check_suffix filename ".c") then
-    Panic.panic_no_pos "File [%s] does not have the [.c] extension." filename;
+    Panic.panic_no_pos "File [%s] does not have the [.c] extension." filename
+
+let c_file_to_ail cpp_includes cpp_nostd filename =
   let open Exception in
+  source_file_check filename;
   match frontend (cpp_cmd cpp_includes cpp_nostd) filename with
   | Result(_, Some(ast), _) -> ast
   | Result(_, None     , _) ->
@@ -63,3 +75,13 @@ let c_file_to_ail cpp_includes cpp_nostd filename =
   let err = Pp_errors.short_message err in
   let (head, pos) = Location_ocaml.head_pos_of_location loc in
   Panic.panic loc "Frontend error.\n%s\n\027[0m%s%!" err pos
+
+let cpp_only cpp_includes cpp_nostd filename output_file =
+  source_file_check filename;
+  let str =
+    match run_cpp (cpp_cmd cpp_includes cpp_nostd) filename with
+    | Result(str)  -> str
+    | Exception(_) -> Panic.panic_no_pos "Failed due to preprocessor error."
+  in
+  let oc = open_out output_file in
+  Printf.fprintf oc "%s\n%!" str; close_out oc
