@@ -2184,7 +2184,24 @@ STD_ "§6.5.3.1#3" $
         desugar_expression e >>= fun d_e ->
         E.return $ AilEunary (translate_unary_operator uop) d_e
     | CabsEsizeof_expr e ->
-        AilEsizeof_expr <$> desugar_expression e
+        if Global.isAgnostic () then
+          E.fail loc (Errors.Desugar_NotYetSupported "sizeof(expr) in the implementation agnostic mode")
+          (* NOTE: use to be
+             AilEsizeof_expr <$> desugar_expression e
+           *)
+        else
+          desugar_expression e >>= fun d_e  ->
+          E.get_sigma_sofar    >>= fun sigm ->
+          E.get_gamma_sofar    >>= fun gamm ->
+          match ErrorMonad.runErrorMonad (GenTyping.annotate_expression sigm gamm GenTyping.CTXsizeof d_e) with
+            | Left (loc, err) ->
+                E.fail_ailtyping loc err
+            | Right a_expr ->
+                (* TODO: this is fixing an integer implementation... *)
+                let (qs, ty) = Translation_aux.qualified_ctype_of a_expr in
+                E.return (AilEsizeof qs ty)
+          end
+    
     | CabsEsizeof_type tyname ->
         (* TODO: STD check + annot *)
         desugar_type_name tyname >>= fun (qs, ty) ->

@@ -269,6 +269,8 @@ let inline bind = State_exception.bind
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
 let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
 
+let inline fail_ailtyping loc tcause = State_exception.fail (loc, Errors.AIL_TYPING tcause)
+
 val contraint_violation: forall 'a. Loc.t -> Constraint.violation -> desugM 'a
 let inline constraint_violation loc v =
   State_exception.fail (loc, Errors.DESUGAR (Errors.Desugar_ConstraintViolation v))
@@ -359,9 +361,9 @@ let under_scope scope m =
   return res
 
 
-(* This is similary to 'under_scope', but it also returns the internal
+(* This is similar to 'under_scope', but also returns the internal
    declarations that where declared while evaluating 'm' *)
-(* NOTE: this only collect INTERNAL declarations, not the extern, static or
+(* NOTE: this only collects INTERNAL declarations, not the extern, static or
    _Thread_local ones *)
 val collect_with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let collect_with_scope scope m =
