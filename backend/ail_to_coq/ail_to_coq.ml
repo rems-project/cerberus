@@ -162,6 +162,8 @@ let is_atomic_tc : GenTypes.typeCategory -> bool = fun tc ->
 
 let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
 
+let loc_of (AilSyntax.AnnotatedExpression(_,_,loc,_)) = loc
+
 let is_const_0 (AilSyntax.AnnotatedExpression(_, _, _, e)) =
   let open AilSyntax in
   match e with
@@ -185,10 +187,10 @@ let op_type_of loc Ctype.(Ctype(_, c_ty)) =
   | Struct(_)           -> not_impl loc "op_type_of (Struct)"
   | Union(_)            -> not_impl loc "op_type_of (Union)"
 
-let op_type_of_tc : GenTypes.typeCategory -> Coq_ast.op_type = fun tc ->
+let op_type_of_tc : loc -> type_cat -> Coq_ast.op_type = fun loc tc ->
   match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> op_type_of Location_ocaml.unknown c_ty
-  | GenTypes.RValueType(c_ty)     -> op_type_of Location_ocaml.unknown c_ty
+  | GenTypes.LValueType(_,c_ty,_) -> op_type_of loc c_ty
+  | GenTypes.RValueType(c_ty)     -> op_type_of loc c_ty
 
 (* We need similar function returning options for casts. *)
 let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
@@ -203,10 +205,10 @@ let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
   | Struct(_)           -> None
   | Union(_)            -> None
 
-let op_type_tc_opt tc =
+let op_type_tc_opt loc tc =
   match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> op_type_opt Location_ocaml.unknown c_ty
-  | GenTypes.RValueType(c_ty)     -> op_type_opt Location_ocaml.unknown c_ty
+  | GenTypes.LValueType(_,c_ty,_) -> op_type_opt loc c_ty
+  | GenTypes.RValueType(c_ty)     -> op_type_opt loc c_ty
 
 let struct_data : ail_expr -> string * bool = fun e ->
   let AilSyntax.AnnotatedExpression(gtc,_,_,_) = e in
@@ -253,7 +255,7 @@ let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
 
 let rec translate_expr lval goal_ty e =
   let open AilSyntax in
-  let res_ty = op_type_tc_opt (tc_of e) in
+  let res_ty = op_type_tc_opt (loc_of e) (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
   let coq_loc = register_loc coq_locs loc in
   let locate e = mkloc e coq_loc in
@@ -270,7 +272,7 @@ let rec translate_expr lval goal_ty e =
         let (e, l) = translate e in
         (locate (Deref(atomic, layout, e)), l)
     | AilEunary(op,e)              ->
-        let ty = op_type_of_tc (tc_of e) in
+        let ty = op_type_of_tc (loc_of e) (tc_of e) in
         let (e, l) = translate e in
         let op =
           match op with
@@ -284,8 +286,8 @@ let rec translate_expr lval goal_ty e =
         in
         (locate (UnOp(op, ty, e)), l)
     | AilEbinary(e1,op,e2)         ->
-        let ty1 = op_type_of_tc (tc_of e1) in
-        let ty2 = op_type_of_tc (tc_of e2) in
+        let ty1 = op_type_of_tc (loc_of e1) (tc_of e1) in
+        let ty2 = op_type_of_tc (loc_of e2) (tc_of e2) in
         let arith_op = ref false in
         let op =
           match op with
@@ -327,8 +329,8 @@ let rec translate_expr lval goal_ty e =
               let AnnotatedExpression(_, _, loc, _) = e in
               ({ elt = Val(Null) ; loc = register_loc coq_locs loc }, [])
           | _                                                   ->
-          let ty = op_type_of_tc (tc_of e) in
-          let op_ty = op_type_of Location_ocaml.unknown c_ty in
+          let ty = op_type_of_tc (loc_of e) (tc_of e) in
+          let op_ty = op_type_of loc c_ty in
           let (e, l) = translate e in
           (locate (UnOp(CastOp(op_ty), ty, e)), l)
         end
@@ -577,7 +579,7 @@ let translate_block stmts blocks ret_ty =
                 let e1 = trans_lval e1 in
                 let layout = layout_of_tc (tc_of e) in
                 let goal_ty =
-                  let ty = op_type_of_tc (tc_of e) in
+                  let ty = op_type_of_tc (loc_of e) (tc_of e) in
                   match ty with
                   | OpInt(_) -> Some(ty)
                   | _        -> None
