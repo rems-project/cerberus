@@ -7,7 +7,7 @@ open Nat_big_num
 
 open Either
 
-open Ocaml_implementation
+(*open Ocaml_implementation*)
 
 
 let simple_fromptr =
@@ -60,7 +60,7 @@ let rec simplify_integer_value_base ival_ =
     | IVmin ity ->
         begin match ity with
           | Char ->
-              if Impl.is_signed_ity Char then
+              if (Ocaml_implementation.get()).is_signed_ity Char then
                 Left (negate (pow_int (of_int 2) (8-1)))
               else
                 Left (of_int 0)
@@ -76,7 +76,7 @@ let rec simplify_integer_value_base ival_ =
               Left (of_int 0)
           | Ptrdiff_t ->
               (* and all of these are signed *)
-              begin match Impl.sizeof_ity ity with
+              begin match (Ocaml_implementation.get()).sizeof_ity ity with
                 | Some n ->
                     Left (negate (pow_int (of_int 2) (8*n-1)))
                 | None ->
@@ -88,7 +88,7 @@ let rec simplify_integer_value_base ival_ =
                   Right ival_
               else
                 (* and all of these are signed *)
-                begin match Impl.sizeof_ity ity with
+                begin match (Ocaml_implementation.get()).sizeof_ity ity with
                   | Some n ->
                       Left (negate (pow_int (of_int 2) (8*n-1)))
                   | None ->
@@ -105,7 +105,7 @@ let rec simplify_integer_value_base ival_ =
         if   not simple_fromptr
           && (ity = Unsigned Long || ity = Unsigned Intptr_t || ity = Signed Intptr_t) then
           Right ival_
-        else begin match Impl.sizeof_ity ity with
+        else begin match (Ocaml_implementation.get()).sizeof_ity ity with
           | Some n ->
               let signed_max =
                 (sub (pow_int (of_int 2) (8*n-1)) (of_int 1)) in
@@ -113,7 +113,7 @@ let rec simplify_integer_value_base ival_ =
                 (sub (pow_int (of_int 2) (8*n)) (of_int 1)) in
               begin match ity with
                 | Char ->
-                    Left (if Impl.is_signed_ity Char then
+                    Left (if (Ocaml_implementation.get()).is_signed_ity Char then
                       signed_max
                     else
                       unsigned_max)
@@ -142,7 +142,7 @@ let rec simplify_integer_value_base ival_ =
               (* Ail type error *)
               assert false
           | Basic (Integer ity) ->
-              begin match Impl.sizeof_ity ity with
+              begin match (Ocaml_implementation.get()).sizeof_ity ity with
                 | Some n ->
                     Left (of_int n)
                 | None ->
@@ -150,7 +150,7 @@ let rec simplify_integer_value_base ival_ =
                     Right ival_
               end
           | Basic (Floating fty) ->
-              begin match Impl.sizeof_fty fty with
+              begin match (Ocaml_implementation.get()).sizeof_fty fty with
                 | Some n ->
                     Left (of_int n)
                 | None ->
@@ -220,14 +220,14 @@ let rec simplify_integer_value_base ival_ =
               (* Ail type error *)
               assert false
           | Basic (Integer ity) ->
-              begin match Impl.alignof_ity ity with
+              begin match (Ocaml_implementation.get()).alignof_ity ity with
                 | Some n ->
                     Left (of_int n)
                 | None ->
                     Right ival_
               end
           | Basic (Floating fty) ->
-              begin match Impl.alignof_fty fty with
+              begin match (Ocaml_implementation.get()).alignof_fty fty with
                 | Some n ->
                     Left (of_int n)
                 | None ->
@@ -306,7 +306,7 @@ let byteof i n = let n' = n `div` (2 ^ (i * 8)) in mod n' 256
     | IVcomposite _ ->
         failwith "simplify_integer_value: IVcomposite"
     | IVbitwise (ity, BW_complement ival_1) ->
-        begin match (Impl.sizeof_ity ity, simplify_integer_value_base ival_1) with
+        begin match ((Ocaml_implementation.get()).sizeof_ity ity, simplify_integer_value_base ival_1) with
           | (Some width, Left n1) ->
               Left (Defacto_memory_aux.tmp_compl width n1)
           | (_, x) ->
