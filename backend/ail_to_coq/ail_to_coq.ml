@@ -420,7 +420,7 @@ let rec translate_expr lval goal_ty e =
         let global = not (Hashtbl.mem local_vars id) in
         if global then Hashtbl.add used_globals id ();
         (locate (Var(Some(id), global)), [])
-    | AilEsizeof(q,c_ty)           -> not_impl loc "expr sizeof"
+    | AilEsizeof(q,c_ty)           -> (locate (Val(SizeOf(layout_of false c_ty))), [])
     | AilEsizeof_expr(e)           -> not_impl loc "expr sizeof_expr"
     | AilEalignof(q,c_ty)          -> not_impl loc "expr alignof"
     | AilEannot(c_ty,e)            -> not_impl loc "expr annot"
