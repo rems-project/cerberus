@@ -9,26 +9,43 @@ open Sexplib
 open Printf
 open Sym
 
+open Colour
+
+
 module Loc = Location
 
 
 
-let debug_level = 1
 
-let debug_print_line level s = 
-  if debug_level >= level 
-  then print_endline s 
-  else ()
-
-let debug_print level s = 
-  if debug_level >= level 
-  then print_endline ("\n" ^ (String.concat "\n" s)) 
-  else ()
-
-let underline c s = 
-  s ^ "\n" ^ (String.make (String.length s) c)
+let debug_level = 2
 
 let pps = Pp_utils.to_plain_pretty_string
+
+let nocolour f x = 
+  let before = !Colour.do_colour in
+  Colour.do_colour := false;
+  let pp = f x in
+  Colour.do_colour := before;
+  pp
+
+let pp_expr e =  (pps (nocolour Pp_mucore.Basic.pp_expr e))
+let pp_pexpr e = (pps (nocolour Pp_mucore.Basic.pp_pexpr e))
+
+let lines s = (String.concat "\n" s)
+let underline c s = s ^ "\n" ^ (String.make (String.length s) c)
+
+
+let h1 s = ansi_format [Bold; Blue] (underline '=' s)
+let h2 s = ansi_format [Bold; Blue] (underline '-' s)
+let item item content = 
+  sprintf "%s: %s" (ansi_format [Bold; Magenta] item) content
+
+
+let debug_print_line level s = 
+  if debug_level >= level then print_endline s else ()
+
+let debug_print level s = 
+  if debug_level >= level then print_endline ("\n" ^ lines s) else ()
 
 
 
@@ -993,10 +1010,17 @@ module GEnv = struct
     pp_list pp_entry "\n" (StringMap.bindings m)
 
   let pp genv = 
-    sprintf ("\nStructs\n-------\n%s\n\nFunctions\n---------\n%s\n\nNames\n-----\n%s\n")
-      (pp_struct_decls genv.struct_decls)
-      (pp_fun_decls genv.fun_decls)
-      (pp_name_map genv.names)
+    lines 
+      [ h2 "Structs"
+      ; pp_struct_decls genv.struct_decls
+      ; ""
+      ; h2 "Functions"
+      ; pp_fun_decls genv.fun_decls
+      ; ""
+      ; h2 "Names"
+      ; pp_name_map genv.names
+      ; ""
+      ]
 
 end
 
@@ -1049,11 +1073,7 @@ module Env = struct
     fold_left remove_var env bindings
 
   let add_rt env rt = 
-    fold_left (fun env b -> 
-        print_endline (sprintf "adding %s" (Binders.pp b));
-        add_var env (b.name, b.bound)
-      )
-      env rt
+    fold_left (fun env b -> add_var env (b.name, b.bound)) env rt
 
   let add_Avar env (sym, t) = add_var env (sym, VarTypes.A t)
   let add_Lvar env (sym, t) = add_var env (sym, VarTypes.L t)
@@ -1110,12 +1130,9 @@ module Env = struct
         ) env.local.vars []
     in
     match relevant with
-    | [] -> 
-       return None
-    | [owned] -> 
-       return (Some owned)
-    | _ :: _ :: _ -> 
-       fail (Unreachable {loc; unreachable = "multiple owners of resource"})
+    | [] -> return None
+    | [owned] -> return (Some owned)
+    | _ -> fail (Unreachable {loc; unreachable = "multiple owners of resource"})
 
 end
 
@@ -1440,8 +1457,10 @@ let make_pointer_ctype ct =
 
 
 
-let strip_quantifiers t = 
+let remove_logical t = 
   List.filter_map (function {name; bound = L _} -> None | b -> Some b) t
+let only_resources t = 
+  List.filter_map (function ({name; bound = R _} as b) -> Some b | _ -> None) t
 
 
 
@@ -1465,7 +1484,29 @@ let make_load_type ct : (FunctionTypes.t,'e) m =
   let ret = 
     {name = lname; bound = A bt} ::
     {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-    (strip_quantifiers rt)
+    (remove_logical rt)
+  in
+  let ftyp = FunctionTypes.F {arguments; return = ret} in
+  return ftyp
+
+let make_store_type ct : (FunctionTypes.t,'e) m = 
+  let aname = fresh () in
+  let rname = fresh () in
+  ctype_aux ct >>= fun ((lname,bt),rt) ->
+  let addr_argument = 
+    ({name = aname; bound = A Loc} :: 
+    {name = lname; bound = L (Base bt)} ::
+    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
+    rt)
+  in
+  let val_argument = 
+    [{name = fresh (); bound = A bt}]
+  in
+  let arguments = addr_argument @ val_argument in
+  let ret = 
+    {name = fresh (); bound = A Unit} ::
+    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
+    (only_resources rt)
   in
   let ftyp = FunctionTypes.F {arguments; return = ret} in
   return ftyp
@@ -1628,11 +1669,11 @@ let call_typ loc_call env decl_typ args =
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
     debug_print 2 
-      [underline '-' "check_and_refine"
-      ; sprintf "lenv: %s" (LEnv.pp env.local)
-      ; sprintf "ftyp: %s" (FunctionTypes.pp (F ftyp))
-      ; sprintf "args: %s" (pp_list (fun (a,_) -> Sym.pp a) ", " args)
-      ; sprintf "unis: %s" (pp_unis unis)
+      [ h2 "check_and_refine"
+      ; item "lenv" (LEnv.pp env.local)
+      ; item "ftyp" (FunctionTypes.pp (F ftyp))
+      ; item "args" (pp_list (fun (a,_) -> Sym.pp a) ", " args)
+      ; item "unis" (pp_unis unis)
       ];
 
 
@@ -1868,12 +1909,14 @@ let check_undef env loc undef =
   if is_unreachable env loc then return ()
   else fail (Undefined_behaviour (loc, undef))
   
+
 let rec infer_pexpr env (pe : 'bty mu_pexpr) = 
 
   debug_print 1
-    [ underline '-' "infer_pexpr"
-    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_pexpr pe))
-    ; sprintf "env: %s" (LEnv.pp env.local)
+    [ h2 "check_pexpr"
+    ; item "env" (LEnv.pp env.local)
+    ; item "e" ""
+    ; pp_pexpr pe
     ];
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
@@ -1943,10 +1986,11 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
 and check_pexpr env (e : 'bty mu_pexpr) ret = 
 
   debug_print 1
-    [ underline '-' "check_pexpr"
-    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_pexpr e))
-    ; sprintf "env: %s" (LEnv.pp env.local)
-    ; sprintf "ret: %s" (Types.pp ret)
+    [ h2 "check_pexpr"
+    ; item "env" (LEnv.pp env.local)
+    ; item "ret" (Types.pp ret)
+    ; item "e" ""
+    ; pp_pexpr e
     ];
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -1993,9 +2037,10 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
 let rec infer_expr env (e : ('a,'bty) mu_expr) = 
 
   debug_print 1
-    [ underline '-' "infer_expr"
-    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_expr e))
-    ; sprintf "env: %s" (LEnv.pp env.local)
+    [ h2 "check_expr"
+    ; item "env" (LEnv.pp env.local)
+    ; item "e" ""
+    ; pp_expr e
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -2021,8 +2066,10 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
         let env = remove_vars env resources in
         let rt = [{name = fresh (); bound = A Unit}] in
         return (rt, env)
-     | M_Store (_is_locking,ct, sym1, sym2, mo) -> 
-        failwith "Store"
+     | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
+        let (ct, _ct_loc) = lof_a a_ct in
+        make_load_type ct >>= fun decl_typ ->
+        call_typ loc env decl_typ [lof_a asym1; lof_a asym2]
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
         make_load_type ct >>= fun decl_typ ->
@@ -2072,10 +2119,11 @@ failwith "LinuxRMW"
 and check_expr env (e : ('a,'bty) mu_expr) ret = 
 
   debug_print 1
-    [ underline '-' "check_expr"
-    ; sprintf "e: %s" (pps (Pp_mucore.Basic.pp_expr e))
-    ; sprintf "env: %s" (LEnv.pp env.local)
-    ; sprintf "ret: %s" (Types.pp ret)
+    [ h2 "check_pexpr"
+    ; item "env" (LEnv.pp env.local)
+    ; item "ret" (Types.pp ret)
+    ; item "e" ""
+    ; pp_expr e
     ];
 
   let (M_Expr (annots, e_)) = e in

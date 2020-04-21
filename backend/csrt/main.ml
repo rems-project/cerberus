@@ -69,6 +69,7 @@ let print_mu_core_file mu_file filename =
  *     (List.length (Pmap.bindings_list core_file.Core.funinfo))) *)
 
 let process core_file0 =
+  Colour.do_colour := false;
   print_core_file core_file0 "0_original";
   let core_file1 = Core_peval.rewrite_file core_file0 in
   print_core_file core_file1 "1_after_peval";
@@ -77,10 +78,10 @@ let process core_file0 =
   let mu_file3 = Core_anormalise.normalise_file core_file2 in
   print_mu_core_file mu_file3 "3_after_anf";
   print_core_file (Mucore.mu_to_core__file mu_file3) "4_back_to_core";
+  Colour.do_colour := true;
   return mu_file3
 
 let frontend conf filename = 
-  Colour.do_colour := false;
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
