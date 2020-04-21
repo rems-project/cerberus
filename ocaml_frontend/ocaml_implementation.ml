@@ -1,22 +1,22 @@
 open Ctype
 
-module type Implementation = sig
-  val name: string
-  val details: string
-  val sizeof_pointer: int option
-  val alignof_pointer: int option
-  val is_signed_ity: integerType -> bool
-  val sizeof_ity: integerType -> int option
-  val precision_ity: integerType -> int option
-  val sizeof_fty: floatingType -> int option
-  val alignof_ity: integerType -> int option
-  val alignof_fty: floatingType -> int option
-  val register_enum: Symbol.sym -> Nat_big_num.num list -> bool
-  val typeof_enum: Symbol.sym -> integerType
-end
+type implementation = {
+  name: string;
+  details: string;
+  sizeof_pointer: int option;
+  alignof_pointer: int option;
+  is_signed_ity: integerType -> bool;
+  sizeof_ity: integerType -> int option;
+  precision_ity: integerType -> int option;
+  sizeof_fty: floatingType -> int option;
+  alignof_ity: integerType -> int option;
+  alignof_fty: floatingType -> int option;
+  register_enum: Symbol.sym -> Nat_big_num.num list -> bool;
+  typeof_enum: Symbol.sym -> integerType;
+}
 
 
-module DefaultImpl: Implementation = struct
+module DefaultImpl = struct
   let name = "clang9_x86_64-apple-darwin16.7.0"
   let details = "Apple LLVM version 9.0.0 (clang-900.0.38)\nTarget: x86_64-apple-darwin16.7.0"
 
@@ -55,27 +55,34 @@ module DefaultImpl: Implementation = struct
           z
 
   (* NOTE: some of them are not implementation defined *)
-  let rec is_signed_ity = function
-    | Char ->
-        true
-    | Bool ->
-        false
-    | Signed _ ->
-        true
-    | Unsigned _ ->
-        false
-    | Enum tag_sym ->
-        is_signed_ity (typeof_enum tag_sym)
-    | Size_t ->
-        (* STD §7.19#2 *)
-        false
-    | Wchar_t ->
-        true
-    | Wint_t ->
-        true
-    | Ptrdiff_t ->
-        (* STD §7.19#2 *)
-        true
+  let is_signed_ity ity =
+    let ity' =
+      match ity with
+        | Enum tag_sym ->
+            typeof_enum tag_sym
+        | _ ->
+            ity in
+    match ity' with
+      | Char ->
+          true
+      | Bool ->
+          false
+      | Signed _ ->
+          true
+      | Unsigned _ ->
+          false
+      | Enum tag_sym ->
+          assert false
+      | Size_t ->
+          (* STD §7.19#2 *)
+          false
+      | Wchar_t ->
+          true
+      | Wint_t ->
+          true
+      | Ptrdiff_t ->
+          (* STD §7.19#2 *)
+          true
 
   let sizeof_ity = function
     | Char
@@ -171,7 +178,21 @@ module DefaultImpl: Implementation = struct
         Some 8
     | RealFloating LongDouble ->
         Some 8 (* TODO:hack ==> 16 *)
-
+  
+  let impl: implementation = {
+    name;
+    details;
+    sizeof_pointer;
+    alignof_pointer;
+    is_signed_ity;
+    sizeof_ity;
+    precision_ity;
+    sizeof_fty;
+    alignof_ity;
+    alignof_fty;
+    register_enum;
+    typeof_enum;
+  }
 end
 
 
@@ -188,7 +209,7 @@ end
 
 
 (* LP64 *)
-module HafniumImpl : Implementation = struct
+module HafniumImpl = struct
   let name = "hafnium_aarch64-none-eabi"
   let details = "TODO"
   
@@ -348,6 +369,21 @@ module HafniumImpl : Implementation = struct
         Some 8
     | RealFloating LongDouble ->
         Some 16
+
+  let impl: implementation = {
+    name;
+    details;
+    sizeof_pointer;
+    alignof_pointer;
+    is_signed_ity;
+    sizeof_ity;
+    precision_ity;
+    sizeof_fty;
+    alignof_ity;
+    alignof_fty;
+    register_enum;
+    typeof_enum;
+  }
 end
 
 
@@ -363,4 +399,17 @@ let hafniumIntImpl: IntegerImpl.implementation =
   (Ptrdiff_t)
 
 
-module Impl = DefaultImpl
+(* TODO: this is horrible... *)
+let (set, get) : (implementation -> unit) * (unit -> implementation) =
+  (* NOTE: to prevent nasty bugs the setter can only be called once *)
+  let rec selected =
+    ref (false, DefaultImpl.impl) in
+  ( begin fun new_impl ->
+      if fst !selected then
+        failwith "Ocaml_implementation: attempted a second set() of the implementation"
+      else
+        selected := (true, new_impl)
+    end
+  , begin fun () ->
+      snd !selected
+    end )
