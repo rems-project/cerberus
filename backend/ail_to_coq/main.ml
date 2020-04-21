@@ -10,6 +10,7 @@ type config =
   ; spec_ctxt   : string list
   ; cpp_I       : string list
   ; cpp_nostd   : bool
+  ; cpp_output  : bool
   ; no_expr_loc : bool
   ; no_stmt_loc : bool }
 
@@ -40,10 +41,13 @@ let run : config -> string -> unit = fun cfg c_file ->
   (* Set the printing flags. *)
   if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
   if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
-  (* Print the code, if necessary. *)
+  (* Print the output of the preprocessor if necessary. *)
+  if cfg.cpp_output then
+    Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file;
+  (* Generate the code, if necessary. *)
   if cfg.gen_code then
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
-  (* Print the spec, if necessary. *)
+  (* Generate the spec, if necessary. *)
   if cfg.gen_spec then
     Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast)
 
@@ -108,6 +112,12 @@ let cpp_nostd =
   in
   Arg.(value & flag & info ["nostdinc"] ~doc)
 
+let cpp_output =
+  let doc =
+    "Print the output of the preprocessor to STDOUT."
+  in
+  Arg.(value & flag & info ["cpp-output"] ~doc)
+
 let no_expr_loc =
   let doc =
     "Do not output location information for expressions in the generated \
@@ -131,16 +141,16 @@ let no_loc =
 
 let opts : config Term.t =
   let build output_dir no_code no_spec full_paths imports spec_ctxt cpp_I
-      cpp_nostd no_expr_loc no_stmt_loc no_loc =
+      cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc =
     let no_expr_loc = no_expr_loc || no_loc in
     let no_stmt_loc = no_stmt_loc || no_loc in
     { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; no_stmt_loc
-    ; no_expr_loc }
+    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; cpp_output
+    ; no_stmt_loc ; no_expr_loc }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
-          imports $ spec_ctxt $ cpp_I $ cpp_nostd $ no_expr_loc $
-          no_stmt_loc $ no_loc)
+          imports $ spec_ctxt $ cpp_I $ cpp_nostd $ cpp_output $
+          no_expr_loc $ no_stmt_loc $ no_loc)
 
 let c_file =
   let doc = "C language source file." in
