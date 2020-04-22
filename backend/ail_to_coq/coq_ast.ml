@@ -88,6 +88,6 @@ type func_def_or_decl =
 type t =
   { source_file : string
   ; entry_point : string option
-  ; global_vars : string list
+  ; global_vars : (string * type_expr option) list
   ; structs     : (string * struct_decl) list
   ; functions   : (string * func_def_or_decl) list }
