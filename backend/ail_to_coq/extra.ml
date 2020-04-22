@@ -63,3 +63,18 @@ module Filename =
 
 module SMap = Map.Make(String)
 module IMap = Map.Make(Int)
+
+module List =
+  struct
+    include List
+
+    (** [filter_map f l] applies function [f] to the elements of [l], and then
+        filters out then [None]. *)
+    let rec filter_map : ('a -> 'b option) -> 'a list -> 'b list = fun f l ->
+      match l with
+      | []     -> []
+      | h :: t ->
+          match f h with
+          | Some(x) -> x :: filter_map f t
+          | None    -> filter_map f t
+  end

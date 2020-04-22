@@ -199,6 +199,11 @@ let parser annot_constr : constr Earley.grammar =
 let parser annot_field : type_expr Earley.grammar =
   | ty:type_expr
 
+(** {4 Annotations on global variables} *)
+
+let parser annot_global : type_expr Earley.grammar =
+  | ty:type_expr
+
 (** {4 Annotations on functions} *)
 
 let parser annot_arg : type_expr Earley.grammar =
@@ -241,6 +246,7 @@ type annot =
   | Annot_immovable
   | Annot_tunion
   | Annot_field      of type_expr
+  | Annot_global     of type_expr
   | Annot_args       of type_expr list
   | Annot_requires   of constr list
   | Annot_returns    of type_expr
@@ -322,6 +328,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "immovable"  -> no_args Annot_immovable
   | "tunion"     -> no_args Annot_tunion
   | "field"      -> single_arg annot_field (fun e -> Annot_field(e))
+  | "global"     -> single_arg annot_global (fun e -> Annot_global(e))
   | "args"       -> many_args annot_arg (fun l -> Annot_args(l))
   | "requires"   -> many_args annot_requires (fun l -> Annot_requires(l))
   | "returns"    -> single_arg annot_returns (fun e -> Annot_returns(e))
@@ -519,3 +526,18 @@ let block_annot : rc_attr list -> block_annot = fun attrs ->
   { bl_exists =  !exists
   ; bl_constrs = !constrs
   ; bl_inv_vars = !vars }
+
+let global_annot : rc_attr list -> type_expr option = fun attrs ->
+  let global = ref None in
+
+  let handle_attr ({rc_attr_id = id; _} as attr) =
+    let error msg =
+      invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
+    in
+    match parse_attr attr with
+    | Annot_global(e) -> global := Some e
+    | _                   -> error "is invalid for a global"
+  in
+  List.iter handle_attr attrs;
+
+  !global
