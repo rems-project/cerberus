@@ -779,9 +779,13 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the global variables. *)
   let global_vars =
-    let fn (id, (_, _, decl)) acc =
+    let fn (id, (_, attrs, decl)) acc =
       match decl with
-      | AilSyntax.Decl_object _ -> sym_to_str id :: acc
+      | AilSyntax.Decl_object _ ->
+         let annots = collect_rc_attrs attrs in
+         let fn () = global_annot annots in
+         let global_annot = handle_invalid_annot None fn () in
+         (sym_to_str id, global_annot) :: acc
       | _                       -> acc
     in
     List.fold_right fn decls []
@@ -888,7 +892,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let func_deps =
         let globals_used =
           (* We preserve order of declaration. *)
-          List.filter (Hashtbl.mem used_globals) global_vars
+          List.filter (Hashtbl.mem used_globals) (List.map fst global_vars)
         in
         let func_used =
           (* We preserve order of declaration. *)
