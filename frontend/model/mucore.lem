@@ -39,11 +39,6 @@ type va_asym 'bty = asym 'bty       (* value *)
 
 
 
-let unspec_undef = Undefined.DUMMY "unspecified value"
-let unsatc_undef = Undefined.DUMMY "unsatisfied constraint"
-
-
-
 type mu_object_value 'bty =  (* C object values *)
  | M_OVinteger of Mem.integer_value (* integer value *)
  | M_OVfloating of Mem.floating_value (* floating-point value *)
@@ -108,8 +103,6 @@ type mu_pexpr_ 'bty =  (* Core pure expressions *)
   * | M_PEbmc_assume of asym 'bty
   * | M_PEis_unsigned of asym 'bty
   * | M_PEare_compatible of asym 'bty * asym 'bty *)
- | M_PEensure_specified of asym 'bty * mu_base_type * annotated (Loc.t * Undefined.undefined_behaviour) 'bty
- | M_PEensure of asym 'bty * asym 'bty * mu_pexpr 'bty
 
 and mu_pexpr 'bty = 
  | M_Pexpr of list annot * 'bty * (mu_pexpr_ 'bty)
@@ -417,24 +410,6 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
    *    Core.PEbmc_assume (get_pexpr e)
    * | M_PEare_compatible p1 p2 ->
    *    Core.PEare_compatible (get_pexpr p1) (get_pexpr p2) *)
-  | M_PEensure_specified asym cbt (Annotated annots bty (loc,undef)) ->
-     let pats_pes = 
-       let undef_pe = Core.Pexpr annots bty (Core.PEundef loc undef) in
-       let newsym = Symbol.fresh_pretty "eanf" in
-       let sym_pat = mk_sym_pat_ annots (Just newsym) cbt in
-       let wild_pat = mk_sym_pat_ annots Nothing cbt in
-       let spec_pat = mk_specified_pat_ annots sym_pat in
-       let unspec_pat = mk_unspecified_pat_ annots wild_pat in
-       let e_spec = make_symbol_pexpr (Annotated annots bty newsym) in
-       [(spec_pat, e_spec); (unspec_pat, undef_pe)]
-     in
-     let pe = get_pexpr "ensure_specified" env asym in
-     wrap (Core.PEcase pe pats_pes)
-  | M_PEensure asym1 asym2 undef_pe ->
-     let pe1 = get_pexpr "PEensure" env asym1 in
-     let pe2 = get_pexpr "PEensure" env asym2 in
-     let pe3 = mu_to_core__pexpr env undef_pe in
-     mk_if_pe_ annots bty pe1 pe2 pe3
 
 
   end

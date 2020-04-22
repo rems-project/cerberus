@@ -232,9 +232,6 @@ module IndexTerms = struct
 
     | List of t * t list
 
-    (* | Specified of Sym.t
-     * | Unspecified of Sym.t *)
-
     | S of Sym.t
 
   let (%+) t1 t2 = Add (t1,t2)
@@ -280,11 +277,6 @@ module IndexTerms = struct
 
     | List (it, its) -> 
        sprintf "(list (%s))" (String.concat " " (map pp (it :: its)))
-
-    (* | Specified sym ->
-     *    sprintf "(specified (%s))" (Sym.pp sym)
-     * | Unspecified sym ->
-     *    sprintf "(unspecified (%s))" (Sym.pp sym) *)
 
     | S sym -> Sym.pp sym
 
@@ -407,8 +399,6 @@ module IndexTerms = struct
     | Not it -> Not (subst sym with_it it)
     | List (it, its) -> 
        List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
-    (* | Specified symbol -> Specified symbol (\* check *\)
-     * | Unspecified symbol -> Unspecified symbol (\* check *\) *)
     | S symbol -> S (sym_subst sym with_it symbol)
 
   let rec unify it it' (res : ('a, Sym.t) uni SymMap.t) = 
@@ -445,10 +435,6 @@ module IndexTerms = struct
 
     | List (it,its), List (it',its') -> 
        unify_list (it::its) (it'::its') res
-
-    (* | Specified symbol, Specified symbol2 when symbol = symbol2 -> 
-     *    return res
-     * | Unspecified symbol, Unspecified symbol (\* check *\) *)
 
     | S sym, S sym' when sym = sym' ->
        return res
@@ -762,6 +748,32 @@ open VarTypes
 open Binders
 open Types
       
+
+module UU = struct
+
+  type u = 
+    | Undefined of Loc.t * Undefined.undefined_behaviour
+    | Unspecified of Loc.t (* * Ctype.ctype *)
+
+  type 'a or_u = 
+    | Normal of 'a
+    | Bad of u
+
+  type ut = Types.t or_u
+
+  let rec all_normal : ('a or_u) list -> ('a list) or_u = function
+    | [] -> Normal []
+    | Bad u :: _ -> Bad u
+    | Normal a :: rest -> 
+       match all_normal rest with
+       | Normal rest -> Normal (a :: rest)
+       | Bad b -> Bad b
+
+end
+
+open UU
+
+
 
 module Err = struct
 
@@ -1520,27 +1532,24 @@ let infer_object_value (env : env) loc ov =
      integer_value_to_num loc iv >>= fun i ->
      let t = {name; bound = A Int} in
      let constr = {name = fresh (); bound = C (LC (S name %= Num i))} in
-     return [t; constr]
+     return (Normal [t; constr])
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
          let t = {name; bound = A Loc} in
          let constr = {name = fresh (); bound = C (LC (Null (S name)))} in
-         return [t; constr] )
+         return (Normal [t; constr]) )
        ( fun sym -> 
          fail (Unsupported {loc; unsupported = "function pointers"}) )
        ( fun _prov loc ->
          let t = {name; bound = A Loc} in
          let constr = {name = fresh (); bound = C (LC (S name %= Num loc))} in
-         return [t; constr] )
-       ( fun _ ->
-         if is_unreachable env loc 
-         then return [{name; bound = A Loc}]
-         else fail (Unspecified_value loc) )
+         return (Normal [t; constr]) )
+       ( fun () -> return (Bad (Unspecified loc)) )
   | M_OVarray items ->
      make_Aargs_bts env items >>= fun args_bts ->
      args_same_typ None args_bts >>
-     return [{name; bound = A Array}]
+     return (Normal [{name; bound = A Array}])
   | M_OVstruct (sym, fields) ->
      failwith "todo: struct"
   | M_OVunion _ -> 
@@ -1551,36 +1560,31 @@ let infer_object_value (env : env) loc ov =
 
 let infer_loaded_value env loc lv = 
   match lv with
- | M_LVspecified ov ->
-    infer_object_value env loc ov >>= fun rt ->
-    return rt
- | M_LVunspecified ct ->
-    if is_unreachable env loc then 
-      ctype (fresh ()) ct >>= fun rt ->
-      failwith "unspecified"
-    else 
-      fail (Unspecified_value loc)
+ | M_LVspecified ov -> infer_object_value env loc ov
+ | M_LVunspecified _ct -> return (Bad (Unspecified loc))
 
 
-let infer_value loc env v = 
+let infer_value loc env v : (UU.ut,'e) m = 
   match v with
   | M_Vobject ov ->
      infer_object_value env loc ov
   | M_Vloaded lv ->
      infer_loaded_value env loc lv
   | M_Vunit ->
-     let t = {name = fresh (); bound = A Unit} in
-     return [t]
+     let rt = [{name = fresh (); bound = A Unit}] in
+     return (Normal rt)
   | M_Vtrue ->
      let name = fresh () in
      let t = {name; bound = A Bool} in
      let constr = {name = fresh (); bound = C (LC (S name))} in
-     return [t; constr]
+     let rt = [t; constr] in
+     return (Normal rt)
   | M_Vfalse -> 
      let name = fresh () in
      let t = {name; bound = A Bool} in
      let constr = {name = fresh (); bound = C (LC (Not (S name)))} in
-     return [t; constr]
+     let rt = [t; constr] in
+     return (Normal rt)
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      begin match bt with
@@ -1588,15 +1592,15 @@ let infer_value loc env v =
         make_Aargs_bts env asyms >>= fun args_bts ->
         args_same_typ (Some i_t) args_bts >>
         (* maybe record list length? *)
-        let t = {name = fresh (); bound = A (List i_t)} in
-        return [t]
+        let rt = [{name = fresh (); bound = A (List i_t)}] in
+        return (Normal rt)
      | bt ->
         fail (Generic_error (loc, "Cnil without list type"))
      end 
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
-     let t = {name = fresh (); bound = A (Tuple (List.map fst args_bts))} in
-     return [t]
+     let rt = [{name = fresh (); bound = A (Tuple (List.map fst args_bts))}] in
+     return (Normal rt)
 
 
 
@@ -1728,7 +1732,7 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
      bt_of_core_base_type loc cbt >>= fun bt ->
      begin match bt, args_bts with
      | List _, [] ->
-        return bt
+        return (Normal bt)
      | _, [] ->
         fail (Generic_error (loc, "Cnil without list type"))
      | _, args -> 
@@ -1740,17 +1744,18 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
      | [(hd_bt,hd_loc); (tl_bt,tl_loc)] ->
         ensure_type tl_loc None (A tl_bt) (A (List hd_bt)) >>
         let t = List tl_bt in
-        return t
+        return (Normal t)
      | args ->
         let err = sprintf "Cons applied to %d argument(s)" 
                     (List.length args) in
         fail (Generic_error (loc, err))
      end
   | Ctuple ->
-     return (BaseTypes.Tuple (List.map fst args_bts))
+     let t = BaseTypes.Tuple (List.map fst args_bts) in
+     return (Normal t)
   | Carray -> 
      args_same_typ None args_bts >>
-     return BaseTypes.Array
+     return (Normal BaseTypes.Array)
   | Civmax
   | Civmin
   | Civsizeof
@@ -1762,7 +1767,7 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
   | Cspecified ->
     begin match args_bts with
     | [(bt,_)] ->
-       return bt
+       return (Normal bt)
     | args ->
        let err = sprintf "Cspecified applied to %d argument(s)" 
                    (List.length args) in
@@ -1797,22 +1802,30 @@ let infer_pat pat =
     match pat_ with
     | CaseBase (None, cbt) ->
        bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((Sym.fresh (), bt), loc)], (bt, loc))
+       return (Normal ([((Sym.fresh (), bt), loc)], (bt, loc)))
     | CaseBase (Some sym, cbt) ->
        bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((sym, bt), loc)], (bt, loc))
+       return (Normal ([((sym, bt), loc)], (bt, loc)))
     | CaseCtor (ctor, args) ->
        mapM aux args >>= fun bindingses_args_bts ->
-       let bindingses, args_bts = List.split bindingses_args_bts in
-       check_disjointness SymSet.empty [] 
-         (List.concat bindingses) >>= fun bindings ->
-       ctor_typ loc ctor args_bts >>= fun bt ->
-       return (bindings, (bt, loc))
+       match all_normal bindingses_args_bts with
+       | Bad b -> 
+          return (Bad b)
+       | Normal bindingses_args_bts ->
+          let bindingses, args_bts = List.split bindingses_args_bts in
+          check_disjointness SymSet.empty [] 
+            (List.concat bindingses) >>= fun bindings ->
+          ctor_typ loc ctor args_bts >>= function
+          | Normal bt -> return (Normal (bindings, (bt, loc)))
+          | Bad bad -> return (Bad bad)
   in
 
-  aux pat >>= fun (bindings, (bt, loc)) ->
-  let (bindings,_) = List.split bindings in
-  return (bindings, bt, loc)
+  aux pat >>= function 
+  | Normal (bindings, (bt, loc)) ->
+     let (bindings,_) = List.split bindings in
+     return (Normal (bindings, bt, loc))
+  | Bad bad -> 
+     return (Bad bad)
 
      
 
@@ -1863,17 +1876,21 @@ let infer_binop env loc op sym1 sym2 =
   ensure_type loc2 (Some sym2) (A t2) (A st2) >>
   let name = fresh () in
   let constr = LC (S name %= (make_binop_constr (S sym1) (S sym2))) in
-  let env = add_Cvar env (fresh (), constr) in
-  let t = {name; bound = A rt} in
-  return ([t], env)
-
-
-let check_undef env loc undef =
-  if is_unreachable env loc then return ()
-  else fail (Undefined_behaviour (loc, undef))
+  let t = [{name; bound = A rt}; {name = fresh (); bound = C constr}] in
+  return t
   
 
-let rec infer_pexpr env (pe : 'bty mu_pexpr) = 
+
+
+let ensure_bad_unreachable loc env bad = 
+  if is_unreachable env loc then return env else 
+    begin match bad with
+    | Undefined (loc,undef) -> fail (Undefined_behaviour (loc, undef))
+    | Unspecified loc -> fail (Unspecified_value loc)
+    end
+
+
+let infer_pexpr env (pe : 'bty mu_pexpr) = 
 
   debug_print 1
     [ h2 "infer_pexpr"
@@ -1887,8 +1904,8 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
   match pe_ with
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun b ->
-     let t = {name = sym; bound = A b} in
-     return ([t], env)
+     let rt = [{name = sym; bound = A b}] in
+     return (Normal rt, env)
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -1896,15 +1913,20 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
      return (t, env)
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
-  | M_PEundef _ ->
-     failwith "undef in inferring position"
+  | M_PEundef (loc,undef) ->
+     return (Bad (Undefined (loc, undef)), env)
   | M_PEerror _ ->
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
      make_Aargs_bts env args >>= fun args_bts ->
      ctor_typ loc ctor args_bts >>= fun t ->
-     let t = [{name = fresh (); bound = A t}] in
-     return (t, env)
+     begin match t with
+     | Normal t ->
+        let rt = [{name = fresh (); bound = A t}] in
+        return (Normal rt, env)
+     | Bad bad -> 
+        return (Bad bad, env)
+     end
   | M_PEcase (asym, pats_es) ->
      failwith "PEcase in inferring position"
   | M_PEarray_shift _ ->
@@ -1918,10 +1940,11 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
      let name = fresh () in
      let constr = LC ((S name) %= Not (S sym)) in
      let env = add_Cvar env (name, constr) in
-     let t = {name; bound = A t} in
-     return ([t], env)
+     let rt = [{name; bound = A t}] in
+     return (Normal rt, env)
   | M_PEop (op,sym1,sym2) ->
-     infer_binop env loc op sym1 sym2
+     infer_binop env loc op sym1 sym2 >>= fun rt ->
+     return (Normal rt, env)
   | M_PEstruct _ ->
      failwith "todo PEstruct"
   | M_PEunion _ ->
@@ -1931,22 +1954,15 @@ let rec infer_pexpr env (pe : 'bty mu_pexpr) =
   | M_PEcall (fname, asyms) ->
      (* include the resource arguments into asyms *)
      (* let env = call_resources annots env in *)
-     call_typ_fn loc fname env (List.map lof_a asyms)
+     call_typ_fn loc fname env (List.map lof_a asyms) >>= fun (rt, env) ->
+     return (Normal rt, env)
   | M_PElet (p, e1, e2) ->
      failwith "PElet in inferring position"
   | M_PEif _ ->
      failwith "PEif in inferring position"
-  | M_PEensure_specified (asym1, _ct, Annotated (_,_,(loc,undef))) ->
-     let sym1, loc1 = lof_a asym1 in
-     (* if constraint_holds loc env (LC (Specified sym1)) then  *)
-       get_Avar loc env sym1 >>= fun t1 ->
-       return ([{name = sym1; bound = A t1}], env)
-     (* else
-      *   fail (Undefined_behaviour (loc,undef)) *)
-  | M_PEensure _ -> failwith "asd"
 
 
-and check_pexpr env (e : 'bty mu_pexpr) ret = 
+let rec check_pexpr env (e : 'bty mu_pexpr) ret = 
 
   debug_print 1
     [ h2 "check_pexpr"
@@ -1972,29 +1988,42 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
-         infer_pat pat >>= fun (bindings, bt', ploc) ->
-         ensure_type ploc None (A bt') (A bt) >>
-         (* check body type against spec *)
-         let env' = add_Avars env bindings in
-         check_pexpr env' pe ret
+         infer_pat pat >>= fun pinfo ->
+         match pinfo with 
+         | Bad bad -> 
+            ensure_bad_unreachable loc env bad
+         | Normal (bindings, bt', ploc) ->
+            ensure_type ploc None (A bt') (A bt) >>
+            (* check body type against spec *)
+            let env' = add_Avars env bindings in
+            check_pexpr env' pe ret
        ) pats_es >>
      return env
   | M_PElet (p, e1, e2) ->
      begin match p with 
      | M_symbol (Annotated (_annots, _, newname)) ->
         infer_pexpr env e1 >>= fun (rt, env) ->
-        check_pexpr (add_rt env (rename newname rt)) e2 ret
+        begin match rt with
+        | Normal rt -> check_pexpr (add_rt env (rename newname rt)) e2 ret
+        | Bad bad -> ensure_bad_unreachable loc env bad
+        end
      | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
-        check_pexpr (add_rt env (rename newname rt)) e2 ret
+        begin match rt with
+        | Normal rt -> check_pexpr (add_rt env (rename newname rt)) e2 ret
+        | Bad bad -> ensure_bad_unreachable loc env bad
+        end        
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | _ ->
-     infer_pexpr env e >>= fun (t, env) ->
-     subtype loc env t ret >>= fun env ->
-     return env
+     infer_pexpr env e >>= fun (rt, env) ->
+     begin match rt with
+     | Normal rt -> subtype loc env rt ret
+     | Bad bad -> ensure_bad_unreachable loc env bad
+     end        
+
 
 
 let rec infer_expr env (e : ('a,'bty) mu_expr) = 
@@ -2018,7 +2047,8 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
      | M_Create (asym,a_ct,_prefix) -> 
         let (ct, _ct_loc) = lof_a a_ct in
         make_create_type ct >>= fun decl_typ ->
-        call_typ loc env decl_typ [lof_a asym]
+        call_typ loc env decl_typ [lof_a asym] >>= fun (rt, env) ->
+        return (Normal rt, env)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         failwith "CreateReadOnly"
      | M_Alloc (ct, sym, _prefix) -> 
@@ -2028,15 +2058,17 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
         recursively_owned_resources loc env sym >>= fun resources ->
         let env = remove_vars env resources in
         let rt = [{name = fresh (); bound = A Unit}] in
-        return (rt, env)
+        return (Normal rt, env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
         make_store_type ct >>= fun decl_typ ->
-        call_typ loc env decl_typ [lof_a asym1; lof_a asym2]
+        call_typ loc env decl_typ [lof_a asym1; lof_a asym2] >>= fun (rt, env) ->
+        return (Normal rt, env)
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
         make_load_type ct >>= fun decl_typ ->
-        call_typ loc env decl_typ [lof_a asym]
+        call_typ loc env decl_typ [lof_a asym] >>= fun (rt, env) ->
+        return (Normal rt, env)
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         failwith "RMW"
      | M_Fence mo -> 
@@ -2061,7 +2093,8 @@ failwith "LinuxRMW"
 | M_Eif _ ->
      failwith "todo eif"
   | M_Eskip -> 
-     return ([{name = fresh (); bound = A Unit}], env)
+     let rt = [{name = fresh (); bound = A Unit}] in
+     return (Normal rt, env)
   | M_Eccall (_a, asym, asd, asyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
@@ -2079,7 +2112,8 @@ failwith "LinuxRMW"
   | M_Erun _ ->
      failwith "todo erun"
 
-and check_expr env (e : ('a,'bty) mu_expr) ret = 
+
+let rec check_expr env (e : ('a,'bty) mu_expr) ret = 
 
   debug_print 1
     [ h2 "check_expr"
@@ -2105,11 +2139,15 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
-         infer_pat pat >>= fun (bindings, bt', ploc) ->
-         ensure_type ploc None (A bt') (A bt) >>
-         (* check body type against spec *)
-         let env' = add_Avars env bindings in
-         check_expr env' pe ret
+         infer_pat pat >>= fun pinfo ->
+         match pinfo with 
+         | Bad bad -> 
+            ensure_bad_unreachable loc env bad
+         | Normal (bindings, bt', ploc) ->
+            ensure_type ploc None (A bt') (A bt) >>
+            (* check body type against spec *)
+            let env' = add_Avars env bindings in
+            check_expr env' pe ret
        ) pats_es >>
      return env     
   | M_Epure pe -> 
@@ -2118,11 +2156,17 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      begin match p with 
      | M_symbol (Annotated (_annots, _, newname)) ->
         infer_pexpr env e1 >>= fun (rt, env) ->
-        check_expr (add_rt env (rename newname rt)) e2 ret
+        begin match rt with
+        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Bad bad -> ensure_bad_unreachable loc env bad
+        end
      | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
-        check_expr (add_rt env (rename newname rt)) e2 ret
+        begin match rt with
+        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Bad bad -> ensure_bad_unreachable loc env bad
+        end        
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
@@ -2132,7 +2176,10 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
      | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
         let newname = sym_or_fresh mnewname in
         infer_expr env e1 >>= fun (rt, env) ->
-        check_expr (add_rt env (rename newname rt)) e2 ret
+        begin match rt with
+        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Bad bad -> ensure_bad_unreachable loc env bad
+        end        
      | Pattern (_annot, CaseCtor _) ->
         failwith "todo ctor pattern"
      end
@@ -2144,9 +2191,12 @@ and check_expr env (e : ('a,'bty) mu_expr) ret =
        ) env args >>= fun env ->
      check_expr env body ret
   | _ ->
-     infer_expr env e >>= fun (t, env) ->
-     subtype loc env t ret >>= fun env ->
-     return env
+     infer_expr env e >>= fun (rt, env) ->
+     begin match rt with
+     | Normal rt -> subtype loc env rt ret
+     | Bad bad -> ensure_bad_unreachable loc env bad
+     end        
+     
 
 
 

@@ -83,6 +83,7 @@ let process core_file0 =
 
 let frontend conf filename = 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
+  Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
   load_core_impl stdlib impl_name >>= fun impl ->
   match Filename.extension filename with
