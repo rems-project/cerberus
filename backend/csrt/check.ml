@@ -28,8 +28,8 @@ let nocolour f x =
   Colour.do_colour := before;
   pp
 
-let pp_expr e =  (pps (nocolour Pp_mucore.Basic.pp_expr e))
-let pp_pexpr e = (pps (nocolour Pp_mucore.Basic.pp_pexpr e))
+let pp_expr e = pps (nocolour Pp_mucore.Basic.pp_expr e)
+let pp_pexpr e = pps (nocolour Pp_mucore.Basic.pp_pexpr e)
 
 let lines s = (String.concat "\n" s)
 let underline c s = s ^ "\n" ^ (String.make (String.length s) c)
@@ -492,7 +492,7 @@ module Resources = struct
      * | Points of IndexTerms.t * IndexTerms.t
      * | Array of IndexTerms.t * IndexTerms.t *)
     (* | Pred of string * IndexTerms.t list *)
-    | Points of IndexTerms.t * BaseTypes.t * IndexTerms.t
+    | Points of IndexTerms.t * IndexTerms.t
 
   let pp = function
     (* | Block (it1,it2) -> 
@@ -511,10 +511,9 @@ module Resources = struct
      *    sprintf "(array %s %s)" 
      *      (IndexTerms.pp it1)
      *      (IndexTerms.pp it2) *)
-    | Points (it1,bt,it2) -> 
-       sprintf "(points %s %s %s)" 
+    | Points (it1,it2) -> 
+       sprintf "(points %s %s)" 
          (IndexTerms.pp it1)
-         (BaseTypes.pp bt)
          (IndexTerms.pp it2)
     (* | Pred (p,its) ->
      *    sprintf "(%s %s)" 
@@ -542,9 +541,8 @@ module Resources = struct
      *    return (Array (it1, it2)) *)
     | Sexp.List [Sexp.Atom "points"; it1; bt; it2] ->
        IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-       BaseTypes.parse_sexp loc names bt >>= fun bt ->
        IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-       return (Points (it1, bt, it2))
+       return (Points (it1, it2))
     (* | Sexp.List (Sexp.Atom p :: its) ->
      *    mapM (IndexTerms.parse_sexp loc names) its >>= fun its ->
      *    return (Pred (p, its)) *)
@@ -562,9 +560,8 @@ module Resources = struct
      *    Points (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
      * | Array (it, it') -> 
      *    Array (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it') *)
-    | Points (it, bt, it') -> 
+    | Points (it, it') -> 
        Points (IndexTerms.subst sym with_it it, 
-               bt, 
                IndexTerms.subst sym with_it it')
     (* | Pred (p, its) ->
      *    Pred (p, map (IndexTerms.subst sym with_it) its) *)
@@ -590,21 +587,20 @@ module Resources = struct
     (* | Array (it1, it2), Array (it1', it2') -> 
      *    IndexTerms.unify it1 it1' res >>= fun res ->
      *    IndexTerms.unify it2 it2' res *)
-    | Points (it1, bt, it2), Points (it1', bt', it2') 
-         when BaseTypes.type_equal bt bt' -> 
+    | Points (it1, it2), Points (it1', it2') ->
        IndexTerms.unify it1 it1' res >>= fun res ->
        IndexTerms.unify it2 it2' res
     (* | Pred (p, its), Pred (p', its') when p = p' ->
      *    IndexTerms.unify_list its its' res *)
-    | _, _ -> fail ()
+    (* | _, _ -> fail () *)
 
   let owner = function
-    | Points (S v, _, _) -> v
-    | Points (_, _, _) -> failwith "no owner"
+    | Points (S v, _) -> v
+    | Points (_, _) -> failwith "no owner"
 
   let owned = function
-    | Points (_, _, S v) -> [v]
-    | Points (_, _, _) -> failwith "nothing owned"
+    | Points (_, S v) -> [v]
+    | Points (_, _) -> failwith "nothing owned"
 
 end
 
@@ -1332,122 +1328,95 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 
 
 
+let a_or_l is_pointee bt = if is_pointee then L (Base bt) else A bt
 
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
 (* and *)
 (* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let bt_and_constr_of_integerBaseType signed ibt = 
-
-  let name = fresh () in
+let integerBaseType name signed ibt is_pointee = 
 
   let make f t = 
-    let ft = IndexTerms.Num (of_string f) in
-    let tt = IndexTerms.Num (of_string t) in
-    let constr = (S name %>= ft) %& (S name %<= tt) in
-    (BaseTypes.Int, LC constr)
+    let ft = Num (of_string f) in
+    let tt = Num (of_string t) in
+    let constr = LC ((S name %>= ft) %& (S name %<= tt)) in
+    let al = [{name; bound = a_or_l is_pointee Int}] in
+    let r = [] in
+    let c = [{name = fresh (); bound = C constr}] in
+    (Int, al, r, c)
   in
 
   match signed, ibt with
-  | true,  Ctype.Ichar    -> make "-127" "127"
-  | true,  Ctype.Short    -> make "-32767" "32767"
-  | true,  Ctype.Int_     -> make "-32767" "32767"
-  | true,  Ctype.Long     -> make "-2147483647" "2147483647"
-  | true,  Ctype.LongLong -> make "-9223372036854775807" "9223372036854775807"
-  | false, Ctype.Ichar    -> make "0" "255"
-  | false, Ctype.Short    -> make "0" "65535"
-  | false, Ctype.Int_     -> make "0" "65535"
-  | false, Ctype.Long     -> make "0" "4294967295"
-  | false, Ctype.LongLong -> make "0" "18446744073709551615"
-  | true, Ctype.IntN_t n -> 
-     begin match n with
-     | 8 ->  make "-127" "127"
-     | 16 -> make "-32768" "32767"
-     | 32 -> make "-2147483648" "2147483647"
-     | 64 -> make "-9223372036854775808" "9223372036854775807"
-     | _ -> failwith (sprintf "IntN_t %d" n)
-     end
-  | false, Ctype.IntN_t n -> 
-     begin match n with
-     | 8 ->  make "0" "255"
-     | 16 -> make "0" "65535"
-     | 32 -> make "0" "4294967295"
-     | 64 -> make "0" "18446744073709551615"
-     | _ -> failwith (sprintf "UIntN_t %d" n)
-     end
-  | _, Ctype.Int_leastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Int_fastN_t n -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intmax_t -> 
-     failwith "todo standard library types"
-  | _, Ctype.Intptr_t -> 
-     failwith "todo standard library types"
+  | true,  Ctype.Ichar     -> make "-127" "127"
+  | true,  Ctype.IntN_t 8  -> make "-127" "127"
+  | true,  Ctype.Short     -> make "-32767" "32767"
+  | true,  Ctype.Int_      -> make "-32767" "32767"
+  | true,  Ctype.IntN_t 16 -> make "-32768" "32767"
+  | true,  Ctype.Long      -> make "-2147483647" "2147483647"
+  | true,  Ctype.LongLong  -> make "-9223372036854775807" "9223372036854775807"
+  | true,  Ctype.IntN_t 32 -> make "-2147483648" "2147483647"
+  | true,  Ctype.IntN_t 64 -> make "-9223372036854775808" "9223372036854775807"
+  | false, Ctype.Ichar     -> make "0" "255"
+  | false, Ctype.Short     -> make "0" "65535"
+  | false, Ctype.Int_      -> make "0" "65535"
+  | false, Ctype.Long      -> make "0" "4294967295"
+  | false, Ctype.LongLong  -> make "0" "18446744073709551615"
+  | false, Ctype.IntN_t 8  -> make "0" "255"
+  | false, Ctype.IntN_t 16 -> make "0" "65535"
+  | false, Ctype.IntN_t 32 -> make "0" "4294967295"
+  | false, Ctype.IntN_t 64 -> make "0" "18446744073709551615"
 
-let bt_and_constr_of_integerType it = 
+  | _, Ctype.IntN_t n       -> failwith (sprintf "UIntN_t %d" n)
+  | _, Ctype.Int_leastN_t n -> failwith "todo standard library types"
+  | _, Ctype.Int_fastN_t n  -> failwith "todo standard library types"
+  | _, Ctype.Intmax_t       -> failwith "todo standard library types"
+  | _, Ctype.Intptr_t       -> failwith "todo standard library types"
+
+
+let integerType name it is_pointee  = 
   match it with
-  | Ctype.Char -> 
-     failwith "todo char"
-  | Ctype.Bool -> 
-     (BaseTypes.Bool, None)
-  | Ctype.Signed ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType true ibt in
-     (bt, Some constr)
-  | Ctype.Unsigned ibt -> 
-     let (bt,constr) = bt_and_constr_of_integerBaseType false ibt in
-     (bt, Some constr)
-  | Ctype.Enum _sym -> 
-     failwith "todo enum"
-  | Ctype.Wchar_t ->
-     failwith "todo wchar_t"
-  | Ctype.Wint_t ->
-     failwith "todo wint_t"
-  | Ctype.Size_t ->
-     failwith "todo size_t"
-  | Ctype.Ptrdiff_t -> 
-     failwith "todo standard library types"
+  | Ctype.Bool -> (Bool, [{name; bound = a_or_l is_pointee Bool}],[],[])
+  | Ctype.Signed ibt -> integerBaseType name true ibt is_pointee
+  | Ctype.Unsigned ibt -> integerBaseType name false ibt is_pointee
+  | Ctype.Char -> failwith "todo char"
+  | Ctype.Enum _sym -> failwith "todo enum"
+  | Ctype.Wchar_t -> failwith "todo wchar_t"
+  | Ctype.Wint_t ->failwith "todo wint_t"
+  | Ctype.Size_t -> failwith "todo size_t"
+  | Ctype.Ptrdiff_t -> failwith "todo standard library types"
 
 
-let rec ctype_aux (Ctype.Ctype (annots, ct)) = 
-  let loc = Annot.get_loc_ annots in
+let rec ctype_aux name (Ctype.Ctype (annots, ct)) is_pointee = 
   match ct with
   | Ctype.Void -> (* check *)
-     return ((fresh (), Unit), [])
+     return (Unit, [{name; bound = A Unit}],[],[])
   | Ctype.Basic (Integer it) -> 
-     let (bt,mc) = bt_and_constr_of_integerType it in
-     begin match mc with
-     | Some c -> 
-        return ((fresh (), bt), [{name = Sym.fresh (); bound = C c}])
-     | None -> 
-        return ((fresh (), bt), [])
-     end
+     return (integerType name it is_pointee)
   | Ctype.Array (ct, _maybe_integer) -> 
-     return ((fresh (), Array), [])
+     return (Array, [{name; bound = A Array}],[],[])
   | Ctype.Pointer (_qualifiers, ctype) ->
-     let aname = fresh () in
-     let rname = fresh () in
-     ctype_aux ctype >>= fun ((lname,bt), rt) ->
-     let rt = 
-       {name = lname; bound = L (Base bt)} ::
-       {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-       rt 
-     in
-     return ((aname, Loc), rt)
+     let res_name = fresh () in
+     let pointee_name = fresh () in
+     let res = R (Points (S name, S pointee_name)) in
+     ctype_aux pointee_name ctype true >>= fun (_,al,r,c) ->
+     let r = {name = res_name; bound = res} :: r in
+     let al = {name; bound = a_or_l is_pointee Loc} :: al in
+     return (Loc, al,r,c)
   | Ctype.Atomic ct ->              (* check *)
-     ctype_aux ct
+     ctype_aux name ct is_pointee
   | Ctype.Struct sym -> 
-     return ((fresh (), Struct sym), [])
+     let al = [{name = fresh (); bound = A (Struct sym)}] in
+     return (Struct sym, al, [],[])
   | Ctype.Union sym ->
      failwith "todo: union types"
-
   | Ctype.Basic (Floating _) -> 
-     fail (Unsupported {loc; unsupported = "floats"} )
+     fail (Unsupported {loc = Annot.get_loc_ annots; unsupported = "floats"} )
   | Ctype.Function _ -> 
-     fail (Unsupported {loc; unsupported = "function pointers"}) 
+     fail (Unsupported {loc = Annot.get_loc_ annots; unsupported = "function pointers"}) 
 
 
-let type_of_ctype ct = 
-  ctype_aux ct >>= fun ((name, bt), rt) ->
-  return ({name; bound = A bt} :: rt)
+let ctype ?(is_pointee=false) (name : Sym.t) (ct : Ctype.ctype) =
+  ctype_aux name ct is_pointee >>= fun (_bt, al,r,c) ->
+  return (al @ r @ c)
 
 let make_pointer_ctype ct = 
   (* fix *)
@@ -1466,49 +1435,43 @@ let only_resources t =
 
 let make_create_type ct : (FunctionTypes.t,'e) m = 
   let arguments = [{name = fresh (); bound = A Int}] in
-  type_of_ctype (make_pointer_ctype ct) >>= fun rt ->
+  ctype (fresh ()) (make_pointer_ctype ct) >>= fun rt ->
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
 
 
 let make_load_type ct : (FunctionTypes.t,'e) m = 
-  let aname = fresh () in
-  let rname = fresh () in
-  ctype_aux ct >>= fun ((lname,bt),rt) ->
-  let arguments = 
-    {name = aname; bound = A Loc} :: 
-    {name = lname; bound = L (Base bt)} ::
-    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-    rt
+  let pointer_name = fresh () in
+  let pointee_name = fresh () in
+  ctype_aux pointee_name ct true >>= fun (bt,al,r,c) ->
+  let addr_argument = 
+    let al = {name = pointer_name; bound = A Loc} :: al in
+    let r = {name = fresh (); bound = R (Points (S pointer_name, S pointee_name))} :: r in
+    al @ r @ c
   in
   let ret = 
-    {name = lname; bound = A bt} ::
-    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-    (remove_logical rt)
+    let al = [{name = pointee_name; bound = A bt}] in
+    al @ r
   in
-  let ftyp = FunctionTypes.F {arguments; return = ret} in
+  let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
 
 let make_store_type ct : (FunctionTypes.t,'e) m = 
-  let aname = fresh () in
-  let rname = fresh () in
-  ctype_aux ct >>= fun ((lname,bt),rt) ->
-  let addr_argument = 
-    ({name = aname; bound = A Loc} :: 
-    {name = lname; bound = L (Base bt)} ::
-    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-    rt)
-  in
-  let val_argument = 
-    [{name = fresh (); bound = A bt}]
-  in
-  let arguments = addr_argument @ val_argument in
-  let ret = 
-    {name = fresh (); bound = A Unit} ::
-    {name = rname; bound = R (Points (S aname, bt, S lname))} :: 
-    (only_resources rt)
-  in
-  let ftyp = FunctionTypes.F {arguments; return = ret} in
+  let pointer_name = fresh () in
+  let val_name = fresh () in
+  ctype pointer_name (make_pointer_ctype ct) >>= fun addr_argument ->
+  begin 
+    ctype_aux val_name ct false >>= fun (_,al,r,c) ->
+    let val_argument = al @ r @ c in
+    print_endline (sprintf "\n\n\n%s\n\n\n" (Types.pp val_argument));
+    let ret = 
+      {name = fresh (); bound = A Unit} ::
+      {name = fresh (); bound = R (Points (S pointer_name, S val_name))} :: 
+      r 
+    in
+    return (val_argument,ret)
+  end >>= fun (val_argument,ret) ->
+  let ftyp = FunctionTypes.F {arguments = addr_argument @ val_argument; return = ret} in
   return ftyp
 
 
@@ -1593,7 +1556,7 @@ let infer_loaded_value env loc lv =
     return rt
  | M_LVunspecified ct ->
     if is_unreachable env loc then 
-      type_of_ctype ct >>= fun rt ->
+      ctype (fresh ()) ct >>= fun rt ->
       failwith "unspecified"
     else 
       fail (Unspecified_value loc)
@@ -1820,7 +1783,7 @@ let infer_pat pat =
     match bindings with
     | [] -> 
        return (List.rev acc)
-    | ((name, bt), loc) :: bindings when SymSet.mem name names ->
+    | ((name, bt), loc) :: bindings when not (SymSet.mem name names) ->
        let acc = ((name, bt), loc) :: acc in
        let names = SymSet.add name names in
        check_disjointness names acc bindings
@@ -1913,7 +1876,7 @@ let check_undef env loc undef =
 let rec infer_pexpr env (pe : 'bty mu_pexpr) = 
 
   debug_print 1
-    [ h2 "check_pexpr"
+    [ h2 "infer_pexpr"
     ; item "env" (LEnv.pp env.local)
     ; item "e" ""
     ; pp_pexpr pe
@@ -2037,7 +2000,7 @@ and check_pexpr env (e : 'bty mu_pexpr) ret =
 let rec infer_expr env (e : ('a,'bty) mu_expr) = 
 
   debug_print 1
-    [ h2 "check_expr"
+    [ h2 "infer_expr"
     ; item "env" (LEnv.pp env.local)
     ; item "e" ""
     ; pp_expr e
@@ -2068,7 +2031,7 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
         return (rt, env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
-        make_load_type ct >>= fun decl_typ ->
+        make_store_type ct >>= fun decl_typ ->
         call_typ loc env decl_typ [lof_a asym1; lof_a asym2]
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
@@ -2119,7 +2082,7 @@ failwith "LinuxRMW"
 and check_expr env (e : ('a,'bty) mu_expr) ret = 
 
   debug_print 1
-    [ h2 "check_pexpr"
+    [ h2 "check_expr"
     ; item "env" (LEnv.pp env.local)
     ; item "ret" (Types.pp ret)
     ; item "e" ""
@@ -2218,12 +2181,14 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
     mapM (binding_of_core_base_type loc) args >>= fun args ->
     binding_of_core_base_type loc ret >>= fun ret ->
     let (F decl_typ) = decl in
-    if BaseTypes.types_equal (forget decl_typ.arguments) (forget args) &&
-         BaseTypes.types_equal (forget decl_typ.return) (forget [ret])
-    then return ()
-    else 
-      let defn = F {arguments = args; return = [ret]} in
-      fail (Inconsistent_fundef {loc; decl; defn = defn})
+    let _ = forget args in
+    return ()
+    (* if BaseTypes.types_equal (forget decl_typ.arguments) (forget args) &&
+     *      BaseTypes.types_equal (forget decl_typ.return) (forget [ret])
+     * then return ()
+     * else 
+     *   let defn = F {arguments = args; return = [ret]} in
+     *   fail (Inconsistent_fundef {loc; decl; defn = defn}) *)
   in
 
   match fn with
@@ -2255,9 +2220,10 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
 
-  let make_arg_t (msym,ctype) = 
-    type_of_ctype (make_pointer_ctype ctype) >>= fun rt ->
-    return (rename (sym_or_fresh msym) rt) 
+  let make_arg_t (msym,ct) = 
+    let name = sym_or_fresh msym in
+    ctype name (make_pointer_ctype ct) >>= fun rt ->
+    return (rename name rt) 
   in
 
   if is_variadic 
@@ -2266,8 +2232,8 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
     let ret_name = Sym.fresh () in
     mapM make_arg_t args >>= fun args_types ->
     let arguments = concat args_types in
-    type_of_ctype ret_ctype >>= fun ret ->
-    let ft = F {arguments; return = rename ret_name ret} in
+    ctype ret_name ret_ctype >>= fun ret ->
+    let ft = F {arguments; return = ret} in
     let fun_decls = SymMap.add sym (loc, ft, ret_name) fun_decls in
     return fun_decls
 
@@ -2284,12 +2250,11 @@ let record_tagDef sym def genv =
      failwith "todo: union types"
   | Ctype.StructDef (fields, _) ->
 
-     fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ctype)) ->
+     fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ct)) ->
        let id = Id.s id in
        let name = Sym.fresh_pretty id in
        let names = (id, (name, Loc.unknown)) :: names in
-       type_of_ctype ctype >>= fun newfields ->
-       let newfields = rename name newfields in
+       ctype name ct >>= fun newfields ->
        return (names, fields @ newfields)
        (* fun bt_constr ->
         * let fields = match bt_constr with
