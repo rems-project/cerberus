@@ -51,6 +51,7 @@ and expr_aux =
   | AddrOf    of expr
   | GetMember of expr * string * bool (* From_union? *) * string
   | AnnotExpr of int * coq_expr * expr
+  | Struct    of string * (string * expr) list
 
 type stmt = stmt_aux Location.located
 and stmt_aux =
