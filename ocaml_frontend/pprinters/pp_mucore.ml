@@ -81,8 +81,7 @@ let rec precedence = function
   | M_PEmemberof _
   | M_PEcall _
   | M_PElet _
-  | M_PEif _ 
-  | M_PEensure_specified _ -> None
+  | M_PEif _ -> None
 
 let rec precedence_expr = function
   | M_Epure _
@@ -518,9 +517,6 @@ let pp_pexpr pe =
               P.nest 2 (P.break 1 ^^ pp pe2) ^^ P.break 1 ^^
               pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
             )
-        | M_PEensure_specified (sym,_,Annotated (annots,bty,(loc,undef))) ->
-           pp_keyword "ensure_specified" ^^^ pp_asym sym ^^ 
-             P.parens (pp (M_Pexpr (annots,bty, M_PEundef (loc,undef))))
     end
   in pp None pe
 
