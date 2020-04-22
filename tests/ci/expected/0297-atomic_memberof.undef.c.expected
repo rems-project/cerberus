@@ -1,0 +1,1 @@
+Undefined behaviour: a member of an atomic structure or union object is accessed at tests/ci/0297-atomic_memberof.undef.c:11:3-5

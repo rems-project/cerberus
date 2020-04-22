@@ -722,6 +722,8 @@ let std_of_undefined_behaviour = function
       Just "§6.5.2.2#6, sentence 3"
   | UB041_function_not_compatible ->
       Just "§6.5.2.2#9"
+  | UB042_access_atomic_structUnion_member ->
+      Just "§6.5.2.3#5"
   | UB043_indirection_invalid_value ->
       Just "§6.5.3.2#4, sentence 4"
   | UB050_pointers_subtraction_not_representable ->
@@ -1031,6 +1033,8 @@ let ub_short_string = function
       "the number of arguments does not equal the number of parameters"
   | UB041_function_not_compatible ->
       "incompatible function type"
+  | UB042_access_atomic_structUnion_member ->
+      "a member of an atomic structure or union object is accessed"
   | UB043_indirection_invalid_value ->
       "the operand of the unary '*' operator has an invalid value"
   | UB048_disjoint_array_pointers_subtraction ->

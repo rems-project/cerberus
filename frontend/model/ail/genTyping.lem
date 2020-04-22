@@ -696,7 +696,7 @@ let rec annotate_expression sigm gamm ctx (AnnotatedExpression () std_annots loc
                  (§6.3.2.1#4). *)
               E.return (AilEident sym, GenRValueType (inject_type (Ctype [Annot.Aloc loc] (Function has_proto (ret_qs, ret_ty) params is_variadic))))
           | _ ->
-              error "gentpying.annotate_expression: AilEident symbol couldn't be resolved"
+              error ("gentpying.annotate_expression: AilEident symbol couldn't be resolved => " ^ show sym)
         end
     
     | AilEbinary e1 Comma e2 ->
