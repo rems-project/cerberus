@@ -594,6 +594,20 @@ module Concrete : Memory = struct
       ) device_ranges
     end
   
+  (* NOTE: this will have to change when moving to a subobject semantics *)
+  let is_atomic_member_access alloc_id lvalue_ty addr =
+    get_allocation alloc_id >>= fun alloc ->
+    match alloc.ty with
+      | Some ty when AilTypesAux.is_atomic ty ->
+          if    addr = alloc.base && N.equal (N.of_int (sizeof lvalue_ty)) alloc.size
+             && Ctype.ctypeEqual lvalue_ty ty then
+            (* the types equality check is to deal with the case where the
+               first member is accessed and their are no padding bytes ... *)
+            return false
+          else
+            return true
+      | _ ->
+          return false
   
   (* INTERNAL: fetch_bytes *)
   let fetch_bytes bytemap base_addr n_bytes : AbsByte.t list =
@@ -1405,7 +1419,12 @@ module Concrete : Memory = struct
                     | false ->
                         return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
                     | true ->
-                        return `OK
+                        begin is_atomic_member_access z ty addr >>= function
+                          | true ->
+                              return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                          | false ->
+                              return `OK
+                        end
                   end
             end in
           resolve_iota precondition iota >>= fun alloc_id ->
@@ -1425,7 +1444,12 @@ module Concrete : Memory = struct
                 );
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
             | true ->
-                do_load (Some alloc_id) addr
+                begin is_atomic_member_access alloc_id ty addr >>= function
+                  | true ->
+                      fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                  | false ->
+                      do_load (Some alloc_id) addr
+                end
           end
   
   
@@ -1487,7 +1511,12 @@ module Concrete : Memory = struct
                   if alloc.is_readonly then
                     return (`FAIL (MerrWriteOnReadOnly loc))
                   else
-                    return `OK in
+                    begin is_atomic_member_access z ty addr >>= function
+                      | true ->
+                          return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                      | false ->
+                          return `OK
+                    end in
           resolve_iota precondition iota >>= fun alloc_id ->
           do_store (Some alloc_id) addr >>= fun fp ->
           begin if is_locking then
@@ -1512,18 +1541,23 @@ module Concrete : Memory = struct
                   if alloc.is_readonly then
                     fail (MerrWriteOnReadOnly loc)
                   else
-                    do_store (Some alloc_id) addr >>= fun fp ->
-                    if is_locking then
-                      Eff.update (fun st ->
-                        { st with allocations=
-                            IntMap.update alloc_id (function
-                              | Some alloc -> Some { alloc with is_readonly= true }
-                              | None       -> None
-                            ) st.allocations }
-                      ) >>= fun () ->
-                      return fp
-                    else
-                      return fp
+                    begin is_atomic_member_access alloc_id ty addr >>= function
+                      | true ->
+                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                      | false ->
+                          do_store (Some alloc_id) addr >>= fun fp ->
+                          if is_locking then
+                            Eff.update (fun st ->
+                              { st with allocations=
+                                  IntMap.update alloc_id (function
+                                    | Some alloc -> Some { alloc with is_readonly= true }
+                                    | None       -> None
+                                  ) st.allocations }
+                            ) >>= fun () ->
+                            return fp
+                          else
+                            return fp
+                    end
             end
 
 (*
