@@ -159,10 +159,10 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.astprints) begin
-            fun () -> io.run_pp None (Pp_ail_ast.pp_program false false ail_prog)
+            fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)
           end
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
-            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program false false ail_prog)
+            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program true false ail_prog)
           end
       >>= fun () -> return ail_prog in
   (* -- *)
@@ -175,7 +175,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
           (* (for debug 4) pretty-printing Ail with type annotations *)
           Pp_ail_ast.pp_program_with_annot ailtau_prog
         else
-          Pp_ail_ast.pp_program false false ailtau_prog in
+          Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
     end >>= fun () ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.pprints) begin
@@ -184,7 +184,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
           (* (for debug 4) pretty-printing Ail with type annotations *)
           Pp_ail.pp_program_with_annot ailtau_prog
         else
-          Pp_ail.pp_program false false ailtau_prog in
+          Pp_ail.pp_program true false ailtau_prog in
         io.run_pp (wrap_fout (Some (filename, "ail"))) doc
     end >>= fun () -> return ailtau_prog in
   (* -- *)
