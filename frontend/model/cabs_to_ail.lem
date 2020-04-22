@@ -3737,17 +3737,29 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                   true
             end) bs_ in
           
-          (* this is removing unnecessary blocks introduced by the desugared.
+          (* this is removing unnecessary blocks and skips introduced by the desugared.
              TODO: check carefully that we don't remove source blocks *)
           let d_ss' =
             List.foldr (fun z acc ->
               match z with
+                | (CabsStatement _ _ CabsSnull, AnnotatedStatement _ _ AilSskip) ->
+                    (* this is the case of a block already present in the Cabs code. *)
+                    snd z :: acc
+                | (CabsStatement _ _ _, AnnotatedStatement _ attrs AilSskip) ->
+                    if attrs = Annot.no_attributes then
+                      acc
+                    else
+                      snd z :: acc
                 | (CabsStatement _ _ (CabsSblock _), AnnotatedStatement _ _ (AilSblock _ _)) ->
                     (* this is the case of a block already present in the Cabs code. *)
                     snd z :: acc
-                | (_, AnnotatedStatement _ _ (AilSblock [] xs)) ->
-                    (* here a block with no local variables was introduced by the desugaring *)
-                    xs ++ acc
+                | (_, AnnotatedStatement _ attrs (AilSblock [] xs)) ->
+                    if attrs = Annot.no_attributes then
+                      (* here a block with no local variables was introduced by the desugaring *)
+                      xs ++ acc
+                    else
+                      (* we keep it if there are attributes *)
+                      snd z :: acc
                 | _ ->
                     snd z :: acc
               end
