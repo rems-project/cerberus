@@ -3642,7 +3642,7 @@ let desugar_declaration_base attrs specifs idecltors =
                   match link with
                     | Linkage_external ->
                         E.register_external_object_declaration sym
-                          (false(*TODO:check*), ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
+                          (false(*TODO:check*), ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, qs, cty)
                     | _ ->
                         E.register_internal_object_declaration sym
                           (ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, cty)
@@ -4250,7 +4250,7 @@ let desugar_and_register_external_declaration edecl =
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
-                      (isTentative, ident_loc, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                      (isTentative, ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->
