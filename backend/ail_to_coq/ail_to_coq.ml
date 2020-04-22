@@ -277,7 +277,7 @@ let rec translate_expr lval goal_ty e =
           | Indirection -> assert false (* Handled above. *)
           | Plus        -> not_impl loc "unary operator (Plus)"
           | Minus       -> not_impl loc "unary operator (Minus)"
-          | Bnot        -> not_impl loc "unary operator (Bnot)"
+          | Bnot        -> NegOp
           | PostfixIncr -> not_impl loc "unary operator (PostfixIncr)"
           | PostfixDecr -> not_impl loc "unary operator (PostfixDecr)"
         in
@@ -375,9 +375,22 @@ let rec translate_expr lval goal_ty e =
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
     | AilEarray(b,c_ty,oes)        -> not_impl loc "expr array"
-    | AilEstruct(sym,fs)           -> not_impl loc "expr struct"
+    | AilEstruct(sym,fs)           ->
+        let id = sym_to_str sym in
+        let fs =
+          let fn (id, eo) = Option.map (fun e -> (id_to_str id, e)) eo in
+          List.filter_map fn fs
+        in
+        let (fs, l) =
+          let fn (id, e) (fs, l) =
+            let (e, l_e) = translate e in
+            ((id, e) :: fs, l_e @ l)
+          in
+          List.fold_right fn fs ([], [])
+        in
+        (locate (Struct(id, fs)), l)
     | AilEunion(sym,id,eo)         -> not_impl loc "expr union"
-    | AilEcompound(q,c_ty,e)       -> not_impl loc "expr compound"
+    | AilEcompound(q,c_ty,e)       -> translate e (* FIXME? *)
     | AilEmemberof(e,id)           ->
         if not lval then assert false;
         let (struct_name, from_union) = struct_data e in
@@ -766,9 +779,13 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
 
   (* Get the global variables. *)
   let global_vars =
-    let fn (id, (_, _, decl)) acc =
+    let fn (id, (_, attrs, decl)) acc =
       match decl with
-      | AilSyntax.Decl_object _ -> sym_to_str id :: acc
+      | AilSyntax.Decl_object _ ->
+         let annots = collect_rc_attrs attrs in
+         let fn () = global_annot annots in
+         let global_annot = handle_invalid_annot None fn () in
+         (sym_to_str id, global_annot) :: acc
       | _                       -> acc
     in
     List.fold_right fn decls []
@@ -875,7 +892,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       let func_deps =
         let globals_used =
           (* We preserve order of declaration. *)
-          List.filter (Hashtbl.mem used_globals) global_vars
+          List.filter (Hashtbl.mem used_globals) (List.map fst global_vars)
         in
         let func_used =
           (* We preserve order of declaration. *)
