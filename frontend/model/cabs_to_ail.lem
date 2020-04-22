@@ -938,7 +938,7 @@ val desugar_init_declarator:
   Annot.attributes ->
   bool(* isAtomic *) -> Ctype.qualifiers -> Ctype.ctype ->
   list storage_class_specifier -> init_declarator ->
-  E.desugM (maybe (Loc.t * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
+  E.desugM (maybe (Loc.t * Annot.attributes * linkage * ail_identifier * bool * (Ctype.qualifiers * Ctype.ctype) *
             (unit -> E.desugM (maybe (Ctype.ctype * expression unit)))))
 
 val desugar_generic_association:
@@ -2428,7 +2428,7 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
   E.get_scope >>= fun scope ->
   match idecltor with
     | InitDecl loc decltor Nothing ->
-        desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
+        desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
         let (qs, _ty) = mk_qs_ctype base_qs base_ty in
         let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
         let mk_desug_init =
@@ -2451,13 +2451,13 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
               (Object_decl_context, E.OK_object false) in
           check_storage_class_specifiers loc ctx scs >>= fun () ->
           E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
-          E.return (Just (Loc.locOf ident, link, sym, is_tentative, (qs, ty), mk_desug_init))
+          E.return (Just (Loc.locOf ident, ident_attrs, link, sym, is_tentative, (qs, ty), mk_desug_init))
     
     | InitDecl loc decltor (Just init) ->
         if scs = [SC_typedef] then
           E.fail loc (Errors.Desugar_MiscViolation Errors.TypedefInitializer)
         else
-          desugar_declarator NotFunDef decltor >>= fun ((_, ident), mk_qs_ctype) ->
+          desugar_declarator NotFunDef decltor >>= fun ((ident_attrs, ident), mk_qs_ctype) ->
           let (qs, _ty) = mk_qs_ctype base_qs base_ty in
           let ty = if isAtomic then Ctype.Ctype [] (Ctype.Atomic _ty) else _ty in
           (* TODO: check that we really never have parameter objects here *)
@@ -2486,7 +2486,7 @@ and desugar_init_declarator attrs isAtomic base_qs base_ty (scs: list storage_cl
                 (Object_decl_context, E.OK_object false) in
             check_storage_class_specifiers loc ctx scs >>= fun () ->
             E.register_ordinary_identifier ident ok scs >>= fun (link, sym) ->
-            E.return (Just (Loc.locOf ident, link, sym, false, (qs, ty), mk_desug_init))
+            E.return (Just (Loc.locOf ident, ident_attrs, link, sym, false, (qs, ty), mk_desug_init))
   end
 
 
@@ -3854,7 +3854,7 @@ let rec desugar_statement_aux ctx (CabsStatement loc attrs stmt_) =
                     (* Case of a typedef *)
                     E.constraint_violation loc IllegalStorageClassIterationStatement
                 
-                | Just (ident_loc, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
+                | Just (ident_loc, _, link, sym, is_tentative, (qs, ty), mk_desug_init) ->
                     if is_tentative then
                       (* NOTE: this shouldn't be possible since tentative definition are file scoped *)
                       error "Cabs_to_ail.desugar_statement, CabsSfor found a positive is_tentative"
@@ -4236,10 +4236,17 @@ let desugar_and_register_external_declaration edecl =
           | Nothing ->
               (* Case of a typedef *)
               E.return ()
-          | Just (ident_loc, link, sym, isTentative, (qs, ty), mk_desug_init) ->
+          | Just (ident_loc, ident_attrs, link, sym, isTentative, (qs, ty), mk_desug_init) ->
               (* NOTE: `desugar_init_declarator' takes care of isAtomic *)
               match ty with
                 | Ctype.Ctype _ (Ctype.Function _ return_ty params is_variadic) ->
+                    let () =
+                      if Annot.no_attributes <> ident_attrs then
+                        Debug.print_debug 0 [] (fun () ->
+                          "WARNING: desugaring of a function initdecl is erasing some attributes!"
+                        )
+                      else
+                        () in
                     E.register_function_declaration ident_loc attrs sym true (
                       return_ty,
                       Just params, (* TODO: KKKK !!!! *)
@@ -4250,7 +4257,7 @@ let desugar_and_register_external_declaration edecl =
                 | ty ->
                     let dur = determinate_storage_duration link specifs.storage_classes in
                     E.register_external_object_declaration sym
-                      (isTentative, ident_loc, attrs, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
+                      (isTentative, ident_loc, Annot.combine_attributes attrs ident_attrs, dur, List.elem SC_register specifs.storage_classes, qs, ty) >>
                     
                     (* TODO: STD check+quote *)
                     E.get_tag_definitions >>= fun ident_tagDefs ->
