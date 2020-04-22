@@ -8,6 +8,7 @@
   (bmc/luc.2015.cat as runtime/bmc/luc.2015.cat)
   (bmc/c11.cat as runtime/bmc/c11.cat)
   (bmc/linux.h as runtime/bmc/linux.h)
+  (libc/include/builtins.h as runtime/libc/include/builtins.h)
   (libc/include/stdlib.h as runtime/libc/include/stdlib.h)
   (libc/include/float.h as runtime/libc/include/float.h)
   (libc/include/fenv.h as runtime/libc/include/fenv.h)
