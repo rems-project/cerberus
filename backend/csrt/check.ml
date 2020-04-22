@@ -1726,75 +1726,98 @@ let call_typ_fn loc_call fname env args =
      call_typ loc_call env decl_typ args
 
 
+let good_ctor loc = function
+  | Cnil cbt -> Normal (`Cnil cbt)
+  | Ccons -> Normal (`Ccons)
+  | Ctuple -> Normal (`Ctuple)
+  | Carray -> Normal (`Carray)
+  | Civmax -> Normal (`Civmax)
+  | Civmin -> Normal (`Civmin)
+  | Civsizeof -> Normal (`Civsizeof)
+  | Civalignof -> Normal (`Civalignof)
+  | CivCOMPL -> Normal (`CivCOMPL)
+  | CivAND -> Normal (`CivAND)
+  | CivOR -> Normal (`CivOR)
+  | CivXOR -> Normal (`CivXOR)
+  | Cspecified -> Normal (`Cspecified)
+  | Cfvfromint -> Normal (`Cfvfromint)
+  | Civfromfloat -> Normal (`Civfromfloat)
+  | Cunspecified -> Bad (Unspecified loc)
+
+
+
 let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) = 
   match ctor with
-  | Cnil cbt ->
+  | `Cnil cbt ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      begin match bt, args_bts with
      | List _, [] ->
-        return (Normal bt)
+        return bt
      | _, [] ->
         fail (Generic_error (loc, "Cnil without list type"))
      | _, args -> 
         let err = sprintf "Cons applied to %d argument(s)" (List.length args) in
         fail (Generic_error (loc, err))
      end
-  | Ccons ->
+  | `Ccons ->
      begin match args_bts with
      | [(hd_bt,hd_loc); (tl_bt,tl_loc)] ->
         ensure_type tl_loc None (A tl_bt) (A (List hd_bt)) >>
         let t = List tl_bt in
-        return (Normal t)
+        return t
      | args ->
         let err = sprintf "Cons applied to %d argument(s)" 
                     (List.length args) in
         fail (Generic_error (loc, err))
      end
-  | Ctuple ->
+  | `Ctuple ->
      let t = BaseTypes.Tuple (List.map fst args_bts) in
-     return (Normal t)
-  | Carray -> 
+     return t
+  | `Carray -> 
      args_same_typ None args_bts >>
-     return (Normal BaseTypes.Array)
-  | Civmax
-  | Civmin
-  | Civsizeof
-  | Civalignof
-  | CivCOMPL
-  | CivAND
-  | CivOR
-  | CivXOR -> failwith "todo"
-  | Cspecified ->
+     return BaseTypes.Array
+  | `Civmax
+  | `Civmin
+  | `Civsizeof
+  | `Civalignof
+  | `CivCOMPL
+  | `CivAND
+  | `CivOR
+  | `CivXOR -> failwith "todo"
+  | `Cspecified ->
     begin match args_bts with
     | [(bt,_)] ->
-       return (Normal bt)
+       return bt
     | args ->
        let err = sprintf "Cspecified applied to %d argument(s)" 
                    (List.length args) in
        fail (Generic_error (loc, err))
     end
-  | Cunspecified ->
-     failwith "unspecified constructor"
 
-  | Cfvfromint -> 
+  | `Cfvfromint -> 
      fail (Unsupported {loc; unsupported = "floats"})
-  | Civfromfloat -> 
+  | `Civfromfloat -> 
      fail (Unsupported {loc; unsupported = "floats"})
+
+
+
+
+let check_name_disjointness names_and_locations = 
+  fold_leftM (fun names_so_far (name,loc) ->
+      if not (SymSet.mem name names_so_far )
+      then return (SymSet.add name names_so_far)
+      else fail (Name_bound_twice {name; loc})
+    ) SymSet.empty names_and_locations
+
+
+let rec collect_pattern_names (Pattern (annots, pat)) = 
+  match pat with
+  | CaseBase (None, _) -> []
+  | CaseBase (Some sym, _) -> [(sym,Annot.get_loc_ annots)]
+  | CaseCtor (_, pats) -> concat_map collect_pattern_names pats
 
 
 let infer_pat pat = 
-
-  let rec check_disjointness names acc bindings =
-    match bindings with
-    | [] -> 
-       return (List.rev acc)
-    | ((name, bt), loc) :: bindings when not (SymSet.mem name names) ->
-       let acc = ((name, bt), loc) :: acc in
-       let names = SymSet.add name names in
-       check_disjointness names acc bindings
-    | ((name, _), loc) :: _ ->
-       fail (Name_bound_twice {name; loc})
-  in
 
   let rec aux pat = 
     let (Core.Pattern (annots, pat_)) = pat in
@@ -1807,19 +1830,20 @@ let infer_pat pat =
        bt_of_core_base_type loc cbt >>= fun bt ->
        return (Normal ([((sym, bt), loc)], (bt, loc)))
     | CaseCtor (ctor, args) ->
-       mapM aux args >>= fun bindingses_args_bts ->
-       match all_normal bindingses_args_bts with
-       | Bad b -> 
-          return (Bad b)
-       | Normal bindingses_args_bts ->
-          let bindingses, args_bts = List.split bindingses_args_bts in
-          check_disjointness SymSet.empty [] 
-            (List.concat bindingses) >>= fun bindings ->
-          ctor_typ loc ctor args_bts >>= function
-          | Normal bt -> return (Normal (bindings, (bt, loc)))
-          | Bad bad -> return (Bad bad)
+       match good_ctor loc ctor with
+       | Bad bad -> return (Bad bad)
+       | Normal ctor ->
+          mapM aux args >>= fun bindingses_args_bts ->
+          match all_normal bindingses_args_bts with
+          | Bad b -> return (Bad b)
+          | Normal bindingses_args_bts ->
+             let bindingses, args_bts = List.split bindingses_args_bts in
+             let bindings = List.concat bindingses in
+             ctor_typ loc ctor args_bts >>= fun bt ->
+             return (Normal (bindings, (bt, loc)))
   in
 
+  check_name_disjointness (collect_pattern_names pat) >>
   aux pat >>= function 
   | Normal (bindings, (bt, loc)) ->
      let (bindings,_) = List.split bindings in
@@ -1919,13 +1943,12 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
      make_Aargs_bts env args >>= fun args_bts ->
-     ctor_typ loc ctor args_bts >>= fun t ->
-     begin match t with
-     | Normal t ->
+     begin match good_ctor loc ctor with
+     | Normal ctor ->
+        ctor_typ loc ctor args_bts >>= fun t ->
         let rt = [{name = fresh (); bound = A t}] in
         return (Normal rt, env)
-     | Bad bad -> 
-        return (Bad bad, env)
+     | Bad bad -> return (Bad bad, env)
      end
   | M_PEcase (asym, pats_es) ->
      failwith "PEcase in inferring position"
