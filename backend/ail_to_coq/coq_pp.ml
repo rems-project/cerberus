@@ -174,6 +174,14 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         pp "(%a) at_union{union_%s} %S" pp_expr e name field
     | AnnotExpr(i,coq_e,e)          ->
         pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
+    | Struct(id, fs)                ->
+        pp "@[@[<hov 2>Struct string_%s [" id;
+        let fn i (id, e) =
+          let s = if i = List.length fs - 1 then " ;" else "" in
+          pp "@;(%S, %a)%s" id pp_expr e s
+        in
+        List.iteri fn fs;
+        pp "@]@;]@]"
   in
   match Location.get e.loc with
   | Some(d) when !print_expr_locs ->
