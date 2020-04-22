@@ -72,7 +72,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
       ) macros_def @
     List.map (fun str -> "-U" ^ str) macros_undef @
     List.map (fun str -> "-I" ^ str) incl_dirs @
-    List.map (fun str -> "-include " ^ str) incl_files
+    List.map (fun str -> "-include " ^ str) (in_runtime "libc/include/builtins.h" :: incl_files)
   end
 
 let core_libraries incl lib_paths libs =

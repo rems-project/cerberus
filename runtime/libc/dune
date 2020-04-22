@@ -16,6 +16,7 @@
        ../libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl
        ../libcore/impls/i686-apple-darwin10-gcc-4.2.1.impl
        ; generated with [find * -name "*.h"]
+       include/builtins.h
        include/stdlib.h
        include/float.h
        include/fenv.h

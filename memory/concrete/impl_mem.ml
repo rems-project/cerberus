@@ -1,6 +1,6 @@
 open Ctype
 
-open Ocaml_implementation
+(*open Ocaml_implementation*)
 open Memory_model
 open Mem_common
 
@@ -114,14 +114,14 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
     | Void | Array (_, None) | Function _ ->
         assert false
     | Basic (Integer ity) ->
-        begin match Impl.sizeof_ity ity with
+        begin match (Ocaml_implementation.get ()).sizeof_ity ity with
           | Some n ->
               n
           | None ->
               failwith ("the concrete memory model requires a complete implementation sizeof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
         end
     | Basic (Floating fty) ->
-        begin match Impl.sizeof_fty fty with
+        begin match (Ocaml_implementation.get ()).sizeof_fty fty with
           | Some n ->
               n
           | None ->
@@ -131,7 +131,7 @@ and sizeof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
         (* TODO: what if too big? *)
         Nat_big_num.to_int n * sizeof ~tagDefs elem_ty
     | Pointer _ ->
-        begin match Impl.sizeof_pointer with
+        begin match (Ocaml_implementation.get ()).sizeof_pointer with
           | Some n ->
               n
           | None ->
@@ -165,14 +165,14 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
     | Void ->
         assert false
     | Basic (Integer ity) ->
-        begin match Impl.alignof_ity ity with
+        begin match (Ocaml_implementation.get ()).alignof_ity ity with
           | Some n ->
               n
           | None ->
               failwith ("the concrete memory model requires a complete implementation alignof INTEGER => " ^ String_core_ctype.string_of_ctype cty)
         end
     | Basic (Floating fty) ->
-        begin match Impl.alignof_fty fty with
+        begin match (Ocaml_implementation.get ()).alignof_fty fty with
           | Some n ->
               n
           | None ->
@@ -183,7 +183,7 @@ and alignof ?(tagDefs= Tags.tagDefs ()) (Ctype (_, ty) as cty) =
     | Function _ ->
         assert false
     | Pointer _ ->
-        begin match Impl.alignof_pointer with
+        begin match (Ocaml_implementation.get ()).alignof_pointer with
           | Some n ->
               n
           | None ->
@@ -594,6 +594,20 @@ module Concrete : Memory = struct
       ) device_ranges
     end
   
+  (* NOTE: this will have to change when moving to a subobject semantics *)
+  let is_atomic_member_access alloc_id lvalue_ty addr =
+    get_allocation alloc_id >>= fun alloc ->
+    match alloc.ty with
+      | Some ty when AilTypesAux.is_atomic ty ->
+          if    addr = alloc.base && N.equal (N.of_int (sizeof lvalue_ty)) alloc.size
+             && Ctype.ctypeEqual lvalue_ty ty then
+            (* the types equality check is to deal with the case where the
+               first member is accessed and their are no padding bytes ... *)
+            return false
+          else
+            return true
+      | _ ->
+          return false
   
   (* INTERNAL: fetch_bytes *)
   let fetch_bytes bytemap base_addr n_bytes : AbsByte.t list =
@@ -1011,7 +1025,7 @@ module Concrete : Memory = struct
           end
       | MVpointer (_, PV (prov, ptrval_)) ->
           Debug_ocaml.print_debug 1 [] (fun () -> "NOTE: we fix the sizeof pointers to 8 bytes");
-          let ptr_size = match Impl.sizeof_pointer with
+          let ptr_size = match (Ocaml_implementation.get ()).sizeof_pointer with
             | None ->
                 failwith "the concrete memory model requires a complete implementation"
             | Some z ->
@@ -1405,7 +1419,12 @@ module Concrete : Memory = struct
                     | false ->
                         return (`FAIL (MerrAccess (loc, LoadAccess, OutOfBoundPtr)))
                     | true ->
-                        return `OK
+                        begin is_atomic_member_access z ty addr >>= function
+                          | true ->
+                              return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                          | false ->
+                              return `OK
+                        end
                   end
             end in
           resolve_iota precondition iota >>= fun alloc_id ->
@@ -1425,7 +1444,12 @@ module Concrete : Memory = struct
                 );
                 fail (MerrAccess (loc, LoadAccess, OutOfBoundPtr))
             | true ->
-                do_load (Some alloc_id) addr
+                begin is_atomic_member_access alloc_id ty addr >>= function
+                  | true ->
+                      fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                  | false ->
+                      do_load (Some alloc_id) addr
+                end
           end
   
   
@@ -1487,7 +1511,12 @@ module Concrete : Memory = struct
                   if alloc.is_readonly then
                     return (`FAIL (MerrWriteOnReadOnly loc))
                   else
-                    return `OK in
+                    begin is_atomic_member_access z ty addr >>= function
+                      | true ->
+                          return (`FAIL (MerrAccess (loc, LoadAccess, AtomicMemberof)))
+                      | false ->
+                          return `OK
+                    end in
           resolve_iota precondition iota >>= fun alloc_id ->
           do_store (Some alloc_id) addr >>= fun fp ->
           begin if is_locking then
@@ -1512,18 +1541,23 @@ module Concrete : Memory = struct
                   if alloc.is_readonly then
                     fail (MerrWriteOnReadOnly loc)
                   else
-                    do_store (Some alloc_id) addr >>= fun fp ->
-                    if is_locking then
-                      Eff.update (fun st ->
-                        { st with allocations=
-                            IntMap.update alloc_id (function
-                              | Some alloc -> Some { alloc with is_readonly= true }
-                              | None       -> None
-                            ) st.allocations }
-                      ) >>= fun () ->
-                      return fp
-                    else
-                      return fp
+                    begin is_atomic_member_access alloc_id ty addr >>= function
+                      | true ->
+                          fail (MerrAccess (loc, LoadAccess, AtomicMemberof))
+                      | false ->
+                          do_store (Some alloc_id) addr >>= fun fp ->
+                          if is_locking then
+                            Eff.update (fun st ->
+                              { st with allocations=
+                                  IntMap.update alloc_id (function
+                                    | Some alloc -> Some { alloc with is_readonly= true }
+                                    | None       -> None
+                                  ) st.allocations }
+                            ) >>= fun () ->
+                            return fp
+                          else
+                            return fp
+                    end
             end
 
 (*
@@ -1859,7 +1893,7 @@ module Concrete : Memory = struct
         "implementation defined cast from integer to pointer"
       );
     let n =
-      let (min, max) = match Impl.sizeof_pointer with
+      let (min, max) = match (Ocaml_implementation.get ()).sizeof_pointer with
         | Some sz ->
             let open Nat_big_num in
             (of_int 0, sub (pow_int (of_int 2) (8*sz)) (of_int 1))
@@ -2064,7 +2098,7 @@ module Concrete : Memory = struct
   
   let max_ival ity =
     let open Nat_big_num in
-    IV (Prov_none, begin match Impl.sizeof_ity ity with
+    IV (Prov_none, begin match (Ocaml_implementation.get ()).sizeof_ity ity with
       | Some n ->
           let signed_max =
             sub (pow_int (of_int 2) (8*n-1)) (of_int 1) in
@@ -2072,7 +2106,7 @@ module Concrete : Memory = struct
             sub (pow_int (of_int 2) (8*n)) (of_int 1) in
           begin match ity with
             | Char ->
-                if Impl.is_signed_ity Char then
+                if (Ocaml_implementation.get ()).is_signed_ity Char then
                   signed_max
                 else
                   unsigned_max
@@ -2099,7 +2133,7 @@ module Concrete : Memory = struct
     let open Nat_big_num in
     IV (Prov_none, begin match ity with
       | Char ->
-          if Impl.is_signed_ity Char then
+          if (Ocaml_implementation.get ()).is_signed_ity Char then
             negate (pow_int (of_int 2) (8-1))
           else
             zero
@@ -2113,7 +2147,7 @@ module Concrete : Memory = struct
       | Ptrdiff_t
       | Signed _ ->
           (* and all of these are signed *)
-          begin match Impl.sizeof_ity ity with
+          begin match (Ocaml_implementation.get ()).sizeof_ity ity with
             | Some n ->
                 negate (pow_int (of_int 2) (8*n-1))
             | None ->
@@ -2275,7 +2309,7 @@ let combine_prov prov1 prov2 =
       | Bool ->
           IV (Prov_none, if fval = 0.0 then N.zero else N.(succ zero))
       | _ ->
-          let nbytes = match Impl.sizeof_ity ity with
+          let nbytes = match (Ocaml_implementation.get ()).sizeof_ity ity with
             | None ->
                 assert false
             | Some z ->

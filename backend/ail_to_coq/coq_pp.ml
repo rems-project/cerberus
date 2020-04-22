@@ -174,6 +174,14 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         pp "(%a) at_union{union_%s} %S" pp_expr e name field
     | AnnotExpr(i,coq_e,e)          ->
         pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
+    | Struct(id, fs)                ->
+        pp "@[@[<hov 2>Struct string_%s [" id;
+        let fn i (id, e) =
+          let s = if i = List.length fs - 1 then "" else " ;" in
+          pp "@;(%S, %a)%s" id pp_expr e s
+        in
+        List.iteri fn fs;
+        pp "@]@;]@]"
   in
   match Location.get e.loc with
   | Some(d) when !print_expr_locs ->
@@ -656,7 +664,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
 
   (* Opening the section. *)
   pp "@[<v 2>Section spec.@;";
-  pp "Context `{typeG Σ}.";
+  pp "Context `{!typeG Σ} `{!globalG Σ}.";
   List.iter (pp "@;%s.") ctxt;
 
   (* Definition of types. *)
@@ -757,11 +765,11 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   (* Function specs. *)
   let pp_spec (id, def_or_decl) =
     pp "\n@;(* Specifications for function [%s]. *)" id;
-    let (annot, deps) =
+    let annot =
       match def_or_decl with
-      | FDef({func_annot=Some(annot); func_deps=(deps,_); _}) -> (annot, deps)
-      | FDec(Some(annot))                                     -> (annot, []  )
-      | _                                                     ->
+      | FDef({func_annot=Some(annot); _}) -> annot
+      | FDec(Some(annot))                 -> annot
+      | _                                 ->
       Panic.panic_no_pos "Annotations on function [%s] are invalid." id
     in
     let (param_names, param_types) = List.split annot.fa_parameters in
@@ -771,9 +779,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       | [] -> ()
       | _  -> pp "; "; pp_sep ", " pp_type_expr ff tys
     in
-    pp "@;Definition type_of_%s " id;
-    List.iter (pp "%s ") deps;
-    pp ":=@;  @[<hov 2>";
+    pp "@;Definition type_of_%s :=@;  @[<hov 2>" id;
     let pp_prod = pp_as_prod (pp_coq_expr true) in
     pp "fn(∀ %a : %a%a; %a)@;→ ∃ %a : %a, %a; %a.@]"
       (pp_as_tuple pp_str) param_names pp_prod param_types
@@ -796,19 +802,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
     else
     let (used_globals, used_functions) = def.func_deps in
     let deps =
-      (* This includes global variables on which the used function depend. *)
-      let fn acc (id, def_or_decl) =
-        if not (List.mem id used_functions) then acc else
-        match def_or_decl with
-        | FDef(def) -> fst def.func_deps @ acc
-        | FDec(_)   -> acc
-      in
-      let all_used_globals = List.fold_left fn used_globals ast.functions in
-      let transitive_used_globals =
-        (* Use filter to preserve definition order. *)
-        List.filter (fun x -> List.mem x all_used_globals) ast.global_vars
-      in
-      transitive_used_globals @ used_functions
+      used_globals @ used_functions
     in
     let pp_args ff xs =
       match xs with
@@ -817,9 +811,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
     in
     pp "@[<v 2>Lemma type_%s%a :@;" id pp_args deps;
     begin
-      match used_functions with
-      | [] -> pp "⊢ typed_function impl_%s type_of_%s." id id
-      | _  ->
+      let prefix = if used_functions = [] then "⊢ " else "" in
       let pp_impl ff id =
         let wrap = used_globals <> [] || used_functions <> [] in
         if wrap then fprintf ff "(";
@@ -828,21 +820,17 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
         List.iter (fprintf ff " %s") used_functions;
         if wrap then fprintf ff ")"
       in
-      let pp_type ff id =
-        let used_globals =
-          match List.assoc id ast.functions with
-          | FDef(def)           -> fst def.func_deps
-          | FDec(_)             -> []
-          | exception Not_found -> assert false (* Unreachable. *)
-        in
-        if used_globals <> [] then fprintf ff "(";
-        fprintf ff "type_of_%s" id;
-        List.iter (fprintf ff " %s") used_globals;
-        if used_globals <> [] then fprintf ff ")"
+      let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
+      List.iter pp_global used_globals;
+      let pp_global_type f =
+        match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
+        | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;" f (pp_type_expr_guard None Guard_none) ty
+        | _ -> ()
       in
-      let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr %a -∗@;" f f pp_type f in
+      List.iter pp_global_type used_globals;
+      let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr type_of_%s -∗@;" f f f in
       List.iter pp_dep used_functions;
-      pp "typed_function %a %a." pp_impl id pp_type id
+      pp "%styped_function %a type_of_%s." prefix pp_impl id id
     end;
     let pp_intros ff xs =
       let pp_intro ff (x,_) = pp_str ff x in
