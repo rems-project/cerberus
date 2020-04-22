@@ -823,9 +823,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
       List.iter pp_global used_globals;
       let pp_global_type f =
-        (* match List.find_opt (fun (name, _) -> name = f) ast.global_vars with *)
-        match if f = "allocator_state" then Some ("a", Some "alloc_state") else None with
-        | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%s : type) →@;" f ty
+        match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
+        | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;" f (pp_type_expr_guard None Guard_none) ty
         | _ -> ()
       in
       List.iter pp_global_type used_globals;
