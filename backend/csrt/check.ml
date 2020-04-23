@@ -15,46 +15,14 @@ open LogicalConstraints
 open Resources
 open IndexTerms
 open BaseTypes
-
+open VarTypes
+open TypeErrors
 
 module SymSet = Set.Make(Sym)
 
 
 
-module VarTypes = struct
 
-  type t = 
-    | A of BaseTypes.t
-    | L of LogicalSorts.t
-    | R of Resources.t
-    | C of LogicalConstraints.t
-
-  let subst sym with_it t = 
-    match t with
-    | A t -> A (BaseTypes.subst sym with_it t)
-    | L t -> L (LogicalSorts.subst sym with_it t)
-    | R t -> R (Resources.subst sym with_it t)
-    | C t -> C (LogicalConstraints.subst sym with_it t)
-
-   type kind = 
-     | Argument
-     | Logical
-     | Resource
-     | Constraint
- 
-   let kind_of_t = function
-     | A _  -> Argument
-     | L _  -> Logical
-     | R _  -> Resource
-     | C _  -> Constraint
- 
-   let pp_kind = function
-     | Argument  -> "computational"
-     | Logical  -> "logical"
-     | Resource  -> "resource"
-     | Constraint  -> "constraint"
- 
-end
 
 
 module Binders = struct
@@ -64,14 +32,10 @@ module Binders = struct
 
   let pp {name;bound} = 
     match bound with
-    | A t -> 
-       sprintf "(A %s : %s)" (Sym.pp name) (BaseTypes.pp t)
-    | L t  -> 
-       sprintf "(L %s : %s)" (Sym.pp name) (LogicalSorts.pp t)
-    | R t -> 
-       sprintf "(R %s : %s)" (Sym.pp name) (Resources.pp t)
-    | C t -> 
-       sprintf "(C %s : %s)" (Sym.pp name) (LogicalConstraints.pp t)
+    | A t -> sprintf "(A %s : %s)" (Sym.pp name) (BaseTypes.pp t)
+    | L t -> sprintf "(L %s : %s)" (Sym.pp name) (LogicalSorts.pp t)
+    | R t -> sprintf "(R %s : %s)" (Sym.pp name) (Resources.pp t)
+    | C t -> sprintf "(C %s : %s)" (Sym.pp name) (LogicalConstraints.pp t)
 
 
   let parse_sexp loc (names : namemap) s = 
@@ -102,6 +66,16 @@ module Binders = struct
       let subst sym with_it b = 
         { name = sym_subst sym with_it b.name;
           bound = VarTypes.subst sym with_it b.bound }
+
+      let makeA name bt = {name; bound = A bt}
+      let makeL name bt = {name; bound = L (Base bt)}
+      let makeR name re = {name; bound = R re}
+      let makeC name it = {name; bound = C (LC it)}
+
+      let makeUA bt = makeA (fresh ()) bt
+      let makeUL bt = makeL (fresh ()) bt
+      let makeUR bt = makeR (fresh ()) bt
+      let makeUC bt = makeC (fresh ()) bt
         
 
 end
@@ -142,7 +116,7 @@ end
 
 module FunctionTypes = struct
 
-  type t = F of {arguments: Types.t;return: Types.t}
+  type t = F of {arguments: Types.t; return: Types.t}
 
   let subst sym sym' (F t) = 
     F { arguments = Types.subst sym sym' t.arguments;
@@ -183,219 +157,6 @@ end
 open UU
 
 
-
-module Err = struct
-
-  type call_return_switch_error = 
-    | Surplus_A of Sym.t * BaseTypes.t
-    | Surplus_L of Sym.t * LogicalSorts.t
-    | Surplus_R of Sym.t * Resources.t
-    | Missing_A of Sym.t * BaseTypes.t
-    | Missing_L of Sym.t * LogicalSorts.t
-    | Missing_R of Sym.t * Resources.t
-    | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
-    | Unsat_constraint of Sym.t * LogicalConstraints.t
-    | Unconstrained_l of Sym.t * LogicalSorts.t
-
-  type type_error = 
-    | Var_kind_error of {
-        loc : Loc.t;
-        sym: Sym.t;
-        expected : VarTypes.kind;
-        has : VarTypes.kind;
-      }
-    | Name_bound_twice of {
-        loc : Loc.t;
-        name: Sym.t
-      }
-    | Unreachable of {
-        loc: Loc.t;
-        unreachable : string;
-      }
-    | Illtyped_it of {
-        loc: Loc.t;
-        it: IndexTerms.t;
-      }
-    | Unsupported of { 
-        loc: Loc.t;
-        unsupported: string; 
-      }
-    | Unbound_name of {
-        loc: Loc.t; 
-        is_function: bool;
-        unbound: Sym.t;
-      }
-    | Inconsistent_fundef of {
-        loc: Loc.t;
-        decl: FunctionTypes.t;
-        defn: FunctionTypes.t;
-      }
-    | Variadic_function of {
-        loc: Loc.t;
-        fn: Sym.t;
-      }
-    | Return_error of 
-        Loc.t * call_return_switch_error
-    | Call_error of 
-        Loc.t * call_return_switch_error
-    | Switch_error of 
-        Loc.t * call_return_switch_error
-    | Integer_value_error of 
-        Loc.t
-    | Undefined_behaviour of
-        Loc.t * Undefined.undefined_behaviour
-    | Unspecified_value of
-        Loc.t
-    | Generic_error of Loc.t * string
-
-  let pp_return_error loc = function
-    | Surplus_A (_name,t) ->
-       sprintf "Line %s. Returning unexpected value of type %s" 
-         (Loc.pp loc) (BaseTypes.pp t)
-    | Surplus_L (_name,t) ->
-       sprintf "%s. Returning unexpected logical value of type %s" 
-         (Loc.pp loc) (LogicalSorts.pp t)
-    | Surplus_R (_name,t) ->
-       sprintf "%s. Returning unexpected resource of type %s" 
-         (Loc.pp loc) (Resources.pp t)
-    | Missing_A (_name,t) ->
-       sprintf "%s. Missing return value of type %s" 
-         (Loc.pp loc) (BaseTypes.pp t)
-    | Missing_L (_name,t) ->
-       sprintf "%s. MIssing logical return value of type %s" 
-         (Loc.pp loc) (LogicalSorts.pp t)
-    | Missing_R (_name,t) ->
-       sprintf "%s. Missing return resource of type %s" 
-         (Loc.pp loc) (Resources.pp t)
-    | Mismatch {mname; has; expected} ->
-       let has_pp = match has with
-         | A t -> sprintf "return value of type %s" (BaseTypes.pp t)
-         | L t -> sprintf "logical return value of type %s" (LogicalSorts.pp t)
-         | R t -> sprintf "return resource of type %s" (Resources.pp t)
-         | C t -> sprintf "return constraint %s" (LogicalConstraints.pp t)
-       in
-       begin match expected with
-       | A t ->
-          sprintf "%s. Expected return value of type %s but found %s" 
-            (Loc.pp loc) (BaseTypes.pp t) has_pp
-       | L t ->
-          sprintf "%s. Expected logical return value of type %s but found %s" 
-            (Loc.pp loc) (LogicalSorts.pp t) has_pp
-       | R t ->
-          sprintf "%s. Expected return resource of type %s but found %s" 
-            (Loc.pp loc) (Resources.pp t) has_pp
-       | C t ->
-          (* dead, I think *)
-          sprintf "%s. Expected return constraint %s but found %s" 
-            (Loc.pp loc) (LogicalConstraints.pp t) has_pp
-       end
-    | Unsat_constraint (name,c) ->
-       sprintf "%s. Unsatisfied return constraint %s: %s" 
-         (Loc.pp loc) (Sym.pp name) (LogicalConstraints.pp c)
-    | Unconstrained_l (name, ls) ->
-       sprintf "%s. Unconstrained logical variable %s: %s" 
-         (Loc.pp loc) (Sym.pp name) (LogicalSorts.pp ls)
-    
-
-  let pp_call_error loc = function
-    | Surplus_A (_name,t) ->
-       sprintf "Line %s. Supplying unexpected argument of type %s" 
-         (Loc.pp loc) (BaseTypes.pp t)
-    | Surplus_L (_name,t) ->
-       sprintf "%s. Supplying unexpected logical argument of type %s" 
-         (Loc.pp loc) (LogicalSorts.pp t)
-    | Surplus_R (_name,t) ->
-       sprintf "%s. Supplying unexpected resource of type %s" 
-         (Loc.pp loc) (Resources.pp t)
-    | Missing_A (_name,t) ->
-       sprintf "%s. Missing argument of type %s" 
-         (Loc.pp loc) (BaseTypes.pp t)
-    | Missing_L (_name,t) ->
-       sprintf "%s. Missing logical argument of type %s" 
-         (Loc.pp loc) (LogicalSorts.pp t)
-    | Missing_R (_name,t) ->
-       sprintf "%s. Missing resource argument of type %s" 
-         (Loc.pp loc) (Resources.pp t)
-    | Mismatch {mname; has; expected} ->
-       let has_pp = match has with
-         | A t -> sprintf "argument of type %s" (BaseTypes.pp t)
-         | L t -> sprintf "logical argument of type %s" (LogicalSorts.pp t)
-         | R t -> sprintf "resource argument of type %s" (Resources.pp t)
-         | C t -> sprintf "constraint argument %s" (LogicalConstraints.pp t)
-       in
-       begin match expected with
-       | A t ->
-          sprintf "%s. Expected argument of type %s but found %s" 
-            (Loc.pp loc) (BaseTypes.pp t) has_pp
-       | L t ->
-          sprintf "%s. Expected logical argument of type %s but found %s" 
-            (Loc.pp loc) (LogicalSorts.pp t) has_pp
-       | R t ->
-          sprintf "%s. Expected resource argument of type %s but found %s" 
-            (Loc.pp loc) (Resources.pp t) has_pp
-       | C t ->
-          (* dead, I think *)
-          sprintf "%s. Expected constraint argument %s but found %s" 
-            (Loc.pp loc) (LogicalConstraints.pp t) has_pp
-       end
-    | Unsat_constraint (name,lc) ->
-       sprintf "%s. Unsatisfied return constraint %s: %s" 
-         (Loc.pp loc) (Sym.pp name) (LogicalConstraints.pp lc)
-    | Unconstrained_l (name,ls) ->
-       sprintf "%s. Unconstrained logical variable %s: %s" 
-         (Loc.pp loc) (Sym.pp name) (LogicalSorts.pp ls)
-
-  let pp = function 
-    | Var_kind_error err ->
-       sprintf "%s. Expected kind %s but found kind %s"
-         (Loc.pp err.loc) (VarTypes.pp_kind err.expected) (VarTypes.pp_kind err.has)
-    | Name_bound_twice err ->
-       sprintf "%s. Name bound twice: %s" 
-         (Loc.pp err.loc) (Sym.pp err.name)
-    | Generic_error (loc, err) ->
-       sprintf "%s. %s" 
-         (Loc.pp loc) err
-    | Unreachable {loc; unreachable} ->
-       sprintf "%s. Should be unreachable: %s" 
-         (Loc.pp loc) unreachable
-    | Illtyped_it {loc; it} ->
-       sprintf "%s. Illtyped index term: %s" 
-         (Loc.pp loc) (IndexTerms.pp it)
-    | Unsupported {loc; unsupported} ->
-       sprintf "%s. Unsupported feature: %s" 
-         (Loc.pp loc) unsupported
-    | Unbound_name {loc; is_function; unbound} ->
-       sprintf "%s. Unbound %s %s"
-         (Loc.pp loc) (if is_function then "function" else "symbol") (Sym.pp unbound)
-    | Inconsistent_fundef {loc; decl; defn} ->
-       sprintf "%s. Function definition inconsistent. Should be %s, is %s"
-         (Loc.pp loc) (FunctionTypes.pp decl) (FunctionTypes.pp defn)
-    | Variadic_function {loc; fn } ->
-       sprintf "Line %s. Variadic functions unsupported (%s)" 
-         (Loc.pp loc) (Sym.pp fn)
-    | Return_error (loc, err) -> 
-       pp_return_error loc err
-    | Call_error (loc, err) -> 
-       pp_call_error loc err
-    | Switch_error (loc, err) -> 
-       pp_call_error loc err
-    | Integer_value_error loc ->
-       sprintf "%s. integer_value_to_num return None"
-         (Loc.pp loc)
-    | Undefined_behaviour (loc, undef) ->
-       sprintf "%s. Undefined behaviour: %s"
-         (Loc.pp loc)
-         (Undefined.pretty_string_of_undefined_behaviour undef)
-    | Unspecified_value loc ->
-       sprintf "%s. Unspecified value"
-         (Loc.pp loc)
-
-
-
-
-end
-
-open Err
 
 
 
@@ -459,6 +220,8 @@ module LEnv = struct
 
 end
 
+
+
 module Env = struct
 
 
@@ -476,8 +239,8 @@ module Env = struct
     { global = genv; 
       local = LEnv.empty }
 
-  let add_var (env : t) (sym, t) = 
-    { env with local = { vars = SymMap.add sym t env.local.vars } }
+  let add_var (env : t) {name; bound = t} = 
+    { env with local = { vars = SymMap.add name t env.local.vars } }
 
   let add_vars env bindings = 
     fold_left add_var env bindings
@@ -489,13 +252,10 @@ module Env = struct
   let remove_vars env bindings = 
     fold_left remove_var env bindings
 
-  let add_rt env rt = 
-    fold_left (fun env b -> add_var env (b.name, b.bound)) env rt
-
-  let add_Avar env (sym, t) = add_var env (sym, VarTypes.A t)
-  let add_Lvar env (sym, t) = add_var env (sym, VarTypes.L t)
-  let add_Rvar env (sym, t) = add_var env (sym, VarTypes.R t)
-  let add_Cvar env (sym, t) = add_var env (sym, VarTypes.C t)
+  let add_Avar env (name, t) = add_var env {name; bound = A t}
+  let add_Lvar env (name, t) = add_var env {name; bound = L t}
+  let add_Rvar env (name, t) = add_var env {name; bound = R t}
+  let add_Cvar env (name, t) = add_var env {name; bound = C t}
 
   let add_Avars env vars = List.fold_left add_Avar env vars
 
@@ -676,20 +436,20 @@ let subtype loc env rt1 rt2 =
        fail (Return_error (loc, Missing_L (name, r2)))
     | [], {name; bound = R r2} :: _ -> 
        fail (Return_error (loc, Missing_R (name, r2)))
-    | {name; bound = C c1} :: rt1', _ ->
-       check (add_var env (name,C c1)) rt1' rt2
+    | ({name; bound = C c1} as b) :: rt1', _ ->
+       check (add_var env b) rt1' rt2
     | _, {name = n2; bound = C c2} :: rt2' ->
        if constraint_holds loc env c2 
        then check env rt1 rt2'
        else fail (Return_error (loc, Unsat_constraint (n2, c2)))
     | (r1 :: rt1), (r2 :: rt2) ->
        match r1, r2 with
-       | {name = n1; bound = A t1}, {name = n2; bound = VarTypes.A t2} 
+       | ({name = n1; bound = A t1} as b), {name = n2; bound = VarTypes.A t2} 
             when BaseTypes.type_equal t1 t2 ->
-          check (add_var env (n1, A t1)) rt1 (Types.subst n2 n1 rt2)
-       | {name = n1; bound = L t1}, {name = n2; bound = L t2} 
+          check (add_var env b) rt1 (Types.subst n2 n1 rt2)
+       | ({name = n1; bound = L t1} as b), {name = n2; bound = L t2} 
             when LogicalSorts.type_equal t1 t2 ->
-          check (add_var env (n1, L t1)) rt1 (Types.subst n2 n1 rt2)
+          check (add_var env b) rt1 (Types.subst n2 n1 rt2)
        | {name = n1; bound = R t1}, {name = n2; bound = R t2} 
             when Resources.type_equal env t1 t2 ->
           check env rt1 rt2
@@ -755,13 +515,9 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 let integerBaseType name signed ibt =
 
   let make f t = 
-    let ft = Num (of_string f) in
-    let tt = Num (of_string t) in
-    let constr = LC ((S name %>= ft) %& (S name %<= tt)) in
-    let l = [] in
-    let r = [] in
-    let c = [{name = fresh (); bound = C constr}] in
-    ((name,Int), l, r, c)
+    let c = makeUC ((S name %>= Num (of_string f)) %& 
+                   (S name %<= Num (of_string t))) in
+    ((name,Int), [], [], [c])
   in
 
   match signed, ibt with
@@ -814,9 +570,8 @@ let rec ctype_aux name (Ctype.Ctype (annots, ct)) =
      return ((name,Array),[],[],[])
   | Ctype.Pointer (_qualifiers, ct) ->
      ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-     let res = R (Points (S name, S pointee_name)) in
-     let r = {name = fresh (); bound = res} :: r in
-     let l = {name = pointee_name; bound = L (Base bt)} :: l in
+     let r = makeUR (Points (S name, S pointee_name)) :: r in
+     let l = makeL pointee_name bt :: l in
      return ((name,Loc),l,r,c)
   | Ctype.Atomic ct ->              (* check *)
      ctype_aux name ct
@@ -832,7 +587,7 @@ let rec ctype_aux name (Ctype.Ctype (annots, ct)) =
 
 let ctype (name : Sym.t) (ct : Ctype.ctype) =
   ctype_aux name ct >>= fun ((name,bt), l,r,c) ->
-  return ({name;bound = A bt} :: l @ r @ c)
+  return (makeA name bt :: l @ r @ c)
 
 let make_pointer_ctype ct = 
   (* fix *)
@@ -850,7 +605,7 @@ let only_resources t =
 
 
 let make_create_type ct : (FunctionTypes.t,'e) m = 
-  let arguments = [{name = fresh (); bound = A Int}] in
+  let arguments = [makeUA Int] in
   ctype (fresh ()) (make_pointer_ctype ct) >>= fun rt ->
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
@@ -860,12 +615,12 @@ let make_load_type ct : (FunctionTypes.t,'e) m =
   let pointer_name = fresh () in
   ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
   let addr_argument = 
-    let a = {name = pointer_name; bound = A Loc} in
-    let l = {name = pointee_name; bound = L (Base bt)} :: l in
-    let r = {name = fresh (); bound = R (Points (S pointer_name, S pointee_name))} :: r in
+    let a = makeA pointer_name Loc in
+    let l = makeL pointee_name bt :: l in
+    let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
     a :: l @ r @ c
   in
-  let ret = {name = pointee_name; bound = A bt} :: r in
+  let ret = makeA pointee_name bt :: r in
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
 
@@ -874,11 +629,8 @@ let make_store_type ct : (FunctionTypes.t,'e) m =
   ctype pointer_name (make_pointer_ctype ct) >>= fun address ->
   begin 
     ctype_aux (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
-    let value = {name = value_name; bound = A bt} :: l @ r @ c in
-    let ret = 
-      {name = fresh (); bound = A Unit} ::
-      {name = fresh (); bound = R (Points (S pointer_name, S value_name))} :: r
-    in
+    let value = makeA value_name bt :: l @ r @ c in
+    let ret = makeUA Unit :: makeUR (Points (S pointer_name, S value_name)) :: r in
     return (value,ret)
   end >>= fun (value,ret) ->
   let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
@@ -928,26 +680,22 @@ let infer_object_value (env : env) loc ov =
   match ov with
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
-     let t = {name; bound = A Int} in
-     let constr = {name = fresh (); bound = C (LC (S name %= Num i))} in
+     let t = makeA name Int in
+     let constr = makeUC (S name %= Num i) in
      return (Normal [t; constr])
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
-         let t = {name; bound = A Loc} in
-         let constr = {name = fresh (); bound = C (LC (Null (S name)))} in
-         return (Normal [t; constr]) )
+         return (Normal [makeA name Loc; makeUC (Null (S name))]) )
        ( fun sym -> 
          fail (Unsupported {loc; unsupported = "function pointers"}) )
        ( fun _prov loc ->
-         let t = {name; bound = A Loc} in
-         let constr = {name = fresh (); bound = C (LC (S name %= Num loc))} in
-         return (Normal [t; constr]) )
+         return (Normal [makeA name Loc; makeUC (S name %= Num loc)]) )
        ( fun () -> return (Bad (Unspecified loc)) )
   | M_OVarray items ->
      make_Aargs_bts env items >>= fun args_bts ->
      args_same_typ None args_bts >>
-     return (Normal [{name; bound = A Array}])
+     return (Normal [makeA name Array])
   | M_OVstruct (sym, fields) ->
      failwith "todo: struct"
   | M_OVunion _ -> 
@@ -969,36 +717,26 @@ let infer_value loc env v : (UU.ut,'e) m =
   | M_Vloaded lv ->
      infer_loaded_value env loc lv
   | M_Vunit ->
-     let rt = [{name = fresh (); bound = A Unit}] in
-     return (Normal rt)
+     return (Normal [makeUA Unit])
   | M_Vtrue ->
      let name = fresh () in
-     let t = {name; bound = A Bool} in
-     let constr = {name = fresh (); bound = C (LC (S name))} in
-     let rt = [t; constr] in
-     return (Normal rt)
+     return (Normal [makeA name Bool; makeUC (S name)])
   | M_Vfalse -> 
      let name = fresh () in
-     let t = {name; bound = A Bool} in
-     let constr = {name = fresh (); bound = C (LC (Not (S name)))} in
-     let rt = [t; constr] in
-     return (Normal rt)
+     return (Normal [makeA name Bool; makeUC (Not (S name))])
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      begin match bt with
      | List i_t ->
         make_Aargs_bts env asyms >>= fun args_bts ->
         args_same_typ (Some i_t) args_bts >>
-        (* maybe record list length? *)
-        let rt = [{name = fresh (); bound = A (List i_t)}] in
-        return (Normal rt)
+        return (Normal [makeUA (List i_t)])
      | bt ->
         fail (Generic_error (loc, "Cnil without list type"))
      end 
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
-     let rt = [{name = fresh (); bound = A (Tuple (List.map fst args_bts))}] in
-     return (Normal rt)
+     return (Normal [makeUA (Tuple (List.map fst args_bts))])
 
 
 
@@ -1297,8 +1035,8 @@ let infer_binop env loc op sym1 sym2 =
   ensure_type loc1 (Some sym1) (A t1) (A st1) >>
   ensure_type loc2 (Some sym2) (A t2) (A st2) >>
   let name = fresh () in
-  let constr = LC (S name %= (make_binop_constr (S sym1) (S sym2))) in
-  let t = [{name; bound = A rt}; {name = fresh (); bound = C constr}] in
+  let constr = S name %= (make_binop_constr (S sym1) (S sym2)) in
+  let t = [makeA name rt; makeUC constr] in
   return t
   
 
@@ -1325,9 +1063,8 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
   let loc = Annot.get_loc_ annots in
   match pe_ with
   | M_PEsym sym ->
-     get_Avar loc env sym >>= fun b ->
-     let rt = [{name = sym; bound = A b}] in
-     return (Normal rt, env)
+     get_Avar loc env sym >>= fun bt ->
+     return (Normal [makeA sym bt], env)
   | M_PEimpl _ ->
      failwith "todo PEimpl"
   | M_PEval v ->
@@ -1343,9 +1080,8 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
      make_Aargs_bts env args >>= fun args_bts ->
      begin match good_ctor loc ctor with
      | Normal ctor ->
-        ctor_typ loc ctor args_bts >>= fun t ->
-        let rt = [{name = fresh (); bound = A t}] in
-        return (Normal rt, env)
+        ctor_typ loc ctor args_bts >>= fun bt ->
+        return (Normal [makeUA bt], env)
      | Bad bad -> return (Bad bad, env)
      end
   | M_PEcase (asym, pats_es) ->
@@ -1359,9 +1095,7 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
      get_Avar loc env sym >>= fun t ->
      ensure_type a_loc (Some sym) (A t) (A BaseTypes.Bool) >>
      let name = fresh () in
-     let constr = LC ((S name) %= Not (S sym)) in
-     let env = add_Cvar env (name, constr) in
-     let rt = [{name; bound = A t}] in
+     let rt = [makeA name t; makeUC ((S name) %= Not (S sym))] in
      return (Normal rt, env)
   | M_PEop (op,sym1,sym2) ->
      infer_binop env loc op sym1 sym2 >>= fun rt ->
@@ -1400,10 +1134,8 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
      let sym1, loc1 = lof_a asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      ensure_type loc1 (Some sym1) (A t1) (A Bool) >>
-     let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
-     let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
-     check_pexpr (add_Cvar env then_constr) e2 ret >>
-     check_pexpr (add_Cvar env else_constr) e3 ret
+     check_pexpr (add_var env (makeUC (S sym1 %= Bool true))) e2 ret >>
+     check_pexpr (add_var env (makeUC (S sym1 %= Bool true))) e3 ret
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = lof_a asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -1425,14 +1157,14 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
      | M_symbol (Annotated (_annots, _, newname)) ->
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_pexpr (add_rt env (rename newname rt)) e2 ret
+        | Normal rt -> check_pexpr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_pexpr (add_rt env (rename newname rt)) e2 ret
+        | Normal rt -> check_pexpr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
@@ -1478,8 +1210,7 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
         let (sym,loc) = lof_a asym in
         recursively_owned_resources loc env sym >>= fun resources ->
         let env = remove_vars env resources in
-        let rt = [{name = fresh (); bound = A Unit}] in
-        return (Normal rt, env)
+        return (Normal [makeUA Unit], env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = lof_a a_ct in
         make_store_type ct >>= fun decl_typ ->
@@ -1514,8 +1245,7 @@ failwith "LinuxRMW"
 | M_Eif _ ->
      failwith "todo eif"
   | M_Eskip -> 
-     let rt = [{name = fresh (); bound = A Unit}] in
-     return (Normal rt, env)
+     return (Normal [makeUA Unit], env)
   | M_Eccall (_a, asym, asd, asyms) ->
      failwith "todo eccall"
   | M_Eproc _ ->
@@ -1578,14 +1308,14 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
      | M_symbol (Annotated (_annots, _, newname)) ->
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
@@ -1598,7 +1328,7 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
         let newname = sym_or_fresh mnewname in
         infer_expr env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr (add_rt env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | Pattern (_annot, CaseCtor _) ->
@@ -1625,7 +1355,7 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
 
 let check_function_body (type a bty) genv name (body : (a,bty) mu_expr) (F decl_typ) = 
   let env = with_fresh_local genv in
-  let env = add_rt env decl_typ.arguments in
+  let env = add_vars env decl_typ.arguments in
   check_expr (* name *) env body decl_typ.return >>= fun _env ->
   return ()
 
@@ -1645,7 +1375,7 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
 
   let binding_of_core_base_type loc (sym,cbt) = 
     bt_of_core_base_type loc cbt >>= fun bt ->
-    return {name = sym; bound = A bt}
+    return (makeA sym bt)
   in
 
   let check_consistent loc decl args ret = 
@@ -1653,13 +1383,18 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
     binding_of_core_base_type loc ret >>= fun ret ->
     let (F decl_typ) = decl in
     let _ = forget args in
-    return ()
-    (* if BaseTypes.types_equal (forget decl_typ.arguments) (forget args) &&
-     *      BaseTypes.types_equal (forget decl_typ.return) (forget [ret])
-     * then return ()
-     * else 
-     *   let defn = F {arguments = args; return = [ret]} in
-     *   fail (Inconsistent_fundef {loc; decl; defn = defn}) *)
+    if BaseTypes.types_equal (forget decl_typ.arguments) (forget args) &&
+         BaseTypes.types_equal (forget decl_typ.return) (forget [ret])
+    then return ()
+    else 
+      let defn = F {arguments = args; return = [ret]} in
+      let err = 
+        sprintf "Function definition inconsistent. Should be %s, is %s"
+          (FunctionTypes.pp decl) (FunctionTypes.pp defn)
+      in
+      fail (Generic_error (loc, err))
+
+
   in
 
   match fn with
@@ -1726,15 +1461,6 @@ let record_tagDef sym def genv =
        let names = (id, (name, Loc.unknown)) :: names in
        ctype name ct >>= fun newfields ->
        return (names, fields @ newfields)
-       (* fun bt_constr ->
-        * let fields = match bt_constr with
-        *   | (bt, Some c) -> 
-        *      fields @ [{name = sym; bound = A bt}; 
-        *                {name = fresh (); bound = C (LC (c (S sym)))}]
-        *   | (bt, None) -> 
-        *      fields @ [{name = sym; bound = A bt}]
-        * in
-        * return (names, fields) *)
      ) ([],[]) fields >>= fun (names,fields) ->
 
      let struct_decls = SymMap.add sym fields genv.GEnv.struct_decls in
@@ -1768,4 +1494,4 @@ let check_and_report core_file =
   match check core_file with
   | Result () -> ()
   | Exception err -> 
-     print_endline ("\n" ^ underline '=' "Error!" ^ "\n" ^ pp err)
+     print_endline ("\n" ^ underline '=' "Error!" ^ "\n" ^ TypeErrors.pp err)
