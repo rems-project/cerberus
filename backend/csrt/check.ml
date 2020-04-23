@@ -1067,8 +1067,8 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
   debug_print
     [ (1, h2 "infer_pexpr")
     ; (1, item "env" (LEnv.pp env.local))
-    ; (1, item "e" "")
-    ; (2, pp_pexpr pe)
+    ; (3, item "e" "")
+    ; (3, pp_pexpr pe)
     ];
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
@@ -1135,8 +1135,8 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
     [ (1, h2 "check_pexpr")
     ; (1, item "env" (LEnv.pp env.local))
     ; (1, item "ret" (Types.pp ret))
-    ; (1, item "e" "")
-    ; (1, pp_pexpr e)
+    ; (3, item "e" "")
+    ; (3, pp_pexpr e)
     ];
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -1196,8 +1196,8 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
   debug_print
     [ (1, h2 "infer_expr")
     ; (1, item "env" (LEnv.pp env.local))
-    ; (1, item "e" "")
-    ; (1, pp_expr e)
+    ; (3, item "e" "")
+    ; (3, pp_expr e)
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -1282,8 +1282,8 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
     [ (1, h2 "check_expr")
     ; (1, item "env" (LEnv.pp env.local))
     ; (1, item "ret" (Types.pp ret))
-    ; (2, item "e" "")
-    ; (2, pp_expr e)
+    ; (3, item "e" "")
+    ; (3, pp_expr e)
     ];
 
   let (M_Expr (annots, e_)) = e in
