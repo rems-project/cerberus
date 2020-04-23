@@ -1,8 +1,9 @@
+(include_subdirs unqualified)
+
 (executable
  (name main)
  (public_name csrt)
  (package csrt)
- (modules main check location except id sym)
  (flags (:standard -w -27))
  (libraries cmdliner str unix
   cerb_frontend cerb_backend mem_concrete util))
