@@ -17,7 +17,7 @@ module Loc = Location
 
 
 
-let debug_level = 2
+let debug_level = 1
 
 let pps = Pp_utils.to_plain_pretty_string
 
@@ -1340,21 +1340,19 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 
 
 
-let a_or_l is_pointee bt = if is_pointee then L (Base bt) else A bt
-
 (* according to https://en.wikipedia.org/wiki/C_data_types *)
 (* and *)
 (* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let integerBaseType name signed ibt is_pointee = 
+let integerBaseType name signed ibt =
 
   let make f t = 
     let ft = Num (of_string f) in
     let tt = Num (of_string t) in
     let constr = LC ((S name %>= ft) %& (S name %<= tt)) in
-    let al = [{name; bound = a_or_l is_pointee Int}] in
+    let l = [] in
     let r = [] in
     let c = [{name = fresh (); bound = C constr}] in
-    (Int, al, r, c)
+    ((name,Int), l, r, c)
   in
 
   match signed, ibt with
@@ -1384,11 +1382,11 @@ let integerBaseType name signed ibt is_pointee =
   | _, Ctype.Intptr_t       -> failwith "todo standard library types"
 
 
-let integerType name it is_pointee  = 
+let integerType name it =
   match it with
-  | Ctype.Bool -> (Bool, [{name; bound = a_or_l is_pointee Bool}],[],[])
-  | Ctype.Signed ibt -> integerBaseType name true ibt is_pointee
-  | Ctype.Unsigned ibt -> integerBaseType name false ibt is_pointee
+  | Ctype.Bool -> ((name, Bool), [], [], [])
+  | Ctype.Signed ibt -> integerBaseType name true ibt
+  | Ctype.Unsigned ibt -> integerBaseType name false ibt
   | Ctype.Char -> failwith "todo char"
   | Ctype.Enum _sym -> failwith "todo enum"
   | Ctype.Wchar_t -> failwith "todo wchar_t"
@@ -1397,27 +1395,24 @@ let integerType name it is_pointee  =
   | Ctype.Ptrdiff_t -> failwith "todo standard library types"
 
 
-let rec ctype_aux name (Ctype.Ctype (annots, ct)) is_pointee = 
+let rec ctype_aux name (Ctype.Ctype (annots, ct)) =
   match ct with
   | Ctype.Void -> (* check *)
-     return (Unit, [{name; bound = A Unit}],[],[])
+     return ((name,Unit), [], [], [])
   | Ctype.Basic (Integer it) -> 
-     return (integerType name it is_pointee)
+     return (integerType name it)
   | Ctype.Array (ct, _maybe_integer) -> 
-     return (Array, [{name; bound = A Array}],[],[])
-  | Ctype.Pointer (_qualifiers, ctype) ->
-     let res_name = fresh () in
-     let pointee_name = fresh () in
+     return ((name,Array),[],[],[])
+  | Ctype.Pointer (_qualifiers, ct) ->
+     ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
      let res = R (Points (S name, S pointee_name)) in
-     ctype_aux pointee_name ctype true >>= fun (_,al,r,c) ->
-     let r = {name = res_name; bound = res} :: r in
-     let al = {name; bound = a_or_l is_pointee Loc} :: al in
-     return (Loc, al,r,c)
+     let r = {name = fresh (); bound = res} :: r in
+     let l = {name = pointee_name; bound = L (Base bt)} :: l in
+     return ((name,Loc),l,r,c)
   | Ctype.Atomic ct ->              (* check *)
-     ctype_aux name ct is_pointee
+     ctype_aux name ct
   | Ctype.Struct sym -> 
-     let al = [{name = fresh (); bound = A (Struct sym)}] in
-     return (Struct sym, al, [],[])
+     return ((name, Struct sym),[],[],[])
   | Ctype.Union sym ->
      failwith "todo: union types"
   | Ctype.Basic (Floating _) -> 
@@ -1426,9 +1421,9 @@ let rec ctype_aux name (Ctype.Ctype (annots, ct)) is_pointee =
      fail (Unsupported {loc = Annot.get_loc_ annots; unsupported = "function pointers"}) 
 
 
-let ctype ?(is_pointee=false) (name : Sym.t) (ct : Ctype.ctype) =
-  ctype_aux name ct is_pointee >>= fun (_bt, al,r,c) ->
-  return (al @ r @ c)
+let ctype (name : Sym.t) (ct : Ctype.ctype) =
+  ctype_aux name ct >>= fun ((name,bt), l,r,c) ->
+  return ({name;bound = A bt} :: l @ r @ c)
 
 let make_pointer_ctype ct = 
   (* fix *)
@@ -1454,36 +1449,30 @@ let make_create_type ct : (FunctionTypes.t,'e) m =
 
 let make_load_type ct : (FunctionTypes.t,'e) m = 
   let pointer_name = fresh () in
-  let pointee_name = fresh () in
-  ctype_aux pointee_name ct true >>= fun (bt,al,r,c) ->
+  ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
   let addr_argument = 
-    let al = {name = pointer_name; bound = A Loc} :: al in
+    let a = {name = pointer_name; bound = A Loc} in
+    let l = {name = pointee_name; bound = L (Base bt)} :: l in
     let r = {name = fresh (); bound = R (Points (S pointer_name, S pointee_name))} :: r in
-    al @ r @ c
+    a :: l @ r @ c
   in
-  let ret = 
-    let al = [{name = pointee_name; bound = A bt}] in
-    al @ r
-  in
+  let ret = {name = pointee_name; bound = A bt} :: r in
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
 
 let make_store_type ct : (FunctionTypes.t,'e) m = 
   let pointer_name = fresh () in
-  let val_name = fresh () in
-  ctype pointer_name (make_pointer_ctype ct) >>= fun addr_argument ->
+  ctype pointer_name (make_pointer_ctype ct) >>= fun address ->
   begin 
-    ctype_aux val_name ct false >>= fun (_,al,r,c) ->
-    let val_argument = al @ r @ c in
-    print_endline (sprintf "\n\n\n%s\n\n\n" (Types.pp val_argument));
+    ctype_aux (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+    let value = {name = value_name; bound = A bt} :: l @ r @ c in
     let ret = 
       {name = fresh (); bound = A Unit} ::
-      {name = fresh (); bound = R (Points (S pointer_name, S val_name))} :: 
-      r 
+      {name = fresh (); bound = R (Points (S pointer_name, S value_name))} :: r
     in
-    return (val_argument,ret)
-  end >>= fun (val_argument,ret) ->
-  let ftyp = FunctionTypes.F {arguments = addr_argument @ val_argument; return = ret} in
+    return (value,ret)
+  end >>= fun (value,ret) ->
+  let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
   return ftyp
 
 
@@ -2295,8 +2284,7 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
 
   let make_arg_t (msym,ct) = 
     let name = sym_or_fresh msym in
-    ctype name (make_pointer_ctype ct) >>= fun rt ->
-    return (rename name rt) 
+    ctype name (make_pointer_ctype ct)
   in
 
   if is_variadic 
