@@ -107,21 +107,26 @@ let cpp_str =
 
 
 
-let check filename =
+let check filename debug_level =
   match frontend (conf cpp_str) filename with
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)
   | Exception.Result core_file ->
-     Check.check_and_report core_file
+     Check.check_and_report core_file debug_level
 
 
 open Cmdliner
 
 let file =
-  let doc = "source C file" in
+  let doc = "Source C file" in
   Arg.(required & pos ~rev:true 0 (some string) None & info [] ~docv:"FILE" ~doc)
+
+let debug_level =
+  (* stolen from backend/driver *)
+  let doc = "Set the debug message level to $(docv) (should range over [0-3])." in
+  Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
 
 
 let () =
-  let check_t = Term.(pure check $ file) in
+  let check_t = Term.(pure check $ file $ debug_level) in
   Term.exit @@ Term.eval (check_t, Term.info "csrt")

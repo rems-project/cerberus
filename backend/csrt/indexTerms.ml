@@ -1,7 +1,6 @@
 open Utils
 open List
 open Printf
-open Sym
 open Sexplib
 open Except
 module Loc=Location
@@ -85,7 +84,7 @@ let rec pp = function
 
 
 
-let rec parse_sexp loc (names : namemap) sx = 
+let rec parse_sexp loc (names : NameMap.t) sx = 
   match sx with
 
   | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
@@ -171,7 +170,7 @@ let rec parse_sexp loc (names : namemap) sx =
      return (List (it, its))
 
   | Sexp.Atom str -> 
-     Sym.parse loc names str >>= fun sym ->
+     NameMap.sym_of loc str names >>= fun sym ->
      return (S sym)
 
   | t -> 
@@ -202,7 +201,7 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   | Not it -> Not (subst sym with_it it)
   | List (it, its) -> 
      List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
-  | S symbol -> S (sym_subst sym with_it symbol)
+  | S symbol -> S (Sym.sym_subst sym with_it symbol)
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
   match it, it' with

@@ -1,7 +1,6 @@
 open Utils
 open List
 open Printf
-open Sym
 open Sexplib
 open Except
 module Loc=Location
@@ -26,7 +25,7 @@ let rec pp = function
   | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (map pp bts))
   | Struct id -> sprintf "(struct %s)" (Sym.pp id)
 
-let rec parse_sexp loc (names : namemap) sx = 
+let rec parse_sexp loc (names : NameMap.t) sx = 
   match sx with
   | Sexp.Atom "unit" -> 
      return Unit
@@ -45,7 +44,7 @@ let rec parse_sexp loc (names : namemap) sx =
      mapM (parse_sexp loc names) bts >>= fun bts ->
      return (Tuple bts)
   | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
-     Sym.parse loc names id >>= fun sym ->
+     NameMap.sym_of loc id names >>= fun sym ->
      return (Struct sym)
   | a -> parse_error "base type" a loc
 

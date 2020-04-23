@@ -1,7 +1,6 @@
 open Utils
 open List
 open Printf
-open Sym
 open Sexplib
 open Except
 module Loc=Location
@@ -43,7 +42,7 @@ let pp = function
    *      (String.concat " " (map IndexTerms.pp its)) *)
 
 
-let parse_sexp loc (names : namemap) sx = 
+let parse_sexp loc (names : NameMap.t) sx = 
   match sx with 
   (* | Sexp.List [Sexp.Atom "block";it1;it2] -> 
    *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->

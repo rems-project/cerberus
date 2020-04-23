@@ -9,8 +9,6 @@ let flip f a b = f b a
 type num = Nat_big_num.num
 
 
-let sym_subst replace with_sym symbol = 
-  if symbol = replace then with_sym else symbol
 
 
 let parse_error (t : string) (sx : Sexp.t) (loc: Location.t) = 
