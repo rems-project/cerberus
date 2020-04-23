@@ -2,8 +2,6 @@ open Cerb_frontend
 open Colour
 open Printf
 
-let debug_level = 1
-
 let pps = Pp_utils.to_plain_pretty_string
 
 let nocolour f x = 
@@ -26,8 +24,6 @@ let item item content =
   sprintf "%s: %s" (ansi_format [Bold; Magenta] item) content
 
 
-let debug_print_line level s = 
-  if debug_level >= level then print_string (s ^ "\n") else ()
-
-let debug_print level s = 
-  if debug_level >= level then print_string (lines s ^ "\n") else ()
+let debug_print_for_level debug_level (list : (int * string) list) : unit = 
+  List.iter (fun (level, s) -> if debug_level >= level then print_endline s) list
+    

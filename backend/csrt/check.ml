@@ -1,16 +1,13 @@
 open List
 open Utils
 open Cerb_frontend
-open Core 
 open Mucore
+open Undefined
 open Except
-open Nat_big_num
-open Sexplib
 open Printf
 open Sym
 open Uni
 open Pp_tools
-module Loc = Location
 open LogicalConstraints
 open Resources
 open IndexTerms
@@ -18,11 +15,18 @@ open BaseTypes
 open VarTypes
 open TypeErrors
 
+module Loc = Location
+module LC = LogicalConstraints
+module RE = Resources
+module IT = IndexTerms
+module BT = BaseTypes
+module LS = LogicalSorts
+
 module SymSet = Set.Make(Sym)
 
 
-
-
+let _DEBUG = ref 0
+let debug_print pp = Pp_tools.debug_print_for_level !_DEBUG pp
 
 
 module Binders = struct
@@ -32,33 +36,35 @@ module Binders = struct
 
   let pp {name;bound} = 
     match bound with
-    | A t -> sprintf "(A %s : %s)" (Sym.pp name) (BaseTypes.pp t)
-    | L t -> sprintf "(L %s : %s)" (Sym.pp name) (LogicalSorts.pp t)
-    | R t -> sprintf "(R %s : %s)" (Sym.pp name) (Resources.pp t)
-    | C t -> sprintf "(C %s : %s)" (Sym.pp name) (LogicalConstraints.pp t)
+    | A t -> sprintf "(A %s : %s)" (Sym.pp name) (BT.pp t)
+    | L t -> sprintf "(L %s : %s)" (Sym.pp name) (LS.pp t)
+    | R t -> sprintf "(R %s : %s)" (Sym.pp name) (RE.pp t)
+    | C t -> sprintf "(C %s : %s)" (Sym.pp name) (LC.pp t)
 
 
-  let parse_sexp loc (names : namemap) s = 
+  let parse_sexp loc (names : NameMap.t) s = 
+    let open Sexplib in
+    let open Sexp in
     match s with
-    | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; t] ->
+    | List [Atom id; Atom ":"; t] ->
        let name = Sym.fresh_pretty id in
-       let names = StringMap.add id (name,loc) names in
-       BaseTypes.parse_sexp loc names t >>= fun t ->
+       let names = NameMap.record id name loc names in
+       BT.parse_sexp loc names t >>= fun t ->
        return ({name; bound = A t}, names)
-    | Sexp.List [Sexp.Atom "Logical"; Sexp.Atom id; Sexp.Atom ":"; ls] ->
+    | List [Atom "Logical"; Atom id; Atom ":"; ls] ->
        let name = Sym.fresh_pretty id in
-       let names = StringMap.add id (name,loc) names in
-       LogicalSorts.parse_sexp loc names ls >>= fun t ->
+       let names = NameMap.record id name loc names in
+       LS.parse_sexp loc names ls >>= fun t ->
        return ({name; bound = L t}, names)
-    | Sexp.List [Sexp.Atom "Resource"; Sexp.Atom id; Sexp.Atom ":"; re] ->
+    | List [Atom "Resource"; Atom id; Atom ":"; re] ->
        let name = Sym.fresh_pretty id in
-       let names = StringMap.add id (name,loc) names in
-       Resources.parse_sexp loc names re >>= fun t ->
+       let names = NameMap.record id name loc names in
+       RE.parse_sexp loc names re >>= fun t ->
        return ({name; bound = R t}, names)
-    | Sexp.List [Sexp.Atom "Constraint"; Sexp.Atom id; Sexp.Atom ":"; lc] ->
+    | List [Atom "Constraint"; Atom id; Atom ":"; lc] ->
        let name = Sym.fresh_pretty id in
-       let names = StringMap.add id (name,loc) names in
-       LogicalConstraints.parse_sexp loc names lc >>= fun t ->
+       let names = NameMap.record id name loc names in
+       LC.parse_sexp loc names lc >>= fun t ->
        return ({name; bound = C t}, names)
     | t -> 
        parse_error "binders" t loc
@@ -76,7 +82,6 @@ module Binders = struct
       let makeUL bt = makeL (fresh ()) bt
       let makeUR bt = makeR (fresh ()) bt
       let makeUC bt = makeC (fresh ()) bt
-        
 
 end
 
@@ -88,8 +93,9 @@ module Types = struct
   let pp ts = 
     String.concat " , " (map Binders.pp ts)
 
-  let parse_sexp loc (names : namemap) s = 
-    let rec aux (names : namemap) acc ts = 
+  let parse_sexp loc (names : NameMap.t) s = 
+    let open Sexplib in
+    let rec aux names acc ts = 
       match ts with
       | [] -> return (rev acc, names)
       | b :: bs ->
@@ -127,7 +133,6 @@ module FunctionTypes = struct
 end
 
 open FunctionTypes
-open VarTypes
 open Binders
 open Types
       
@@ -135,7 +140,7 @@ open Types
 module UU = struct
 
   type u = 
-    | Undefined of Loc.t * Undefined.undefined_behaviour
+    | Undefined of Loc.t * undefined_behaviour
     | Unspecified of Loc.t (* * Ctype.ctype *)
 
   type 'a or_u = 
@@ -165,7 +170,7 @@ module GEnv = struct
   type t = 
     { struct_decls : Types.t SymMap.t ; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
-      names : namemap
+      names : NameMap.t
     } 
   type genv = t
 
@@ -173,7 +178,7 @@ module GEnv = struct
   let empty = 
     { struct_decls = SymMap.empty; 
       fun_decls = SymMap.empty;
-      names = StringMap.empty }
+      names = NameMap.empty }
 
   let pp_struct_decls decls = 
     let pp_entry (sym, bs) = sprintf "%s: %s" (Sym.pp sym) (Types.pp bs) in
@@ -184,21 +189,18 @@ module GEnv = struct
     pp_list pp_entry "\n" (SymMap.bindings decls)
 
   let pp_name_map m = 
-    let pp_entry (name,(sym,_)) = sprintf "%s: %s" name (Sym.pp sym) in
-    pp_list pp_entry "\n" (StringMap.bindings m)
+    let pp_entry (name,sym) = sprintf "%s: %s" name (Sym.pp sym) in
+    pp_list pp_entry "\n" (NameMap.all_names m)
 
-  let pp genv = 
-    lines 
-      [ h2 "Structs"
-      ; pp_struct_decls genv.struct_decls
-      ; ""
-      ; h2 "Functions"
-      ; pp_fun_decls genv.fun_decls
-      ; ""
-      ; h2 "Names"
-      ; pp_name_map genv.names
-      ; ""
-      ]
+  let pp_items genv = 
+    [ (1, h2 "Structs")
+    ; (1, pp_struct_decls genv.struct_decls)
+    ; (1, h2 "Functions")
+    ; (1, pp_fun_decls genv.fun_decls)
+    ; (1, h2 "Names")
+    ; (1, pp_name_map genv.names)
+    ]
+  let pp genv = lines (map snd (pp_items genv))
 
 end
 
@@ -266,17 +268,17 @@ module Env = struct
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
     lookup loc env.local.vars name >>= function
-    | VarTypes.A t -> return (`A t)
-    | VarTypes.L t -> return (`L t)
-    | VarTypes.R t -> return (`R (t, remove_var env name))
-    | VarTypes.C t -> return (`C t)
+    | A t -> return (`A t)
+    | L t -> return (`L t)
+    | R t -> return (`R (t, remove_var env name))
+    | C t -> return (`C t)
 
 
   let kind = function
-    | `A _ -> VarTypes.Argument
-    | `L _ -> VarTypes.Logical
-    | `R _ -> VarTypes.Resource
-    | `C _ -> VarTypes.Constraint
+    | `A _ -> Argument
+    | `L _ -> Logical
+    | `R _ -> Resource
+    | `C _ -> Constraint
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
     get_var loc env sym >>= function
@@ -302,7 +304,7 @@ module Env = struct
     let relevant = 
       SymMap.fold (fun name b acc ->
           match b with
-          | (R t) -> if Resources.owner t = owner_sym then (name,t) :: acc else acc
+          | (R t) -> if RE.owner t = owner_sym then (name,t) :: acc else acc
           | _ -> acc
         ) env.local.vars []
     in
@@ -320,7 +322,7 @@ open Env
 let rec recursively_owned_resources loc env owner_sym = 
   get_owned_resource loc env owner_sym >>= function
   | Some (res,t) -> 
-     let owned = Resources.owned t in
+     let owned = RE.owned t in
      mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
      return (res :: concat owneds)
   | None -> 
@@ -331,8 +333,8 @@ let rec recursively_owned_resources loc env owner_sym =
 
 let rec infer_it loc env it = 
   match it with
-  | Num _ -> return BaseTypes.Int
-  | Bool _ -> return BaseTypes.Bool
+  | Num _ -> return BT.Int
+  | Bool _ -> return BT.Bool
 
   | Add (it,it')
   | Sub (it,it')
@@ -342,9 +344,9 @@ let rec infer_it loc env it =
   | App (it,it')
   | Rem_t (it,it')
   | Rem_f (it,it') ->
-     check_it loc env it BaseTypes.Int >>
-     check_it loc env it' BaseTypes.Int >>
-     return BaseTypes.Int
+     check_it loc env it BT.Int >>
+     check_it loc env it' BT.Int >>
+     return BT.Int
 
   | EQ (it,it')
   | NE (it,it')
@@ -352,23 +354,23 @@ let rec infer_it loc env it =
   | GT (it,it')
   | LE (it,it')
   | GE (it,it') ->
-     check_it loc env it BaseTypes.Int >>
-     check_it loc env it' BaseTypes.Int >>
-     return BaseTypes.Bool
+     check_it loc env it BT.Int >>
+     check_it loc env it' BT.Int >>
+     return BT.Bool
 
   | Null it ->
-     check_it loc env it BaseTypes.Loc >>
-     return BaseTypes.Bool
+     check_it loc env it BT.Loc >>
+     return BT.Bool
 
   | And (it,it')
   | Or (it,it') ->
-     check_it loc env it BaseTypes.Int >>
-     check_it loc env it' BaseTypes.Int >>
-     return BaseTypes.Bool
+     check_it loc env it BT.Int >>
+     check_it loc env it' BT.Int >>
+     return BT.Bool
 
   | Not it ->
-     check_it loc env it BaseTypes.Bool >>
-     return BaseTypes.Bool
+     check_it loc env it BT.Bool >>
+     return BT.Bool
 
   | List (it, its) ->
      infer_it loc env it >>= fun bt ->
@@ -378,7 +380,7 @@ let rec infer_it loc env it =
   | S sym ->
      get_var loc env sym >>= function
      | `A t -> return t
-     | `L (LogicalSorts.Base t) -> return t
+     | `L (LS.Base t) -> return t
      | `R _ -> fail (Illtyped_it {loc; it})
      | `C _ -> fail (Illtyped_it {loc; it})
 
@@ -444,14 +446,14 @@ let subtype loc env rt1 rt2 =
        else fail (Return_error (loc, Unsat_constraint (n2, c2)))
     | (r1 :: rt1), (r2 :: rt2) ->
        match r1, r2 with
-       | ({name = n1; bound = A t1} as b), {name = n2; bound = VarTypes.A t2} 
-            when BaseTypes.type_equal t1 t2 ->
+       | ({name = n1; bound = A t1} as b), {name = n2; bound = A t2} 
+            when BT.type_equal t1 t2 ->
           check (add_var env b) rt1 (Types.subst n2 n1 rt2)
        | ({name = n1; bound = L t1} as b), {name = n2; bound = L t2} 
-            when LogicalSorts.type_equal t1 t2 ->
+            when LS.type_equal t1 t2 ->
           check (add_var env b) rt1 (Types.subst n2 n1 rt2)
        | {name = n1; bound = R t1}, {name = n2; bound = R t2} 
-            when Resources.type_equal env t1 t2 ->
+            when RE.type_equal env t1 t2 ->
           check env rt1 rt2
        | _, _ ->
           let msm = Mismatch {mname = Some r1.name; 
@@ -467,15 +469,17 @@ let subtype loc env rt1 rt2 =
 
 
 
-let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m = 
+let rec bt_of_core_base_type loc cbt : (BT.t, type_error) m = 
+
+  let open Core in
 
   let bt_of_core_object_type loc = function
     | OTy_integer -> 
-       return BaseTypes.Int
+       return BT.Int
     | OTy_pointer -> 
-       return BaseTypes.Loc
+       return BT.Loc
     | OTy_array cbt -> 
-       return BaseTypes.Array
+       return BT.Array
     | OTy_struct sym -> 
        return (Struct sym)
     | OTy_union _sym -> 
@@ -486,24 +490,24 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
   in
 
   match cbt with
-  | Core.BTy_unit -> 
-     return BaseTypes.Unit
-  | Core.BTy_boolean -> 
-     return BaseTypes.Bool
-  | Core.BTy_list bt -> 
+  | BTy_unit -> 
+     return BT.Unit
+  | BTy_boolean -> 
+     return BT.Bool
+  | BTy_list bt -> 
      bt_of_core_base_type loc bt >>= fun bt ->
-     return (BaseTypes.List bt)
-  | Core.BTy_tuple bts -> 
+     return (BT.List bt)
+  | BTy_tuple bts -> 
      mapM (bt_of_core_base_type loc) bts >>= fun bts ->
-     return (BaseTypes.Tuple bts)
-  | Core.BTy_object ot -> 
+     return (BT.Tuple bts)
+  | BTy_object ot -> 
      bt_of_core_object_type loc ot
-  | Core.BTy_loaded ot -> 
+  | BTy_loaded ot -> 
      bt_of_core_object_type loc ot
 
-  | Core.BTy_storable -> 
+  | BTy_storable -> 
      fail (Unsupported {loc; unsupported = "BTy_storable"})
-  | Core.BTy_ctype -> 
+  | BTy_ctype -> 
      fail (Unsupported {loc; unsupported = "ctype"})
 
 
@@ -514,74 +518,78 @@ let rec bt_of_core_base_type loc cbt : (BaseTypes.t, type_error) m =
 (* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
 let integerBaseType name signed ibt =
 
+  let open Ctype in
+
   let make f t = 
-    let c = makeUC ((S name %>= Num (of_string f)) %& 
-                   (S name %<= Num (of_string t))) in
+    let c = makeUC ((S name %>= Num (Nat_big_num.of_string f)) %& 
+                   (S name %<= Num (Nat_big_num.of_string t))) in
     ((name,Int), [], [], [c])
   in
 
   match signed, ibt with
-  | true,  Ctype.Ichar     -> make "-127" "127"
-  | true,  Ctype.IntN_t 8  -> make "-127" "127"
-  | true,  Ctype.Short     -> make "-32767" "32767"
-  | true,  Ctype.Int_      -> make "-32767" "32767"
-  | true,  Ctype.IntN_t 16 -> make "-32768" "32767"
-  | true,  Ctype.Long      -> make "-2147483647" "2147483647"
-  | true,  Ctype.LongLong  -> make "-9223372036854775807" "9223372036854775807"
-  | true,  Ctype.IntN_t 32 -> make "-2147483648" "2147483647"
-  | true,  Ctype.IntN_t 64 -> make "-9223372036854775808" "9223372036854775807"
-  | false, Ctype.Ichar     -> make "0" "255"
-  | false, Ctype.Short     -> make "0" "65535"
-  | false, Ctype.Int_      -> make "0" "65535"
-  | false, Ctype.Long      -> make "0" "4294967295"
-  | false, Ctype.LongLong  -> make "0" "18446744073709551615"
-  | false, Ctype.IntN_t 8  -> make "0" "255"
-  | false, Ctype.IntN_t 16 -> make "0" "65535"
-  | false, Ctype.IntN_t 32 -> make "0" "4294967295"
-  | false, Ctype.IntN_t 64 -> make "0" "18446744073709551615"
+  | true,  Ichar     -> make "-127" "127"
+  | true,  IntN_t 8  -> make "-127" "127"
+  | true,  Short     -> make "-32767" "32767"
+  | true,  Int_      -> make "-32767" "32767"
+  | true,  IntN_t 16 -> make "-32768" "32767"
+  | true,  Long      -> make "-2147483647" "2147483647"
+  | true,  LongLong  -> make "-9223372036854775807" "9223372036854775807"
+  | true,  IntN_t 32 -> make "-2147483648" "2147483647"
+  | true,  IntN_t 64 -> make "-9223372036854775808" "9223372036854775807"
+  | false, Ichar     -> make "0" "255"
+  | false, Short     -> make "0" "65535"
+  | false, Int_      -> make "0" "65535"
+  | false, Long      -> make "0" "4294967295"
+  | false, LongLong  -> make "0" "18446744073709551615"
+  | false, IntN_t 8  -> make "0" "255"
+  | false, IntN_t 16 -> make "0" "65535"
+  | false, IntN_t 32 -> make "0" "4294967295"
+  | false, IntN_t 64 -> make "0" "18446744073709551615"
 
-  | _, Ctype.IntN_t n       -> failwith (sprintf "UIntN_t %d" n)
-  | _, Ctype.Int_leastN_t n -> failwith "todo standard library types"
-  | _, Ctype.Int_fastN_t n  -> failwith "todo standard library types"
-  | _, Ctype.Intmax_t       -> failwith "todo standard library types"
-  | _, Ctype.Intptr_t       -> failwith "todo standard library types"
+  | _, IntN_t n       -> failwith (sprintf "UIntN_t %d" n)
+  | _, Int_leastN_t n -> failwith "todo standard library types"
+  | _, Int_fastN_t n  -> failwith "todo standard library types"
+  | _, Intmax_t       -> failwith "todo standard library types"
+  | _, Intptr_t       -> failwith "todo standard library types"
 
 
 let integerType name it =
+  let open Ctype in
   match it with
-  | Ctype.Bool -> ((name, Bool), [], [], [])
-  | Ctype.Signed ibt -> integerBaseType name true ibt
-  | Ctype.Unsigned ibt -> integerBaseType name false ibt
-  | Ctype.Char -> failwith "todo char"
-  | Ctype.Enum _sym -> failwith "todo enum"
-  | Ctype.Wchar_t -> failwith "todo wchar_t"
-  | Ctype.Wint_t ->failwith "todo wint_t"
-  | Ctype.Size_t -> failwith "todo size_t"
-  | Ctype.Ptrdiff_t -> failwith "todo standard library types"
+  | Bool -> ((name, BT.Bool), [], [], [])
+  | Signed ibt -> integerBaseType name true ibt
+  | Unsigned ibt -> integerBaseType name false ibt
+  | Char -> failwith "todo char"
+  | Enum _sym -> failwith "todo enum"
+  | Wchar_t -> failwith "todo wchar_t"
+  | Wint_t ->failwith "todo wint_t"
+  | Size_t -> failwith "todo size_t"
+  | Ptrdiff_t -> failwith "todo standard library types"
 
 
 let rec ctype_aux name (Ctype.Ctype (annots, ct)) =
+  let open Ctype in
   match ct with
-  | Ctype.Void -> (* check *)
+  | Void -> (* check *)
      return ((name,Unit), [], [], [])
-  | Ctype.Basic (Integer it) -> 
+  | Basic (Integer it) -> 
      return (integerType name it)
-  | Ctype.Array (ct, _maybe_integer) -> 
-     return ((name,Array),[],[],[])
-  | Ctype.Pointer (_qualifiers, ct) ->
+  | Array (ct, _maybe_integer) -> 
+     return ((name,BT.Array),[],[],[])
+  | Pointer (_qualifiers, ct) ->
      ctype_aux (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
      let r = makeUR (Points (S name, S pointee_name)) :: r in
      let l = makeL pointee_name bt :: l in
      return ((name,Loc),l,r,c)
-  | Ctype.Atomic ct ->              (* check *)
+  | Atomic ct ->              (* check *)
      ctype_aux name ct
-  | Ctype.Struct sym -> 
-     return ((name, Struct sym),[],[],[])
-  | Ctype.Union sym ->
+  | Struct sym -> 
+     return ((name, BT.Struct sym),[],[],[])
+  | Union sym ->
      failwith "todo: union types"
-  | Ctype.Basic (Floating _) -> 
+  | Basic (Floating _) -> 
      fail (Unsupported {loc = Annot.get_loc_ annots; unsupported = "floats"} )
-  | Ctype.Function _ -> 
+  | Function _ -> 
      fail (Unsupported {loc = Annot.get_loc_ annots; unsupported = "function pointers"}) 
 
 
@@ -590,9 +598,10 @@ let ctype (name : Sym.t) (ct : Ctype.ctype) =
   return (makeA name bt :: l @ r @ c)
 
 let make_pointer_ctype ct = 
+  let open Ctype in
   (* fix *)
-  let q = {Ctype.const = false; Ctype.restrict = false; Ctype.volatile = false} in
-  Ctype.Ctype ([], Ctype.Pointer (q, ct))
+  let q = {const = false; restrict = false; volatile = false} in
+  Ctype ([], Pointer (q, ct))
 
 
 
@@ -645,12 +654,12 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 
 
 let ensure_type loc mname has expected : (unit, type_error) m = 
-  if BaseTypes.type_equal has expected 
+  if BT.type_equal has expected 
   then return ()
   else fail (Call_error (loc, Mismatch {mname; has; expected}))
 
 
-let args_same_typ (mtyp : BaseTypes.t option) (args_bts : (BaseTypes.t * Loc.t) list) =
+let args_same_typ (mtyp : BT.t option) (args_bts : (BT.t * Loc.t) list) =
   fold_leftM (fun mt (bt,loc) ->
       match mt with
       | None -> return (Some bt)
@@ -746,9 +755,9 @@ let pp_unis unis =
     match resolved with
     | Some res -> 
        sprintf "%s : %s resolved as %s" 
-         (Sym.pp sym) (LogicalSorts.pp spec) (Sym.pp res)
+         (Sym.pp sym) (LS.pp spec) (Sym.pp res)
     | None -> sprintf "%s : %s unresolved"
-         (Sym.pp sym) (LogicalSorts.pp spec) 
+         (Sym.pp sym) (LS.pp spec) 
   in
   pp_list pp_entry ", " (SymMap.bindings unis)
 
@@ -763,7 +772,7 @@ let call_typ loc_call env decl_typ args =
         | None ->
            return (SymMap.add usym uni unresolved, substs)
         | Some sym -> 
-           let (LogicalSorts.Base bt) = spec in
+           let (LS.Base bt) = spec in
            check_it loc_call env (S sym) bt >>
            return (unresolved, (usym, sym) :: substs)
       ) unis (SymMap.empty, [])
@@ -771,12 +780,12 @@ let call_typ loc_call env decl_typ args =
 
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
-    debug_print 2 
-      [ h2 "check_and_refine"
-      ; item "lenv" (LEnv.pp env.local)
-      ; item "ftyp" (FunctionTypes.pp (F ftyp))
-      ; item "args" (pp_list (fun (a,_) -> Sym.pp a) ", " args)
-      ; item "unis" (pp_unis unis)
+    debug_print
+      [ (2, h2 "check_and_refine")
+      ; (2, item "lenv" (LEnv.pp env.local))
+      ; (2, item "ftyp" (FunctionTypes.pp (F ftyp)))
+      ; (2, item "args" (pp_list (fun (a,_) -> Sym.pp a) ", " args))
+      ; (2, item "unis" (pp_unis unis))
       ];
 
 
@@ -796,7 +805,7 @@ let call_typ loc_call env decl_typ args =
             in
             let constrs = 
               fold_left (fun constrs (s, subst) -> 
-                  map (fun (n,lc) -> (n, LogicalConstraints.subst s subst lc)) constrs)
+                  map (fun (n,lc) -> (n, LC.subst s subst lc)) constrs)
                  constrs substs
             in
             constraints_hold loc_call env constrs >>
@@ -811,7 +820,7 @@ let call_typ loc_call env decl_typ args =
        begin match args with
        | (sym,loc) :: args ->
           get_Avar loc env sym >>= fun t' ->
-          if BaseTypes.type_equal t' t then 
+          if BT.type_equal t' t then 
             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
             check_and_refine env args ftyp unis constrs
           else 
@@ -822,12 +831,12 @@ let call_typ loc_call env decl_typ args =
        end
 
     | {name = n; bound = R t} :: decl_args -> 
-       let owner = Resources.owner t in
+       let owner = RE.owner t in
        get_owned_resource loc_call env owner >>= begin function
        | None -> fail (Call_error (loc_call, (Missing_R (n, t))))
        | Some (sym, _) -> 
           get_Rvar loc_call env sym >>= fun (t',env) ->
-          tryM (Resources.unify t t' unis)
+          tryM (RE.unify t t' unis)
             (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
              fail (Call_error (loc_call, err))) >>= fun unis ->
           let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
@@ -862,7 +871,9 @@ let call_typ_fn loc_call fname env args =
      call_typ loc_call env decl_typ args
 
 
-let good_ctor loc = function
+let good_ctor loc ctor = 
+  let open Core in 
+  match ctor with
   | Cnil cbt -> Normal (`Cnil cbt)
   | Ccons -> Normal (`Ccons)
   | Ctuple -> Normal (`Ctuple)
@@ -882,7 +893,7 @@ let good_ctor loc = function
 
 
 
-let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) = 
+let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) = 
   match ctor with
   | `Cnil cbt ->
      bt_of_core_base_type loc cbt >>= fun bt ->
@@ -907,11 +918,11 @@ let ctor_typ loc ctor (args_bts : ((BaseTypes.t * Loc.t) list)) =
         fail (Generic_error (loc, err))
      end
   | `Ctuple ->
-     let t = BaseTypes.Tuple (List.map fst args_bts) in
+     let t = BT.Tuple (List.map fst args_bts) in
      return t
   | `Carray -> 
      args_same_typ None args_bts >>
-     return BaseTypes.Array
+     return BT.Array
   | `Civmax
   | `Civmin
   | `Civsizeof
@@ -946,7 +957,7 @@ let check_name_disjointness names_and_locations =
     ) SymSet.empty names_and_locations
 
 
-let rec collect_pattern_names (Pattern (annots, pat)) = 
+let rec collect_pattern_names (Core.Pattern (annots, pat)) = 
   match pat with
   | CaseBase (None, _) -> []
   | CaseBase (Some sym, _) -> [(sym,Annot.get_loc_ annots)]
@@ -991,7 +1002,8 @@ let infer_pat pat =
 
 let infer_binop env loc op sym1 sym2 = 
 
-  let make_binop_constr (v1 : IndexTerms.t) (v2 : IndexTerms.t) =
+  let make_binop_constr (v1 : IT.t) (v2 : IT.t) =
+    let open Core in
     match op with
     | OpAdd -> Add (v1, v2)
     | OpSub -> Sub (v1, v2)
@@ -1009,22 +1021,22 @@ let infer_binop env loc op sym1 sym2 =
     | OpOr -> Or (v1, v2)
   in
 
-  let bt_of_binop : ((BaseTypes.t * BaseTypes.t) * BaseTypes.t) = 
+  let bt_of_binop : ((BT.t * BT.t) * BT.t) = 
     match op with
-    | OpAdd -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpSub -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpMul -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpDiv -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpRem_t -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpRem_f -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpExp -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Int)
-    | OpEq -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Bool)
-    | OpGt -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Bool)
-    | OpLt -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Bool)
-    | OpGe -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Bool)
-    | OpLe -> ((BaseTypes.Int, BaseTypes.Int), BaseTypes.Bool)
-    | OpAnd -> ((BaseTypes.Bool, BaseTypes.Bool), BaseTypes.Bool)
-    | OpOr -> ((BaseTypes.Bool, BaseTypes.Bool), BaseTypes.Bool)
+    | OpAdd -> ((Int, Int), Int)
+    | OpSub -> ((Int, Int), Int)
+    | OpMul -> ((Int, Int), Int)
+    | OpDiv -> ((Int, Int), Int)
+    | OpRem_t -> ((Int, Int), Int)
+    | OpRem_f -> ((Int, Int), Int)
+    | OpExp -> ((Int, Int), Int)
+    | OpEq -> ((Int, Int), Bool)
+    | OpGt -> ((Int, Int), Bool)
+    | OpLt -> ((Int, Int), Bool)
+    | OpGe -> ((Int, Int), Bool)
+    | OpLe -> ((Int, Int), Bool)
+    | OpAnd -> ((Bool, Bool), Bool)
+    | OpOr -> ((Bool, Bool), Bool)
   in
 
   let (sym1, loc1) = lof_a sym1 in
@@ -1052,11 +1064,11 @@ let ensure_bad_unreachable loc env bad =
 
 let infer_pexpr env (pe : 'bty mu_pexpr) = 
 
-  debug_print 1
-    [ h2 "infer_pexpr"
-    ; item "env" (LEnv.pp env.local)
-    ; item "e" ""
-    ; pp_pexpr pe
+  debug_print
+    [ (1, h2 "infer_pexpr")
+    ; (1, item "env" (LEnv.pp env.local))
+    ; (1, item "e" "")
+    ; (2, pp_pexpr pe)
     ];
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
@@ -1093,7 +1105,7 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
   | M_PEnot sym ->
      let (sym,a_loc) = lof_a sym in
      get_Avar loc env sym >>= fun t ->
-     ensure_type a_loc (Some sym) (A t) (A BaseTypes.Bool) >>
+     ensure_type a_loc (Some sym) (A t) (A BT.Bool) >>
      let name = fresh () in
      let rt = [makeA name t; makeUC ((S name) %= Not (S sym))] in
      return (Normal rt, env)
@@ -1119,12 +1131,12 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
 
 let rec check_pexpr env (e : 'bty mu_pexpr) ret = 
 
-  debug_print 1
-    [ h2 "check_pexpr"
-    ; item "env" (LEnv.pp env.local)
-    ; item "ret" (Types.pp ret)
-    ; item "e" ""
-    ; pp_pexpr e
+  debug_print
+    [ (1, h2 "check_pexpr")
+    ; (1, item "env" (LEnv.pp env.local))
+    ; (1, item "ret" (Types.pp ret))
+    ; (1, item "e" "")
+    ; (1, pp_pexpr e)
     ];
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -1181,11 +1193,11 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
 
 let rec infer_expr env (e : ('a,'bty) mu_expr) = 
 
-  debug_print 1
-    [ h2 "infer_expr"
-    ; item "env" (LEnv.pp env.local)
-    ; item "e" ""
-    ; pp_expr e
+  debug_print
+    [ (1, h2 "infer_expr")
+    ; (1, item "env" (LEnv.pp env.local))
+    ; (1, item "e" "")
+    ; (1, pp_expr e)
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -1266,12 +1278,12 @@ failwith "LinuxRMW"
 
 let rec check_expr env (e : ('a,'bty) mu_expr) ret = 
 
-  debug_print 1
-    [ h2 "check_expr"
-    ; item "env" (LEnv.pp env.local)
-    ; item "ret" (Types.pp ret)
-    ; item "e" ""
-    ; pp_expr e
+  debug_print
+    [ (1, h2 "check_expr")
+    ; (1, item "env" (LEnv.pp env.local))
+    ; (1, item "ret" (Types.pp ret))
+    ; (2, item "e" "")
+    ; (2, pp_expr e)
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -1353,7 +1365,10 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
 
 
 
-let check_function_body (type a bty) genv name (body : (a,bty) mu_expr) (F decl_typ) = 
+let check_function_body fsym genv body (F decl_typ) = 
+
+  debug_print [(1, h1 (sprintf "Checking function %s" (Sym.pp fsym)))];
+
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr (* name *) env body decl_typ.return >>= fun _env ->
@@ -1367,7 +1382,7 @@ let embed_fun_proc body =
 
 
 
-let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) = 
+let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
 
   let forget = 
     filter_map (function {name; bound = A t} -> Some (name,t) | _ -> None) in
@@ -1383,8 +1398,8 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
     binding_of_core_base_type loc ret >>= fun ret ->
     let (F decl_typ) = decl in
     let _ = forget args in
-    if BaseTypes.types_equal (forget decl_typ.arguments) (forget args) &&
-         BaseTypes.types_equal (forget decl_typ.return) (forget [ret])
+    if BT.types_equal (forget decl_typ.arguments) (forget args) &&
+         BT.types_equal (forget decl_typ.return) (forget [ret])
     then return ()
     else 
       let defn = F {arguments = args; return = [ret]} in
@@ -1403,12 +1418,12 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
      lookup ~is_function:true loc genv.GEnv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body genv fsym (embed_fun_proc body) decl_typ
+     check_function_body fsym genv (embed_fun_proc body) decl_typ
   | M_Proc (loc, ret, args, body) ->
      lookup ~is_function:true loc genv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body genv fsym body decl_typ
+     check_function_body fsym genv body decl_typ
   | M_ProcDecl _
   | M_BuiltinDecl _ -> 
      return ()
@@ -1464,7 +1479,8 @@ let record_tagDef sym def genv =
      ) ([],[]) fields >>= fun (names,fields) ->
 
      let struct_decls = SymMap.add sym fields genv.GEnv.struct_decls in
-     let names = fold_left (fun m (k,v) -> StringMap.add k v m) genv.names names in
+     let names = fold_left (fun m (id,(sym,loc)) -> 
+                     NameMap.record id sym loc m) genv.names names in
      return { genv with names = names; struct_decls = struct_decls }
 
 let record_tagDefs genv tagDefs = 
@@ -1481,17 +1497,20 @@ let pp_fun_map_decl funinfo =
   print_string (Pp_utils.to_plain_string pp)
 
 
+let print_initial_environment genv = 
+  debug_print ((1, h1 "initial environment") :: (GEnv.pp_items genv))
 
 
-let check mu_file =
-  let env = GEnv.empty in
-  record_tagDefs env mu_file.mu_tagDefs >>= fun env ->
-  record_funinfo env mu_file.mu_funinfo >>= fun env ->
-  let () = print_endline (GEnv.pp env) in
-  check_functions env mu_file.mu_funs
+let check mu_file debug_level =
+  _DEBUG := debug_level;
+  let genv = GEnv.empty in
+  record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
+  record_funinfo genv mu_file.mu_funinfo >>= fun genv ->
+  print_initial_environment genv;
+  check_functions genv mu_file.mu_funs
 
-let check_and_report core_file = 
-  match check core_file with
+let check_and_report core_file debug_level = 
+  match check core_file debug_level with
   | Result () -> ()
   | Exception err -> 
      print_endline ("\n" ^ underline '=' "Error!" ^ "\n" ^ TypeErrors.pp err)

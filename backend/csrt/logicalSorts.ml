@@ -1,5 +1,4 @@
 open List
-open Sym
 open Except
 module Loc=Location
 
@@ -9,7 +8,7 @@ type t =
 let pp = function
   | Base bt -> BaseTypes.pp bt
 
-let parse_sexp loc (names : namemap) sx =
+let parse_sexp loc (names : NameMap.t) sx =
   match sx with
   | sx ->
      BaseTypes.parse_sexp loc names sx >>= fun bt ->
