@@ -23,6 +23,7 @@ type expr 'a 'bty = generic_expr 'a 'bty Symbol.sym
 type pattern = mu_pattern
 type annot = Annot.annot
 type annots = list annot
+type outer_annots = annots
 type action 'a 'bty = generic_action 'a 'bty Symbol.sym
 type paction 'a 'bty = generic_paction 'a 'bty Symbol.sym
 
@@ -132,18 +133,19 @@ let letbinder_pexpr_in_expr annots pat pexpr body : mu_expr 'a =
 
 val letbind_pexpr :
   forall 'a.
+  outer_annots ->
   letbinder mu_pexpr 'a -> 
   mu_pexpr -> 
   (asym -> 'a) -> 
   'a
 
-let letbind_pexpr letbinder pexpr ctxt  = 
+let letbind_pexpr outer_annots letbinder pexpr ctxt  = 
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
   let asym = Annotated annots bty sym in
   let pat = M_symbol asym in
   let body = ctxt asym in
-  letbinder annots pat pexpr body
+  letbinder outer_annots pat pexpr body
 
 val n_val : 
   forall 'a.
@@ -174,13 +176,13 @@ val n_val_names :
 
 
 val n_pexpr : pexpr unit -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
-val n_pexpr_name : forall 'bty. pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
-val n_pexpr_names : forall 'bty. pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : outer_annots -> pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : outer_annots -> pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
 val normalise_pexpr : forall 'bty. pexpr unit -> mu_pexpr
 
 val n_pexpr_in_expr : forall 'a. pexpr unit -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_name_in_expr : forall 'a. pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_names_in_expr : forall 'a. pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. outer_annots -> pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. outer_annots -> pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
 
 
 (* let typeof_value v = 
@@ -232,7 +234,7 @@ and n_val_name lb annots v k =
   let bty = () in (* typeof_value v in *)
   n_val lb annots v (fun v -> 
   let pe = M_Pexpr annots bty (M_PEval v) in
-  letbind_pexpr lb pe (fun sym -> 
+  letbind_pexpr annots lb pe (fun sym -> 
   k sym))
 
 and n_val_names lb annots vs k = 
@@ -257,30 +259,30 @@ and n_val_names lb annots vs k =
 
 (* 1 begin *)
 
-let rec n_pexpr_name (e : pexpr unit) (k : asym -> mu_pexpr) : mu_pexpr = 
+let rec n_pexpr_name outer_annots e k : mu_pexpr = 
   n_pexpr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
-  | Nothing -> letbind_pexpr letbinder_pexpr_in_pexpr e k
+  | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_pexpr e k
   end)
 
-and n_pexpr_name_2 (e,e') k = 
-  n_pexpr_name e (fun e -> 
-  n_pexpr_name e' (fun e' ->
+and n_pexpr_name_2 outer_annots (e,e') k = 
+  n_pexpr_name outer_annots e (fun e -> 
+  n_pexpr_name outer_annots e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_name_3 (e,e',e'') k = 
-  n_pexpr_name e (fun e -> 
-  n_pexpr_name e' (fun e' ->
-  n_pexpr_name e'' (fun e'' ->
+and n_pexpr_name_3 outer_annots (e,e',e'') k = 
+  n_pexpr_name outer_annots e (fun e -> 
+  n_pexpr_name outer_annots e' (fun e' ->
+  n_pexpr_name outer_annots e'' (fun e'' ->
   k (e,e',e''))))
 
-and n_pexpr_names (es : list (pexpr unit)) k =
-  match es with
+and n_pexpr_names outer_annots (es : list (pexpr unit)) k =
+  match es with 
   | [] -> k []
   | e :: es -> 
-     n_pexpr_name e (fun e -> 
-     n_pexpr_names es (fun es ->
+     n_pexpr_name outer_annots e (fun e -> 
+     n_pexpr_names outer_annots es (fun es ->
      k (e :: es)))
   end
 
@@ -288,6 +290,10 @@ and n_pexpr (e : pexpr unit) k =
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
+
+  let n_pexpr_names = n_pexpr_names annots in
+  let n_pexpr_name = n_pexpr_name annots in
+  let n_pexpr_name_2 = n_pexpr_name_2 annots in
 
   match pe with
   | PEsym sym -> 
@@ -392,30 +398,30 @@ and n_pexpr (e : pexpr unit) k =
 
 (* 2 begin *)
 
-let rec n_pexpr_in_expr_name (e : pexpr unit) (k : asym -> mu_expr 'a) : mu_expr 'a = 
+let rec n_pexpr_in_expr_name outer_annots e k : mu_expr 'a = 
   n_pexpr_in_expr e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
-  | Nothing -> letbind_pexpr letbinder_pexpr_in_expr e k
+  | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_expr e k
   end)
 
-and n_pexpr_in_expr_name_2 (e,e') k : mu_expr 'a = 
-  n_pexpr_in_expr_name e (fun e -> 
-  n_pexpr_in_expr_name e' (fun e' ->
+and n_pexpr_in_expr_name_2 outer_annots (e,e') k : mu_expr 'a = 
+  n_pexpr_in_expr_name outer_annots e (fun e -> 
+  n_pexpr_in_expr_name outer_annots e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_in_expr_name_3 (e,e',e'') k = 
-  n_pexpr_in_expr_name e (fun e -> 
-  n_pexpr_in_expr_name e' (fun e' ->
-  n_pexpr_in_expr_name e'' (fun e'' ->
+and n_pexpr_in_expr_name_3 outer_annots (e,e',e'') k = 
+  n_pexpr_in_expr_name outer_annots e  (fun e -> 
+  n_pexpr_in_expr_name outer_annots e' (fun e' ->
+  n_pexpr_in_expr_name outer_annots e'' (fun e'' ->
   k (e,e',e''))))
 
-and n_pexpr_in_expr_names (es : list (pexpr unit)) k : mu_expr 'a =
+and n_pexpr_in_expr_names outer_annots (es : list (pexpr unit)) k : mu_expr 'a =
   match es with
   | [] -> k []
   | e :: es -> 
-     n_pexpr_in_expr_name e (fun e -> 
-     n_pexpr_in_expr_names es (fun es ->
+     n_pexpr_in_expr_name outer_annots e (fun e -> 
+     n_pexpr_in_expr_names outer_annots es (fun es ->
      k (e :: es)))
   end
 
@@ -423,6 +429,10 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
+
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names annots in
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 annots in
 
   match pe with
   | PEsym sym -> 
@@ -541,8 +551,9 @@ let normalise_pexpr (e : pexpr unit) =
  * val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
 
-let n_action (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
+let n_action annots (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
   let (Action t an a) = action in
+  let n_pexpr_in_expr_name =  n_pexpr_in_expr_name annots in
   let wrap a = M_Action t an a in
   match a with
   | Create e1 e2 sym ->
@@ -609,10 +620,10 @@ let n_action (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) =
   end
      
 
-let n_paction pa (k : mu_paction 'a -> mu_expr 'a) = 
+let n_paction annots pa (k : mu_paction 'a -> mu_expr 'a) = 
   let (Paction pol a) = pa in
   let wrap a = M_Paction pol a in
-  n_action a (fun a -> 
+  n_action annots a (fun a -> 
   k (wrap a))
 
 
@@ -620,7 +631,11 @@ let rec normalise_expr e =
   n_expr e (fun e -> e)
 
 
-and n_memop memop pexprs k = 
+and n_memop annots memop pexprs k = 
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 annots in
+  let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 annots in
+
   match (memop, pexprs) with
   | (Mem_common.PtrEq, [pe1;pe2]) ->
      n_pexpr_in_expr_name_2 (pe1,pe2) (fun (sym1,sym2) ->
@@ -695,16 +710,18 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
         : mu_expr 'a = 
   let (Expr annots pe) = e in
   let wrap pe : mu_expr 'a = M_Expr annots pe in
-  
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names annots in
+
   match pe with
   | Epure pexpr -> 
      n_pexpr_in_expr pexpr (fun e -> 
      k (wrap (M_Epure e)))
   | Ememop memop pexprs -> 
-     n_memop memop pexprs (fun memop ->
+     n_memop annots memop pexprs (fun memop ->
      k (wrap (M_Ememop memop)))
   | Eaction paction ->
-     n_paction paction (fun paction ->
+     n_paction annots paction (fun paction ->
      k (wrap (M_Eaction paction)))
   | Ecase pexpr pats_es ->
      n_pexpr_in_expr_name pexpr (fun pexpr ->
