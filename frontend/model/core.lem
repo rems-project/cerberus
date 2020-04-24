@@ -189,9 +189,8 @@ type generic_value 'sym =  (* Core values *)
 
 
 type generic_ctor =  (* data constructors *)
- | Cnil of core_base_type (* empty list  *) 
- (* annotated with the type of the list: for example, for a list of
-    units Cnil will have 'list unit' *)
+ | Cnil of core_base_type (* empty list *) 
+ (* annotated with the type of the list items *)
  | Ccons (* list cons *)
  | Ctuple (* tuple *)
  | Carray (* C array *)
