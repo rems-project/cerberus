@@ -1,6 +1,21 @@
+open Utils
 open Cerb_frontend
 open Colour
-open Printf
+open PPrint
+
+
+let (^^^) = Pp_prelude.(^^^)
+let words l = PPrint.separate space l
+let lines l = PPrint.separate (break 1) l
+
+let eq = equals
+let ne = langle ^^ rangle
+let lt = langle
+let gt = rangle
+let le = langle ^^ equals
+let ge = rangle ^^ equals
+let arrow = minus ^^ rangle
+
 
 let pps = Pp_utils.to_plain_pretty_string
 
@@ -11,19 +26,27 @@ let nocolour f x =
   Colour.do_colour := before;
   pp
 
-let pp_expr e = pps (nocolour Pp_mucore.Basic.pp_expr e)
-let pp_pexpr e = pps (nocolour Pp_mucore.Basic.pp_pexpr e)
-
-let lines s = String.concat "\n" s
-let underline c s = s ^ "\n" ^ (String.make (String.length s) c)
+let underline c s = string s ^/^ repeat (String.length s) (char c)
+let h1 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ break 1 ^^ underline '=' s)
+let h2 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ underline '=' s)
 
 
-let h1 s = ansi_format [Bold; Blue] ("\n\n" ^ underline '=' s)
-let h2 s = ansi_format [Bold; Blue] ("\n" ^ underline '-' s)
+let typ n typ = n ^^ colon ^^^ typ
+let alrctyp alrc n typ = (char alrc) ^^^ n ^^ colon ^^^ typ
+
+
 let item item content = 
-  sprintf "%s: %s" (ansi_format [Bold; Magenta] item) content
+  (pp_ansi_format [Bold; Magenta] item) ^^ colon ^^ break 1 ^^
+  space ^^ space ^^ space ^^ space ^^ space ^^ align content
 
 
-let debug_print_for_level debug_level (list : (int * string) list) : unit = 
-  List.iter (fun (level, s) -> if debug_level >= level then print_endline s) list
+
+let debug_print_for_level debug_level l =
+  match filter_map (fun (l,s) -> if debug_level >= l then Some s else None) l with
+  | [] -> ()
+  | l -> Cerb_backend.Pipeline.run_pp None (lines l ^^ hardline)
     
+
+
+let pp_expr e = nocolour Pp_mucore.Basic.pp_expr e
+let pp_pexpr e = nocolour Pp_mucore.Basic.pp_pexpr e

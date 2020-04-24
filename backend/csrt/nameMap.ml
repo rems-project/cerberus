@@ -1,4 +1,7 @@
 open Except
+open Location
+open PPrint
+open Pp_tools
 
 
 module StringMap = Map.Make(String)
@@ -14,24 +17,21 @@ let sym_of call_loc (string : string) (namemap : t) : (Sym.symbol,'e) m  =
   match StringMap.find_opt string namemap.sym_of_name with
   | Some sym -> return sym
   | None -> 
-     let err = Printf.sprintf "%s. Unbound name %s" 
-                 (Location.pp call_loc) string in
+     let err = withloc call_loc ((!^ "Unbound name") ^^^ (squotes (!^ string))) in
      Except.fail err
 
 let name_of call_loc (sym : Sym.t) (namemap : t) : (string,'e) m  = 
   match SymMap.find_opt sym namemap.name_of_sym with
   | Some name -> return name
   | None -> 
-     let err = Printf.sprintf "%s. Unbound variable %s" 
-                 (Location.pp call_loc) (Sym.pp sym) in
+     let err = withloc call_loc ((!^ "Unbound name") ^^^ (squotes (Sym.pp sym))) in
      Except.fail err
 
 let loc_of call_loc (sym : Sym.t) (namemap : t) : (Location.t,'e) m  = 
   match SymMap.find_opt sym namemap.loc_of_sym with
   | Some loc -> return loc
   | None -> 
-     let err = Printf.sprintf "%s. Unbound variable %s" 
-                 (Location.pp call_loc) (Sym.pp sym) in
+     let err = withloc call_loc ((!^ "Unbound name") ^^^ (squotes (Sym.pp sym))) in
      Except.fail err
 
 
