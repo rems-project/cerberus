@@ -1,3 +1,5 @@
+open PPrint
+
 type t = 
  | A of BaseTypes.t
  | L of LogicalSorts.t
@@ -18,14 +20,14 @@ type kind =
   | Constraint
 
 let kind_of_t = function
-  | A _  -> Argument
-  | L _  -> Logical
-  | R _  -> Resource
-  | C _  -> Constraint
+  | A _ -> Argument
+  | L _ -> Logical
+  | R _ -> Resource
+  | C _ -> Constraint
 
 let pp_kind = function
-  | Argument  -> "computational"
-  | Logical  -> "logical"
-  | Resource  -> "resource"
-  | Constraint  -> "constraint"
+  | Argument -> !^"computational"
+  | Logical -> !^"logical"
+  | Resource -> !^"resource"
+  | Constraint -> !^"constraint"
 
