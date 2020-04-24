@@ -842,7 +842,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
                    List.iter (fprintf ff " %a]" pp_intro) xs
     in
     pp "@]@;@[<v 2>Proof.@;";
-    pp "start_function (%a)" pp_intros annot.fa_parameters;
+    pp "start_function \"%s\" (%a)" id pp_intros annot.fa_parameters;
     if def.func_vars <> [] || def.func_args <> [] then
       begin
         pp " =>";
