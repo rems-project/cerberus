@@ -20,7 +20,7 @@ let run_pp with_ext doc =
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
   let term_col = match terminal_size () with
-    | Some (_, col) -> col
+    | Some (_, col) -> col - 1  (* without '-1' it's sometimes wrong *)
     | _ -> 80
   in
   PPrint.ToChannel.pretty 1.0 term_col oc doc;

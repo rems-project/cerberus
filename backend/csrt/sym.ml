@@ -6,7 +6,7 @@ type t = symbol
 
 let fresh = Symbol.fresh
 let fresh_pretty = Symbol.fresh_pretty
-let pp = Pp_symbol.to_string_pretty
+let pp sym = PPrint.string (Pp_symbol.to_string_pretty sym)
 
 let compare = Symbol.symbol_compare
 
