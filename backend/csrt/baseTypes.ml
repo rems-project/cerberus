@@ -1,6 +1,7 @@
 open Utils
 open List
-open Printf
+open PPrint
+open Pp_tools
 open Sexplib
 open Except
 module Loc=Location
@@ -16,14 +17,14 @@ type t =
   | Struct of Sym.t
 
 let rec pp = function
-  | Unit -> "unit" 
-  | Bool -> "bool"
-  | Int -> "int"
-  | Loc -> "loc"
-  | Array -> "array"
-  | List bt -> sprintf "(list %s)" (pp bt)
-  | Tuple bts -> sprintf "(tuple (%s))" (String.concat " " (map pp bts))
-  | Struct id -> sprintf "(struct %s)" (Sym.pp id)
+  | Unit -> !^ "unit"
+  | Bool -> !^ "bool"
+  | Int -> !^ "int"
+  | Loc -> !^ "loc"
+  | Array -> !^ "array"
+  | List bt -> parens ((!^ "list") ^^^ pp bt)
+  | Tuple bts -> parens ((!^ "tuple") ^^ separate (break 1) (map pp bts))
+  | Struct id -> parens (!^ "struct" ^^ Sym.pp id)
 
 let rec parse_sexp loc (names : NameMap.t) sx = 
   match sx with

@@ -1,6 +1,7 @@
 open Utils
 open List
-open Printf
+open PPrint
+open Pp_tools
 open Sexplib
 open Except
 module Loc=Location
@@ -33,9 +34,7 @@ let pp = function
    *      (IndexTerms.pp it1)
    *      (IndexTerms.pp it2) *)
   | Points (it1,it2) -> 
-     sprintf "(points %s %s)" 
-       (IndexTerms.pp it1)
-       (IndexTerms.pp it2)
+     parens (!^ "points" ^^^ IndexTerms.pp it1 ^^^ IndexTerms.pp it2)
   (* | Pred (p,its) ->
    *    sprintf "(%s %s)" 
    *      p

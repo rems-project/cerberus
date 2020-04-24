@@ -1,10 +1,10 @@
-open List
 open Utils
 open Cerb_frontend
 open Mucore
 open Undefined
 open Except
-open Printf
+open PPrint
+open List
 open Sym
 open Uni
 open Pp_tools
@@ -36,10 +36,10 @@ module Binders = struct
 
   let pp {name;bound} = 
     match bound with
-    | A t -> sprintf "(A %s : %s)" (Sym.pp name) (BT.pp t)
-    | L t -> sprintf "(L %s : %s)" (Sym.pp name) (LS.pp t)
-    | R t -> sprintf "(R %s : %s)" (Sym.pp name) (RE.pp t)
-    | C t -> sprintf "(C %s : %s)" (Sym.pp name) (LC.pp t)
+    | A t -> alrctyp 'A' (Sym.pp name) (BT.pp t)
+    | L t -> alrctyp 'L' (Sym.pp name) (LS.pp t)
+    | R t -> alrctyp 'R' (Sym.pp name) (RE.pp t)
+    | C t -> alrctyp 'C' (Sym.pp name) (LC.pp t)
 
 
   let parse_sexp loc (names : NameMap.t) s = 
@@ -90,8 +90,7 @@ module Types = struct
 
   type t = Binders.t list
 
-  let pp ts = 
-    String.concat " , " (map Binders.pp ts)
+  let pp ts = separate_map (space ^^ comma ^^ space) Binders.pp ts
 
   let parse_sexp loc (names : NameMap.t) s = 
     let open Sexplib in
@@ -128,8 +127,7 @@ module FunctionTypes = struct
     F { arguments = Types.subst sym sym' t.arguments;
         return = Types.subst sym sym' t.return }
 
-  let pp (F t) = 
-    sprintf "%s -> %s" (Types.pp t.arguments) (Types.pp t.return)
+  let pp (F t) = Types.pp t.arguments ^^^ arrow ^^^ Types.pp t.return
 end
 
 open FunctionTypes
@@ -181,16 +179,19 @@ module GEnv = struct
       names = NameMap.empty }
 
   let pp_struct_decls decls = 
-    let pp_entry (sym, bs) = sprintf "%s: %s" (Sym.pp sym) (Types.pp bs) in
-    pp_list pp_entry "\n" (SymMap.bindings decls)
+    separate_map (break 1)
+      (fun (sym, bs) -> item (Sym.pp sym) (Types.pp bs))
+      (SymMap.bindings decls)
 
   let pp_fun_decls decls = 
-    let pp_entry (sym, (_, t, _ret)) = sprintf "%s: %s" (Sym.pp sym) (FunctionTypes.pp t) in
-    pp_list pp_entry "\n" (SymMap.bindings decls)
+    separate_map (break 1) 
+      (fun (sym, (_, t, _ret)) -> typ (Sym.pp sym) (FunctionTypes.pp t))
+      (SymMap.bindings decls)
 
   let pp_name_map m = 
-    let pp_entry (name,sym) = sprintf "%s: %s" name (Sym.pp sym) in
-    pp_list pp_entry "\n" (NameMap.all_names m)
+    separate_map (break 1) 
+      (fun (name,sym) -> item (!^name) (Sym.pp sym))
+      (NameMap.all_names m)
 
   let pp_items genv = 
     [ (1, h2 "Structs")
@@ -205,27 +206,54 @@ module GEnv = struct
 end
 
 module LEnv = struct
-  type t = { vars : VarTypes.t SymMap.t }
-  type lenv = t
-  let empty = { vars = SymMap.empty }
 
-  let pp_vars decls = 
-    let pp_entry (sym, t) = Binders.pp {name = sym; bound = t} in
-    pp_list pp_entry ", " (SymMap.bindings decls)
+  type lenv = VarTypes.t SymMap.t
 
-  let pp_rmap decls = 
-    let pp_entry (sym, sym2) = sprintf "(%s,%s)" (Sym.pp sym) (Sym.pp sym2) in
-    pp_list pp_entry ", " (SymMap.bindings decls)
+  type t = lenv
 
-  let pp lenv = 
-    sprintf "%s" (pp_vars lenv.vars)
+  let empty = SymMap.empty
+
+  let pp_avars = 
+    flow_map (comma ^^ break 1)
+    (fun (sym, t) -> typ (Sym.pp sym) (BT.pp t))
+
+  let pp_lvars = 
+    flow_map (comma ^^ break 1)
+    (fun (sym, t) -> typ (Sym.pp sym) (LS.pp t))
+
+  let pp_rvars = 
+    flow_map (comma ^^ break 1)
+    (fun (sym, t) -> typ (Sym.pp sym) (RE.pp t))
+
+  let pp_cvars = 
+    flow_map (comma ^^ break 1)
+    (fun (sym, t) -> typ (Sym.pp sym) (LC.pp t))
+
+  let pp lenv =
+    let (a,l,r,c) = 
+      SymMap.fold (fun name b (a,l,r,c) ->
+          match b with
+          | A t -> (((name,t) :: a),l,r,c)
+          | L t -> (a,((name,t) :: l),r,c)
+          | R t -> (a,l,((name,t) :: r),c)
+          | C t -> (a,l,r,((name,t) :: c))
+        ) lenv ([],[],[],[])
+    in
+    (separate (break 1)
+       [ item !^"A" (pp_avars a)
+       ; item !^"L" (pp_lvars l)
+       ; item !^"R" (pp_rvars r)
+       ; item !^"C" (pp_cvars c)
+    ])
+
+    let add_var env b = SymMap.add b.name b.bound env
+    let remove_var env sym = SymMap.remove sym env
 
 end
 
 
 
 module Env = struct
-
 
   type t = 
     { local : LEnv.t ; 
@@ -241,18 +269,11 @@ module Env = struct
     { global = genv; 
       local = LEnv.empty }
 
-  let add_var (env : t) {name; bound = t} = 
-    { env with local = { vars = SymMap.add name t env.local.vars } }
+  let add_var env b = {env with local = LEnv.add_var env.local b}
+  let remove_var env sym = { env with local = LEnv.remove_var env.local sym }
 
-  let add_vars env bindings = 
-    fold_left add_var env bindings
-
-  let remove_var env sym = 
-    let vars = SymMap.remove sym env.local.vars in
-    { env with local = {vars} }
-
-  let remove_vars env bindings = 
-    fold_left remove_var env bindings
+  let add_vars env bindings = fold_left add_var env bindings
+  let remove_vars env bindings = fold_left remove_var env bindings
 
   let add_Avar env (name, t) = add_var env {name; bound = A t}
   let add_Lvar env (name, t) = add_var env {name; bound = L t}
@@ -261,13 +282,14 @@ module Env = struct
 
   let add_Avars env vars = List.fold_left add_Avar env vars
 
-  let lookup ?is_function:(is_function=false) (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
+  let lookup ?is_function:(is_function=false) (loc : Loc.t) 
+        (env: 'v SymMap.t) (name: Sym.t) =
     match SymMap.find_opt name env with
     | None -> fail (Unbound_name {loc; is_function; unbound = name})
     | Some v -> return v
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
-    lookup loc env.local.vars name >>= function
+    lookup loc env.local name >>= function
     | A t -> return (`A t)
     | L t -> return (`L t)
     | R t -> return (`R (t, remove_var env name))
@@ -306,7 +328,7 @@ module Env = struct
           match b with
           | (R t) -> if RE.owner t = owner_sym then (name,t) :: acc else acc
           | _ -> acc
-        ) env.local.vars []
+        ) env.local []
     in
     match relevant with
     | [] -> return None
@@ -324,7 +346,7 @@ let rec recursively_owned_resources loc env owner_sym =
   | Some (res,t) -> 
      let owned = RE.owned t in
      mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
-     return (res :: concat owneds)
+     return (res :: List.concat owneds)
   | None -> 
      return []
 
@@ -341,7 +363,6 @@ let rec infer_it loc env it =
   | Mul (it,it')
   | Div (it,it')
   | Exp (it,it')
-  | App (it,it')
   | Rem_t (it,it')
   | Rem_f (it,it') ->
      check_it loc env it BT.Int >>
@@ -546,7 +567,7 @@ let integerBaseType name signed ibt =
   | false, IntN_t 32 -> make "0" "4294967295"
   | false, IntN_t 64 -> make "0" "18446744073709551615"
 
-  | _, IntN_t n       -> failwith (sprintf "UIntN_t %d" n)
+  | _, IntN_t n       -> failwith (Printf.sprintf "UIntN_t %d" n)
   | _, Int_leastN_t n -> failwith "todo standard library types"
   | _, Int_fastN_t n  -> failwith "todo standard library types"
   | _, Intmax_t       -> failwith "todo standard library types"
@@ -607,9 +628,9 @@ let make_pointer_ctype ct =
 
 
 let remove_logical t = 
-  List.filter_map (function {name; bound = L _} -> None | b -> Some b) t
+  filter_map (function {name; bound = L _} -> None | b -> Some b) t
 let only_resources t = 
-  List.filter_map (function ({name; bound = R _} as b) -> Some b | _ -> None) t
+  filter_map (function ({name; bound = R _} as b) -> Some b | _ -> None) t
 
 
 
@@ -754,12 +775,10 @@ let pp_unis unis =
   let pp_entry (sym, {spec_name; spec; resolved}) =
     match resolved with
     | Some res -> 
-       sprintf "%s : %s resolved as %s" 
-         (Sym.pp sym) (LS.pp spec) (Sym.pp res)
-    | None -> sprintf "%s : %s unresolved"
-         (Sym.pp sym) (LS.pp spec) 
+       (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
+    | None -> (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"unresolved"
   in
-  pp_list pp_entry ", " (SymMap.bindings unis)
+  separate_map (comma ^^ space) pp_entry (SymMap.bindings unis)
 
 
 
@@ -782,10 +801,10 @@ let call_typ loc_call env decl_typ args =
     
     debug_print
       [ (2, h2 "check_and_refine")
-      ; (2, item "lenv" (LEnv.pp env.local))
-      ; (2, item "ftyp" (FunctionTypes.pp (F ftyp)))
-      ; (2, item "args" (pp_list (fun (a,_) -> Sym.pp a) ", " args))
-      ; (2, item "unis" (pp_unis unis))
+      ; (2, item !^"env" (LEnv.pp env.local))
+      ; (2, item !^"ftyp" (FunctionTypes.pp (F ftyp)))
+      ; (2, item !^"args" (separate_map (comma ^^ space) (fun (a,_) -> Sym.pp a) args))
+      ; (2, item !^"unis" (pp_unis unis))
       ];
 
 
@@ -903,7 +922,7 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
      | _, [] ->
         fail (Generic_error (loc, "Cnil without list type"))
      | _, args -> 
-        let err = sprintf "Cons applied to %d argument(s)" (List.length args) in
+        let err = Printf.sprintf "Cons applied to %d argument(s)" (List.length args) in
         fail (Generic_error (loc, err))
      end
   | `Ccons ->
@@ -913,7 +932,7 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
         let t = List tl_bt in
         return t
      | args ->
-        let err = sprintf "Cons applied to %d argument(s)" 
+        let err = Printf.sprintf "Cons applied to %d argument(s)" 
                     (List.length args) in
         fail (Generic_error (loc, err))
      end
@@ -936,7 +955,7 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
     | [(bt,_)] ->
        return bt
     | args ->
-       let err = sprintf "Cspecified applied to %d argument(s)" 
+       let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
                    (List.length args) in
        fail (Generic_error (loc, err))
     end
@@ -1066,9 +1085,8 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
 
   debug_print
     [ (1, h2 "infer_pexpr")
-    ; (1, item "env" (LEnv.pp env.local))
-    ; (3, item "e" "")
-    ; (3, pp_pexpr pe)
+    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (3, item !^"expression" (pp_pexpr pe))
     ];
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
@@ -1133,10 +1151,9 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
 
   debug_print
     [ (1, h2 "check_pexpr")
-    ; (1, item "env" (LEnv.pp env.local))
-    ; (1, item "ret" (Types.pp ret))
-    ; (3, item "e" "")
-    ; (3, pp_pexpr e)
+    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (1, item !^"ret" (Types.pp ret))
+    ; (3, item !^"expression" (pp_pexpr e))
     ];
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -1195,9 +1212,8 @@ let rec infer_expr env (e : ('a,'bty) mu_expr) =
 
   debug_print
     [ (1, h2 "infer_expr")
-    ; (1, item "env" (LEnv.pp env.local))
-    ; (3, item "e" "")
-    ; (3, pp_expr e)
+    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (3, item !^"expression" (pp_expr e))
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -1280,10 +1296,9 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
 
   debug_print
     [ (1, h2 "check_expr")
-    ; (1, item "env" (LEnv.pp env.local))
-    ; (1, item "ret" (Types.pp ret))
-    ; (3, item "e" "")
-    ; (3, pp_expr e)
+    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (1, item !^"ret" (Types.pp ret))
+    ; (3, item !^"expression" (pp_expr e))
     ];
 
   let (M_Expr (annots, e_)) = e in
@@ -1367,7 +1382,7 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
 
 let check_function_body fsym genv body (F decl_typ) = 
 
-  debug_print [(1, h1 (sprintf "Checking function %s" (Sym.pp fsym)))];
+  debug_print [(1, h1 (Printf.sprintf "Checking function %s" (pps (Sym.pp fsym))))];
 
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
@@ -1404,8 +1419,8 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
     else 
       let defn = F {arguments = args; return = [ret]} in
       let err = 
-        sprintf "Function definition inconsistent. Should be %s, is %s"
-          (FunctionTypes.pp decl) (FunctionTypes.pp defn)
+        Printf.sprintf "Function definition inconsistent. Should be %s, is %s"
+          (pps (FunctionTypes.pp decl)) (pps (FunctionTypes.pp defn))
       in
       fail (Generic_error (loc, err))
 
@@ -1512,5 +1527,4 @@ let check mu_file debug_level =
 let check_and_report core_file debug_level = 
   match check core_file debug_level with
   | Result () -> ()
-  | Exception err -> 
-     print_endline ("\n" ^ underline '=' "Error!" ^ "\n" ^ TypeErrors.pp err)
+  | Exception err -> report_error err

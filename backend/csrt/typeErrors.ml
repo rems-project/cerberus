@@ -1,6 +1,8 @@
 open Cerb_frontend
 module Loc = Location
-open Printf
+open Loc
+open PPrint
+open Pp_tools
 
  type call_return_switch_error = 
   | Surplus_A of Sym.t * BaseTypes.t
@@ -64,131 +66,115 @@ open Printf
       Loc.t
   | Generic_error of Loc.t * string
 
- let pp_return_error loc = function
-  | Surplus_A (_name,t) ->
-     sprintf "Line %s. Returning unexpected value of type %s" 
-       (Loc.pp loc) (BaseTypes.pp t)
-  | Surplus_L (_name,t) ->
-     sprintf "%s. Returning unexpected logical value of type %s" 
-       (Loc.pp loc) (LogicalSorts.pp t)
-  | Surplus_R (_name,t) ->
-     sprintf "%s. Returning unexpected resource of type %s" 
-       (Loc.pp loc) (Resources.pp t)
-  | Missing_A (_name,t) ->
-     sprintf "%s. Missing return value of type %s" 
-       (Loc.pp loc) (BaseTypes.pp t)
-  | Missing_L (_name,t) ->
-     sprintf "%s. MIssing logical return value of type %s" 
-       (Loc.pp loc) (LogicalSorts.pp t)
-  | Missing_R (_name,t) ->
-     sprintf "%s. Missing return resource of type %s" 
-       (Loc.pp loc) (Resources.pp t)
-  | Mismatch {mname; has; expected} ->
-     let has_pp = match has with
-       | A t -> sprintf "return value of type %s" (BaseTypes.pp t)
-       | L t -> sprintf "logical return value of type %s" (LogicalSorts.pp t)
-       | R t -> sprintf "return resource of type %s" (Resources.pp t)
-       | C t -> sprintf "return constraint %s" (LogicalConstraints.pp t)
-     in
-     begin match expected with
-     | A t ->
-        sprintf "%s. Expected return value of type %s but found %s" 
-          (Loc.pp loc) (BaseTypes.pp t) has_pp
-     | L t ->
-        sprintf "%s. Expected logical return value of type %s but found %s" 
-          (Loc.pp loc) (LogicalSorts.pp t) has_pp
-     | R t ->
-        sprintf "%s. Expected return resource of type %s but found %s" 
-          (Loc.pp loc) (Resources.pp t) has_pp
-     | C t ->
-        (* dead, I think *)
-        sprintf "%s. Expected return constraint %s but found %s" 
-          (Loc.pp loc) (LogicalConstraints.pp t) has_pp
+ let pp_return_error loc err = 
+   withloc loc
+     begin match err with
+     | Surplus_A (_name,t) ->
+        !^"Returning unexpected value of type" ^^^ BaseTypes.pp t
+     | Surplus_L (_name,t) ->
+        !^"Returning unexpected logical value of type" ^^^ LogicalSorts.pp t
+     | Surplus_R (_name,t) ->
+        !^"Returning unexpected resource of type" ^^^ Resources.pp t
+     | Missing_A (_name,t) ->
+        !^"Missing return value of type" ^^^ BaseTypes.pp t
+     | Missing_L (_name,t) ->
+        !^"Missing logical return value of type" ^^^ LogicalSorts.pp t
+     | Missing_R (_name,t) ->
+        !^"Missing return resource of type" ^^^ Resources.pp t
+     | Mismatch {mname; has; expected} ->
+        let has_pp = match has with
+          | A t -> !^ "return value of type" ^^^ BaseTypes.pp t
+          | L t -> !^ "logical return value of type" ^^^ LogicalSorts.pp t
+          | R t -> !^ "return resource of type" ^^^ Resources.pp t
+          | C t -> !^ "return constraint" ^^^ LogicalConstraints.pp t
+        in
+        begin match expected with
+        | A t -> !^"Expected return value of type" ^^^ 
+                   BaseTypes.pp t ^^^ !^ "but found" ^^^ has_pp
+        | L t -> !^ "Expected logical return value of type" ^^^ 
+                   LogicalSorts.pp t ^^^ !^ "but found" ^^^ has_pp
+        | R t -> !^"Expected return resource of type" ^^^ 
+                   Resources.pp t ^^^ !^ "but found" ^^^ has_pp
+        | C t -> !^"Expected return constraint" ^^^ 
+                   LogicalConstraints.pp t ^^^ !^"but found" ^^^ has_pp
+           (* dead, I think *)
+        end
+     | Unsat_constraint (name,c) ->
+        !^"Unsatisfied return constraint" ^^^
+          typ (Sym.pp name) (LogicalConstraints.pp c)
+     | Unconstrained_l (name, ls) ->
+        !^"Unconstrained logical variable" ^^^
+          typ (Sym.pp name) (LogicalSorts.pp ls)
      end
-  | Unsat_constraint (name,c) ->
-     sprintf "%s. Unsatisfied return constraint %s: %s" 
-       (Loc.pp loc) (Sym.pp name) (LogicalConstraints.pp c)
-  | Unconstrained_l (name, ls) ->
-     sprintf "%s. Unconstrained logical variable %s: %s" 
-       (Loc.pp loc) (Sym.pp name) (LogicalSorts.pp ls)
 
-
- let pp_call_error loc = function
-  | Surplus_A (_name,t) ->
-     sprintf "Line %s. Supplying unexpected argument of type %s" 
-       (Loc.pp loc) (BaseTypes.pp t)
-  | Surplus_L (_name,t) ->
-     sprintf "%s. Supplying unexpected logical argument of type %s" 
-       (Loc.pp loc) (LogicalSorts.pp t)
-  | Surplus_R (_name,t) ->
-     sprintf "%s. Supplying unexpected resource of type %s" 
-       (Loc.pp loc) (Resources.pp t)
-  | Missing_A (_name,t) ->
-     sprintf "%s. Missing argument of type %s" 
-       (Loc.pp loc) (BaseTypes.pp t)
-  | Missing_L (_name,t) ->
-     sprintf "%s. Missing logical argument of type %s" 
-       (Loc.pp loc) (LogicalSorts.pp t)
-  | Missing_R (_name,t) ->
-     sprintf "%s. Missing resource argument of type %s" 
-       (Loc.pp loc) (Resources.pp t)
-  | Mismatch {mname; has; expected} ->
-     let has_pp = match has with
-       | A t -> sprintf "argument of type %s" (BaseTypes.pp t)
-       | L t -> sprintf "logical argument of type %s" (LogicalSorts.pp t)
-       | R t -> sprintf "resource argument of type %s" (Resources.pp t)
-       | C t -> sprintf "constraint argument %s" (LogicalConstraints.pp t)
-     in
-     begin match expected with
-     | A t ->
-        sprintf "%s. Expected argument of type %s but found %s" 
-          (Loc.pp loc) (BaseTypes.pp t) has_pp
-     | L t ->
-        sprintf "%s. Expected logical argument of type %s but found %s" 
-          (Loc.pp loc) (LogicalSorts.pp t) has_pp
-     | R t ->
-        sprintf "%s. Expected resource argument of type %s but found %s" 
-          (Loc.pp loc) (Resources.pp t) has_pp
-     | C t ->
-        (* dead, I think *)
-        sprintf "%s. Expected constraint argument %s but found %s" 
-          (Loc.pp loc) (LogicalConstraints.pp t) has_pp
+ let pp_call_error loc err = 
+   withloc loc
+     begin match err with
+     | Surplus_A (_name,t) ->
+        !^"Supplying unexpected argument of type" ^^^ BaseTypes.pp t
+     | Surplus_L (_name,t) ->
+        !^"Supplying unexpected logical argument of type" ^^^ LogicalSorts.pp t
+     | Surplus_R (_name,t) ->
+        !^"Supplying unexpected resource of type" ^^^ Resources.pp t
+     | Missing_A (_name,t) ->
+        !^"Missing argument of type" ^^^ BaseTypes.pp t
+     | Missing_L (_name,t) ->
+        !^"Missing logical argument of type" ^^^ LogicalSorts.pp t
+     | Missing_R (_name,t) ->
+        !^"Missing resource argument of type" ^^^ Resources.pp t
+     | Mismatch {mname; has; expected} ->
+        let has_pp = match has with
+          | A t -> !^ "argument of type" ^^^ BaseTypes.pp t
+          | L t -> !^ "logical argument of type" ^^^ LogicalSorts.pp t
+          | R t -> !^ "resource argument of type" ^^^ Resources.pp t
+          | C t -> !^ "constraint argument" ^^^ LogicalConstraints.pp t
+        in
+        begin match expected with
+        | A t -> !^"Expected argument of type" ^^^ 
+                   BaseTypes.pp t ^^^ !^ "but found" ^^^ has_pp
+        | L t -> !^ "Expected logical argument of type" ^^^ 
+                   LogicalSorts.pp t ^^^ !^ "but found" ^^^ has_pp
+        | R t -> !^"Expected resource argument of type" ^^^ 
+                   Resources.pp t ^^^ !^ "but found" ^^^ has_pp
+        | C t -> !^"Expected constraint argument" ^^^ 
+                   LogicalConstraints.pp t ^^^ !^"but found" ^^^ has_pp
+           (* dead, I think *)
+        end
+     | Unsat_constraint (name,c) ->
+        !^"Unsatisfied return constraint" ^^^
+          typ (Sym.pp name) (LogicalConstraints.pp c)
+     | Unconstrained_l (name, ls) ->
+        !^"Unconstrained logical variable" ^^^
+          typ (Sym.pp name) (LogicalSorts.pp ls)
      end
-  | Unsat_constraint (name,lc) ->
-     sprintf "%s. Unsatisfied return constraint %s: %s" 
-       (Loc.pp loc) (Sym.pp name) (LogicalConstraints.pp lc)
-  | Unconstrained_l (name,ls) ->
-     sprintf "%s. Unconstrained logical variable %s: %s" 
-       (Loc.pp loc) (Sym.pp name) (LogicalSorts.pp ls)
+
 
  let pp = function 
   | Var_kind_error err ->
-     sprintf "%s. Expected kind %s but found kind %s"
-       (Loc.pp err.loc) (VarTypes.pp_kind err.expected) (VarTypes.pp_kind err.has)
+     withloc err.loc (!^"Expected kind" ^^^ VarTypes.pp_kind err.expected ^^^
+                        !^"but found kind" ^^^ VarTypes.pp_kind err.has)
   | Name_bound_twice err ->
-     sprintf "%s. Name bound twice: %s" 
-       (Loc.pp err.loc) (Sym.pp err.name)
+     withloc err.loc (!^"Name bound twice" ^^ colon ^^^ 
+                        squotes (Sym.pp err.name))
   | Generic_error (loc, err) ->
-     sprintf "%s. %s" 
-       (Loc.pp loc) err
+     withloc loc (!^err)
   | Unreachable {loc; unreachable} ->
-     sprintf "%s. Should be unreachable: %s" 
-       (Loc.pp loc) unreachable
+     withloc loc (!^"Internal error, should be unreachable" ^^ 
+                    colon ^^^ !^unreachable)
   | Illtyped_it {loc; it} ->
-     sprintf "%s. Illtyped index term: %s" 
-       (Loc.pp loc) (IndexTerms.pp it)
+     withloc loc (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it))
   | Unsupported {loc; unsupported} ->
-     sprintf "%s. Unsupported feature: %s" 
-       (Loc.pp loc) unsupported
+     withloc loc (!^"Unsupported feature" ^^ colon ^^^ !^unsupported)
   | Unbound_name {loc; is_function; unbound} ->
-     sprintf "%s. Unbound %s %s"
-       (Loc.pp loc) (if is_function then "function" else "symbol") (Sym.pp unbound)
+     withloc loc
+       (if is_function 
+        then !^"Unbound function" ^^ colon ^^^ Sym.pp unbound
+        else !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound)
   (* | Inconsistent_fundef {loc; decl; defn} ->
    *    sprintf "%s. Function definition inconsistent. Should be %s, is %s"
    *      (Loc.pp loc) (FunctionTypes.pp decl) (FunctionTypes.pp defn) *)
-  | Variadic_function {loc; fn } ->
-     sprintf "Line %s. Variadic functions unsupported (%s)" 
-       (Loc.pp loc) (Sym.pp fn)
+  | Variadic_function {loc; fn} ->
+     withloc loc (!^"Variadic functions unsupported" ^^^ parens (Sym.pp fn))
   | Return_error (loc, err) -> 
      pp_return_error loc err
   | Call_error (loc, err) -> 
@@ -196,16 +182,19 @@ open Printf
   | Switch_error (loc, err) -> 
      pp_call_error loc err
   | Integer_value_error loc ->
-     sprintf "%s. integer_value_to_num return None"
-       (Loc.pp loc)
+     withloc loc (!^"integer_value_to_num returned None")
   | Undefined_behaviour (loc, undef) ->
-     sprintf "%s. Undefined behaviour: %s"
-       (Loc.pp loc)
-       (Undefined.pretty_string_of_undefined_behaviour undef)
+     withloc loc (!^"Undefined behaviour" ^^ colon ^^^ 
+                    !^(Undefined.pretty_string_of_undefined_behaviour undef))
   | Unspecified_value loc ->
-     sprintf "%s. Unspecified value"
-       (Loc.pp loc)
+     withloc loc (!^"Unspecified value")
 
 
 
 
+
+
+
+let report_error err = 
+  Cerb_backend.Pipeline.run_pp None (h1 "Error!");
+  Cerb_backend.Pipeline.run_pp None (pp err);
