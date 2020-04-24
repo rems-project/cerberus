@@ -712,20 +712,20 @@ let infer_object_value (env : env) loc ov =
      integer_value_to_num loc iv >>= fun i ->
      let t = makeA name Int in
      let constr = makeUC (S name %= Num i) in
-     return (Normal [t; constr])
+     return [t; constr]
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
-         return (Normal [makeA name Loc; makeUC (Null (S name))]) )
+         return [makeA name Loc; makeUC (Null (S name))] )
        ( fun sym -> 
          fail (Unsupported {loc; unsupported = "function pointers"}) )
        ( fun _prov loc ->
-         return (Normal [makeA name Loc; makeUC (S name %= Num loc)]) )
-       ( fun () -> return (Bad (Unspecified loc)) )
+         return [makeA name Loc; makeUC (S name %= Num loc)] )
+       ( fun () -> fail (Unreachable {loc; unreachable = "unspecified pointer value"}) )
   | M_OVarray items ->
      make_Aargs_bts env items >>= fun args_bts ->
      args_same_typ None args_bts >>
-     return (Normal [makeA name Array])
+     return [makeA name Array]
   | M_OVstruct (sym, fields) ->
      failwith "todo: struct"
   | M_OVunion _ -> 
@@ -737,31 +737,30 @@ let infer_object_value (env : env) loc ov =
 let infer_loaded_value env loc lv = 
   match lv with
  | M_LVspecified ov -> infer_object_value env loc ov
- | M_LVunspecified _ct -> return (Bad (Unspecified loc))
 
 
-let infer_value loc env v : (UU.ut,'e) m = 
+let infer_value loc env v : (Types.t,'e) m = 
   match v with
   | M_Vobject ov ->
      infer_object_value env loc ov
   | M_Vloaded lv ->
      infer_loaded_value env loc lv
   | M_Vunit ->
-     return (Normal [makeUA Unit])
+     return [makeUA Unit]
   | M_Vtrue ->
      let name = fresh () in
-     return (Normal [makeA name Bool; makeUC (S name)])
+     return [makeA name Bool; makeUC (S name)]
   | M_Vfalse -> 
      let name = fresh () in
-     return (Normal [makeA name Bool; makeUC (Not (S name))])
+     return [makeA name Bool; makeUC (Not (S name))]
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun i_t ->
      make_Aargs_bts env asyms >>= fun args_bts ->
      args_same_typ (Some i_t) args_bts >>
-     return (Normal [makeUA (List i_t)])
+     return [makeUA (List i_t)]
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
-     return (Normal [makeUA (Tuple (List.map fst args_bts))])
+     return [makeUA (Tuple (List.map fst args_bts))]
 
 
 
@@ -885,31 +884,10 @@ let call_typ_fn loc_call fname env args =
      call_typ loc_call env decl_typ args
 
 
-let good_ctor loc ctor = 
-  let open Core in 
-  match ctor with
-  | Cnil cbt -> Normal (`Cnil cbt)
-  | Ccons -> Normal (`Ccons)
-  | Ctuple -> Normal (`Ctuple)
-  | Carray -> Normal (`Carray)
-  | Civmax -> Normal (`Civmax)
-  | Civmin -> Normal (`Civmin)
-  | Civsizeof -> Normal (`Civsizeof)
-  | Civalignof -> Normal (`Civalignof)
-  | CivCOMPL -> Normal (`CivCOMPL)
-  | CivAND -> Normal (`CivAND)
-  | CivOR -> Normal (`CivOR)
-  | CivXOR -> Normal (`CivXOR)
-  | Cspecified -> Normal (`Cspecified)
-  | Cfvfromint -> Normal (`Cfvfromint)
-  | Civfromfloat -> Normal (`Civfromfloat)
-  | Cunspecified -> Bad (Unspecified loc)
-
-
 
 let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) = 
   match ctor with
-  | `Cnil cbt ->
+  | M_Cnil cbt ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      begin match args_bts with
      | [] -> return (List bt)
@@ -918,7 +896,7 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
                     (List.length args_bts) in
         fail (Generic_error (loc, err))
      end
-  | `Ccons ->
+  | M_Ccons ->
      begin match args_bts with
      | [(hd_bt,hd_loc); (tl_bt,tl_loc)] ->
         ensure_type tl_loc None (A tl_bt) (A (List hd_bt)) >>
@@ -929,21 +907,21 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
                     (List.length args) in
         fail (Generic_error (loc, err))
      end
-  | `Ctuple ->
+  | M_Ctuple ->
      let t = BT.Tuple (List.map fst args_bts) in
      return t
-  | `Carray -> 
+  | M_Carray -> 
      args_same_typ None args_bts >>
      return BT.Array
-  | `Civmax
-  | `Civmin
-  | `Civsizeof
-  | `Civalignof
-  | `CivCOMPL
-  | `CivAND
-  | `CivOR
-  | `CivXOR -> failwith "todo"
-  | `Cspecified ->
+  | M_Civmax
+  | M_Civmin
+  | M_Civsizeof
+  | M_Civalignof
+  | M_CivCOMPL
+  | M_CivAND
+  | M_CivOR
+  | M_CivXOR -> failwith "todo"
+  | M_Cspecified ->
     begin match args_bts with
     | [(bt,_)] ->
        return bt
@@ -953,9 +931,9 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
        fail (Generic_error (loc, err))
     end
 
-  | `Cfvfromint -> 
+  | M_Cfvfromint -> 
      fail (Unsupported {loc; unsupported = "floats"})
-  | `Civfromfloat -> 
+  | M_Civfromfloat -> 
      fail (Unsupported {loc; unsupported = "floats"})
 
 
@@ -969,46 +947,37 @@ let check_name_disjointness names_and_locations =
     ) SymSet.empty names_and_locations
 
 
-let rec collect_pattern_names (Core.Pattern (annots, pat)) = 
+let rec collect_pattern_names (M_Pattern (annots, pat)) = 
   match pat with
-  | CaseBase (None, _) -> []
-  | CaseBase (Some sym, _) -> [(sym,Annot.get_loc_ annots)]
-  | CaseCtor (_, pats) -> concat_map collect_pattern_names pats
+  | M_CaseBase (None, _) -> []
+  | M_CaseBase (Some sym, _) -> [(sym,Annot.get_loc_ annots)]
+  | M_CaseCtor (_, pats) -> concat_map collect_pattern_names pats
 
 
 let infer_pat pat = 
 
   let rec aux pat = 
-    let (Core.Pattern (annots, pat_)) = pat in
+    let (M_Pattern (annots, pat_)) = pat in
     let loc = Annot.get_loc_ annots in
     match pat_ with
-    | CaseBase (None, cbt) ->
+    | M_CaseBase (None, cbt) ->
        bt_of_core_base_type loc cbt >>= fun bt ->
-       return (Normal ([((Sym.fresh (), bt), loc)], (bt, loc)))
-    | CaseBase (Some sym, cbt) ->
+       return ([((Sym.fresh (), bt), loc)], (bt, loc))
+    | M_CaseBase (Some sym, cbt) ->
        bt_of_core_base_type loc cbt >>= fun bt ->
-       return (Normal ([((sym, bt), loc)], (bt, loc)))
-    | CaseCtor (ctor, args) ->
-       match good_ctor loc ctor with
-       | Bad bad -> return (Bad bad)
-       | Normal ctor ->
-          mapM aux args >>= fun bindingses_args_bts ->
-          match all_normal bindingses_args_bts with
-          | Bad b -> return (Bad b)
-          | Normal bindingses_args_bts ->
-             let bindingses, args_bts = List.split bindingses_args_bts in
-             let bindings = List.concat bindingses in
-             ctor_typ loc ctor args_bts >>= fun bt ->
-             return (Normal (bindings, (bt, loc)))
+       return ([((sym, bt), loc)], (bt, loc))
+    | M_CaseCtor (ctor, args) ->
+       mapM aux args >>= fun bindingses_args_bts ->
+       let bindingses, args_bts = List.split bindingses_args_bts in
+       let bindings = List.concat bindingses in
+       ctor_typ loc ctor args_bts >>= fun bt ->
+       return (bindings, (bt, loc))
   in
 
   check_name_disjointness (collect_pattern_names pat) >>
-  aux pat >>= function 
-  | Normal (bindings, (bt, loc)) ->
-     let (bindings,_) = List.split bindings in
-     return (Normal (bindings, bt, loc))
-  | Bad bad -> 
-     return (Bad bad)
+  aux pat >>= fun (bindings, (bt, loc)) ->
+  let (bindings,_) = List.split bindings in
+  return (bindings, bt, loc)
 
      
 
@@ -1092,7 +1061,7 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
      failwith "todo PEimpl"
   | M_PEval v ->
      infer_value loc env v >>= fun t ->
-     return (t, env)
+     return (Normal t, env)
   | M_PEconstrained _ ->
      failwith "todo PEconstrained"
   | M_PEundef (loc,undef) ->
@@ -1101,12 +1070,8 @@ let infer_pexpr env (pe : 'bty mu_pexpr) =
      failwith "todo PEerror"
   | M_PEctor (ctor, args) ->
      make_Aargs_bts env args >>= fun args_bts ->
-     begin match good_ctor loc ctor with
-     | Normal ctor ->
-        ctor_typ loc ctor args_bts >>= fun bt ->
-        return (Normal [makeUA bt], env)
-     | Bad bad -> return (Bad bad, env)
-     end
+     ctor_typ loc ctor args_bts >>= fun bt ->
+     return (Normal [makeUA bt], env)
   | M_PEcase (asym, pats_es) ->
      failwith "PEcase in inferring position"
   | M_PEarray_shift _ ->
@@ -1163,15 +1128,11 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
-         infer_pat pat >>= fun pinfo ->
-         match pinfo with 
-         | Bad bad -> 
-            ensure_bad_unreachable loc env bad
-         | Normal (bindings, bt', ploc) ->
-            ensure_type ploc None (A bt') (A bt) >>
-            (* check body type against spec *)
-            let env' = add_Avars env bindings in
-            check_pexpr env' pe ret
+         infer_pat pat >>= fun (bindings, bt', ploc) ->
+         ensure_type ploc None (A bt') (A bt) >>
+         (* check body type against spec *)
+         let env' = add_Avars env bindings in
+         check_pexpr env' pe ret
        ) pats_es >>
      return env
   | M_PElet (p, e1, e2) ->
@@ -1182,14 +1143,14 @@ let rec check_pexpr env (e : 'bty mu_pexpr) ret =
         | Normal rt -> check_pexpr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+     | M_normal_pattern (M_Pattern (_annot, M_CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
+     | M_normal_pattern (M_Pattern (_annot, M_CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | _ ->
@@ -1310,15 +1271,11 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
      get_Avar eloc env esym >>= fun bt ->
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
-         infer_pat pat >>= fun pinfo ->
-         match pinfo with 
-         | Bad bad -> 
-            ensure_bad_unreachable loc env bad
-         | Normal (bindings, bt', ploc) ->
-            ensure_type ploc None (A bt') (A bt) >>
-            (* check body type against spec *)
-            let env' = add_Avars env bindings in
-            check_expr env' pe ret
+         infer_pat pat >>= fun (bindings, bt', ploc) ->
+         ensure_type ploc None (A bt') (A bt) >>
+         (* check body type against spec *)
+         let env' = add_Avars env bindings in
+         check_expr env' pe ret
        ) pats_es >>
      return env     
   | M_Epure pe -> 
@@ -1331,27 +1288,27 @@ let rec check_expr env (e : ('a,'bty) mu_expr) ret =
         | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (Pattern (_annot, CaseBase (mnewname,_cbt))) ->
+     | M_normal_pattern (M_Pattern (_annot, M_CaseBase (mnewname,_cbt))) ->
         let newname = sym_or_fresh mnewname in
         infer_pexpr env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (Pattern (_annot, CaseCtor _)) ->
+     | M_normal_pattern (M_Pattern (_annot, M_CaseCtor _)) ->
         failwith "todo ctor pattern"
      end
   | M_Ewseq (p, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (p, e1, e2) ->
      begin match p with 
-     | Pattern (_annot, CaseBase (mnewname,_cbt)) ->
+     | M_Pattern (_annot, M_CaseBase (mnewname,_cbt)) ->
         let newname = sym_or_fresh mnewname in
         infer_expr env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | Pattern (_annot, CaseCtor _) ->
+     | M_Pattern (_annot, M_CaseCtor _) ->
         failwith "todo ctor pattern"
      end
   | M_Esave (_ret, args, body) ->

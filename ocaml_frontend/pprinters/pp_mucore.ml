@@ -312,8 +312,6 @@ let pp_object_value = function
 let pp_loaded_value = function
   | M_LVspecified oval ->
       pp_const "Specified" ^^ P.parens (pp_object_value oval)
-  | M_LVunspecified ty ->
-      pp_const "Unspecified" ^^ P.parens (P.squotes (Pp_core_ctype.pp_ctype ty))
 
 
 let rec pp_value = function
@@ -342,50 +340,48 @@ let rec pp_value = function
       pp_loaded_value lval
 
 let pp_ctor = function
-  | Cnil _ ->
+  | M_Cnil _ ->
       !^ "Nil"
-  | Ccons ->
+  | M_Ccons ->
       !^ "Cons"
-  | Ctuple ->
+  | M_Ctuple ->
       !^ "Tuple"
-  | Carray ->
+  | M_Carray ->
       !^ "Array"
-  | Civmax ->
+  | M_Civmax ->
       !^ "Ivmax"
-  | Civmin ->
+  | M_Civmin ->
       !^ "Ivmin"
-  | Civsizeof ->
+  | M_Civsizeof ->
       !^ "Ivsizeof"
-  | Civalignof ->
+  | M_Civalignof ->
       !^ "Ivalignof"
-  | CivCOMPL ->
+  | M_CivCOMPL ->
       !^ "IvCOMPL"
-  | CivAND ->
+  | M_CivAND ->
       !^ "IvAND"
-  | CivOR ->
+  | M_CivOR ->
       !^ "IvOR"
-  | CivXOR ->
+  | M_CivXOR ->
       !^ "IvXOR"
-  | Cspecified ->
+  | M_Cspecified ->
       !^ "Specified"
-  | Cunspecified ->
-      !^ "Unspecified"
-  | Cfvfromint ->
+  | M_Cfvfromint ->
       !^ "Cfvfromint"
-  | Civfromfloat ->
+  | M_Civfromfloat ->
       !^ "Civfromfloat"
 
 
-let rec pp_pattern (Pattern (_, pat)) =
+let rec pp_pattern (M_Pattern (_, pat)) =
   match pat with
-  | CaseBase (None, bTy) ->
+  | M_CaseBase (None, bTy) ->
       P.underscore ^^ P.colon ^^^ pp_core_base_type bTy
-  | CaseBase (Some sym, bTy) ->
+  | M_CaseBase (Some sym, bTy) ->
       pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy
 (* Syntactic sugar for tuples and lists *)
-  | CaseCtor (Ctuple, pats) ->
+  | M_CaseCtor (M_Ctuple, pats) ->
       P.parens (comma_list pp_pattern pats)
-  | CaseCtor (ctor, pats) ->
+  | M_CaseCtor (ctor, pats) ->
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_sym_or_pattern = function
@@ -421,7 +417,7 @@ let pp_pexpr pe =
             pp_symbol sym
         | M_PEimpl iCst ->
             pp_impl iCst
-        | M_PEctor (Cnil _, pes) ->
+        | M_PEctor (M_Cnil _, pes) ->
             if not (pes <> []) then
               Debug_ocaml.warn [] (fun () ->
                 "Pp_core found a Cnil with pes <> []"
@@ -444,7 +440,7 @@ let pp_pexpr pe =
          *       | M_None ->
          *           P.separate_map (P.space ^^ P.colon ^^ P.colon ^^ P.space) pp pes
          *     end *)
-        | M_PEctor (Ctuple, pes) ->
+        | M_PEctor (M_Ctuple, pes) ->
             P.parens (comma_list pp_asym pes)
         | M_PEctor (ctor, pes) ->
             pp_ctor ctor ^^ P.parens (comma_list pp_asym pes)
@@ -555,7 +551,7 @@ let rec pp_expr expr =
         if compare_precedence prec' prec then
           (* right associativity of ; *)
           match (is_semi, e) with
-            | (true, M_Esseq (Pattern (_, CaseBase (None, BTy_unit)), _, _)) ->
+            | (true, M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), _, _)) ->
                 P.parens
             | _ ->
                 fun z -> z
@@ -608,7 +604,7 @@ let rec pp_expr expr =
               P.ifflat doc_e1 (P.nest 2 (P.break 1 ^^ doc_e1)) ^^^ pp_control "in"
             ) ^^
             P.break 1 ^^ (pp e2)
-        | M_Esseq (Pattern (_, CaseBase (None, BTy_unit)), e1, e2) ->
+        | M_Esseq (M_Pattern (_, M_CaseBase (None, BTy_unit)), e1, e2) ->
             (pp_ e1 ^^^ P.semi) ^/^ (pp e2)
         | M_Esseq (pat, e1, e2) ->
             P.group (

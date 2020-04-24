@@ -13,32 +13,6 @@ open import Mucore
    those places. *)
 
 
-let remove_unspecified = true
-
-
-let unspec_undef = Undefined.DUMMY "unspecified value"
-
-
-let replace_with_undefined_pe pe = 
-  let (Core.Pexpr annots bty _) = pe in
-  M_Pexpr annots () (M_PEundef (Loc.locOf pe) unspec_undef)
-
-let replace_with_undefined_e e = 
-  let (Core.Expr annots _) = e in
-  let pe = M_Pexpr annots () (M_PEundef (Loc.locOf e) unspec_undef) in
-  M_Expr annots (M_Epure pe)
-
-
-
-let rec contains_unspecified (Pattern annots pat_) = 
-  match pat_ with
-  | Core.CaseBase _ -> false
-  | Core.CaseCtor Core.Cunspecified _ -> true
-  | Core.CaseCtor _ pats -> List.any id (List.map contains_unspecified pats)
-  end
-          
-
-
 
 (* type bty = core_base_type *)
 type value = generic_value Symbol.sym
@@ -100,6 +74,47 @@ let fensure_ctype__pexpr err pe =
   | Just ctype -> ctype
   | Nothing -> failwith err
 end
+
+
+
+
+
+let core_to_mu__ctor = function
+ | Core.Cnil bt -> M_Cnil bt
+ | Core.Ccons -> M_Ccons
+ | Core.Ctuple -> M_Ctuple
+ | Core.Carray -> M_Carray
+ | Core.Civmax -> M_Civmax
+ | Core.Civmin -> M_Civmin
+ | Core.Civsizeof -> M_Civsizeof
+ | Core.Civalignof -> M_Civalignof
+ | Core.CivCOMPL -> M_CivCOMPL
+ | Core.CivAND-> M_CivAND
+ | Core.CivOR -> M_CivOR
+ | Core.CivXOR -> M_CivXOR
+ | Core.Cspecified -> M_Cspecified
+ | Core.Cfvfromint-> M_Cfvfromint
+ | Core.Civfromfloat -> M_Civfromfloat
+ | Core.Cunspecified -> 
+    failwith "core_anormalisation: Cunspecified"
+end
+
+
+let rec core_to_mu__pattern (Core.Pattern annots pat_) = 
+  let wrap pat_ = M_Pattern annots pat_ in
+  match pat_ with
+  | Core.CaseBase (msym, bt) -> 
+     wrap (M_CaseBase (msym, bt))
+  | Core.CaseCtor ctor pats -> 
+     wrap (M_CaseCtor 
+             (core_to_mu__ctor ctor)
+             (map core_to_mu__pattern pats))
+  end
+
+
+
+
+
 
 
 type letbinder 'bound 'body = 
@@ -196,7 +211,7 @@ and n_lv lb annots v k =
      n_ov lb annots ov (fun ov ->
      k (M_LVspecified ov))
   | LVunspecified ct ->
-     k (M_LVunspecified ct)
+     failwith "core_anormalisation: LVunspeified"
   end
 
 and n_val lb annots v k = 
@@ -294,16 +309,13 @@ and n_pexpr (e : pexpr unit) k =
      k (annotate (M_PEerror err e')))
   | PEctor ctor args ->
      n_pexpr_names args (fun args -> 
-     k (annotate (M_PEctor ctor args)))
+     k (annotate (M_PEctor (core_to_mu__ctor ctor) args)))
   | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
         let pats_pes = 
           map (fun (pat,pe) -> 
-              let pe = 
-                if contains_unspecified pat && remove_unspecified
-                then replace_with_undefined_pe pe
-                else n_pexpr pe k 
-              in
+              let pat = core_to_mu__pattern pat in
+              let pe = n_pexpr pe k in
               (pat, pe)) pats_pes 
         in
         annotate (M_PEcase e' pats_pes)
@@ -341,7 +353,7 @@ and n_pexpr (e : pexpr unit) k =
   | PElet pat e' e'' ->
      n_pexpr e' (fun e' ->
      letbinder_pexpr_in_pexpr annots 
-       (M_normal_pattern pat)
+       (M_normal_pattern (core_to_mu__pattern pat))
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
@@ -432,16 +444,13 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEerror err e')))
   | PEctor ctor args ->
      n_pexpr_in_expr_names args (fun args -> 
-     k (annotate (M_PEctor ctor args)))
+     k (annotate (M_PEctor (core_to_mu__ctor ctor) args)))
   | PEcase e' pats_pes ->
      n_pexpr_in_expr_name e' (fun e' -> 
         let pats_pes = 
           map (fun (pat,pe) -> 
-              let pe = 
-                if contains_unspecified pat && remove_unspecified
-                then embed_pexpr_expr (replace_with_undefined_pe pe)
-                else n_pexpr_in_expr pe k 
-              in
+              let pat = core_to_mu__pattern pat in
+              let pe = n_pexpr_in_expr pe k in
               (pat, pe)) pats_pes 
         in
         M_Expr annots (M_Ecase e' pats_pes)
@@ -479,7 +488,7 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
   | PElet pat e' e'' ->
      n_pexpr_in_expr e' (fun e' ->
      letbinder_pexpr_in_expr annots 
-       (M_normal_pattern pat) 
+       (M_normal_pattern (core_to_mu__pattern pat))
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
@@ -701,11 +710,8 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      n_pexpr_in_expr_name pexpr (fun pexpr ->
          let pats_es = 
            map (fun (pat,e) -> 
-               let pe = 
-                 if contains_unspecified pat && remove_unspecified 
-                 then replace_with_undefined_e e
-                 else n_expr e k 
-               in
+               let pat = core_to_mu__pattern pat in
+               let pe = n_expr e k in
                (pat, pe)
              ) 
              pats_es 
@@ -714,7 +720,8 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      )
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
-     wrap (M_Elet (M_normal_pattern pat) e1 (n_expr e2 k)))
+     wrap (M_Elet (M_normal_pattern (core_to_mu__pattern pat) )
+             e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
      n_pexpr_in_expr_name e1 (fun e1 ->
      let e2 = n_expr e2 k in
@@ -739,10 +746,10 @@ and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      failwith "todo Eunseq"
   | Ewseq pat e1 e2 ->
      n_expr e1 (fun e1 ->
-     wrap (M_Ewseq pat e1 (n_expr e2 k)))
+     wrap (M_Ewseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
   | Esseq pat e1 e2 ->
      n_expr e1 (fun e1 ->
-     wrap (M_Esseq pat e1 (n_expr e2 k)))
+     wrap (M_Esseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
   | Easeq b action paction ->
      failwith "todo Easeq"
   | Eindet n e ->
