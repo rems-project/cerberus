@@ -61,6 +61,11 @@ let rec mk_list_pat bTy = function
   | _pat::_pats ->
       Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat bTy _pats]))
 
+let ensure_list_core_base_type loc = function
+  | BTy_list cbt -> cbt
+  | _ -> failwith ((Location_ocaml.location_to_string loc) ^ 
+                     ": list given non-list type")
+
 
 type symbolify_state = {
   labels: (Core_parser_util._sym, Symbol.sym * Location_ocaml.t) Pmap.map;
@@ -1388,11 +1393,13 @@ ctor:
 
 list_pattern:
 | BRACKETS COLON bTy= core_base_type
-  { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Cnil bTy, [])) }
+  { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+    Pattern ([Aloc loc], CaseCtor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
   { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Ccons, [_pat1; _pat2])) }
 | _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
-    { mk_list_pat bTy _pats }
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      mk_list_pat (ensure_list_core_base_type loc bTy) _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
@@ -1448,11 +1455,13 @@ value:
 
 list_pexpr:
 | BRACKETS COLON bTy= core_base_type
-    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Cnil bTy, [])) }
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      Pexpr ([Aloc loc], (), PEctor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Ccons, [_pe1; _pe2])) }
 | _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET) COLON bTy= core_base_type
-    { mk_list_pe bTy _pes }
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      mk_list_pe (ensure_list_core_base_type loc bTy) _pes }
 
 member:
 | DOT cid=cabs_id EQ _pe=pexpr

@@ -2481,7 +2481,7 @@ begin if expect_is_variadic then
                             List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
                                      (List.zip (List.reverse rev_arg_ty_pes) vararg_pes) in
                          let varargs_ty_pes_type = 
-                           C.BTy_list (C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)]) in
+                           C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)] in
                          arg_pes ++ [Caux.mk_list_pe varargs_ty_pes_type varargs_ty_pes]
                         )
                       )

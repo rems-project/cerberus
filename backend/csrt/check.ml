@@ -755,15 +755,10 @@ let infer_value loc env v : (UU.ut,'e) m =
      let name = fresh () in
      return (Normal [makeA name Bool; makeUC (Not (S name))])
   | M_Vlist (cbt, asyms) ->
-     bt_of_core_base_type loc cbt >>= fun bt ->
-     begin match bt with
-     | List i_t ->
-        make_Aargs_bts env asyms >>= fun args_bts ->
-        args_same_typ (Some i_t) args_bts >>
-        return (Normal [makeUA (List i_t)])
-     | bt ->
-        fail (Generic_error (loc, "Cnil without list type"))
-     end 
+     bt_of_core_base_type loc cbt >>= fun i_t ->
+     make_Aargs_bts env asyms >>= fun args_bts ->
+     args_same_typ (Some i_t) args_bts >>
+     return (Normal [makeUA (List i_t)])
   | M_Vtuple args ->
      make_Aargs_bts env args >>= fun args_bts ->
      return (Normal [makeUA (Tuple (List.map fst args_bts))])
@@ -916,13 +911,11 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
   match ctor with
   | `Cnil cbt ->
      bt_of_core_base_type loc cbt >>= fun bt ->
-     begin match bt, args_bts with
-     | List _, [] ->
-        return bt
-     | _, [] ->
-        fail (Generic_error (loc, "Cnil without list type"))
-     | _, args -> 
-        let err = Printf.sprintf "Cons applied to %d argument(s)" (List.length args) in
+     begin match args_bts with
+     | [] -> return (List bt)
+     | args_bts -> 
+        let err = Printf.sprintf "Cons applied to %d argument(s)" 
+                    (List.length args_bts) in
         fail (Generic_error (loc, err))
      end
   | `Ccons ->

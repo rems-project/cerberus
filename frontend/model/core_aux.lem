@@ -225,7 +225,7 @@ let mk_unspecified_pat_ annots pat =
 val mk_unspecified_pat: pattern -> pattern
 let mk_unspecified_pat pat = mk_unspecified_pat_ [] pat
 
-let rec mk_list_pat bTy pats = 
+let rec mk_list_pat (bTy : core_base_type) pats = 
   match pats with
   | [] ->
       Pattern [] (CaseCtor (Cnil bTy) [])
