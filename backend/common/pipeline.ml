@@ -20,7 +20,7 @@ let run_pp with_ext doc =
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
   let term_col = match terminal_size () with
-    | Some (_, col) -> col
+    | Some (_, col) -> col - 1  (* without '-1' it's sometimes wrong *)
     | _ -> 80
   in
   PPrint.ToChannel.pretty 1.0 term_col oc doc;
@@ -474,6 +474,13 @@ let print_core (conf, io) ~filename core_file =
   return core_file
 
 let core_passes (conf, io) ~filename core_file =
+  (* If using the switch making load() returning unspecified value undefined, then
+     we remove from the Core the code dealing with them. *)
+  let core_file =
+    if Switches.(has_switch SW_strict_reads) then
+      Remove_unspecs.rewrite_file core_file
+    else
+      core_file in
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
       typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->

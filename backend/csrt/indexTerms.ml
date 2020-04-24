@@ -1,6 +1,7 @@
 open Utils
 open List
-open Printf
+open PPrint
+open Pp_tools
 open Sexplib
 open Except
 module Loc=Location
@@ -16,7 +17,6 @@ type t =
   | Mul of t * t
   | Div of t * t
   | Exp of t * t
-  | App of t * t
   | Rem_t of t * t
   | Rem_f of t * t
 
@@ -53,32 +53,30 @@ let (%&) t1 t2 = And (t1, t2)
 let (%|) t1 t2 = Or (t1, t2)
 
 let rec pp = function
-  | Num i -> Nat_big_num.to_string i
-  | Bool b -> if b then "true" else "false"
+  | Num i -> !^ (Nat_big_num.to_string i)
+  | Bool b -> !^ (if b then "true" else "false")
 
-  | Add (it1,it2) -> sprintf "(%s + %s)" (pp it1) (pp it2)
-  | Sub (it1,it2) -> sprintf "(%s - %s)" (pp it1) (pp it2)
-  | Mul (it1,it2) -> sprintf "(%s * %s)" (pp it1) (pp it2)
-  | Div (it1,it2) -> sprintf "(%s / %s)" (pp it1) (pp it2)
-  | Exp (it1,it2) -> sprintf "(%s ^ %s)" (pp it1) (pp it2)
-  | App (it1,it2) -> sprintf "(app %s %s)" (pp it1) (pp it2)
-  | Rem_t (it1,it2) -> sprintf "(rem_t %s %s)" (pp it1) (pp it2)
-  | Rem_f (it1,it2) -> sprintf "(rem_f %s %s)" (pp it1) (pp it2)
+  | Add (it1,it2) -> parens (pp it1 ^^^ plus ^^^ pp it2)
+  | Sub (it1,it2) -> parens (pp it1 ^^^ minus ^^^ pp it2)
+  | Mul (it1,it2) -> parens (pp it1 ^^^ star ^^^ pp it2)
+  | Div (it1,it2) -> parens (pp it1 ^^^ slash ^^^ pp it2)
+  | Exp (it1,it2) -> parens (pp it1 ^^^ caret ^^^ pp it2)
+  | Rem_t (it1,it2) -> parens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
+  | Rem_f (it1,it2) -> parens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
 
-  | EQ (o1,o2) -> sprintf "(%s = %s)"  (pp o1) (pp o2)
-  | NE (o1,o2) -> sprintf "(%s <> %s)" (pp o1) (pp o2)
-  | LT (o1,o2) -> sprintf "(%s < %s)"  (pp o1) (pp o2)
-  | GT (o1,o2) -> sprintf "(%s > %s)"  (pp o1) (pp o2)
-  | LE (o1,o2) -> sprintf "(%s <= %s)" (pp o1) (pp o2)
-  | GE (o1,o2) -> sprintf "(%s >= %s)" (pp o1) (pp o2)
+  | EQ (o1,o2) -> parens (pp o1 ^^^ eq ^^^ pp o2)
+  | NE (o1,o2) -> parens (pp o1 ^^^ ne ^^^ pp o2)
+  | LT (o1,o2) -> parens (pp o1 ^^^ lt ^^^ pp o2)
+  | GT (o1,o2) -> parens (pp o1 ^^^ gt ^^^ pp o2)
+  | LE (o1,o2) -> parens (pp o1 ^^^ le ^^^ pp o2)
+  | GE (o1,o2) -> parens (pp o1 ^^^ ge ^^^ pp o2)
 
-  | Null o1 -> sprintf "(null %s)" (pp o1) 
-  | And (o1,o2) -> sprintf "(%s & %s)" (pp o1) (pp o2)
-  | Or (o1,o2) -> sprintf "(%s | %s)" (pp o1) (pp o2)
-  | Not (o1) -> sprintf "(not %s)" (pp o1)
+  | Null o1 -> parens (!^ "null" ^^^ pp o1)
+  | And (o1,o2) -> parens (pp o1 ^^^ ampersand ^^^ pp o2)
+  | Or (o1,o2) -> parens (pp o1 ^^^ bar ^^^ pp o2)
+  | Not (o1) -> parens (!^ "not" ^^^ pp o1)
 
-  | List (it, its) -> 
-     sprintf "(list (%s))" (String.concat " " (map pp (it :: its)))
+  | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its))
 
   | S sym -> Sym.pp sym
 
@@ -114,10 +112,6 @@ let rec parse_sexp loc (names : NameMap.t) sx =
      parse_sexp loc names o1 >>= fun o1 ->
      parse_sexp loc names o2 >>= fun o2 -> 
      return (Exp (o1, o2))
-  | Sexp.List [Sexp.Atom "app"; o1;o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (App (o1, o2))
   | Sexp.List [Sexp.Atom "rem_t";o1;o2] -> 
      parse_sexp loc names o1 >>= fun o1 ->
      parse_sexp loc names o2 >>= fun o2 ->
@@ -186,7 +180,6 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   | Mul (it, it') -> Mul (subst sym with_it it, subst sym with_it it')
   | Div (it, it') -> Div (subst sym with_it it, subst sym with_it it')
   | Exp (it, it') -> Exp (subst sym with_it it, subst sym with_it it')
-  | App (it, it') -> App (subst sym with_it it, subst sym with_it it')
   | Rem_t (it, it') -> Rem_t (subst sym with_it it, subst sym with_it it')
   | Rem_f (it, it') -> Rem_f (subst sym with_it it, subst sym with_it it')
   | EQ (it, it') -> EQ (subst sym with_it it, subst sym with_it it')
@@ -213,7 +206,6 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
   | Mul (it1, it2), Mul (it1', it2')
   | Div (it1, it2), Div (it1', it2')
   | Exp (it1, it2), Exp (it1', it2')
-  | App (it1, it2), App (it1', it2')
   | Rem_t (it1, it2), Rem_t (it1', it2')
   | Rem_f (it1, it2), Rem_f (it1', it2')
 
