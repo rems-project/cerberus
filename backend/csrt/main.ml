@@ -1,114 +1,118 @@
 open Cerb_frontend
 open Cerb_backend
 open Pipeline
+open Setup
 
 let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
 
-let io =
-  let open Pipeline in
-  { pass_message = begin
-        let ref = ref 0 in
-        fun str -> Debug_ocaml.print_success (string_of_int !ref ^ ". " ^ str);
-                   incr ref;
-                   return ()
-      end;
-    set_progress = begin
-      fun str -> return ()
-      end;
-    run_pp = begin
-      fun opts doc -> run_pp opts doc;
-                      return ()
-      end;
-    print_endline = begin
-      fun str -> print_endline str;
-                 return ();
-      end;
-    print_debug = begin
-      fun n mk_str -> Debug_ocaml.print_debug n [] mk_str;
-                      return ()
-      end;
-    warn = begin
-      fun mk_str -> Debug_ocaml.warn [] mk_str;
-                    return ()
-      end;
-  }
+
+type core_file = (unit,unit) Core.generic_file
+type mu_file = (unit,unit) Mucore.mu_file
+type file = 
+  | CORE of core_file
+  | MUCORE of mu_file
 
 
-let impl_name = "gcc_4.9.0_x86_64-apple-darwin10.8.0"
+let print_file ?(remove_path = false) filename file =
+  match file with
+  | CORE file ->
+     Pipeline.run_pp ~remove_path (Some (filename,"core")) 
+       (Pp_core.Basic.pp_file file);
+  | MUCORE file ->
+     Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
+       (Pp_mucore.Basic.pp_file file);
 
 
-let conf cpp_str = {
-    debug_level = 0
-  ; pprints = []
-  ; astprints = []
-  ; ppflags = []
-  ; typecheck_core = true
-  ; rewrite_core = true
-  ; sequentialise_core = true
-  ; cpp_cmd = cpp_str
-  ; cpp_stderr = true
-}
+module Log : sig 
+  val print_log_file : string -> file -> unit
+end = struct
+  let print_count = ref 0
+  let print_log_file filename file =
+    let count = !print_count in
+    print_file ("/tmp/" ^ string_of_int count ^ "__" ^ filename) file;
+    print_count := 1 + !print_count;
+end
+
+open Log
 
 
+type rewrite = core_file -> (core_file, Errors.error) Exception.exceptM
+type named_rewrite = string * rewrite
 
 
-let print_core_file core_file filename = 
-  let pp = Pp_core.Basic.pp_file core_file in
-  Pipeline.run_pp (Some (filename,"core")) pp
+let remove_unspecified : named_rewrite =
+  ("unspec_removal",
+   fun core_file -> 
+   return (Remove_unspecs.rewrite_file core_file))
 
-let print_mu_core_file mu_file filename = 
-  let pp = Pp_mucore.Basic.pp_file mu_file in
-  Pipeline.run_pp (Some (filename,"core")) pp
+let partial_evaluation : named_rewrite = 
+  ("partial_evaluation", 
+   fun core_file -> 
+   return (Core_peval.rewrite_file core_file))
 
+let remove_unused : named_rewrite = 
+  ("unused_functions_removal",
+   fun core_file -> 
+   return (Core_remove_unused_functions.remove_unused_functions core_file))
 
-(* let pcff core_file_name core_file = 
- *   print_endline (Printf.sprintf "%s.funinfo: %d entries" 
- *     core_file_name
- *     (List.length (Pmap.bindings_list core_file.Core.funinfo))) *)
+let hackish_order : named_rewrite = 
+  ("hackish_order",
+   fun core_file -> 
+   return (Core_indet.hackish_order core_file))
 
-let process core_file0 =
+let sequentialise : named_rewrite = 
+  ("sequentialisation",
+   fun core_file -> 
+   Core_typing.typecheck_program core_file >>= fun core_file ->
+   let core_file = Core_sequentialise.sequentialise_file core_file in
+   return (Pipeline.untype_file core_file)
+)
+
+let rec do_rewrites_and_log named_rewrites core_file =
+  match named_rewrites with
+  | [] -> return core_file
+  | (name,rw) :: named_rewrites ->
+     rw core_file >>= fun core_file -> 
+     print_log_file ("after_" ^ name) (CORE core_file);
+     do_rewrites_and_log named_rewrites core_file
+  
+
+let process core_file =
   Colour.do_colour := false;
-  print_core_file core_file0 "0_original";
-  let core_file1 = Core_peval.rewrite_file core_file0 in
-  print_core_file core_file1 "1_after_peval";
-  let core_file2 = Core_remove_unused_functions.remove_unused_functions core_file1 in
-  print_core_file core_file2 "2_after_removing_unused_functions";
-  let mu_file3 = Core_anormalise.normalise_file core_file2 in
-  print_mu_core_file mu_file3 "3_after_anf";
-  print_core_file (Mucore.mu_to_core__file mu_file3) "4_back_to_core";
+  print_log_file "original" (CORE core_file);
+  do_rewrites_and_log
+    [ remove_unspecified
+    ; partial_evaluation
+    ; remove_unused
+    ; hackish_order ]
+    (* ; sequentialise ] *)
+    core_file >>= fun core_file ->
+  let mu_file = Core_anormalise.normalise_file core_file in
+  print_log_file "after_anf" (MUCORE mu_file);
+  print_log_file "back_to_core" (CORE (Mucore.mu_to_core__file mu_file));
   Colour.do_colour := true;
-  return mu_file3
+  return mu_file
 
-let frontend conf filename = 
+let frontend filename = 
   Global_ocaml.(set_cerb_conf false Random false Basic false false false);
   Ocaml_implementation.(set (HafniumImpl.impl));
   load_core_stdlib () >>= fun stdlib ->
-  load_core_impl stdlib impl_name >>= fun impl ->
+  load_core_impl stdlib Setup.impl_name >>= fun impl ->
   match Filename.extension filename with
   | ".c" ->
      c_frontend (conf, io) (stdlib, impl) ~filename >>= fun (_,_,core_file) ->
      Tags.set_tagDefs core_file.Core.tagDefs;
-     process core_file
-  | ".core" ->
-     core_frontend (conf, io) (stdlib, impl) ~filename >>= fun core_file ->
      process core_file
   | ext ->
      failwith (Printf.sprintf "wrong file extension %s" ext)
 
 
 
-let cpp_str =
-    "cc -E -C -Werror -nostdinc -undef -D__cerb__"
-  ^ " -I$(HOME)/Sources/rems-project/cerberus-private/runtime/libc/include"
-  ^ " -DDEBUG"
-
-
-
 
 let check filename debug_level =
-  match frontend (conf cpp_str) filename with
+  match frontend filename with
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)
   | Exception.Result core_file ->
