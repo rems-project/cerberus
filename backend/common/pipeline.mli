@@ -27,7 +27,7 @@ type io_helpers = {
   warn: (unit -> string) -> (unit, Errors.error) Exception.exceptM;
 }
 
-val run_pp: (string * string) option -> PPrint.document -> unit
+val run_pp: ?remove_path:bool -> (string * string) option -> PPrint.document -> unit
 
 val load_core_stdlib:
   unit -> ((string, Symbol.sym) Pmap.map * unit Core.fun_map, Location_ocaml.t * Errors.cause) Exception.exceptM
@@ -81,3 +81,8 @@ val read_core_object:
   (((string, Symbol.sym) Pmap.map * (unit, unit) Core.generic_fun_map) * unit Core.generic_impl) ->
   string -> unit Core.file
 val write_core_object: unit Core.file -> string -> unit
+
+
+val untype_file: 
+  'a Core.typed_file ->
+  'a Core.file

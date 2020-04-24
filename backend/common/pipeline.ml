@@ -10,11 +10,16 @@ let (>>=) = Exception.except_bind
 let (<$>)  = Exception.except_fmap
 let return = Exception.except_return
 
-let run_pp with_ext doc =
+let run_pp ?(remove_path = true) with_ext doc =
   let (is_fout, oc) =
     match with_ext with
       | Some (filename, ext_str) ->
-          (true, Stdlib.open_out (Filename.remove_extension (Filename.basename filename) ^ "." ^ ext_str))
+         let open Filename in
+         let filename = 
+           if remove_path then remove_extension (basename filename) ^ "." ^ ext_str 
+           else remove_extension filename ^ "." ^ ext_str 
+         in
+         (true, Stdlib.open_out filename)
       | None ->
           (false, Stdlib.stdout) in
   let saved = !Colour.do_colour in
