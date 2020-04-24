@@ -66,7 +66,7 @@ let parse_sexp loc (names : NameMap.t) sx =
   (* | Sexp.List (Sexp.Atom p :: its) ->
    *    mapM (IndexTerms.parse_sexp loc names) its >>= fun its ->
    *    return (Pred (p, its)) *)
-  | t -> parse_error "resource type" t loc
+  | t -> parse_error loc "resource type" t
 
 let subst sym with_it t = 
   match t with

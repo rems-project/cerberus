@@ -168,7 +168,7 @@ let rec parse_sexp loc (names : NameMap.t) sx =
      return (S sym)
 
   | t -> 
-     parse_error "index term" t loc
+     parse_error loc "index term" t
 
 
 let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 
@@ -235,18 +235,18 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
 
   | S sym, S it' ->
      begin match SymMap.find_opt sym res with
-     | None -> fail ()
+     | None -> noloc_fail ()
      | Some uni ->
         match uni.resolved with
         | Some it when it = it' -> return res 
-        | Some it -> fail ()
+        | Some it -> noloc_fail ()
         | None -> 
            let uni = { uni with resolved = Some it' } in
            return (SymMap.add sym uni res)
      end
 
   | _, _ ->
-     fail ()
+     noloc_fail ()
 
 and unify_list its its' res =
   match its, its' with
@@ -255,5 +255,5 @@ and unify_list its its' res =
      unify it it' res >>= fun res ->
      unify_list its its' res
   | _, _ ->
-     fail ()
+     noloc_fail ()
 

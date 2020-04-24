@@ -1,7 +1,6 @@
 open PPrint
 open Sexplib
 open Except
-open Location
 
 let uncurry f (a,b)  = f a b
 let curry f a b = f (a,b)
@@ -12,12 +11,11 @@ type num = Nat_big_num.num
 
 
 
-let parse_error (t : string) (sx : Sexp.t) (loc: Location.t) =
+let parse_error (loc: Location.t) (t : string) (sx : Sexp.t) =
   let fname = (!^) t in
-  let msg = parens fname ^^ space ^^ (!^ "unexpected token") ^^ 
+  let err = parens fname ^^ space ^^ (!^ "unexpected token") ^^ 
               colon ^^ space ^^ (!^ (Sexp.to_string sx)) in
-  let err = withloc loc msg in
-  fail err
+  fail loc err
 
 let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
