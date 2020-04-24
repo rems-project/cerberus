@@ -63,7 +63,7 @@ let collect_rc_attrs : Annot.attributes -> rc_attr list =
         {rc_attr_id; rc_attr_args} :: acc
     | _          -> acc
   in
-  fun (Annot.Attrs(attrs)) -> List.rev (List.fold_left fn [] attrs)
+  fun (Annot.Attrs(attrs)) -> List.fold_left fn [] attrs
 
 let rec translate_int_type : loc -> i_type -> Coq_ast.int_type = fun loc i ->
   let open Ctype in

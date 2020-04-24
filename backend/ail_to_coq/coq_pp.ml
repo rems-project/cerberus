@@ -175,7 +175,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
     | AnnotExpr(i,coq_e,e)          ->
         pp "AnnotExpr %i%%nat %a (%a)" i (pp_coq_expr true) coq_e pp_expr e
     | Struct(id, fs)                ->
-        pp "@[@[<hov 2>Struct string_%s [" id;
+        pp "@[@[<hov 2>Struct struct_%s [" id;
         let fn i (id, e) =
           let s = if i = List.length fs - 1 then "" else " ;" in
           pp "@;(%S, %a)%s" id pp_expr e s
@@ -842,7 +842,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
                    List.iter (fprintf ff " %a]" pp_intro) xs
     in
     pp "@]@;@[<v 2>Proof.@;";
-    pp "start_function (%a)" pp_intros annot.fa_parameters;
+    pp "start_function \"%s\" (%a)" id pp_intros annot.fa_parameters;
     if def.func_vars <> [] || def.func_args <> [] then
       begin
         pp " =>";
