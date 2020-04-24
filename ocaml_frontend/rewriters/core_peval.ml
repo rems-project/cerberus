@@ -557,10 +557,14 @@ let core_peval file : 'bty RW.rewriter =
                               Core_aux.mk_sym_pat sym bTy
                             ) sym_bTys in
                           Update begin
-                            Core_aux.mk_let_pe
-                              (Core_aux.mk_tuple_pat pats)
-                              (Core_aux.mk_tuple_pe pes)
-                              body_pe
+                            match pes with
+                              | [] ->
+                                  body_pe
+                              | _ ->
+                                  Core_aux.mk_let_pe
+                                    (Core_aux.mk_tuple_pat pats)
+                                    (Core_aux.mk_tuple_pe pes)
+                                    body_pe
                           end
                       | None ->
                           Traverse
