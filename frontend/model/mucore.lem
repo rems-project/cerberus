@@ -49,7 +49,7 @@ type mu_object_value 'bty =  (* C object values *)
 
 type mu_loaded_value 'bty =  (* potentially unspecified C object values *)
  | M_LVspecified of mu_object_value 'bty (* non-unspecified loaded value *)
- | M_LVunspecified of ctype (* unspecified loaded value *)
+ (* | M_LVunspecified of ctype (\* unspecified loaded value *\) *)
 
 
 (* again, we might remove something from the definition here,
@@ -66,11 +66,31 @@ type mu_value 'bty =  (* Core values *)
 
 
 
-type mu_ctor = Core.generic_ctor
+type mu_ctor =  (* data constructors *)
+ | M_Cnil of mu_base_type (* empty list *) 
+ (* annotated with the type of the list items *)
+ | M_Ccons (* list cons *)
+ | M_Ctuple (* tuple *)
+ | M_Carray (* C array *)
+ | M_Civmax (* max integer value *)
+ | M_Civmin (* min integer value *)
+ | M_Civsizeof (* sizeof value *)
+ | M_Civalignof (* alignof value *)
+ | M_CivCOMPL (* bitwise complement *)
+ | M_CivAND (* bitwise AND *)
+ | M_CivOR (* bitwise OR *)
+ | M_CivXOR (* bitwise XOR *)
+ | M_Cspecified (* non-unspecified loaded value *)
+ (* | M_Cunspecified (\* unspecified loaded value *\) *)
+ | M_Cfvfromint (* cast integer to floating value *)
+ | M_Civfromfloat (* cast floating to integer value *)
 
+type mu_pattern_ = 
+ | M_CaseBase of (maybe Symbol.sym * mu_base_type)
+ | M_CaseCtor of mu_ctor * list mu_pattern
 
-type mu_pattern_ = Core.generic_pattern_ symbol
-type mu_pattern = Core.generic_pattern symbol
+and mu_pattern = 
+ | M_Pattern of list annot * mu_pattern_
 
 type mu_sym_or_pattern 'bty = 
   | M_symbol of annotated symbol 'bty
@@ -310,7 +330,7 @@ and mu_to_core__loaded_value (env : env 'bty) lv =
   match lv with
   | M_LVspecified ov ->
      Core.LVspecified (mu_to_core__object_value env ov)
-  | M_LVunspecified ct -> Core.LVunspecified ct
+  (* | M_LVunspecified ct -> Core.LVunspecified ct *)
   end
 
 
@@ -331,7 +351,35 @@ let rec mu_to_core__value (env : env 'bty) (v : mu_value 'bty)
      Core.Vtuple is
   end
   
+let mu_to_core__ctor = function
+ | M_Cnil bt -> Core.Cnil bt
+ | M_Ccons -> Core.Ccons
+ | M_Ctuple -> Core.Ctuple
+ | M_Carray -> Core.Carray
+ | M_Civmax -> Core.Civmax
+ | M_Civmin -> Core.Civmin
+ | M_Civsizeof -> Core.Civsizeof
+ | M_Civalignof -> Core.Civalignof
+ | M_CivCOMPL -> Core.CivCOMPL
+ | M_CivAND-> Core.CivAND
+ | M_CivOR -> Core.CivOR
+ | M_CivXOR -> Core.CivXOR
+ | M_Cspecified -> Core.Cspecified
+ | M_Cfvfromint-> Core.Cfvfromint
+ | M_Civfromfloat -> Core.Civfromfloat
+end
 
+
+let rec mu_to_core__pattern (M_Pattern annots pat_) = 
+  let wrap pat_ = Core.Pattern annots pat_ in
+  match pat_ with
+  | M_CaseBase (msym, bt) -> 
+     wrap (Core.CaseBase (msym, bt))
+  | M_CaseCtor ctor pats -> 
+     wrap (Core.CaseCtor 
+             (mu_to_core__ctor ctor)
+             (map mu_to_core__pattern pats))
+  end
 
 let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
         : Core.generic_pexpr 'bty symbol =
@@ -352,10 +400,15 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
   | M_PEerror err p -> 
      wrap (Core.PEerror err (get_pexpr "PEerror" env p))
   | M_PEctor ctor pes -> 
-     wrap (Core.PEctor ctor (map (get_pexpr "PEctor" env) pes))
+     wrap (Core.PEctor 
+             (mu_to_core__ctor ctor)
+             (map (get_pexpr "PEctor" env) pes))
   | M_PEcase p pats_pes ->
      let pats_pes = 
-       map (fun (pat,e) -> (pat, mu_to_core__pexpr env e)) pats_pes in
+       map (fun (pat,e) -> 
+           (mu_to_core__pattern pat, 
+            mu_to_core__pexpr env e)) 
+         pats_pes in
      wrap (Core.PEcase (get_pexpr "PEcase" env p) pats_pes)
   | M_PEarray_shift pe1 ctype pe2 ->
      wrap (Core.PEarray_shift 
@@ -389,7 +442,7 @@ let rec mu_to_core__pexpr (env : env 'bty) (pexpr : mu_pexpr 'bty)
         mu_to_core__pexpr env' p2
      | M_normal_pattern pat ->
         wrap (Core.PElet 
-                pat
+                (mu_to_core__pattern pat)
                 (mu_to_core__pexpr env p1) 
                 (mu_to_core__pexpr env p2))
      end
@@ -667,7 +720,9 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
        wrap (Core.Eaction (mu_to_core__paction env pa))
     | M_Ecase pe es ->
        wrap (Core.Ecase (get_pexpr "Ecase" env pe) 
-               (map (fun (pat,e) -> (pat, mu_to_core__expr env e)) es))
+               (map (fun (pat,e) -> 
+                    (mu_to_core__pattern pat, 
+                     mu_to_core__expr env e)) es))
     | M_Elet pat pe e ->
        match pat with
        | M_symbol (Annotated _ _ sym) ->
@@ -676,7 +731,7 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
           mu_to_core__expr env' e
        | M_normal_pattern pat ->
           wrap (Core.Elet 
-                  pat
+                  (mu_to_core__pattern pat)
                   (mu_to_core__pexpr env pe) 
                   (mu_to_core__expr env e))
        end
@@ -696,11 +751,13 @@ let rec mu_to_core__expr env (expr : mu_expr 'a 'bty)
     (* | M_Eunseq es ->
      *    Core.Eunseq (map (mu_to_core__expr env) es) *)
     | M_Ewseq pat e1 e2 ->
-       wrap (Core.Ewseq pat
+       wrap (Core.Ewseq 
+               (mu_to_core__pattern pat)
                (mu_to_core__expr env e1)
                (mu_to_core__expr env e2))
     | M_Esseq pat e1 e2 ->
-       wrap (Core.Esseq pat
+       wrap (Core.Esseq 
+               (mu_to_core__pattern pat)
                (mu_to_core__expr env e1)
                (mu_to_core__expr env e2))
     (* | M_Easeq (s,bt) a pa ->
