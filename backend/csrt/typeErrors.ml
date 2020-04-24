@@ -16,55 +16,24 @@ open Pp_tools
   | Unconstrained_l of Sym.t * LogicalSorts.t
 
  type type_error = 
+  | Name_bound_twice of Sym.t
+  | Unbound_name of Sym.t
+  | Unreachable of string
+  | Unsupported of string
   | Var_kind_error of {
-      loc : Loc.t;
       sym: Sym.t;
       expected : VarTypes.kind;
       has : VarTypes.kind;
     }
-  | Name_bound_twice of {
-      loc : Loc.t;
-      name: Sym.t
-    }
-  | Unreachable of {
-      loc: Loc.t;
-      unreachable : string;
-    }
-  | Illtyped_it of {
-      loc: Loc.t;
-      it: IndexTerms.t;
-    }
-  | Unsupported of { 
-      loc: Loc.t;
-      unsupported: string; 
-    }
-  | Unbound_name of {
-      loc: Loc.t; 
-      is_function: bool;
-      unbound: Sym.t;
-    }
-  (* | Inconsistent_fundef of {
-   *     loc: Loc.t;
-   *     decl: FunctionTypes.t;
-   *     defn: FunctionTypes.t;
-   *   } *)
-  | Variadic_function of {
-      loc: Loc.t;
-      fn: Sym.t;
-    }
-  | Return_error of 
-      Loc.t * call_return_switch_error
-  | Call_error of 
-      Loc.t * call_return_switch_error
-  | Switch_error of 
-      Loc.t * call_return_switch_error
-  | Integer_value_error of 
-      Loc.t
-  | Undefined_behaviour of
-      Loc.t * Undefined.undefined_behaviour
-  | Unspecified_value of
-      Loc.t
-  | Generic_error of Loc.t * string
+  | Illtyped_it of IndexTerms.t
+  | Variadic_function of Sym.t
+  | Return_error of call_return_switch_error
+  | Call_error of call_return_switch_error
+  | Switch_error of call_return_switch_error
+  | Integer_value_error
+  | Undefined_behaviour of Undefined.undefined_behaviour
+  | Unspecified_value
+  | Generic_error of string
 
  let pp_return_error loc err = 
    withloc loc
@@ -149,44 +118,41 @@ open Pp_tools
      end
 
 
- let pp = function 
+ let pp loc = function 
   | Var_kind_error err ->
-     withloc err.loc (!^"Expected kind" ^^^ VarTypes.pp_kind err.expected ^^^
+     withloc loc (!^"Expected kind" ^^^ VarTypes.pp_kind err.expected ^^^
                         !^"but found kind" ^^^ VarTypes.pp_kind err.has)
-  | Name_bound_twice err ->
-     withloc err.loc (!^"Name bound twice" ^^ colon ^^^ 
-                        squotes (Sym.pp err.name))
-  | Generic_error (loc, err) ->
+  | Name_bound_twice name ->
+     withloc loc (!^"Name bound twice" ^^ colon ^^^ 
+                    squotes (Sym.pp name))
+  | Generic_error err ->
      withloc loc (!^err)
-  | Unreachable {loc; unreachable} ->
+  | Unreachable unreachable ->
      withloc loc (!^"Internal error, should be unreachable" ^^ 
                     colon ^^^ !^unreachable)
-  | Illtyped_it {loc; it} ->
+  | Illtyped_it it ->
      withloc loc (!^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it))
-  | Unsupported {loc; unsupported} ->
+  | Unsupported unsupported ->
      withloc loc (!^"Unsupported feature" ^^ colon ^^^ !^unsupported)
-  | Unbound_name {loc; is_function; unbound} ->
-     withloc loc
-       (if is_function 
-        then !^"Unbound function" ^^ colon ^^^ Sym.pp unbound
-        else !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound)
+  | Unbound_name unbound ->
+     withloc loc (!^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound)
   (* | Inconsistent_fundef {loc; decl; defn} ->
    *    sprintf "%s. Function definition inconsistent. Should be %s, is %s"
    *      (Loc.pp loc) (FunctionTypes.pp decl) (FunctionTypes.pp defn) *)
-  | Variadic_function {loc; fn} ->
+  | Variadic_function fn ->
      withloc loc (!^"Variadic functions unsupported" ^^^ parens (Sym.pp fn))
-  | Return_error (loc, err) -> 
+  | Return_error err -> 
      pp_return_error loc err
-  | Call_error (loc, err) -> 
+  | Call_error err -> 
      pp_call_error loc err
-  | Switch_error (loc, err) -> 
+  | Switch_error err -> 
      pp_call_error loc err
-  | Integer_value_error loc ->
+  | Integer_value_error ->
      withloc loc (!^"integer_value_to_num returned None")
-  | Undefined_behaviour (loc, undef) ->
+  | Undefined_behaviour undef ->
      withloc loc (!^"Undefined behaviour" ^^ colon ^^^ 
                     !^(Undefined.pretty_string_of_undefined_behaviour undef))
-  | Unspecified_value loc ->
+  | Unspecified_value ->
      withloc loc (!^"Unspecified value")
 
 
@@ -195,6 +161,6 @@ open Pp_tools
 
 
 
-let report_error err = 
+let report_type_error loc err = 
   Cerb_backend.Pipeline.run_pp None (h1 "Error!");
-  Cerb_backend.Pipeline.run_pp None (pp err);
+  Cerb_backend.Pipeline.run_pp None (pp loc err);

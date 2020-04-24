@@ -2,11 +2,14 @@ open Cerb_frontend
 open Exception
 
 
-type ('a,'e) m = ('a,'e) exceptM
+type ('a,'e) m = ('a, 'e) exceptM
 
 let return : 'a -> ('a,'e) m = except_return
 
-let fail : 'e -> ('a,'e) m = fail
+let fail : Location.t -> 'e -> ('a, Location.t * 'e) m = 
+  fun loc e -> Exception.fail (loc,e)
+
+let noloc_fail e = Exception.fail e
 
 let (>>=) = except_bind
 

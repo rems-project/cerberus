@@ -47,7 +47,7 @@ let rec parse_sexp loc (names : NameMap.t) sx =
   | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
      NameMap.sym_of loc id names >>= fun sym ->
      return (Struct sym)
-  | a -> parse_error "base type" a loc
+  | a -> parse_error loc "base type" a
 
 let type_equal t1 t2 = t1 = t2
 
