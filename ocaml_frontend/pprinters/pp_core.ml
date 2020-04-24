@@ -407,12 +407,12 @@ let pp_pexpr pe =
             pp_symbol sym
         | PEimpl iCst ->
             pp_impl iCst
-        | PEctor (Cnil _, pes) ->
+        | PEctor (Cnil bTy, pes) ->
             if not (pes <> []) then
               Debug_ocaml.warn [] (fun () ->
                 "Pp_core found a Cnil with pes <> []"
               );
-            P.brackets P.empty
+            P.brackets P.empty ^^ P.colon ^^^ pp_core_base_type bTy
         | PEctor (Ccons, pes) ->
             let to_list_value =
               let rec aux acc = function

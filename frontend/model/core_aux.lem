@@ -305,8 +305,14 @@ let rec mk_list_pe bTy pes =
   end
 
 val mk_tuple_pe: list pexpr -> pexpr
-let mk_tuple_pe pes =
-  Pexpr [] () (PEctor Ctuple pes)
+let mk_tuple_pe = function
+  | [] ->
+      error "Core_aux.mk_tuple_pe []"
+  | [pe] ->
+      pe
+  | pes ->
+      Pexpr [] () (PEctor Ctuple pes)
+end
 
 val mk_ivmax_pe: pexpr -> pexpr
 let mk_ivmax_pe pe =
