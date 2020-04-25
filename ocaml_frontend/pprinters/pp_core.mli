@@ -7,6 +7,8 @@ sig
   (* Show function from #include -- actually from .h files *)
   val show_include: bool
   (* handle_location c_loc core_range *)
+  val show_locations: bool
+  (* print locations *)
   val handle_location: Location_ocaml.t -> PPrint.range -> unit
   (* handle_uid uid core_range *)
   val handle_uid: string -> PPrint.range -> unit
@@ -35,5 +37,5 @@ module Make (C : CONFIG) : PP_CORE
 
 module Basic : PP_CORE
 module All : PP_CORE
-
+module WithLocations : PP_CORE
 

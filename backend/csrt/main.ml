@@ -19,10 +19,10 @@ let print_file ?(remove_path = false) filename file =
   match file with
   | CORE file ->
      Pipeline.run_pp ~remove_path (Some (filename,"core")) 
-       (Pp_core.Basic.pp_file file);
+       (Pp_core.WithLocations.pp_file file);
   | MUCORE file ->
      Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
-       (Pp_mucore.Basic.pp_file file);
+       (Pp_mucore.WithLocations.pp_file file);
 
 
 module Log : sig 
