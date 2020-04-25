@@ -86,8 +86,8 @@ let process core_file =
     [ remove_unspecified
     ; partial_evaluation
     ; remove_unused
-    ; hackish_order ]
-    (* ; sequentialise ] *)
+    ; hackish_order
+    ; sequentialise ]
     core_file >>= fun core_file ->
   let mu_file = Core_anormalise.normalise_file core_file in
   print_log_file "after_anf" (MUCORE mu_file);

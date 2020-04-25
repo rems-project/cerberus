@@ -47,4 +47,8 @@ let record (loc : Location.t) (string : string) (sym : Sym.t) namemap =
     name_of_sym = SymMap.add sym string namemap.name_of_sym;
     loc_of_sym  = SymMap.add sym loc namemap.loc_of_sym }
 
+let record_without_loc (string : string) (sym : Sym.t) namemap = 
+  { namemap with sym_of_name = StringMap.add string sym namemap.sym_of_name;
+                 name_of_sym = SymMap.add sym string namemap.name_of_sym }
+
 

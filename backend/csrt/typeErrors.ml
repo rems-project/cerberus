@@ -158,9 +158,8 @@ open Pp_tools
 
 
 
-
-
-
 let report_type_error loc err = 
-  Cerb_backend.Pipeline.run_pp None (h1 "Error!");
-  Cerb_backend.Pipeline.run_pp None (pp loc err);
+  print 
+    [ h1 "Error!"
+    ; pp loc err
+    ]

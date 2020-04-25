@@ -1,3 +1,4 @@
+open Cerb_frontend
 open PPrint
 open Sexplib
 open Except
@@ -36,10 +37,15 @@ let pp_list pp sep l = String.concat sep (List.map pp l)
 
 
 
+let precise_loc loc mlock = 
+  match mlock with
+  | Some loc2 -> loc2
+  | None -> loc
 
-let of_a a = 
-  let (Cerb_frontend.Mucore.Annotated (_, _, x)) = a in x
 
-let lof_a a = 
-  let (Cerb_frontend.Mucore.Annotated (annots, _, x)) = a in 
-  (x, Cerb_frontend.Annot.get_loc_ annots)
+let update_loc loc annots =
+  precise_loc loc (Annot.get_loc annots)
+  
+let aunpack loc (Mucore.Annotated (annots, _, x)) = 
+  (x, update_loc loc annots)
+
