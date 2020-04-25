@@ -220,13 +220,6 @@ let struct_data : ail_expr -> string * bool = fun e ->
 
 let strip_expr (AilSyntax.AnnotatedExpression(_,_,_,e)) = e
 
-let rec will_decay : ail_expr -> bool = fun e ->
-  let open AilSyntax in
-  match strip_expr e with
-  | AilEarray_decay(_) -> true
-  | AilEbinary(e,_,_)  -> will_decay e
-  | _                  -> false (* FIXME *)
-
 let rec function_decls decls =
   let open AilSyntax in
   match decls with
@@ -262,12 +255,7 @@ let rec translate_expr lval goal_ty e =
     | AilEunary(Address,e)         ->
         let (e, l) = translate_expr true None e in
         (locate (AddrOf(e)), l)
-    | AilEunary(Indirection,e)     ->
-        if will_decay e then translate e else
-        let layout = layout_of_tc (tc_of e) in
-        let atomic = is_atomic_tc (tc_of e) in
-        let (e, l) = translate e in
-        (locate (Deref(atomic, layout, e)), l)
+    | AilEunary(Indirection,e)     -> translate e
     | AilEunary(op,e)              ->
         let ty = op_type_of_tc (loc_of e) (tc_of e) in
         let (e, l) = translate e in
@@ -398,9 +386,7 @@ let rec translate_expr lval goal_ty e =
         (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEmemberofptr(e,id)        ->
         let (struct_name, from_union) = struct_data e in
-        let atomic = is_atomic_tc (tc_of e) in
         let (e, l) = translate e in
-        let e = locate (Deref(atomic, LPtr, e)) in
         (locate (GetMember(e, struct_name, from_union, id_to_str id)), l)
     | AilEbuiltin(b)               -> not_impl loc "expr builtin"
     | AilEstr(s)                   -> not_impl loc "expr str"
@@ -444,12 +430,12 @@ let rec translate_expr lval goal_ty e =
     | AilEprint_type(e)            -> not_impl loc "expr print_type"
     | AilEbmc_assume(e)            -> not_impl loc "expr bmc_assume"
     | AilEreg_load(r)              -> not_impl loc "expr reg_load"
-    | AilErvalue(e) when lval      -> translate e
     | AilErvalue(e)                ->
         let layout = layout_of_tc (tc_of e) in
         let atomic = is_atomic_tc (tc_of e) in
         let (e, l) = translate_expr true None e in
-        (locate (Use(atomic, layout, e)), l)
+        let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
+        (locate gen, l)
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
     | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
   in
