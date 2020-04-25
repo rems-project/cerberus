@@ -16,6 +16,7 @@ module type CONFIG =
 sig
   val show_std: bool
   val show_include: bool
+  val show_locations: bool
   val handle_location: Location_ocaml.t -> P.range -> unit
   val handle_uid: string -> P.range -> unit
 end
@@ -41,6 +42,18 @@ end
 module Make (Config: CONFIG) =
 struct
 open Config
+
+
+let maybe_print_location : Annot.annot list -> P.document =
+  if not show_locations then 
+    fun annot -> P.empty
+  else
+    fun annot -> 
+    match show_locations, Annot.get_loc annot with
+    | true, Some loc -> P.parens (Location_ocaml.pp_location loc) ^^ P.space
+    | _ -> P.empty
+
+
 
 let rec precedence = function
   | M_PEop (OpExp, _, _) -> Some 1
@@ -392,11 +405,12 @@ let pp_sym_or_pattern = function
 
 
 let pp_pexpr pe =
-  let rec pp prec (M_Pexpr (_, _, pe)) =
+  let rec pp prec (M_Pexpr (annot, _, pe)) =
     let prec' = precedence pe in
     let pp z = P.group (pp prec' z) in
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin
+      (maybe_print_location annot) ^^
       match pe with
         | M_PEundef (_, ub) ->
             pp_keyword "undef" ^^ P.parens (P.angles (P.angles (!^ (
@@ -558,6 +572,7 @@ let rec pp_expr expr =
         else
           P.parens
       end
+      (maybe_print_location annot) ^^
       begin match e with
         | M_Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
@@ -872,6 +887,7 @@ end
 module Basic = Make (struct
   let show_std = false
   let show_include = false
+  let show_locations = false
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)
@@ -879,6 +895,15 @@ end)
 module All = Make (struct
   let show_std = true
   let show_include = true
+  let show_locations = false
+  let handle_location _ _ = ()
+  let handle_uid _ _ = ()
+end)
+
+module WithLocations = Make (struct
+  let show_std = false
+  let show_include = false
+  let show_locations = true
   let handle_location _ _ = ()
   let handle_uid _ _ = ()
 end)

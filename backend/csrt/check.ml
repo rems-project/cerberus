@@ -90,7 +90,7 @@ module Types = struct
 
   type t = Binders.t list
 
-  let pp ts = separate_map (space ^^ comma ^^ space) Binders.pp ts
+  let pp ts = flow_map (space ^^ comma ^^ break 1) Binders.pp ts
 
   let parse_sexp loc (names : NameMap.t) s = 
     let open Sexplib in
@@ -113,8 +113,7 @@ module Types = struct
   let rename newname t = 
     match t with
     | [] -> print_endline "\n\nempty return type\n\n"; []
-    | {Binders.name; _} :: _ ->
-       subst name newname t
+    | {Binders.name; _} :: _ -> subst name newname t
 
 end
 
