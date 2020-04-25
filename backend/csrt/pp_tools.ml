@@ -41,7 +41,9 @@ let item item content =
 
 
 
-let debug_print_for_level debug_level l =
+let print l = Cerb_backend.Pipeline.run_pp None (lines l ^^ hardline)
+
+let print_for_level debug_level l =
   match filter_map (fun (l,s) -> if debug_level >= l then Some s else None) l with
   | [] -> ()
   | l -> Cerb_backend.Pipeline.run_pp None (lines l ^^ hardline)
