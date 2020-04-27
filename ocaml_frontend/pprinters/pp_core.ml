@@ -397,9 +397,9 @@ let pp_pexpr pe =
   let rec pp prec (Pexpr (annot, _, pe)) =
     let prec' = precedence pe in
     let pp z = P.group (pp prec' z) in
+    (maybe_print_location annot) ^^
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin
-      (maybe_print_location annot) ^^
       match pe with
         | PEundef (_, ub) ->
             pp_keyword "undef" ^^ P.parens (P.angles (P.angles (!^ (
@@ -563,6 +563,7 @@ let rec pp_expr expr =
         ) doc annot
     end
     begin
+      (maybe_print_location annot) ^^
       begin
         (* Here we check whether parentheses are needed *)
         if compare_precedence prec' prec then
@@ -575,7 +576,6 @@ let rec pp_expr expr =
         else
           P.parens
       end
-      (maybe_print_location annot) ^^
       begin match e with
         | Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
