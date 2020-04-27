@@ -1,9 +1,9 @@
+open PPrint
 open Utils
 open Cerb_frontend
 open Mucore
 open Undefined
 open Except
-open PPrint
 open List
 open Sym
 open Uni
@@ -14,6 +14,7 @@ open IndexTerms
 open BaseTypes
 open VarTypes
 open TypeErrors
+
 
 module Loc = Location
 module LC = LogicalConstraints

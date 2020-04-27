@@ -18,7 +18,7 @@ let parse_error (loc: Location.t) (t : string) (sx : Sexp.t) =
               colon ^^ space ^^ (!^ (Sexp.to_string sx)) in
   fail loc err
 
-let concatmap (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
+let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
 
 let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
