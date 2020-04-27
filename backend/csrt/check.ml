@@ -2,7 +2,6 @@ open PPrint
 open Utils
 open Cerb_frontend
 open Mucore
-open Undefined
 open Except
 open List
 open Sym
@@ -151,8 +150,9 @@ open Types
 module UU = struct
 
   type u = 
-    | Undefined of Loc.t * undefined_behaviour
-    | Unspecified of Loc.t (* * Ctype.ctype *)
+   | Undefined of Loc.t * Undefined.undefined_behaviour
+   | Unspecified of Loc.t (* * Ctype.ctype *)
+   | StaticError of Loc.t * (string * Sym.t)
 
   type 'a or_u = 
     | Normal of 'a
@@ -160,7 +160,7 @@ module UU = struct
 
   type ut = Types.t or_u
 
-  let rec all_normal : ('a or_u) list -> ('a list) or_u = function
+  let rec all_normal : ('a or_u) list -> 'a list or_u = function
     | [] -> Normal []
     | Bad u :: _ -> Bad u
     | Normal a :: rest -> 
@@ -982,12 +982,12 @@ let binop_type op =
 
 
 
-let ensure_bad_unreachable loc env bad = 
-  if is_unreachable env then return env else 
-    begin match bad with
-    | Undefined (loc,undef) -> fail loc (Undefined_behaviour undef)
-    | Unspecified loc -> fail loc Unspecified_value
-    end
+let ensure_bad_unreachable env bad = 
+  if is_unreachable env then return () else 
+    match bad with
+    | Undefined (loc,ub) -> fail loc (TypeErrors.Undefined ub)
+    | Unspecified loc -> fail loc TypeErrors.Unspecified
+    | StaticError (loc, (err,pe)) -> fail loc (TypeErrors.StaticError (err,pe))
 
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
@@ -1013,8 +1013,9 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      failwith "todo PEconstrained"
   | M_PEundef (loc,undef) ->
      return (Bad (Undefined (loc, undef)), env)
-  | M_PEerror _ ->
-     failwith "todo PEerror"
+  | M_PEerror (err,asym) ->
+     let (sym, loc) = aunpack loc asym in
+     return (Bad (StaticError (loc, (err,sym))), env)
   | M_PEctor (ctor, args) ->
      make_Aargs_bts loc env args >>= fun args_bts ->
      ctor_typ loc ctor args_bts >>= fun bt ->
@@ -1025,12 +1026,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      failwith "todo PEarray_shift"
   | M_PEmember_shift _ ->
      failwith "todo PEmember_shift"
-  | M_PEnot sym ->
-     let (sym,a_loc) = aunpack loc sym in
-     get_Avar loc env sym >>= fun t ->
-     ensure_type a_loc (Some sym) (A t) (A BT.Bool) >>
-     let name = fresh () in
-     let rt = [makeA name t; makeUC ((S name) %= Not (S sym))] in
+  | M_PEnot asym ->
+     let a, ar = fresh (), fresh () in
+     let ret = [makeA ar Bool; makeUC (S ar %= Not (S a))] in
+     let decl_typ = F {arguments = [makeA a Bool]; return = ret} in
+     call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
      return (Normal rt, env)
   | M_PEop (op,asym1,asym2) ->
      let decl_typ = binop_type op in
@@ -1091,7 +1091,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 ret
-        | Bad bad -> ensure_bad_unreachable loc env bad
+        | Bad bad -> ensure_bad_unreachable env bad >> return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
@@ -1100,7 +1100,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 ret
-        | Bad bad -> ensure_bad_unreachable loc env bad
+        | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
@@ -1110,7 +1110,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
      infer_pexpr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt ret
-     | Bad bad -> ensure_bad_unreachable loc env bad
+     | Bad bad -> ensure_bad_unreachable env bad >> return env
      end        
 
 
@@ -1241,7 +1241,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
-        | Bad bad -> ensure_bad_unreachable loc env bad
+        | Bad bad -> ensure_bad_unreachable env bad >> return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
@@ -1250,7 +1250,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
-        | Bad bad -> ensure_bad_unreachable loc env bad
+        | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
@@ -1266,7 +1266,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
-        | Bad bad -> ensure_bad_unreachable loc env bad
+        | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
         let _loc = update_loc loc annots in
@@ -1283,7 +1283,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
      infer_expr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt ret
-     | Bad bad -> ensure_bad_unreachable loc env bad
+     | Bad bad -> ensure_bad_unreachable env bad >> return env
      end        
      
 
