@@ -30,6 +30,15 @@ let _DEBUG = ref 0
 let debug_print pp = Pp_tools.print_for_level !_DEBUG pp
 
 
+
+
+let integer_value_to_num loc iv = 
+  match Impl_mem.eval_integer_value iv with
+  | Some v -> return v
+  | None -> fail loc Integer_value_error      
+
+
+
 module Binders = struct
 
   type t = {name: Sym.t; bound: VarTypes.t}
@@ -158,7 +167,6 @@ module UU = struct
 end
 
 open UU
-
 
 
 
@@ -526,58 +534,13 @@ let rec bt_of_core_base_type loc cbt =
 
 
 
-(* according to https://en.wikipedia.org/wiki/C_data_types *)
-(* and *)
-(* https://en.wikibooks.org/wiki/C_Programming/stdint.h#Exact-width_integer_types *)
-let integerBaseType name signed ibt =
-
-  let open Ctype in
-
-  let make f t = 
-    let c = makeUC ((S name %>= Num (Nat_big_num.of_string f)) %& 
-                   (S name %<= Num (Nat_big_num.of_string t))) in
-    ((name,Int), [], [], [c])
-  in
-
-  match signed, ibt with
-  | true,  Ichar     -> make "-127" "127"
-  | true,  IntN_t 8  -> make "-127" "127"
-  | true,  Short     -> make "-32767" "32767"
-  | true,  Int_      -> make "-32767" "32767"
-  | true,  IntN_t 16 -> make "-32768" "32767"
-  | true,  Long      -> make "-2147483647" "2147483647"
-  | true,  LongLong  -> make "-9223372036854775807" "9223372036854775807"
-  | true,  IntN_t 32 -> make "-2147483648" "2147483647"
-  | true,  IntN_t 64 -> make "-9223372036854775808" "9223372036854775807"
-  | false, Ichar     -> make "0" "255"
-  | false, Short     -> make "0" "65535"
-  | false, Int_      -> make "0" "65535"
-  | false, Long      -> make "0" "4294967295"
-  | false, LongLong  -> make "0" "18446744073709551615"
-  | false, IntN_t 8  -> make "0" "255"
-  | false, IntN_t 16 -> make "0" "65535"
-  | false, IntN_t 32 -> make "0" "4294967295"
-  | false, IntN_t 64 -> make "0" "18446744073709551615"
-
-  | _, IntN_t n       -> failwith (Printf.sprintf "UIntN_t %d" n)
-  | _, Int_leastN_t n -> failwith "todo standard library types"
-  | _, Int_fastN_t n  -> failwith "todo standard library types"
-  | _, Intmax_t       -> failwith "todo standard library types"
-  | _, Intptr_t       -> failwith "todo standard library types"
+let integerType loc name it =
+  integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
+  integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
+  let c = makeUC ((S name %>= Num min) %& (S name %<= Num max)) in
+  return ((name,Int), [], [], [c])
 
 
-let integerType name it =
-  let open Ctype in
-  match it with
-  | Bool -> ((name, BT.Bool), [], [], [])
-  | Signed ibt -> integerBaseType name true ibt
-  | Unsigned ibt -> integerBaseType name false ibt
-  | Char -> failwith "todo char"
-  | Enum _sym -> failwith "todo enum"
-  | Wchar_t -> failwith "todo wchar_t"
-  | Wint_t ->failwith "todo wint_t"
-  | Size_t -> failwith "todo size_t"
-  | Ptrdiff_t -> failwith "todo standard library types"
 
 
 let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
@@ -587,7 +550,7 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Void -> (* check *)
      return ((name,Unit), [], [], [])
   | Basic (Integer it) -> 
-     return (integerType name it)
+     integerType loc name it
   | Array (ct, _maybe_integer) -> 
      return ((name,BT.Array),[],[],[])
   | Pointer (_qualifiers, ct) ->
@@ -692,13 +655,6 @@ let make_Aargs_bts loc env tsyms =
 
 
 let infer_object_value loc (env : env) ov =
-
-  let integer_value_to_num loc iv = 
-    match Impl_mem.eval_integer_value iv with
-    | Some v -> return v
-    | None -> fail loc Integer_value_error
-      
-  in
 
   let name = fresh () in
 
