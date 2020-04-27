@@ -30,6 +30,10 @@ let _DEBUG = ref 0
 let debug_print pp = Pp_tools.print_for_level !_DEBUG pp
 
 
+let failwith err = 
+  print_endline err;
+  failwith "Internal error"
+
 
 
 let integer_value_to_num loc iv = 
@@ -934,56 +938,46 @@ let infer_pat loc pat =
      
 
 (* todo: replace with call_typ *)
-let infer_binop loc env op sym1 sym2 = 
+let make_binop_constr op (v1 : IT.t) (v2 : IT.t) =
+  let open Core in
+  match op with
+  | OpAdd -> Add (v1, v2)
+  | OpSub -> Sub (v1, v2)
+  | OpMul -> Mul (v1, v2)
+  | OpDiv -> Div (v1, v2) 
+  | OpRem_t -> Rem_t (v1, v2)
+  | OpRem_f -> Rem_f (v1, v2)
+  | OpExp -> Exp (v1, v2)
+  | OpEq -> EQ (v1, v2)
+  | OpGt -> GT (v1, v2)
+  | OpLt -> LT (v1, v2)
+  | OpGe -> GE (v1, v2)
+  | OpLe -> LE (v1, v2)
+  | OpAnd -> And (v1, v2)
+  | OpOr -> Or (v1, v2)
 
-  let make_binop_constr (v1 : IT.t) (v2 : IT.t) =
-    let open Core in
-    match op with
-    | OpAdd -> Add (v1, v2)
-    | OpSub -> Sub (v1, v2)
-    | OpMul -> Mul (v1, v2)
-    | OpDiv -> Div (v1, v2) 
-    | OpRem_t -> Rem_t (v1, v2)
-    | OpRem_f -> Rem_f (v1, v2)
-    | OpExp -> Exp (v1, v2)
-    | OpEq -> EQ (v1, v2)
-    | OpGt -> GT (v1, v2)
-    | OpLt -> LT (v1, v2)
-    | OpGe -> GE (v1, v2)
-    | OpLe -> LE (v1, v2)
-    | OpAnd -> And (v1, v2)
-    | OpOr -> Or (v1, v2)
+
+let binop_type op = 
+  let open Core in
+  let a1, a2, ar = fresh (), fresh (), fresh () in
+  let constr = S ar %= (make_binop_constr op (S a1) (S a2)) in
+  let at, rt = match op with
+    | OpAdd
+    | OpSub
+    | OpMul
+    | OpDiv
+    | OpRem_t
+    | OpRem_f
+    | OpExp -> ([makeA a1 Int; makeA a2 Int], [makeA ar Int; makeUC constr])
+    | OpEq
+    | OpGt
+    | OpLt
+    | OpGe
+    | OpLe -> ([makeA a1 Int; makeA a2 Int], [makeA ar Bool; makeUC constr])
+    | OpAnd
+    | OpOr -> ([makeA a1 Bool; makeA a2 Bool], [makeA ar Bool; makeUC constr])
   in
-
-  let bt_of_binop : ((BT.t * BT.t) * BT.t) = 
-    match op with
-    | OpAdd -> ((Int, Int), Int)
-    | OpSub -> ((Int, Int), Int)
-    | OpMul -> ((Int, Int), Int)
-    | OpDiv -> ((Int, Int), Int)
-    | OpRem_t -> ((Int, Int), Int)
-    | OpRem_f -> ((Int, Int), Int)
-    | OpExp -> ((Int, Int), Int)
-    | OpEq -> ((Int, Int), Bool)
-    | OpGt -> ((Int, Int), Bool)
-    | OpLt -> ((Int, Int), Bool)
-    | OpGe -> ((Int, Int), Bool)
-    | OpLe -> ((Int, Int), Bool)
-    | OpAnd -> ((Bool, Bool), Bool)
-    | OpOr -> ((Bool, Bool), Bool)
-  in
-
-  let (sym1, loc1) = aunpack loc sym1 in
-  let (sym2, loc2) = aunpack loc sym2 in
-  get_Avar loc env sym1 >>= fun t1 ->
-  get_Avar loc env sym2 >>= fun t2 ->
-  let ((st1,st2),rt) = bt_of_binop in
-  ensure_type loc1 (Some sym1) (A t1) (A st1) >>
-  ensure_type loc2 (Some sym2) (A t2) (A st2) >>
-  let name = fresh () in
-  let constr = S name %= (make_binop_constr (S sym1) (S sym2)) in
-  let t = [makeA name rt; makeUC constr] in
-  return t
+  F {arguments = at; return = rt}
   
 
 
@@ -1038,8 +1032,10 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      let name = fresh () in
      let rt = [makeA name t; makeUC ((S name) %= Not (S sym))] in
      return (Normal rt, env)
-  | M_PEop (op,sym1,sym2) ->
-     infer_binop loc env op sym1 sym2 >>= fun rt ->
+  | M_PEop (op,asym1,asym2) ->
+     let decl_typ = binop_type op in
+     let args = [aunpack loc asym1; aunpack loc asym2] in
+     call_typ loc env decl_typ args >>= fun (rt, env) ->
      return (Normal rt, env)
   | M_PEstruct _ ->
      failwith "todo PEstruct"
@@ -1097,7 +1093,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt))) ->
+     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
@@ -1246,7 +1243,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt))) ->
+     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
@@ -1261,7 +1259,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
   | M_Ewseq (p, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (p, e1, e2) ->
      begin match p with 
-     | M_Pattern (annots, M_CaseBase (mnewname,_cbt)) ->
+     | M_Pattern (annots, M_CaseBase (mnewname,_cbt))
+     | M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))])) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_expr loc env e1 >>= fun (rt, env) ->
