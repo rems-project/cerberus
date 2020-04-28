@@ -177,18 +177,38 @@ open UU
 
 module GEnv = struct 
 
+  open Implementation
+
+  module ImplMap = 
+    Map.Make
+      (struct 
+        type t = implementation_constant
+        let compare = implementation_constant_compare 
+       end)
+
   type t = 
-    { struct_decls : Types.t SymMap.t ; 
+    { struct_decls : Types.t SymMap.t; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
+      impl_fun_decls : FunctionTypes.t ImplMap.t;
+      impl_constants : BT.t ImplMap.t;
       names : NameMap.t
     } 
+
   type genv = t
 
 
   let empty = 
     { struct_decls = SymMap.empty; 
       fun_decls = SymMap.empty;
+      impl_fun_decls = ImplMap.empty;
+      impl_constants = ImplMap.empty;
       names = NameMap.empty }
+
+  let get_impl_const_type (loc : Loc.t) (genv: genv) (i: implementation_constant) = 
+    match ImplMap.find_opt i genv.impl_constants with
+    | Some t -> return t
+    | None -> fail loc (TypeErrors.Unbound_impl_const i)
+
 
   let pp_struct_decls decls = 
     separate_map (break 1)
@@ -352,8 +372,15 @@ module Env = struct
     | [owned] -> return (Some owned)
     | _ -> fail loc (Unreachable "multiple owners of resource")
 
+
+  open Implementation
+  let get_impl_const_type (loc : Loc.t) (env: env) (i: implementation_constant) = 
+    GEnv.get_impl_const_type loc env.global i
+
+
 end
 
+open GEnv
 open Env
 
 
@@ -1004,8 +1031,9 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun bt ->
      return (Normal [makeA sym bt], env)
-  | M_PEimpl _ ->
-     failwith "todo PEimpl"
+  | M_PEimpl i ->
+     get_impl_const_type loc env i >>= fun t ->
+     return (Normal [makeUA t], env)
   | M_PEval v ->
      infer_value loc env v >>= fun t ->
      return (Normal t, env)
@@ -1363,15 +1391,8 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 
 
 let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
-
-  let make_arg_t (msym,ct) = 
-    let name = sym_or_fresh msym in
-    ctype loc name (make_pointer_ctype ct)
-  in
-
-  if is_variadic 
-  then fail loc (Variadic_function sym)
-  else 
+  if is_variadic then fail loc (Variadic_function sym) else
+    let make_arg_t (msym,ct) = ctype loc (sym_or_fresh msym) (make_pointer_ctype ct) in
     let ret_name = Sym.fresh () in
     mapM make_arg_t args >>= fun args_types ->
     let arguments = concat args_types in
@@ -1383,6 +1404,25 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
 let record_funinfo genv funinfo = 
   pmap_foldM record_fun funinfo genv.GEnv.fun_decls >>= fun fun_decls ->
   return { genv with GEnv.fun_decls = fun_decls }
+
+
+(* check the types? *)
+let record_impl impl impl_decl genv = 
+  match impl_decl with
+  | M_Def (bt, _p) -> 
+     bt_of_core_base_type Loc.unknown bt >>= fun bt ->
+     return { genv with impl_constants = ImplMap.add impl bt genv.impl_constants }
+  | M_IFun (bt, args, _body) ->
+     mapM (fun (sym,a_bt) -> 
+         bt_of_core_base_type Loc.unknown a_bt >>= fun a_bt ->
+         return (makeA sym a_bt)) args >>= fun args_ts ->
+     bt_of_core_base_type Loc.unknown bt >>= fun bt ->
+     let decl_typ = F {arguments = args_ts; return = [makeUA bt]} in
+     return { genv with impl_fun_decls = ImplMap.add impl decl_typ genv.impl_fun_decls }
+                        
+
+
+let record_impls genv impls = pmap_foldM record_impl impls genv
 
 
 
@@ -1426,6 +1466,7 @@ let print_initial_environment genv =
 
 let check mu_file debug_level =
   _DEBUG := debug_level;
+  pp_fun_map_decl mu_file.mu_funinfo;
   let genv = GEnv.empty in
   record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
   record_funinfo genv mu_file.mu_funinfo >>= fun genv ->
