@@ -18,6 +18,7 @@ open Pp_tools
  type type_error = 
   | Name_bound_twice of Sym.t
   | Unbound_name of Sym.t
+  | Unbound_impl_const of Implementation.implementation_constant
   | Unreachable of string
   | Unsupported of string
   | Var_kind_error of {
@@ -136,6 +137,9 @@ open Pp_tools
      (* | Inconsistent_fundef {loc; decl; defn} ->
       *    sprintf "%s. Function definition inconsistent. Should be %s, is %s"
       *      (Loc.pp loc) (FunctionTypes.pp decl) (FunctionTypes.pp defn) *)
+     | Unbound_impl_const i ->
+        !^("Unbound implementation defined constant" ^
+            Implementation.string_of_implementation_constant i)
      | Variadic_function fn ->
         !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
      | Return_error err -> 
