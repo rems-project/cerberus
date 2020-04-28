@@ -8,12 +8,10 @@ module Loc=Location
 
 
 type t = 
-  (* | Block of IndexTerms.t * IndexTerms.t *)
-  (* | Bool of IndexTerms.t * IndexTerms.t (\* location and value *\)
+  (* | Block of IndexTerms.t * IndexTerms.t
    * | Int of IndexTerms.t * IndexTerms.t (\* location and value *\)
-   * | Points of IndexTerms.t * IndexTerms.t
-   * | Array of IndexTerms.t * IndexTerms.t *)
-  (* | Pred of string * IndexTerms.t list *)
+   * | Array of IndexTerms.t * IndexTerms.t
+   * | Pred of string * IndexTerms.t list *)
   | Points of IndexTerms.t * IndexTerms.t
 
 let pp = function

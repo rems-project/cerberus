@@ -1,7 +1,6 @@
 open Utils
 open List
 open PPrint
-open Pp_tools
 open Sexplib
 open Except
 module Loc=Location
@@ -12,7 +11,7 @@ type t =
   | Int
   | Loc
   | Array
-  | List of t
+  (* | List of t *)
   | Tuple of t list
   | Struct of Sym.t
 
@@ -22,7 +21,7 @@ let rec pp = function
   | Int -> !^ "int"
   | Loc -> !^ "loc"
   | Array -> !^ "array"
-  | List bt -> parens ((!^ "list") ^^^ pp bt)
+  (* | List bt -> parens ((!^ "list") ^^^ pp bt) *)
   | Tuple bts -> parens ((!^ "tuple") ^^ separate (break 1) (map pp bts))
   | Struct id -> parens (!^ "struct" ^^ Sym.pp id)
 
@@ -38,9 +37,9 @@ let rec parse_sexp loc (names : NameMap.t) sx =
      return Loc
   | Sexp.Atom "array" -> 
      return Array
-  | Sexp.List [Sexp.Atom "list"; bt] -> 
-     parse_sexp loc names bt >>= fun bt -> 
-     return (List bt)
+  (* | Sexp.List [Sexp.Atom "list"; bt] -> 
+   *    parse_sexp loc names bt >>= fun bt -> 
+   *    return (List bt) *)
   | Sexp.List [Sexp.Atom "tuple"; Sexp.List bts] -> 
      mapM (parse_sexp loc names) bts >>= fun bts ->
      return (Tuple bts)
