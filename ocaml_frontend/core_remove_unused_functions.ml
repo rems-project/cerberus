@@ -43,16 +43,34 @@ module Sym = struct
   let compare = Symbol.symbol_compare
 end
 
-module SymPair = struct
-  type t = Symbol.sym * Symbol.sym
-  let compare (s1,s2) (s1',s2') = 
-    match Symbol.symbol_compare s1 s1' with
-    | 0 -> Symbol.symbol_compare s2 s2'
-    | c -> c
+
+module Def = struct
+  type t = 
+    | Impl of Implementation.implementation_constant
+    | Sym of Symbol.sym 
+    | Id of string
+  let rec compare a b = 
+    match a, b with
+    | Impl i1, Impl i2 -> Implementation.implementation_constant_compare i1 i2
+    | Sym s1, Sym s2 -> Symbol.symbol_compare s1 s2
+    | Id i1, Id i2 -> String.compare i1 i2
+    | Impl _, Sym _ -> -1
+    | Sym _, Id _ -> -1
+    | Impl _, Id _ -> -1
+    | Sym _, Impl _ -> 1
+    | Id _, Sym _ -> 1
+    | Id _, Impl _ -> 1
 end
 
+module DefPair = struct 
+  type t = Def.t * Def.t
+  let compare a b = Lem_basic_classes.pairCompare Def.compare Def.compare a b
+end
+
+
 module Symset = Set.Make(Sym)
-module Symrel = Set.Make(SymPair)
+module DefSet = Set.Make(Def)
+module DefRel = Set.Make(DefPair)
 
 (* module IdSet = Set.Make(String) *)
 
@@ -60,35 +78,27 @@ module State = struct
 
   module S = struct 
     type t = { 
-        deps: Symrel.t; 
-        keep: Symset.t;
+        deps: DefRel.t; 
+        keep: DefSet.t;
         (* identifiers : IdSet.t *)
       }
     let empty = {
-        deps = Symrel.empty;
-        keep = Symset.empty;
+        deps = DefRel.empty;
+        keep = DefSet.empty;
       }
   end
 
   open S
   include STATE(S)
 
-  let record_dep sym sym' : unit t = 
+  let record_dep a b : unit t = 
     get () >>= fun s ->
-    put { s with deps = Symrel.add (sym, sym') s.deps }
+    put { s with deps = DefRel.add (a,b) s.deps }
 
   let record_keep sym : unit t = 
     get () >>= fun s ->
-    put { s with keep = Symset.add sym s.keep }
+    put { s with keep = DefSet.add sym s.keep }
 
-  let record_sym mfn sym = 
-    match mfn with
-    | Some fn -> record_dep fn sym 
-    | None -> record_keep sym
-
-  (* let record_id (Symbol.Identifier (_,id)) = 
-   *   get () >>= fun s ->
-   *   put {s with identifiers = IdSet.add id s.identifiers} *)
 end
 
 open State
@@ -116,24 +126,21 @@ type ('a,'bty,'sym) name_collector =
 
 (* Rewriter doing partial evaluation for Core (pure) expressions *)
 (* this collects all the symbols mentioned *)
-let name_collector mfn : ('a,'bty,'sym) name_collector = 
+let deps_of fn_or_impl : ('a,'bty,'sym) name_collector = 
 
-  let record_sym = record_sym mfn in
-
-  (* let record_id id = record_sym (fn,id) *)
-
+  let record_dep = record_dep fn_or_impl in
 
   let rec names_in_pointer_value pv : unit m = 
     Impl_mem.case_ptrval pv
       (fun ct -> names_in_ctype ct)
-      (fun sym -> record_sym sym)
+      (fun sym -> record_dep (Sym sym))
       (fun _ _ -> return ())
       (fun _ -> return ())
 
   and names_in_memory_value mv : unit m = 
     Impl_mem.case_mem_value mv 
       (fun ct -> names_in_ctype ct)
-      (fun _ sym -> record_sym sym)
+      (fun _ sym -> record_dep (Sym sym))
       (fun _ _ -> return ())
       (fun _ _ -> return ())
       (fun ct pv -> 
@@ -146,16 +153,16 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
         names_in_union sym id mv)
 
   and names_in_struct (sym : Symbol.sym) fields : unit m =
-    record_sym sym >>
-    iterate fields (fun (id, ctype, mv) ->
-        (* record_id id >> *)
+    record_dep (Sym sym) >>
+    iterate fields (fun (Identifier (_,id), ctype, mv) ->
+        record_dep (Id id) >>
         names_in_ctype ctype >>
         names_in_memory_value mv
       )
 
-  and names_in_union sym id mv : unit m = 
-    record_sym sym >>
-    (* record_id id >> *)
+  and names_in_union sym (Identifier (_,id)) mv : unit m = 
+    record_dep (Sym sym) >>
+    record_dep (Id id) >>
     names_in_memory_value mv
 
   and names_in_object_value ov : unit m =
@@ -182,8 +189,8 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
        iterate args (fun (_,ct,_) -> names_in_ctype ct)
     | Pointer (_, ct) -> names_in_ctype ct
     | Atomic ct -> names_in_ctype ct
-    | Struct sym -> record_sym sym
-    | Union sym -> record_sym sym
+    | Struct sym -> record_dep (Sym sym)
+    | Union sym -> record_dep (Sym sym)
   in
 
   let rec names_in_core_object_type = function
@@ -191,8 +198,8 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
     | OTy_floating
     | OTy_pointer -> return ()
     | OTy_array cot -> names_in_core_object_type cot
-    | OTy_struct sym -> record_sym sym
-    | OTy_union sym -> record_sym sym
+    | OTy_struct sym -> record_dep (Sym sym)
+    | OTy_union sym -> record_dep (Sym sym)
   in
 
   let rec names_in_core_base_type = function
@@ -222,15 +229,15 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
     | CaseBase (None, cbt) -> 
        names_in_core_base_type cbt
     | CaseBase (Some sym, cbt) -> 
-       record_sym sym >>
+       record_dep (Sym sym) >>
        names_in_core_base_type cbt
     | CaseCtor (_, pats) ->
        iterate pats names_in_pattern
   in
 
   let names_in_name = function
-    | Sym sym -> record_sym sym
-    | Impl _impl -> return ()
+    | Sym sym -> record_dep (Sym sym)
+    | Impl impl -> record_dep (Impl impl)
   in
 
   let collect_names_rw = 
@@ -239,7 +246,10 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
         RW.RW begin fun pexpr ->
           let (Pexpr (annots, bTy, pexpr_)) = pexpr in
           match pexpr_ with
-          | PEsym sym -> PostTraverseAction (fun () -> record_sym sym)
+          | PEsym sym -> 
+             PostTraverseAction (fun () -> record_dep (Sym sym))
+          | PEimpl impl -> 
+             PostTraverseAction (fun () -> record_dep (Impl impl))
           | PEval v -> 
              let a () = names_in_value v in
              PostTraverseAction a
@@ -251,17 +261,15 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
              PostTraverseAction a
           | PEstruct (sym,fields) ->
              let a () = 
-               record_sym sym(*  >>
-                * iterate fields (fun (id,_) -> record_id id) *)
+               record_dep (Sym sym) >>
+               iterate fields (fun (Identifier (_,id),_) -> 
+                   record_dep (Id id))
              in
              PostTraverseAction a
-          |  PEmember_shift (_,sym,id)
-          | PEunion (sym,id,_)
-          | PEmemberof (sym,id,_) ->
-             let a () = 
-               record_sym sym (* >> 
-                * record_id id  *)
-             in
+          | PEmember_shift (_,sym,Identifier (_,id))
+          | PEunion (sym,Identifier (_,id),_)
+          | PEmemberof (sym,Identifier (_,id),_) ->
+             let a () = record_dep (Sym sym) >> record_dep (Id id) in
              PostTraverseAction a
           | PEcall (name,_) ->
              let a () = names_in_name name in
@@ -289,17 +297,17 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
              let a () = names_in_pattern pat in
              PostTraverseAction a
           | Easeq ((sym,cbt),_,_) ->
-             let a () = record_sym sym >> names_in_core_base_type cbt in
+             let a () = record_dep (Sym sym) >> names_in_core_base_type cbt in
              PostTraverseAction a
           | Esave ((sym,cbt),ls,_) ->
              let a () = 
-               record_sym sym >> 
+               record_dep (Sym sym) >> 
                names_in_core_base_type cbt >>
-               iterate ls (fun (sym,_) -> record_sym sym)
+               iterate ls (fun (sym,_) -> record_dep (Sym sym))
              in
              PostTraverseAction a
           | Erun (_,sym,_) ->
-             let a () = record_sym sym in
+             let a () = record_dep (Sym sym) in
              PostTraverseAction a
           | _ ->
                 Traverse
@@ -307,16 +315,11 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
     }
   in
 
-  (* This does one step of partial evaluation on an expression *)
+  (* These do one step of partial evaluation on an expression *)
   let names_in_expr expr =
-    RW.(rewriteExpr collect_names_rw expr) >>
-    return ()
-  in
-  (* This does one step of partial evaluation on an expression *)
+    RW.(rewriteExpr collect_names_rw expr) >> return () in
   let names_in_pexpr expr =
-    RW.(rewritePexpr collect_names_rw expr) >>
-    return ()
-  in
+    RW.(rewritePexpr collect_names_rw expr) >> return () in
 
   { names_in_pointer_value; 
     names_in_memory_value;
@@ -337,113 +340,104 @@ let name_collector mfn : ('a,'bty,'sym) name_collector =
    collects all the symbols, whereas here, so far, we're only
    collecting some for discarding some unused functions *)
 
-let called_names_file file = 
-
-  let called_names_impl (is : 'bty generic_impl) = 
-    let called_names_impl_decl decl = 
-      let name_collector = name_collector None in
+let do_impls is = 
+  pmap_iterM (fun i decl ->
+      record_keep (Impl i) >>
+      let name_collector = deps_of (Impl i) in
       match decl with
       | Def (cbt, pe) -> 
          name_collector.names_in_core_base_type cbt >>
-         name_collector.names_in_pexpr pe
+           name_collector.names_in_pexpr pe
       | IFun (cbt, args, pe) -> 
          name_collector.names_in_core_base_type cbt >>
-         iterate args (fun (sym,cbt) ->
-             record_sym None sym >>
-             name_collector.names_in_core_base_type cbt
-           ) >>
-         name_collector.names_in_pexpr pe
-    in
-    pmap_iterM (fun _ v -> called_names_impl_decl v) is >>
+           iterate args (fun (sym,cbt) ->
+               record_dep (Impl i) (Sym sym) >>
+                 name_collector.names_in_core_base_type cbt
+             ) >>
+           name_collector.names_in_pexpr pe) is >>
+    return () 
+
+let do_fun_map definitely_keep (fmap : ('bty,'a) generic_fun_map) =
+  pmap_iterM (fun fn decl ->
+    (if definitely_keep then record_keep (Sym fn) else return ()) >>
+    let name_collector = deps_of (Sym fn) in
+    begin match decl with
+    | Fun (cbt, args, pe) -> 
+       name_collector.names_in_core_base_type cbt >>
+       iterate args (fun (sym,cbt) ->
+           record_dep (Sym fn) (Sym sym) >>
+           name_collector.names_in_core_base_type cbt
+         ) >>
+       name_collector.names_in_pexpr pe
+    | Proc (_loc, cbt, args, e) -> 
+       name_collector.names_in_core_base_type cbt >>
+       iterate args (fun (sym,cbt) ->
+           record_dep (Sym fn) (Sym sym) >>
+           name_collector.names_in_core_base_type cbt
+         ) >>
+       name_collector.names_in_expr e
+    | ProcDecl (_loc, cbt, bts)
+    | BuiltinDecl (_loc, cbt, bts) -> 
+       name_collector.names_in_core_base_type cbt >>
+       iterate bts name_collector.names_in_core_base_type
+    end) fmap >>
     return ()
-  in
 
 
-  let called_names_fun_map (fmap : ('bty,'a) generic_fun_map) =
-    let called_names_fun_map_decl fn decl acc =
-      let name_collector = name_collector (Some fn) in
-      begin match decl with
-      | Fun (cbt, args, pe) -> 
-         name_collector.names_in_core_base_type cbt >>
-         iterate args (fun (sym,cbt) ->
-             record_sym None sym >>
-             name_collector.names_in_core_base_type cbt
-           ) >>
-         name_collector.names_in_pexpr pe
-      | Proc (_loc, cbt, args, e) -> 
-         name_collector.names_in_core_base_type cbt >>
-         iterate args (fun (sym,cbt) ->
-             record_sym None sym >>
-             name_collector.names_in_core_base_type cbt
-           ) >>
-         name_collector.names_in_expr e
-      | ProcDecl (_loc, cbt, bts)
-      | BuiltinDecl (_loc, cbt, bts) -> 
-         name_collector.names_in_core_base_type cbt >>
-         iterate bts name_collector.names_in_core_base_type
-      end >>
-      return (fn :: acc)
-    in
-    pmap_foldM called_names_fun_map_decl fmap []
-  in
-
-
-  let called_names_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list ) =
-    let called_names_globs glob (g : ('a, 'bty) generic_globs) = 
-      let name_collector = name_collector (Some glob) in
+let do_globs_list (gs : (Symbol.sym *  ('a, 'bty) generic_globs) list) =
+  mapM (fun (glob, g) ->
+      record_keep (Sym glob) >>
+      let name_collector = deps_of (Sym glob) in
       match g with
       | GlobalDef (cbt, e) -> 
          name_collector.names_in_core_base_type cbt >>
-         name_collector.names_in_expr e
+           name_collector.names_in_expr e
       | GlobalDecl cbt -> 
          name_collector.names_in_core_base_type cbt
-    in
-    mapM (fun (sym,g) -> (called_names_globs sym g)) gs >>
-    return ()
-  in
+    ) gs
 
-  let called_names_tagDefs tagDefs =
-    let called_names_tagDef sym tagDef = 
-      let name_collector = name_collector (Some sym) in
-      match tagDef with
-      | Ctype.StructDef (fields, flexible_opt) ->
-         iterate fields (fun (_id, (_,_,ct)) -> 
-             name_collector.names_in_ctype ct) >>
-         begin match flexible_opt with
-           | None ->
-               return ()
-           | Some (FlexibleArrayMember (_, _, _, elem_ty)) ->
-               name_collector.names_in_ctype (Ctype ([], Array (elem_ty, None)))
-         end
-      | Ctype.UnionDef d ->
-         iterate d (fun (_id, (_,_,ct)) -> 
-             name_collector.names_in_ctype ct)
-    in
-    pmap_iterM called_names_tagDef tagDefs >>
-    return ()
-  in
 
-  let called_names_extern_map em = 
-    let called_names_extern _extern (ls,_) = 
-      iterate ls (record_sym None)
-    in
-    pmap_iterM called_names_extern em
-  in
-  (* let called_names_extern_map  *)
+let do_tagDefs tagDefs =
+  pmap_iterM (fun sym tagDef ->
+    record_keep (Sym sym) >>
+    let name_collector = deps_of (Sym sym) in
+    match tagDef with
+    | Ctype.StructDef (fields, flexible_opt) ->
+       iterate fields (fun (Identifier (_,id), (_,_,ct)) -> 
+           record_dep (Sym sym) (Id id) >>
+           name_collector.names_in_ctype ct) >>
+       begin match flexible_opt with
+         | None ->
+             return ()
+         | Some (FlexibleArrayMember (_, _, _, elem_ty)) ->
+             name_collector.names_in_ctype (Ctype ([], Array (elem_ty, None)))
+       end
+    | Ctype.UnionDef d ->
+       iterate d (fun (Identifier (_,id), (_,_,ct)) -> 
+           record_dep (Sym sym) (Id id) >>
+           name_collector.names_in_ctype ct)
+    ) tagDefs
 
-  begin match file.main with
+let do_extern_map em = 
+  pmap_iterM (fun (Symbol.Identifier (_,id)) (ls,_) ->
+    record_keep (Id id) >>
+      iterate ls (fun s -> record_dep (Id id) (Sym s))
+    ) em >>
+  return ()
+
+let do_main = function
   | None -> return ()
-  | Some sym -> record_sym None sym
-  end >>
+  | Some main -> record_keep (Sym main)
 
-  called_names_tagDefs file.tagDefs >>
-  called_names_fun_map file.stdlib >>= fun stdlib_names ->
-  called_names_impl file.impl >>
-  called_names_globs_list file.globs >>
-  called_names_fun_map file.funs >>= fun fun_names ->
-  called_names_extern_map file.extern >>
-
-  return (fun_names,stdlib_names)
+let deps_file file = 
+  do_main file.main >>
+  do_tagDefs file.tagDefs >>
+  do_fun_map false file.stdlib >>= fun stdlib_names ->
+  do_impls file.impl >>
+  do_globs_list file.globs >>
+  do_fun_map true file.funs >>= fun fun_names ->
+  do_extern_map file.extern >>
+  return ()
 
 
 
@@ -452,32 +446,33 @@ let called_names_file file =
 
 let remove_unused_functions file = 
 
-  let ((fun_names,stdlib_names),s) = called_names_file file State.S.empty in
+
+  let ((),s) = deps_file file State.S.empty in
 
   (* transitively close deps first? *)
 
-  let nothing_depends (sym : Symbol.sym) (deps : Symrel.t) = 
-    not ((Symrel.exists (fun (sym1,sym2) -> sym2 = sym)) deps) in
+  let nothing_depends deps d = 
+    not ((DefRel.exists (fun (a,b) -> b = d)) deps) in
 
-  let rec only_used maybe_remove deps = 
-    match List.filter (fun sym -> nothing_depends sym deps) maybe_remove with
+  let can_remove deps d = not (DefSet.mem d s.keep) && nothing_depends deps d in
+
+  let rec remove_unused maybe_remove deps = 
+    match List.filter (can_remove deps) maybe_remove with
     | [] -> 
        (maybe_remove,deps)
     | x :: xs ->
-       let deps' = Symrel.filter (fun (sym1,sym2) -> sym1 <> x) deps in
+       let deps' = DefRel.filter (fun (sym1,sym2) -> sym1 <> x) deps in
        let maybe_remove' = List.filter ((<>) x) maybe_remove in
-       only_used maybe_remove' deps'
+       remove_unused maybe_remove' deps'
   in
 
-  let (used_stdlib,_) = 
-    only_used 
-      (List.filter (fun sym -> Symset.mem sym s.keep) stdlib_names)
-      s.deps 
-  in
+
+  let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Sym sym :: acc) file.stdlib [] in  
+  let (used_stdlib,_) = remove_unused stdlib_names s.deps in
 
   let remove_unused stdlib 
       : ('bty, 'a) generic_fun_map = 
-    Pmap.filter (fun name _ -> List.mem name used_stdlib) stdlib
+    Pmap.filter (fun name _ -> List.mem (Def.Sym name) used_stdlib) stdlib
   in
 
   { file with stdlib = remove_unused file.stdlib }
