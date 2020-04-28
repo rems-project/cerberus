@@ -327,12 +327,10 @@ let make_create_type loc ct : (FunctionTypes.t,'e) m =
 let make_load_type loc ct : (FunctionTypes.t,'e) m = 
   let pointer_name = fresh () in
   ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-  let addr_argument = 
-    let a = makeA pointer_name Loc in
-    let l = makeL pointee_name bt :: l in
-    let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
-    a :: l @ r @ c
-  in
+  let a = makeA pointer_name Loc in
+  let l = makeL pointee_name bt :: l in
+  let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
+  let addr_argument = a :: l @ r @ c in
   let ret = makeA pointee_name bt :: r in
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
@@ -1010,17 +1008,19 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
 
 
 let check_proc loc fsym genv body (F decl_typ) = 
-  debug_print [(1, h1 (Printf.sprintf "Checking function %s" (pps (Sym.pp fsym))))];
+  debug_print [(1, h1 ("Checking procedure " ^ (pps (Sym.pp fsym))))];
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
+  debug_print [(1, em !^"...checked ok")];
   return ()
 
 let check_fun loc fsym genv body (F decl_typ) = 
-  debug_print [(1, h1 (Printf.sprintf "Checking function %s" (pps (Sym.pp fsym))))];
+  debug_print [(1, h1 ("Checking function " ^ (pps (Sym.pp fsym))))];
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_pexpr loc env body decl_typ.return >>= fun _env ->
+  debug_print [(1, em !^"...checked ok")];
   return ()
 
 
