@@ -14,6 +14,9 @@ open BaseTypes
 open VarTypes
 open TypeErrors
 open Environment
+open FunctionTypes
+open Binders
+open Types
 
 open GEnv
 open Env
@@ -29,28 +32,27 @@ module LS = LogicalSorts
 module SymSet = Set.Make(Sym)
 
 
+
 let _DEBUG = ref 0
 let debug_print pp = Pp_tools.print_for_level !_DEBUG pp
 
 
+
+
+(* auxiliary definitions *)
 let failwith err = 
   print_endline err;
   failwith "Internal error"
-
-
 
 let integer_value_to_num loc iv = 
   match Impl_mem.eval_integer_value iv with
   | Some v -> return v
   | None -> fail loc Integer_value_error      
-
-
-
-open FunctionTypes
-open Binders
-open Types
       
 
+
+
+(* types recording undefined behaviour, error cases, etc. *)
 module UU = struct
 
   type u = 
@@ -80,21 +82,27 @@ open UU
 
 
 
+(* TODO: plug in cosntraint solver *)
+let constraint_holds env (LC c) = 
+  true
+
+let is_unreachable env =
+  constraint_holds env (LC (Bool false))
+
+let rec constraints_hold loc env = function
+  | [] -> return ()
+  | (n, t) :: constrs ->
+     if constraint_holds env t 
+     then constraints_hold loc env constrs
+     else fail loc (Call_error (Unsat_constraint (n, t)))
 
 
 
-let rec recursively_owned_resources loc env owner_sym = 
-  get_owned_resource loc env owner_sym >>= function
-  | Some (res,t) -> 
-     let owned = RE.owned t in
-     mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
-     return (res :: List.concat owneds)
-  | None -> 
-     return []
 
 
 
 
+(* infer base types of index terms *)
 let rec infer_it loc env it = 
   match it with
   | Num _ -> return BT.Int
@@ -163,19 +171,94 @@ and check_its loc env its bt =
 
 
 
-let constraint_holds env (LC c) = 
-  true                          (* todo: call z3 *)
-
-let is_unreachable env =
-  constraint_holds env (LC (Bool false))
 
 
-let rec constraints_hold loc env = function
-  | [] -> return ()
-  | (n, t) :: constrs ->
-     if constraint_holds env t 
-     then constraints_hold loc env constrs
-     else fail loc (Call_error (Unsat_constraint (n, t)))
+
+let rec recursively_owned_resources loc env owner_sym = 
+  get_owned_resource loc env owner_sym >>= function
+  | Some (res,t) -> 
+     let owned = RE.owned t in
+     mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
+     return (res :: List.concat owneds)
+  | None -> 
+     return []
+
+
+
+
+
+(* convert from other types *)
+let bt_of_core_object_type loc ot =
+  let open Core in
+  match ot with
+  | OTy_integer -> return BT.Int
+  | OTy_pointer -> return BT.Loc
+  | OTy_array cbt -> return BT.Array
+  | OTy_struct sym -> return (Struct sym)
+  | OTy_union _sym -> failwith "todo: union types"
+  | OTy_floating -> fail loc (Unsupported "float")
+
+let rec bt_of_core_base_type loc cbt =
+  let open Core in
+  match cbt with
+  | BTy_unit -> return BT.Unit
+  | BTy_boolean -> return BT.Bool
+  | BTy_object ot -> bt_of_core_object_type loc ot
+  | BTy_loaded ot -> bt_of_core_object_type loc ot
+  | BTy_list bt -> 
+     bt_of_core_base_type loc bt >>= fun bt ->
+     return (BT.List bt)
+  | BTy_tuple bts -> 
+     mapM (bt_of_core_base_type loc) bts >>= fun bts ->
+     return (BT.Tuple bts)
+  | BTy_storable -> fail loc (Unsupported "BTy_storable")
+  | BTy_ctype -> fail loc (Unsupported "ctype")
+
+
+
+let integerType loc name it =
+  integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
+  integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
+  let c = makeUC ((S name %>= Num min) %& (S name %<= Num max)) in
+  return ((name,Int), [], [], [c])
+
+let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
+  let loc = update_loc loc annots in
+  let open Ctype in
+  match ct with
+  | Void -> (* check *)
+     return ((name,Unit), [], [], [])
+  | Basic (Integer it) -> 
+     integerType loc name it
+  | Array (ct, _maybe_integer) -> 
+     return ((name,BT.Array),[],[],[])
+  | Pointer (_qualifiers, ct) ->
+     ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
+     let r = makeUR (Points (S name, S pointee_name)) :: r in
+     let l = makeL pointee_name bt :: l in
+     return ((name,Loc),l,r,c)
+  | Atomic ct ->              (* check *)
+     ctype_aux loc name ct
+  | Struct sym -> 
+     return ((name, BT.Struct sym),[],[],[])
+  | Union sym ->
+     failwith "todo: union types"
+  | Basic (Floating _) -> 
+     fail loc (Unsupported "floats")
+  | Function _ -> 
+     fail loc (Unsupported "function pointers")
+
+
+let ctype loc (name : Sym.t) (ct : Ctype.ctype) =
+  ctype_aux loc name ct >>= fun ((name,bt), l,r,c) ->
+  return (makeA name bt :: l @ r @ c)
+
+let make_pointer_ctype ct = 
+  let open Ctype in
+  (* fix *)
+  let q = {const = false; restrict = false; volatile = false} in
+  Ctype ([], Pointer (q, ct))
+
 
 
 
@@ -231,91 +314,6 @@ let subtype loc env rt1 rt2 =
 
 
 
-
-
-
-let bt_of_core_object_type loc ot =
-  let open Core in
-  match ot with
-  | OTy_integer -> return BT.Int
-  | OTy_pointer -> return BT.Loc
-  | OTy_array cbt -> return BT.Array
-  | OTy_struct sym -> return (Struct sym)
-  | OTy_union _sym -> failwith "todo: union types"
-  | OTy_floating -> fail loc (Unsupported "float")
-
-let rec bt_of_core_base_type loc cbt =
-  let open Core in
-  match cbt with
-  | BTy_unit -> return BT.Unit
-  | BTy_boolean -> return BT.Bool
-  | BTy_object ot -> bt_of_core_object_type loc ot
-  | BTy_loaded ot -> bt_of_core_object_type loc ot
-  | BTy_list bt -> 
-     bt_of_core_base_type loc bt >>= fun bt ->
-     return (BT.List bt)
-  | BTy_tuple bts -> 
-     mapM (bt_of_core_base_type loc) bts >>= fun bts ->
-     return (BT.Tuple bts)
-  | BTy_storable -> fail loc (Unsupported "BTy_storable")
-  | BTy_ctype -> fail loc (Unsupported "ctype")
-
-
-
-
-let integerType loc name it =
-  integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
-  integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
-  let c = makeUC ((S name %>= Num min) %& (S name %<= Num max)) in
-  return ((name,Int), [], [], [c])
-
-
-
-
-let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
-  let loc = update_loc loc annots in
-  let open Ctype in
-  match ct with
-  | Void -> (* check *)
-     return ((name,Unit), [], [], [])
-  | Basic (Integer it) -> 
-     integerType loc name it
-  | Array (ct, _maybe_integer) -> 
-     return ((name,BT.Array),[],[],[])
-  | Pointer (_qualifiers, ct) ->
-     ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-     let r = makeUR (Points (S name, S pointee_name)) :: r in
-     let l = makeL pointee_name bt :: l in
-     return ((name,Loc),l,r,c)
-  | Atomic ct ->              (* check *)
-     ctype_aux loc name ct
-  | Struct sym -> 
-     return ((name, BT.Struct sym),[],[],[])
-  | Union sym ->
-     failwith "todo: union types"
-  | Basic (Floating _) -> 
-     fail loc (Unsupported "floats")
-  | Function _ -> 
-     fail loc (Unsupported "function pointers")
-
-
-let ctype loc (name : Sym.t) (ct : Ctype.ctype) =
-  ctype_aux loc name ct >>= fun ((name,bt), l,r,c) ->
-  return (makeA name bt :: l @ r @ c)
-
-let make_pointer_ctype ct = 
-  let open Ctype in
-  (* fix *)
-  let q = {const = false; restrict = false; volatile = false} in
-  Ctype ([], Pointer (q, ct))
-
-
-
-
-let remove_logical t = 
-  filter_map (function {name; bound = L _} -> None | b -> Some b) t
-let only_resources t = 
-  filter_map (function ({name; bound = R _} as b) -> Some b | _ -> None) t
 
 
 
@@ -853,7 +851,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
   | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
      begin match action_ with
      | M_Create (asym,a_ct,_prefix) -> 
-        let (ct, _ct_loc) = aunpack loc a_ct in
+        let (ct, ct_loc) = aunpack loc a_ct in
         make_create_type loc ct >>= fun decl_typ ->
         call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
         return (Normal rt, env)
@@ -892,7 +890,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
      | M_LinuxStore (ct, sym1, sym2, mo) -> 
         failwith "LinuxStore"
      | M_LinuxRMW (ct, sym1, sym2, mo) -> 
-failwith "LinuxRMW"
+        failwith "LinuxRMW"
      end
   | M_Ecase _ ->
      failwith "todo ecase"
@@ -1004,7 +1002,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
      begin match rt with
      | Normal rt -> subtype loc env rt ret
      | Bad bad -> ensure_bad_unreachable env bad >> return env
-     end        
+     end
      
 
 
