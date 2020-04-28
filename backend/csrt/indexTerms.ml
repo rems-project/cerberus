@@ -32,7 +32,7 @@ type t =
   | Or of t * t
   | Not of t
 
-  | List of t * t list
+  (* | List of t * t list *)
 
   | S of Sym.t
 
@@ -76,7 +76,7 @@ let rec pp = function
   | Or (o1,o2) -> parens (pp o1 ^^^ bar ^^^ pp o2)
   | Not (o1) -> parens (!^ "not" ^^^ pp o1)
 
-  | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its))
+  (* | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its)) *)
 
   | S sym -> Sym.pp sym
 
@@ -158,10 +158,10 @@ let rec parse_sexp loc (names : NameMap.t) sx =
   | Sexp.List [Sexp.Atom "not"; o1] -> 
      parse_sexp loc names o1 >>= fun o1 ->
      return (Not o1)    
-  | Sexp.List [Sexp.Atom "list"; List (it :: its)] -> 
-     parse_sexp loc names it >>= fun it ->
-     mapM (parse_sexp loc names) its >>= fun its ->
-     return (List (it, its))
+  (* | Sexp.List [Sexp.Atom "list"; List (it :: its)] -> 
+   *    parse_sexp loc names it >>= fun it ->
+   *    mapM (parse_sexp loc names) its >>= fun its ->
+   *    return (List (it, its)) *)
 
   | Sexp.Atom str -> 
      NameMap.sym_of loc str names >>= fun sym ->
@@ -192,8 +192,8 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   | And (it, it') -> And (subst sym with_it it, subst sym with_it it')
   | Or (it, it') -> Or (subst sym with_it it, subst sym with_it it')
   | Not it -> Not (subst sym with_it it)
-  | List (it, its) -> 
-     List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
+  (* | List (it, its) -> 
+   *    List (subst sym with_it it, map (fun it -> subst sym with_it it) its) *)
   | S symbol -> S (Sym.sym_subst sym with_it symbol)
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
@@ -227,8 +227,8 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
     -> 
      unify it it' res
 
-  | List (it,its), List (it',its') -> 
-     unify_list (it::its) (it'::its') res
+  (* | List (it,its), List (it',its') -> 
+   *    unify_list (it::its) (it'::its') res *)
 
   | S sym, S sym' when sym = sym' ->
      return res
