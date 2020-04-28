@@ -30,6 +30,8 @@ let underline c s = string s ^/^ repeat (String.length s) (char c)
 let h1 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ break 1 ^^ underline '=' s)
 let h2 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ underline '=' s)
 
+let em = pp_ansi_format [Bold; Magenta]
+
 
 let typ n typ = n ^^ colon ^^^ typ
 let alrctyp alrc n typ = (char alrc) ^^^ n ^^ colon ^^^ typ
