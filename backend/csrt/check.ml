@@ -912,46 +912,46 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
 
 
 
-(* let check_name_disjointness names_and_locations = 
- *   fold_leftM (fun names_so_far (name,loc) ->
- *       if not (SymSet.mem name names_so_far )
- *       then return (SymSet.add name names_so_far)
- *       else fail loc (Name_bound_twice name)
- *     ) SymSet.empty names_and_locations
- * 
- * 
- * let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
- *   let loc = update_loc loc annots in
- *   match pat with
- *   | M_CaseBase (None, _) -> []
- *   | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
- *   | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
- * 
- * 
- * let infer_pat loc pat = 
- * 
- *   let rec aux pat = 
- *     let (M_Pattern (annots, pat_)) = pat in
- *     let loc = update_loc loc annots in
- *     match pat_ with
- *     | M_CaseBase (None, cbt) ->
- *        bt_of_core_base_type loc cbt >>= fun bt ->
- *        return ([((Sym.fresh (), bt), loc)], (bt, loc))
- *     | M_CaseBase (Some sym, cbt) ->
- *        bt_of_core_base_type loc cbt >>= fun bt ->
- *        return ([((sym, bt), loc)], (bt, loc))
- *     | M_CaseCtor (ctor, args) ->
- *        mapM aux args >>= fun bindingses_args_bts ->
- *        let bindingses, args_bts = List.split bindingses_args_bts in
- *        let bindings = List.concat bindingses in
- *        ctor_typ loc ctor args_bts >>= fun bt ->
- *        return (bindings, (bt, loc))
- *   in
- * 
- *   check_name_disjointness (collect_pattern_names loc pat) >>
- *   aux pat >>= fun (bindings, (bt, loc)) ->
- *   let (bindings,_) = List.split bindings in
- *   return (bindings, bt, loc) *)
+let check_name_disjointness names_and_locations = 
+  fold_leftM (fun names_so_far (name,loc) ->
+      if not (SymSet.mem name names_so_far )
+      then return (SymSet.add name names_so_far)
+      else fail loc (Name_bound_twice name)
+    ) SymSet.empty names_and_locations
+
+
+let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
+  let loc = update_loc loc annots in
+  match pat with
+  | M_CaseBase (None, _) -> []
+  | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
+  | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
+
+
+let infer_pat loc pat = 
+
+  let rec aux pat = 
+    let (M_Pattern (annots, pat_)) = pat in
+    let loc = update_loc loc annots in
+    match pat_ with
+    | M_CaseBase (None, cbt) ->
+       bt_of_core_base_type loc cbt >>= fun bt ->
+       return ([((Sym.fresh (), bt), loc)], (bt, loc))
+    | M_CaseBase (Some sym, cbt) ->
+       bt_of_core_base_type loc cbt >>= fun bt ->
+       return ([((sym, bt), loc)], (bt, loc))
+    | M_CaseCtor (ctor, args) ->
+       mapM aux args >>= fun bindingses_args_bts ->
+       let bindingses, args_bts = List.split bindingses_args_bts in
+       let bindings = List.concat bindingses in
+       ctor_typ loc ctor args_bts >>= fun bt ->
+       return (bindings, (bt, loc))
+  in
+
+  check_name_disjointness (collect_pattern_names loc pat) >>
+  aux pat >>= fun (bindings, (bt, loc)) ->
+  let (bindings,_) = List.split bindings in
+  return (bindings, bt, loc)
 
      
 
