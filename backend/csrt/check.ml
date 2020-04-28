@@ -858,19 +858,6 @@ let call_typ loc_call env decl_typ args =
   check_and_refine env args decl_typ SymMap.empty []
 
 
-let call_typ_fn loc_call fname env args =
-  match fname with
-  | Core.Impl impl -> 
-     let decl = get_impl_fun_type env impl in
-     let decl_typ = decl in 
-     call_typ loc_call env decl_typ args
-  | Core.Sym sym ->
-     lookup loc_call env.global.fun_decls sym >>= fun decl ->
-     let (_loc,decl_typ,_ret_name) = decl in 
-     call_typ loc_call env decl_typ args
-
-
-
 let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) = 
   match ctor with
   | M_Cnil cbt ->
@@ -925,46 +912,46 @@ let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) =
 
 
 
-let check_name_disjointness names_and_locations = 
-  fold_leftM (fun names_so_far (name,loc) ->
-      if not (SymSet.mem name names_so_far )
-      then return (SymSet.add name names_so_far)
-      else fail loc (Name_bound_twice name)
-    ) SymSet.empty names_and_locations
-
-
-let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
-  let loc = update_loc loc annots in
-  match pat with
-  | M_CaseBase (None, _) -> []
-  | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
-  | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
-
-
-let infer_pat loc pat = 
-
-  let rec aux pat = 
-    let (M_Pattern (annots, pat_)) = pat in
-    let loc = update_loc loc annots in
-    match pat_ with
-    | M_CaseBase (None, cbt) ->
-       bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((Sym.fresh (), bt), loc)], (bt, loc))
-    | M_CaseBase (Some sym, cbt) ->
-       bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((sym, bt), loc)], (bt, loc))
-    | M_CaseCtor (ctor, args) ->
-       mapM aux args >>= fun bindingses_args_bts ->
-       let bindingses, args_bts = List.split bindingses_args_bts in
-       let bindings = List.concat bindingses in
-       ctor_typ loc ctor args_bts >>= fun bt ->
-       return (bindings, (bt, loc))
-  in
-
-  check_name_disjointness (collect_pattern_names loc pat) >>
-  aux pat >>= fun (bindings, (bt, loc)) ->
-  let (bindings,_) = List.split bindings in
-  return (bindings, bt, loc)
+(* let check_name_disjointness names_and_locations = 
+ *   fold_leftM (fun names_so_far (name,loc) ->
+ *       if not (SymSet.mem name names_so_far )
+ *       then return (SymSet.add name names_so_far)
+ *       else fail loc (Name_bound_twice name)
+ *     ) SymSet.empty names_and_locations
+ * 
+ * 
+ * let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
+ *   let loc = update_loc loc annots in
+ *   match pat with
+ *   | M_CaseBase (None, _) -> []
+ *   | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
+ *   | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
+ * 
+ * 
+ * let infer_pat loc pat = 
+ * 
+ *   let rec aux pat = 
+ *     let (M_Pattern (annots, pat_)) = pat in
+ *     let loc = update_loc loc annots in
+ *     match pat_ with
+ *     | M_CaseBase (None, cbt) ->
+ *        bt_of_core_base_type loc cbt >>= fun bt ->
+ *        return ([((Sym.fresh (), bt), loc)], (bt, loc))
+ *     | M_CaseBase (Some sym, cbt) ->
+ *        bt_of_core_base_type loc cbt >>= fun bt ->
+ *        return ([((sym, bt), loc)], (bt, loc))
+ *     | M_CaseCtor (ctor, args) ->
+ *        mapM aux args >>= fun bindingses_args_bts ->
+ *        let bindingses, args_bts = List.split bindingses_args_bts in
+ *        let bindings = List.concat bindingses in
+ *        ctor_typ loc ctor args_bts >>= fun bt ->
+ *        return (bindings, (bt, loc))
+ *   in
+ * 
+ *   check_name_disjointness (collect_pattern_names loc pat) >>
+ *   aux pat >>= fun (bindings, (bt, loc)) ->
+ *   let (bindings,_) = List.split bindings in
+ *   return (bindings, bt, loc) *)
 
      
 
@@ -1076,9 +1063,14 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEmemberof _ ->
      failwith "todo M_PEmemberof"
   | M_PEcall (fname, asyms) ->
-     (* include the resource arguments into asyms *)
-     (* let env = call_resources annots env in *)
-     call_typ_fn loc fname env (List.map (aunpack loc) asyms) >>= fun (rt, env) ->
+     begin match fname with
+     | Core.Impl impl -> 
+        return (get_impl_fun_type env impl)
+     | Core.Sym sym ->
+        lookup loc env.global.fun_decls sym >>= fun (_loc,decl_typ,_ret_name) ->
+        return decl_typ
+     end >>= fun decl_typ ->
+     call_typ loc env decl_typ (List.map (aunpack loc) asyms) >>= fun (rt, env) ->
      return (Normal rt, env)
   | M_PElet (p, e1, e2) ->
      failwith "PElet in inferring position"
