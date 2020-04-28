@@ -577,7 +577,7 @@ let rec pp_expr expr =
         | M_Epure pe ->
             pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
         | M_Ememop memop ->
-           let (memop, pes) = Mucore.mu_to_core__memop__ memop in
+           let (memop, pes) = Mucore_to_core.mu_to_core__memop__ memop in
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
         | M_Eaction (M_Paction (p, (M_Action (_, bs, act)))) ->
             pp_polarity p (pp_action act)

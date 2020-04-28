@@ -1319,32 +1319,28 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
 
 
 
-let check_function_body loc fsym genv body (F decl_typ) = 
+let check_proc loc fsym genv body (F decl_typ) = 
   debug_print [(1, h1 (Printf.sprintf "Checking function %s" (pps (Sym.pp fsym))))];
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
   return ()
 
-
-
-let embed_fun_proc body = 
-  let (M_Pexpr (annots, _, _)) = body in
-  M_Expr (annots, M_Epure (body))
-
+let check_fun loc fsym genv body (F decl_typ) = 
+  debug_print [(1, h1 (Printf.sprintf "Checking function %s" (pps (Sym.pp fsym))))];
+  let env = with_fresh_local genv in
+  let env = add_vars env decl_typ.arguments in
+  check_pexpr loc env body decl_typ.return >>= fun _env ->
+  return ()
 
 
 let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
-
   let forget = 
     filter_map (function {name; bound = A t} -> Some (name,t) | _ -> None) in
-
-
   let binding_of_core_base_type loc (sym,cbt) = 
     bt_of_core_base_type loc cbt >>= fun bt ->
     return (makeA sym bt)
   in
-
   let check_consistent loc decl args ret = 
     mapM (binding_of_core_base_type loc) args >>= fun args ->
     binding_of_core_base_type loc ret >>= fun ret ->
@@ -1360,21 +1356,18 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
           (pps (FunctionTypes.pp decl)) (pps (FunctionTypes.pp defn))
       in
       fail loc (Generic_error err)
-
-
   in
-
   match fn with
   | M_Fun (ret, args, body) ->
      let decl = SymMap.find fsym genv.GEnv.fun_decls in
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body loc fsym genv (embed_fun_proc body) decl_typ
+     check_fun loc fsym genv body decl_typ
   | M_Proc (loc, ret, args, body) ->
      lookup loc genv.fun_decls fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
-     check_function_body loc fsym genv body decl_typ
+     check_proc loc fsym genv body decl_typ
   | M_ProcDecl _
   | M_BuiltinDecl _ -> 
      return ()
