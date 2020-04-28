@@ -46,7 +46,6 @@ module Binders = struct
 
   type t = {name: Sym.t; bound: VarTypes.t}
 
-
   let pp {name;bound} = 
     match bound with
     | A t -> alrctyp 'A' (Sym.pp name) (BT.pp t)
@@ -204,10 +203,11 @@ module GEnv = struct
       impl_constants = ImplMap.empty;
       names = NameMap.empty }
 
-  let get_impl_const_type (loc : Loc.t) (genv: genv) (i: implementation_constant) = 
-    match ImplMap.find_opt i genv.impl_constants with
-    | Some t -> return t
-    | None -> fail loc (TypeErrors.Unbound_impl_const i)
+  let get_impl_const_type (genv: genv) (i: implementation_constant) = 
+    ImplMap.find i genv.impl_constants
+
+  let get_impl_fun_type (genv: genv) (i: implementation_constant) = 
+    ImplMap.find i genv.impl_fun_decls
 
 
   let pp_struct_decls decls = 
@@ -374,8 +374,10 @@ module Env = struct
 
 
   open Implementation
-  let get_impl_const_type (loc : Loc.t) (env: env) (i: implementation_constant) = 
-    GEnv.get_impl_const_type loc env.global i
+  let get_impl_const_type (env: env) (i: implementation_constant) = 
+    GEnv.get_impl_const_type env.global i
+  let get_impl_fun_type (env: env) (i: implementation_constant) = 
+    GEnv.get_impl_fun_type env.global i
 
 
 end
@@ -858,8 +860,10 @@ let call_typ loc_call env decl_typ args =
 
 let call_typ_fn loc_call fname env args =
   match fname with
-  | Core.Impl _ -> 
-     failwith "todo implementation-defined constrant"
+  | Core.Impl impl -> 
+     let decl = get_impl_fun_type env impl in
+     let decl_typ = decl in 
+     call_typ loc_call env decl_typ args
   | Core.Sym sym ->
      lookup loc_call env.global.fun_decls sym >>= fun decl ->
      let (_loc,decl_typ,_ret_name) = decl in 
@@ -1032,7 +1036,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      get_Avar loc env sym >>= fun bt ->
      return (Normal [makeA sym bt], env)
   | M_PEimpl i ->
-     get_impl_const_type loc env i >>= fun t ->
+     let t = get_impl_const_type env i in
      return (Normal [makeUA t], env)
   | M_PEval v ->
      infer_value loc env v >>= fun t ->
