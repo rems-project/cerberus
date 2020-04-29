@@ -923,7 +923,15 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
         | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
       in
       begin
-        match (all_vars, annot.bl_constrs) with
+        let fn constr constrs =
+          match constr with
+          | Constr_Coq(_) -> constr :: constrs
+          | _             -> constrs
+        in
+        let constrs =
+          List.fold_right fn func_annot.fa_requires annot.bl_constrs
+        in
+        match (all_vars, constrs) with
         | ([]     , []     ) ->
             Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
               def.func_name
