@@ -791,13 +791,15 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
 
   (* Typing proofs. *)
   let pp_proof (id, def) =
-    let annot =
+    let func_annot =
       match def.func_annot with
       | Some(annot) -> annot
       | None        -> assert false (* Unreachable. *)
     in
+    if List.length def.func_args <> List.length func_annot.fa_args then
+      Panic.panic_no_pos "Argument number missmatch between code and spec.";
     pp "\n@;(* Typing proof for [%s]. *)@;" id;
-    if annot.fa_trust_me then
+    if func_annot.fa_trust_me then
       pp "(* Let's skip that, you seem to have some faith. *)"
     else
     let (used_globals, used_functions) = def.func_deps in
@@ -842,7 +844,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
                    List.iter (fprintf ff " %a]" pp_intro) xs
     in
     pp "@]@;@[<v 2>Proof.@;";
-    pp "start_function \"%s\" (%a)" id pp_intros annot.fa_parameters;
+    pp "start_function \"%s\" (%a)" id pp_intros func_annot.fa_parameters;
     if def.func_vars <> [] || def.func_args <> [] then
       begin
         pp " =>";
@@ -865,6 +867,15 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
             if List.mem_assoc id def.func_vars then
               Panic.panic_no_pos "[%s] denotes both an argument and a local \
                 variable of function [%s]." id def.func_name;
+            (* Check if the type is different for the toplevel one. *)
+            let toplevel_ty =
+              try
+                let i = List.find_index (fun (s,_) -> s = id) def.func_args in
+                List.nth func_annot.fa_args i
+              with Not_found | Failure(_) -> assert false (* Unreachable. *)
+            in
+            if ty = toplevel_ty then
+              Panic.wrn None "Useless annotation for argument [%s]." id;
             ("arg_" ^ id, (layout, Some(ty)))
           with Not_found ->
           (* Not a function argument, check that it is a local variable. *)
@@ -884,7 +895,16 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
             List.for_all (fun (id_var, _) -> id <> id_var) used
           in
           let args = List.filter pred def.func_args in
-          List.map (fun (id, layout) -> ("arg_" ^ id, layout)) args
+          let fn (id, layout) =
+            let ty =
+              try
+                let i = List.find_index (fun (s,_) -> s = id) def.func_args in
+                List.nth func_annot.fa_args i
+              with Not_found | Failure(_) -> assert false (* Unreachable. *)
+            in
+            ("arg_" ^ id, (layout, Some(ty)))
+          in
+          List.map fn args
         in
         let unused_vars =
           let pred (id, _) =
@@ -892,10 +912,9 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
             List.for_all (fun (id_var, _) -> id <> id_var) used
           in
           let vars = List.filter pred def.func_vars in
-          List.map (fun (id, layout) -> ("local_" ^ id, layout)) vars
+          List.map (fun (id, layout) -> ("local_" ^ id, (layout, None))) vars
         in
-        let unused = unused_args @ unused_vars in
-        List.map (fun (id, layout) -> (id, (layout, None))) unused
+        unused_args @ unused_vars
       in
       let all_vars = unused @ used in
       let pp_var ff (id, (layout, ty_opt)) =
@@ -904,7 +923,15 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
         | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
       in
       begin
-        match (all_vars, annot.bl_constrs) with
+        let fn constr constrs =
+          match constr with
+          | Constr_Coq(_) -> constr :: constrs
+          | _             -> constrs
+        in
+        let constrs =
+          List.fold_right fn func_annot.fa_requires annot.bl_constrs
+        in
+        match (all_vars, constrs) with
         | ([]     , []     ) ->
             Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
               def.func_name
@@ -935,7 +962,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
         | t :: ts when is_all t -> pp "@;%s" t; pp_tactics_all ts
         | ts                    -> ts
       in
-      pp_tactics_all annot.fa_tactics
+      pp_tactics_all func_annot.fa_tactics
     in
     List.iter (pp "@;+ %s") tactics_items;
     pp "@;all: print_sidecondition_goal \"%s\"." def.func_name;

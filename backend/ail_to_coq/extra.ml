@@ -77,4 +77,12 @@ module List =
           match f h with
           | Some(x) -> x :: filter_map f t
           | None    -> filter_map f t
+
+    let find_index : ('a -> bool) -> 'a list -> int = fun p l ->
+      let rec find i l =
+        match l with
+        | []     -> raise Not_found
+        | x :: l -> if p x then i else find (i+1) l
+      in
+      find 0 l
   end
