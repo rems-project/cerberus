@@ -34,8 +34,6 @@ let em = pp_ansi_format [Bold; Magenta]
 
 
 let typ n typ = n ^^ colon ^^^ typ
-let alrctyp alrc n typ = (char alrc) ^^^ n ^^ colon ^^^ typ
-
 
 let item item content = 
   (pp_ansi_format [Bold; Magenta] item) ^^ colon ^^ break 1 ^^
