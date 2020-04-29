@@ -11,8 +11,8 @@ let pp = function
 let parse_sexp loc (names : NameMap.t) sx =
   match sx with
   | sx ->
-     BaseTypes.parse_sexp loc names sx >>= fun bt ->
-     return (Base bt)
+     BaseTypes.parse_sexp loc names sx >>= fun (bt,names) ->
+     return (Base bt, names)
 
 let type_equal t1 t2 = t1 = t2
 
