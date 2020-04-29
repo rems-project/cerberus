@@ -842,7 +842,7 @@ let pp_file file =
         pp_fun_map file.mu_stdlib ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
-  (*  pp_impl file.impl ^^ P.break 1 ^^ *)
+        pp_impl file.mu_impl ^^ P.break 1 ^^
         !^ "-- END IMPL" ^^ P.break 1 ^^ z
     else
       id
