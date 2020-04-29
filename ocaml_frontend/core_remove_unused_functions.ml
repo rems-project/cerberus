@@ -342,7 +342,7 @@ let deps_of fn_or_impl : ('a,'bty,'sym) name_collector =
 
 let do_impls is = 
   pmap_iterM (fun i decl ->
-      record_keep (Impl i) >>
+      (* record_keep (Impl i) >> *)
       let name_collector = deps_of (Impl i) in
       match decl with
       | Def (cbt, pe) -> 
@@ -456,25 +456,29 @@ let remove_unused_functions file =
 
   let can_remove deps d = not (DefSet.mem d s.keep) && nothing_depends deps d in
 
-  let rec remove_unused maybe_remove deps = 
+  let rec only_used maybe_remove deps = 
     match List.filter (can_remove deps) maybe_remove with
     | [] -> 
        (maybe_remove,deps)
     | x :: xs ->
        let deps' = DefRel.filter (fun (sym1,sym2) -> sym1 <> x) deps in
        let maybe_remove' = List.filter ((<>) x) maybe_remove in
-       remove_unused maybe_remove' deps'
+       only_used maybe_remove' deps'
   in
 
-
-  let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Sym sym :: acc) file.stdlib [] in  
-  let (used_stdlib,_) = remove_unused stdlib_names s.deps in
-
-  let remove_unused stdlib 
-      : ('bty, 'a) generic_fun_map = 
-    Pmap.filter (fun name _ -> List.mem (Def.Sym name) used_stdlib) stdlib
+  let used_stdlib : ('bty, 'a) generic_fun_map = 
+    let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Sym sym :: acc) file.stdlib [] in  
+    let (used_stdlib,_) = only_used stdlib_names s.deps in
+    Pmap.filter (fun name _ -> List.mem (Def.Sym name) used_stdlib) file.stdlib 
   in
 
-  { file with stdlib = remove_unused file.stdlib }
+  let used_impls = 
+    let stdlib_names = Pmap.fold (fun sym _ acc -> Def.Impl sym :: acc) file.impl [] in  
+    let (used_stdlib,_) = only_used stdlib_names s.deps in
+    Pmap.filter (fun name _ -> List.mem (Def.Impl name) used_stdlib) file.impl
+  in
+
+  { file with stdlib = used_stdlib;
+              impl = used_impls}
 
 
