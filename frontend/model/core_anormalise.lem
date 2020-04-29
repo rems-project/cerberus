@@ -80,34 +80,37 @@ end
 
 
 
-let core_to_mu__ctor = function
- | Core.Cnil bt -> M_Cnil bt
- | Core.Ccons -> M_Ccons
- | Core.Ctuple -> M_Ctuple
- | Core.Carray -> M_Carray
- | Core.CivCOMPL -> M_CivCOMPL
- | Core.CivAND-> M_CivAND
- | Core.CivOR -> M_CivOR
- | Core.CivXOR -> M_CivXOR
- | Core.Cspecified -> M_Cspecified
- | Core.Cfvfromint-> M_Cfvfromint
- | Core.Civfromfloat -> M_Civfromfloat
- | Core.Civmax -> failwith "core_anormalisation: Civmax"
- | Core.Civmin -> failwith "core_anormalisation: Civmin"
- | Core.Civsizeof -> failwith "core_anormalisation: Civsizeof"
- | Core.Civalignof -> failwith "core_anormalisation: Civalignof"
- | Core.Cunspecified -> failwith "core_anormalisation: Cunspecified"
-end
+let core_to_mu__ctor loc ctor = 
+  let loc = Loc.stringFromLocation loc in
+  match ctor with 
+  | Core.Cnil bt -> M_Cnil bt
+  | Core.Ccons -> M_Ccons
+  | Core.Ctuple -> M_Ctuple
+  | Core.Carray -> M_Carray
+  | Core.CivCOMPL -> M_CivCOMPL
+  | Core.CivAND-> M_CivAND
+  | Core.CivOR -> M_CivOR
+  | Core.CivXOR -> M_CivXOR
+  | Core.Cspecified -> M_Cspecified
+  | Core.Cfvfromint-> M_Cfvfromint
+  | Core.Civfromfloat -> M_Civfromfloat
+  | Core.Civmax -> failwith (loc ^ ". core_anormalisation: Civmax")
+  | Core.Civmin -> failwith (loc ^ ". core_anormalisation: Civmin")
+  | Core.Civsizeof -> failwith (loc ^ ". core_anormalisation: Civsizeof")
+  | Core.Civalignof -> failwith (loc ^ ". core_anormalisation: Civalignof")
+  | Core.Cunspecified -> failwith (loc ^ ". core_anormalisation: Cunspecified")
+ end
 
 
 let rec core_to_mu__pattern (Core.Pattern annots pat_) = 
   let wrap pat_ = M_Pattern annots pat_ in
+  let loc = Annot.get_loc_ annots in
   match pat_ with
   | Core.CaseBase (msym, bt) -> 
      wrap (M_CaseBase (msym, bt))
   | Core.CaseCtor ctor pats -> 
      wrap (M_CaseCtor 
-             (core_to_mu__ctor ctor)
+             (core_to_mu__ctor loc ctor)
              (map core_to_mu__pattern pats))
   end
 
@@ -174,14 +177,14 @@ val n_val_names :
 
 
 
-val n_pexpr : pexpr unit -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
-val n_pexpr_name : outer_annots -> pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
-val n_pexpr_names : outer_annots -> pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
+val n_pexpr : Loc.t -> pexpr unit -> (mu_pexpr -> mu_pexpr) -> mu_pexpr
+val n_pexpr_name : Loc.t -> outer_annots -> pexpr unit -> (asym -> mu_pexpr) -> mu_pexpr
+val n_pexpr_names : Loc.t -> outer_annots -> pexprs unit -> (asyms -> mu_pexpr) -> mu_pexpr
 val normalise_pexpr : forall 'bty. pexpr unit -> mu_pexpr
 
-val n_pexpr_in_expr : forall 'a. pexpr unit -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_name_in_expr : forall 'a. outer_annots -> pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
-val n_pexpr_names_in_expr : forall 'a. outer_annots -> pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_in_expr : forall 'a. Loc.t -> pexpr unit -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_name_in_expr : forall 'a. Loc.t -> outer_annots -> pexpr unit -> (asym -> mu_expr 'a) -> mu_expr 'a
+val n_pexpr_names_in_expr : forall 'a. Loc.t -> outer_annots -> pexprs unit -> (asyms -> mu_expr 'a) -> mu_expr 'a
 
 
 (* let typeof_value v = 
@@ -258,41 +261,46 @@ and n_val_names lb annots vs k =
 
 (* 1 begin *)
 
-let rec n_pexpr_name outer_annots e k : mu_pexpr = 
-  n_pexpr e (fun e -> 
+let rec n_pexpr_name loc outer_annots e k : mu_pexpr = 
+  n_pexpr loc e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
   | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_pexpr e k
   end)
 
-and n_pexpr_name_2 outer_annots (e,e') k = 
-  n_pexpr_name outer_annots e (fun e -> 
-  n_pexpr_name outer_annots e' (fun e' ->
+and n_pexpr_name_2 loc outer_annots (e,e') k = 
+  n_pexpr_name loc outer_annots e (fun e -> 
+  n_pexpr_name loc outer_annots e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_name_3 outer_annots (e,e',e'') k = 
-  n_pexpr_name outer_annots e (fun e -> 
-  n_pexpr_name outer_annots e' (fun e' ->
-  n_pexpr_name outer_annots e'' (fun e'' ->
+and n_pexpr_name_3 loc outer_annots (e,e',e'') k = 
+  n_pexpr_name loc outer_annots e (fun e -> 
+  n_pexpr_name loc outer_annots e' (fun e' ->
+  n_pexpr_name loc outer_annots e'' (fun e'' ->
   k (e,e',e''))))
 
-and n_pexpr_names outer_annots (es : list (pexpr unit)) k =
+and n_pexpr_names loc outer_annots (es : list (pexpr unit)) k =
   match es with 
   | [] -> k []
   | e :: es -> 
-     n_pexpr_name outer_annots e (fun e -> 
-     n_pexpr_names outer_annots es (fun es ->
+     n_pexpr_name loc outer_annots e (fun e -> 
+     n_pexpr_names loc outer_annots es (fun es ->
      k (e :: es)))
   end
 
-and n_pexpr (e : pexpr unit) k = 
+and n_pexpr loc (e : pexpr unit) k = 
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
+  let loc = match Annot.get_loc annots with
+    | Nothing -> loc
+    | Just loc -> loc
+  end in
 
-  let n_pexpr_names = n_pexpr_names annots in
-  let n_pexpr_name = n_pexpr_name annots in
-  let n_pexpr_name_2 = n_pexpr_name_2 annots in
+  let n_pexpr = n_pexpr loc in
+  let n_pexpr_names = n_pexpr_names loc annots in
+  let n_pexpr_name = n_pexpr_name loc annots in
+  let n_pexpr_name_2 = n_pexpr_name_2 loc annots in
 
   match pe with
   | PEsym sym -> 
@@ -314,7 +322,7 @@ and n_pexpr (e : pexpr unit) k =
      k (annotate (M_PEerror err e')))
   | PEctor ctor args ->
      n_pexpr_names args (fun args -> 
-     k (annotate (M_PEctor (core_to_mu__ctor ctor) args)))
+     k (annotate (M_PEctor (core_to_mu__ctor loc ctor) args)))
   | PEcase e' pats_pes ->
      n_pexpr_name e' (fun e' -> 
         let pats_pes = 
@@ -397,41 +405,46 @@ and n_pexpr (e : pexpr unit) k =
 
 (* 2 begin *)
 
-let rec n_pexpr_in_expr_name outer_annots e k : mu_expr 'a = 
-  n_pexpr_in_expr e (fun e -> 
+let rec n_pexpr_in_expr_name loc outer_annots e k : mu_expr 'a = 
+  n_pexpr_in_expr loc e (fun e -> 
   match is_symbol e with
   | Just sym -> k sym
   | Nothing -> letbind_pexpr outer_annots letbinder_pexpr_in_expr e k
   end)
 
-and n_pexpr_in_expr_name_2 outer_annots (e,e') k : mu_expr 'a = 
-  n_pexpr_in_expr_name outer_annots e (fun e -> 
-  n_pexpr_in_expr_name outer_annots e' (fun e' ->
+and n_pexpr_in_expr_name_2 loc outer_annots (e,e') k : mu_expr 'a = 
+  n_pexpr_in_expr_name loc outer_annots e (fun e -> 
+  n_pexpr_in_expr_name loc outer_annots e' (fun e' ->
   k (e,e')))
 
-and n_pexpr_in_expr_name_3 outer_annots (e,e',e'') k = 
-  n_pexpr_in_expr_name outer_annots e  (fun e -> 
-  n_pexpr_in_expr_name outer_annots e' (fun e' ->
-  n_pexpr_in_expr_name outer_annots e'' (fun e'' ->
+and n_pexpr_in_expr_name_3 loc outer_annots (e,e',e'') k = 
+  n_pexpr_in_expr_name loc outer_annots e  (fun e -> 
+  n_pexpr_in_expr_name loc outer_annots e' (fun e' ->
+  n_pexpr_in_expr_name loc outer_annots e'' (fun e'' ->
   k (e,e',e''))))
 
-and n_pexpr_in_expr_names outer_annots (es : list (pexpr unit)) k : mu_expr 'a =
+and n_pexpr_in_expr_names loc outer_annots (es : list (pexpr unit)) k : mu_expr 'a =
   match es with
   | [] -> k []
   | e :: es -> 
-     n_pexpr_in_expr_name outer_annots e (fun e -> 
-     n_pexpr_in_expr_names outer_annots es (fun es ->
+     n_pexpr_in_expr_name loc outer_annots e (fun e -> 
+     n_pexpr_in_expr_names loc outer_annots es (fun es ->
      k (e :: es)))
   end
 
-and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
+and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a = 
 
   let (Pexpr annots bty pe) = e in
   let annotate pe = M_Pexpr annots bty pe in
+  let loc = match Annot.get_loc annots with
+    | Nothing -> loc
+    | Just loc -> loc
+  end in
 
-  let n_pexpr_in_expr_names = n_pexpr_in_expr_names annots in
-  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
-  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 annots in
+  let n_pexpr_in_expr = n_pexpr_in_expr loc in
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc annots in
 
   match pe with
   | PEsym sym -> 
@@ -453,7 +466,7 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
      k (annotate (M_PEerror err e')))
   | PEctor ctor args ->
      n_pexpr_in_expr_names args (fun args -> 
-     k (annotate (M_PEctor (core_to_mu__ctor ctor) args)))
+     k (annotate (M_PEctor (core_to_mu__ctor loc ctor) args)))
   | PEcase e' pats_pes ->
      n_pexpr_in_expr_name e' (fun e' -> 
         let pats_pes = 
@@ -538,7 +551,7 @@ and n_pexpr_in_expr (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 'a =
 
 
 let normalise_pexpr (e : pexpr unit) = 
-  n_pexpr e (fun e -> e)
+  n_pexpr (Loc.locOf e) e (fun e -> e)
 
 
 (* val n_pexpr_in_expr : forall 'a. pexpr -> (mu_pexpr -> mu_expr 'a) -> mu_expr 'a
@@ -550,9 +563,9 @@ let normalise_pexpr (e : pexpr unit) =
  * val n_pexpr_names_in_expr : forall 'a. pexprs -> (asyms -> mu_expr 'a) -> mu_expr 'a
  * let n_pexpr_names_in_expr p k = n_pexpr_names letbinder_pexpr_in_expr p k *)
 
-let n_action annots (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
+let n_action loc annots (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) = 
   let (Action t an a) = action in
-  let n_pexpr_in_expr_name =  n_pexpr_in_expr_name annots in
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
   let wrap a = M_Action t an a in
   match a with
   | Create e1 e2 sym ->
@@ -619,21 +632,21 @@ let n_action annots (action : action 'a unit) (k : mu_action 'a -> mu_expr 'a) =
   end
      
 
-let n_paction annots pa (k : mu_paction 'a -> mu_expr 'a) = 
+let n_paction loc annots pa (k : mu_paction 'a -> mu_expr 'a) = 
   let (Paction pol a) = pa in
   let wrap a = M_Paction pol a in
-  n_action annots a (fun a -> 
+  n_action loc annots a (fun a -> 
   k (wrap a))
 
 
 let rec normalise_expr e =
-  n_expr e (fun e -> e)
+  n_expr (Loc.locOf e) e (fun e -> e)
 
 
-and n_memop annots memop pexprs k = 
-  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
-  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 annots in
-  let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 annots in
+and n_memop loc annots memop pexprs k = 
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_name_2 = n_pexpr_in_expr_name_2 loc annots in
+  let n_pexpr_in_expr_name_3 = n_pexpr_in_expr_name_3 loc annots in
 
   match (memop, pexprs) with
   | (Mem_common.PtrEq, [pe1;pe2]) ->
@@ -705,12 +718,22 @@ and n_memop annots memop pexprs k =
                  show (List.length pexprs) ^ " arguments")
   end
 
-and n_expr (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
+and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a) 
         : mu_expr 'a = 
   let (Expr annots pe) = e in
   let wrap pe : mu_expr 'a = M_Expr annots pe in
-  let n_pexpr_in_expr_name = n_pexpr_in_expr_name annots in
-  let n_pexpr_in_expr_names = n_pexpr_in_expr_names annots in
+
+  let loc = match Annot.get_loc annots with
+    | Just loc -> loc
+    | Nothing -> loc
+  end in
+
+  let n_pexpr_in_expr_name = n_pexpr_in_expr_name loc annots in
+  let n_pexpr_in_expr_names = n_pexpr_in_expr_names loc annots in
+  let n_pexpr_in_expr = n_pexpr_in_expr loc in
+  let n_paction = n_paction loc in
+  let n_expr = n_expr loc in
+  let n_memop = n_memop loc in
 
   match pe with
   | Epure pexpr -> 
