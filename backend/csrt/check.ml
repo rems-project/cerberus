@@ -42,7 +42,7 @@ let debug_print pp = Pp_tools.print_for_level !_DEBUG pp
 let integer_value_to_num loc iv = 
   match Impl_mem.eval_integer_value iv with
   | Some v -> return v
-  | None -> fail loc Integer_value_error      
+  | None -> fail loc Integer_value_error
       
 
 
@@ -203,7 +203,8 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_list bt -> fail loc (Unsupported "lists")
   | BTy_tuple bts -> 
      mapM (bt_of_core_base_type loc) bts >>= fun bts ->
-     return (BT.Tuple bts)
+     let nbts = List.map (fun bt -> (Sym.fresh (), bt)) bts in
+     return (Tuple nbts)
   | BTy_storable -> fail loc (Unsupported "BTy_storable")
   | BTy_ctype -> fail loc (Unsupported "ctype")
 
@@ -354,21 +355,24 @@ let check_base_type loc mname has expected =
   else fail loc (Call_error (Mismatch {mname; has; expected}))
 
 
-let args_same_typ (mtyp : BT.t option) (args_bts : (BT.t * Loc.t) list) =
-  fold_leftM (fun mt (bt,loc) ->
-      match mt with
-      | None -> return (Some bt)
-      | Some t -> 
-         check_base_type loc None (A bt) (A t) >>
-         return (Some t)
-    ) mtyp args_bts
+type aargs = ((Sym.t * BT.t) * Loc.t) list
 
-
-let make_Aargs_bts loc env tsyms = 
-  mapM (fun tsym ->
-      let (sym, loc) = aunpack loc tsym in
+let make_Aargs loc env tsyms = 
+  mapM (fun asym ->
+      let (sym, loc) = aunpack loc asym in
       get_Avar loc env sym >>= fun t ->
-      return (t, loc)) tsyms
+      return ((sym, t), loc)) tsyms
+
+
+let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : (BT.t option, 'e) m =
+  fold_leftM (fun mt ((sym,bt),loc) ->
+      match mt with
+      | None -> 
+         return (Some bt)
+      | Some t -> 
+         check_base_type loc (Some sym) (A bt) (A t) >>
+         return (Some t)
+    ) mtyp aargs
 
 
 
@@ -392,8 +396,8 @@ let infer_object_value loc (env : env) ov =
          return [makeA name Loc; makeUC (S name %= Num loc)] )
        ( fun () -> fail loc (Unreachable "unspecified pointer value") )
   | M_OVarray items ->
-     make_Aargs_bts loc env items >>= fun args_bts ->
-     args_same_typ None args_bts >>
+     make_Aargs loc env items >>= fun args_bts ->
+     check_Aargs_typ None args_bts >>
      return [makeA name Array]
   | M_OVstruct (sym, fields) ->
      fail loc (Unsupported "todo: struct")
@@ -425,8 +429,8 @@ let infer_value loc env v : (Types.t,'e) m =
   | M_Vlist (cbt, asyms) ->
      fail loc (Unsupported "lists")
   | M_Vtuple args ->
-     make_Aargs_bts loc env args >>= fun args_bts ->
-     return [makeUA (Tuple (List.map fst args_bts))]
+     make_Aargs loc env args >>= fun aargs ->
+     return (List.map (fun ((name,bt),_) -> makeA name bt) aargs)
 
 
 
@@ -540,85 +544,103 @@ let call_typ loc_call env decl_typ args =
   check_and_refine env args decl_typ SymMap.empty []
 
 
-let ctor_typ loc ctor (args_bts : ((BT.t * Loc.t) list)) = 
+let infer_ctor loc ctor (aargs : aargs) = 
   match ctor with
-  | M_Cnil cbt -> fail loc (Unsupported "lists")
-  | M_Ccons -> fail loc (Unsupported "lists")
-  | M_Ctuple ->
-     let t = BT.Tuple (List.map fst args_bts) in
-     return t
+  | M_Ctuple -> 
+     return (List.map (fun ((name,bt),_) -> makeA name bt) aargs)
   | M_Carray -> 
-     args_same_typ None args_bts >>
-     return BT.Array
-  | M_Civmax
-  | M_Civmin
-  | M_Civsizeof
-  | M_Civalignof
+     check_Aargs_typ None aargs >> 
+     return [{name = fresh (); bound = A Array}]
   | M_CivCOMPL
   | M_CivAND
   | M_CivOR
   | M_CivXOR -> 
      fail loc (Unsupported "todo: Civ..")
   | M_Cspecified ->
-    begin match args_bts with
-    | [(bt,_)] ->
-       return bt
+    begin match aargs with
+    | [((name,bt),_)] -> 
+       return [{name; bound = A bt}]
     | args ->
        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
                    (List.length args) in
        fail loc (Generic_error err)
     end
-
-  | M_Cfvfromint -> 
-     fail loc (Unsupported "floats")
-  | M_Civfromfloat -> 
-     fail loc (Unsupported "floats")
-
+  | M_Cnil cbt -> fail loc (Unsupported "lists")
+  | M_Ccons -> fail loc (Unsupported "lists")
+  | M_Cfvfromint -> fail loc (Unsupported "floats")
+  | M_Civfromfloat -> fail loc (Unsupported "floats")
 
 
+(* let rec check_pattern_and_bind loc env ret (M_Pattern (annots, pat_)) =
+ *   let loc = precise_loc loc annots in
+ *   match pat_ with
+ *   | M_CaseBase (None, cbt) -> 
+ *      match ret with
+ *      | [
+ *   | M_CaseBase (msym, cbt) -> 
+ *   | M_CaseCtor (ctor, pats) -> 
+ *   match ctor with
+ *   | M_Ctuple -> 
+ *   | M_Carray -> 
+ *   | M_CivCOMPL
+ *   | M_CivAND
+ *   | M_CivOR
+ *   | M_CivXOR -> 
+ *      fail loc (Unsupported "todo: Civ..")
+ *   | M_Cspecified ->
+ *   | M_Cnil cbt -> fail loc (Unsupported "lists")
+ *   | M_Ccons -> fail loc (Unsupported "lists")
+ *   | M_Cfvfromint -> fail loc (Unsupported "floats")
+ *   | M_Civfromfloat -> fail loc (Unsupported "floats") *)
 
-let check_name_disjointness names_and_locations = 
-  fold_leftM (fun names_so_far (name,loc) ->
-      if not (SymSet.mem name names_so_far )
-      then return (SymSet.add name names_so_far)
-      else fail loc (Name_bound_twice name)
-    ) SymSet.empty names_and_locations
 
 
-let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
-  let loc = update_loc loc annots in
-  match pat with
-  | M_CaseBase (None, _) -> []
-  | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
-  | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
-
-
-let infer_pat loc pat = 
-
-  let rec aux pat = 
-    let (M_Pattern (annots, pat_)) = pat in
-    let loc = update_loc loc annots in
-    match pat_ with
-    | M_CaseBase (None, cbt) ->
-       bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((Sym.fresh (), bt), loc)], (bt, loc))
-    | M_CaseBase (Some sym, cbt) ->
-       bt_of_core_base_type loc cbt >>= fun bt ->
-       return ([((sym, bt), loc)], (bt, loc))
-    | M_CaseCtor (ctor, args) ->
-       mapM aux args >>= fun bindingses_args_bts ->
-       let bindingses, args_bts = List.split bindingses_args_bts in
-       let bindings = List.concat bindingses in
-       ctor_typ loc ctor args_bts >>= fun bt ->
-       return (bindings, (bt, loc))
-  in
-
-  check_name_disjointness (collect_pattern_names loc pat) >>
-  aux pat >>= fun (bindings, (bt, loc)) ->
-  let (bindings,_) = List.split bindings in
-  return (bindings, bt, loc)
+(* let check_name_disjointness names_and_locations = 
+ *   fold_leftM (fun names_so_far (name,loc) ->
+ *       if not (SymSet.mem name names_so_far )
+ *       then return (SymSet.add name names_so_far)
+ *       else fail loc (Name_bound_twice name)
+ *     ) SymSet.empty names_and_locations
+ * 
+ * 
+ * let rec collect_pattern_names loc (M_Pattern (annots, pat)) = 
+ *   let loc = update_loc loc annots in
+ *   match pat with
+ *   | M_CaseBase (None, _) -> []
+ *   | M_CaseBase (Some sym, _) -> [(sym,update_loc loc annots)]
+ *   | M_CaseCtor (_, pats) -> concat_map (collect_pattern_names loc) pats
+ * 
+ * 
+ * let infer_pat loc pat = 
+ * 
+ *   let rec aux pat = 
+ *     let (M_Pattern (annots, pat_)) = pat in
+ *     let loc = update_loc loc annots in
+ *     match pat_ with
+ *     | M_CaseBase (None, cbt) ->
+ *        type_of_core_base_type loc cbt >>= fun bt ->
+ *        return ([((Sym.fresh (), bt), loc)], (bt, loc))
+ *     | M_CaseBase (Some sym, cbt) ->
+ *        bt_of_core_base_type loc cbt >>= fun bt ->
+ *        return ([((sym, bt), loc)], (bt, loc))
+ *     | M_CaseCtor (ctor, args) ->
+ *        mapM aux args >>= fun bindingses_args_bts ->
+ *        let bindingses, args_bts = List.split bindingses_args_bts in
+ *        let bindings = List.concat bindingses in
+ *        ctor_typ loc ctor args_bts >>= fun bt ->
+ *        return (bindings, (bt, loc))
+ *   in
+ * 
+ *   check_name_disjointness (collect_pattern_names loc pat) >>
+ *   aux pat >>= fun (bindings, (bt, loc)) ->
+ *   let (bindings,_) = List.split bindings in
+ *   return (bindings, bt, loc) *)
 
      
+let infer_pat loc pat = 
+  fail loc (Unsupported "todo: implement infer_pat")
+
+
 
 (* todo: replace with call_typ *)
 let make_binop_constr op (v1 : IT.t) (v2 : IT.t) =
@@ -701,9 +723,9 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      let (sym, loc) = aunpack loc asym in
      return (Bad (StaticError (loc, (err,sym))), env)
   | M_PEctor (ctor, args) ->
-     make_Aargs_bts loc env args >>= fun args_bts ->
-     ctor_typ loc ctor args_bts >>= fun bt ->
-     return (Normal [makeUA bt], env)
+     make_Aargs loc env args >>= fun aargs ->
+     infer_ctor loc ctor aargs >>= fun rt ->
+     return (Normal rt, env)
   | M_PEarray_shift _ ->
      fail loc (Unsupported "todo: PEarray_shift")
   | M_PEmember_shift _ ->

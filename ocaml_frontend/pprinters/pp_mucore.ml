@@ -361,14 +361,6 @@ let pp_ctor = function
       !^ "Tuple"
   | M_Carray ->
       !^ "Array"
-  | M_Civmax ->
-      !^ "Ivmax"
-  | M_Civmin ->
-      !^ "Ivmin"
-  | M_Civsizeof ->
-      !^ "Ivsizeof"
-  | M_Civalignof ->
-      !^ "Ivalignof"
   | M_CivCOMPL ->
       !^ "IvCOMPL"
   | M_CivAND ->

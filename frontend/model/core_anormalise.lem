@@ -85,10 +85,6 @@ let core_to_mu__ctor = function
  | Core.Ccons -> M_Ccons
  | Core.Ctuple -> M_Ctuple
  | Core.Carray -> M_Carray
- | Core.Civmax -> M_Civmax
- | Core.Civmin -> M_Civmin
- | Core.Civsizeof -> M_Civsizeof
- | Core.Civalignof -> M_Civalignof
  | Core.CivCOMPL -> M_CivCOMPL
  | Core.CivAND-> M_CivAND
  | Core.CivOR -> M_CivOR
@@ -96,8 +92,11 @@ let core_to_mu__ctor = function
  | Core.Cspecified -> M_Cspecified
  | Core.Cfvfromint-> M_Cfvfromint
  | Core.Civfromfloat -> M_Civfromfloat
- | Core.Cunspecified -> 
-    failwith "core_anormalisation: Cunspecified"
+ | Core.Civmax -> failwith "core_anormalisation: Civmax"
+ | Core.Civmin -> failwith "core_anormalisation: Civmin"
+ | Core.Civsizeof -> failwith "core_anormalisation: Civsizeof"
+ | Core.Civalignof -> failwith "core_anormalisation: Civalignof"
+ | Core.Cunspecified -> failwith "core_anormalisation: Cunspecified"
 end
 
 

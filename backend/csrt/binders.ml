@@ -31,12 +31,12 @@ let parse_sexp loc (names : NameMap.t) s =
  | List [Atom id; Atom ":"; t] ->
     let name = Sym.fresh_pretty id in
     let names = NameMap.record loc id name names in
-    BT.parse_sexp loc names t >>= fun t ->
+    BT.parse_sexp loc names t >>= fun (t,names) ->
     return ({name; bound = A t}, names)
  | List [Atom "Logical"; Atom id; Atom ":"; ls] ->
     let name = Sym.fresh_pretty id in
     let names = NameMap.record loc id name names in
-    LS.parse_sexp loc names ls >>= fun t ->
+    LS.parse_sexp loc names ls >>= fun (t,names) ->
     return ({name; bound = L t}, names)
  | List [Atom "Resource"; Atom id; Atom ":"; re] ->
     let name = Sym.fresh_pretty id in

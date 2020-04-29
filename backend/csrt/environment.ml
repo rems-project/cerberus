@@ -1,4 +1,3 @@
-open Utils
 open Cerb_frontend
 open PPrint
 open Pp_tools
@@ -176,12 +175,6 @@ module Env = struct
     | `C _ -> Constraint
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
-    | `A t -> return t
-    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
-
-  let get_AAvar (loc : Loc.t) (env: env) asym = 
-    let (sym,loc) = aunpack loc asym in
     get_var loc env sym >>= function
     | `A t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
