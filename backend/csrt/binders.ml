@@ -3,6 +3,7 @@ open Except
 open List
 open Sym
 open Pp_tools
+open PPrint
 
 
 module Loc = Location
@@ -14,14 +15,26 @@ module LS = LogicalSorts
 
 module SymSet = Set.Make(Sym)
 
+
+let print_rc_names = false
+
+
+
 type t = {name: Sym.t; bound: VarTypes.t}
 
 let pp {name;bound} = 
- match bound with
- | A t -> alrctyp 'A' (Sym.pp name) (BT.pp t)
- | L t -> alrctyp 'L' (Sym.pp name) (LS.pp t)
- | R t -> alrctyp 'R' (Sym.pp name) (RE.pp t)
- | C t -> alrctyp 'C' (Sym.pp name) (LC.pp t)
+  if print_rc_names then
+    match bound with
+    | A t -> char 'A' ^^^ (typ (Sym.pp name) (BT.pp t))
+    | L t -> char 'L' ^^^ (typ (Sym.pp name) (LS.pp t))
+    | R t -> char 'R' ^^^ (typ (Sym.pp name) (RE.pp t))
+    | C t -> char 'C' ^^^ (typ (Sym.pp name) (LC.pp t))
+  else
+    match bound with
+    | A t -> char 'A' ^^^ (typ (Sym.pp name) (BT.pp t))
+    | L t -> char 'L' ^^^ (typ (Sym.pp name) (LS.pp t))
+    | R t -> char 'R' ^^^ (RE.pp t)
+    | C t -> char 'C' ^^^ (LC.pp t)
 
 
 let parse_sexp loc (names : NameMap.t) s = 

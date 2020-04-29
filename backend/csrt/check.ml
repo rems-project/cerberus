@@ -334,7 +334,7 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: makeUR (Points (S pointer_name, S value_name)) :: r in
+    let ret = makeUA Unit :: [makeUR (Points (S pointer_name, S value_name))] in
     return (value,ret)
   end >>= fun (value,ret) ->
   let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
