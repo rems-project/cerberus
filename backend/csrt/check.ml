@@ -33,8 +33,7 @@ module SymSet = Set.Make(Sym)
 
 
 
-let _DEBUG = ref 0
-let debug_print pp = Pp_tools.print_for_level !_DEBUG pp
+let debug_print pp = Pp_tools.print_for_level !Debug_ocaml.debug_level pp
 
 
 
@@ -1134,8 +1133,7 @@ let print_initial_environment genv =
   debug_print ((1, h1 "initial environment") :: (GEnv.pp_items genv))
 
 
-let check mu_file debug_level =
-  _DEBUG := debug_level;
+let check mu_file =
   pp_fun_map_decl mu_file.mu_funinfo;
   let genv = GEnv.empty in
   record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
@@ -1143,7 +1141,7 @@ let check mu_file debug_level =
   print_initial_environment genv;
   check_functions genv mu_file.mu_funs
 
-let check_and_report core_file debug_level = 
-  match check core_file debug_level with
+let check_and_report core_file = 
+  match check core_file with
   | Result () -> ()
   | Exception (loc,err) -> report_type_error loc err

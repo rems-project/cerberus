@@ -111,12 +111,13 @@ let frontend filename =
 
 
 
-let check filename debug_level =
+let main filename debug_level =
+  Debug_ocaml.debug_level := debug_level;
   match frontend filename with
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)
   | Exception.Result core_file ->
-     Check.check_and_report core_file debug_level
+     Check.check_and_report core_file
 
 
 open Cmdliner
@@ -132,5 +133,5 @@ let debug_level =
 
 
 let () =
-  let check_t = Term.(pure check $ file $ debug_level) in
+  let check_t = Term.(pure main $ file $ debug_level) in
   Term.exit @@ Term.eval (check_t, Term.info "csrt")
