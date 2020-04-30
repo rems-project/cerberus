@@ -6,7 +6,7 @@ type ('a,'e) m = ('a, 'e) exceptM
 
 let return : 'a -> ('a,'e) m = except_return
 
-let fail : Location.t -> 'e -> ('a, Location.t * 'e) m = 
+let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) m = 
   fun loc e -> Exception.fail (loc,e)
 
 let noloc_fail e = Exception.fail e

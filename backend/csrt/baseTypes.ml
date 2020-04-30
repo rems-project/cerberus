@@ -1,9 +1,10 @@
-open Utils
 open List
 open PPrint
-open Sexplib
-open Except
+open Pp_tools
 module Loc=Location
+
+
+type field_access = {pointer: Sym.t; strct: Sym.t; field: Sym.t}
 
 type t =
   | Unit 
@@ -12,54 +13,34 @@ type t =
   | Loc
   | Array
   (* | List of t *)
-  | Tuple of (Sym.t * t) list
+  (* | Tuple of (Sym.t * t) list *)
   | Struct of Sym.t
+  | StructField of field_access
 
-let rec pp = function
+let is_unit = function Unit -> true | _ -> false
+let is_bool = function Bool -> true | _ -> false
+let is_int = function Int -> true | _ -> false
+let is_loc = function Loc -> true | _ -> false
+let is_array = function Array -> true | _ -> false
+let is_struct = function Struct s -> Some s | _ -> None
+let is_structfield = function StructField p -> Some p | _ -> None
+
+
+let pp = function
   | Unit -> !^ "unit"
   | Bool -> !^ "bool"
   | Int -> !^ "int"
   | Loc -> !^ "loc"
   | Array -> !^ "array"
   (* | List bt -> parens ((!^ "list") ^^^ pp bt) *)
-  | Tuple nbts -> parens (separate (break 1) (map pp_tuple_item nbts))
-  | Struct id -> parens (!^ "struct" ^^ Sym.pp id)
+  (* | Tuple nbts -> parens (separate (break 1) (map pp_tuple_item nbts)) *)
+  | Struct sym -> parens (!^ "struct" ^^^ Sym.pp sym)
+  | StructField sf -> 
+     let args = Sym.pp sf.pointer ^^ dot ^^ Sym.pp sf.field in
+     parens (squotes (Sym.pp sf.strct) ^^ minus ^^ !^"field" ^^^ args)
 
-and pp_tuple_item (sym, bt) = 
-  parens (Sym.pp sym ^^ space ^^ colon ^^ space ^^ pp bt)
-
-let rec parse_sexp loc (names : NameMap.t) sx = 
-  match sx with
-  | Sexp.Atom "unit" -> 
-     return (Unit,names)
-  | Sexp.Atom "bool" -> 
-     return (Bool,names)
-  | Sexp.Atom "int" -> 
-     return (Int,names)
-  | Sexp.Atom "loc" -> 
-     return (Loc,names)
-  | Sexp.Atom "array" -> 
-     return (Array,names)
-  (* | Sexp.List [Sexp.Atom "list"; bt] -> 
-   *    parse_sexp loc names bt >>= fun bt -> 
-   *    return (List bt) *)
-  | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
-     NameMap.sym_of loc id names >>= fun sym ->
-     return (Struct sym, names)
-  | Sexp.List tuple_items -> 
-     fold_leftM (parse_tuple_item loc) ([],names) tuple_items >>= fun (nbts,names) ->
-     return (Tuple nbts,names)
-  | a -> parse_error loc "base type" a
-
-and parse_tuple_item loc (components, names) s = 
-  match s with
-  | Sexp.List [Sexp.Atom id; Sexp.Atom ":"; bt] ->
-     let name = Sym.fresh_pretty id in
-     let names = NameMap.record loc id name names in
-     parse_sexp loc names bt >>= fun (bt,names) ->
-     return (components @ [name,bt], names)
-     
-  | a -> parse_error loc "base type" a
+(* and pp_tuple_item (sym, bt) = 
+ *   parens (Sym.pp sym ^^ space ^^ colon ^^ space ^^ pp bt) *)
 
 
 let type_equal t1 t2 = t1 = t2
