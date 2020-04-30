@@ -8,23 +8,40 @@ open Except
 open TypeErrors
 
 
-module Loc = Location
+module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 
+
+
+
+
+
+
+module ImplMap = 
+  Map.Make
+    (struct 
+      type t = Implementation.implementation_constant
+      let compare = Implementation.implementation_constant_compare 
+     end)
+
+
+let lookup_sym (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
+  match SymMap.find_opt name env with
+  | None -> fail loc (Unbound_name name)
+  | Some v -> return v
+
+let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
+  match ImplMap.find_opt i env with
+  | None -> fail loc (Unbound_impl_const i)
+  | Some v -> return v
+
+
+
 module GEnv = struct 
-
-  open Implementation
-
-  module ImplMap = 
-    Map.Make
-      (struct 
-        type t = implementation_constant
-        let compare = implementation_constant_compare 
-       end)
 
   type t = 
     { struct_decls : Types.t SymMap.t; 
@@ -34,8 +51,6 @@ module GEnv = struct
       names : NameMap.t
     } 
 
-  type genv = t
-
 
   let empty = 
     { struct_decls = SymMap.empty; 
@@ -44,11 +59,43 @@ module GEnv = struct
       impl_constants = ImplMap.empty;
       names = NameMap.empty }
 
-  let get_impl_const_type (genv: genv) (i: implementation_constant) = 
-    ImplMap.find i genv.impl_constants
+  let add_struct_decl genv sym typ = 
+    { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
 
-  let get_impl_fun_type (genv: genv) (i: implementation_constant) = 
-    ImplMap.find i genv.impl_fun_decls
+  let add_fun_decl genv fsym (loc, typ, ret_sym) = 
+    { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
+
+  let add_impl_fun_decl genv i typ = 
+    { genv with impl_fun_decls = ImplMap.add i typ genv.impl_fun_decls }
+
+  let add_impl_constant genv i typ = 
+    { genv with impl_constants = ImplMap.add i typ genv.impl_constants }
+
+
+  let get_struct_decl loc genv sym = 
+    match SymMap.find_opt sym genv.struct_decls with
+    | Some decl -> return decl 
+    | None -> 
+       let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
+       fail loc (Generic_error err)
+
+
+  let get_fun_decl loc genv sym = 
+    lookup_sym loc genv.fun_decls sym
+
+  let get_impl_fun_decl loc genv i = 
+    lookup_impl loc genv.impl_fun_decls i
+
+  let get_impl_constant loc genv i = 
+    lookup_impl loc genv.impl_constants i
+
+  let get_names genv = genv.names
+
+  let record_name genv loc string sym =
+    { genv with names = NameMap.record loc string sym genv.names }
+
+  let record_name_without_loc genv string sym =
+    { genv with names = NameMap.record_without_loc string sym genv.names }
 
 
   let pp_struct_decls decls = 
@@ -74,7 +121,9 @@ module GEnv = struct
     ; (1, h2 "Names")
     ; (1, pp_name_map genv.names)
     ]
-  let pp genv = lines (map snd (pp_items genv))
+
+  let pp genv = 
+    lines (map snd (pp_items genv))
 
 end
 
@@ -129,14 +178,10 @@ end
 module Env = struct
 
   type t = 
-    { local : LEnv.t ; 
-      global : GEnv.t }
+    { global : GEnv.t; 
+      local : LEnv.t;  }
 
   type env = t
-
-  let empty = 
-    { local = LEnv.empty; 
-      global = GEnv.empty }
 
   let with_fresh_local genv = 
     { global = genv; 
@@ -145,28 +190,12 @@ module Env = struct
   let add_var env b = {env with local = LEnv.add_var env.local b}
   let remove_var env sym = { env with local = LEnv.remove_var env.local sym }
 
-  let add_vars env bindings = fold_left add_var env bindings
-  let remove_vars env bindings = fold_left remove_var env bindings
-
-  let add_Avar env (name, t) = add_var env {name; bound = A t}
-  let add_Lvar env (name, t) = add_var env {name; bound = L t}
-  let add_Rvar env (name, t) = add_var env {name; bound = R t}
-  let add_Cvar env (name, t) = add_var env {name; bound = C t}
-
-  let add_Avars env vars = List.fold_left add_Avar env vars
-
-  let lookup (loc : Loc.t) (env: 'v SymMap.t) (name: Sym.t) =
-    match SymMap.find_opt name env with
-    | None -> fail loc (Unbound_name name)
-    | Some v -> return v
-
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
-    lookup loc env.local name >>= function
+    lookup_sym loc env.local name >>= function
     | A t -> return (`A t)
     | L t -> return (`L t)
     | R t -> return (`R (t, remove_var env name))
     | C t -> return (`C t)
-
 
   let kind = function
     | `A _ -> Argument
@@ -194,7 +223,8 @@ module Env = struct
     | `C t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
 
-  let get_owned_resource loc env owner_sym = 
+  (* internal, have to make mli file *)
+  let unsafe_owned_resource loc env owner_sym = 
     let relevant = 
       SymMap.fold (fun name b acc ->
           match b with
@@ -204,15 +234,24 @@ module Env = struct
     in
     match relevant with
     | [] -> return None
-    | [owned] -> return (Some owned)
+    | [(s,r)] -> return (Some (s,r))
     | _ -> fail loc (Unreachable "multiple owners of resource")
 
+  (* returns only name, so safe *)
+  let owned_resource loc env owner_sym = 
+    unsafe_owned_resource loc env owner_sym >>= function
+    | Some (name,_) -> return (Some name)
+    | None -> return None
 
-  open Implementation
-  let get_impl_const_type (env: env) (i: implementation_constant) = 
-    GEnv.get_impl_const_type env.global i
-  let get_impl_fun_type (env: env) (i: implementation_constant) = 
-    GEnv.get_impl_fun_type env.global i
+  (* returns only name, so safe *)
+  let rec recursively_owned_resources loc env owner_sym = 
+    unsafe_owned_resource loc env owner_sym >>= function
+    | Some (res,t) -> 
+       let owned = RE.owned t in
+       mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
+       return (res :: List.concat owneds)
+    | None -> 
+       return []
 
 
 end

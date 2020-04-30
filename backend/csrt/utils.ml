@@ -1,7 +1,4 @@
 open Cerb_frontend
-open PPrint
-open Sexplib
-open Except
 
 let uncurry f (a,b)  = f a b
 let curry f a b = f (a,b)
@@ -12,11 +9,7 @@ type num = Nat_big_num.num
 
 
 
-let parse_error (loc: Location.t) (t : string) (sx : Sexp.t) =
-  let fname = (!^) t in
-  let err = parens fname ^^ space ^^ (!^ "unexpected token") ^^ 
-              colon ^^ space ^^ (!^ (Sexp.to_string sx)) in
-  fail loc err
+
 
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
@@ -48,4 +41,7 @@ let update_loc loc annots =
   
 let aunpack loc (Mucore.Annotated (annots, _, x)) = 
   (x, update_loc loc annots)
+
+
+
 

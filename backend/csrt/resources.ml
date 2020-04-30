@@ -1,8 +1,6 @@
-open Utils
 open List
 open PPrint
 open Pp_tools
-open Sexplib
 open Except
 module Loc=Location
 
@@ -39,32 +37,6 @@ let pp = function
    *      (String.concat " " (map IndexTerms.pp its)) *)
 
 
-let parse_sexp loc (names : NameMap.t) sx = 
-  match sx with 
-  (* | Sexp.List [Sexp.Atom "block";it1;it2] -> 
-   *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-   *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-   *    return (Block (it1, it2)) *)
-  (* | Sexp.List [Sexp.Atom "bool"; it1; it2] ->
-   *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-   *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-   *    return (Bool (it1, it2))
-   * | Sexp.List [Sexp.Atom "int"; it1; it2] ->
-   *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-   *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-   *    return (Int (it1, it2))
-   * | Sexp.List [Sexp.Atom "array"; it1; it2] ->
-   *    IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-   *    IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-   *    return (Array (it1, it2)) *)
-  | Sexp.List [Sexp.Atom "points"; it1; bt; it2] ->
-     IndexTerms.parse_sexp loc names it1 >>= fun it1 ->
-     IndexTerms.parse_sexp loc names it2 >>= fun it2 ->
-     return (Points (it1, it2))
-  (* | Sexp.List (Sexp.Atom p :: its) ->
-   *    mapM (IndexTerms.parse_sexp loc names) its >>= fun its ->
-   *    return (Pred (p, its)) *)
-  | t -> parse_error loc "resource type" t
 
 let subst sym with_it t = 
   match t with

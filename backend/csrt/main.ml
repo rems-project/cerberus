@@ -8,6 +8,7 @@ let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
 
 
+
 type core_file = (unit,unit) Core.generic_file
 type mu_file = (unit,unit) Mucore.mu_file
 type file = 
@@ -111,8 +112,9 @@ let frontend filename =
 
 
 
-let main filename debug_level =
+let main filename debug_level type_debug_level =
   Debug_ocaml.debug_level := debug_level;
+  Check.debug_level := type_debug_level;
   match frontend filename with
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)
@@ -128,10 +130,15 @@ let file =
 
 let debug_level =
   (* stolen from backend/driver *)
-  let doc = "Set the debug message level to $(docv) (should range over [0-3])." in
+  let doc = "Set the debug message level for cerberus to $(docv) (should range over [0-3])." in
   Arg.(value & opt int 0 & info ["d"; "debug"] ~docv:"N" ~doc)
+
+let type_debug_level =
+  (* stolen from backend/driver *)
+  let doc = "Set the debug message level for the type system to $(docv) (should range over [0-3])." in
+  Arg.(value & opt int 0 & info ["td"; "type-debug"] ~docv:"N" ~doc)
 
 
 let () =
-  let check_t = Term.(pure main $ file $ debug_level) in
+  let check_t = Term.(pure main $ file $ debug_level $ type_debug_level) in
   Term.exit @@ Term.eval (check_t, Term.info "csrt")

@@ -1,5 +1,5 @@
 open Cerb_frontend
-module Loc = Location
+module Loc = Locations
 open PPrint
 open Pp_tools
 
@@ -32,7 +32,7 @@ open Pp_tools
   | Call_error of call_return_switch_error
   | Switch_error of call_return_switch_error
   | Integer_value_error
-  | Generic_error of string
+  | Generic_error of PPrint.document
   | Undefined of Undefined.undefined_behaviour
   | Unspecified
   | StaticError of string * Sym.t
@@ -125,7 +125,7 @@ open Pp_tools
      | Name_bound_twice name ->
         !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
      | Generic_error err ->
-        !^err
+        err
      | Unreachable unreachable ->
         !^"Internal error, should be unreachable" ^^ colon ^^^ !^unreachable
      | Illtyped_it it ->

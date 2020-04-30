@@ -1,9 +1,8 @@
 open Utils
 open List
+open Except
 open PPrint
 open Pp_tools
-open Sexplib
-open Except
 module Loc=Location
 
 
@@ -82,95 +81,6 @@ let rec pp = function
 
 
 
-let rec parse_sexp loc (names : NameMap.t) sx = 
-  match sx with
-
-  | Sexp.Atom str when Str.string_match (Str.regexp "[0-9]+") str 0 ->
-     return (Num (Nat_big_num.of_string str))
-  | Sexp.Atom "true" -> 
-     return (Bool true)
-  | Sexp.Atom "false" -> 
-     return (Bool false)
-
-  | Sexp.List [o1;Sexp.Atom "+";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Add (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "-";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Sub (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "*";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Mul (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "/";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Div (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "^";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 -> 
-     return (Exp (o1, o2))
-  | Sexp.List [Sexp.Atom "rem_t";o1;o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Rem_t (o1, o2))
-  | Sexp.List [Sexp.Atom "rem_f";o1;o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Rem_f (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "=";o2]  -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (EQ (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "<>";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (NE (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "<";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (LT (o1, o2))
-  | Sexp.List [o1;Sexp.Atom ">";o2]  -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (GT (o1, o2))
-  | Sexp.List [o1;Sexp.Atom "<=";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (LE (o1, o2))
-  | Sexp.List [o1;Sexp.Atom ">=";o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (GE (o1, o2))    
-  | Sexp.List [Sexp.Atom "null"; o1] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     return (Null o1)
-  | Sexp.List [o1; Sexp.Atom "&"; o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (And (o1, o2))
-  | Sexp.List [o1; Sexp.Atom "|"; o2] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     parse_sexp loc names o2 >>= fun o2 ->
-     return (Or (o1, o2))
-  | Sexp.List [Sexp.Atom "not"; o1] -> 
-     parse_sexp loc names o1 >>= fun o1 ->
-     return (Not o1)    
-  (* | Sexp.List [Sexp.Atom "list"; List (it :: its)] -> 
-   *    parse_sexp loc names it >>= fun it ->
-   *    mapM (parse_sexp loc names) its >>= fun its ->
-   *    return (List (it, its)) *)
-
-  | Sexp.Atom str -> 
-     NameMap.sym_of loc str names >>= fun sym ->
-     return (S sym)
-
-  | t -> 
-     parse_error loc "index term" t
-
-
 let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 
   match it with
   | Num _ -> it
@@ -195,6 +105,7 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   (* | List (it, its) -> 
    *    List (subst sym with_it it, map (fun it -> subst sym with_it it) its) *)
   | S symbol -> S (Sym.sym_subst sym with_it symbol)
+
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
   match it, it' with

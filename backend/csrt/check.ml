@@ -18,11 +18,11 @@ open FunctionTypes
 open Binders
 open Types
 
+
 open GEnv
 open Env
 
-
-module Loc = Location
+module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
 module IT = IndexTerms
@@ -33,7 +33,20 @@ module SymSet = Set.Make(Sym)
 
 
 
-let debug_print pp = Pp_tools.print_for_level !Debug_ocaml.debug_level pp
+
+let add_Avar env (name, t) = add_var env {name; bound = A t}
+let add_Lvar env (name, t) = add_var env {name; bound = L t}
+let add_Rvar env (name, t) = add_var env {name; bound = R t}
+let add_Cvar env (name, t) = add_var env {name; bound = C t}
+
+let add_vars env bindings = fold_left add_var env bindings
+let remove_vars env names = fold_left remove_var env names
+
+let add_Avars env vars = List.fold_left add_Avar env vars
+
+
+let debug_level = ref 0
+let debug_print pp = Pp_tools.print_for_level !debug_level pp
 
 
 
@@ -143,11 +156,9 @@ let rec infer_it loc env it =
    *    return (List bt) *)
 
   | S sym ->
-     get_var loc env sym >>= function
-     | `A t -> return t
-     | `L (LS.Base t) -> return t
-     | `R _ -> fail loc (Illtyped_it it)
-     | `C _ -> fail loc (Illtyped_it it)
+     tryM
+       (get_Avar loc env sym)
+       (get_Lvar loc env sym >>= fun (Base t) -> return t)
 
 
 and check_it loc env it bt =
@@ -168,32 +179,21 @@ and check_its loc env its bt =
 
 
 
-let rec recursively_owned_resources loc env owner_sym = 
-  get_owned_resource loc env owner_sym >>= function
-  | Some (res,t) -> 
-     let owned = RE.owned t in
-     mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
-     return (res :: List.concat owneds)
-  | None -> 
-     return []
-
-
-
 
 
 (* convert from other types *)
-let bt_of_core_object_type loc ot =
-  let open Core in
-  match ot with
-  | OTy_integer -> return BT.Int
-  | OTy_pointer -> return BT.Loc
-  | OTy_array cbt -> return BT.Array
-  | OTy_struct sym -> return (Struct sym)
-  | OTy_union _sym -> fail loc (Unsupported "todo: unions")
-  | OTy_floating -> fail loc (Unsupported "float")
 
-let rec bt_of_core_base_type loc cbt =
+let bt_of_core_base_type loc cbt =
   let open Core in
+  let bt_of_core_object_type loc ot =
+    match ot with
+    | OTy_integer -> return BT.Int
+    | OTy_pointer -> return BT.Loc
+    | OTy_array cbt -> return BT.Array
+    | OTy_struct sym -> return (Struct sym)
+    | OTy_union _sym -> fail loc (Unsupported "todo: unions")
+    | OTy_floating -> fail loc (Unsupported "todo: float")
+  in
   match cbt with
   | BTy_unit -> return BT.Unit
   | BTy_boolean -> return BT.Bool
@@ -201,9 +201,10 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_loaded ot -> bt_of_core_object_type loc ot
   | BTy_list bt -> fail loc (Unsupported "lists")
   | BTy_tuple bts -> 
-     mapM (bt_of_core_base_type loc) bts >>= fun bts ->
-     let nbts = List.map (fun bt -> (Sym.fresh (), bt)) bts in
-     return (Tuple nbts)
+     fail loc (Unsupported "tuples")
+     (* mapM (bt_of_core_base_type loc) bts >>= fun bts ->
+      * let nbts = List.map (fun bt -> (Sym.fresh (), bt)) bts in
+      * return (Tuple nbts) *)
   | BTy_storable -> fail loc (Unsupported "BTy_storable")
   | BTy_ctype -> fail loc (Unsupported "ctype")
 
@@ -328,6 +329,19 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
 
+
+let make_load_field_type loc ct access : (FunctionTypes.t,'e) m = 
+  let pointer_name = fresh () in
+  ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
+  let a = makeA pointer_name Loc in
+  let l = makeL pointee_name bt :: l in
+  let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
+  let addr_argument = a :: l @ r @ c in
+  let ret = makeA pointee_name bt :: r in
+  let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
+  return ftyp
+
+
 let make_store_type loc ct : (FunctionTypes.t,'e) m = 
   let pointer_name = fresh () in
   ctype loc pointer_name (make_pointer_ctype ct) >>= fun address ->
@@ -375,7 +389,7 @@ let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : (BT.t option, 'e) m =
 
 
 
-let infer_object_value loc (env : env) ov =
+let infer_object_value loc env ov =
 
   let name = fresh () in
 
@@ -428,8 +442,9 @@ let infer_value loc env v : (Types.t,'e) m =
   | M_Vlist (cbt, asyms) ->
      fail loc (Unsupported "lists")
   | M_Vtuple args ->
-     make_Aargs loc env args >>= fun aargs ->
-     return (List.map (fun ((name,bt),_) -> makeA name bt) aargs)
+     fail loc (Unsupported "todo: tuples")
+     (* make_Aargs loc env args >>= fun aargs ->
+      * return (List.map (fun ((name,bt),_) -> makeA name bt) aargs) *)
 
 
 
@@ -464,10 +479,10 @@ let call_typ loc_call env decl_typ args =
     
     debug_print
       [ (2, h2 "check_and_refine")
-      ; (2, item !^"env" (LEnv.pp env.local))
       ; (2, item !^"ftyp" (FunctionTypes.pp (F ftyp)))
       ; (2, item !^"args" (separate_map (comma ^^ space) (fun (a,_) -> Sym.pp a) args))
       ; (2, item !^"unis" (pp_unis unis))
+      ; (2, LEnv.pp env.local)
       ];
 
 
@@ -514,9 +529,9 @@ let call_typ loc_call env decl_typ args =
 
     | {name = n; bound = R t} :: decl_args -> 
        let owner = RE.owner t in
-       get_owned_resource loc_call env owner >>= begin function
+       owned_resource loc_call env owner >>= begin function
        | None -> fail loc_call (Call_error (Missing_R (n, t)))
-       | Some (sym, _) -> 
+       | Some sym -> 
           get_Rvar loc_call env sym >>= fun (t',env) ->
           tryM (RE.unify t t' unis)
             (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
@@ -546,7 +561,8 @@ let call_typ loc_call env decl_typ args =
 let infer_ctor loc ctor (aargs : aargs) = 
   match ctor with
   | M_Ctuple -> 
-     return (List.map (fun ((name,bt),_) -> makeA name bt) aargs)
+     fail loc (Unsupported "tuples")
+     (* return (List.map (fun ((name,bt),_) -> makeA name bt) aargs) *)
   | M_Carray -> 
      check_Aargs_typ None aargs >> 
      return [{name = fresh (); bound = A Array}]
@@ -562,7 +578,7 @@ let infer_ctor loc ctor (aargs : aargs) =
     | args ->
        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
                    (List.length args) in
-       fail loc (Generic_error err)
+       fail loc (Generic_error !^err)
     end
   | M_Cnil cbt -> fail loc (Unsupported "lists")
   | M_Ccons -> fail loc (Unsupported "lists")
@@ -694,11 +710,23 @@ let ensure_bad_unreachable env bad =
     | StaticError (loc, (err,pe)) -> fail loc (TypeErrors.StaticError (err,pe))
 
 
+let struct_member_type loc env strct field = 
+  get_struct_decl loc env.global strct >>= fun binders ->
+  match List.find_opt (fun b -> b.name = field) binders with
+  | None -> 
+     let err = (!^"struct" ^^^ Sym.pp strct ^^^ 
+                  !^"does not have field" ^^^ Sym.pp field) in
+     fail loc (Generic_error err)
+  | Some b ->
+     return b.bound
+
+
+
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
 
   debug_print
     [ (1, h2 "infer_pexpr")
-    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (1, LEnv.pp env.local)
     ; (3, item !^"expression" (pp_pexpr pe))
     ];
 
@@ -709,7 +737,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      get_Avar loc env sym >>= fun bt ->
      return (Normal [makeA sym bt], env)
   | M_PEimpl i ->
-     let t = get_impl_const_type env i in
+     get_impl_constant loc env.global i >>= fun t ->
      return (Normal [makeUA t], env)
   | M_PEval v ->
      infer_value loc env v >>= fun t ->
@@ -727,8 +755,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      return (Normal rt, env)
   | M_PEarray_shift _ ->
      fail loc (Unsupported "todo: PEarray_shift")
-  | M_PEmember_shift _ ->
-     fail loc (Unsupported "todo: PEmember_shift")
+  | M_PEmember_shift (asym, strct, Identifier (_floc,fid)) ->
+     let (pointer, _loc) = aunpack loc asym in
+     NameMap.sym_of loc fid (get_names env.global) >>= fun field ->
+     let bt = StructField {pointer; strct; field} in
+     return (Normal [makeUA bt], env)
   | M_PEnot asym ->
      let a, ar = fresh (), fresh () in
      let ret = [makeA ar Bool; makeUC (S ar %= Not (S a))] in
@@ -749,9 +780,9 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEcall (fname, asyms) ->
      begin match fname with
      | Core.Impl impl -> 
-        return (get_impl_fun_type env impl)
+        get_impl_fun_decl loc env.global impl
      | Core.Sym sym ->
-        lookup loc env.global.fun_decls sym >>= fun (_loc,decl_typ,_ret_name) ->
+        get_fun_decl loc env.global sym >>= fun (_loc,decl_typ,_ret_name) ->
         return decl_typ
      end >>= fun decl_typ ->
      call_typ loc env decl_typ (List.map (aunpack loc) asyms) >>= fun (rt, env) ->
@@ -765,8 +796,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
 
   debug_print
     [ (1, h2 "check_pexpr")
-    ; (1, item !^"env" (LEnv.pp env.local))
     ; (1, item !^"ret" (Types.pp ret))
+    ; (1, LEnv.pp env.local)
     ; (3, item !^"expression" (pp_pexpr e))
     ];
 
@@ -826,7 +857,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
 
   debug_print
     [ (1, h2 "infer_expr")
-    ; (1, item !^"env" (LEnv.pp env.local))
+    ; (1, LEnv.pp env.local)
     ; (3, item !^"expression" (pp_expr e))
     ];
 
@@ -861,9 +892,18 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         return (Normal rt, env)
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = aunpack loc a_ct in
-        make_load_type loc ct >>= fun decl_typ ->
-        call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
-        return (Normal rt, env)
+        let (sym,_) = aunpack loc asym in
+        get_Avar loc env sym >>= fun bt ->
+        begin match is_structfield bt with
+        | Some access ->
+           make_load_field_type loc ct access >>= fun decl_typ ->
+           call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
+           return (Normal rt, env)
+        | None ->
+           make_load_type loc ct >>= fun decl_typ ->
+           call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
+           return (Normal rt, env)
+        end
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
         fail loc (Unsupported "todo: RMW")
      | M_Fence mo -> 
@@ -906,8 +946,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
 
   debug_print
     [ (1, h2 "check_expr")
-    ; (1, item !^"env" (LEnv.pp env.local))
     ; (1, item !^"ret" (Types.pp ret))
+    ; (1, LEnv.pp env.local)
     ; (3, item !^"expression" (pp_expr e))
     ];
 
@@ -1031,16 +1071,16 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
         Printf.sprintf "Function definition inconsistent. Should be %s, is %s"
           (pps (FunctionTypes.pp decl)) (pps (FunctionTypes.pp defn))
       in
-      fail loc (Generic_error err)
+      fail loc (Generic_error !^err)
   in
   match fn with
   | M_Fun (ret, args, body) ->
-     let decl = SymMap.find fsym genv.GEnv.fun_decls in
+     get_fun_decl Loc.unknown genv fsym  >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
      check_fun loc fsym genv body decl_typ
   | M_Proc (loc, ret, args, body) ->
-     lookup loc genv.fun_decls fsym >>= fun decl ->
+     get_fun_decl loc genv fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
      check_consistent loc decl_typ args (ret_name,ret) >>
      check_proc loc fsym genv body decl_typ
@@ -1059,7 +1099,7 @@ let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
 
 
 
-let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls =
+let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) genv =
   if is_variadic then fail loc (Variadic_function sym) else
     let make_arg_t (msym,ct) = ctype loc (sym_or_fresh msym) (make_pointer_ctype ct) in
     let ret_name = Sym.fresh () in
@@ -1067,27 +1107,26 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) fun_decls 
     let arguments = concat args_types in
     ctype loc ret_name ret_ctype >>= fun ret ->
     let ft = F {arguments; return = ret} in
-    let fun_decls = SymMap.add sym (loc, ft, ret_name) fun_decls in
-    return fun_decls
+    return (add_fun_decl genv sym (loc, ft, ret_name))
 
 let record_funinfo genv funinfo = 
-  pmap_foldM record_fun funinfo genv.GEnv.fun_decls >>= fun fun_decls ->
-  return { genv with GEnv.fun_decls = fun_decls }
+  pmap_foldM record_fun funinfo genv
 
 
 (* check the types? *)
 let record_impl impl impl_decl genv = 
+  let open GEnv in
   match impl_decl with
   | M_Def (bt, _p) -> 
      bt_of_core_base_type Loc.unknown bt >>= fun bt ->
-     return { genv with impl_constants = ImplMap.add impl bt genv.impl_constants }
+     return (add_impl_constant genv impl bt)
   | M_IFun (bt, args, _body) ->
      mapM (fun (sym,a_bt) -> 
          bt_of_core_base_type Loc.unknown a_bt >>= fun a_bt ->
          return (makeA sym a_bt)) args >>= fun args_ts ->
      bt_of_core_base_type Loc.unknown bt >>= fun bt ->
      let decl_typ = F {arguments = args_ts; return = [makeUA bt]} in
-     return { genv with impl_fun_decls = ImplMap.add impl decl_typ genv.impl_fun_decls }
+     return (add_impl_fun_decl genv impl decl_typ)
                         
 
 
@@ -1110,10 +1149,11 @@ let record_tagDef sym def genv =
        return (names, fields @ newfields)
      ) ([],[]) fields >>= fun (names,fields) ->
 
-     let struct_decls = SymMap.add sym fields genv.GEnv.struct_decls in
-     let names = fold_left (fun m (id,sym) -> 
-                     NameMap.record_without_loc id sym m) genv.names names in
-     return { genv with names = names; struct_decls = struct_decls }
+     let genv = add_struct_decl genv sym fields in
+     let genv = fold_left (fun genv (id,sym) -> 
+                    record_name_without_loc genv id sym) genv names in
+     return genv
+
 
 let record_tagDefs genv tagDefs = 
   pmap_foldM record_tagDef tagDefs genv
