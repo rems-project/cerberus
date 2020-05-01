@@ -22,9 +22,6 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | None -> filter_map f xs
      | Some y -> y :: filter_map f xs
 
-let list_of_maybe = function
-  | None -> []
-  | Some a -> [a]
 
 let pp_list pp sep l = String.concat sep (List.map pp l)
 

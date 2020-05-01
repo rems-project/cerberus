@@ -92,6 +92,11 @@ module Local : sig
   val empty :
     t
 
+  val pp_filtered : 
+    (bool * bool * bool * bool) ->
+    t -> 
+    PPrint.document
+
   val pp : 
     t -> 
     PPrint.document
@@ -178,9 +183,14 @@ module Env : sig
     (Sym.t list, Loc.t * TypeErrors.type_error) Except.m
 
 
-  val constraints_about :
+  val get_all_constraints :
+    t ->
+    LogicalConstraints.t list
+
+
+  val get_constraints_about :
     t ->
     Sym.t ->
-    (Sym.t * LogicalConstraints.t) list
+    LogicalConstraints.t list
 
 end

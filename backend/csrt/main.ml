@@ -114,7 +114,7 @@ let frontend filename =
 
 let main filename debug_level type_debug_level =
   Debug_ocaml.debug_level := debug_level;
-  Check.debug_level := type_debug_level;
+  Pp_tools.debug_level := type_debug_level;
   match frontend filename with
   | Exception.Exception err ->
      prerr_endline (Pp_errors.to_string err)

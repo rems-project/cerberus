@@ -53,13 +53,13 @@ let unify r1 r2 res =
 
 
 let owner = function
-  | Points (S v, _) -> Some v
-  | Block (S v, _) -> Some v
+  | Points (S (v,_), _) -> Some v
+  | Block (S (v,_), _) -> Some v
   (* | Uninitialised (S v, _) -> v *)
   | _ -> None
 
 let owned = function
-  | Points (_, S v) -> [v]
+  | Points (_, S (v,_)) -> [v]
   | Points (_, _) -> []
   | Block _ -> []
   (* | Uninitialised _ -> [] *)

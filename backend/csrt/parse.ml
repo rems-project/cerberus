@@ -128,9 +128,10 @@ let rec parse_index_term loc (names : NameMap.t) sx =
    *    mapM (parse_index_term loc names) its >>= fun its ->
    *    return (List (it, its)) *)
 
-  | Sexp.Atom str -> 
+  | Sexp.List [Sexp.Atom str; Atom ":"; bt] -> 
      NameMap.sym_of loc str names >>= fun sym ->
-     return (S sym)
+     parse_base_type loc names bt >>= fun (bt,names) ->
+     return (S (sym, bt))
 
   | t -> 
      parse_error loc "index term" t

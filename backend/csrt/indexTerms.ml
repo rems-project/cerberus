@@ -39,7 +39,7 @@ type t =
   | Head of t
   | Tail of t
 
-  | S of Sym.t
+  | S of Sym.t * BaseTypes.t
 
 let (%+) t1 t2 = Add (t1,t2)
 let (%-) t1 t2 = Sub (t1,t2)
@@ -87,7 +87,7 @@ let rec pp = function
   | Head (o1) -> parens (!^ "hd" ^^^ pp o1)
   | Tail (o1) -> parens (!^ "tl" ^^^ pp o1)
 
-  | S sym -> Sym.pp sym
+  | S (sym,bt) -> parens (typ (Sym.pp sym) (BaseTypes.pp bt))
 
 
 
@@ -102,7 +102,7 @@ let rec syms_in it : SymSet.t =
   | Div (it, it') 
   | Exp (it, it') 
   | Rem_t (it, it') 
-  | Rem_f (it, it') 
+  | Rem_f (it, it')
   | EQ (it, it') 
   | NE (it, it') 
   | LT (it, it') 
@@ -121,7 +121,7 @@ let rec syms_in it : SymSet.t =
   | Tuple (it, its)
   | List (it, its) ->
      SymSet.union (syms_in it) (syms_in_list its)
-  | S symbol -> SymSet.singleton symbol
+  | S (symbol,_) -> SymSet.singleton symbol
 
 and syms_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (syms_in sym))
@@ -159,7 +159,7 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
      Head (subst sym with_it it)
   | Tail it ->
      Tail (subst sym with_it it)
-  | S symbol -> S (Sym.subst sym with_it symbol)
+  | S (symbol,bt) -> S (Sym.subst sym with_it symbol, bt)
 
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
@@ -203,10 +203,11 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
   | List (it,its), List (it',its') -> 
      unify_list (it::its) (it'::its') res
 
-  | S sym, S sym' when sym = sym' ->
+  | S (sym, bt), S (sym',bt') 
+       when sym = sym' && BaseTypes.type_equal bt bt' ->
      return res
 
-  | S sym, S it' ->
+  | S (sym, _), S (it',_) ->
      begin match SymMap.find_opt sym res with
      | None -> fail_noloc ()
      | Some uni ->
