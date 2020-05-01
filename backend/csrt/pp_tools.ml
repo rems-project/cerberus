@@ -1,12 +1,17 @@
-open Utils
 open Cerb_frontend
 open Colour
 open PPrint
 
 
-let (^^^) = Pp_prelude.(^^^)
-let words l = PPrint.separate space l
-let lines l = PPrint.separate (break 1) l
+(* ugly *)
+let nocolour f x = 
+  let before = !Colour.do_colour in
+  Colour.do_colour := false;
+  let pp = f x in
+  Colour.do_colour := before;
+  pp
+
+let pps = Pp_utils.to_plain_pretty_string
 
 let eq = equals
 let ne = langle ^^ rangle
@@ -17,36 +22,36 @@ let ge = rangle ^^ equals
 let arrow = minus ^^ rangle
 
 
-let pps = Pp_utils.to_plain_pretty_string
+let (^^^) = Pp_prelude.(^^^)
+let lines l = align (PPrint.separate (break 1) l)
 
-let nocolour f x = 
-  let before = !Colour.do_colour in
-  Colour.do_colour := false;
-  let pp = f x in
-  Colour.do_colour := before;
-  pp
 
+let bold = pp_ansi_format [Bold]
 let underline c s = string s ^/^ repeat (String.length s) (char c)
-let h1 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ break 1 ^^ underline '=' s)
-let h2 s = pp_ansi_format [Bold; Blue] (break 1 ^^ break 1 ^^ underline '=' s)
 
-let em = pp_ansi_format [Bold; Magenta]
+let h1 s = pp_ansi_format [Bold;Magenta] (break 1 ^^ break 1 ^^ underline '=' s)
+let red_h1 s = pp_ansi_format [Bold;Red] (break 1 ^^ break 1 ^^ underline '=' s)
+let h2 s = bold (break 1 ^^ underline '-' s)
+
+let good = pp_ansi_format [Green]
+let bad = pp_ansi_format [Red]
 
 
 let typ n typ = n ^^ colon ^^^ typ
 
+let inline_item item content = 
+  (pp_ansi_format [Bold] item) ^^ colon ^^
+  space ^^ content
+
 let item item content = 
-  (pp_ansi_format [Bold; Magenta] item) ^^ colon ^^ break 1 ^^
-  space ^^ space ^^ space ^^ space ^^ space ^^ align content
+  (pp_ansi_format [Bold] item) ^^ colon ^^ space ^^ align (content)
 
 
 
-let print l = Cerb_backend.Pipeline.run_pp None (lines l ^^ hardline)
+let print pp = Cerb_backend.Pipeline.run_pp None (pp ^^ hardline)
 
-let print_for_level debug_level l =
-  match filter_map (fun (l,s) -> if debug_level >= l then Some s else None) l with
-  | [] -> ()
-  | l -> Cerb_backend.Pipeline.run_pp None (lines l ^^ hardline)
+let print_for_level debug_level print_level pp =
+  if debug_level >= print_level then print pp else ()
     
 
 

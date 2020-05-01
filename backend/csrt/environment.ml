@@ -17,8 +17,8 @@ module LS = LogicalSorts
 
 
 
-
-
+let print_resource_names = false
+let print_constraint_names = false
 
 
 module ImplMap = 
@@ -41,7 +41,7 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 
 
-module GEnv = struct 
+module Global = struct 
 
   type t = 
     { struct_decls : Types.t SymMap.t; 
@@ -127,7 +127,7 @@ module GEnv = struct
 
 end
 
-module LEnv = struct
+module Local = struct
 
   type lenv = VarTypes.t SymMap.t
 
@@ -145,11 +145,15 @@ module LEnv = struct
 
   let pp_rvars = 
     flow_map (comma ^^ break 1)
-    (fun (sym, t) -> typ (Sym.pp sym) (RE.pp t))
+      (fun (sym, t) -> 
+        if print_resource_names then typ (Sym.pp sym) (RE.pp t) 
+        else (RE.pp t))
 
   let pp_cvars = 
     flow_map (comma ^^ break 1)
-    (fun (sym, t) -> typ (Sym.pp sym) (LC.pp t))
+      (fun (sym, t) -> 
+        if print_constraint_names then typ (Sym.pp sym) (LC.pp t) 
+        else (LC.pp t))
 
   let pp lenv =
     let (a,l,r,c) = 
@@ -161,11 +165,11 @@ module LEnv = struct
           | C t -> (a,l,r,((name,t) :: c))
         ) lenv ([],[],[],[])
     in
-    (separate (break 1)
-       [ item !^"A" (pp_avars a)
-       ; item !^"L" (pp_lvars l)
-       ; item !^"R" (pp_rvars r)
-       ; item !^"C" (pp_cvars c)
+    (separate (space ^^ space)
+       [ inline_item !^"A" (brackets (pp_avars a))
+       ; inline_item !^"L" (brackets (pp_lvars l))
+       ; inline_item !^"R" (brackets (pp_rvars r))
+       ; inline_item !^"C" (brackets (pp_cvars c))
     ])
 
     let add_var env b = SymMap.add b.name b.bound env
@@ -178,17 +182,17 @@ end
 module Env = struct
 
   type t = 
-    { global : GEnv.t; 
-      local : LEnv.t;  }
+    { global : Global.t; 
+      local : Local.t;  }
 
   type env = t
 
   let with_fresh_local genv = 
     { global = genv; 
-      local = LEnv.empty }
+      local = Local.empty }
 
-  let add_var env b = {env with local = LEnv.add_var env.local b}
-  let remove_var env sym = { env with local = LEnv.remove_var env.local sym }
+  let add_var env b = {env with local = Local.add_var env.local b}
+  let remove_var env sym = { env with local = Local.remove_var env.local sym }
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
     lookup_sym loc env.local name >>= function
@@ -223,14 +227,21 @@ module Env = struct
     | `C t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
 
-  (* internal, have to make mli file *)
+  (* internal only *)
   let unsafe_owned_resource loc env owner_sym = 
     let relevant = 
       SymMap.fold (fun name b acc ->
           match b with
-          | (R t) -> if RE.owner t = owner_sym then (name,t) :: acc else acc
+          | (R t) -> 
+             begin match RE.owner t with
+             | None -> []
+             | Some owner ->
+                if owner = owner_sym 
+                then (name,t) :: acc
+                else acc
+             end
           | _ -> acc
-        ) env.local []
+        ) env.local [] 
     in
     match relevant with
     | [] -> return None
@@ -241,6 +252,11 @@ module Env = struct
   let owned_resource loc env owner_sym = 
     unsafe_owned_resource loc env owner_sym >>= function
     | Some (name,_) -> return (Some name)
+    | None -> return None
+
+  let get_owned_resource loc env owner_sym = 
+    unsafe_owned_resource loc env owner_sym >>= function
+    | Some (name,r) -> return (Some ((name,r), remove_var env name))
     | None -> return None
 
   (* returns only name, so safe *)

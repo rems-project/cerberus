@@ -104,7 +104,7 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   | Not it -> Not (subst sym with_it it)
   (* | List (it, its) -> 
    *    List (subst sym with_it it, map (fun it -> subst sym with_it it) its) *)
-  | S symbol -> S (Sym.sym_subst sym with_it symbol)
+  | S symbol -> S (Sym.subst sym with_it symbol)
 
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
@@ -146,18 +146,18 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
 
   | S sym, S it' ->
      begin match SymMap.find_opt sym res with
-     | None -> noloc_fail ()
+     | None -> fail_noloc ()
      | Some uni ->
         match uni.resolved with
         | Some it when it = it' -> return res 
-        | Some it -> noloc_fail ()
+        | Some it -> fail_noloc ()
         | None -> 
            let uni = { uni with resolved = Some it' } in
            return (SymMap.add sym uni res)
      end
 
   | _, _ ->
-     noloc_fail ()
+     fail_noloc ()
 
 and unify_list its its' res =
   match its, its' with
@@ -166,5 +166,5 @@ and unify_list its its' res =
      unify it it' res >>= fun res ->
      unify_list its its' res
   | _, _ ->
-     noloc_fail ()
+     fail_noloc ()
 

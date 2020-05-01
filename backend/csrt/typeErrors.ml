@@ -120,8 +120,10 @@ open Pp_tools
    Loc.withloc loc
      begin match err with
      | Var_kind_error err ->
-        !^"Expected kind" ^^^ VarTypes.pp_kind err.expected ^^^
-          !^"but found kind" ^^^ VarTypes.pp_kind err.has
+        flow (break 1)
+          (List.concat 
+             [words "Expected kind"; [VarTypes.pp_kind err.expected];
+              (words "but found kind"); [VarTypes.pp_kind err.has]])
      | Name_bound_twice name ->
         !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
      | Generic_error err ->
@@ -163,7 +165,6 @@ open Pp_tools
 
 
 let report_type_error loc err = 
-  print 
-    [ h1 "Error!"
-    ; pp loc err
-    ]
+  print empty;
+  print empty;
+  print (bad (!^"Error") ^/^ pp loc err)
