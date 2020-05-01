@@ -3,6 +3,12 @@ open Colour
 open PPrint
 
 
+
+let debug_level = ref 0
+
+
+
+
 let pp_num n = !^(Nat_big_num.to_string n)
 
 (* ugly *)
@@ -37,8 +43,9 @@ let h2 s = bold (break 1 ^^ underline '-' s ^^ break 1)
 let action a = 
   fancystring (ansi_format [Bold;Magenta] " * ") 3 ^^ !^a ^^ !^"..."
 
-let good = ansi_format [Bold;Green]
-let bad = ansi_format [Bold;Red]
+let greenb = ansi_format [Bold;Green]
+let redb = ansi_format [Bold;Red]
+let yellowb = ansi_format [Bold;Yellow]
 
 
 let pp_env_list optional_wrapper l f = 
@@ -65,10 +72,24 @@ let item item content =
 
 let print pp = Cerb_backend.Pipeline.run_pp None (pp ^^ hardline)
 
-let print_for_level debug_level print_level pp =
-  if debug_level >= print_level then print pp else ()
+
+let debug_print print_level pp =
+  if !debug_level >= print_level then print pp else ()
     
 
 
 let pp_expr e = nocolour Pp_mucore.Basic.pp_expr e
 let pp_pexpr e = nocolour Pp_mucore.Basic.pp_pexpr e
+
+
+
+let warn pp = 
+  print (hardline ^^ blank 3 ^^ 
+           !^(yellowb "[!] Warning:") ^^^ pp ^^ 
+             hardline ^^ hardline )
+
+let error pp = 
+  print empty;
+  print empty;
+  print (!^(redb "[!] Error") ^/^ pp);
+  exit 1

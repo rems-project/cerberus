@@ -17,6 +17,7 @@ open Environment
 open FunctionTypes
 open Binders
 open Types
+open Solver
 
 
 open Global
@@ -50,8 +51,6 @@ let add_Cvar env (name, t) = add_var env {name; bound = C t}
 let add_Avars env vars = List.fold_left add_Avar env vars
 
 
-let debug_level = ref 0
-let debug_print pp = Pp_tools.print_for_level !debug_level pp
 
 
 
@@ -112,9 +111,7 @@ open UU
 
 
 
-(* TODO: plug in cosntraint solver *)
-let constraint_holds env (LC c) = 
-  true
+
 
 let is_unreachable env =
   constraint_holds env (LC (Bool false))
@@ -133,7 +130,7 @@ let rec constraints_hold loc env = function
 
 
 (* infer base types of index terms *)
-let rec infer_it loc env it = 
+let rec infer_it loc it = 
   match it with
   | Num _ -> return BT.Int
   | Bool _ -> return BT.Bool
@@ -145,8 +142,8 @@ let rec infer_it loc env it =
   | Exp (it,it')
   | Rem_t (it,it')
   | Rem_f (it,it') ->
-     check_it loc env it BT.Int >>
-     check_it loc env it' BT.Int >>
+     check_it loc it BT.Int >>
+     check_it loc it' BT.Int >>
      return BT.Int
 
   | EQ (it,it')
@@ -155,42 +152,42 @@ let rec infer_it loc env it =
   | GT (it,it')
   | LE (it,it')
   | GE (it,it') ->
-     check_it loc env it BT.Int >>
-     check_it loc env it' BT.Int >>
+     check_it loc it BT.Int >>
+     check_it loc it' BT.Int >>
      return BT.Bool
 
   | Null it ->
-     check_it loc env it BT.Loc >>
+     check_it loc it BT.Loc >>
      return BT.Bool
 
   | And (it,it')
   | Or (it,it') ->
-     check_it loc env it BT.Int >>
-     check_it loc env it' BT.Int >>
+     check_it loc it BT.Int >>
+     check_it loc it' BT.Int >>
      return BT.Bool
 
   | Not it ->
-     check_it loc env it BT.Bool >>
+     check_it loc it BT.Bool >>
      return BT.Bool
 
   | List (it, its) ->
-     infer_it loc env it >>= fun bt ->
-     check_it loc env it bt >>
+     infer_it loc it >>= fun bt ->
+     check_it loc it bt >>
      return (List bt)
 
   | Head it ->
-     list_type loc env it
+     list_type loc it
 
   | Tail it ->
-     list_type loc env it >>= fun bt ->
+     list_type loc it >>= fun bt ->
      return (List bt)
 
   | Tuple (it, its) ->
-     infer_its loc env (it :: its) >>= fun bts ->
+     infer_its loc (it :: its) >>= fun bts ->
      return (Tuple bts)
 
   | Nth (n, it') ->
-     tuple_type loc env it >>= fun bts ->
+     tuple_type loc it >>= fun bts ->
      let rec get_nth n bts =
        let open Nat_big_num in
        match bts with
@@ -202,38 +199,35 @@ let rec infer_it loc env it =
      in
      get_nth n bts
 
-  | S sym ->
-     tryM
-       (get_Avar loc env sym)
-       (get_Lvar loc env sym >>= fun (Base t) -> return t)
+  | S (sym, bt) -> return bt
 
-and infer_its loc env its = 
+and infer_its loc its = 
   match its with
   | [] -> return []
   | it :: its ->
-     infer_it loc env it >>= fun bt ->
-     infer_its loc env its >>= fun bts ->
+     infer_it loc it >>= fun bt ->
+     infer_its loc its >>= fun bts ->
      return (bt :: bts)
 
-and check_it loc env it bt =
-  infer_it loc env it >>= fun bt' ->
+and check_it loc it bt =
+  infer_it loc it >>= fun bt' ->
   if bt = bt' then return ()
   else fail loc (Illtyped_it it)
 
-and check_its loc env its bt = 
+and check_its loc its bt = 
   match its with
   | [] -> return ()
   | it :: its -> 
-     check_it loc env it bt >>
-     check_its loc env its bt
+     check_it loc it bt >>
+     check_its loc its bt
 
-and list_type loc env it =
-  infer_it loc env it >>= function
+and list_type loc it =
+  infer_it loc it >>= function
   | List bt -> return bt
   | _ -> fail loc (Illtyped_it it)
 
-and tuple_type loc env it =
-  infer_it loc env it >>= function
+and tuple_type loc it =
+  infer_it loc it >>= function
   | Tuple bts -> return bts
   | _ -> fail loc (Illtyped_it it)
 
@@ -277,7 +271,8 @@ let rec bt_of_core_base_type loc cbt =
 let integerType loc name it =
   integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
   integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
-  let c = makeUC (LC ((S name %>= Num min) %& (S name %<= Num max))) in
+  let c = makeUC (LC ((S (name, Int) %>= Num min) %& 
+                      (S (name, Int) %<= Num max))) in
   return ((name,Int), [], [], [c])
 
 let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
@@ -292,7 +287,7 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
      return ((name,BT.Array),[],[],[])
   | Pointer (_qualifiers, ct) ->
      ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-     let r = makeUR (Points (S name, S pointee_name)) :: r in
+     let r = makeUR (Points (S (name, Loc), S (pointee_name, bt))) :: r in
      let l = makeL pointee_name (Base bt) :: l in
      return ((name,Loc),l,r,c)
   | Atomic ct ->              (* check *)
@@ -379,7 +374,7 @@ let make_create_type loc ct : (FunctionTypes.t,'e) m =
   let arguments = [makeUA Int] in
   let name = fresh () in
   size_of_ctype loc ct >>= fun size ->
-  let rt = [makeA name Loc; makeUR (Block (S name, Num size))] in
+  let rt = [makeA name Loc; makeUR (Block (S (name, Loc), Num size))] in
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
 
@@ -389,7 +384,7 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
   ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
   let a = makeA pointer_name Loc in
   let l = makeL pointee_name (Base bt) :: l in
-  let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
+  let r = makeUR (Points (S (pointer_name, Loc), S (pointee_name, bt))) :: r in
   let addr_argument = a :: l @ r @ c in
   let ret = makeA pointee_name bt :: r in
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
@@ -403,11 +398,11 @@ let make_load_field_type loc ct access : (FunctionTypes.t,'e) m =
 let make_initial_store_type loc ct = 
   let pointer_name = fresh () in
   size_of_ctype loc ct >>= fun size ->
-  let p = [makeA pointer_name Loc; makeUR (Block (S pointer_name, Num size))] in
+  let p = [makeA pointer_name Loc; makeUR (Block (S (pointer_name, Loc), Num size))] in
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S pointer_name, S value_name))] in
+    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] in
     return (value,ret)
   end >>= fun (value,ret) ->
   let ftyp = FunctionTypes.F {arguments = p @ value; return = ret} in
@@ -420,7 +415,7 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S pointer_name, S value_name))] in
+    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] in
     return (value,ret)
   end >>= fun (value,ret) ->
   let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
@@ -476,16 +471,16 @@ let infer_object_value loc env ov =
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
      let t = makeA name Int in
-     let constr = makeUC (LC (S name %= Num i)) in
+     let constr = makeUC (LC (S (name, Int) %= Num i)) in
      return [t; constr]
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
-         return [makeA name Loc; makeUC (LC (Null (S name)))] )
+         return [makeA name Loc; makeUC (LC (Null (S (name, Loc))))] )
        ( fun sym -> 
          fail loc (Unsupported "function pointers") )
        ( fun _prov loc ->
-         return [makeA name Loc; makeUC (LC (S name %= Num loc))] )
+         return [makeA name Loc; makeUC (LC (S (name, Loc) %= Num loc))] )
        ( fun () -> fail loc (Unreachable "unspecified pointer value") )
   | M_OVarray items ->
      make_Aargs loc env items >>= fun args_bts ->
@@ -513,10 +508,10 @@ let infer_value loc env v : (Types.t,'e) m =
      return [makeUA Unit]
   | M_Vtrue ->
      let name = fresh () in
-     return [makeA name Bool; makeUC (LC (S name))]
+     return [makeA name Bool; makeUC (LC (S (name, Bool)))]
   | M_Vfalse -> 
      let name = fresh () in
-     return [makeA name Bool; makeUC (LC (Not (S name)))]
+     return [makeA name Bool; makeUC (LC (Not (S (name, Bool))))]
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      make_Aargs loc env asyms >>= fun aargs ->
@@ -555,7 +550,7 @@ let call_typ loc_call env decl_typ args =
            return (SymMap.add usym uni unresolved, substs)
         | Some sym -> 
            let (LS.Base bt) = spec in
-           check_it loc_call env (S sym) bt >>
+           (* check_it loc_call (S (sym, bt)) bt >> *)
            return (unresolved, (usym, sym) :: substs)
       ) unis (SymMap.empty, [])
   in
@@ -739,52 +734,33 @@ let infer_ctor loc ctor (aargs : aargs) =
  *   return (bindings, bt, loc) *)
 
      
-let infer_pat loc pat = 
+let infer_pat loc (M_Pattern (annots, pat_)) = 
   fail loc (Unsupported "todo: implement infer_pat")
 
 
-
-(* todo: replace with call_typ *)
-let make_binop_constr op (v1 : IT.t) (v2 : IT.t) =
+let binop_typ op = 
   let open Core in
-  match op with
-  | OpAdd -> Add (v1, v2)
-  | OpSub -> Sub (v1, v2)
-  | OpMul -> Mul (v1, v2)
-  | OpDiv -> Div (v1, v2) 
-  | OpRem_t -> Rem_t (v1, v2)
-  | OpRem_f -> Rem_f (v1, v2)
-  | OpExp -> Exp (v1, v2)
-  | OpEq -> EQ (v1, v2)
-  | OpGt -> GT (v1, v2)
-  | OpLt -> LT (v1, v2)
-  | OpGe -> GE (v1, v2)
-  | OpLe -> LE (v1, v2)
-  | OpAnd -> And (v1, v2)
-  | OpOr -> Or (v1, v2)
-
-
-let binop_type op = 
-  let open Core in
-  let a1, a2, ar = fresh (), fresh (), fresh () in
-  let constr = LC (S ar %= (make_binop_constr op (S a1) (S a2))) in
-  let at, rt = match op with
-    | OpAdd
-    | OpSub
-    | OpMul
-    | OpDiv
-    | OpRem_t
-    | OpRem_f
-    | OpExp -> ([makeA a1 Int; makeA a2 Int], [makeA ar Int; makeUC constr])
-    | OpEq
-    | OpGt
-    | OpLt
-    | OpGe
-    | OpLe -> ([makeA a1 Int; makeA a2 Int], [makeA ar Bool; makeUC constr])
-    | OpAnd
-    | OpOr -> ([makeA a1 Bool; makeA a2 Bool], [makeA ar Bool; makeUC constr])
+  let (((at1,at2), rt), vc) =
+    match op with
+    | OpAdd -> (((Int, Int), Int), fun v1 v2 -> Add (v1, v2))
+    | OpSub -> (((Int, Int), Int), fun v1 v2 -> Sub (v1, v2))
+    | OpMul -> (((Int, Int), Int), fun v1 v2 -> Mul (v1, v2))
+    | OpDiv -> (((Int, Int), Int), fun v1 v2 -> Div (v1, v2))
+    | OpRem_t -> (((Int, Int), Int), fun v1 v2 -> Rem_t (v1, v2))
+    | OpRem_f -> (((Int, Int), Int), fun v1 v2 -> Rem_f (v1, v2))
+    | OpExp -> (((Int, Int), Int), fun v1 v2 -> Exp (v1, v2))
+    | OpEq -> (((Int, Int), Bool), fun v1 v2 -> EQ (v1, v2))
+    | OpGt -> (((Int, Int), Bool), fun v1 v2 -> GT (v1, v2))
+    | OpLt -> (((Int, Int), Bool), fun v1 v2 -> LT (v1, v2))
+    | OpGe -> (((Int, Int), Bool), fun v1 v2 -> GE (v1, v2))
+    | OpLe -> (((Int, Int), Bool), fun v1 v2 -> LE (v1, v2))
+    | OpAnd -> (((Bool, Bool), Bool), fun v1 v2 -> And (v1, v2))
+    | OpOr -> (((Bool, Bool), Bool), fun v1 v2 -> Or (v1, v2))
   in
-  F {arguments = at; return = rt}
+  let a1, a2, ar = fresh (), fresh (), fresh () in
+  let constr = LC ((vc (S (a1,at1)) (S (a2,at2))) %= S (ar,rt)) in
+  F {arguments = [makeA a1 at1; makeA a2 at2];
+     return = [makeA ar rt; makeUC constr ]}
   
 
 
@@ -823,7 +799,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      get_Avar loc env sym >>= fun bt ->
      recursively_owned_resources loc env sym >>= fun resource_names ->
      get_vars loc env resource_names >>= fun (resources,env) ->
-     let constraints = List.map snd (constraints_about env sym) in
+     let constraints = get_constraints_about env sym in
      let new_constraints = map makeUC constraints in
      let typ = makeA sym bt::List.map makeU resources@new_constraints in
      return (Normal typ, env)
@@ -853,12 +829,12 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      return (Normal [makeUA bt], env)
   | M_PEnot asym ->
      let a, ar = fresh (), fresh () in
-     let ret = [makeA ar Bool; makeUC (LC (S ar %= Not (S a)))] in
+     let ret = [makeA ar Bool; makeUC (LC (S (ar,Bool) %= Not (S (a,Bool))))] in
      let decl_typ = F {arguments = [makeA a Bool]; return = ret} in
      call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
      return (Normal rt, env)
   | M_PEop (op,asym1,asym2) ->
-     let decl_typ = binop_type op in
+     let decl_typ = binop_typ op in
      let args = [aunpack loc asym1; aunpack loc asym2] in
      call_typ loc env decl_typ args >>= fun (rt, env) ->
      return (Normal rt, env)
@@ -899,8 +875,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
-     check_pexpr loc (add_var env (makeUC (LC (S sym1 %= Bool true)))) e2 typ >>
-     check_pexpr loc (add_var env (makeUC (LC (S sym1 %= Bool true)))) e3 typ
+     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e2 typ >>
+     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -974,7 +950,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         let ret_name = fresh () in
         let ptr_typ = (makeA name bt) :: l @ r @ c in
         (* todo: plug in some other constraint *)
-        let constr = LC (S ret_name %= Bool true) in
+        let constr = LC (S (ret_name,Bool) %= Bool true) in
         let decl_typ = FT.make ptr_typ ([makeA ret_name Bool; makeUC constr]@r) in
         call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
         return (Normal rt, env)
@@ -1082,8 +1058,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
-     let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
-     let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
+     let then_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
+     let else_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
      check_expr loc (add_Cvar env then_constr) e2 typ >>
      check_expr loc (add_Cvar env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
@@ -1162,7 +1138,7 @@ let check_proc loc fsym genv body (F decl_typ) =
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (!^(good "...checked ok"));
+  debug_print 1 (!^(greenb "...checked ok"));
   return ()
 
 let check_fun loc fsym genv body (F decl_typ) = 
@@ -1170,7 +1146,7 @@ let check_fun loc fsym genv body (F decl_typ) =
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_pexpr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (!^(good "...checked ok"));
+  debug_print 1 (!^(greenb "...checked ok"));
   return ()
 
 
