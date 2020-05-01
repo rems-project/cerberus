@@ -3,6 +3,8 @@ open Colour
 open PPrint
 
 
+let pp_num n = !^(Nat_big_num.to_string n)
+
 (* ugly *)
 let nocolour f x = 
   let before = !Colour.do_colour in

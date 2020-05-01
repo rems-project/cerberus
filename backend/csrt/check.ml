@@ -173,16 +173,47 @@ let rec infer_it loc env it =
      check_it loc env it BT.Bool >>
      return BT.Bool
 
-  (* | List (it, its) ->
-   *    infer_it loc env it >>= fun bt ->
-   *    check_it loc env it bt >>
-   *    return (List bt) *)
+  | List (it, its) ->
+     infer_it loc env it >>= fun bt ->
+     check_it loc env it bt >>
+     return (List bt)
+
+  | Head it ->
+     list_type loc env it
+
+  | Tail it ->
+     list_type loc env it >>= fun bt ->
+     return (List bt)
+
+  | Tuple (it, its) ->
+     infer_its loc env (it :: its) >>= fun bts ->
+     return (Tuple bts)
+
+  | Nth (n, it') ->
+     tuple_type loc env it >>= fun bts ->
+     let rec get_nth n bts =
+       let open Nat_big_num in
+       match bts with
+       | [] -> fail loc (Illtyped_it it)
+       | [bt] -> 
+          if equal zero n then return bt 
+          else fail loc (Illtyped_it it)
+       | bt :: bts -> get_nth (pred n) bts
+     in
+     get_nth n bts
 
   | S sym ->
      tryM
        (get_Avar loc env sym)
        (get_Lvar loc env sym >>= fun (Base t) -> return t)
 
+and infer_its loc env its = 
+  match its with
+  | [] -> return []
+  | it :: its ->
+     infer_it loc env it >>= fun bt ->
+     infer_its loc env its >>= fun bts ->
+     return (bt :: bts)
 
 and check_it loc env it bt =
   infer_it loc env it >>= fun bt' ->
@@ -196,6 +227,16 @@ and check_its loc env its bt =
      check_it loc env it bt >>
      check_its loc env its bt
 
+and list_type loc env it =
+  infer_it loc env it >>= function
+  | List bt -> return bt
+  | _ -> fail loc (Illtyped_it it)
+
+and tuple_type loc env it =
+  infer_it loc env it >>= function
+  | Tuple bts -> return bts
+  | _ -> fail loc (Illtyped_it it)
+
 
 
 
@@ -206,7 +247,7 @@ and check_its loc env its bt =
 
 (* convert from other types *)
 
-let bt_of_core_base_type loc cbt =
+let rec bt_of_core_base_type loc cbt =
   let open Core in
   let bt_of_core_object_type loc ot =
     match ot with
@@ -222,12 +263,12 @@ let bt_of_core_base_type loc cbt =
   | BTy_boolean -> return BT.Bool
   | BTy_object ot -> bt_of_core_object_type loc ot
   | BTy_loaded ot -> bt_of_core_object_type loc ot
-  | BTy_list bt -> fail loc (Unsupported "lists")
+  | BTy_list bt -> 
+     bt_of_core_base_type loc bt >>= fun bt ->
+     return (List bt)
   | BTy_tuple bts -> 
-     fail loc (Unsupported "tuples")
-     (* mapM (bt_of_core_base_type loc) bts >>= fun bts ->
-      * let nbts = List.map (fun bt -> (Sym.fresh (), bt)) bts in
-      * return (Tuple nbts) *)
+     mapM (bt_of_core_base_type loc) bts >>= fun bts ->
+     return (Tuple bts)
   | BTy_storable -> fail loc (Unsupported "BTy_storable")
   | BTy_ctype -> fail loc (Unsupported "ctype")
 
@@ -458,9 +499,8 @@ let infer_object_value loc env ov =
   | M_OVfloating iv ->
      fail loc (Unsupported "floats")
 
-let infer_loaded_value loc env lv = 
-  match lv with
- | M_LVspecified ov -> infer_object_value loc env ov
+let infer_loaded_value loc env (M_LVspecified ov) = 
+  infer_object_value loc env ov
 
 
 let infer_value loc env v : (Types.t,'e) m = 
@@ -478,11 +518,18 @@ let infer_value loc env v : (Types.t,'e) m =
      let name = fresh () in
      return [makeA name Bool; makeUC (LC (Not (S name)))]
   | M_Vlist (cbt, asyms) ->
-     fail loc (Unsupported "lists")
-  | M_Vtuple args ->
-     fail loc (Unsupported "todo: tuples")
-     (* make_Aargs loc env args >>= fun aargs ->
-      * return (List.map (fun ((name,bt),_) -> makeA name bt) aargs) *)
+     bt_of_core_base_type loc cbt >>= fun bt ->
+     make_Aargs loc env asyms >>= fun aargs ->
+     check_Aargs_typ (Some bt) aargs >>
+     return [makeUA (List bt)]
+  | M_Vtuple [] ->
+     fail loc (Generic_error !^"empty tuple")
+  | M_Vtuple asyms ->
+     make_Aargs loc env asyms >>= fun aargs ->
+     let (args,_) = List.split aargs in
+     let (names,bts) = List.split args in
+     let a = List.map makeUA bts in
+     return a
 
 
 
