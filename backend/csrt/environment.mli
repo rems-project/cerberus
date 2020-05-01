@@ -1,7 +1,7 @@
 open Cerb_frontend
 module Loc = Locations
 
-module GEnv : sig
+module Global : sig
 
   type t
 
@@ -85,7 +85,7 @@ end
 
 
 
-module LEnv : sig
+module Local : sig
 
   type t
 
@@ -98,7 +98,7 @@ module LEnv : sig
 
   val add_var : 
     t ->
-    Binders.t ->
+    VarTypes.t Binders.t ->
     t
 
   val remove_var :
@@ -112,15 +112,15 @@ end
 
 module Env : sig
 
-  type t = { global: GEnv.t; local: LEnv.t}
+  type t = { global: Global.t; local: Local.t}
 
   val with_fresh_local :
-    GEnv.t ->
+    Global.t ->
     t
 
   val add_var : 
     t ->
-    Binders.t ->
+    VarTypes.t Binders.t ->
     t
 
   val remove_var :
@@ -152,12 +152,17 @@ module Env : sig
     Sym.t ->
     (LogicalConstraints.t, Loc.t * TypeErrors.type_error) Except.m
 
-
   val owned_resource :
     Loc.t ->
     t ->
     Sym.t ->
     (Sym.t option, Loc.t * TypeErrors.type_error) Except.m
+
+  val get_owned_resource :
+    Loc.t ->
+    t ->
+    Sym.t ->
+    (((Sym.t*Resources.t) * t) option, Loc.t * TypeErrors.type_error) Except.m
 
 
   val recursively_owned_resources :

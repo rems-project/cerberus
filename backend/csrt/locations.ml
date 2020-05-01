@@ -4,4 +4,4 @@ include Location_ocaml
 let pp loc = Location_ocaml.pp_location loc
 
 let withloc loc p : PPrint.document = 
-  pp loc ^^ dot ^^ space ^^ p
+  flow (break 1) [pp loc;p]

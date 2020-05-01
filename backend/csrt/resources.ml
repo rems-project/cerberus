@@ -2,59 +2,35 @@ open List
 open PPrint
 open Pp_tools
 open Except
-module Loc=Location
+module Loc=Locations
 
 
 type t = 
-  (* | Block of IndexTerms.t * IndexTerms.t
-   * | Int of IndexTerms.t * IndexTerms.t (\* location and value *\)
-   * | Array of IndexTerms.t * IndexTerms.t
-   * | Pred of string * IndexTerms.t list *)
+  | Block of IndexTerms.t * IndexTerms.t (* size *)
+  (* | Uninitialised of IndexTerms.t * Ctype.ctype *)
   | Points of IndexTerms.t * IndexTerms.t
 
 let pp = function
-  (* | Block (it1,it2) -> 
-   *    sprintf "(block %s %s)" 
-   *      (IndexTerms.pp it1)
-   *      (IndexTerms.pp it2) *)
-  (* | Bool (it1,it2) -> 
-   *    sprintf "(bool %s %s)" 
-   *      (IndexTerms.pp it1) 
-   *      (IndexTerms.pp it2)
-   * | Int (it1,it2) -> 
-   *    sprintf "(int %s %s)" 
-   *      (IndexTerms.pp it1) 
-   *      (IndexTerms.pp it2)
-   * | Array (it1,it2) -> 
-   *    sprintf "(array %s %s)" 
-   *      (IndexTerms.pp it1)
-   *      (IndexTerms.pp it2) *)
+  | Block (it1,it2) -> 
+     parens (!^"block" ^^^ IndexTerms.pp it1 ^^^ IndexTerms.pp it2)
+  (* | Uninitialised (it, ct) ->
+   *    parens (!^"uninit" ^^^ IndexTerms.pp it ^^^ squotes (Pp_core_ctype.pp_ctype ct) *)
   | Points (it1,it2) -> 
-     parens (!^ "points" ^^^ IndexTerms.pp it1 ^^^ IndexTerms.pp it2)
-  (* | Pred (p,its) ->
-   *    sprintf "(%s %s)" 
-   *      p
-   *      (String.concat " " (map IndexTerms.pp its)) *)
+     parens (!^"points" ^^^ IndexTerms.pp it1 ^^^ IndexTerms.pp it2)
+
 
 
 
 let subst sym with_it t = 
   match t with
-  (* | Block (it, it') -> 
-   *    Block (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it') *)
-  (* | Bool (it, it') -> 
-   *    Bool (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-   * | Int (it, it') -> 
-   *    Int (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-   * | Points (it, it') -> 
-   *    Points (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it')
-   * | Array (it, it') -> 
-   *    Array (IndexTerms.subst sym with_it it, IndexTerms.subst sym with_it it') *)
+  | Block (it, it') -> 
+     Block (IndexTerms.subst sym with_it it, 
+             IndexTerms.subst sym with_it it')
+  (* | Uninitialised (it,ct) ->
+   *    Uninitialised (IndexTerms.subst sym with_it it, ct) *)
   | Points (it, it') -> 
      Points (IndexTerms.subst sym with_it it, 
              IndexTerms.subst sym with_it it')
-  (* | Pred (p, its) ->
-   *    Pred (p, map (IndexTerms.subst sym with_it) its) *)
 
 let type_equal env t1 t2 = 
   t1 = t2                       (* todo: maybe up to variable
@@ -65,30 +41,27 @@ let types_equal env ts1 ts2 =
 
 let unify r1 r2 res = 
   match r1, r2 with
-  (* | Block (it1, it2), Block (it1', it2') ->
-   *    IndexTerms.unify it1 it1' res >>= fun res ->
-   *    IndexTerms.unify it2 it2' res *)
-  (* | Bool (it1, it2), Bool (it1', it2') -> 
-   *    IndexTerms.unify it1 it1' res >>= fun res ->
-   *    IndexTerms.unify it2 it2' res
-   * | Int (it1, it2), Int (it1', it2') -> 
-   *    IndexTerms.unify it1 it1' res >>= fun res ->
-   *    IndexTerms.unify it2 it2' res *)
-  (* | Array (it1, it2), Array (it1', it2') -> 
-   *    IndexTerms.unify it1 it1' res >>= fun res ->
-   *    IndexTerms.unify it2 it2' res *)
+  (* | Uninitialised (it1, ct), Uninitialised (it1', ct') ->
+   *    IndexTerms.unify it1 it1' res *)
   | Points (it1, it2), Points (it1', it2') ->
      IndexTerms.unify it1 it1' res >>= fun res ->
      IndexTerms.unify it2 it2' res
-  (* | Pred (p, its), Pred (p', its') when p = p' ->
-   *    IndexTerms.unify_list its its' res *)
-  (* | _, _ -> fail () *)
+  | Block (it1, it2), Block (it1', it2') ->
+     IndexTerms.unify it1 it1' res >>= fun res ->
+     IndexTerms.unify it2 it2' res
+  | _ -> fail_noloc ()
+
 
 let owner = function
-  | Points (S v, _) -> v
-  | Points (_, _) -> failwith "no owner"
+  | Points (S v, _) -> Some v
+  | Block (S v, _) -> Some v
+  (* | Uninitialised (S v, _) -> v *)
+  | _ -> None
 
 let owned = function
   | Points (_, S v) -> [v]
-  | Points (_, _) -> failwith "nothing owned"
+  | Points (_, _) -> []
+  | Block _ -> []
+  (* | Uninitialised _ -> [] *)
+
 

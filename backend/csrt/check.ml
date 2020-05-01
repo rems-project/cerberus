@@ -19,7 +19,7 @@ open Binders
 open Types
 
 
-open GEnv
+open Global
 open Env
 
 module Loc = Locations
@@ -35,8 +35,6 @@ module SymSet = Set.Make(Sym)
 
 
 let add_Avar env (name, t) = add_var env {name; bound = A t}
-let add_Lvar env (name, t) = add_var env {name; bound = L t}
-let add_Rvar env (name, t) = add_var env {name; bound = R t}
 let add_Cvar env (name, t) = add_var env {name; bound = C t}
 
 let add_vars env bindings = fold_left add_var env bindings
@@ -51,10 +49,26 @@ let debug_print pp = Pp_tools.print_for_level !debug_level pp
 
 
 
+let makeA name bt = {name; bound = A bt}
+let makeL name bt = {name; bound = L (Base bt)}
+let makeR name re = {name; bound = R re}
+let makeC name it = {name; bound = C (LC it)}
+
+let makeUA bt = makeA (fresh ()) bt
+let makeUL bt = makeL (fresh ()) bt
+let makeUR bt = makeR (fresh ()) bt
+let makeUC bt = makeC (fresh ()) bt
+
+
+
+
 let integer_value_to_num loc iv = 
   match Impl_mem.eval_integer_value iv with
   | Some v -> return v
   | None -> fail loc Integer_value_error
+
+let size_of_ctype loc ct = 
+  integer_value_to_num loc (Impl_mem.sizeof_ival ct)
       
 
 
@@ -313,7 +327,9 @@ let subtype loc env rt1 rt2 =
 
 let make_create_type loc ct : (FunctionTypes.t,'e) m = 
   let arguments = [makeUA Int] in
-  ctype loc (fresh ()) (make_pointer_ctype ct) >>= fun rt ->
+  let name = fresh () in
+  size_of_ctype loc ct >>= fun size ->
+  let rt = [makeA name Loc; makeUR (Block (S name, Num size))] in
   let ftyp = FunctionTypes.F {arguments; return = rt} in
   return ftyp
 
@@ -331,14 +347,20 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
 
 
 let make_load_field_type loc ct access : (FunctionTypes.t,'e) m = 
+  fail loc (Unsupported "make_load_field_type not implemented yet")
+
+(* have to also allow for Block of bigger size potentially *)
+let make_initial_store_type loc ct = 
   let pointer_name = fresh () in
-  ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-  let a = makeA pointer_name Loc in
-  let l = makeL pointee_name bt :: l in
-  let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
-  let addr_argument = a :: l @ r @ c in
-  let ret = makeA pointee_name bt :: r in
-  let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
+  size_of_ctype loc ct >>= fun size ->
+  let p = [makeA pointer_name Loc; makeUR (Block (S pointer_name, Num size))] in
+  begin 
+    ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+    let value = makeA value_name bt :: l @ r @ c in
+    let ret = makeUA Unit :: [makeUR (Points (S pointer_name, S value_name))] in
+    return (value,ret)
+  end >>= fun (value,ret) ->
+  let ftyp = FunctionTypes.F {arguments = p @ value; return = ret} in
   return ftyp
 
 
@@ -353,6 +375,13 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
   end >>= fun (value,ret) ->
   let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
   return ftyp
+
+
+let is_uninitialised_pointer loc env sym = 
+  get_Avar loc env sym >>= fun bt ->
+  get_owned_resource loc env sym >>= function
+  | Some ((_, Block _),_) -> return (bt = Loc)
+  | _ -> return false
 
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
@@ -477,13 +506,11 @@ let call_typ loc_call env decl_typ args =
 
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
-    debug_print
-      [ (2, h2 "check_and_refine")
-      ; (2, item !^"ftyp" (FunctionTypes.pp (F ftyp)))
-      ; (2, item !^"args" (separate_map (comma ^^ space) (fun (a,_) -> Sym.pp a) args))
-      ; (2, item !^"unis" (pp_unis unis))
-      ; (2, LEnv.pp env.local)
-      ];
+    debug_print 2 (h2 "check_and_refine");
+    debug_print 2 (item !^"ftyp" (FunctionTypes.pp (F ftyp)));
+    debug_print 2 (item !^"args" (separate_map (comma ^^ space) (fun (a,_) -> Sym.pp a) args));
+    debug_print 2 (item !^"unis" (pp_unis unis));
+    debug_print 2 (item !^"environment" (Local.pp env.local));
 
 
     match ftyp.arguments with
@@ -528,18 +555,21 @@ let call_typ loc_call env decl_typ args =
        end
 
     | {name = n; bound = R t} :: decl_args -> 
-       let owner = RE.owner t in
-       owned_resource loc_call env owner >>= begin function
+       begin match RE.owner t with
        | None -> fail loc_call (Call_error (Missing_R (n, t)))
-       | Some sym -> 
-          get_Rvar loc_call env sym >>= fun (t',env) ->
-          tryM (RE.unify t t' unis)
-            (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
-             fail loc_call (Call_error err)) >>= fun unis ->
-          let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-          find_resolved env unis >>= fun (_,substs) ->
-          let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
-          check_and_refine env args ftyp unis constrs
+       | Some owner ->
+          owned_resource loc_call env owner >>= begin function
+          | None -> fail loc_call (Call_error (Missing_R (n, t)))
+          | Some sym -> 
+             get_Rvar loc_call env sym >>= fun (t',env) ->
+             tryM (RE.unify t t' unis)
+               (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
+                fail loc_call (Call_error err)) >>= fun unis ->
+             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+             find_resolved env unis >>= fun (_,substs) ->
+             let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
+             check_and_refine env args ftyp unis constrs
+         end
        end
 
     | {name = n; bound = L t} :: decl_args -> 
@@ -724,11 +754,9 @@ let struct_member_type loc env strct field =
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
 
-  debug_print
-    [ (1, h2 "infer_pexpr")
-    ; (1, LEnv.pp env.local)
-    ; (3, item !^"expression" (pp_pexpr pe))
-    ];
+  debug_print 1 (h2 "inferring pure expression type");
+  debug_print 1 (item !^"environment" (Local.pp env.local));
+  debug_print 3 (item !^"expression" (pp_pexpr pe));
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = update_loc loc annots in
@@ -792,14 +820,13 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEif _ -> fail loc (Unreachable "PElet in inferring position")
 
 
-let rec check_pexpr loc env (e : 'bty mu_pexpr) ret = 
+let rec check_pexpr loc env (e : 'bty mu_pexpr) typ = 
 
-  debug_print
-    [ (1, h2 "check_pexpr")
-    ; (1, item !^"ret" (Types.pp ret))
-    ; (1, LEnv.pp env.local)
-    ; (3, item !^"expression" (pp_pexpr e))
-    ];
+  debug_print 1 (h2 "checking pure expression type");
+  debug_print 1 (item !^"type" (Types.pp typ));
+  debug_print 1 (item !^"environment" (Local.pp env.local));
+  debug_print 3 (item !^"expression" (pp_pexpr e));
+
 
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = update_loc loc annots in
@@ -808,8 +835,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
-     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e2 ret >>
-     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e3 ret
+     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e2 typ >>
+     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -819,7 +846,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
          check_base_type ploc None (A bt') (A bt) >>
          (* check body type against spec *)
          let env' = add_Avars env bindings in
-         check_pexpr loc env' pe ret
+         check_pexpr loc env' pe typ
        ) pats_es >>
      return env
   | M_PElet (p, e1, e2) ->
@@ -828,7 +855,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 ret
+        | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable env bad >> return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -837,7 +864,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 ret
+        | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
@@ -847,7 +874,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
   | _ ->
      infer_pexpr loc env e >>= fun (rt, env) ->
      begin match rt with
-     | Normal rt -> subtype loc env rt ret
+     | Normal rt -> subtype loc env rt typ
      | Bad bad -> ensure_bad_unreachable env bad >> return env
      end        
 
@@ -855,11 +882,9 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) ret =
 
 let rec infer_expr loc env (e : ('a,'bty) mu_expr) = 
 
-  debug_print
-    [ (1, h2 "infer_expr")
-    ; (1, LEnv.pp env.local)
-    ; (3, item !^"expression" (pp_expr e))
-    ];
+  debug_print 1 (h2 "inferring expression type");
+  debug_print 1 (item !^"environment" (Local.pp env.local));
+  debug_print 3 (item !^"expression" (pp_expr e));
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
@@ -886,7 +911,11 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         return (Normal [makeUA Unit], env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = aunpack loc a_ct in
-        make_store_type loc ct >>= fun decl_typ ->
+        let (sym1,loc1) = aunpack loc asym1 in
+        is_uninitialised_pointer loc1 env sym1 >>= begin function
+         | true -> make_initial_store_type loc ct 
+         | false -> make_store_type loc ct
+        end >>= fun decl_typ ->
         let args = [aunpack loc asym1; aunpack loc asym2] in
         call_typ loc env decl_typ args >>= fun (rt, env) ->
         return (Normal rt, env)
@@ -942,14 +971,12 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
   | M_Esseq _ -> fail loc (Unsupported "Esseq in inferring position")
 
 
-let rec check_expr loc env (e : ('a,'bty) mu_expr) ret = 
+let rec check_expr loc env (e : ('a,'bty) mu_expr) typ = 
 
-  debug_print
-    [ (1, h2 "check_expr")
-    ; (1, item !^"ret" (Types.pp ret))
-    ; (1, LEnv.pp env.local)
-    ; (3, item !^"expression" (pp_expr e))
-    ];
+  debug_print 1 (h2 "checking expression type");
+  debug_print 1 (item !^"type" (Types.pp typ));
+  debug_print 1 (item !^"environment" (Local.pp env.local));
+  debug_print 3 (item !^"expression" (pp_expr e));
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
@@ -960,8 +987,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
      let then_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
      let else_constr = (Sym.fresh (), LC (S sym1 %= Bool true)) in
-     check_expr loc (add_Cvar env then_constr) e2 ret >>
-     check_expr loc (add_Cvar env else_constr) e3 ret
+     check_expr loc (add_Cvar env then_constr) e2 typ >>
+     check_expr loc (add_Cvar env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -971,18 +998,18 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
          check_base_type ploc None (A bt') (A bt) >>
          (* check body type against spec *)
          let env' = add_Avars env bindings in
-         check_expr loc env' pe ret
+         check_expr loc env' pe typ
        ) pats_es >>
      return env     
   | M_Epure pe -> 
-     check_pexpr loc env pe ret
+     check_pexpr loc env pe typ
   | M_Elet (p, e1, e2) ->
      begin match p with 
      | M_symbol (Annotated (annots, _, newname)) ->
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable env bad >> return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -991,7 +1018,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
@@ -1007,7 +1034,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
         let newname = sym_or_fresh mnewname in
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
-        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 ret
+        | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable env bad >> return env
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
@@ -1020,11 +1047,11 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
          get_Avar loc env vsym >>= fun bt ->
          return (add_Avar env (sym,bt))
        ) env args >>= fun env ->
-     check_expr loc env body ret
+     check_expr loc env body typ
   | _ ->
      infer_expr loc env e >>= fun (rt, env) ->
      begin match rt with
-     | Normal rt -> subtype loc env rt ret
+     | Normal rt -> subtype loc env rt typ
      | Bad bad -> ensure_bad_unreachable env bad >> return env
      end
      
@@ -1034,19 +1061,19 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) ret =
 
 
 let check_proc loc fsym genv body (F decl_typ) = 
-  debug_print [(1, h1 ("Checking procedure " ^ (pps (Sym.pp fsym))))];
+  debug_print 1 (h1 ("Checking procedure " ^ (pps (Sym.pp fsym))));
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
-  debug_print [(1, em !^"...checked ok")];
+  debug_print 1 (break 1 ^^ !^"...checked ok");
   return ()
 
 let check_fun loc fsym genv body (F decl_typ) = 
-  debug_print [(1, h1 ("Checking function " ^ (pps (Sym.pp fsym))))];
+  debug_print 1 (h1 ("Checking function " ^ (pps (Sym.pp fsym))));
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_pexpr loc env body decl_typ.return >>= fun _env ->
-  debug_print [(1, em !^"...checked ok")];
+  debug_print 1 (!^"...checked ok");
   return ()
 
 
@@ -1115,7 +1142,6 @@ let record_funinfo genv funinfo =
 
 (* check the types? *)
 let record_impl impl impl_decl genv = 
-  let open GEnv in
   match impl_decl with
   | M_Def (bt, _p) -> 
      bt_of_core_base_type Loc.unknown bt >>= fun bt ->
@@ -1170,12 +1196,13 @@ let pp_fun_map_decl funinfo =
 
 
 let print_initial_environment genv = 
-  debug_print ((1, h1 "initial environment") :: (GEnv.pp_items genv))
+  debug_print 1 (h1 "initial environment");
+  debug_print 1 (Global.pp genv)
 
 
 let check mu_file =
   pp_fun_map_decl mu_file.mu_funinfo;
-  let genv = GEnv.empty in
+  let genv = Global.empty in
   record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
   record_funinfo genv mu_file.mu_funinfo >>= fun genv ->
   print_initial_environment genv;

@@ -182,7 +182,8 @@ let parse_logical_constraint loc env s =
 
 
 
-let parse_binder loc (names : NameMap.t) s = 
+let parse_vartype_binder loc (names : NameMap.t) s = 
+  let open VarTypes in
   let open Binders in
   let open Sexplib in
   let open Sexp in
@@ -220,7 +221,7 @@ let parse_type loc (names : NameMap.t) s =
     match ts with
     | [] -> return (List.rev acc, names)
     | b :: bs ->
-       parse_binder loc names b >>= fun (b, names) ->
+       parse_vartype_binder loc names b >>= fun (b, names) ->
        aux names (b :: acc) bs
   in
   match s with
