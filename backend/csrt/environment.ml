@@ -7,6 +7,8 @@ open Binders
 open Except
 open TypeErrors
 
+module SymSet = Set.Make(Sym)
+
 
 module Loc = Locations
 module LC = LogicalConstraints
@@ -99,19 +101,20 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
-    separate_map (break 1)
-      (fun (sym, bs) -> item (Sym.pp sym) (Types.pp bs))
-      (SymMap.bindings decls)
+    pp_env_list None 
+      (SymMap.bindings decls) 
+      (fun (sym, bs) -> typ (Sym.pp sym) (Types.pp bs))
+             
 
   let pp_fun_decls decls = 
-    separate_map (break 1) 
-      (fun (sym, (_, t, _ret)) -> typ (Sym.pp sym) (FunctionTypes.pp t))
+    pp_env_list None
       (SymMap.bindings decls)
+      (fun (sym, (_, t, _ret)) -> typ (Sym.pp sym) (FunctionTypes.pp t))
 
   let pp_name_map m = 
-    separate_map (break 1) 
-      (fun (name,sym) -> item (!^name) (Sym.pp sym))
+    pp_env_list None
       (NameMap.all_names m)
+      (fun (name,sym) -> item name (Sym.pp sym))
 
   let pp_items genv = 
     [ (1, h2 "Structs")
@@ -135,22 +138,22 @@ module Local = struct
 
   let empty = SymMap.empty
 
-  let pp_avars = 
-    flow_map (comma ^^ break 1)
-    (fun (sym, t) -> typ (Sym.pp sym) (BT.pp t))
+  let pp_avars avars = 
+    pp_env_list (Some brackets) avars
+      (fun (sym, t) -> typ (Sym.pp sym) (BT.pp t))
 
-  let pp_lvars = 
-    flow_map (comma ^^ break 1)
-    (fun (sym, t) -> typ (Sym.pp sym) (LS.pp t))
+  let pp_lvars lvars = 
+    pp_env_list (Some brackets) lvars
+      (fun (sym, t) -> typ (Sym.pp sym) (LS.pp t))
 
-  let pp_rvars = 
-    flow_map (comma ^^ break 1)
+  let pp_rvars rvars = 
+    pp_env_list (Some brackets) rvars
       (fun (sym, t) -> 
         if print_resource_names then typ (Sym.pp sym) (RE.pp t) 
         else (RE.pp t))
 
-  let pp_cvars = 
-    flow_map (comma ^^ break 1)
+  let pp_cvars cvars = 
+    pp_env_list (Some brackets) cvars
       (fun (sym, t) -> 
         if print_constraint_names then typ (Sym.pp sym) (LC.pp t) 
         else (LC.pp t))
@@ -165,11 +168,11 @@ module Local = struct
           | C t -> (a,l,r,((name,t) :: c))
         ) lenv ([],[],[],[])
     in
-    (separate (space ^^ space)
-       [ inline_item !^"A" (brackets (pp_avars a))
-       ; inline_item !^"L" (brackets (pp_lvars l))
-       ; inline_item !^"R" (brackets (pp_rvars r))
-       ; inline_item !^"C" (brackets (pp_cvars c))
+    (flow (break 1)
+       [ inline_item "computational" (pp_avars a)
+       ; inline_item "logical" (pp_lvars l)
+       ; inline_item "resources" (pp_rvars r)
+       ; inline_item "constraints" (pp_cvars c)
     ])
 
     let add_var env b = SymMap.add b.name b.bound env
@@ -194,12 +197,13 @@ module Env = struct
   let add_var env b = {env with local = Local.add_var env.local b}
   let remove_var env sym = { env with local = Local.remove_var env.local sym }
 
-  let get_var (loc : Loc.t) (env: t) (name: Sym.t) =
+  let internal_get_var (loc : Loc.t) (env: t) (name: Sym.t) =
     lookup_sym loc env.local name >>= function
     | A t -> return (`A t)
     | L t -> return (`L t)
     | R t -> return (`R (t, remove_var env name))
     | C t -> return (`C t)
+
 
   let kind = function
     | `A _ -> Argument
@@ -208,24 +212,29 @@ module Env = struct
     | `C _ -> Constraint
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    internal_get_var loc env sym >>= function
     | `A t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
 
   let get_Lvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    internal_get_var loc env sym >>= function
     | `L t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
 
   let get_Rvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    internal_get_var loc env sym >>= function
     | `R (t, env) -> return (t, env)
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
 
   let get_Cvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    internal_get_var loc env sym >>= function
     | `C t -> return t
     | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
+
+  let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
+    lookup_sym loc env.local name >>= function
+    | R t -> return (R t, remove_var env name)
+    | t -> return (t, env)
 
   (* internal only *)
   let unsafe_owned_resource loc env owner_sym = 
@@ -269,6 +278,13 @@ module Env = struct
     | None -> 
        return []
 
+  let constraints_about env sym =
+    SymMap.fold (fun csym b acc -> 
+        match b with
+        | C c -> if SymSet.mem sym (LC.syms_in c) then (csym,c) :: acc else acc
+        | _ -> acc
+      ) 
+      env.local []
 
 end
 

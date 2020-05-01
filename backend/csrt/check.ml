@@ -28,18 +28,25 @@ module RE = Resources
 module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
+module FT = FunctionTypes
 
 module SymSet = Set.Make(Sym)
 
 
 
 
-let add_Avar env (name, t) = add_var env {name; bound = A t}
-let add_Cvar env (name, t) = add_var env {name; bound = C t}
+
 
 let add_vars env bindings = fold_left add_var env bindings
 let remove_vars env names = fold_left remove_var env names
+let get_vars loc env vars = 
+  fold_leftM (fun (acc,env) sym ->
+      get_var loc env sym >>= fun (t,env) ->
+      return (acc@[t], env)
+    ) ([],env) vars
 
+let add_Avar env (name, t) = add_var env {name; bound = A t}
+let add_Cvar env (name, t) = add_var env {name; bound = C t}
 let add_Avars env vars = List.fold_left add_Avar env vars
 
 
@@ -49,11 +56,13 @@ let debug_print pp = Pp_tools.print_for_level !debug_level pp
 
 
 
-let makeA name bt = {name; bound = A bt}
-let makeL name bt = {name; bound = L (Base bt)}
-let makeR name re = {name; bound = R re}
-let makeC name it = {name; bound = C (LC it)}
 
+let makeA name bt = {name; bound = A bt}
+let makeL name ls = {name; bound = L ls}
+let makeR name re = {name; bound = R re}
+let makeC name lc = {name; bound = C lc}
+
+let makeU t = {name = fresh (); bound = t}
 let makeUA bt = makeA (fresh ()) bt
 let makeUL bt = makeL (fresh ()) bt
 let makeUR bt = makeR (fresh ()) bt
@@ -227,7 +236,7 @@ let bt_of_core_base_type loc cbt =
 let integerType loc name it =
   integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
   integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
-  let c = makeUC ((S name %>= Num min) %& (S name %<= Num max)) in
+  let c = makeUC (LC ((S name %>= Num min) %& (S name %<= Num max))) in
   return ((name,Int), [], [], [c])
 
 let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
@@ -243,7 +252,7 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Pointer (_qualifiers, ct) ->
      ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
      let r = makeUR (Points (S name, S pointee_name)) :: r in
-     let l = makeL pointee_name bt :: l in
+     let l = makeL pointee_name (Base bt) :: l in
      return ((name,Loc),l,r,c)
   | Atomic ct ->              (* check *)
      ctype_aux loc name ct
@@ -338,7 +347,7 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
   let pointer_name = fresh () in
   ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
   let a = makeA pointer_name Loc in
-  let l = makeL pointee_name bt :: l in
+  let l = makeL pointee_name (Base bt) :: l in
   let r = makeUR (Points (S pointer_name, S pointee_name)) :: r in
   let addr_argument = a :: l @ r @ c in
   let ret = makeA pointee_name bt :: r in
@@ -426,16 +435,16 @@ let infer_object_value loc env ov =
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
      let t = makeA name Int in
-     let constr = makeUC (S name %= Num i) in
+     let constr = makeUC (LC (S name %= Num i)) in
      return [t; constr]
   | M_OVpointer p ->
      Impl_mem.case_ptrval p
        ( fun _cbt -> 
-         return [makeA name Loc; makeUC (Null (S name))] )
+         return [makeA name Loc; makeUC (LC (Null (S name)))] )
        ( fun sym -> 
          fail loc (Unsupported "function pointers") )
        ( fun _prov loc ->
-         return [makeA name Loc; makeUC (S name %= Num loc)] )
+         return [makeA name Loc; makeUC (LC (S name %= Num loc))] )
        ( fun () -> fail loc (Unreachable "unspecified pointer value") )
   | M_OVarray items ->
      make_Aargs loc env items >>= fun args_bts ->
@@ -464,10 +473,10 @@ let infer_value loc env v : (Types.t,'e) m =
      return [makeUA Unit]
   | M_Vtrue ->
      let name = fresh () in
-     return [makeA name Bool; makeUC (S name)]
+     return [makeA name Bool; makeUC (LC (S name))]
   | M_Vfalse -> 
      let name = fresh () in
-     return [makeA name Bool; makeUC (Not (S name))]
+     return [makeA name Bool; makeUC (LC (Not (S name)))]
   | M_Vlist (cbt, asyms) ->
      fail loc (Unsupported "lists")
   | M_Vtuple args ->
@@ -485,7 +494,7 @@ let pp_unis unis =
        (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
     | None -> (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"unresolved"
   in
-  separate_map (comma ^^ space) pp_entry (SymMap.bindings unis)
+  pp_env_list None (SymMap.bindings unis) pp_entry
 
 
 
@@ -506,11 +515,12 @@ let call_typ loc_call env decl_typ args =
 
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
-    debug_print 2 (h2 "check_and_refine");
-    debug_print 2 (item !^"ftyp" (FunctionTypes.pp (F ftyp)));
-    debug_print 2 (item !^"args" (separate_map (comma ^^ space) (fun (a,_) -> Sym.pp a) args));
-    debug_print 2 (item !^"unis" (pp_unis unis));
-    debug_print 2 (item !^"environment" (Local.pp env.local));
+    debug_print 2 (action "checking and refining function call type");
+    debug_print 2 (blank 3 ^^ item "ftyp" (FunctionTypes.pp (F ftyp)));
+    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun (a,_) -> Sym.pp a)));
+    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis));
+    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local));
+    debug_print 2 PPrint.empty;
 
 
     match ftyp.arguments with
@@ -710,7 +720,7 @@ let make_binop_constr op (v1 : IT.t) (v2 : IT.t) =
 let binop_type op = 
   let open Core in
   let a1, a2, ar = fresh (), fresh (), fresh () in
-  let constr = S ar %= (make_binop_constr op (S a1) (S a2)) in
+  let constr = LC (S ar %= (make_binop_constr op (S a1) (S a2))) in
   let at, rt = match op with
     | OpAdd
     | OpSub
@@ -754,16 +764,22 @@ let struct_member_type loc env strct field =
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
 
-  debug_print 1 (h2 "inferring pure expression type");
-  debug_print 1 (item !^"environment" (Local.pp env.local));
-  debug_print 3 (item !^"expression" (pp_pexpr pe));
+  debug_print 1 (action "inferring pure expression type");
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
+  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr pe));
+  debug_print 1 PPrint.empty;
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = update_loc loc annots in
   match pe_ with
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun bt ->
-     return (Normal [makeA sym bt], env)
+     recursively_owned_resources loc env sym >>= fun resource_names ->
+     get_vars loc env resource_names >>= fun (resources,env) ->
+     let constraints = List.map snd (constraints_about env sym) in
+     let new_constraints = map makeUC constraints in
+     let typ = makeA sym bt::List.map makeU resources@new_constraints in
+     return (Normal typ, env)
   | M_PEimpl i ->
      get_impl_constant loc env.global i >>= fun t ->
      return (Normal [makeUA t], env)
@@ -790,7 +806,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      return (Normal [makeUA bt], env)
   | M_PEnot asym ->
      let a, ar = fresh (), fresh () in
-     let ret = [makeA ar Bool; makeUC (S ar %= Not (S a))] in
+     let ret = [makeA ar Bool; makeUC (LC (S ar %= Not (S a)))] in
      let decl_typ = F {arguments = [makeA a Bool]; return = ret} in
      call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
      return (Normal rt, env)
@@ -822,10 +838,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
 
 let rec check_pexpr loc env (e : 'bty mu_pexpr) typ = 
 
-  debug_print 1 (h2 "checking pure expression type");
-  debug_print 1 (item !^"type" (Types.pp typ));
-  debug_print 1 (item !^"environment" (Local.pp env.local));
-  debug_print 3 (item !^"expression" (pp_pexpr e));
+  debug_print 1 (action "checking pure expression type");
+  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ));
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
+  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr e));
+  debug_print 1 PPrint.empty;
 
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -835,8 +852,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
-     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e2 typ >>
-     check_pexpr loc (add_var env (makeUC (S sym1 %= Bool true))) e3 typ
+     check_pexpr loc (add_var env (makeUC (LC (S sym1 %= Bool true)))) e2 typ >>
+     check_pexpr loc (add_var env (makeUC (LC (S sym1 %= Bool true)))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -882,17 +899,49 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
 
 let rec infer_expr loc env (e : ('a,'bty) mu_expr) = 
 
-  debug_print 1 (h2 "inferring expression type");
-  debug_print 1 (item !^"environment" (Local.pp env.local));
-  debug_print 3 (item !^"expression" (pp_expr e));
+  debug_print 1 (action "inferring expression type");
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
+  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e));
+  debug_print 1 PPrint.empty;
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
   match e_ with
   | M_Epure pe -> 
      infer_pexpr loc env pe
-  | M_Ememop _ ->
-     fail loc (Unsupported "todo: ememop")
+  | M_Ememop memop ->
+     begin match memop with
+     | M_PtrEq _ (* (asym 'bty * asym 'bty) *)
+     | M_PtrNe _ (* (asym 'bty * asym 'bty) *)
+     | M_PtrLt _ (* (asym 'bty * asym 'bty) *)
+     | M_PtrGt _ (* (asym 'bty * asym 'bty) *)
+     | M_PtrLe _ (* (asym 'bty * asym 'bty) *)
+     | M_PtrGe _ (* (asym 'bty * asym 'bty) *)
+     | M_Ptrdiff _ (* (actype 'bty * asym 'bty * asym 'bty) *)
+     | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
+     | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
+       -> fail loc (Unsupported "todo: ememop")
+     | M_PtrValidForDeref (a_ct, asym) ->
+        let (ct, ct_loc) = aunpack loc a_ct in
+        ctype_aux loc (fresh ()) (make_pointer_ctype ct) >>= fun ((name,bt),l,r,c) ->
+        let ret_name = fresh () in
+        let ptr_typ = (makeA name bt) :: l @ r @ c in
+        (* todo: plug in some other constraint *)
+        let constr = LC (S ret_name %= Bool true) in
+        let decl_typ = FT.make ptr_typ ([makeA ret_name Bool; makeUC constr]@r) in
+        call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
+        return (Normal rt, env)
+     | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
+     | M_PtrArrayShift _ (* (asym 'bty * actype 'bty * asym 'bty  ) *)
+     | M_Memcpy _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+     | M_Memcmp _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+     | M_Realloc _ (* (asym 'bty * asym 'bty * asym 'bty) *)
+     | M_Va_start _ (* (asym 'bty * asym 'bty) *)
+     | M_Va_copy _ (* (asym 'bty) *)
+     | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
+     | M_Va_end _ (* (asym 'bty) *) 
+       -> fail loc (Unsupported "todo: ememop")
+     end
   | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
      begin match action_ with
      | M_Create (asym,a_ct,_prefix) -> 
@@ -973,10 +1022,11 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
 
 let rec check_expr loc env (e : ('a,'bty) mu_expr) typ = 
 
-  debug_print 1 (h2 "checking expression type");
-  debug_print 1 (item !^"type" (Types.pp typ));
-  debug_print 1 (item !^"environment" (Local.pp env.local));
-  debug_print 3 (item !^"expression" (pp_expr e));
+  debug_print 1 (action "checking expression type");
+  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ));
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
+  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e));
+  debug_print 1 PPrint.empty;
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in

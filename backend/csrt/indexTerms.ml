@@ -3,9 +3,10 @@ open List
 open Except
 open PPrint
 open Pp_tools
-module Loc=Location
+module Loc=Locations
 
 
+module SymSet = Set.Make(Sym)
 
 type t =
   | Num of num
@@ -79,6 +80,32 @@ let rec pp = function
 
   | S sym -> Sym.pp sym
 
+
+
+let rec syms_in it : SymSet.t = 
+  match it with
+  | Num _  
+  | Bool _ -> 
+     SymSet.empty
+  | Add (it, it')
+  | Sub (it, it') 
+  | Mul (it, it') 
+  | Div (it, it') 
+  | Exp (it, it') 
+  | Rem_t (it, it') 
+  | Rem_f (it, it') 
+  | EQ (it, it') 
+  | NE (it, it') 
+  | LT (it, it') 
+  | GT (it, it') 
+  | LE (it, it') 
+  | GE (it, it') 
+  | And (it, it')
+  | Or (it, it') ->
+     SymSet.union (syms_in it) (syms_in it')
+  | Null it
+  | Not it -> syms_in it
+  | S symbol -> SymSet.singleton symbol
 
 
 let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 

@@ -29,22 +29,35 @@ let lines l = align (PPrint.separate (break 1) l)
 let bold = pp_ansi_format [Bold]
 let underline c s = string s ^/^ repeat (String.length s) (char c)
 
-let h1 s = pp_ansi_format [Bold;Magenta] (break 1 ^^ break 1 ^^ underline '=' s)
-let red_h1 s = pp_ansi_format [Bold;Red] (break 1 ^^ break 1 ^^ underline '=' s)
-let h2 s = bold (break 1 ^^ underline '-' s)
+let h1 s = bold (break 1 ^^ break 1 ^^ underline '=' s ^^ break 1 ^^ break 1)
+let h2 s = bold (break 1 ^^ underline '-' s ^^ break 1)
 
-let good = pp_ansi_format [Green]
-let bad = pp_ansi_format [Red]
+let action a = 
+  fancystring (ansi_format [Bold;Magenta] " * ") 3 ^^ !^a ^^ !^"..."
+
+let good = pp_ansi_format [Bold;Green]
+let bad = pp_ansi_format [Bold;Red]
+
+
+let pp_env_list optional_wrapper l f = 
+  match l with
+  | [] -> !^"(empty)"
+  | l -> 
+     let pp = flow_map (comma ^^ break 1) f l in
+     match optional_wrapper with
+     | Some wrapper -> wrapper pp
+     | None -> pp
 
 
 let typ n typ = n ^^ colon ^^^ typ
 
 let inline_item item content = 
-  (pp_ansi_format [Bold] item) ^^ colon ^^
-  space ^^ content
+  fancystring (ansi_format [Bold] item) (String.length item) ^^ 
+    colon ^^ space ^^ content
 
 let item item content = 
-  (pp_ansi_format [Bold] item) ^^ colon ^^ space ^^ align (content)
+  fancystring (ansi_format [Bold] item) (String.length item) ^^ 
+    colon ^^ space ^^ align content
 
 
 
