@@ -1115,7 +1115,7 @@ let check_proc loc fsym genv body (F decl_typ) =
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (break 1 ^^ !^"...checked ok");
+  debug_print 1 (!^(good "...checked ok"));
   return ()
 
 let check_fun loc fsym genv body (F decl_typ) = 
@@ -1123,7 +1123,7 @@ let check_fun loc fsym genv body (F decl_typ) =
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_pexpr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (!^"...checked ok");
+  debug_print 1 (!^(good "...checked ok"));
   return ()
 
 
@@ -1261,4 +1261,6 @@ let check mu_file =
 let check_and_report core_file = 
   match check core_file with
   | Result () -> ()
-  | Exception (loc,err) -> report_type_error loc err
+  | Exception (loc,err) -> 
+     report_type_error loc err;
+     raise (Failure "type error")
