@@ -35,8 +35,8 @@ let h2 s = bold (break 1 ^^ underline '-' s ^^ break 1)
 let action a = 
   fancystring (ansi_format [Bold;Magenta] " * ") 3 ^^ !^a ^^ !^"..."
 
-let good = pp_ansi_format [Bold;Green]
-let bad = pp_ansi_format [Bold;Red]
+let good = ansi_format [Bold;Green]
+let bad = ansi_format [Bold;Red]
 
 
 let pp_env_list optional_wrapper l f = 

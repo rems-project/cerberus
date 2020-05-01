@@ -167,4 +167,4 @@ open Pp_tools
 let report_type_error loc err = 
   print empty;
   print empty;
-  print (bad (!^"[!] Error") ^/^ pp loc err)
+  print (!^(bad "[!] Error") ^/^ pp loc err)
