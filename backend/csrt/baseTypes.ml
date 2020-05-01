@@ -12,8 +12,8 @@ type t =
   | Int
   | Loc
   | Array
-  (* | List of t *)
-  (* | Tuple of (Sym.t * t) list *)
+  | List of t
+  | Tuple of t list
   | Struct of Sym.t
   | StructField of field_access
 
@@ -26,21 +26,18 @@ let is_struct = function Struct s -> Some s | _ -> None
 let is_structfield = function StructField p -> Some p | _ -> None
 
 
-let pp = function
+let rec pp = function
   | Unit -> !^ "unit"
   | Bool -> !^ "bool"
   | Int -> !^ "int"
   | Loc -> !^ "loc"
   | Array -> !^ "array"
-  (* | List bt -> parens ((!^ "list") ^^^ pp bt) *)
-  (* | Tuple nbts -> parens (separate (break 1) (map pp_tuple_item nbts)) *)
+  | List bt -> parens ((!^ "list") ^^^ pp bt)
+  | Tuple nbts -> parens (!^ "tuple" ^^^ flow_map (break 1) pp (nbts))
   | Struct sym -> parens (!^ "struct" ^^^ Sym.pp sym)
   | StructField sf -> 
      let args = Sym.pp sf.pointer ^^ dot ^^ Sym.pp sf.field in
      parens (squotes (Sym.pp sf.strct) ^^ minus ^^ !^"field" ^^^ args)
-
-(* and pp_tuple_item (sym, bt) = 
- *   parens (Sym.pp sym ^^ space ^^ colon ^^ space ^^ pp bt) *)
 
 
 let type_equal t1 t2 = t1 = t2

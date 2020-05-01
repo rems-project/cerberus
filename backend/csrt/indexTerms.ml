@@ -32,7 +32,12 @@ type t =
   | Or of t * t
   | Not of t
 
-  (* | List of t * t list *)
+  | Tuple of t * t list
+  | Nth of num * t (* of tuple *)
+
+  | List of t * t list
+  | Head of t
+  | Tail of t
 
   | S of Sym.t
 
@@ -53,7 +58,7 @@ let (%&) t1 t2 = And (t1, t2)
 let (%|) t1 t2 = Or (t1, t2)
 
 let rec pp = function
-  | Num i -> !^ (Nat_big_num.to_string i)
+  | Num i -> pp_num i
   | Bool b -> !^ (if b then "true" else "false")
 
   | Add (it1,it2) -> parens (pp it1 ^^^ plus ^^^ pp it2)
@@ -76,7 +81,11 @@ let rec pp = function
   | Or (o1,o2) -> parens (pp o1 ^^^ bar ^^^ pp o2)
   | Not (o1) -> parens (!^ "not" ^^^ pp o1)
 
-  (* | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its)) *)
+  | Tuple (it,its) -> parens (!^ "tuple" ^^^ separate_map space pp (it :: its))
+  | Nth (n,it2) -> parens (!^"nth" ^^^ pp_num n ^^^ pp it2)
+  | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its))
+  | Head (o1) -> parens (!^ "hd" ^^^ pp o1)
+  | Tail (o1) -> parens (!^ "tl" ^^^ pp o1)
 
   | S sym -> Sym.pp sym
 
@@ -101,11 +110,22 @@ let rec syms_in it : SymSet.t =
   | LE (it, it') 
   | GE (it, it') 
   | And (it, it')
-  | Or (it, it') ->
+  | Or (it, it')  ->
      SymSet.union (syms_in it) (syms_in it')
+  | Nth (_, it)
   | Null it
-  | Not it -> syms_in it
+  | Not it 
+  | Head it
+  | Tail it -> 
+     syms_in it
+  | Tuple (it, its)
+  | List (it, its) ->
+     SymSet.union (syms_in it) (syms_in_list its)
   | S symbol -> SymSet.singleton symbol
+
+and syms_in_list l = 
+  List.fold_left (fun acc sym -> SymSet.union acc (syms_in sym))
+    SymSet.empty l
 
 
 let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 
@@ -129,8 +149,16 @@ let rec subst (sym : Sym.t) (with_it : Sym.t) it : t =
   | And (it, it') -> And (subst sym with_it it, subst sym with_it it')
   | Or (it, it') -> Or (subst sym with_it it, subst sym with_it it')
   | Not it -> Not (subst sym with_it it)
-  (* | List (it, its) -> 
-   *    List (subst sym with_it it, map (fun it -> subst sym with_it it) its) *)
+  | Tuple (it, its) ->
+     Tuple (subst sym with_it it, map (fun it -> subst sym with_it it) its)
+  | Nth (n, it') ->
+     Nth (n, subst sym with_it it')
+  | List (it, its) -> 
+     List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
+  | Head it ->
+     Head (subst sym with_it it)
+  | Tail it ->
+     Tail (subst sym with_it it)
   | S symbol -> S (Sym.subst sym with_it symbol)
 
 
@@ -162,11 +190,18 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
 
   | Null it, Null it'
   | Not it, Not it' 
+  | Head it, Head it' 
+  | Tail it, Tail it' 
     -> 
      unify it it' res
 
-  (* | List (it,its), List (it',its') -> 
-   *    unify_list (it::its) (it'::its') res *)
+  | Nth (n, it2), Nth (n', it2') when n = n'
+    -> 
+     unify it it' res
+
+  | Tuple (it,its), Tuple (it',its')
+  | List (it,its), List (it',its') -> 
+     unify_list (it::its) (it'::its') res
 
   | S sym, S sym' when sym = sym' ->
      return res
