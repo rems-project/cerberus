@@ -128,6 +128,12 @@ module Env : sig
     Sym.t ->
     t
 
+  val get_var : 
+    Loc.t ->
+    t ->
+    Sym.t ->
+    (VarTypes.t * t, Loc.t * TypeErrors.type_error) Except.m
+
   val get_Avar : 
     Loc.t ->
     t ->
@@ -170,5 +176,11 @@ module Env : sig
     t ->
     Sym.t ->
     (Sym.t list, Loc.t * TypeErrors.type_error) Except.m
+
+
+  val constraints_about :
+    t ->
+    Sym.t ->
+    (Sym.t * LogicalConstraints.t) list
 
 end
