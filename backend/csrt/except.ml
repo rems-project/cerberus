@@ -1,5 +1,6 @@
 open Cerb_frontend
 open Exception
+open Pp_tools
 
 
 type ('a,'e) m = ('a, 'e) exceptM
@@ -13,7 +14,9 @@ let fail_noloc e = Exception.fail e
 
 let (>>=) = except_bind
 
-let (>>) m m' = m >>= fun _ -> m'
+(* this is dangerous when combined with effects: ">>" does not enforce
+   evluation order in the right way *)
+(* let (>>) m m' = m >>= fun _ -> m' *)
 
 let liftM = except_fmap
 
@@ -39,7 +42,7 @@ let pmap_foldM
   Pmap.fold (fun k v a -> a >>= f k v) map (return init)
 
 let pmap_iterM f m = 
-  Pmap.fold (fun k v a -> a >> f k v) 
+  Pmap.fold (fun k v a -> a >>= fun () -> f k v) 
     m (return ())
 
 let tryM (m : ('a,'e1) exceptM) (m' : ('a,'e2) exceptM) =
@@ -52,3 +55,10 @@ let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
   | Result a, _ -> Result a
   | Exception _, m' :: ms' -> tryMs m' ms'
   | Exception e, [] -> Exception e
+
+
+
+
+let print pp = unsafe_print pp; return ()
+let debug_print l pp = unsafe_debug_print l pp; return ()
+let warn pp = unsafe_warn pp; return ()

@@ -36,6 +36,9 @@ open Pp_tools
   | Undefined of Undefined.undefined_behaviour
   | Unspecified
   | StaticError of string * Sym.t
+  | Z3_fail of string
+  | Z3_BT_not_implemented_yet of BaseTypes.t
+  | Z3_IT_not_implemented_yet of IndexTerms.t
 
  type t = type_error
 
@@ -109,7 +112,7 @@ open Pp_tools
          (* dead, I think *)
       end
    | Unsat_constraint (name,c) ->
-      !^"Unsatisfied return constraint" ^^^
+      !^"Unsatisfied argument constraint" ^^^
         typ (Sym.pp name) (LogicalConstraints.pp c)
    | Unconstrained_l (name, ls) ->
       !^"Unconstrained logical variable" ^^^
@@ -159,11 +162,17 @@ open Pp_tools
         !^"Unspecified value"
      | StaticError (err, _pe) ->
         !^("Static error: " ^ err)
+     | Z3_fail err ->
+        !^("Z3 failure: ^ err")
+     | Z3_BT_not_implemented_yet bt ->
+        !^"Z3: base type" ^^^ BaseTypes.pp bt ^^^ !^"not implemented yet"
+     | Z3_IT_not_implemented_yet it ->
+        !^"Z3: index term" ^^^ IndexTerms.pp it ^^^ !^"not implemented yet"
      end
 
 
 
 
 let report_type_error loc err : unit = 
-  error (pp loc err)
+  unsafe_error (pp loc err)
 

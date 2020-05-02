@@ -113,17 +113,21 @@ open UU
 
 
 
-let is_unreachable env =
-  constraint_holds env (LC (Bool false))
+
+
+
+  
 
 let rec constraints_hold loc env = function
   | [] -> return ()
   | (n, t) :: constrs ->
-     if constraint_holds env t 
-     then constraints_hold loc env constrs
-     else fail loc (Call_error (Unsat_constraint (n, t)))
+     constraint_holds loc env t >>= function
+     | true -> constraints_hold loc env constrs
+     | false -> fail loc (Call_error (Unsat_constraint (n, t)))
 
 
+let is_unreachable loc env =
+  constraint_holds loc env (LC (Bool false))
 
 
 
@@ -142,8 +146,8 @@ let rec infer_it loc it =
   | Exp (it,it')
   | Rem_t (it,it')
   | Rem_f (it,it') ->
-     check_it loc it BT.Int >>
-     check_it loc it' BT.Int >>
+     check_it loc it BT.Int >>= fun () ->
+     check_it loc it' BT.Int >>= fun () ->
      return BT.Int
 
   | EQ (it,it')
@@ -152,27 +156,27 @@ let rec infer_it loc it =
   | GT (it,it')
   | LE (it,it')
   | GE (it,it') ->
-     check_it loc it BT.Int >>
-     check_it loc it' BT.Int >>
+     check_it loc it BT.Int >>= fun () ->
+     check_it loc it' BT.Int >>= fun () ->
      return BT.Bool
 
   | Null it ->
-     check_it loc it BT.Loc >>
+     check_it loc it BT.Loc >>= fun () ->
      return BT.Bool
 
   | And (it,it')
   | Or (it,it') ->
-     check_it loc it BT.Int >>
-     check_it loc it' BT.Int >>
+     check_it loc it BT.Int >>= fun () ->
+     check_it loc it' BT.Int >>= fun () ->
      return BT.Bool
 
   | Not it ->
-     check_it loc it BT.Bool >>
+     check_it loc it BT.Bool >>= fun () ->
      return BT.Bool
 
   | List (it, its) ->
      infer_it loc it >>= fun bt ->
-     check_it loc it bt >>
+     check_it loc it bt >>= fun () ->
      return (List bt)
 
   | Head it ->
@@ -218,7 +222,7 @@ and check_its loc its bt =
   match its with
   | [] -> return ()
   | it :: its -> 
-     check_it loc it bt >>
+     check_it loc it bt >>= fun () ->
      check_its loc its bt
 
 and list_type loc it =
@@ -318,8 +322,6 @@ let make_pointer_ctype ct =
 
 let subtype loc env rt1 rt2 = 
 
-  let open Binders in
-
   let rec check env rt1 rt2 =
     match rt1, rt2 with
     | [], [] -> 
@@ -340,9 +342,11 @@ let subtype loc env rt1 rt2 =
     | ({name; bound = C c1} as b) :: rt1', _ ->
        check (add_var env b) rt1' rt2
     | _, {name = n2; bound = C c2} :: rt2' ->
-       if constraint_holds env c2 
-       then check env rt1 rt2'
-       else fail loc (Return_error (Unsat_constraint (n2, c2)))
+       begin constraint_holds loc env c2 >>= function
+       | true -> check env rt1 rt2'
+       | false ->
+         fail loc (Return_error (Unsat_constraint (n2, c2)))
+       end
     | (r1 :: rt1), (r2 :: rt2) ->
        match r1, r2 with
        | ({name = n1; bound = A t1} as b), {name = n2; bound = A t2} 
@@ -457,7 +461,7 @@ let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : (BT.t option, 'e) m =
       | None -> 
          return (Some bt)
       | Some t -> 
-         check_base_type loc (Some sym) (A bt) (A t) >>
+         check_base_type loc (Some sym) (A bt) (A t) >>= fun () ->
          return (Some t)
     ) mtyp aargs
 
@@ -484,7 +488,7 @@ let infer_object_value loc env ov =
        ( fun () -> fail loc (Unreachable "unspecified pointer value") )
   | M_OVarray items ->
      make_Aargs loc env items >>= fun args_bts ->
-     check_Aargs_typ None args_bts >>
+     check_Aargs_typ None args_bts >>= fun _ ->
      return [makeA name Array]
   | M_OVstruct (sym, fields) ->
      fail loc (Unsupported "todo: struct")
@@ -515,7 +519,7 @@ let infer_value loc env v : (Types.t,'e) m =
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      make_Aargs loc env asyms >>= fun aargs ->
-     check_Aargs_typ (Some bt) aargs >>
+     check_Aargs_typ (Some bt) aargs >>= fun _ ->
      return [makeUA (List bt)]
   | M_Vtuple [] ->
      fail loc (Generic_error !^"empty tuple")
@@ -541,6 +545,8 @@ let pp_unis unis =
 
 
 let call_typ loc_call env decl_typ args =
+    
+  debug_print 1 (action "function call type") >>= fun () ->
 
   let find_resolved env unis = 
     SymMap.foldM
@@ -557,12 +563,12 @@ let call_typ loc_call env decl_typ args =
 
   let rec check_and_refine env args (F ftyp) unis constrs = 
     
-    debug_print 2 (action "checking and refining function call type");
-    debug_print 2 (blank 3 ^^ item "ftyp" (FunctionTypes.pp (F ftyp)));
-    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun (a,_) -> Sym.pp a)));
-    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis));
-    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local));
-    debug_print 2 PPrint.empty;
+    debug_print 2 (action "checking and refining function call type") >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "ftyp" (FunctionTypes.pp (F ftyp))) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun (a,_) -> Sym.pp a))) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+    debug_print 2 PPrint.empty >>= fun () ->
 
 
     match ftyp.arguments with
@@ -584,8 +590,8 @@ let call_typ loc_call env decl_typ args =
                   map (fun (n,lc) -> (n, LC.subst s subst lc)) constrs)
                  constrs substs
             in
-            constraints_hold loc_call env constrs >>
-              return (ret,env)
+            constraints_hold loc_call env constrs >>= fun () ->
+            return (ret,env)
           
        | (sym,loc) :: args -> 
           get_Avar loc env sym >>= fun bt ->
@@ -598,6 +604,7 @@ let call_typ loc_call env decl_typ args =
           get_Avar loc env sym >>= fun t' ->
           if BT.type_equal t' t then 
             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+            let constrs = LogicalConstraints.subst_nameds n sym constrs in
             check_and_refine env args ftyp unis constrs
           else 
             let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
@@ -618,8 +625,10 @@ let call_typ loc_call env decl_typ args =
                (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
                 fail loc_call (Call_error err)) >>= fun unis ->
              let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
+            let constrs = LogicalConstraints.subst_nameds n sym constrs in
              find_resolved env unis >>= fun (_,substs) ->
              let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
+             let constrs = fold_left (fun f (s, s') -> LogicalConstraints.subst_nameds s s' f) constrs substs in
              check_and_refine env args ftyp unis constrs
          end
        end
@@ -629,7 +638,8 @@ let call_typ loc_call env decl_typ args =
        let uni = { spec_name = n; spec = t; resolved = None } in
        let unis' = SymMap.add sym uni unis in
        let ftyp' = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-       check_and_refine env args ftyp' unis' constrs
+       let constrs' = LogicalConstraints.subst_nameds n sym constrs in
+       check_and_refine env args ftyp' unis' constrs'
 
     | {name = n; bound = C t} :: decl_args ->        
        let constrs' = (constrs @ [(n, t)]) in
@@ -646,7 +656,7 @@ let infer_ctor loc ctor (aargs : aargs) =
      fail loc (Unsupported "tuples")
      (* return (List.map (fun ((name,bt),_) -> makeA name bt) aargs) *)
   | M_Carray -> 
-     check_Aargs_typ None aargs >> 
+     check_Aargs_typ None aargs >>= fun _ ->
      return [{name = fresh (); bound = A Array}]
   | M_CivCOMPL
   | M_CivAND
@@ -765,12 +775,14 @@ let binop_typ op =
 
 
 
-let ensure_bad_unreachable env bad = 
-  if is_unreachable env then return () else 
-    match bad with
-    | Undefined (loc,ub) -> fail loc (TypeErrors.Undefined ub)
-    | Unspecified loc -> fail loc TypeErrors.Unspecified
-    | StaticError (loc, (err,pe)) -> fail loc (TypeErrors.StaticError (err,pe))
+let ensure_bad_unreachable loc env bad = 
+  is_unreachable loc env >>= function
+  | true -> return () 
+  | false -> 
+     match bad with
+     | Undefined (loc,ub) -> fail loc (TypeErrors.Undefined ub)
+     | Unspecified loc -> fail loc TypeErrors.Unspecified
+     | StaticError (loc, (err,pe)) -> fail loc (TypeErrors.StaticError (err,pe))
 
 
 let struct_member_type loc env strct field = 
@@ -787,10 +799,10 @@ let struct_member_type loc env strct field =
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
 
-  debug_print 1 (action "inferring pure expression type");
-  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
-  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr pe));
-  debug_print 1 PPrint.empty;
+  debug_print 1 (action "inferring pure expression type") >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr pe)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = update_loc loc annots in
@@ -861,11 +873,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
 
 let rec check_pexpr loc env (e : 'bty mu_pexpr) typ = 
 
-  debug_print 1 (action "checking pure expression type");
-  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ));
-  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
-  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr e));
-  debug_print 1 PPrint.empty;
+  debug_print 1 (action "checking pure expression type") >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ)) >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr e)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
 
 
   let (M_Pexpr (annots, _, e_)) = e in
@@ -874,8 +886,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
   | M_PEif (asym1, e2, e3) ->
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
-     check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
-     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e2 typ >>
+     check_base_type loc1 (Some sym1) (A t1) (A Bool) >>= fun () ->
+     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e2 typ >>= fun _env ->
      check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
@@ -883,11 +895,11 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
          infer_pat loc pat >>= fun (bindings, bt', ploc) ->
-         check_base_type ploc None (A bt') (A bt) >>
+         check_base_type ploc None (A bt') (A bt) >>= fun () ->
          (* check body type against spec *)
          let env' = add_Avars env bindings in
          check_pexpr loc env' pe typ
-       ) pats_es >>
+       ) pats_es >>= fun _ ->
      return env
   | M_PElet (p, e1, e2) ->
      begin match p with 
@@ -896,7 +908,9 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable env bad >> return env
+        | Bad bad -> 
+           ensure_bad_unreachable loc env bad >>= fun () ->
+           return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
@@ -905,7 +919,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable env bad >> return env
+        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
+                     return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
@@ -915,17 +930,18 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      infer_pexpr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable env bad >> return env
+     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
+                  return env
      end        
 
 
 
 let rec infer_expr loc env (e : ('a,'bty) mu_expr) = 
 
-  debug_print 1 (action "inferring expression type");
-  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
-  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e));
-  debug_print 1 PPrint.empty;
+  debug_print 1 (action "inferring expression type") >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
@@ -1045,11 +1061,11 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
 
 let rec check_expr loc env (e : ('a,'bty) mu_expr) typ = 
 
-  debug_print 1 (action "checking expression type");
-  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ));
-  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local));
-  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e));
-  debug_print 1 PPrint.empty;
+  debug_print 1 (action "checking expression type") >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "type" (Types.pp typ)) >>= fun () ->
+  debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 3 (blank 3 ^^ item "expression" (pp_expr e)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
@@ -1057,10 +1073,10 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
   | M_Eif (asym1, e2, e3) ->
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
-     check_base_type loc1 (Some sym1) (A t1) (A Bool) >>
+     check_base_type loc1 (Some sym1) (A t1) (A Bool) >>= fun () ->
      let then_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
      let else_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
-     check_expr loc (add_Cvar env then_constr) e2 typ >>
+     check_expr loc (add_Cvar env then_constr) e2 typ >>= fun _env ->
      check_expr loc (add_Cvar env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
@@ -1068,11 +1084,11 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      mapM (fun (pat,pe) ->
          (* check pattern type against bt *)
          infer_pat loc pat >>= fun (bindings, bt', ploc) ->
-         check_base_type ploc None (A bt') (A bt) >>
+         check_base_type ploc None (A bt') (A bt) >>= fun () ->
          (* check body type against spec *)
          let env' = add_Avars env bindings in
          check_expr loc env' pe typ
-       ) pats_es >>
+       ) pats_es >>= fun _ ->
      return env     
   | M_Epure pe -> 
      check_pexpr loc env pe typ
@@ -1083,7 +1099,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable env bad >> return env
+        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
+                     return env
         end
      | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
@@ -1092,7 +1109,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable env bad >> return env
+        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () -> 
+                     return env
         end        
      | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
@@ -1108,7 +1126,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable env bad >> return env
+        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
+                     return env
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
         let _loc = update_loc loc annots in
@@ -1125,7 +1144,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      infer_expr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable env bad >> return env
+     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
+                  return env
      end
      
 
@@ -1134,19 +1154,19 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
 
 
 let check_proc loc fsym genv body (F decl_typ) = 
-  debug_print 1 (h1 ("Checking procedure " ^ (pps (Sym.pp fsym))));
+  debug_print 1 (h1 ("Checking procedure " ^ (pps (Sym.pp fsym)))) >>= fun () ->
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_expr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (!^(greenb "...checked ok"));
+  debug_print 1 (!^(greenb "...checked ok")) >>= fun () ->
   return ()
 
 let check_fun loc fsym genv body (F decl_typ) = 
-  debug_print 1 (h1 ("Checking function " ^ (pps (Sym.pp fsym))));
+  debug_print 1 (h1 ("Checking function " ^ (pps (Sym.pp fsym)))) >>= fun () ->
   let env = with_fresh_local genv in
   let env = add_vars env decl_typ.arguments in
   check_pexpr loc env body decl_typ.return >>= fun _env ->
-  debug_print 1 (!^(greenb "...checked ok"));
+  debug_print 1 (!^(greenb "...checked ok")) >>= fun () ->
   return ()
 
 
@@ -1177,12 +1197,12 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
   | M_Fun (ret, args, body) ->
      get_fun_decl Loc.unknown genv fsym  >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
-     check_consistent loc decl_typ args (ret_name,ret) >>
+     check_consistent loc decl_typ args (ret_name,ret) >>= fun () ->
      check_fun loc fsym genv body decl_typ
   | M_Proc (loc, ret, args, body) ->
      get_fun_decl loc genv fsym >>= fun decl ->
      let (loc,decl_typ,ret_name) = decl in
-     check_consistent loc decl_typ args (ret_name,ret) >>
+     check_consistent loc decl_typ args (ret_name,ret) >>= fun () ->
      check_proc loc fsym genv body decl_typ
   | M_ProcDecl _
   | M_BuiltinDecl _ -> 
@@ -1269,7 +1289,7 @@ let pp_fun_map_decl funinfo =
 
 
 let print_initial_environment genv = 
-  debug_print 1 (h1 "initial environment");
+  debug_print 1 (h1 "initial environment") >>= fun () ->
   debug_print 1 (Global.pp genv)
 
 
@@ -1278,7 +1298,7 @@ let check mu_file =
   let genv = Global.empty in
   record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
   record_funinfo genv mu_file.mu_funinfo >>= fun genv ->
-  print_initial_environment genv;
+  print_initial_environment genv >>= fun () ->
   check_functions genv mu_file.mu_funs
 
 let check_and_report core_file = 
