@@ -158,7 +158,7 @@ module Local = struct
         if print_constraint_names then typ (Sym.pp sym) (LC.pp t) 
         else (LC.pp t))
 
-  let pp_filtered (do_a,do_l,do_r,do_c) lenv =
+  let pp lenv =
     let (a,l,r,c) = 
       SymMap.fold (fun name b (a,l,r,c) ->
           match b with
@@ -169,16 +169,12 @@ module Local = struct
         ) lenv ([],[],[],[])
     in
     (flow (break 1)
-       (List.concat
-          [ if do_a then [inline_item "computational" (pp_avars a)] else []
-          ; if do_l then [inline_item "logical" (pp_lvars l)] else []
-          ; if do_r then [inline_item "resources" (pp_rvars r)] else []
-          ; if do_c then [inline_item "constraints" (pp_cvars c)] else []
-          ]
-       )
+       [ inline_item "computational" (pp_avars a)
+       ; inline_item "logical" (pp_lvars l)
+       ; inline_item "resources" (pp_rvars r)
+       ; inline_item "constraints" (pp_cvars c)
+       ]
     )
-
-    let pp = pp_filtered (true,true,true,true)
 
     let add_var env b = SymMap.add b.name b.bound env
     let remove_var env sym = SymMap.remove sym env

@@ -92,11 +92,6 @@ module Local : sig
   val empty :
     t
 
-  val pp_filtered : 
-    (bool * bool * bool * bool) ->
-    t -> 
-    PPrint.document
-
   val pp : 
     t -> 
     PPrint.document
