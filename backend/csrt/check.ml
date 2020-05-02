@@ -18,6 +18,7 @@ open FunctionTypes
 open Binders
 open Types
 open Solver
+open Nat_big_num
 
 
 open Global
@@ -49,6 +50,7 @@ let get_vars loc env vars =
 let add_Avar env (name, t) = add_var env {name; bound = A t}
 let add_Cvar env (name, t) = add_var env {name; bound = C t}
 let add_Avars env vars = List.fold_left add_Avar env vars
+let add_Cvars env vars = List.fold_left add_Cvar env vars
 
 
 
@@ -494,20 +496,15 @@ let infer_object_value loc env ov =
      fail loc (Unsupported "todo: struct")
   | M_OVunion _ -> 
      fail loc (Unsupported "todo: union types")
-
   | M_OVfloating iv ->
      fail loc (Unsupported "floats")
-
-let infer_loaded_value loc env (M_LVspecified ov) = 
-  infer_object_value loc env ov
 
 
 let infer_value loc env v : (Types.t,'e) m = 
   match v with
-  | M_Vobject ov ->
+  | M_Vobject ov
+  | M_Vloaded (M_LVspecified ov) ->
      infer_object_value loc env ov
-  | M_Vloaded lv ->
-     infer_loaded_value loc env lv
   | M_Vunit ->
      return [makeUA Unit]
   | M_Vtrue ->
@@ -653,8 +650,16 @@ let call_typ loc_call env decl_typ args =
 let infer_ctor loc ctor (aargs : aargs) = 
   match ctor with
   | M_Ctuple -> 
-     fail loc (Unsupported "tuples")
-     (* return (List.map (fun ((name,bt),_) -> makeA name bt) aargs) *)
+     let name = fresh () in
+     let (names_bts,_) = List.split aargs in
+     let (names,bts) = List.split names_bts in
+     let bt = Tuple bts in
+     let constrs = 
+       mapi (fun i (sym,ibt) -> 
+           makeUC (LC (Nth (of_int i, S (name,bt) %= S (sym,ibt)))))
+         names_bts 
+     in
+     return ([makeA name bt]@constrs)
   | M_Carray -> 
      check_Aargs_typ None aargs >>= fun _ ->
      return [{name = fresh (); bound = A Array}]
@@ -664,14 +669,15 @@ let infer_ctor loc ctor (aargs : aargs) =
   | M_CivXOR -> 
      fail loc (Unsupported "todo: Civ..")
   | M_Cspecified ->
-    begin match aargs with
-    | [((name,bt),_)] -> 
-       return [{name; bound = A bt}]
-    | args ->
-       let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
-                   (List.length args) in
-       fail loc (Generic_error !^err)
-    end
+     let name = fresh () in
+     begin match aargs with
+     | [((sym,bt),_)] -> 
+        return [makeA name bt; makeUC (LC (S (sym,bt) %= S (name,bt)))]
+     | args ->
+        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
+                    (List.length args) in
+        fail loc (Generic_error !^err)
+     end
   | M_Cnil cbt -> fail loc (Unsupported "lists")
   | M_Ccons -> fail loc (Unsupported "lists")
   | M_Cfvfromint -> fail loc (Unsupported "floats")
@@ -809,11 +815,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   match pe_ with
   | M_PEsym sym ->
      get_Avar loc env sym >>= fun bt ->
-     recursively_owned_resources loc env sym >>= fun resource_names ->
-     get_vars loc env resource_names >>= fun (resources,env) ->
-     let constraints = get_constraints_about env sym in
-     let new_constraints = map makeUC constraints in
-     let typ = makeA sym bt::List.map makeU resources@new_constraints in
+     let typ = [makeA sym bt] in
      return (Normal typ, env)
   | M_PEimpl i ->
      get_impl_constant loc env.global i >>= fun t ->
