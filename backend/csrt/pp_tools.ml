@@ -70,11 +70,12 @@ let item item content =
 
 
 
-let print pp = Cerb_backend.Pipeline.run_pp None (pp ^^ hardline)
+let unsafe_print pp = 
+  Cerb_backend.Pipeline.run_pp None (pp ^^ hardline)
 
 
-let debug_print print_level pp =
-  if !debug_level >= print_level then print pp else ()
+let unsafe_debug_print print_level pp =
+  if !debug_level >= print_level then unsafe_print pp
     
 
 
@@ -83,13 +84,17 @@ let pp_pexpr e = nocolour Pp_mucore.Basic.pp_pexpr e
 
 
 
-let warn pp = 
-  print (hardline ^^ blank 3 ^^ 
-           !^(yellowb "[!] Warning:") ^^^ pp ^^ 
-             hardline ^^ hardline )
+let unsafe_warn pp = 
+  unsafe_print (hardline ^^ blank 3 ^^ 
+                  !^(yellowb "[!] Warning:") ^^^ pp ^^ 
+                    hardline ^^ hardline )
 
-let error pp = 
-  print empty;
-  print empty;
-  print (!^(redb "[!] Error") ^/^ pp);
-  exit 1
+let unsafe_error pp : unit = 
+  unsafe_print empty;
+  unsafe_print empty;
+  unsafe_print (!^(redb "[!] Error") ^/^ pp);
+  exit 1 
+
+
+
+
