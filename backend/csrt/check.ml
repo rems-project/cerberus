@@ -105,6 +105,11 @@ module UU = struct
        | Normal rest -> Normal (a :: rest)
        | Bad b -> Bad b
 
+  let pp_ut = function
+    | Normal t -> Types.pp t
+    | Bad u -> !^"bad"
+
+
 end
 
 open UU
@@ -130,116 +135,6 @@ let rec constraints_hold loc env = function
 
 let is_unreachable loc env =
   constraint_holds loc env (LC (Bool false))
-
-
-
-
-
-(* infer base types of index terms *)
-let rec infer_it loc it = 
-  match it with
-  | Num _ -> return BT.Int
-  | Bool _ -> return BT.Bool
-
-  | Add (it,it')
-  | Sub (it,it')
-  | Mul (it,it')
-  | Div (it,it')
-  | Exp (it,it')
-  | Rem_t (it,it')
-  | Rem_f (it,it') ->
-     check_it loc it BT.Int >>= fun () ->
-     check_it loc it' BT.Int >>= fun () ->
-     return BT.Int
-
-  | EQ (it,it')
-  | NE (it,it')
-  | LT (it,it')
-  | GT (it,it')
-  | LE (it,it')
-  | GE (it,it') ->
-     check_it loc it BT.Int >>= fun () ->
-     check_it loc it' BT.Int >>= fun () ->
-     return BT.Bool
-
-  | Null it ->
-     check_it loc it BT.Loc >>= fun () ->
-     return BT.Bool
-
-  | And (it,it')
-  | Or (it,it') ->
-     check_it loc it BT.Int >>= fun () ->
-     check_it loc it' BT.Int >>= fun () ->
-     return BT.Bool
-
-  | Not it ->
-     check_it loc it BT.Bool >>= fun () ->
-     return BT.Bool
-
-  | List (it, its) ->
-     infer_it loc it >>= fun bt ->
-     check_it loc it bt >>= fun () ->
-     return (List bt)
-
-  | Head it ->
-     list_type loc it
-
-  | Tail it ->
-     list_type loc it >>= fun bt ->
-     return (List bt)
-
-  | Tuple (it, its) ->
-     infer_its loc (it :: its) >>= fun bts ->
-     return (Tuple bts)
-
-  | Nth (n, it') ->
-     tuple_type loc it >>= fun bts ->
-     let rec get_nth n bts =
-       let open Nat_big_num in
-       match bts with
-       | [] -> fail loc (Illtyped_it it)
-       | [bt] -> 
-          if equal zero n then return bt 
-          else fail loc (Illtyped_it it)
-       | bt :: bts -> get_nth (pred n) bts
-     in
-     get_nth n bts
-
-  | S (sym, bt) -> return bt
-
-and infer_its loc its = 
-  match its with
-  | [] -> return []
-  | it :: its ->
-     infer_it loc it >>= fun bt ->
-     infer_its loc its >>= fun bts ->
-     return (bt :: bts)
-
-and check_it loc it bt =
-  infer_it loc it >>= fun bt' ->
-  if bt = bt' then return ()
-  else fail loc (Illtyped_it it)
-
-and check_its loc its bt = 
-  match its with
-  | [] -> return ()
-  | it :: its -> 
-     check_it loc it bt >>= fun () ->
-     check_its loc its bt
-
-and list_type loc it =
-  infer_it loc it >>= function
-  | List bt -> return bt
-  | _ -> fail loc (Illtyped_it it)
-
-and tuple_type loc it =
-  infer_it loc it >>= function
-  | Tuple bts -> return bts
-  | _ -> fail loc (Illtyped_it it)
-
-
-
-
 
 
 
@@ -277,7 +172,7 @@ let rec bt_of_core_base_type loc cbt =
 let integerType loc name it =
   integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
   integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
-  let c = makeUC (LC ((S (name, Int) %>= Num min) %& 
+  let c = makeUC (LC ((Num min %<= S (name, Int)) %& 
                       (S (name, Int) %<= Num max))) in
   return ((name,Int), [], [], [c])
 
@@ -392,7 +287,8 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
   let l = makeL pointee_name (Base bt) :: l in
   let r = makeUR (Points (S (pointer_name, Loc), S (pointee_name, bt))) :: r in
   let addr_argument = a :: l @ r @ c in
-  let ret = makeA pointee_name bt :: r in
+  let ret_name = fresh () in
+  let ret = makeA ret_name bt :: r @ [makeUC (LC (S (ret_name, bt) %= (S (pointee_name,bt))))] in
   let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
   return ftyp
 
@@ -808,14 +704,15 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   debug_print 1 (action "inferring pure expression type") >>= fun () ->
   debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr pe)) >>= fun () ->
-  debug_print 1 PPrint.empty >>= fun () ->
 
   let (M_Pexpr (annots, _bty, pe_)) = pe in
   let loc = update_loc loc annots in
-  match pe_ with
+
+  begin match pe_ with
   | M_PEsym sym ->
+     let name = fresh () in
      get_Avar loc env sym >>= fun bt ->
-     let typ = [makeA sym bt] in
+     let typ = [makeA name bt; makeUC (LC (S (sym, bt) %= S (name, bt)))] in
      return (Normal typ, env)
   | M_PEimpl i ->
      get_impl_constant loc env.global i >>= fun t ->
@@ -871,6 +768,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEcase _ -> fail loc (Unreachable "PEcase in inferring position")
   | M_PElet _ -> fail loc (Unreachable "PElet in inferring position")
   | M_PEif _ -> fail loc (Unreachable "PElet in inferring position")
+  end >>= fun (typ,env) ->
+  
+  debug_print 3 (blank 3 ^^ item "interred" (UU.pp_ut typ)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
+  return (typ,env)
 
 
 let rec check_pexpr loc env (e : 'bty mu_pexpr) typ = 
@@ -889,8 +791,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>= fun () ->
-     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e2 typ >>= fun _env ->
-     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool) %= Bool true)))) e3 typ
+     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool))))) e2 typ >>= fun _env ->
+     check_pexpr loc (add_var env (makeUC (LC (Not (S (sym1,Bool)))))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun bt ->
@@ -943,11 +845,11 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
   debug_print 1 (action "inferring expression type") >>= fun () ->
   debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 3 (blank 3 ^^ item "expression" (pp_expr e)) >>= fun () ->
-  debug_print 1 PPrint.empty >>= fun () ->
 
   let (M_Expr (annots, e_)) = e in
   let loc = update_loc loc annots in
-  match e_ with
+
+  begin match e_ with
   | M_Epure pe -> 
      infer_pexpr loc env pe
   | M_Ememop memop ->
@@ -968,7 +870,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         let ret_name = fresh () in
         let ptr_typ = (makeA name bt) :: l @ r @ c in
         (* todo: plug in some other constraint *)
-        let constr = LC (S (ret_name,Bool) %= Bool true) in
+        let constr = LC (S (ret_name,Bool)) in
         let decl_typ = FT.make ptr_typ ([makeA ret_name Bool; makeUC constr]@r) in
         call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
         return (Normal rt, env)
@@ -1059,6 +961,11 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
   | M_Eif _ -> fail loc (Unreachable "Eif in inferring position")
   | M_Ewseq _ -> fail loc (Unsupported "Ewseq in inferring position")
   | M_Esseq _ -> fail loc (Unsupported "Esseq in inferring position")
+  end >>= fun (typ,env) ->
+
+  debug_print 3 (blank 3 ^^ item "interred" (UU.pp_ut typ)) >>= fun () ->
+  debug_print 1 PPrint.empty >>= fun () ->
+  return (typ,env)
 
 
 let rec check_expr loc env (e : ('a,'bty) mu_expr) typ = 
@@ -1076,8 +983,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun t1 -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>= fun () ->
-     let then_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
-     let else_constr = (Sym.fresh (), LC (S (sym1,Bool) %= Bool true)) in
+     let then_constr = (Sym.fresh (), LC (S (sym1,Bool))) in
+     let else_constr = (Sym.fresh (), LC (Not (S (sym1,Bool)))) in
      check_expr loc (add_Cvar env then_constr) e2 typ >>= fun _env ->
      check_expr loc (add_Cvar env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
