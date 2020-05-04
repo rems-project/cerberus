@@ -724,10 +724,10 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
 
       pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
         id pp_params params (pp_id_args true id) param_names;
-      pp "  {| rmovable arg := movable_eq _ _ (%s_unfold" id;
-      List.iter (fun _ -> pp " _") param_names;
-      List.iter (fun _ -> pp " _") ref_names;
-      pp ") |}.@;Next Obligation. done. Qed.\n";
+      pp "  {| rmovable '%a := movable_eq _ _ (%s_unfold" (pp_as_tuple pp_str) ref_names id;
+      List.iter (fun n -> pp " %s" n) param_names;
+      List.iter (fun n -> pp " %s" n) ref_names;
+      pp ") |}.@;Next Obligation. solve_ty_layout_eq. Qed.\n";
 
       (* Generation of the global instances. *)
       let pp_instance_place inst_name type_name =
