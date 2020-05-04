@@ -363,6 +363,7 @@ let rec translate_expr lval goal_ty e =
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
     | AilEarray(b,c_ty,oes)        -> not_impl loc "expr array"
+    | AilEstruct(sym,fs) when lval -> not_impl loc "Struct initializer not supported in lvalue context"
     | AilEstruct(sym,fs)           ->
         let id = sym_to_str sym in
         let fs =
@@ -431,11 +432,16 @@ let rec translate_expr lval goal_ty e =
     | AilEbmc_assume(e)            -> not_impl loc "expr bmc_assume"
     | AilEreg_load(r)              -> not_impl loc "expr reg_load"
     | AilErvalue(e)                ->
-        let layout = layout_of_tc (tc_of e) in
-        let atomic = is_atomic_tc (tc_of e) in
-        let (e, l) = translate_expr true None e in
-        let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
-        (locate gen, l)
+        let res = match e with
+        (* Struct initializers are lvalues for Ail, but rvalues for us. *)
+        | AnnotatedExpression(_, _, _, AilEcompound(_, _, _)) -> translate e
+        | _ ->
+          let layout = layout_of_tc (tc_of e) in
+          let atomic = is_atomic_tc (tc_of e) in
+          let (e, l) = translate_expr true None e in
+          let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
+          (locate gen, l)
+        in res
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
     | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
   in
@@ -542,7 +548,7 @@ let translate_block stmts blocks ret_ty =
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
     let coq_loc = register_loc coq_locs loc in
     let locate e = mkloc e coq_loc in
-    let attrs = collect_rc_attrs attrs in
+    let attrs = List.rev (collect_rc_attrs attrs) in
     let attrs_used = ref false in
     let res =
       match s with
@@ -869,7 +875,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
-          let fn () = Some(block_annot (collect_rc_attrs s_attrs)) in
+          let fn () =
+            Some(block_annot (List.rev (collect_rc_attrs s_attrs)))
+          in
           handle_invalid_annot None fn ()
         in
         SMap.add func_init (annots, stmt) blocks
