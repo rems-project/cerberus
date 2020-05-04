@@ -237,47 +237,38 @@ module Env = struct
     | R t -> return (R t, remove_var env name)
     | t -> return (t, env)
 
+  let filter_vars p env = 
+    SymMap.fold (fun sym t acc -> if p sym t then sym :: acc else acc) 
+      env.local []
+
+
   (* internal only *)
-  let unsafe_owned_resource loc env owner_sym = 
-    let relevant = 
-      SymMap.fold (fun name b acc ->
-          match b with
-          | (R t) -> 
-             begin match RE.owner t with
-             | None -> []
-             | Some owner ->
-                if owner = owner_sym 
-                then (name,t) :: acc
-                else acc
-             end
-          | _ -> acc
-        ) env.local [] 
-    in
-    match relevant with
-    | [] -> return None
-    | [(s,r)] -> return (Some (s,r))
-    | _ -> fail loc (Unreachable "multiple owners of resource")
+  let unsafe_owned_resource env owner_sym = 
+    SymMap.fold (fun name b acc ->
+        match b with
+        | (R t) -> 
+           begin match RE.owner t with
+           | None -> []
+           | Some owner ->
+              if owner = owner_sym 
+              then (name,t) :: acc
+              else acc
+           end
+        | _ -> acc
+      ) env.local [] 
 
   (* returns only name, so safe *)
-  let owned_resource loc env owner_sym = 
-    unsafe_owned_resource loc env owner_sym >>= function
-    | Some (name,_) -> return (Some name)
-    | None -> return None
-
-  let get_owned_resource loc env owner_sym = 
-    unsafe_owned_resource loc env owner_sym >>= function
-    | Some (name,r) -> return (Some ((name,r), remove_var env name))
-    | None -> return None
+  let owned_resources env owner_sym = 
+    let resources = unsafe_owned_resource env owner_sym in
+    map fst resources
 
   (* returns only name, so safe *)
-  let rec recursively_owned_resources loc env owner_sym = 
-    unsafe_owned_resource loc env owner_sym >>= function
-    | Some (res,t) -> 
-       let owned = RE.owned t in
-       mapM (recursively_owned_resources loc env) owned >>= fun owneds ->
-       return (res :: List.concat owneds)
-    | None -> 
-       return []
+  let rec recursively_owned_resources env owner_sym = 
+    let resources = unsafe_owned_resource env owner_sym in
+    let names = List.map fst resources in
+    let owned = List.concat_map (fun (_,t) -> RE.owned t) resources in
+    let owneds = concat_map (recursively_owned_resources env) owned in
+    names @ owneds
 
 
   let get_all_constraints env = 
