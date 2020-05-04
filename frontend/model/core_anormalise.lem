@@ -145,7 +145,7 @@ let letbind_pexpr outer_annots letbinder pexpr ctxt  =
   let (M_Pexpr annots bty _) = pexpr in
   let sym = Symbol.fresh () in
   let asym = Annotated annots bty sym in
-  let pat = M_symbol asym in
+  let pat = M_Symbol asym in
   let body = ctxt asym in
   letbinder outer_annots pat pexpr body
 
@@ -366,7 +366,7 @@ and n_pexpr loc (e : pexpr unit) k =
   | PElet pat e' e'' ->
      n_pexpr e' (fun e' ->
      letbinder_pexpr_in_pexpr annots 
-       (M_normal_pattern (core_to_mu__pattern pat))
+       (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
@@ -510,7 +510,7 @@ and n_pexpr_in_expr loc (e : pexpr unit) (k : mu_pexpr -> mu_expr 'a) : mu_expr 
   | PElet pat e' e'' ->
      n_pexpr_in_expr e' (fun e' ->
      letbinder_pexpr_in_expr annots 
-       (M_normal_pattern (core_to_mu__pattern pat))
+       (M_Pat (core_to_mu__pattern pat))
        e' (n_pexpr_in_expr e'' k))
   | PEif e' e'' e''' ->
      (* this changes the type of the PEif expression *)
@@ -759,7 +759,7 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      )
   | Elet pat e1 e2 ->
      n_pexpr_in_expr e1 (fun e1 ->
-     wrap (M_Elet (M_normal_pattern (core_to_mu__pattern pat) )
+     wrap (M_Elet (M_Pat (core_to_mu__pattern pat) )
              e1 (n_expr e2 k)))
   | Eif e1 e2 e3 ->
      n_pexpr_in_expr_name e1 (fun e1 ->
