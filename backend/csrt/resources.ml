@@ -1,7 +1,7 @@
+open Option
 open List
 open PPrint
 open Pp_tools
-open Except
 module Loc=Locations
 
 
@@ -49,7 +49,7 @@ let unify r1 r2 res =
   | Block (it1, it2), Block (it1', it2') ->
      IndexTerms.unify it1 it1' res >>= fun res ->
      IndexTerms.unify it2 it2' res
-  | _ -> fail_noloc ()
+  | _ -> fail
 
 
 let owner = function

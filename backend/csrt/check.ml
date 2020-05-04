@@ -17,7 +17,6 @@ open Environment
 open FunctionTypes
 open Binders
 open Types
-open Solver
 open Nat_big_num
 
 
@@ -52,8 +51,16 @@ let add_Cvar env (name, t) = add_var env {name; bound = C t}
 let add_Avars env vars = List.fold_left add_Avar env vars
 let add_Cvars env vars = List.fold_left add_Cvar env vars
 
+let get_ALvar loc env var = 
+  tryM (get_Avar loc env var)
+    (get_Lvar loc env var >>= fun (Base bt) -> return bt)
 
 
+let get_Rvars loc env vars = 
+  fold_leftM (fun (acc,env) sym ->
+      get_Rvar loc env sym >>= fun (t,env) ->
+      return (acc@[t], env)
+    ) ([],env) vars
 
 
 
@@ -117,24 +124,30 @@ open UU
 
 
 
-
-
-
-
-
-
-  
-
-let rec constraints_hold loc env = function
-  | [] -> return ()
-  | (n, t) :: constrs ->
-     constraint_holds loc env t >>= function
-     | true -> constraints_hold loc env constrs
-     | false -> fail loc (Call_error (Unsat_constraint (n, t)))
-
-
 let is_unreachable loc env =
-  constraint_holds loc env (LC (Bool false))
+  Solver.constraint_holds loc env (LC (Bool false))
+
+let rec check_constraints_hold loc env = function
+  | [] -> return ()
+  | {name; bound = t} :: constrs ->
+     Solver.constraint_holds loc env t >>= function
+     | true -> check_constraints_hold loc env constrs
+     | false -> fail loc (Call_error (Unsat_constraint (name, t)))
+
+
+let vars_equal_to loc env sym bt = 
+  let similar = 
+    filter_vars (fun sym' t -> 
+      match t with 
+      | A bt' | L (Base bt') -> sym <> sym' && BT.type_equal bt bt'
+      | _ -> false
+    ) env 
+  in
+  filter_mapM (fun sym' -> 
+      Solver.constraint_holds loc env (LC (S (sym,bt) %= S (sym',bt))) >>= fun holds ->
+      return (if holds then Some sym' else None)
+    ) similar
+
 
 
 
@@ -239,7 +252,7 @@ let subtype loc env rt1 rt2 =
     | ({name; bound = C c1} as b) :: rt1', _ ->
        check (add_var env b) rt1' rt2
     | _, {name = n2; bound = C c2} :: rt2' ->
-       begin constraint_holds loc env c2 >>= function
+       begin Solver.constraint_holds loc env c2 >>= function
        | true -> check env rt1 rt2'
        | false ->
          fail loc (Return_error (Unsat_constraint (n2, c2)))
@@ -324,10 +337,14 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
   return ftyp
 
 
+(* maybe replace this function: this does not look at symbols equal to
+   sym for ownership currently *)
 let is_uninitialised_pointer loc env sym = 
   get_Avar loc env sym >>= fun bt ->
-  get_owned_resource loc env sym >>= function
-  | Some ((_, Block _),_) -> return (bt = Loc)
+  let resource_names = owned_resources env sym in
+  get_Rvars loc env resource_names >>= fun (resources,_) ->
+  match resources with
+  | [Block _] -> return (bt = Loc)
   | _ -> return false
 
 
@@ -427,7 +444,7 @@ let infer_value loc env v : (Types.t,'e) m =
 
 
 let pp_unis unis = 
-  let pp_entry (sym, {spec_name; spec; resolved}) =
+  let pp_entry (sym, {spec; resolved}) =
     match resolved with
     | Some res -> 
        (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
@@ -439,108 +456,107 @@ let pp_unis unis =
 
 let call_typ loc_call env decl_typ args =
     
+  let open Alrc in
+
+  let ftyp = ft_from_function_type decl_typ in
+
+
   debug_print 1 (action "function call type") >>= fun () ->
 
-  let find_resolved env unis = 
-    SymMap.foldM
-      (fun usym ({spec_name : Sym.t; spec; resolved} as uni) (unresolved,substs) ->
-        match resolved with
-        | None ->
-           return (SymMap.add usym uni unresolved, substs)
-        | Some sym -> 
-           let (LS.Base bt) = spec in
-           (* check_it loc_call (S (sym, bt)) bt >> *)
-           return (unresolved, (usym, sym) :: substs)
-      ) unis (SymMap.empty, [])
-  in
-
-  let rec check_and_refine env args (F ftyp) unis constrs = 
-    
+  let print ftyp args env unis = 
     debug_print 2 (action "checking and refining function call type") >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "ftyp" (FunctionTypes.pp (F ftyp))) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.pp_ft ftyp)) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun (a,_) -> Sym.pp a))) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-    debug_print 2 PPrint.empty >>= fun () ->
-
-
-    match ftyp.arguments with
-    | [] -> 
-       begin match args with
-       | [] -> 
-          find_resolved env unis >>= fun (unresolved,substs) ->
-          if not (SymMap.is_empty unresolved) then
-            let (usym, {spec_name : Sym.t; spec; resolved}) =
-              SymMap.find_first (fun _ -> true) unresolved in
-            fail loc_call (Call_error (Unconstrained_l (spec_name,spec)))
-          else
-            let ret = 
-              fold_left (fun ret (s, subst) -> Types.subst s subst ret)
-                ftyp.return substs 
-            in
-            let constrs = 
-              fold_left (fun constrs (s, subst) -> 
-                  map (fun (n,lc) -> (n, LC.subst s subst lc)) constrs)
-                 constrs substs
-            in
-            constraints_hold loc_call env constrs >>= fun () ->
-            return (ret,env)
-          
-       | (sym,loc) :: args -> 
-          get_Avar loc env sym >>= fun bt ->
-          fail loc (Call_error (Surplus_A (sym, bt)))
-       end
-
-    | {name = n; bound =  A t} :: decl_args ->
-       begin match args with
-       | (sym,loc) :: args ->
-          get_Avar loc env sym >>= fun t' ->
-          if BT.type_equal t' t then 
-            let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-            let constrs = LogicalConstraints.subst_nameds n sym constrs in
-            check_and_refine env args ftyp unis constrs
-          else 
-            let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
-            fail loc (Call_error msm)
-       | [] ->
-          fail loc_call (Call_error (Missing_A (n, t)))
-       end
-
-    | {name = n; bound = R t} :: decl_args -> 
-       begin match RE.owner t with
-       | None -> fail loc_call (Call_error (Missing_R (n, t)))
-       | Some owner ->
-          owned_resource loc_call env owner >>= begin function
-          | None -> fail loc_call (Call_error (Missing_R (n, t)))
-          | Some sym -> 
-             get_Rvar loc_call env sym >>= fun (t',env) ->
-             tryM (RE.unify t t' unis)
-               (let err = Mismatch {mname = Some sym; has = R t'; expected = R t} in
-                fail loc_call (Call_error err)) >>= fun unis ->
-             let ftyp = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-            let constrs = LogicalConstraints.subst_nameds n sym constrs in
-             find_resolved env unis >>= fun (_,substs) ->
-             let ftyp = fold_left (fun f (s, s') -> FunctionTypes.subst s s' f) ftyp substs in
-             let constrs = fold_left (fun f (s, s') -> LogicalConstraints.subst_nameds s s' f) constrs substs in
-             check_and_refine env args ftyp unis constrs
-         end
-       end
-
-    | {name = n; bound = L t} :: decl_args -> 
-       let sym = Sym.fresh () in
-       let uni = { spec_name = n; spec = t; resolved = None } in
-       let unis' = SymMap.add sym uni unis in
-       let ftyp' = FunctionTypes.subst n sym (F {ftyp with arguments = decl_args}) in
-       let constrs' = LogicalConstraints.subst_nameds n sym constrs in
-       check_and_refine env args ftyp' unis' constrs'
-
-    | {name = n; bound = C t} :: decl_args ->        
-       let constrs' = (constrs @ [(n, t)]) in
-       check_and_refine env args (F {ftyp with arguments = decl_args}) unis constrs'
-
+    debug_print 2 PPrint.empty
   in
 
-  check_and_refine env args decl_typ SymMap.empty []
+  let unis = SymMap.empty in
+
+  let rec do_a args ftyp = 
+    print ftyp args env unis >>= fun () ->
+    match args, ftyp.args.a with
+    | [], [] -> return (ftyp,args)
+    | ((sym,loc) :: args), ({name = n; bound = t} :: decl_args) ->
+       get_Avar loc env sym >>= fun t' ->
+       if BT.type_equal t' t then 
+         let ftyp = subst_ft n sym {ftyp with args = {ftyp.args with a = decl_args}} in
+         do_a args ftyp
+       else 
+         let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
+         fail loc (Call_error msm)
+    | (sym,loc) :: _, [] -> 
+       get_Avar loc env sym >>= fun bt ->
+       fail loc (Call_error (Surplus_A (sym, bt)))
+    | [], {name = n; bound =  t} :: _ ->
+       fail loc_call (Call_error (Missing_A (n, t)))
+  in
+
+  do_a args ftyp >>= fun (ftyp,args) ->
+
+  let rec do_l ftyp unis = 
+    print ftyp args env unis >>= fun () ->
+    match ftyp.args.l with
+    | [] -> return (ftyp, unis)
+    | {name = n; bound = t} :: decl_args ->
+       let sym = Sym.fresh () in
+       let uni = { spec = t; resolved = None } in
+       let unis = SymMap.add sym uni unis in
+       let ftyp = Alrc.subst_ft n sym {ftyp with args = {ftyp.args with l = decl_args}} in
+       do_l ftyp unis
+  in
+  do_l ftyp unis >>= fun (ftyp,unis) -> 
+
+  let rec do_r ftyp env unis = 
+    print ftyp args env unis >>= fun () ->
+    match ftyp.args.r with
+    | [] -> return (ftyp,env,unis)
+    | {name = n; bound = resource} :: decl_args -> 
+       begin match RE.owner resource with
+       | None -> fail loc_call (Call_error (Missing_R (n, resource)))
+       | Some owner ->
+          get_ALvar loc_call env owner >>= fun bt ->
+          vars_equal_to loc_call env owner bt >>= fun equal_to_owner ->
+          let owneds = concat_map (fun o -> map (fun r -> (o,r)) (owned_resources env o))
+                         (owner :: equal_to_owner) in
+          let rec try_resources = function
+            | [] -> 
+               fail loc_call (Call_error (Missing_R (n, resource)))
+            | (o,r) :: owned_resources ->
+               get_Rvar loc_call env r >>= fun (resource',env) ->
+               let resource' = RE.subst o owner resource' in
+               unsafe_print (action ("trying resource " ^ (pps (RE.pp resource'))));
+               match RE.unify resource resource' unis with
+               | None -> try_resources owned_resources
+               | Some unis ->
+                  debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->
+                  let ftyp = Alrc.subst_ft n r {ftyp with args = {ftyp.args with r = decl_args}} in
+                  find_resolved env unis >>= fun (_,substs) ->
+                  let ftyp = fold_left (fun f (s, s') -> Alrc.subst_ft s s' f) ftyp substs in
+                  do_r ftyp env unis
+          in
+          try_resources owneds
+       end
+  in
+
+  do_r ftyp env unis >>= fun (ftyp,env,unis) ->
+
+  debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->    
+
+  find_resolved env unis >>= fun (unresolved,substs) ->
+  if not (SymMap.is_empty unresolved) then
+    let (usym, {spec; resolved}) =
+      SymMap.find_first (fun _ -> true) unresolved in
+    fail loc_call (Call_error (Unconstrained_l (usym,spec)))
+  else
+
+    let ftyp = fold_left (fun ret (s, subst) -> Alrc.subst_ft s subst ftyp) 
+                 ftyp substs in
+
+    check_constraints_hold loc_call env ftyp.args.c >>= fun () ->
+    return (Alrc.to_type ftyp.ret,env)    
+
 
 
 let infer_ctor loc ctor (aargs : aargs) = 
@@ -898,7 +914,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         fail loc (Unsupported "todo: Alloc")
      | M_Kill (_is_dynamic, asym) -> 
         let (sym,loc) = aunpack loc asym in
-        recursively_owned_resources loc env sym >>= fun resources ->
+        let resources = recursively_owned_resources env sym in
         let env = remove_vars env resources in
         return (Normal [makeUA Unit], env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 

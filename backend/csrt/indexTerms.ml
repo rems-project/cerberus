@@ -1,6 +1,6 @@
 open Utils
+open Option
 open List
-open Except
 open PPrint
 open Pp_tools
 module Loc=Locations
@@ -209,18 +209,18 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
 
   | S (sym, _), S (it',_) ->
      begin match SymMap.find_opt sym res with
-     | None -> fail_noloc ()
+     | None -> fail
      | Some uni ->
         match uni.resolved with
         | Some it when it = it' -> return res 
-        | Some it -> fail_noloc ()
+        | Some it -> fail
         | None -> 
            let uni = { uni with resolved = Some it' } in
            return (SymMap.add sym uni res)
      end
 
   | _, _ ->
-     fail_noloc ()
+     fail
 
 and unify_list its its' res =
   match its, its' with
@@ -229,5 +229,5 @@ and unify_list its its' res =
      unify it it' res >>= fun res ->
      unify_list its its' res
   | _, _ ->
-     fail_noloc ()
+     fail
 

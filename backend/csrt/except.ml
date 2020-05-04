@@ -1,3 +1,4 @@
+open Utils
 open Cerb_frontend
 open Exception
 open Pp_tools
@@ -29,9 +30,14 @@ let to_bool = to_bool
 let mapM : ('a -> ('b,'e) m) -> 'a list -> ('b list, 'e) m = 
   except_mapM
 
-let concatmapM f l = 
+let concat_mapM f l = 
   seq (List.map f l) >>= fun xs ->
   return (List.concat xs)
+
+let filter_mapM f l = 
+  seq (List.map f l) >>= fun xs ->
+  return (filter_map (fun x -> x) xs)
+
 
 let fold_leftM (f : 'a -> 'b -> ('c,'e) m) (a : 'a) (bs : 'b list) =
   List.fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs

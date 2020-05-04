@@ -85,9 +85,7 @@ let pp_pexpr e = nocolour Pp_mucore.Basic.pp_pexpr e
 
 
 let unsafe_warn pp = 
-  unsafe_print (hardline ^^ blank 3 ^^ 
-                  !^(yellowb "[!] Warning:") ^^^ pp ^^ 
-                    hardline ^^ hardline )
+  unsafe_print (blank 3 ^^ !^(yellowb "[!] Warning:") ^^^ pp)
 
 let unsafe_error pp : unit = 
   unsafe_print empty;
