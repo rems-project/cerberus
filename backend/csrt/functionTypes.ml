@@ -1,13 +1,13 @@
 open PPrint
 open Pp_tools
 
-type t = F of {arguments: Types.t; return: Types.t}
+type t = {arguments: Types.t; return: Types.t}
 
-let subst sym sym' (F t) = 
-  F { arguments = Types.subst sym sym' t.arguments;
-      return = Types.subst sym sym' t.return }
+let subst sym sym' ft = 
+  { arguments = Types.subst sym sym' ft.arguments;
+    return = Types.subst sym sym' ft.return }
 
-let pp (F t) = flow (break 1) [Types.pp t.arguments;arrow;Types.pp t.return]
+let pp ft = flow (break 1) [Types.pp ft.arguments;arrow;Types.pp ft.return]
 
 
-let make arguments return = F {arguments; return}
+let make arguments return = {arguments; return}

@@ -1,6 +1,8 @@
 open Binders
 open VarTypes
 
+module Types = struct
+
 type alrc = {
     a : (BaseTypes.t Binders.t) list;
     l : (LogicalSorts.t Binders.t) list;
@@ -36,17 +38,33 @@ let subst alrc sym with_it =
     c = List.map (Binders.subst LogicalConstraints.subst sym with_it) alrc.c; }
   
 
+end
+
+module FunctionTypes = struct
+
+open Types
 
 
-type ft = {args : alrc; ret : alrc}
+type t = {arguments2 : alrc; return2 : alrc}
 
-let subst_ft sym with_it ft = 
-  { args = subst ft.args sym with_it; 
-    ret = subst ft.ret sym with_it }
+let subst sym with_it ft = 
+  { arguments2 = subst ft.arguments2 sym with_it; 
+    return2 = subst ft.return2 sym with_it }
 
-let pp_ft ft = 
-  FunctionTypes.pp (FunctionTypes.make (to_type ft.args) (to_type ft.ret))
+let pp ft = 
+  FunctionTypes.pp 
+    (FunctionTypes.make (to_type ft.arguments2) (to_type ft.return2))
 
-let ft_from_function_type (FunctionTypes.F {arguments;return}) = 
-  { args = from_type arguments; ret = from_type return }
+let from_function_type ft = 
+  let open FunctionTypes in
+  let {arguments;return} = ft in
+  { arguments2 = from_type arguments; 
+    return2 = from_type return }
 
+let to_function_type ft = 
+  let open FunctionTypes in
+  let {arguments2;return2} = ft in
+  { arguments = to_type arguments2; 
+    return = to_type return2 }
+
+end
