@@ -712,12 +712,7 @@ let translate_block stmts blocks ret_ty =
             in
             let layout = layout_of false ty in
             let atomic = is_atomic ty in
-            let goal_ty =
-              let ty = op_type_of Location_ocaml.unknown ty in
-              match ty with
-              | OpInt(_) -> Some(ty)
-              | _        -> None
-            in
+            let goal_ty = op_type_opt Location_ocaml.unknown ty in
             let fn e =
               let var = noloc (Var(Some(id), false)) in
               noloc (Assign(atomic, layout, var, e, stmt))
