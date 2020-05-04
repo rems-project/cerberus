@@ -230,6 +230,16 @@ let rec function_decls decls =
       function_decls decls
 
 let global_fun_decls = ref []
+let global_tag_defs = ref []
+
+let tag_def_data : loc -> string -> (string * op_type) list = fun loc id ->
+  let fs =
+    match List.find (fun (s,_) -> sym_to_str s = id) !global_tag_defs with
+    | (_, (_, Ctype.StructDef(fs,_)))
+    | (_, (_, Ctype.UnionDef(fs)   )) -> fs
+  in
+  let fn (s, (_, _, c_ty)) = (id_to_str s, op_type_of loc c_ty) in
+  List.map fn fs
 
 let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
     fun ?loc default f a ->
@@ -365,19 +375,22 @@ let rec translate_expr lval goal_ty e =
     | AilEarray(b,c_ty,oes)        -> not_impl loc "expr array"
     | AilEstruct(sym,fs) when lval -> not_impl loc "Struct initializer not supported in lvalue context"
     | AilEstruct(sym,fs)           ->
-        let id = sym_to_str sym in
+        let st_id = sym_to_str sym in
+        (* Map of types for the fields. *)
+        let map = try tag_def_data loc st_id with Not_found -> assert false in
         let fs =
           let fn (id, eo) = Option.map (fun e -> (id_to_str id, e)) eo in
           List.filter_map fn fs
         in
         let (fs, l) =
           let fn (id, e) (fs, l) =
-            let (e, l_e) = translate e in
+            let ty = try List.assoc id map with Not_found -> assert false in
+            let (e, l_e) = translate_expr lval (Some(ty)) e in
             ((id, e) :: fs, l_e @ l)
           in
           List.fold_right fn fs ([], [])
         in
-        (locate (Struct(id, fs)), l)
+        (locate (Struct(st_id, fs)), l)
     | AilEunion(sym,id,eo)         -> not_impl loc "expr union"
     | AilEcompound(q,c_ty,e)       -> translate e (* FIXME? *)
     | AilEmemberof(e,id)           ->
@@ -763,6 +776,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Give global access to declarations. *)
   let fun_decls = function_decls decls in
   global_fun_decls := fun_decls;
+
+  (* Give global access to tag declarations *)
+  global_tag_defs := tag_defs;
 
   (* Get the global variables. *)
   let global_vars =
