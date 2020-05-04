@@ -7,32 +7,11 @@ open PPrint
 let debug_level = ref 0
 
 
-
-
-let pp_num n = !^(Nat_big_num.to_string n)
-
-(* ugly *)
-let nocolour f x = 
-  let before = !Colour.do_colour in
-  Colour.do_colour := false;
-  let pp = f x in
-  Colour.do_colour := before;
-  pp
-
 let pps = Pp_utils.to_plain_pretty_string
 
-let eq = equals
-let ne = langle ^^ rangle
-let lt = langle
-let gt = rangle
-let le = langle ^^ equals
-let ge = rangle ^^ equals
 let arrow = minus ^^ rangle
 
-
 let (^^^) = Pp_prelude.(^^^)
-let lines l = align (PPrint.separate (break 1) l)
-
 
 let bold = pp_ansi_format [Bold]
 let underline c s = string s ^/^ repeat (String.length s) (char c)
@@ -78,6 +57,19 @@ let unsafe_debug_print print_level pp =
   if !debug_level >= print_level then unsafe_print pp
     
 
+
+
+
+(* ugly *)
+let nocolour f x = 
+  let before = !Colour.do_colour in
+  Colour.do_colour := false;
+  let pp = f x in
+  Colour.do_colour := before;
+  pp
+
+
+let pp_num n = !^(Nat_big_num.to_string n)
 
 let pp_expr e = nocolour Pp_mucore.Basic.pp_expr e
 let pp_pexpr e = nocolour Pp_mucore.Basic.pp_pexpr e
