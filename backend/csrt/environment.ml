@@ -125,8 +125,7 @@ module Global = struct
     ; (1, pp_name_map genv.names)
     ]
 
-  let pp genv = 
-    lines (map snd (pp_items genv))
+  let pp genv = separate (break 1) (map snd (pp_items genv))
 
 end
 

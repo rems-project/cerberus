@@ -65,6 +65,6 @@ let rec tryMs (m : ('a,'e1) exceptM) (ms : (('a,'e2) exceptM) list) =
 
 
 
-let print pp = unsafe_print pp; return ()
+let print (pp : PPrint.document) : (unit,'e) m = unsafe_print pp; return ()
 let debug_print l pp = unsafe_debug_print l pp; return ()
 let warn pp = unsafe_warn pp; return ()

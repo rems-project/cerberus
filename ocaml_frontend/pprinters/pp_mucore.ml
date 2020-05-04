@@ -390,9 +390,9 @@ let rec pp_pattern (M_Pattern (_, pat)) =
       pp_ctor ctor  ^^ P.parens (comma_list pp_pattern pats)
 
 let pp_sym_or_pattern = function
-  | M_symbol (Annotated (_annots, _bty, sym)) ->
+  | M_Symbol (Annotated (_annots, _bty, sym)) ->
      pp_symbol sym
-  | M_normal_pattern pat ->
+  | M_Pat pat ->
      pp_pattern pat
 
 
