@@ -8,7 +8,7 @@ let pp pp_bound {name;bound} =
 
 
 
-let subst sym with_it b = 
+let subst bound_subst sym with_it b = 
   { name = Sym.subst sym with_it b.name;
-    bound = VarTypes.subst sym with_it b.bound }
+    bound = bound_subst sym with_it b.bound }
 
