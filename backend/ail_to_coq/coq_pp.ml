@@ -722,8 +722,15 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       pp "@]@;)%%I.@]@;";
       pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
+      pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
+        id pp_params params (pp_id_args true id) param_names;
+      pp "  {| rmovable arg := movable_eq _ _ (%s_unfold" id;
+      List.iter (fun _ -> pp " _") param_names;
+      List.iter (fun _ -> pp " _") ref_names;
+      pp ") |}.@;Next Obligation. done. Qed.\n";
+
       (* Generation of the global instances. *)
-      let pp_instance inst_name type_name =
+      let pp_instance_place inst_name type_name =
         pp "@;Global Instance %s_%s_inst l_ β_ %a%a:@;" id inst_name
           pp_params params pp_params annot.st_refined_by;
         pp "  %s l_ β_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
@@ -732,15 +739,21 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
         List.iter (fun _ -> pp " _") param_names;
         List.iter (fun _ -> pp " _") ref_names; pp "))."
       in
-      pp_instance "simplify_hyp_place" "SimplifyHypPlace";
-      pp_instance "simplify_goal_place" "SimplifyGoalPlace";
-
-      pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
-        id pp_params params (pp_id_args true id) param_names;
-      pp "  {| rmovable arg := movable_eq _ _ (%s_unfold" id;
-      List.iter (fun _ -> pp " _") param_names;
-      List.iter (fun _ -> pp " _") ref_names;
-      pp ") |}.@;Next Obligation. done. Qed."
+      let pp_instance_val inst_name type_name =
+        pp "@;Global Program Instance %s_%s_inst v_ %a%a:@;" id inst_name
+          pp_params params pp_params annot.st_refined_by;
+        pp "  %s v_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
+          (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
+        pp "  λ T, i2p (%s_eq v_ _ _ (%s_unfold" inst_name id;
+        List.iter (fun _ -> pp " _") param_names;
+        List.iter (fun _ -> pp " _") ref_names; pp ") T _).";
+        pp "@;Next Obligation. done. Qed."
+      in
+      pp_instance_place "simplify_hyp_place" "SimplifyHypPlace";
+      pp_instance_place "simplify_goal_place" "SimplifyGoalPlace";
+      pp "\n";
+      pp_instance_val "simplify_hyp_val" "SimplifyHypVal";
+      pp_instance_val "simplify_goal_val" "SimplifyGoalVal"
     end else begin
       (* Definition of the [rtype]. *)
       pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
