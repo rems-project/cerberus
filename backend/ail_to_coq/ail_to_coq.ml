@@ -548,7 +548,7 @@ let translate_block stmts blocks ret_ty =
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
     let coq_loc = register_loc coq_locs loc in
     let locate e = mkloc e coq_loc in
-    let attrs = collect_rc_attrs attrs in
+    let attrs = List.rev (collect_rc_attrs attrs) in
     let attrs_used = ref false in
     let res =
       match s with
@@ -875,7 +875,9 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
         let annots =
-          let fn () = Some(block_annot (collect_rc_attrs s_attrs)) in
+          let fn () =
+            Some(block_annot (List.rev (collect_rc_attrs s_attrs)))
+          in
           handle_invalid_annot None fn ()
         in
         SMap.add func_init (annots, stmt) blocks
