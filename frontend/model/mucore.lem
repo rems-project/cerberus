@@ -93,8 +93,8 @@ and mu_pattern =
  | M_Pattern of list annot * mu_pattern_
 
 type mu_sym_or_pattern 'bty = 
-  | M_symbol of annotated symbol 'bty
-  | M_normal_pattern of mu_pattern
+  | M_Symbol of annotated symbol 'bty
+  | M_Pat of mu_pattern
 
 
 type mu_pexpr_ 'bty =  (* Core pure expressions *)

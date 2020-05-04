@@ -461,9 +461,7 @@ let call_typ loc_call env ftyp args =
     
   let open Alrc.Types in
   let open Alrc.FunctionTypes in
-
   let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
-
 
   debug_print 1 (action "function call type") >>= fun () ->
 
@@ -482,11 +480,10 @@ let call_typ loc_call env ftyp args =
     print ftyp args env unis >>= fun () ->
     match args, ftyp.arguments2.a with
     | [], [] -> return (ftyp,args)
-    | ((sym,loc) :: args), ({name = n; bound = t} :: decl_args) ->
+    | ((sym,loc) :: args), ({name = n; bound = t} :: fargs) ->
        get_Avar loc env sym >>= fun t' ->
        if BT.type_equal t' t then 
-         let ftyp = subst n sym {ftyp with arguments2 = {ftyp.arguments2 with a = decl_args}} in
-         do_a args ftyp
+         do_a args (subst n sym (updateAargs ftyp fargs))
        else 
          let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
          fail loc (Call_error msm)
@@ -496,18 +493,17 @@ let call_typ loc_call env ftyp args =
     | [], {name = n; bound =  t} :: _ ->
        fail loc_call (Call_error (Missing_A (n, t)))
   in
-
   do_a args ftyp >>= fun (ftyp,args) ->
 
   let rec do_l ftyp unis = 
     print ftyp args env unis >>= fun () ->
     match ftyp.arguments2.l with
     | [] -> return (ftyp, unis)
-    | {name = n; bound = t} :: decl_args ->
+    | {name = n; bound = t} :: fargs ->
        let sym = Sym.fresh () in
        let uni = { spec = t; resolved = None } in
        let unis = SymMap.add sym uni unis in
-       let ftyp = subst n sym {ftyp with arguments2 = {ftyp.arguments2 with l = decl_args}} in
+       let ftyp = subst n sym (updateLargs ftyp fargs) in
        do_l ftyp unis
   in
   do_l ftyp unis >>= fun (ftyp,unis) -> 
@@ -535,7 +531,7 @@ let call_typ loc_call env ftyp args =
                | None -> try_resources owned_resources
                | Some unis ->
                   debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->
-                  let ftyp = subst n r {ftyp with arguments2 = {ftyp.arguments2 with r = decl_args}} in
+                  let ftyp = subst n r (updateRargs ftyp decl_args) in
                   find_resolved env unis >>= fun (_,substs) ->
                   let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
                   do_r ftyp env unis
@@ -543,10 +539,7 @@ let call_typ loc_call env ftyp args =
           try_resources owneds
        end
   in
-
   do_r ftyp env unis >>= fun (ftyp,env,unis) ->
-
-  debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->    
 
   find_resolved env unis >>= fun (unresolved,substs) ->
   if not (SymMap.is_empty unresolved) then
@@ -697,7 +690,7 @@ let binop_typ op =
 
 let ensure_bad_unreachable loc env bad = 
   is_unreachable loc env >>= function
-  | true -> return () 
+  | true -> return env
   | false -> 
      match bad with
      | Undefined (loc,ub) -> fail loc (TypeErrors.Undefined ub)
@@ -801,9 +794,9 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
   debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr e)) >>= fun () ->
   debug_print 1 PPrint.empty >>= fun () ->
 
-
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = update_loc loc annots in
+
   match e_ with
   | M_PEif (asym1, e2, e3) ->
      let sym1, loc1 = aunpack loc asym1 in
@@ -825,26 +818,23 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      return env
   | M_PElet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (annots, _, newname)) ->
+     | M_Symbol (Annotated (annots, _, newname)) ->
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> 
-           ensure_bad_unreachable loc env bad >>= fun () ->
-           return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
+     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
+     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
         fail loc (Unsupported "todo: ctor pattern")
      end
@@ -852,9 +842,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      infer_pexpr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                  return env
-     end        
+     | Bad bad -> ensure_bad_unreachable loc env bad
+     end
 
 
 
@@ -1021,25 +1010,23 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      check_pexpr loc env pe typ
   | M_Elet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (annots, _, newname)) ->
+     | M_Symbol (Annotated (annots, _, newname)) ->
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
+     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () -> 
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
+     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
         fail loc (Unsupported "todo: ctor pattern")
      end
@@ -1053,8 +1040,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
         let _loc = update_loc loc annots in
@@ -1071,8 +1057,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      infer_expr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                  return env
+     | Bad bad -> ensure_bad_unreachable loc env bad
      end
      
 
