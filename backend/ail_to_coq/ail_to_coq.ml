@@ -363,6 +363,7 @@ let rec translate_expr lval goal_ty e =
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
     | AilEarray(b,c_ty,oes)        -> not_impl loc "expr array"
+    | AilEstruct(sym,fs) when lval -> not_impl loc "Struct initializer not supported in lvalue context"
     | AilEstruct(sym,fs)           ->
         let id = sym_to_str sym in
         let fs =
@@ -431,11 +432,16 @@ let rec translate_expr lval goal_ty e =
     | AilEbmc_assume(e)            -> not_impl loc "expr bmc_assume"
     | AilEreg_load(r)              -> not_impl loc "expr reg_load"
     | AilErvalue(e)                ->
-        let layout = layout_of_tc (tc_of e) in
-        let atomic = is_atomic_tc (tc_of e) in
-        let (e, l) = translate_expr true None e in
-        let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
-        (locate gen, l)
+        let res = match e with
+        (* Struct initializers are lvalues for Ail, but rvalues for us. *)
+        | AnnotatedExpression(_, _, _, AilEcompound(_, _, _)) -> translate e
+        | _ ->
+          let layout = layout_of_tc (tc_of e) in
+          let atomic = is_atomic_tc (tc_of e) in
+          let (e, l) = translate_expr true None e in
+          let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
+          (locate gen, l)
+        in res
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
     | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
   in

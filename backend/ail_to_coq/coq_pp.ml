@@ -178,7 +178,7 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
         pp "@[@[<hov 2>StructInit struct_%s [" id;
         let fn i (id, e) =
           let s = if i = List.length fs - 1 then "" else " ;" in
-          pp "@;(%S, %a)%s" id pp_expr e s
+          pp "@;(%S, %a : expr)%s" id pp_expr e s
         in
         List.iteri fn fs;
         pp "@]@;]@]"
