@@ -128,12 +128,6 @@ module Env : sig
     Sym.t ->
     t
 
-  val get_var : 
-    Loc.t ->
-    t ->
-    Sym.t ->
-    (VarTypes.t * t, Loc.t * TypeErrors.type_error) Except.m
-
   val get_Avar : 
     Loc.t ->
     t ->
@@ -158,24 +152,27 @@ module Env : sig
     Sym.t ->
     (LogicalConstraints.t, Loc.t * TypeErrors.type_error) Except.m
 
-  val owned_resource :
+  val get_var : 
     Loc.t ->
     t ->
     Sym.t ->
-    (Sym.t option, Loc.t * TypeErrors.type_error) Except.m
+    (VarTypes.t * t, Loc.t * TypeErrors.type_error) Except.m
 
-  val get_owned_resource :
-    Loc.t ->
+  val filter_vars : 
+    (Sym.t -> VarTypes.t -> bool) ->
+    t ->
+    Sym.t list
+
+  val owned_resources :
     t ->
     Sym.t ->
-    (((Sym.t*Resources.t) * t) option, Loc.t * TypeErrors.type_error) Except.m
+    Sym.t list
 
 
   val recursively_owned_resources :
-    Loc.t ->
     t ->
     Sym.t ->
-    (Sym.t list, Loc.t * TypeErrors.type_error) Except.m
+    Sym.t list
 
 
   val get_all_constraints :

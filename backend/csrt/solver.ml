@@ -131,8 +131,8 @@ let z3_check loc ctxt solver constrs : (Z3.Solver.status, (Loc.t * TypeErrors.t)
     else 
       try 
         Z3.Solver.add solver constrs;
-        unsafe_warn !^(string_of_int (List.length constrs) ^ " constrs length");
-        unsafe_warn !^(string_of_int (Z3.Solver.get_num_assertions solver) ^ " assertions in solver");
+        unsafe_debug_print 3 (blank 3 ^^ parens !^(string_of_int (List.length constrs) ^ " constrs length"));
+        unsafe_debug_print 3 (blank 3 ^^ parens (!^(string_of_int (Z3.Solver.get_num_assertions solver) ^ " assertions in solver")));
         let result = Z3.Solver.check solver [] in
         Z3.Log.close ();
         return result
@@ -148,7 +148,7 @@ let constraint_holds loc env c =
   debug_print 1 (action "checking constraint") >>= fun () ->
   debug_print 1 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 1 (blank 3 ^^ item "constraint" (LogicalConstraints.pp c)) >>= fun () ->
-  let ctxt = Z3.mk_context [("trace","true");("model","true")] in
+  let ctxt = Z3.mk_context [("model","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: (Env.get_all_constraints env)) in
   mapM (fun (LC it) -> of_index_term loc ctxt it) lcs >>= fun constrs ->
