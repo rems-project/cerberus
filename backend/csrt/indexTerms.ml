@@ -69,12 +69,12 @@ let rec pp = function
   | Rem_t (it1,it2) -> parens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
   | Rem_f (it1,it2) -> parens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
 
-  | EQ (o1,o2) -> parens (pp o1 ^^^ eq ^^^ pp o2)
-  | NE (o1,o2) -> parens (pp o1 ^^^ ne ^^^ pp o2)
-  | LT (o1,o2) -> parens (pp o1 ^^^ lt ^^^ pp o2)
-  | GT (o1,o2) -> parens (pp o1 ^^^ gt ^^^ pp o2)
-  | LE (o1,o2) -> parens (pp o1 ^^^ le ^^^ pp o2)
-  | GE (o1,o2) -> parens (pp o1 ^^^ ge ^^^ pp o2)
+  | EQ (o1,o2) -> parens (pp o1 ^^^ equals ^^^ pp o2)
+  | NE (o1,o2) -> parens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
+  | LT (o1,o2) -> parens (pp o1 ^^^ langle ^^^ pp o2)
+  | GT (o1,o2) -> parens (pp o1 ^^^ rangle ^^^ pp o2)
+  | LE (o1,o2) -> parens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
+  | GE (o1,o2) -> parens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
 
   | Null o1 -> parens (!^ "null" ^^^ pp o1)
   | And (o1,o2) -> parens (pp o1 ^^^ ampersand ^^^ pp o2)

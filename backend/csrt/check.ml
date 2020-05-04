@@ -129,10 +129,17 @@ let is_unreachable loc env =
 
 let rec check_constraints_hold loc env = function
   | [] -> return ()
-  | {name; bound = t} :: constrs ->
-     Solver.constraint_holds loc env t >>= function
-     | true -> check_constraints_hold loc env constrs
-     | false -> fail loc (Call_error (Unsat_constraint (name, t)))
+  | {name; bound = c} :: constrs ->
+     debug_print 2 (action "checking constraint") >>= fun () ->
+     debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+     debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp c)) >>= fun () ->
+     Solver.constraint_holds loc env c >>= function
+     | true -> 
+        debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) >>= fun () ->
+        check_constraints_hold loc env constrs
+     | false -> 
+        debug_print 2 (blank 3 ^^ !^(greenb "constraint does not hold")) >>= fun () ->
+        fail loc (Call_error (Unsat_constraint (name, c)))
 
 
 let vars_equal_to loc env sym bt = 
@@ -289,8 +296,7 @@ let make_create_type loc ct : (FunctionTypes.t,'e) m =
   let name = fresh () in
   size_of_ctype loc ct >>= fun size ->
   let rt = [makeA name Loc; makeUR (Block (S (name, Loc), Num size))] in
-  let ftyp = FunctionTypes.F {arguments; return = rt} in
-  return ftyp
+  return {arguments; return = rt}
 
 
 let make_load_type loc ct : (FunctionTypes.t,'e) m = 
@@ -302,8 +308,7 @@ let make_load_type loc ct : (FunctionTypes.t,'e) m =
   let addr_argument = a :: l @ r @ c in
   let ret_name = fresh () in
   let ret = makeA ret_name bt :: r @ [makeUC (LC (S (ret_name, bt) %= (S (pointee_name,bt))))] in
-  let ftyp = FunctionTypes.F {arguments = addr_argument; return = ret} in
-  return ftyp
+  return {arguments = addr_argument; return = ret}
 
 
 let make_load_field_type loc ct access : (FunctionTypes.t,'e) m = 
@@ -320,8 +325,7 @@ let make_initial_store_type loc ct =
     let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] in
     return (value,ret)
   end >>= fun (value,ret) ->
-  let ftyp = FunctionTypes.F {arguments = p @ value; return = ret} in
-  return ftyp
+  return {arguments = p @ value; return = ret}
 
 
 let make_store_type loc ct : (FunctionTypes.t,'e) m = 
@@ -333,8 +337,7 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
     let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] in
     return (value,ret)
   end >>= fun (value,ret) ->
-  let ftyp = FunctionTypes.F {arguments = address @ value; return = ret} in
-  return ftyp
+  return {arguments = address @ value; return = ret}
 
 
 (* maybe replace this function: this does not look at symbols equal to
@@ -454,18 +457,17 @@ let pp_unis unis =
 
 
 
-let call_typ loc_call env decl_typ args =
+let call_typ loc_call env ftyp args =
     
-  let open Alrc in
-
-  let ftyp = ft_from_function_type decl_typ in
-
+  let open Alrc.Types in
+  let open Alrc.FunctionTypes in
+  let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
 
   debug_print 1 (action "function call type") >>= fun () ->
 
   let print ftyp args env unis = 
     debug_print 2 (action "checking and refining function call type") >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.pp_ft ftyp)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun (a,_) -> Sym.pp a))) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
@@ -476,13 +478,12 @@ let call_typ loc_call env decl_typ args =
 
   let rec do_a args ftyp = 
     print ftyp args env unis >>= fun () ->
-    match args, ftyp.args.a with
+    match args, ftyp.arguments2.a with
     | [], [] -> return (ftyp,args)
-    | ((sym,loc) :: args), ({name = n; bound = t} :: decl_args) ->
+    | ((sym,loc) :: args), ({name = n; bound = t} :: fargs) ->
        get_Avar loc env sym >>= fun t' ->
        if BT.type_equal t' t then 
-         let ftyp = subst_ft n sym {ftyp with args = {ftyp.args with a = decl_args}} in
-         do_a args ftyp
+         do_a args (subst n sym (updateAargs ftyp fargs))
        else 
          let msm = Mismatch {mname = Some sym; has = A t'; expected = A t} in
          fail loc (Call_error msm)
@@ -492,25 +493,24 @@ let call_typ loc_call env decl_typ args =
     | [], {name = n; bound =  t} :: _ ->
        fail loc_call (Call_error (Missing_A (n, t)))
   in
-
   do_a args ftyp >>= fun (ftyp,args) ->
 
   let rec do_l ftyp unis = 
     print ftyp args env unis >>= fun () ->
-    match ftyp.args.l with
+    match ftyp.arguments2.l with
     | [] -> return (ftyp, unis)
-    | {name = n; bound = t} :: decl_args ->
+    | {name = n; bound = t} :: fargs ->
        let sym = Sym.fresh () in
        let uni = { spec = t; resolved = None } in
        let unis = SymMap.add sym uni unis in
-       let ftyp = Alrc.subst_ft n sym {ftyp with args = {ftyp.args with l = decl_args}} in
+       let ftyp = subst n sym (updateLargs ftyp fargs) in
        do_l ftyp unis
   in
   do_l ftyp unis >>= fun (ftyp,unis) -> 
 
   let rec do_r ftyp env unis = 
     print ftyp args env unis >>= fun () ->
-    match ftyp.args.r with
+    match ftyp.arguments2.r with
     | [] -> return (ftyp,env,unis)
     | {name = n; bound = resource} :: decl_args -> 
        begin match RE.owner resource with
@@ -526,23 +526,20 @@ let call_typ loc_call env decl_typ args =
             | (o,r) :: owned_resources ->
                get_Rvar loc_call env r >>= fun (resource',env) ->
                let resource' = RE.subst o owner resource' in
-               unsafe_print (action ("trying resource " ^ (pps (RE.pp resource'))));
+               debug_print 3 (action ("trying resource" ^ pps (RE.pp resource'))) >>= fun () ->
                match RE.unify resource resource' unis with
                | None -> try_resources owned_resources
                | Some unis ->
                   debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->
-                  let ftyp = Alrc.subst_ft n r {ftyp with args = {ftyp.args with r = decl_args}} in
+                  let ftyp = subst n r (updateRargs ftyp decl_args) in
                   find_resolved env unis >>= fun (_,substs) ->
-                  let ftyp = fold_left (fun f (s, s') -> Alrc.subst_ft s s' f) ftyp substs in
+                  let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
                   do_r ftyp env unis
           in
           try_resources owneds
        end
   in
-
   do_r ftyp env unis >>= fun (ftyp,env,unis) ->
-
-  debug_print 2 (blank 3 ^^ item "** unis" (pp_unis unis)) >>= fun () ->    
 
   find_resolved env unis >>= fun (unresolved,substs) ->
   if not (SymMap.is_empty unresolved) then
@@ -550,12 +547,10 @@ let call_typ loc_call env decl_typ args =
       SymMap.find_first (fun _ -> true) unresolved in
     fail loc_call (Call_error (Unconstrained_l (usym,spec)))
   else
-
-    let ftyp = fold_left (fun ret (s, subst) -> Alrc.subst_ft s subst ftyp) 
-                 ftyp substs in
-
-    check_constraints_hold loc_call env ftyp.args.c >>= fun () ->
-    return (Alrc.to_type ftyp.ret,env)    
+    let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
+    check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
+    let ftyp = to_function_type ftyp in
+    return (ftyp.return,env)
 
 
 
@@ -687,15 +682,15 @@ let binop_typ op =
   in
   let a1, a2, ar = fresh (), fresh (), fresh () in
   let constr = LC ((vc (S (a1,at1)) (S (a2,at2))) %= S (ar,rt)) in
-  F {arguments = [makeA a1 at1; makeA a2 at2];
-     return = [makeA ar rt; makeUC constr ]}
+  {arguments = [makeA a1 at1; makeA a2 at2];
+   return = [makeA ar rt; makeUC constr ]}
   
 
 
 
 let ensure_bad_unreachable loc env bad = 
   is_unreachable loc env >>= function
-  | true -> return () 
+  | true -> return env
   | false -> 
      match bad with
      | Undefined (loc,ub) -> fail loc (TypeErrors.Undefined ub)
@@ -757,7 +752,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEnot asym ->
      let a, ar = fresh (), fresh () in
      let ret = [makeA ar Bool; makeUC (LC (S (ar,Bool) %= Not (S (a,Bool))))] in
-     let decl_typ = F {arguments = [makeA a Bool]; return = ret} in
+     let decl_typ = {arguments = [makeA a Bool]; return = ret} in
      call_typ loc env decl_typ [aunpack loc asym] >>= fun (rt, env) ->
      return (Normal rt, env)
   | M_PEop (op,asym1,asym2) ->
@@ -799,9 +794,9 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
   debug_print 3 (blank 3 ^^ item "expression" (pp_pexpr e)) >>= fun () ->
   debug_print 1 PPrint.empty >>= fun () ->
 
-
   let (M_Pexpr (annots, _, e_)) = e in
   let loc = update_loc loc annots in
+
   match e_ with
   | M_PEif (asym1, e2, e3) ->
      let sym1, loc1 = aunpack loc asym1 in
@@ -823,26 +818,23 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      return env
   | M_PElet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (annots, _, newname)) ->
+     | M_Symbol (Annotated (annots, _, newname)) ->
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> 
-           ensure_bad_unreachable loc env bad >>= fun () ->
-           return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
+     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_pexpr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
+     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
         fail loc (Unsupported "todo: ctor pattern")
      end
@@ -850,9 +842,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      infer_pexpr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                  return env
-     end        
+     | Bad bad -> ensure_bad_unreachable loc env bad
+     end
 
 
 
@@ -1019,25 +1010,23 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      check_pexpr loc env pe typ
   | M_Elet (p, e1, e2) ->
      begin match p with 
-     | M_symbol (Annotated (annots, _, newname)) ->
+     | M_Symbol (Annotated (annots, _, newname)) ->
         let loc = update_loc loc annots in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end
-     | M_normal_pattern (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
+     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
+     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
         let loc = update_loc loc annots in
         let newname = sym_or_fresh mnewname in
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () -> 
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
-     | M_normal_pattern (M_Pattern (annots, M_CaseCtor _)) ->
+     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
         fail loc (Unsupported "todo: ctor pattern")
      end
@@ -1051,8 +1040,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> check_expr loc (add_vars env (rename newname rt)) e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                     return env
+        | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
         let _loc = update_loc loc annots in
@@ -1069,8 +1057,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      infer_expr loc env e >>= fun (rt, env) ->
      begin match rt with
      | Normal rt -> subtype loc env rt typ
-     | Bad bad -> ensure_bad_unreachable loc env bad >>= fun () ->
-                  return env
+     | Bad bad -> ensure_bad_unreachable loc env bad
      end
      
 
@@ -1078,19 +1065,19 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
 
 
 
-let check_proc loc fsym genv body (F decl_typ) = 
+let check_proc loc fsym genv body ftyp = 
   debug_print 1 (h1 ("Checking procedure " ^ (pps (Sym.pp fsym)))) >>= fun () ->
   let env = with_fresh_local genv in
-  let env = add_vars env decl_typ.arguments in
-  check_expr loc env body decl_typ.return >>= fun _env ->
+  let env = add_vars env ftyp.arguments in
+  check_expr loc env body ftyp.return >>= fun _env ->
   debug_print 1 (!^(greenb "...checked ok")) >>= fun () ->
   return ()
 
-let check_fun loc fsym genv body (F decl_typ) = 
+let check_fun loc fsym genv body ftyp = 
   debug_print 1 (h1 ("Checking function " ^ (pps (Sym.pp fsym)))) >>= fun () ->
   let env = with_fresh_local genv in
-  let env = add_vars env decl_typ.arguments in
-  check_pexpr loc env body decl_typ.return >>= fun _env ->
+  let env = add_vars env ftyp.arguments in
+  check_pexpr loc env body ftyp.return >>= fun _env ->
   debug_print 1 (!^(greenb "...checked ok")) >>= fun () ->
   return ()
 
@@ -1102,33 +1089,32 @@ let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
     bt_of_core_base_type loc cbt >>= fun bt ->
     return (makeA sym bt)
   in
-  let check_consistent loc decl args ret = 
+  let check_consistent loc ftyp args ret = 
     mapM (binding_of_core_base_type loc) args >>= fun args ->
     binding_of_core_base_type loc ret >>= fun ret ->
-    let (F decl_typ) = decl in
     let _ = forget args in
-    if BT.types_equal (forget decl_typ.arguments) (forget args) &&
-         BT.types_equal (forget decl_typ.return) (forget [ret])
+    if BT.types_equal (forget ftyp.arguments) (forget args) &&
+         BT.types_equal (forget ftyp.return) (forget [ret])
     then return ()
     else 
-      let defn = F {arguments = args; return = [ret]} in
+      let defn = {arguments = args; return = [ret]} in
       let err = 
         Printf.sprintf "Function definition inconsistent. Should be %s, is %s"
-          (pps (FunctionTypes.pp decl)) (pps (FunctionTypes.pp defn))
+          (pps (FunctionTypes.pp ftyp)) (pps (FunctionTypes.pp defn))
       in
       fail loc (Generic_error !^err)
   in
   match fn with
   | M_Fun (ret, args, body) ->
      get_fun_decl Loc.unknown genv fsym  >>= fun decl ->
-     let (loc,decl_typ,ret_name) = decl in
-     check_consistent loc decl_typ args (ret_name,ret) >>= fun () ->
-     check_fun loc fsym genv body decl_typ
+     let (loc,ftyp,ret_name) = decl in
+     check_consistent loc ftyp args (ret_name,ret) >>= fun () ->
+     check_fun loc fsym genv body ftyp
   | M_Proc (loc, ret, args, body) ->
      get_fun_decl loc genv fsym >>= fun decl ->
-     let (loc,decl_typ,ret_name) = decl in
-     check_consistent loc decl_typ args (ret_name,ret) >>= fun () ->
-     check_proc loc fsym genv body decl_typ
+     let (loc,ftyp,ret_name) = decl in
+     check_consistent loc ftyp args (ret_name,ret) >>= fun () ->
+     check_proc loc fsym genv body ftyp
   | M_ProcDecl _
   | M_BuiltinDecl _ -> 
      return ()
@@ -1151,8 +1137,8 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) genv =
     mapM make_arg_t args >>= fun args_types ->
     let arguments = concat args_types in
     ctype loc ret_name ret_ctype >>= fun ret ->
-    let ft = F {arguments; return = ret} in
-    return (add_fun_decl genv sym (loc, ft, ret_name))
+    let ftyp = {arguments; return = ret} in
+    return (add_fun_decl genv sym (loc, ftyp, ret_name))
 
 let record_funinfo genv funinfo = 
   pmap_foldM record_fun funinfo genv
@@ -1169,8 +1155,8 @@ let record_impl impl impl_decl genv =
          bt_of_core_base_type Loc.unknown a_bt >>= fun a_bt ->
          return (makeA sym a_bt)) args >>= fun args_ts ->
      bt_of_core_base_type Loc.unknown bt >>= fun bt ->
-     let decl_typ = F {arguments = args_ts; return = [makeUA bt]} in
-     return (add_impl_fun_decl genv impl decl_typ)
+     let ftyp = {arguments = args_ts; return = [makeUA bt]} in
+     return (add_impl_fun_decl genv impl ftyp)
                         
 
 
