@@ -91,3 +91,8 @@ type t =
   ; global_vars : (string * type_expr option) list
   ; structs     : (string * struct_decl) list
   ; functions   : (string * func_def_or_decl) list }
+
+let trusted : func_def -> bool = fun def ->
+  match def.func_annot with
+  | None        -> assert false (* Should not be reachable at call site. *)
+  | Some(annot) -> annot.fa_trust_me
