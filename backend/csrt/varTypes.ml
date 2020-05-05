@@ -39,7 +39,7 @@ type kind =
   | Resource
   | Constraint
 
-let kind_of_t = function
+let kind = function
   | A _ -> Argument
   | L _ -> Logical
   | R _ -> Resource

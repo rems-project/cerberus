@@ -12,3 +12,7 @@ let subst bound_subst sym with_it b =
   { name = Sym.subst sym with_it b.name;
     bound = bound_subst sym with_it b.bound }
 
+
+
+
+let to_tuple {name;bound} = (name,bound)

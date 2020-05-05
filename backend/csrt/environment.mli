@@ -87,6 +87,11 @@ end
 
 module Local : sig
 
+  type open_struct = {
+      struct_type: Sym.t;
+      field_names: Sym.t -> Sym.t;
+    }
+
   type t
 
   val empty :
@@ -132,13 +137,13 @@ module Env : sig
     Loc.t ->
     t ->
     Sym.t ->
-    (BaseTypes.t, Loc.t * TypeErrors.type_error) Except.m
+    (BaseTypes.t * t, Loc.t * TypeErrors.type_error) Except.m
 
   val get_Lvar : 
     Loc.t ->
     t ->
     Sym.t ->
-    (LogicalSorts.t, Loc.t * TypeErrors.type_error) Except.m
+    (LogicalSorts.t * t, Loc.t * TypeErrors.type_error) Except.m
 
   val get_Rvar : 
     Loc.t ->
@@ -150,7 +155,7 @@ module Env : sig
     Loc.t ->
     t ->
     Sym.t ->
-    (LogicalConstraints.t, Loc.t * TypeErrors.type_error) Except.m
+    (LogicalConstraints.t * t, Loc.t * TypeErrors.type_error) Except.m
 
   val get_var : 
     Loc.t ->
@@ -184,5 +189,16 @@ module Env : sig
     t ->
     Sym.t ->
     LogicalConstraints.t list
+
+  val add_open_struct :
+    t ->
+    Sym.t ->
+    Local.open_struct ->
+    t
+
+  val get_and_remove_open_struct :
+    t ->
+    Sym.t ->
+    (Local.open_struct * t) option
 
 end

@@ -1,7 +1,7 @@
 open List
 open PPrint
 open Pp_tools
-module Loc=Location
+module Loc=Locations
 
 
 type field_access = {pointer: Sym.t; strct: Sym.t; field: Sym.t}
