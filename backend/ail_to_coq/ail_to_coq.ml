@@ -506,7 +506,7 @@ let translate_bool_expr then_goto else_goto blocks e =
   let rec translate then_goto else_goto blocks be =
     match be with
     | BE_leaf(e)      ->
-        let fn e = noloc (If(e, then_goto, else_goto)) in
+        let fn e = mkloc (If(e, then_goto, else_goto)) e.loc in
         (trans_bool_expr e fn, blocks)
     | BE_neg(be)      ->
         translate else_goto then_goto blocks be
