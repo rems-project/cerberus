@@ -2,7 +2,6 @@ open BaseTypes
 open Cerb_frontend
 open IndexTerms
 open LogicalConstraints
-open Environment
 open PPrint
 open Pp_tools
 open TypeErrors
@@ -141,10 +140,10 @@ let z3_check loc ctxt solver constrs : (Z3.Solver.status, (Loc.t * TypeErrors.t)
 
 let negate (LC c) = (LC (Not c))
 
-let constraint_holds loc env c = 
+let constraint_holds loc constraints c = 
   let ctxt = Z3.mk_context [("model","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
-  let lcs = (negate c :: (Env.get_all_constraints env)) in
+  let lcs = (negate c :: constraints) in
   mapM (fun (LC it) -> of_index_term loc ctxt it) lcs >>= fun constrs ->
   debug_print 3 (action "checking satisfiability of constraints") >>= fun () ->
   debug_print 3 (blank 3 ^^ item "constraints" (flow_map (break 1) LogicalConstraints.pp lcs)) >>= fun () ->

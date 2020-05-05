@@ -131,11 +131,21 @@ end
 
 module Local = struct
 
-  type lenv = VarTypes.t SymMap.t
+  type open_struct = {
+      struct_type: Sym.t;
+      field_names: Sym.t -> Sym.t;
+    }
+
+  type lenv = 
+    { vars: VarTypes.t SymMap.t; 
+      open_structs : open_struct SymMap.t
+    }
 
   type t = lenv
 
-  let empty = SymMap.empty
+  let empty = 
+    { vars = SymMap.empty;
+      open_structs = SymMap.empty }
 
   let pp_avars avars = 
     pp_env_list (Some brackets) avars
@@ -165,7 +175,7 @@ module Local = struct
           | L t -> (a,((name,t) :: l),r,c)
           | R t -> (a,l,((name,t) :: r),c)
           | C t -> (a,l,r,((name,t) :: c))
-        ) lenv ([],[],[],[])
+        ) lenv.vars ([],[],[],[])
     in
     (flow (break 1)
        [ inline_item "computational" (pp_avars a)
@@ -175,8 +185,22 @@ module Local = struct
        ]
     )
 
-    let add_var env b = SymMap.add b.name b.bound env
-    let remove_var env sym = SymMap.remove sym env
+
+    let add_var env b = 
+      { env with vars = SymMap.add b.name b.bound env.vars} 
+
+    let remove_var env sym = 
+      { env with vars = SymMap.remove sym env.vars} 
+
+    let add_open_struct env sym open_struct = 
+      { env with open_structs = SymMap.add sym open_struct env.open_structs }
+
+    let get_and_remove_open_struct env sym = 
+      match SymMap.find_opt sym env.open_structs with
+      | Some open_struct -> 
+         let env = { env with open_structs = SymMap.remove sym env.open_structs } in
+         Some (open_struct, env)
+      | None -> None
 
 end
 
@@ -197,48 +221,35 @@ module Env = struct
   let add_var env b = {env with local = Local.add_var env.local b}
   let remove_var env sym = { env with local = Local.remove_var env.local sym }
 
-  let internal_get_var (loc : Loc.t) (env: t) (name: Sym.t) =
-    lookup_sym loc env.local name >>= function
-    | A t -> return (`A t)
-    | L t -> return (`L t)
-    | R t -> return (`R (t, remove_var env name))
-    | C t -> return (`C t)
-
-
-  let kind = function
-    | `A _ -> Argument
-    | `L _ -> Logical
-    | `R _ -> Resource
-    | `C _ -> Constraint
+  let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
+    lookup_sym loc env.local.vars name >>= function
+    | R t -> return (R t, remove_var env name)
+    | A (Struct s) -> return (A (Struct s), remove_var env name)
+    | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    internal_get_var loc env sym >>= function
-    | `A t -> return t
-    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
+    get_var loc env sym >>= function
+    | (A t, env) -> return (t, env)
+    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
 
   let get_Lvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    internal_get_var loc env sym >>= function
-    | `L t -> return t
-    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
+    get_var loc env sym >>= function
+    | (L t, env) -> return (t, env)
+    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
 
   let get_Rvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    internal_get_var loc env sym >>= function
-    | `R (t, env) -> return (t, env)
-    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
+    get_var loc env sym >>= function
+    | (R t, env) -> return (t, env)
+    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
 
   let get_Cvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    internal_get_var loc env sym >>= function
-    | `C t -> return t
-    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
-
-  let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
-    lookup_sym loc env.local name >>= function
-    | R t -> return (R t, remove_var env name)
-    | t -> return (t, env)
+    get_var loc env sym >>= function
+    | (C t, env) -> return (t, env)
+    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
 
   let filter_vars p env = 
     SymMap.fold (fun sym t acc -> if p sym t then sym :: acc else acc) 
-      env.local []
+      env.local.vars []
 
 
   (* internal only *)
@@ -254,7 +265,7 @@ module Env = struct
               else acc
            end
         | _ -> acc
-      ) env.local [] 
+      ) env.local.vars [] 
 
   (* returns only name, so safe *)
   let owned_resources env owner_sym = 
@@ -272,7 +283,7 @@ module Env = struct
 
   let get_all_constraints env = 
     SymMap.fold (fun _ b acc -> match b with C c -> c :: acc | _ -> acc)
-      env.local []
+      env.local.vars []
 
   let get_constraints_about env sym =
     SymMap.fold (fun _ b acc -> 
@@ -280,7 +291,18 @@ module Env = struct
         | C c -> if SymSet.mem sym (LC.syms_in c) then c :: acc else acc
         | _ -> acc
       ) 
-      env.local []
+      env.local.vars []
+
+
+  let add_open_struct env sym open_struct =
+    { env with local = Local.add_open_struct env.local sym open_struct }
+
+  let get_and_remove_open_struct env sym = 
+    match Local.get_and_remove_open_struct env.local sym with
+    | Some (open_struct,lenv) -> 
+       let env = { env with local = lenv } in
+       Some (open_struct, env)
+    | None -> None
 
 end
 
