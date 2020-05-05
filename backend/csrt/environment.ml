@@ -19,10 +19,6 @@ module LS = LogicalSorts
 
 
 
-let print_resource_names = false
-let print_constraint_names = false
-
-
 module ImplMap = 
   Map.Make
     (struct 
@@ -147,34 +143,19 @@ module Local = struct
     { vars = SymMap.empty;
       open_structs = SymMap.empty }
 
-  let pp_avars avars = 
-    pp_env_list (Some brackets) avars
-      (fun (sym, t) -> typ (Sym.pp sym) (BT.pp t))
-
-  let pp_lvars lvars = 
-    pp_env_list (Some brackets) lvars
-      (fun (sym, t) -> typ (Sym.pp sym) (LS.pp t))
-
-  let pp_rvars rvars = 
-    pp_env_list (Some brackets) rvars
-      (fun (sym, t) -> 
-        if print_resource_names then typ (Sym.pp sym) (RE.pp t) 
-        else (RE.pp t))
-
-  let pp_cvars cvars = 
-    pp_env_list (Some brackets) cvars
-      (fun (sym, t) -> 
-        if print_constraint_names then typ (Sym.pp sym) (LC.pp t) 
-        else (LC.pp t))
+  let pp_avars avars = pp_env_list (Some brackets) avars (Binders.pp BT.pp)
+  let pp_lvars avars = pp_env_list (Some brackets) avars (Binders.pp LS.pp)
+  let pp_rvars avars = pp_env_list (Some brackets) avars (Binders.pp RE.pp)
+  let pp_cvars avars = pp_env_list (Some brackets) avars (Binders.pp LC.pp)
 
   let pp lenv =
     let (a,l,r,c) = 
       SymMap.fold (fun name b (a,l,r,c) ->
           match b with
-          | A t -> (((name,t) :: a),l,r,c)
-          | L t -> (a,((name,t) :: l),r,c)
-          | R t -> (a,l,((name,t) :: r),c)
-          | C t -> (a,l,r,((name,t) :: c))
+          | A t -> (({name;bound = t} :: a),l,r,c)
+          | L t -> (a,({name; bound= t} :: l),r,c)
+          | R t -> (a,l,({name; bound = t} :: r),c)
+          | C t -> (a,l,r,({name; bound = t} :: c))
         ) lenv.vars ([],[],[],[])
     in
     (flow (break 1)

@@ -16,14 +16,13 @@ open Except
 let sym_to_symbol ctxt (Symbol.Symbol (_digest, num, _mstring)) =
   Z3.Symbol.mk_int ctxt num
 
+(* maybe fix Loc *)
 let bt_to_sort loc ctxt bt = 
   match bt with
   | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt "unit")
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
   | Int -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
-  | Loc -> 
-     warn !^"Loc base type" >>= fun () ->
-     return (Z3.Arithmetic.Integer.mk_sort ctxt)
+  | Loc -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
   | Array
   | List _
   | Tuple _

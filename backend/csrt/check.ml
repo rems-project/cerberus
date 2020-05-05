@@ -46,10 +46,10 @@ let get_vars loc env vars =
       return (acc@[t], env)
     ) ([],env) vars
 
-let add_Avar env (name, t) = add_var env {name; bound = A t}
-let add_Lvar env (name, t) = add_var env {name; bound = L t}
-let add_Rvar env (name, t) = add_var env {name; bound = R t}
-let add_Cvar env (name, t) = add_var env {name; bound = C t}
+let add_Avar env b = add_var env {name = b.name; bound = A b.bound}
+let add_Lvar env b = add_var env {name = b.name; bound = L b.bound}
+let add_Rvar env b = add_var env {name = b.name; bound = R b.bound}
+let add_Cvar env b = add_var env {name = b.name; bound = C b.bound}
 let add_Avars env vars = List.fold_left add_Avar env vars
 let add_Lvars env vars = List.fold_left add_Lvar env vars
 let add_Rvars env vars = List.fold_left add_Rvar env vars
@@ -277,9 +277,9 @@ let rec make_Aargs loc env asyms =
 let make_Aargs_bind_lrc loc env rt =
   let open Alrc.Types in
   let rt = from_type rt in
-  let env = add_Lvars env (List.map to_tuple rt.l) in
-  let env = add_Rvars env (List.map to_tuple rt.r) in
-  let env = add_Cvars env (List.map to_tuple rt.c) in
+  let env = add_Lvars env rt.l in
+  let env = add_Rvars env rt.r in
+  let env = add_Cvars env rt.c in
   let (rt : aargs) = (List.map (fun b -> (b,loc))) rt.a in
   (rt,env)
 
@@ -341,7 +341,7 @@ let find_next_matching_resource errf loc env unis specs =
   | [] -> return `Done
   | spec :: specs -> 
      begin match RE.owner spec.bound with
-     | None -> fail loc (Call_error (Missing_R (spec.name, spec.bound)))
+     | None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
      | Some owner ->
         (* TODO: unsafe env *)
         get_ALvar loc env owner >>= fun (bt,_env) ->
@@ -350,7 +350,7 @@ let find_next_matching_resource errf loc env unis specs =
                        (owner :: equal_to_owner) in
         let rec try_resources = function
           | [] -> 
-             fail loc (Call_error (Missing_R (spec.name, spec.bound)))
+             fail loc (errf (Missing_R (spec.name, spec.bound)))
           | (o,r) :: owned_resources ->
              get_Rvar loc env r >>= fun (resource',env) ->
              let resource' = RE.subst o owner resource' in
@@ -373,7 +373,7 @@ let subtype loc_ret env args rtyp =
 
   let open Alrc.Types in
   let rtyp = Alrc.Types.from_type rtyp in
-  debug_print 1 (action "function call type") >>= fun () ->
+  debug_print 1 (action "function return type") >>= fun () ->
 
   let print rtyp args env unis = 
     debug_print 2 (action "function return subtype check") >>= fun () ->
@@ -574,7 +574,6 @@ let call_typ loc_call env ftyp (args : aargs) =
   let open Alrc.Types in
   let open Alrc.FunctionTypes in
   let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
-
   debug_print 1 (action "function call type") >>= fun () ->
 
   let print ftyp args env unis = 
@@ -590,7 +589,7 @@ let call_typ loc_call env ftyp (args : aargs) =
 
   let rec do_a (args : aargs) ftyp = 
     print ftyp args env unis >>= fun () ->
-    match_next_a (fun e -> Return_error e) loc_call args ftyp.arguments2.a >>= function
+    match_next_a (fun e -> Call_error e) loc_call args ftyp.arguments2.a >>= function
     | `Done -> return (ftyp, args)
     | `Match ((n,sym),(args,fargs)) ->
        do_a args (subst n sym (updateAargs ftyp fargs))
@@ -608,7 +607,7 @@ let call_typ loc_call env ftyp (args : aargs) =
 
   let rec do_r ftyp env unis = 
     print ftyp args env unis >>= fun () ->
-    find_next_matching_resource (fun e -> Return_error e) 
+    find_next_matching_resource (fun e -> Call_error e) 
       loc_call env unis ftyp.arguments2.r >>= function
     | `Done -> return (ftyp,env,unis)
     | `Next (decl_args,env,unis,substs) -> 
@@ -1101,10 +1100,10 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun (t1,env) -> 
      check_base_type loc1 (Some sym1) (A t1) (A Bool) >>= fun () ->
-     let then_constr = (Sym.fresh (), LC (S (sym1,Bool))) in
-     let else_constr = (Sym.fresh (), LC (Not (S (sym1,Bool)))) in
-     check_expr loc (add_Cvar env then_constr) e2 typ >>= fun _env ->
-     check_expr loc (add_Cvar env else_constr) e3 typ
+     let then_constr = makeUC (LC (S (sym1,Bool))) in
+     let else_constr = makeUC (LC (Not (S (sym1,Bool)))) in
+     check_expr loc (add_var env then_constr) e2 typ >>= fun _env ->
+     check_expr loc (add_var env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun (bt,env) ->
@@ -1161,7 +1160,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      fold_leftM (fun env (sym, (_, asym)) ->
          let (vsym,loc) = aunpack loc asym in
          get_Avar loc env vsym >>= fun (bt,env) ->
-         return (add_Avar env (sym,bt))
+         return (add_var env (makeA sym bt))
        ) env args >>= fun env ->
      check_expr loc env body typ
   | _ ->
