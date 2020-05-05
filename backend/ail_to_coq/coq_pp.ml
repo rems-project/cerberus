@@ -667,6 +667,9 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   pp "Context `{!typeG Σ} `{!globalG Σ}.";
   List.iter (pp "@;%s.") ctxt;
 
+  (* [Typeclass Opaque] stuff that needs to be repeated after the section. *)
+  let opaque = ref [] in
+
   (* Definition of types. *)
   let pp_struct (struct_id, s) =
     let annot =
@@ -701,6 +704,7 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       let guard = Guard_in_def(id) in
       pp_struct_def ref_names ast.structs guard annot fields ff struct_id;
       pp "@]@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
+      opaque := !opaque @ [id ^ "_rec"];
 
       pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
         (pp_id_args true (id ^ "_rec")) param_names;
@@ -802,206 +806,236 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   in
   List.iter pp_spec ast.functions;
 
+  (* Closing the section. *)
+  pp "@]@;End spec.";
+
+  (* [Typeclass Opaque] stuff. *)
+  if !opaque <> [] then pp "@;";
+  let pp_opaque = pp "@;Typeclasses Opaque %s." in
+  List.iter pp_opaque !opaque;
+  pp "@]"
+
+let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
+    fun def imports ctxt ff ast ->
+  (* Stuff for import of the code. *)
+  let basename =
+    let name = Filename.basename ast.source_file in
+    try Filename.chop_extension name with Invalid_argument(_) -> name
+  in
+  let import_path = "refinedc" in (* FIXME generic? Do something smarter? *)
+
+  (* Formatting utilities. *)
+  let pp fmt = Format.fprintf ff fmt in
+
+  (* Printing some header. *)
+  pp "@[<v 0>From refinedc.typing Require Import typing.@;";
+  pp "From %s Require Import %s_code.@;" import_path basename;
+  pp "From %s Require Import %s_spec.@;" import_path basename;
+  List.iter (pp_import ff) imports;
+  pp "Set Default Proof Using \"Type\".@;@;";
+
+  (* Printing generation data in a comment. *)
+  pp "(* Generated from [%s]. *)@;" ast.source_file;
+
+  (* Opening the section. *)
+  pp "@[<v 2>Section proof_%s.@;" def.func_name;
+  pp "Context `{!typeG Σ} `{!globalG Σ}.";
+  List.iter (pp "@;%s.") ctxt;
+
   (* Typing proofs. *)
-  let pp_proof (id, def) =
-    let func_annot =
-      match def.func_annot with
-      | Some(annot) -> annot
-      | None        -> assert false (* Unreachable. *)
+  let func_annot =
+    match def.func_annot with
+    | Some(annot) -> annot
+    | None        -> assert false (* Unreachable. *)
+  in
+  if List.length def.func_args <> List.length func_annot.fa_args then
+    Panic.panic_no_pos "Argument number missmatch between code and spec.";
+  pp "\n@;(* Typing proof for [%s]. *)@;" def.func_name;
+  if func_annot.fa_trust_me then
+    pp "(* Let's skip that, you seem to have some faith. *)"
+  else
+  let (used_globals, used_functions) = def.func_deps in
+  let deps =
+    used_globals @ used_functions
+  in
+  let pp_args ff xs =
+    match xs with
+    | [] -> ()
+    | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_str) xs
+  in
+  pp "@[<v 2>Lemma type_%s%a :@;" def.func_name pp_args deps;
+  begin
+    let prefix = if used_functions = [] then "⊢ " else "" in
+    let pp_impl ff id =
+      let wrap = used_globals <> [] || used_functions <> [] in
+      if wrap then fprintf ff "(";
+      fprintf ff "impl_%s" id;
+      List.iter (fprintf ff " %s") used_globals;
+      List.iter (fprintf ff " %s") used_functions;
+      if wrap then fprintf ff ")"
     in
-    if List.length def.func_args <> List.length func_annot.fa_args then
-      Panic.panic_no_pos "Argument number missmatch between code and spec.";
-    pp "\n@;(* Typing proof for [%s]. *)@;" id;
-    if func_annot.fa_trust_me then
-      pp "(* Let's skip that, you seem to have some faith. *)"
-    else
-    let (used_globals, used_functions) = def.func_deps in
-    let deps =
-      used_globals @ used_functions
+    let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
+    List.iter pp_global used_globals;
+    let pp_global_type f =
+      match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
+      | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;" f (pp_type_expr_guard None Guard_none) ty
+      | _ -> ()
     in
-    let pp_args ff xs =
-      match xs with
-      | [] -> ()
-      | _  -> fprintf ff " (%a : loc)" (pp_sep " " pp_str) xs
-    in
-    pp "@[<v 2>Lemma type_%s%a :@;" id pp_args deps;
+    List.iter pp_global_type used_globals;
+    let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr type_of_%s -∗@;" f f f in
+    List.iter pp_dep used_functions;
+    pp "%styped_function %a type_of_%s." prefix pp_impl def.func_name def.func_name
+  end;
+  let pp_intros ff xs =
+    let pp_intro ff (x,_) = pp_str ff x in
+    match xs with
+    | []      -> fprintf ff "[]"
+    | [x]     -> pp_intro ff x
+    | x :: xs -> List.iter (fun _ -> pp_str ff "[") xs;
+                 pp_intro ff x;
+                 List.iter (fprintf ff " %a]" pp_intro) xs
+  in
+  pp "@]@;@[<v 2>Proof.@;";
+  pp "start_function \"%s\" (%a)" def.func_name pp_intros func_annot.fa_parameters;
+  if def.func_vars <> [] || def.func_args <> [] then
     begin
-      let prefix = if used_functions = [] then "⊢ " else "" in
-      let pp_impl ff id =
-        let wrap = used_globals <> [] || used_functions <> [] in
-        if wrap then fprintf ff "(";
-        fprintf ff "impl_%s" id;
-        List.iter (fprintf ff " %s") used_globals;
-        List.iter (fprintf ff " %s") used_functions;
-        if wrap then fprintf ff ")"
-      in
-      let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
-      List.iter pp_global used_globals;
-      let pp_global_type f =
-        match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
-        | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;" f (pp_type_expr_guard None Guard_none) ty
-        | _ -> ()
-      in
-      List.iter pp_global_type used_globals;
-      let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr type_of_%s -∗@;" f f f in
-      List.iter pp_dep used_functions;
-      pp "%styped_function %a type_of_%s." prefix pp_impl id id
+      pp " =>";
+      List.iter (fun (x,_) -> pp " arg_%s" x) def.func_args;
+      List.iter (fun (x,_) -> pp " local_%s" x) def.func_vars
     end;
-    let pp_intros ff xs =
-      let pp_intro ff (x,_) = pp_str ff x in
-      match xs with
-      | []      -> fprintf ff "[]"
-      | [x]     -> pp_intro ff x
-      | x :: xs -> List.iter (fun _ -> pp_str ff "[") xs;
-                   pp_intro ff x;
-                   List.iter (fprintf ff " %a]" pp_intro) xs
-    in
-    pp "@]@;@[<v 2>Proof.@;";
-    pp "start_function \"%s\" (%a)" id pp_intros func_annot.fa_parameters;
-    if def.func_vars <> [] || def.func_args <> [] then
-      begin
-        pp " =>";
-        List.iter (fun (x,_) -> pp " arg_%s" x) def.func_args;
-        List.iter (fun (x,_) -> pp " local_%s" x) def.func_vars
-      end;
-    pp ".@;@[<v 2>split_blocks ((";
-    let pp_inv (id, annot) =
-      (* Opening a box and printing the existentials. *)
-      pp "@;@[<v 2><[ \"%s\" :=" id;
-      let pp_exists (id, e) = pp "@;∃ %s : %a," id (pp_coq_expr false) e in
-      List.iter pp_exists annot.bl_exists;
-      (* Compute the used and unused arguments and variables. *)
-      let used =
-        let fn (id, ty) =
-          (* Check if [id_var] is a function argument. *)
-          try
-            let layout = List.assoc id def.func_args in
-            (* Check for name clash with local variables. *)
-            if List.mem_assoc id def.func_vars then
-              Panic.panic_no_pos "[%s] denotes both an argument and a local \
-                variable of function [%s]." id def.func_name;
-            (* Check if the type is different for the toplevel one. *)
-            let toplevel_ty =
-              try
-                let i = List.find_index (fun (s,_) -> s = id) def.func_args in
-                List.nth func_annot.fa_args i
-              with Not_found | Failure(_) -> assert false (* Unreachable. *)
-            in
-            if ty = toplevel_ty then
-              Panic.wrn None "Useless annotation for argument [%s]." id;
-            ("arg_" ^ id, (layout, Some(ty)))
-          with Not_found ->
-          (* Not a function argument, check that it is a local variable. *)
-          try
-            let layout = List.assoc id def.func_vars in
-            ("local_" ^ id, (layout, Some(ty)))
-          with Not_found ->
-            Panic.panic_no_pos "[%s] is neither a local variable nor an \
-              argument." id
-        in
-        List.map fn annot.bl_inv_vars
-      in
-      let unused =
-        let unused_args =
-          let pred (id, _) =
-            let id = "arg_" ^ id in
-            List.for_all (fun (id_var, _) -> id <> id_var) used
+  pp ".@;@[<v 2>split_blocks ((";
+  let pp_inv (id, annot) =
+    (* Opening a box and printing the existentials. *)
+    pp "@;@[<v 2><[ \"%s\" :=" id;
+    let pp_exists (id, e) = pp "@;∃ %s : %a," id (pp_coq_expr false) e in
+    List.iter pp_exists annot.bl_exists;
+    (* Compute the used and unused arguments and variables. *)
+    let used =
+      let fn (id, ty) =
+        (* Check if [id_var] is a function argument. *)
+        try
+          let layout = List.assoc id def.func_args in
+          (* Check for name clash with local variables. *)
+          if List.mem_assoc id def.func_vars then
+            Panic.panic_no_pos "[%s] denotes both an argument and a local \
+              variable of function [%s]." id def.func_name;
+          (* Check if the type is different for the toplevel one. *)
+          let toplevel_ty =
+            try
+              let i = List.find_index (fun (s,_) -> s = id) def.func_args in
+              List.nth func_annot.fa_args i
+            with Not_found | Failure(_) -> assert false (* Unreachable. *)
           in
-          let args = List.filter pred def.func_args in
-          let fn (id, layout) =
-            let ty =
-              try
-                let i = List.find_index (fun (s,_) -> s = id) def.func_args in
-                List.nth func_annot.fa_args i
-              with Not_found | Failure(_) -> assert false (* Unreachable. *)
-            in
-            ("arg_" ^ id, (layout, Some(ty)))
+          if ty = toplevel_ty then
+            Panic.wrn None "Useless annotation for argument [%s]." id;
+          ("arg_" ^ id, (layout, Some(ty)))
+        with Not_found ->
+        (* Not a function argument, check that it is a local variable. *)
+        try
+          let layout = List.assoc id def.func_vars in
+          ("local_" ^ id, (layout, Some(ty)))
+        with Not_found ->
+          Panic.panic_no_pos "[%s] is neither a local variable nor an \
+            argument." id
+      in
+      List.map fn annot.bl_inv_vars
+    in
+    let unused =
+      let unused_args =
+        let pred (id, _) =
+          let id = "arg_" ^ id in
+          List.for_all (fun (id_var, _) -> id <> id_var) used
+        in
+        let args = List.filter pred def.func_args in
+        let fn (id, layout) =
+          let ty =
+            try
+              let i = List.find_index (fun (s,_) -> s = id) def.func_args in
+              List.nth func_annot.fa_args i
+            with Not_found | Failure(_) -> assert false (* Unreachable. *)
           in
-          List.map fn args
+          ("arg_" ^ id, (layout, Some(ty)))
         in
-        let unused_vars =
-          let pred (id, _) =
-            let id = "local_" ^ id in
-            List.for_all (fun (id_var, _) -> id <> id_var) used
-          in
-          let vars = List.filter pred def.func_vars in
-          List.map (fun (id, layout) -> ("local_" ^ id, (layout, None))) vars
-        in
-        unused_args @ unused_vars
+        List.map fn args
       in
-      let all_vars = unused @ used in
-      let pp_var ff (id, (layout, ty_opt)) =
-        match ty_opt with
-        | None     -> fprintf ff "%s ◁ₗ uninit %a" id (pp_layout true) layout
-        | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
-      in
-      begin
-        let fn constr constrs =
-          match constr with
-          | Constr_Coq(_) -> constr :: constrs
-          | _             -> constrs
+      let unused_vars =
+        let pred (id, _) =
+          let id = "local_" ^ id in
+          List.for_all (fun (id_var, _) -> id <> id_var) used
         in
-        let constrs =
-          List.fold_right fn func_annot.fa_requires annot.bl_constrs
-        in
-        match (all_vars, constrs) with
-        | ([]     , []     ) ->
-            Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
-              def.func_name
-        | ([]     , c :: cs) ->
-            pp "@;%a" pp_constr c;
-            List.iter (pp " ∗@;%a" pp_constr) cs
-        | (v :: vs, cs     ) ->
-            pp "@;%a" pp_var v;
-            List.iter (pp " ∗@;%a" pp_var) vs;
-            List.iter (pp " ∗@;%a" pp_constr) cs
-      end;
-      (* Closing the box. *)
-      pp "@]@;]> $"
-    in
-    let invs = collect_invs def in
-    List.iter pp_inv invs;
-    pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
-    let pp_do_step id =
-      pp "@;- repeat do_step; do_finish.";
-      pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
-    in
-    List.iter pp_do_step (List.cons "#0" (List.map fst invs));
-    pp "@;Unshelve. all: prepare_sideconditions; try solve_goal.";
-    let tactics_items =
-      let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
-      let rec pp_tactics_all tactics =
-        match tactics with
-        | t :: ts when is_all t -> pp "@;%s" t; pp_tactics_all ts
-        | ts                    -> ts
+        let vars = List.filter pred def.func_vars in
+        List.map (fun (id, layout) -> ("local_" ^ id, (layout, None))) vars
       in
-      pp_tactics_all func_annot.fa_tactics
+      unused_args @ unused_vars
     in
-    List.iter (pp "@;+ %s") tactics_items;
-    pp "@;all: print_sidecondition_goal \"%s\"." def.func_name;
-    pp "@]@;Qed."
+    let all_vars = unused @ used in
+    let pp_var ff (id, (layout, ty_opt)) =
+      match ty_opt with
+      | None     -> fprintf ff "%s ◁ₗ uninit %a" id (pp_layout true) layout
+      | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
+    in
+    begin
+      let fn constr constrs =
+        match constr with
+        | Constr_Coq(_) -> constr :: constrs
+        | _             -> constrs
+      in
+      let constrs =
+        List.fold_right fn func_annot.fa_requires annot.bl_constrs
+      in
+      match (all_vars, constrs) with
+      | ([]     , []     ) ->
+          Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
+            def.func_name
+      | ([]     , c :: cs) ->
+          pp "@;%a" pp_constr c;
+          List.iter (pp " ∗@;%a" pp_constr) cs
+      | (v :: vs, cs     ) ->
+          pp "@;%a" pp_var v;
+          List.iter (pp " ∗@;%a" pp_var) vs;
+          List.iter (pp " ∗@;%a" pp_constr) cs
+    end;
+    (* Closing the box. *)
+    pp "@]@;]> $"
   in
-  let pp_proof (id, def_or_decl) =
-    match def_or_decl with
-    | FDef(def) -> pp_proof (id, def)
-    | FDec(_)   -> ()
+  let invs = collect_invs def in
+  List.iter pp_inv invs;
+  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
+  let pp_do_step id =
+    pp "@;- repeat do_step; do_finish.";
+    pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
   in
-  List.iter pp_proof ast.functions;
+  List.iter pp_do_step (List.cons "#0" (List.map fst invs));
+  pp "@;Unshelve. all: prepare_sideconditions; try solve_goal.";
+  let tactics_items =
+    let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
+    let rec pp_tactics_all tactics =
+      match tactics with
+      | t :: ts when is_all t -> pp "@;%s" t; pp_tactics_all ts
+      | ts                    -> ts
+    in
+    pp_tactics_all func_annot.fa_tactics
+  in
+  List.iter (pp "@;+ %s") tactics_items;
+  pp "@;all: print_sidecondition_goal \"%s\"." def.func_name;
+  pp "@]@;Qed.";
 
   (* Closing the section. *)
-  pp "@]@;End spec.@]"
+  pp "@]@;End proof_%s.@]" def.func_name
 
 type mode =
   | Code of import list
   | Spec of import list * string list
+  | Fprf of func_def * import list * string list
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let oc = open_out fname in
   let ff = Format.formatter_of_out_channel oc in
   let pp =
     match mode with
-    | Code(imports)       -> pp_code imports
-    | Spec(imports, ctxt) -> pp_spec imports ctxt
+    | Code(imports)          -> pp_code imports
+    | Spec(imports,ctxt)     -> pp_spec imports ctxt
+    | Fprf(def,imports,ctxt) -> pp_proof def imports ctxt
   in
   Format.fprintf ff "%a@." pp ast;
   close_out oc
