@@ -1029,13 +1029,18 @@ type mode =
   | Fprf of func_def * import list * string list
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
-  let oc = open_out fname in
-  let ff = Format.formatter_of_out_channel oc in
   let pp =
     match mode with
     | Code(imports)          -> pp_code imports
     | Spec(imports,ctxt)     -> pp_spec imports ctxt
     | Fprf(def,imports,ctxt) -> pp_proof def imports ctxt
   in
-  Format.fprintf ff "%a@." pp ast;
-  close_out oc
+  (* We write to a buffer. *)
+  let buffer = Buffer.create 4096 in
+  Format.fprintf (Format.formatter_of_buffer buffer) "%a@." pp ast;
+  (* Check if we should write the file (inexistent / contents different). *)
+  let must_write =
+    try Buffer.contents (Buffer.from_file fname) <> Buffer.contents buffer
+    with Sys_error(_) -> true
+  in
+  if must_write then Buffer.to_file fname buffer
