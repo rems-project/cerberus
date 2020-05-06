@@ -428,7 +428,101 @@ let subtype loc_ret env args rtyp =
 
 
 
+let call_typ loc_call env ftyp (args : aargs) =
+    
+  let open Alrc.Types in
+  let open Alrc.FunctionTypes in
+  let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
+  debug_print 1 (action "function call type") >>= fun () ->
 
+  let print ftyp args env unis = 
+    debug_print 2 (action "checking and refining function call type") >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+    debug_print 2 PPrint.empty
+  in
+
+  let unis = SymMap.empty in
+
+  let rec do_a (args : aargs) ftyp = 
+    print ftyp args env unis >>= fun () ->
+    match_next_a (fun e -> Call_error e) loc_call args ftyp.arguments2.a >>= function
+    | `Done -> return (ftyp, args)
+    | `Match ((n,sym),(args,fargs)) ->
+       do_a args (subst n sym (updateAargs ftyp fargs))
+  in
+  do_a args ftyp >>= fun (ftyp,args) ->
+
+  let rec do_l ftyp unis = 
+    print ftyp args env unis >>= fun () ->
+    match record_next_l_for_unification unis ftyp.arguments2.l with
+    | `Done -> return (ftyp,unis)
+    | `Next ((n,sym), unis,specs) ->
+       do_l (subst n sym (updateLargs ftyp specs)) unis
+  in
+  do_l ftyp unis >>= fun (ftyp, unis) -> 
+
+  let rec do_r ftyp env unis = 
+    print ftyp args env unis >>= fun () ->
+    find_next_matching_resource (fun e -> Call_error e) 
+      loc_call env unis ftyp.arguments2.r >>= function
+    | `Done -> return (ftyp,env,unis)
+    | `Next (decl_args,env,unis,substs) -> 
+       let ftyp = fold_left (fun f (s, s') -> subst s s' f) 
+                    (updateRargs ftyp decl_args) substs in
+       do_r ftyp env unis 
+  in
+  do_r ftyp env unis >>= fun (rtyp,env,unis) ->
+
+  find_resolved env unis >>= fun (unresolved,substs) ->
+  if not (SymMap.is_empty unresolved) then
+    let (usym, {spec; resolved}) =
+      SymMap.find_first (fun _ -> true) unresolved in
+    fail loc_call (Call_error (Unconstrained_l (usym,spec)))
+  else
+    let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
+    check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
+    let ftyp = to_function_type ftyp in
+    return (ftyp.return,env)
+
+
+
+let infer_ctor loc ctor (aargs : aargs) = 
+  match ctor with
+  | M_Ctuple -> 
+     let name = fresh () in
+     let bts = fold_left (fun bts (b,_) -> bts @ [b.bound]) [] aargs in
+     let bt = Tuple bts in
+     let constrs = 
+       mapi (fun i (b,_) -> 
+           makeUC (LC (Nth (of_int i, S (name,bt) %= S (b.name,b.bound)))))
+         aargs
+     in
+     return ([makeA name bt]@constrs)
+  | M_Carray -> 
+     check_Aargs_typ None aargs >>= fun _ ->
+     return [{name = fresh (); bound = A Array}]
+  | M_CivCOMPL
+  | M_CivAND
+  | M_CivOR
+  | M_CivXOR -> 
+     fail loc (Unsupported "todo: Civ..")
+  | M_Cspecified ->
+     let name = fresh () in
+     begin match aargs with
+     | [({name = sym;bound = bt},_)] -> 
+        return [makeA name bt; makeUC (LC (S (sym,bt) %= S (name,bt)))]
+     | args ->
+        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
+                    (List.length args) in
+        fail loc (Generic_error !^err)
+     end
+  | M_Cnil cbt -> fail loc (Unsupported "lists")
+  | M_Ccons -> fail loc (Unsupported "lists")
+  | M_Cfvfromint -> fail loc (Unsupported "floats")
+  | M_Civfromfloat -> fail loc (Unsupported "floats")
 
 
 
@@ -569,101 +663,7 @@ let infer_value loc env v : (Types.t * Env.t,'e) m =
 
 
 
-let call_typ loc_call env ftyp (args : aargs) =
-    
-  let open Alrc.Types in
-  let open Alrc.FunctionTypes in
-  let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
-  debug_print 1 (action "function call type") >>= fun () ->
 
-  let print ftyp args env unis = 
-    debug_print 2 (action "checking and refining function call type") >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-    debug_print 2 PPrint.empty
-  in
-
-  let unis = SymMap.empty in
-
-  let rec do_a (args : aargs) ftyp = 
-    print ftyp args env unis >>= fun () ->
-    match_next_a (fun e -> Call_error e) loc_call args ftyp.arguments2.a >>= function
-    | `Done -> return (ftyp, args)
-    | `Match ((n,sym),(args,fargs)) ->
-       do_a args (subst n sym (updateAargs ftyp fargs))
-  in
-  do_a args ftyp >>= fun (ftyp,args) ->
-
-  let rec do_l ftyp unis = 
-    print ftyp args env unis >>= fun () ->
-    match record_next_l_for_unification unis ftyp.arguments2.l with
-    | `Done -> return (ftyp,unis)
-    | `Next ((n,sym), unis,specs) ->
-       do_l (subst n sym (updateLargs ftyp specs)) unis
-  in
-  do_l ftyp unis >>= fun (ftyp, unis) -> 
-
-  let rec do_r ftyp env unis = 
-    print ftyp args env unis >>= fun () ->
-    find_next_matching_resource (fun e -> Call_error e) 
-      loc_call env unis ftyp.arguments2.r >>= function
-    | `Done -> return (ftyp,env,unis)
-    | `Next (decl_args,env,unis,substs) -> 
-       let ftyp = fold_left (fun f (s, s') -> subst s s' f) 
-                    (updateRargs ftyp decl_args) substs in
-       do_r ftyp env unis 
-  in
-  do_r ftyp env unis >>= fun (rtyp,env,unis) ->
-
-  find_resolved env unis >>= fun (unresolved,substs) ->
-  if not (SymMap.is_empty unresolved) then
-    let (usym, {spec; resolved}) =
-      SymMap.find_first (fun _ -> true) unresolved in
-    fail loc_call (Call_error (Unconstrained_l (usym,spec)))
-  else
-    let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
-    check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
-    let ftyp = to_function_type ftyp in
-    return (ftyp.return,env)
-
-
-
-let infer_ctor loc ctor (aargs : aargs) = 
-  match ctor with
-  | M_Ctuple -> 
-     let name = fresh () in
-     let bts = fold_left (fun bts (b,_) -> bts @ [b.bound]) [] aargs in
-     let bt = Tuple bts in
-     let constrs = 
-       mapi (fun i (b,_) -> 
-           makeUC (LC (Nth (of_int i, S (name,bt) %= S (b.name,b.bound)))))
-         aargs
-     in
-     return ([makeA name bt]@constrs)
-  | M_Carray -> 
-     check_Aargs_typ None aargs >>= fun _ ->
-     return [{name = fresh (); bound = A Array}]
-  | M_CivCOMPL
-  | M_CivAND
-  | M_CivOR
-  | M_CivXOR -> 
-     fail loc (Unsupported "todo: Civ..")
-  | M_Cspecified ->
-     let name = fresh () in
-     begin match aargs with
-     | [({name = sym;bound = bt},_)] -> 
-        return [makeA name bt; makeUC (LC (S (sym,bt) %= S (name,bt)))]
-     | args ->
-        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
-                    (List.length args) in
-        fail loc (Generic_error !^err)
-     end
-  | M_Cnil cbt -> fail loc (Unsupported "lists")
-  | M_Ccons -> fail loc (Unsupported "lists")
-  | M_Cfvfromint -> fail loc (Unsupported "floats")
-  | M_Civfromfloat -> fail loc (Unsupported "floats")
 
 
 (* let rec check_pattern_and_bind loc env ret (M_Pattern (annots, pat_)) =
@@ -783,31 +783,43 @@ let struct_member_type loc env strct field =
   | Some b ->
      return b.bound
 
+
 let unpack_struct loc env sym struct_type = 
   Global.get_struct_decl loc env.global struct_type >>= fun fields ->
   let (bindings, name_mapping) = 
     List.split 
       (List.map (fun {name; bound} ->
            let sym = fresh () in
-           ({name; bound}, (name, sym))
+           ({name = sym; bound}, (name, sym))
          ) fields
       )
   in
-  let name_map field_name = List.assoc field_name name_mapping in
-  let open_struct = { Local.struct_type; field_names = name_map } in
-  return (bindings, open_struct)
+  let openstruct = {name = sym; bound = A (OpenStruct (sym, name_mapping))} in
+  return (openstruct :: bindings)
 
 let rec recursively_unpack_struct loc env sym struct_type = 
-  unpack_struct loc env sym struct_type >>= fun (bindings, open_struct) ->
-  fold_leftM (fun (bindings, open_structs) {name;bound} ->
-      match bound with
+  unpack_struct loc env sym struct_type >>= fun bindings ->
+  concat_mapM (fun b ->
+      match b.bound with
       | A (Struct s) | L (Base (Struct s)) -> 
-         recursively_unpack_struct loc env name s >>= 
-           fun (new_bindings, new_open_structs) ->
-           return (bindings @ new_bindings, open_structs @ new_open_structs)
-      | _ -> return (bindings, open_structs)
-    ) (bindings, [open_struct]) bindings 
+         recursively_unpack_struct loc env b.name s
+      | _ -> return [b]
+    ) bindings 
   
+
+(* let rec recursively_pack_struct loc env sym struct_type fields =
+ *   fold_leftM 
+ *     (fun env (fsym,vsym) ->
+ *       get_var loc env vsym >>= fun (t,env) ->
+ *       begin match t with
+ *       | A (OpenStruct (s,f)) | L (Base (OpenStruct (s,f))) -> 
+ *          recursively_pack_struct loc env vsym s f >>= fun (_packed_struct,env) ->
+ *          return (remove_var env vsym)
+ *       | _ -> 
+ *          return env
+ *       end
+ *     ) env fields >>= fun _ ->
+ *     return ({name = sym; bound = A (Struct struct_type)}, env) *)
 
 
 
