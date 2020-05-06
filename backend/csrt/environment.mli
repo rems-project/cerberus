@@ -87,10 +87,10 @@ end
 
 module Local : sig
 
-  type open_struct = {
-      struct_type: Sym.t;
-      field_names: Sym.t -> Sym.t;
-    }
+  (* type open_struct = {
+   *     struct_type: Sym.t;
+   *     field_names: Sym.t -> Sym.t;
+   *   } *)
 
   type t
 
@@ -190,15 +190,15 @@ module Env : sig
     Sym.t ->
     LogicalConstraints.t list
 
-  val add_open_struct :
-    t ->
-    Sym.t ->
-    Local.open_struct ->
-    t
+  (* val add_open_struct :
+   *   t ->
+   *   Sym.t ->
+   *   Local.open_struct ->
+   *   t *)
 
-  val get_and_remove_open_struct :
-    t ->
-    Sym.t ->
-    (Local.open_struct * t) option
+  (* val get_and_remove_open_struct :
+   *   t ->
+   *   Sym.t ->
+   *   (Local.open_struct * t) option *)
 
 end

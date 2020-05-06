@@ -27,6 +27,7 @@ let bt_to_sort loc ctxt bt =
   | List _
   | Tuple _
   | Struct _
+  | OpenStruct _
   | StructField _ -> 
      fail loc (Z3_BT_not_implemented_yet bt)
 
