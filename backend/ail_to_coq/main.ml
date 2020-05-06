@@ -5,6 +5,7 @@ type config =
   { output_dir  : string option
   ; gen_code    : bool
   ; gen_spec    : bool
+  ; no_proof    : string list
   ; full_paths  : bool
   ; imports     : (string * string) list
   ; spec_ctxt   : string list
@@ -36,9 +37,11 @@ let run : config -> string -> unit = fun cfg c_file ->
     let name = Filename.basename c_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
-  let cppc_file = Filename.concat output_dir (base_name ^ ".cpp.c" ) in
-  let code_file = Filename.concat output_dir (base_name ^ "_code.v") in
-  let spec_file = Filename.concat output_dir (base_name ^ "_spec.v") in
+  let outfile suffix = Filename.concat output_dir (base_name ^ suffix) in
+  let cppc_file = outfile ".cpp.c" in
+  let code_file = outfile "_code.v" in
+  let spec_file = outfile "_spec.v" in
+  let fprf_file name = outfile ("_proof_" ^ name ^ ".v") in
   (* Print the output of the preprocessor if necessary. *)
   if cfg.cpp_output then
     Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
@@ -51,7 +54,19 @@ let run : config -> string -> unit = fun cfg c_file ->
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
   (* Generate the spec, if necessary. *)
   if cfg.gen_spec then
-    Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast)
+    Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast);
+  (* Generate the proof for each function, if necessary. *)
+  let write_proof (id, def_or_decl) =
+    let open Coq_ast in
+    let open Coq_pp in
+    match def_or_decl with
+    | FDec(_)                                 -> ()
+    | FDef(_  ) when List.mem id cfg.no_proof -> ()
+    | FDef(def) when Coq_ast.trusted def      -> ()
+    | FDef(def)                               ->
+    write (Fprf(def, cfg.imports, cfg.spec_ctxt)) (fprf_file id) coq_ast
+  in
+  if cfg.gen_spec then List.iter write_proof coq_ast.functions
 
 let output_dir =
   let doc =
@@ -73,6 +88,14 @@ let no_spec =
      functions defined in $(i,FILE)."
   in
   Arg.(value & flag & info ["no-spec"] ~doc)
+
+let no_proof =
+  let doc =
+    "Do not generate the Coq file that corresponds to the typing proof for \
+     function $(docv) defined in $(i,FILE). If there is no function with the 
+     given name then nothing happens."
+  in
+  Arg.(value & opt_all string [] & info ["no-proof"] ~docv:"NAME" ~doc)
 
 let full_paths =
   let doc =
@@ -142,15 +165,15 @@ let no_loc =
   Arg.(value & flag & info ["no-loc"] ~doc)
 
 let opts : config Term.t =
-  let build output_dir no_code no_spec full_paths imports spec_ctxt cpp_I
-      cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc =
+  let build output_dir no_code no_spec no_proof full_paths imports spec_ctxt
+      cpp_I cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc =
     let no_expr_loc = no_expr_loc || no_loc in
     let no_stmt_loc = no_stmt_loc || no_loc in
     { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
-    ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd ; cpp_output
-    ; no_stmt_loc ; no_expr_loc }
+    ; no_proof ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd
+    ; cpp_output ; no_stmt_loc ; no_expr_loc }
   in
-  Term.(pure build $ output_dir $ no_code $ no_spec $ full_paths $
+  Term.(pure build $ output_dir $ no_code $ no_spec $ no_proof $ full_paths $
           imports $ spec_ctxt $ cpp_I $ cpp_nostd $ cpp_output $
           no_expr_loc $ no_stmt_loc $ no_loc)
 

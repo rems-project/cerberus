@@ -86,3 +86,29 @@ module List =
       in
       find 0 l
   end
+
+module Buffer =
+  struct
+    include Buffer
+
+    let add_full_channel : t -> in_channel -> unit = fun buf ic ->
+      try
+        while true do
+          add_char buf (input_char ic)
+        done
+      with End_of_file -> ()
+
+    let add_file : t -> string -> unit = fun buf fname ->
+      let ic = open_in fname in
+      add_full_channel buf ic;
+      close_in ic
+
+    let from_file : string -> t = fun fname ->
+      let buf = create 4096 in
+      add_file buf fname; buf
+
+    let to_file : string -> t -> unit = fun fname buf ->
+      let oc = open_out fname in
+      output_buffer oc buf;
+      close_out oc
+  end
