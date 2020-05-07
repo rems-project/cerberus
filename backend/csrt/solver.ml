@@ -27,7 +27,6 @@ let bt_to_sort loc ctxt bt =
   | List _
   | Tuple _
   | Struct _
-  | OpenStruct _
   | StructField _ -> 
      fail loc (Z3_BT_not_implemented_yet bt)
 
@@ -144,7 +143,8 @@ let constraint_holds loc constraints c =
   let ctxt = Z3.mk_context [("model","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: constraints) in
-  mapM (fun (LC it) -> of_index_term loc ctxt it) lcs >>= fun constrs ->
+  mapM (fun (LC it) -> tryM (of_index_term loc ctxt it) 
+                         (of_index_term loc ctxt (Bool true))) lcs >>= fun constrs ->
   debug_print 3 (action "checking satisfiability of constraints") >>= fun () ->
   debug_print 3 (blank 3 ^^ item "constraints" (flow_map (break 1) LogicalConstraints.pp lcs)) >>= fun () ->
   z3_check loc ctxt solver constrs >>= function

@@ -127,21 +127,18 @@ end
 
 module Local = struct
 
-  (* type open_struct = {
-   *     struct_type: Sym.t;
-   *     field_names: Sym.t -> Sym.t;
-   *   } *)
+  type open_struct = { field_names: (Sym.t * Sym.t) list ; }
 
   type lenv = 
     { vars: VarTypes.t SymMap.t; 
-      (* open_structs : open_struct SymMap.t *)
+      open_structs : open_struct SymMap.t
     }
 
   type t = lenv
 
   let empty = 
-    { vars = SymMap.empty; }
-      (* open_structs = SymMap.empty } *)
+    { vars = SymMap.empty; 
+      open_structs = SymMap.empty }
 
   let pp_avars avars = pp_env_list (Some brackets) avars (Binders.pp BT.pp)
   let pp_lvars avars = pp_env_list (Some brackets) avars (Binders.pp LS.pp)
@@ -168,20 +165,18 @@ module Local = struct
 
 
     let add_var env b = 
-      { vars = SymMap.add b.name b.bound env.vars} 
+      { env with vars = SymMap.add b.name b.bound env.vars} 
 
     let remove_var env sym = 
-      { vars = SymMap.remove sym env.vars} 
+      { env with vars = SymMap.remove sym env.vars} 
 
-    (* let add_open_struct env sym open_struct = 
-     *   { env with open_structs = SymMap.add sym open_struct env.open_structs } *)
+    let add_open_struct env sym open_struct = 
+      { env with open_structs = SymMap.add sym open_struct env.open_structs }
 
-    (* let get_and_remove_open_struct env sym = 
-     *   match SymMap.find_opt sym env.open_structs with
-     *   | Some open_struct -> 
-     *      let env = { env with open_structs = SymMap.remove sym env.open_structs } in
-     *      Some (open_struct, env)
-     *   | None -> None *)
+    let get_open_struct env sym = SymMap.find_opt sym env.open_structs
+
+    let remove_open_struct env sym = 
+      {env with open_structs = SymMap.remove sym env.open_structs }
 
 end
 
@@ -275,15 +270,15 @@ module Env = struct
       env.local.vars []
 
 
-  (* let add_open_struct env sym open_struct =
-   *   { env with local = Local.add_open_struct env.local sym open_struct } *)
+  let add_open_struct env sym open_struct =
+    { env with local = Local.add_open_struct env.local sym open_struct }
 
-  (* let get_and_remove_open_struct env sym = 
-   *   match Local.get_and_remove_open_struct env.local sym with
-   *   | Some (open_struct,lenv) -> 
-   *      let env = { env with local = lenv } in
-   *      Some (open_struct, env)
-   *   | None -> None *)
+  let get_open_struct env sym = 
+    Local.get_open_struct env.local sym
+
+  let remove_open_struct env sym = 
+    let lenv = Local.remove_open_struct env.local sym in
+    { env with local = lenv }
 
 end
 

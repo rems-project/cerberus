@@ -111,7 +111,8 @@ let pp (loc : Loc.t) (err : t) =
     | Var_kind_error err ->
        flow (break 1)
          (List.concat 
-            [words "Expected kind"; [VarTypes.pp_kind err.expected];
+            [[ !^"Symbol" ]; [Sym.pp err.sym];
+              words "Expected kind"; [VarTypes.pp_kind err.expected];
              (words "but found kind"); [VarTypes.pp_kind err.has]])
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
