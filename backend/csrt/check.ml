@@ -95,6 +95,10 @@ let size_of_ctype loc ct =
 
 
 
+
+
+
+
 (* types recording undefined behaviour, error cases, etc. *)
 module UU = struct
 
@@ -274,6 +278,19 @@ let rec make_Aargs loc env asyms =
      return (({name; bound = t}, loc) :: rest, env)
 
 
+
+
+let resources_owned_by_var_or_equals loc env owner =
+  get_ALvar loc env owner >>= fun (bt,_env) ->
+  vars_equal_to loc env owner bt >>= fun equal_to_owner ->
+  let owneds = concat_map (fun o -> map (fun r -> (o,r)) (owned_resources env o))
+                 (owner :: equal_to_owner) in
+  return owneds
+  
+
+
+
+
 let make_Aargs_bind_lrc loc env rt =
   let open Alrc.Types in
   let rt = from_type rt in
@@ -349,10 +366,7 @@ let find_next_matching_resource errf loc env unis specs =
      | None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
      | Some owner ->
         (* TODO: unsafe env *)
-        get_ALvar loc env owner >>= fun (bt,_env) ->
-        vars_equal_to loc env owner bt >>= fun equal_to_owner ->
-        let owneds = concat_map (fun o -> map (fun r -> (o,r)) (owned_resources env o))
-                       (owner :: equal_to_owner) in
+        resources_owned_by_var_or_equals loc env owner >>= fun owneds ->
         let rec try_resources = function
           | [] -> 
              fail loc (errf (Missing_R (spec.name, spec.bound)))
@@ -389,14 +403,17 @@ let unpack_struct loc env sym struct_type =
   match get_open_struct env sym with
   | None -> 
      Global.get_struct_decl loc env.global struct_type >>= fun fields ->
-     let (bindings, name_mapping) = 
-       List.split 
-         (List.map (fun {name; bound} ->
-              let sym = fresh () in
-              ({name = sym; bound}, (name, sym))
-            ) fields
-         )
+     let rec aux acc_bindings acc_name_mapping fields =
+       match fields with
+       | [] -> (acc_bindings, acc_name_mapping)
+       | {name;bound} :: fields ->
+          let sym = fresh () in
+          let acc_bindings = acc_bindings @ [{name = sym; bound}] in
+          let acc_name_mapping = acc_name_mapping @ [(name, sym)] in
+          let fields = Types.subst name sym fields in
+          aux acc_bindings acc_name_mapping fields
      in
+     let (bindings, name_mapping) = aux [] [] fields in
      let env = add_open_struct env sym {field_names = name_mapping} in
      return (bindings, env)
   | Some {field_names} -> 
@@ -691,16 +708,26 @@ let is_owned_pointer loc env sym =
   debug_print 3 (action "checking whether owned pointer") >>= fun () ->
   debug_print 3 (blank 3 ^^ item "sym" (Sym.pp sym)) >>= fun () ->
   debug_print 3 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-  debug_print 3 PPrint.empty >>= fun () ->
   get_Avar loc env sym >>= fun (bt, env) ->
-  let resource_names = owned_resources env sym in
-  get_Rvars loc env resource_names >>= fun (resources,_env) ->
-  match bt, resources with
-  | Loc, [Points (_,S (pointee,bt))] -> 
-     return (Some (pointee, bt))
-  | _,_ -> 
-     debug_print 3 !^"no" >>= fun () ->
-     return None
+  if bt <> Loc then return None
+  else
+    resources_owned_by_var_or_equals loc env sym >>= fun owneds ->
+    get_Rvars loc env (List.map snd owneds) >>= fun (resources,_env) ->
+    let relevant = 
+      (filter_map (function 
+               | Points (_,S (pointee,bt)) -> Some (pointee,bt) 
+               | _ -> None) resources)
+    in
+    match relevant with
+    | [] -> 
+       debug_print 3 (blank 3 ^^ !^"no") >>= fun () ->
+       return None
+    | [(p,bt)] -> 
+       debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
+       return (Some (p,bt))
+    | _ -> fail loc (Generic_error !^"pointer owning multiple resources")
+
+
 
 
 let sym_or_fresh (msym : Sym.t option) : Sym.t = 
@@ -915,14 +942,18 @@ let check_field_access loc env sym access =
      end >>= fun field_names ->
   NameMap.sym_of loc (Id.s access.field) (get_names env.global) >>= fun field ->
   let fvar = List.assoc field field_names in
-  return (fvar,access.loc)
+  return (pointee,fvar,access.loc)
 
+(* change data structures to avoid empty list failure *)
 let rec check_field_accesses loc env sym accesses =
   match accesses with
-  | [] -> return (sym,loc)
+  | [] -> fail loc (Unreachable "empty access list")
+  | [access] -> 
+     check_field_access loc env sym access
   | access :: accesses ->
-     check_field_access loc env sym access >>= fun (sym,loc) ->
-     check_field_accesses loc env sym accesses
+     check_field_access loc env sym access >>= fun (_,sym,loc) ->
+     check_field_accesses loc env sym accesses >>= fun (sym,sym2,loc) ->
+     return (sym,sym2,loc)
 
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
@@ -1140,20 +1171,47 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = aunpack loc a_ct in
         let (sym1,loc1) = aunpack loc asym1 in
-        is_uninitialised_pointer loc1 env sym1 >>= begin function
-         | true -> make_initial_store_type loc ct 
-         | false -> make_store_type loc ct
-        end >>= fun decl_typ ->
-        make_Aargs loc env [asym1; asym2] >>= fun (args,env) ->
-        call_typ loc env decl_typ args >>= fun (rt, env) ->
-        return (Normal rt, env)
+        let (sym2,loc2) = aunpack loc asym2 in
+        get_Avar loc1 env sym1 >>= fun (bt1,env) ->
+        get_Avar loc2 env sym2 >>= fun (bt2,env) ->
+        begin match is_structfield bt1 with
+        | Some (sym,accesses) ->
+           check_field_accesses loc env sym accesses >>= fun (ssym,fsym,floc) ->
+           get_Avar floc env fsym >>= fun (fbt,env) ->
+           (* revisit when unpacking logical structs differently *)
+           let field_after = Sym.fresh () in
+           ctype loc (fresh ()) ct >>= fun consume_before_t ->
+           ctype loc field_after ct >>= fun consume_value_t ->
+           let ret = [makeUA Unit] in
+           let ftyp = {arguments = consume_before_t @ consume_value_t; 
+                       return = ret} in
+           let args : aargs = [({name=fsym;bound=fbt},floc);({name=sym2;bound=bt2},loc2)] in
+           call_typ loc env ftyp args >>= fun (rt, env) ->
+           begin match get_open_struct env ssym with
+           | None -> fail loc (Unreachable ("store: open struct is not open: " ^ (pps (Sym.pp ssym))))
+           | Some {field_names} ->
+              let field_names = List.map (fun (f,s) -> (f,Sym.subst fsym field_after s)) 
+                                  field_names in
+              let env = remove_open_struct env ssym in
+              let env = add_open_struct env ssym {field_names} in
+              return (Normal rt, env)
+           end
+        | None ->
+           is_uninitialised_pointer loc1 env sym1 >>= begin function
+            | true -> make_initial_store_type loc ct 
+            | false -> make_store_type loc ct
+           end >>= fun decl_typ ->
+           make_Aargs loc env [asym1; asym2] >>= fun (args,env) ->
+           call_typ loc env decl_typ args >>= fun (rt, env) ->
+           return (Normal rt, env)
+        end
      | M_Load (a_ct, asym, _mo) -> 
         let (ct, _ct_loc) = aunpack loc a_ct in
         let (sym,_) = aunpack loc asym in
         get_Avar loc env sym >>= fun (bt,env) ->
         begin match is_structfield bt with
         | Some (sym,accesses) ->
-           check_field_accesses loc env sym accesses >>= fun (fsym,floc) ->
+           check_field_accesses loc env sym accesses >>= fun (_ssym,fsym,floc) ->
            get_Avar floc env fsym >>= fun (fbt,env) ->
            let ret_name = fresh () in
            let constr = LC (S (ret_name, bt) %= (S (fsym,fbt))) in
@@ -1457,3 +1515,17 @@ let check_and_report core_file =
   | Exception (loc,err) -> 
      report_type_error loc err;
      raise (Failure "type error")
+
+
+
+
+
+
+
+(* todo: 
+   - correctly unpack logical structs,
+   - make call_typ accept non-A arguments
+   - struct handling in constraint solver
+   - more struct rules
+   - revisit rules implemented using store rule
+ *)
