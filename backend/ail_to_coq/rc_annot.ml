@@ -257,6 +257,9 @@ type annot =
   | Annot_tactics    of string list
   | Annot_trust_me
 
+let annot_lemmas : string list -> string list =
+  List.map (Printf.sprintf "all: try by apply: %s; solve_goal.")
+
 let rc_locs : Location.Pool.t = Location.Pool.make ()
 
 exception Invalid_annot of Location.t * string
@@ -337,6 +340,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
   | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
   | "tactics"    -> raw_many_args (fun l -> Annot_tactics(l))
+  | "lemmas"     -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
   | "trust_me"   -> no_args Annot_trust_me
   | _            -> error "undefined"
 
