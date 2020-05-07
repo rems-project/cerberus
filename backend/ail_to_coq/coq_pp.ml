@@ -1006,7 +1006,7 @@ let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
   in
   List.iter pp_do_step (List.cons "#0" (List.map fst invs));
-  pp "@;Unshelve. all: prepare_sideconditions; try solve_goal.";
+  pp "@;Unshelve. all: prepare_sideconditions; normalize_and_simpl_goal; try solve_goal.";
   let tactics_items =
     let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
     let rec pp_tactics_all tactics =
