@@ -145,6 +145,15 @@ module Local = struct
   let pp_rvars avars = pp_env_list (Some brackets) avars (Binders.pp RE.pp)
   let pp_cvars avars = pp_env_list (Some brackets) avars (Binders.pp LC.pp)
 
+  let pp_open_structs open_structs = 
+    let l = SymMap.bindings open_structs in
+    let pp_field_names {field_names} =
+      flow_map (comma ^^ break 1) 
+        (fun (s1,s2) -> parens (Sym.pp s1 ^^^ arrow ^^^ Sym.pp s2)) 
+        field_names
+    in
+    flow_map (break 1) (fun (s,fn) -> parens (Sym.pp s ^^^ brackets (pp_field_names fn))) l
+
   let pp lenv =
     let (a,l,r,c) = 
       SymMap.fold (fun name b (a,l,r,c) ->
@@ -160,6 +169,7 @@ module Local = struct
        ; inline_item "logical" (pp_lvars l)
        ; inline_item "resources" (pp_rvars r)
        ; inline_item "constraints" (pp_cvars c)
+       ; inline_item "open structs" (pp_open_structs lenv.open_structs)
        ]
     )
 
