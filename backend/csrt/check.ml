@@ -1179,9 +1179,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            check_field_accesses loc env sym accesses >>= fun (ssym,fsym,floc) ->
            get_Avar floc env fsym >>= fun (fbt,env) ->
            (* revisit when unpacking logical structs differently *)
-           let field_after = Sym.fresh () in
            ctype loc (fresh ()) ct >>= fun consume_before_t ->
-           ctype loc field_after ct >>= fun consume_value_t ->
+           ctype loc (fresh ()) ct >>= fun consume_value_t ->
            let ret = [makeUA Unit] in
            let ftyp = {arguments = consume_before_t @ consume_value_t; 
                        return = ret} in
@@ -1190,7 +1189,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            begin match get_open_struct env ssym with
            | None -> fail loc (Unreachable ("store: open struct is not open: " ^ (pps (Sym.pp ssym))))
            | Some {field_names} ->
-              let field_names = List.map (fun (f,s) -> (f,Sym.subst fsym field_after s)) 
+              let field_names = List.map (fun (f,s) -> (f,Sym.subst fsym sym2 s)) 
                                   field_names in
               let env = remove_open_struct env ssym in
               let env = add_open_struct env ssym {field_names} in
