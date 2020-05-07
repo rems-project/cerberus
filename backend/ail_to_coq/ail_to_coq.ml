@@ -266,6 +266,7 @@ let rec translate_expr lval goal_ty e =
         let (e, l) = translate_expr true None e in
         (locate (AddrOf(e)), l)
     | AilEunary(Indirection,e)     -> translate e
+    | AilEunary(Plus,e)            -> translate e
     | AilEunary(op,e)              ->
         let ty = op_type_of_tc (loc_of e) (tc_of e) in
         let (e, l) = translate e in
@@ -273,9 +274,9 @@ let rec translate_expr lval goal_ty e =
           match op with
           | Address     -> assert false (* Handled above. *)
           | Indirection -> assert false (* Handled above. *)
-          | Plus        -> not_impl loc "unary operator (Plus)"
-          | Minus       -> not_impl loc "unary operator (Minus)"
-          | Bnot        -> NegOp
+          | Plus        -> assert false (* Handled above. *)
+          | Minus       -> NegOp
+          | Bnot        -> NotIntOp
           | PostfixIncr -> not_impl loc "unary operator (PostfixIncr)"
           | PostfixDecr -> not_impl loc "unary operator (PostfixDecr)"
         in
@@ -456,7 +457,7 @@ let rec translate_expr lval goal_ty e =
           (locate gen, l)
         in res
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
-    | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
+    | AilEfunction_decay(e)        -> not_impl loc "expr function_decay"
   in
   match (goal_ty, res_ty) with
   | (None         , _           )
