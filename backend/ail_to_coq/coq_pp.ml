@@ -479,11 +479,12 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
             let ty = Ty_lambda([], Some(Coq_ident("unit")), ty) in
             fprintf ff "optionalO %a null" (pp true false) ty
         | "optional" | "optionalO" ->
-            let ty =
-              match tys with [ty] -> ty | _    ->
-              Panic.panic_no_pos "[%s] expects exactly one argument." id
-            in
-            fprintf ff "%s %a null" id (pp true false) ty
+           (match tys with
+           | [ty]       ->
+             fprintf ff "%s %a null" id (pp true false) ty
+           | [ty1; ty2] ->
+              fprintf ff "%s %a %a" id (pp true false) ty1 (pp true false) ty2
+           | _ -> Panic.panic_no_pos "[%s] expects one or two arguments." id)
         | "struct"                 ->
             let (ty, tys) =
               match tys with ty :: tys -> (ty, tys) | [] ->
