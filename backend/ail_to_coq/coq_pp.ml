@@ -506,15 +506,15 @@ let pp_constrs : constr list pp = fun ff cs ->
   | []      -> pp_str ff "True"
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
-let gather_fields s_id s =
+let gather_struct_fields id s =
   let fn (x, (ty_opt, layout)) =
     match ty_opt with
-    | Some(Some(ty)) -> (x, ty, layout)
-    | Some(None)     ->
-        Panic.panic_no_pos "Weird error on field [%s] of struct [%s]." x s_id
+    | Some(MA_field(ty)) -> (x, ty, layout)
+    | Some(MA_utag(_))
+    | Some(MA_none)      ->
+        Panic.panic_no_pos "Bad annotation on field [%s] of struct [%s]." x id
     | None           ->
-    Panic.panic_no_pos
-      "Annotation on field [%s] (struct [%s])] is invalid." x s_id
+        Panic.panic_no_pos "No annotation on field [%s] of struct [%s]." x id
   in
   List.map fn s.struct_members
 
@@ -552,18 +552,28 @@ let rec pp_struct_def_np structs guard annot fields ff id =
             | None        ->
             Panic.panic_no_pos "Annotations on struct [%s] are invalid." s_id
           in
-          if annot = no_struct_annot then
-            (* Fall back to normal printing in case of unannotated struct. *)
-            pp_type_expr_guard None guard ff ty
-          else
-          let annot =
-            match annot.st_ptr_type with
-            | None    -> {annot with st_ptr_type = Some((s_id,ty))}
-            | Some(_) ->
-            Panic.panic_no_pos "[rc::ptr_type] in nested struct [%s]." s_id
-          in
-          let fields = gather_fields s_id s in
-          pp "(%a)" (pp_struct_def_np structs Guard_none annot fields) s_id
+          begin
+            match annot with
+            | SA_union        ->
+                Panic.panic_no_pos "Annotations on struct [%s] are invalid \
+                  since it is not a union." s_id
+            | SA_tagged_u(_)  ->
+                Panic.panic_no_pos "Annotations on struct [%s] are invalid \
+                  since it is not a tagged union." s_id
+            | SA_basic(annot) ->
+            if annot = default_basic_struct_annot then
+              (* No annotation on struct, fall back to normal printing. *)
+              pp_type_expr_guard None guard ff ty
+            else
+            let annot =
+              match annot.st_ptr_type with
+              | None    -> {annot with st_ptr_type = Some((s_id,ty))}
+              | Some(_) ->
+              Panic.panic_no_pos "[rc::ptr_type] in nested struct [%s]." s_id
+            in
+            let fields = gather_struct_fields s_id s in
+            pp "(%a)" (pp_struct_def_np structs Guard_none annot fields) s_id
+          end
       | LStruct(_   , true ) -> assert false (* TODO *)
       | _                    -> pp_type_expr_guard None guard ff ty
     in
@@ -672,17 +682,11 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   let opaque = ref [] in
 
   (* Definition of types. *)
-  let pp_struct (struct_id, s) =
-    let annot =
-      match s.struct_annot with
-      | Some(annot) -> annot
-      | None        ->
-      Panic.panic_no_pos "Annotations on struct [%s] are invalid." struct_id
-    in
+  let pp_struct struct_id annot s =
     (* Check if a type must be generated. *)
     if annot.st_refined_by = [] && annot.st_ptr_type = None then () else
     (* Gather the field annotations. *)
-    let fields = gather_fields struct_id s in
+    let fields = gather_struct_fields struct_id s in
     let (ref_names, ref_types) = List.split annot.st_refined_by in
     let pp_params ff =
       List.iter (fun (x,e) -> fprintf ff "(%s : %a) " x (pp_coq_expr false) e)
@@ -772,13 +776,20 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       pp "@;Proof. solve_rmovable. Defined."
     end
   in
-  let pp_union (id, _) =
-    pp "\n@;(* Printing for Unions not implemented [%s]. *)" id (* TODO *)
+  let pp_tagged_union id _ _ =
+    pp "\n@;(* Printing of tagged unions not implemented [%s]. *)" id
+    (* TODO *)
   in
-  let pp_struct_union ((_, {struct_is_union; struct_name; _}) as s) =
-    if struct_is_union then pp_union s else pp_struct s
+  let pp_struct_or_tagged_union (id, s) =
+    match s.struct_annot with
+    | Some(SA_basic(annot)) -> pp_struct id annot s
+    | Some(SA_tagged_u(e))  -> pp_tagged_union id e s
+    | Some(SA_union)        ->
+        Panic.panic_no_pos "Unions like [%s] not allowed at the top level." id
+    | None                  ->
+        Panic.panic_no_pos "Annotations on struct [%s] are invalid." id
   in
-  List.iter pp_struct_union ast.structs;
+  List.iter pp_struct_or_tagged_union ast.structs;
 
   (* Function specs. *)
   let pp_spec (id, def_or_decl) =
