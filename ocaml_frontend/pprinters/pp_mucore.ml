@@ -12,6 +12,9 @@ open Colour
 
 open Pp_prelude
 
+type budget = int option
+
+
 module type CONFIG =
 sig
   val show_std: bool
@@ -28,12 +31,12 @@ sig
   val pp_object_value: 'bty mu_value -> PPrint.document
   val pp_value: 'bty mu_value -> PPrint.document
   val pp_params: (Symbol.sym * mu_base_type) list -> PPrint.document
-  val pp_pexpr: ('ty) mu_pexpr -> PPrint.document
-  val pp_expr: ('a, 'b) mu_expr -> PPrint.document
-  val pp_file: ('a, 'b) mu_file -> PPrint.document
+  val pp_pexpr: budget -> ('ty) mu_pexpr -> PPrint.document
+  val pp_expr: budget -> ('a, 'b) mu_expr -> PPrint.document
+  val pp_file: budget -> ('a, 'b) mu_file -> PPrint.document
 
-  val pp_funinfo: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
-  val pp_funinfo_with_attributes: (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
+  val pp_funinfo_with_attributes: budget -> (Symbol.sym, Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool) Pmap.map -> PPrint.document
   val pp_extern_symmap: (Symbol.sym, Symbol.sym) Pmap.map -> PPrint.document
 
   val pp_action: 'a mu_action_ -> PPrint.document
@@ -396,10 +399,22 @@ let pp_sym_or_pattern = function
      pp_pattern pat
 
 
-let pp_pexpr pe =
-  let rec pp prec (M_Pexpr (annot, _, pe)) =
+let pp_pexpr budget pe =
+
+
+  let rec pp budget prec (M_Pexpr (annot, _, pe)) =
+
+    match budget with
+    | Some 0 -> P.dot ^^ P.dot ^^ P.dot ^^^ P.parens (!^"abbreviated")
+    | _ -> 
+
+    let budget' = match budget with
+      | Some n -> Some (n-1)
+      | None -> None
+    in
+
     let prec' = precedence pe in
-    let pp z = P.group (pp prec' z) in
+    let pp z = P.group (pp budget' prec' z) in
     (maybe_print_location annot) ^^
     (if compare_precedence prec' prec then fun z -> z else P.parens)
     begin
@@ -520,14 +535,78 @@ let pp_pexpr pe =
               pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp pe3)
             )
     end
-  in pp None pe
+  in pp budget None pe
 
 
-let rec pp_expr expr =
-  let rec pp is_semi prec (M_Expr (annot, e)) =
+
+let pp_action act =
+  let pp_args args mo =
+    P.parens (comma_list pp_actype_or_asym args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
+  match act with
+    | M_Create (al, ty, _) ->
+        pp_keyword "create" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty)
+    | M_CreateReadOnly (al, ty, init, _) ->
+        pp_keyword "create_readonly" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_asym init)
+    | M_Alloc (al, n, _) ->
+        pp_keyword "alloc" ^^ P.parens (pp_actype al ^^ P.comma ^^^ pp_asym n)
+    | M_Kill (b, e) ->
+        pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_asym e)
+    | M_Store (is_locking, ty, e1, e2, mo) ->
+       pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [Left ty; Right e1; Right e2] mo
+    | M_Load (ty, e, mo) ->
+       pp_keyword "load" ^^ pp_args [Left ty; Right e] mo
+    | M_RMW (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "rmw" ^^
+        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
+                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | M_Fence mo ->
+        pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
+    | M_CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_strong" ^^
+        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
+                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | M_CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
+        pp_keyword "compare_exchange_weak" ^^
+        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
+                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
+                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
+    | M_LinuxFence mo ->
+        pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
+    | M_LinuxStore (ty, e1, e2, mo) ->
+        pp_keyword "linux_store" ^^
+        P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+    | M_LinuxLoad (ty, e, mo) ->
+        pp_keyword "linux_load" ^^
+        P.parens (comma_list pp_actype_or_asym [Left ty;Right e] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+    | M_LinuxRMW (ty, e1, e2, mo) ->
+        pp_keyword "linux_rmw" ^^
+        P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
+                  pp_linux_memory_order mo)
+
+
+let pp_expr budget expr =
+
+  let rec pp budget is_semi prec (M_Expr (annot, e)) =
+  
+    match budget with
+    | Some 0 -> P.dot ^^ P.dot ^^ P.dot ^^^ P.parens (!^"abbreviated")
+    | _ -> 
+
+    let budget' = match budget with
+      | Some n -> Some (n-1)
+      | None -> None
+    in
+
+
+
+
     let prec' = precedence_expr e in
-    let pp_ z = pp true prec' z in  (* TODO: this is sad *)
-    let pp  z = pp false prec' z in
+    let pp_ z = pp budget' true prec' z in  (* TODO: this is sad *)
+    let pp  z = pp budget' false prec' z in
 
     begin
       fun doc ->
@@ -567,7 +646,7 @@ let rec pp_expr expr =
       end
       begin match e with
         | M_Epure pe ->
-            pp_keyword "pure" ^^ P.parens (pp_pexpr pe)
+            pp_keyword "pure" ^^ P.parens (pp_pexpr budget pe)
         | M_Ememop memop ->
            let (memop, pes) = Mucore_to_core.mu_to_core__memop__ memop in
             pp_keyword "memop" ^^ P.parens (Pp_mem.pp_memop memop ^^ P.comma ^^^ comma_list pp_actype_or_asym pes)
@@ -585,7 +664,8 @@ let rec pp_expr expr =
         | M_Elet (pat, pe1, e2) ->
             P.group (
               P.prefix 0 1
-                (pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^ pp_pexpr pe1 ^^^ pp_control "in")
+                (pp_control "let" ^^^ pp_sym_or_pattern pat ^^^ P.equals ^^^ 
+                   pp_pexpr budget' pe1 ^^^ pp_control "in")
                 (pp e2)
            )
         | M_Eif (pe1, e2, e3) ->
@@ -645,57 +725,11 @@ let rec pp_expr expr =
             P.parens (pp e)
       end
     end
-    in pp false None expr
+    in pp budget false None expr
 
 
 
-and pp_action act =
-  let pp_args args mo =
-    P.parens (comma_list pp_actype_or_asym args ^^ if mo = Cmm_csem.NA then P.empty else P.comma ^^^ pp_memory_order mo) in
-  match act with
-    | M_Create (al, ty, _) ->
-        pp_keyword "create" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty)
-    | M_CreateReadOnly (al, ty, init, _) ->
-        pp_keyword "create_readonly" ^^ P.parens (pp_asym al ^^ P.comma ^^^ pp_actype ty ^^ P.comma ^^^ pp_asym init)
-    | M_Alloc (al, n, _) ->
-        pp_keyword "alloc" ^^ P.parens (pp_actype al ^^ P.comma ^^^ pp_asym n)
-    | M_Kill (b, e) ->
-        pp_keyword (if b then "free" else "kill") ^^ P.parens (pp_asym e)
-    | M_Store (is_locking, ty, e1, e2, mo) ->
-       pp_keyword (if is_locking then "store_lock" else "store") ^^ pp_args [Left ty; Right e1; Right e2] mo
-    | M_Load (ty, e, mo) ->
-       pp_keyword "load" ^^ pp_args [Left ty; Right e] mo
-    | M_RMW (ty, e1, e2, e3, mo1, mo2) ->
-        pp_keyword "rmw" ^^
-        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
-                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | M_Fence mo ->
-        pp_keyword "fence" ^^ P.parens (pp_memory_order mo)
-    | M_CompareExchangeStrong (ty, e1, e2, e3, mo1, mo2) ->
-        pp_keyword "compare_exchange_strong" ^^
-        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
-                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | M_CompareExchangeWeak (ty, e1, e2, e3, mo1, mo2) ->
-        pp_keyword "compare_exchange_weak" ^^
-        P.parens (pp_actype ty ^^ P.comma ^^^ pp_asym e1 ^^ P.comma ^^^
-                  pp_asym e2 ^^ P.comma ^^^ pp_asym e3 ^^ P.comma ^^^
-                  pp_memory_order mo1 ^^ P.comma ^^^ pp_memory_order mo2)
-    | M_LinuxFence mo ->
-        pp_keyword "linux_fence" ^^ P.parens (pp_linux_memory_order mo)
-    | M_LinuxStore (ty, e1, e2, mo) ->
-        pp_keyword "linux_store" ^^
-        P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
-                  pp_linux_memory_order mo)
-    | M_LinuxLoad (ty, e, mo) ->
-        pp_keyword "linux_load" ^^
-        P.parens (comma_list pp_actype_or_asym [Left ty;Right e] ^^ P.comma ^^^
-                  pp_linux_memory_order mo)
-    | M_LinuxRMW (ty, e1, e2, mo) ->
-        pp_keyword "linux_rmw" ^^
-        P.parens (comma_list pp_actype_or_asym [Left ty;Right e1;Right e2] ^^ P.comma ^^^
-                  pp_linux_memory_order mo)
+
 
 
 
@@ -755,7 +789,7 @@ let pp_argument (sym, bTy) =
 let pp_params params =
   P.parens (comma_list pp_argument params)
 
-let pp_fun_map funs =
+let pp_fun_map budget funs =
   let pp_cond loc d =
     if show_include || Location_ocaml.from_main_file loc then d else P.empty
   in
@@ -765,7 +799,7 @@ let pp_fun_map funs =
       | M_Fun  (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.hardline ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.hardline ^^ P.hardline
       | M_ProcDecl (loc, bTy, bTys) ->
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ P.parens (comma_list pp_core_base_type bTys) ^^ P.hardline ^^ P.hardline
@@ -776,22 +810,22 @@ let pp_fun_map funs =
           pp_cond loc @@
           pp_keyword "proc" ^^^ pp_symbol sym ^^^ pp_params params ^^ P.colon ^^^ pp_keyword "eff" ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.hardline ^^ P.hardline
+          P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.hardline ^^ P.hardline
     ) funs P.empty
 
 
-let pp_impl impl =
+let pp_impl budget impl =
   Pmap.fold (fun iCst iDecl acc ->
     acc ^^
     match iDecl with
       | M_Def (bty, pe) ->
           pp_keyword "def" ^^^ pp_impl iCst ^^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
 
       | M_IFun (bTy, params, pe) ->
           pp_keyword "fun" ^^^ pp_impl iCst ^^^ pp_params params ^^ P.colon ^^^ pp_core_base_type bTy ^^^
           P.colon ^^ P.equals ^^
-          P.nest 2 (P.break 1 ^^ pp_pexpr pe) ^^ P.break 1 ^^ P.break 1
+          P.nest 2 (P.break 1 ^^ pp_pexpr budget pe) ^^ P.break 1 ^^ P.break 1
   ) impl P.empty
 
 let pp_extern_symmap symmap =
@@ -820,17 +854,17 @@ let pp_funinfo_with_attributes finfos =
         ^^^ (* P.at ^^^ Location_ocaml.pp_location loc ^^^ *) Pp_ail.pp_attributes attrs
         ^^ P.hardline) finfos P.empty
 
-let pp_globs globs =
+let pp_globs budget globs =
   List.fold_left (fun acc (sym, decl) ->
       match decl with
       | M_GlobalDef (bTy, e) ->
         acc ^^ pp_keyword "glob" ^^^ pp_symbol sym ^^ P.colon ^^^ pp_core_base_type bTy ^^^
               P.colon ^^ P.equals ^^
-              P.nest 2 (P.break 1 ^^ pp_expr e) ^^ P.break 1 ^^ P.break 1
+              P.nest 2 (P.break 1 ^^ pp_expr budget e) ^^ P.break 1 ^^ P.break 1
       | M_GlobalDecl _ ->
         acc) P.empty globs
 
-let pp_file file =
+let pp_file budget file =
   let show_aggregate = not @@ Pmap.is_empty file.mu_tagDefs in
   let show_globs = file.mu_globs != [] in
   let guard b doc = if b then doc else P.empty in
@@ -839,10 +873,10 @@ let pp_file file =
     if Debug_ocaml.get_debug_level () > 1 then
       fun z ->
         !^ "-- BEGIN STDLIB" ^^ P.break 1 ^^
-        pp_fun_map file.mu_stdlib ^^ P.break 1 ^^
+        (pp_fun_map budget file.mu_stdlib) ^^ P.break 1 ^^
         !^ "-- END STDLIB" ^^ P.break 1 ^^
         !^ "-- BEGIN IMPL" ^^ P.break 1 ^^
-        pp_impl file.mu_impl ^^ P.break 1 ^^
+        pp_impl budget file.mu_impl ^^ P.break 1 ^^
         !^ "-- END IMPL" ^^ P.break 1 ^^ z
     else
       id
@@ -862,13 +896,13 @@ let pp_file file =
 
     guard show_globs begin
       !^ "-- Globals" ^^ P.break 1 ^^
-      pp_globs file.mu_globs
+      pp_globs budget file.mu_globs
     end ^^
 
     guard (show_aggregate || show_globs) begin
       !^ "-- Fun map" ^^ P.break 1
     end ^^
-    pp_fun_map file.mu_funs
+    pp_fun_map budget file.mu_funs
   end
 
 end
