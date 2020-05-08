@@ -21,6 +21,8 @@ let to_type_cat : GenTypes.genTypeCategory -> type_cat = fun tc ->
 
 let not_impl loc fmt = panic loc ("Not implemented: " ^^ fmt)
 
+let forbidden loc fmt = panic loc ("Forbidden: " ^^ fmt)
+
 (* Short names for common functions. *)
 let sym_to_str : Symbol.sym -> string =
   Pp_symbol.to_string_pretty
@@ -266,6 +268,7 @@ let rec translate_expr lval goal_ty e =
         let (e, l) = translate_expr true None e in
         (locate (AddrOf(e)), l)
     | AilEunary(Indirection,e)     -> translate e
+    | AilEunary(Plus,e)            -> translate e
     | AilEunary(op,e)              ->
         let ty = op_type_of_tc (loc_of e) (tc_of e) in
         let (e, l) = translate e in
@@ -273,11 +276,11 @@ let rec translate_expr lval goal_ty e =
           match op with
           | Address     -> assert false (* Handled above. *)
           | Indirection -> assert false (* Handled above. *)
-          | Plus        -> not_impl loc "unary operator (Plus)"
-          | Minus       -> not_impl loc "unary operator (Minus)"
-          | Bnot        -> NegOp
-          | PostfixIncr -> not_impl loc "unary operator (PostfixIncr)"
-          | PostfixDecr -> not_impl loc "unary operator (PostfixDecr)"
+          | Plus        -> assert false (* Handled above. *)
+          | Minus       -> NegOp
+          | Bnot        -> NotIntOp
+          | PostfixIncr -> forbidden loc "nested postfix increment"
+          | PostfixDecr -> forbidden loc "nested postfix decrement"
         in
         (locate (UnOp(op, ty, e)), l)
     | AilEbinary(e1,op,e2)         ->
@@ -314,7 +317,7 @@ let rec translate_expr lval goal_ty e =
         let (e1, l1) = translate_expr lval  goal_ty e1 in
         let (e2, l2) = translate_expr false goal_ty e2 in
         (locate (BinOp(op, ty1, ty2, e1, e2)), l1 @ l2)
-    | AilEassign(e1,e2)            -> not_impl loc "nested assignment"
+    | AilEassign(e1,e2)            -> forbidden loc "nested assignment"
     | AilEcompoundAssign(e1,op,e2) -> not_impl loc "expr compound assign"
     | AilEcond(e1,e2,e3)           -> not_impl loc "expr cond"
     | AilEcast(q,c_ty,e)           ->
@@ -456,7 +459,7 @@ let rec translate_expr lval goal_ty e =
           (locate gen, l)
         in res
     | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
-    | AilEfunction_decay(e)        -> not_impl loc"expr function_decay"
+    | AilEfunction_decay(e)        -> not_impl loc "expr function_decay"
   in
   match (goal_ty, res_ty) with
   | (None         , _           )
@@ -585,11 +588,12 @@ let translate_block stmts blocks ret_ty =
       | AilSskip            -> trans break continue final stmts blocks
       | AilSexpr(e)         ->
           let (stmt, blocks) = trans break continue final stmts blocks in
+          let incr_or_decr op = op = PostfixIncr || op = PostfixDecr in
           let stmt =
             match strip_expr e with
-            | AilEassert(e)     ->
+            | AilEassert(e)                        ->
                 trans_bool_expr e (fun e -> locate (Assert(e, stmt)))
-            | AilEassign(e1,e2) ->
+            | AilEassign(e1,e2)                    ->
                 let atomic = is_atomic_tc (tc_of e1) in
                 let e1 = trans_lval e1 in
                 let layout = layout_of_tc (tc_of e) in
@@ -601,7 +605,25 @@ let translate_block stmts blocks ret_ty =
                 in
                 let fn e2 = locate (Assign(atomic, layout, e1, e2, stmt)) in
                 trans_expr e2 goal_ty fn
-            | AilEcall(_,_)     ->
+            | AilEunary(op,e) when incr_or_decr op ->
+                let atomic = is_atomic_tc (tc_of e) in
+                let layout = layout_of_tc (tc_of e) in
+                let int_ty =
+                  let ty_opt = op_type_tc_opt (loc_of e) (tc_of e) in
+                  match ty_opt with
+                  | Some(OpInt(int_ty)) -> int_ty
+                  | _                   -> assert false (* Badly typed. *)
+                in
+                let op = match op with PostfixIncr -> AddOp | _ -> SubOp in
+                let e1 = trans_lval e in
+                let e2 =
+                  let (e, calls) = translate_expr false None e in
+                  if calls <> [] then assert false;
+                  let one = locate (Val(Int("1", int_ty))) in
+                  locate (BinOp(op, OpInt(int_ty), OpInt(int_ty), e, one))
+                in
+                locate (Assign(atomic, layout, e1, e2, stmt))
+            | AilEcall(_,_)                        ->
                 let (stmt, calls) =
                   match snd (translate_expr false None e) with
                   | []                  -> assert false
@@ -612,7 +634,7 @@ let translate_block stmts blocks ret_ty =
                   mkloc (Call(id, e, es, stmt)) loc
                 in
                 List.fold_right fn calls stmt
-            | _                 ->
+            | _                                    ->
                 attrs_used := true;
                 let annots =
                   let fn () = Some(expr_annot attrs) in
