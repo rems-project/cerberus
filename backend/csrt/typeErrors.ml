@@ -18,8 +18,8 @@ type type_error =
  | Name_bound_twice of Sym.t
  | Unbound_name of Sym.t
  | Unbound_impl_const of Implementation.implementation_constant
- | Unreachable of string
- | Unsupported of string
+ | Unreachable of PPrint.document
+ | Unsupported of PPrint.document
  | Var_kind_error of {
      sym: Sym.t;
      expected : VarTypes.kind;
@@ -119,11 +119,11 @@ let pp (loc : Loc.t) (err : t) =
     | Generic_error err ->
        err
     | Unreachable unreachable ->
-       !^"Internal error, should be unreachable" ^^ colon ^^^ !^unreachable
+       !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
     | Illtyped_it it ->
        !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
     | Unsupported unsupported ->
-       !^"Unsupported feature" ^^ colon ^^^ !^unsupported
+       !^"Unsupported feature" ^^ colon ^^^ unsupported
     | Unbound_name unbound ->
        !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
     (* | Inconsistent_fundef {loc; decl; defn} ->

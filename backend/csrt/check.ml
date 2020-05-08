@@ -185,8 +185,8 @@ let rec bt_of_core_base_type loc cbt =
     | OTy_pointer -> return BT.Loc
     | OTy_array cbt -> return BT.Array
     | OTy_struct sym -> return (Struct sym)
-    | OTy_union _sym -> fail loc (Unsupported "todo: unions")
-    | OTy_floating -> fail loc (Unsupported "todo: float")
+    | OTy_union _sym -> fail loc (Unsupported !^"todo: unions")
+    | OTy_floating -> fail loc (Unsupported !^"todo: float")
   in
   match cbt with
   | BTy_unit -> return BT.Unit
@@ -199,8 +199,8 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_tuple bts -> 
      mapM (bt_of_core_base_type loc) bts >>= fun bts ->
      return (Tuple bts)
-  | BTy_storable -> fail loc (Unsupported "BTy_storable")
-  | BTy_ctype -> fail loc (Unsupported "ctype")
+  | BTy_storable -> fail loc (Unsupported !^"BTy_storable")
+  | BTy_ctype -> fail loc (Unsupported !^"ctype")
 
 
 
@@ -231,11 +231,11 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Struct sym -> 
      return ((name, BT.Struct sym),[],[],[])
   | Union sym -> 
-     fail loc (Unsupported "todo: union types")
+     fail loc (Unsupported !^"todo: union types")
   | Basic (Floating _) -> 
-     fail loc (Unsupported "floats")
+     fail loc (Unsupported !^"floats")
   | Function _ -> 
-     fail loc (Unsupported "function pointers")
+     fail loc (Unsupported !^"function pointers")
 
 
 let ctype loc (name : Sym.t) (ct : Ctype.ctype) =
@@ -405,7 +405,7 @@ let match_next_l errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Bind
                             has = L arg.bound; expected = L spec.bound} in
         fail loc (errf msm)
      end
-  | _ -> fail loc (Unreachable "surplus/missing L")
+  | _ -> fail loc (Unreachable !^"surplus/missing L")
 
 
 
@@ -487,9 +487,9 @@ let rec pack_struct loc env sym struct_type {Local.field_names} =
   | [{name;bound = L (Base (Struct struct_type))}] ->
      return ({name;bound = Struct struct_type},env)
   | _ :: _ :: _ -> 
-     fail loc (Unreachable "pack_struct returned multiple things")
+     fail loc (Unreachable !^"pack_struct returned multiple things")
   | _ -> 
-     fail loc (Unreachable "pack_struct returned non-struct type")
+     fail loc (Unreachable !^"pack_struct returned non-struct type")
   
 
 
@@ -683,7 +683,7 @@ let infer_ctor loc ctor (aargs : aargs) =
   | M_CivAND
   | M_CivOR
   | M_CivXOR -> 
-     fail loc (Unsupported "todo: Civ..")
+     fail loc (Unsupported !^"todo: Civ..")
   | M_Cspecified ->
      let name = fresh () in
      begin match aargs with
@@ -694,10 +694,10 @@ let infer_ctor loc ctor (aargs : aargs) =
                     (List.length args) in
         fail loc (Generic_error !^err)
      end
-  | M_Cnil cbt -> fail loc (Unsupported "lists")
-  | M_Ccons -> fail loc (Unsupported "lists")
-  | M_Cfvfromint -> fail loc (Unsupported "floats")
-  | M_Civfromfloat -> fail loc (Unsupported "floats")
+  | M_Cnil cbt -> fail loc (Unsupported !^"lists")
+  | M_Ccons -> fail loc (Unsupported !^"lists")
+  | M_Cfvfromint -> fail loc (Unsupported !^"floats")
+  | M_Civfromfloat -> fail loc (Unsupported !^"floats")
 
 
 
@@ -809,7 +809,14 @@ let is_owned_pointer loc env sym =
     | [(r,(p,bt))] -> 
        debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
        return (Some (r,(p,bt)))
-    | _ -> fail loc (Generic_error (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources"))
+    | (r,(p,bt))::_::_ -> 
+       (* this can happen, maybe normally, but at least when we're on
+          a control-flow path that the constraint solver knows to be
+          unreachable: with an inconsistent set of assumptions *)
+       warn (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources") >>= fun () ->
+       debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
+       return (Some (r,(p,bt)))
+    (* | _ -> fail loc (Unreachable (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources")) *)
 
 
 
@@ -841,21 +848,21 @@ let infer_object_value loc env ov =
          let typ = [makeA name Loc; makeUC (LC (Null (S (name, Loc))))] in
          return (typ,env) )
        ( fun sym -> 
-         fail loc (Unsupported "function pointers") )
+         fail loc (Unsupported !^"function pointers") )
        ( fun _prov loc ->
          let typ = [makeA name Loc; makeUC (LC (S (name, Loc) %= Num loc))] in
          return (typ,env) )
-       ( fun () -> fail loc (Unreachable "unspecified pointer value") )
+       ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
   | M_OVarray items ->
      make_Aargs loc env items >>= fun (args_bts,env) ->
      check_Aargs_typ None args_bts >>= fun _ ->
      return ([makeA name Array], env)
   | M_OVstruct (sym, fields) ->
-     fail loc (Unsupported "todo: struct")
+     fail loc (Unsupported !^"todo: struct")
   | M_OVunion _ -> 
-     fail loc (Unsupported "todo: union types")
+     fail loc (Unsupported !^"todo: union types")
   | M_OVfloating iv ->
-     fail loc (Unsupported "floats")
+     fail loc (Unsupported !^"floats")
 
 
 let infer_value loc env v : (Types.t * Env.t,'e) m = 
@@ -960,7 +967,7 @@ let infer_value loc env v : (Types.t * Env.t,'e) m =
 
      
 let infer_pat loc (M_Pattern (annots, pat_)) = 
-  fail loc (Unsupported "todo: implement infer_pat")
+  fail loc (Unsupported !^"todo: implement infer_pat")
 
 
 let binop_typ op = 
@@ -1029,7 +1036,7 @@ let check_field_access loc env sym access =
 (* change data structures to avoid empty list failure *)
 let rec check_field_accesses loc env sym accesses =
   match accesses with
-  | [] -> fail loc (Unreachable "empty access list")
+  | [] -> fail loc (Unreachable !^"empty access list")
   | [access] -> 
      check_field_access loc env sym access
   | access :: accesses ->
@@ -1060,7 +1067,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      infer_value loc env v >>= fun (t, env) ->
      return (Normal t, env)
   | M_PEconstrained _ ->
-     fail loc (Unsupported "todo: PEconstrained")
+     fail loc (Unsupported !^"todo: PEconstrained")
   | M_PEundef (loc,undef) ->
      return (Bad (Undefined (loc, undef)), env)
   | M_PEerror (err,asym) ->
@@ -1071,7 +1078,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      infer_ctor loc ctor aargs >>= fun rt ->
      return (Normal rt, env)
   | M_PEarray_shift _ ->
-     fail loc (Unsupported "todo: PEarray_shift")
+     fail loc (Unsupported !^"todo: PEarray_shift")
   | M_PEmember_shift (asym, struct_type, fid) ->
      let (sym, loc) = aunpack loc asym in
      get_Avar loc env sym >>= fun (bt,env) ->
@@ -1083,7 +1090,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
         let bt = StructField (sym, accesses@[{loc; struct_type; field=fid}]) in
         return (Normal [makeUA bt], env)
      | bt ->
-        fail loc (Unreachable "member_shift applied to non-pointer")
+        fail loc (Unreachable !^"member_shift applied to non-pointer")
      end
   | M_PEnot asym ->
      let (sym,loc) = aunpack loc asym in
@@ -1103,11 +1110,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      let constr = LC ((c (S (sym1,bt1)) (S (sym1,bt2))) %= S (ret,rbt)) in
      return (Normal [makeA ret rbt; makeUC constr], env)
   | M_PEstruct _ ->
-     fail loc (Unsupported "todo: PEstruct")
+     fail loc (Unsupported !^"todo: PEstruct")
   | M_PEunion _ ->
-     fail loc (Unsupported "todo: PEunion")
+     fail loc (Unsupported !^"todo: PEunion")
   | M_PEmemberof _ ->
-     fail loc (Unsupported "todo: M_PEmemberof")
+     fail loc (Unsupported !^"todo: M_PEmemberof")
   | M_PEcall (fname, asyms) ->
      begin match fname with
      | Core.Impl impl -> 
@@ -1119,9 +1126,9 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      make_Aargs loc env asyms >>= fun (args,env) ->
      call_typ loc env decl_typ args >>= fun (rt, env) ->
      return (Normal rt, env)
-  | M_PEcase _ -> fail loc (Unreachable "PEcase in inferring position")
-  | M_PElet _ -> fail loc (Unreachable "PElet in inferring position")
-  | M_PEif _ -> fail loc (Unreachable "PElet in inferring position")
+  | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
+  | M_PElet _ -> fail loc (Unreachable !^"PElet in inferring position")
+  | M_PEif _ -> fail loc (Unreachable !^"PElet in inferring position")
   end >>= fun (typ,env) ->
   
   debug_print 3 (blank 3 ^^ item "inferred" (UU.pp_ut typ)) >>= fun () ->
@@ -1179,7 +1186,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
-        fail loc (Unsupported "todo: ctor pattern")
+        fail loc (Unsupported !^"todo: ctor pattern")
      end
   | _ ->
      infer_pexpr loc env e >>= fun (rt, env) ->
@@ -1215,7 +1222,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
      | M_Ptrdiff _ (* (actype 'bty * asym 'bty * asym 'bty) *)
      | M_IntFromPtr _ (* (actype 'bty * asym 'bty) *)
      | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
-       -> fail loc (Unsupported "todo: ememop")
+       -> fail loc (Unsupported !^"todo: ememop")
      | M_PtrValidForDeref (a_ct, asym) ->
         let (ct, ct_loc) = aunpack loc a_ct in
         ctype_aux loc (fresh ()) (make_pointer_ctype ct) >>= fun ((name,bt),l,r,c) ->
@@ -1236,7 +1243,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
      | M_Va_copy _ (* (asym 'bty) *)
      | M_Va_arg _ (* (asym 'bty * actype 'bty) *)
      | M_Va_end _ (* (asym 'bty) *) 
-       -> fail loc (Unsupported "todo: ememop")
+       -> fail loc (Unsupported !^"todo: ememop")
      end
   | M_Eaction (M_Paction (_pol, M_Action (aloc,_,action_))) ->
      begin match action_ with
@@ -1250,9 +1257,9 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         let rt = [makeA name Loc; makeUR (Block (S (name, Loc), Num size))] in
         return (Normal rt, env)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
-        fail loc (Unsupported "todo: CreateReadOnly")
+        fail loc (Unsupported !^"todo: CreateReadOnly")
      | M_Alloc (ct, sym, _prefix) -> 
-        fail loc (Unsupported "todo: Alloc")
+        fail loc (Unsupported !^"todo: Alloc")
      | M_Kill (_is_dynamic, asym) -> 
         let (sym,loc) = aunpack loc asym in
         let resources = recursively_owned_resources env sym in
@@ -1277,8 +1284,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            let args : aargs = [({name=fsym;bound=fbt},floc);({name=val_sym;bound=val_bt},val_loc)] in
            call_typ loc env ftyp args >>= fun (rt, env) ->
            begin match get_open_struct env old_struct with
-           | None -> fail loc (Unreachable ("store: open struct is not open: " ^ 
-                                              (pps (Sym.pp old_struct))))
+           | None -> fail loc (Unreachable (!^"store: open struct is not open: " ^^ 
+                                 Sym.pp old_struct))
            | Some {field_names} ->
               let field_names = List.map (fun (f,s) -> (f,Sym.subst fsym val_sym s)) 
                                   field_names in
@@ -1323,41 +1330,41 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            end
         end
      | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        fail loc (Unsupported "todo: RMW")
+        fail loc (Unsupported !^"todo: RMW")
      | M_Fence mo -> 
-        fail loc (Unsupported "todo: Fence")
+        fail loc (Unsupported !^"todo: Fence")
      | M_CompareExchangeStrong (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        fail loc (Unsupported "todo: CompareExchangeStrong")
+        fail loc (Unsupported !^"todo: CompareExchangeStrong")
      | M_CompareExchangeWeak (ct, sym1, sym2, sym3, mo1, mo2) -> 
-        fail loc (Unsupported "todo: CompareExchangeWeak")
+        fail loc (Unsupported !^"todo: CompareExchangeWeak")
      | M_LinuxFence mo -> 
-        fail loc (Unsupported "todo: LinuxFemce")
+        fail loc (Unsupported !^"todo: LinuxFemce")
      | M_LinuxLoad (ct, sym1, mo) -> 
-        fail loc (Unsupported "todo: LinuxLoad")
+        fail loc (Unsupported !^"todo: LinuxLoad")
      | M_LinuxStore (ct, sym1, sym2, mo) -> 
-        fail loc (Unsupported "todo: LinuxStore")
+        fail loc (Unsupported !^"todo: LinuxStore")
      | M_LinuxRMW (ct, sym1, sym2, mo) -> 
-        fail loc (Unsupported "todo: LinuxRMW")
+        fail loc (Unsupported !^"todo: LinuxRMW")
      end
   | M_Eskip -> 
      return (Normal [makeUA Unit], env)
   | M_Eccall (_a, asym, asd, asyms) ->
-     fail loc (Unsupported "todo: Eccall")
+     fail loc (Unsupported !^"todo: Eccall")
   | M_Eproc _ ->
-     fail loc (Unsupported "todo: Eproc")
+     fail loc (Unsupported !^"todo: Eproc")
   | M_Ebound (n, e) ->
      infer_expr loc env e
   | M_End _ ->
-     fail loc (Unsupported "todo: End")
+     fail loc (Unsupported !^"todo: End")
   | M_Esave _ ->
-     fail loc (Unsupported "todo: Esave")
+     fail loc (Unsupported !^"todo: Esave")
   | M_Erun _ ->
-     fail loc (Unsupported "todo: Erun")
-  | M_Ecase _ -> fail loc (Unreachable "Ecase in inferring position")
-  | M_Elet _ -> fail loc (Unreachable "Elet in inferring position")
-  | M_Eif _ -> fail loc (Unreachable "Eif in inferring position")
-  | M_Ewseq _ -> fail loc (Unsupported "Ewseq in inferring position")
-  | M_Esseq _ -> fail loc (Unsupported "Esseq in inferring position")
+     fail loc (Unsupported !^"todo: Erun")
+  | M_Ecase _ -> fail loc (Unreachable !^"Ecase in inferring position")
+  | M_Elet _ -> fail loc (Unreachable !^"Elet in inferring position")
+  | M_Eif _ -> fail loc (Unreachable !^"Eif in inferring position")
+  | M_Ewseq _ -> fail loc (Unsupported !^"Ewseq in inferring position")
+  | M_Esseq _ -> fail loc (Unsupported !^"Esseq in inferring position")
   end >>= fun (typ,env) ->
 
   debug_print 3 (blank 3 ^^ item "inferred" (UU.pp_ut typ)) >>= fun () ->
@@ -1418,7 +1425,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
         let _loc = update_loc loc annots in
-        fail loc (Unsupported "todo: ctor pattern")
+        fail loc (Unsupported !^"todo: ctor pattern")
      end
   | M_Ewseq (p, e1, e2)      (* for now, the same as Esseq *)
   | M_Esseq (p, e1, e2) ->
@@ -1434,7 +1441,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
         let _loc = update_loc loc annots in
-        fail loc (Unsupported "todo: ctor pattern")
+        fail loc (Unsupported !^"todo: ctor pattern")
      end
   | M_Esave (_ret, args, body) ->
      fold_leftM (fun env (sym, (_, asym)) ->
@@ -1569,7 +1576,7 @@ let record_tagDef sym def genv =
 
   match def with
   | Ctype.UnionDef _ -> 
-     fail Loc.unknown (Unsupported "todo: union types")
+     fail Loc.unknown (Unsupported !^"todo: union types")
   | Ctype.StructDef (fields, _) ->
 
      fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ct)) ->
