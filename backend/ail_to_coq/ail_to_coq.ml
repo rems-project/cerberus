@@ -818,28 +818,30 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
   (* Get the definition of structs/unions. *)
   let structs =
     let build (id, (attrs, def)) =
-      let (struct_annot, needs_field_annot) =
-        let annots = collect_rc_attrs attrs in
-        let fn () = (Some(struct_annot annots), annots <> []) in
-        handle_invalid_annot (None, true) fn ()
+      let (fields, struct_is_union) =
+        match def with
+        | Ctype.StructDef(fields,_) -> (fields, false)
+        | Ctype.UnionDef(fields)    -> (fields, true )
       in
-      let struct_name = sym_to_str id in
-      let (struct_members, struct_is_union) =
-        let (l, is_union) =
-          match def with
-          | Ctype.UnionDef(l)  -> (l, true )
-          | Ctype.StructDef(l, _) -> (l, false)
-        in
+      let id = sym_to_str id in
+      let struct_annot =
+        let attrs = collect_rc_attrs attrs in
+        if struct_is_union && attrs <> [] then
+          Panic.wrn None "Attributes on unions like [%s] are ignored." id;
+        if struct_is_union then Some(SA_union) else
+        handle_invalid_annot None (fun _ -> Some(struct_annot attrs)) ()
+      in
+      let struct_members =
         let fn (id, (attrs, loc, c_ty)) =
           let ty =
-            let annots = collect_rc_attrs attrs in
-            let fn () = Some(field_annot needs_field_annot annots) in
             let loc = loc_of_id id in
+            let annots = collect_rc_attrs attrs in
+            let fn () = Some(member_annot annots) in
             handle_invalid_annot ~loc None fn ()
           in
           (id_to_str id, (ty, layout_of false c_ty))
         in
-        (List.map fn l, is_union)
+        List.map fn fields
       in
       let struct_deps =
         let fn acc (_, (_, layout)) =
@@ -856,10 +858,10 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         List.rev (List.fold_left fn [] struct_members)
       in
       let struct_ =
-        { struct_name ; struct_annot ; struct_deps
+        { struct_name = id ; struct_annot ; struct_deps
         ; struct_is_union ; struct_members }
       in
-      (struct_name, struct_)
+      (id, struct_)
     in
     List.map build tag_defs
   in
