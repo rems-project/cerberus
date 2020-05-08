@@ -6,13 +6,11 @@ type ('spec, 'res) t = {
 
 let find_resolved env unis = 
   SymMap.foldM
-    (fun usym ({spec; resolved} as uni) (unresolved,substs) ->
+    (fun usym {spec; resolved} (unresolveds,resolveds) ->
       match resolved with
       | None ->
-         Except.return (SymMap.add usym uni unresolved, substs)
+         Except.return (SymMap.add usym spec unresolveds, resolveds)
       | Some sym -> 
-         let (LogicalSorts.Base bt) = spec in
-         (* check_it loc_call (S (sym, bt)) bt >> *)
-         Except.return (unresolved, (usym, sym) :: substs)
+         Except.return (unresolveds, (spec, (usym, sym)) :: resolveds)
     ) unis (SymMap.empty, [])
 

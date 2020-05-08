@@ -23,7 +23,7 @@ let print_file ?(remove_path = false) filename file =
        (Pp_core.Basic.pp_file file);
   | MUCORE file ->
      Pipeline.run_pp ~remove_path (Some (filename,"mucore")) 
-       (Pp_mucore.Basic.pp_file file);
+       (Pp_mucore.Basic.pp_file None file);
 
 
 module Log : sig 

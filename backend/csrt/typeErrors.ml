@@ -81,13 +81,13 @@ let pp_call_error = function
      !^"Missing resource argument of type" ^^^ Resources.pp t
   | Mismatch {mname; has; expected} ->
      let has_pp = match has with
-       | A t -> !^ "argument of type" ^^^ BaseTypes.pp t
+       | A t -> !^ "(computational) argument of type" ^^^ BaseTypes.pp t
        | L t -> !^ "logical argument of type" ^^^ LogicalSorts.pp t
        | R t -> !^ "resource argument of type" ^^^ Resources.pp t
        | C t -> !^ "constraint argument" ^^^ LogicalConstraints.pp t
      in
      begin match expected with
-     | A t -> !^"Expected argument of type" ^^^ 
+     | A t -> !^"Expected (computational) argument of type" ^^^ 
                 BaseTypes.pp t ^^^ !^ "but found" ^^^ has_pp
      | L t -> !^ "Expected logical argument of type" ^^^ 
                 LogicalSorts.pp t ^^^ !^ "but found" ^^^ has_pp

@@ -48,7 +48,7 @@ let rec pp = function
    *    (!^ "open-struct" ^^^ Sym.pp sym ^^^ 
    *       brackets (flow_map (break 1) pp_field fields)) *)
   | StructField (p,a) -> 
-     Sym.pp p ^^ dot ^^ pp_field_accesses a
+     parens (!^"structfield" ^^^ Sym.pp p ^^ dot ^^ pp_field_accesses a)
 
 
 let type_equal t1 t2 = t1 = t2
