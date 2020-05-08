@@ -617,10 +617,9 @@ let translate_block stmts blocks ret_ty =
                 let op = match op with PostfixIncr -> AddOp | _ -> SubOp in
                 let e1 = trans_lval e in
                 let e2 =
-                  let (e, calls) = translate_expr false None e in
-                  if calls <> [] then assert false;
                   let one = locate (Val(Int("1", int_ty))) in
-                  locate (BinOp(op, OpInt(int_ty), OpInt(int_ty), e, one))
+                  let use = locate (Use(atomic, layout, e1)) in
+                  locate (BinOp(op, OpInt(int_ty), OpInt(int_ty), use, one))
                 in
                 locate (Assign(atomic, layout, e1, e2, stmt))
             | AilEcall(_,_)                        ->
