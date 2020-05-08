@@ -133,8 +133,6 @@ open UU
 
 
 
-
-
 let constraint_holds loc env c =
   Solver.constraint_holds loc (Env.get_all_constraints env) c
 
@@ -203,13 +201,23 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_ctype -> fail loc (Unsupported !^"ctype")
 
 
+let integer_value_min loc it = 
+  integer_value_to_num loc (Impl_mem.min_ival it)
+
+let integer_value_max loc it = 
+  integer_value_to_num loc (Impl_mem.max_ival it)
+
+let integerType_constraint loc name it =
+  integer_value_min loc it >>= fun min ->
+  integer_value_max loc it >>= fun max ->
+  return (LC ((Num min %<= S (name, Int)) %& (S (name, Int) %<= Num max)))
 
 let integerType loc name it =
-  integer_value_to_num loc (Impl_mem.min_ival it) >>= fun min ->
-  integer_value_to_num loc (Impl_mem.max_ival it) >>= fun max ->
-  let c = makeUC (LC ((Num min %<= S (name, Int)) %& 
-                      (S (name, Int) %<= Num max))) in
-  return ((name,Int), [], [], [c])
+  integerType_constraint loc name it >>= fun constr ->
+  return ((name,Int), [], [], [makeUC constr])
+
+let floatingType loc =
+  fail loc (Unsupported !^"floats")
 
 let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   let loc = update_loc loc annots in
@@ -233,7 +241,7 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Union sym -> 
      fail loc (Unsupported !^"todo: union types")
   | Basic (Floating _) -> 
-     fail loc (Unsupported !^"floats")
+     floatingType loc 
   | Function _ -> 
      fail loc (Unsupported !^"function pointers")
 
@@ -831,36 +839,73 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 
 
 
+let infer_ptrval name loc env ptrval = 
+  Impl_mem.case_ptrval ptrval
+    ( fun _cbt -> 
+      let typ = [makeA name Loc; makeUC (LC (Null (S (name, Loc))))] in
+      return typ )
+    ( fun sym -> 
+      fail loc (Unsupported !^"function pointers") )
+    ( fun _prov loc ->
+      let typ = [makeA name Loc; makeUC (LC (S (name, Loc) %= Num loc))] in
+      return typ )
+    ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
+
+
+let rec infer_mem_value loc env mem = 
+  let open Ctype in
+  Impl_mem.case_mem_value mem
+    ( fun _ctyp -> fail loc (Unsupported !^"ctypes as values") )
+    ( fun it _sym -> 
+      (* todo: do something with sym *)
+      ctype loc (fresh ()) (Ctype ([], Basic (Integer it)))) 
+    ( fun it iv -> 
+      let name = fresh () in
+      integer_value_to_num loc iv >>= fun v ->
+      let val_constr = LC (S (name, Int) %= Num v) in
+      integerType_constraint loc name it >>= fun type_constr ->
+      Solver.constraint_holds loc [val_constr] type_constr >>= function
+      | true -> return [makeA name Int; makeUC val_constr]
+      | false -> fail loc (Generic_error !^"Integer value does not satisfy range constraint")
+    )
+    ( fun ft fv -> floatingType loc )
+    ( fun _ctype ptrval ->
+      (* maybe revisit and take ctype into account *)
+      infer_ptrval (fresh ()) loc env ptrval )
+    ( fun mem_values -> infer_array loc env mem_values )
+    ( fun sym fields -> infer_struct loc env (sym,fields) )
+    ( fun sym id mv -> infer_union loc env sym id mv )
+
+and infer_struct loc env (sym,fields) =
+  fail loc (Unsupported !^"todo: struct")
+
+and infer_union loc env sym id mv =
+  fail loc (Unsupported !^"todo: union types")
+
+and infer_array loc env mem_values = 
+  fail loc (Unsupported !^"todo: mem_value arrays")
 
 let infer_object_value loc env ov =
-
   let name = fresh () in
-
   match ov with
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
      let t = makeA name Int in
      let constr = makeUC (LC (S (name, Int) %= Num i)) in
      return ([t; constr], env)
-  | M_OVpointer p ->
-     Impl_mem.case_ptrval p
-       ( fun _cbt -> 
-         let typ = [makeA name Loc; makeUC (LC (Null (S (name, Loc))))] in
-         return (typ,env) )
-       ( fun sym -> 
-         fail loc (Unsupported !^"function pointers") )
-       ( fun _prov loc ->
-         let typ = [makeA name Loc; makeUC (LC (S (name, Loc) %= Num loc))] in
-         return (typ,env) )
-       ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
+  | M_OVpointer p -> 
+     infer_ptrval name loc env p >>= fun t ->
+     return (t,env)
   | M_OVarray items ->
      make_Aargs loc env items >>= fun (args_bts,env) ->
      check_Aargs_typ None args_bts >>= fun _ ->
      return ([makeA name Array], env)
-  | M_OVstruct (sym, fields) ->
-     fail loc (Unsupported !^"todo: struct")
-  | M_OVunion _ -> 
-     fail loc (Unsupported !^"todo: union types")
+  | M_OVstruct (sym, fields) -> 
+     infer_struct loc env (sym,fields) >>= fun t ->
+     return (t,env)
+  | M_OVunion (sym,id,mv) -> 
+     infer_union loc env sym id mv >>= fun t ->
+     return (t,env)
   | M_OVfloating iv ->
      fail loc (Unsupported !^"floats")
 
