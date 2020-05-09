@@ -346,7 +346,7 @@ let match_next_argument errf loc env (args : aargs) (specs : (BT.t Binders.t) li
   | ((arg,loc) :: args), (spec :: specs) ->
      begin match arg.bound, get_open_struct env arg.name, spec.bound with
      | Struct s1, Some fields, Struct s2 when s1 = s2 ->
-        return (`Open_vs_closed_struct ((arg,loc,s1,fields), args))
+        return (`Open_vs_closed_struct (arg.name,loc,s1,fields))
      | _, _, _ when BT.type_equal arg.bound spec.bound ->
        (* apply this substitution and continue *)
         return (`Match ((spec.name,arg.name), (args,specs)))
@@ -404,7 +404,7 @@ let match_next_l errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Bind
   | (arg :: args), (spec :: specs) ->
      begin match arg.bound, get_open_struct env arg.name, spec.bound with
      | Base (Struct s1), Some fields, Base (Struct s2) when s1 = s2 ->
-        return (`Open_vs_closed_struct ((arg,s1,fields), args))
+        return (`Open_vs_closed_struct (arg.name,s1,fields))
      | _, _, _ when BT.type_equal arg.bound spec.bound ->
        (* apply this substitution and continue *)
         return (`Match ((spec.name,arg.name), (args,specs)))
@@ -473,40 +473,62 @@ let recursively_unpack_structs loc env bs =
 
 
 let rec pack_struct loc env sym struct_type {Local.field_names} =
-  debug_print 2 (blank 3 ^^ (!^"packing struct" ^^^ Sym.pp sym)) >>= fun () ->
-  get_struct_decl loc env.global struct_type >>= fun binders ->
-  let packing_type = 
-    { arguments = binders; 
-      return = [makeA sym (Struct struct_type)]} 
-  in
-  let arg_syms = List.map snd field_names in
-  return (packing_type,arg_syms) >>= fun (pack_fn,syms) ->
-  fold_leftM (fun (acc,env) sym ->
-      get_var loc env sym >>= fun (t,env) ->
-      match t with
-      | A t -> return (acc @ [({name = sym; bound = t},loc)], env)
-      | _ -> return (acc,env)
-    ) ([],env) syms >>= fun (args,env) ->
+  debug_print 2 (action "packing struct") >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "struct" (Sym.pp sym)) >>= fun () ->
   let env = remove_open_struct env sym in
-  debug_print 2 (blank 3 ^^ (!^"removing open struct" ^^^ Sym.pp sym)) >>= fun () ->
-  call_typ ~unpack_after:(false) loc env pack_fn args >>= fun (s, env) ->
-  match s with
-  | [{name;bound = A (Struct struct_type)}]
-  | [{name;bound = L (Base (Struct struct_type))}] ->
-     return ({name;bound = Struct struct_type},env)
-  | _ :: _ :: _ -> 
-     fail loc (Unreachable !^"pack_struct returned multiple things")
-  | _ -> 
-     fail loc (Unreachable !^"pack_struct returned non-struct type")
-  
+  get_struct_decl loc env.global struct_type >>= fun spec ->
+  let arg_syms = List.map snd field_names in
+  get_vars loc env arg_syms >>= fun (arg_typs,env) ->
+  let args = List.map from_tuple (List.combine arg_syms arg_typs) in
+  let args_and_specs = List.combine args spec in
+
+  let pp_args_and_spec args_and_spec = 
+    let (args,spec) = List.split args_and_spec in
+    (Types.pp args, Types.pp spec)
+  in    
+
+  let subst_in_spec (sym : Sym.t) (with_sym : Sym.t) args_and_specs = 
+    List.map (fun (b1,b2) -> (b1, Binders.subst VarTypes.subst sym with_sym b2)) 
+      args_and_specs
+  in
+
+  let rec check env args_and_specs =
+    debug_print 2 (action "checking") >>= fun () ->
+    let (argspp,specspp) = pp_args_and_spec args_and_specs in
+    debug_print 2 (blank 3 ^^ item "args" argspp) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "specs" specspp) >>= fun () ->
+    match args_and_specs with
+    | [] -> return env
+    | (b1,b2) :: args_and_specs ->
+       match b1.bound, get_open_struct env b1.name, b2.bound with
+       | C _, _, C c2 ->
+          begin constraint_holds loc env c2 >>= function
+          | true -> check env args_and_specs
+          | false -> fail loc (Return_error (Unsat_constraint (b2.name, c2)))
+          end
+       | A (Struct s1), Some fields, A (Struct s2) when s1 = s2 ->
+          pack_struct loc env b1.name s1 fields >>= fun env ->
+          check env (subst_in_spec b2.name b1.name args_and_specs)
+       | A t1, _, A t2 when BT.type_equal t1 t2 ->
+          check env (subst_in_spec b2.name b1.name args_and_specs)
+       | L (Base (Struct s1)), Some fields, L (Base (Struct s2)) when s1 = s2 ->
+          pack_struct loc env b1.name s1 fields >>= fun env ->
+          check env (subst_in_spec b2.name b1.name args_and_specs)
+       | L t1, _, L t2 when LS.type_equal t1 t2 ->
+          check env (subst_in_spec b2.name b1.name args_and_specs)
+       | R t1, _,  R t2 when RE.type_equal env t1 t2 ->
+          check env args_and_specs
+       | _, _, _ ->
+          let msm = Mismatch {mname = Some b1.name; has = b1.bound; 
+                              expected = b2.bound} in
+          fail loc (Return_error (msm))
+
+  in
+  check env args_and_specs
 
 
 
-
-
-
-
-and call_typ ?(unpack_after=true) loc_call env ftyp (args : aargs) =
+let call_typ loc_call env ftyp (args : aargs) =
     
   let open Alrc.Types in
   let open Alrc.FunctionTypes in
@@ -530,9 +552,9 @@ and call_typ ?(unpack_after=true) loc_call env ftyp (args : aargs) =
     | `Done -> return (env, ftyp, args)
     | `Match ((n,sym),(args,fargs)) ->
        do_a env args (subst n sym (updateAargs ftyp fargs))
-    | `Open_vs_closed_struct ((arg,loc,struct_type,fields), args) ->
-       pack_struct loc_call env arg.name struct_type fields >>= fun (b,env) ->
-       do_a env ((b,loc)::args) ftyp
+    | `Open_vs_closed_struct (sym,loc,struct_type,fields) ->
+       pack_struct loc_call env sym struct_type fields >>= fun env ->
+       do_a env args ftyp
   in
   do_a env args ftyp >>= fun (env, ftyp,args) ->
 
@@ -575,17 +597,15 @@ and call_typ ?(unpack_after=true) loc_call env ftyp (args : aargs) =
       | `Done -> return (env, ftyp)
       | `Match ((n,sym),(largs,lspecs)) ->
          do_l2 env largs lspecs (subst n sym ftyp)
-      | `Open_vs_closed_struct ((arg,struct_type,fields), largs) ->
-         pack_struct loc_call env arg.name struct_type fields >>= fun (b,env) ->
-         do_l2 env ({name = b.name; bound = Base b.bound}::largs) lspecs ftyp
+      | `Open_vs_closed_struct (sym,struct_type,fields) ->
+         pack_struct loc_call env sym struct_type fields >>= fun env ->
+         do_l2 env largs lspecs ftyp
     in
     do_l2 env largs lspecs ftyp >>= fun (env, ftyp) ->
   
     check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
     let ftyp = to_function_type ftyp in
-    if unpack_after then recursively_unpack_structs loc_call env ftyp.return
-    else return (ftyp.return, env)
-
+    recursively_unpack_structs loc_call env ftyp.return
 
 
 
@@ -612,9 +632,9 @@ let subtype loc_ret env args rtyp =
     | `Done -> return (env,rtyp, args)
     | `Match ((n,sym),(args,specs)) ->
        do_a env args (Alrc.Types.subst n sym {rtyp with a = specs})
-    | `Open_vs_closed_struct ((arg,loc,struct_type,fields), args) ->
-       pack_struct loc env arg.name struct_type fields >>= fun (b,env) ->
-       do_a env ((b,loc)::args) rtyp       
+    | `Open_vs_closed_struct (sym,loc,struct_type,fields) ->
+       pack_struct loc env sym struct_type fields >>= fun envx ->
+       do_a env args rtyp       
   in
   do_a env args rtyp >>= fun (env,rtyp,args) ->
 
@@ -658,9 +678,9 @@ let subtype loc_ret env args rtyp =
       | `Done -> return (env, ftyp)
       | `Match ((n,sym),(largs,lspecs)) ->
          do_l2 env largs lspecs (subst n sym ftyp)
-      | `Open_vs_closed_struct ((arg,struct_type,fields), largs) ->
-         pack_struct loc_ret env arg.name struct_type fields >>= fun (b,env) ->
-         do_l2 env ({name=b.name;bound=Base b.bound}::largs) lspecs ftyp
+      | `Open_vs_closed_struct (sym,struct_type,fields) ->
+         pack_struct loc_ret env sym struct_type fields >>= fun env ->
+         do_l2 env largs lspecs ftyp
     in
     do_l2 env largs lspecs rtyp >>= fun (env, rtyp) ->
 
