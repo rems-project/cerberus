@@ -194,6 +194,15 @@ let parser annot_exist : (ident * coq_expr) Earley.grammar =
 let parser annot_constr : constr Earley.grammar =
   | c:constr
 
+(** {4 Annotations on tagged unions} *)
+
+type tag_spec = string * (string * coq_expr) list
+
+let tagged_union : coq_expr Earley.grammar = coq_expr
+
+let parser union_tag : tag_spec Earley.grammar =
+  | c:ident l:{"(" ident ":" coq_expr ")"}*
+
 (** {4 Annotations on fields} *)
 
 let parser annot_field : type_expr Earley.grammar =
@@ -236,25 +245,26 @@ let parser annot_inv_var : (ident * type_expr) Earley.grammar =
 (** {3 Parsing of attributes} *)
 
 type annot =
-  | Annot_parameters of (ident * coq_expr) list
-  | Annot_refined_by of (ident * coq_expr) list
-  | Annot_ptr_type   of (ident * type_expr)
-  | Annot_type       of ident
-  | Annot_size       of coq_expr
-  | Annot_exist      of (ident * coq_expr) list
-  | Annot_constraint of constr list
+  | Annot_parameters   of (ident * coq_expr) list
+  | Annot_refined_by   of (ident * coq_expr) list
+  | Annot_ptr_type     of (ident * type_expr)
+  | Annot_type         of ident
+  | Annot_size         of coq_expr
+  | Annot_exist        of (ident * coq_expr) list
+  | Annot_constraint   of constr list
   | Annot_immovable
-  | Annot_tunion
-  | Annot_field      of type_expr
-  | Annot_global     of type_expr
-  | Annot_args       of type_expr list
-  | Annot_requires   of constr list
-  | Annot_returns    of type_expr
-  | Annot_ensures    of constr list
-  | Annot_annot      of string
-  | Annot_inv_vars   of (ident * type_expr) list
-  | Annot_annot_args of annot_arg list
-  | Annot_tactics    of string list
+  | Annot_tagged_union of coq_expr
+  | Annot_union_tag    of tag_spec
+  | Annot_field        of type_expr
+  | Annot_global       of type_expr
+  | Annot_args         of type_expr list
+  | Annot_requires     of constr list
+  | Annot_returns      of type_expr
+  | Annot_ensures      of constr list
+  | Annot_annot        of string
+  | Annot_inv_vars     of (ident * type_expr) list
+  | Annot_annot_args   of annot_arg list
+  | Annot_tactics      of string list
   | Annot_trust_me
 
 let annot_lemmas : string list -> string list =
@@ -321,28 +331,29 @@ let parse_attr : rc_attr -> annot = fun attr ->
   in
 
   match id.elt with
-  | "parameters" -> many_args annot_parameter (fun l -> Annot_parameters(l))
-  | "refined_by" -> many_args annot_refine (fun l -> Annot_refined_by(l))
-  | "ptr_type"   -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
-  | "type"       -> single_arg annot_type (fun e -> Annot_type(e))
-  | "size"       -> single_arg annot_size (fun e -> Annot_size(e))
-  | "exists"     -> many_args annot_exist (fun l -> Annot_exist(l))
-  | "constraints"-> many_args annot_constr (fun l -> Annot_constraint(l))
-  | "immovable"  -> no_args Annot_immovable
-  | "tunion"     -> no_args Annot_tunion
-  | "field"      -> single_arg annot_field (fun e -> Annot_field(e))
-  | "global"     -> single_arg annot_global (fun e -> Annot_global(e))
-  | "args"       -> many_args annot_arg (fun l -> Annot_args(l))
-  | "requires"   -> many_args annot_requires (fun l -> Annot_requires(l))
-  | "returns"    -> single_arg annot_returns (fun e -> Annot_returns(e))
-  | "ensures"    -> many_args annot_ensures (fun l -> Annot_ensures(l))
-  | "annot"      -> raw_single_arg (fun e -> Annot_annot(e))
-  | "inv_vars"   -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
-  | "annot_args" -> many_args annot_args (fun l -> Annot_annot_args(l))
-  | "tactics"    -> raw_many_args (fun l -> Annot_tactics(l))
-  | "lemmas"     -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
-  | "trust_me"   -> no_args Annot_trust_me
-  | _            -> error "undefined"
+  | "parameters"   -> many_args annot_parameter (fun l -> Annot_parameters(l))
+  | "refined_by"   -> many_args annot_refine (fun l -> Annot_refined_by(l))
+  | "ptr_type"     -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
+  | "type"         -> single_arg annot_type (fun e -> Annot_type(e))
+  | "size"         -> single_arg annot_size (fun e -> Annot_size(e))
+  | "exists"       -> many_args annot_exist (fun l -> Annot_exist(l))
+  | "constraints"  -> many_args annot_constr (fun l -> Annot_constraint(l))
+  | "immovable"    -> no_args Annot_immovable
+  | "tagged_union" -> single_arg tagged_union (fun e -> Annot_tagged_union(e))
+  | "union_tag"    -> single_arg union_tag (fun t -> Annot_union_tag(t))
+  | "field"        -> single_arg annot_field (fun e -> Annot_field(e))
+  | "global"       -> single_arg annot_global (fun e -> Annot_global(e))
+  | "args"         -> many_args annot_arg (fun l -> Annot_args(l))
+  | "requires"     -> many_args annot_requires (fun l -> Annot_requires(l))
+  | "returns"      -> single_arg annot_returns (fun e -> Annot_returns(e))
+  | "ensures"      -> many_args annot_ensures (fun l -> Annot_ensures(l))
+  | "annot"        -> raw_single_arg (fun e -> Annot_annot(e))
+  | "inv_vars"     -> many_args annot_inv_var (fun l -> Annot_inv_vars(l))
+  | "annot_args"   -> many_args annot_args (fun l -> Annot_annot_args(l))
+  | "tactics"      -> raw_many_args (fun l -> Annot_tactics(l))
+  | "lemmas"       -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
+  | "trust_me"     -> no_args Annot_trust_me
+  | _              -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
 
@@ -408,25 +419,26 @@ let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
 
   !annot_args
 
-let field_annot : bool -> rc_attr list -> type_expr option = fun need attrs ->
-  let field = ref None in
+type member_annot =
+  | MA_none
+  | MA_field of type_expr
+  | MA_utag  of tag_spec
+
+let member_annot : rc_attr list -> member_annot = fun attrs ->
+  let annot = ref MA_none in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
-    match (parse_attr attr, !field) with
-    | (Annot_field(ty), None) -> field := Some(ty)
-    | (Annot_field(_) , _   ) -> error "already specified"
-    | (_              , _   ) -> error "is invalid for a field"
+    match (parse_attr attr, !annot) with
+    | (Annot_field(ty)   , MA_none) -> annot := MA_field(ty)
+    | (Annot_field(_)    , _      ) -> error "already specified"
+    | (Annot_union_tag(s), MA_none) -> annot := MA_utag(s)
+    | (Annot_union_tag(_), _      ) -> error "already specified"
+    | (_                 , _      ) -> error "is invalid for a field"
   in
-  List.iter handle_attr attrs;
-
-  match (!field, need) with
-  | (None    , false) -> None
-  | (None    , true ) -> invalid_annot_no_pos "Field annotation required."
-  | (Some(ty), true ) -> Some(ty)
-  | (Some(_ ), false) -> invalid_annot_no_pos "Field annotation forbidden."
+  List.iter handle_attr attrs; !annot
 
 type expr_annot = string option
 
@@ -442,25 +454,28 @@ let expr_annot : rc_attr list -> expr_annot = fun attrs ->
   | Annot_annot(s) -> Some(s)
   | _              -> error "is invalid (wrong kind)"
 
-type struct_annot =
+type basic_struct_annot =
   { st_parameters : (ident * coq_expr) list
   ; st_refined_by : (ident * coq_expr) list
   ; st_exists     : (ident * coq_expr) list
   ; st_constrs    : constr list
   ; st_size       : coq_expr option
   ; st_ptr_type   : (ident * type_expr) option
-  ; st_immovable  : bool
-  ; st_union      : bool }
+  ; st_immovable  : bool }
 
-let no_struct_annot =
+let default_basic_struct_annot : basic_struct_annot =
   { st_parameters = []
   ; st_refined_by = []
   ; st_exists     = []
   ; st_constrs    = []
   ; st_size       = None
   ; st_ptr_type   = None
-  ; st_immovable  = false
-  ; st_union      = false }
+  ; st_immovable  = false }
+
+type struct_annot =
+  | SA_union
+  | SA_basic    of basic_struct_annot
+  | SA_tagged_u of coq_expr
 
 let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   let parameters = ref [] in
@@ -470,37 +485,56 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   let size = ref None in
   let ptr = ref None in
   let immovable = ref false in
-  let union = ref false in
+  let tagged_union = ref None in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
-    match parse_attr attr with
-    | Annot_parameters(l) -> parameters := !parameters @ l
-    | Annot_refined_by(l) -> refined_by := !refined_by @ l
-    | Annot_exist(l)      -> exists := !exists @ l
-    | Annot_constraint(l) -> constrs := !constrs @ l
-    | Annot_size(s)       -> if !size <> None then error "already specified";
-                             size := Some(s)
-    | Annot_ptr_type(e)   -> if !ptr <> None then error "already specified";
-                             ptr := Some(e)
-    | Annot_immovable     -> if !immovable then error "already specified";
-                             immovable := true
-    | Annot_tunion        -> if !union then error "already specified";
-                             union := true
-    | _                   -> error "is invalid for a struct"
+    let check_and_set r v =
+      if !r <> None then error "already specified";
+      r := Some(v)
+    in
+    match (parse_attr attr, !tagged_union) with
+    (* Tagged union stuff. *)
+    | (Annot_tagged_union(e), None   ) -> tagged_union := Some(e)
+    | (Annot_tagged_union(e), Some(_)) -> error "already specified"
+    (* Normal struct stuff. *)
+    | (Annot_parameters(l)  , None   ) -> parameters := !parameters @ l
+    | (Annot_refined_by(l)  , None   ) -> refined_by := !refined_by @ l
+    | (Annot_exist(l)       , None   ) -> exists := !exists @ l
+    | (Annot_constraint(l)  , None   ) -> constrs := !constrs @ l
+    | (Annot_size(s)        , None   ) -> check_and_set size s
+    | (Annot_ptr_type(e)    , None   ) -> check_and_set ptr e
+    | (Annot_immovable      , None   ) ->
+        if !immovable then error "already specified";
+        immovable := true
+    | (Annot_parameters(_)  , _      )
+    | (Annot_refined_by(_)  , _      )
+    | (Annot_exist(_)       , _      )
+    | (Annot_constraint(_)  , _      )
+    | (Annot_size(_)        , _      )
+    | (Annot_ptr_type(_)    , _      )
+    | (Annot_immovable      , _      ) ->
+        error "is invalid for tagged unions"
+    | (_                    , _      ) ->
+        error "is invalid for a struct or a tagged union"
   in
   List.iter handle_attr attrs;
 
-  { st_parameters = !parameters
-  ; st_refined_by = !refined_by
-  ; st_exists     = !exists
-  ; st_constrs    = !constrs
-  ; st_size       = !size
-  ; st_ptr_type   = !ptr
-  ; st_immovable  = !immovable
-  ; st_union      = !union }
+  match !tagged_union with
+  | Some(e) -> SA_tagged_u(e)
+  | None    ->
+  let basic_annot =
+    { st_parameters = !parameters
+    ; st_refined_by = !refined_by
+    ; st_exists     = !exists
+    ; st_constrs    = !constrs
+    ; st_size       = !size
+    ; st_ptr_type   = !ptr
+    ; st_immovable  = !immovable }
+  in
+  SA_basic(basic_annot)
 
 type block_annot =
   { bl_exists   : (ident * coq_expr) list
