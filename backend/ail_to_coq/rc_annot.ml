@@ -196,12 +196,12 @@ let parser annot_constr : constr Earley.grammar =
 
 (** {4 Annotations on tagged unions} *)
 
-type tag_spec = coq_expr * (string * coq_expr) list
+type tag_spec = string * (string * coq_expr) list
 
 let tagged_union : coq_expr Earley.grammar = coq_expr
 
 let parser union_tag : tag_spec Earley.grammar =
-  | c:coq_expr l:{"(" ident ":" coq_expr ")"}*
+  | c:ident l:{"(" ident ":" coq_expr ")"}*
 
 (** {4 Annotations on fields} *)
 
