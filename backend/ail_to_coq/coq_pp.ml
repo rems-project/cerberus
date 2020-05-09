@@ -83,7 +83,8 @@ let rec pp_layout : bool -> Coq_ast.layout pp = fun wrap ff layout ->
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
-  | LArray(layout, n)  -> pp "al_layout (mk_array_layout %a %s)" (pp_layout true) layout n
+  | LArray(layout, n)  -> pp "al_layout (mk_array_layout %a %s)"
+                            (pp_layout true) layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
   let pp fmt = Format.fprintf ff fmt in
@@ -136,7 +137,8 @@ let rec pp_expr : Coq_ast.expr pp = fun ff e ->
     | Val(Int(s,it))                ->
         pp "i2v %s %a" s pp_int_type it
     | Val(SizeOf(ly))                ->
-        pp "i2v (%a).(ly_size) %a" (pp_layout false) ly pp_int_type (ItSize_t false)
+        pp "i2v (%a).(ly_size) %a" (pp_layout false) ly
+          pp_int_type (ItSize_t false)
     | UnOp(op,ty,e)                 ->
         pp "UnOp %a (%a) (%a)" pp_un_op op pp_op_type ty pp_expr e
     | BinOp(op,ty1,ty2,e1,e2)       ->
@@ -733,7 +735,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
 
       pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
         id pp_params params (pp_id_args true id) param_names;
-      pp "  {| rmovable '%a := movable_eq _ _ (%s_unfold" (pp_as_tuple pp_str) ref_names id;
+      pp "  {| rmovable '%a := movable_eq _ _ (%s_unfold"
+        (pp_as_tuple pp_str) ref_names id;
       List.iter (fun n -> pp " %s" n) param_names;
       List.iter (fun n -> pp " %s" n) ref_names;
       pp ") |}.@;Next Obligation. solve_ty_layout_eq. Qed.\n";
@@ -776,16 +779,150 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       pp "@;Proof. solve_rmovable. Defined."
     end
   in
-  let pp_tagged_union id _ _ =
-    pp "\n@;(* Printing of tagged unions not implemented [%s]. *)" id
-    (* TODO *)
+  let pp_tagged_union id tag_type_e s =
+    if s.struct_is_union then
+      Panic.panic_no_pos "Tagged union annotations used on [%s] should \
+        rather be placed on a struct definition." id;
+    (* Extract the two fields of the wrapping structure (tag and union). *)
+    let (tag_field, union_field) =
+      match s.struct_members with
+      | [tag_field ; union_field] -> (tag_field, union_field)
+      | _                         ->
+      Panic.panic_no_pos "Tagged union [%s] is ill-formed: it should have \
+        exactly two fields (tag and union)." id
+    in
+    (* Obtain the name of the tag field and check its type. *)
+    let tag_field =
+      let (tag_field, (annot, layout)) = tag_field in
+      if annot <> Some(MA_none) then
+        Panic.wrn None "Annotation ignored on the tag field [%s] of \
+          the tagged union [%s]." tag_field id;
+      if layout <> LInt(ItSize_t(false)) then
+        Panic.panic_no_pos "The tag field [%s] of tagged union [%s] does \
+          not have the expected [size_t] type." tag_field id;
+      tag_field
+    in
+    (* Obtain the name of the union field and the name of the actual union. *)
+    let (union_field, union_name) =
+      let (union_field, (annot, layout)) = union_field in
+      if annot <> Some(MA_none) then
+        Panic.wrn None "Annotation ignored on the union field [%s] of \
+          the tagged union [%s]." union_field id;
+      match layout with
+      | LStruct(union_name, true) -> (union_field, union_name)
+      | _                         ->
+      Panic.panic_no_pos "The union field [%s] of tagged union [%s] is \
+        expected to be a union." union_field id
+    in
+    (* Find the union and extract its fields and corresponding annotations. *)
+    let union_cases =
+      let union =
+        try List.assoc union_name ast.structs
+        with Not_found -> assert false (* Unreachable thanks to Cerberus. *)
+      in
+      (* Some sanity checks. *)
+      if not union.struct_is_union then
+        Panic.panic_no_pos "[%s] was expected to be a union." union_name;
+      assert (union.struct_annot = Some(SA_union));
+      (* Extracting data from the fields. *)
+      let fn (name, (annot, layout)) =
+        match annot with
+        | Some(MA_utag(ts)) ->
+            let id_struct =
+              match layout with
+              | LStruct(id, false) -> id
+              | _                  ->
+              Panic.panic_no_pos "Field [%s] of union [%s] is not a struct."
+                name union_name
+            in
+            (name, ts, id_struct)
+        | Some(MA_none    ) ->
+            Panic.panic_no_pos "Union tag annotation expected on field [%s] \
+              of union [%s]." name union_name
+        | Some(MA_field(_)) ->
+            Panic.panic_no_pos "Unexpected field annotation on [%s] in the \
+              union [%s]." name union_name
+        | None              ->
+            Panic.panic_no_pos "Invalid annotation on field [%s] in the \
+              union [%s]." name union_name
+      in
+      List.map fn union.struct_members
+    in
+    (* Starting to do the printing. *)
+    pp "\n@;(* Definition of type [%s] (tagged union). *)@;" id;
+    (* Definition of the tag function. *)
+    pp "@[<v 2>Definition %s_tag (c : %a) : nat :=@;"
+      id (pp_coq_expr false) tag_type_e;
+    pp "match c with@;";
+    let pp_tag_case i (_, (c, args), _) =
+      pp "| %s" c; List.iter (fun _ -> pp " _") args; pp " => %i%%nat@;" i
+    in
+    List.iteri pp_tag_case union_cases;
+    pp "end.@]\n@;";
+    (* Simplifications hints for inversing the tag function. *)
+    let pp_inversion_hint i (_, (c, args), _) =
+      pp "Global Instance simpl_%s_tag_%s c :@;" id c;
+      pp "  SimplBothRel (=) (%s_tag c) %i%%nat (" id i;
+      if args <> [] then pp "∃";
+      List.iter (fun (x,e) -> pp " (%s : %a)" x (pp_coq_expr false) e) args;
+      if args <> [] then pp ", ";
+      pp "c = %s" c; List.iter (fun (x,_) -> pp " %s" x) args; pp ").@;";
+      pp "Proof. split; destruct c; naive_solver. Qed.\n@;";
+    in
+    List.iteri pp_inversion_hint union_cases;
+    (* Definition for the tagged union info. *)
+    pp "@[<v 2>Program Definition %s_tunion_info : tunion_info := {|@;" id;
+    pp "ti_rtype := %a;@;" (pp_coq_expr false) tag_type_e;
+    pp "ti_base_layout := struct_%s;@;" id;
+    pp "ti_tag_field_name := \"%s\";@;" tag_field;
+    pp "ti_union_field_name := \"%s\";@;" union_field;
+    pp "ti_union_layout := union_%s;@;" union_name;
+    pp "ti_tag := %s_tag;@;" id;
+    pp "ti_type c :=@;";
+    pp "  match c with@;";
+    let fn (name, (c, args), struct_id) =
+      pp "  | %s" c; List.iter (fun (x,_) -> pp " %s" x) args;
+      pp " => struct struct_%s [@@{type} " name;
+      begin
+        let s =
+          try List.assoc struct_id ast.structs
+          with Not_found -> assert false (* Unreachable thanks to Cerberus. *)
+        in
+        let fields = gather_struct_fields struct_id s in
+        let pp_field ff (_, ty, _) = fprintf ff "%a" pp_type_expr ty in
+        match fields with
+        | []      -> ()
+        | f :: fs -> pp "%a" pp_field f; List.iter (pp "; %a" pp_field) fs
+      end;
+      pp "]%%I@;"
+    in
+    List.iter fn union_cases;
+    pp "  end;@]@;";
+    pp "|}.@;";
+    pp "Next Obligation. done. Qed.@;";
+    pp "Next Obligation. by case; eauto. Qed.\n@;";
+    (* Movable instance. *)
+    pp "Global Program Instance movable_%s_tunion_info : MovableTUnion \
+      %s_tunion_info := {|@;" id id;
+    pp "  mti_movable c :=@;";
+    pp "    match c with@;";
+    let fn (_, (c, args), _) =
+      pp "    | %s" c; List.iter (fun (x,_) -> pp " %s" x) args; pp " => _@;"
+    in
+    List.iter fn union_cases;
+    pp "    end;@;";
+    pp "|}.@;";
+    let fn _ = pp "Next Obligation. simpl. apply _. Defined.@;" in
+    List.iter fn union_cases;
+    pp "Next Obligation. by case => /=; apply _. Qed.\n@;";
+    (* Actual definition of the type. *)
+    pp "Program Definition %s : rtype := tunion %s_tunion_info." id id
   in
   let pp_struct_or_tagged_union (id, s) =
     match s.struct_annot with
     | Some(SA_basic(annot)) -> pp_struct id annot s
     | Some(SA_tagged_u(e))  -> pp_tagged_union id e s
-    | Some(SA_union)        ->
-        Panic.panic_no_pos "Unions like [%s] not allowed at the top level." id
+    | Some(SA_union)        -> ()
     | None                  ->
         Panic.panic_no_pos "Annotations on struct [%s] are invalid." id
   in
@@ -890,13 +1027,16 @@ let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
     List.iter pp_global used_globals;
     let pp_global_type f =
       match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
-      | Some (_, Some ty) -> pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;" f (pp_type_expr_guard None Guard_none) ty
-      | _ -> ()
+      | Some(_, Some(ty)) ->
+          pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;"
+            f (pp_type_expr_guard None Guard_none) ty
+      | _                 -> ()
     in
     List.iter pp_global_type used_globals;
     let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr type_of_%s -∗@;" f f f in
     List.iter pp_dep used_functions;
-    pp "%styped_function %a type_of_%s." prefix pp_impl def.func_name def.func_name
+    pp "%styped_function %a type_of_%s." prefix pp_impl
+      def.func_name def.func_name
   end;
   let pp_intros ff xs =
     let pp_intro ff (x,_) = pp_str ff x in
@@ -908,7 +1048,8 @@ let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
                  List.iter (fprintf ff " %a]" pp_intro) xs
   in
   pp "@]@;@[<v 2>Proof.@;";
-  pp "start_function \"%s\" (%a)" def.func_name pp_intros func_annot.fa_parameters;
+  pp "start_function \"%s\" (%a)" def.func_name
+    pp_intros func_annot.fa_parameters;
   if def.func_vars <> [] || def.func_args <> [] then
     begin
       pp " =>";
@@ -1018,7 +1159,8 @@ let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
   in
   List.iter pp_do_step (List.cons "#0" (List.map fst invs));
-  pp "@;Unshelve. all: prepare_sideconditions; normalize_and_simpl_goal; try solve_goal.";
+  pp "@;Unshelve. all: prepare_sideconditions; ";
+  pp "normalize_and_simpl_goal; try solve_goal.";
   let tactics_items =
     let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
     let rec pp_tactics_all tactics =
