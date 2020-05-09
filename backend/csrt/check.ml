@@ -505,17 +505,18 @@ let rec match_resources errf loc env acc_substs (unis : ((LS.t, Sym.t) Uni.t) Sy
      end
 
 
-let match_next_l errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Binders.t) list) =
+let rec match_logical_arguments errf loc env acc_substs (args : (LS.t Binders.t) list) (specs : (LS.t Binders.t) list) =
   match args, specs with
   | [], [] -> 
-     return `Done
+     return (acc_substs,env)
   | (arg :: args), (spec :: specs) ->
      begin match arg.bound, get_open_struct env arg.name, spec.bound with
      | Base (Struct s1), Some fields, Base (Struct s2) when s1 = s2 ->
-        return (`Open_vs_closed_struct (arg.name,s1,fields))
+        pack_struct loc env arg.name s1 fields >>= fun env ->
+        match_logical_arguments errf loc env (acc_substs@[(spec.name,arg.name)]) args specs
      | _, _, _ when BT.type_equal arg.bound spec.bound ->
        (* apply this substitution and continue *)
-        return (`Match ((spec.name,arg.name), (args,specs)))
+        match_logical_arguments errf loc env (acc_substs@[(spec.name,arg.name)]) args specs
      | _, _, _ ->
         let msm = Mismatch {mname = Some arg.name; 
                             has = L arg.bound; expected = L spec.bound} in
@@ -546,11 +547,11 @@ let call_typ loc_call env ftyp (args : aargs) =
 
 
   match_aargs (fun e -> Call_error e) loc_call env [] args ftyp.arguments2.a >>= fun (substs,env) ->
-  let ftyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
+  let ftyp = fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
                (updateAargs ftyp []) substs  in
 
   let (unis,substs) = record_lvars_for_unification SymMap.empty [] ftyp.arguments2.l in
-  let ftyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
+  let ftyp = fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
                (updateLargs ftyp []) substs in
 
   match_resources (fun e -> Call_error e) loc_call env [] unis ftyp.arguments2.r >>= fun (substs,unis,env) ->
@@ -568,16 +569,9 @@ let call_typ loc_call env ftyp (args : aargs) =
       ) ([],env) resolved >>= fun (largs,env) ->
     let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
 
-    let rec do_l2 env largs lspecs ftyp = 
-      match_next_l (fun e -> Call_error e) loc_call env largs lspecs >>= function
-      | `Done -> return (env, ftyp)
-      | `Match ((n,sym),(largs,lspecs)) ->
-         do_l2 env largs lspecs (subst n sym ftyp)
-      | `Open_vs_closed_struct (sym,struct_type,fields) ->
-         pack_struct loc_call env sym struct_type fields >>= fun env ->
-         do_l2 env largs lspecs ftyp
-    in
-    do_l2 env largs lspecs ftyp >>= fun (env, ftyp) ->
+
+    match_logical_arguments (fun e -> Call_error e) loc_call env [] largs lspecs >>= fun (substs,env) ->
+  let ftyp = fold_left (fun f (s, s') -> subst s s' f) ftyp substs in
   
     check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
     let ftyp = to_function_type ftyp in
@@ -623,17 +617,9 @@ let subtype loc_ret env args rtyp =
       ) ([],env) resolved >>= fun (largs,env) ->
     let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
 
-    let rec do_l2 env largs lspecs ftyp = 
-      match_next_l (fun e -> Call_error e) loc_ret env largs lspecs >>= function
-      | `Done -> return (env, ftyp)
-      | `Match ((n,sym),(largs,lspecs)) ->
-         do_l2 env largs lspecs (subst n sym ftyp)
-      | `Open_vs_closed_struct (sym,struct_type,fields) ->
-         pack_struct loc_ret env sym struct_type fields >>= fun env ->
-         do_l2 env largs lspecs ftyp
-    in
-    do_l2 env largs lspecs rtyp >>= fun (env, rtyp) ->
 
+    match_logical_arguments (fun e -> Call_error e) loc_ret env [] largs lspecs >>= fun (substs,env) ->
+  let rtyp = fold_left (fun f (s, s') -> subst s s' f) rtyp substs in
 
     check_constraints_hold loc_ret env rtyp.c >>= fun () ->
     return env
