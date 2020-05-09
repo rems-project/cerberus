@@ -12,8 +12,8 @@ let subst bound_subst sym with_it b =
   { name = Sym.subst sym with_it b.name;
     bound = bound_subst sym with_it b.bound }
 
-
-
+let subst_list bound_subst sym with_it bs = 
+  List.map (subst bound_subst sym with_it) bs
 
 let to_tuple {name;bound} = (name,bound)
 let from_tuple (name,bound) = {name;bound}

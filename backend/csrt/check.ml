@@ -474,9 +474,9 @@ let rec record_lvars_for_unification acc_unis acc_substs (specs : (LS.t Binders.
      let acc_substs = acc_substs@[(spec.name,sym)] in
      record_lvars_for_unification acc_unis acc_substs specs
 
-let find_next_matching_resource errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
+let rec match_resources errf loc env acc_substs (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
   match specs with
-  | [] -> return `Done
+  | [] -> return (acc_substs,unis,env)
   | spec :: specs -> 
      begin match RE.owner spec.bound with
      | None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
@@ -493,9 +493,13 @@ let find_next_matching_resource errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMa
              match RE.unify spec.bound resource' unis with
              | None -> try_resources owned_resources
              | Some unis ->
-                find_resolved env unis >>= fun (_,substs) ->
-                let substs = (spec.name,r) :: (map snd substs) in
-                return (`Next (specs, env, unis, substs))
+                find_resolved env unis >>= fun (_,new_substs) ->
+                let new_substs = (spec.name,r) :: (map snd new_substs) in
+                let specs = 
+                  fold_left (fun r (s, s') -> Binders.subst_list Resources.subst s s' r) 
+                    specs new_substs
+                in
+                match_resources errf loc env (acc_substs@new_substs) unis specs
         in
         try_resources owneds
      end
@@ -549,17 +553,8 @@ let call_typ loc_call env ftyp (args : aargs) =
   let ftyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
                (updateLargs ftyp []) substs in
 
-  let rec do_r ftyp env unis = 
-    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-    find_next_matching_resource (fun e -> Call_error e) 
-      loc_call env unis ftyp.arguments2.r >>= function
-    | `Done -> return (ftyp,env,unis)
-    | `Next (decl_args,env,unis,substs) -> 
-       let ftyp = fold_left (fun f (s, s') -> subst s s' f) 
-                    (updateRargs ftyp decl_args) substs in
-       do_r ftyp env unis 
-  in
-  do_r ftyp env unis >>= fun (rtyp,env,unis) ->
+  match_resources (fun e -> Call_error e) loc_call env [] unis ftyp.arguments2.r >>= fun (substs,unis,env) ->
+  let ftyp = fold_left (fun f (s, s') -> subst s s' f) (updateRargs ftyp []) substs in
 
   find_resolved env unis >>= fun (unresolved,resolved) ->
   if not (SymMap.is_empty unresolved) then
@@ -607,27 +602,13 @@ let subtype loc_ret env args rtyp =
   let rtyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
                {rtyp with a = []} substs  in
 
-  debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "substs" (pp_env_list None substs (fun (s,s') -> Sym.pp s ^^^ Sym.pp s'))) >>= fun () ->
-
   let (unis,substs) = record_lvars_for_unification SymMap.empty [] rtyp.l in
   let rtyp = List.fold_left (fun rtyp (sym,sym') -> subst sym sym' rtyp) 
                {rtyp with l = []} substs in
 
-  debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "substs" (pp_env_list None substs (fun (s,s') -> Sym.pp s ^^^ Sym.pp s'))) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
 
-  let rec do_r rtyp env unis = 
-    find_next_matching_resource (fun e -> Return_error e) 
-      loc_ret env unis rtyp.r >>= function
-    | `Done -> return (rtyp,env,unis)
-    | `Next (decl_args,env,unis,substs) -> 
-       let rtyp = fold_left (fun f (s, s') -> subst s s' f) 
-                    {rtyp with r = decl_args} substs in
-       do_r rtyp env unis 
-  in
-  do_r rtyp env unis >>= fun (rtyp,env,unis) ->
+  match_resources (fun e -> Call_error e) loc_ret env [] unis rtyp.r >>= fun (substs,unis,env) ->
+  let rtyp = fold_left (fun f (s, s') -> subst s s' f) {rtyp with r =  []} substs in
 
 
   find_resolved env unis >>= fun (unresolved,resolved) ->
