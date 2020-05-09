@@ -16,3 +16,4 @@ let subst bound_subst sym with_it b =
 
 
 let to_tuple {name;bound} = (name,bound)
+let from_tuple (name,bound) = {name;bound}
