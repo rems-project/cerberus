@@ -113,18 +113,9 @@ module UU = struct
 
   type ut = Types.t or_u
 
-  let rec all_normal : ('a or_u) list -> 'a list or_u = function
-    | [] -> Normal []
-    | Bad u :: _ -> Bad u
-    | Normal a :: rest -> 
-       match all_normal rest with
-       | Normal rest -> Normal (a :: rest)
-       | Bad b -> Bad b
-
   let pp_ut = function
     | Normal t -> Types.pp t
     | Bad u -> !^"bad"
-
 
 end
 
@@ -337,88 +328,6 @@ let pp_unis unis =
 
 
 
-(* begin: functions used for subtype and call_typ *)
-
-let match_next_argument errf loc env (args : aargs) (specs : (BT.t Binders.t) list) =
-  match args, specs with
-  | [], [] -> 
-     return `Done
-  | ((arg,loc) :: args), (spec :: specs) ->
-     begin match arg.bound, get_open_struct env arg.name, spec.bound with
-     | Struct s1, Some fields, Struct s2 when s1 = s2 ->
-        return (`Open_vs_closed_struct (arg.name,loc,s1,fields))
-     | _, _, _ when BT.type_equal arg.bound spec.bound ->
-       (* apply this substitution and continue *)
-        return (`Match ((spec.name,arg.name), (args,specs)))
-     | _, _, _ ->
-        let msm = Mismatch {mname = Some arg.name; 
-                            has = A arg.bound; expected = A spec.bound} in
-        fail loc (errf msm)
-     end
-  | (arg,loc) :: _, [] -> 
-     fail loc (errf (Surplus_A (arg.name, arg.bound)))
-  | [], spec :: _ ->
-     fail loc (errf (Missing_A (spec.name, spec.bound)))
-
-let record_next_l_for_unification unis (specs : (LS.t Binders.t) list) =
-  match specs with
-  | [] -> `Done
-  | spec :: specs ->
-     let sym = Sym.fresh () in
-     let uni = { spec = spec.bound; resolved = None } in
-     let unis = SymMap.add sym uni unis in
-     (* apply this substitution and continue *)
-     `Next ((spec.name,sym), unis, specs)
-
-let find_next_matching_resource errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
-  match specs with
-  | [] -> return `Done
-  | spec :: specs -> 
-     begin match RE.owner spec.bound with
-     | None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
-     | Some owner ->
-        (* TODO: unsafe env *)
-        resources_owned_by_var_or_equals loc env owner >>= fun owneds ->
-        let rec try_resources = function
-          | [] -> 
-             fail loc (errf (Missing_R (spec.name, spec.bound)))
-          | (o,r) :: owned_resources ->
-             get_Rvar loc env r >>= fun (resource',env) ->
-             let resource' = RE.subst o owner resource' in
-             debug_print 3 (action ("trying resource" ^ pps (RE.pp resource'))) >>= fun () ->
-             match RE.unify spec.bound resource' unis with
-             | None -> try_resources owned_resources
-             | Some unis ->
-                find_resolved env unis >>= fun (_,substs) ->
-                let substs = (spec.name,r) :: (map snd substs) in
-                return (`Next (specs, env, unis, substs))
-        in
-        try_resources owneds
-     end
-
-
-let match_next_l errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Binders.t) list) =
-  match args, specs with
-  | [], [] -> 
-     return `Done
-  | (arg :: args), (spec :: specs) ->
-     begin match arg.bound, get_open_struct env arg.name, spec.bound with
-     | Base (Struct s1), Some fields, Base (Struct s2) when s1 = s2 ->
-        return (`Open_vs_closed_struct (arg.name,s1,fields))
-     | _, _, _ when BT.type_equal arg.bound spec.bound ->
-       (* apply this substitution and continue *)
-        return (`Match ((spec.name,arg.name), (args,specs)))
-     | _, _, _ ->
-        let msm = Mismatch {mname = Some arg.name; 
-                            has = L arg.bound; expected = L spec.bound} in
-        fail loc (errf msm)
-     end
-  | _ -> fail loc (Unreachable !^"surplus/missing L")
-
-
-
-(* end: functions used for subtype and call_typ *)
-
 
 let struct_member_type loc env struct_type field = 
   get_struct_decl loc env.global struct_type >>= fun binders ->
@@ -528,6 +437,97 @@ let rec pack_struct loc env sym struct_type {Local.field_names} =
 
 
 
+
+
+
+
+(* begin: functions used for subtype and call_typ *)
+
+let rec match_aargs errf loc env acc_substs (args : aargs) (specs : (BT.t Binders.t) list) =
+  match args, specs with
+  | [], [] -> 
+     return (acc_substs,env)
+  | (arg,loc) :: _, [] -> 
+     fail loc (errf (Surplus_A (arg.name, arg.bound)))
+  | [], spec :: _ -> 
+     fail loc (errf (Missing_A (spec.name, spec.bound)))
+  | ((arg,arg_loc) :: args), (spec :: specs) ->
+     begin match arg.bound, get_open_struct env arg.name, spec.bound with
+     | Struct s1, Some fields, Struct s2 when s1 = s2 ->
+        pack_struct arg_loc env arg.name s1 fields >>= fun env ->
+        match_aargs errf loc env (acc_substs@[(spec.name,arg.name)]) args specs
+     | _, _, _ when BT.type_equal arg.bound spec.bound ->
+        match_aargs errf loc env (acc_substs@[(spec.name,arg.name)]) args specs
+     | _, _, _ ->
+        let msm = Mismatch {mname = Some arg.name; 
+                            has = A arg.bound; expected = A spec.bound} in
+        fail loc (errf msm)
+     end
+
+let rec record_lvars_for_unification acc_unis acc_substs (specs : (LS.t Binders.t) list) =
+  match specs with
+  | [] -> (acc_unis,acc_substs)
+  | spec :: specs ->
+     let sym = Sym.fresh () in
+     let uni = { spec = spec.bound; resolved = None } in
+     let acc_unis = SymMap.add sym uni acc_unis in
+     let acc_substs = acc_substs@[(spec.name,sym)] in
+     record_lvars_for_unification acc_unis acc_substs specs
+
+let find_next_matching_resource errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
+  match specs with
+  | [] -> return `Done
+  | spec :: specs -> 
+     begin match RE.owner spec.bound with
+     | None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
+     | Some owner ->
+        (* TODO: unsafe env *)
+        resources_owned_by_var_or_equals loc env owner >>= fun owneds ->
+        let rec try_resources = function
+          | [] -> 
+             fail loc (errf (Missing_R (spec.name, spec.bound)))
+          | (o,r) :: owned_resources ->
+             get_Rvar loc env r >>= fun (resource',env) ->
+             let resource' = RE.subst o owner resource' in
+             debug_print 3 (action ("trying resource" ^ pps (RE.pp resource'))) >>= fun () ->
+             match RE.unify spec.bound resource' unis with
+             | None -> try_resources owned_resources
+             | Some unis ->
+                find_resolved env unis >>= fun (_,substs) ->
+                let substs = (spec.name,r) :: (map snd substs) in
+                return (`Next (specs, env, unis, substs))
+        in
+        try_resources owneds
+     end
+
+
+let match_next_l errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Binders.t) list) =
+  match args, specs with
+  | [], [] -> 
+     return `Done
+  | (arg :: args), (spec :: specs) ->
+     begin match arg.bound, get_open_struct env arg.name, spec.bound with
+     | Base (Struct s1), Some fields, Base (Struct s2) when s1 = s2 ->
+        return (`Open_vs_closed_struct (arg.name,s1,fields))
+     | _, _, _ when BT.type_equal arg.bound spec.bound ->
+       (* apply this substitution and continue *)
+        return (`Match ((spec.name,arg.name), (args,specs)))
+     | _, _, _ ->
+        let msm = Mismatch {mname = Some arg.name; 
+                            has = L arg.bound; expected = L spec.bound} in
+        fail loc (errf msm)
+     end
+  | _ -> fail loc (Unreachable !^"surplus/missing L")
+
+
+
+(* end: functions used for subtype and call_typ *)
+
+
+
+
+
+
 let call_typ loc_call env ftyp (args : aargs) =
     
   let open Alrc.Types in
@@ -535,40 +535,22 @@ let call_typ loc_call env ftyp (args : aargs) =
   let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
   debug_print 1 (action "function call type") >>= fun () ->
 
-  let print ftyp args env unis = 
-    debug_print 2 (action "checking and refining function call type") >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-    debug_print 2 PPrint.empty
-  in
+  debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "args" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 2 PPrint.empty >>= fun () ->
 
-  let unis : ((LS.t, Sym.t) Uni.t) SymMap.t = SymMap.empty in
 
-  let rec do_a env (args : aargs) ftyp = 
-    print ftyp args env unis >>= fun () ->
-    match_next_argument (fun e -> Call_error e) loc_call env args ftyp.arguments2.a >>= function
-    | `Done -> return (env, ftyp, args)
-    | `Match ((n,sym),(args,fargs)) ->
-       do_a env args (subst n sym (updateAargs ftyp fargs))
-    | `Open_vs_closed_struct (sym,loc,struct_type,fields) ->
-       pack_struct loc_call env sym struct_type fields >>= fun env ->
-       do_a env args ftyp
-  in
-  do_a env args ftyp >>= fun (env, ftyp,args) ->
+  match_aargs (fun e -> Call_error e) loc_call env [] args ftyp.arguments2.a >>= fun (substs,env) ->
+  let ftyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
+               (updateAargs ftyp []) substs  in
 
-  let rec do_l ftyp unis = 
-    print ftyp args env unis >>= fun () ->
-    match record_next_l_for_unification unis ftyp.arguments2.l with
-    | `Done -> return (ftyp,unis)
-    | `Next ((n,sym), unis,specs) ->
-       do_l (subst n sym (updateLargs ftyp specs)) unis
-  in
-  do_l ftyp unis >>= fun (ftyp, unis) -> 
+  let (unis,substs) = record_lvars_for_unification SymMap.empty [] ftyp.arguments2.l in
+  let ftyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
+               (updateLargs ftyp []) substs in
 
   let rec do_r ftyp env unis = 
-    print ftyp args env unis >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
     find_next_matching_resource (fun e -> Call_error e) 
       loc_call env unis ftyp.arguments2.r >>= function
     | `Done -> return (ftyp,env,unis)
@@ -592,7 +574,6 @@ let call_typ loc_call env ftyp (args : aargs) =
     let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
 
     let rec do_l2 env largs lspecs ftyp = 
-      print ftyp args env unis >>= fun () ->
       match_next_l (fun e -> Call_error e) loc_call env largs lspecs >>= function
       | `Done -> return (env, ftyp)
       | `Match ((n,sym),(largs,lspecs)) ->
@@ -615,40 +596,29 @@ let subtype loc_ret env args rtyp =
   let rtyp = Alrc.Types.from_type rtyp in
   debug_print 1 (action "function return type") >>= fun () ->
 
-  let print rtyp args env unis = 
-    debug_print 2 (action "function return subtype check") >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "returned" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-    debug_print 2 PPrint.empty
-  in
+  debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "returned" (pp_env_list None args (fun ({name;bound},_) -> Sym.pp name))) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
+  debug_print 2 PPrint.empty >>= fun () ->
 
-  let unis = SymMap.empty in
 
-  let rec do_a env (args : aargs) rtyp = 
-    print rtyp args env unis >>= fun () ->
-    match_next_argument (fun e -> Return_error e) loc_ret env args rtyp.a >>= function
-    | `Done -> return (env,rtyp, args)
-    | `Match ((n,sym),(args,specs)) ->
-       do_a env args (Alrc.Types.subst n sym {rtyp with a = specs})
-    | `Open_vs_closed_struct (sym,loc,struct_type,fields) ->
-       pack_struct loc env sym struct_type fields >>= fun envx ->
-       do_a env args rtyp       
-  in
-  do_a env args rtyp >>= fun (env,rtyp,args) ->
 
-  let rec do_l rtyp unis = 
-    print rtyp args env unis >>= fun () ->
-    match record_next_l_for_unification unis rtyp.l with
-    | `Done -> return (rtyp, unis)
-    | `Next ((n,sym), unis, specs) ->
-       do_l (subst n sym {rtyp with l = specs}) unis
-  in
-  do_l rtyp unis >>= fun (rtyp, unis) -> 
+  match_aargs (fun e -> Call_error e) loc_ret env [] args rtyp.a >>= fun (substs,env) ->
+  let rtyp = List.fold_left (fun ftyp (sym,sym') -> subst sym sym' ftyp) 
+               {rtyp with a = []} substs  in
+
+  debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "substs" (pp_env_list None substs (fun (s,s') -> Sym.pp s ^^^ Sym.pp s'))) >>= fun () ->
+
+  let (unis,substs) = record_lvars_for_unification SymMap.empty [] rtyp.l in
+  let rtyp = List.fold_left (fun rtyp (sym,sym') -> subst sym sym' rtyp) 
+               {rtyp with l = []} substs in
+
+  debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "substs" (pp_env_list None substs (fun (s,s') -> Sym.pp s ^^^ Sym.pp s'))) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "unis" (pp_unis unis)) >>= fun () ->
 
   let rec do_r rtyp env unis = 
-    print rtyp args env unis >>= fun () ->
     find_next_matching_resource (fun e -> Return_error e) 
       loc_ret env unis rtyp.r >>= function
     | `Done -> return (rtyp,env,unis)
@@ -673,7 +643,6 @@ let subtype loc_ret env args rtyp =
     let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
 
     let rec do_l2 env largs lspecs ftyp = 
-      print ftyp args env unis >>= fun () ->
       match_next_l (fun e -> Call_error e) loc_ret env largs lspecs >>= function
       | `Done -> return (env, ftyp)
       | `Match ((n,sym),(largs,lspecs)) ->
