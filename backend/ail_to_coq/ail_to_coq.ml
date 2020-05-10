@@ -519,7 +519,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate id_goto else_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (None, s) blocks
+          SMap.add id (Some(no_block_annot), s) blocks
         in
         (s, blocks)
     | BE_or (be1,be2) ->
@@ -528,7 +528,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate then_goto id_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (None, s) blocks
+          SMap.add id (Some(no_block_annot), s) blocks
         in
         (s, blocks)
   in
