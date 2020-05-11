@@ -554,6 +554,50 @@ let collect_bindings () =
   in
   Hashtbl.fold fn local_vars []
 
+let warn_ignored_attrs so attrs =
+  let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
+    Format.fprintf ff "%s(" id.elt;
+    match args with
+    | arg :: args ->
+        let open Location in
+        Format.fprintf ff "%s" arg.elt;
+        List.iter (fun arg -> Format.fprintf ff ", %s" arg.elt) args;
+        Format.fprintf ff ")"
+    | []          ->
+        Format.fprintf ff ")"
+  in
+  let fn attr =
+    let desc s =
+      let open AilSyntax in
+      match s with
+      | AilSblock(_,_)     -> "a block"
+      | AilSgoto(_)        -> "a goto"
+      | AilSreturnVoid
+      | AilSreturn(_)      -> "a return"
+      | AilSbreak          -> "a break"
+      | AilScontinue       -> "a continue"
+      | AilSskip           -> "a skip"
+      | AilSexpr(_)        -> "an expression"
+      | AilSif(_,_,_)      -> "an if statement"
+      | AilSwhile(_,_)     -> "a while loop"
+      | AilSdo(_,_)        -> "a do-while loop"
+      | AilSswitch(_,_)    -> "a switch statement"
+      | AilScase(_,_)      -> "a case statement"
+      | AilSdefault(_)     -> "a default statement"
+      | AilSlabel(_,_)     -> "a label"
+      | AilSdeclaration(_) -> "a declaration"
+      | AilSpar(_)         -> "a par statement"
+      | AilSreg_store(_,_) -> "a register store statement"
+    in
+    let desc =
+      match so with
+      | Some(s) -> Printf.sprintf " (on %s)" (desc s)
+      | None    -> " (on an outer block)"
+    in
+    Panic.wrn None "Ignored attribute [%a]%s." pp_rc attr desc
+  in
+  List.iter fn attrs
+
 let translate_block stmts blocks ret_ty =
   let rec trans extra_attrs break continue final stmts blocks =
     let open AilSyntax in
@@ -648,6 +692,7 @@ let translate_block stmts blocks ret_ty =
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
+          warn_ignored_attrs None extra_attrs;
           (* Translate the continuation. *)
           let (blocks, final) =
             if stmts = [] then (blocks, final) else
@@ -766,45 +811,7 @@ let translate_block stmts blocks ret_ty =
       | AilSpar(_)          -> not_impl loc "statement par"
       | AilSreg_store(_,_)  -> not_impl loc "statement store"
     in
-    if not !attrs_used then
-      begin
-        let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
-          Format.fprintf ff "%s(" id.elt;
-          match args with
-          | arg :: args ->
-              let open Location in
-              Format.fprintf ff "%s" arg.elt;
-              List.iter (fun arg -> Format.fprintf ff ", %s" arg.elt) args;
-              Format.fprintf ff ")"
-          | []          ->
-              Format.fprintf ff ")"
-        in
-        let fn attr =
-          let desc =
-            match s with
-            | AilSblock(_,_)     -> "a block"
-            | AilSgoto(_)        -> "a goto"
-            | AilSreturnVoid
-            | AilSreturn(_)      -> "a return"
-            | AilSbreak          -> "a break"
-            | AilScontinue       -> "a continue"
-            | AilSskip           -> "a skip"
-            | AilSexpr(_)        -> "an expression"
-            | AilSif(_,_,_)      -> "an if statement"
-            | AilSwhile(_,_)     -> "a while loop"
-            | AilSdo(_,_)        -> "a do-while loop"
-            | AilSswitch(_,_)    -> "a switch statement"
-            | AilScase(_,_)      -> "a case statement"
-            | AilSdefault(_)     -> "a default statement"
-            | AilSlabel(_,_)     -> "a label"
-            | AilSdeclaration(_) -> "a declaration"
-            | AilSpar(_)         -> "a par statement"
-            | AilSreg_store(_,_) -> "a register store statement"
-          in
-          Panic.wrn None "Ignored attribute [%a] (on %s)." pp_rc attr desc
-        in
-        List.iter fn attrs;
-      end;
+    if not !attrs_used then warn_ignored_attrs (Some(s)) attrs;
     res
   in
   trans [] None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
