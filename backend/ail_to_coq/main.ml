@@ -60,11 +60,11 @@ let run : config -> string -> unit = fun cfg c_file ->
     let open Coq_ast in
     let open Coq_pp in
     match def_or_decl with
-    | FDec(_)                                 -> ()
-    | FDef(_  ) when List.mem id cfg.no_proof -> ()
-    | FDef(def) when Coq_ast.trusted def      -> ()
-    | FDef(def)                               ->
-    write (Fprf(def, cfg.imports, cfg.spec_ctxt)) (fprf_file id) coq_ast
+    | FDec(_)   -> ()
+    | FDef(def) ->
+    let trusted = List.mem id cfg.no_proof || Coq_ast.trusted def in
+    let mode = Fprf(def, cfg.imports, cfg.spec_ctxt, trusted) in
+    write mode (fprf_file id) coq_ast
   in
   if cfg.gen_spec then List.iter write_proof coq_ast.functions
 

@@ -964,17 +964,22 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   List.iter pp_opaque !opaque;
   pp "@]"
 
-let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
-    fun def imports ctxt ff ast ->
+let pp_proof : func_def -> import list -> string list -> bool
+    -> Coq_ast.t pp = fun def imports ctxt trusted ff ast ->
+  (* Formatting utilities. *)
+  let pp fmt = Format.fprintf ff fmt in
+
+  (* Only print a comment if the function is trusted. *)
+  if trusted then
+    pp "(* Let's skip that, you seem to have some faith. *)"
+  else
+
   (* Stuff for import of the code. *)
   let basename =
     let name = Filename.basename ast.source_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
   let import_path = "refinedc" in (* FIXME generic? Do something smarter? *)
-
-  (* Formatting utilities. *)
-  let pp fmt = Format.fprintf ff fmt in
 
   (* Printing some header. *)
   pp "@[<v 0>From refinedc.typing Require Import typing.@;";
@@ -1180,14 +1185,14 @@ let pp_proof : func_def -> import list -> string list -> Coq_ast.t pp =
 type mode =
   | Code of import list
   | Spec of import list * string list
-  | Fprf of func_def * import list * string list
+  | Fprf of func_def * import list * string list * bool (* trusted *)
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let pp =
     match mode with
-    | Code(imports)          -> pp_code imports
-    | Spec(imports,ctxt)     -> pp_spec imports ctxt
-    | Fprf(def,imports,ctxt) -> pp_proof def imports ctxt
+    | Code(imports)                  -> pp_code imports
+    | Spec(imports,ctxt)             -> pp_spec imports ctxt
+    | Fprf(def,imports,ctxt,trusted) -> pp_proof def imports ctxt trusted
   in
   (* We write to a buffer. *)
   let buffer = Buffer.create 4096 in
