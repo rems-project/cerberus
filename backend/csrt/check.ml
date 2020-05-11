@@ -738,7 +738,7 @@ let is_uninitialised_pointer loc env sym =
   | _,_ -> return false
 
 
-let is_owned_pointer loc env sym = 
+let is_owning_pointer loc env sym = 
   debug_print 3 (action "checking whether owned pointer") >>= fun () ->
   debug_print 3 (blank 3 ^^ item "sym" (Sym.pp sym)) >>= fun () ->
   debug_print 3 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
@@ -1018,7 +1018,7 @@ let check_field_access loc env sym access =
   debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 2 PPrint.empty >>= fun () ->
 
-  is_owned_pointer loc env sym >>= function
+  is_owning_pointer loc env sym >>= function
   | None -> fail loc (Generic_error !^"no ownership justifying struct access")
   | Some (resource,(pointee,bt)) ->
      begin match bt, get_open_struct env pointee with
@@ -1235,15 +1235,15 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
      | M_PtrFromInt _ (* (actype 'bty * asym 'bty) *)
        -> fail loc (Unsupported !^"todo: ememop")
      | M_PtrValidForDeref (a_ct, asym) ->
-        let (ct, ct_loc) = aunpack loc a_ct in
-        ctype_aux loc (fresh ()) (make_pointer_ctype ct) >>= fun ((name,bt),l,r,c) ->
+        (* let (ct, ct_loc) = aunpack loc a_ct in *)
+        let (sym, loc) = aunpack loc asym in
+        is_owning_pointer loc env sym >>= fun is_owned ->
         let ret_name = fresh () in
-        let ptr_typ = (makeA name bt) :: l @ r @ c in
-        (* todo: plug in some other constraint *)
-        let constr = LC (S (ret_name,Bool)) in
-        let decl_typ = FT.make ptr_typ ([makeA ret_name Bool; makeUC constr]@r) in
-        make_Aargs loc env [asym] >>= fun (args,env) ->
-        call_typ loc env decl_typ args >>= fun (rt, env) ->
+        let constr = match is_owned with
+          | Some _ ->  LC (S (ret_name,Bool)) 
+          | None   ->  LC (Not (S (ret_name,Bool))) 
+        in
+        let rt = [makeA ret_name Bool; makeUC constr] in
         return (Normal rt, env)
      | M_PtrWellAligned _ (* (actype 'bty * asym 'bty  ) *)
      | M_PtrArrayShift _ (* (asym 'bty * actype 'bty * asym 'bty  ) *)
@@ -1331,7 +1331,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            let rt = [makeA ret fbt; makeUC constr] in
            return (Normal rt, env)
         | None ->
-           begin is_owned_pointer loc env sym >>= function
+           begin is_owning_pointer loc env sym >>= function
             | Some (_r,(pointee,bt)) ->
                let constr = LC (S (ret,bt) %= S (pointee,bt)) in
                return (Normal [makeA ret bt; makeUC constr], env)
