@@ -519,7 +519,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate id_goto else_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (None, s) blocks
+          SMap.add id (Some(no_block_annot), s) blocks
         in
         (s, blocks)
     | BE_or (be1,be2) ->
@@ -528,7 +528,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate then_goto id_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (None, s) blocks
+          SMap.add id (Some(no_block_annot), s) blocks
         in
         (s, blocks)
   in
@@ -554,8 +554,52 @@ let collect_bindings () =
   in
   Hashtbl.fold fn local_vars []
 
+let warn_ignored_attrs so attrs =
+  let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
+    Format.fprintf ff "%s(" id.elt;
+    match args with
+    | arg :: args ->
+        let open Location in
+        Format.fprintf ff "%s" arg.elt;
+        List.iter (fun arg -> Format.fprintf ff ", %s" arg.elt) args;
+        Format.fprintf ff ")"
+    | []          ->
+        Format.fprintf ff ")"
+  in
+  let fn attr =
+    let desc s =
+      let open AilSyntax in
+      match s with
+      | AilSblock(_,_)     -> "a block"
+      | AilSgoto(_)        -> "a goto"
+      | AilSreturnVoid
+      | AilSreturn(_)      -> "a return"
+      | AilSbreak          -> "a break"
+      | AilScontinue       -> "a continue"
+      | AilSskip           -> "a skip"
+      | AilSexpr(_)        -> "an expression"
+      | AilSif(_,_,_)      -> "an if statement"
+      | AilSwhile(_,_)     -> "a while loop"
+      | AilSdo(_,_)        -> "a do-while loop"
+      | AilSswitch(_,_)    -> "a switch statement"
+      | AilScase(_,_)      -> "a case statement"
+      | AilSdefault(_)     -> "a default statement"
+      | AilSlabel(_,_)     -> "a label"
+      | AilSdeclaration(_) -> "a declaration"
+      | AilSpar(_)         -> "a par statement"
+      | AilSreg_store(_,_) -> "a register store statement"
+    in
+    let desc =
+      match so with
+      | Some(s) -> Printf.sprintf " (on %s)" (desc s)
+      | None    -> " (on an outer block)"
+    in
+    Panic.wrn None "Ignored attribute [%a]%s." pp_rc attr desc
+  in
+  List.iter fn attrs
+
 let translate_block stmts blocks ret_ty =
-  let rec trans break continue final stmts blocks =
+  let rec trans extra_attrs break continue final stmts blocks =
     let open AilSyntax in
     let resume goto = match goto with None -> assert false | Some(s) -> s in
     (* End of the block reached. *)
@@ -569,8 +613,10 @@ let translate_block stmts blocks ret_ty =
     let res =
       match s with
       (* Nested block. *)
-      | AilSblock(bs, ss)   -> insert_bindings bs;
-                               trans break continue final (ss @ stmts) blocks
+      | AilSblock(bs, ss)   ->
+          insert_bindings bs;
+          attrs_used := true; (* Will be attach to the first loop we find. *)
+          trans (extra_attrs @ attrs) break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
       | AilSgoto(l)         -> (locate (Goto(sym_to_str l)), blocks)
       | AilSreturnVoid      ->
@@ -585,9 +631,12 @@ let translate_block stmts blocks ret_ty =
           in
           (trans_expr e goal_ty (fun e -> locate (Return(e))), blocks)
       (* All the other constructors. *)
-      | AilSskip            -> trans break continue final stmts blocks
+      | AilSskip            ->
+          trans extra_attrs break continue final stmts blocks
       | AilSexpr(e)         ->
-          let (stmt, blocks) = trans break continue final stmts blocks in
+          let (stmt, blocks) =
+            trans extra_attrs break continue final stmts blocks
+          in
           let incr_or_decr op = op = PostfixIncr || op = PostfixDecr in
           let stmt =
             match strip_expr e with
@@ -643,35 +692,37 @@ let translate_block stmts blocks ret_ty =
           in
           (stmt, blocks)
       | AilSif(e,s1,s2)     ->
+          warn_ignored_attrs None extra_attrs;
           (* Translate the continuation. *)
           let (blocks, final) =
             if stmts = [] then (blocks, final) else
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans break continue final stmts blocks in
+            let (s, blocks) = trans [] break continue final stmts blocks in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, Some(mkloc (Goto(id_cont)) s.loc))
           in
           (* Translate the two branches. *)
           let (blocks, then_goto) =
             let id_then = fresh_block_id () in
-            let (s, blocks) = trans break continue final [s1] blocks in
+            let (s, blocks) = trans [] break continue final [s1] blocks in
             let blocks = SMap.add id_then (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_then)) s.loc)
           in
           let (blocks, else_goto) =
             let id_else = fresh_block_id () in
-            let (s, blocks) = trans break continue final [s2] blocks in
+            let (s, blocks) = trans [] break continue final [s2] blocks in
             let blocks = SMap.add id_else (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_else)) s.loc)
           in
           translate_bool_expr then_goto else_goto blocks e
       | AilSwhile(e,s)      ->
+          let attrs = extra_attrs @ attrs in
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans break continue final stmts blocks in
+            let (s, blocks) = trans [] break continue final stmts blocks in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -679,7 +730,7 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(locate (Goto(id_cond))) in
-            let (s, blocks) = trans break continue continue [s] blocks in
+            let (s, blocks) = trans [] break continue continue [s] blocks in
             let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_body)) s.loc)
           in
@@ -697,12 +748,13 @@ let translate_block stmts blocks ret_ty =
           in
           (locate (Goto(id_cond)), blocks)
       | AilSdo(s,e)         ->
+          let attrs = extra_attrs @ attrs in
           let id_cond = fresh_block_id () in
           let id_body = fresh_block_id () in
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans break continue final stmts blocks in
+            let (s, blocks) = trans [] break continue final stmts blocks in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -710,7 +762,7 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(noloc (Goto(id_cond))) in (* FIXME loc *)
-            let (s, blocks) = trans break continue continue [s] blocks in
+            let (s, blocks) = trans [] break continue continue [s] blocks in
             let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
             (blocks, locate (Goto(id_body)))
           in
@@ -730,14 +782,16 @@ let translate_block stmts blocks ret_ty =
       | AilSdefault(_)      -> not_impl loc "statement default"
       | AilSlabel(l,s)      ->
           let (stmt, blocks) =
-            trans break continue final (s :: stmts) blocks
+            trans extra_attrs break continue final (s :: stmts) blocks
           in
           let blocks =
             SMap.add (sym_to_str l) (Some(no_block_annot), stmt) blocks
           in
           (locate (Goto(sym_to_str l)), blocks)
       | AilSdeclaration(ls) ->
-          let (stmt, blocks) = trans break continue final stmts blocks in
+          let (stmt, blocks) =
+            trans extra_attrs break continue final stmts blocks
+          in
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
             let ty =
@@ -757,25 +811,10 @@ let translate_block stmts blocks ret_ty =
       | AilSpar(_)          -> not_impl loc "statement par"
       | AilSreg_store(_,_)  -> not_impl loc "statement store"
     in
-    if not !attrs_used then
-      begin
-        let pp_rc ff {rc_attr_id = id; rc_attr_args = args} =
-          Format.fprintf ff "%s(" id.elt;
-          match args with
-          | arg :: args ->
-              let open Location in
-              Format.fprintf ff "%s" arg.elt;
-              List.iter (fun arg -> Format.fprintf ff ", %s" arg.elt) args;
-              Format.fprintf ff ")"
-          | []          ->
-              Format.fprintf ff ")"
-        in
-        let fn = Panic.wrn None "Ignored attribute [%a]." pp_rc in
-        List.iter fn attrs;
-      end;
+    if not !attrs_used then warn_ignored_attrs (Some(s)) attrs;
     res
   in
-  trans None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
+  trans [] None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
 
 (** [translate fname ail] translates typed Ail AST to Coq AST. *)
 let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
