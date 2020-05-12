@@ -97,20 +97,20 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
-    pp_env_list None 
+    pp_list None 
+      (fun (sym, bs) -> typ (bold (Sym.pp sym)) (Types.pp bs))
       (SymMap.bindings decls) 
-      (fun (sym, bs) -> typ (Sym.pp sym) (Types.pp bs))
              
 
   let pp_fun_decls decls = 
-    pp_env_list None
+    pp_list None
+      (fun (sym, (_, t, _ret)) -> typ (bold (Sym.pp sym)) (FunctionTypes.pp t))
       (SymMap.bindings decls)
-      (fun (sym, (_, t, _ret)) -> typ (Sym.pp sym) (FunctionTypes.pp t))
 
   let pp_name_map m = 
-    pp_env_list None
-      (NameMap.all_names m)
+    pp_list None
       (fun (name,sym) -> item name (Sym.pp sym))
+      (NameMap.all_names m)
 
   let pp_items genv = 
     [ (1, h2 "Structs")
@@ -140,10 +140,10 @@ module Local = struct
     { vars = SymMap.empty; 
       open_structs = SymMap.empty }
 
-  let pp_avars avars = pp_env_list (Some brackets) avars (Binders.pp BT.pp)
-  let pp_lvars avars = pp_env_list (Some brackets) avars (Binders.pp LS.pp)
-  let pp_rvars avars = pp_env_list (Some brackets) avars (Binders.pp RE.pp)
-  let pp_cvars avars = pp_env_list (Some brackets) avars (Binders.pp LC.pp)
+  let pp_avars vars = pp_list (Some brackets) (Binders.pp BT.pp) vars 
+  let pp_lvars vars = pp_list (Some brackets) (Binders.pp LS.pp) vars
+  let pp_rvars vars = pp_list (Some brackets) (Binders.pp RE.pp) vars 
+  let pp_cvars vars = pp_list (Some brackets) (Binders.pp LC.pp) vars
 
   let pp_open_structs open_structs = 
     let l = SymMap.bindings open_structs in
@@ -210,8 +210,8 @@ module Env = struct
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     lookup_sym loc env.local.vars name >>= function
     | R t -> return (R t, remove_var env name)
-    | A (Struct s) -> return (A (Struct s), remove_var env name)
-    | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name)
+    (* | A (Struct s) -> return (A (Struct s), remove_var env name)
+     * | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name) *)
     | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
