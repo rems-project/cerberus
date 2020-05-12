@@ -171,7 +171,7 @@ let is_const_0 (AilSyntax.AnnotatedExpression(_, _, _, e)) =
       end
   | _            -> false
 
-let op_type_of loc Ctype.(Ctype(_, c_ty)) =
+let rec op_type_of loc Ctype.(Ctype(_, c_ty)) =
   match c_ty with
   | Void                -> not_impl loc "op_type_of (Void)"
   | Basic(Integer(i))   -> OpInt(translate_int_type loc i)
@@ -179,7 +179,12 @@ let op_type_of loc Ctype.(Ctype(_, c_ty)) =
   | Array(_,_)          -> not_impl loc "op_type_of (Array)"
   | Function(_,_,_,_)   -> not_impl loc "op_type_of (Function)"
   | Pointer(_,c_ty)     -> OpPtr(layout_of false c_ty)
-  | Atomic(c_ty)        -> not_impl loc "op_type_of (Atomic)"
+  | Atomic(c_ty)        ->
+      begin
+        match op_type_of loc c_ty with
+        | OpInt(_) as op_ty -> op_ty
+        | _                 -> not_impl loc "op_type_of (Atomic not an int)"
+      end
   | Struct(_)           -> not_impl loc "op_type_of (Struct)"
   | Union(_)            -> not_impl loc "op_type_of (Union)"
 
