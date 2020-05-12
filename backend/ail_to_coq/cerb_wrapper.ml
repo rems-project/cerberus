@@ -74,7 +74,10 @@ let c_file_to_ail cpp_includes cpp_nostd filename =
   | CPP(_) -> Panic.panic_no_pos "Failed due to preprocessor error."
   | _      ->
   let err = Pp_errors.short_message err in
-  let (head, pos) = Location_ocaml.head_pos_of_location loc in
+  let (_, pos) =
+    try Location_ocaml.head_pos_of_location loc with Invalid_argument(_) ->
+      ("", "(Cerberus position bug)")
+  in
   Panic.panic loc "Frontend error.\n%s\n\027[0m%s%!" err pos
 
 let cpp_only cpp_includes cpp_nostd filename output_file =
