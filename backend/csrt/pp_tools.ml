@@ -7,7 +7,7 @@ open PPrint
 let debug_level = ref 0
 
 
-let pps = Pp_utils.to_plain_pretty_string
+let plain = Pp_utils.to_plain_pretty_string
 
 let arrow = minus ^^ rangle
 
@@ -27,7 +27,7 @@ let redb = ansi_format [Bold;Red]
 let yellowb = ansi_format [Bold;Yellow]
 
 
-let pp_env_list optional_wrapper l f = 
+let pp_list optional_wrapper f l = 
   match l with
   | [] -> !^"(empty)"
   | l -> 
