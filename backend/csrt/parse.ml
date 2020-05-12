@@ -163,10 +163,11 @@ let parse_resource loc (names : NameMap.t) sx =
    *    parse_index_terms loc names it1 >>= fun it1 ->
    *    parse_index_terms loc names it2 >>= fun it2 ->
    *    return (Array (it1, it2)) *)
-  | Sexp.List [Sexp.Atom "points"; it1; bt; it2] ->
+  | Sexp.List [Sexp.Atom "points"; it1; it2; it3] ->
      parse_index_term loc names it1 >>= fun it1 ->
      parse_index_term loc names it2 >>= fun it2 ->
-     return (Points (it1, it2))
+     parse_index_term loc names it3 >>= fun it3 ->
+     return (Points (it1, it2, it3))
   (* | Sexp.List (Sexp.Atom p :: its) ->
    *    mapM (parse_index_terms loc names) its >>= fun its ->
    *    return (Pred (p, its)) *)

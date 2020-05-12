@@ -228,7 +228,8 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
      return ((name,BT.Array),[],[],[])
   | Pointer (_qualifiers, ct) ->
      ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-     let r = makeUR (Points (S (name, Loc), S (pointee_name, bt))) :: r in
+     size_of_ctype loc ct >>= fun size ->
+     let r = makeUR (Points (S (name, Loc), S (pointee_name, bt), Num size)) :: r in
      let l = makeL pointee_name (Base bt) :: l in
      return ((name,Loc),l,r,c)
   | Atomic ct ->              (* check *)
@@ -706,7 +707,7 @@ let make_initial_store_type loc ct =
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] @ r in
+    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt), Num size))] @ r in
     return (value,ret)
   end >>= fun (value,ret) ->
   return {arguments = p @ value; return = ret}
@@ -715,10 +716,11 @@ let make_initial_store_type loc ct =
 let make_store_type loc ct : (FunctionTypes.t,'e) m = 
   let pointer_name = fresh () in
   ctype loc pointer_name (make_pointer_ctype ct) >>= fun address ->
+  size_of_ctype loc ct >>= fun size ->
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt)))] @ r in
+    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt), Num size))] @ r in
     return (value,ret)
   end >>= fun (value,ret) ->
   return {arguments = address @ value; return = ret}
@@ -728,9 +730,10 @@ let make_fun_arg_type sym loc ct =
   ctype loc sym (make_pointer_ctype ct) >>= fun pointer_and_value_before ->
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+    size_of_ctype loc ct >>= fun size ->
     let ret =
       makeL value_name (Base bt) :: 
-      (makeUR (Points (S (sym, Loc), S (value_name, bt)))) ::
+      (makeUR (Points (S (sym, Loc), S (value_name, bt), Num size))) ::
       l @ r @ c 
     in
     return ret
@@ -765,7 +768,7 @@ let is_owned_pointer loc env sym =
     let relevant = 
       (filter_map (fun (name,r) ->
            match r with
-           | Points (_,S (pointee,bt)) -> Some (name,(pointee,bt) )
+           | Points (_,S (pointee,bt), _) -> Some (name,(pointee,bt) )
            | _ -> None) named_resources)
     in
     match relevant with
