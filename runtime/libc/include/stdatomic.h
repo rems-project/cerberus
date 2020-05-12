@@ -109,10 +109,10 @@ typedef _Atomic(uintmax_t)              atomic_uintmax_t;
 #define atomic_exchange(object, desired) \
   atomic_exchange_explicit(object, desired, memory_order_seq_cst)
 #define atomic_compare_exchange_strong(object, expected, desired) \
-  atomic_compare_exchange_strong(object, expected, desired, \
+  atomic_compare_exchange_strong_explicit(object, expected, desired, \
       memory_order_seq_cst, memory_order_seq_cst)
 #define atomic_compare_exchange_weak(object, expected, desired) \
-  atomic_compare_exchange_weak(object, expected, desired, \
+  atomic_compare_exchange_weak_explicit(object, expected, desired, \
       memory_order_seq_cst, memory_order_seq_cst)
 #define atomic_fetch_key(object, operand) \
   atomic_fetch_key_explicit(object, operand, memory_order_seq_cst)
