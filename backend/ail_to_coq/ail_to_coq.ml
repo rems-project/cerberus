@@ -11,6 +11,11 @@ type i_type    = Ctype.integerType
 type type_cat  = GenTypes.typeCategory
 type loc       = Location_ocaml.t
 
+let c_type_of_type_cat : type_cat -> c_type = fun tc ->
+  match tc with
+  | GenTypes.LValueType(_,c_ty,_) -> c_ty
+  | GenTypes.RValueType(c_ty)     -> c_ty
+
 let to_type_cat : GenTypes.genTypeCategory -> type_cat = fun tc ->
   let loc = Location_ocaml.unknown in
   let impl = Ocaml_implementation.hafniumIntImpl in
@@ -18,6 +23,12 @@ let to_type_cat : GenTypes.genTypeCategory -> type_cat = fun tc ->
   match ErrorMonad.runErrorMonad m_tc with
   | Either.Right(tc) -> tc
   | Either.Left(_,_) -> assert false (* FIXME possible here? *)
+
+let tc_of : ail_expr -> type_cat = fun e ->
+  let AilSyntax.AnnotatedExpression(ty,_,_,_) = e in to_type_cat ty
+
+let loc_of : ail_expr -> loc = fun e ->
+  let AilSyntax.AnnotatedExpression(_,_,loc,_) = e in loc
 
 let not_impl loc fmt = panic loc ("Not implemented: " ^^ fmt)
 
@@ -122,6 +133,12 @@ let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
   in
   layout_of c_ty
 
+(* Get a layout under a pointer indirection in the type of [e]. *)
+let ptr_layout_of : ail_expr -> Coq_ast.layout = fun e ->
+  match c_type_of_type_cat (tc_of e) with
+  | Ctype(_, Pointer(_,c_ty)) -> layout_of false c_ty
+  | _                         -> assert false
+
 (* Hashtable of local variables to distinguish global ones. *)
 let local_vars = Hashtbl.create 17
 
@@ -143,11 +160,6 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let c_type_of_type_cat : type_cat -> c_type = fun tc ->
-  match tc with
-  | GenTypes.LValueType(_,c_ty,_) -> c_ty
-  | GenTypes.RValueType(c_ty)     -> c_ty
-
 let layout_of_tc : type_cat -> Coq_ast.layout = fun tc ->
   layout_of false (c_type_of_type_cat tc)
 
@@ -155,10 +167,6 @@ let is_atomic : c_type -> bool = AilTypesAux.is_atomic
 
 let is_atomic_tc : GenTypes.typeCategory -> bool = fun tc ->
   is_atomic (c_type_of_type_cat tc)
-
-let tc_of (AilSyntax.AnnotatedExpression(ty,_,_,_)) = to_type_cat ty
-
-let loc_of (AilSyntax.AnnotatedExpression(_,_,loc,_)) = loc
 
 let is_const_0 (AilSyntax.AnnotatedExpression(_, _, _, e)) =
   let open AilSyntax in
@@ -188,7 +196,7 @@ let rec op_type_of loc Ctype.(Ctype(_, c_ty)) =
   | Struct(_)           -> not_impl loc "op_type_of (Struct)"
   | Union(_)            -> not_impl loc "op_type_of (Union)"
 
-(* Get an op_type under a pointer indirection. *)
+(* Get an op_type under a pointer indirection in the type of [e]. *)
 let ptr_op_type_of : ail_expr -> Coq_ast.op_type = fun e ->
   match c_type_of_type_cat (tc_of e) with
   | Ctype(_, Pointer(_,c_ty)) -> op_type_of (loc_of e) c_ty
@@ -520,7 +528,7 @@ and translate_call : type a. a call_place -> loc -> bool -> ail_expr
               | [e1; e2; e3] -> (e1, e2, e3)
               | _            -> assert false
             in
-            let layout = layout_of_tc (tc_of e1) in
+            let layout = ptr_layout_of e1 in
             let op_type = ptr_op_type_of e1 in
             let (e1, l1) = translate_expr lval None e1 in
             let (e2, l2) = translate_expr lval (Some(op_type)) e2 in
