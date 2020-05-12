@@ -530,8 +530,8 @@ and translate_call : type a. a call_place -> loc -> bool -> ail_expr
             in
             let layout = ptr_layout_of e1 in
             let op_type = ptr_op_type_of e1 in
-            let (e1, l1) = translate_expr lval None e1 in
-            let (e2, l2) = translate_expr lval (Some(op_type)) e2 in
+            let (e1, l1) = translate_expr true None e1 in
+            let (e2, l2) = translate_expr false (Some(op_type)) e2 in
             let mo = memory_order_of_expr e3 in
             if mo <> Cmm_csem.Seq_cst then
               Panic.panic loc "Only the Seq_cst memory order is supported.";
@@ -540,6 +540,12 @@ and translate_call : type a. a call_place -> loc -> bool -> ail_expr
               | In_Expr ->
                   forbidden loc "nested (atomic) store"
               | In_Stmt ->
+                  let e1 =
+                    match e1.elt with
+                    | AddrOf(e) -> e
+                    | _         -> forbidden loc "atomic store whose LHS is \
+                                     not of the form [&e]"
+                  in
                   (Call_atomic_store(layout, e1, e2), List.concat [l1; l2])
             end
         | AilBatomic(AilBAload)                    ->
