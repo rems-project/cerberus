@@ -139,7 +139,7 @@ let cpp_nostd =
 
 let cpp_output =
   let doc =
-    "Write the output of the preprocessor to a file with '.c.cpp' extension."
+    "Write the output of the preprocessor to a file with '.cpp.c' extension."
   in
   Arg.(value & flag & info ["cpp-output"] ~doc)
 
