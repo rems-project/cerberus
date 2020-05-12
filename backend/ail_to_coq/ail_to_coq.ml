@@ -143,13 +143,6 @@ let (fresh_block_id, reset_block_id) =
   let reset () = counter := -1 in
   (fresh, reset)
 
-let rec ident_of_expr (AilSyntax.AnnotatedExpression(_,_,loc,e)) =
-  let open AilSyntax in
-  match e with
-  | AilEident(sym)        -> Some(loc, sym_to_str sym)
-  | AilEfunction_decay(e) -> ident_of_expr e
-  | _                     -> None
-
 let c_type_of_type_cat : type_cat -> c_type = fun tc ->
   match tc with
   | GenTypes.LValueType(_,c_ty,_) -> c_ty
@@ -186,9 +179,15 @@ let op_type_of loc Ctype.(Ctype(_, c_ty)) =
   | Array(_,_)          -> not_impl loc "op_type_of (Array)"
   | Function(_,_,_,_)   -> not_impl loc "op_type_of (Function)"
   | Pointer(_,c_ty)     -> OpPtr(layout_of false c_ty)
-  | Atomic(_)           -> not_impl loc "op_type_of (Atomic)"
+  | Atomic(c_ty)        -> not_impl loc "op_type_of (Atomic)"
   | Struct(_)           -> not_impl loc "op_type_of (Struct)"
   | Union(_)            -> not_impl loc "op_type_of (Union)"
+
+(* Get an op_type under a pointer indirection. *)
+let ptr_op_type_of : ail_expr -> Coq_ast.op_type = fun e ->
+  match c_type_of_type_cat (tc_of e) with
+  | Ctype(_, Pointer(_,c_ty)) -> op_type_of (loc_of e) c_ty
+  | _                         -> assert false
 
 let op_type_of_tc : loc -> type_cat -> Coq_ast.op_type = fun loc tc ->
   op_type_of loc (c_type_of_type_cat tc)
@@ -255,7 +254,37 @@ let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
           Location.pp_data d msg
   end; default
 
-let rec translate_expr lval goal_ty e =
+let memory_order_of_expr : ail_expr -> Cmm_csem.memory_order = fun e ->
+  let i =
+    match strip_expr e with
+    | AilEconst(ConstantInteger(IConstant(i,_,_))) -> i
+    | _                                            ->
+        Panic.panic (loc_of e) "Memory order is not an integer constant."
+  in
+  let i =
+    try Z.to_int i with Z.Overflow ->
+      Panic.panic (loc_of e) "Memory order is invalid (bad constant)."
+  in
+  match Builtins.decode_memory_order i with
+  | Some(mo) -> mo
+  | None     ->
+      Panic.panic (loc_of e) "Memory order is invalid (bad constant)."
+
+(* Calls accumulated while translating expressions. *)
+type call = Location.t * string option * expr * expr list
+type calls = call list
+
+type _ call_place =
+  | In_Expr : expr call_place (* Nested call in expression. *)
+  | In_Stmt : stmt call_place (* Call at the top level. *)
+
+type _ call_res =
+  | Call_simple       : expr * expr list     -> 'a   call_place call_res
+  | Call_atomic_expr  : expr_aux             -> 'a   call_place call_res
+  | Call_atomic_store : layout * expr * expr -> stmt call_place call_res
+
+let rec translate_expr : bool -> op_type option -> ail_expr -> expr * calls =
+  fun lval goal_ty e ->
   let open AilSyntax in
   let res_ty = op_type_tc_opt (loc_of e) (tc_of e) in
   let AnnotatedExpression(_, _, loc, e) = e in
@@ -333,45 +362,14 @@ let rec translate_expr lval goal_ty e =
           (locate (UnOp(CastOp(op_ty), ty, e)), l)
         end
     | AilEcall(e,es)               ->
-        let (fun_loc, fun_id) =
-          match ident_of_expr e with
-          | None     -> not_impl loc "expr complicated call"
-          | Some(id) -> id
-        in
-        let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
-        let attrs = collect_rc_attrs attrs in
-        let annot_args =
-          handle_invalid_annot ~loc [] function_annot_args attrs
-        in
-        let nb_args = List.length es in
-        let check_useful (i, _, _) =
-          if i >= nb_args then
-            Panic.wrn (Some(loc))
-              "Argument annotation not usable (not enough arguments)."
-        in
-        List.iter check_useful annot_args;
-        let (es, l) =
-          let fn i e =
-            let (_, ty, _) = List.nth args i in
-            match op_type_opt Location_ocaml.unknown ty with
-            | Some(OpInt(_)) as goal_ty -> translate_expr lval goal_ty e
-            | _                         -> translate e
-          in
-          let es_ls = List.mapi fn es in
-          (List.map fst es_ls, List.concat (List.map snd es_ls))
-        in
-        let annotate i e =
-          let annot_args = List.filter (fun (n, _, _) -> n = i) annot_args in
-          let fn (_, k, coq_e) acc = mkloc (AnnotExpr(k, coq_e, e)) e.loc in
-          List.fold_right fn annot_args e
-        in
-        let es = List.mapi annotate es in
-        let ret_id = Some(fresh_ret_id ()) in
-        Hashtbl.add used_functions fun_id ();
-        let e_call =
-          mkloc (Var(Some(fun_id), true)) (register_loc coq_locs fun_loc)
-        in
-        (locate (Var(ret_id, false)), l @ [(coq_loc, ret_id, e_call, es)])
+        let (call, l) = translate_call In_Expr loc lval e es in
+        begin
+          match call with
+          | Call_atomic_expr(e) -> (locate e, l)
+          | Call_simple(e, es)  ->
+              let ret_id = Some(fresh_ret_id ()) in
+              (locate (Var(ret_id, false)), l @ [(coq_loc, ret_id, e, es)])
+        end
     | AilEassert(e)                -> not_impl loc "expr assert nested"
     | AilEoffsetof(c_ty,is)        -> not_impl loc "expr offsetof"
     | AilEgeneric(e,gas)           -> not_impl loc "expr generic"
@@ -467,6 +465,104 @@ let rec translate_expr lval goal_ty e =
   | (Some(goal_ty), Some(res_ty)) ->
       if goal_ty = res_ty then res
       else (mkloc (UnOp(CastOp(goal_ty), res_ty, e)) e.loc, l)
+
+and translate_call : type a. a call_place -> loc -> bool -> ail_expr
+    -> ail_expr list -> a call_place call_res * calls =
+  fun place loc lval e es ->
+  let loc_e = register_loc coq_locs (loc_of e) in
+  match strip_expr e with
+  | AilEfunction_decay(e) -> translate_call place loc lval e es
+  | AilEident(sym)        ->
+      let fun_id = sym_to_str sym in
+      Hashtbl.add used_functions fun_id ();
+      let e = mkloc (Var(Some(fun_id), true)) loc_e in
+      let (_, args, attrs) = List.assoc fun_id !global_fun_decls in
+      let attrs = collect_rc_attrs attrs in
+      let annot_args =
+        handle_invalid_annot ~loc [] function_annot_args attrs
+      in
+      let nb_args = List.length es in
+      let check_useful (i, _, _) =
+        if i >= nb_args then
+          Panic.wrn (Some(loc))
+            "Argument annotation not usable (not enough arguments)."
+      in
+      List.iter check_useful annot_args;
+      let (es, l) =
+        let fn i e =
+          let (_, ty, _) = List.nth args i in
+          match op_type_opt Location_ocaml.unknown ty with
+          | Some(OpInt(_)) as goal_ty -> translate_expr false goal_ty e
+          | _                         -> translate_expr false None e
+        in
+        let es_ls = List.mapi fn es in
+        (List.map fst es_ls, List.concat (List.map snd es_ls))
+      in
+      let annotate i e =
+        let annot_args = List.filter (fun (n, _, _) -> n = i) annot_args in
+        let fn (_, k, coq_e) acc = mkloc (AnnotExpr(k, coq_e, e)) e.loc in
+        List.fold_right fn annot_args e
+      in
+      (Call_simple(e, List.mapi annotate es), l)
+  | AilEbuiltin(b)        ->
+      begin
+        match b with
+        | AilBatomic(AilBAthread_fence)            ->
+            not_impl loc "call to builtin atomic (thread_fence)"
+        | AilBatomic(AilBAstore)                   ->
+            let (e1, e2, e3) =
+              match es with
+              | [e1; e2; e3] -> (e1, e2, e3)
+              | _            -> assert false
+            in
+            let layout = layout_of_tc (tc_of e1) in
+            let op_type = ptr_op_type_of e1 in
+            let (e1, l1) = translate_expr lval None e1 in
+            let (e2, l2) = translate_expr lval (Some(op_type)) e2 in
+            let mo = memory_order_of_expr e3 in
+            if mo <> Cmm_csem.Seq_cst then
+              Panic.panic loc "Only the Seq_cst memory order is supported.";
+            begin
+              match place with
+              | In_Expr ->
+                  forbidden loc "nested (atomic) store"
+              | In_Stmt ->
+                  (Call_atomic_store(layout, e1, e2), List.concat [l1; l2])
+            end
+        | AilBatomic(AilBAload)                    ->
+            not_impl loc "call to builtin atomic (load)"
+        | AilBatomic(AilBAexchange)                ->
+            not_impl loc "call to builtin atomic (exchange)"
+        | AilBatomic(AilBAcompare_exchange_strong) ->
+            let (e1, e2, e3, e4, e5) =
+              match es with
+              | [e1; e2; e3; e4; e5] -> (e1, e2, e3, e4, e5)
+              | _                    -> assert false
+            in
+            let op_type = ptr_op_type_of e1 in
+            let (e1, l1) = translate_expr lval None e1 in
+            let (e2, l2) = translate_expr lval None e2 in
+            let (e3, l3) = translate_expr lval (Some(op_type)) e3 in
+            let mo1 = memory_order_of_expr e4 in
+            let mo2 = memory_order_of_expr e4 in
+            if mo1 <> Cmm_csem.Seq_cst || mo2 <> Cmm_csem.Seq_cst then
+              Panic.panic loc "Only the Seq_cst memory order is supported.";
+            let cas = CAS(op_type, e1, e2, e3) in
+            (Call_atomic_expr(cas), List.concat [l1; l2; l3])
+        | AilBatomic(AilBAcompare_exchange_weak)   ->
+            not_impl loc "call to builtin atomic (compare_exchange_weak)"
+        | AilBatomic(AilBAfetch_key)               ->
+            not_impl loc "call to builtin atomic (fetch_key)"
+        | AilBlinux(AilBLfence)                    ->
+            not_impl loc "call to linux builtin (fence)"
+        | AilBlinux(AilBLread)                     ->
+            not_impl loc "call to linux builtin (read)"
+        | AilBlinux(AilBLwrite)                    ->
+            not_impl loc "call to linux builtin (write)"
+        | AilBlinux(AilBLrmw)                      ->
+            not_impl loc "call to linux builtin (rmw)"
+      end
+  | _                     -> not_impl loc "expr complicated call"
 
 type bool_expr =
   | BE_leaf of ail_expr
@@ -638,7 +734,13 @@ let translate_block stmts blocks ret_ty =
             trans extra_attrs break continue final stmts blocks
           in
           let incr_or_decr op = op = PostfixIncr || op = PostfixDecr in
+          let use_annots () =
+            attrs_used := true;
+            let fn () = Some(expr_annot attrs) in
+            handle_invalid_annot ~loc None fn ()
+          in
           let stmt =
+            let loc_full = loc_of e in
             match strip_expr e with
             | AilEassert(e)                        ->
                 trans_bool_expr e (fun e -> locate (Assert(e, stmt)))
@@ -671,23 +773,26 @@ let translate_block stmts blocks ret_ty =
                   locate (BinOp(op, OpInt(int_ty), OpInt(int_ty), use, one))
                 in
                 locate (Assign(atomic, layout, e1, e2, stmt))
-            | AilEcall(_,_)                        ->
-                let (stmt, calls) =
-                  match snd (translate_expr false None e) with
-                  | []                  -> assert false
-                  | (_,_,e,es) :: calls ->
-                      (locate (Call(None, e, es, stmt)), calls)
+            | AilEcall(e,es)                       ->
+                let (call, calls) =
+                  translate_call In_Stmt loc_full false e es
+                in
+                let stmt =
+                  match call with
+                  | Call_atomic_expr(e)             ->
+                      let annots = use_annots () in
+                      locate (ExprS(annots, locate e, stmt))
+                  | Call_simple(e,es)               ->
+                      locate (Call(None, e, es, stmt))
+                  | Call_atomic_store(layout,e1,e2) ->
+                      locate (Assign(true, layout, e1, e2, stmt))
                 in
                 let fn (loc, id, e, es) stmt =
                   mkloc (Call(id, e, es, stmt)) loc
                 in
                 List.fold_right fn calls stmt
             | _                                    ->
-                attrs_used := true;
-                let annots =
-                  let fn () = Some(expr_annot attrs) in
-                  handle_invalid_annot ~loc None fn ()
-                in
+                let annots = use_annots () in
                 trans_expr e None (fun e -> locate (ExprS(annots, e, stmt)))
           in
           (stmt, blocks)
