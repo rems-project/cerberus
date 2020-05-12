@@ -206,7 +206,7 @@ let op_type_of_tc : loc -> type_cat -> Coq_ast.op_type = fun loc tc ->
   op_type_of loc (c_type_of_type_cat tc)
 
 (* We need similar function returning options for casts. *)
-let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
+let rec op_type_opt loc Ctype.(Ctype(_, c_ty)) =
   match c_ty with
   | Void                -> None
   | Basic(Integer(i))   -> Some(OpInt(translate_int_type loc i))
@@ -214,7 +214,12 @@ let op_type_opt loc Ctype.(Ctype(_, c_ty)) =
   | Array(_,_)          -> None
   | Function(_,_,_,_)   -> None
   | Pointer(_,c_ty)     -> Some(OpPtr(layout_of false c_ty))
-  | Atomic(_)           -> None
+  | Atomic(c_ty)        ->
+      begin
+        match op_type_opt loc c_ty with
+        | Some(OpInt(_)) as op_ty -> op_ty
+        | _                       -> None
+      end
   | Struct(_)           -> None
   | Union(_)            -> None
 
