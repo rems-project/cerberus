@@ -230,6 +230,11 @@ let parser annot_ensures : constr Earley.grammar =
 let parser annot_args : annot_arg Earley.grammar =
   | integer ":" integer coq_expr
 
+type manual_proof = string * string * string (* Load path, module, lemma. *)
+
+let parser annot_manual : manual_proof Earley.grammar =
+  | f:ident fs:{"." ident}* ":" file:ident "," thm:ident ->
+      (String.concat "." (f :: fs), file, thm)
 
 (** {4 Annotations on statement expressions (ExprS)} *)
 
@@ -266,6 +271,7 @@ type annot =
   | Annot_annot_args   of annot_arg list
   | Annot_tactics      of string list
   | Annot_trust_me
+  | Annot_manual       of manual_proof
 
 let annot_lemmas : string list -> string list =
   List.map (Printf.sprintf "all: try by apply: %s; solve_goal.")
@@ -353,9 +359,15 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "tactics"      -> raw_many_args (fun l -> Annot_tactics(l))
   | "lemmas"       -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
   | "trust_me"     -> no_args Annot_trust_me
+  | "manual_proof" -> single_arg annot_manual (fun e -> Annot_manual(e))
   | _              -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
+
+type proof_kind =
+  | Proof_normal
+  | Proof_trusted
+  | Proof_manual of manual_proof
 
 type function_annot =
   { fa_parameters : (ident * coq_expr) list
@@ -365,7 +377,7 @@ type function_annot =
   ; fa_requires   : constr list
   ; fa_ensures    : constr list
   ; fa_tactics    : string list
-  ; fa_trust_me   : bool }
+  ; fa_proof_kind : proof_kind }
 
 let function_annot : rc_attr list -> function_annot = fun attrs ->
   let parameters = ref [] in
@@ -375,7 +387,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   let requires = ref [] in
   let ensures = ref [] in
   let tactics = ref [] in
-  let trust_me = ref false in
+  let proof = ref Proof_normal in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
@@ -391,8 +403,12 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
     | (Annot_tactics(l)   , _   ) -> tactics := !tactics @ l
-    | (Annot_trust_me     , _   ) when !trust_me -> error "already specified"
-    | (Annot_trust_me     , _   ) -> trust_me := true
+    | (Annot_trust_me     , _   ) ->
+        if !proof <> Proof_normal then error "proof mode already specified";
+        proof := Proof_trusted
+    | (Annot_manual(cfg)  , _   ) ->
+        if !proof <> Proof_normal then error "proof mode already specified";
+        proof := Proof_manual(cfg)
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
@@ -404,7 +420,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures
   ; fa_tactics    = !tactics
-  ; fa_trust_me   = !trust_me }
+  ; fa_proof_kind = !proof }
 
 let function_annot_args : rc_attr list -> annot_arg list = fun attrs ->
   let annot_args = ref [] in

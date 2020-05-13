@@ -92,7 +92,7 @@ type t =
   ; structs     : (string * struct_decl) list
   ; functions   : (string * func_def_or_decl) list }
 
-let trusted : func_def -> bool = fun def ->
+let proof_kind : func_def -> proof_kind = fun def ->
   match def.func_annot with
-  | None        -> assert false (* Should not be reachable at call site. *)
-  | Some(annot) -> annot.fa_trust_me
+  | None        -> Proof_normal
+  | Some(annot) -> annot.fa_proof_kind
