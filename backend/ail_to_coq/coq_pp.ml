@@ -964,15 +964,23 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   List.iter pp_opaque !opaque;
   pp "@]"
 
-let pp_proof : func_def -> import list -> string list -> bool
-    -> Coq_ast.t pp = fun def imports ctxt trusted ff ast ->
+let pp_proof : func_def -> import list -> string list -> proof_kind
+    -> Coq_ast.t pp = fun def imports ctxt proof_kind ff ast ->
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
 
   (* Only print a comment if the function is trusted. *)
-  if trusted then
-    pp "(* Let's skip that, you seem to have some faith. *)"
-  else
+  match proof_kind with
+  | Proof_trusted ->
+      pp "(* Let's skip that, you seem to have some faith. *)"
+  | _             ->
+
+  (* Add the extra import in case of manual proof. *)
+  let imports =
+    match proof_kind with
+    | Proof_manual(from,file,_) -> imports @ [(from,file)]
+    | _                         -> imports
+  in
 
   (* Stuff for import of the code. *)
   let basename =
@@ -996,7 +1004,7 @@ let pp_proof : func_def -> import list -> string list -> bool
   pp "Context `{!typeG Σ} `{!globalG Σ}.";
   List.iter (pp "@;%s.") ctxt;
 
-  (* Typing proofs. *)
+  (* Statement of the typing proof. *)
   let func_annot =
     match def.func_annot with
     | Some(annot) -> annot
@@ -1005,9 +1013,6 @@ let pp_proof : func_def -> import list -> string list -> bool
   if List.length def.func_args <> List.length func_annot.fa_args then
     Panic.panic_no_pos "Argument number missmatch between code and spec.";
   pp "\n@;(* Typing proof for [%s]. *)@;" def.func_name;
-  if func_annot.fa_trust_me then
-    pp "(* Let's skip that, you seem to have some faith. *)"
-  else
   let (used_globals, used_functions) = def.func_deps in
   let deps =
     used_globals @ used_functions
@@ -1040,9 +1045,18 @@ let pp_proof : func_def -> import list -> string list -> bool
     List.iter pp_global_type used_globals;
     let pp_dep f = pp "%s ◁ᵥ %s @@ function_ptr type_of_%s -∗@;" f f f in
     List.iter pp_dep used_functions;
-    pp "%styped_function %a type_of_%s." prefix pp_impl
+    pp "%styped_function %a type_of_%s.@]@;" prefix pp_impl
       def.func_name def.func_name
   end;
+
+  (* We have a manual proof. *)
+  match proof_kind with
+  | Proof_manual(_,_,thm) ->
+      pp "Proof. refine %s. Qed." thm;
+      pp "@]@;End proof_%s.@]" def.func_name (* Section closing. *)
+  | _                     ->
+
+  (* We output a normal proof. *)
   let pp_intros ff xs =
     let pp_intro ff (x,_) = pp_str ff x in
     match xs with
@@ -1052,7 +1066,7 @@ let pp_proof : func_def -> import list -> string list -> bool
                  pp_intro ff x;
                  List.iter (fprintf ff " %a]" pp_intro) xs
   in
-  pp "@]@;@[<v 2>Proof.@;";
+  pp "@[<v 2>Proof.@;";
   pp "start_function \"%s\" (%a)" def.func_name
     pp_intros func_annot.fa_parameters;
   if def.func_vars <> [] || def.func_args <> [] then
@@ -1177,14 +1191,14 @@ let pp_proof : func_def -> import list -> string list -> bool
 type mode =
   | Code of import list
   | Spec of import list * string list
-  | Fprf of func_def * import list * string list * bool (* trusted *)
+  | Fprf of func_def * import list * string list * proof_kind
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let pp =
     match mode with
-    | Code(imports)                  -> pp_code imports
-    | Spec(imports,ctxt)             -> pp_spec imports ctxt
-    | Fprf(def,imports,ctxt,trusted) -> pp_proof def imports ctxt trusted
+    | Code(imports)               -> pp_code imports
+    | Spec(imports,ctxt)          -> pp_spec imports ctxt
+    | Fprf(def,imports,ctxt,kind) -> pp_proof def imports ctxt kind
   in
   (* We write to a buffer. *)
   let buffer = Buffer.create 4096 in
