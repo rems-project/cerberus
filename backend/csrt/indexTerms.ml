@@ -203,21 +203,8 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
   | List (it,its), List (it',its') -> 
      unify_list (it::its) (it'::its') res
 
-  | S (sym, bt), S (sym',bt') 
-       when sym = sym' && BaseTypes.type_equal bt bt' ->
-     return res
-
-  | S (sym, _), S (it',_) ->
-     begin match SymMap.find_opt sym res with
-     | None -> fail
-     | Some uni ->
-        match uni.resolved with
-        | Some it when it = it' -> return res 
-        | Some it -> fail
-        | None -> 
-           let uni = { uni with resolved = Some it' } in
-           return (SymMap.add sym uni res)
-     end
+  | S (sym, bt), S (sym',bt') when BaseTypes.type_equal bt bt' ->
+     Sym.unify sym sym' res 
 
   | _, _ ->
      fail

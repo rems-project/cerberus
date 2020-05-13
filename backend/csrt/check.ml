@@ -229,7 +229,7 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Pointer (_qualifiers, ct) ->
      ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
      size_of_ctype loc ct >>= fun size ->
-     let r = makeUR (Points (S (name, Loc), S (pointee_name, bt), Num size)) :: r in
+     let r = makeUR (Points (name, pointee_name, Num size)) :: r in
      let l = makeL pointee_name (Base bt) :: l in
      return ((name,Loc),l,r,c)
   | Atomic ct ->              (* check *)
@@ -703,11 +703,11 @@ let infer_ctor loc ctor (aargs : aargs) =
 let make_initial_store_type loc ct = 
   let pointer_name = fresh () in
   size_of_ctype loc ct >>= fun size ->
-  let p = [makeA pointer_name Loc; makeUR (Block (S (pointer_name, Loc), Num size))] in
+  let p = [makeA pointer_name Loc; makeUR (Block (pointer_name, Num size))] in
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt), Num size))] @ r in
+    let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, Num size))] @ r in
     return (value,ret)
   end >>= fun (value,ret) ->
   return {arguments = p @ value; return = ret}
@@ -720,7 +720,7 @@ let make_store_type loc ct : (FunctionTypes.t,'e) m =
   begin 
     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (S (pointer_name, Loc), S (value_name, bt), Num size))] @ r in
+    let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, Num size))] @ r in
     return (value,ret)
   end >>= fun (value,ret) ->
   return {arguments = address @ value; return = ret}
@@ -733,7 +733,7 @@ let make_fun_arg_type sym loc ct =
     size_of_ctype loc ct >>= fun size ->
     let ret =
       makeL value_name (Base bt) :: 
-      (makeUR (Points (S (sym, Loc), S (value_name, bt), Num size))) ::
+      (makeUR (Points (sym, value_name, Num size))) ::
       l @ r @ c 
     in
     return ret
@@ -768,23 +768,23 @@ let is_owned_pointer loc env sym =
     let relevant = 
       (filter_map (fun (name,r) ->
            match r with
-           | Points (_,S (pointee,bt), _) -> Some (name,(pointee,bt) )
+           | Points (_,pointee, _) -> Some (name,pointee)
            | _ -> None) named_resources)
     in
     match relevant with
     | [] -> 
        debug_print 3 (blank 3 ^^ !^"no") >>= fun () ->
        return None
-    | [(r,(p,bt))] -> 
+    | [(r,p)] -> 
        debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
-       return (Some (r,(p,bt)))
-    | (r,(p,bt))::_::_ -> 
+       return (Some (r,p))
+    | (r,p)::_::_ -> 
        (* this can happen, maybe normally, but at least when we're on
           a control-flow path that the constraint solver knows to be
           unreachable: with an inconsistent set of assumptions *)
        warn (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources") >>= fun () ->
        debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
-       return (Some (r,(p,bt)))
+       return (Some (r,p))
     (* | _ -> fail loc (Unreachable (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources")) *)
 
 
@@ -1035,7 +1035,8 @@ let check_field_access loc env sym access =
 
   is_owned_pointer loc env sym >>= function
   | None -> fail loc (Generic_error !^"no ownership justifying struct access")
-  | Some (resource,(pointee,bt)) ->
+  | Some (resource,pointee) ->
+     get_ALvar loc env pointee >>= fun (bt,_) ->
      begin match bt, get_open_struct env pointee with
      | Struct struct_type, Some {field_names}
           when struct_type = access.struct_type -> 
@@ -1279,7 +1280,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         check_base_type loc (Some sym) Int a_bt >>= fun () ->
         let name = fresh () in
         size_of_ctype loc ct >>= fun size ->
-        let rt = [makeA name Loc; makeUR (Block (S (name, Loc), Num size))] in
+        let rt = [makeA name Loc; makeUR (Block (name, Num size))] in
         return (Normal rt, env)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         fail loc (Unsupported !^"todo: CreateReadOnly")
@@ -1346,7 +1347,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
            return (Normal rt, env)
         | None ->
            begin is_owned_pointer loc env sym >>= function
-            | Some (_r,(pointee,bt)) ->
+            | Some (_r,pointee) ->
+               get_ALvar loc env pointee >>= fun (bt,env) ->
                let constr = LC (S (ret,bt) %= S (pointee,bt)) in
                return (Normal [makeA ret bt; makeUC constr], env)
             | None -> fail loc (Generic_error !^"no ownership justifying load")
