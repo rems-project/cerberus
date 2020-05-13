@@ -458,10 +458,10 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
           in
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,_)) when c = s ->
-              fprintf ff "guarded (nroot.@%a) " with_uid s;
+              fprintf ff "guarded (%a) " with_uid s;
               fprintf ff "(apply_dfun self %a)" (pp_coq_expr true) e
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
-              fprintf ff "guarded (nroot.@%a) (" with_uid s;
+              fprintf ff "guarded (%a) (" with_uid s;
               normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
