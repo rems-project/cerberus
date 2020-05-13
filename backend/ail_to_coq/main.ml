@@ -62,8 +62,11 @@ let run : config -> string -> unit = fun cfg c_file ->
     match def_or_decl with
     | FDec(_)   -> ()
     | FDef(def) ->
-    let trusted = List.mem id cfg.no_proof || Coq_ast.trusted def in
-    let mode = Fprf(def, cfg.imports, cfg.spec_ctxt, trusted) in
+    let proof_kind =
+      if List.mem id cfg.no_proof then Rc_annot.Proof_trusted
+      else Coq_ast.proof_kind def
+    in
+    let mode = Fprf(def, cfg.imports, cfg.spec_ctxt, proof_kind) in
     write mode (fprf_file id) coq_ast
   in
   if cfg.gen_spec then List.iter write_proof coq_ast.functions
