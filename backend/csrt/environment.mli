@@ -165,13 +165,13 @@ module Env : sig
     t ->
     Sym.t list
 
-  val owned_resources :
+  val resources_associated_with :
     t ->
     Sym.t ->
     Sym.t list
 
 
-  val recursively_owned_resources :
+  val resources_for_loc :
     t ->
     Sym.t ->
     Sym.t list

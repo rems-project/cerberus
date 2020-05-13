@@ -239,33 +239,24 @@ module Env = struct
       env.local.vars []
 
 
-  (* internal only *)
-  let unsafe_owned_resource env owner_sym = 
-    SymMap.fold (fun name b acc ->
-        match b with
-        | (R t) -> 
-           begin match RE.owner t with
-           | None -> []
-           | Some owner ->
-              if owner = owner_sym 
-              then (name,t) :: acc
-              else acc
-           end
-        | _ -> acc
-      ) env.local.vars [] 
+  let resources_associated_with env sym = 
+    filter_vars (fun _ t ->
+        match t with
+        | R t -> RE.associated t = sym
+        | _ -> false
+      ) env
 
-  (* returns only name, so safe *)
-  let owned_resources env owner_sym = 
-    let resources = unsafe_owned_resource env owner_sym in
-    map fst resources
 
-  (* returns only name, so safe *)
-  let rec recursively_owned_resources env owner_sym = 
-    let resources = unsafe_owned_resource env owner_sym in
-    let names = List.map fst resources in
-    let owned = List.concat_map (fun (_,t) -> RE.owned t) resources in
-    let owneds = concat_map (recursively_owned_resources env) owned in
-    names @ owneds
+  let resources_for_loc env loc_sym = 
+    filter_vars (fun sym t ->
+        match t with
+        | R t ->
+          begin match RE.footprint t with
+          | None -> false
+          | Some (loc,size) -> loc = loc_sym 
+          end
+        | _ -> false
+      ) env
 
 
   let get_all_constraints env = 
