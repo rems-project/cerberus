@@ -54,33 +54,24 @@ let unify r1 r2 res =
   | Block (it1, it2), Block (it1', it2') ->
      Sym.unify it1 it1' res >>= fun res ->
      IndexTerms.unify it2 it2' res
-
-  | Struct (sym), Struct (sym') when sym = sym' ->
-     return res
-
   | Struct sym, Struct sym' ->
-     begin match SymMap.find_opt sym res with
-     | None -> fail
-     | Some uni ->
-        match uni.resolved with
-        | Some s when s = sym' -> return res 
-        | Some it -> fail
-        | None -> 
-           let uni = { uni with resolved = Some sym' } in
-           return (SymMap.add sym uni res)
-     end
+     Sym.unify sym sym' res
   | _ -> fail
 
 
-let owner = function
-  | Points (v, _, _) -> Some v
-  | Block (v, _) -> Some v
-  | Struct v -> Some v
+let associated = function
+  | Points (v, _, _) -> v
+  | Block (v, _) -> v
+  | Struct v -> v
 
+let footprint = function
+  | Points (v, _, size) -> Some (v,size)
+  | Block (v, size) -> Some (v,size)
+  | Struct v -> None
 
-let owned = function
-  | Points (_, v, _) -> [v]
-  | Struct _ -> []
-  | Block _ -> []
+(* let owned = function
+ *   | Points (_, v, _) -> [v]
+ *   | Struct _ -> []
+ *   | Block _ -> [] *)
 
 

@@ -288,12 +288,13 @@ let rec make_Aargs loc env asyms =
 
 
 
-let resources_owned_by_var_or_equals loc env owner =
+let resources_associated_with_var_or_equals loc env owner =
   get_ALvar loc env owner >>= fun (bt,_env) ->
   vars_equal_to loc env owner bt >>= fun equal_to_owner ->
   debug_print 3 (blank 3 ^^ !^"equal to" ^^^ Sym.pp owner ^^ colon ^^^
                    pp_list None Sym.pp equal_to_owner) >>= fun () ->
-  let owneds = concat_map (fun o -> map (fun r -> (o,r)) (owned_resources env o))
+  let owneds = concat_map (fun o -> map (fun r -> (o,r)) 
+                                      (resources_associated_with env o))
                  (owner :: equal_to_owner) in
   return owneds
   
@@ -486,8 +487,8 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
        debug_print 2 (blank 3 ^^ !^"done.") >>= fun () ->
        return (acc_substs,unis,env)
     | spec :: specs -> 
-       match spec.bound, RE.owner spec.bound with
-       | Struct sym, _ ->
+       match spec.bound, RE.associated spec.bound with
+       | RE.Struct sym, _ ->
           get_ALvar loc env sym >>= fun (bt,env) ->
           begin match is_struct bt with
           | Some struct_type ->
@@ -495,10 +496,9 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
              match_Rs errf loc env unis specs             
           | _ -> fail loc (Unreachable !^"Struct not of struct type")
           end
-       | _, None -> fail loc (errf (Missing_R (spec.name, spec.bound)))
-       | _, Some owner ->
+       | _, owner ->
           (* TODO: unsafe env *)
-          resources_owned_by_var_or_equals loc env owner >>= fun owneds ->
+          resources_associated_with_var_or_equals loc env owner >>= fun owneds ->
           let rec try_resources = function
             | [] -> 
                fail loc (errf (Missing_R (spec.name, spec.bound)))
@@ -746,11 +746,16 @@ let make_fun_arg_type sym loc ct =
    sym for ownership currently *)
 (* TODO: unsafe env *)
 let is_uninitialised_pointer loc env sym = 
+  warn !^"is uninitialised pointer?" >>= fun () ->
   get_Avar loc env sym >>= fun (bt, env) ->
-  let resource_names = owned_resources env sym in
+  resources_associated_with_var_or_equals loc env sym >>= fun rs ->
+  let resource_names = List.map snd rs in
+  debug_print 3 (blank 3 ^^ item "associated resources" (pp_list None Sym.pp resource_names)) >>= fun () ->
   get_Rvars loc env resource_names >>= fun (resources,_env) ->
   match bt, resources with
-  | Loc, [Block _] -> return true
+  | Loc, (Block _ :: _)-> 
+     warn !^"yes" >>= fun () ->
+     return true
   | _,_ -> return false
 
 
@@ -761,7 +766,7 @@ let is_owned_pointer loc env sym =
   get_Avar loc env sym >>= fun (bt, env) ->
   if bt <> Loc then return None
   else
-    resources_owned_by_var_or_equals loc env sym >>= fun owneds ->
+    resources_associated_with_var_or_equals loc env sym >>= fun owneds ->
     let owneds = List.map snd owneds in
     get_Rvars loc env owneds >>= fun (resources,_env) ->
     let named_resources = List.combine owneds resources in
@@ -1288,7 +1293,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         fail loc (Unsupported !^"todo: Alloc")
      | M_Kill (_is_dynamic, asym) -> 
         let (sym,loc) = aunpack loc asym in
-        let resources = owned_resources env sym in
+        let resources = resources_associated_with env sym in
         let env = remove_vars env resources in
         return (Normal [makeUA Unit], env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
