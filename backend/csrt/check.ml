@@ -102,7 +102,8 @@ let integer_value_to_num loc iv =
   | None -> fail loc Integer_value_error
 
 let size_of_ctype loc ct = 
-  integer_value_to_num loc (Impl_mem.sizeof_ival ct)
+  let s = Impl_mem.sizeof_ival ct in
+  integer_value_to_num loc s
 
 let size_of_struct_type loc sym =
   size_of_ctype loc (Ctype.Ctype ([], Ctype.Struct sym))
@@ -520,7 +521,6 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
                debug_print 3 (action ("trying resource" ^ plain (RE.pp resource'))) >>= fun () ->
                match RE.unify spec.bound resource' unis with
                | None -> 
-                  warn !^"okokokokokookookokokok" >>= fun () ->
                   try_resources owned_resources
                | Some unis ->
                   find_resolved env unis >>= fun (_,new_substs) ->
@@ -581,7 +581,7 @@ and call_typ loc_call env ftyp (args : aargs) =
 
 and pack_struct loc env sym struct_type aargs = 
   get_struct_decl loc env.global struct_type >>= fun spec ->
-  size_of_struct_type loc sym >>= fun n ->
+  size_of_struct_type loc struct_type >>= fun n ->
   let packing_type = {arguments = spec; return = []} in
   call_typ loc env packing_type aargs >>= fun (rt,env) ->
   return (PackedStruct sym, env)
@@ -1047,18 +1047,32 @@ let ensure_bad_unreachable loc env bad =
      | StaticError (loc, (err,pe)) -> fail loc (TypeErrors.StaticError (err,pe))
   
 
+type access_ok = 
+  Ok of {open_struct_resource : Sym.t;
+         strct : Sym.t;
+         struct_type : Sym.t;
+         field_names : (Sym.t * Sym.t) list;
+         field : Sym.t;
+         fvar : Sym.t;
+         loc : Loc.t}
 
 (* todo: which location should we use? *)
 let check_field_access loc env strct access = 
   get_ALvar loc env strct >>= fun (bt,_) ->
   begin match bt, is_struct_open env strct with
   | Struct struct_type, Some (open_struct_resource,field_names) 
-       when struct_type = access.struct_type -> 
+       when BT.type_equal struct_type access.struct_type -> 
      NameMap.sym_of loc (Id.s access.field) (get_names env.global) >>= fun field ->
      assoc_err loc field field_names "check_field_access" >>= fun fvar ->
-     return (open_struct_resource, strct, struct_type, field_names, fvar, access.loc)
+     return (Ok {open_struct_resource; 
+                 strct; 
+                 struct_type; 
+                 field_names; 
+                 field; 
+                 fvar; 
+                 loc = access.loc})
   | Struct struct_type, None 
-       when struct_type = access.struct_type -> 
+       when BT.type_equal struct_type access.struct_type -> 
      fail loc (Generic_error !^"check_field_access: struct not open")
   | _ ->
      let msm = Mismatch { mname=Some strct; has= A bt; 
@@ -1073,8 +1087,8 @@ let rec check_field_accesses loc env strct accesses =
   | [access] -> 
      check_field_access loc env strct access
   | access :: accesses ->
-     check_field_access loc env strct access >>= fun (_,_,field,_,_,_) ->
-     check_field_accesses access.loc env field accesses
+     check_field_access loc env strct access >>= fun (Ok a) ->
+     check_field_accesses access.loc env a.fvar accesses
 
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
@@ -1326,24 +1340,24 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         | StructField (sym,accesses) ->
            begin is_owned_pointer loc env sym >>= function
            | Some (_,(pointee,_)) ->
-              check_field_accesses loc env pointee accesses >>= 
-              fun (open_struct_resource,strct,struct_type,field_names,field,floc) ->
+              check_field_accesses loc env pointee accesses >>= fun (Ok a) ->
+              (* fun (open_struct_resource,strct,struct_type,field_names,(field,fvar),floc) -> *)
               (* maybe also check against raw ctype declaration? *)
               begin 
-                Global.get_struct_layout loc env.global struct_type >>= fun sizes ->
-                return ()
-                (* assoc_err loc field sizes "Struct field store" >>= fun size' ->
-                 * if Nat_big_num.less_equal size size' then return ()     
-                 * else fail loc (Generic_error !^"owned memory not big enough for store" ) *)
+                Global.get_struct_layout loc env.global a.struct_type >>= fun sizes ->
+                (* return () *)
+                assoc_err loc a.field sizes "Struct field store" >>= fun size' ->
+                if Nat_big_num.less_equal size size' then return ()     
+                else fail loc (Generic_error !^"owned memory not big enough for store" )
               end >>= fun () ->
               begin
                 let vname = fresh () in
                 ctype false loc vname ct >>= fun t ->
                 subtype loc env [({name=val_sym;bound=val_bt},val_loc)] t
               end >>= fun env ->
-              let field_names = List.map (fun (f,s) -> (f,Sym.subst field val_sym s)) field_names in
-              let env = remove_var env open_struct_resource in
-              let env = add_var env (makeR open_struct_resource (OpenedStruct (strct,field_names))) in
+              let field_names = List.map (fun (f,s) -> (f,Sym.subst a.fvar val_sym s)) a.field_names in
+              let env = remove_var env a.open_struct_resource in
+              let env = add_var env (makeR a.open_struct_resource (OpenedStruct (a.strct,field_names))) in
               return (Normal [makeUA Unit], env)
            | _ -> fail loc (Generic_error !^"No ownership to justify struct access")
            end
@@ -1359,19 +1373,19 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         | Some (sym,accesses) ->
            begin is_owned_pointer loc env sym >>= function
            | Some (_,(pointee,_)) ->
-              check_field_accesses loc env pointee accesses >>= fun (_,_,struct_type,_,field,floc) ->
-              Global.get_struct_layout loc env.global struct_type >>= fun sizes ->
-              (* assoc_err loc field sizes "Struct field load" >>= fun size' ->
-               * begin
-               *   if Nat_big_num.less_equal size size' then return ()
-               *   else fail loc (Generic_error !^"owned memory not big enough for load" ) 
-               * end >>= fun () -> *)
-              get_Avar floc env field >>= fun (fbt,env) ->
-              let constr = LC (S (ret, fbt) %= (S (field,fbt))) in
+              check_field_accesses loc env pointee accesses >>= fun (Ok a) -> (* _,_,struct_type,_,(field,fvar),floc) ->  *)
+              Global.get_struct_layout loc env.global a.struct_type >>= fun sizes ->
+              assoc_err loc a.field sizes "Struct field load" >>= fun size' ->
+              begin
+                if Nat_big_num.less_equal size size' then return ()
+                else fail loc (Generic_error !^"owned memory not big enough for load" ) 
+              end >>= fun () ->
+              get_Avar a.loc env a.fvar >>= fun (fbt,env) ->
+              let constr = LC (S (ret, fbt) %= (S (a.fvar,fbt))) in
               begin
                 let vname = fresh () in
                 ctype false loc vname ct >>= fun t ->
-                subtype loc env [({name=field;bound=fbt},floc)] t
+                subtype loc env [({name=a.fvar;bound=fbt},a.loc)] t
               end >>= fun env ->
               let rt = [makeA ret fbt; makeUC constr] in
               return (Normal rt, env)
