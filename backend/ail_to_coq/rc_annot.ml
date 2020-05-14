@@ -588,9 +588,10 @@ let global_annot : rc_attr list -> type_expr option = fun attrs ->
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
-    match parse_attr attr with
-    | Annot_global(e) -> global := Some e
-    | _                   -> error "is invalid for a global"
+    match (parse_attr attr, !global) with
+    | (Annot_global(e), None) -> global := Some e
+    | (Annot_global(_), _   ) -> error "already specified"
+    | (_              , _   ) -> error "is invalid for a global"
   in
   List.iter handle_attr attrs;
 
