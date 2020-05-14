@@ -253,7 +253,6 @@ type annot =
   | Annot_parameters   of (ident * coq_expr) list
   | Annot_refined_by   of (ident * coq_expr) list
   | Annot_ptr_type     of (ident * type_expr)
-  | Annot_type         of ident
   | Annot_size         of coq_expr
   | Annot_exist        of (ident * coq_expr) list
   | Annot_constraint   of constr list
@@ -340,7 +339,6 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "parameters"   -> many_args annot_parameter (fun l -> Annot_parameters(l))
   | "refined_by"   -> many_args annot_refine (fun l -> Annot_refined_by(l))
   | "ptr_type"     -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
-  | "type"         -> single_arg annot_type (fun e -> Annot_type(e))
   | "size"         -> single_arg annot_size (fun e -> Annot_size(e))
   | "exists"       -> many_args annot_exist (fun l -> Annot_exist(l))
   | "constraints"  -> many_args annot_constr (fun l -> Annot_constraint(l))
