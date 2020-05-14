@@ -145,7 +145,7 @@ let parse_logical_sort loc (names : NameMap.t) sx =
 
 
 let parse_resource loc (names : NameMap.t) sx = 
-  let open Resources in
+  (* let open Resources in *)
   match sx with 
   (* | Sexp.List [Sexp.Atom "block";it1;it2] -> 
    *    parse_index_terms loc names it1 >>= fun it1 ->
@@ -163,11 +163,11 @@ let parse_resource loc (names : NameMap.t) sx =
    *    parse_index_terms loc names it1 >>= fun it1 ->
    *    parse_index_terms loc names it2 >>= fun it2 ->
    *    return (Array (it1, it2)) *)
-  | Sexp.List [Sexp.Atom "points"; Sexp.Atom s1; Sexp.Atom s2; it3] ->
-     NameMap.sym_of loc s1 names >>= fun sym1 ->
-     NameMap.sym_of loc s2 names >>= fun sym2 ->
-     parse_index_term loc names it3 >>= fun it3 ->
-     return (Points (sym1, sym2, it3))
+  (* | Sexp.List [Sexp.Atom "points"; Sexp.Atom s1; Sexp.Atom s2; it3] ->
+   *    NameMap.sym_of loc s1 names >>= fun sym1 ->
+   *    NameMap.sym_of loc s2 names >>= fun sym2 ->
+   *    parse_index_term loc names it3 >>= fun it3 ->
+   *    return (Points (sym1, sym2, it3)) *)
   (* | Sexp.List (Sexp.Atom p :: its) ->
    *    mapM (parse_index_terms loc names) its >>= fun its ->
    *    return (Pred (p, its)) *)

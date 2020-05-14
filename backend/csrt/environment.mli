@@ -1,3 +1,4 @@
+open Utils
 open Cerb_frontend
 module Loc = Locations
 
@@ -12,6 +13,12 @@ module Global : sig
     t -> 
     Sym.t -> 
     Types.t ->
+    t
+
+  val add_struct_layout : 
+    t -> 
+    Sym.t -> 
+    (Sym.t * num) list ->
     t
 
   val add_fun_decl : 
@@ -37,6 +44,12 @@ module Global : sig
     t -> 
     Sym.t -> 
     (Types.t, Loc.t * TypeErrors.type_error) Except.m
+
+  val get_struct_layout : 
+    Loc.t ->
+    t -> 
+    Sym.t -> 
+    ((Sym.t * num) list, Loc.t * TypeErrors.type_error) Except.m
 
   val get_fun_decl : 
     Loc.t ->
@@ -86,8 +99,6 @@ end
 
 
 module Local : sig
-
-  type open_struct = { field_names: (Sym.t * Sym.t) list ; }
 
   type t
 
@@ -187,20 +198,9 @@ module Env : sig
     Sym.t ->
     LogicalConstraints.t list
 
-  val add_open_struct :
+  val is_struct_open :
     t ->
     Sym.t ->
-    Local.open_struct ->
-    t
-
-  val get_open_struct :
-    t ->
-    Sym.t ->
-    Local.open_struct option
-
-  val remove_open_struct :
-    t ->
-    Sym.t ->
-    t
+    (Sym.t * Resources.field_names) option
 
 end

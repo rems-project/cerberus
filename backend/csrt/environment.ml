@@ -1,3 +1,4 @@
+open Utils
 open Cerb_frontend
 open PPrint
 open Pp_tools
@@ -43,6 +44,7 @@ module Global = struct
 
   type t = 
     { struct_decls : Types.t SymMap.t; 
+      struct_layouts : ((Sym.t * num) list) SymMap.t; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
       impl_fun_decls : FunctionTypes.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
@@ -52,6 +54,7 @@ module Global = struct
 
   let empty = 
     { struct_decls = SymMap.empty; 
+      struct_layouts = SymMap.empty; 
       fun_decls = SymMap.empty;
       impl_fun_decls = ImplMap.empty;
       impl_constants = ImplMap.empty;
@@ -59,6 +62,9 @@ module Global = struct
 
   let add_struct_decl genv sym typ = 
     { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
+
+  let add_struct_layout genv sym l = 
+    { genv with struct_layouts = SymMap.add sym l genv.struct_layouts }
 
   let add_fun_decl genv fsym (loc, typ, ret_sym) = 
     { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
@@ -69,10 +75,16 @@ module Global = struct
   let add_impl_constant genv i typ = 
     { genv with impl_constants = ImplMap.add i typ genv.impl_constants }
 
-
   let get_struct_decl loc genv sym = 
     match SymMap.find_opt sym genv.struct_decls with
     | Some decl -> return decl 
+    | None -> 
+       let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
+       fail loc (Generic_error err)
+
+  let get_struct_layout loc genv sym = 
+    match SymMap.find_opt sym genv.struct_layouts with
+    | Some layout -> return layout
     | None -> 
        let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
        fail loc (Generic_error err)
@@ -127,32 +139,18 @@ end
 
 module Local = struct
 
-  type open_struct = { field_names: (Sym.t * Sym.t) list ; }
-
   type lenv = 
-    { vars: VarTypes.t SymMap.t; 
-      open_structs : open_struct SymMap.t
-    }
+    { vars: VarTypes.t SymMap.t }
 
   type t = lenv
 
   let empty = 
-    { vars = SymMap.empty; 
-      open_structs = SymMap.empty }
+    { vars = SymMap.empty }
 
   let pp_avars vars = pp_list (Some brackets) (Binders.pp BT.pp) vars 
   let pp_lvars vars = pp_list (Some brackets) (Binders.pp LS.pp) vars
   let pp_rvars vars = pp_list (Some brackets) (Binders.pp RE.pp) vars 
   let pp_cvars vars = pp_list (Some brackets) (Binders.pp LC.pp) vars
-
-  let pp_open_structs open_structs = 
-    let l = SymMap.bindings open_structs in
-    let pp_field_names {field_names} =
-      flow_map (comma ^^ break 1) 
-        (fun (s1,s2) -> parens (Sym.pp s1 ^^^ arrow ^^^ Sym.pp s2)) 
-        field_names
-    in
-    flow_map (break 1) (fun (s,fn) -> parens (Sym.pp s ^^^ brackets (pp_field_names fn))) l
 
   let pp lenv =
     let (a,l,r,c) = 
@@ -169,24 +167,15 @@ module Local = struct
        ; inline_item "logical" (pp_lvars l)
        ; inline_item "resources" (pp_rvars r)
        ; inline_item "constraints" (pp_cvars c)
-       ; inline_item "open structs" (pp_open_structs lenv.open_structs)
        ]
     )
 
 
     let add_var env b = 
-      { env with vars = SymMap.add b.name b.bound env.vars} 
+      { vars = SymMap.add b.name b.bound env.vars} 
 
     let remove_var env sym = 
-      { env with vars = SymMap.remove sym env.vars} 
-
-    let add_open_struct env sym open_struct = 
-      { env with open_structs = SymMap.add sym open_struct env.open_structs }
-
-    let get_open_struct env sym = SymMap.find_opt sym env.open_structs
-
-    let remove_open_struct env sym = 
-      {env with open_structs = SymMap.remove sym env.open_structs }
+      { vars = SymMap.remove sym env.vars} 
 
 end
 
@@ -271,16 +260,14 @@ module Env = struct
       ) 
       env.local.vars []
 
-
-  let add_open_struct env sym open_struct =
-    { env with local = Local.add_open_struct env.local sym open_struct }
-
-  let get_open_struct env sym = 
-    Local.get_open_struct env.local sym
-
-  let remove_open_struct env sym = 
-    let lenv = Local.remove_open_struct env.local sym in
-    { env with local = lenv }
+  let is_struct_open env struct_sym = 
+    SymMap.fold (fun r t acc -> 
+        match t with
+        | R (OpenedStruct (s,field_names)) when s = struct_sym ->
+           Some (r,field_names)
+        | _ -> acc
+      ) 
+      env.local.vars None
 
 end
 

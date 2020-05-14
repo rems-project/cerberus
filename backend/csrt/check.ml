@@ -37,6 +37,12 @@ module SymSet = Set.Make(Sym)
 let budget = Some 7
 
 
+let assoc_err loc list entry err =
+  match List.assoc_opt list entry with
+  | Some result -> return result
+  | None -> fail loc (Generic_error (!^"list assoc failed:" ^^^ !^err))
+
+
 
 let add_vars env bindings = fold_left add_var env bindings
 let remove_vars env names = fold_left remove_var env names
@@ -97,8 +103,9 @@ let integer_value_to_num loc iv =
 
 let size_of_ctype loc ct = 
   integer_value_to_num loc (Impl_mem.sizeof_ival ct)
-      
 
+let size_of_struct_type loc sym =
+  size_of_ctype loc (Ctype.Ctype ([], Ctype.Struct sym))
 
 
 
@@ -216,10 +223,10 @@ let integerType loc name it =
 let floatingType loc =
   fail loc (Unsupported !^"floats")
 
-let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
+let rec ctype_aux owned loc name ((Ctype.Ctype (annots, ct_)) as ct) =
   let loc = update_loc loc annots in
   let open Ctype in
-  match ct with
+  match ct_ with
   | Void -> (* check *)
      return ((name,Unit), [], [], [])
   | Basic (Integer it) -> 
@@ -227,15 +234,19 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
   | Array (ct, _maybe_integer) -> 
      return ((name,BT.Array),[],[],[])
   | Pointer (_qualifiers, ct) ->
-     ctype_aux loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
-     size_of_ctype loc ct >>= fun size ->
-     let r = makeUR (Points (name, pointee_name, Num size)) :: r in
-     let l = makeL pointee_name (Base bt) :: l in
-     return ((name,Loc),l,r,c)
+     if owned then
+       ctype_aux owned loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
+       size_of_ctype loc ct >>= fun size ->
+       let r = makeUR (Points (name, pointee_name, size)) :: r in
+       let l = makeL pointee_name (Base bt) :: l in
+       return ((name,Loc),l,r,c)
+     else
+       return ((name,Loc),[],[],[])
   | Atomic ct ->              (* check *)
-     ctype_aux loc name ct
+     ctype_aux owned loc name ct
   | Struct sym -> 
-     return ((name, BT.Struct sym),[],[makeUR (RE.Struct name)],[])
+     size_of_ctype loc ct >>= fun size ->
+     return ((name, BT.Struct sym),[],[makeUR (RE.PackedStruct name)],[])
   | Union sym -> 
      fail loc (Unsupported !^"todo: union types")
   | Basic (Floating _) -> 
@@ -244,8 +255,9 @@ let rec ctype_aux loc name (Ctype.Ctype (annots, ct)) =
      fail loc (Unsupported !^"function pointers")
 
 
-let ctype loc (name : Sym.t) (ct : Ctype.ctype) =
-  ctype_aux loc name ct >>= fun ((name,bt), l,r,c) ->
+
+let ctype owned loc (name : Sym.t) (ct : Ctype.ctype) =
+  ctype_aux owned loc name ct >>= fun ((name,bt), l,r,c) ->
   return (makeA name bt :: l @ r @ c)
 
 let make_pointer_ctype ct = 
@@ -350,11 +362,11 @@ let struct_member_type loc env struct_type field =
 let separate_struct_tokens bindings = 
   fold_left (fun (structs,nonstructs) b ->
       match b.bound with
-      | R (Struct s) -> (structs@[(b.name, s)], nonstructs)
+      | R (PackedStruct s) -> (structs@[(b.name, s)], nonstructs)
       | _ -> (structs,nonstructs@[b])
     ) ([],[]) bindings
 
-let rec unpack_struct loc env (r, sym) = 
+let rec unpack_struct loc env (_resource_name, sym) = 
   debug_print 2 (blank 3 ^^ (!^"unpacking struct" ^^^ Sym.pp sym)) >>= fun () ->
   get_ALvar loc env sym >>= fun (bt,env) ->
   match bt with
@@ -376,7 +388,7 @@ let rec unpack_struct loc env (r, sym) =
      let (bindings, name_mapping) = aux [] [] fields in
      let (newstructs,newbindings) = separate_struct_tokens bindings in
      let env = add_vars env newbindings in
-     let env = add_open_struct env sym {field_names = name_mapping} in
+     let env = add_var env (makeUR (OpenedStruct (sym,name_mapping))) in
      unpack_structs loc env newstructs
   | _ -> fail loc (Unreachable !^"unpacking non-struct")
 
@@ -475,7 +487,7 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
     let (structs,nonstructs) = 
       partition (fun r -> 
           match r.bound with 
-          | RE.Struct _ -> true 
+          | RE.PackedStruct _ -> true 
           | _ -> false
         ) specs 
     in
@@ -488,7 +500,7 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
        return (acc_substs,unis,env)
     | spec :: specs -> 
        match spec.bound, RE.associated spec.bound with
-       | RE.Struct sym, _ ->
+       | RE.PackedStruct sym, _ ->
           get_ALvar loc env sym >>= fun (bt,env) ->
           begin match is_struct bt with
           | Some struct_type ->
@@ -507,7 +519,9 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
                let resource' = RE.subst o owner resource' in
                debug_print 3 (action ("trying resource" ^ plain (RE.pp resource'))) >>= fun () ->
                match RE.unify spec.bound resource' unis with
-               | None -> try_resources owned_resources
+               | None -> 
+                  warn !^"okokokokokookookokokok" >>= fun () ->
+                  try_resources owned_resources
                | Some unis ->
                   find_resolved env unis >>= fun (_,new_substs) ->
                   let new_substs = (spec.name,r) :: (map snd new_substs) in
@@ -567,29 +581,22 @@ and call_typ loc_call env ftyp (args : aargs) =
 
 and pack_struct loc env sym struct_type aargs = 
   get_struct_decl loc env.global struct_type >>= fun spec ->
-  let packing_type = {arguments = spec; return = [makeUR (Struct sym)]} in
+  size_of_struct_type loc sym >>= fun n ->
+  let packing_type = {arguments = spec; return = []} in
   call_typ loc env packing_type aargs >>= fun (rt,env) ->
-  begin match rt with
-  | [b] ->
-     if b.bound = R (Struct sym) then return (RE.Struct sym, env)
-     else fail loc (Unreachable !^"pack_struct returned non-struct") 
-  | _ -> 
-     fail loc (Unreachable !^"pack_struct returned multiple values")
-  end
+  return (PackedStruct sym, env)
 
 and pack_open_struct loc env sym struct_type =
   vars_equal_to loc env sym (Struct struct_type) >>= fun equals ->
-  let opens = filter_map (get_open_struct env) (sym :: equals) in
-  match opens with
-  | [] -> fail loc (Unreachable !^"struct to pack not open")
-  | [{field_names}] ->
-     let env = remove_open_struct env sym in
+  match is_struct_open env sym with
+  | None -> fail loc (Unreachable !^"struct to pack not open")
+  | Some (r,field_names) ->
+     let env = remove_var env r in
      let arg_syms = List.map snd field_names in
      get_Avars loc env arg_syms >>= fun (arg_typs,env) ->
      let args = List.map from_tuple (List.combine arg_syms arg_typs) in
      let aargs = List.map (fun b -> (b,loc)) args in
      pack_struct loc env sym struct_type aargs
-  | _ -> fail loc (Unreachable !^"struct opened multiple times")
 
 
 let subtype loc_ret env args rtyp =
@@ -699,41 +706,47 @@ let infer_ctor loc ctor (aargs : aargs) =
 
 
 
-(* have to also allow for Block of bigger size potentially *)
-let make_initial_store_type loc ct = 
-  let pointer_name = fresh () in
-  size_of_ctype loc ct >>= fun size ->
-  let p = [makeA pointer_name Loc; makeUR (Block (pointer_name, Num size))] in
-  begin 
-    ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
-    let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, Num size))] @ r in
-    return (value,ret)
-  end >>= fun (value,ret) ->
-  return {arguments = p @ value; return = ret}
+(* (\* have to also allow for Block of bigger size potentially *\)
+ * let make_initial_store_type loc ct = 
+ *   let pointer_name = fresh () in
+ *   size_of_ctype loc ct >>= fun size ->
+ *   let p = [makeA pointer_name Loc; makeUR (Block (pointer_name, size))] in
+ *   begin 
+ *     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+ *     let value = makeA value_name bt :: l @ r @ c in
+ *     let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, size))] @ r in
+ *     return (value,ret)
+ *   end >>= fun (value,ret) ->
+ *   return {arguments = p @ value; return = ret}
+ * 
+ * 
+ * let make_store_type loc ct : (FunctionTypes.t,'e) m = 
+ *   let pointer_name = fresh () in
+ *   ctype loc pointer_name (make_pointer_ctype ct) >>= fun address ->
+ *   size_of_ctype loc ct >>= fun size ->
+ *   begin 
+ *     ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+ *     let value = makeA value_name bt :: l @ r @ c in
+ *     let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, size))] @ r in
+ *     return (value,ret)
+ *   end >>= fun (value,ret) ->
+ *   return {arguments = address @ value; return = ret} *)
 
 
-let make_store_type loc ct : (FunctionTypes.t,'e) m = 
-  let pointer_name = fresh () in
-  ctype loc pointer_name (make_pointer_ctype ct) >>= fun address ->
-  size_of_ctype loc ct >>= fun size ->
-  begin 
-    ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
-    let value = makeA value_name bt :: l @ r @ c in
-    let ret = makeUA Unit :: [makeUR (Points (pointer_name, value_name, Num size))] @ r in
-    return (value,ret)
-  end >>= fun (value,ret) ->
-  return {arguments = address @ value; return = ret}
+
+  
+
+
 
 (* similar to store type *)
 let make_fun_arg_type sym loc ct =
-  ctype loc sym (make_pointer_ctype ct) >>= fun pointer_and_value_before ->
+  ctype true loc sym (make_pointer_ctype ct) >>= fun pointer_and_value_before ->
   begin 
-    ctype_aux loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
+    ctype_aux true loc (fresh ()) ct >>= fun ((value_name,bt),l,r,c) ->
     size_of_ctype loc ct >>= fun size ->
     let ret =
       makeL value_name (Base bt) :: 
-      (makeUR (Points (sym, value_name, Num size))) ::
+      (makeUR (Points (sym, value_name, size))) ::
       l @ r @ c 
     in
     return ret
@@ -742,21 +755,52 @@ let make_fun_arg_type sym loc ct =
 
 
 
-(* maybe replace this function: this does not look at symbols equal to
-   sym for ownership currently *)
+
+
 (* TODO: unsafe env *)
-let is_uninitialised_pointer loc env sym = 
-  warn !^"is uninitialised pointer?" >>= fun () ->
-  get_Avar loc env sym >>= fun (bt, env) ->
+let owns_uninitialised_memory loc env sym = 
   resources_associated_with_var_or_equals loc env sym >>= fun rs ->
   let resource_names = List.map snd rs in
-  debug_print 3 (blank 3 ^^ item "associated resources" (pp_list None Sym.pp resource_names)) >>= fun () ->
   get_Rvars loc env resource_names >>= fun (resources,_env) ->
-  match bt, resources with
-  | Loc, (Block _ :: _)-> 
-     warn !^"yes" >>= fun () ->
-     return true
-  | _,_ -> return false
+  let named_resources = List.combine resource_names resources in
+  let rec check = function
+  | (r, Block (_,size)) :: _ -> return (Some (r,size))
+  | _ :: named_resources -> check named_resources
+  | [] -> return None
+  in
+  check named_resources
+
+let points_to loc env sym = 
+  resources_associated_with_var_or_equals loc env sym >>= fun owneds ->
+  let resource_names = List.map snd owneds in
+  get_Rvars loc env resource_names >>= fun (resources,_env) ->
+  let named_resources = List.combine resource_names resources in
+  let rec check = function
+    | (r, Points (_,pointee, size)) :: _ -> return (Some (r,(pointee,size)))
+    | _ :: named_resources -> check named_resources
+    | [] -> return None
+  in
+  check named_resources
+
+
+let owns_memory loc env sym = 
+  resources_associated_with_var_or_equals loc env sym >>= fun owneds ->
+  let resource_names = List.map snd owneds in
+  get_Rvars loc env resource_names >>= fun (resources,_env) ->
+  let named_resources = List.combine resource_names resources in
+  let rec check = function
+    | (r, Block (_,size)) :: _ -> return (Some (r,size))
+    | (r, Points (_,_, size)) :: _ -> return (Some (r,size))
+    | _ :: named_resources -> check named_resources
+    | [] -> return None
+  in
+  check named_resources
+
+
+let is_uninitialised_pointer loc env sym = 
+  get_Avar loc env sym >>= fun (bt, env) ->
+  if bt <> Loc then return None 
+  else owns_uninitialised_memory loc env sym
 
 
 let is_owned_pointer loc env sym = 
@@ -764,34 +808,9 @@ let is_owned_pointer loc env sym =
   debug_print 3 (blank 3 ^^ item "sym" (Sym.pp sym)) >>= fun () ->
   debug_print 3 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   get_Avar loc env sym >>= fun (bt, env) ->
-  if bt <> Loc then return None
-  else
-    resources_associated_with_var_or_equals loc env sym >>= fun owneds ->
-    let owneds = List.map snd owneds in
-    get_Rvars loc env owneds >>= fun (resources,_env) ->
-    let named_resources = List.combine owneds resources in
-    let relevant = 
-      (filter_map (fun (name,r) ->
-           match r with
-           | Points (_,pointee, _) -> Some (name,pointee)
-           | _ -> None) named_resources)
-    in
-    match relevant with
-    | [] -> 
-       debug_print 3 (blank 3 ^^ !^"no") >>= fun () ->
-       return None
-    | [(r,p)] -> 
-       debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
-       return (Some (r,p))
-    | (r,p)::_::_ -> 
-       (* this can happen, maybe normally, but at least when we're on
-          a control-flow path that the constraint solver knows to be
-          unreachable: with an inconsistent set of assumptions *)
-       warn (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources") >>= fun () ->
-       debug_print 3 (blank 3 ^^ !^"yes, to" ^^^ Sym.pp p ^^ hardline) >>= fun () ->
-       return (Some (r,p))
-    (* | _ -> fail loc (Unreachable (!^"pointer" ^^^ Sym.pp sym ^^^ !^"owning multiple resources")) *)
-
+  if bt <> Loc then return None 
+  else points_to loc env sym
+    
 
 
 
@@ -824,7 +843,7 @@ let rec infer_mem_value loc env mem =
     ( fun _ctyp -> fail loc (Unsupported !^"ctypes as values") )
     ( fun it _sym -> 
       (* todo: do something with sym *)
-      ctype loc (fresh ()) (Ctype ([], Basic (Integer it))) >>= fun t ->
+      ctype false loc (fresh ()) (Ctype ([], Basic (Integer it))) >>= fun t ->
       return (t, env) )
     ( fun it iv -> 
       let name = fresh () in
@@ -1030,45 +1049,32 @@ let ensure_bad_unreachable loc env bad =
 
 
 (* todo: which location should we use? *)
-let check_field_access loc env sym access = 
-
-  debug_print 2 (action "checking field access") >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "sym" (Sym.pp sym)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "access" (Id.pp access.field)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-  debug_print 2 PPrint.empty >>= fun () ->
-
-  is_owned_pointer loc env sym >>= function
-  | None -> fail loc (Generic_error !^"no ownership justifying struct access")
-  | Some (resource,pointee) ->
-     get_ALvar loc env pointee >>= fun (bt,_) ->
-     begin match bt, get_open_struct env pointee with
-     | Struct struct_type, Some {field_names}
-          when struct_type = access.struct_type -> 
-        return field_names
-     | Struct struct_type, None
-          when struct_type = access.struct_type -> 
-        fail loc (Generic_error !^"check_field_access: struct not open")
-     | _ ->
-        (* fix this to not refer to closed structs *)
-        let msm = Mismatch { mname=Some pointee; has= A bt; 
-                             expected= A (Struct access.struct_type)}  in
-        fail loc (Call_error (msm)) 
-     end >>= fun field_names ->
-  NameMap.sym_of loc (Id.s access.field) (get_names env.global) >>= fun field ->
-  let fvar = List.assoc field field_names in
-  return ((resource,pointee),(fvar,access.loc))
+let check_field_access loc env strct access = 
+  get_ALvar loc env strct >>= fun (bt,_) ->
+  begin match bt, is_struct_open env strct with
+  | Struct struct_type, Some (open_struct_resource,field_names) 
+       when struct_type = access.struct_type -> 
+     NameMap.sym_of loc (Id.s access.field) (get_names env.global) >>= fun field ->
+     assoc_err loc field field_names "check_field_access" >>= fun fvar ->
+     return (open_struct_resource, strct, struct_type, field_names, fvar, access.loc)
+  | Struct struct_type, None 
+       when struct_type = access.struct_type -> 
+     fail loc (Generic_error !^"check_field_access: struct not open")
+  | _ ->
+     let msm = Mismatch { mname=Some strct; has= A bt; 
+                          expected= A (Struct access.struct_type) } in
+     fail loc (Call_error (msm))
+  end
 
 (* change data structures to avoid empty list failure *)
-let rec check_field_accesses loc env sym accesses =
+let rec check_field_accesses loc env strct accesses =
   match accesses with
   | [] -> fail loc (Unreachable !^"empty access list")
   | [access] -> 
-     check_field_access loc env sym access
+     check_field_access loc env strct access
   | access :: accesses ->
-     check_field_access loc env sym access >>= fun (_,(sym,loc)) ->
-     check_field_accesses loc env sym accesses >>= fun ((resource,sym),(sym2,loc)) ->
-     return ((resource,sym),(sym2,loc))
+     check_field_access loc env strct access >>= fun (_,_,field,_,_,_) ->
+     check_field_accesses access.loc env field accesses
 
 
 let infer_pexpr loc env (pe : 'bty mu_pexpr) = 
@@ -1285,7 +1291,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         check_base_type loc (Some sym) Int a_bt >>= fun () ->
         let name = fresh () in
         size_of_ctype loc ct >>= fun size ->
-        let rt = [makeA name Loc; makeUR (Block (name, Num size))] in
+        let rt = [makeA name Loc; makeUR (Block (name, size))] in
         return (Normal rt, env)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
         fail loc (Unsupported !^"todo: CreateReadOnly")
@@ -1298,62 +1304,92 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         return (Normal [makeUA Unit], env)
      | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
         let (ct, _ct_loc) = aunpack loc a_ct in
+        size_of_ctype loc ct >>= fun size ->
         let (sym1,loc1) = aunpack loc asym1 in
         let (val_sym,val_loc) = aunpack loc asym2 in
         get_Avar loc1 env sym1 >>= fun (bt1,env) ->
         get_Avar val_loc env val_sym >>= fun (val_bt,env) ->
-        begin match is_structfield bt1 with
-        | Some (sym,accesses) ->
-           check_field_accesses loc env sym accesses >>= fun ((resource,old_struct),(fsym,floc)) ->
-           get_Avar floc env fsym >>= fun (fbt,env) ->
-           (* revisit when unpacking logical structs differently *)
-           ctype loc (fresh ()) ct >>= fun consume_before_t ->
-           ctype loc (fresh ()) ct >>= fun consume_value_t ->
-           let ret = [makeUA Unit] in
-           let ftyp = {arguments = consume_before_t @ consume_value_t; 
-                       return = ret} in
-           let args : aargs = [({name=fsym;bound=fbt},floc);({name=val_sym;bound=val_bt},val_loc)] in
-           call_typ loc env ftyp args >>= fun (rt, env) ->
-           begin match get_open_struct env old_struct with
-           | None -> fail loc (Unreachable (!^"store: open struct is not open: " ^^ 
-                                 Sym.pp old_struct))
-           | Some {field_names} ->
-              let field_names = List.map (fun (f,s) -> (f,Sym.subst fsym val_sym s)) 
-                                  field_names in
-              let env = remove_open_struct env old_struct in
-              get_var loc env old_struct >>= fun (t,env) -> (* removes old_struct *)
-              let new_struct = fresh () in
-              let env = add_open_struct env new_struct {field_names} in
-              let env = add_var env {name=new_struct;bound= t} in
-              get_Rvar loc env resource >>= fun (r,env) ->
-              let env = remove_var env resource in
-              let env = add_Rvar env {name=resource; bound= RE.subst old_struct new_struct r} in
-              return (Normal rt, env)
+        begin match bt1 with
+        | Loc ->
+           (* deal with unequal sizes properly *)
+           owns_memory loc1 env sym1 >>= begin function
+            | Some (resource,size') when Nat_big_num.less_equal size size' -> 
+               let vname = fresh () in
+               ctype false loc vname ct >>= fun t ->
+               subtype loc env [({name=val_sym;bound=val_bt},val_loc)] t >>= fun env ->
+               let env = remove_var env resource in 
+               let env = add_var env (makeUR (Points (sym1,val_sym,size))) in
+               return (Normal [makeUA Unit], env)
+            | Some _ -> fail loc (Generic_error !^"owned memory not big enough for store" )
+            | None -> fail loc (Generic_error !^"no ownership justifying store" )
            end
-        | None ->
-           is_uninitialised_pointer loc1 env sym1 >>= begin function
-            | true -> make_initial_store_type loc ct 
-            | false -> make_store_type loc ct
-           end >>= fun decl_typ ->
-           let args = [({name=sym1;bound=bt1},loc1);({name=val_sym;bound=val_bt},val_loc)] in
-           call_typ loc env decl_typ args >>= fun (rt, env) ->
-           return (Normal rt, env)
+        | StructField (sym,accesses) ->
+           begin is_owned_pointer loc env sym >>= function
+           | Some (_,(pointee,_)) ->
+              check_field_accesses loc env pointee accesses >>= 
+              fun (open_struct_resource,strct,struct_type,field_names,field,floc) ->
+              (* maybe also check against raw ctype declaration? *)
+              begin 
+                Global.get_struct_layout loc env.global struct_type >>= fun sizes ->
+                return ()
+                (* assoc_err loc field sizes "Struct field store" >>= fun size' ->
+                 * if Nat_big_num.less_equal size size' then return ()     
+                 * else fail loc (Generic_error !^"owned memory not big enough for store" ) *)
+              end >>= fun () ->
+              begin
+                let vname = fresh () in
+                ctype false loc vname ct >>= fun t ->
+                subtype loc env [({name=val_sym;bound=val_bt},val_loc)] t
+              end >>= fun env ->
+              let field_names = List.map (fun (f,s) -> (f,Sym.subst field val_sym s)) field_names in
+              let env = remove_var env open_struct_resource in
+              let env = add_var env (makeR open_struct_resource (OpenedStruct (strct,field_names))) in
+              return (Normal [makeUA Unit], env)
+           | _ -> fail loc (Generic_error !^"No ownership to justify struct access")
+           end
+        | _ -> fail loc1 (Generic_error !^"This store argument is neither a pointer nor a struct  field")
         end
      | M_Load (a_ct, asym, _mo) -> 
+        let (ct,_) = aunpack loc a_ct in
         let (sym,_) = aunpack loc asym in
+        size_of_ctype loc ct >>= fun size ->
         let ret = fresh () in
         get_Avar loc env sym >>= fun (bt,env) ->
         begin match is_structfield bt with
         | Some (sym,accesses) ->
-           check_field_accesses loc env sym accesses >>= fun ((_,pointee),(fsym,floc)) ->
-           get_Avar floc env fsym >>= fun (fbt,env) ->
-           let constr = LC (S (ret, fbt) %= (S (fsym,fbt))) in
-           let rt = [makeA ret fbt; makeUC constr] in
-           return (Normal rt, env)
+           begin is_owned_pointer loc env sym >>= function
+           | Some (_,(pointee,_)) ->
+              check_field_accesses loc env pointee accesses >>= fun (_,_,struct_type,_,field,floc) ->
+              Global.get_struct_layout loc env.global struct_type >>= fun sizes ->
+              (* assoc_err loc field sizes "Struct field load" >>= fun size' ->
+               * begin
+               *   if Nat_big_num.less_equal size size' then return ()
+               *   else fail loc (Generic_error !^"owned memory not big enough for load" ) 
+               * end >>= fun () -> *)
+              get_Avar floc env field >>= fun (fbt,env) ->
+              let constr = LC (S (ret, fbt) %= (S (field,fbt))) in
+              begin
+                let vname = fresh () in
+                ctype false loc vname ct >>= fun t ->
+                subtype loc env [({name=field;bound=fbt},floc)] t
+              end >>= fun env ->
+              let rt = [makeA ret fbt; makeUC constr] in
+              return (Normal rt, env)
+            | None -> fail loc (Generic_error !^"no ownership justifying load")
+           end
         | None ->
            begin is_owned_pointer loc env sym >>= function
-            | Some (_r,pointee) ->
+            | Some (_r,(pointee,size')) ->
+               begin
+                 if Nat_big_num.less_equal size size' then return ()
+                 else fail loc (Generic_error !^"owned memory not big enough for load" ) 
+               end >>= fun () ->
                get_ALvar loc env pointee >>= fun (bt,env) ->
+               begin
+                 let vname = fresh () in
+                 ctype false loc vname ct >>= fun t ->
+                 subtype loc env [({name=pointee;bound=bt},loc)] t
+               end >>= fun env ->
                let constr = LC (S (ret,bt) %= S (pointee,bt)) in
                return (Normal [makeA ret bt; makeUC constr], env)
             | None -> fail loc (Generic_error !^"no ownership justifying load")
@@ -1581,7 +1617,7 @@ let record_fun sym (loc,_attrs,ret_ctype,args,is_variadic,_has_proto) genv =
         return (args@arg, returns@ret)
       ) ([],[]) args >>= fun (arguments, returns) ->
     let ret_name = Sym.fresh () in
-    ctype loc ret_name ret_ctype >>= fun ret ->
+    ctype true loc ret_name ret_ctype >>= fun ret ->
     let ftyp = {arguments; return = ret@returns} in
     return (add_fun_decl genv sym (loc, ftyp, ret_name))
 
@@ -1616,15 +1652,18 @@ let record_tagDef sym def genv =
      fail Loc.unknown (Unsupported !^"todo: union types")
   | Ctype.StructDef (fields, _) ->
 
-     fold_leftM (fun (names,fields) (id, (_attributes, _qualifier, ct)) ->
+     fold_leftM (fun (names,fields,layout) (id, (_attributes, _qualifier, ct)) ->
        let id = Id.s id in
        let name = Sym.fresh_pretty id in
        let names = (id, name) :: names in
-       ctype Loc.unknown name ct >>= fun newfields ->
-       return (names, fields @ newfields)
-     ) ([],[]) fields >>= fun (names,fields) ->
+       ctype true Loc.unknown name ct >>= fun newfields ->
+       size_of_ctype Loc.unknown ct >>= fun size ->
+       let layout = layout @ [(name,size)] in
+       return (names, fields @ newfields, layout)
+     ) ([],[],[]) fields >>= fun (names,fields,layout) ->
 
      let genv = add_struct_decl genv sym fields in
+     let genv = add_struct_layout genv sym layout in
      let genv = fold_left (fun genv (id,sym) -> 
                     record_name_without_loc genv id sym) genv names in
      return genv
