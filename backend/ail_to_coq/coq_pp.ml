@@ -437,10 +437,6 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)          -> (pp_coq_expr wrap) ff e
     | Ty_params(id,[])   -> pp_str ff id
-    (* Always wrapped. *)
-    | Ty_lambda(xs,a,ty) ->
-        fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
-          pp_type_annot a pp_encoded_patt_bindings xs (pp false false) ty
     (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots            ->
         begin
@@ -471,32 +467,41 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
           (pp false false) ty
     | Ty_constr(ty,c)    ->
         fprintf ff "constrained %a %a" (pp true false) ty (pp_constr true) c
-    | Ty_params(id,tys)  ->
+    | Ty_params(id,tyas) ->
         match id with
         | "optional" when not rfnd ->
-            let ty =
-              match tys with [ty] -> ty | _    ->
+            let tya =
+              match tyas with [tya] -> tya | _    ->
               Panic.panic_no_pos "[%s] expects exactly one argument." id
             in
-            let ty = Ty_lambda([], Some(Coq_ident("unit")), ty) in
-            fprintf ff "optionalO %a null" (pp true false) ty
+            let tya =
+              Ty_arg_lambda([], Some(Coq_ident("unit")), tya)
+            in
+            fprintf ff "optionalO %a null" (pp_arg true) tya
         | "optional" | "optionalO" ->
-           (match tys with
-           | [ty]       ->
-             fprintf ff "%s %a null" id (pp true false) ty
-           | [ty1; ty2] ->
-              fprintf ff "%s %a %a" id (pp true false) ty1 (pp true false) ty2
-           | _ -> Panic.panic_no_pos "[%s] expects one or two arguments." id)
+           (match tyas with
+           | [tya]        ->
+               fprintf ff "%s %a null" id (pp_arg true) tya
+           | [tya1; tya2] ->
+               fprintf ff "%s %a %a" id (pp_arg true) tya1 (pp_arg true) tya2
+           | _            ->
+               Panic.panic_no_pos "[%s] expects one or two arguments." id)
         | "struct"                 ->
-            let (ty, tys) =
-              match tys with ty :: tys -> (ty, tys) | [] ->
+            let (tya, tyas) =
+              match tyas with tya :: tyas -> (tya, tyas) | [] ->
               Panic.panic_no_pos "[%s] expects at least one argument." id
             in
-            fprintf ff "struct %a [@@{type} %a ]" (pp true false) ty
-              (pp_sep " ; " (pp false false)) tys
+            fprintf ff "struct %a [@@{type} %a ]"
+              (pp_arg true) tya (pp_sep " ; " (pp_arg false)) tyas
         | _                        ->
-            pp_str ff id;
-            List.iter (fprintf ff " %a" (pp true false)) tys
+            pp_str ff id; List.iter (fprintf ff " %a" (pp_arg true)) tyas
+  and pp_arg wrap ff tya =
+    match tya with
+    | Ty_arg_expr(ty)         ->
+        pp wrap false ff ty
+    | Ty_arg_lambda(xs,a,tya) ->
+        fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
+          pp_type_annot a pp_encoded_patt_bindings xs (pp_arg false) tya
   in
   pp true false ff ty
 
@@ -631,11 +636,15 @@ let rec in_type_expr : string -> type_expr -> bool = fun s ty ->
   | Ty_ptr(_,ty)      -> in_type_expr s ty
   | Ty_dots           -> false
   | Ty_exists(x,a,ty) -> in_type_annot s a || (x <> s && in_type_expr s ty)
-  | Ty_lambda(p,a,ty) -> in_type_annot s a ||
-                         (not (in_patt s p) && in_type_expr s ty)
   | Ty_constr(ty,c)   -> in_type_expr s ty || in_constr s c
-  | Ty_params(x,tys)  -> x = s || List.exists (in_type_expr s) tys
+  | Ty_params(x,tys)  -> x = s || List.exists (in_type_expr_arg s) tys
   | Ty_Coq(e)         -> in_coq_expr s e
+
+and in_type_expr_arg : string -> type_expr_arg -> bool = fun s tya ->
+  match tya with
+  | Ty_arg_expr(ty)        -> in_type_expr s ty
+  | Ty_arg_lambda(p,a,tya) ->
+      in_type_annot s a || (not (in_patt s p) && in_type_expr_arg s tya)
 
 and in_constr : string -> constr -> bool = fun s c ->
   match c with
@@ -771,7 +780,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
       pp "rty_type := %a;@;" pp_prod ref_types;
       pp "rty %a := (@;  @[<v 0>%a@]@;)%%I" pp_encoded_patt_name ref_names
-        (pp_struct_def ref_names ast.structs Guard_none annot fields) id;
+        (pp_struct_def ref_names ast.structs Guard_none annot fields)
+        struct_id;
       pp "@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Instance %s_movable %a:" id pp_params params;

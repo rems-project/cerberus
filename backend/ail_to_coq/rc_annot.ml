@@ -107,10 +107,13 @@ and type_expr =
   | Ty_ptr    of ptr_kind * type_expr
   | Ty_dots
   | Ty_exists of ident * coq_expr option * type_expr
-  | Ty_lambda of pattern * coq_expr option * type_expr
   | Ty_constr of type_expr * constr
-  | Ty_params of ident * type_expr list
+  | Ty_params of ident * type_expr_arg list
   | Ty_Coq    of coq_expr
+
+and type_expr_arg =
+  | Ty_arg_expr   of type_expr
+  | Ty_arg_lambda of pattern * coq_expr option * type_expr_arg
 
 let type_void : type_expr = Ty_params("void", [])
 
@@ -154,16 +157,20 @@ and parser type_expr @(p : type_expr_prio) =
       when p >= PAtom -> Ty_dots
   | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr PFull)
       when p >= PFull -> Ty_exists(x,a,ty)
-  | "λ" p:pattern a:{":" coq_expr}? "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_lambda(p,a,ty)
   | ty:(type_expr PCstr) "&" c:constr
       when p >= PCstr -> Ty_constr(ty,c)
   | "(" ty:(type_expr PFull) ")"
       when p >= PAtom -> ty
 
+and parser type_expr_arg =
+  | ty:(type_expr PFull)
+      -> Ty_arg_expr(ty)
+  | "λ" p:pattern a:{":" coq_expr}? "." tya:type_expr_arg
+      -> Ty_arg_lambda(p,a,tya)
+
 and parser type_args =
-  | EMPTY                                           -> []
-  | e:(type_expr PFull) es:{"," (type_expr PFull)}* -> e::es
+  | EMPTY                                   -> []
+  | e:type_expr_arg es:{"," type_expr_arg}* -> e::es
 
 let type_expr = type_expr PFull
 
@@ -253,7 +260,6 @@ type annot =
   | Annot_parameters   of (ident * coq_expr) list
   | Annot_refined_by   of (ident * coq_expr) list
   | Annot_ptr_type     of (ident * type_expr)
-  | Annot_type         of ident
   | Annot_size         of coq_expr
   | Annot_exist        of (ident * coq_expr) list
   | Annot_constraint   of constr list
@@ -340,7 +346,6 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "parameters"   -> many_args annot_parameter (fun l -> Annot_parameters(l))
   | "refined_by"   -> many_args annot_refine (fun l -> Annot_refined_by(l))
   | "ptr_type"     -> single_arg annot_ptr_type (fun e -> Annot_ptr_type(e))
-  | "type"         -> single_arg annot_type (fun e -> Annot_type(e))
   | "size"         -> single_arg annot_size (fun e -> Annot_size(e))
   | "exists"       -> many_args annot_exist (fun l -> Annot_exist(l))
   | "constraints"  -> many_args annot_constr (fun l -> Annot_constraint(l))
