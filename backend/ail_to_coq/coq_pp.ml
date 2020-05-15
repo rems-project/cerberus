@@ -771,7 +771,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
       pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
       pp "rty_type := %a;@;" pp_prod ref_types;
       pp "rty %a := (@;  @[<v 0>%a@]@;)%%I" pp_encoded_patt_name ref_names
-        (pp_struct_def ref_names ast.structs Guard_none annot fields) id;
+        (pp_struct_def ref_names ast.structs Guard_none annot fields)
+        struct_id;
       pp "@]@;|}.\n";
       (* Typeclass stuff. *)
       pp "@;Global Instance %s_movable %a:" id pp_params params;
