@@ -21,6 +21,7 @@ type t =
   | Struct of Sym.t
   (* | OpenStruct of Sym.t * (Sym.t * Sym.t) list *)
   | StructField of Sym.t * field_access list
+  | FunctionPointer of Sym.t
 
 let is_unit = function Unit -> true | _ -> false
 let is_bool = function Bool -> true | _ -> false
@@ -49,6 +50,8 @@ let rec pp = function
    *       brackets (flow_map (break 1) pp_field fields)) *)
   | StructField (p,a) -> 
      parens (!^"structfield" ^^^ Sym.pp p ^^ dot ^^ pp_field_accesses a)
+  | FunctionPointer p ->
+     parens (!^"function" ^^^ Sym.pp p)
 
 
 let type_equal t1 t2 = t1 = t2
@@ -64,6 +67,8 @@ let subst sym with_sym = function
   | StructField (p,accesses) ->
      StructField (Sym.subst sym with_sym p,
                   field_accesses_subst sym with_sym accesses)
+  | FunctionPointer p ->
+     FunctionPointer (Sym.subst sym with_sym p)
   | bt -> bt
 
 

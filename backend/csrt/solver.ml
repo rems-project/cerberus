@@ -29,6 +29,8 @@ let bt_to_sort loc ctxt bt =
   | Struct _
   | StructField _ -> 
      fail loc (Z3_BT_not_implemented_yet bt)
+  | FunctionPointer _ -> 
+     return (Z3.Sort.mk_uninterpreted_s ctxt "function")
 
 
 let rec of_index_term loc ctxt it = 
