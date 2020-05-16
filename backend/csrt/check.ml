@@ -747,28 +747,59 @@ let infer_ctor loc ctor (aargs : aargs) =
   
 
 
-
-(* similar to store type *)
+(* brittle. revisit later *)
 let make_fun_arg_type sym loc ct =
   size_of_ctype loc ct >>= fun size ->
+  ctype true true loc sym (make_pointer_ctype ct) >>= fun arg ->
 
-  let name1 = fresh () in
-  ctype_aux true true loc name1 ct >>= fun ((name1,bt),l,r,c) ->
-  let arg = 
-    makeA sym Loc :: 
-    makeL name1 (Base bt) :: l @ 
-    (makeUR (Points (sym, name1, size)) :: r) @ c 
+  let rec return_resources (lvars,resources) arg = 
+    match arg with
+    | [] -> return (lvars,resources)
+    | b :: arg ->
+       match b.bound with
+       | Block (p,size) -> 
+          return_resources (lvars, resources@[makeUR (Block (p,size))]) arg 
+       | Points (p,n,size) -> 
+          let name = fresh () in
+          let lvars = lvars @ [(n,name)] in
+          return_resources (lvars, resources@[makeUR (Points (p,name,size))]) arg
+       | PackedStruct n -> 
+          begin match List.assoc_opt n lvars with
+          | None -> 
+             return_resources (lvars,resources) arg
+          | Some name -> 
+             return_resources (lvars, resources@[makeUR (PackedStruct name)]) arg
+          end
+       | OpenedStruct (_n,_field_names) -> 
+          fail loc (Unreachable !^"open struct in cfunction argument type")
+  in
+  let alrc_arg = Alrc.Types.from_type arg in
+  return_resources ([],[]) alrc_arg.r >>= fun (lvar_substs,return_resources) ->
+
+  let return_logical = 
+    filter_map (fun b -> 
+        match List.assoc_opt b.name lvar_substs with
+        | None -> None
+        | Some name -> Some (makeL name b.bound)
+      ) alrc_arg.l
   in
 
-  let name2 = fresh () in
-  ctype_aux true true loc name1 ct >>= fun ((name1,bt),l,r,c) ->
-  let ret = 
-    makeL name2 (Base bt) ::
-    makeUR (Points (sym, name2, size)) :: 
-    l @ r @ c 
+  let return_constraints = 
+    filter_map (fun b ->
+        match SymSet.elements (LC.syms_in b.bound) with
+        | [n] -> 
+           begin match List.assoc_opt n lvar_substs with
+           | Some name -> Some (makeUC (LC.subst n name b.bound))
+           | None -> None
+           end
+        | _ -> None
+      ) alrc_arg.c
   in
+  return (arg, return_logical@return_resources@return_constraints)
 
-  return (arg, ret)
+
+
+
 
 
 
@@ -1090,7 +1121,7 @@ let check_field_access loc env strct access =
                  loc = access.loc})
   | Struct struct_type, None 
        when BT.type_equal struct_type access.struct_type -> 
-     fail loc (Generic_error !^"check_field_access: struct not open")
+     fail loc (Generic_error !^"do not have the resource to pack struct")
   | _ ->
      let msm = Mismatch { mname=Some strct; has= A bt; 
                           expected= A (Struct access.struct_type) } in

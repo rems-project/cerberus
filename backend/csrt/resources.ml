@@ -11,7 +11,6 @@ type field_names = (Sym.t * Sym.t) list
 
 type t = 
   | Block of Sym.t * Utils.num (* size *)
-  (* | Uninitialised of IndexTerms.t * Ctype.ctype *)
   | Points of Sym.t * Sym.t * Utils.num
   | PackedStruct of Sym.t
   | OpenedStruct of Sym.t * field_names
@@ -19,8 +18,6 @@ type t =
 let pp = function
   | Block (it1,it2) -> 
      parens (!^"block" ^^^ Sym.pp it1 ^^^ pp_num it2)
-  (* | Uninitialised (it, ct) ->
-   *    parens (!^"uninit" ^^^ IndexTerms.pp it ^^^ squotes (Pp_core_ctype.pp_ctype ct) *)
   | Points (it1,it2,it3) ->     (* it2: what it points to, it3: size *)
      parens (!^"points" ^^^ Sym.pp it1 ^^^ Sym.pp it2 ^^^ pp_num it3)
   | PackedStruct sym ->
