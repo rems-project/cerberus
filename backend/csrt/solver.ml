@@ -147,8 +147,8 @@ let constraint_holds loc constraints c =
   let lcs = (negate c :: constraints) in
   mapM (fun (LC it) -> tryM (of_index_term loc ctxt it) 
                          (of_index_term loc ctxt (Bool true))) lcs >>= fun constrs ->
-  debug_print 3 (action "checking satisfiability of constraints") >>= fun () ->
-  debug_print 3 (blank 3 ^^ item "constraints" (flow_map (break 1) LogicalConstraints.pp lcs)) >>= fun () ->
+  debug_print 4 (action "checking satisfiability of constraints") >>= fun () ->
+  debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) LogicalConstraints.pp lcs)) >>= fun () ->
   z3_check loc ctxt solver constrs >>= function
   (* the conjunction of existing constraints and 'not c' is unsatisfiable *)
   | UNSATISFIABLE -> 
