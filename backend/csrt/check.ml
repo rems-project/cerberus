@@ -156,7 +156,7 @@ let rec check_constraints_hold loc env = function
         debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) >>= fun () ->
         check_constraints_hold loc env constrs
      | false -> 
-        debug_print 2 (blank 3 ^^ !^(greenb "constraint does not hold")) >>= fun () ->
+        debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) >>= fun () ->
         fail loc (Call_error (Unsat_constraint (name, c)))
 
 
@@ -485,8 +485,6 @@ let ensure_unis_resolved loc env unis =
 
 let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
   debug_print 2 (action "matching resources") >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "spec" (pps RE.pp specs)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   (* do struct packs last, so then the symbols are resolved *)
   let specs = 
     let (structs,nonstructs) = 
@@ -499,6 +497,8 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
     nonstructs@structs
   in
   let rec aux env acc_substs unis specs = 
+    debug_print 2 (blank 3 ^^ item "spec" (pps RE.pp specs)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
     match specs with
     | [] -> 
        debug_print 2 (blank 3 ^^ !^"done.") >>= fun () ->
@@ -525,8 +525,10 @@ let rec match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
                debug_print 3 (action ("trying resource" ^ plain (RE.pp resource'))) >>= fun () ->
                match RE.unify spec.bound resource' unis with
                | None -> 
+                  debug_print 3 (action ("no")) >>= fun () ->
                   try_resources owned_resources
                | Some unis ->
+                  debug_print 3 (action ("yes")) >>= fun () ->
                   find_resolved env unis >>= fun (_,new_substs) ->
                   let new_substs = (spec.name,r) :: (map snd new_substs) in
                   let specs = 
