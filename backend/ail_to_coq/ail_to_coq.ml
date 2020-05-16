@@ -288,6 +288,12 @@ let memory_order_of_expr : ail_expr -> Cmm_csem.memory_order = fun e ->
   | None     ->
       Panic.panic (loc_of e) "Memory order is invalid (bad constant)."
 
+let integer_constant_to_string loc i =
+  let open AilSyntax in
+  match i with
+  | IConstant(i,_,_) -> Z.to_string i
+  | _                -> not_impl loc "weird integer constant"
+
 (* Calls accumulated while translating expressions. *)
 type call = Location.t * string option * expr * expr list
 type calls = call list
@@ -429,17 +435,12 @@ let rec translate_expr : bool -> op_type option -> ail_expr -> expr * calls =
           | ConstantIndeterminate(c_ty) -> assert false
           | ConstantNull                -> Null
           | ConstantInteger(i)          ->
-              begin
-                match i with
-                | IConstant(i,_,_) ->
-                    let it =
-                      match res_ty with
-                      | Some(OpInt(it)) -> it
-                      | _               -> assert false
-                    in
-                    Int(Z.to_string i, it)
-                | _                -> not_impl loc "weird integer constant"
-              end
+              let it =
+                match res_ty with
+                | Some(OpInt(it)) -> it
+                | _               -> assert false
+              in
+              Int(integer_constant_to_string loc i, it)
           | ConstantFloating(_)         -> not_impl loc "constant float"
           | ConstantCharacter(_)        -> not_impl loc "constant char"
           | ConstantArray(_,_)          -> not_impl loc "constant array"
@@ -452,7 +453,8 @@ let rec translate_expr : bool -> op_type option -> ail_expr -> expr * calls =
         let global = not (Hashtbl.mem local_vars id) in
         if global then Hashtbl.add used_globals id ();
         (locate (Var(Some(id), global)), [])
-    | AilEsizeof(q,c_ty)           -> (locate (Val(SizeOf(layout_of false c_ty))), [])
+    | AilEsizeof(q,c_ty)           ->
+        (locate (Val(SizeOf(layout_of false c_ty))), [])
     | AilEsizeof_expr(e)           -> not_impl loc "expr sizeof_expr"
     | AilEalignof(q,c_ty)          -> not_impl loc "expr alignof"
     | AilEannot(c_ty,e)            -> not_impl loc "expr annot"
@@ -719,7 +721,7 @@ let warn_ignored_attrs so attrs =
   List.iter fn attrs
 
 let translate_block stmts blocks ret_ty =
-  let rec trans extra_attrs break continue final stmts blocks =
+  let rec trans extra_attrs swstk break continue final stmts blocks =
     let open AilSyntax in
     let resume goto = match goto with None -> assert false | Some(s) -> s in
     (* End of the block reached. *)
@@ -736,7 +738,8 @@ let translate_block stmts blocks ret_ty =
       | AilSblock(bs, ss)   ->
           insert_bindings bs;
           attrs_used := true; (* Will be attach to the first loop we find. *)
-          trans (extra_attrs @ attrs) break continue final (ss @ stmts) blocks
+          let attrs = extra_attrs @ attrs in
+          trans attrs swstk break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
       | AilSgoto(l)         -> (locate (Goto(sym_to_str l)), blocks)
       | AilSreturnVoid      ->
@@ -752,10 +755,10 @@ let translate_block stmts blocks ret_ty =
           (trans_expr e goal_ty (fun e -> locate (Return(e))), blocks)
       (* All the other constructors. *)
       | AilSskip            ->
-          trans extra_attrs break continue final stmts blocks
+          trans extra_attrs swstk break continue final stmts blocks
       | AilSexpr(e)         ->
           let (stmt, blocks) =
-            trans extra_attrs break continue final stmts blocks
+            trans extra_attrs swstk break continue final stmts blocks
           in
           let incr_or_decr op = op = PostfixIncr || op = PostfixDecr in
           let use_annots () =
@@ -826,20 +829,26 @@ let translate_block stmts blocks ret_ty =
           let (blocks, final) =
             if stmts = [] then (blocks, final) else
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans [] break continue final stmts blocks in
+            let (s, blocks) =
+              trans [] swstk break continue final stmts blocks
+            in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, Some(mkloc (Goto(id_cont)) s.loc))
           in
           (* Translate the two branches. *)
           let (blocks, then_goto) =
             let id_then = fresh_block_id () in
-            let (s, blocks) = trans [] break continue final [s1] blocks in
+            let (s, blocks) =
+              trans [] swstk break continue final [s1] blocks
+            in
             let blocks = SMap.add id_then (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_then)) s.loc)
           in
           let (blocks, else_goto) =
             let id_else = fresh_block_id () in
-            let (s, blocks) = trans [] break continue final [s2] blocks in
+            let (s, blocks) =
+              trans [] swstk break continue final [s2] blocks
+            in
             let blocks = SMap.add id_else (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_else)) s.loc)
           in
@@ -851,7 +860,9 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans [] break continue final stmts blocks in
+            let (s, blocks) =
+              trans [] swstk break continue final stmts blocks
+            in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -859,7 +870,9 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(locate (Goto(id_cond))) in
-            let (s, blocks) = trans [] break continue continue [s] blocks in
+            let (s, blocks) =
+              trans [] swstk break continue continue [s] blocks
+            in
             let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_body)) s.loc)
           in
@@ -883,7 +896,9 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) = trans [] break continue final stmts blocks in
+            let (s, blocks) =
+              trans [] swstk break continue final stmts blocks
+            in
             let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -891,7 +906,9 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(noloc (Goto(id_cond))) in (* FIXME loc *)
-            let (s, blocks) = trans [] break continue continue [s] blocks in
+            let (s, blocks) =
+              trans [] swstk break continue continue [s] blocks
+            in
             let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
             (blocks, locate (Goto(id_body)))
           in
@@ -906,12 +923,84 @@ let translate_block stmts blocks ret_ty =
             SMap.add id_cond (annot, s) blocks
           in
           (locate (Goto(id_body)), blocks)
-      | AilSswitch(_,_)     -> not_impl loc "statement switch"
-      | AilScase(_,_)       -> not_impl loc "statement case"
-      | AilSdefault(_)      -> not_impl loc "statement default"
+      | AilSswitch(e,s)     ->
+          warn_ignored_attrs None extra_attrs;
+          (* Translate the continuation. *)
+          let (blocks, goto_cont) =
+            let id_cont = fresh_block_id () in
+            let (s, blocks) =
+              trans [] swstk break continue final stmts blocks
+            in
+            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            (blocks, mkloc (Goto(id_cont)) s.loc)
+          in
+          (* Figure out the integer type of [e]. *)
+          let it =
+            match op_type_of_tc (loc_of e) (tc_of e) with
+            | OpInt(it) -> it
+            | _         -> assert false (* Not reachable since well-typed. *)
+          in
+          (* Translate the body. *)
+          let (map, bs, def, blocks) =
+            (* We push a fresh entry on the switch data stack. *)
+            let swdata =
+              let next_label = fresh_block_id () in
+              ref ([], None, next_label)
+              (* Map, current case label (if not first), next case label. *)
+            in
+            let (s, blocks) =
+              let swstk = swdata :: swstk in
+              trans [] swstk (Some(goto_cont)) continue final [s] blocks
+            in
+            (* Extract the accumulated data. *)
+            let (map, cur_label, next_label) = !swdata in
+            let (map, bs) = List.split (List.rev map) in
+            let map = List.mapi (fun i k -> (k, i)) map in
+            let bs =
+              let fn r = match !r with None -> assert false | Some s -> s in
+              List.map fn bs
+            in
+            let def = goto_cont in (* FIXME *)
+            (map, bs, def, blocks)
+          in
+          (* Put everything together. *)
+          let fn e = locate (Switch(it, e, map, bs, def)) in
+          (trans_expr e None fn, blocks)
+      | AilScase(i,s)       ->
+          warn_ignored_attrs None extra_attrs;
+          (* Get the value of the current case. *)
+          let i = integer_constant_to_string loc i in
+          (* Prepare the ref to eventually store the compiled [s]. *)
+          let (case_ref, cur_label, next_label) =
+            (* Obtain the state of the current switch. *)
+            let r = match swstk with [] -> assert false | r :: _ -> r in
+            let (map, cur_label, next_label) = !r in
+            (* Register the current case. *)
+            let case_ref = ref None in
+            r := ((i, case_ref) :: map, Some(next_label), fresh_block_id ());
+            (case_ref, cur_label, next_label)
+          in
+          (* Translate case body. *)
+          let (case_s, blocks) =
+            let final = (Some(noloc (Goto(next_label)))) in
+            trans [] swstk break continue final [s] blocks
+          in
+          let (case_s, blocks) =
+            match cur_label with
+            | None    -> (case_s, blocks)
+            | Some(l) ->
+            let blocks = SMap.add l (Some(no_block_annot), case_s) blocks in
+            (locate (Goto(l)), blocks)
+          in
+          (* Update the case ref. *)
+          case_ref := Some(case_s);
+          (* Continue with the following statements. *)
+          trans [] swstk break continue final stmts blocks
+      | AilSdefault(_)      ->
+          not_impl loc "statement default"
       | AilSlabel(l,s)      ->
           let (stmt, blocks) =
-            trans extra_attrs break continue final (s :: stmts) blocks
+            trans extra_attrs swstk break continue final (s :: stmts) blocks
           in
           let blocks =
             SMap.add (sym_to_str l) (Some(no_block_annot), stmt) blocks
@@ -919,7 +1008,7 @@ let translate_block stmts blocks ret_ty =
           (locate (Goto(sym_to_str l)), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) =
-            trans extra_attrs break continue final stmts blocks
+            trans extra_attrs swstk break continue final stmts blocks
           in
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
@@ -943,7 +1032,7 @@ let translate_block stmts blocks ret_ty =
     if not !attrs_used then warn_ignored_attrs (Some(s)) attrs;
     res
   in
-  trans [] None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
+  trans [] [] None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
 
 (** [translate fname ail] translates typed Ail AST to Coq AST. *)
 let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
