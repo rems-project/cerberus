@@ -204,6 +204,26 @@ let rec pp_stmt : Coq_ast.stmt pp = fun ff stmt ->
       pp "Goto %S" id
   | Return(e)                     ->
       pp "Return @[<hov 0>(%a)@]" pp_expr e
+  | Switch(it,e,map,bs,def)       ->
+      pp "@[<v 2>Switch %a@;" pp_int_type it;
+      pp "(%a)@;" pp_expr e;
+      begin
+        match map with
+        | []         -> pp "∅@;"
+        | (k,v)::map ->
+        pp "@[<v 2>(@;<[ %s := %i%%nat ]> " k v;
+        List.iter (fun (k,v) -> pp "$@;<[ %s := %i%%nat ]> " k v) map;
+        pp "∅@]@;)@;"
+      end;
+      begin
+        match bs with
+        | []    -> pp "[]@;"
+        | b::bs ->
+        pp "@[<v 2>(@;(%a)" pp_stmt b;
+        List.iter (pp " ::@;(%a)" pp_stmt) bs;
+        pp " :: []@]@;)@;"
+      end;
+      pp "(%a)@]" pp_stmt def
   | Assign(atomic,lay,e1,e2,stmt) ->
       let order = if atomic then ", ScOrd" else "" in
       pp "@[<hov 2>%a <-{ %a%s }@ %a ;@]@;%a"

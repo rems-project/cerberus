@@ -57,7 +57,7 @@ type stmt = stmt_aux Location.located
 and stmt_aux =
   | Goto   of string (* Block index in the [IMap.t]. *)
   | Return of expr
-(*| Switch (it : int_type) (e : expr) (m : gmap Z nat) (bs : list stmt) (def : * stmt)*)
+  | Switch of int_type * expr * (string * int) list * stmt list * stmt
   | Assign of bool (* Atomic? *) * layout * expr * expr * stmt
   | Call   of string option * expr * expr list * stmt
   | SkipS  of stmt
