@@ -546,11 +546,11 @@ let rec unpack_structs loc genv bindings =
   | {name;bound = A (Struct typ)} :: bindings ->
      unpack_struct loc genv name typ >>= fun ((newname,bt),newbindings) ->
      unpack_structs loc genv (subst name newname bindings) >>= fun newbindings' ->
-     return (newbindings @ [makeA newname bt] @ newbindings')
+     return (makeA newname bt :: newbindings @ newbindings')
   | {name;bound = L (Base (Struct typ))} :: bindings ->
      unpack_struct loc genv name typ >>= fun ((newname,bt),newbindings) ->
      unpack_structs loc genv (subst name newname bindings) >>= fun newbindings' ->
-     return (newbindings @ [makeL newname (Base bt)] @ newbindings')
+     return (makeL newname (Base bt) :: newbindings @ newbindings')
   | b :: bindings ->
      unpack_structs loc genv bindings >>= fun newbindings ->
      return (b :: newbindings)
@@ -687,7 +687,8 @@ let call_typ loc_call env (args : aargs) ftyp =
   
   check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
 
-  unpack_structs loc_call env.global ((to_function_type ftyp).return) >>= fun rt ->
+  let rt = ((to_function_type ftyp).return) in
+  (* unpack_structs loc_call env.global rt >>= fun rt -> *)
   return (rt, env)
 
 
@@ -1238,8 +1239,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> 
-           let rt = rename newname rt in
-           check_pexpr loc (add_vars env rt) e2 typ
+           unpack_structs loc env.global rt >>= fun rt ->
+           check_pexpr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -1249,8 +1250,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> 
-           let rt = rename newname rt in
-           check_pexpr loc (add_vars env rt) e2 typ
+           unpack_structs loc env.global rt >>= fun rt ->
+           check_pexpr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
@@ -1590,8 +1591,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> 
-           let rt = rename newname rt in
-           check_expr loc (add_vars env rt) e2 typ
+           unpack_structs loc env.global rt >>= fun rt ->
+           check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -1601,8 +1602,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_pexpr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> 
-           let rt = rename newname rt in
-           check_expr loc (add_vars env rt) e2 typ
+           unpack_structs loc env.global rt >>= fun rt ->
+           check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
@@ -1619,8 +1620,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         infer_expr loc env e1 >>= fun (rt, env) ->
         begin match rt with
         | Normal rt -> 
-           let rt = rename newname rt in
-           check_expr loc (add_vars env rt) e2 typ
+           unpack_structs loc env.global rt >>= fun rt ->
+           check_expr loc (add_vars env (rename newname rt)) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
@@ -1766,7 +1767,7 @@ let record_tagDef sym def genv =
        let id = Id.s id in
        let name = Sym.fresh_pretty id in
        let names = (id, name) :: names in
-       ctype true true Loc.unknown name ct >>= fun newfields ->
+       ctype false true Loc.unknown name ct >>= fun newfields ->
        let ctypes = ctypes @ [(name,ct)] in
        return (names, fields @ newfields, ctypes)
      ) ([],[],[]) fields >>= fun (names,fields,ctypes) ->
