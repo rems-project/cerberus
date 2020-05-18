@@ -30,6 +30,9 @@ let to_bool = to_bool
 let mapM : ('a -> ('b,'e) m) -> 'a list -> ('b list, 'e) m = 
   except_mapM
 
+let iterM : ('a -> (unit,'e) m) -> 'a list -> (unit, 'e) m = 
+  fun f l -> mapM f l >>= fun _ -> return ()
+
 let concat_mapM f l = 
   seq (List.map f l) >>= fun xs ->
   return (List.concat xs)

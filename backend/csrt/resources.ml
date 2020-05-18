@@ -18,7 +18,6 @@ type points_to =
 type t = 
   (* | Block of {loc: Sym.t; size : num} *)
   | Points of points_to
-  | PackedStruct of {sym: Sym.t}
 
 let pp = function
   (* | Block b -> 
@@ -32,8 +31,6 @@ let pp = function
         parens (!^"points" ^^^ Sym.pp p.pointer ^^^ !^"uninitialised" ^^^
                   Cerb_frontend.Pp_core_ctype.pp_ctype p.typ)
      end
-  | PackedStruct s ->
-     (parens (!^"packed struct" ^^^ Sym.pp s.sym))
 
 let subst sym with_it t = 
   match t with
@@ -46,8 +43,6 @@ let subst sym with_it t =
                pointee = match p.pointee with
                          | Some s -> Some (Sym.subst sym with_it s)
                          | None -> None}
-  | PackedStruct s ->
-     PackedStruct {sym = Sym.subst sym with_it s.sym}
 
 
 let type_equal env t1 t2 = 
@@ -79,20 +74,20 @@ let unify r1 r2 res =
      return res
   (* | Block b, Block b' when Nat_big_num.equal b.size b'.size ->
    *    Sym.unify b.loc b.loc res *)
-  | PackedStruct s, PackedStruct s' ->
-     Sym.unify s.sym s'.sym res
+  (* | PackedStruct s, PackedStruct s' ->
+   *    Sym.unify s.sym s'.sym res *)
   | _ -> fail
 
 
 let associated = function
   | Points p -> p.pointer
   (* | Block b -> b.loc *)
-  | PackedStruct s -> s.sym
+  (* | PackedStruct s -> s.sym *)
 
 let footprint = function
   | Points p -> Some (p.pointer,p.size)
   (* | Block b -> Some (b.loc,b.size) *)
-  | PackedStruct s -> None
+  (* | PackedStruct s -> None *)
 
 (* let owned = function
  *   | Points (_, v, _) -> [v]

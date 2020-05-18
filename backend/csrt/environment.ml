@@ -198,8 +198,8 @@ module Env = struct
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     lookup_sym loc env.local.vars name >>= function
     | R t -> return (R t, remove_var env name)
-    | A (Struct s) -> return (A (Struct s), remove_var env name)
-    | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name)
+    (* | A (Struct s) -> return (A (Struct s), remove_var env name)
+     * | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name) *)
     | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 

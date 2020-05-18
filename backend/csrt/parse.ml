@@ -28,9 +28,9 @@ let parse_base_type loc (names : NameMap.t) sx =
   (* | Sexp.List [Sexp.Atom "list"; bt] -> 
    *    parse_base_type loc names bt >>= fun bt -> 
    *    return (List bt) *)
-  | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
-     NameMap.sym_of loc id names >>= fun sym ->
-     return (Struct sym, names)
+  (* | Sexp.List [Sexp.Atom "struct"; Sexp.Atom id] -> 
+   *    NameMap.sym_of loc id names >>= fun sym ->
+   *    return (Struct sym, names) *)
   (* | Sexp.List tuple_items -> 
    *    fold_leftM (parse_tuple_item loc) ([],names) tuple_items >>= fun (nbts,names) ->
    *    return (Tuple nbts,names) *)
