@@ -676,12 +676,13 @@ and in_constr : string -> constr -> bool = fun s c ->
   | Constr_exist(x,a,c) -> in_type_annot s a || (x <> s && in_constr s c)
   | Constr_own(_,_,ty)  -> in_type_expr s ty
 
-let collect_invs : func_def -> (string * block_annot) list = fun def ->
+let collect_invs : func_def -> (string * loop_annot) list = fun def ->
   let fn id (annot, _) acc =
     match annot with
-    | Some(annot) when annot = no_block_annot -> acc
-    | Some(annot)                             -> (id, annot) :: acc
-    | None                                    ->
+    | BA_none                                         -> acc
+    | BA_loop(Some(annot)) when annot = no_loop_annot -> acc
+    | BA_loop(Some(annot))                            -> (id, annot) :: acc
+    | BA_loop(None)                                   ->
     Panic.panic_no_pos "Bad block annotation in function [%s]." def.func_name
   in
   SMap.fold fn def.func_blocks []
@@ -1108,12 +1109,12 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
       List.iter (fun (x,_) -> pp " arg_%s" x) def.func_args;
       List.iter (fun (x,_) -> pp " local_%s" x) def.func_vars
     end;
-  pp ".@;@[<v 2>split_blocks ((";
+  pp ".@;split_blocks ((";
   let pp_inv (id, annot) =
     (* Opening a box and printing the existentials. *)
-    pp "@;@[<v 2><[ \"%s\" :=" id;
+    pp "@;  @[<v 2><[ \"%s\" :=" id;
     let pp_exists (id, e) = pp "@;∃ %s : %a," id (pp_coq_expr false) e in
-    List.iter pp_exists annot.bl_exists;
+    List.iter pp_exists annot.la_exists;
     (* Compute the used and unused arguments and variables. *)
     let used =
       let fn (id, ty) =
@@ -1143,7 +1144,7 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
           Panic.panic_no_pos "[%s] is neither a local variable nor an \
             argument." id
       in
-      List.map fn annot.bl_inv_vars
+      List.map fn annot.la_inv_vars
     in
     let unused =
       let unused_args =
@@ -1180,7 +1181,7 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
       | Some(ty) -> fprintf ff "%s ◁ₗ %a" id pp_type_expr ty
     in
     begin
-      match (all_vars, annot.bl_constrs) with
+      match (all_vars, annot.la_constrs) with
       | ([]     , []     ) ->
           Panic.panic_no_pos "Ill-formed block annotation in function [%s]."
             def.func_name
@@ -1196,8 +1197,11 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
     pp "@]@;]> $"
   in
   let invs = collect_invs def in
-  List.iter pp_inv invs;
-  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)) (∅ : gmap block_id (iProp Σ)).";
+  let (invs_fb, invs_b) = List.partition (fun (_,la) -> la.la_full) invs in
+  List.iter pp_inv invs_fb;
+  pp "@;  ∅@;)%%I : gmap block_id (iProp Σ)) ((";
+  List.iter pp_inv invs_b;
+  pp "@;  ∅@;)%%I : gmap block_id (iProp Σ)).";
   let pp_do_step id =
     pp "@;- repeat do_step; do_finish.";
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
