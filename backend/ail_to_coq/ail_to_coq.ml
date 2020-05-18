@@ -729,13 +729,74 @@ let warn_ignored_attrs so attrs =
   in
   List.iter fn attrs
 
+type stmto = stmt option
+
+type k_data =
+  { k_break    : stmto (* What to do in case of break. *)
+  ; k_continue : stmto (* What to do in case of break. *)
+  ; k_final    : stmto (* What to do at the end of control flow. *)
+  ; k_on_case  : bool (* Was this pushed for a case or default? *) }
+
+let k_push : stmto -> stmto -> stmto -> bool -> k_data list -> k_data list =
+  fun k_break k_continue k_final k_on_case l ->
+    { k_break ; k_continue ; k_final ; k_on_case } :: l
+
+let k_push_final : stmt -> k_data list -> k_data list = fun s l ->
+  k_push None None (Some(s)) false l
+
+let k_push_final_case : stmt -> k_data list -> k_data list = fun s l ->
+  k_push None None (Some(s)) true l
+
+let rec k_gen : (k_data -> stmto) -> k_data list -> stmt = fun f l ->
+  match l with
+  | []     -> assert false
+  | k :: l -> match f k with None -> k_gen f l | Some(s) -> s
+
+let k_break    = k_gen (fun k -> k.k_break   )
+let k_continue = k_gen (fun k -> k.k_continue)
+let k_final    = k_gen (fun k -> k.k_final   )
+
+let rec k_pop_cases : k_data list -> k_data list = fun l ->
+  match l with
+  | []     -> []
+  | k :: l -> if k.k_on_case then k_pop_cases l else k :: l
+
+let debug = false
+
+let k_stack_print : out_channel -> k_data list -> unit = fun oc l ->
+  let to_str s =
+    match Location.(s.elt) with
+    | Goto(l)   -> l
+    | Return(_) -> "RET"
+    | _         -> "???"
+  in
+  let opt_to_str to_str o =
+    match o with
+    | None    -> "-"
+    | Some(e) -> to_str e
+  in
+  let print_data d =
+    Printf.fprintf oc " (%s,%s,%s,%s)"
+      (opt_to_str to_str d.k_break)
+      (opt_to_str to_str d.k_continue)
+      (opt_to_str to_str d.k_final)
+      (if d.k_on_case then "y" else "n")
+  in
+  Printf.fprintf oc "K-stack:";
+  List.iter print_data l;
+  Printf.fprintf oc "\n%!"
+
+
 let translate_block stmts blocks ret_ty =
-  let rec trans extra_attrs swstk break continue final stmts blocks =
+  let rec trans extra_attrs swstk ks stmts blocks =
     let open AilSyntax in
-    let resume goto = match goto with None -> assert false | Some(s) -> s in
+    if debug then Printf.eprintf "[trans] %a" k_stack_print ks;
     (* End of the block reached. *)
     match stmts with
-    | []                                           -> (resume final, blocks)
+    | []                                           ->
+        if debug then Printf.eprintf "End of [trans] with empty list\n%!";
+        let ks = k_pop_cases ks in
+        (k_final ks, blocks)
     | (AnnotatedStatement(loc, attrs, s)) :: stmts ->
     let coq_loc = register_loc coq_locs loc in
     let locate e = mkloc e coq_loc in
@@ -747,33 +808,20 @@ let translate_block stmts blocks ret_ty =
       | AilSblock(bs, ss)   ->
           insert_bindings bs;
           attrs_used := true; (* Will be attach to the first loop we find. *)
-          let attrs = extra_attrs @ attrs in
-          trans attrs swstk break continue final (ss @ stmts) blocks
+          trans (extra_attrs @ attrs) swstk ks (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
       | AilSgoto(l)         ->
-          let (_, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
+          let (_, blocks) = trans extra_attrs swstk ks stmts blocks in
           (locate (Goto(sym_to_str l)), blocks)
       | AilSreturnVoid      ->
-          let (_, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
+          let (_, blocks) = trans extra_attrs swstk ks stmts blocks in
           (locate (Return(noloc (Val(Void)))), blocks)
       | AilSbreak           ->
-          let (_, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
-          (resume break      , blocks)
+          (k_break ks, snd (trans extra_attrs swstk ks stmts blocks))
       | AilScontinue        ->
-          let (_, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
-          (resume continue   , blocks)
+          (k_continue ks, snd (trans extra_attrs swstk ks stmts blocks))
       | AilSreturn(e)       ->
-          let (_, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
+          let blocks = snd (trans extra_attrs swstk ks stmts blocks) in
           let goal_ty =
             match ret_ty with
             | Some(OpInt(_)) -> ret_ty
@@ -782,11 +830,9 @@ let translate_block stmts blocks ret_ty =
           (trans_expr e goal_ty (fun e -> locate (Return(e))), blocks)
       (* All the other constructors. *)
       | AilSskip            ->
-          trans extra_attrs swstk break continue final stmts blocks
+          trans extra_attrs swstk ks stmts blocks
       | AilSexpr(e)         ->
-          let (stmt, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
+          let (stmt, blocks) = trans extra_attrs swstk ks stmts blocks in
           let incr_or_decr op = op = PostfixIncr || op = PostfixDecr in
           let use_annots () =
             attrs_used := true;
@@ -853,20 +899,18 @@ let translate_block stmts blocks ret_ty =
       | AilSif(e,s1,s2)     ->
           warn_ignored_attrs None extra_attrs;
           (* Translate the continuation. *)
-          let (blocks, final) =
-            if stmts = [] then (blocks, final) else
+          let (blocks, ks) =
+            if stmts = [] then (blocks, ks) else
             let id_cont = fresh_block_id () in
-            let (s, blocks) =
-              trans [] swstk break continue final stmts blocks
-            in
+            let (s, blocks) = trans [] swstk ks stmts blocks in
             let blocks = add_block id_cont s blocks in
-            (blocks, Some(mkloc (Goto(id_cont)) s.loc))
+            (blocks, k_push_final (mkloc (Goto(id_cont)) s.loc) ks)
           in
           (* Translate the two branches. *)
           let (blocks, then_goto) =
             let id_then = fresh_block_id () in
             let (s, blocks) =
-              trans [] swstk break continue final [s1] blocks
+              trans [] swstk ks [s1] blocks
             in
             let blocks = add_block id_then s blocks in
             (blocks, mkloc (Goto(id_then)) s.loc)
@@ -874,7 +918,7 @@ let translate_block stmts blocks ret_ty =
           let (blocks, else_goto) =
             let id_else = fresh_block_id () in
             let (s, blocks) =
-              trans [] swstk break continue final [s2] blocks
+              trans [] swstk ks [s2] blocks
             in
             let blocks = add_block id_else s blocks in
             (blocks, mkloc (Goto(id_else)) s.loc)
@@ -887,9 +931,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) =
-              trans [] swstk break continue final stmts blocks
-            in
+            let (s, blocks) = trans [] swstk ks stmts blocks in
             let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -897,9 +939,8 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(locate (Goto(id_cond))) in
-            let (s, blocks) =
-              trans [] swstk break continue continue [s] blocks
-            in
+            let ks = k_push break continue continue false ks in
+            let (s, blocks) = trans [] swstk ks [s] blocks in
             let blocks = add_block id_body s blocks in
             (blocks, mkloc (Goto(id_body)) s.loc)
           in
@@ -923,9 +964,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) =
-              trans [] swstk break continue final stmts blocks
-            in
+            let (s, blocks) = trans [] swstk ks stmts blocks in
             let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -933,9 +972,10 @@ let translate_block stmts blocks ret_ty =
           let (blocks, goto_body) =
             let break    = Some(goto_cont) in
             let continue = Some(noloc (Goto(id_cond))) in (* FIXME loc *)
-            let (s, blocks) =
-              trans [] swstk break continue continue [s] blocks
-            in
+            let ks = k_push break continue continue false ks in
+            if debug then Printf.eprintf "Entering do-while body\n%!";
+            let (s, blocks) = trans [] swstk ks [s] blocks in
+            if debug then Printf.eprintf "Done with do-while body\n%!";
             let blocks = add_block id_body s blocks in
             (blocks, locate (Goto(id_body)))
           in
@@ -955,9 +995,7 @@ let translate_block stmts blocks ret_ty =
           (* Translate the continuation. *)
           let (blocks, goto_cont) =
             let id_cont = fresh_block_id () in
-            let (s, blocks) =
-              trans [] swstk break continue final stmts blocks
-            in
+            let (s, blocks) = trans [] swstk ks stmts blocks in
             let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
@@ -978,10 +1016,12 @@ let translate_block stmts blocks ret_ty =
               ref (cases_map, cur_label, next_label, default)
             in
             let (_, blocks) =
-              let swstk = swdata :: swstk in
-              let final = Some(goto_cont) in
-              trans [] swstk final continue final [s] blocks
+              let break = Some(goto_cont) in
+              let ks = k_push break None break false ks in
+              if debug then Printf.eprintf "Entering switch body\n%!";
+              trans [] (swdata :: swstk) ks [s] blocks
             in
+            if debug then Printf.eprintf "Done with switch body\n%!";
             (* Extract the accumulated data. *)
             let (map, cur_label, _, default) = !swdata in
             let (map, bs) = List.split (List.rev map) in
@@ -1019,9 +1059,11 @@ let translate_block stmts blocks ret_ty =
           in
           (* Translate case body. *)
           let (case_s, blocks) =
-            let final = (Some(noloc (Goto(next_label)))) in
-            trans [] swstk break continue final (s :: stmts) blocks
+            let ks = k_push_final_case (noloc (Goto(next_label))) ks in
+            if debug then Printf.eprintf "Entering case body (%s)\n%!" i;
+            trans [] swstk ks (s :: stmts) blocks
           in
+          if debug then Printf.eprintf "Done with case body (%s)\n%!" i;
           let (case_s, blocks) =
             (locate (Goto(cur_label)), add_block cur_label case_s blocks)
           in
@@ -1043,8 +1085,8 @@ let translate_block stmts blocks ret_ty =
           in
           (* Translate the default body. *)
           let (default_s, blocks) =
-            let final = (Some(noloc (Goto(next_label)))) in
-            trans [] swstk break continue final (s :: stmts) blocks
+            let ks = k_push_final_case (noloc (Goto(next_label))) ks in
+            trans [] swstk ks (s :: stmts) blocks
           in
           let (default_s, blocks) =
             (locate (Goto(cur_label)), add_block cur_label default_s blocks)
@@ -1053,15 +1095,11 @@ let translate_block stmts blocks ret_ty =
           default_ref := Some(default_s);
           (default_s, blocks)
       | AilSlabel(l,s)      ->
-          let (stmt, blocks) =
-            trans extra_attrs swstk break continue final (s :: stmts) blocks
-          in
-          let blocks = add_block (sym_to_str l) stmt blocks in
+          let (s, blocks) = trans extra_attrs swstk ks (s :: stmts) blocks in
+          let blocks = add_block (sym_to_str l) s blocks in
           (locate (Goto(sym_to_str l)), blocks)
       | AilSdeclaration(ls) ->
-          let (stmt, blocks) =
-            trans extra_attrs swstk break continue final stmts blocks
-          in
+          let (stmt, blocks) = trans extra_attrs swstk ks stmts blocks in
           let add_decl (id, e) stmt =
             let id = sym_to_str id in
             let ty =
@@ -1084,7 +1122,8 @@ let translate_block stmts blocks ret_ty =
     if not !attrs_used then warn_ignored_attrs (Some(s)) attrs;
     res
   in
-  trans [] [] None None (Some(noloc (Return(noloc (Val(Void)))))) stmts blocks
+  let initial_ks = k_push_final (noloc (Return(noloc (Val(Void))))) [] in
+  trans [] [] initial_ks stmts blocks
 
 (** [translate fname ail] translates typed Ail AST to Coq AST. *)
 let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
