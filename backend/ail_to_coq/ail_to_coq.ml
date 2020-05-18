@@ -614,6 +614,14 @@ let rec bool_expr : ail_expr -> bool_expr = fun e ->
       end
   | _                     -> BE_leaf(e)
 
+let add_block ?annots id s blocks =
+  let annots =
+    match annots with
+    | None         -> Some(no_block_annot)
+    | Some(annots) -> annots
+  in
+  SMap.add id (annots, s) blocks
+
 type op_ty_opt = Coq_ast.op_type option
 
 let trans_expr : ail_expr -> op_ty_opt -> (expr -> stmt) -> stmt =
@@ -641,7 +649,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate id_goto else_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (Some(no_block_annot), s) blocks
+          add_block id s blocks
         in
         (s, blocks)
     | BE_or (be1,be2) ->
@@ -650,7 +658,7 @@ let translate_bool_expr then_goto else_goto blocks e =
         let (s, blocks) = translate then_goto id_goto blocks be1 in
         let blocks =
           let (s, blocks) = translate then_goto else_goto blocks be2 in
-          SMap.add id (Some(no_block_annot), s) blocks
+          add_block id s blocks
         in
         (s, blocks)
   in
@@ -832,7 +840,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final stmts blocks
             in
-            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_cont s blocks in
             (blocks, Some(mkloc (Goto(id_cont)) s.loc))
           in
           (* Translate the two branches. *)
@@ -841,7 +849,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final [s1] blocks
             in
-            let blocks = SMap.add id_then (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_then s blocks in
             (blocks, mkloc (Goto(id_then)) s.loc)
           in
           let (blocks, else_goto) =
@@ -849,7 +857,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final [s2] blocks
             in
-            let blocks = SMap.add id_else (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_else s blocks in
             (blocks, mkloc (Goto(id_else)) s.loc)
           in
           translate_bool_expr then_goto else_goto blocks e
@@ -863,7 +871,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final stmts blocks
             in
-            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
           (* Translate the body. *)
@@ -873,7 +881,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue continue [s] blocks
             in
-            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_body s blocks in
             (blocks, mkloc (Goto(id_body)) s.loc)
           in
           (* Translate the condition. *)
@@ -881,12 +889,12 @@ let translate_block stmts blocks ret_ty =
             translate_bool_expr goto_body goto_cont blocks e
           in
           let blocks =
-            let annot =
+            let annots =
               attrs_used := true;
               let fn () = Some(block_annot attrs) in
               handle_invalid_annot ~loc None fn ()
             in
-            SMap.add id_cond (annot, s) blocks
+            add_block ~annots id_cond s blocks
           in
           (locate (Goto(id_cond)), blocks)
       | AilSdo(s,e)         ->
@@ -899,7 +907,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final stmts blocks
             in
-            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
           (* Translate the body. *)
@@ -909,18 +917,18 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue continue [s] blocks
             in
-            let blocks = SMap.add id_body (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_body s blocks in
             (blocks, locate (Goto(id_body)))
           in
           (* Translate the condition. *)
           let (s, blocks) = translate_bool_expr goto_body goto_cont blocks e in
           let blocks =
-            let annot =
+            let annots =
               attrs_used := true;
               let fn () = Some(block_annot attrs) in
               handle_invalid_annot ~loc None fn ()
             in
-            SMap.add id_cond (annot, s) blocks
+            add_block ~annots id_cond s blocks
           in
           (locate (Goto(id_body)), blocks)
       | AilSswitch(e,s)     ->
@@ -931,7 +939,7 @@ let translate_block stmts blocks ret_ty =
             let (s, blocks) =
               trans [] swstk break continue final stmts blocks
             in
-            let blocks = SMap.add id_cont (Some(no_block_annot), s) blocks in
+            let blocks = add_block id_cont s blocks in
             (blocks, mkloc (Goto(id_cont)) s.loc)
           in
           (* Figure out the integer type of [e]. *)
@@ -960,7 +968,14 @@ let translate_block stmts blocks ret_ty =
               let fn r = match !r with None -> assert false | Some s -> s in
               List.map fn bs
             in
-            let def = goto_cont in (* FIXME *)
+            let (def, blocks) =
+              let blocks =
+                match cur_label with
+                | Some(l) -> add_block l goto_cont blocks
+                | None    -> assert false
+              in
+              (goto_cont, blocks) (* FIXME *)
+            in
             (map, bs, def, blocks)
           in
           (* Put everything together. *)
@@ -988,9 +1003,7 @@ let translate_block stmts blocks ret_ty =
           let (case_s, blocks) =
             match cur_label with
             | None    -> (case_s, blocks)
-            | Some(l) ->
-            let blocks = SMap.add l (Some(no_block_annot), case_s) blocks in
-            (locate (Goto(l)), blocks)
+            | Some(l) -> (locate (Goto(l)), add_block l case_s blocks)
           in
           (* Update the case ref. *)
           case_ref := Some(case_s);
@@ -1002,9 +1015,7 @@ let translate_block stmts blocks ret_ty =
           let (stmt, blocks) =
             trans extra_attrs swstk break continue final (s :: stmts) blocks
           in
-          let blocks =
-            SMap.add (sym_to_str l) (Some(no_block_annot), stmt) blocks
-          in
+          let blocks = add_block (sym_to_str l) stmt blocks in
           (locate (Goto(sym_to_str l)), blocks)
       | AilSdeclaration(ls) ->
           let (stmt, blocks) =
@@ -1171,7 +1182,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
           in
           handle_invalid_annot None fn ()
         in
-        SMap.add func_init (annots, stmt) blocks
+        add_block ~annots func_init stmt blocks
       in
       let func_vars = collect_bindings () in
       let func_deps =
