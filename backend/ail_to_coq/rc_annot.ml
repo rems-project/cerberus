@@ -367,6 +367,8 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "lemmas"       -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
   | "trust_me"     -> no_args Annot_trust_me
   | "manual_proof" -> single_arg annot_manual (fun e -> Annot_manual(e))
+  | "block"        -> no_args Annot_block
+  | "full_block"   -> no_args Annot_full_block
   | _              -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
