@@ -278,6 +278,8 @@ type annot =
   | Annot_tactics      of string list
   | Annot_trust_me
   | Annot_manual       of manual_proof
+  | Annot_block
+  | Annot_full_block
 
 let annot_lemmas : string list -> string list =
   List.map (Printf.sprintf "all: try by apply: %s; solve_goal.")
@@ -365,6 +367,8 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "lemmas"       -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
   | "trust_me"     -> no_args Annot_trust_me
   | "manual_proof" -> single_arg annot_manual (fun e -> Annot_manual(e))
+  | "block"        -> no_args Annot_block
+  | "full_block"   -> no_args Annot_full_block
   | _              -> error "undefined"
 
 (** {3 High level parsing of attributes} *)
@@ -557,34 +561,50 @@ let struct_annot : rc_attr list -> struct_annot = fun attrs ->
   in
   SA_basic(basic_annot)
 
-type block_annot =
-  { bl_exists   : (ident * coq_expr) list
-  ; bl_constrs  : constr list
-  ; bl_inv_vars : (ident * type_expr) list }
+type loop_annot =
+  { la_exists   : (ident * coq_expr) list
+  ; la_constrs  : constr list
+  ; la_inv_vars : (ident * type_expr) list
+  ; la_full     : bool }
 
-let no_block_annot : block_annot =
-  { bl_exists = [] ; bl_constrs = [] ; bl_inv_vars = [] }
+let no_loop_annot : loop_annot =
+  { la_exists   = []
+  ; la_constrs  = []
+  ; la_inv_vars = []
+  ; la_full     = true }
 
-let block_annot : rc_attr list -> block_annot = fun attrs ->
+let loop_annot : rc_attr list -> loop_annot = fun attrs ->
   let exists = ref [] in
   let constrs = ref [] in
   let vars = ref [] in
+  let full_block = ref None in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
+    let set_full_block b =
+      match !full_block with
+      | Some(_) -> error "mode already specified"
+      | None    -> full_block := Some(b)
+    in
     match parse_attr attr with
     | Annot_exist(l)      -> exists := !exists @ l
     | Annot_constraint(l) -> constrs := !constrs @ l
     | Annot_inv_vars(l)   -> vars := !vars @ l
+    | Annot_block         -> set_full_block false
+    | Annot_full_block    -> set_full_block true
     | _                   -> error "is invalid (wrong kind)"
   in
   List.iter handle_attr attrs;
 
-  { bl_exists =  !exists
-  ; bl_constrs = !constrs
-  ; bl_inv_vars = !vars }
+  let la_full =
+    match !full_block with
+    | Some(b) -> b
+    | None    -> no_loop_annot.la_full
+  in
+
+  {la_exists = !exists; la_constrs = !constrs; la_inv_vars = !vars; la_full}
 
 let global_annot : rc_attr list -> type_expr option = fun attrs ->
   let global = ref None in
