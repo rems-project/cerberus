@@ -26,15 +26,8 @@ type t =
   | FunctionPointer of Sym.t
   | StoredStruct of open_struct
 
-let is_unit = function Unit -> true | _ -> false
-let is_bool = function Bool -> true | _ -> false
-let is_int = function Int -> true | _ -> false
 let is_loc = function Loc -> true | _ -> false
-let is_array = function Array -> true | _ -> false
-let is_struct = function Struct s -> Some s | _ -> None
-let is_structfield = function 
-  | StructField (p,access) -> Some (p,access) 
-  | _ -> None
+
 
 
 let rec pp = function
