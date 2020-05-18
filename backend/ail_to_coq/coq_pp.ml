@@ -490,14 +490,17 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | Ty_params(id,tyas) ->
         match id with
         | "optional" when not rfnd ->
-            let tya =
-              match tyas with [tya] -> tya | _    ->
-              Panic.panic_no_pos "[%s] expects exactly one argument." id
+            let (tya1, tya2) =
+              match tyas with
+              | [tya]        -> (tya, Ty_arg_expr(Ty_Coq(Coq_ident("null"))))
+              | [tya1; tya2] -> (tya1, tya2)
+              | _            ->
+                 Panic.panic_no_pos "[%s] expects one or two arguments." id
             in
-            let tya =
-              Ty_arg_lambda([], Some(Coq_ident("unit")), tya)
+            let tya1 =
+              Ty_arg_lambda([], Some(Coq_ident("unit")), tya1)
             in
-            fprintf ff "optionalO %a null" (pp_arg true) tya
+            fprintf ff "optionalO %a %a" (pp_arg true) tya1 (pp_arg true) tya2
         | "optional" | "optionalO" ->
            (match tyas with
            | [tya]        ->
@@ -1194,7 +1197,7 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
   in
   let invs = collect_invs def in
   List.iter pp_inv invs;
-  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
+  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)) (∅ : gmap block_id (iProp Σ)).";
   let pp_do_step id =
     pp "@;- repeat do_step; do_finish.";
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
