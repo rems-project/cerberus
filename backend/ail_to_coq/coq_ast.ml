@@ -72,6 +72,10 @@ type struct_decl =
   ; struct_is_union : bool
   ; struct_members  : (string * (member_annot option * layout)) list }
 
+type block_annot =
+  | BA_none
+  | BA_loop of loop_annot option
+
 type func_def =
   { func_name   : string
   ; func_annot  : function_annot option
@@ -79,7 +83,7 @@ type func_def =
   ; func_vars   : (string * layout) list
   ; func_init   : string
   ; func_deps   : string list * string list (* global vars/functions used. *)
-  ; func_blocks : (block_annot option * stmt) SMap.t }
+  ; func_blocks : (block_annot * stmt) SMap.t }
 
 type func_def_or_decl =
   | FDef of func_def

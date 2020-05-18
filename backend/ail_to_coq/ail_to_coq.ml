@@ -618,8 +618,8 @@ let add_block ?annots id s blocks =
   if SMap.mem id blocks then assert false;
   let annots =
     match annots with
-    | None         -> Some(no_block_annot)
-    | Some(annots) -> annots
+    | None         -> BA_none
+    | Some(annots) -> BA_loop(annots)
   in
   SMap.add id (annots, s) blocks
 
@@ -910,7 +910,7 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annots =
               attrs_used := true;
-              let fn () = Some(block_annot attrs) in
+              let fn () = Some(loop_annot attrs) in
               handle_invalid_annot ~loc None fn ()
             in
             add_block ~annots id_cond s blocks
@@ -944,7 +944,7 @@ let translate_block stmts blocks ret_ty =
           let blocks =
             let annots =
               attrs_used := true;
-              let fn () = Some(block_annot attrs) in
+              let fn () = Some(loop_annot attrs) in
               handle_invalid_annot ~loc None fn ()
             in
             add_block ~annots id_cond s blocks
@@ -1193,6 +1193,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
           (* Function is only declared. *)
           (func_name, FDec(func_annot))
       | (_, (_, _, args, AnnotatedStatement(loc, s_attrs, stmt))) ->
+      (* Attributes on the function body are ignored. *)
+      warn_ignored_attrs None (List.rev (collect_rc_attrs s_attrs));
       (* Function is defined. *)
       let func_args =
         let fn i (_, c_ty, _) =
@@ -1217,13 +1219,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
         in
         let ret_ty = op_type_opt Location_ocaml.unknown ret_ty in
         let (stmt, blocks) = translate_block stmts SMap.empty ret_ty in
-        let annots =
-          let fn () =
-            Some(block_annot (List.rev (collect_rc_attrs s_attrs)))
-          in
-          handle_invalid_annot None fn ()
-        in
-        add_block ~annots func_init stmt blocks
+        add_block func_init stmt blocks
       in
       let func_vars = collect_bindings () in
       let func_deps =
