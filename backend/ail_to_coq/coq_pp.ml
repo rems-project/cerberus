@@ -679,10 +679,9 @@ and in_constr : string -> constr -> bool = fun s c ->
 let collect_invs : func_def -> (string * loop_annot) list = fun def ->
   let fn id (annot, _) acc =
     match annot with
-    | BA_none                                         -> acc
-    | BA_loop(Some(annot)) when annot = no_loop_annot -> acc
-    | BA_loop(Some(annot))                            -> (id, annot) :: acc
-    | BA_loop(None)                                   ->
+    | BA_none              -> acc
+    | BA_loop(Some(annot)) -> (id, annot) :: acc
+    | BA_loop(None)        ->
     Panic.panic_no_pos "Bad block annotation in function [%s]." def.func_name
   in
   SMap.fold fn def.func_blocks []
