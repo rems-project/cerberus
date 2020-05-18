@@ -1197,7 +1197,7 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
   in
   let invs = collect_invs def in
   List.iter pp_inv invs;
-  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)).";
+  pp "@;∅@]@;)%%I : gmap block_id (iProp Σ)) (∅ : gmap block_id (iProp Σ)).";
   let pp_do_step id =
     pp "@;- repeat do_step; do_finish.";
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
