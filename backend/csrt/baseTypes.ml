@@ -24,7 +24,7 @@ type t =
   | Struct of Sym.t
   | StructField of Sym.t * field_access list
   | FunctionPointer of Sym.t
-  | StoredStruct of open_struct
+  | OpenStruct of open_struct
 
 let is_loc = function Loc -> true | _ -> false
 
@@ -43,7 +43,7 @@ let rec pp = function
      parens (!^"structfield" ^^^ Sym.pp p ^^ dot ^^ pp_field_accesses a)
   | FunctionPointer p ->
      parens (!^"function" ^^^ Sym.pp p)
-  | StoredStruct s ->
+  | OpenStruct s ->
      let pp_field_names =
        flow_map (comma ^^ break 1) 
          (fun (f,(_,mfvar)) -> 
@@ -82,9 +82,9 @@ let subst sym with_sym = function
                   field_accesses_subst sym with_sym accesses)
   | FunctionPointer p ->
      FunctionPointer (Sym.subst sym with_sym p)
-  | StoredStruct s ->
-     StoredStruct {typ = Sym.subst sym with_sym s.typ;
-                   fields = subst_fields sym with_sym s.fields}
+  | OpenStruct s ->
+     OpenStruct {typ = Sym.subst sym with_sym s.typ;
+                 fields = subst_fields sym with_sym s.fields}
   | bt -> bt
 
 
