@@ -1,4 +1,3 @@
-open Utils
 open Cerb_frontend
 open PPrint
 open Pp_tools
@@ -44,7 +43,7 @@ module Global = struct
 
   type t = 
     { struct_decls : Types.t SymMap.t; 
-      struct_layouts : ((Sym.t * num) list) SymMap.t; 
+      struct_ctypes : ((Sym.t * Ctype.ctype) list) SymMap.t; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
       impl_fun_decls : FunctionTypes.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
@@ -54,7 +53,7 @@ module Global = struct
 
   let empty = 
     { struct_decls = SymMap.empty; 
-      struct_layouts = SymMap.empty; 
+      struct_ctypes = SymMap.empty; 
       fun_decls = SymMap.empty;
       impl_fun_decls = ImplMap.empty;
       impl_constants = ImplMap.empty;
@@ -63,8 +62,8 @@ module Global = struct
   let add_struct_decl genv sym typ = 
     { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
 
-  let add_struct_layout genv sym l = 
-    { genv with struct_layouts = SymMap.add sym l genv.struct_layouts }
+  let add_struct_ctypes genv sym l = 
+    { genv with struct_ctypes = SymMap.add sym l genv.struct_ctypes }
 
   let add_fun_decl genv fsym (loc, typ, ret_sym) = 
     { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
@@ -82,8 +81,8 @@ module Global = struct
        let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
        fail loc (Generic_error err)
 
-  let get_struct_layout loc genv sym = 
-    match SymMap.find_opt sym genv.struct_layouts with
+  let get_struct_ctype loc genv sym = 
+    match SymMap.find_opt sym genv.struct_ctypes with
     | Some layout -> return layout
     | None -> 
        let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
@@ -199,8 +198,8 @@ module Env = struct
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     lookup_sym loc env.local.vars name >>= function
     | R t -> return (R t, remove_var env name)
-    (* | A (Struct s) -> return (A (Struct s), remove_var env name)
-     * | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name) *)
+    | A (Struct s) -> return (A (Struct s), remove_var env name)
+    | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name)
     | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
@@ -236,16 +235,22 @@ module Env = struct
       ) env
 
 
-  let resources_for_loc env loc_sym = 
-    filter_vars (fun sym t ->
-        match t with
-        | R t ->
-          begin match RE.footprint t with
-          | None -> false
-          | Some (loc,size) -> loc = loc_sym 
-          end
-        | _ -> false
-      ) env
+  let resources_for_loc loc env loc_sym = 
+    let filtered = 
+      filter_vars (fun sym t ->
+          match t with
+          | R t ->
+             begin match RE.footprint t with
+             | None -> false
+             | Some (loc,size) -> loc = loc_sym 
+             end
+          | _ -> false
+        ) env
+    in
+    match filtered with
+    | [] -> return None
+    | [r] -> return (Some r)
+    | _ -> fail loc (Unreachable !^"same location owned multiple times")
 
 
   let get_all_constraints env = 
@@ -260,14 +265,14 @@ module Env = struct
       ) 
       env.local.vars []
 
-  let is_struct_open env struct_sym = 
-    SymMap.fold (fun r t acc -> 
-        match t with
-        | R (OpenedStruct (s,field_names)) when s = struct_sym ->
-           Some (r,field_names)
-        | _ -> acc
-      ) 
-      env.local.vars None
+  (* let is_struct_open env struct_loc_sym = 
+   *   SymMap.fold (fun r t acc -> 
+   *       match t with
+   *       | R (OpenedStruct s) when s.loc = struct_loc_sym ->
+   *          Some (r,s)
+   *       | _ -> acc
+   *     ) 
+   *     env.local.vars None *)
 
 end
 
