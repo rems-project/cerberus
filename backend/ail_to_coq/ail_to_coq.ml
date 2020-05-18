@@ -615,6 +615,7 @@ let rec bool_expr : ail_expr -> bool_expr = fun e ->
   | _                     -> BE_leaf(e)
 
 let add_block ?annots id s blocks =
+  if SMap.mem id blocks then assert false;
   let annots =
     match annots with
     | None         -> Some(no_block_annot)
@@ -749,12 +750,30 @@ let translate_block stmts blocks ret_ty =
           let attrs = extra_attrs @ attrs in
           trans attrs swstk break continue final (ss @ stmts) blocks
       (* End of block stuff, assuming [stmts] is empty. *)
-      | AilSgoto(l)         -> (locate (Goto(sym_to_str l)), blocks)
+      | AilSgoto(l)         ->
+          let (_, blocks) =
+            trans extra_attrs swstk break continue final stmts blocks
+          in
+          (locate (Goto(sym_to_str l)), blocks)
       | AilSreturnVoid      ->
+          let (_, blocks) =
+            trans extra_attrs swstk break continue final stmts blocks
+          in
           (locate (Return(noloc (Val(Void)))), blocks)
-      | AilSbreak           -> (resume break      , blocks)
-      | AilScontinue        -> (resume continue   , blocks)
+      | AilSbreak           ->
+          let (_, blocks) =
+            trans extra_attrs swstk break continue final stmts blocks
+          in
+          (resume break      , blocks)
+      | AilScontinue        ->
+          let (_, blocks) =
+            trans extra_attrs swstk break continue final stmts blocks
+          in
+          (resume continue   , blocks)
       | AilSreturn(e)       ->
+          let (_, blocks) =
+            trans extra_attrs swstk break continue final stmts blocks
+          in
           let goal_ty =
             match ret_ty with
             | Some(OpInt(_)) -> ret_ty
@@ -952,11 +971,13 @@ let translate_block stmts blocks ret_ty =
           let (map, bs, def, blocks) =
             (* We push a fresh entry on the switch data stack. *)
             let swdata =
+              let cur_label = fresh_block_id () in
               let next_label = fresh_block_id () in
-              ref ([], None, next_label, None)
-              (* Map, current label (if not first), next label, default. *)
+              let cases_map = [] in
+              let default = None in
+              ref (cases_map, cur_label, next_label, default)
             in
-            let (s, blocks) =
+            let (_, blocks) =
               let swstk = swdata :: swstk in
               let final = Some(goto_cont) in
               trans [] swstk final continue final [s] blocks
@@ -969,16 +990,12 @@ let translate_block stmts blocks ret_ty =
               let fn r = match !r with None -> assert false | Some s -> s in
               List.map fn bs
             in
-            let (def, blocks) =
+            let def =
               match default with
-              | Some(s) ->
-                  let s = match !s with Some(s) -> s | None -> assert false in
-                  (s, blocks)
-              | None    ->
-              match cur_label with
-              | Some(l) -> (goto_cont, add_block l goto_cont blocks)
-              | None    -> assert false (* FIXME empty switch? *)
+              | None    -> goto_cont
+              | Some(s) -> match !s with Some(s) -> s | None -> assert false
             in
+            let blocks = add_block cur_label goto_cont blocks in
             (map, bs, def, blocks)
           in
           (* Put everything together. *)
@@ -997,49 +1014,44 @@ let translate_block stmts blocks ret_ty =
             (* Register the current case. *)
             let case_ref = ref None in
             let map = (i, case_ref) :: map in
-            r := (map, Some(next_label), fresh_block_id (), None);
+            r := (map, next_label, fresh_block_id (), None);
             (case_ref, cur_label, next_label)
           in
           (* Translate case body. *)
           let (case_s, blocks) =
             let final = (Some(noloc (Goto(next_label)))) in
-            trans [] swstk break continue final [s] blocks
+            trans [] swstk break continue final (s :: stmts) blocks
           in
           let (case_s, blocks) =
-            match cur_label with
-            | None    -> (case_s, blocks)
-            | Some(l) -> (locate (Goto(l)), add_block l case_s blocks)
+            (locate (Goto(cur_label)), add_block cur_label case_s blocks)
           in
           (* Update the case ref. *)
           case_ref := Some(case_s);
-          (* Continue with the following statements. *)
-          trans [] swstk break continue final stmts blocks
+          (case_s, blocks)
       | AilSdefault(s)      ->
           warn_ignored_attrs None extra_attrs;
           (* Prepare the ref to eventually store the compiled [s]. *)
-          let (default_ref, cur_label) =
+          let (default_ref, cur_label, next_label) =
             (* Obtain the state of the current switch. *)
             let r = match swstk with [] -> assert false | r :: _ -> r in
             let (map, cur_label, next_label, default) = !r in
             if default <> None then assert false;
             (* Register the default case. *)
             let default_ref = ref None in
-            r := (map, cur_label, next_label, Some(default_ref));
-            (default_ref, cur_label)
+            r := (map, next_label, fresh_block_id (), Some(default_ref));
+            (default_ref, cur_label, next_label)
           in
           (* Translate the default body. *)
           let (default_s, blocks) =
-            trans [] swstk break continue final [s] blocks
+            let final = (Some(noloc (Goto(next_label)))) in
+            trans [] swstk break continue final (s :: stmts) blocks
           in
           let (default_s, blocks) =
-            match cur_label with
-            | None    -> (default_s, blocks)
-            | Some(l) -> (locate (Goto(l)), add_block l default_s blocks)
+            (locate (Goto(cur_label)), add_block cur_label default_s blocks)
           in
           (* Update the default ref. *)
           default_ref := Some(default_s);
-          (* Continue with the following statements. *)
-          trans [] swstk break continue final stmts blocks
+          (default_s, blocks)
       | AilSlabel(l,s)      ->
           let (stmt, blocks) =
             trans extra_attrs swstk break continue final (s :: stmts) blocks
