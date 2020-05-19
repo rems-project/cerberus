@@ -291,8 +291,16 @@ let memory_order_of_expr : ail_expr -> Cmm_csem.memory_order = fun e ->
 let integer_constant_to_string loc i =
   let open AilSyntax in
   match i with
-  | IConstant(i,_,_) -> Z.to_string i
-  | _                -> not_impl loc "weird integer constant"
+  | IConstant(i,_,_) ->
+      (Z.to_string i, None)
+  | IConstantMax(it) ->
+      let it : int_type = translate_int_type loc it in
+      Format.(fprintf str_formatter) "(it_max %a - 1)" Coq_pp.pp_int_type it;
+      (Format.flush_str_formatter (), Some(it))
+  | IConstantMin(it) ->
+      let it : int_type = translate_int_type loc it in
+      Format.(fprintf str_formatter) "(it_min %a)" Coq_pp.pp_int_type it;
+      (Format.flush_str_formatter (), Some(it))
 
 (* Calls accumulated while translating expressions. *)
 type call = Location.t * string option * expr * expr list
@@ -435,12 +443,17 @@ let rec translate_expr : bool -> op_type option -> ail_expr -> expr * calls =
           | ConstantIndeterminate(c_ty) -> assert false
           | ConstantNull                -> Null
           | ConstantInteger(i)          ->
-              let it =
-                match res_ty with
-                | Some(OpInt(it)) -> it
-                | _               -> assert false
+              let (i, it) =
+                let (i, ito) = integer_constant_to_string loc i in
+                let it =
+                  match (res_ty, ito) with
+                  | (Some(OpInt(it)), Some(it_c)) -> assert (it = it_c); it
+                  | (Some(OpInt(it)), None      ) -> it
+                  | (_              , _         ) -> assert false
+                in
+                (i, it)
               in
-              Int(integer_constant_to_string loc i, it)
+              Int(i, it)
           | ConstantFloating(_)         -> not_impl loc "constant float"
           | ConstantCharacter(_)        -> not_impl loc "constant char"
           | ConstantArray(_,_)          -> not_impl loc "constant array"
@@ -1044,7 +1057,7 @@ let translate_block stmts blocks ret_ty =
       | AilScase(i,s)       ->
           warn_ignored_attrs None extra_attrs;
           (* Get the value of the current case. *)
-          let i = integer_constant_to_string loc i in
+          let i = fst (integer_constant_to_string loc i) in
           (* Prepare the ref to eventually store the compiled [s]. *)
           let (case_ref, cur_label, next_label) =
             (* Obtain the state of the current switch. *)
