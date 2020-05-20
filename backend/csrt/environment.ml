@@ -42,8 +42,8 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 module Global = struct 
 
   type t = 
-    { struct_decls : Types.t SymMap.t; 
-      struct_ctypes : ((Sym.t * Ctype.ctype) list) SymMap.t; 
+    { struct_decls : (((string, VarTypes.t) Binders.t) list) SymMap.t; 
+      struct_ctypes : ((string * Ctype.ctype) list) SymMap.t; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
       impl_fun_decls : FunctionTypes.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
@@ -108,8 +108,10 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
+    let pp_field f = dot ^^ !^(f.name) ^^^ colon ^^^ VarTypes.pp f.bound in
     pp_list None 
-      (fun (sym, bs) -> typ (bold (Sym.pp sym)) (Types.pp bs))
+      (fun (sym, bs) -> typ (bold (Sym.pp sym)) 
+                          (braces (separate_map (semi ^^ space) pp_field bs)))
       (SymMap.bindings decls) 
              
 
@@ -146,10 +148,10 @@ module Local = struct
   let empty = 
     { vars = SymMap.empty }
 
-  let pp_avars vars = pp_list (Some brackets) (Binders.pp BT.pp) vars 
-  let pp_lvars vars = pp_list (Some brackets) (Binders.pp LS.pp) vars
-  let pp_rvars vars = pp_list (Some brackets) (Binders.pp RE.pp) vars 
-  let pp_cvars vars = pp_list (Some brackets) (Binders.pp LC.pp) vars
+  let pp_avars vars = pp_list (Some brackets) (Binders.pp Sym.pp BT.pp) vars 
+  let pp_lvars vars = pp_list (Some brackets) (Binders.pp Sym.pp LS.pp) vars
+  let pp_rvars vars = pp_list (Some brackets) (Binders.pp Sym.pp RE.pp) vars 
+  let pp_cvars vars = pp_list (Some brackets) (Binders.pp Sym.pp LC.pp) vars
 
   let pp lenv =
     let (a,l,r,c) = 
@@ -235,35 +237,35 @@ module Env = struct
       ) env
 
 
-  let resources_for_loc loc env loc_sym = 
-    let filtered = 
-      filter_vars (fun sym t ->
-          match t with
-          | R t ->
-             begin match RE.footprint t with
-             | None -> false
-             | Some (loc,size) -> loc = loc_sym 
-             end
-          | _ -> false
-        ) env
-    in
-    match filtered with
-    | [] -> return None
-    | [r] -> return (Some r)
-    | _ -> fail loc (Unreachable !^"same location owned multiple times")
+  (* let resources_for_loc loc env loc_sym = 
+   *   let filtered = 
+   *     filter_vars (fun sym t ->
+   *         match t with
+   *         | R t ->
+   *            begin match RE.footprint t with
+   *            | None -> false
+   *            | Some (loc,size) -> loc = loc_sym 
+   *            end
+   *         | _ -> false
+   *       ) env
+   *   in
+   *   match filtered with
+   *   | [] -> return None
+   *   | [r] -> return (Some r)
+   *   | _ -> fail loc (Unreachable !^"same location owned multiple times") *)
 
 
   let get_all_constraints env = 
     SymMap.fold (fun _ b acc -> match b with C c -> c :: acc | _ -> acc)
       env.local.vars []
 
-  let get_constraints_about env sym =
-    SymMap.fold (fun _ b acc -> 
-        match b with
-        | C c -> if SymSet.mem sym (LC.syms_in c) then c :: acc else acc
-        | _ -> acc
-      ) 
-      env.local.vars []
+  (* let get_constraints_about env sym =
+   *   SymMap.fold (fun _ b acc -> 
+   *       match b with
+   *       | C c -> if SymSet.mem sym (LC.syms_in c) then c :: acc else acc
+   *       | _ -> acc
+   *     ) 
+   *     env.local.vars [] *)
 
   (* let is_struct_open env struct_loc_sym = 
    *   SymMap.fold (fun r t acc -> 

@@ -5,8 +5,8 @@ open PPrint
 open Pp_tools
 module Loc=Locations
 
-
 module SymSet = Set.Make(Sym)
+
 
 type t =
   | Num of num
@@ -32,14 +32,18 @@ type t =
   | Or of t * t
   | Not of t
 
-  | Tuple of t * t list
+  | Tuple of t list
   | Nth of num * t (* of tuple *)
 
-  | List of t * t list
+  | Struct of (Id.t * t) list
+  | Field of t * Id.t
+
+  | List of t list * BaseTypes.t
   | Head of t
   | Tail of t
 
   | S of Sym.t * BaseTypes.t
+  | StructDefField of string * BaseTypes.t
 
 let (%+) t1 t2 = Add (t1,t2)
 let (%-) t1 t2 = Sub (t1,t2)
@@ -57,41 +61,56 @@ let (%>=) t1 t2 = GE (t1, t2)
 let (%&) t1 t2 = And (t1, t2)
 let (%|) t1 t2 = Or (t1, t2)
 
-let rec pp = function
-  | Num i -> pp_num i
-  | Bool b -> !^ (if b then "true" else "false")
+let pp it : PPrint.document = 
 
-  | Add (it1,it2) -> parens (pp it1 ^^^ plus ^^^ pp it2)
-  | Sub (it1,it2) -> parens (pp it1 ^^^ minus ^^^ pp it2)
-  | Mul (it1,it2) -> parens (pp it1 ^^^ star ^^^ pp it2)
-  | Div (it1,it2) -> parens (pp it1 ^^^ slash ^^^ pp it2)
-  | Exp (it1,it2) -> parens (pp it1 ^^^ caret ^^^ pp it2)
-  | Rem_t (it1,it2) -> parens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
-  | Rem_f (it1,it2) -> parens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
+  let rec aux atomic it = 
+    let mparens pped = if atomic then parens pped else pped in
+    let pp = aux true in
+    match it with
+    | Num i -> pp_num i
+    | Bool true -> !^"true"
+    | Bool false -> !^"false"
 
-  | EQ (o1,o2) -> parens (pp o1 ^^^ equals ^^^ pp o2)
-  | NE (o1,o2) -> parens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
-  | LT (o1,o2) -> parens (pp o1 ^^^ langle ^^^ pp o2)
-  | GT (o1,o2) -> parens (pp o1 ^^^ rangle ^^^ pp o2)
-  | LE (o1,o2) -> parens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
-  | GE (o1,o2) -> parens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
+    | Add (it1,it2) -> mparens (pp it1 ^^^ plus ^^^ pp it2)
+    | Sub (it1,it2) -> mparens (pp it1 ^^^ minus ^^^ pp it2)
+    | Mul (it1,it2) -> mparens (pp it1 ^^^ star ^^^ pp it2)
+    | Div (it1,it2) -> mparens (pp it1 ^^^ slash ^^^ pp it2)
+    | Exp (it1,it2) -> mparens (pp it1 ^^^ caret ^^^ pp it2)
+    | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
+    | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
 
-  | Null o1 -> parens (!^ "null" ^^^ pp o1)
-  | And (o1,o2) -> parens (pp o1 ^^^ ampersand ^^^ pp o2)
-  | Or (o1,o2) -> parens (pp o1 ^^^ bar ^^^ pp o2)
-  | Not (o1) -> parens (!^ "not" ^^^ pp o1)
+    | EQ (o1,o2) -> mparens (pp o1 ^^^ equals ^^^ pp o2)
+    | NE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
+    | LT (o1,o2) -> mparens (pp o1 ^^^ langle ^^^ pp o2)
+    | GT (o1,o2) -> mparens (pp o1 ^^^ rangle ^^^ pp o2)
+    | LE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
+    | GE (o1,o2) -> mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
 
-  | Tuple (it,its) -> parens (!^ "tuple" ^^^ separate_map space pp (it :: its))
-  | Nth (n,it2) -> parens (!^"nth" ^^^ pp_num n ^^^ pp it2)
-  | List (it, its) -> parens (!^ "list" ^^^ separate_map space pp (it :: its))
-  | Head (o1) -> parens (!^ "hd" ^^^ pp o1)
-  | Tail (o1) -> parens (!^ "tl" ^^^ pp o1)
+    | Null o1 -> mparens (!^"null" ^^^ pp o1)
+    | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
+    | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
+    | Not (o1) -> mparens (!^"not" ^^^ pp o1)
 
-  | S (sym,bt) -> parens (typ (Sym.pp sym) (BaseTypes.pp bt))
+    | Nth (n,it2) -> mparens (!^"nth" ^^^ pp_num n ^^^ pp it2)
+    | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
+    | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
+
+    | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
+    | List (its, bt) -> 
+       brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp bt
+    | Struct fields -> 
+       let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
+       braces (separate_map semi pp_field fields)
+    | Field (t, s) ->
+       pp t ^^ dot ^^ Id.pp s
+
+    | S (sym,bt) -> mparens (typ (Sym.pp sym) (BaseTypes.pp bt))
+    | StructDefField (id,bt) -> mparens (typ (!^id) (BaseTypes.pp bt))
+  in
+  aux true it
 
 
-
-let rec syms_in it : SymSet.t = 
+let rec vars_in it : SymSet.t = 
   match it with
   | Num _  
   | Bool _ -> 
@@ -111,56 +130,124 @@ let rec syms_in it : SymSet.t =
   | GE (it, it') 
   | And (it, it')
   | Or (it, it')  ->
-     SymSet.union (syms_in it) (syms_in it')
+     SymSet.union (vars_in it) (vars_in it')
   | Nth (_, it)
   | Null it
   | Not it 
   | Head it
   | Tail it -> 
-     syms_in it
-  | Tuple (it, its)
-  | List (it, its) ->
-     SymSet.union (syms_in it) (syms_in_list its)
-  | S (symbol,_) -> SymSet.singleton symbol
+     vars_in it
+  | Tuple its -> SymSet.union (vars_in it) (vars_in_list its)
+  | Field (it,s) -> SymSet.union (vars_in it) (vars_in it)
+  | Struct fields -> 
+     List.fold_left (fun acc (f,v) -> SymSet.union acc (vars_in v))
+       SymSet.empty fields
+  | List (its,bt) ->
+     SymSet.union (BaseTypes.vars_in bt) (vars_in_list its)
+  | S (symbol,bt) -> SymSet.add symbol (BaseTypes.vars_in bt)
+  | StructDefField (_,bt) -> BaseTypes.vars_in bt
 
-and syms_in_list l = 
-  List.fold_left (fun acc sym -> SymSet.union acc (syms_in sym))
+and vars_in_list l = 
+  List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
     SymSet.empty l
 
 
-let rec subst (sym : Sym.t) (with_it : Sym.t) it : t = 
+let rec subst_var (sym : Sym.t) (with_it : Sym.t) it : t = 
   match it with
   | Num _ -> it
   | Bool _ -> it
-  | Add (it, it') -> Add (subst sym with_it it, subst sym with_it it')
-  | Sub (it, it') -> Sub (subst sym with_it it, subst sym with_it it')
-  | Mul (it, it') -> Mul (subst sym with_it it, subst sym with_it it')
-  | Div (it, it') -> Div (subst sym with_it it, subst sym with_it it')
-  | Exp (it, it') -> Exp (subst sym with_it it, subst sym with_it it')
-  | Rem_t (it, it') -> Rem_t (subst sym with_it it, subst sym with_it it')
-  | Rem_f (it, it') -> Rem_f (subst sym with_it it, subst sym with_it it')
-  | EQ (it, it') -> EQ (subst sym with_it it, subst sym with_it it')
-  | NE (it, it') -> NE (subst sym with_it it, subst sym with_it it')
-  | LT (it, it') -> LT (subst sym with_it it, subst sym with_it it')
-  | GT (it, it') -> GT (subst sym with_it it, subst sym with_it it')
-  | LE (it, it') -> LE (subst sym with_it it, subst sym with_it it')
-  | GE (it, it') -> GE (subst sym with_it it, subst sym with_it it')
-  | Null it -> Null (subst sym with_it it)
-  | And (it, it') -> And (subst sym with_it it, subst sym with_it it')
-  | Or (it, it') -> Or (subst sym with_it it, subst sym with_it it')
-  | Not it -> Not (subst sym with_it it)
-  | Tuple (it, its) ->
-     Tuple (subst sym with_it it, map (fun it -> subst sym with_it it) its)
+  | Add (it, it') -> Add (subst_var sym with_it it, subst_var sym with_it it')
+  | Sub (it, it') -> Sub (subst_var sym with_it it, subst_var sym with_it it')
+  | Mul (it, it') -> Mul (subst_var sym with_it it, subst_var sym with_it it')
+  | Div (it, it') -> Div (subst_var sym with_it it, subst_var sym with_it it')
+  | Exp (it, it') -> Exp (subst_var sym with_it it, subst_var sym with_it it')
+  | Rem_t (it, it') -> Rem_t (subst_var sym with_it it, subst_var sym with_it it')
+  | Rem_f (it, it') -> Rem_f (subst_var sym with_it it, subst_var sym with_it it')
+  | EQ (it, it') -> EQ (subst_var sym with_it it, subst_var sym with_it it')
+  | NE (it, it') -> NE (subst_var sym with_it it, subst_var sym with_it it')
+  | LT (it, it') -> LT (subst_var sym with_it it, subst_var sym with_it it')
+  | GT (it, it') -> GT (subst_var sym with_it it, subst_var sym with_it it')
+  | LE (it, it') -> LE (subst_var sym with_it it, subst_var sym with_it it')
+  | GE (it, it') -> GE (subst_var sym with_it it, subst_var sym with_it it')
+  | Null it -> Null (subst_var sym with_it it)
+  | And (it, it') -> And (subst_var sym with_it it, subst_var sym with_it it')
+  | Or (it, it') -> Or (subst_var sym with_it it, subst_var sym with_it it')
+  | Not it -> Not (subst_var sym with_it it)
+  | Tuple its ->
+     Tuple (map (fun it -> subst_var sym with_it it) its)
   | Nth (n, it') ->
-     Nth (n, subst sym with_it it')
-  | List (it, its) -> 
-     List (subst sym with_it it, map (fun it -> subst sym with_it it) its)
+     Nth (n, subst_var sym with_it it')
+  | List (its,bt) -> 
+     List (map (fun it -> subst_var sym with_it it) its,
+           BaseTypes.subst_var sym with_it bt)
   | Head it ->
-     Head (subst sym with_it it)
+     Head (subst_var sym with_it it)
   | Tail it ->
-     Tail (subst sym with_it it)
-  | S (symbol,bt) -> S (Sym.subst sym with_it symbol, bt)
+     Tail (subst_var sym with_it it)
+  | Struct fields ->
+     Struct (map (fun (f,v) -> (f, subst_var sym with_it v)) fields)
+  | Field (t,f) ->
+     Field (subst_var sym with_it t, f)
+  | S (symbol,bt) -> S (Sym.subst sym with_it symbol, 
+                        BaseTypes.subst_var sym with_it bt)
+  | StructDefField (id,bt) -> 
+     StructDefField (id, BaseTypes.subst_var sym with_it bt)
 
+
+let rec concretise_field (id : string) (with_it : Sym.t) it : t = 
+  match it with
+  | Num _ -> it
+  | Bool _ -> it
+  | Add (it, it') -> Add (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Sub (it, it') -> Sub (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Mul (it, it') -> Mul (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Div (it, it') -> Div (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Exp (it, it') -> Exp (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Rem_t (it, it') -> Rem_t (concretise_field id with_it it, 
+                              concretise_field id with_it it')
+  | Rem_f (it, it') -> Rem_f (concretise_field id with_it it, 
+                              concretise_field id with_it it')
+  | EQ (it, it') -> EQ (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | NE (it, it') -> NE (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | LT (it, it') -> LT (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | GT (it, it') -> GT (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | LE (it, it') -> LE (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | GE (it, it') -> GE (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | Null it -> Null (concretise_field id with_it it)
+  | And (it, it') -> And (concretise_field id with_it it, 
+                          concretise_field id with_it it')
+  | Or (it, it') -> Or (concretise_field id with_it it, 
+                        concretise_field id with_it it')
+  | Not it -> Not (concretise_field id with_it it)
+  | Tuple its ->
+     Tuple (map (fun it -> concretise_field id with_it it) its)
+  | Nth (n, it') ->
+     Nth (n, concretise_field id with_it it')
+  | List (its,bt) -> 
+     List (map (fun it -> concretise_field id with_it it) its, bt)
+  | Head it ->
+     Head (concretise_field id with_it it)
+  | Tail it ->
+     Tail (concretise_field id with_it it)
+  | Struct fields ->
+     Struct (map (fun (f,v) -> (f,concretise_field id with_it v)) fields)
+  | Field (t,f) ->
+     Field (concretise_field id with_it t, f)
+  | S (s,bt) -> S (s, bt)
+  | StructDefField (id',bt) -> 
+     if id = id' then S (with_it, bt) else StructDefField (id',bt)
+     
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
   match it, it' with
@@ -199,12 +286,16 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
     -> 
      unify it it' res
 
-  | Tuple (it,its), Tuple (it',its')
-  | List (it,its), List (it',its') -> 
+  | Tuple its, Tuple its' ->
      unify_list (it::its) (it'::its') res
+  | List (its,bt), List (its',bt') when BaseTypes.type_equal bt bt' ->
+     unify_list its its' res
 
   | S (sym, bt), S (sym',bt') when BaseTypes.type_equal bt bt' ->
      Sym.unify sym sym' res 
+  | StructDefField (id, bt), StructDefField (id',bt') 
+       when id = id' && BaseTypes.type_equal bt bt' ->
+     return res
 
   | _, _ ->
      fail

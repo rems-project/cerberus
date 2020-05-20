@@ -11,13 +11,13 @@ module Global : sig
   val add_struct_decl : 
     t -> 
     Sym.t -> 
-    Types.t ->
+    ((string,VarTypes.t) Binders.t) list ->
     t
 
   val add_struct_ctypes : 
     t -> 
     Sym.t -> 
-    (Sym.t * Ctype.ctype) list ->
+    (string * Ctype.ctype) list ->
     t
 
   val add_fun_decl : 
@@ -42,13 +42,13 @@ module Global : sig
     Loc.t ->
     t -> 
     Sym.t -> 
-    (Types.t, Loc.t * TypeErrors.type_error) Except.m
+    (((string, VarTypes.t) Binders.t) list, Loc.t * TypeErrors.type_error) Except.m
 
   val get_struct_ctype : 
     Loc.t ->
     t -> 
     Sym.t -> 
-    ((Sym.t * Ctype.ctype) list, Loc.t * TypeErrors.type_error) Except.m
+    ((string * Ctype.ctype) list, Loc.t * TypeErrors.type_error) Except.m
 
   val get_fun_decl : 
     Loc.t ->
@@ -110,7 +110,7 @@ module Local : sig
 
   val add_var : 
     t ->
-    VarTypes.t Binders.t ->
+    (Sym.t,VarTypes.t) Binders.t ->
     t
 
   val remove_var :
@@ -132,7 +132,7 @@ module Env : sig
 
   val add_var : 
     t ->
-    VarTypes.t Binders.t ->
+    (Sym.t,VarTypes.t) Binders.t ->
     t
 
   val remove_var :
@@ -181,11 +181,11 @@ module Env : sig
     Sym.t list
 
 
-  val resources_for_loc :
-    Loc.t ->
-    t ->
-    Sym.t ->
-    (Sym.t option, Loc.t * TypeErrors.type_error) Except.m
+  (* val resources_for_loc :
+   *   Loc.t ->
+   *   t ->
+   *   Sym.t ->
+   *   (Sym.t option, Loc.t * TypeErrors.type_error) Except.m *)
 
 
   val get_all_constraints :
@@ -193,10 +193,10 @@ module Env : sig
     LogicalConstraints.t list
 
 
-  val get_constraints_about :
-    t ->
-    Sym.t ->
-    LogicalConstraints.t list
+  (* val get_constraints_about :
+   *   t ->
+   *   Sym.t ->
+   *   LogicalConstraints.t list *)
 
   (* val is_struct_open :
    *   t ->

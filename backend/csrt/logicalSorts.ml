@@ -20,7 +20,7 @@ let type_equal t1 t2 = t1 = t2
 let types_equal ts1 ts2 = 
   for_all (fun (t1,t2) -> type_equal t1 t2) (combine ts1 ts2)
 
-let subst sym with_it ls =
+let subst_var sym with_it ls =
   match ls with
-  | Base bt -> Base (BaseTypes.subst sym with_it bt)
+  | Base bt -> Base (BaseTypes.subst_var sym with_it bt)
 
