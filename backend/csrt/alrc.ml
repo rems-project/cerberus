@@ -4,10 +4,10 @@ open VarTypes
 module Types = struct
 
   type alrc = {
-      a : (BaseTypes.t Binders.t) list;
-      l : (LogicalSorts.t Binders.t) list;
-      r : (Resources.t Binders.t) list;
-      c : (LogicalConstraints.t Binders.t) list
+      a : ((Sym.t, BaseTypes.t) Binders.t) list;
+      l : ((Sym.t, LogicalSorts.t) Binders.t) list;
+      r : ((Sym.t, Resources.t) Binders.t) list;
+      c : ((Sym.t, LogicalConstraints.t) Binders.t) list
     }
 
 
@@ -15,7 +15,7 @@ module Types = struct
 
 
   let from_type (t : Types.t) = 
-    List.fold_left (fun (alrc : alrc) (b : VarTypes.t Binders.t) ->
+    List.fold_left (fun (alrc : alrc) (b : (Sym.t, VarTypes.t) Binders.t) ->
         match b.bound with
         | A bt -> {alrc with a = alrc.a@[{name = b.name; bound = bt}]}
         | L ls -> {alrc with l = alrc.l@[{name = b.name; bound = ls}]}
@@ -31,11 +31,11 @@ module Types = struct
 
 
   let pp alrc = Types.pp (to_type alrc)
-  let subst sym with_it alrc = 
-    { a = List.map (Binders.subst BaseTypes.subst sym with_it) alrc.a;
-      l = List.map (Binders.subst LogicalSorts.subst sym with_it) alrc.l;
-      r = List.map (Binders.subst Resources.subst sym with_it) alrc.r;
-      c = List.map (Binders.subst LogicalConstraints.subst sym with_it) alrc.c; }  
+  let subst_var sym with_it alrc = 
+    { a = List.map (Binders.subst Sym.subst BaseTypes.subst_var sym with_it) alrc.a;
+      l = List.map (Binders.subst Sym.subst LogicalSorts.subst_var sym with_it) alrc.l;
+      r = List.map (Binders.subst Sym.subst Resources.subst_var sym with_it) alrc.r;
+      c = List.map (Binders.subst Sym.subst LogicalConstraints.subst_var sym with_it) alrc.c; }  
 
 
 end
@@ -47,9 +47,9 @@ module FunctionTypes = struct
 
   type t = {arguments2 : alrc; return2 : alrc}
 
-  let subst sym with_it ft = 
-    { arguments2 = subst sym with_it ft.arguments2; 
-      return2 = subst sym with_it ft.return2}
+  let subst_var sym with_it ft = 
+    { arguments2 = subst_var sym with_it ft.arguments2; 
+      return2 = subst_var sym with_it ft.return2}
 
   let pp ft = 
     FunctionTypes.pp 

@@ -2,15 +2,10 @@ type t = LC of IndexTerms.t
 
 let pp (LC c) = IndexTerms.pp c
 
-let subst sym with_it (LC c) = 
-  LC (IndexTerms.subst sym with_it c)
+let subst_var sym with_it (LC c) = 
+  LC (IndexTerms.subst_var sym with_it c)
 
-let subst_named sym with_it (name, LC c) = 
-  (Sym.subst name sym with_it, LC (IndexTerms.subst sym with_it c))
+let concretise_field id with_it (LC c) = 
+  LC (IndexTerms.concretise_field id with_it c)
 
-let subst_nameds sym with_it = List.map (subst_named sym with_it)
-
-
-let syms_in (LC c) = IndexTerms.syms_in c
-
-
+let vars_in (LC c) = IndexTerms.vars_in c
