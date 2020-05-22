@@ -62,9 +62,8 @@ let add_Rvars env vars = List.fold_left add_Rvar env vars
 let add_Cvars env vars = List.fold_left add_Cvar env vars
 
 let get_ALvar loc env var = 
-  tryM (get_Avar loc env var)
-    (get_Lvar loc env var >>= fun (Base bt, env) -> 
-     return (bt, env))
+  tryM (get_Lvar loc env var >>= fun (Base bt, env) -> return (bt, env))
+    (get_Avar loc env var)
 
 
 let get_Avars loc env vars = 
@@ -141,16 +140,18 @@ open UU
 
 
 
-let vars_equal_to loc env sym bt = 
+let vars_equal_to loc env sym ls = 
   let similar = 
     filter_vars (fun sym' t -> 
       match t with 
-      | A bt' | L (Base bt') -> sym <> sym' && BT.type_equal bt bt'
+      | A bt' -> sym <> sym' && LS.type_equal ls (LS.Base bt')
+      | L ls' -> sym <> sym' && LS.type_equal ls ls'
       | _ -> false
     ) env 
   in
   filter_mapM (fun sym' -> 
-      Solver.constraint_holds loc env (LC (S (sym,bt) %= S (sym',bt))) >>= fun holds ->
+      let c = (LC (S (sym,ls) %= S (sym',ls))) in
+      Solver.constraint_holds loc env c >>= fun holds ->
       return (if holds then Some sym' else None)
     ) similar
 
@@ -199,7 +200,7 @@ let integerType_constraint loc about it =
   return (LC ((Num min %<= about) %& (about %<= Num max)))
 
 let integerType loc name it =
-  integerType_constraint loc (S (name, Int)) it >>= fun constr ->
+  integerType_constraint loc (S (name, LS.Base Int)) it >>= fun constr ->
   return ((name,Int), [], [], [makeUC constr])
 
 let floatingType loc =
@@ -217,7 +218,7 @@ let rec ctype_aux owned packed loc name (Ctype.Ctype (annots, ct_)) =
        ctype_aux owned packed loc (fresh ()) ct >>= fun ((pointee_name,bt),l,r,c) ->
        size_of_ctype loc ct >>= fun size ->
        let r = makeUR (Points {pointer = name; pointee = Some pointee_name; 
-                               typ = ct; size}) :: r in
+                               offset = zero; typ = ct; size}) :: r in
        let l = makeL pointee_name (Base bt) :: l in
        return ((name,Loc),l,r,c)
      else
@@ -280,7 +281,7 @@ let make_Aargs_bind_lrc loc env rt =
 
 let resources_associated_with_var_or_equals loc env owner =
   get_ALvar loc env owner >>= fun (bt,_env) ->
-  vars_equal_to loc env owner bt >>= fun equal_to_owner ->
+  vars_equal_to loc env owner (Base bt) >>= fun equal_to_owner ->
   debug_print 3 (blank 3 ^^ !^"equal to" ^^^ Sym.pp owner ^^ colon ^^^
                    pp_list None Sym.pp equal_to_owner) >>= fun () ->
   let owneds = concat_map (fun o -> map (fun r -> (o,r)) 
@@ -309,8 +310,8 @@ let pp_unis unis =
   let pp_entry (sym, {spec; resolved}) =
     match resolved with
     | Some res -> 
-       (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
-    | None -> (typ (Sym.pp sym) (LS.pp spec)) ^^^ !^"unresolved"
+       (typ (Sym.pp sym) (LS.pp true spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
+    | None -> (typ (Sym.pp sym) (LS.pp true spec)) ^^^ !^"unresolved"
   in
   pp_list None pp_entry (SymMap.bindings unis)
 
@@ -327,8 +328,8 @@ let match_As errf loc env (args : aargs) (specs : ((Sym.t,BT.t) Binders.t) list)
   debug_print 2 (action "matching computational variables") >>= fun () ->
 
   let rec aux env acc_substs args specs =
-    debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp BT.pp (List.map fst args))) >>= fun () ->
-    debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp BT.pp specs)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp (BT.pp false) (List.map fst args))) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp (BT.pp false) specs)) >>= fun () ->
     match args, specs with
     | [], [] -> 
        debug_print 2 (blank 3 ^^ !^"done.") >>= fun () ->
@@ -363,8 +364,8 @@ let record_lvars_for_unification (specs : ((Sym.t,LS.t) Binders.t) list) =
 
 let match_Ls errf loc env (args : ((Sym.t,LS.t) Binders.t) list) (specs : ((Sym.t,LS.t) Binders.t) list) =
   debug_print 2 (action "matching logical variables") >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp LS.pp args)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp LS.pp specs)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp (LS.pp false) args)) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp (LS.pp false) specs)) >>= fun () ->
   let rec aux env acc_substs args specs = 
     match args, specs with
     | [], [] -> 
@@ -393,7 +394,7 @@ let ensure_unis_resolved loc env unis =
 let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
   debug_print 2 (action "matching resources") >>= fun () ->
   let rec aux env acc_substs unis specs = 
-    debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp RE.pp specs)) >>= fun () ->
+    debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp (RE.pp false) specs)) >>= fun () ->
     debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
     match specs with
     | [] -> 
@@ -409,7 +410,7 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
          | (o,r) :: owned_resources ->
             get_Rvar loc env r >>= fun (resource',env) ->
             let resource' = RE.subst_var o owner resource' in
-            debug_print 3 (action ("trying resource" ^ plain (RE.pp resource'))) >>= fun () ->
+            debug_print 3 (action ("trying resource" ^ plain (RE.pp false resource'))) >>= fun () ->
             match RE.unify spec.bound resource' unis with
             | None -> try_resources owned_resources
             | Some unis ->
@@ -430,50 +431,72 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
 
 
 
-
-
 (* TODO: remove all the Ctype auxiliary things *)
 let rec unpack_struct loc genv (S_Id struct_typ) = 
   debug_print 2 (blank 3 ^^ (!^"unpacking struct")) >>= fun () ->
-  Global.get_struct_decl loc genv struct_typ >>= fun fields ->
-  Global.get_struct_ctype loc genv struct_typ >>= fun ctypes ->
-  let rec aux acc_bindings acc_name_mapping (fields : ((string,VarTypes.t) Binders.t) list) =
+  Global.get_struct_decl loc genv struct_typ >>= fun decl ->
+  let rec aux acc_bindings acc_fields (fields : ((string,VarTypes.t) Binders.t) list) =
     match fields with
     | [] -> 
-       return (acc_bindings, acc_name_mapping)
+       return (acc_bindings, acc_fields)
     | {name; bound = A (Struct sym)} :: fields ->
        unpack_struct loc genv sym >>= fun ((newsym,bt),newbindings) ->
-       assoc_err loc name ctypes "struct field ctype not found" >>= fun ctype ->
-       let acc_name_mapping = acc_name_mapping @ [(name, (ctype, Some newsym))] in
+       assoc_err loc name decl.ctypes "struct field ctype not found" >>= fun ctype ->
+       assoc_err loc name decl.offsets "struct field ctype not found" >>= fun offset ->
+       let acc_fields = acc_fields @ [(name, (offset, ctype, Some newsym))] in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = A bt}] in
        let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
-       aux acc_bindings acc_name_mapping fields
+       aux acc_bindings acc_fields fields
     | {name; bound = L (Base (Struct sym))} :: fields ->
        unpack_struct loc genv sym >>= fun ((newsym,bt),newbindings) ->
-       assoc_err loc name ctypes "struct field ctype not found" >>= fun ctype ->
-       let acc_name_mapping = acc_name_mapping @ [(name, (ctype, Some newsym))] in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = L (Base bt)}] in
        let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
-       aux acc_bindings acc_name_mapping fields
+       aux acc_bindings acc_fields fields
     | {name;bound} :: fields ->
        let newsym = fresh () in
        begin match bound with 
        | A bt -> 
-          assoc_err loc name ctypes "struct field ctype not found" >>= fun ctype ->
+          assoc_err loc name decl.ctypes "struct field ctype not found" >>= fun ctype ->
+          assoc_err loc name decl.offsets "struct field ctype not found" >>= fun offset ->
           let acc_bindings = acc_bindings @ [{name=newsym;bound = A bt}] in
-          let acc_name_mapping = acc_name_mapping @ [(name, (ctype, Some newsym))] in
+          let acc_fields = acc_fields @ [(name, (offset, ctype, Some newsym))] in
           let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
-          aux acc_bindings acc_name_mapping fields
+          aux acc_bindings acc_fields fields
        | _ -> 
           let acc_bindings = acc_bindings @ [{name=newsym;bound}] in
           let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
-          aux acc_bindings acc_name_mapping fields
+          aux acc_bindings acc_fields fields
        end
   in
-  aux [] [] fields >>= fun (bindings, name_mapping) ->
-  let s = {typ = S_Id struct_typ; fields = name_mapping} in
-  return ((fresh (),OpenStruct s),bindings)
+  aux [] [] decl.typ >>= fun (bindings, fields) ->
+  size_of_struct_type loc struct_typ >>= fun size ->
+  let s = {typ = S_Id struct_typ; size; fields} in
+  return ((fresh (), OpenStruct s),bindings)
 
+
+(* let rec unpack_structs loc genv bindings = 
+ *   let rec aux lvars acc_bindings = function
+ *     | [] -> return acc_bindings
+ *     | b :: bindings ->
+ *        match b with
+ *        | {name; bound = L (Base (Struct typ))} ->
+ *           aux (SymMap.add name typ lvars) acc_bindings bindings
+ *        | ({name; bound = R (Points {pointee = Some v; _})} as b) ->
+ *           begin match SymMap.find_opt v lvars with
+ *           | Some typ -> 
+ *              unpack_struct loc genv typ >>= fun (openstruct, newbindings) ->
+ *              (\* TODO: generate constraints using substs and v *\)
+ *              aux 
+ *                lvars 
+ *                (acc_bindings @ [makeR name (OpenStruct openstruct)])
+ *                bindings
+ *           | None ->
+ *              aux lvars (acc_bindings @ [b]) bindings
+ *           end
+ *        | b ->
+ *           aux lvars (acc_bindings @ [b]) bindings
+ *   in
+ *   aux SymMap.empty [] bindings *)
 
 let rec unpack_structs loc genv bindings = 
   match bindings with
@@ -494,11 +517,12 @@ let rec unpack_structs loc genv bindings =
 
 
 
+
 (* use Neel's resource map and use pack_struct to package the aargs
    part of a struct and *as many resources* of the struct definition
    as possible *)
 let rec pack_struct loc env (S_Id struct_type) aargs = 
-  get_struct_decl loc env.global struct_type >>= fun spec ->
+  get_struct_decl loc env.global struct_type >>= fun decl ->
   let rec aux = function
     | [] -> []
     | {name;bound} :: spec ->
@@ -506,11 +530,11 @@ let rec pack_struct loc env (S_Id struct_type) aargs =
        let spec = Binders.subst_list Id.subst VarTypes.concretise_field name newsym spec in
        {name=newsym;bound} :: aux spec
   in
-  subtype loc env aargs (aux spec) "packing struct" >>= fun env ->
+  subtype loc env aargs (aux decl.typ) "packing struct" >>= fun env ->
   return ((fresh (), Struct (S_Id struct_type)), env)
 
 and pack_open_struct loc env open_struct =
-  mapM (fun (fid,(_,marg)) ->
+  mapM (fun (fid,(_,_,marg)) ->
       match marg with
       | None -> fail loc (Generic_error (!^"Struct cannot be packed:" ^^^ 
                             !^fid ^^^ !^"uninitialised"))
@@ -560,7 +584,7 @@ and subtype loc_ret env (args : aargs) (rtyp : Types.t) ppdescr =
   let rtyp = Alrc.Types.from_type rtyp in
   debug_print 1 (action ppdescr) >>= fun () ->
   debug_print 2 (blank 3 ^^ item "rtyp" (Alrc.Types.pp rtyp)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "returned" (pps Sym.pp BT.pp (List.map fst args))) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "returned" (pps Sym.pp (BT.pp false) (List.map fst args))) >>= fun () ->
   debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 2 PPrint.empty >>= fun () ->
 
@@ -580,8 +604,8 @@ and subtype loc_ret env (args : aargs) (rtyp : Types.t) ppdescr =
   ensure_unis_resolved loc_ret env unis >>= fun resolved ->
 
   fold_leftM (fun (ts,env) (_,(_,sym)) -> 
-      get_ALvar loc_ret env sym >>= fun (t,env) ->
-      return (ts@[{name=sym; bound = LS.Base t}], env)
+      get_ALvar loc_ret env sym >>= fun (bt,env) ->
+      return (ts@[{name=sym; bound = LS.Base bt}], env)
     ) ([],env) resolved >>= fun (largs,env) ->
   pack_structs_largs loc_ret env largs >>= fun (largs,env) ->
   let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
@@ -601,7 +625,7 @@ let call_typ loc_call env (args : aargs) (ftyp : FunctionTypes.t) =
   let ftyp = Alrc.FunctionTypes.from_function_type ftyp in
   debug_print 1 (action "function call type") >>= fun () ->
   debug_print 2 (blank 3 ^^ item "ftyp" (Alrc.FunctionTypes.pp ftyp)) >>= fun () ->
-  debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp BT.pp (List.map fst args))) >>= fun () ->
+  debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp (BT.pp false) (List.map fst args))) >>= fun () ->
   debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
   debug_print 2 PPrint.empty >>= fun () ->
 
@@ -621,8 +645,8 @@ let call_typ loc_call env (args : aargs) (ftyp : FunctionTypes.t) =
   ensure_unis_resolved loc_call env unis >>= fun resolved ->
 
   fold_leftM (fun (ts,env) (_,(_,sym)) -> 
-      get_ALvar loc_call env sym >>= fun (t,env) ->
-      return (ts@[{name=sym; bound = LS.Base t}], env)
+      get_ALvar loc_call env sym >>= fun (bt,env) ->
+      return (ts@[{name=sym; bound = LS.Base bt}], env)
     ) ([],env) resolved >>= fun (largs,env) ->
   pack_structs_largs loc_call env largs >>= fun (largs,env) ->
   let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
@@ -650,7 +674,7 @@ let infer_ctor loc ctor (aargs : aargs) =
      let bt = Tuple bts in
      let constrs = 
        mapi (fun i (b,_) -> 
-           makeUC (LC (Nth (of_int i, S (name,bt) %= S (b.name,b.bound)))))
+           makeUC (LC (Nth (of_int i, S (name,Base bt) %= S (b.name, Base b.bound)))))
          aargs
      in
      return ([makeA name bt]@constrs)
@@ -666,7 +690,7 @@ let infer_ctor loc ctor (aargs : aargs) =
      let name = fresh () in
      begin match aargs with
      | [({name = sym;bound = bt},_)] -> 
-        return [makeA name bt; makeUC (LC (S (sym,bt) %= S (name,bt)))]
+        return [makeA name bt; makeUC (LC (S (sym,Base bt) %= S (name,Base bt)))]
      | args ->
         let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
                     (List.length args) in
@@ -772,12 +796,12 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 let infer_ptrval name loc env ptrval = 
   Impl_mem.case_ptrval ptrval
     ( fun _cbt -> 
-      let typ = [makeA name Loc; makeUC (LC (Null (S (name, Loc))))] in
+      let typ = [makeA name Loc; makeUC (LC (Null (S (name, Base Loc))))] in
       return typ )
     ( fun sym -> 
       return [makeA name (FunctionPointer sym)] )
     ( fun _prov loc ->
-      let typ = [makeA name Loc; makeUC (LC (S (name, Loc) %= Num loc))] in
+      let typ = [makeA name Loc; makeUC (LC (S (name, Base Loc) %= Num loc))] in
       return typ )
     ( fun () -> fail loc (Unreachable !^"unspecified pointer value") )
 
@@ -793,8 +817,8 @@ let rec infer_mem_value loc env mem =
     ( fun it iv -> 
       let name = fresh () in
       integer_value_to_num loc iv >>= fun v ->
-      let val_constr = LC (S (name, Int) %= Num v) in
-      integerType_constraint loc (S (name,Int)) it >>= fun type_constr ->
+      let val_constr = LC (S (name, Base Int) %= Num v) in
+      integerType_constraint loc (S (name,Base Int)) it >>= fun type_constr ->
       Solver.constraint_holds_given_constraints loc env [val_constr] type_constr >>= function
       | true -> return ([makeA name Int; makeUC val_constr], env)
       | false -> fail loc (Generic_error !^"Integer value does not satisfy range constraint")
@@ -835,7 +859,7 @@ let infer_object_value loc env ov =
   | M_OVinteger iv ->
      integer_value_to_num loc iv >>= fun i ->
      let t = makeA name Int in
-     let constr = makeUC (LC (S (name, Int) %= Num i)) in
+     let constr = makeUC (LC (S (name, Base Int) %= Num i)) in
      return ([t; constr], env)
   | M_OVpointer p -> 
      infer_ptrval name loc env p >>= fun t ->
@@ -861,10 +885,10 @@ let infer_value loc env v : (Types.t * Env.t,'e) m =
      return ([makeUA Unit], env)
   | M_Vtrue ->
      let name = fresh () in
-     return ([makeA name Bool; makeUC (LC (S (name, Bool)))], env)
+     return ([makeA name Bool; makeUC (LC (S (name, Base Bool)))], env)
   | M_Vfalse -> 
      let name = fresh () in
-     return ([makeA name Bool; makeUC (LC (Not (S (name, Bool))))], env)
+     return ([makeA name Bool; makeUC (LC (Not (S (name, Base Bool))))], env)
   | M_Vlist (cbt, asyms) ->
      bt_of_core_base_type loc cbt >>= fun bt ->
      make_Aargs loc env asyms >>= fun (aargs, env) ->
@@ -877,7 +901,7 @@ let infer_value loc env v : (Types.t * Env.t,'e) m =
      let bt = Tuple bts in
      let constrs = 
        mapi (fun i (b, _) -> 
-           makeUC (LC (Nth (of_int i, S (name,bt) %= S (b.name,b.bound)))))
+           makeUC (LC (Nth (of_int i, S (name,Base bt) %= S (b.name,Base b.bound)))))
          aargs
      in
      return ((makeA name bt) :: constrs, env)
@@ -946,7 +970,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
   | M_PEsym sym ->
      let name = fresh () in
      get_Avar loc env sym >>= fun (bt,env) ->
-     let typ = [makeA name bt; makeUC (LC (S (sym, bt) %= S (name, bt)))] in
+     let typ = [makeA name bt; makeUC (LC (S (sym, Base bt) %= S (name, Base bt)))] in
      return (Normal typ, env)
   | M_PEimpl i ->
      get_impl_constant loc env.global i >>= fun t ->
@@ -985,7 +1009,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      get_Avar loc env sym >>= fun (bt,env) ->
      check_base_type loc (Some sym) Bool bt >>= fun () ->
      let ret = fresh () in 
-     let rt = [makeA sym Bool; makeUC (LC (S (ret,Bool) %= Not (S (sym,Bool))))] in
+     let rt = [makeA sym Bool; makeUC (LC (S (ret,Base Bool) %= Not (S (sym,Base Bool))))] in
      return (Normal rt, env)
   | M_PEop (op,asym1,asym2) ->
      let (sym1,loc1) = aunpack loc asym1 in
@@ -995,7 +1019,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
      let (((ebt1,ebt2),rbt),c) = binop_typ op in
      check_base_type loc1 (Some sym1) bt1 ebt1 >>= fun () ->
      let ret = fresh () in
-     let constr = LC ((c (S (sym1,bt1)) (S (sym1,bt2))) %= S (ret,rbt)) in
+     let constr = LC ((c (S (sym1,Base bt1)) (S (sym1,Base bt2))) %= S (ret,Base rbt)) in
      return (Normal [makeA ret rbt; makeUC constr], env)
   | M_PEstruct _ ->
      fail loc (Unsupported !^"todo: PEstruct")
@@ -1048,8 +1072,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun (t1,env) -> 
      check_base_type loc1 (Some sym1) t1 Bool >>= fun () ->
-     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Bool))))) e2 typ >>= fun _env ->
-     check_pexpr loc (add_var env (makeUC (LC (Not (S (sym1,Bool)))))) e3 typ
+     check_pexpr loc (add_var env (makeUC (LC (S (sym1,Base Bool))))) e2 typ >>= fun _env ->
+     check_pexpr loc (add_var env (makeUC (LC (Not (S (sym1,Base Bool)))))) e3 typ
   | M_PEcase (asym, pats_es) ->
      let (esym,eloc) = aunpack loc asym in
      get_Avar eloc env esym >>= fun (bt,env) ->
@@ -1131,8 +1155,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         (* check more things? *)
         points_to loc env sym >>= fun points ->
         let constr = match points with
-          | Some _ -> LC (S (ret_name,Bool)) 
-          | None -> LC (Not (S (ret_name,Bool))) 
+          | Some _ -> LC (S (ret_name,Base Bool)) 
+          | None -> LC (Not (S (ret_name,Base Bool))) 
         in
         let ret = [makeA ret_name Bool; makeUC constr] in
         return (Normal ret, env)
@@ -1156,7 +1180,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
         check_base_type loc (Some sym) Int a_bt >>= fun () ->
         let name = fresh () in
         size_of_ctype loc ct >>= fun size ->
-        let r = (Points {pointer = name; pointee = None; typ = ct; size}) in
+        let r = (Points {pointer = name; offset = zero; 
+                         pointee = None; typ = ct; size}) in
         let rt = [makeA name Loc; makeUR r] in
         return (Normal rt, env)
      | M_CreateReadOnly (sym1, ct, sym2, _prefix) -> 
@@ -1222,7 +1247,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              end >>= fun _ ->
              let newsym = fresh () in
              let env = add_var env (makeL newsym (Base vbt)) in
-             let env = add_var env (makeUC (LC (S (newsym,vbt) %= S (vsym,vbt)))) in
+             let env = add_var env (makeUC (LC (S (newsym,Base vbt) %= S (vsym,Base vbt)))) in
              return (vsym,env)
           | None, _ -> fail ploc (Generic_error !^"cannot dereference uninitialised struct field")
           | Some base, fa :: access ->
@@ -1230,13 +1255,14 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              get_ALvar ploc env base >>= fun (bt,env) ->
              begin match bt with
              | OpenStruct s when BT.type_equal fa.struct_type s.typ ->
-               assoc_err loc fa.field s.fields "check store field access" >>= fun (expected_ct,fvar) ->
+               assoc_err loc fa.field s.fields "check store field access" >>= 
+                 fun (_offset,expected_ct,fvar) ->
                check_access_and_update expected_ct fvar access >>= fun (new_field_sym,env) ->
                let fields = 
-                 map (fun (efield,(typ,value)) -> 
+                 map (fun (efield,(offset,typ,value)) -> 
                      if efield = fa.field 
-                     then (efield,(typ, Some new_field_sym))
-                     else (efield,(typ, None))
+                     then (efield,(offset,typ, Some new_field_sym))
+                     else (efield,(offset,typ, None))
                    ) s.fields
                in
                let newsym = fresh () in
@@ -1292,7 +1318,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                 * | _ -> return ((s,bt),env)
                 * end >>= fun ((s,bt),env) -> *)
                let ret = fresh () in
-               let constr = LC (S (ret, bt) %= (S (s,bt))) in
+               let constr = LC (S (ret, Base bt) %= (S (s,Base bt))) in
                begin 
                  ctype false false loc (fresh ()) field_ct >>= fun t ->
                  subtype loc env [({name=s;bound=bt},ploc)] t 
@@ -1305,7 +1331,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              | OpenStruct s when BT.type_equal fa.struct_type s.typ ->
                 (* debug_print 3 (action "checking field access") >>= fun () ->
                  * debug_print 3 (item "checking field access") >>= fun () -> *)
-               assoc_err loc fa.field s.fields "check load field access" >>= fun (field_ct,fvar) ->
+               assoc_err loc fa.field s.fields "check load field access" >>= fun 
+                 (_offset,field_ct,fvar) ->
                check_access_and_read field_ct fvar access
              | OpenStruct s -> fail loc (Unreachable !^"load: struct type mismatch") 
              | _  ->fail loc (Generic_error !^"cannot access field of non-struct type") 
@@ -1398,8 +1425,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let sym1, loc1 = aunpack loc asym1 in
      get_Avar loc env sym1 >>= fun (t1,env) -> 
      check_base_type loc1 (Some sym1) t1 Bool >>= fun () ->
-     let then_constr = makeUC (LC (S (sym1,Bool))) in
-     let else_constr = makeUC (LC (Not (S (sym1,Bool)))) in
+     let then_constr = makeUC (LC (S (sym1,Base Bool))) in
+     let else_constr = makeUC (LC (Not (S (sym1,Base Bool)))) in
      check_expr loc (add_var env then_constr) e2 typ >>= fun _env ->
      check_expr loc (add_var env else_constr) e3 typ
   | M_Ecase (asym, pats_es) ->
@@ -1588,7 +1615,7 @@ let record_impls genv impls = pmap_foldM record_impl impls genv
 
 
 
-let record_tagDef sym def genv =
+let record_tagDef file sym def genv =
 
   (* like ctype_aux *)
   let rec aux owned packed loc (id : string) (Ctype.Ctype (annots, ct_)) =
@@ -1620,20 +1647,21 @@ let record_tagDef sym def genv =
      fail Loc.unknown (Unsupported !^"todo: union types")
   | Ctype.StructDef (fields, _) ->
 
-     fold_leftM (fun (fields,ctypes) (id, (_attributes, _qualifier, ct)) ->
-       let id = Id.s id in
-       aux false true Loc.unknown id ct >>= fun newfields ->
-       let ctypes = ctypes @ [(id,ct)] in
-       return (fields @ newfields, ctypes)
-     ) ([],[]) fields >>= fun (fields,ctypes) ->
+     fold_leftM (fun (typ,ctypes,offsets) (id, (_attributes, _qualifier, ct)) ->
+       let sid = Id.s id in
+       aux false true Loc.unknown sid ct >>= fun newfields ->
+       let offset_ival = Impl_mem.offsetof_ival file.Mucore.mu_tagDefs sym id in
+       integer_value_to_num Loc.unknown offset_ival >>= fun offset ->
+       return (typ@newfields, ctypes@[(sid,ct)], offsets@[(sid,offset)])
+     ) ([],[],[]) fields >>= fun (typ,ctypes,offsets) ->
 
-     let genv = add_struct_decl genv sym fields in
-     let genv = add_struct_ctypes genv sym ctypes in
+     let decl = {typ;ctypes;offsets} in
+     let genv = add_struct_decl genv sym decl in
      return genv
 
 
-let record_tagDefs genv tagDefs = 
-  pmap_foldM record_tagDef tagDefs genv
+let record_tagDefs file genv tagDefs = 
+  pmap_foldM (record_tagDef file) tagDefs genv
 
 
 
@@ -1654,7 +1682,7 @@ let print_initial_environment genv =
 let check mu_file =
   pp_fun_map_decl mu_file.mu_funinfo;
   let genv = Global.empty in
-  record_tagDefs genv mu_file.mu_tagDefs >>= fun genv ->
+  record_tagDefs mu_file genv mu_file.mu_tagDefs >>= fun genv ->
   record_funinfo genv mu_file.mu_funinfo >>= fun genv ->
   print_initial_environment genv >>= fun () ->
   check_functions genv mu_file.mu_funs

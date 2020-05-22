@@ -1,5 +1,12 @@
 open Cerb_frontend
+
 module Loc = Locations
+
+
+type struct_decl = 
+  {typ : (((string, VarTypes.t) Binders.t) list);
+   ctypes : ((string * Ctype.ctype) list);
+   offsets : (string * Num.t) list}
 
 module Global : sig
 
@@ -11,13 +18,7 @@ module Global : sig
   val add_struct_decl : 
     t -> 
     Sym.t -> 
-    ((string,VarTypes.t) Binders.t) list ->
-    t
-
-  val add_struct_ctypes : 
-    t -> 
-    Sym.t -> 
-    (string * Ctype.ctype) list ->
+    struct_decl ->
     t
 
   val add_fun_decl : 
@@ -42,13 +43,7 @@ module Global : sig
     Loc.t ->
     t -> 
     Sym.t -> 
-    (((string, VarTypes.t) Binders.t) list, Loc.t * TypeErrors.type_error) Except.m
-
-  val get_struct_ctype : 
-    Loc.t ->
-    t -> 
-    Sym.t -> 
-    ((string * Ctype.ctype) list, Loc.t * TypeErrors.type_error) Except.m
+    (struct_decl, Loc.t * TypeErrors.type_error) Except.m
 
   val get_fun_decl : 
     Loc.t ->

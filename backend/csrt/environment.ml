@@ -9,7 +9,6 @@ open TypeErrors
 
 module SymSet = Set.Make(Sym)
 
-
 module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
@@ -39,11 +38,15 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 
 
+type struct_decl = 
+  {typ : (((string, VarTypes.t) Binders.t) list);
+   ctypes : ((string * Ctype.ctype) list);
+   offsets : (string * Num.t) list}
+
 module Global = struct 
 
   type t = 
-    { struct_decls : (((string, VarTypes.t) Binders.t) list) SymMap.t; 
-      struct_ctypes : ((string * Ctype.ctype) list) SymMap.t; 
+    { struct_decls : struct_decl SymMap.t; 
       fun_decls : (Loc.t * FunctionTypes.t * Sym.t) SymMap.t; (* third item is return name *)
       impl_fun_decls : FunctionTypes.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
@@ -53,7 +56,6 @@ module Global = struct
 
   let empty = 
     { struct_decls = SymMap.empty; 
-      struct_ctypes = SymMap.empty; 
       fun_decls = SymMap.empty;
       impl_fun_decls = ImplMap.empty;
       impl_constants = ImplMap.empty;
@@ -61,9 +63,6 @@ module Global = struct
 
   let add_struct_decl genv sym typ = 
     { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
-
-  let add_struct_ctypes genv sym l = 
-    { genv with struct_ctypes = SymMap.add sym l genv.struct_ctypes }
 
   let add_fun_decl genv fsym (loc, typ, ret_sym) = 
     { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
@@ -80,14 +79,6 @@ module Global = struct
     | None -> 
        let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
        fail loc (Generic_error err)
-
-  let get_struct_ctype loc genv sym = 
-    match SymMap.find_opt sym genv.struct_ctypes with
-    | Some layout -> return layout
-    | None -> 
-       let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
-       fail loc (Generic_error err)
-
 
   let get_fun_decl loc genv sym = 
     lookup_sym loc genv.fun_decls sym
@@ -110,8 +101,8 @@ module Global = struct
   let pp_struct_decls decls = 
     let pp_field f = dot ^^ !^(f.name) ^^^ colon ^^^ VarTypes.pp f.bound in
     pp_list None 
-      (fun (sym, bs) -> typ (bold (Sym.pp sym)) 
-                          (braces (separate_map (semi ^^ space) pp_field bs)))
+      (fun (sym, s) -> typ (bold (Sym.pp sym)) 
+                         (braces (separate_map (semi ^^ space) pp_field s.typ)))
       (SymMap.bindings decls) 
              
 
@@ -148,10 +139,15 @@ module Local = struct
   let empty = 
     { vars = SymMap.empty }
 
-  let pp_avars vars = pp_list (Some brackets) (Binders.pp Sym.pp BT.pp) vars 
-  let pp_lvars vars = pp_list (Some brackets) (Binders.pp Sym.pp LS.pp) vars
-  let pp_rvars vars = pp_list (Some brackets) (Binders.pp Sym.pp RE.pp) vars 
-  let pp_cvars vars = pp_list (Some brackets) (Binders.pp Sym.pp LC.pp) vars
+  let print_constraint_names = false
+
+  let pp_avars vars = pp_list (Some brackets) (Binders.pp Sym.pp (BT.pp false)) vars 
+  let pp_lvars vars = pp_list (Some brackets) (Binders.pp Sym.pp (LS.pp false)) vars
+  let pp_rvars vars = pp_list (Some brackets) (Binders.pp Sym.pp (RE.pp false)) vars 
+  let pp_cvars vars = 
+    if print_constraint_names 
+    then pp_list (Some brackets) (Binders.pp Sym.pp (LC.pp false)) vars
+    else pp_list (Some brackets) (fun b -> LC.pp false b.bound) vars
 
   let pp lenv =
     let (a,l,r,c) = 

@@ -11,6 +11,8 @@ open Pp_tools
 open TypeErrors
 open Except
 
+module LS=LogicalSorts
+
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
 
@@ -30,7 +32,7 @@ let rec bt_to_sort loc env ctxt bt =
      mapM (bt_to_sort loc env ctxt) bts >>= fun sorts ->
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
   | Struct (S_Id typ) ->
-     Environment.Global.get_struct_decl loc env.Env.global typ >>= fun fields ->
+     Environment.Global.get_struct_decl loc env.Env.global typ >>= fun decl ->
      fold_leftM (fun (names,sorts) {name = id; bound = t} ->
          match t with
          | A bt | L (Base bt) -> 
@@ -38,16 +40,21 @@ let rec bt_to_sort loc env ctxt bt =
             return (Z3.Symbol.mk_string ctxt id :: names, sort :: sorts)
          | _ -> 
             return (names,sorts)
-       ) ([],[]) fields >>= fun (names,sorts) ->
+       ) ([],[]) decl.typ >>= fun (names,sorts) ->
      let name = Z3.Symbol.mk_string ctxt "struct" in
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
   | Array
   | List _
-  | StructField _
-  | OpenStruct _ ->
-     fail loc (Z3_BT_not_implemented_yet bt)
+  | StructField _ 
+  | OpenStruct _
+    ->
+     fail loc (Z3_LS_not_implemented_yet (LS.Base bt))
   | FunctionPointer _ -> 
      return (Z3.Sort.mk_uninterpreted_s ctxt "function")
+
+let ls_to_sort loc env ctxt ls = 
+  match ls with
+  | LogicalSorts.Base bt -> bt_to_sort loc env ctxt bt
 
 
 let rec of_index_term loc env ctxt it = 
@@ -132,9 +139,9 @@ let rec of_index_term loc env ctxt it =
    * | List of t * t list
    * | Head of t
    * | Tail of t *)
-  | S (s,bt) -> 
+  | S (s,ls) -> 
      let s = sym_to_symbol ctxt s in
-     bt_to_sort loc env ctxt bt >>= fun bt ->
+     ls_to_sort loc env ctxt ls >>= fun bt ->
      return (Z3.Expr.mk_const ctxt s bt)
   | _ -> 
      fail loc (Z3_IT_not_implemented_yet it)
@@ -167,7 +174,7 @@ let constraint_holds_given_constraints loc env constraints c =
   mapM (fun (LC it) -> tryM (of_index_term loc env ctxt it) 
                          (of_index_term loc env ctxt (Bool true))) lcs >>= fun constrs ->
   debug_print 4 (action "checking satisfiability of constraints") >>= fun () ->
-  debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) LogicalConstraints.pp lcs)) >>= fun () ->
+  debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) (LogicalConstraints.pp true) lcs)) >>= fun () ->
   z3_check loc ctxt solver constrs >>= function
   (* the conjunction of existing constraints and 'not c' is unsatisfiable *)
   | UNSATISFIABLE -> 
@@ -197,7 +204,7 @@ let rec check_constraints_hold loc env constr =
   | {name; bound = c} :: constrs ->
      debug_print 2 (action "checking constraint") >>= fun () ->
      debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-     debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp c)) >>= fun () ->
+     debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) >>= fun () ->
      constraint_holds loc env c >>= function
      | true -> 
         debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) >>= fun () ->

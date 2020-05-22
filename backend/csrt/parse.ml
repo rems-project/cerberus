@@ -47,6 +47,15 @@ let parse_base_type loc (names : NameMap.t) sx =
 
 
 
+
+
+let parse_logical_sort loc (names : NameMap.t) sx =
+  let open LogicalSorts in
+  parse_base_type loc names sx >>= fun (bt,names) ->
+  return (Base bt, names)
+
+
+
 let rec parse_index_term loc (names : NameMap.t) sx = 
   let open IndexTerms in
   match sx with
@@ -130,18 +139,11 @@ let rec parse_index_term loc (names : NameMap.t) sx =
 
   | Sexp.List [Sexp.Atom str; Atom ":"; bt] -> 
      NameMap.sym_of loc str names >>= fun sym ->
-     parse_base_type loc names bt >>= fun (bt,names) ->
-     return (S (sym, bt))
+     parse_logical_sort loc names bt >>= fun (ls,names) ->
+     return (S (sym, ls))
 
   | t -> 
      parse_error loc "index term" t
-
-
-
-let parse_logical_sort loc (names : NameMap.t) sx =
-  let open LogicalSorts in
-  parse_base_type loc names sx >>= fun (bt,names) ->
-  return (Base bt, names)
 
 
 let parse_resource loc (names : NameMap.t) sx = 
