@@ -1,7 +1,6 @@
 open List
 open PPrint
 open Pp_tools
-open Cerb_frontend
 module Loc=Locations
 
 module SymSet = Set.Make(Sym)
@@ -15,7 +14,7 @@ type field_access = {loc : Loc.t; struct_type: struct_type; field: string}
 type offset = Num.t
 
 
-type field = string * (offset * Ctype.ctype * Sym.t option)
+type field = string * Sym.t option
 
 type openstruct = 
   {typ : struct_type; 
@@ -30,7 +29,7 @@ let rec pp_openstruct o =
 and pp_field_names fields =
   braces (
     flow_map (semi ^^ break 1) 
-      (fun (f,(_,_,mfvar)) -> 
+      (fun (f,mfvar) -> 
         match mfvar with
         | Some fvar -> dot ^^ !^f ^^^ arrow ^^^ Sym.pp fvar
         | None -> dot ^^ !^f ^^^ !^"uninit"
@@ -89,12 +88,12 @@ let rec subst_openstruct sym with_it o =
   { o with fields = subst_fields sym with_it o.fields }
 
 and subst_fields sym with_it fields = 
-  List.map (fun (f,(offset,ct,fvar)) -> 
+  List.map (fun (f,fvar) -> 
       let fvar = match fvar with
         | None -> None
         | Some fvar -> Some (Sym.subst sym with_it fvar)
       in
-      (f,(offset,ct,fvar))
+      (f,fvar)
     ) fields
 
 let subst_var sym with_sym bt = 
@@ -108,7 +107,7 @@ let subst_var sym with_sym bt =
 let vars_in = function
   | FunctionPointer p -> SymSet.singleton p
   | StructField (p,a) -> SymSet.singleton p
-  | OpenStruct s -> SymSet.of_list (filter_map (fun (_,(_,_,f)) -> f) s.fields)
+  | OpenStruct s -> SymSet.of_list (filter_map (fun (_,f) -> f) s.fields)
   | bt -> SymSet.empty
 
 

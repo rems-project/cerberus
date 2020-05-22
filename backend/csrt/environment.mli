@@ -17,7 +17,7 @@ module Global : sig
 
   val add_struct_decl : 
     t -> 
-    Sym.t -> 
+    BaseTypes.struct_type -> 
     struct_decl ->
     t
 
@@ -42,7 +42,7 @@ module Global : sig
   val get_struct_decl : 
     Loc.t ->
     t -> 
-    Sym.t -> 
+    BaseTypes.struct_type -> 
     (struct_decl, Loc.t * TypeErrors.type_error) Except.m
 
   val get_fun_decl : 
