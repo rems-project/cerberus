@@ -61,7 +61,7 @@ module Global = struct
       impl_constants = ImplMap.empty;
       names = NameMap.empty }
 
-  let add_struct_decl genv sym typ = 
+  let add_struct_decl genv (BaseTypes.S_Id sym) typ = 
     { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
 
   let add_fun_decl genv fsym (loc, typ, ret_sym) = 
@@ -73,7 +73,7 @@ module Global = struct
   let add_impl_constant genv i typ = 
     { genv with impl_constants = ImplMap.add i typ genv.impl_constants }
 
-  let get_struct_decl loc genv sym = 
+  let get_struct_decl loc genv (BaseTypes.S_Id sym) = 
     match SymMap.find_opt sym genv.struct_decls with
     | Some decl -> return decl 
     | None -> 

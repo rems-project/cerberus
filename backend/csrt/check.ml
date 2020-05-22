@@ -104,7 +104,7 @@ let size_of_ctype loc ct =
   let s = Impl_mem.sizeof_ival ct in
   integer_value_to_num loc s
 
-let size_of_struct_type loc sym =
+let size_of_struct_type loc (S_Id sym) =
   size_of_ctype loc (Ctype.Ctype ([], Ctype.Struct sym))
 
 
@@ -432,18 +432,16 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
 
 
 (* TODO: remove all the Ctype auxiliary things *)
-let rec unpack_struct loc genv (S_Id struct_typ) = 
+let rec unpack_struct loc genv typ = 
   debug_print 2 (blank 3 ^^ (!^"unpacking struct")) >>= fun () ->
-  Global.get_struct_decl loc genv struct_typ >>= fun decl ->
+  Global.get_struct_decl loc genv typ >>= fun decl ->
   let rec aux acc_bindings acc_fields (fields : ((string,VarTypes.t) Binders.t) list) =
     match fields with
     | [] -> 
        return (acc_bindings, acc_fields)
     | {name; bound = A (Struct sym)} :: fields ->
        unpack_struct loc genv sym >>= fun ((newsym,bt),newbindings) ->
-       assoc_err loc name decl.ctypes "struct field ctype not found" >>= fun ctype ->
-       assoc_err loc name decl.offsets "struct field ctype not found" >>= fun offset ->
-       let acc_fields = acc_fields @ [(name, (offset, ctype, Some newsym))] in
+       let acc_fields = acc_fields @ [(name, Some newsym)] in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = A bt}] in
        let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
        aux acc_bindings acc_fields fields
@@ -459,7 +457,7 @@ let rec unpack_struct loc genv (S_Id struct_typ) =
           assoc_err loc name decl.ctypes "struct field ctype not found" >>= fun ctype ->
           assoc_err loc name decl.offsets "struct field ctype not found" >>= fun offset ->
           let acc_bindings = acc_bindings @ [{name=newsym;bound = A bt}] in
-          let acc_fields = acc_fields @ [(name, (offset, ctype, Some newsym))] in
+          let acc_fields = acc_fields @ [(name, Some newsym)] in
           let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
           aux acc_bindings acc_fields fields
        | _ -> 
@@ -469,34 +467,12 @@ let rec unpack_struct loc genv (S_Id struct_typ) =
        end
   in
   aux [] [] decl.typ >>= fun (bindings, fields) ->
-  size_of_struct_type loc struct_typ >>= fun size ->
-  let s = {typ = S_Id struct_typ; size; fields} in
+  size_of_struct_type loc typ >>= fun size ->
+  let s = {typ; size; fields} in
   return ((fresh (), OpenStruct s),bindings)
 
 
-(* let rec unpack_structs loc genv bindings = 
- *   let rec aux lvars acc_bindings = function
- *     | [] -> return acc_bindings
- *     | b :: bindings ->
- *        match b with
- *        | {name; bound = L (Base (Struct typ))} ->
- *           aux (SymMap.add name typ lvars) acc_bindings bindings
- *        | ({name; bound = R (Points {pointee = Some v; _})} as b) ->
- *           begin match SymMap.find_opt v lvars with
- *           | Some typ -> 
- *              unpack_struct loc genv typ >>= fun (openstruct, newbindings) ->
- *              (\* TODO: generate constraints using substs and v *\)
- *              aux 
- *                lvars 
- *                (acc_bindings @ [makeR name (OpenStruct openstruct)])
- *                bindings
- *           | None ->
- *              aux lvars (acc_bindings @ [b]) bindings
- *           end
- *        | b ->
- *           aux lvars (acc_bindings @ [b]) bindings
- *   in
- *   aux SymMap.empty [] bindings *)
+
 
 let rec unpack_structs loc genv bindings = 
   match bindings with
@@ -521,8 +497,8 @@ let rec unpack_structs loc genv bindings =
 (* use Neel's resource map and use pack_struct to package the aargs
    part of a struct and *as many resources* of the struct definition
    as possible *)
-let rec pack_struct loc env (S_Id struct_type) aargs = 
-  get_struct_decl loc env.global struct_type >>= fun decl ->
+let rec pack_struct loc env typ aargs = 
+  get_struct_decl loc env.global typ >>= fun decl ->
   let rec aux = function
     | [] -> []
     | {name;bound} :: spec ->
@@ -531,10 +507,10 @@ let rec pack_struct loc env (S_Id struct_type) aargs =
        {name=newsym;bound} :: aux spec
   in
   subtype loc env aargs (aux decl.typ) "packing struct" >>= fun env ->
-  return ((fresh (), Struct (S_Id struct_type)), env)
+  return ((fresh (), Struct typ), env)
 
 and pack_open_struct loc env open_struct =
-  mapM (fun (fid,(_,_,marg)) ->
+  mapM (fun (fid,marg) ->
       match marg with
       | None -> fail loc (Generic_error (!^"Struct cannot be packed:" ^^^ 
                             !^fid ^^^ !^"uninitialised"))
@@ -662,6 +638,43 @@ let call_typ loc_call env (args : aargs) (ftyp : FunctionTypes.t) =
 
 
 
+
+
+(* let rec explode_struct loc env rsym = 
+ * 
+ *   get_Rvar loc env rsym >>= fun (r,env) ->
+ *   begin match r with
+ *   | Points ({pointee = Some sym;_} as p) -> return (sym,p)
+ *   | _ -> fail loc (Unreachable !^"explode_struct: uninitialised memory")
+ *   end >>= fun (pointee,p) ->
+ *   get_Lvar loc env pointee >>= fun (Base bt, env) ->
+ *   begin match bt with
+ *   | OpenStruct o -> return o
+ *   | _ -> fail loc (Unreachable !^"explode_struct: not an open struct")
+ *   end >>= fun o ->
+ * 
+ *   let rec aux lvars acc_bindings = function
+ *     | [] -> return acc_bindings
+ *     | b :: bindings ->
+ *        match b with
+ *        | {name; bound = L (Base (Struct typ))} ->
+ *           aux (SymMap.add name typ lvars) acc_bindings bindings
+ *        | ({name; bound = R (Points {pointee = Some v; _})} as b) ->
+ *           begin match SymMap.find_opt v lvars with
+ *           | Some typ -> 
+ *              unpack_struct loc genv typ >>= fun (openstruct, newbindings) ->
+ *              (\* TODO: generate constraints using substs and v *\)
+ *              aux 
+ *                lvars 
+ *                (acc_bindings @ [makeR name (OpenStruct openstruct)])
+ *                bindings
+ *           | None ->
+ *              aux lvars (acc_bindings @ [b]) bindings
+ *           end
+ *        | b ->
+ *           aux lvars (acc_bindings @ [b]) bindings
+ *   in
+ *   aux SymMap.empty [] bindings *)
 
 
 
@@ -1255,14 +1268,13 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              get_ALvar ploc env base >>= fun (bt,env) ->
              begin match bt with
              | OpenStruct s when BT.type_equal fa.struct_type s.typ ->
-               assoc_err loc fa.field s.fields "check store field access" >>= 
-                 fun (_offset,expected_ct,fvar) ->
+               assoc_err loc fa.field s.fields "check store field access" >>= fun fvar ->
+               Global.get_struct_decl loc env.global s.typ >>= fun decl ->
+               assoc_err loc fa.field decl.ctypes "check store field access" >>= fun expected_ct ->
                check_access_and_update expected_ct fvar access >>= fun (new_field_sym,env) ->
                let fields = 
-                 map (fun (efield,(offset,typ,value)) -> 
-                     if efield = fa.field 
-                     then (efield,(offset,typ, Some new_field_sym))
-                     else (efield,(offset,typ, None))
+                 map (fun (efield,v) -> 
+                     if efield = fa.field then (efield,Some new_field_sym) else (efield,v)
                    ) s.fields
                in
                let newsym = fresh () in
@@ -1331,8 +1343,9 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              | OpenStruct s when BT.type_equal fa.struct_type s.typ ->
                 (* debug_print 3 (action "checking field access") >>= fun () ->
                  * debug_print 3 (item "checking field access") >>= fun () -> *)
-               assoc_err loc fa.field s.fields "check load field access" >>= fun 
-                 (_offset,field_ct,fvar) ->
+               assoc_err loc fa.field s.fields "check load field access" >>= fun fvar ->
+               Global.get_struct_decl loc env.global s.typ >>= fun decl ->
+               assoc_err loc fa.field decl.ctypes "check store field access" >>= fun field_ct ->
                check_access_and_read field_ct fvar access
              | OpenStruct s -> fail loc (Unreachable !^"load: struct type mismatch") 
              | _  ->fail loc (Generic_error !^"cannot access field of non-struct type") 
@@ -1656,7 +1669,7 @@ let record_tagDef file sym def genv =
      ) ([],[],[]) fields >>= fun (typ,ctypes,offsets) ->
 
      let decl = {typ;ctypes;offsets} in
-     let genv = add_struct_decl genv sym decl in
+     let genv = add_struct_decl genv (S_Id sym) decl in
      return genv
 
 
