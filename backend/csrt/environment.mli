@@ -5,8 +5,9 @@ module Loc = Locations
 
 type struct_decl = 
   {typ : (((string, VarTypes.t) Binders.t) list);
-   ctypes : ((string * Ctype.ctype) list);
-   offsets : (string * Num.t) list}
+   mcl: Memory.mcl}
+
+
 
 module Global : sig
 
@@ -44,6 +45,7 @@ module Global : sig
     t -> 
     BaseTypes.struct_type -> 
     (struct_decl, Loc.t * TypeErrors.type_error) Except.m
+
 
   val get_fun_decl : 
     Loc.t ->

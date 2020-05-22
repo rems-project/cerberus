@@ -1,5 +1,6 @@
 open PPrint
 open Utils
+open Memory
 open Cerb_frontend
 open Mucore
 open Except
@@ -95,21 +96,6 @@ let makeUC bt = makeC (fresh ()) bt
 
 
 
-let integer_value_to_num loc iv = 
-  match Impl_mem.eval_integer_value iv with
-  | Some v -> return v
-  | None -> fail loc Integer_value_error
-
-let size_of_ctype loc ct = 
-  let s = Impl_mem.sizeof_ival ct in
-  integer_value_to_num loc s
-
-let size_of_struct_type loc (S_Id sym) =
-  size_of_ctype loc (Ctype.Ctype ([], Ctype.Struct sym))
-
-
-
-
 
 
 (* types recording undefined behaviour, error cases, etc. *)
@@ -188,11 +174,7 @@ let rec bt_of_core_base_type loc cbt =
   | BTy_ctype -> fail loc (Unsupported !^"ctype")
 
 
-let integer_value_min loc it = 
-  integer_value_to_num loc (Impl_mem.min_ival it)
 
-let integer_value_max loc it = 
-  integer_value_to_num loc (Impl_mem.max_ival it)
 
 let integerType_constraint loc about it =
   integer_value_min loc it >>= fun min ->
@@ -454,8 +436,6 @@ let rec unpack_struct loc genv typ =
        let newsym = fresh () in
        begin match bound with 
        | A bt -> 
-          assoc_err loc name decl.ctypes "struct field ctype not found" >>= fun ctype ->
-          assoc_err loc name decl.offsets "struct field ctype not found" >>= fun offset ->
           let acc_bindings = acc_bindings @ [{name=newsym;bound = A bt}] in
           let acc_fields = acc_fields @ [(name, Some newsym)] in
           let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
@@ -635,6 +615,10 @@ let call_typ loc_call env (args : aargs) (ftyp : FunctionTypes.t) =
   let rt = ((to_function_type ftyp).return) in
   (* unpack_structs loc_call env.global rt >>= fun rt -> *)
   return (rt, env)
+
+
+
+
 
 
 
@@ -1270,8 +1254,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
              | OpenStruct s when BT.type_equal fa.struct_type s.typ ->
                assoc_err loc fa.field s.fields "check store field access" >>= fun fvar ->
                Global.get_struct_decl loc env.global s.typ >>= fun decl ->
-               assoc_err loc fa.field decl.ctypes "check store field access" >>= fun expected_ct ->
-               check_access_and_update expected_ct fvar access >>= fun (new_field_sym,env) ->
+               assoc_err loc fa.field decl.mcl.fields "check store field access" >>= fun cl ->
+               check_access_and_update cl.ct fvar access >>= fun (new_field_sym,env) ->
                let fields = 
                  map (fun (efield,v) -> 
                      if efield = fa.field then (efield,Some new_field_sym) else (efield,v)
@@ -1345,8 +1329,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                  * debug_print 3 (item "checking field access") >>= fun () -> *)
                assoc_err loc fa.field s.fields "check load field access" >>= fun fvar ->
                Global.get_struct_decl loc env.global s.typ >>= fun decl ->
-               assoc_err loc fa.field decl.ctypes "check store field access" >>= fun field_ct ->
-               check_access_and_read field_ct fvar access
+               assoc_err loc fa.field decl.mcl.fields "check store field access" >>= fun cl ->
+               check_access_and_read cl.ct fvar access
              | OpenStruct s -> fail loc (Unreachable !^"load: struct type mismatch") 
              | _  ->fail loc (Generic_error !^"cannot access field of non-struct type") 
              end 
@@ -1659,16 +1643,12 @@ let record_tagDef file sym def genv =
   | Ctype.UnionDef _ -> 
      fail Loc.unknown (Unsupported !^"todo: union types")
   | Ctype.StructDef (fields, _) ->
-
-     fold_leftM (fun (typ,ctypes,offsets) (id, (_attributes, _qualifier, ct)) ->
-       let sid = Id.s id in
-       aux false true Loc.unknown sid ct >>= fun newfields ->
-       let offset_ival = Impl_mem.offsetof_ival file.Mucore.mu_tagDefs sym id in
-       integer_value_to_num Loc.unknown offset_ival >>= fun offset ->
-       return (typ@newfields, ctypes@[(sid,ct)], offsets@[(sid,offset)])
-     ) ([],[],[]) fields >>= fun (typ,ctypes,offsets) ->
-
-     let decl = {typ;ctypes;offsets} in
+     fold_leftM (fun typ (id, (_attributes, _qualifier, ct)) ->
+       aux false true Loc.unknown (Id.s id) ct >>= fun newfields ->
+       return (typ@newfields)
+     ) [] fields >>= fun typ ->
+     Memory.struct_ct_and_layout file Loc.unknown genv (S_Id sym) fields >>= fun mcl ->
+     let decl = {typ;mcl} in
      let genv = add_struct_decl genv (S_Id sym) decl in
      return genv
 

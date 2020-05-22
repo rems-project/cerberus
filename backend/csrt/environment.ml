@@ -40,8 +40,8 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 type struct_decl = 
   {typ : (((string, VarTypes.t) Binders.t) list);
-   ctypes : ((string * Ctype.ctype) list);
-   offsets : (string * Num.t) list}
+   mcl: Memory.mcl}
+
 
 module Global = struct 
 
