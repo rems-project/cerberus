@@ -1,5 +1,6 @@
 open Cerb_frontend
 
+module StringMap = Map.Make(String)
 
 let uncurry f (a,b)  = f a b
 let curry f a b = f (a,b)

@@ -35,74 +35,74 @@ type type_error =
  | Unspecified
  | StaticError of string * Sym.t
  | Z3_fail of string
- | Z3_BT_not_implemented_yet of BaseTypes.t
+ | Z3_LS_not_implemented_yet of LogicalSorts.t
  | Z3_IT_not_implemented_yet of IndexTerms.t
 
 type t = type_error
 
 let pp_return_error = function
   | Surplus_A (_name,t) ->
-     !^"Returning unexpected value of type" ^^^ BaseTypes.pp t
+     !^"Returning unexpected value of type" ^^^ BaseTypes.pp false t
   | Missing_A (_name,t) ->
-     !^"Missing return value of type" ^^^ BaseTypes.pp t
+     !^"Missing return value of type" ^^^ BaseTypes.pp false t
   | Missing_R (_name,t) ->
-     !^"Missing return resource of type" ^^^ Resources.pp t
+     !^"Missing return resource of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
      let has_pp = match has with
-       | A t -> !^ "return value of type" ^^^ BaseTypes.pp t
-       | L t -> !^ "logical return value of type" ^^^ LogicalSorts.pp t
-       | R t -> !^ "return resource of type" ^^^ Resources.pp t
-       | C t -> !^ "return constraint" ^^^ LogicalConstraints.pp t
+       | A t -> !^ "return value of type" ^^^ BaseTypes.pp false t
+       | L t -> !^ "logical return value of type" ^^^ LogicalSorts.pp false t
+       | R t -> !^ "return resource of type" ^^^ Resources.pp false t
+       | C t -> !^ "return constraint" ^^^ LogicalConstraints.pp false t
      in
      begin match expected with
      | A t -> !^"Expected return value of type" ^^^ 
-                BaseTypes.pp t ^^^ !^ "but found" ^^^ has_pp
+                BaseTypes.pp false t ^^^ !^ "but found" ^^^ has_pp
      | L t -> !^ "Expected logical return value of type" ^^^ 
-                LogicalSorts.pp t ^^^ !^ "but found" ^^^ has_pp
+                LogicalSorts.pp false t ^^^ !^ "but found" ^^^ has_pp
      | R t -> !^"Expected return resource of type" ^^^ 
-                Resources.pp t ^^^ !^ "but found" ^^^ has_pp
+                Resources.pp false t ^^^ !^ "but found" ^^^ has_pp
      | C t -> !^"Expected return constraint" ^^^ 
-                LogicalConstraints.pp t ^^^ !^"but found" ^^^ has_pp
+                LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
         (* dead, I think *)
      end
   | Unsat_constraint (name,c) ->
      !^"Unsatisfied return constraint" ^^^
-       typ (Sym.pp name) (LogicalConstraints.pp c)
+       typ (Sym.pp name) (LogicalConstraints.pp false c)
   | Unconstrained_l (name, ls) ->
      !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp ls)
+       typ (Sym.pp name) (LogicalSorts.pp false ls)
 
 let pp_call_error = function
   | Surplus_A (_name,t) ->
-     !^"Supplying unexpected argument of type" ^^^ BaseTypes.pp t
+     !^"Supplying unexpected argument of type" ^^^ BaseTypes.pp false t
   | Missing_A (_name,t) ->
-     !^"Missing argument of type" ^^^ BaseTypes.pp t
+     !^"Missing argument of type" ^^^ BaseTypes.pp false t
   | Missing_R (_name,t) ->
-     !^"Missing resource argument of type" ^^^ Resources.pp t
+     !^"Missing resource argument of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
      let has_pp = match has with
-       | A t -> !^ "(computational) argument of type" ^^^ BaseTypes.pp t
-       | L t -> !^ "logical argument of type" ^^^ LogicalSorts.pp t
-       | R t -> !^ "resource argument of type" ^^^ Resources.pp t
-       | C t -> !^ "constraint argument" ^^^ LogicalConstraints.pp t
+       | A t -> !^ "(computational) argument of type" ^^^ BaseTypes.pp false t
+       | L t -> !^ "logical argument of type" ^^^ LogicalSorts.pp false t
+       | R t -> !^ "resource argument of type" ^^^ Resources.pp false t
+       | C t -> !^ "constraint argument" ^^^ LogicalConstraints.pp false t
      in
      begin match expected with
      | A t -> !^"Expected (computational) argument of type" ^^^ 
-                BaseTypes.pp t ^^^ !^ "but found" ^^^ has_pp
+                BaseTypes.pp false t ^^^ !^ "but found" ^^^ has_pp
      | L t -> !^ "Expected logical argument of type" ^^^ 
-                LogicalSorts.pp t ^^^ !^ "but found" ^^^ has_pp
+                LogicalSorts.pp false t ^^^ !^ "but found" ^^^ has_pp
      | R t -> !^"Expected resource argument of type" ^^^ 
-                Resources.pp t ^^^ !^ "but found" ^^^ has_pp
+                Resources.pp false t ^^^ !^ "but found" ^^^ has_pp
      | C t -> !^"Expected constraint argument" ^^^ 
-                LogicalConstraints.pp t ^^^ !^"but found" ^^^ has_pp
+                LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
         (* dead, I think *)
      end
   | Unsat_constraint (name,c) ->
      !^"Unsatisfied argument constraint" ^^^
-       typ (Sym.pp name) (LogicalConstraints.pp c)
+       typ (Sym.pp name) (LogicalConstraints.pp false c)
   | Unconstrained_l (name, ls) ->
      !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp ls)
+       typ (Sym.pp name) (LogicalSorts.pp false ls)
 
 
 let pp (loc : Loc.t) (err : t) = 
@@ -121,7 +121,7 @@ let pp (loc : Loc.t) (err : t) =
     | Unreachable unreachable ->
        !^"Internal error, should be unreachable" ^^ colon ^^^ unreachable
     | Illtyped_it it ->
-       !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp it)
+       !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp false it)
     | Unsupported unsupported ->
        !^"Unsupported feature" ^^ colon ^^^ unsupported
     | Unbound_name unbound ->
@@ -149,10 +149,10 @@ let pp (loc : Loc.t) (err : t) =
        !^("Static error: " ^ err)
     | Z3_fail err ->
        !^("Z3 failure: ^ err")
-    | Z3_BT_not_implemented_yet bt ->
-       !^"Z3: base type" ^^^ BaseTypes.pp bt ^^^ !^"not implemented yet"
+    | Z3_LS_not_implemented_yet bt ->
+       !^"Z3: base type" ^^^ LogicalSorts.pp false bt ^^^ !^"not implemented yet"
     | Z3_IT_not_implemented_yet it ->
-       !^"Z3: index term" ^^^ IndexTerms.pp it ^^^ !^"not implemented yet"
+       !^"Z3: index term" ^^^ IndexTerms.pp false it ^^^ !^"not implemented yet"
     end
 
 

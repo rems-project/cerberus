@@ -1,4 +1,4 @@
-open Utils
+open Num
 open Option
 open List
 open PPrint
@@ -9,7 +9,7 @@ module SymSet = Set.Make(Sym)
 
 
 type t =
-  | Num of num
+  | Num of Num.t
   | Bool of bool
 
   | Add of t * t
@@ -42,7 +42,7 @@ type t =
   | Head of t
   | Tail of t
 
-  | S of Sym.t * BaseTypes.t
+  | S of Sym.t * LogicalSorts.t
   | StructDefField of string * BaseTypes.t
 
 let (%+) t1 t2 = Add (t1,t2)
@@ -61,53 +61,50 @@ let (%>=) t1 t2 = GE (t1, t2)
 let (%&) t1 t2 = And (t1, t2)
 let (%|) t1 t2 = Or (t1, t2)
 
-let pp it : PPrint.document = 
+let rec pp atomic it : PPrint.document = 
 
-  let rec aux atomic it = 
-    let mparens pped = if atomic then parens pped else pped in
-    let pp = aux true in
-    match it with
-    | Num i -> pp_num i
-    | Bool true -> !^"true"
-    | Bool false -> !^"false"
+  let mparens pped = if atomic then parens pped else pped in
+  let pp = pp true in
+  match it with
+  | Num i -> Num.pp i
+  | Bool true -> !^"true"
+  | Bool false -> !^"false"
 
-    | Add (it1,it2) -> mparens (pp it1 ^^^ plus ^^^ pp it2)
-    | Sub (it1,it2) -> mparens (pp it1 ^^^ minus ^^^ pp it2)
-    | Mul (it1,it2) -> mparens (pp it1 ^^^ star ^^^ pp it2)
-    | Div (it1,it2) -> mparens (pp it1 ^^^ slash ^^^ pp it2)
-    | Exp (it1,it2) -> mparens (pp it1 ^^^ caret ^^^ pp it2)
-    | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
-    | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
+  | Add (it1,it2) -> mparens (pp it1 ^^^ plus ^^^ pp it2)
+  | Sub (it1,it2) -> mparens (pp it1 ^^^ minus ^^^ pp it2)
+  | Mul (it1,it2) -> mparens (pp it1 ^^^ star ^^^ pp it2)
+  | Div (it1,it2) -> mparens (pp it1 ^^^ slash ^^^ pp it2)
+  | Exp (it1,it2) -> mparens (pp it1 ^^^ caret ^^^ pp it2)
+  | Rem_t (it1,it2) -> mparens (!^ "rem_t" ^^^ pp it1 ^^^ pp it2)
+  | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
 
-    | EQ (o1,o2) -> mparens (pp o1 ^^^ equals ^^^ pp o2)
-    | NE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
-    | LT (o1,o2) -> mparens (pp o1 ^^^ langle ^^^ pp o2)
-    | GT (o1,o2) -> mparens (pp o1 ^^^ rangle ^^^ pp o2)
-    | LE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
-    | GE (o1,o2) -> mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
+  | EQ (o1,o2) -> mparens (pp o1 ^^^ equals ^^^ pp o2)
+  | NE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
+  | LT (o1,o2) -> mparens (pp o1 ^^^ langle ^^^ pp o2)
+  | GT (o1,o2) -> mparens (pp o1 ^^^ rangle ^^^ pp o2)
+  | LE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
+  | GE (o1,o2) -> mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
 
-    | Null o1 -> mparens (!^"null" ^^^ pp o1)
-    | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
-    | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
-    | Not (o1) -> mparens (!^"not" ^^^ pp o1)
+  | Null o1 -> mparens (!^"null" ^^^ pp o1)
+  | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
+  | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
+  | Not (o1) -> mparens (!^"not" ^^^ pp o1)
 
-    | Nth (n,it2) -> mparens (!^"nth" ^^^ pp_num n ^^^ pp it2)
-    | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
-    | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
+  | Nth (n,it2) -> mparens (!^"nth" ^^^ Num.pp n ^^^ pp it2)
+  | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
+  | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
 
-    | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
-    | List (its, bt) -> 
-       brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp bt
-    | Struct fields -> 
-       let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
-       braces (separate_map semi pp_field fields)
-    | Field (t, s) ->
-       pp t ^^ dot ^^ Id.pp s
+  | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
+  | List (its, bt) -> 
+     mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp false bt)
+  | Struct fields -> 
+     let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
+     braces (separate_map semi pp_field fields)
+  | Field (t, s) ->
+     pp t ^^ dot ^^ Id.pp s
 
-    | S (sym,bt) -> mparens (typ (Sym.pp sym) (BaseTypes.pp bt))
-    | StructDefField (id,bt) -> mparens (typ (!^id) (BaseTypes.pp bt))
-  in
-  aux true it
+  | S (sym,bt) -> mparens (typ (Sym.pp sym) (LogicalSorts.pp false bt))
+  | StructDefField (id,bt) -> mparens (typ (!^id) (BaseTypes.pp false bt))
 
 
 let rec vars_in it : SymSet.t = 
@@ -144,7 +141,7 @@ let rec vars_in it : SymSet.t =
        SymSet.empty fields
   | List (its,bt) ->
      SymSet.union (BaseTypes.vars_in bt) (vars_in_list its)
-  | S (symbol,bt) -> SymSet.add symbol (BaseTypes.vars_in bt)
+  | S (symbol,bt) -> SymSet.add symbol (LogicalSorts.vars_in bt)
   | StructDefField (_,bt) -> BaseTypes.vars_in bt
 
 and vars_in_list l = 
@@ -189,7 +186,7 @@ let rec subst_var (sym : Sym.t) (with_it : Sym.t) it : t =
   | Field (t,f) ->
      Field (subst_var sym with_it t, f)
   | S (symbol,bt) -> S (Sym.subst sym with_it symbol, 
-                        BaseTypes.subst_var sym with_it bt)
+                        LogicalSorts.subst_var sym with_it bt)
   | StructDefField (id,bt) -> 
      StructDefField (id, BaseTypes.subst_var sym with_it bt)
 
@@ -246,7 +243,7 @@ let rec concretise_field (id : string) (with_it : Sym.t) it : t =
      Field (concretise_field id with_it t, f)
   | S (s,bt) -> S (s, bt)
   | StructDefField (id',bt) -> 
-     if id = id' then S (with_it, bt) else StructDefField (id',bt)
+     if id = id' then S (with_it, Base bt) else StructDefField (id',bt)
      
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
