@@ -31,9 +31,9 @@ let rec bt_to_sort loc env ctxt bt =
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (string_of_int i)) bts in
      mapM (bt_to_sort loc env ctxt) bts >>= fun sorts ->
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
-  | Struct typ ->
+  | ClosedStruct typ ->
      Environment.Global.get_struct_decl loc env.Env.global typ >>= fun decl ->
-     fold_leftM (fun (names,sorts) {name = id; bound = t} ->
+     fold_leftM (fun (names,sorts) {name = Member id; bound = t} ->
          match t with
          | A bt | L (Base bt) -> 
             bt_to_sort loc env ctxt bt >>= fun sort -> 
@@ -45,7 +45,7 @@ let rec bt_to_sort loc env ctxt bt =
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
   | Array
   | List _
-  | StructField _ 
+  | Path _ 
   | OpenStruct _
     ->
      fail loc (Z3_LS_not_implemented_yet (LS.Base bt))

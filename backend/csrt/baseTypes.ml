@@ -2,40 +2,18 @@ open List
 open PPrint
 open Pp_tools
 module Loc=Locations
-
 module SymSet = Set.Make(Sym)
 
-type struct_type = S_Id of Sym.t
-type var = Sym.t
 
-type field_access = {loc : Loc.t; struct_type: struct_type; field: string}
+type tag = Tag of Sym.t
+type member = Member of string
 
+type access = { loc: Loc.t; tag: tag; member: member }
+type path = access list
 
-type offset = Num.t
-
-
-type field = string * Sym.t option
-
-type openstruct = 
-  {typ : struct_type; 
-   size : Num.t;
-   fields : field list;
-  }
+type fieldmap = (member * Sym.t option) list
 
 
-let rec pp_openstruct o = 
-  pp_field_names o.fields
-
-and pp_field_names fields =
-  braces (
-    flow_map (semi ^^ break 1) 
-      (fun (f,mfvar) -> 
-        match mfvar with
-        | Some fvar -> dot ^^ !^f ^^^ arrow ^^^ Sym.pp fvar
-        | None -> dot ^^ !^f ^^^ !^"uninit"
-      )
-      fields
-    )
 
 type t =
   | Unit 
@@ -45,17 +23,27 @@ type t =
   | Array
   | List of t
   | Tuple of t list
-  | Struct of struct_type
-  | StructField of var * field_access list
-  | FunctionPointer of var
-  | OpenStruct of openstruct
+  | ClosedStruct of tag
+  | OpenStruct of tag * fieldmap
+  | Path of Sym.t * path
+  | FunctionPointer of Sym.t
 
-let is_loc = function Loc -> true | _ -> false
 
 
 let pp_field_access access =
-  separate_map dot (fun a -> !^(a.field)) access
+  separate_map dot (fun { member = Member member; _} -> !^member) access
 
+
+let pp_fieldmap fields =
+  braces (
+    flow_map (semi ^^ break 1) 
+      (fun (Member f,mfvar) -> 
+        match mfvar with
+        | Some fvar -> dot ^^ !^f ^^^ arrow ^^^ Sym.pp fvar
+        | None -> dot ^^ !^f ^^^ !^"uninit"
+      )
+      fields
+    )
 
 let rec pp atomic = 
   let mparens pped = if atomic then parens pped else pped in
@@ -67,12 +55,12 @@ let rec pp atomic =
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^^^ pp true bt)
   | Tuple nbts -> mparens (!^ "tuple" ^^^ flow_map (comma ^^ break 1) (pp false) (nbts))
-  | Struct (S_Id sym) -> parens (!^ "struct" ^^^ Sym.pp sym)
-  | StructField (p,a) -> 
-     mparens (!^"structfield" ^^^ Sym.pp p ^^ dot ^^ pp_field_access a)
+  | ClosedStruct (Tag sym) -> parens (!^ "struct" ^^^ Sym.pp sym)
+  | Path (p,a) -> 
+     mparens (!^"path" ^^^ Sym.pp p ^^ dot ^^ pp_field_access a)
   | FunctionPointer p ->
      parens (!^"function" ^^^ Sym.pp p)
-  | OpenStruct s -> pp_openstruct s
+  | OpenStruct (_tag,fieldmap) -> pp_fieldmap fieldmap
 
 
 
@@ -84,10 +72,7 @@ let types_equal ts1 ts2 =
 
 
 
-let rec subst_openstruct sym with_it o = 
-  { o with fields = subst_fields sym with_it o.fields }
-
-and subst_fields sym with_it fields = 
+let subst_fieldmap sym with_it fields = 
   List.map (fun (f,fvar) -> 
       let fvar = match fvar with
         | None -> None
@@ -99,15 +84,15 @@ and subst_fields sym with_it fields =
 let subst_var sym with_sym bt = 
   match bt with
   | FunctionPointer p -> FunctionPointer (Sym.subst sym with_sym p)
-  | StructField (p,a) -> StructField (Sym.subst sym with_sym p, a)
-  | OpenStruct s ->
-     OpenStruct (subst_openstruct sym with_sym s)
+  | Path (p,a) -> Path (Sym.subst sym with_sym p, a)
+  | OpenStruct (tag,fieldmap) ->
+     OpenStruct (tag,subst_fieldmap sym with_sym fieldmap)
   | bt -> bt
 
 let vars_in = function
   | FunctionPointer p -> SymSet.singleton p
-  | StructField (p,a) -> SymSet.singleton p
-  | OpenStruct s -> SymSet.of_list (filter_map (fun (_,f) -> f) s.fields)
+  | Path (p,a) -> SymSet.singleton p
+  | OpenStruct (tag,fieldmap) -> SymSet.of_list (filter_map (fun (_,f) -> f) fieldmap)
   | bt -> SymSet.empty
 
 

@@ -8,35 +8,26 @@ module Loc=Locations
 module IT=IndexTerms
 
 
-type offset = Num.t
-
-type points_to = 
-  {pointer: Sym.t; 
-   offset: offset;
-   pointee: Sym.t option; 
-   typ: Cerb_frontend.Ctype.ctype;
-   size: Num.t}
+type points = 
+  { pointer: Sym.t; 
+    pointee: Sym.t option; 
+    typ: Cerb_frontend.Ctype.ctype;
+    size: Num.t 
+  }
 
 
 
 
 
-type t = Points of points_to
+type t = Points of points
 
-let pp_pointer_and_offset pointer offset = 
-  if Num.equal offset Num.zero then Sym.pp pointer 
-  else Sym.pp pointer ^^ plus ^^ !^(Num.to_string offset)
-
-
-let pp atomic = 
+let pp atomic resource = 
   let mparens pped = if atomic then parens pped else pped in
-  function
-  | Points {pointer; offset; pointee = Some s ; typ; size} ->
-     mparens (pp_pointer_and_offset pointer offset ^^
-                parens (pp_ctype typ) ^^^ arrow ^^^ Sym.pp s)
-  | Points {pointer; offset; pointee = None ; typ; size} ->
-     mparens (pp_pointer_and_offset pointer offset ^^
-                parens (pp_ctype typ) ^^^ !^"uninit")
+  match resource with
+  | Points {pointer; pointee = Some v; typ; size} ->
+     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ Sym.pp v)
+  | Points {pointer; pointee = None; typ; size} ->
+     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ !^"uninit")
 
 
 
@@ -70,9 +61,7 @@ let associated = function
 let unify r1 r2 res = 
   match r1, r2 with
   | Points p, Points p' when 
-         Num.equal p.offset p'.offset &&
-         Ctype.ctypeEqual p.typ p'.typ &&
-         Num.equal p.size p'.size ->
+         Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
 
      Sym.unify p.pointer p'.pointer res >>= fun res ->
      begin match p.pointee, p'.pointee with
