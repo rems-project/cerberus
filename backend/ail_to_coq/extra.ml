@@ -112,3 +112,12 @@ module Buffer =
       output_buffer oc buf;
       close_out oc
   end
+
+module String =
+  struct
+    include String
+
+    let for_all : (char -> bool) -> string -> bool = fun p s ->
+      try iter (fun c -> if not (p c) then raise Exit) s; true
+      with Exit -> false
+  end
