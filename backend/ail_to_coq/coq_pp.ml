@@ -1209,7 +1209,16 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
   pp "@;Unshelve. all: prepare_sideconditions; ";
   pp "normalize_and_simpl_goal; try solve_goal.";
   let tactics_items =
-    let is_all t = String.length t >= 4 && String.sub t 0 4 = "all:" in
+    let is_all t =
+      let is_selector s =
+        s = "all" ||
+        let ok c = ('0' <= c && c <= '9') || List.mem c [' '; ','; '-'] in
+        String.for_all ok s
+      in
+      match String.split_on_char ':' t with
+      | []     -> false
+      | s :: _ -> is_selector (String.trim s)
+    in
     let rec pp_tactics_all tactics =
       match tactics with
       | t :: ts when is_all t -> pp "@;%s" t; pp_tactics_all ts
