@@ -31,11 +31,15 @@ module Types = struct
 
 
   let pp alrc = Types.pp (to_type alrc)
-  let subst_var sym with_it alrc = 
-    { a = List.map (Binders.subst Sym.subst BaseTypes.subst_var sym with_it) alrc.a;
-      l = List.map (Binders.subst Sym.subst LogicalSorts.subst_var sym with_it) alrc.l;
-      r = List.map (Binders.subst Sym.subst Resources.subst_var sym with_it) alrc.r;
-      c = List.map (Binders.subst Sym.subst LogicalConstraints.subst_var sym with_it) alrc.c; }  
+
+  let subst_var subst alrc = 
+    { a = List.map (Binders.subst Sym.subst BaseTypes.subst_var subst) alrc.a;
+      l = List.map (Binders.subst Sym.subst LogicalSorts.subst_var subst) alrc.l;
+      r = List.map (Binders.subst Sym.subst Resources.subst_var subst) alrc.r;
+      c = List.map (Binders.subst Sym.subst LogicalConstraints.subst_var subst) alrc.c; }  
+
+  let subst_vars = Tools.make_substs subst_var
+
 
 
 end
@@ -47,9 +51,12 @@ module FunctionTypes = struct
 
   type t = {arguments2 : alrc; return2 : alrc}
 
-  let subst_var sym with_it ft = 
-    { arguments2 = subst_var sym with_it ft.arguments2; 
-      return2 = subst_var sym with_it ft.return2}
+  let subst_var subst ft = 
+    { arguments2 = subst_var subst ft.arguments2; 
+      return2 = subst_var subst ft.return2}
+
+  let subst_vars = Tools.make_substs subst_var
+
 
   let pp ft = 
     FunctionTypes.pp 

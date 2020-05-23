@@ -32,14 +32,16 @@ let pp atomic resource =
 
 
 
-let subst_var sym with_it = function
+let subst_var subst = function
   | Points p -> 
      let pointee = match p.pointee with
-       | Some s -> Some (Sym.subst sym with_it s)
+       | Some s -> Some (Sym.subst subst s)
        | None -> None
      in
-     let pointer = Sym.subst sym with_it p.pointer in
+     let pointer = Sym.subst subst p.pointer in
      Points {p with pointer; pointee}
+
+let subst_vars = Tools.make_substs subst_var
 
 
 

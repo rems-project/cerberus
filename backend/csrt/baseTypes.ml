@@ -1,3 +1,4 @@
+open Tools
 open List
 open PPrint
 open Pp_tools
@@ -72,22 +73,25 @@ let types_equal ts1 ts2 =
 
 
 
-let subst_fieldmap sym with_it fields = 
+let subst_fieldmap subst fields = 
   List.map (fun (f,fvar) -> 
       let fvar = match fvar with
         | None -> None
-        | Some fvar -> Some (Sym.subst sym with_it fvar)
+        | Some fvar -> Some (Sym.subst subst fvar)
       in
       (f,fvar)
     ) fields
 
-let subst_var sym with_sym bt = 
+let subst_var subst bt = 
   match bt with
-  | FunctionPointer p -> FunctionPointer (Sym.subst sym with_sym p)
-  | Path (p,a) -> Path (Sym.subst sym with_sym p, a)
+  | FunctionPointer p -> FunctionPointer (Sym.subst subst p)
+  | Path (p,a) -> Path (Sym.subst subst p, a)
   | OpenStruct (tag,fieldmap) ->
-     OpenStruct (tag,subst_fieldmap sym with_sym fieldmap)
+     OpenStruct (tag,subst_fieldmap subst fieldmap)
   | bt -> bt
+
+let subst_vars = make_substs subst_var
+
 
 let vars_in = function
   | FunctionPointer p -> SymSet.singleton p

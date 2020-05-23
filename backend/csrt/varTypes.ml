@@ -15,16 +15,19 @@ type t =
  | R of Resources.t
  | C of LogicalConstraints.t
 
-let subst_var sym with_it t = 
+let subst_var subst t = 
  match t with
- | A t -> A (BaseTypes.subst_var sym with_it t)
- | L t -> L (LogicalSorts.subst_var sym with_it t)
- | R t -> R (Resources.subst_var sym with_it t)
- | C t -> C (LogicalConstraints.subst_var sym with_it t)
+ | A t -> A (BaseTypes.subst_var subst t)
+ | L t -> L (LogicalSorts.subst_var subst t)
+ | R t -> R (Resources.subst_var subst t)
+ | C t -> C (LogicalConstraints.subst_var subst t)
 
-let concretise_field id with_it t = 
+let subst_vars = Tools.make_substs subst_var
+
+
+let concretise_field subst t = 
  match t with
- | C t -> C (LogicalConstraints.concretise_field id with_it t)
+ | C t -> C (LogicalConstraints.concretise_field subst t)
  | _ -> t
 
 
