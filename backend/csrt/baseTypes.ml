@@ -39,7 +39,7 @@ let pp_fieldmap fields =
     flow_map (semi ^^ break 1) 
       (fun (Member f,mfvar) -> 
         match mfvar with
-        | Some fvar -> dot ^^ !^f ^^^ arrow ^^^ Sym.pp fvar
+        | Some fvar -> dot ^^ !^f ^^^ equals ^^^ Sym.pp fvar
         | None -> dot ^^ !^f ^^^ !^"uninit"
       )
       fields
