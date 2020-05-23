@@ -1,6 +1,7 @@
+open Tools
+open Subst
 open Cerb_frontend
 open Option
-open Uni
 
 type symbol = Symbol.sym
 type t = symbol
@@ -12,8 +13,42 @@ let pp sym = PPrint.string (Pp_symbol.to_string_pretty sym)
 
 let compare = Symbol.symbol_compare
 
-let subst replace with_sym symbol = 
-  if symbol = replace then with_sym else symbol
+
+
+
+
+
+
+module Uni = struct
+
+type ('spec, 'res) t = {
+    spec : 'spec;
+    resolved : 'res option
+  }
+
+
+let find_resolved env unis = 
+  SymMap.foldM
+    (fun usym {spec; resolved} (unresolveds,resolveds) ->
+      match resolved with
+      | None ->
+         Except.return (SymMap.add usym spec unresolveds, resolveds)
+      | Some sym -> 
+         Except.return (unresolveds, (spec, {substitute=usym; swith=sym}) :: resolveds)
+    ) unis (SymMap.empty, [])
+
+end
+    
+
+open Uni
+
+
+
+let subst (subst : (symbol,symbol) Subst.t) (symbol : symbol) : symbol = 
+  if symbol = subst.substitute then subst.swith else symbol
+
+let substs = make_substs subst
+
 
 
 let unify sym sym' res = 

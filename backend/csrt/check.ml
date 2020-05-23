@@ -1,5 +1,6 @@
+open Subst
 open PPrint
-open Utils
+open Tools
 open Memory
 open Cerb_frontend
 open Mucore
@@ -321,7 +322,7 @@ let match_As errf loc env (args : aargs) (specs : ((Sym.t,BT.t) Binders.t) list)
        fail loc (errf (Missing_A (spec.name, spec.bound)))
     | ((arg,arg_loc) :: args), (spec :: specs) ->
        if BT.type_equal arg.bound spec.bound then
-         aux env (acc_substs@[(spec.name,arg.name)]) args specs
+         aux env (acc_substs@[{substitute=spec.name;swith= arg.name}]) args specs
        else
          let msm = Mismatch {mname = Some arg.name; 
                              has = A arg.bound; expected = A spec.bound} in
@@ -337,7 +338,7 @@ let record_lvars_for_unification (specs : ((Sym.t,LS.t) Binders.t) list) =
        let sym = Sym.fresh () in
        let uni = { spec = spec.bound; resolved = None } in
        let acc_unis = SymMap.add sym uni acc_unis in
-       let acc_substs = acc_substs@[(spec.name,sym)] in
+       let acc_substs = acc_substs@[{substitute=spec.name; swith= sym}] in
        aux acc_unis acc_substs specs
   in
   aux SymMap.empty [] specs
@@ -354,7 +355,7 @@ let match_Ls errf loc env (args : ((Sym.t,LS.t) Binders.t) list) (specs : ((Sym.
        return (acc_substs,env)
     | (arg :: args), (spec :: specs) ->
        if LS.type_equal arg.bound spec.bound then
-         aux env (acc_substs@[(spec.name,arg.name)]) args specs
+         aux env (acc_substs@[{substitute=spec.name;swith=arg.name}]) args specs
        else
          let msm = Mismatch {mname = Some arg.name; 
                              has = L arg.bound; expected = L spec.bound} in
@@ -390,16 +391,16 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
             fail loc (errf (Missing_R (spec.name, spec.bound)))
          | (o,r) :: owned_resources ->
             get_Rvar loc env r >>= fun (resource',env) ->
-            let resource' = RE.subst_var o owner resource' in
+            let resource' = RE.subst_var {substitute=o; swith=owner} resource' in
             debug_print 3 (action ("trying resource" ^ plain (RE.pp false resource'))) >>= fun () ->
             match RE.unify spec.bound resource' unis with
             | None -> try_resources owned_resources
             | Some unis ->
                find_resolved env unis >>= fun (_,new_substs) ->
-               let new_substs = (spec.name,r) :: (map snd new_substs) in
+               let new_substs = {substitute=spec.name; swith=r} :: (map snd new_substs) in
                let specs = 
-                 fold_left (fun r (s, s') -> 
-                     Binders.subst_list Sym.subst Resources.subst_var s s' r) 
+                 fold_left (fun r subst -> 
+                     Binders.subst_list Sym.subst Resources.subst_var subst r) 
                    specs new_substs
                in
                aux env (acc_substs@new_substs) unis specs
@@ -424,12 +425,14 @@ let rec unpack_struct loc genv tag =
        unpack_struct loc genv sym >>= fun ((newsym,bt),newbindings) ->
        let acc_fields = acc_fields @ [(Member name, Some newsym)] in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = A bt}] in
-       let fields = Binders.subst_list (fun _ _ m -> m) VarTypes.concretise_field name newsym fields in
+       let fields = Binders.subst_list (fun _ m -> m) VarTypes.concretise_field 
+                      {substitute=name;swith= newsym} fields in
        aux acc_bindings acc_fields fields
     | {name = Member name; bound = L (Base (ClosedStruct sym))} :: fields ->
        unpack_struct loc genv sym >>= fun ((newsym,bt),newbindings) ->
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = L (Base bt)}] in
-       let fields = Binders.subst_list (fun _ _ m -> m) VarTypes.concretise_field name newsym fields in
+       let fields = Binders.subst_list (fun _ m -> m) VarTypes.concretise_field 
+                      {substitute=name;swith= newsym} fields in
        aux acc_bindings acc_fields fields
     | {name = Member name;bound} :: fields ->
        let newsym = fresh () in
@@ -437,11 +440,13 @@ let rec unpack_struct loc genv tag =
        | A bt -> 
           let acc_bindings = acc_bindings @ [{name=newsym;bound = A bt}] in
           let acc_fields = acc_fields @ [(Member name, Some newsym)] in
-          let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
+          let fields = Binders.subst_list Id.subst VarTypes.concretise_field 
+                         {substitute=name;swith= newsym} fields in
           aux acc_bindings acc_fields fields
        | _ -> 
           let acc_bindings = acc_bindings @ [{name=newsym;bound}] in
-          let fields = Binders.subst_list Id.subst VarTypes.concretise_field name newsym fields in
+          let fields = Binders.subst_list Id.subst VarTypes.concretise_field 
+                         {substitute=name;swith= newsym} fields in
           aux acc_bindings acc_fields fields
        end
   in
@@ -456,11 +461,13 @@ let rec unpack_structs loc genv bindings =
   match bindings with
   | {name;bound = A (ClosedStruct typ)} :: bindings ->
      unpack_struct loc genv typ >>= fun ((newname,bt),newbindings) ->
-     unpack_structs loc genv (subst_var name newname bindings) >>= fun newbindings' ->
+     let subst = {substitute=name;swith=newname} in
+     unpack_structs loc genv (subst_var subst bindings) >>= fun newbindings' ->
      return (makeA newname bt :: newbindings @ newbindings')
   | {name;bound = L (Base (ClosedStruct typ))} :: bindings ->
      unpack_struct loc genv typ >>= fun ((newname,bt),newbindings) ->
-     unpack_structs loc genv (subst_var name newname bindings) >>= fun newbindings' ->
+     let subst = {substitute=name;swith= newname} in
+     unpack_structs loc genv (subst_var subst bindings) >>= fun newbindings' ->
      return (makeL newname (Base bt) :: newbindings @ newbindings')
   | b :: bindings ->
      unpack_structs loc genv bindings >>= fun newbindings ->
@@ -481,7 +488,8 @@ let rec pack_struct loc env typ aargs =
     | [] -> []
     | {name = Member name;bound} :: spec ->
        let newsym = fresh () in
-       let spec = Binders.subst_list Id.subst VarTypes.concretise_field name newsym spec in
+       let subst = {substitute=name;swith=newsym} in
+       let spec = Binders.subst_list Id.subst VarTypes.concretise_field subst spec in
        {name=newsym;bound} :: aux spec
   in
   subtype loc env aargs (aux decl.typ) "packing struct" >>= fun env ->
@@ -501,16 +509,16 @@ and pack_open_struct loc env tag fieldmap =
 
 
 and pack_structs_aargs loc env args =
-  let aargs_subst sym with_sym aargs = 
+  let aargs_subst subst aargs = 
     let (just_args,locs) = List.split aargs in
-    let aargs = Binders.subst_list Sym.subst BT.subst_var sym with_sym just_args in
+    let aargs = Binders.subst_list Sym.subst BT.subst_var subst just_args in
     List.combine aargs locs
   in
   let rec aux acc env = function
     | ({name;bound = OpenStruct (tag,fieldmap)},loc) :: args -> 
        pack_open_struct loc env tag fieldmap >>= fun ((newname,bt),env) ->
        aux (acc@[({name=newname;bound = bt},loc)]) env 
-         (aargs_subst name newname args)
+         (aargs_subst {substitute=name; swith=newname} args)
     | (b,loc) :: args -> 
        aux (acc@[(b,loc)]) env args
     | [] -> return (acc, env)
@@ -522,8 +530,9 @@ and pack_structs_largs loc env args =
   let rec aux acc env = function
     | {name;bound = LS.Base (OpenStruct (tag,fieldmap))} :: args -> 
        pack_open_struct loc env tag fieldmap >>= fun ((newname,bt),env) ->
+       let subst = {substitute=name;swith= newname} in
        aux (acc@[{name=newname;bound = LS.Base bt}]) env 
-         (Binders.subst_list Sym.subst LS.subst_var name newname args)
+         (Binders.subst_list Sym.subst LS.subst_var subst args)
     | b :: args -> 
        aux (acc@[b]) env args
     | [] -> return (acc, env)
@@ -545,27 +554,25 @@ and subtype loc_ret env (args : aargs) (rtyp : Types.t) ppdescr =
   pack_structs_aargs loc_ret env args >>= fun (args,env) ->
 
   match_As (fun e -> Call_error e) loc_ret env args rtyp.a >>= fun (substs,env) ->
-  let rtyp = List.fold_left (fun ftyp (sym,sym') -> subst_var sym sym' ftyp) 
-               {rtyp with a = []} substs  in
+  let rtyp = subst_vars substs {rtyp with a = []} in
 
   let (unis,substs) = record_lvars_for_unification rtyp.l in
-  let rtyp = List.fold_left (fun rtyp (sym,sym') -> subst_var sym sym' rtyp) 
-               {rtyp with l = []} substs in
+  let rtyp = subst_vars substs {rtyp with l = []} in
 
   match_Rs (fun e -> Call_error e) loc_ret env unis rtyp.r >>= fun (substs,unis,env) ->
-  let rtyp = fold_left (fun f (s, s') -> subst_var s s' f) {rtyp with r =  []} substs in
+  let rtyp = subst_vars substs {rtyp with r =  []} in
 
   ensure_unis_resolved loc_ret env unis >>= fun resolved ->
 
-  fold_leftM (fun (ts,env) (_,(_,sym)) -> 
-      get_ALvar loc_ret env sym >>= fun (bt,env) ->
-      return (ts@[{name=sym; bound = LS.Base bt}], env)
+  fold_leftM (fun (ts,env) (_,subst) -> 
+      get_ALvar loc_ret env subst.swith >>= fun (bt,env) ->
+      return (ts@[{name=subst.swith; bound = LS.Base bt}], env)
     ) ([],env) resolved >>= fun (largs,env) ->
   pack_structs_largs loc_ret env largs >>= fun (largs,env) ->
-  let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
+  let lspecs = map (fun (spec,subst) -> {name=subst.substitute;bound=spec}) resolved in
 
   match_Ls (fun e -> Call_error e) loc_ret env largs lspecs >>= fun (substs,env) ->
-  let rtyp = fold_left (fun f (s, s') -> subst_var s s' f) rtyp substs in
+  let rtyp = subst_vars substs rtyp in
 
   Solver.check_constraints_hold loc_ret env rtyp.c >>= fun () ->
   return env
@@ -586,27 +593,25 @@ let call_typ loc_call env (args : aargs) (ftyp : FunctionTypes.t) =
   pack_structs_aargs loc_call env args >>= fun (args,env) ->
 
   match_As (fun e -> Call_error e) loc_call env args ftyp.arguments2.a >>= fun (substs,env) ->
-  let ftyp = fold_left (fun ftyp (sym,sym') -> subst_var sym sym' ftyp) 
-               (updateAargs ftyp []) substs in
+  let ftyp = subst_vars substs (updateAargs ftyp []) in
 
   let (unis,substs) = record_lvars_for_unification ftyp.arguments2.l in
-  let ftyp = fold_left (fun ftyp (sym,sym') -> subst_var sym sym' ftyp) 
-               (updateLargs ftyp []) substs in
+  let ftyp = subst_vars substs (updateLargs ftyp []) in
 
   match_Rs (fun e -> Call_error e) loc_call env unis ftyp.arguments2.r >>= fun (substs,unis,env) ->
-  let ftyp = fold_left (fun f (s, s') -> subst_var s s' f) (updateRargs ftyp []) substs in
+  let ftyp = subst_vars substs (updateRargs ftyp []) in
 
   ensure_unis_resolved loc_call env unis >>= fun resolved ->
 
-  fold_leftM (fun (ts,env) (_,(_,sym)) -> 
-      get_ALvar loc_call env sym >>= fun (bt,env) ->
-      return (ts@[{name=sym; bound = LS.Base bt}], env)
+  fold_leftM (fun (ts,env) (_,subst) -> 
+      get_ALvar loc_call env subst.swith >>= fun (bt,env) ->
+      return (ts@[{name=subst.swith; bound = LS.Base bt}], env)
     ) ([],env) resolved >>= fun (largs,env) ->
   pack_structs_largs loc_call env largs >>= fun (largs,env) ->
-  let lspecs = map (fun (spec,(sym,_)) -> {name=sym;bound=spec}) resolved in
+  let lspecs = map (fun (spec,subst) -> {name=subst.substitute;bound=spec}) resolved in
 
   match_Ls (fun e -> Call_error e) loc_call env largs lspecs >>= fun (substs,env) ->
-  let ftyp = fold_left (fun f (s, s') -> subst_var s s' f) ftyp substs in
+  let ftyp = subst_vars substs ftyp in
   
   Solver.check_constraints_hold loc_call env ftyp.arguments2.c >>= fun () ->
 
@@ -673,8 +678,6 @@ let make_fun_arg_type sym loc ct =
     | [] -> return (lvars,resources)
     | b :: arg ->
        match b.bound with
-       (* | Block b -> 
-        *    return_resources (lvars, resources@[makeUR (Block b)]) arg  *)
        | Points p -> 
           begin match p.pointee with
           | Some s ->
@@ -685,14 +688,6 @@ let make_fun_arg_type sym loc ct =
           | None ->
              fail loc (Unreachable !^"uninitialised memory in argument list")
           end
-       (* | PackedStruct {sym = n} -> 
-        *    begin match List.assoc_opt n lvars with
-        *    | None -> 
-        *       return_resources (lvars,resources) arg
-        *    | Some name -> 
-        *       let resources = resources@[makeUR (PackedStruct {sym = name})] in
-        *       return_resources (lvars, resources) arg
-        *    end *)
   in
   let alrc_arg = Alrc.Types.from_type arg in
   return_resources ([],[]) alrc_arg.r >>= fun (lvar_substs,return_resources) ->
@@ -710,7 +705,7 @@ let make_fun_arg_type sym loc ct =
         match SymSet.elements (LC.vars_in b.bound) with
         | [n] -> 
            begin match List.assoc_opt n lvar_substs with
-           | Some name -> Some (makeUC (LC.subst_var n name b.bound))
+           | Some name -> Some (makeUC (LC.subst_var {substitute=n;swith= name} b.bound))
            | None -> None
            end
         | _ -> None

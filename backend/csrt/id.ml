@@ -14,4 +14,4 @@ let parse loc id =
   Symbol.Identifier (loc,id)
 
 
-let subst _ _ id = id
+let subst _ id = id
