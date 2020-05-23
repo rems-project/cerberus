@@ -39,8 +39,8 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 
 type struct_decl = 
-  {typ : (((string, VarTypes.t) Binders.t) list);
-   mcl: Memory.mcl}
+  { typ: (((BaseTypes.member, VarTypes.t) Binders.t) list);
+    mcl: Memory.mcl}
 
 
 module Global = struct 
@@ -61,8 +61,8 @@ module Global = struct
       impl_constants = ImplMap.empty;
       names = NameMap.empty }
 
-  let add_struct_decl genv (BaseTypes.S_Id sym) typ = 
-    { genv with struct_decls = SymMap.add sym typ genv.struct_decls }
+  let add_struct_decl genv (BaseTypes.Tag s) typ = 
+    { genv with struct_decls = SymMap.add s typ genv.struct_decls }
 
   let add_fun_decl genv fsym (loc, typ, ret_sym) = 
     { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
@@ -73,11 +73,11 @@ module Global = struct
   let add_impl_constant genv i typ = 
     { genv with impl_constants = ImplMap.add i typ genv.impl_constants }
 
-  let get_struct_decl loc genv (BaseTypes.S_Id sym) = 
-    match SymMap.find_opt sym genv.struct_decls with
+  let get_struct_decl loc genv (BaseTypes.Tag s) = 
+    match SymMap.find_opt s genv.struct_decls with
     | Some decl -> return decl 
     | None -> 
-       let err = !^"struct" ^^^ Sym.pp sym ^^^ !^"not defined" in
+       let err = !^"struct" ^^^ Sym.pp s ^^^ !^"not defined" in
        fail loc (Generic_error err)
 
   let get_fun_decl loc genv sym = 
@@ -99,7 +99,7 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
-    let pp_field f = dot ^^ !^(f.name) ^^^ colon ^^^ VarTypes.pp f.bound in
+    let pp_field {name = BaseTypes.Member f; bound} = dot ^^ !^f ^^^ colon ^^^ VarTypes.pp bound in
     pp_list None 
       (fun (sym, s) -> typ (bold (Sym.pp sym)) 
                          (braces (separate_map (semi ^^ space) pp_field s.typ)))
@@ -196,8 +196,8 @@ module Env = struct
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     lookup_sym loc env.local.vars name >>= function
     | R t -> return (R t, remove_var env name)
-    | A (Struct s) -> return (A (Struct s), remove_var env name)
-    | L (Base (Struct s)) -> return (L (Base (Struct s)), remove_var env name)
+    | A (ClosedStruct s) -> return (A (ClosedStruct s), remove_var env name)
+    | L (Base (ClosedStruct s)) -> return (L (Base (ClosedStruct s)), remove_var env name)
     | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 

@@ -4,8 +4,8 @@ module Loc = Locations
 
 
 type struct_decl = 
-  {typ : (((string, VarTypes.t) Binders.t) list);
-   mcl: Memory.mcl}
+  { typ : ((BaseTypes.member, VarTypes.t) Binders.t) list;
+    mcl: Memory.mcl }
 
 
 
@@ -18,7 +18,7 @@ module Global : sig
 
   val add_struct_decl : 
     t -> 
-    BaseTypes.struct_type -> 
+    BaseTypes.tag -> 
     struct_decl ->
     t
 
@@ -43,7 +43,7 @@ module Global : sig
   val get_struct_decl : 
     Loc.t ->
     t -> 
-    BaseTypes.struct_type -> 
+    BaseTypes.tag -> 
     (struct_decl, Loc.t * TypeErrors.type_error) Except.m
 
 

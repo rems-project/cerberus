@@ -6,8 +6,6 @@ let uncurry f (a,b)  = f a b
 let curry f a b = f (a,b)
 let flip f a b = f b a
 
-type num = Nat_big_num.num
-
 
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
