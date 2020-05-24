@@ -194,29 +194,34 @@ module Env = struct
   let remove_var env sym = { env with local = Local.remove_var env.local sym }
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
-    lookup_sym loc env.local.vars name >>= function
+    let* found = lookup_sym loc env.local.vars name in
+    match found with
     | R t -> return (R t, remove_var env name)
     | A (ClosedStruct s) -> return (A (ClosedStruct s), remove_var env name)
     | L (Base (ClosedStruct s)) -> return (L (Base (ClosedStruct s)), remove_var env name)
     | t -> return (t, env)
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    let* found = get_var loc env sym in
+    match found with
     | (A t, env) -> return (t, env)
     | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
 
   let get_Lvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    let* found = get_var loc env sym in
+    match found with
     | (L t, env) -> return (t, env)
     | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
 
   let get_Rvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    let* found = get_var loc env sym in
+    match found with
     | (R t, env) -> return (t, env)
     | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
 
   let get_Cvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
-    get_var loc env sym >>= function
+    let* found = get_var loc env sym in
+    match found with
     | (C t, env) -> return (t, env)
     | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
 

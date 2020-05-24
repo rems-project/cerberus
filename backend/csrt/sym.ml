@@ -54,10 +54,10 @@ let substs = make_substs subst
 let unify sym sym' res = 
   if sym = sym' then Some res
   else
-   SymMap.find_opt sym res >>= fun uni ->
-   match uni.resolved with
-   | Some s when s = sym' -> return res 
-   | Some s -> fail
-   | None -> 
-      let uni = { uni with resolved = Some sym' } in
-      return (SymMap.add sym uni res)
+    let* uni = SymMap.find_opt sym res in
+    match uni.resolved with
+    | Some s when s = sym' -> return res 
+    | Some s -> fail
+    | None -> 
+       let uni = { uni with resolved = Some sym' } in
+       return (SymMap.add sym uni res)

@@ -11,3 +11,6 @@ let (>>=) : 'a m -> ('a -> 'b m) -> 'b m =
   match a with
   | Some a -> f a 
   | None -> None
+
+
+let (let*) = (>>=)
