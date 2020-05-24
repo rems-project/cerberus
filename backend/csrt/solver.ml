@@ -29,18 +29,20 @@ let rec bt_to_sort loc env ctxt bt =
   | Loc -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
   | Tuple bts ->
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (string_of_int i)) bts in
-     mapM (bt_to_sort loc env ctxt) bts >>= fun sorts ->
+     let* sorts = mapM (bt_to_sort loc env ctxt) bts in
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
   | ClosedStruct typ ->
-     Environment.Global.get_struct_decl loc env.Env.global typ >>= fun decl ->
-     fold_leftM (fun (names,sorts) {name = Member id; bound = t} ->
-         match t with
-         | A bt | L (Base bt) -> 
-            bt_to_sort loc env ctxt bt >>= fun sort -> 
-            return (Z3.Symbol.mk_string ctxt id :: names, sort :: sorts)
-         | _ -> 
-            return (names,sorts)
-       ) ([],[]) decl.typ >>= fun (names,sorts) ->
+     let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
+     let* (names,sorts) = 
+       fold_leftM (fun (names,sorts) {name = Member id; bound = t} ->
+           match t with
+           | A bt | L (Base bt) -> 
+              let* sort = bt_to_sort loc env ctxt bt in
+              return (Z3.Symbol.mk_string ctxt id :: names, sort :: sorts)
+           | _ -> 
+              return (names,sorts)
+         ) ([],[]) decl.typ
+    in
      let name = Z3.Symbol.mk_string ctxt "struct" in
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
   | Array
@@ -68,70 +70,70 @@ let rec of_index_term loc env ctxt it =
   | Bool false -> 
      return (Z3.Boolean.mk_false ctxt)
   | Add (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_add ctxt [a;a'])
   | Sub (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_sub ctxt [a;a'])
   | Mul (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_mul ctxt [a; a'])
   | Div (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_div ctxt a a')
   | Exp (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_power ctxt a a')
   | Rem_t (it,it') -> 
-     warn !^"Rem_t constraint" >>= fun () -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* () = warn !^"Rem_t constraint" in
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
   | Rem_f (it,it') -> 
-     warn !^"Rem_f constraint" >>= fun () ->
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* () = warn !^"Rem_f constraint" in
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.Integer.mk_rem ctxt a a')
   | EQ (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Boolean.mk_eq ctxt a a')
   | NE (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Boolean.mk_distinct ctxt [a; a'])
   | LT (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_lt ctxt a a')
   | GT (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_gt ctxt a a') 
   | LE (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_le ctxt a a')
   | GE (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_ge ctxt a a')
   (* | Null t ->  *)
   | And (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a ->
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Boolean.mk_and ctxt [a; a'])
   | Or (it,it') -> 
-     of_index_term loc env ctxt it >>= fun a -> 
-     of_index_term loc env ctxt it' >>= fun a' ->
+     let* a = of_index_term loc env ctxt it in
+     let* a' = of_index_term loc env ctxt it' in
      return (Z3.Boolean.mk_or ctxt [a; a'])
   | Not it -> 
-     of_index_term loc env ctxt it >>= fun a ->
+     let* a = of_index_term loc env ctxt it in
      return (Z3.Boolean.mk_not ctxt a)
   (* | Tuple of t * t list
    * | Nth of num * t (\* of tuple *\)
@@ -141,7 +143,7 @@ let rec of_index_term loc env ctxt it =
    * | Tail of t *)
   | S (s,ls) -> 
      let s = sym_to_symbol ctxt s in
-     ls_to_sort loc env ctxt ls >>= fun bt ->
+     let* bt = ls_to_sort loc env ctxt ls in
      return (Z3.Expr.mk_const ctxt s bt)
   | _ -> 
      fail loc (Z3_IT_not_implemented_yet it)
@@ -171,19 +173,20 @@ let constraint_holds_given_constraints loc env constraints c =
   let ctxt = Z3.mk_context [("model","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: constraints) in
-  mapM (fun (LC it) -> tryM (of_index_term loc env ctxt it) 
-                         (of_index_term loc env ctxt (Bool true))) lcs >>= fun constrs ->
-  debug_print 4 (action "checking satisfiability of constraints") >>= fun () ->
-  debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) (LogicalConstraints.pp true) lcs)) >>= fun () ->
-  z3_check loc ctxt solver constrs >>= function
-  (* the conjunction of existing constraints and 'not c' is unsatisfiable *)
-  | UNSATISFIABLE -> 
-     return true
-  (* the conjunction of existing constraints and 'not c' is satisfiable *)
-  | SATISFIABLE ->
-     return false
+  let* constrs = 
+    mapM (fun (LC it) -> 
+        tryM (of_index_term loc env ctxt it) 
+          (of_index_term loc env ctxt (Bool true))
+      ) lcs 
+  in
+  let* () = debug_print 4 (action "checking satisfiability of constraints") in
+  let* () = debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) (LogicalConstraints.pp true) lcs)) in
+  let* checked = z3_check loc ctxt solver constrs in
+  match checked with
+  | UNSATISFIABLE -> return true
+  | SATISFIABLE -> return false
   | UNKNOWN ->
-     warn !^"constraint solver returned unknown" >>= fun () ->
+     let* () = warn !^"constraint solver returned unknown" in
      return false
 
 
@@ -202,13 +205,13 @@ let rec check_constraints_hold loc env constr =
   match constr with
   | [] -> return ()
   | {name; bound = c} :: constrs ->
-     debug_print 2 (action "checking constraint") >>= fun () ->
-     debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) >>= fun () ->
-     debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) >>= fun () ->
-     constraint_holds loc env c >>= function
-     | true -> 
-        debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) >>= fun () ->
-        check_constraints_hold loc env constrs
-     | false -> 
-        debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) >>= fun () ->
-        fail loc (Call_error (Unsat_constraint (name, c)))
+     let* () = debug_print 2 (action "checking constraint") in
+     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
+     let* () = debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) in
+     let* holds = constraint_holds loc env c in
+     if holds then
+       let* () = debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) in
+       check_constraints_hold loc env constrs
+     else
+       let* () = debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) in
+       fail loc (Call_error (Unsat_constraint (name, c)))

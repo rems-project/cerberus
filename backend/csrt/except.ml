@@ -14,6 +14,7 @@ let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) m =
 let fail_noloc e = Exception.fail e
 
 let (>>=) = except_bind
+let (let*) = except_bind
 
 (* this is dangerous when combined with effects: ">>" does not enforce
    evluation order in the right way *)

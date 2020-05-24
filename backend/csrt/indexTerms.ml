@@ -275,7 +275,7 @@ let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) =
   | And (it1, it2), And (it1', it2')
   | Or (it1, it2), Or (it1', it2')
     ->
-     unify it1 it1' res >>= fun res ->
+     let* res = unify it1 it1' res in
      unify it2 it2' res
 
   | Null it, Null it'
@@ -307,7 +307,7 @@ and unify_list its its' res =
   match its, its' with
   | [], [] -> return res
   | (it :: its), (it' :: its') ->
-     unify it it' res >>= fun res ->
+     let* res = unify it it' res in
      unify_list its its' res
   | _, _ ->
      fail

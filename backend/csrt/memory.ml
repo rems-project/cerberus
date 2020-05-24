@@ -32,9 +32,9 @@ let struct_ct_and_layout file loc genv (Tag s) fields =
   let rec aux acc_fields acc_padding position  = function
     | (id, (_attributes, _qualifier, ct)) :: fields ->
        let offset_ival = Impl_mem.offsetof_ival file.Mucore.mu_tagDefs s id in
-       integer_value_to_num Loc.unknown offset_ival >>= fun offset ->
+       let* offset = integer_value_to_num Loc.unknown offset_ival in
        if Num.greater_equal offset position then
-         size_of_ctype loc ct >>= fun size ->
+         let* size = size_of_ctype loc ct in
          let pstart = offset in
          let pend = Num.add offset size in
          let acc_fields = acc_fields@[(Member (Id.s id),{ct;pstart;pend})] in
@@ -48,7 +48,7 @@ let struct_ct_and_layout file loc genv (Tag s) fields =
          fail loc (Unreachable !^"struct offset too small")
     | [] -> return (acc_fields, acc_padding)
   in
-  aux [] [] zero fields >>= fun (fields,paddings) ->
+  let* (fields,paddings) = aux [] [] zero fields in
   return {fields;paddings}
   
 

@@ -65,7 +65,7 @@ let unify r1 r2 res =
   | Points p, Points p' when 
          Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
 
-     Sym.unify p.pointer p'.pointer res >>= fun res ->
+     let* res = Sym.unify p.pointer p'.pointer res in
      begin match p.pointee, p'.pointee with
      | Some s, Some s' -> Sym.unify s s' res
      | None, None -> return res
