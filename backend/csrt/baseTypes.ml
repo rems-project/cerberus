@@ -1,7 +1,6 @@
 open Tools
 open List
-open PPrint
-open Pp_tools
+open Pp
 module Loc=Locations
 module SymSet = Set.Make(Sym)
 

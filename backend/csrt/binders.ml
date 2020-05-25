@@ -1,4 +1,4 @@
-open Pp_tools
+open Pp
 
 
 type ('name, 'bound) t = {name : 'name; bound: 'bound}
@@ -7,7 +7,7 @@ let pp pp_name pp_bound {name;bound} =
   PPrint.parens (typ (pp_name name) (pp_bound bound))
 
 let pps pp_name pp_bound = 
-  Pp_tools.pp_list None (pp pp_name pp_bound)
+  pp_list None (pp pp_name pp_bound)
 
 let subst name_subst bound_subst subst b = 
   { name = name_subst subst b.name;

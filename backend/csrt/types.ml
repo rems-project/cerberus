@@ -1,4 +1,4 @@
-open PPrint
+open Pp
 open List
 
 
@@ -21,8 +21,20 @@ let names t = List.map (fun {Binders.name; _} -> name) t
 
 let rename newname t = 
   match t with
-  | [] -> Pp_tools.unsafe_warn !^"renaming empty return type"; []
+  | [] -> unsafe_warn !^"renaming empty return type"; []
   | {Binders.name; _} :: _ -> subst_var {substitute=name; swith=newname} t
 
 
 
+
+
+let makeA name bt = Binders.{name; bound = VarTypes.A bt}
+let makeL name ls = Binders.{name; bound = VarTypes.L ls}
+let makeR name re = Binders.{name; bound = VarTypes.R re}
+let makeC name lc = Binders.{name; bound = VarTypes.C lc}
+
+let makeU t = Binders.{name = Sym.fresh (); bound = t}
+let makeUA bt = makeA (Sym.fresh ()) bt
+let makeUL bt = makeL (Sym.fresh ()) bt
+let makeUR bt = makeR (Sym.fresh ()) bt
+let makeUC bt = makeC (Sym.fresh ()) bt

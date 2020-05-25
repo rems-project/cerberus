@@ -1,8 +1,6 @@
-open Cerb_frontend
+open Pp
 module Loc = Locations
-open PPrint
-open Pp_tools
-
+module CF=Cerb_frontend
 
 (* todo: make error messages use Binders.t *)
 
@@ -17,7 +15,7 @@ type call_return_switch_error =
 type type_error = 
  | Name_bound_twice of Sym.t
  | Unbound_name of Sym.t
- | Unbound_impl_const of Implementation.implementation_constant
+ | Unbound_impl_const of CF.Implementation.implementation_constant
  | Unreachable of PPrint.document
  | Unsupported of PPrint.document
  | Var_kind_error of {
@@ -31,7 +29,7 @@ type type_error =
  | Call_error of call_return_switch_error
  | Integer_value_error
  | Generic_error of PPrint.document
- | Undefined of Undefined.undefined_behaviour
+ | Undefined of CF.Undefined.undefined_behaviour
  | Unspecified
  | StaticError of string * Sym.t
  | Z3_fail of string
@@ -131,7 +129,7 @@ let pp (loc : Loc.t) (err : t) =
      *      (Loc.pp loc) (FunctionTypes.pp decl) (FunctionTypes.pp defn) *)
     | Unbound_impl_const i ->
        !^("Unbound implementation defined constant" ^
-           Implementation.string_of_implementation_constant i)
+           CF.Implementation.string_of_implementation_constant i)
     | Variadic_function fn ->
        !^"Variadic functions unsupported" ^^^ parens (Sym.pp fn)
     | Return_error err -> 
@@ -142,7 +140,7 @@ let pp (loc : Loc.t) (err : t) =
        !^"integer_value_to_num returned None"
     | Undefined undef ->
        !^"Undefined behaviour" ^^ colon ^^^ 
-         !^(Undefined.pretty_string_of_undefined_behaviour undef)
+         !^(CF.Undefined.pretty_string_of_undefined_behaviour undef)
     | Unspecified ->
        !^"Unspecified value"
     | StaticError (err, _pe) ->

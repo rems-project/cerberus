@@ -1,9 +1,10 @@
+module CF=Cerb_frontend
 open Except
 
 include Map.Make (
   struct 
-    type t = Cerb_frontend.Symbol.sym 
-    let compare = Cerb_frontend.Symbol.symbol_compare
+    type t = CF.Symbol.sym 
+    let compare = CF.Symbol.symbol_compare
   end
 )
 

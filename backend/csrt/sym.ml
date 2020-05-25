@@ -1,17 +1,18 @@
 open Tools
 open Subst
-open Cerb_frontend
+module CF = Cerb_frontend
+module S = CF.Symbol
 open Option
 
-type symbol = Symbol.sym
+type symbol = S.sym
 type t = symbol
 
 
-let fresh = Symbol.fresh
-let fresh_pretty = Symbol.fresh_pretty
-let pp sym = PPrint.string (Pp_symbol.to_string_pretty sym)
+let fresh = S.fresh
+let fresh_pretty = S.fresh_pretty
+let pp sym = PPrint.string (CF.Pp_symbol.to_string_pretty sym)
 
-let compare = Symbol.symbol_compare
+let compare = S.symbol_compare
 
 
 
