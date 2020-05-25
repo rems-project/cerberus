@@ -21,17 +21,16 @@ let run : config -> string -> unit = fun cfg c_file ->
   if cfg.no_expr_loc then Coq_pp.print_expr_locs := false;
   if cfg.no_stmt_loc then Coq_pp.print_stmt_locs := false;
   (* Get an absolute path to the file, for better error reporting. *)
-  let c_file =
-    if cfg.full_paths then
-      try Filename.realpath c_file with Invalid_argument(_) ->
-        Panic.panic_no_pos "File [%s] disappeared..." c_file
-    else c_file
+  let full_c_file =
+    try Filename.realpath c_file with Invalid_argument(_) ->
+      Panic.panic_no_pos "File [%s] disappeared..." c_file
   in
+  let c_file = if cfg.full_paths then full_c_file else c_file in
   (* Compute the path to the output files. *)
   let output_dir =
     match cfg.output_dir with
     | Some(dir) -> dir
-    | None      -> Filename.dirname c_file
+    | None      -> Filename.dirname full_c_file
   in
   let base_name =
     let name = Filename.basename c_file in
@@ -42,6 +41,19 @@ let run : config -> string -> unit = fun cfg c_file ->
   let code_file = outfile "_code.v" in
   let spec_file = outfile "_spec.v" in
   let fprf_file name = outfile ("_proof_" ^ name ^ ".v") in
+  (* Compute the import path (for the generated Coq files). *)
+  let path =
+    let path = List.tl (String.split_on_char '/' output_dir) in
+    let rec build_path path =
+      match path with
+      | "theories" :: path -> "refinedc" :: path
+      | _          :: path -> build_path path
+      | []                 ->
+      Panic.wrn None "A precise Coq import path cannot be derived form the \
+        given C source file.\nDefaulting to [refinedc]."; ["refinedc"]
+    in
+    String.concat "." (build_path path)
+  in
   (* Print the output of the preprocessor if necessary. *)
   if cfg.cpp_output then
     Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
@@ -54,7 +66,7 @@ let run : config -> string -> unit = fun cfg c_file ->
     Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
   (* Generate the spec, if necessary. *)
   if cfg.gen_spec then
-    Coq_pp.(write (Spec(cfg.imports, cfg.spec_ctxt)) spec_file coq_ast);
+    Coq_pp.(write (Spec(path, cfg.imports, cfg.spec_ctxt)) spec_file coq_ast);
   (* Generate the proof for each function, if necessary. *)
   let write_proof (id, def_or_decl) =
     let open Coq_ast in
@@ -66,7 +78,7 @@ let run : config -> string -> unit = fun cfg c_file ->
       if List.mem id cfg.no_proof then Rc_annot.Proof_trusted
       else Coq_ast.proof_kind def
     in
-    let mode = Fprf(def, cfg.imports, cfg.spec_ctxt, proof_kind) in
+    let mode = Fprf(path, def, cfg.imports, cfg.spec_ctxt, proof_kind) in
     write mode (fprf_file id) coq_ast
   in
   if cfg.gen_spec then List.iter write_proof coq_ast.functions
