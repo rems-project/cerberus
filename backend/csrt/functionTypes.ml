@@ -1,5 +1,4 @@
-open PPrint
-open Pp_tools
+open Pp
 
 type t = {arguments: Types.t; return: Types.t}
 

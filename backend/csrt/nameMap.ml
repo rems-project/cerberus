@@ -1,7 +1,6 @@
 open Except
 open TypeErrors
-open PPrint
-open Pp_tools
+open Pp
 
 
 module StringMap = Map.Make(String)

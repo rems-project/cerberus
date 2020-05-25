@@ -4,8 +4,7 @@ open Sym
 open Num
 open Option
 open List
-open PPrint
-open Pp_tools
+open Pp
 module Loc=Locations
 
 module SymSet = Set.Make(Sym)

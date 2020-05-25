@@ -1,17 +1,14 @@
 open Option
-open Cerb_frontend
-open Pp_core_ctype
+open Pp
 open List
-open PPrint
-open Pp_tools
-module Loc=Locations
-module IT=IndexTerms
-
+module Loc = Locations
+module IT = IndexTerms
+module CF = Cerb_frontend
 
 type points = 
   { pointer: Sym.t; 
     pointee: Sym.t option; 
-    typ: Cerb_frontend.Ctype.ctype;
+    typ: CF.Ctype.ctype;
     size: Num.t 
   }
 
@@ -62,8 +59,8 @@ let associated = function
 
 let unify r1 r2 res = 
   match r1, r2 with
-  | Points p, Points p' when 
-         Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
+  | Points p, Points p' when
+         CF.Ctype.ctypeEqual p.typ p'.typ && Num.equal p.size p'.size ->
 
      let* res = Sym.unify p.pointer p'.pointer res in
      begin match p.pointee, p'.pointee with

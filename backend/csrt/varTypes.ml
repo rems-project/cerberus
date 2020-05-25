@@ -1,5 +1,4 @@
-open PPrint
-open Pp_tools
+open Pp
 
 
 module Loc = Locations
@@ -58,4 +57,6 @@ let pp_kind = function
   | Logical -> !^"logical"
   | Resource -> !^"resource"
   | Constraint -> !^"constraint"
+
+
 

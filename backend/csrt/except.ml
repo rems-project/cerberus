@@ -1,7 +1,7 @@
 open Tools
-open Cerb_frontend
-open Exception
-open Pp_tools
+open Pp
+open Cerb_frontend.Exception
+
 
 
 type ('a,'e) m = ('a, 'e) exceptM
@@ -9,9 +9,9 @@ type ('a,'e) m = ('a, 'e) exceptM
 let return : 'a -> ('a,'e) m = except_return
 
 let fail : Locations.t -> 'e -> ('a, Locations.t * 'e) m = 
-  fun loc e -> Exception.fail (loc,e)
+  fun loc e -> fail (loc,e)
 
-let fail_noloc e = Exception.fail e
+let fail_noloc e = fail e
 
 let (>>=) = except_bind
 let (let*) = except_bind

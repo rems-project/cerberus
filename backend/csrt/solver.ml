@@ -1,27 +1,22 @@
 open Environment
-open Binders
-open VarTypes
 open List
-open BaseTypes
-open Cerb_frontend
-open IndexTerms
-open LogicalConstraints
-(* open PPrint *)
-open Pp_tools
+open Pp
 open TypeErrors
 open Except
 
-module LS=LogicalSorts
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
 
 
-let sym_to_symbol ctxt (Symbol.Symbol (_digest, num, _mstring)) =
+let sym_to_symbol ctxt sym =
+  let open Cerb_frontend.Symbol in
+  let (Symbol (_digest, num, _mstring)) = sym in
   Z3.Symbol.mk_int ctxt num
 
 (* maybe fix Loc *)
 let rec bt_to_sort loc env ctxt bt = 
+  let open BaseTypes in
   match bt with
   | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt "unit")
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
@@ -34,9 +29,9 @@ let rec bt_to_sort loc env ctxt bt =
   | ClosedStruct typ ->
      let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
      let* (names,sorts) = 
-       fold_leftM (fun (names,sorts) {name = Member id; bound = t} ->
+       fold_leftM (fun (names,sorts) Binders.{name = Member id; bound = t} ->
            match t with
-           | A bt | L (Base bt) -> 
+           | VarTypes.A bt | VarTypes.L (Base bt) -> 
               let* sort = bt_to_sort loc env ctxt bt in
               return (Z3.Symbol.mk_string ctxt id :: names, sort :: sorts)
            | _ -> 
@@ -50,7 +45,7 @@ let rec bt_to_sort loc env ctxt bt =
   | Path _ 
   | OpenStruct _
     ->
-     fail loc (Z3_LS_not_implemented_yet (LS.Base bt))
+     fail loc (Z3_LS_not_implemented_yet (LogicalSorts.Base bt))
   | FunctionPointer _ -> 
      return (Z3.Sort.mk_uninterpreted_s ctxt "function")
 
@@ -60,7 +55,8 @@ let ls_to_sort loc env ctxt ls =
 
 
 let rec of_index_term loc env ctxt it = 
-  let open PPrint in
+  let open Pp in
+  let open IndexTerms in
   match it with
   | Num n -> 
      let nstr = Nat_big_num.to_string n in
@@ -166,7 +162,8 @@ let z3_check loc ctxt solver constrs : (Z3.Solver.status, (Loc.t * TypeErrors.t)
   end
 
 
-let negate (LC c) = (LC (Not c))
+let negate (LogicalConstraints.LC c) = 
+  (LogicalConstraints.LC (Not c))
 
 let constraint_holds_given_constraints loc env constraints c = 
   let open PPrint in
@@ -174,7 +171,7 @@ let constraint_holds_given_constraints loc env constraints c =
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: constraints) in
   let* constrs = 
-    mapM (fun (LC it) -> 
+    mapM (fun (LogicalConstraints.LC it) -> 
         tryM (of_index_term loc env ctxt it) 
           (of_index_term loc env ctxt (Bool true))
       ) lcs 
@@ -204,7 +201,7 @@ let rec check_constraints_hold loc env constr =
   let open Env in
   match constr with
   | [] -> return ()
-  | {name; bound = c} :: constrs ->
+  | Binders.{name; bound = c} :: constrs ->
      let* () = debug_print 2 (action "checking constraint") in
      let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
      let* () = debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) in

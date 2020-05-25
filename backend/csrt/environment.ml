@@ -1,6 +1,4 @@
-open Cerb_frontend
-open PPrint
-open Pp_tools
+open Pp
 open List
 open VarTypes
 open Binders
@@ -8,7 +6,7 @@ open Except
 open TypeErrors
 
 module SymSet = Set.Make(Sym)
-
+module CF = Cerb_frontend
 module Loc = Locations
 module LC = LogicalConstraints
 module RE = Resources
@@ -21,8 +19,8 @@ module LS = LogicalSorts
 module ImplMap = 
   Map.Make
     (struct 
-      type t = Implementation.implementation_constant
-      let compare = Implementation.implementation_constant_compare 
+      type t = CF.Implementation.implementation_constant
+      let compare = CF.Implementation.implementation_constant_compare 
      end)
 
 
@@ -40,7 +38,7 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 type struct_decl = 
   { typ: (((BaseTypes.member, VarTypes.t) Binders.t) list);
-    mcl: Memory.mcl}
+    mcl: Memory.mcl }
 
 
 module Global = struct 
@@ -228,6 +226,43 @@ module Env = struct
   let filter_vars p env = 
     SymMap.fold (fun sym t acc -> if p sym t then sym :: acc else acc) 
       env.local.vars []
+
+
+  let add_vars env bindings = fold_left add_var env bindings
+  let remove_vars env names = fold_left remove_var env names
+  let get_vars loc env vars = 
+    fold_leftM (fun (acc,env) sym ->
+        let* (t,env) = get_var loc env sym in
+        return (acc@[t], env)
+      ) ([],env) vars
+
+  let add_Avar env b = add_var env {name = b.name; bound = A b.bound}
+  let add_Lvar env b = add_var env {name = b.name; bound = L b.bound}
+  let add_Rvar env b = add_var env {name = b.name; bound = R b.bound}
+  let add_Cvar env b = add_var env {name = b.name; bound = C b.bound}
+  let add_Avars env vars = List.fold_left add_Avar env vars
+  let add_Lvars env vars = List.fold_left add_Lvar env vars
+  let add_Rvars env vars = List.fold_left add_Rvar env vars
+  let add_Cvars env vars = List.fold_left add_Cvar env vars
+
+  let get_ALvar loc env var = 
+    tryM 
+      (let* (Base bt, env) = get_Lvar loc env var in 
+       return (bt, env))
+      (get_Avar loc env var)
+
+
+  let get_Avars loc env vars = 
+    fold_leftM (fun (acc,env) sym ->
+        let* (t,env) = get_Avar loc env sym in
+        return (acc@[t], env)
+      ) ([],env) vars
+
+  let get_Rvars loc env vars = 
+    fold_leftM (fun (acc,env) sym ->
+        let* (t,env) = get_Rvar loc env sym in
+        return (acc@[t], env)
+      ) ([],env) vars
 
 
   let resources_associated_with env sym = 
