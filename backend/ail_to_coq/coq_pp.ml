@@ -686,14 +686,13 @@ let collect_invs : func_def -> (string * loop_annot) list = fun def ->
   in
   SMap.fold fn def.func_blocks []
 
-let pp_spec : import list -> string list -> Coq_ast.t pp =
-    fun imports ctxt ff ast ->
+let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
+    fun import_path imports ctxt ff ast ->
   (* Stuff for import of the code. *)
   let basename =
     let name = Filename.basename ast.source_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
-  let import_path = "refinedc" in (* FIXME generic? Do something smarter? *)
 
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
@@ -997,8 +996,8 @@ let pp_spec : import list -> string list -> Coq_ast.t pp =
   List.iter pp_opaque !opaque;
   pp "@]"
 
-let pp_proof : func_def -> import list -> string list -> proof_kind
-    -> Coq_ast.t pp = fun def imports ctxt proof_kind ff ast ->
+let pp_proof : string -> func_def -> import list -> string list -> proof_kind
+    -> Coq_ast.t pp = fun import_path def imports ctxt proof_kind ff ast ->
   (* Formatting utilities. *)
   let pp fmt = Format.fprintf ff fmt in
 
@@ -1020,7 +1019,6 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
     let name = Filename.basename ast.source_file in
     try Filename.chop_extension name with Invalid_argument(_) -> name
   in
-  let import_path = "refinedc" in (* FIXME generic? Do something smarter? *)
 
   (* Printing some header. *)
   pp "@[<v 0>From refinedc.typing Require Import typing.@;";
@@ -1235,15 +1233,15 @@ let pp_proof : func_def -> import list -> string list -> proof_kind
 
 type mode =
   | Code of import list
-  | Spec of import list * string list
-  | Fprf of func_def * import list * string list * proof_kind
+  | Spec of string * import list * string list
+  | Fprf of string * func_def * import list * string list * proof_kind
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let pp =
     match mode with
-    | Code(imports)               -> pp_code imports
-    | Spec(imports,ctxt)          -> pp_spec imports ctxt
-    | Fprf(def,imports,ctxt,kind) -> pp_proof def imports ctxt kind
+    | Code(imports)                    -> pp_code imports
+    | Spec(path,imports,ctxt)          -> pp_spec path imports ctxt
+    | Fprf(path,def,imports,ctxt,kind) -> pp_proof path def imports ctxt kind
   in
   (* We write to a buffer. *)
   let buffer = Buffer.create 4096 in
