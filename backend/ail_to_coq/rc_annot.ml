@@ -2,60 +2,126 @@ open Earley_core
 open Earley
 open Extra
 
-(** {3 Combinators and tokens} *)
+(** {3 Combinators and utilities} *)
 
-(** [well_bracketed c_op c_cl] is a grammar that accepts strings starting with
-    character [c_op], and ending with character [c_cl]. Moreover, strings with
-    non-well-bracketed occurences of [c_op] and [c_cl] are rejected. The input
-    ["(aa(b)(c))"] is hence accepted by [well_bracketed '(' ')'], and this has
-    the effect of producing ["aa(b)(c)"] as semantic action. However, with the
-    same parameters the input ["(aa(b)(c)"] would be rejected. *)
-let well_bracketed : char -> char -> string Earley.grammar = fun c_op c_cl ->
+type 'a quot_elt =
+  | Quot_plain of string
+  | Quot_anti  of 'a
+
+type 'a quoted = 'a quot_elt list
+
+(** [well_bracketed c_op c_cl anti_gr] is a grammar accepting strings starting
+    with character [c_op], and ending with character [c_cl]. Moreover, strings
+    with non-well-bracketed occurences of characters [c_op] / [c_cl] and ['{']
+    / ['}'] are rejected. A sequence of the form ["!{text}"] is interpreted as
+    an antiquotation. Its contents (here, ["text"]) is parsed using [anti_gr],
+    an it should itself be well-bracketed in terms of ['{'] / ['}']. Note that
+    the produced semantic value is a list of elements that can be either plain
+    text (using the [Quot_plain(s)] constructor) or an anti-quotation (using a
+    [Quot_anti(e)] constructor). *)
+let well_bracketed : char -> char -> 'a grammar -> 'a quoted grammar =
+    fun c_op c_cl anti_gr ->
   let fn buf pos =
+    let elts = ref [] in
     let str = Buffer.create 20 in
-    let rec loop nb_op buf pos =
-      let (c, buf, pos) = Input.read buf pos in
-      match c with
-      (* Opening/closing character. *)
-      | _ when c = c_op              ->
-          Buffer.add_char str c;
-          loop (nb_op + 1) buf pos
-      | _ when c = c_cl && nb_op = 1 ->
-          (buf, pos) (* Done. *)
-      | _ when c = c_cl              ->
-          Buffer.add_char str c;
-          loop (nb_op - 1) buf pos
-      (* EOF: error. *)
-      | '\255'                       ->
-          Earley.give_up ()
-      (* Interpret some escape sequences. *)
-      | '\\'                         ->
-          let (c, buf, pos) = Input.read buf pos in
-          let c =
-            match c with
-            | '\255' -> Earley.give_up () (* EOF: error. *)
-            | '"'    -> '"'
-            | '\\'   -> '\\'
-            | 'n'    -> '\n'
-            | 't'    -> '\t'
-            | _      -> Earley.give_up () (* Bad escape sequence. *)
-          in
-          Buffer.add_char str c;
-          loop nb_op buf pos
-      (* Anything else is just taken. *)
-      | _                            ->
-          Buffer.add_char str c;
-          loop nb_op buf pos
+    let flush_plain () =
+      elts := (Quot_plain(Buffer.contents str)) :: !elts;
+      Buffer.clear str
     in
-    let (buf, pos) = loop 1 buf (pos + 1) in
-    (Buffer.contents str, buf, pos)
+    let flush_anti () =
+      (*Printf.eprintf "PARSING ANTIQUOTATION\n%!";*)
+      let text = Buffer.contents str in
+      let anti =
+        let parse = Earley.parse_string anti_gr Blanks.default in
+        try parse text with Earley.Parse_error(_,_) ->
+          assert false (* FIXME fail correctly *)
+      in
+      elts := (Quot_anti(anti)) :: !elts;
+      Buffer.clear str
+    in
+    let rec loop state buf pos =
+      let (c, next_buf, next_pos) = Input.read buf pos in
+      (*
+      begin
+        Printf.eprintf "READING [%c] IN STATE " c;
+        match state with
+        | `Init(i)   -> Printf.eprintf "Init(%i)\n%!" i
+        | `Bang(i)   -> Printf.eprintf "Bang(%i)\n%!" i
+        | `Anti(k,i) -> Printf.eprintf "Anti(%i,%i)\n%!" k i
+      end;
+      *)
+      match (c, state) with
+      | ('\255', _       )               -> (* EOF, error. *)
+          Earley.give_up ()
+      | ('\\'  , _       )               -> (* Escape sequence. *)
+          let c = Input.get next_buf next_pos in
+          if not (List.mem c ['\255'; '"'; '\\']) then Earley.give_up ();
+          (* We only need to remove the [`\\`] here. *)
+          loop state next_buf next_pos;
+      | (_     , `Init(i)  ) when c = c_op -> (* Normal mode opening. *)
+          Buffer.add_char str c; loop (`Init(i+1)) next_buf next_pos
+      | (_     , `Init(1)  ) when c = c_cl -> (* Normal mode final closing. *)
+          flush_plain (); (next_buf, next_pos)
+      | (_     , `Init(i)  ) when c = c_cl -> (* Normal mode closing. *)
+          Buffer.add_char str c; loop (`Init(i-1)) next_buf next_pos
+      | ('!'   , `Init(i)  )               -> (* Potential antiquotation. *)
+          loop (`Bang(i)) next_buf next_pos
+      | ('{'   , `Bang(i)  )               -> (* Actual antiquotation. *)
+          flush_plain (); loop (`Anti(1,i)) next_buf next_pos
+      | (_     , `Bang(i)  )               -> (* No antiquot. after all. *)
+          Buffer.add_char str '!'; loop (`Init(i)) buf pos
+      | ('{'   , `Anti(k,i))               -> (* Antiquot. operning. *)
+          Buffer.add_char str c; loop (`Anti(k+1,i)) next_buf next_pos
+      | ('}'   , `Anti(1,i))               -> (* Antiquot. final closing. *)
+          flush_anti (); loop (`Init(i)) next_buf next_pos
+      | ('}'   , `Anti(k,i))               -> (* Antiquot. closing. *)
+          Buffer.add_char str '}'; loop (`Anti(k-1,i)) next_buf next_pos
+      | (_     , _         )               -> (* Normal character. *)
+          Buffer.add_char str c; loop state next_buf next_pos
+    in
+    let (buf, pos) = loop (`Init(1)) buf (pos + 1) in
+    (List.rev !elts, buf, pos)
   in
   let name = Printf.sprintf "<%cwell-bracketed%c>" c_op c_cl in
   Earley.black_box fn (Charset.singleton c_op) false name
 
-type ident     = string
-type iris_term = string
-type coq_term  = string
+(** {3 Annotations AST} *)
+
+type ident   = string
+type pattern = ident list
+
+type coq_term  = type_expr quoted
+
+and  iris_term = type_expr quoted
+
+and coq_expr =
+  | Coq_ident of string
+  | Coq_all   of coq_term
+
+and constr =
+  | Constr_Iris  of iris_term
+  | Constr_exist of string * coq_expr option * constr
+  | Constr_own   of string * ptr_kind * type_expr
+  | Constr_Coq   of coq_expr
+
+and ptr_kind = Own | Shr | Frac of coq_expr
+
+and type_expr =
+  | Ty_refine of coq_expr * type_expr
+  | Ty_ptr    of ptr_kind * type_expr
+  | Ty_dots
+  | Ty_exists of ident * coq_expr option * type_expr
+  | Ty_constr of type_expr * constr
+  | Ty_params of ident * type_expr_arg list
+  | Ty_Coq    of coq_expr
+
+and type_expr_arg =
+  | Ty_arg_expr   of type_expr
+  | Ty_arg_lambda of pattern * coq_expr option * type_expr_arg
+
+type annot_arg = int * int * coq_expr
+
+(** {3 Main grammar defintions} *)
 
 (** Identifier token (regexp ["[A-Za-z_]+"]). *)
 let ident : ident Earley.grammar =
@@ -78,92 +144,56 @@ let integer : int Earley.grammar =
   in
   Earley.black_box fn cs false "<integer>"
 
-(** Arbitrary ("well-bracketed") string delimited by ['['] and [']']. *)
-let iris_term : iris_term Earley.grammar =
-  well_bracketed '[' ']'
-
-(** Arbitrary ("well-bracketed") string delimited by ['{'] and ['}']. *)
-let coq_term : coq_term Earley.grammar =
-  well_bracketed '{' '}'
-
-(** {3 Main grammars} *)
-
-type coq_expr =
-  | Coq_ident of string
-  | Coq_all   of string
-
-type pattern = ident list
-
-type constr =
-  | Constr_Iris  of string
-  | Constr_exist of string * coq_expr option * constr
-  | Constr_own   of string * ptr_kind * type_expr
-  | Constr_Coq   of coq_expr
-
-and ptr_kind = Own | Shr | Frac of coq_expr
-
-and type_expr =
-  | Ty_refine of coq_expr * type_expr
-  | Ty_ptr    of ptr_kind * type_expr
-  | Ty_dots
-  | Ty_exists of ident * coq_expr option * type_expr
-  | Ty_constr of type_expr * constr
-  | Ty_params of ident * type_expr_arg list
-  | Ty_Coq    of coq_expr
-
-and type_expr_arg =
-  | Ty_arg_expr   of type_expr
-  | Ty_arg_lambda of pattern * coq_expr option * type_expr_arg
-
-let type_void : type_expr = Ty_params("void", [])
-
-type annot_arg = int * int * coq_expr
-
-type type_expr_prio = PAtom | PCstr | PFull
-
-let parser coq_expr =
-  | x:ident    -> Coq_ident(x)
-  | s:coq_term -> Coq_all(s)
-
 let parser pattern =
   | "(" ")"                         -> []
   | x:ident                         -> [x]
   | "(" x:ident xs:{"," ident}+ ")" -> x :: xs
 
-let parser constr =
+(** Arbitrary ("well-bracketed") string delimited by ['{'] and ['}']. *)
+let parser coq_term  = (well_bracketed '{' '}' (type_expr `Full))
+
+(** Arbitrary ("well-bracketed") string delimited by ['['] and [']']. *)
+and parser iris_term = (well_bracketed '[' ']' (type_expr `Full))
+
+and parser coq_expr =
+  | x:ident    -> Coq_ident(x)
+  | s:coq_term -> Coq_all(s)
+
+and parser constr =
   | s:iris_term                                   -> Constr_Iris(s)
   | "∃" x:ident a:{":" coq_expr}? "." c:constr    -> Constr_exist(x,a,c)
   | x:ident "@" (k,ty):ptr_type                   -> Constr_own(x,k,ty)
   | c:coq_expr                                    -> Constr_Coq(c)
 
 and parser ptr_type =
-  | "&own<" ty:(type_expr PFull) ">"                 -> (Own    , ty)
-  | "&shr<" ty:(type_expr PFull) ">"                 -> (Shr    , ty)
-  | "&frac<" e:coq_expr "," ty:(type_expr PFull) ">" -> (Frac(e), ty)
+  | "&own<" ty:(type_expr `Full) ">"                 -> (Own    , ty)
+  | "&shr<" ty:(type_expr `Full) ">"                 -> (Shr    , ty)
+  | "&frac<" e:coq_expr "," ty:(type_expr `Full) ">" -> (Frac(e), ty)
 
-and parser type_expr @(p : type_expr_prio) =
-  | c:coq_expr ty:{"@" (type_expr PAtom)}?
-      when p >= PAtom -> begin
-                           match (c, ty) with
-                           | (Coq_ident(x), None    ) -> Ty_params(x,[])
-                           | (_           , None    ) -> Ty_Coq(c)
-                           | (_           , Some(ty)) -> Ty_refine(c,ty)
-                         end
+and parser type_expr @(p : [`Atom | `Cstr | `Full]) =
+  | c:coq_expr ty:{"@" (type_expr `Atom)}?
+      when p >= `Atom ->
+        begin
+          match (c, ty) with
+          | (Coq_ident(x), None    ) -> Ty_params(x,[])
+          | (_           , None    ) -> Ty_Coq(c)
+          | (_           , Some(ty)) -> Ty_refine(c,ty)
+        end
   | (k,ty):ptr_type
-      when p >= PAtom -> Ty_ptr(k, ty)
+      when p >= `Atom -> Ty_ptr(k, ty)
   | id:ident "<" tys:type_args ">"
-      when p >= PAtom -> Ty_params(id,tys)
+      when p >= `Atom -> Ty_params(id,tys)
   | "..."
-      when p >= PAtom -> Ty_dots
-  | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr PFull)
-      when p >= PFull -> Ty_exists(x,a,ty)
-  | ty:(type_expr PCstr) "&" c:constr
-      when p >= PCstr -> Ty_constr(ty,c)
-  | "(" ty:(type_expr PFull) ")"
-      when p >= PAtom -> ty
+      when p >= `Atom -> Ty_dots
+  | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr `Full)
+      when p >= `Full -> Ty_exists(x,a,ty)
+  | ty:(type_expr `Cstr) "&" c:constr
+      when p >= `Cstr -> Ty_constr(ty,c)
+  | "(" ty:(type_expr `Full) ")"
+      when p >= `Atom -> ty
 
 and parser type_expr_arg =
-  | ty:(type_expr PFull)
+  | ty:(type_expr `Full)
       -> Ty_arg_expr(ty)
   | "λ" p:pattern a:{":" coq_expr}? "." tya:type_expr_arg
       -> Ty_arg_lambda(p,a,tya)
@@ -172,7 +202,7 @@ and parser type_args =
   | EMPTY                                   -> []
   | e:type_expr_arg es:{"," type_expr_arg}* -> e::es
 
-let type_expr = type_expr PFull
+let type_expr = type_expr `Full
 
 (** {3 Entry points} *)
 
@@ -424,7 +454,7 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
 
   { fa_parameters = !parameters
   ; fa_args       = !args
-  ; fa_returns    = Option.get type_void !returns
+  ; fa_returns    = Option.get (Ty_params("void", [])) !returns
   ; fa_exists     = !exists
   ; fa_requires   = !requires
   ; fa_ensures    = !ensures
