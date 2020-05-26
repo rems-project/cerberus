@@ -262,8 +262,8 @@ let is_derived_declarator ty =
 
 (* TODO *)
 (* STD §6.2.5#1, sentence 4 *)
-val is_complete: forall 'a. sigma 'a -> ctype -> bool
-let is_complete sigm ty =
+val     is_complete: forall 'a. sigma 'a -> ctype -> bool
+let rec is_complete sigm ty =
   (* NOTE: for atomic types we look at the argument type. The standard doesn't say
      when/whether atomic types are complete... *)
   match unatomic_ ty with
@@ -275,10 +275,13 @@ let is_complete sigm ty =
       true
   | Pointer _ _ ->
       true
-  | Array _ n_opt ->
+  | Array elem_ty n_opt ->
       (* STD §6.2.5#22, sentence 1-2 *)
       (* STD §6.7.6.2#4, sentence 1 *)
-      isJust n_opt
+      (* NOTE: because this function is also called during the desugaring, it is possible for the element type
+         to be incomplete: if it is a struct type whose declaration has not yet been completed *)
+          is_complete sigm elem_ty
+      &&  isJust n_opt
     (* STD §6.2.5#22, sentence 3-4 *)
   | Struct sym ->
       match List.lookup sym sigm.tag_definitions with
