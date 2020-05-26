@@ -1216,7 +1216,8 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
           in
           extend acc layout
         in
-        List.rev (List.fold_left fn [] struct_members)
+        let deps = List.rev (List.fold_left fn [] struct_members) in
+        List.filter (fun s -> s <> id) (List.sort_uniq String.compare deps)
       in
       let struct_ =
         { struct_name = id ; struct_annot ; struct_deps
