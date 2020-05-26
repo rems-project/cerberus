@@ -156,6 +156,6 @@ let pp (loc : Loc.t) (err : t) =
 
 
 
-let report_type_error loc err : unit = 
-  unsafe_error (pp loc err)
+(* let report_type_error loc err : unit = 
+ *   unsafe_error (pp loc err) *)
 

@@ -1,3 +1,4 @@
+open Except
 open Pp
 open List
 
@@ -21,8 +22,11 @@ let names t = List.map (fun {Binders.name; _} -> name) t
 
 let rename newname t = 
   match t with
-  | [] -> unsafe_warn !^"renaming empty return type"; []
-  | {Binders.name; _} :: _ -> subst_var {substitute=name; swith=newname} t
+  | [] -> 
+     let* () = warn !^"renaming empty return type" in
+     return []
+  | {Binders.name; _} :: _ -> 
+     return (subst_var {substitute=name; swith=newname} t)
 
 
 

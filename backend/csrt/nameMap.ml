@@ -12,21 +12,21 @@ type t =
     loc_of_sym : Locations.t SymMap.t;
   }
 
-let sym_of loc (string : string) (namemap : t) : (Sym.symbol,'e) m  = 
+let sym_of loc (string : string) (namemap : t) : Sym.symbol m  =
   match StringMap.find_opt string namemap.sym_of_name with
   | Some sym -> return sym
   | None -> 
      let err = !^ "Unbound name" ^^^ squotes (!^ string) in
      Except.fail loc (Generic_error err)
 
-let name_of loc (sym : Sym.t) (namemap : t) : (string,'e) m  = 
+let name_of loc (sym : Sym.t) (namemap : t) : string m  = 
   match SymMap.find_opt sym namemap.name_of_sym with
   | Some name -> return name
   | None -> 
      let err = !^ "Unbound name" ^^^ squotes (Sym.pp sym) in
      Except.fail loc (Generic_error err)
 
-let loc_of loc (sym : Sym.t) (namemap : t) : (Locations.t,'e) m  = 
+let loc_of loc (sym : Sym.t) (namemap : t) : Locations.t m  = 
   match SymMap.find_opt sym namemap.loc_of_sym with
   | Some loc -> return loc
   | None -> 

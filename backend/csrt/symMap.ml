@@ -1,5 +1,4 @@
 module CF=Cerb_frontend
-open Except
 
 include Map.Make (
   struct 
@@ -8,7 +7,7 @@ include Map.Make (
   end
 )
 
-let foldM 
-      (f : key -> 'x -> 'y -> ('y,'e) m)
-      (map : 'x t) (init: 'y) : ('y,'e) m =
-  fold (fun k v a -> let* a = a in f k v a) map (return init)
+(* let foldM 
+ *       (f : key -> 'x -> 'y -> ('y,'e) m)
+ *       (map : 'x t) (init: 'y) : ('y,'e) m =
+ *   fold (fun k v a -> let* a = a in f k v a) map (return init) *)

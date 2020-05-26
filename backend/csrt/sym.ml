@@ -29,13 +29,11 @@ type ('spec, 'res) t = {
 
 
 let find_resolved env unis = 
-  SymMap.foldM
+  SymMap.fold
     (fun usym {spec; resolved} (unresolveds,resolveds) ->
       match resolved with
-      | None ->
-         Except.return (SymMap.add usym spec unresolveds, resolveds)
-      | Some sym -> 
-         Except.return (unresolveds, (spec, {substitute=usym; swith=sym}) :: resolveds)
+      | None -> (SymMap.add usym spec unresolveds, resolveds)
+      | Some sym -> (unresolveds, (spec, {substitute=usym; swith=sym}) :: resolveds)
     ) unis (SymMap.empty, [])
 
 end

@@ -21,7 +21,7 @@ let rec bt_to_sort loc env ctxt bt =
   | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt "unit")
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
   | Int -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
-  | Loc -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
+  | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt "loc")
   | Tuple bts ->
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (string_of_int i)) bts in
      let* sorts = mapM (bt_to_sort loc env ctxt) bts in
@@ -145,7 +145,7 @@ let rec of_index_term loc env ctxt it =
      fail loc (Z3_IT_not_implemented_yet it)
 
 
-let z3_check loc ctxt solver constrs : (Z3.Solver.status, (Loc.t * TypeErrors.t)) m = 
+let z3_check loc ctxt solver constrs : Z3.Solver.status m = 
   begin 
     let logfile = "/tmp/z3.log" in
     if not (Z3.Log.open_ logfile) 
