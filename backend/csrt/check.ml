@@ -36,6 +36,19 @@ module SymSet = Set.Make(Sym)
 let pp_budget = Some 7
 
 
+
+let error pp =
+  CB.Pipeline.run_pp None 
+    (hardline ^^
+     hardline ^^ 
+     !^(redb "[!] Error") ^/^ pp ^^
+     hardline
+    );
+  exit 1
+
+
+
+
 let assoc_err loc list entry err =
   match List.assoc_opt list entry with
   | Some result -> return result
@@ -224,7 +237,7 @@ let resources_associated_with_var_or_equals loc env owner =
 
 
 
-let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : (BT.t option, 'e) m =
+let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : BT.t option m =
   fold_leftM (fun mt ({name = sym; bound = bt},loc) ->
       match mt with
       | None -> 
@@ -313,7 +326,7 @@ let match_Ls errf loc env (args : ((Sym.t,LS.t) Binders.t) list) (specs : ((Sym.
 
 
 let ensure_unis_resolved loc env unis =
-  let* (unresolved,resolved) = Uni.find_resolved env unis in
+  let (unresolved,resolved) = Uni.find_resolved env unis in
   if SymMap.is_empty unresolved then return resolved else
     let (usym, spec) = SymMap.find_first (fun _ -> true) unresolved in
     fail loc (Call_error (Unconstrained_l (usym,spec)))
@@ -343,7 +356,7 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
             match RE.unify spec.bound resource' unis with
             | None -> try_resources owned_resources
             | Some unis ->
-               let* (_,new_substs) = Uni.find_resolved env unis in
+               let (_,new_substs) = Uni.find_resolved env unis in
                let new_substs = {substitute=spec.name; swith=r} :: (map snd new_substs) in
                let specs = 
                  fold_left (fun r subst -> 
@@ -784,7 +797,7 @@ let infer_object_value loc env ov =
      fail loc (Unsupported !^"floats")
 
 
-let infer_value loc env v : (Types.t * Env.t,'e) m = 
+let infer_value loc env v : (Types.t * Env.t) m = 
   match v with
   | M_Vobject ov
   | M_Vloaded (M_LVspecified ov) ->
@@ -999,7 +1012,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_structs loc env.global rt in
-           check_pexpr loc (add_vars env (rename newname rt)) e2 typ
+           let* rt = rename newname rt in
+           check_pexpr loc (add_vars env rt) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -1010,7 +1024,8 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_structs loc env.global rt in
-           check_pexpr loc (add_vars env (rename newname rt)) e2 typ
+           let* rt = rename newname rt in
+           check_pexpr loc (add_vars env rt) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
@@ -1350,7 +1365,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_structs loc env.global rt in
-           check_expr loc (add_vars env (rename newname rt)) e2 typ
+           let* rt = rename newname rt in
+           check_expr loc (add_vars env rt) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end
      | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
@@ -1361,7 +1377,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_structs loc env.global rt in
-           check_expr loc (add_vars env (rename newname rt)) e2 typ
+           let* rt = rename newname rt in
+           check_expr loc (add_vars env rt) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
@@ -1379,7 +1396,8 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_structs loc env.global rt in
-           check_expr loc (add_vars env (rename newname rt)) e2 typ
+           let* rt = rename newname rt in
+           check_expr loc (add_vars env rt) e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
         end        
      | M_Pattern (annots, M_CaseCtor _) ->
@@ -1596,8 +1614,8 @@ let check_and_report core_file =
   match check core_file with
   | Result () -> ()
   | Exception (loc,err) -> 
-     report_type_error loc err;
-     raise (Failure "type error")
+     let pped = TypeErrors.pp loc err in
+     error pped
 
 
 

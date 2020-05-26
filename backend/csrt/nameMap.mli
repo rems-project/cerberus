@@ -1,22 +1,24 @@
+open Except
+
 type t
 
 val sym_of : 
   Locations.t -> 
   string -> 
   t -> 
-  (Sym.symbol,Location_ocaml.t * TypeErrors.type_error) Except.m
+  Sym.symbol m
 
 val name_of : 
   Locations.t -> 
   Sym.t -> 
   t -> 
-  (string,Location_ocaml.t * TypeErrors.type_error) Except.m
+  string m
 
 val loc_of : 
   Locations.t -> 
   Sym.t -> 
   t  -> 
-  (Locations.t,Location_ocaml.t * TypeErrors.type_error) Except.m
+  Locations.t m
 
 val all_names : 
   t ->

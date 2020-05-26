@@ -44,6 +44,8 @@ type t =
   | Head of t
   | Tail of t
 
+  | LocOf of t
+
   | S of Sym.t * LogicalSorts.t
   | StructDefField of string * BaseTypes.t
 
@@ -96,6 +98,8 @@ let rec pp atomic it : PPrint.document =
   | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
   | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
 
+  | LocOf (o1) -> mparens (!^"loc" ^^^ pp o1)
+
   | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
   | List (its, bt) -> 
      mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp false bt)
@@ -134,7 +138,9 @@ let rec vars_in it : SymSet.t =
   | Null it
   | Not it 
   | Head it
-  | Tail it -> 
+  | Tail it
+  | LocOf it 
+    -> 
      vars_in it
   | Tuple its -> SymSet.union (vars_in it) (vars_in_list its)
   | Field (it,s) -> SymSet.union (vars_in it) (vars_in it)
@@ -183,6 +189,8 @@ let rec subst_var subst it : t =
      Head (subst_var subst it)
   | Tail it ->
      Tail (subst_var subst it)
+  | LocOf it ->
+     LocOf (subst_var subst it)
   | Struct fields ->
      Struct (map (fun (f,v) -> (f, subst_var subst v)) fields)
   | Field (t,f) ->
@@ -241,6 +249,8 @@ let rec concretise_field subst it : t =
      Head (concretise_field subst it)
   | Tail it ->
      Tail (concretise_field subst it)
+  | LocOf it ->
+     LocOf (concretise_field subst it)
   | Struct fields ->
      Struct (map (fun (f,v) -> (f,concretise_field subst v)) fields)
   | Field (t,f) ->
