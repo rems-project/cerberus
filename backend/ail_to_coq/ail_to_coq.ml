@@ -1186,7 +1186,7 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       in
       let id = sym_to_str id in
       let struct_annot =
-        let attrs = collect_rc_attrs attrs in
+        let attrs = List.rev (collect_rc_attrs attrs) in
         if struct_is_union && attrs <> [] then
           Panic.wrn None "Attributes on unions like [%s] are ignored." id;
         if struct_is_union then Some(SA_union) else
