@@ -662,52 +662,6 @@ let pp_struct_def ref_names structs guard annot fields ff id =
   pp_encoded_patt_bindings ff ref_names;
   pp_struct_def_np structs guard annot fields ff id
 
-(* Functions for looking for recursive occurences of a type. *)
-
-let in_patt : string -> pattern -> bool = List.mem
-
-let rec in_quoted : string -> type_expr quoted -> bool = fun s l ->
-  let in_quoted_elt s e =
-    match e with
-    | Quot_plain(_) -> false (* May not be accurate. *)
-    | Quot_anti(ty) -> in_type_expr s ty
-  in
-  List.exists (in_quoted_elt s) l
-
-and in_coq_expr : string -> coq_expr -> bool = fun s e ->
-  match e with
-  | Coq_ident(x)             -> x = s
-  | Coq_all([Quot_plain(x)]) -> x = s (* In case of [{s}]. *)
-  | Coq_all(l)               -> in_quoted s l
-
-and in_type_annot : string -> coq_expr option -> bool = fun s a ->
-  match a with
-  | None    -> false
-  | Some(e) -> in_coq_expr s e
-
-and in_type_expr : string -> type_expr -> bool = fun s ty ->
-  match ty with
-  | Ty_refine(e,ty)   -> in_coq_expr s e || in_type_expr s ty
-  | Ty_ptr(_,ty)      -> in_type_expr s ty
-  | Ty_dots           -> false
-  | Ty_exists(x,a,ty) -> in_type_annot s a || (x <> s && in_type_expr s ty)
-  | Ty_constr(ty,c)   -> in_type_expr s ty || in_constr s c
-  | Ty_params(x,tys)  -> x = s || List.exists (in_type_expr_arg s) tys
-  | Ty_Coq(e)         -> in_coq_expr s e
-
-and in_type_expr_arg : string -> type_expr_arg -> bool = fun s tya ->
-  match tya with
-  | Ty_arg_expr(ty)        -> in_type_expr s ty
-  | Ty_arg_lambda(p,a,tya) ->
-      in_type_annot s a || (not (in_patt s p) && in_type_expr_arg s tya)
-
-and in_constr : string -> constr -> bool = fun s c ->
-  match c with
-  | Constr_Coq(e)       -> in_coq_expr s e
-  | Constr_Iris(s)      -> false
-  | Constr_exist(x,a,c) -> in_type_annot s a || (x <> s && in_constr s c)
-  | Constr_own(_,_,ty)  -> in_type_expr s ty
-
 let collect_invs : func_def -> (string * loop_annot) list = fun def ->
   let fn id (annot, _) acc =
     match annot with
@@ -765,84 +719,69 @@ let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
       | Some(id,_) -> id
     in
     pp "\n@;(* Definition of type [%s]. *)@;" id;
-    let is_rec = List.exists (fun (_,ty, _) -> in_type_expr id ty) fields in
     let pp_prod = pp_as_prod (pp_simple_coq_expr true) in
-    if is_rec then begin
-      pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
-      pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
-        ref_types (pp_as_prod (pp_simple_coq_expr true)) ref_types;
-      pp "(λ self %a,@;" pp_encoded_patt_name ref_names;
-      let guard = Guard_in_def(id) in
-      pp_struct_def ref_names ast.structs guard annot fields ff struct_id;
-      pp "@]@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
-      opaque := !opaque @ [id ^ "_rec"];
+    pp "@[<v 2>Definition %s_rec %a:" id pp_params params;
+    pp " (%a -d> typeO) → (%a -d> typeO) := " pp_prod
+      ref_types (pp_as_prod (pp_simple_coq_expr true)) ref_types;
+    pp "(λ self %a,@;" pp_encoded_patt_name ref_names;
+    let guard = Guard_in_def(id) in
+    pp_struct_def ref_names ast.structs guard annot fields ff struct_id;
+    pp "@]@;)%%I.@;Typeclasses Opaque %s_rec.\n" id;
+    opaque := !opaque @ [id ^ "_rec"];
 
-      pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
-        (pp_id_args true (id ^ "_rec")) param_names;
-      pp "@;Proof. solve_type_proper. Qed.\n@;";
+    pp "@;Global Instance %s_rec_ne %a: Contractive %a." id pp_params params
+      (pp_id_args true (id ^ "_rec")) param_names;
+    pp "@;Proof. solve_type_proper. Qed.\n@;";
 
-      pp "@[<v 2>Definition %s %a: rtype := {|@;"
-        id pp_params params;
-      pp "rty_type := %a;@;" pp_prod ref_types;
-      pp "rty := fixp %a" (pp_id_args true (id ^ "_rec")) param_names;
-      pp "@]@;|}.\n";
+    pp "@[<v 2>Definition %s %a: rtype := {|@;"
+      id pp_params params;
+    pp "rty_type := %a;@;" pp_prod ref_types;
+    pp "rty := fixp %a" (pp_id_args true (id ^ "_rec")) param_names;
+    pp "@]@;|}.\n";
 
-      (* Generation of the unfolding lemma. *)
-      pp "@;@[<v 2>Lemma %s_unfold %a%a:@;"
-        id pp_params params pp_params annot.st_refined_by;
-      pp "@[<v 2>(%a @@ %a)%%I ≡@@{type} (@;" (pp_as_tuple pp_str) ref_names
-        (pp_id_args false id) param_names;
-      let guard = Guard_in_lem(id) in
-      pp_struct_def_np ast.structs guard annot fields ff struct_id;
-      pp "@]@;)%%I.@]@;";
-      pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
+    (* Generation of the unfolding lemma. *)
+    pp "@;@[<v 2>Lemma %s_unfold %a%a:@;"
+      id pp_params params pp_params annot.st_refined_by;
+    pp "@[<v 2>(%a @@ %a)%%I ≡@@{type} (@;" (pp_as_tuple pp_str) ref_names
+      (pp_id_args false id) param_names;
+    let guard = Guard_in_lem(id) in
+    pp_struct_def_np ast.structs guard annot fields ff struct_id;
+    pp "@]@;)%%I.@]@;";
+    pp "Proof. by rewrite {1}/with_refinement/=fixp_unfold. Qed.\n";
 
-      pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
-        id pp_params params (pp_id_args true id) param_names;
-      pp "  {| rmovable '%a := movable_eq _ _ (%s_unfold"
-        (pp_as_tuple pp_str) ref_names id;
-      List.iter (fun n -> pp " %s" n) param_names;
-      List.iter (fun n -> pp " %s" n) ref_names;
-      pp ") |}.@;Next Obligation. solve_ty_layout_eq. Qed.\n";
+    pp "\n@;Global Program Instance %s_rmovable %a: RMovable %a :=@;"
+      id pp_params params (pp_id_args true id) param_names;
+    pp "  {| rmovable '%a := movable_eq _ _ (%s_unfold"
+      (pp_as_tuple pp_str) ref_names id;
+    List.iter (fun n -> pp " %s" n) param_names;
+    List.iter (fun n -> pp " %s" n) ref_names;
+    pp ") |}.@;Next Obligation. solve_ty_layout_eq. Qed.\n";
 
-      (* Generation of the global instances. *)
-      let pp_instance_place inst_name type_name =
-        pp "@;Global Instance %s_%s_inst l_ β_ %a%a:@;" id inst_name
-          pp_params params pp_params annot.st_refined_by;
-        pp "  %s l_ β_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
-          (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
-        pp "  λ T, i2p (%s_eq l_ β_ _ _ T (%s_unfold" inst_name id;
-        List.iter (fun _ -> pp " _") param_names;
-        List.iter (fun _ -> pp " _") ref_names; pp "))."
-      in
-      let pp_instance_val inst_name type_name =
-        pp "@;Global Program Instance %s_%s_inst v_ %a%a:@;" id inst_name
-          pp_params params pp_params annot.st_refined_by;
-        pp "  %s v_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
-          (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
-        pp "  λ T, i2p (%s_eq v_ _ _ (%s_unfold" inst_name id;
-        List.iter (fun _ -> pp " _") param_names;
-        List.iter (fun _ -> pp " _") ref_names; pp ") T _).";
-        pp "@;Next Obligation. done. Qed."
-      in
-      pp_instance_place "simplify_hyp_place" "SimplifyHypPlace";
-      pp_instance_place "simplify_goal_place" "SimplifyGoalPlace";
-      pp "\n";
-      pp_instance_val "simplify_hyp_val" "SimplifyHypVal";
-      pp_instance_val "simplify_goal_val" "SimplifyGoalVal"
-    end else begin
-      (* Definition of the [rtype]. *)
-      pp "@[<v 2>Definition %s %a: rtype := {|@;" id pp_params params;
-      pp "rty_type := %a;@;" pp_prod ref_types;
-      pp "rty %a := (@;  @[<v 0>%a@]@;)%%I" pp_encoded_patt_name ref_names
-        (pp_struct_def ref_names ast.structs Guard_none annot fields)
-        struct_id;
-      pp "@]@;|}.\n";
-      (* Typeclass stuff. *)
-      pp "@;Global Instance %s_movable %a:" id pp_params params;
-      pp " RMovable %a." (pp_id_args true id) param_names;
-      pp "@;Proof. solve_rmovable. Defined."
-    end
+    (* Generation of the global instances. *)
+    let pp_instance_place inst_name type_name =
+      pp "@;Global Instance %s_%s_inst l_ β_ %a%a:@;" id inst_name
+        pp_params params pp_params annot.st_refined_by;
+      pp "  %s l_ β_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
+        (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
+      pp "  λ T, i2p (%s_eq l_ β_ _ _ T (%s_unfold" inst_name id;
+      List.iter (fun _ -> pp " _") param_names;
+      List.iter (fun _ -> pp " _") ref_names; pp "))."
+    in
+    let pp_instance_val inst_name type_name =
+      pp "@;Global Program Instance %s_%s_inst v_ %a%a:@;" id inst_name
+        pp_params params pp_params annot.st_refined_by;
+      pp "  %s v_ (%a @@ %a)%%I (Some 100%%N) :=@;" type_name
+        (pp_as_tuple pp_str) ref_names (pp_id_args false id) param_names;
+      pp "  λ T, i2p (%s_eq v_ _ _ (%s_unfold" inst_name id;
+      List.iter (fun _ -> pp " _") param_names;
+      List.iter (fun _ -> pp " _") ref_names; pp ") T _).";
+      pp "@;Next Obligation. done. Qed."
+    in
+    pp_instance_place "simplify_hyp_place" "SimplifyHypPlace";
+    pp_instance_place "simplify_goal_place" "SimplifyGoalPlace";
+    pp "\n";
+    pp_instance_val "simplify_hyp_val" "SimplifyHypVal";
+    pp_instance_val "simplify_goal_val" "SimplifyGoalVal"
   in
   let pp_tagged_union id tag_type_e s =
     if s.struct_is_union then
