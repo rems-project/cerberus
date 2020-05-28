@@ -37,7 +37,7 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 
 type struct_decl = 
-  { typ: (((BaseTypes.member, VarTypes.t) Binders.t) list);
+  { typ: (BaseTypes.member * VarTypes.t Binders.t) list;
     mcl: Memory.mcl }
 
 
@@ -97,7 +97,7 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
-    let pp_field {name = BaseTypes.Member f; bound} = dot ^^ !^f ^^^ colon ^^^ VarTypes.pp bound in
+    let pp_field (BaseTypes.Member f, {name; bound}) = dot ^^ !^f ^^^ colon ^^^ VarTypes.pp bound in
     pp_list None 
       (fun (sym, s) -> typ (bold (Sym.pp sym)) 
                          (braces (separate_map (semi ^^ space) pp_field s.typ)))
@@ -139,12 +139,12 @@ module Local = struct
 
   let print_constraint_names = false
 
-  let pp_avars vars = pp_list (Some brackets) (Binders.pp Sym.pp (BT.pp false)) vars 
-  let pp_lvars vars = pp_list (Some brackets) (Binders.pp Sym.pp (LS.pp false)) vars
-  let pp_rvars vars = pp_list (Some brackets) (Binders.pp Sym.pp (RE.pp false)) vars 
+  let pp_avars vars = pp_list (Some brackets) (Binders.pp (BT.pp false)) vars 
+  let pp_lvars vars = pp_list (Some brackets) (Binders.pp (LS.pp false)) vars
+  let pp_rvars vars = pp_list (Some brackets) (Binders.pp (RE.pp false)) vars 
   let pp_cvars vars = 
     if print_constraint_names 
-    then pp_list (Some brackets) (Binders.pp Sym.pp (LC.pp false)) vars
+    then pp_list (Some brackets) (Binders.pp (LC.pp false)) vars
     else pp_list (Some brackets) (fun b -> LC.pp false b.bound) vars
 
   let pp lenv =

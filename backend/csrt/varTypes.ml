@@ -24,13 +24,6 @@ let subst_var subst t =
 let subst_vars = Tools.make_substs subst_var
 
 
-let concretise_field subst t = 
- match t with
- | C t -> C (LogicalConstraints.concretise_field subst t)
- | _ -> t
-
-
-
 let pp = function
   | A t -> char 'A' ^^^ (BT.pp false t)
   | L t -> char 'L' ^^^ (LS.pp false t)

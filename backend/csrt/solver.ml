@@ -29,7 +29,7 @@ let rec bt_to_sort loc env ctxt bt =
   | ClosedStruct typ ->
      let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
      let* (names,sorts) = 
-       fold_leftM (fun (names,sorts) Binders.{name = Member id; bound = t} ->
+       fold_leftM (fun (names,sorts) (Member id, Binders.{name; bound = t}) ->
            match t with
            | VarTypes.A bt | VarTypes.L (Base bt) -> 
               let* sort = bt_to_sort loc env ctxt bt in

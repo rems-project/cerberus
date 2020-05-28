@@ -1,5 +1,4 @@
 open Tools
-open Subst
 open Sym
 open Num
 open Option
@@ -202,64 +201,6 @@ let rec subst_var subst it : t =
 
 let subst_vars = make_substs subst_var
 
-
-let rec concretise_field subst it : t = 
-  match it with
-  | Num _ -> it
-  | Bool _ -> it
-  | Add (it, it') -> Add (concretise_field subst it, 
-                          concretise_field subst it')
-  | Sub (it, it') -> Sub (concretise_field subst it, 
-                          concretise_field subst it')
-  | Mul (it, it') -> Mul (concretise_field subst it, 
-                          concretise_field subst it')
-  | Div (it, it') -> Div (concretise_field subst it, 
-                          concretise_field subst it')
-  | Exp (it, it') -> Exp (concretise_field subst it, 
-                          concretise_field subst it')
-  | Rem_t (it, it') -> Rem_t (concretise_field subst it, 
-                              concretise_field subst it')
-  | Rem_f (it, it') -> Rem_f (concretise_field subst it, 
-                              concretise_field subst it')
-  | EQ (it, it') -> EQ (concretise_field subst it, 
-                        concretise_field subst it')
-  | NE (it, it') -> NE (concretise_field subst it, 
-                        concretise_field subst it')
-  | LT (it, it') -> LT (concretise_field subst it, 
-                        concretise_field subst it')
-  | GT (it, it') -> GT (concretise_field subst it, 
-                        concretise_field subst it')
-  | LE (it, it') -> LE (concretise_field subst it, 
-                        concretise_field subst it')
-  | GE (it, it') -> GE (concretise_field subst it, 
-                        concretise_field subst it')
-  | Null it -> Null (concretise_field subst it)
-  | And (it, it') -> And (concretise_field subst it, 
-                          concretise_field subst it')
-  | Or (it, it') -> Or (concretise_field subst it, 
-                        concretise_field subst it')
-  | Not it -> Not (concretise_field subst it)
-  | Tuple its ->
-     Tuple (map (fun it -> concretise_field subst it) its)
-  | Nth (n, it') ->
-     Nth (n, concretise_field subst it')
-  | List (its,bt) -> 
-     List (map (fun it -> concretise_field subst it) its, bt)
-  | Head it ->
-     Head (concretise_field subst it)
-  | Tail it ->
-     Tail (concretise_field subst it)
-  | LocOf it ->
-     LocOf (concretise_field subst it)
-  | Struct fields ->
-     Struct (map (fun (f,v) -> (f,concretise_field subst v)) fields)
-  | Field (t,f) ->
-     Field (concretise_field subst t, f)
-  | S (s,bt) -> S (s, bt)
-  | StructDefField (id,bt) -> 
-     if id = subst.substitute then S (subst.swith, Base bt) 
-     else StructDefField (id,bt)
-     
 
 let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
   match it, it' with
