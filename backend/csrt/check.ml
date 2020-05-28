@@ -139,10 +139,11 @@ let rec bt_of_core_base_type loc cbt =
 let integerType_constraint loc about it =
   let* min = Memory.integer_value_min loc it in
   let* max = Memory.integer_value_max loc it in
-  return (LC ((Num min %<= about) %& (about %<= Num max)))
+  return (LC ((Num min %<= S (about,Base Int)) %& 
+                (S (about,Base Int) %<= Num max)))
 
 let integerType loc name it =
-  let* constr = integerType_constraint loc (S (name, LS.Base Int)) it in
+  let* constr = integerType_constraint loc name it in
   return ((name,Int), [], [], [makeUC constr])
 
 let floatingType loc =
@@ -195,7 +196,7 @@ let check_base_type loc mname has expected =
     fail loc (Call_error msm)
 
 
-type aargs = (((Sym.t,BT.t) Binders.t) * Loc.t) list
+type aargs = ((BT.t Binders.t) * Loc.t) list
 
 let rec make_Aargs loc env asyms = 
   match asyms with
@@ -266,7 +267,7 @@ let pp_unis unis =
 
 (* begin: shared logic for function calls, function returns, struct packing *)
 
-let match_As errf loc env (args : aargs) (specs : ((Sym.t,BT.t) Binders.t) list) =
+let match_As errf loc env (args : aargs) (specs : (BT.t Binders.t) list) =
   let* () = debug_print 2 (action "matching computational variables") in
 
   let rec aux env acc_substs args specs =
@@ -290,7 +291,7 @@ let match_As errf loc env (args : aargs) (specs : ((Sym.t,BT.t) Binders.t) list)
   in
   aux env [] args specs
 
-let record_lvars_for_unification (specs : ((Sym.t,LS.t) Binders.t) list) =
+let record_lvars_for_unification (specs : (LS.t Binders.t) list) =
   let rec aux acc_unis acc_substs specs = 
     match specs with
     | [] -> (acc_unis,acc_substs)
@@ -304,7 +305,7 @@ let record_lvars_for_unification (specs : ((Sym.t,LS.t) Binders.t) list) =
   aux SymMap.empty [] specs
 
 
-let match_Ls errf loc env (args : ((Sym.t,LS.t) Binders.t) list) (specs : ((Sym.t,LS.t) Binders.t) list) =
+let match_Ls errf loc env (args : (LS.t Binders.t) list) (specs : (LS.t Binders.t) list) =
   let* () = debug_print 2 (action "matching logical variables") in
   let* () = debug_print 2 (blank 3 ^^ item "args" (pps Sym.pp (LS.pp false) args)) in
   let* () = debug_print 2 (blank 3 ^^ item "spec" (pps Sym.pp (LS.pp false) specs)) in
@@ -377,36 +378,32 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
 let rec unpack_struct loc genv tag = 
   let* () = debug_print 2 (blank 3 ^^ (!^"unpacking struct")) in
   let* decl = Global.get_struct_decl loc genv tag in
-  let rec aux acc_bindings acc_fields (fields : ((member,VarTypes.t) Binders.t) list) =
+  let rec aux acc_bindings acc_fields (fields : (member * VarTypes.t Binders.t) list) =
     match fields with
     | [] -> 
        return (acc_bindings, acc_fields)
-    | {name = Member name; bound = A (ClosedStruct sym)} :: fields ->
-       let* ((newsym,bt),newbindings) = unpack_struct loc genv sym in
-       let acc_fields = acc_fields @ [(Member name, Some newsym)] in
+    | (Member id, {name=lname;bound = A (ClosedStruct tag2)}) :: fields ->
+       let* ((newsym,bt),newbindings) = unpack_struct loc genv tag2 in
+       let acc_fields = acc_fields @ [(Member id, Some newsym)] in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = A bt}] in
-       let fields = Binders.subst_list (fun _ m -> m) VarTypes.concretise_field 
-                      {substitute=name;swith= newsym} fields in
+       let fields = map (fun (mem,binding) -> (mem,Binders.subst VarTypes.subst_var {substitute=lname;swith=newsym} binding)) fields in
        aux acc_bindings acc_fields fields
-    | {name = Member name; bound = L (Base (ClosedStruct sym))} :: fields ->
-       let* ((newsym,bt),newbindings) = unpack_struct loc genv sym in
+    | (Member id, {name=lname; bound = L (Base (ClosedStruct tag2))}) :: fields ->
+       let* ((newsym,bt),newbindings) = unpack_struct loc genv tag2 in
        let acc_bindings = acc_bindings @ newbindings @ [{name=newsym;bound = L (Base bt)}] in
-       let fields = Binders.subst_list (fun _ m -> m) VarTypes.concretise_field 
-                      {substitute=name;swith= newsym} fields in
+       let fields = map (fun (mem,binding) -> (mem,Binders.subst VarTypes.subst_var {substitute=lname;swith=newsym} binding)) fields in
        aux acc_bindings acc_fields fields
-    | {name = Member name;bound} :: fields ->
+    | (Member id, {name=lname;bound}) :: fields ->
        let newsym = fresh () in
        begin match bound with 
        | A bt -> 
           let acc_bindings = acc_bindings @ [{name=newsym;bound = A bt}] in
-          let acc_fields = acc_fields @ [(Member name, Some newsym)] in
-          let fields = Binders.subst_list Id.subst VarTypes.concretise_field 
-                         {substitute=name;swith= newsym} fields in
+          let acc_fields = acc_fields @ [(Member id, Some newsym)] in
+          let fields = map (fun (mem,binding) -> (mem,Binders.subst VarTypes.subst_var {substitute=lname;swith=newsym} binding)) fields in
           aux acc_bindings acc_fields fields
        | _ -> 
           let acc_bindings = acc_bindings @ [{name=newsym;bound}] in
-          let fields = Binders.subst_list Id.subst VarTypes.concretise_field 
-                         {substitute=name;swith= newsym} fields in
+          let fields = map (fun (mem,binding) -> (mem,Binders.subst VarTypes.subst_var {substitute=lname;swith=newsym} binding)) fields in
           aux acc_bindings acc_fields fields
        end
   in
@@ -444,15 +441,7 @@ let rec unpack_structs loc genv bindings =
    as possible *)
 let rec pack_struct loc env typ aargs = 
   let* decl = get_struct_decl loc env.global typ in
-  let rec aux = function
-    | [] -> []
-    | {name = Member name;bound} :: spec ->
-       let newsym = fresh () in
-       let subst = {substitute=name;swith=newsym} in
-       let spec = Binders.subst_list Id.subst VarTypes.concretise_field subst spec in
-       {name=newsym;bound} :: aux spec
-  in
-  let* env = subtype loc env aargs (aux decl.typ) "packing struct" in
+  let* env = subtype loc env aargs (List.map snd decl.typ) "packing struct" in
   return ((fresh (), ClosedStruct typ), env)
 
 and pack_open_struct loc env tag fieldmap =
@@ -736,7 +725,7 @@ let rec infer_mem_value loc env mem =
       let name = fresh () in
       let* v = Memory.integer_value_to_num loc iv in
       let val_constr = LC (S (name, Base Int) %= Num v) in
-      let* type_constr = integerType_constraint loc (S (name,Base Int)) it in
+      let* type_constr = integerType_constraint loc name it in
       let* solved = Solver.constraint_holds_given_constraints loc env [val_constr] type_constr in
       match solved with
       | true -> return ([makeA name Int; makeUC val_constr], env)
@@ -1546,20 +1535,21 @@ let record_tagDef file sym def genv =
     let loc = update_loc loc annots in
     match ct_ with
     | Void -> 
-       return [{name=Member id; bound = A Unit}]
+       return [(Member id, makeUA Unit)]
     | Basic (Integer it) -> 
+       let name = fresh () in
        let newid = id ^ "_range_constraint" in
-       let* lc = integerType_constraint loc (StructDefField (id,Int)) it in
-       return [{name=Member id; bound = A Int}; {name=Member newid; bound = C lc}]
+       let* lc = integerType_constraint loc name it in
+       return [(Member id, makeA name Int); (Member newid, makeUC lc)]
     | Array (ct, _maybe_integer) -> 
-       return [{name=Member id;bound=A BT.Array}]
+       return [(Member id, makeUA BT.Array)]
     | Pointer (_qualifiers, ct) -> 
-       return [{name=Member id;bound = A Loc}]
+       return [(Member id, makeUA Loc)]
     (* fix *)
     | Atomic ct -> 
        aux owned packed loc (Member id) ct
     | Struct sym -> 
-       return [{name=Member id; bound = A (BT.ClosedStruct (Tag sym))}]
+       return [(Member id, makeUA (BT.ClosedStruct (Tag sym)))]
     | Basic (Floating _) -> fail loc (Unsupported !^"todo: union types")
     | Union sym -> fail loc (Unsupported !^"todo: union types")
     | Function _ -> fail loc (Unsupported !^"function pointers")

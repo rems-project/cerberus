@@ -4,10 +4,10 @@ open VarTypes
 module Types = struct
 
   type alrc = {
-      a : ((Sym.t, BaseTypes.t) Binders.t) list;
-      l : ((Sym.t, LogicalSorts.t) Binders.t) list;
-      r : ((Sym.t, Resources.t) Binders.t) list;
-      c : ((Sym.t, LogicalConstraints.t) Binders.t) list
+      a : (BaseTypes.t Binders.t) list;
+      l : (LogicalSorts.t Binders.t) list;
+      r : (Resources.t Binders.t) list;
+      c : (LogicalConstraints.t Binders.t) list
     }
 
 
@@ -15,7 +15,7 @@ module Types = struct
 
 
   let from_type (t : Types.t) = 
-    List.fold_left (fun (alrc : alrc) (b : (Sym.t, VarTypes.t) Binders.t) ->
+    List.fold_left (fun (alrc : alrc) (b : VarTypes.t Binders.t) ->
         match b.bound with
         | A bt -> {alrc with a = alrc.a@[{name = b.name; bound = bt}]}
         | L ls -> {alrc with l = alrc.l@[{name = b.name; bound = ls}]}
@@ -33,10 +33,10 @@ module Types = struct
   let pp alrc = Types.pp (to_type alrc)
 
   let subst_var subst alrc = 
-    { a = List.map (Binders.subst Sym.subst BaseTypes.subst_var subst) alrc.a;
-      l = List.map (Binders.subst Sym.subst LogicalSorts.subst_var subst) alrc.l;
-      r = List.map (Binders.subst Sym.subst Resources.subst_var subst) alrc.r;
-      c = List.map (Binders.subst Sym.subst LogicalConstraints.subst_var subst) alrc.c; }  
+    { a = List.map (Binders.subst BaseTypes.subst_var subst) alrc.a;
+      l = List.map (Binders.subst LogicalSorts.subst_var subst) alrc.l;
+      r = List.map (Binders.subst Resources.subst_var subst) alrc.r;
+      c = List.map (Binders.subst LogicalConstraints.subst_var subst) alrc.c; }  
 
   let subst_vars = Tools.make_substs subst_var
 
