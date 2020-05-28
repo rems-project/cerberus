@@ -471,11 +471,12 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     match k with
     | Own     -> pp_str ff "&own"
     | Shr     -> pp_str ff "&shr"
-    | Frac(e) -> fprintf ff "&frac{%a}" (pp_coq_expr false (pp false false)) e
+    | Frac(e) -> fprintf ff "&frac{%a}"
+                   (pp_coq_expr false (pp false false false)) e
   and pp_ty_annot ff a =
-    pp_type_annot (pp false false) ff a
-  and pp wrap rfnd ff ty =
-    let pp_coq_expr wrap = pp_coq_expr wrap (pp false rfnd) in
+    pp_type_annot (pp false false false) ff a
+  and pp wrap rfnd guarded ff ty =
+    let pp_coq_expr wrap = pp_coq_expr wrap (pp false rfnd guarded) in
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)          -> (pp_coq_expr wrap) ff e
@@ -489,26 +490,30 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
           fprintf ff (if wrap then "(@;  %a@;)" else "%a") pp ()
         end
     (* Insert wrapping if needed. *)
-    | _ when wrap        -> fprintf ff "(%a)" (pp false rfnd) ty
+    | _ when wrap        -> fprintf ff "(%a)" (pp false rfnd guarded) ty
     | Ty_refine(e,ty)    ->
         begin
           let normal () =
-            fprintf ff "%a @@ %a" (pp_coq_expr true) e (pp true true) ty
+            fprintf ff "%a @@ %a" (pp_coq_expr true) e
+              (pp true true guarded) ty
           in
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,_)) when c = s ->
-              fprintf ff "guarded (%a) " with_uid s;
+              if not guarded then fprintf ff "guarded (%a) " with_uid s;
               fprintf ff "(apply_dfun self %a)" (pp_coq_expr true) e
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
-              fprintf ff "guarded (%a) (" with_uid s;
-              normal (); pp_str ff ")"
+              if not guarded then fprintf ff "guarded %a " with_uid s;
+              pp_str ff "("; normal (); pp_str ff ")"
           | (_              , _               )            -> normal ()
         end
-    | Ty_ptr(k,ty)       -> fprintf ff "%a %a" pp_kind k (pp true false) ty
+    | Ty_ptr(k,ty)       ->
+        fprintf ff "%a %a" pp_kind k (pp true false guarded) ty
     | Ty_exists(x,a,ty)  ->
-        fprintf ff "tyexists (λ %s%a, %a)" x pp_ty_annot a (pp false false) ty
+        fprintf ff "tyexists (λ %s%a, %a)" x pp_ty_annot a
+          (pp false false guarded) ty
     | Ty_constr(ty,c)    ->
-        fprintf ff "constrained %a %a" (pp true false) ty (pp_constr true) c
+        fprintf ff "constrained %a %a" (pp true false guarded) ty
+          (pp_constr true) c
     | Ty_params(id,tyas) ->
         match id with
         | "optional" when not rfnd ->
@@ -522,13 +527,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
             let tya1 =
               Ty_arg_lambda([], Some(Coq_ident("unit")), tya1)
             in
-            fprintf ff "optionalO %a %a" (pp_arg true) tya1 (pp_arg true) tya2
+            fprintf ff "optionalO %a %a" (pp_arg true guarded) tya1
+              (pp_arg true guarded) tya2
         | "optional" | "optionalO" ->
            (match tyas with
            | [tya]        ->
-               fprintf ff "%s %a null" id (pp_arg true) tya
+               fprintf ff "%s %a null" id (pp_arg true guarded) tya
            | [tya1; tya2] ->
-               fprintf ff "%s %a %a" id (pp_arg true) tya1 (pp_arg true) tya2
+               fprintf ff "%s %a %a" id (pp_arg true guarded) tya1
+                 (pp_arg true guarded) tya2
            | _            ->
                Panic.panic_no_pos "[%s] expects one or two arguments." id)
         | "struct"                 ->
@@ -537,18 +544,31 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
               Panic.panic_no_pos "[%s] expects at least one argument." id
             in
             fprintf ff "struct %a [@@{type} %a ]"
-              (pp_arg true) tya (pp_sep " ; " (pp_arg false)) tyas
+              (pp_arg true guarded) tya
+              (pp_sep " ; " (pp_arg false guarded)) tyas
+        | "guarded"                ->
+            let (s, ty) =
+              match (guard, tyas) with
+              | (Guard_in_def(s), [ty])
+              | (Guard_in_lem(s), [ty]) -> (s, ty)
+              | (Guard_none     , [_ ]) ->
+                  Panic.panic_no_pos "[%s] not expected here." id
+              | (_              , _   ) ->
+                  Panic.panic_no_pos "[%s] expects exactly one argument." id
+            in
+            fprintf ff "guarded %a %a" with_uid s (pp_arg true true) ty;
         | _                        ->
-            pp_str ff id; List.iter (fprintf ff " %a" (pp_arg true)) tyas
-  and pp_arg wrap ff tya =
+            pp_str ff id;
+            List.iter (fprintf ff " %a" (pp_arg true guarded)) tyas
+  and pp_arg wrap guarded ff tya =
     match tya with
     | Ty_arg_expr(ty)         ->
-        pp wrap false ff ty
+        pp wrap false guarded ff ty
     | Ty_arg_lambda(xs,a,tya) ->
         fprintf ff "(λ %a%a,@;  @[<v 0>%a%a@]@;)" pp_encoded_patt_name xs
-          pp_ty_annot a pp_encoded_patt_bindings xs (pp_arg false) tya
+          pp_ty_annot a pp_encoded_patt_bindings xs (pp_arg false guarded) tya
   in
-  pp true false ff ty
+  pp true false false ff ty
 
 let pp_type_expr = pp_type_expr_guard None Guard_none
 let pp_constr = pp_constr_guard None Guard_none true
