@@ -28,6 +28,7 @@ type mcl_padding = {pstart: Num.t; pend: Num.t}
 type mcl_paddings = mcl_padding list
 type mcl = {fields: mcl_fields; paddings: mcl_paddings}
 
+(* broken *)
 let struct_ct_and_layout file loc genv (Tag s) fields = 
   let rec aux acc_fields acc_padding position  = function
     | (id, (_attributes, _qualifier, ct)) :: fields ->

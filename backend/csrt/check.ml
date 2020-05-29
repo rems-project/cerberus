@@ -451,12 +451,12 @@ let open_struct_to_stored_struct loc genv tag fieldmap =
   let* decl = get_struct_decl loc genv tag in
   let* (addr_fieldmap,addrs,points_tos) =
     fold_leftM (fun (fieldmap,addrs,points_tos) (field,fval) ->
-        let* cl = assoc_err loc field decl.mcl.fields "check store field access" in
+        let* ct = assoc_err loc field decl.ctypes "check store field access" in
         let faddr = fresh () in
         let fieldmap = fieldmap@[(field,faddr)] in
         let addrs = addrs@[faddr] in
-        let* size = Memory.size_of_ctype loc cl.ct in
-        let points_tos = points_tos@[Points {pointer=faddr;pointee=Some fval;typ=cl.ct;size}] in
+        let* size = Memory.size_of_ctype loc ct in
+        let points_tos = points_tos@[Points {pointer=faddr;pointee=Some fval;typ=ct;size}] in
         return (fieldmap, addrs, points_tos)
       )
       ([],[],[]) fieldmap
@@ -996,7 +996,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
             fail loc (Generic_error !^"member-shift at uninitialised location" )
          | _ -> fail loc (Generic_error !^"missing ownership of member-shift location" )
        in
-       let* (bt,env) = get_Avar loc env pointee in
+       let* (bt,env) = get_ALvar loc env pointee in
        let* fieldmap = match bt with
          (* TODO: proper equality *)
          | StoredStruct (tag',fieldmap) when tag = tag' -> return fieldmap
@@ -1618,14 +1618,13 @@ let record_tagDef file sym def genv =
   | CF.Ctype.UnionDef _ -> 
      fail Loc.unknown (Unsupported !^"todo: union types")
   | CF.Ctype.StructDef (fields, _) ->
-     let* typ =
-       fold_leftM (fun typ (id, (_attributes, _qualifier, ct)) ->
+     let* (typ,ctypes) =
+       fold_leftM (fun (typ,ctypes) (id, (_attributes, _qualifier, ct)) ->
            let* newfields = aux false true Loc.unknown (Member (Id.s id)) ct in
-           return (typ@newfields)
-         ) [] fields
+           return (typ@newfields, ctypes@[(Member (Id.s id),ct)])
+         ) ([],[]) fields
      in
-     let* mcl = Memory.struct_ct_and_layout file Loc.unknown genv (Tag sym) fields in
-     let decl = {typ;mcl} in
+     let decl = {typ;ctypes} in
      let genv = add_struct_decl genv (Tag sym) decl in
      return genv
 
