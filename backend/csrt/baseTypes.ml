@@ -40,7 +40,7 @@ let pp_fieldmap stored fields =
     flow_map (semi ^^ break 1) 
       (fun (Member f,fvar) -> 
         (if stored then ampersand else empty) ^^ 
-          dot ^^ !^f ^^^ equals ^^^ Sym.pp fvar)
+          !^f ^^ equals ^^ Sym.pp fvar)
       fields
     )
 

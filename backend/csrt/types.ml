@@ -5,7 +5,7 @@ open List
 
 type t = (VarTypes.t Binders.t) list
 
-let pp ts = flow_map (comma ^^ break 1) (Binders.pp VarTypes.pp) ts
+let pp ts = flow_map (comma ^^ break 1) (Binders.pp false VarTypes.pp) ts
 
 let subst_var subst bs = 
   Binders.subst_list Sym.subst VarTypes.subst_var subst bs

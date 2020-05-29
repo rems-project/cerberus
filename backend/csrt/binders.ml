@@ -2,11 +2,12 @@ open Pp
 
 type 'bound t = {name : Sym.t; bound: 'bound}
 
-let pp pp_bound {name;bound} = 
-  PPrint.parens (typ (Sym.pp name) (pp_bound bound))
+let pp atomic pp_bound {name;bound} = 
+  let mparens pped = if atomic then parens pped else pped in
+  mparens (typ (Sym.pp name) (pp_bound bound))
 
 let pps pp_name pp_bound = 
-  pp_list None (pp pp_bound)
+  pp_list (pp false pp_bound)
 
 let subst bound_subst subst b = 
   { name = Sym.subst subst b.name;
