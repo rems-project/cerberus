@@ -44,6 +44,7 @@ let rec bt_to_sort loc env ctxt bt =
   | List _
   | Path _ 
   | OpenStruct _
+  | StoredStruct _
     ->
      fail loc (Z3_LS_not_implemented_yet (LogicalSorts.Base bt))
   | FunctionPointer _ -> 

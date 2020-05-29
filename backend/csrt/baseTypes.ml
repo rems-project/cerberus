@@ -25,6 +25,7 @@ type t =
   | Tuple of t list
   | ClosedStruct of tag
   | OpenStruct of tag * fieldmap
+  | StoredStruct of tag * fieldmap
   | Path of Sym.t * path
   | FunctionPointer of Sym.t
 
@@ -34,10 +35,12 @@ let pp_field_access access =
   separate_map dot (fun { member = Member member; _} -> !^member) access
 
 
-let pp_fieldmap fields =
+let pp_fieldmap stored fields =
   braces (
     flow_map (semi ^^ break 1) 
-      (fun (Member f,fvar) -> dot ^^ !^f ^^^ equals ^^^ Sym.pp fvar)
+      (fun (Member f,fvar) -> 
+        (if stored then ampersand else empty) ^^ 
+          dot ^^ !^f ^^^ equals ^^^ Sym.pp fvar)
       fields
     )
 
@@ -51,12 +54,16 @@ let rec pp atomic =
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^^^ pp true bt)
   | Tuple nbts -> mparens (!^ "tuple" ^^^ flow_map (comma ^^ break 1) (pp false) (nbts))
-  | ClosedStruct (Tag sym) -> parens (!^ "closed" ^^^ !^"struct" ^^^ Sym.pp sym)
+  | ClosedStruct (Tag sym) -> 
+     mparens (!^ "closed" ^^^ !^"struct" ^^^ Sym.pp sym)
   | Path (p,a) -> 
      mparens (!^"path" ^^^ Sym.pp p ^^ dot ^^ pp_field_access a)
   | FunctionPointer p ->
      parens (!^"function" ^^^ Sym.pp p)
-  | OpenStruct (_tag,fieldmap) -> pp_fieldmap fieldmap
+  | OpenStruct (Tag tag,fieldmap) -> 
+     mparens (!^"open" ^^^ !^"struct" ^^^ Sym.pp tag ^^^ pp_fieldmap false fieldmap)
+  | StoredStruct (Tag tag,fieldmap) -> 
+     mparens (!^"stored" ^^^ !^"struct" ^^^ Sym.pp tag ^^^ pp_fieldmap true fieldmap)
 
 
 
@@ -77,6 +84,8 @@ let subst_var subst bt =
   | Path (p,a) -> Path (Sym.subst subst p, a)
   | OpenStruct (tag,fieldmap) ->
      OpenStruct (tag,subst_fieldmap subst fieldmap)
+  | StoredStruct (tag,fieldmap) ->
+     StoredStruct (tag,subst_fieldmap subst fieldmap)
   | bt -> bt
 
 let subst_vars = make_substs subst_var
@@ -86,6 +95,7 @@ let vars_in = function
   | FunctionPointer p -> SymSet.singleton p
   | Path (p,a) -> SymSet.singleton p
   | OpenStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
+  | StoredStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
   | bt -> SymSet.empty
 
 
