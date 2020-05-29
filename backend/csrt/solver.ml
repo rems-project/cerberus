@@ -42,7 +42,6 @@ let rec bt_to_sort loc env ctxt bt =
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
   | Array
   | List _
-  | Path _ 
   | OpenStruct _
   | StoredStruct _
     ->
