@@ -252,9 +252,23 @@ module Env = struct
       (get_Avar loc env var)
 
 
+  let get_ALvars loc env vars = 
+    fold_leftM (fun (acc,env) sym ->
+        let* (t,env) = get_ALvar loc env sym in
+        return (acc@[t], env)
+      ) ([],env) vars
+
+
   let get_Avars loc env vars = 
     fold_leftM (fun (acc,env) sym ->
         let* (t,env) = get_Avar loc env sym in
+        return (acc@[t], env)
+      ) ([],env) vars
+
+
+  let get_Lvars loc env vars = 
+    fold_leftM (fun (acc,env) sym ->
+        let* (t,env) = get_Lvar loc env sym in
         return (acc@[t], env)
       ) ([],env) vars
 
