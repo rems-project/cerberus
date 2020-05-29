@@ -9,7 +9,6 @@ type tag = Tag of Sym.t
 type member = Member of string
 
 type access = { loc: Loc.t; tag: tag; member: member }
-type path = access list
 
 type fieldmap = (member * Sym.t) list
 
@@ -26,7 +25,6 @@ type t =
   | ClosedStruct of tag
   | OpenStruct of tag * fieldmap
   | StoredStruct of tag * fieldmap
-  | Path of Sym.t * path
   | FunctionPointer of Sym.t
 
 
@@ -49,15 +47,13 @@ let rec pp atomic =
   function
   | Unit -> !^ "unit"
   | Bool -> !^ "bool"
-  | Int -> !^ "int"
+  | Int -> !^ "integer"
   | Loc -> !^ "loc"
   | Array -> !^ "array"
   | List bt -> mparens ((!^ "list") ^^^ pp true bt)
   | Tuple nbts -> mparens (!^ "tuple" ^^^ flow_map (comma ^^ break 1) (pp false) (nbts))
   | ClosedStruct (Tag sym) -> 
      mparens (!^ "closed" ^^^ !^"struct" ^^^ Sym.pp sym)
-  | Path (p,a) -> 
-     mparens (!^"path" ^^^ Sym.pp p ^^ dot ^^ pp_field_access a)
   | FunctionPointer p ->
      parens (!^"function" ^^^ Sym.pp p)
   | OpenStruct (Tag tag,fieldmap) -> 
@@ -81,7 +77,6 @@ let subst_fieldmap subst fields =
 let subst_var subst bt = 
   match bt with
   | FunctionPointer p -> FunctionPointer (Sym.subst subst p)
-  | Path (p,a) -> Path (Sym.subst subst p, a)
   | OpenStruct (tag,fieldmap) ->
      OpenStruct (tag,subst_fieldmap subst fieldmap)
   | StoredStruct (tag,fieldmap) ->
@@ -93,7 +88,6 @@ let subst_vars = make_substs subst_var
 
 let vars_in = function
   | FunctionPointer p -> SymSet.singleton p
-  | Path (p,a) -> SymSet.singleton p
   | OpenStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
   | StoredStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
   | bt -> SymSet.empty
