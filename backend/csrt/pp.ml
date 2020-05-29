@@ -11,6 +11,7 @@ let debug_level = ref 0
 let plain = CF.Pp_utils.to_plain_pretty_string
 
 let arrow = minus ^^ rangle
+let bigarrow = equals ^^ rangle
 
 let (^^^) = Pp_prelude.(^^^)
 
@@ -28,14 +29,11 @@ let redb = ansi_format [Bold;Red]
 let yellowb = ansi_format [Bold;Yellow]
 
 
-let pp_list optional_wrapper f l = 
+let pp_list f l = 
   match l with
   | [] -> !^"(empty)"
-  | l -> 
-     let pp = flow_map (comma ^^ break 1) f l in
-     match optional_wrapper with
-     | Some wrapper -> wrapper pp
-     | None -> pp
+  | l -> flow_map (comma ^^ break 1) f l
+
 
 
 let typ n typ = n ^^ colon ^^^ typ

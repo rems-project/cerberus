@@ -98,19 +98,19 @@ module Global = struct
 
   let pp_struct_decls decls = 
     let pp_field (BaseTypes.Member f, {name; bound}) = dot ^^ !^f ^^^ colon ^^^ VarTypes.pp bound in
-    pp_list None 
+    pp_list
       (fun (sym, s) -> typ (bold (Sym.pp sym)) 
                          (braces (separate_map (semi ^^ space) pp_field s.typ)))
       (SymMap.bindings decls) 
              
 
   let pp_fun_decls decls = 
-    pp_list None
+    pp_list
       (fun (sym, (_, t, _ret)) -> typ (bold (Sym.pp sym)) (FunctionTypes.pp t))
       (SymMap.bindings decls)
 
   let pp_name_map m = 
-    pp_list None
+    pp_list
       (fun (name,sym) -> item name (Sym.pp sym))
       (NameMap.all_names m)
 
@@ -139,13 +139,13 @@ module Local = struct
 
   let print_constraint_names = false
 
-  let pp_avars vars = pp_list (Some brackets) (Binders.pp (BT.pp false)) vars 
-  let pp_lvars vars = pp_list (Some brackets) (Binders.pp (LS.pp false)) vars
-  let pp_rvars vars = pp_list (Some brackets) (Binders.pp (RE.pp false)) vars 
+  let pp_avars vars = pp_list (Binders.pp false (BT.pp false)) vars 
+  let pp_lvars vars = pp_list (Binders.pp false (LS.pp false)) vars
+  let pp_rvars vars = pp_list (Binders.pp false (RE.pp false)) vars 
   let pp_cvars vars = 
     if print_constraint_names 
-    then pp_list (Some brackets) (Binders.pp (LC.pp false)) vars
-    else pp_list (Some brackets) (fun b -> LC.pp false b.bound) vars
+    then pp_list (Binders.pp false (LC.pp false)) vars
+    else pp_list (fun b -> LC.pp false b.bound) vars
 
   let pp lenv =
     let (a,l,r,c) = 
@@ -157,7 +157,7 @@ module Local = struct
           | C t -> (a,l,r,({name; bound = t} :: c))
         ) lenv.vars ([],[],[],[])
     in
-    (flow (break 1)
+    (separate hardline
        [ inline_item "computational" (pp_avars a)
        ; inline_item "logical" (pp_lvars l)
        ; inline_item "resources" (pp_rvars r)

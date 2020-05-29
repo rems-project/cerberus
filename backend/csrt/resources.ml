@@ -19,12 +19,11 @@ type points =
 type t = Points of points
 
 let pp atomic resource = 
-  let mparens pped = if atomic then parens pped else pped in
   match resource with
   | Points {pointer; pointee = Some v; typ; size} ->
-     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ Sym.pp v)
+     parens (Sym.pp pointer ^^^ bigarrow ^^^ parens (pp_ctype typ) ^^^ Sym.pp v)
   | Points {pointer; pointee = None; typ; size} ->
-     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ !^"uninit")
+     parens (Sym.pp pointer ^^^ bigarrow ^^^ parens (pp_ctype typ) ^^^ !^"uninit")
 
 
 

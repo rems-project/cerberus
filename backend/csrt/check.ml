@@ -225,7 +225,7 @@ let resources_associated_with_var_or_equals loc env owner =
   let* (bt,_env) = get_ALvar loc env owner in
   let* equal_to_owner = vars_equal_to loc env owner (Base bt) in
   let* () = debug_print 3 (blank 3 ^^ !^"equal to" ^^^ Sym.pp owner ^^ colon ^^^
-                             pp_list None Sym.pp equal_to_owner) in
+                             pp_list Sym.pp equal_to_owner) in
   let owneds = 
     concat_map (fun o -> map (fun r -> (o,r)) (resources_associated_with env o))
       (owner :: equal_to_owner) 
@@ -270,7 +270,7 @@ let pp_unis unis =
        (typ (Sym.pp sym) (LS.pp true spec)) ^^^ !^"resolved as" ^^^ (Sym.pp res)
     | None -> (typ (Sym.pp sym) (LS.pp true spec)) ^^^ !^"unresolved"
   in
-  pp_list None pp_entry (SymMap.bindings unis)
+  pp_list pp_entry (SymMap.bindings unis)
 
 
 
@@ -367,7 +367,7 @@ let match_Rs errf loc env (unis : ((LS.t, Sym.t) Uni.t) SymMap.t) specs =
          | (o,r) :: owned_resources ->
             let* (resource',env) = get_Rvar loc env r in
             let resource' = RE.subst_var {substitute=o; swith=owner} resource' in
-            let* () = debug_print 3 (action ("trying resource" ^ plain (RE.pp false resource'))) in
+            let* () = debug_print 3 (action ("trying resource " ^ plain (RE.pp false resource'))) in
             match RE.unify spec.bound resource' unis with
             | None -> try_resources owned_resources
             | Some unis ->
@@ -495,9 +495,33 @@ let deal_with_structs loc genv bindings =
 
 
 
-(* use Neel's resource map and use pack_struct to package the aargs
-   part of a struct and *as many resources* of the struct definition
-   as possible *)
+
+
+let rec remove_subtree loc env pointer =
+  let* does_point = points_to loc env pointer in
+  match does_point with
+  | Some (r,{pointee=Some pointee; _}) -> 
+     let* (bt, env) = get_ALvar loc env pointee in
+     let env = remove_var env r in
+     begin match bt with
+       | StoredStruct (tag,fieldmap) ->
+          let rec aux env = function
+            | (field, faddr) :: fields -> 
+               let* env = remove_subtree loc env faddr in
+               aux env fields
+            | [] -> return env
+          in
+          aux env fieldmap
+       | _ -> return env
+     end
+  | Some (r,{pointee=None; _}) -> 
+     return (remove_var env r)
+  | _ -> 
+     return env
+
+
+
+
 
 let stored_struct_to_open_struct remove_ownership loc env tag fieldmap =
   let rec aux env acc_vals = function
@@ -522,7 +546,9 @@ let stored_struct_to_open_struct remove_ownership loc env tag fieldmap =
   return ((tag,fieldmap),env)
 
 
-
+(* use Neel's resource map and use pack_struct to package the aargs
+   part of a struct and *as many resources* of the struct definition
+   as possible *)
 let rec pack_struct loc env typ aargs = 
   let* decl = get_struct_decl loc env.global typ in
   let* env = subtype loc env aargs (List.map snd decl.typ) "packing struct" in
@@ -1199,10 +1225,10 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
        | M_Kill (_is_dynamic, asym) -> 
           let (sym,loc) = aunpack loc asym in
           (* have remove resources of location instead? *)
-          let resources = resources_associated_with env sym in
-          let env = remove_vars env resources in
+          let* (a_bt,env) = get_Avar loc env sym in
+          let* () = check_base_type loc (Some sym) Loc a_bt in
+          let* env = remove_subtree loc env sym in
           return (Normal [makeUA Unit], env)
-
 
        | M_Store (_is_locking, a_ct, asym1, asym2, mo) -> 
           let (ct, _ct_loc) = aunpack loc a_ct in
@@ -1244,23 +1270,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
           let env = add_var env (makeL newsym (Base vbt)) in
           let env = add_var env (makeUC (LC (S (newsym,Base vbt) %= S (vsym,Base vbt)))) in
 
-          let* env = 
-            match p.pointee with 
-            | None -> 
-               let env = remove_var env r in
-               return env
-            | Some pointee ->
-               let* (bt,env) = get_Lvar loc env pointee in
-               match bt with
-               | Base (StoredStruct (_,fieldmap)) ->
-                  let _addrs = List.map snd fieldmap in
-                  (* TODO: recursively cleanup: remove pointed resources *)
-                  let env = remove_var env r in
-                  return env
-               | _ -> 
-                  let env = remove_var env r in
-                  return env
-          in
+          let* env = remove_subtree loc env p.pointer in
           let env = add_var env (makeUR (Points {p with pointee = Some newsym})) in
           return (Normal [makeUA Unit],env)
 
@@ -1289,6 +1299,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                let* ((tag,fieldmap),env) = 
                  stored_struct_to_open_struct false loc env tag fieldmap in
                (* TODO: fix constraint *)
+               let bt = OpenStruct (tag,fieldmap) in
                let constr = LC (S (ret, Base bt) %= (S (pointee,Base bt))) in
                return (bt,constr)
             | bt ->
@@ -1671,9 +1682,9 @@ let check_and_report core_file =
 
 
 (* todo: 
-   - correctly unpack logical structs,
    - make call_typ accept non-A arguments
-   - struct handling in constraint solver
-   - more struct rules
-   - revisit rules implemented using store rule
+
+   - when applying substitution: be careful about the variable 
+     types: e.g. when converting struct types
+
  *)

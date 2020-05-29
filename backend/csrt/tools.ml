@@ -20,9 +20,6 @@ let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list =
      | Some y -> y :: filter_map f xs
 
 
-let pp_list pp sep l = String.concat sep (List.map pp l)
-
-
 
 let precise_loc loc mlock = 
   match mlock with
