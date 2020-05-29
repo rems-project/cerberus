@@ -476,7 +476,7 @@ let deal_with_structs loc genv bindings =
     | {name;bound = L (Base (OpenStruct (tag,fieldmap)))} :: bindings ->
        let* ((tag,fieldmap),newbindings) =
          open_struct_to_stored_struct loc genv tag fieldmap in
-       let acc_bindings = acc_bindings @ newbindings @ [makeA name (StoredStruct (tag,fieldmap))] in
+       let acc_bindings = acc_bindings @ newbindings @ [makeL name (Base (StoredStruct (tag,fieldmap)))] in
        aux acc_bindings loc genv bindings 
     | b :: bindings ->
        let acc_bindings = acc_bindings@[b] in
@@ -502,7 +502,7 @@ let deal_with_structs loc genv bindings =
 let stored_struct_to_open_struct remove_ownership loc env tag fieldmap =
   let rec aux env acc_vals = function
     | (field, faddr) :: fields ->
-       let* (bt,env) = get_Avar loc env faddr in
+       let* (Base bt,env) = get_Lvar loc env faddr in
        let* () = match bt with
          | Loc -> return ()
          | _ -> fail loc (Generic_error !^"stored struct with non-loc field address")
@@ -562,8 +562,14 @@ and pack_structs_aargs loc env args =
 and pack_structs_largs loc env args =
   let* () = debug_print 2 (action "packing structs") in
   let rec aux acc env = function
-    | {name;bound = LS.Base (OpenStruct (tag,fieldmap))} :: args
+    | {name;bound = LS.Base (OpenStruct (tag,fieldmap))} :: args ->
+       let* ((newname,bt),env) = pack_open_struct loc env tag fieldmap in
+       let subst = {substitute=name;swith= newname} in
+       aux (acc@[{name=newname;bound = LS.Base bt}]) env 
+         (Binders.subst_list Sym.subst LS.subst_var subst args)
     | {name;bound = LS.Base (StoredStruct (tag,fieldmap))} :: args -> 
+       let* ((tag,fieldmap),env) = 
+         stored_struct_to_open_struct true loc env tag fieldmap in
        let* ((newname,bt),env) = pack_open_struct loc env tag fieldmap in
        let subst = {substitute=name;swith= newname} in
        aux (acc@[{name=newname;bound = LS.Base bt}]) env 
@@ -990,11 +996,11 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
             fail loc (Generic_error !^"member-shift at uninitialised location" )
          | _ -> fail loc (Generic_error !^"missing ownership of member-shift location" )
        in
-       let* (bt,env) = get_Lvar loc env pointee in
+       let* (bt,env) = get_Avar loc env pointee in
        let* fieldmap = match bt with
          (* TODO: proper equality *)
-         | Base (StoredStruct (tag',fieldmap)) when tag = tag' -> return fieldmap
-         | Base (StoredStruct (tag',fieldmap)) -> 
+         | StoredStruct (tag',fieldmap) when tag = tag' -> return fieldmap
+         | StoredStruct (tag',fieldmap) -> 
             fail loc (Generic_error !^"struct access incompatible with this struct type")
          | _ -> 
             fail loc (Generic_error !^"struct access to non-struct")
