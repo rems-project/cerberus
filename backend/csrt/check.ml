@@ -1294,24 +1294,22 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
 
           let ret = fresh () in
           let* (bt,env) = get_ALvar ploc env pointee in
-          let* (bt,constr) = match bt with
-            | StoredStruct (tag,fieldmap) ->
-               let* ((tag,fieldmap),env) = 
-                 stored_struct_to_open_struct false loc env tag fieldmap in
-               (* TODO: fix constraint *)
-               let bt = OpenStruct (tag,fieldmap) in
-               let constr = LC (S (ret, Base bt) %= (S (pointee,Base bt))) in
-               return (bt,constr)
+          let* (bt,constrs) = match bt with
+            | StoredStruct (tag,addrmap) ->
+               let* ((tag,valuemap),env) = 
+                 stored_struct_to_open_struct false loc env tag addrmap in
+               let bt = OpenStruct (tag,valuemap) in
+               return (bt,[])
             | bt ->
                let constr = LC (S (ret, Base bt) %= (S (pointee,Base bt))) in
-               return (bt,constr)
+               return (bt,[makeUC constr])
           in
           let* _ = 
             let* t = ctype false false loc (fresh ()) ct' in
             subtype loc env [({name=pointee;bound=bt},ploc)] t 
               "checking load value against expected type"
           in
-          return (Normal [makeA ret bt; makeUC constr],env)
+          return (Normal (makeA ret bt :: constrs),env)
 
        | M_RMW (ct, sym1, sym2, sym3, mo1, mo2) -> 
           fail loc (Unsupported !^"todo: RMW")
