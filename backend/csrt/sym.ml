@@ -1,4 +1,3 @@
-open Tools
 open Subst
 module CF = Cerb_frontend
 module S = CF.Symbol

@@ -1,4 +1,4 @@
-open Tools
+open Subst
 open Sym
 open Num
 open Option

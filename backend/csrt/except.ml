@@ -1,4 +1,3 @@
-open Tools
 open Cerb_frontend.Exception
 module CB = Cerb_backend
 
@@ -36,6 +35,14 @@ let concat_mapM f l =
   seq (List.map f l) >>= fun xs ->
   return (List.concat xs)
 
+let rec filter_map (f : 'a -> 'b option) (xs : 'a list) : 'b list = 
+  match xs with
+  | [] -> []
+  | x :: xs ->
+     match f x with
+     | None -> filter_map f xs
+     | Some y -> y :: filter_map f xs
+
 let filter_mapM f l = 
   seq (List.map f l) >>= fun xs ->
   return (filter_map (fun x -> x) xs)
@@ -43,6 +50,7 @@ let filter_mapM f l =
 
 let fold_leftM (f : 'a -> 'b -> ('c,'e) t) (a : 'a) (bs : 'b list) =
   List.fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs
+
 
 let pmap_foldM 
       (f : 'k -> 'x -> 'y -> ('y,'e) t)

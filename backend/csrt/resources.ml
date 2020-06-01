@@ -5,14 +5,15 @@ module Loc = Locations
 module IT = IndexTerms
 module CF = Cerb_frontend
 
+
+
+
 type points = 
   { pointer: Sym.t; 
     pointee: Sym.t option; 
     typ: CF.Ctype.ctype;
     size: Num.t 
   }
-
-
 
 
 
@@ -38,7 +39,7 @@ let subst_var subst = function
      let pointer = Sym.subst subst p.pointer in
      Points {p with pointer; pointee}
 
-let subst_vars = Tools.make_substs subst_var
+let subst_vars = Subst.make_substs subst_var
 
 
 
