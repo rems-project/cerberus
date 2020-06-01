@@ -1,13 +1,12 @@
 open Subst
 
-module RT = ReturnTypes
 module BT = BaseTypes
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
 
 type t = 
-  | Return of ReturnTypes.t
+  | I
   | Computational of Sym.t * BT.t * t
   | Logical of Sym.t * LS.t * t
   | Resource of RE.t * t
@@ -25,25 +24,23 @@ let mresource bound t =
   Resource (bound,t)
 
 
-let rec args_and_ret = function
-  | Return rt -> 
-     (RT.I,rt)
-  | Computational (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Computational (name,bound,args_rt), ret)
-  | Logical (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Logical (name,bound,args_rt), ret)
-  | Resource (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Resource (bound,args_rt), ret)
-  | Constraint (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Constraint (bound,args_rt), ret)
+
+let rec (@@) (t1: t) (t2: t) :t = 
+  match t1 with
+  | I -> t2
+  | Computational (name,bound,t) -> 
+     Computational (name,bound, t@@t2)
+  | Logical (name,bound,t) -> 
+     Logical (name,bound, t@@t2)
+  | Resource (bound,t) -> 
+     Resource (bound, t@@t2)
+  | Constraint (bound,t) -> 
+     Constraint (bound, t@@t2)
+
 
 
 let rec subst_var substitution = function
-  | Return t -> Return (ReturnTypes.subst_var substitution t)
+  | I -> I
   | Computational (name,bt,t) -> 
      if name = substitution.substitute then 
        Computational (name,bt,t) 
@@ -83,12 +80,12 @@ let rec subst_var substitution = function
 let rec pp = 
   let open Pp in
   function
-  | Return t -> 
-     space ^^ space ^^ space ^^ ReturnTypes.pp t
+  | I -> 
+     !^"I"
   | Computational (name,bt,t) ->
-     utf8string "Π" ^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot ^^^ pp t
+     utf8string "Σ" ^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot ^^^ pp t
   | Logical (name,ls,t) ->
-     utf8string "∀" ^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot ^^^ pp t
+     utf8string "∃" ^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot ^^^ pp t
   | Resource (re,t) ->
      RE.pp false re ^^^ !^"*" ^^^ pp t
   | Constraint (lc,t) ->
@@ -96,3 +93,11 @@ let rec pp =
 
 
 
+
+
+(* let rec vars = function
+ *   | I -> []
+ *   | Computational (name,bt,t) -> (name, VarTypes.A bt) :: vars t
+ *   | Logical (name,ls,t) -> (name, VarTypes.L ls) :: vars t
+ *   | Resource (re,t) -> (Sym.fresh (), R re) :: vars t
+ *   | Constraint (lc,t) -> (Sym.fresh (), C lc) :: vars t *)
