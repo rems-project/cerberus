@@ -197,7 +197,7 @@ let rec subst_var subst it : t =
 let subst_vars = make_substs subst_var
 
 
-let rec unify it it' (res : ('a, Sym.t) Uni.t SymMap.t) = 
+let rec unify it it' (res : (Sym.t Uni.t) SymMap.t) = 
   match it, it' with
   | Num n, Num n' when n = n' -> return res
   | Bool b, Bool b' when b = b' -> return res
