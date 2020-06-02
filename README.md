@@ -235,3 +235,15 @@ The files are located at `./sibylfs`, and can be built with:
 ```bash
 $ make sibylfs
 ```
+
+Docker image
+------------
+
+```bash
+$ make -f Makefile_docker
+```
+creates a Docker image than can be used for example with:
+```bash
+$ docker run --volume `PWD`:/data/ cerberus:0.1 tests/tcc/00_assignment.c --pp=core
+```
+This image contains all the source code.
