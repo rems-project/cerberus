@@ -76,28 +76,32 @@ let rec subst_var substitution = function
      let t = subst_var substitution t in
      Constraint (lc,t)
 
+let subst_vars = Subst.make_substs subst_var
 
-let rec pp = 
+
+let pp rt = 
   let open Pp in
-  function
-  | I -> 
-     !^"I"
-  | Computational (name,bt,t) ->
-     utf8string "Σ" ^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot ^^^ pp t
-  | Logical (name,ls,t) ->
-     utf8string "∃" ^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot ^^^ pp t
-  | Resource (re,t) ->
-     RE.pp false re ^^^ !^"*" ^^^ pp t
-  | Constraint (lc,t) ->
-     LC.pp false lc ^^^ !^"∧" ^^^ pp t
+  let rec aux = function
+    | Computational (name,bt,t) ->
+       `More (typ (Sym.pp name) (BT.pp false bt) ^^ comma_pp t)
+    | Logical (name,ls,t) ->
+       `More (!^"logical" ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ comma_pp t)
+    | Resource (re,t) ->
+       `More (RE.pp false re ^^^ comma_pp t)
+    | Constraint (lc,t) ->
+       `More (LC.pp false lc ^^^ comma_pp t)
+    | I -> 
+       `Done
+  and comma_pp t = 
+    match aux t with
+    | `More t_pp -> comma ^^^ t_pp
+    | `Done -> empty
+  in
+  match aux rt with
+  | `More pp -> pp
+  | `Done -> !^"(nothing)"
 
 
 
 
 
-(* let rec vars = function
- *   | I -> []
- *   | Computational (name,bt,t) -> (name, VarTypes.A bt) :: vars t
- *   | Logical (name,ls,t) -> (name, VarTypes.L ls) :: vars t
- *   | Resource (re,t) -> (Sym.fresh (), R re) :: vars t
- *   | Constraint (lc,t) -> (Sym.fresh (), C lc) :: vars t *)

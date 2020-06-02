@@ -5,8 +5,9 @@ open Except
 
 let cpp_str =
     "cc -E -C -Werror -nostdinc -undef -D__cerb__"
-  ^ " -I$(HOME)/Sources/rems-project/cerberus-private/runtime/libc/include"
-  ^ " -DDEBUG"
+    ^ " -I " ^ Cerb_runtime.in_runtime "libc/include"
+    ^ " -I " ^ Cerb_runtime.in_runtime "libcore"
+    ^ " -DDEBUG"
 
 let io =
   let open Pipeline in

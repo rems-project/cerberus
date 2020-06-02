@@ -9,7 +9,7 @@ type call_return_switch_error =
  | Missing_R of Resources.t
  | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
  | Unsat_constraint of LogicalConstraints.t
- | Unconstrained_l of Sym.t * LogicalSorts.t
+ | Unconstrained_l of Sym.t
 
 type type_error = 
  | Name_bound_twice of Sym.t
@@ -65,9 +65,8 @@ let pp_return_error = function
   | Unsat_constraint c ->
      !^"Unsatisfied return constraint" ^^^
        LogicalConstraints.pp false c
-  | Unconstrained_l (name, ls) ->
-     !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp false ls)
+  | Unconstrained_l name ->
+     !^"Unconstrained logical variable" ^^^ Sym.pp name
 
 let pp_call_error = function
   | Surplus_A (_name,t) ->
@@ -97,9 +96,8 @@ let pp_call_error = function
   | Unsat_constraint c ->
      !^"Unsatisfied argument constraint" ^^^
        LogicalConstraints.pp false c
-  | Unconstrained_l (name, ls) ->
-     !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp false ls)
+  | Unconstrained_l name ->
+     !^"Unconstrained logical variable" ^^^ Sym.pp name
 
 
 let pp (loc : Loc.t) (err : t) = 

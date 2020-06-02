@@ -80,19 +80,27 @@ let rec subst_var substitution = function
      Constraint (lc,t)
 
 
-let rec pp = 
+let pp rt = 
   let open Pp in
-  function
-  | Return t -> 
-     space ^^ space ^^ space ^^ ReturnTypes.pp t
-  | Computational (name,bt,t) ->
-     utf8string "Π" ^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot ^^^ pp t
-  | Logical (name,ls,t) ->
-     utf8string "∀" ^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot ^^^ pp t
-  | Resource (re,t) ->
-     RE.pp false re ^^^ !^"*" ^^^ pp t
-  | Constraint (lc,t) ->
-     LC.pp false lc ^^^ !^"∧" ^^^ pp t
+  let rec aux = function
+    | Computational (name,bt,t) ->
+       `More (typ (Sym.pp name) (BT.pp false bt) ^^ comma_pp t)
+    | Logical (name,ls,t) ->
+       `More (!^"logical" ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ comma_pp t)
+    | Resource (re,t) ->
+       `More (RE.pp false re ^^^ comma_pp t)
+    | Constraint (lc,t) ->
+       `More (LC.pp false lc ^^^ comma_pp t)
+    | Return rt -> 
+       `Return (RT.pp rt)
+  and comma_pp t = 
+    match aux t with
+    | `More t_pp -> comma ^^^ t_pp
+    | `Return r_pp -> arrow ^^^ r_pp
+  in
+  match aux rt with 
+  | `More pp
+  | `Return pp -> pp
 
 
 
