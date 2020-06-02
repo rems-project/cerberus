@@ -1,0 +1,4 @@
+.PHONY: docker
+docker:
+	docker build --tag cerberus:0.1 .
+	@echo 'for example: docker run --volume `PWD`:/data/ cerberus:0.1 tests/tcc/00_assignment.c --pp=core'
