@@ -5,7 +5,7 @@ module type Type = sig
   type t
 end
 
-(* TODO: unclear what to do with annotations *)
+(* TODO: unclear what to do with annotations if they mention Core variables *)
 
 module Binding_aware_rewriter = struct
   type annots = Annot.annot list
