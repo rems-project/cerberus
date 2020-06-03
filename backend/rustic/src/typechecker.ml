@@ -55,7 +55,8 @@ let string_of_annots annots =
       | Aloc loc -> None
       | Auid _ -> None
       | Abmc _ -> None
-      | Aattrs (Attrs attrs) -> Some attrs)
+      | Aattrs (Attrs attrs) -> Some attrs
+      | Atypedef _ -> failwith "?")
       annots in
   let annots = List.concat annots in
   String.concat " " (List.map string_of_attr annots)
