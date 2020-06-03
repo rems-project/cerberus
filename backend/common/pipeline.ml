@@ -203,9 +203,10 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   (* TODO(someday): find a better way *)
   Tags.reset_tagDefs ();
   let core_file = Translation.translate core_stdlib core_impl ailtau_prog in
+  let nice_core_file = Make_names_human_readable.rewrite_file core_file in
   io.set_progress "ELABO" >>= fun () ->
   io.pass_message "Translation to Core completed!" >>= fun () ->
-  return (Some cabs_tunit, Some ailtau_prog, core_file)
+  return (Some cabs_tunit, Some ailtau_prog, nice_core_file)
 
 let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   Fresh.set_digest filename;
