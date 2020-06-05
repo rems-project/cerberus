@@ -250,7 +250,7 @@ module Binding_aware_rewriter = struct
       barw_pebinding_post = (fun (annots, pat) () e1 e2 -> M.return (Expr (annots, Elet (pat, e1, e2))));
     }
 
-    type ('pre, 'mid) e_binding_action = {
+    type ('pre, 'mid) ebinding_action = {
       barw_binding_pre : Annot.annot list -> Sym.t generic_pattern -> 'pre M.t;
       barw_binding_mid : 'mid M.t;
       barw_binding_post :
@@ -294,8 +294,8 @@ module Binding_aware_rewriter = struct
       barw_ecase : ('pre2, 'mid2, 'case2, 'post2) ecase_action;
       barw_elet : ('pre3, 'mid3) pebinding_action;
       barw_eunseq : 'a6 eunseq_action;
-      barw_ewseq : ('pre4, 'mid4) e_binding_action;
-      barw_esseq : ('pre5, 'mid5) e_binding_action;
+      barw_ewseq : ('pre4, 'mid4) ebinding_action;
+      barw_esseq : ('pre5, 'mid5) ebinding_action;
       barw_easeq : ('pre7, 'mid7) easeq_action;
       barw_esave : ('pre8, 'acc8, 'mid8, 'post8) esave_action;
     }
@@ -562,6 +562,11 @@ end
 module Int_map = Map.Make(Int)
 
 module Scoped_remapping = struct
+    (** scoped remapping state;
+    `sr_counter` is the gensym counter;
+    `sr_stk_aside` is the list of scopes set aside by `let`s:
+    when remapping `e1` in `let pat = e1 in e2`, the scope containing the variables of `pat` is set aside;
+    `sr_stk_in_scope` is the list of scopes that are in scope *)
     type state = {
       sr_counter : int;
       sr_stk_aside : int Int_map.t list;
@@ -589,7 +594,7 @@ module Scoped_remapping = struct
     | [] -> assert false
     | m :: stk -> Int_map.add k v m :: stk
 
-    (** generate and register a remapping for `k` *)
+    (** generate and register a remapping for `k`, in the innermost scope *)
     let gen : int -> int t = fun k ->
       let+ st = State.get in
       let+ () =
@@ -608,13 +613,17 @@ module Scoped_remapping = struct
       | Some y -> Some y
       end
 
+    (** lookup a variable identifier in the in-scope scopes *)
     let lookup : int -> (int option) t = fun x ->
       let+ st = State.get in
       State.return (lookup_in_stack x st.sr_stk_in_scope)
 
+    (** add a new scope; used on `pat` for `let pat = e1 in e2` *)
     let new_scope : unit t =
       State.update (fun st -> { st with sr_stk_in_scope = Int_map.empty :: st.sr_stk_in_scope })
 
+    (** enter a scope that was set aside; used before remapping `e2` in `let pat = e1 in e2`,
+    to make the scope containing the variables of `pat` be in scope *)
     let enter_aside_scope : unit t =
       State.update
         (fun st ->
@@ -625,6 +634,8 @@ module Scoped_remapping = struct
               sr_stk_in_scope = m :: st.sr_stk_in_scope;
               sr_stk_aside = rest_aside })
 
+    (** used after setting up the scope for the variables of `pat` but before remapping `e1` in `let pat = e1 in e2`,
+    so that the variables of `pat` are not in scope in `e1` *)
     let set_scope_aside : unit t =
       State.update
         (fun st ->
@@ -635,6 +646,7 @@ module Scoped_remapping = struct
               sr_stk_in_scope = rest_in_scope;
               sr_stk_aside = m :: st.sr_stk_aside })
 
+    (** used when exiting `e2` in `let pat = e1 in e2` *)
     let leave_scope : unit t =
       State.update
         (fun st ->
@@ -658,31 +670,31 @@ module Scoped_remapping = struct
 end
 
 module State = struct
-    module Make (X : Type) = struct
-    type state = X.t
-    
-    type 'a t = ('a, state) State.stateM
-    
-    let return : 'a -> 'a t = State.return
-    let bind : 'a t -> ('a -> 'b t) -> 'b t = State.bind
-    let (>>=) = bind
-    let mapM = State.mapM
-    let mapM_ = State.mapM_
-    let rec foldlM (f: ('a -> 'b -> 'b t)) xs init =
-      match xs with
-       | [] ->
-           return init
-       | x::xs' ->
-           f x init >>= fun init' ->
-           foldlM f xs' init'
-    
-    let get : 'a t = State.get
+  module Make (X : Type) = struct
+  type state = X.t
+  
+  type 'a t = ('a, state) State.stateM
+  
+  let return : 'a -> 'a t = State.return
+  let bind : 'a t -> ('a -> 'b t) -> 'b t = State.bind
+  let (>>=) = bind
+  let mapM = State.mapM
+  let mapM_ = State.mapM_
+  let rec foldlM (f: ('a -> 'b -> 'b t)) xs init =
+    match xs with
+      | [] ->
+          return init
+      | x::xs' ->
+          f x init >>= fun init' ->
+          foldlM f xs' init'
+  
+  let get : 'a t = State.get
 
-    let update : (state -> state) -> 'a t = State.update
+  let update : (state -> state) -> 'a t = State.update
 
-    let runStateM : 'a t -> state -> ('a * state) = State.runStateM
+  let runStateM : 'a t -> state -> ('a * state) = State.runStateM
 
-    end
+  end
 end
 
 module Symbol_helper = struct
@@ -690,13 +702,6 @@ module Symbol_helper = struct
 end
 
 module RW = Binding_aware_rewriter.Make(Unit)(Symbol_helper)(Unit)(Scoped_remapping)
-
-(*
-  let rewrite_impl_decl = function
-    | Def (bTy, pe) ->
-        Def (bTy, rewrite_pexpr pe)
-    | IFun (bTy, args, pe) ->
-        IFun (bTy, args, rewrite_pexpr pe) in*)
   
 let rewrite_fun_map_decl rws = function
   | Fun (bTy, args, pe) ->
