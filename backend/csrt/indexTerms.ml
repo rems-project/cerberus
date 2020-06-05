@@ -37,7 +37,7 @@ type t =
   | Nth of num * t (* of tuple *)
 
   | Struct of (Id.t * t) list
-  | Field of t * Id.t
+  | Field of t * BaseTypes.member
 
   | List of t list * BaseTypes.t
   | Head of t
@@ -104,8 +104,8 @@ let rec pp atomic it : PPrint.document =
   | Struct fields -> 
      let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
      braces (separate_map semi pp_field fields)
-  | Field (t, s) ->
-     pp t ^^ dot ^^ Id.pp s
+  | Field (t, Member s) ->
+     pp t ^^ dot ^^ !^s
 
   | S (sym,bt) -> mparens (typ (Sym.pp sym) (LogicalSorts.pp false bt))
 
