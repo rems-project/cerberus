@@ -1,9 +1,8 @@
 open Pp
 open List
-open VarTypes
-open Binders
 open Except
 open TypeErrors
+open VarTypes
 
 module SymSet = Set.Make(Sym)
 module CF = Cerb_frontend
@@ -37,7 +36,8 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 
 type struct_decl = 
-  { typ: (BaseTypes.member * VarTypes.t Binders.t) list;
+  { typ: ReturnTypes.t;
+    fnames: (BaseTypes.member * Sym.t) list;
     ctypes: (BaseTypes.member * CF.Ctype.ctype) list }
 
 
@@ -97,20 +97,18 @@ module Global = struct
 
 
   let pp_struct_decls decls = 
-    let pp_field (BaseTypes.Member f, {name; bound}) = dot ^^ !^f ^^^ colon ^^^ VarTypes.pp bound in
-    pp_list None 
-      (fun (sym, s) -> typ (bold (Sym.pp sym)) 
-                         (braces (separate_map (semi ^^ space) pp_field s.typ)))
+    pp_list
+      (fun (sym, s) -> item (plain (Sym.pp sym)) (ReturnTypes.pp s.typ))
       (SymMap.bindings decls) 
              
 
   let pp_fun_decls decls = 
-    pp_list None
+    pp_list
       (fun (sym, (_, t, _ret)) -> typ (bold (Sym.pp sym)) (FunctionTypes.pp t))
       (SymMap.bindings decls)
 
   let pp_name_map m = 
-    pp_list None
+    pp_list
       (fun (name,sym) -> item name (Sym.pp sym))
       (NameMap.all_names m)
 
@@ -129,8 +127,7 @@ end
 
 module Local = struct
 
-  type lenv = 
-    { vars: VarTypes.t SymMap.t }
+  type lenv = { vars: VarTypes.t SymMap.t }
 
   type t = lenv
 
@@ -139,25 +136,22 @@ module Local = struct
 
   let print_constraint_names = false
 
-  let pp_avars vars = pp_list (Some brackets) (Binders.pp (BT.pp false)) vars 
-  let pp_lvars vars = pp_list (Some brackets) (Binders.pp (LS.pp false)) vars
-  let pp_rvars vars = pp_list (Some brackets) (Binders.pp (RE.pp false)) vars 
-  let pp_cvars vars = 
-    if print_constraint_names 
-    then pp_list (Some brackets) (Binders.pp (LC.pp false)) vars
-    else pp_list (Some brackets) (fun b -> LC.pp false b.bound) vars
+  let pp_avars vars = pp_list (fun (n,t) -> typ (Sym.pp n) (BT.pp false t)) vars 
+  let pp_lvars vars = pp_list (fun (n,t) -> typ (Sym.pp n) (LS.pp false t)) vars 
+  let pp_rvars vars = pp_list (fun (n,t) -> RE.pp false t) vars 
+  let pp_cvars vars = pp_list (fun (n,t) -> LC.pp false t) vars 
 
   let pp lenv =
     let (a,l,r,c) = 
       SymMap.fold (fun name b (a,l,r,c) ->
           match b with
-          | A t -> (({name;bound = t} :: a),l,r,c)
-          | L t -> (a,({name; bound= t} :: l),r,c)
-          | R t -> (a,l,({name; bound = t} :: r),c)
-          | C t -> (a,l,r,({name; bound = t} :: c))
+          | A t -> ((name,t) :: a,l,r,c)
+          | L t -> (a,(name,t) :: l,r,c)
+          | R t -> (a,l,(name,t) :: r,c)
+          | C t -> (a,l,r,(name,t) :: c)
         ) lenv.vars ([],[],[],[])
     in
-    (flow (break 1)
+    (separate hardline
        [ inline_item "computational" (pp_avars a)
        ; inline_item "logical" (pp_lvars l)
        ; inline_item "resources" (pp_rvars r)
@@ -166,11 +160,8 @@ module Local = struct
     )
 
 
-    let add_var env b = 
-      { vars = SymMap.add b.name b.bound env.vars} 
-
-    let remove_var env sym = 
-      { vars = SymMap.remove sym env.vars} 
+    let add_var env (name,t) = { vars = SymMap.add name t env.vars} 
+    let remove_var env sym = { vars = SymMap.remove sym env.vars} 
 
 end
 
@@ -236,14 +227,15 @@ module Env = struct
         return (acc@[t], env)
       ) ([],env) vars
 
-  let add_Avar env b = add_var env {name = b.name; bound = A b.bound}
-  let add_Lvar env b = add_var env {name = b.name; bound = L b.bound}
-  let add_Rvar env b = add_var env {name = b.name; bound = R b.bound}
-  let add_Cvar env b = add_var env {name = b.name; bound = C b.bound}
+  let add_Avar env (name,t) = add_var env (name,A t)
+  let add_Lvar env (name,t) = add_var env (name,L t)
+  let add_Rvar env (name,t) = add_var env (name,R t)
+  let add_URvar env t = add_var env (Sym.fresh (),R t)
+  let add_UCvar env t = add_var env (Sym.fresh (),C t)
   let add_Avars env vars = List.fold_left add_Avar env vars
   let add_Lvars env vars = List.fold_left add_Lvar env vars
-  let add_Rvars env vars = List.fold_left add_Rvar env vars
-  let add_Cvars env vars = List.fold_left add_Cvar env vars
+  let add_URvars env vars = List.fold_left add_URvar env vars
+  let add_UCvars env vars = List.fold_left add_UCvar env vars
 
   let get_ALvar loc env var = 
     tryM 

@@ -28,21 +28,24 @@ let rec bt_to_sort loc env ctxt bt =
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
   | ClosedStruct typ ->
      let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
-     let* (names,sorts) = 
-       fold_leftM (fun (names,sorts) (Member id, Binders.{name; bound = t}) ->
-           match t with
-           | VarTypes.A bt | VarTypes.L (Base bt) -> 
-              let* sort = bt_to_sort loc env ctxt bt in
-              return (Z3.Symbol.mk_string ctxt id :: names, sort :: sorts)
-           | _ -> 
-              return (names,sorts)
-         ) ([],[]) decl.typ
+     let rec aux (names,sorts) = function
+       | ReturnTypes.Computational (sym,bt,t) ->
+          let* sort = bt_to_sort loc env ctxt bt in
+          let* (Member id) = Tools.rassoc_err loc sym decl.fnames "bt_to_sort" in
+          let names = names @ [Z3.Symbol.mk_string ctxt id] in
+          let sorts = sorts @ [sort] in
+          aux (names,sorts) t
+       | ReturnTypes.Logical (_,_,t) -> aux (names,sorts) t
+       | ReturnTypes.Resource (_,t) -> aux (names,sorts) t
+       | ReturnTypes.Constraint (_,t) -> aux (names,sorts) t
+       | ReturnTypes.I -> return (names,sorts)
+     in
+     let* (names,sorts) = aux ([],[]) decl.typ
     in
      let name = Z3.Symbol.mk_string ctxt "struct" in
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
   | Array
   | List _
-  | Path _ 
   | OpenStruct _
   | StoredStruct _
     ->
@@ -202,7 +205,7 @@ let rec check_constraints_hold loc env constr =
   let open Env in
   match constr with
   | [] -> return ()
-  | Binders.{name; bound = c} :: constrs ->
+  | c :: constrs ->
      let* () = debug_print 2 (action "checking constraint") in
      let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
      let* () = debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) in
@@ -212,4 +215,4 @@ let rec check_constraints_hold loc env constr =
        check_constraints_hold loc env constrs
      else
        let* () = debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) in
-       fail loc (Call_error (Unsat_constraint (name, c)))
+       fail loc (Call_error (Unsat_constraint c))

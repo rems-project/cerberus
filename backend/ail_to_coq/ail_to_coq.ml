@@ -479,17 +479,24 @@ let rec translate_expr : bool -> op_type option -> ail_expr -> expr * calls =
     | AilEbmc_assume(e)            -> not_impl loc "expr bmc_assume"
     | AilEreg_load(r)              -> not_impl loc "expr reg_load"
     | AilErvalue(e)                ->
-        let res = match e with
-        (* Struct initializers are lvalues for Ail, but rvalues for us. *)
-        | AnnotatedExpression(_, _, _, AilEcompound(_, _, _)) -> translate e
-        | _ ->
+        let res =
+          match e with
+          (* Struct initializers are lvalues for Ail, but rvalues for us. *)
+          | AnnotatedExpression(_, _, _, AilEcompound(_, _, _)) -> translate e
+          | _                                                   ->
           let layout = layout_of_tc (tc_of e) in
           let atomic = is_atomic_tc (tc_of e) in
           let (e, l) = translate_expr true None e in
-          let gen = if lval then Deref(atomic, layout, e) else Use(atomic, layout, e) in
+          let gen =
+            if lval then Deref(atomic, layout, e)
+            else Use(atomic, layout, e)
+          in
           (locate gen, l)
         in res
-    | AilEarray_decay(e)           -> translate e (* FIXME ??? *)
+    | AilEarray_decay(e) when lval -> translate e
+    | AilEarray_decay(e)           ->
+        let (e, l) = translate_expr true None e in
+        (locate (AddrOf(e)), l)
     | AilEfunction_decay(e)        -> not_impl loc "expr function_decay"
   in
   match (goal_ty, res_ty) with
