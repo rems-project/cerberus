@@ -1,4 +1,3 @@
-open Tools
 open Subst
 module CF = Cerb_frontend
 module S = CF.Symbol
@@ -22,19 +21,15 @@ let compare = S.symbol_compare
 
 module Uni = struct
 
-type ('spec, 'res) t = {
-    spec : 'spec;
-    resolved : 'res option
-  }
-
+type 'res t = { resolved : 'res option }
 
 let find_resolved env unis = 
   SymMap.fold
-    (fun usym {spec; resolved} (unresolveds,resolveds) ->
+    (fun usym {resolved} (unresolveds,resolveds) ->
       match resolved with
-      | None -> (SymMap.add usym spec unresolveds, resolveds)
-      | Some sym -> (unresolveds, (spec, {substitute=usym; swith=sym}) :: resolveds)
-    ) unis (SymMap.empty, [])
+      | None -> (usym :: unresolveds, resolveds)
+      | Some sym -> (unresolveds, ({substitute=usym; swith=sym}) :: resolveds)
+    ) unis ([], [])
 
 end
     
@@ -58,5 +53,5 @@ let unify sym sym' res =
     | Some s when s = sym' -> return res 
     | Some s -> fail
     | None -> 
-       let uni = { uni with resolved = Some sym' } in
+       let uni = { resolved = Some sym' } in
        return (SymMap.add sym uni res)

@@ -2,15 +2,14 @@ open Pp
 module Loc = Locations
 module CF=Cerb_frontend
 
-(* todo: make error messages use Binders.t *)
 
 type call_return_switch_error = 
  | Surplus_A of Sym.t * BaseTypes.t
  | Missing_A of Sym.t * BaseTypes.t
- | Missing_R of Sym.t * Resources.t
+ | Missing_R of Resources.t
  | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
- | Unsat_constraint of Sym.t * LogicalConstraints.t
- | Unconstrained_l of Sym.t * LogicalSorts.t
+ | Unsat_constraint of LogicalConstraints.t
+ | Unconstrained_l of Sym.t
 
 type type_error = 
  | Name_bound_twice of Sym.t
@@ -43,7 +42,7 @@ let pp_return_error = function
      !^"Returning unexpected value of type" ^^^ BaseTypes.pp false t
   | Missing_A (_name,t) ->
      !^"Missing return value of type" ^^^ BaseTypes.pp false t
-  | Missing_R (_name,t) ->
+  | Missing_R t ->
      !^"Missing return resource of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
      let has_pp = match has with
@@ -63,19 +62,18 @@ let pp_return_error = function
                 LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
         (* dead, I think *)
      end
-  | Unsat_constraint (name,c) ->
+  | Unsat_constraint c ->
      !^"Unsatisfied return constraint" ^^^
-       typ (Sym.pp name) (LogicalConstraints.pp false c)
-  | Unconstrained_l (name, ls) ->
-     !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp false ls)
+       LogicalConstraints.pp false c
+  | Unconstrained_l name ->
+     !^"Unconstrained logical variable" ^^^ Sym.pp name
 
 let pp_call_error = function
   | Surplus_A (_name,t) ->
      !^"Supplying unexpected argument of type" ^^^ BaseTypes.pp false t
   | Missing_A (_name,t) ->
      !^"Missing argument of type" ^^^ BaseTypes.pp false t
-  | Missing_R (_name,t) ->
+  | Missing_R t ->
      !^"Missing resource argument of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
      let has_pp = match has with
@@ -95,12 +93,11 @@ let pp_call_error = function
                 LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
         (* dead, I think *)
      end
-  | Unsat_constraint (name,c) ->
+  | Unsat_constraint c ->
      !^"Unsatisfied argument constraint" ^^^
-       typ (Sym.pp name) (LogicalConstraints.pp false c)
-  | Unconstrained_l (name, ls) ->
-     !^"Unconstrained logical variable" ^^^
-       typ (Sym.pp name) (LogicalSorts.pp false ls)
+       LogicalConstraints.pp false c
+  | Unconstrained_l name ->
+     !^"Unconstrained logical variable" ^^^ Sym.pp name
 
 
 let pp (loc : Loc.t) (err : t) = 

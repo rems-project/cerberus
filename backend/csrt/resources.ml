@@ -5,6 +5,9 @@ module Loc = Locations
 module IT = IndexTerms
 module CF = Cerb_frontend
 
+
+
+
 type points = 
   { pointer: Sym.t; 
     pointee: Sym.t option; 
@@ -14,17 +17,19 @@ type points =
 
 
 
-
-
 type t = Points of points
 
 let pp atomic resource = 
-  let mparens pped = if atomic then parens pped else pped in
+  let mparens pp = if atomic then parens pp else pp in
   match resource with
   | Points {pointer; pointee = Some v; typ; size} ->
-     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ Sym.pp v)
+     mparens (!^"Points" ^^ parens (pp_ctype typ ^^ comma ^^^ 
+                                      Sym.pp pointer ^^ comma ^^^ 
+                                        Sym.pp v))
   | Points {pointer; pointee = None; typ; size} ->
-     mparens (Sym.pp pointer ^^^ arrow ^^^ parens (pp_ctype typ) ^^^ !^"uninit")
+     mparens (!^"Points" ^^ parens (pp_ctype typ ^^ comma ^^^ 
+                                      Sym.pp pointer ^^ comma ^^^ 
+                                        !^"uninit"))
 
 
 
@@ -38,7 +43,7 @@ let subst_var subst = function
      let pointer = Sym.subst subst p.pointer in
      Points {p with pointer; pointee}
 
-let subst_vars = Tools.make_substs subst_var
+let subst_vars = Subst.make_substs subst_var
 
 
 

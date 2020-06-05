@@ -1,13 +1,12 @@
 open Subst
 
-module RT = ReturnTypes
 module BT = BaseTypes
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
 
 type t = 
-  | Return of ReturnTypes.t
+  | I
   | Computational of Sym.t * BT.t * t
   | Logical of Sym.t * LS.t * t
   | Resource of RE.t * t
@@ -25,25 +24,23 @@ let mresource bound t =
   Resource (bound,t)
 
 
-let rec args_and_ret = function
-  | Return rt -> 
-     (RT.I,rt)
-  | Computational (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Computational (name,bound,args_rt), ret)
-  | Logical (name,bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Logical (name,bound,args_rt), ret)
-  | Resource (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Resource (bound,args_rt), ret)
-  | Constraint (bound,t) ->
-     let (args_rt, ret) = args_and_ret t in
-     (RT.Constraint (bound,args_rt), ret)
+
+let rec (@@) (t1: t) (t2: t) :t = 
+  match t1 with
+  | I -> t2
+  | Computational (name,bound,t) -> 
+     Computational (name,bound, t@@t2)
+  | Logical (name,bound,t) -> 
+     Logical (name,bound, t@@t2)
+  | Resource (bound,t) -> 
+     Resource (bound, t@@t2)
+  | Constraint (bound,t) -> 
+     Constraint (bound, t@@t2)
+
 
 
 let rec subst_var substitution = function
-  | Return t -> Return (ReturnTypes.subst_var substitution t)
+  | I -> I
   | Computational (name,bt,t) -> 
      if name = substitution.substitute then 
        Computational (name,bt,t) 
@@ -79,6 +76,8 @@ let rec subst_var substitution = function
      let t = subst_var substitution t in
      Constraint (lc,t)
 
+let subst_vars = Subst.make_substs subst_var
+
 
 let pp rt = 
   let open Pp in
@@ -91,16 +90,18 @@ let pp rt =
        `More (RE.pp false re ^^^ comma_pp t)
     | Constraint (lc,t) ->
        `More (LC.pp false lc ^^^ comma_pp t)
-    | Return rt -> 
-       `Return (RT.pp rt)
+    | I -> 
+       `Done
   and comma_pp t = 
     match aux t with
     | `More t_pp -> comma ^^^ t_pp
-    | `Return r_pp -> arrow ^^^ r_pp
+    | `Done -> empty
   in
-  match aux rt with 
-  | `More pp
-  | `Return pp -> pp
+  match aux rt with
+  | `More pp -> pp
+  | `Done -> !^"(nothing)"
+
+
 
 
 
