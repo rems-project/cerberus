@@ -493,20 +493,22 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | _ when wrap        -> fprintf ff "(%a)" (pp false rfnd guarded) ty
     | Ty_refine(e,ty)    ->
         begin
-          let normal () =
+          let default () =
             fprintf ff "%a @@ %a" (pp_coq_expr true) e
               (pp true true guarded) ty
           in
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,tys)) when c = s ->
-              if not guarded then fprintf ff "guarded (%a) " with_uid s;
-              fprintf ff "(apply_dfun self (%a" (pp_coq_expr true) e;
+              if not guarded then fprintf ff "guarded (%a) (" with_uid s;
+              fprintf ff "apply_dfun self (%a" (pp_coq_expr true) e;
               List.iter (fprintf ff ", %a" (pp_arg true guarded)) tys;
-              fprintf ff "))"
+              fprintf ff ")"; if not guarded then fprintf ff ")"
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
-              if not guarded then fprintf ff "guarded %a " with_uid s;
-              pp_str ff "("; normal (); pp_str ff ")"
-          | (_              , _               )            -> normal ()
+              if not guarded then fprintf ff "guarded %a (" with_uid s;
+              default ();
+              if not guarded then fprintf ff ")"
+          | (_              , _               )            ->
+              default ()
         end
     | Ty_ptr(k,ty)       ->
         fprintf ff "%a %a" pp_kind k (pp true false guarded) ty
@@ -517,6 +519,23 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
         fprintf ff "constrained %a %a" (pp true false guarded) ty
           (pp_constr true) c
     | Ty_params(id,tyas) ->
+        let default () =
+          pp_str ff id;
+          List.iter (fprintf ff " %a" (pp_arg true guarded)) tyas
+        in
+        match guard with
+        | Guard_in_def(s) when id = s ->
+            fprintf ff "tyexists (λ rfmt__, ";
+            if not guarded then fprintf ff "guarded (%a) (" with_uid s;
+            fprintf ff "apply_dfun self (rfmt__";
+            List.iter (fprintf ff ", %a" (pp_arg true guarded)) tyas;
+            fprintf ff "))"; if not guarded then fprintf ff ")"
+        | Guard_in_lem(s) when id = s ->
+            fprintf ff "tyexists (λ rfmt__, rfmt__ @@ ";
+            if not guarded then fprintf ff "guarded %a (" with_uid s;
+            default (); fprintf ff ")";
+            if not guarded then fprintf ff ")"
+        | _                           ->
         match id with
         | "optional" when not rfnd ->
             let (tya1, tya2) =
@@ -560,8 +579,7 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
             in
             fprintf ff "guarded %a %a" with_uid s (pp_arg true true) ty;
         | _                        ->
-            pp_str ff id;
-            List.iter (fprintf ff " %a" (pp_arg true guarded)) tyas
+            default ()
   and pp_arg wrap guarded ff tya =
     match tya with
     | Ty_arg_expr(ty)         ->
