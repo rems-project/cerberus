@@ -1306,7 +1306,7 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                   | Vloaded (LVspecified (OVpointer pv)) ->
                       E.mapM full_eval_pexpr' pes >>= fun cvals ->
                       let case_funptrval psym =
-                        let mem_values =
+                        let _mem_values =
                           match Map.lookup psym file.funinfo with
                             | Just (_, _, _, param_tys, _, _) ->
                                 List.map (fun (ty, cval) ->

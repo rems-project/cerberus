@@ -80,7 +80,7 @@ let test file expr : unit expr =
       rw_expr=
     RW.RW begin fun (Expr (annots, expr_) as expr) ->
       match expr_ with
-        | Ebound (_, e) ->
+        | Ebound e ->
             ChangeDoChildrenPost
               ( Identity.return e, Identity.return )
 (*
