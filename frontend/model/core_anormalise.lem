@@ -766,8 +766,6 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      let e2 = n_expr e2 k in
      let e3 = n_expr e3 k in
      wrap (M_Eif e1 e2 e3))
-  | Eskip ->
-     k (wrap (M_Eskip))
   | Eccall a ct e2 es ->
      let ct = match ct with
        | Core.Pexpr annots bty (Core.PEval (Core.Vctype ct)) -> 
@@ -791,10 +789,8 @@ and n_expr loc (e : expr 'a unit) (k : mu_expr 'a -> mu_expr 'a)
      wrap (M_Esseq (core_to_mu__pattern pat) e1 (n_expr e2 k)))
   | Easeq b action paction ->
      failwith "todo Easeq"
-  | Eindet n e ->
-     failwith "todo Eindet"
-  | Ebound n e ->
-     wrap (M_Ebound n (n_expr e k))
+  | Ebound e ->
+     wrap (M_Ebound (n_expr e k))
   | End es ->
      let es = map normalise_expr es in
      k (wrap (M_End es))

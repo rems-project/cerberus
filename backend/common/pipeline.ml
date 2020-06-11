@@ -412,6 +412,10 @@ let untype_file (file: 'a Core.typed_file) : 'a Core.file =
           Epar (List.map untype_expr es)
       | Ewait tid ->
           Ewait tid
+      | Eannot (dyn, e) ->
+          Eannot (dyn, untype_expr e)
+      | Eexcluded (n, act) ->
+          Eexcluded (n, untype_action act)
     in Expr (annots, aux expr_) in
   let untype_generic_fun_map_decl = function
     | Fun (bty, xs, pe) ->

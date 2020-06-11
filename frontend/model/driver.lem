@@ -1455,7 +1455,7 @@ end
 val perform_action_request2:
   bool -> Loc.t -> Mem.thread_id -> Core_reduction.action_request2 Core_run.thread_state -> driverM unit
 let perform_action_request2 with_concurrency loc tid request =
-  let execution_mode_is_random = match Global.current_execution_mode () with
+  let _execution_mode_is_random = match Global.current_execution_mode () with
     | Nothing   -> false
     | Just mode -> mode = Global.Random
   end in

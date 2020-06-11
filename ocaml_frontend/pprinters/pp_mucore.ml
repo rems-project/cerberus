@@ -104,7 +104,6 @@ let rec precedence_expr = function
   | M_Ememop _
   | M_Eaction _
   | M_Ecase _
-  | M_Eskip
   | M_Eproc _
   | M_Eccall _
   (* | M_Eunseq _ *)
@@ -672,8 +671,7 @@ let pp_expr budget expr =
             pp_control "if" ^^^ pp_asym pe1 ^^^ pp_control "then" ^^
             P.nest 2 (P.break 1 ^^ pp e2) ^^ P.break 1 ^^
             pp_control "else" ^^ P.nest 2 (P.break 1 ^^ pp e3)
-        | M_Eskip ->
-            pp_keyword "skip"
+
         | M_Eproc (_, nm, pes) ->
             pp_keyword "pcall" ^^ P.parens (pp_name nm ^^ P.comma ^^^ comma_list pp_asym pes)
         | M_Eccall (_, pe_ty, pe, pes) ->
@@ -720,9 +718,8 @@ let pp_expr budget expr =
          *     pp_keyword "wait" ^^ P.parens (pp_thread_id tid) *)
         | M_End es ->
             pp_keyword "nd" ^^ P.parens (comma_list pp es)
-        | M_Ebound (i, e) ->
-            pp_keyword "bound" ^^ P.brackets (!^ (string_of_int i)) ^/^
-            P.parens (pp e)
+        | M_Ebound e ->
+            pp_keyword "bound" ^^ P.parens (pp e)
       end
     end
     in pp budget false None expr

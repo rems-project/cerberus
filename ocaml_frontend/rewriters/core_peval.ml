@@ -292,8 +292,6 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Epure (subst_sym_pexpr2 sym z pe)
             | Ememop (memop, pes) ->
                 Ememop (memop, List.map (subst_sym_pexpr2 sym z) pes)
-            | Eskip ->
-                expr_
             | Elet (pat, pe1, e2) ->
                 Elet ( pat
                      , subst_sym_pexpr2 sym z pe1
@@ -326,19 +324,17 @@ let rec subst_sym_expr2 sym z (Expr (annot, expr_)) =
                 Esseq ( pat
                       , subst_sym_expr2 sym z e1
                       , if Core_aux.in_pattern sym pat then e2 else subst_sym_expr2 sym z e2 )
-            | Easeq ((sym', bTy), act1, pact2) ->
+            | Easeq ((sym', bTy), act1, act2) ->
                 Easeq ( (sym', bTy)
                       , subst_sym_action2 sym z act1
                       , begin
                           if sym = sym' then
-                            pact2
+                            act2
                           else
-                            subst_sym_paction2 sym z pact2
+                            subst_sym_action2 sym z act2
                         end )
-            | Eindet (i, e) ->
-                Eindet (i, subst_sym_expr2 sym z e)
-            | Ebound (i, e) ->
-                Ebound (i, subst_sym_expr2 sym z e)
+            | Ebound e ->
+                Ebound (subst_sym_expr2 sym z e)
             | Esave (lab_sym, sym_bTy_pes, e) ->
                 let sym_bTy_pes' = List.map (fun (x, (bTy, pe)) ->
                   (x, (bTy, subst_sym_pexpr2 sym z pe))
@@ -583,7 +579,7 @@ let core_peval file : 'bty RW.rewriter =
     rw_expr=
       RW.RW begin fun (Expr (annots, expr_) (*as expr*)) ->
         match expr_ with
-          | Ebound (_, e) ->
+          | Ebound e ->
               ChangeDoChildrenPost
                 ( Identity.return e, Identity.return )
 (*
