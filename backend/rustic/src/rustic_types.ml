@@ -46,6 +46,7 @@ module String_map = Map.Make(String)
 module String_map_aux = Map_of_list(String_map)
 module String_option_map = Option_map(String_map)
 
+(*
 type rc_ownership =
 | RC_read
 | RC_write
@@ -57,13 +58,19 @@ let string_of_rc_ownership = function
 | RC_write -> "write"
 | RC_zap -> "zap"
 | RC_bad -> "BAD"
+*)
+
+type rc_scoping =
+| RCS_scoped of string
+| RCS_unscoped
 
 type rc_type =
 | RC_placeholder of string
+| RC_uninit
 | RC_scalar
-| RC_ptr of rc_ownership * rc_type
-| RC_struct of Symbol.sym * rc_ownership
-| RC_atomic of rc_type
+| RC_ptr of rc_type * rc_scoping
+| RC_struct of Symbol.sym (* * rc_ownership
+| RC_atomic of rc_type*)
 
 module RC_type = struct
   type t = rc_type
@@ -80,11 +87,18 @@ type rc_change =
 let string_of_sym (Symbol.Symbol (_, _, id_opt)) =
   match id_opt with Some id -> id | None -> assert false (* FIXME? *)
 
+let string_of_scoping = function
+| RCS_scoped s -> s
+| RCS_unscoped -> "all"
+
 let rec string_of_rc_type = function
 | RC_placeholder s -> "?" ^ s
 | RC_scalar -> "scalar"
-| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "](" ^ string_of_rc_type t ^ ")"
-| RC_struct (id, o) -> "struct " ^ string_of_sym id ^ "[" ^ string_of_rc_ownership o ^ "]"
-| RC_atomic t -> "atomic " ^ string_of_rc_type t
+| RC_uninit -> "uninit"
+| RC_ptr (t, s) -> "ptr@" ^ string_of_scoping s ^ "[" ^ string_of_rc_type t ^ "]"
+| RC_struct s -> failwith "TODO: struct"
+(*| RC_ptr (o, t) -> "ptr[" ^ string_of_rc_ownership o ^ "](" ^ string_of_rc_type t ^ ")"*)
+(*| RC_struct (id, o) -> "struct " ^ string_of_sym id ^ "[" ^ string_of_rc_ownership o ^ "]"
+| RC_atomic t -> "atomic " ^ string_of_rc_type t*)
 
-type ('b) gamma_ty = (rc_type String_map.t * 'b) list
+type ('b) gamma_ty = (rc_type String_map.t) list
