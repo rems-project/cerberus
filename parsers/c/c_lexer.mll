@@ -429,16 +429,18 @@ and initial = parse
   let lexer_state = ref LSRegular
 
   let lexer lexbuf =
-    let rec concat_strings ((prev_pref_opt, strs_acc) as lit) lex_curr_p =
-      match initial lexbuf with
-      | STRING_LITERAL (new_pref_opt, strs) ->
-          begin match merge_encoding_prefixes prev_pref_opt new_pref_opt with
-          | Some pref_opt ->
-              concat_strings (pref_opt, strs_acc @ strs) lexbuf.lex_curr_p
-          | None          ->
-              raise (Error Errors.Cparser_non_standard_string_concatenation)
-          end
-      | tok -> (lit, tok, lex_curr_p)
+    let concat_strings (pref_opt, strs) lex_curr_p =
+      let rec aux (prev_pref_opt, strs_rev_acc) lex_curr_p =
+        match initial lexbuf with
+        | STRING_LITERAL (new_pref_opt, strs) ->
+            begin match merge_encoding_prefixes prev_pref_opt new_pref_opt with
+            | Some pref_opt ->
+                aux (pref_opt, strs :: strs_rev_acc) lexbuf.lex_curr_p
+            | None          ->
+                raise (Error Errors.Cparser_non_standard_string_concatenation)
+            end
+        | tok -> ((prev_pref_opt, List.concat (List.rev strs_rev_acc)), tok, lex_curr_p) in
+      aux (pref_opt, [strs]) lex_curr_p
     in
     match !lexer_state with
     | LSRegular ->
