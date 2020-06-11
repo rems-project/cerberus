@@ -1,5 +1,5 @@
 open import Pervasives Utils AilSyntax AilTypesAux Ctype
-import Cabs Cmm_csem
+import Cmm_csem
 
 (* Things needed to model in a implementation independent way,
    types and constant the std library defines. *)
@@ -193,8 +193,8 @@ let decode_memory_order  = function
   | _ -> Nothing
 end
 
-val translate_builtin_varnames: Cabs.cabs_identifier -> maybe (expression_ unit)
-let translate_builtin_varnames (Cabs.CabsIdentifier _ str) =
+val translate_builtin_varnames: Symbol.identifier -> maybe (expression_ unit)
+let translate_builtin_varnames (Symbol.Identifier _ str) =
   let const_int ic: maybe(expression_ unit) =
     Just (AilEconst (ConstantInteger ic))
   in

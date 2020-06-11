@@ -3,8 +3,8 @@
  *     Victor Gomes
  *)
 
-open import Pervasives Loc Show
-import Symbol Annot Cabs
+open import Pervasives Loc Show Symbol
+import Annot
 
 type integerBaseType [name = "^\\(\\|\\([a-z A-Z]+_\\)\\)ibty[0-9]*'?$"] =
  | Ichar
@@ -92,9 +92,13 @@ instance (Located ctype)
     Annot.get_loc_ annots
 end
 
+type flexible_array_member =
+    (* NOTE: the last parameter is the element type of the array *)
+  | FlexibleArrayMember of Annot.attributes * Symbol.identifier * qualifiers * ctype
+
 type tag_definition =
-  | StructDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
-  | UnionDef of list (Cabs.cabs_identifier * (qualifiers * ctype))
+  | StructDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype)) * maybe flexible_array_member
+  | UnionDef of list (Symbol.identifier * (Annot.attributes * qualifiers * ctype))
 
 (** Type class instances *)
 
@@ -371,13 +375,18 @@ end
 instance (Show tag_definition)
   let show def =
     let string_of_identifiers tag_defs =
-      List.foldl (fun acc (Cabs.CabsIdentifier _ str, _) ->
-        acc ^ str ^ "; "
+      List.foldl (fun acc (ident, _) ->
+        acc ^ (show ident) ^ "; "
       ) "[" tag_defs ^ "]"
     in
     match def with
-      | StructDef tag_defs -> string_of_identifiers tag_defs
-      | UnionDef tag_defs -> string_of_identifiers tag_defs
+      | StructDef tag_defs Nothing ->
+          string_of_identifiers tag_defs
+      | StructDef tag_defs (Just (FlexibleArrayMember attrs ident qs elem_ty)) ->
+          let ty = Ctype [] (Array elem_ty Nothing) in
+          string_of_identifiers (tag_defs ++ [(ident, (attrs, qs, ty))])
+      | UnionDef tag_defs ->
+          string_of_identifiers tag_defs
     end
 end
 

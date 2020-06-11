@@ -20,7 +20,7 @@ let throw m = Exception m
 let fail = throw
 let inline join m = except_bind m (fun x -> x)
 
-val fmap: forall 'a 'b 'msg. ('a -> 'b) -> exceptM 'a 'msg -> exceptM 'b 'msg
+val except_fmap: forall 'a 'b 'msg. ('a -> 'b) -> exceptM 'a 'msg -> exceptM 'b 'msg
 let except_fmap f m = except_bind m (except_return -| f)
 
 
@@ -51,7 +51,7 @@ let map3 f mx my mz = app (map2 f mx my) mz
 *)
 
 val sequence: forall 'a 'msg. list (exceptM 'a 'msg) -> exceptM (list 'a) 'msg
-let inline sequence ms =
+let except_sequence ms =
   foldr
     (fun m ms' ->
       m   >>= fun x  ->
@@ -60,18 +60,18 @@ let inline sequence ms =
     ) (except_return []) ms
 
 val listM: forall 'a 'b 'msg. ('a -> list (exceptM 'b 'msg)) -> 'a -> exceptM (list 'b) 'msg
-let inline listM t xs = sequence (t xs)
+let inline listM t xs = except_sequence (t xs)
 
-val mapM: forall 'a 'b 'msg. ('a -> exceptM 'b 'msg) -> list 'a -> exceptM (list 'b) 'msg
-let inline mapM f = listM (List.map f)
+val except_mapM: forall 'a 'b 'msg. ('a -> exceptM 'b 'msg) -> list 'a -> exceptM (list 'b) 'msg
+let except_mapM f = listM (List.map f)
 
 
-val     foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg
-let rec foldlM f a = function
+val     except_foldlM: forall 'a 'b 'msg. ('a -> 'b -> exceptM 'a 'msg) -> 'a -> list 'b -> exceptM 'a 'msg
+let rec except_foldlM f a = function
   | [] ->
       except_return a
   | x::xs ->
-      except_bind (f a x) (fun z -> foldlM f z xs)
+      except_bind (f a x) (fun z -> except_foldlM f z xs)
 end
 
 
@@ -156,3 +156,6 @@ end
 let inline return = except_return
 let inline bind = except_bind
 let inline fmap = except_fmap
+let inline sequence = except_sequence
+let inline mapM = except_mapM
+let inline foldlM = except_foldlM

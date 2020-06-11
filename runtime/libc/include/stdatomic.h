@@ -15,7 +15,6 @@
 #define ATOMIC_LLONG_LOCK_FREE     __cerbvar_ATOMIC_LLONG_LOCK_FREE
 #define ATOMIC_POINTER_LOCK_FREE   __cerbvar_ATOMIC_POINTER_LOCK_FREE
 
-#define ATOMIC_FLAG_INIT           __cerbvar_ATOMIC_FLAG_INIT
 
 typedef enum memory_order {
   memory_order_relaxed = __cerbvar_memory_order_relaxed,
@@ -26,14 +25,20 @@ typedef enum memory_order {
   memory_order_seq_cst = __cerbvar_memory_order_seq_cst
 } memory_order;
 
-// TODO: atomic_flag
-// atomic_flag ===> a structure type representing a lock-free, primitive atomic flag; and several atomic analogs of integer types.
+// TODO: check the definition of atomic_flag
+typedef struct atomic_flag {
+  _Atomic(_Bool) _Value;
+} atomic_flag;
+
+#define ATOMIC_FLAG_INIT { /*._Value=*/ 0 }
+
 
 
 #define ATOMIC_VAR_INIT(value) (value)
 
 
-#define atomic_init(obj, value)    __cerbvar_atomic_init(obj, value)
+//#define atomic_init(obj, value)    __cerbvar_atomic_init(obj, value)
+#define atomic_init(obj,value)   (*obj = value)
 
 
 void atomic_thread_fence(memory_order order);
@@ -104,10 +109,10 @@ typedef _Atomic(uintmax_t)              atomic_uintmax_t;
 #define atomic_exchange(object, desired) \
   atomic_exchange_explicit(object, desired, memory_order_seq_cst)
 #define atomic_compare_exchange_strong(object, expected, desired) \
-  atomic_compare_exchange_strong(object, expected, desired, \
+  atomic_compare_exchange_strong_explicit(object, expected, desired, \
       memory_order_seq_cst, memory_order_seq_cst)
 #define atomic_compare_exchange_weak(object, expected, desired) \
-  atomic_compare_exchange_weak(object, expected, desired, \
+  atomic_compare_exchange_weak_explicit(object, expected, desired, \
       memory_order_seq_cst, memory_order_seq_cst)
 #define atomic_fetch_key(object, operand) \
   atomic_fetch_key_explicit(object, operand, memory_order_seq_cst)

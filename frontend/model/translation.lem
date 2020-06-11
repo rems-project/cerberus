@@ -152,7 +152,7 @@ let oneAil_tau =
 
 
 (*
-val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Cabs.cabs_identifier -> C.shift_path
+val shiftPathFromMember: A.program GenTypes.genTypeCategory -> Symbol.sym -> Symbol.identifier -> C.shift_path
 let shiftPathFromMember program tag ident =
   match List.lookup tag (snd program).A.tag_definitions with
     | Just (A.StructDef ident_tys) ->
@@ -655,7 +655,7 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
   end in
   (* TODO !!!! *)
   let integer_promotion (ty: Ctype.ctype) (e: C.pexpr) : C.pexpr =
-    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion tmp_implementation ty) in
+    let promoted_ty = fromJust "Translation_aux.integer_promotion" (AilTypesAux.promotion integerImpl ty) in
     stdlib.mkcall_conv_int promoted_ty e in
   
   (* STD §6.3.1.8 *)
@@ -671,7 +671,7 @@ and translate_expression ctx variadic_env stdlib (tagDefs : Core.core_tag_defini
       | (Nothing, Nothing) ->
           (* TODO: this is so readable ... *)
           (* STD §6.3.1.8#1, bullet 4 *)
-          match (AilTypesAux.promotion tmp_implementation ty1, AilTypesAux.promotion tmp_implementation ty2) with
+          match (AilTypesAux.promotion integerImpl ty1, AilTypesAux.promotion integerImpl ty2) with
             | (Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity1')) as ty1'), Just (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity2')) as ty2')) ->
                 (* "If both operants have the same type, then no further conversion is needed." *)
                 if ty1' = ty2' then
@@ -890,7 +890,8 @@ else
             translate_function_designator ctx variadic_env stdlib tagDefs e
       
       (* TODO: promotion? + atomicity *)
-      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
+      (* NOTE: if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but a do while
+         with compare_exchange_weak with seq_cst, seq_cst) *)
       | A.AilEunary A.PostfixIncr e ->
           (* STD §6.5.2.4 *)
           let () = if AilTypesAux.is_atomic (ctype_of e) then
@@ -1764,26 +1765,29 @@ else
           let core_ty_pe1 = Caux.mk_ail_ctype_pe $ AilTypesAux.rvalue_coercion (snd (from_lvalue_type e1)) in
           
           let e2_sym = Symbol.fresh () in
+          let ty1 = ctype_of e1 in
+          let ty2 = ctype_of e2 in
           begin
-if AilTypesAux.is_arithmetic (ctype_of e1) && AilTypesAux.is_arithmetic (ctype_of e2) then
+if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_arithmetic ty1 && AilTypesAux.is_arithmetic ty2 then
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
-              conv_loaded_arith stdlib (ctype_of e2) (ctype_of e1)
+              conv_loaded_arith stdlib ty2 (Ctype.unatomic ty1)
             )
 
-else if AilTypesAux.is_struct_or_union (ctype_of e1) then
+else if AilTypesAux.atomic_qualified_unqualified AilTypesAux.is_struct_or_union ty1 then
             (* TODO(check): I don't think that any conversion is needed here. *)
             (* TODO2: if we have multiple translation units, then maybe there should be a conversion? *)
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
               fun z -> z
             )
 
-else match AilTypesAux.referenced_type (ctype_of e1) with
+(* NOTE: we apply unatomic to ty1 because the left operand may be an atomic pointer to ... (STD §6.5.16.1#1, bullet 3) *)
+else match AilTypesAux.referenced_type (Ctype.unatomic ty1) with
   | Just ref_ty ->
         if Aaux.is_null_pointer_constant e2 then
             E.return (
@@ -1794,13 +1798,13 @@ else match AilTypesAux.referenced_type (ctype_of e1) with
         else
             self e2 >>= fun core_e ->
             E.return (
-              force_core_object_type_of_ctype (ctype_of e2),
+              force_core_object_type_of_ctype ty2,
               core_e,
               fun z -> z
            )
   | Nothing ->
         (* By Ail typing, e1 must have type _Bool and e2 must be a pointer *)
-        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers (ctype_of e2)) in
+        let _ = Debug.print_debug 1 [] (fun _ -> "E2 can have type function: " ^ Pp.stringFromAil_ctype Ctype.no_qualifiers ty2) in (* TODO *)
         self e2 >>= fun core_e2 ->
         E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e2_sym_pat, e2_sym_pe) ->
         E.return (
@@ -1819,12 +1823,11 @@ end
             ) in
           
           let mo =
-            if AilTypesAux.is_atomic (ctype_of e1) then
+            if AilTypesAux.is_atomic ty1 then
               (* STD §6.2.6.1#9 *)
               Cmm.Seq_cst
             else
               Cmm.NA in
-          
           E.return $
             C.Expr [Annot.Astd "§6.5.16#3, sentence 4"] (
               C.Ewseq (Caux.mk_tuple_pat [ e1_sym_pat
@@ -1849,11 +1852,7 @@ end
             C.Expr [Annot.Astd "§6.5.17#2, sentence 2"] (
               C.Esseq (Caux.mk_empty_pat (C.BTy_loaded oTy)) core_e1 core_e2
           )
-
-
-
-
-
+      
       | A.AilEcompoundAssign e1 aop e2 ->
           (* TODO: in C11/C17 this is a seq_cst RMW for atomic types *)
           (* NOTE: but if I read N2329 correctly, in C2X this will not be an RMW for the atomic case (but seq_cst) *)
@@ -2433,7 +2432,7 @@ TODO: #9
           E.foldlM (fun (rev_arg_ty_pes, rev_variadic_core_creates) (arg_ty, arg_is_null, arg_sym_pe) ->
             let (conv_ty, conv_value) =
               if AilTypesAux.is_integer arg_ty then
-                let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion tmp_implementation arg_ty) in
+                let prom_ty = fromJust "translation: default arguments promotion" (AilTypesAux.promotion integerImpl arg_ty) in
                 (prom_ty, stdlib.mkcall_conv_loaded_int prom_ty arg_sym_pe)
               else if AilTypesAux.is_floating arg_ty then
                 (Ctype.Ctype [] (Ctype.Basic (Ctype.Floating (Ctype.RealFloating Ctype.Double))), arg_sym_pe) (* TODO: convert this to double *)
@@ -2491,8 +2490,10 @@ begin if expect_is_variadic then
                         (let (arg_pes, vararg_pes) = List.splitAt (List.length expect_params) arg_ptr_sym_pes in
                          let varargs_ty_pes =
                             List.map (fun (ty_pe, pe) -> Caux.mk_tuple_pe [ty_pe; pe])
-                                     (List.zip (List.reverse rev_arg_ty_pes) vararg_pes)
-                         in arg_pes ++ [Caux.mk_list_pe varargs_ty_pes]
+                                     (List.zip (List.reverse rev_arg_ty_pes) vararg_pes) in
+                         let varargs_ty_pes_type = 
+                           C.BTy_tuple [C.BTy_ctype; (C.BTy_object C.OTy_pointer)] in
+                         arg_pes ++ [Caux.mk_list_pe varargs_ty_pes_type varargs_ty_pes]
                         )
                       )
                       (Caux.mk_sseq_e killall_pat
@@ -2632,8 +2633,9 @@ else (* is_pointer *)
              mk_expr (Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_array_pe (List.reverse rev_pes))))
       
       | A.AilEstruct tag_sym ident_e_opts ->
+          (* TODO(check) ignoring the potential flexible array member, because it should not be part of a struct as value *)
           let ident_tys = match Map.lookup tag_sym tagDefs with
-            | Just (Cty.StructDef z) ->
+            | Just (Cty.StructDef z _) ->
                 z
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEstruct"
@@ -2641,7 +2643,7 @@ else (* is_pointer *)
           E.foldlM (fun (acc, mk_core) (ident, e_opt) ->
             match e_opt with
               | Just e ->
-                  let (_, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
+                  let (_, _, memb_ty) = fromJust "Translation.translate_expression, AilEstruct 2" $ List.lookup ident ident_tys in
                   let oTy = force_core_object_type_of_ctype memb_ty in
                   begin
                     if AilTypesAux.is_pointer memb_ty && Aaux.is_null_pointer_constant e then
@@ -2668,7 +2670,7 @@ else (* is_pointer *)
                       )
                   end
               | Nothing ->
-                  let (_, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
+                  let (_, _, ty) = fromJust "Translation.translate_expression, AilEstruct 3" $ List.lookup ident ident_tys in
                   E.return (
                     (ident, Caux.mk_unspecified_pe ty) :: acc,
                     mk_core
@@ -2706,13 +2708,13 @@ else (* is_pointer *)
           match Map.lookup tag_sym tagDefs with
             | (*BISECT-IGNORE*) Nothing ->
                 illTypedAil loc "AilEunion: couldn't find the definition"
-            | (*BISECT-IGNORE*) Just (Cty.StructDef ident_tys) ->
+            | (*BISECT-IGNORE*) Just (Cty.StructDef _ _) ->
                 illTypedAil loc "AilEunion: found a struct definition"
             | Just (Cty.UnionDef ident_tys) ->
                 match List.lookup memb_ident ident_tys with
                   | (*BISECT-IGNORE*) Nothing ->
                       illTypedAil loc "AilEunion: couldn't find a union definition"
-                  | Just (_, memb_ty) ->
+                  | Just (_, _, memb_ty) ->
                       let oTy = force_core_object_type_of_ctype memb_ty in
                       match e_opt with
                         | Nothing ->
@@ -2737,7 +2739,11 @@ else (* is_pointer *)
           let (tag_sym, oTy) = match ctype_of e with
             | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
                 (tag_sym, C.OTy_struct tag_sym)
+            | Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Struct tag_sym))) ->
+                (tag_sym, C.OTy_struct tag_sym)
             | Ctype.Ctype _ (Ctype.Union tag_sym) ->
+                (tag_sym, C.OTy_union tag_sym)
+            | Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Union tag_sym))) ->
                 (tag_sym, C.OTy_union tag_sym)
             | (*BISECT-IGNORE*) _ ->
                 illTypedAil loc "AilEmemberof"
@@ -2771,8 +2777,14 @@ else (* is_pointer *)
       | A.AilEmemberofptr e ident ->
           (* STD §6.5.2.3 *)
           let (ref_ty, tag_sym) = match ctype_of e with
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Struct tag_sym) as ref_ty)) -> (ref_ty, tag_sym)
-            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Union tag_sym) as ref_ty))  -> (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Struct tag_sym) as ref_ty)) ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Struct tag_sym))) as ref_ty)) ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Union tag_sym) as ref_ty))  ->
+                (ref_ty, tag_sym)
+            | Ctype.Ctype _ (Ctype.Pointer _ (Ctype.Ctype _ (Ctype.Atomic (Ctype.Ctype _ (Ctype.Union tag_sym))) as ref_ty)) ->
+                (ref_ty, tag_sym)
             | (*BISECT-IGNORE*) _ -> illTypedAil loc "AilEmemberofptr"
           end in
           E.wrapped_fresh_symbol (C.BTy_loaded C.OTy_pointer) >>= fun (_, e_sym_pat   , e_sym_pe   ) ->
@@ -3003,6 +3015,12 @@ else (* is_pointer *)
 
       
       | A.AilErvalue e ->
+          let mo =
+            if AilTypesAux.is_atomic (ctype_of e) then
+              (* STD §6.2.6.1#9 *)
+              Cmm.Seq_cst
+            else
+              Cmm.NA in
           (* TODO: check + I don't like have a wseq here *)
           self e >>= fun core_e ->
           E.wrapped_fresh_symbol (C.BTy_object C.OTy_pointer)
@@ -3010,7 +3028,7 @@ else (* is_pointer *)
           E.return (
             C.Expr [] (
               C.Ewseq ( (* Caux.mk_specified_pat *) e_sym_pat) core_e (
-                Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe Cmm.NA
+                Caux.pload loc (Caux.mk_ail_ctype_pe result_ty) e_sym_pe mo
               )
             )
           )
@@ -3071,7 +3089,7 @@ type collect_cases_state = <|
 |>
 
 val     collect_cases_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_cases_state
-let rec collect_cases_ (A.AnnotatedStatement loc stmt) =
+let rec collect_cases_ (A.AnnotatedStatement loc _ stmt) =
   let register_case ic_n =
     St.update (fun s -> <| s with case_csts= ic_n :: s.case_csts |>) in
   let register_default =
@@ -3133,14 +3151,14 @@ type erase_loop_control_state = <|
 |>
 
 val     erase_loop_control_aux: A.statement GenTypes.genTypeCategory -> St.stateM (A.statement GenTypes.genTypeCategory) erase_loop_control_state
-let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
+let rec erase_loop_control_aux (A.AnnotatedStatement loc attrs stmt_) =
   let with_fresh_labels mf =
     fun st ->
       let continue_sym = Symbol.fresh_pretty_with_id (fun x -> "continue_" ^ show x) in
       let break_sym    = Symbol.fresh_pretty_with_id (fun x -> "break_" ^ show x) in
       let (ret, st')   = mf <| elc_continue= Just continue_sym; elc_break= Just break_sym |> in
       ((continue_sym, break_sym, ret), st) in 
-  A.AnnotatedStatement loc <$> match stmt_ with
+  A.AnnotatedStatement loc attrs <$> match stmt_ with
     | A.AilSskip ->
         St.return stmt_
     | A.AilSexpr _ ->
@@ -3154,18 +3172,18 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSwhile e (A.AnnotatedStatement loc (A.AilSblock []
-                [s'; A.AnnotatedStatement loc (A.AilSlabel continue_sym (A.AnnotatedStatement loc A.AilSskip))])))
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSwhile e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])))
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
 
     | A.AilSdo s e ->
         (* STD §6.8.6.2#2 and §6.8.6.3#2 *)
         with_fresh_labels (erase_loop_control_aux s) >>= fun (continue_sym, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSdo (A.AnnotatedStatement loc (A.AilSblock []
-                [s'; A.AnnotatedStatement loc (A.AilSlabel continue_sym (A.AnnotatedStatement loc A.AilSskip))])) e)
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSdo (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [s'; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel continue_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip))])) e)
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
     | A.AilSbreak ->
         St.get >>= function
           | <| elc_break= Just break_sym |> ->
@@ -3188,9 +3206,9 @@ let rec erase_loop_control_aux (A.AnnotatedStatement loc stmt_) =
         with_fresh_labels (erase_loop_control_aux s) >>= fun (_, break_sym, s') ->
         St.return $
           A.AilSblock []
-            [ A.AnnotatedStatement loc (A.AilSswitch e (A.AnnotatedStatement loc (A.AilSblock []
-                [ A.AnnotatedStatement loc (A.AilSgoto break_sym); s' ])))
-            ; A.AnnotatedStatement loc (A.AilSlabel break_sym (A.AnnotatedStatement loc A.AilSskip)) ]
+            [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSswitch e (A.AnnotatedStatement loc Annot.no_attributes (A.AilSblock []
+                [ A.AnnotatedStatement loc Annot.no_attributes (A.AilSgoto break_sym); s' ])))
+            ; A.AnnotatedStatement loc Annot.no_attributes (A.AilSlabel break_sym (A.AnnotatedStatement loc Annot.no_attributes A.AilSskip)) ]
     | A.AilScase iCst s ->
         A.AilScase iCst <$> erase_loop_control_aux s
     | A.AilSdefault s ->
@@ -3219,7 +3237,7 @@ let erase_loop_control stmt =
 
 
 val     collect_visibles_: A.statement GenTypes.genTypeCategory -> St.stateM unit collect_visibles_state
-let rec collect_visibles_ (A.AnnotatedStatement loc stmt) =
+let rec collect_visibles_ (A.AnnotatedStatement loc _ stmt) =
   match stmt with
     | A.AilSskip ->
         St.return ()
@@ -3344,12 +3362,12 @@ type translate_stmt_env = <|
 
 
 val translate_stmt:
-  translation_stdlib -> C.core_tag_definitions -> A.identifier -> translate_stmt_env ->
+  translation_stdlib -> C.core_tag_definitions -> A.ail_identifier -> translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
   E.elabM (C.core_base_type * C.expr unit)
 
 
-let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E.elabM (C.expr unit) =
+let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : E.elabM (C.expr unit) =
   let translate_expression = translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
       translate_stmt2 stdlib tagDefs f <| env with case_labs=   case_labs;
@@ -3612,7 +3630,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
         let promoted_pe =
           Caux.mk_std_pe "§6.8.4.2#5, sentence 1" (
             stdlib.mkcall_conv_int (fromJust "Translation.translate_stmt2: switch expr promotion"
-              (AilTypesAux.promotion tmp_implementation (ctype_of e))) control_sym_pe
+              (AilTypesAux.promotion integerImpl (ctype_of e))) control_sym_pe
           ) in
         (* Create case symbols and translate cases block *)
         let cases    = collect_cases s in
@@ -3751,9 +3769,9 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc stmt) : E
 
 
 (* TODO: delete this *)
-val translate_tag_definitions: list (A.identifier * Ctype.tag_definition) -> C.core_tag_definitions
+val translate_tag_definitions: list (A.ail_identifier * (Annot.attributes * Ctype.tag_definition)) -> C.core_tag_definitions
 let translate_tag_definitions ctx =
-  Map.fromList ctx
+  Map.fromList (List.map (fun (x, (_, y)) -> (x, y)) ctx)
 (*
   Map.fromList $ List.map (function
     | (sym, A.StructDef tagDef) ->
@@ -3773,7 +3791,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
   let core_tagDefs = translate_tag_definitions sigm.A.tag_definitions in
   (*let () = Core_ctype_aux.set_tagDefs core_tagDefs in*)
   
-  E.foldlM (fun (gacc, facc, finfoacc) (sym, (loc, decl)) ->
+  E.foldlM (fun (gacc, facc, finfoacc) (sym, (loc, _, decl)) ->
     (* for each Ail declaration *)
     match decl with
       | A.Decl_object _ qs ty ->
@@ -3855,8 +3873,8 @@ let translate_program stdlib (startup_sym_opt, sigm) =
             | Nothing ->
                 (* if the function has no definition,
                    we create Core procedure declaration *)
-                let finfo =
-                  (return_ty
+                let finfo =     (* TODO: plug in non-empty attributes *)
+                  (loc, Annot.Attrs [], return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (_, ty, _) -> (Nothing, ty)) params
                   , is_variadic, has_proto) in
@@ -3873,12 +3891,12 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                      | _ -> Map.insert sym finfo finfoacc
                   end)
             
-            | Just (loc, param_syms, stmt) ->
+            | Just (loc, attrs, param_syms, stmt) ->
                 (* making the argument variables visible *)
 (* TODO: WIP                E.with_block_objects param_syms *)
                 (* TODO: variadic!! *)
                 let finfo =
-                  (return_ty
+                  ( loc, attrs, return_ty
                   (* TODO: check if we need qualifiers too *)
                   , List.map (fun (sym, (_, ty, _)) -> (Just sym, ty)) (List.zip param_syms params)
                   , is_variadic, has_proto) in

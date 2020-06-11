@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Global_ocaml
 
 module Mem = Naive_memory
@@ -64,7 +65,7 @@ let catch_result m =
 
 (* use this when calling a pretty printer *)
 let run_pp =
-    PPrint.ToChannel.pretty 40.0 80 Pervasives.stdout
+    PPrint.ToChannel.pretty 40.0 80 Stdlib.stdout
 
 
 

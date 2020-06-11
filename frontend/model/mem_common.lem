@@ -17,6 +17,7 @@ type access_error =
   | DeadPtr
   | OutOfBoundPtr
   | NoProvPtr
+  | AtomicMemberof
 
 
 let stringFromAccess_error = function
@@ -30,6 +31,8 @@ let stringFromAccess_error = function
       "OutOfBoundPtr"
   | NoProvPtr ->
       "NoProvPtr"
+  | AtomicMemberof ->
+      "AtomicMemberof"
 end
 
 type free_error =
@@ -129,6 +132,9 @@ let undefinedFromMem_error = function
       Just [Undefined.UB_CERB002a_out_of_bound_load]
   | MerrAccess _ StoreAccess OutOfBoundPtr ->
       Just [Undefined.UB_CERB002b_out_of_bound_store]
+  
+  | MerrAccess _ _ AtomicMemberof ->
+      Just [Undefined.UB042_access_atomic_structUnion_member]
   
   | MerrUndefinedFree loc Free_static_allocation ->
       Just [Undefined.UB179a_static_allocation]
@@ -327,8 +333,8 @@ type mem_value =
   | MVfloating of string
   | MVpointer of pointer_value
   | MVarray of list mem_value (* TODO: list (maybe mem_value) *)
-  | MVstruct of Symbol.t * list (Cabs.cabs_identifier * mem_value)
-  | MVunion of Symbol.t * Cabs.cabs_identifier * mem_value (* the symbols are respectively the tag and the member *)
+  | MVstruct of Symbol.t * list (Cabs.identifier * mem_value)
+  | MVunion of Symbol.t * Cabs.identifier * mem_value (* the symbols are respectively the tag and the member *)
 
 
 *)

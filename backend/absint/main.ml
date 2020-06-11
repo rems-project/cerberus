@@ -1,4 +1,7 @@
+open Cerb_frontend
+open Cerb_backend
 open Global_ocaml
+open Cerb_runtime
 open Pipeline
 
 (* BEGIN TMP MLM DEBUG *)
@@ -48,7 +51,7 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
+    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -58,7 +61,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [cerb_path ^ "/runtime/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
+  let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
@@ -73,7 +76,7 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
   end
 
 let core_libraries incl lib_paths libs =
-  let lib_paths = if incl then (cerb_path ^ "/runtime/libc") :: lib_paths else lib_paths in
+  let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
   let libs = if incl then "c" :: libs else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
@@ -124,7 +127,7 @@ let cerberus debug_level progress
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in *)
   (* set global configuration *)
-  set_cerb_conf false Random false QuoteStd defacto false;
+  set_cerb_conf false Random false QuoteStd defacto false false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -138,7 +141,7 @@ let cerberus debug_level progress
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.foldlM (fun core_files file ->
+    Exception.except_foldlM (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
         return (core_file::core_files)) [] (core_libraries (not nolibc) link_lib_path link_core_obj @ files)
   in
@@ -170,8 +173,8 @@ let cerberus debug_level progress
         | None -> Filename.chop_extension first_file
       in
       if cpp_only then
-        Exception.foldlM (fun () file ->
-            cpp (conf, io) file >>= fun processed_file ->
+        Exception.except_foldlM (fun () filename ->
+            cpp (conf, io) ~filename >>= fun processed_file ->
             print_file processed_file;
             return ()
           ) () files >>= fun () ->
@@ -364,6 +367,6 @@ let () =
                          fs_dump $ fs $
                          output_file $
                          files $ args) in
-  (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)

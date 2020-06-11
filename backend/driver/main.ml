@@ -1,4 +1,7 @@
+open Cerb_frontend
+open Cerb_backend
 open Global_ocaml
+open Cerb_runtime
 open Pipeline
 
 (* BEGIN TMP MLM DEBUG *)
@@ -48,7 +51,7 @@ let frontend (conf, io) filename core_std =
   if Filename.check_suffix filename ".co" || Filename.check_suffix filename ".o" then
     return @@ read_core_object core_std filename
   else if Filename.check_suffix filename ".c" then
-    c_frontend (conf, io) core_std filename >>= fun (_, _, core_file) ->
+    c_frontend (conf, io) core_std ~filename >>= fun (_, _, core_file) ->
     core_passes (conf, io) ~filename core_file
   else if Filename.check_suffix filename ".core" then
     core_frontend (conf, io) core_std ~filename
@@ -58,7 +61,7 @@ let frontend (conf, io) filename core_std =
                       "The file extention is not supported")
 
 let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files nolibc =
-  let libc_dirs = [cerb_path ^ "/runtime/bmc"; cerb_path ^ "/runtime/libc/include"; cerb_path ^ "/runtime/libc/include/posix"] in
+  let libc_dirs = [in_runtime "bmc"; in_runtime "libc/include"; in_runtime "libc/include/posix"] in
   let incl_dirs = if nostdinc then incl_dirs else libc_dirs @ incl_dirs in
   let macros_def = if nolibc then macros_def else ("CERB_WITH_LIB", None) :: macros_def in
   String.concat " " begin
@@ -69,11 +72,11 @@ let create_cpp_cmd cpp_cmd nostdinc macros_def macros_undef incl_dirs incl_files
       ) macros_def @
     List.map (fun str -> "-U" ^ str) macros_undef @
     List.map (fun str -> "-I" ^ str) incl_dirs @
-    List.map (fun str -> "-include " ^ str) incl_files
+    List.map (fun str -> "-include " ^ str) (in_runtime "libc/include/builtins.h" :: incl_files)
   end
 
 let core_libraries incl lib_paths libs =
-  let lib_paths = if incl then (cerb_path ^ "/runtime/libc") :: lib_paths else lib_paths in
+  let lib_paths = if incl then in_runtime "libc" :: lib_paths else lib_paths in
   let libs = if incl then "c" :: libs else libs in
   List.map (fun lib ->
       match List.fold_left (fun acc path ->
@@ -103,7 +106,7 @@ let create_executable out =
   Unix.chmod out 0o755
 
 let cerberus debug_level progress core_obj
-             cpp_cmd nostdinc nolibc macros macros_undef
+             cpp_cmd nostdinc nolibc agnostic macros macros_undef
              incl_dirs incl_files cpp_only
              link_lib_path link_core_obj
              impl_name
@@ -122,7 +125,7 @@ let cerberus debug_level progress core_obj
     | Some args -> Str.split (Str.regexp "[ \t]+") args
   in
   (* set global configuration *)
-  set_cerb_conf exec exec_mode concurrency QuoteStd defacto false;
+  set_cerb_conf exec exec_mode concurrency QuoteStd defacto agnostic false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core;
                rewrite_core; sequentialise_core; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -136,7 +139,7 @@ let cerberus debug_level progress core_obj
     return (core_stdlib, core_impl)
   in
   let main core_std =
-    Exception.foldlM (fun core_files file ->
+    Exception.except_foldlM (fun core_files file ->
         frontend (conf, io) file core_std >>= fun core_file ->
         return (core_file::core_files)) [] (core_libraries (not nolibc && not core_obj) link_lib_path link_core_obj @ files)
   in
@@ -175,8 +178,8 @@ let cerberus debug_level progress core_obj
     | files ->
       (* Run only CPP *)
       if cpp_only then
-        Exception.foldlM (fun () file ->
-            cpp (conf, io) file >>= fun processed_file ->
+        Exception.except_foldlM (fun () filename ->
+            cpp (conf, io) ~filename >>= fun processed_file ->
             print_file processed_file;
             return ()
           ) () files >>= fun () ->
@@ -184,7 +187,7 @@ let cerberus debug_level progress core_obj
       (* Dump a core object (-c) *)
       else if core_obj then
         prelude >>= fun core_std ->
-        Exception.foldlM (fun () file ->
+        Exception.except_foldlM (fun () file ->
           frontend (conf, io) file core_std >>= fun core_file ->
           let output_file = Filename.remove_extension file ^ ".co" in
           write_core_object core_file output_file;
@@ -303,6 +306,11 @@ let nolibc =
   let doc = "Do not search the standard system directories for include files." in
   Arg.(value & flag & info ["nolibc"] ~doc)
 
+let agnostic =
+  let doc = "Asks Cerberus to delay looking at implementation settings until as late \
+             as possible. This makes the pipeline somewhat implementation agnostic." in
+  Arg.(value & flag & info ["agnostic"] ~doc)
+
 let exec =
   let doc = "Execute the Core program after the elaboration." in
   Arg.(value & flag & info ["exec"] ~doc)
@@ -314,26 +322,26 @@ let exec_mode =
 
 let pprints =
   let open Pipeline in
-  let doc = "Pretty print the intermediate programs for the listed languages\
+  let doc = "Pretty print the intermediate programs for the listed languages \
              (ranging over {ail, core})." in
   Arg.(value & opt (list (enum ["ail", Ail; "core", Core])) [] &
        info ["pp"] ~docv:"LANG1,..." ~doc)
 
 let astprints =
   let open Pipeline in
-  let doc = "Pretty print the intermediate syntax tree for the listed languages\
-             (ranging over {cabs, ail, core})." in
+  let doc = "Pretty print the intermediate syntax tree for the listed languages \
+             (ranging over {cabs, ail})." in
   Arg.(value & opt (list (enum ["cabs", Cabs; "ail", Ail])) [] &
        info ["ast"] ~docv:"LANG1,..." ~doc)
 
 let fs =
-  let doc = "Initialise the internal file system with the contents of the\
+  let doc = "Initialise the internal file system with the contents of the \
              directory DIR" in
   Arg.(value & opt (some string) None & info ["fs"] ~docv:"DIR" ~doc)
 
 let ppflags =
   let open Pipeline in
-  let doc = "Pretty print flags [annot: include location and ISO annotations,\
+  let doc = "Pretty print flags [annot: include location and ISO annotations, \
              fout: output in a file]." in
   Arg.(value & opt (list (enum ["annot", Annot; "fout", FOut])) [] &
        info ["pp_flags"] ~doc)
@@ -343,9 +351,9 @@ let files =
   Arg.(value & pos_all file [] & info [] ~docv:"FILE" ~doc)
 
 let progress =
-  let doc = "Progress mode: the return code indicate how far the source program\
+  let doc = "Progress mode: the return code indicate how far the source program \
              went through the pipeline \
-             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed,\
+             [1 = total failure, 10 = parsed, 11 = desugared, 12 = typed, \
              13 = elaborated, 14 = executed]" in
   Arg.(value & flag & info ["progress"] ~doc)
 
@@ -395,7 +403,7 @@ let args =
 (* entry point *)
 let () =
   let cerberus_t = Term.(pure cerberus $ debug_level $ progress $ core_obj $
-                         cpp_cmd $ nostdinc $ nolibc $ macros $ macros_undef $
+                         cpp_cmd $ nostdinc $ nolibc $ agnostic $ macros $ macros_undef $
                          incl_dir $ incl_file $ cpp_only $
                          link_lib_path $ link_core_obj $
                          impl $
@@ -406,6 +414,6 @@ let () =
                          fs_dump $ fs $ trace $
                          output_file $
                          files $ args) in
-  (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)

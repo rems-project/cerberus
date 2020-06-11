@@ -1,5 +1,6 @@
+open Cerb_frontend
 open Core
-open Core_ctype
+open Ctype
 
 module Int = struct
   type t = int
@@ -103,19 +104,19 @@ type ('a, 'bty) texpr =
   | TEval of Symbol.sym generic_value
   | TEaction of ('a, 'bty) taction
   | TEmemop of Mem_common.memop * ('a, 'bty) texpr list
-  | TEimpl of Implementation_.implementation_constant
+  | TEimpl of Implementation.implementation_constant
   | TEconstrained of (Mem.mem_iv_constraint * ('a, 'bty) texpr) list
   | TEundef of Location_ocaml.t * Undefined.undefined_behaviour
   | TEerror of string * ('a, 'bty) texpr
-  | TEctor of 'bty generic_ctor * ('a, 'bty) texpr list
-  | TEarray_shift of ('a, 'bty) texpr * ctype0 * ('a, 'bty) texpr
-  | TEmember_shift of ('a, 'bty) texpr * Symbol.sym * Cabs.cabs_identifier
+  | TEctor of generic_ctor * ('a, 'bty) texpr list
+  | TEarray_shift of ('a, 'bty) texpr * ctype * ('a, 'bty) texpr
+  | TEmember_shift of ('a, 'bty) texpr * Symbol.sym * Symbol.identifier
   | TEnot of ('a, 'bty) texpr
   | TEop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
-  | TEstruct of Symbol.sym * (Cabs.cabs_identifier * ('a, 'bty) texpr) list
-  | TEunion of Symbol.sym * Cabs.cabs_identifier * ('a, 'bty) texpr
+  | TEstruct of Symbol.sym * (Symbol.identifier * ('a, 'bty) texpr) list
+  | TEunion of Symbol.sym * Symbol.identifier * ('a, 'bty) texpr
   | TEcfunction of ('a, 'bty) texpr
-  | TEmemberof of Symbol.sym * Cabs.cabs_identifier * ('a, 'bty) texpr
+  | TEmemberof of Symbol.sym * Symbol.identifier * ('a, 'bty) texpr
   | TEcall of Symbol.sym generic_name * ('a, 'bty) texpr list
   | TEis_scalar of ('a, 'bty) texpr
   | TEis_integer of ('a, 'bty) texpr
@@ -136,7 +137,7 @@ type ('a, 'bty) cond =
   | Cval of Symbol.sym generic_value
   | Cop of binop * ('a, 'bty) texpr * ('a, 'bty) texpr
   | Cnot of ('a, 'bty) cond
-  | Cmatch of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
+  | Cmatch of (Symbol.sym) generic_pattern * ('a, 'bty) texpr
   | Cis_scalar of ('a, 'bty) texpr
   | Cis_integer of ('a, 'bty) texpr
   | Cis_signed of ('a, 'bty) texpr
@@ -147,8 +148,8 @@ type ('a, 'bty) cond =
 type ('a, 'bty) transfer =
   | Tskip
   | Tcond of ('a, 'bty) cond
-  | Tassign of ('a, Symbol.sym) generic_pattern * ('a, 'bty) texpr
-  | Tcall of ('a, Symbol.sym) generic_pattern
+  | Tassign of (Symbol.sym) generic_pattern * ('a, 'bty) texpr
+  | Tcall of (Symbol.sym) generic_pattern
              * ('a, 'bty) texpr * ('a, 'bty) texpr list
 
 type 'a fun_map_decl =
@@ -163,7 +164,7 @@ type 'a cfg_file =
     impl: unit; (* TODO *)
     globs: int * (unit, ('a, 'a) transfer) Pgraph.graph;
     funs: (Symbol.sym, 'a fun_map_decl) Pmap.map;
-    funinfo: (Symbol.sym, (Core_ctype.ctype0 * (Symbol.sym option * Core_ctype.ctype0) list * bool * bool)) Pmap.map
+    funinfo: (Symbol.sym, (Location_ocaml.t * Annot.attributes * ctype * (Symbol.sym option * ctype) list * bool * bool)) Pmap.map
   }
 
 
@@ -245,7 +246,7 @@ let polarity = function
 
 let show_name = function
   | Sym a  -> Sym.show a
-  | Impl i -> Implementation_.string_of_implementation_constant i
+  | Impl i -> Implementation.string_of_implementation_constant i
 
 let rec show_texpr te =
   let self e = show_texpr e in
@@ -259,7 +260,7 @@ let rec show_texpr te =
   | TEmemop (memop, tes) ->
     "memop" ^ parens (show_memop memop ^ ", " ^ comma_list self tes)
   | TEimpl i ->
-    Implementation_.string_of_implementation_constant i
+    Implementation.string_of_implementation_constant i
   | TEconstrained (ivs_tes) -> "constrained"
   | TEundef (_, ub) ->
     Undefined.stringFromUndefined_behaviour ub
@@ -289,7 +290,7 @@ let rec show_texpr te =
     "array_shift" ^ parens (self te1 ^ ", "
                             ^ String_core_ctype.string_of_ctype cty
                             ^ self te2)
-  | TEmember_shift (te, x, Cabs.CabsIdentifier (_, memb)) ->
+  | TEmember_shift (te, x, Symbol.Identifier (_, memb)) ->
     "member_shift" ^ parens (self te ^ ", " ^ Sym.show x ^ ", " ^ memb)
   | TEnot te ->
     "not " ^ parens (self te)
@@ -301,7 +302,7 @@ let rec show_texpr te =
     "union " ^ Sym.show x
   | TEcfunction te ->
     "cfunction" ^ parens (self te)
-  | TEmemberof (x, Cabs.CabsIdentifier (_, memb), te) ->
+  | TEmemberof (x, Symbol.Identifier (_, memb), te) ->
     "memberof" ^ parens (Sym.show x ^ ", " ^ memb ^ ", " ^ self te)
   | TEcall (nm, tes) ->
     show_name nm ^ parens (comma_list self tes)

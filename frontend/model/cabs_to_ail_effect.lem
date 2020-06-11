@@ -7,6 +7,8 @@ import AilSyntax AilTypesAux
 
 import Map_extra Ctype
 
+import Mem
+
 module A      = AilSyntax
 
 
@@ -144,7 +146,7 @@ end
 type namespace =
   | Namespace_label
   | Namespace_tag
-  | Namespace_member of cabs_identifier (* NOTE: theses are only struct/union members *)
+  | Namespace_member of Symbol.identifier (* NOTE: theses are only struct/union members *)
   | Namespace_ordinary (* NOTE: enumeration constants go here *)
 
 instance (Show namespace)
@@ -196,7 +198,7 @@ type function_declaration =
       * bool (* isNoReturn *)
 
 type registration =
-  | Internal of A.identifier * identifier_kind * maybe linkage
+  | Internal of A.ail_identifier * identifier_kind * maybe linkage
   | External
 
 type global_definition =
@@ -209,44 +211,44 @@ type state = <|
   aux_supply: nat;
   (* table (with stacked scopes) associating C identifiers to symbols *)
   
-  registered_external_identifiers: map (cabs_identifier * namespace) (scope * (A.identifier * identifier_kind * maybe linkage));
-  registered_identifiers: Scope_table.t scope (cabs_identifier * namespace) registration;
+  registered_external_identifiers: map (Symbol.identifier * namespace) (scope * (A.ail_identifier * identifier_kind * maybe linkage));
+  registered_identifiers: Scope_table.t scope (Symbol.identifier * namespace) registration;
   
   (* TODO: this type of too large, maybe separate the namespaces into different maps under the scope table *)
 (*
-  registered_identifiers: Scope_table.t scope (cabs_identifier * namespace) (A.identifier * identifier_kind * maybe linkage);
+  registered_identifiers: Scope_table.t scope (cabs_identifier * namespace) (A.ail_identifier * identifier_kind * maybe linkage);
 *)
   
-  tag_definitions: map A.identifier tag_definition;
+  tag_definitions: map A.ail_identifier tag_definition;
   
   (* return type; parameters types; is_variadic; is_inline; is_Noreturn *)
   (* the first boolean records whether the function has a prototype *)
   (* the boolean in the parameters list tells whether there was a register storage-class *)
-  function_declarations: map A.identifier (
-    (*hasProto*)bool * Loc.t *
+  function_declarations: map A.ail_identifier (
+    (*hasProto*)bool * Loc.t * Annot.attributes *
     ( (Ctype.qualifiers * Ctype.ctype)                     (* qualifier and return type *)
     * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) (* Nothing if there was no parameter type list,
                                                                 the boolean is the isRegister flag *)
     * bool * bool * bool )                                   (* isVariadic, isInline, isNoReturn flags *)
    );
-  external_object_declarations: map A.identifier  ((* isTentative *)bool * Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
-  internal_object_declarations: map A.identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
+  external_object_declarations: map A.ail_identifier  ((* isTentative *)bool * Loc.t * Annot.attributes * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
+  internal_object_declarations: map A.ail_identifier  (Loc.t * A.storageDuration * (* isRegister *) bool * Ctype.qualifiers * Ctype.ctype);
   
-  function_definitions: map A.identifier (Loc.t * list A.identifier * A.statement unit);
-  global_object_definitions: map A.identifier global_definition;
+  function_definitions: map A.ail_identifier (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit);
+  global_object_definitions: map A.ail_identifier global_definition;
   
   (* TODO: I really don't like the potential lack of sync between the next field and registered_identifiers *)
-  typedef_definitions: map A.identifier (Ctype.qualifiers * Ctype.ctype);
+  typedef_definitions: map A.ail_identifier (Annot.attributes * Ctype.qualifiers * Ctype.ctype);
   
   static_assertions: list (A.expression unit * A.stringLiteral);
   
   (* STD §6.2.1#1, sentence 2 *)
-  enumeration_constants: map A.identifier (A.expression_ unit);
+  enumeration_constants: map A.ail_identifier (A.expression_ unit);
   
   (* TODO: this is idiotically inefficient, should store here the converse *)
   (* list the object/functions actually used, so that we can forget everything else that is declared/defined.
      This is particularly useful when stdlib headers are included *)
-  used_identifier: list A.identifier;
+  used_identifier: list A.ail_identifier;
   current_return_type : Ctype.ctype;
   
   
@@ -266,6 +268,8 @@ let inline bind = State_exception.bind
 
 val fail: forall 'a. Loc.t -> Errors.desugar_cause -> desugM 'a
 let inline fail loc dcause = State_exception.fail (loc, Errors.DESUGAR dcause)
+
+let inline fail_ailtyping loc tcause = State_exception.fail (loc, Errors.AIL_TYPING tcause)
 
 val contraint_violation: forall 'a. Loc.t -> Constraint.violation -> desugM 'a
 let inline constraint_violation loc v =
@@ -357,9 +361,9 @@ let under_scope scope m =
   return res
 
 
-(* This is similary to 'under_scope', but it also returns the internal
+(* This is similar to 'under_scope', but also returns the internal
    declarations that where declared while evaluating 'm' *)
-(* NOTE: this only collect INTERNAL declarations, not the extern, static or
+(* NOTE: this only collects INTERNAL declarations, not the extern, static or
    _Thread_local ones *)
 val collect_with_scope: forall 'a. scope -> desugM 'a -> desugM (A.bindings * 'a)
 let collect_with_scope scope m =
@@ -381,7 +385,7 @@ let collect_with_scope scope m =
             match kind with
               | Kind_ordinary (OK_object false) ->
                   match Map.lookup sym st.external_object_declarations with
-                    | Just (isTentative, loc, dur, isRegister, qs, ty) ->
+                    | Just (isTentative, loc, _, dur, isRegister, qs, ty) ->
                         (sym, ((loc, dur, isRegister), qs, ty)) :: acc
                     | Nothing ->
                         match Map.lookup sym st.internal_object_declarations with
@@ -412,7 +416,7 @@ let collect_with_scope scope m =
 
 
 (* TODO: rename *)
-val with_scope2: forall 'a. scope -> desugM 'a -> desugM (Map.map (cabs_identifier * namespace) registration * 'a)
+val with_scope2: forall 'a. scope -> desugM 'a -> desugM (Map.map (Symbol.identifier * namespace) registration * 'a)
 let with_scope2 scope m =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -442,7 +446,7 @@ let bindings_of_idents_map idents_map =
               match kind with
                 | Kind_ordinary (OK_object _) ->
                     match Map.lookup sym st.external_object_declarations with
-                      | Just (isTentative, _, dur, isRegister, qs, ty) ->
+                      | Just (isTentative, _, _, dur, isRegister, qs, ty) ->
                           (sym, ((dur, isRegister), qs, ty)) :: acc
                       | Nothing ->
                           match Map.lookup sym st.internal_object_declarations with
@@ -462,7 +466,7 @@ let bindings_of_idents_map idents_map =
   )
 
 (* TODO: this is a massive hack (see desugar_and_register_function_definition). MUST DO BETTER *)
-val hack_inject_idents_map: Map.map (cabs_identifier * namespace) registration -> desugM unit
+val hack_inject_idents_map: Map.map (Symbol.identifier * namespace) registration -> desugM unit
 let hack_inject_idents_map idents_map =
   State_exception.update (fun st ->
     <| st with registered_identifiers=
@@ -506,11 +510,11 @@ let inline eval = cabs_to_ail_effect_eval
 
 
 
-val freshify: cabs_identifier -> desugM cabs_identifier
-let freshify (CabsIdentifier loc str) =
+val freshify: Symbol.identifier -> desugM Symbol.identifier
+let freshify (Symbol.Identifier loc str) =
   State_exception.modify (fun st ->
     let n = st.aux_supply in
-    (CabsIdentifier loc (str ^ show n), <| st with aux_supply= n+1 |>)
+    (Symbol.Identifier loc (str ^ show n), <| st with aux_supply= n+1 |>)
   )
 
 val fresh_block_scope: desugM scope
@@ -523,14 +527,14 @@ let fresh_block_scope =
 
 
 (* ========================================================================== *)
-val ident_is_in_scope: cabs_identifier -> namespace -> desugM bool
+val ident_is_in_scope: Symbol.identifier -> namespace -> desugM bool
 let ident_is_in_scope ident namespace =
   State_exception.read (fun st ->
     Scope_table.is_in_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
   )
 
 
-val ident_is_in_current_scope: cabs_identifier -> namespace -> desugM bool
+val ident_is_in_current_scope: Symbol.identifier -> namespace -> desugM bool
 let ident_is_in_current_scope ident namespace =
   State_exception.read (fun st ->
     Scope_table.is_in_current_scope (ident, namespace) (Scope_table.return_scope st.registered_identifiers)
@@ -539,8 +543,8 @@ let ident_is_in_current_scope ident namespace =
 
 (* NOTE: this function shouldn't be called outside of the current module *)
 val internal_register_identifier:
-  (scope * (A.identifier * identifier_kind * maybe linkage) -> (unit -> desugM A.identifier) -> desugM A.identifier) ->
-  cabs_identifier -> namespace -> identifier_kind -> maybe linkage -> desugM A.identifier
+  (scope * (A.ail_identifier * identifier_kind * maybe linkage) -> (unit -> desugM A.ail_identifier) -> desugM A.ail_identifier) ->
+  Symbol.identifier -> namespace -> identifier_kind -> maybe linkage -> desugM A.ail_identifier
 let internal_register_identifier if_found ident namespace kind link_opt =
   get_scope >>= fun sc ->
   let () =
@@ -575,7 +579,7 @@ let internal_register_identifier if_found ident namespace kind link_opt =
   end >>
   let do_fresh () =
     (* generates a fresh symbol *)
-    let CabsIdentifier _ str = ident in
+    let Symbol.Identifier _ str = ident in
     let sym = Symbol.fresh_pretty str in
     (* associates it to the identifier *)
     State_exception.update (fun st ->
@@ -668,8 +672,8 @@ let internal_register_identifier if_found ident namespace kind link_opt =
         end
   end
 
-val register_typedef: cabs_identifier -> Ctype.qualifiers * Ctype.ctype -> desugM unit
-let register_typedef ident (qs, ty) =
+val register_typedef: Symbol.identifier -> Annot.attributes * Ctype.qualifiers * Ctype.ctype -> desugM unit
+let register_typedef ident (attrs, qs, ty) =
   let loc = Loc.locOf ident in
   let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
     "registering typedef identifier: " ^ show ident ^
@@ -681,26 +685,30 @@ let register_typedef ident (qs, ty) =
     ident Namespace_ordinary (Kind_ordinary OK_typedef) Nothing >>= fun sym ->
   State_exception.get >>= fun st ->
   match Map.lookup sym st.typedef_definitions with
-    | Just (qs', ty') ->
+    | Just (attrs', qs', ty') ->
         (* STD §6.7#3, first bullet *)
         if AilTypesAux.variably_modified ty then
           constraint_violation loc Constraint.TypedefRedefinitionVariablyModifiedType
         else if qs <> qs' || ty <> ty' then
           constraint_violation loc Constraint.TypedefRedefinition
         else
-          return ()
+          (* TODO: we combine the attributes, not sure this is right thing to do *)
+          State_exception.put (<| st with
+            typedef_definitions= Map.insert sym (Annot.combine_attributes attrs attrs', qs', ty') st.typedef_definitions
+           |>)
+          (* return () *)
     | Nothing ->
         State_exception.put (<| st with
-          typedef_definitions= Map.insert sym (qs, ty) st.typedef_definitions
+          typedef_definitions= Map.insert sym (attrs, qs, ty) st.typedef_definitions
          |>)
   end
 
 
-val resolve_typedef: A.identifier -> desugM (Ctype.qualifiers * Ctype.ctype)
+val resolve_typedef: A.ail_identifier -> desugM (Annot.attributes * Ctype.qualifiers * Ctype.ctype)
 let resolve_typedef sym =
   State_exception.read (fun st ->
     match Map.lookup sym st.typedef_definitions with
-      | Just qs_ty -> qs_ty
+      | Just attrs_qs_ty -> attrs_qs_ty
       | _ -> error "TODO(msg) Cabs_to_ail_effect.resolve_typedef"
     end
   )
@@ -708,7 +716,7 @@ let resolve_typedef sym =
 
 (*
 (* NOTE: this function shouldn't be called outside of the current module *)
-val register_identifier_: cabs_identifier -> namespace -> identifier_kind -> maybe linkage -> desugM A.identifier
+val register_identifier_: Symbol.identifier -> namespace -> identifier_kind -> maybe linkage -> desugM A.ail_identifier
 let register_identifier_ ident namespace kind link_opt =
   get_scope >>= fun sc ->
   let () =
@@ -726,7 +734,7 @@ let register_identifier_ ident namespace kind link_opt =
   let do_fresh =
     (* generates a fresh symbol *)
     State_exception.modify (fun st ->
-      let CabsIdentifier _ str = ident in
+      let Symbol.Identifier _ str = ident in
       let (sym, symbol_supply) = Symbol.fresh_pretty str st.symbol_supply in
       (sym, <| st with symbol_supply = symbol_supply |>)
     ) >>= fun sym ->
@@ -791,11 +799,11 @@ let register_identifier_ ident namespace kind link_opt =
     or functions) or enumeration constants *)
 
 type ordinary_registration =
-  | OReg_enum_constant of A.identifier
-  | OReg_typedef of A.identifier
-  | OReg_other of A.identifier * ordinary_kind * linkage
+  | OReg_enum_constant of A.ail_identifier
+  | OReg_typedef of A.ail_identifier
+  | OReg_other of A.ail_identifier * ordinary_kind * linkage
 
-val resolve_ordinary_identifier: Loc.t -> cabs_identifier -> desugM (maybe (scope * ordinary_registration))
+val resolve_ordinary_identifier: Loc.t -> Symbol.identifier -> desugM (maybe (scope * ordinary_registration))
 let resolve_ordinary_identifier loc ident =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -839,7 +847,7 @@ let resolve_ordinary_identifier loc ident =
 
 
 val resolve_extraordinary_identifier:
-  cabs_identifier -> namespace -> desugM (maybe (scope * (A.identifier * identifier_kind)))
+  Symbol.identifier -> namespace -> desugM (maybe (scope * (A.ail_identifier * identifier_kind)))
 let resolve_extraordinary_identifier ident namespace =
   State_exception.read (fun st ->
     match Scope_table.resolve (ident, namespace) st.registered_identifiers with
@@ -857,14 +865,14 @@ let resolve_extraordinary_identifier ident namespace =
   )
 
 
-val internal_resolve_identifier: cabs_identifier -> namespace -> desugM (maybe (scope * registration))
+val internal_resolve_identifier: Symbol.identifier -> namespace -> desugM (maybe (scope * registration))
 let internal_resolve_identifier ident namespace =
   State_exception.read (fun st ->
     Scope_table.resolve (ident, namespace) st.registered_identifiers
   )
 
 
-val     determinate_linkage: cabs_identifier -> namespace -> ordinary_kind -> list storage_class_specifier -> desugM linkage
+val     determinate_linkage: Symbol.identifier -> namespace -> ordinary_kind -> list storage_class_specifier -> desugM linkage
 let rec determinate_linkage ident namespace kind storage_classes =
   get_scope >>= fun scope ->
   let scs = List.delete SC_Thread_local storage_classes in
@@ -952,7 +960,7 @@ STD_ "§6.2.2#6" $
 
 (* NOTE: don't call this on typedef identifier *)
 val register_ordinary_identifier:
-  cabs_identifier -> ordinary_kind -> list storage_class_specifier -> desugM (linkage * A.identifier)
+  Symbol.identifier -> ordinary_kind -> list storage_class_specifier -> desugM (linkage * A.ail_identifier)
 let register_ordinary_identifier ident kind storage_classes =
   match kind with
     | OK_enum_constant ->
@@ -1025,11 +1033,11 @@ let register_ordinary_identifier ident kind storage_classes =
   return (link, sym)
 
 
-val register_tag: tag_kind -> maybe cabs_identifier -> desugM A.identifier
+val register_tag: tag_kind -> maybe Symbol.identifier -> desugM A.ail_identifier
 let register_tag kind tag_ident_opt =
   (* generate a fresh tag identifier if none provided *)
   maybe
-    (freshify (CabsIdentifier (Loc.other "anonymous_tag") "anonymous_tag_"))
+    (freshify (Symbol.Identifier (Loc.other "anonymous_tag") "anonymous_tag_"))
     return
     tag_ident_opt >>= fun tag_ident ->
   internal_register_identifier (fun (scope, (sym, prev_kind, _)) do_fresh ->
@@ -1045,7 +1053,7 @@ let register_tag kind tag_ident_opt =
   ) tag_ident Namespace_tag (Kind_tag kind) Nothing
 
 
-val register_tag_definition: Loc.t -> A.identifier -> tag_definition -> desugM unit
+val register_tag_definition: Loc.t -> A.ail_identifier -> tag_definition -> desugM unit
 let register_tag_definition loc tag_sym tag_decl =
   let () = Debug.print_debug 5 [Debug.DB_desugaring] (fun () -> "REGISTERING TAG DEFINITION: " ^ show tag_sym) in
   State_exception.read (fun st ->
@@ -1073,7 +1081,7 @@ let register_tag_definition loc tag_sym tag_decl =
   )
 
 
-val resolve_tag_definition: A.identifier -> desugM (maybe tag_definition)
+val resolve_tag_definition: A.ail_identifier -> desugM (maybe tag_definition)
 let resolve_tag_definition tag_sym =
   State_exception.read (fun st ->
     Map.lookup tag_sym st.tag_definitions
@@ -1092,7 +1100,7 @@ let resolve_tag_definition tag_sym =
 *)
 
 
-val get_tag_definitions: desugM (map A.identifier tag_definition)
+val get_tag_definitions: desugM (map A.ail_identifier tag_definition)
 let get_tag_definitions =
   State_exception.read (fun st ->
     st.tag_definitions
@@ -1101,7 +1109,7 @@ let get_tag_definitions =
 
 
 val get_anonymous_struct_or_union:
-  Ctype.ctype -> desugM (maybe (list (Cabs.cabs_identifier * (Ctype.qualifiers * Ctype.ctype))))
+  Ctype.ctype -> desugM (maybe (list (Symbol.identifier * (Annot.attributes * Ctype.qualifiers * Ctype.ctype))))
 let get_anonymous_struct_or_union ty =
   (* TODO: the unatomic is commented because clang doesn't consider an atomic
      struct/union an anonymous (regardless of the absence of tag). So we do
@@ -1109,7 +1117,9 @@ let get_anonymous_struct_or_union ty =
   match (* Ctype.unatomic_ *) ty with
     | Ctype.Ctype _ (Ctype.Struct tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Struct_definition isAnonymous membrs) ->
+          | Just (Struct_definition _ _ _ (Just _)) ->
+              fail (Loc.unknown) (Errors.Desugar_ConstraintViolation Constraint.StructMemberFlexibleArray)
+          | Just (Struct_definition _ isAnonymous membrs Nothing) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1118,7 +1128,7 @@ let get_anonymous_struct_or_union ty =
         end
     | Ctype.Ctype _ (Ctype.Union tag_sym) ->
         resolve_tag_definition tag_sym >>= function
-          | Just (Union_definition isAnonymous membrs) ->
+          | Just (Union_definition _ isAnonymous membrs) ->
               return begin
                 if isAnonymous then Just membrs else Nothing
               end
@@ -1135,11 +1145,11 @@ let get_anonymous_struct_or_union ty =
 KKK
 
 type tag_declaration =
-  | Struct_declaration of list (Cabs.cabs_identifier * Ctype.ctype)
+  | Struct_declaration of list (Symbol.identifier * Ctype.ctype)
 
 
 
-  registered_tag_declarations: Scope_table.t scope A.identifier tag_declaration;
+  registered_tag_declarations: Scope_table.t scope A.ail_identifier tag_declaration;
 *)
 
 
@@ -1183,7 +1193,7 @@ type tag_declaration =
 
 
 (*
-val resolve_identifier: cabs_identifier -> t (A.identifier * identifier_kind * linkage)
+val resolve_identifier: Symbol.identifier -> t (A.ail_identifier * identifier_kind * linkage)
 let resolve_identifier name =
   bind (State_exception.read (fun st -> Scope_table.lookup name st.registered_identifiers))
     function
@@ -1249,13 +1259,13 @@ let resolve_declarations =
 *)
 
 (* TODO: maybe have an error when the identifier is not even registered for a function *)
-val is_static_object_identifier: A.identifier -> desugM bool
+val is_static_object_identifier: A.ail_identifier -> desugM bool
 let is_static_object_identifier sym =
   State_exception.read (fun st ->
     (* ... *)
     let map_union = Map.(union) in
     map_union
-      st.external_object_declarations
+      (Map.map (fun (isTentative, loc, _, dur, isRegister, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
       (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   return match Map.lookup sym decls with
@@ -1266,13 +1276,13 @@ let is_static_object_identifier sym =
   end
 
 
-val fetch_object_declaration: A.identifier -> desugM (bool * Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype)
+val fetch_object_declaration: A.ail_identifier -> desugM (bool * Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype)
 let fetch_object_declaration sym =
   State_exception.read (fun st ->
     (* ... *)
     let map_union = Map.(union) in
     map_union
-      st.external_object_declarations
+      (Map.map (fun (isTentative, loc, _, dur, isRegister, qs, ty) -> (isTentative, loc, dur, isRegister, qs, ty)) st.external_object_declarations)
       (Map.map (fun (loc, dur, isRegister, qs, ty) -> (false, loc, dur, isRegister, qs, ty)) st.internal_object_declarations)
   ) >>= fun decls ->
   match Map.lookup sym decls with
@@ -1283,7 +1293,7 @@ let fetch_object_declaration sym =
   end
 
 
-val register_global_object_definition2: Loc.t -> A.identifier -> linkage -> global_definition -> desugM unit
+val register_global_object_definition2: Loc.t -> A.ail_identifier -> linkage -> global_definition -> desugM unit
 let register_global_object_definition2 loc sym link gdef =
   State_exception.get >>= fun st ->
   let do_update new_gdef =
@@ -1334,7 +1344,7 @@ let register_global_object_definition2 loc sym link gdef =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_global_object_definition: A.identifier -> global_definition -> desugM unit
+val register_global_object_definition: A.ail_identifier -> global_definition -> desugM unit
 let register_global_object_definition sym gdef =
 (*
   (* this guard makes sure we are indeed registering the definition of an
@@ -1360,27 +1370,27 @@ let register_global_object_definition sym gdef =
 
 
 (* NOTE: no check for redefinition is made here *)
-val register_function_definition: A.identifier -> (Loc.t * list A.identifier * A.statement unit) -> desugM unit
+val register_function_definition: A.ail_identifier -> (Loc.t * Annot.attributes * list A.ail_identifier * A.statement unit) -> desugM unit
 let register_function_definition sym fdef =
   (* NOTE: unlike for external objects, we don't need to check the scope here,
      because the parse won't allow block scoped function definitions anyway. *)
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
-      let (_, xs, _) = fdef in
+      let (_, _, xs, _) = fdef in
       "registering function definition of '" ^ show sym ^ "' with params: " ^ stringFromList show xs
     ) in
     <| st with function_definitions= Map.insert sym fdef st.function_definitions |>
   )
 
 
-val global_object_is_defined: A.identifier -> desugM bool
+val global_object_is_defined: A.ail_identifier -> desugM bool
 let global_object_is_defined sym =
   State_exception.read (fun st ->
     Map.member sym st.global_object_definitions
   )
 
 
-val function_is_defined: A.identifier -> desugM bool
+val function_is_defined: A.ail_identifier -> desugM bool
 let function_is_defined sym =
   State_exception.read (fun st ->
     Map.member sym st.function_definitions
@@ -1388,8 +1398,8 @@ let function_is_defined sym =
 
 
 val register_function_declaration:
-  Loc.t -> A.identifier -> bool -> ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool) -> desugM unit
-let register_function_declaration loc sym is_proto decl =
+  Loc.t -> Annot.attributes -> A.ail_identifier -> bool -> ((Ctype.qualifiers * Ctype.ctype) * maybe (list (Ctype.qualifiers * Ctype.ctype * bool)) * bool * bool * bool) -> desugM unit
+let register_function_declaration loc attrs sym is_proto decl =
   (* DEBUG *)
   let string_of_decl ((ret_qs, ret_ty), params_opt, isVariadic, _, _) =
     let params' = Maybe.maybe [] id params_opt in
@@ -1407,7 +1417,7 @@ let register_function_declaration loc sym is_proto decl =
   State_exception.read (fun st ->
     Map.lookup sym st.function_declarations
   ) >>= function
-    | Just (prev_has_proto, _, prev_decl) ->
+    | Just (prev_has_proto, prev_loc, prev_attrs, prev_decl) ->
 (* KKK
         let () = Debug.print_debug 1 [] (fun () ->
           "TODO: FIXME -> Cabs_to_ail_effect.register_function_declaration"
@@ -1465,20 +1475,23 @@ AilTypesAux.make_composite
           constraint_violation loc Constraint.SameScopeIncompatibleDeclarations
         else
           let () = Debug.print_debug 1 [] (fun () -> "HELLO: decl == prev_decl") in
-          return ()
+          (* NOTE: we concat the attributes from the previous declartion with the new ones *)
+          State_exception.update (fun st ->
+            <| st with function_declarations= Map.insert sym (prev_has_proto, prev_loc, Annot.combine_attributes prev_attrs attrs, prev_decl) st.function_declarations |>
+          )
     | Nothing ->
         State_exception.update (fun st ->
           let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
             "registering function declaration of '" ^ show sym ^ (if is_proto then "' with PROTOTYPE" else "'") ^ " with decl= " ^
            string_of_decl decl) in
-          <| st with function_declarations= Map.insert sym (is_proto, loc, decl) st.function_declarations |>
+          <| st with function_declarations= Map.insert sym (is_proto, loc, attrs, decl) st.function_declarations |>
         )
   end
 
 
 (* TODO: the redeclaration check don't mix external/internal declarations *)
-val register_external_object_declaration: A.identifier -> (bool * Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
-let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_ty) as new_decl) =
+val register_external_object_declaration: A.ail_identifier -> (bool * Loc.t * Annot.attributes * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+let register_external_object_declaration sym ((_, loc, _, new_dur, _, new_qs, new_ty) as new_decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
       "attempting to register external object declaration of `" ^ show sym ^
@@ -1488,7 +1501,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
   State_exception.read (fun st ->
     Map.lookup sym st.external_object_declarations
   ) >>= function
-    | Just (_, _, prev_dur, _, prev_qs, prev_ty) ->
+    | Just (_, _, _, prev_dur, _, prev_qs, prev_ty) ->
         if not (prev_dur = A.Thread --> new_dur = A.Thread) then
           constraint_violation loc Constraint.ThreadLocalShouldAppearInEveryDeclaration
         
@@ -1530,7 +1543,7 @@ let register_external_object_declaration sym ((_, loc, new_dur, _, new_qs, new_t
         )
   end
 
-val update_external_object_type: A.identifier -> Ctype.ctype -> desugM unit
+val update_external_object_type: A.ail_identifier -> Ctype.ctype -> desugM unit
 let update_external_object_type sym ty =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1541,16 +1554,16 @@ let update_external_object_type sym ty =
     match Map.lookup sym st.external_object_declarations with
       | Nothing ->
           error "[Cabs_to_ail_effect.update_external_object_type] called on an unregistered symbol"
-      | Just (isTentative, loc, dur, is_register, qs, _) ->
+      | Just (isTentative, loc, attrs, dur, is_register, qs, _) ->
           <| st with external_object_declarations=
-            Map.insert sym (isTentative, loc, dur, is_register, qs, ty) st.external_object_declarations
+            Map.insert sym (isTentative, loc, attrs, dur, is_register, qs, ty) st.external_object_declarations
           |>
     end
   )
 
 (* TODO: factorize *)
 val register_internal_object_declaration:
-  A.identifier -> (Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
+  A.ail_identifier -> (Loc.t * A.storageDuration * bool * Ctype.qualifiers * Ctype.ctype) -> desugM unit
 let register_internal_object_declaration sym ((loc, _, _, _, _) as decl) =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1574,7 +1587,7 @@ let register_internal_object_declaration sym ((loc, _, _, _, _) as decl) =
         )
   end
 
-val update_internal_object_type: A.identifier -> Ctype.ctype -> desugM unit
+val update_internal_object_type: A.ail_identifier -> Ctype.ctype -> desugM unit
 let update_internal_object_type sym ty =
   return (
     Debug.print_debug 2 [Debug.DB_desugaring] (fun () ->
@@ -1601,14 +1614,14 @@ let register_static_assertion e strCst =
   )
 
 
-val register_label: cabs_identifier -> desugM unit
+val register_label: Symbol.identifier -> desugM unit
 let register_label ident =
   void $ internal_register_identifier (fun _ _ ->
     constraint_violation (Loc.locOf ident) (Constraint.LabelRedefinition ident)
   ) ident Namespace_label Kind_label Nothing
 
 
-val resolve_label: cabs_identifier -> desugM A.identifier
+val resolve_label: Symbol.identifier -> desugM A.ail_identifier
 let resolve_label ident =
   (* TODO: §6.8.6.1#1 *)
   internal_resolve_identifier ident Namespace_label >>= function
@@ -1634,14 +1647,14 @@ let set_current_return_type (ty: Ctype.ctype) : desugM unit =
 
 
 (* TODO: would be more efficient to store in the state the list of unused functions *)
-val add_used_identifier: A.identifier -> desugM unit
+val add_used_identifier: A.ail_identifier -> desugM unit
 let add_used_identifier sym =
   State_exception.update (fun st ->
     let () = Debug.print_debug 2 [Debug.DB_desugaring] (fun () -> "USED IDENTIFIER") in
     <| st with used_identifier= Utils.list_insert sym st.used_identifier |>
   )
 
-val get_used_identifier: desugM (list A.identifier)
+val get_used_identifier: desugM (list A.ail_identifier)
 let get_used_identifier =
   State_exception.read (fun st ->
     st.used_identifier
@@ -1652,7 +1665,7 @@ let get_used_identifier =
 
 
 
-val register_enum_constant: cabs_identifier -> A.expression_ unit -> desugM unit
+val register_enum_constant: Symbol.identifier -> A.expression_ unit -> desugM unit
 let register_enum_constant ident expr =
   let () = Debug.print_debug 2 [] (fun () -> 
     "register_enum_constant: " ^ show ident
@@ -1671,7 +1684,7 @@ let register_enum_constant ident expr =
     <| st with enumeration_constants= Map.insert sym expr st.enumeration_constants |>
   )
 
-val resolve_enum_constant: A.identifier -> desugM (A.expression_ unit)
+val resolve_enum_constant: A.ail_identifier -> desugM (A.expression_ unit)
 let resolve_enum_constant sym =
   State_exception.read (fun st ->
     st.enumeration_constants
@@ -1685,12 +1698,12 @@ let resolve_enum_constant sym =
 
 
 (* TODO: hackish, uber inefficient *)
-val remove_unused_identifiers: forall 'a. state -> A.identifier -> list (A.identifier * 'a) -> list (A.identifier * 'a)
+val remove_unused_identifiers: forall 'a. state -> A.ail_identifier -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
 let remove_unused_identifiers st startup_sym xs =
   List.filter (fun (sym, _) -> sym = startup_sym || List.elem sym st.used_identifier) xs
 
 (*
-val remove_block_scoped_identifiers: forall 'a. state -> list (A.identifier * 'a) -> list (A.identifier * 'a)
+val remove_block_scoped_identifiers: forall 'a. state -> list (A.ail_identifier * 'a) -> list (A.ail_identifier * 'a)
 let remove_block_scoped_identifiers st xs =
   List.filter (fun (sym, _) ->
     match Scope_table.resolve (sym, Namespace_ordinary) st.registered_identifiers with
@@ -1716,7 +1729,7 @@ val extract_program: string -> desugM (A.ail_program unit)
 let extract_program startup_str =
   State_exception.get >>= fun st ->
   let startup_sym_opt =
-    match Map.lookup (CabsIdentifier Loc.unknown startup_str, Namespace_ordinary)
+    match Map.lookup (Symbol.Identifier Loc.unknown startup_str, Namespace_ordinary)
             st.registered_external_identifiers with
       | Nothing ->
           Nothing
@@ -1728,7 +1741,7 @@ let extract_program startup_str =
     map_union
       begin map_union
         begin
-          Map.map (fun (hasProto, loc, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, attrs, (ret_qs_ty, params_opt, isVariadic, isInline, isNoreturn)) ->
             let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
@@ -1736,11 +1749,11 @@ let extract_program startup_str =
               | Nothing -> []
               | Just z  -> z
             end in
-            (loc, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
+            (loc, attrs, A.Decl_function hasProto ret_qs_ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
-          Map.map (fun (isTentative, loc, dur, isRegister, qs, ty) ->
+          Map.map (fun (isTentative, loc, attrs, dur, isRegister, qs, ty) ->
             let ty' =
               if isTentative then
                 match ty with
@@ -1753,7 +1766,7 @@ let extract_program startup_str =
                 end
               else
                 ty in
-            (loc, A.Decl_object (dur, isRegister) qs ty')
+            (loc, attrs, A.Decl_object (dur, isRegister) qs ty')
           ) st.external_object_declarations
         end
       end
@@ -1762,9 +1775,9 @@ let extract_program startup_str =
         Map_extra.fold (fun ident (loc, dur, isRegister, qs, ty) acc ->
           match dur with
             | A.Static ->
-                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, Annot.no_attributes, A.Decl_object (dur, isRegister) qs ty) acc
             | A.Thread ->
-                Map.insert ident (loc, A.Decl_object (dur, isRegister) qs ty) acc
+                Map.insert ident (loc, Annot.no_attributes, A.Decl_object (dur, isRegister) qs ty) acc
             | _ ->
                 acc
           end
@@ -1847,15 +1860,16 @@ let extract_program startup_str =
      
      A.tag_definitions= List.foldr (fun (sym, def) acc ->
                           match def with
-                           | Struct_definition _ membersDefs ->
-                               (sym, Ctype.StructDef membersDefs) :: acc
-                           | Union_definition _ membersDefs ->
-                               (sym, Ctype.UnionDef membersDefs) :: acc
+                           | Struct_definition attrs _ membersDefs flexible_opt ->
+                               (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
+                           | Union_definition attrs _ membersDefs ->
+                               (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
                            | Enum_definition _ ->
                                acc
                            end
                         ) [] $ Map_extra.toList st.tag_definitions;
     A.extern_idmap= extern_idmap;
+    A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
    |>)
 
 
@@ -1892,7 +1906,7 @@ let get_sigma_sofar =
     let decls = Map_extra.toList (
       map_union
         begin
-          Map.map (fun (hasProto, loc, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
+          Map.map (fun (hasProto, loc, attrs, (ty, params_opt, isVariadic, isInline, isNoreturn)) ->
             let () = Debug.print_debug 1 [] (fun () ->
               "KKK: check + find STD quote"
             ) in
@@ -1901,12 +1915,12 @@ let get_sigma_sofar =
               | Nothing -> []
               | Just z  -> z
             end in
-            (loc, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
+            (loc, attrs, A.Decl_function hasProto ty params isVariadic isInline isNoreturn)
           ) st.function_declarations
         end
         begin
-          Map.map (fun (_, loc, dur, isRegister, qs, ty) ->
-            (loc, A.Decl_object ((dur, isRegister)) qs ty)
+          Map.map (fun (_, loc, attrs, dur, isRegister, qs, ty) ->
+            (loc, attrs, A.Decl_object ((dur, isRegister)) qs ty)
           ) st.external_object_declarations
         end
     ) in
@@ -1920,15 +1934,16 @@ let get_sigma_sofar =
        
        A.tag_definitions= List.foldr (fun (sym, def) acc ->
                             match def with
-                             | Struct_definition _ membersDefs ->
-                                 (sym, Ctype.StructDef membersDefs) :: acc
-                             | Union_definition _ membersDefs ->
-                                 (sym, Ctype.UnionDef membersDefs) :: acc
+                             | Struct_definition attrs _ membersDefs flexible_opt ->
+                                 (sym, (attrs, Ctype.StructDef membersDefs flexible_opt)) :: acc
+                             | Union_definition attrs _ membersDefs ->
+                                 (sym, (attrs, Ctype.UnionDef membersDefs)) :: acc
                              | Enum_definition _ ->
                                  acc
                              end
                           ) [] $ Map_extra.toList st.tag_definitions;
        A.extern_idmap= Map.empty;
+       A.typedef_attributes= Map.map (fun (z, _, _) -> z) st.typedef_definitions;
      |>
   )
 
@@ -1944,15 +1959,16 @@ let cabs_to_ail_effect_is_incomplete ty =
     A.tag_definitions=
       List.foldl (fun acc (ident, tagDef) ->
         match tagDef with
-          | Struct_definition _ xs ->
-              (ident, Ctype.StructDef xs) :: acc
-          | Union_definition _ xs ->
-              (ident, Ctype.UnionDef xs) :: acc
+          | Struct_definition attrs _ xs flexible_opt ->
+              (ident, (attrs, Ctype.StructDef xs flexible_opt)) :: acc
+          | Union_definition attrs _ xs ->
+              (ident, (attrs, Ctype.UnionDef xs)) :: acc
           | Enum_definition _ ->
               acc
         end
       ) [] (Map_extra.toList ident_tagDefs);
     A.extern_idmap= Map.empty;
+    A.typedef_attributes= Map.empty;
   |> in
   return (AilTypesAux.is_incomplete fake_ail_sigma ty)
 let inline is_incomplete = cabs_to_ail_effect_is_incomplete

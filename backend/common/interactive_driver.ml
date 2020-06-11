@@ -3,6 +3,7 @@ file zero ->
          Exception.t (list (U.t ((Core.expr E.taction_id) * (Map.map E.taction_id E.trace_action * E.trace)) * E.state)) Errors.t
 *)
 
+open Cerb_frontend
 open Core
 
 
@@ -142,7 +143,7 @@ let drive file =
       | Some (retTy, [], expr_main) ->
           expr_main
       |  _ ->
-          Pervasives.output_string stderr "ERROR: couldn't find the Core main function\n";
+          Stdlib.output_string stderr "ERROR: couldn't find the Core main function\n";
           exit (-1)
   in
   

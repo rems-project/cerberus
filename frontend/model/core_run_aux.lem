@@ -471,50 +471,50 @@ end
 
 (* BEGIN silly *)
 (* Dummy function doing nothing, but required to typecheck *)
-val convert_ctor: forall 'bty. Core.generic_ctor 'bty -> Core.ctor
-let convert_ctor = function
-  | Cnil _ ->
-      Cnil ()
-  | Ccons ->
-      Ccons
-  | Ctuple ->
-      Ctuple
-  | Carray ->
-      Carray
-  | Civmax ->
-      Civmax
-  | Civmin ->
-      Civmin
-  | Civsizeof ->
-      Civsizeof
-  | Civalignof ->
-      Civalignof
-  | CivCOMPL ->
-      CivCOMPL
-  | CivAND ->
-      CivAND
-  | CivOR ->
-      CivOR
-  | CivXOR ->
-      CivXOR
-  | Cspecified ->
-      Cspecified
-  | Cunspecified ->
-      Cunspecified
-  | Cfvfromint ->
-      Cfvfromint
-  | Civfromfloat ->
-      Civfromfloat
-end
+val convert_ctor: Core.generic_ctor -> Core.ctor
+let convert_ctor ctor = ctor (* function
+ *   | Cnil bTy ->
+ *       Cnil bTy
+ *   | Ccons ->
+ *       Ccons
+ *   | Ctuple ->
+ *       Ctuple
+ *   | Carray ->
+ *       Carray
+ *   | Civmax ->
+ *       Civmax
+ *   | Civmin ->
+ *       Civmin
+ *   | Civsizeof ->
+ *       Civsizeof
+ *   | Civalignof ->
+ *       Civalignof
+ *   | CivCOMPL ->
+ *       CivCOMPL
+ *   | CivAND ->
+ *       CivAND
+ *   | CivOR ->
+ *       CivOR
+ *   | CivXOR ->
+ *       CivXOR
+ *   | Cspecified ->
+ *       Cspecified
+ *   | Cunspecified ->
+ *       Cunspecified
+ *   | Cfvfromint ->
+ *       Cfvfromint
+ *   | Civfromfloat ->
+ *       Civfromfloat
+ * end *)
 
-val     convert_pattern: forall 'bty. Core.generic_pattern 'bty Symbol.sym -> Core.pattern
-let rec convert_pattern (Pattern annots pat) =
-  Pattern annots $ match pat with
-    | CaseBase (sym_opt, bTy) ->
-        CaseBase (sym_opt, bTy)
-    | CaseCtor ctor pats ->
-        CaseCtor (convert_ctor ctor) (List.map convert_pattern pats)
-  end
+val     convert_pattern: Core.generic_pattern Symbol.sym -> Core.pattern
+let rec convert_pattern (Pattern annots pat) = (Pattern annots pat)
+  (* Pattern annots $ match pat with
+   *   | CaseBase (sym_opt, bTy) ->
+   *       CaseBase (sym_opt, bTy)
+   *   | CaseCtor ctor pats ->
+   *       CaseCtor (convert_ctor ctor) (List.map convert_pattern pats)
+   * end *)
 
 val convert_pexpr: forall 'bty. generic_pexpr 'bty Symbol.sym -> pexpr
 let rec convert_pexpr (Pexpr annot _ pexpr_) =

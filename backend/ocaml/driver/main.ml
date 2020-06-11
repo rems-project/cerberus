@@ -131,7 +131,7 @@ let cerberus debug_level progress core_obj
     create_cpp_cmd cpp_cmd nostdinc macros macros_undef incl_dirs incl_files nolibc
   in
   (* set global configuration *)
-  set_cerb_conf false Random false QuoteStd false false;
+  set_cerb_conf false Random false QuoteStd false false false;
   let conf = { astprints; pprints; ppflags; debug_level; typecheck_core = false;
                rewrite_core; sequentialise_core = true; cpp_cmd; cpp_stderr = true } in
   let prelude =
@@ -390,6 +390,6 @@ let () =
                          ocaml_corestd $
                          output_file $
                          files) in
-  (* the version is "sed-out" by the Makefile *)
-  let info = Term.info "cerberus" ~version:"<<GIT-HEAD>>" ~doc:"Cerberus C semantics"  in
+  let version = Version.version in
+  let info = Term.info "cerberus" ~version ~doc:"Cerberus C semantics"  in
   Term.exit @@ Term.eval (cerberus_t, info)

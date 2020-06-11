@@ -3,6 +3,8 @@
 (* Based on Jacques-Henri Jourdan and Francois Pottier TOPLAS 2017:
    "A simple, possibly correct LR parser for C11" *)
 
+open Cerb_frontend
+
 module IdSet = Set.Make(String)
 
 type context = IdSet.t
@@ -65,7 +67,7 @@ let restore_context ctxt =
 type decl_sort =
   | DeclId
   | DeclFun of context
-  | DeclFunIds of context * Cabs.cabs_identifier list
+  | DeclFunIds of context * Symbol.identifier list
   | DeclPtr of Cabs.pointer_declarator
   | DeclOther
 and declarator =
@@ -89,10 +91,10 @@ let pointer_decl pdecl d =
   { d with sort=    DeclPtr pdecl;
   }
 
-let identifier_decl (Cabs.CabsIdentifier(_, str) as i) =
+let identifier_decl attrs (Symbol.Identifier(_, str) as i) =
   { id=      str;
     sort=    DeclId;
-    direct=  Cabs.DDecl_identifier i;
+    direct=  Cabs.DDecl_identifier (attrs, i);
   }
 
 let declarator_decl d =
@@ -120,7 +122,17 @@ let reinstall_function_context d =
   | DeclFun ctxt -> restore_context ctxt; declare_varname d.id
   | _ -> ()
 
-let create_function_definition loc specifs d stmt rev_dlist_opt =
+let create_function_definition loc attr_opt specifs d stmt rev_dlist_opt =
+  let xs = match attr_opt with
+    | None ->
+        []
+    | Some z ->
+        List.map (fun ((ns, id), args_opt) ->
+          let open Annot in
+          { attr_ns=   ns
+          ; attr_id=   id
+          ; attr_args= match args_opt with None -> [] | Some z -> z }
+        ) (List.concat z) in
   match d.sort, rev_dlist_opt with
   | DeclFunIds (_, ids), None ->
     let open Cabs in
@@ -133,16 +145,16 @@ let create_function_definition loc specifs d stmt rev_dlist_opt =
       } in
     let params = List.map (fun id ->
         PDeclaration_decl (signed_int_specifiers,
-                           Declarator (None,  DDecl_identifier id))
+                           Declarator (None,  DDecl_identifier (Annot.no_attributes, id)))
       ) ids in
     let direct_declarator =
       match d.direct with
       | DDecl_function (ddecl, _) -> DDecl_function (ddecl, Params (params, false))
       | _ -> assert false in
     let decl = Cabs.Declarator (None, direct_declarator) in
-    Cabs.FunDef (loc, specifs, decl, stmt)
+    Cabs.FunDef (loc, Annot.Attrs xs, specifs, decl, stmt)
   | DeclFunIds (_, ids), Some rev_dlist ->
     assert false
   | _, _ ->
-    Cabs.FunDef (loc, specifs, cabs_of_declarator d, stmt)
+    Cabs.FunDef (loc, Annot.Attrs xs, specifs, cabs_of_declarator d, stmt)
 

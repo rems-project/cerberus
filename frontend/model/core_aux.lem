@@ -194,9 +194,12 @@ val mk_empty_pat: core_base_type -> pattern
 let mk_empty_pat bTy =
   Pattern [] (CaseBase (Nothing, bTy))
 
+val mk_sym_pat_: forall 'sym. list Annot.annot -> maybe 'sym -> core_base_type -> generic_pattern 'sym
+let mk_sym_pat_ annots msym bTy =
+  Pattern annots (CaseBase (msym, bTy))
+
 val mk_sym_pat: Symbol.sym -> core_base_type -> pattern
-let mk_sym_pat sym bTy =
-  Pattern [] (CaseBase (Just sym, bTy))
+let mk_sym_pat sym bty = mk_sym_pat_ [] (Just sym) bty
 
 val mk_tuple_pat: list pattern -> pattern
 let mk_tuple_pat = function
@@ -208,16 +211,34 @@ let mk_tuple_pat = function
       Pattern [] (CaseCtor Ctuple pats)
 end
 
+val mk_specified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'sym -> generic_pattern 'sym
+let mk_specified_pat_ annots pat =
+  Pattern annots (CaseCtor Cspecified [pat])
+
 val mk_specified_pat: pattern -> pattern
-let mk_specified_pat pat =
-  Pattern [] (CaseCtor Cspecified [pat])
+let mk_specified_pat pat = mk_specified_pat_ [] pat
+
+val mk_unspecified_pat_: forall 'bty 'sym. list Annot.annot -> generic_pattern 'sym -> generic_pattern 'sym
+let mk_unspecified_pat_ annots pat =
+  Pattern annots (CaseCtor Cunspecified [pat])
 
 val mk_unspecified_pat: pattern -> pattern
-let mk_unspecified_pat pat =
-  Pattern [] (CaseCtor Cunspecified [pat])
+let mk_unspecified_pat pat = mk_unspecified_pat_ [] pat
+
+let rec mk_list_pat (bTy : core_base_type) pats = 
+  match pats with
+  | [] ->
+      Pattern [] (CaseCtor (Cnil bTy) [])
+  | _pat::_pats ->
+      Pattern [] (CaseCtor Ccons [_pat; mk_list_pat bTy _pats])
+  end
 
 
 (* Core pexpr builders  ***************************************************** *)
+val mk_sym_pe_ : forall 'bty. list Annot.annot -> 'bty -> Symbol.sym -> generic_pexpr 'bty Symbol.sym
+let mk_sym_pe_ annots bty sym =
+  Pexpr annots bty (PEsym sym)
+
 val mk_sym_pe: Symbol.sym -> pexpr
 let mk_sym_pe sym =
   Pexpr [] () (PEsym sym)
@@ -254,9 +275,15 @@ val mk_unit_pe: pexpr
 let mk_unit_pe =
   Pexpr [] () (PEval Vunit)
 
+
+let mk_boolean_v = function
+  | true -> Vtrue
+  | false -> Vfalse
+  end
+
 val mk_boolean_pe: bool -> pexpr
 let mk_boolean_pe b =
-  Pexpr [] () (PEval (if b then Vtrue else Vfalse))
+  Pexpr [] () (PEval (mk_boolean_v b))
 
 (* TODO: PEval Vtrue, Vfalse *)
 
@@ -268,18 +295,24 @@ val mk_ctype_pe: ctype -> pexpr
 let mk_ctype_pe ty =
   Pexpr [] () (PEval (Vctype ty))
 
-val     mk_list_pe: list pexpr -> pexpr
-let rec mk_list_pe pes =
+val     mk_list_pe: core_base_type -> list pexpr -> pexpr
+let rec mk_list_pe bTy pes =
   Pexpr [] () match pes with
     | [] ->
-        PEctor (Cnil ()) []
+        PEctor (Cnil bTy) []
     | pe :: pes' ->
-        PEctor Ccons [pe; mk_list_pe pes']
+        PEctor Ccons [pe; mk_list_pe bTy pes']
   end
 
 val mk_tuple_pe: list pexpr -> pexpr
-let mk_tuple_pe pes =
-  Pexpr [] () (PEctor Ctuple pes)
+let mk_tuple_pe = function
+  | [] ->
+      error "Core_aux.mk_tuple_pe []"
+  | [pe] ->
+      pe
+  | pes ->
+      Pexpr [] () (PEctor Ctuple pes)
+end
 
 val mk_ivmax_pe: pexpr -> pexpr
 let mk_ivmax_pe pe =
@@ -319,6 +352,10 @@ val mk_let_pe: pattern -> pexpr -> pexpr -> pexpr
 let mk_let_pe pat pe1 pe2 =
   Pexpr [] () (PElet pat pe1 pe2)
 
+val mk_if_pe_ : forall 'bty. list Annot.annot -> 'bty -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym -> generic_pexpr 'bty Symbol.sym
+let mk_if_pe_ annots bty pe1 pe2 pe3 =
+  Pexpr annots bty (PEif pe1 pe2 pe3)
+
 val mk_if_pe: pexpr -> pexpr -> pexpr -> pexpr
 let mk_if_pe pe1 pe2 pe3 =
   Pexpr [] () (PEif pe1 pe2 pe3)
@@ -327,7 +364,7 @@ val mk_array_shift: pexpr -> ctype -> pexpr -> pexpr
 let mk_array_shift pe1 ty pe2 =
   Pexpr [] () (PEarray_shift pe1 ty pe2)
 
-val mk_member_shift_pe: pexpr -> Symbol.sym -> Cabs.cabs_identifier -> pexpr
+val mk_member_shift_pe: pexpr -> Symbol.sym -> Symbol.identifier -> pexpr
 let mk_member_shift_pe pe1 tag_sym member_ident =
   Pexpr [] () (PEmember_shift pe1 tag_sym member_ident)
 
@@ -339,15 +376,15 @@ val mk_neg_pe: pexpr -> pexpr
 let mk_neg_pe pe =
   Pexpr [] () (PEop OpSub (mk_integer_pe 0) pe)
 
-val mk_struct_pe: Symbol.sym -> list (Cabs.cabs_identifier * pexpr) -> pexpr
+val mk_struct_pe: Symbol.sym -> list (Symbol.identifier * pexpr) -> pexpr
 let mk_struct_pe tag_sym xs =
   Pexpr [] () (PEstruct tag_sym xs)
 
-val mk_union_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
+val mk_union_pe: Symbol.sym -> Symbol.identifier -> pexpr -> pexpr
 let mk_union_pe tag_sym memb_ident pe =
   Pexpr [] () (PEunion tag_sym memb_ident pe)
 
-val mk_memberof_pe: Symbol.sym -> Cabs.cabs_identifier -> pexpr -> pexpr
+val mk_memberof_pe: Symbol.sym -> Symbol.identifier -> pexpr -> pexpr
 let mk_memberof_pe tag_sym memb_ident pe =
   Pexpr [] () (PEmemberof tag_sym memb_ident pe)
 
@@ -476,14 +513,19 @@ let rec zeros_aux tagDefs (Ctype _ ty) =
         zeros_aux tagDefs ty'
     | Struct tag ->
         match Map.lookup tag tagDefs with
-          | Just (StructDef ident_tys) ->
-              Mem.struct_mval tag (List.map (fun (ident, (_, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
+          | Just (StructDef ident_tys Nothing) ->
+              Mem.struct_mval tag (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
+          | Just (StructDef ident_tys (Just (FlexibleArrayMember _ flex_ident flex_qs flex_elem_ty))) ->
+              let () = Debug.print_debug 0 [] (fun () ->
+                "TODO: check Core_aux.zeros_aux for flexible array member"
+              ) in
+              Mem.struct_mval tag (List.map (fun (ident, (_, _, ty)) -> (ident, ty, zeros_aux tagDefs ty)) ident_tys)
           | _ ->
               error "Core_aux.zeros_aux, not StructDef"
         end
     | Union tag ->
         match Map.lookup tag tagDefs with
-          | Just (UnionDef ((ident, (_, ty'))::_)) ->
+          | Just (UnionDef ((ident, (_, _, ty'))::_)) ->
               Mem.union_mval tag ident (zeros_aux tagDefs ty')
           | _ ->
               error "Core_aux.zeros_aux, not UnionDef"
@@ -985,7 +1027,7 @@ let rec subst_pattern_val (Pattern _ pat) cval expr =
     | (CaseBase (Just sym, _), _) ->
         (* e[sym \ v] *)
         subst_sym_expr sym cval expr
-    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+    | (CaseCtor (Cnil _) [], Vlist _ []) ->
         (* empty list (value) *)
         expr
     | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->
@@ -1259,7 +1301,7 @@ let rec unsafe_subst_pattern (Pattern _ pat) pe' expr =
         expr
     | (CaseBase (Just sym, _), _) ->
         unsafe_subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         expr
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
@@ -1338,7 +1380,7 @@ let rec subst_pattern (Pattern _ pat) pe' expr =
         Just expr
     | (CaseBase (Just sym, _), _) ->
         Just $ unsafe_subst_sym_expr sym pe' expr
-    | (CaseCtor (Cnil ()) [], Pexpr _ _ (PEval (Vlist _ []))) ->
+    | (CaseCtor (Cnil _) [], Pexpr _ _ (PEval (Vlist _ []))) ->
         (* empty list (value) *)
         Just expr
     | (CaseCtor (Cnil _) [], Pexpr _ _ (PEctor (Cnil _) [])) ->
@@ -2144,7 +2186,7 @@ let rec update_env_aux (Pattern _ pat) cval env =
     | (CaseBase (Just sym, _), _) ->
         (* e[sym \ v] *)
         Map.insert sym cval env
-    | (CaseCtor (Cnil ()) [], Vlist _ []) ->
+    | (CaseCtor (Cnil _) [], Vlist _ []) ->
         (* empty list (value) *)
         env
     | (CaseCtor Ccons [pat1; pat2], Vlist bTy_elem (cval1::cvals)) ->

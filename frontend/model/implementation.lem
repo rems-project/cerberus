@@ -11,14 +11,14 @@ val alignof_fty: Ctype.floatingType -> maybe nat
 val register_enum: Symbol.sym -> list integer -> bool
 val typeof_enum: Symbol.sym -> Ctype.integerType
 
-declare ocaml target_rep function is_signed_ity = `Ocaml_implementation.Impl.is_signed_ity`
-declare ocaml target_rep function sizeof_ity = `Ocaml_implementation.Impl.sizeof_ity`
-declare ocaml target_rep function precision_ity = `Ocaml_implementation.Impl.precision_ity`
-declare ocaml target_rep function sizeof_fty = `Ocaml_implementation.Impl.sizeof_fty`
-declare ocaml target_rep function alignof_ity = `Ocaml_implementation.Impl.alignof_ity`
-declare ocaml target_rep function alignof_fty = `Ocaml_implementation.Impl.alignof_fty`
-declare ocaml target_rep function register_enum = `Ocaml_implementation.Impl.register_enum`
-declare ocaml target_rep function typeof_enum = `Ocaml_implementation.Impl.typeof_enum`
+declare ocaml target_rep function is_signed_ity = `(Ocaml_implementation.get()).is_signed_ity`
+declare ocaml target_rep function sizeof_ity = `(Ocaml_implementation.get()).sizeof_ity`
+declare ocaml target_rep function precision_ity = `(Ocaml_implementation.get()).precision_ity`
+declare ocaml target_rep function sizeof_fty = `(Ocaml_implementation.get()).sizeof_fty`
+declare ocaml target_rep function alignof_ity = `(Ocaml_implementation.get()).alignof_ity`
+declare ocaml target_rep function alignof_fty = `(Ocaml_implementation.get()).alignof_fty`
+declare ocaml target_rep function register_enum = `(Ocaml_implementation.get()).register_enum`
+declare ocaml target_rep function typeof_enum = `(Ocaml_implementation.get()).typeof_enum`
 
 type implementation_constant =
   (* J.3.2 Environment *)

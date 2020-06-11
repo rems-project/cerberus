@@ -40,6 +40,7 @@ let empty_sigma = <|
   A.static_assertions= [];
   A.tag_definitions= [];
   A.extern_idmap= Map.empty;
+  A.typedef_attributes= Map.empty;
 |>
 
 

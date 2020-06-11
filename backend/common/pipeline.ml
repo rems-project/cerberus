@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Global_ocaml
 
 external terminal_size: unit -> (int * int) option = "terminal_size"
@@ -5,21 +6,26 @@ external terminal_size: unit -> (int * int) option = "terminal_size"
 (* Pipeline *)
 
 let (>>=) = Exception.except_bind
-let (>>) m f = m >>= fun _ -> f
+(*let (>>) m f = m >>= fun _ -> f*)
 let (<$>)  = Exception.except_fmap
 let return = Exception.except_return
 
-let run_pp with_ext doc =
+let run_pp ?(remove_path = true) with_ext doc =
   let (is_fout, oc) =
     match with_ext with
       | Some (filename, ext_str) ->
-          (true, Pervasives.open_out (Filename.remove_extension (Filename.basename filename) ^ "." ^ ext_str))
+         let open Filename in
+         let filename = 
+           if remove_path then remove_extension (basename filename) ^ "." ^ ext_str 
+           else remove_extension filename ^ "." ^ ext_str 
+         in
+         (true, Stdlib.open_out filename)
       | None ->
-          (false, Pervasives.stdout) in
+          (false, Stdlib.stdout) in
   let saved = !Colour.do_colour in
   Colour.do_colour := not is_fout;
   let term_col = match terminal_size () with
-    | Some (_, col) -> col
+    | Some (_, col) -> col - 1  (* without '-1' it's sometimes wrong *)
     | _ -> 80
   in
   PPrint.ToChannel.pretty 1.0 term_col oc doc;
@@ -28,12 +34,12 @@ let run_pp with_ext doc =
   Colour.do_colour := saved
 
 (* The path to the Core standard library *)
-let core_stdlib_path =
-  Filename.concat Global_ocaml.cerb_path "runtime/libcore"
+let core_stdlib_path () =
+  Filename.concat (Cerb_runtime.runtime ()) "libcore"
 
 (* == load the Core standard library ============================================================ *)
 let load_core_stdlib () =
-  let filepath = Filename.concat core_stdlib_path "std.core" in
+  let filepath = Filename.concat (core_stdlib_path ()) "std.core" in
   if not (Sys.file_exists filepath) then
     error ("couldn't find the Core standard library file\n (looked at: `" ^ filepath ^ "').")
   else
@@ -45,7 +51,7 @@ let load_core_stdlib () =
 
 (* == load the implementation file ============================================================== *)
 let load_core_impl core_stdlib impl_name =
-  let iname = Filename.concat core_stdlib_path ("impls/" ^ impl_name ^ ".impl") in
+  let iname = Filename.concat (core_stdlib_path ()) ("impls/" ^ impl_name ^ ".impl") in
   if not (Sys.file_exists iname) then
     error ("couldn't find the implementation file\n (looked at: `" ^ iname ^ "').")
   else
@@ -140,7 +146,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   (* -- *)
   let parse file_content =
-    Cparser_driver.parse_from_string file_content >>= fun cabs_tunit ->
+    C_parser_driver.parse_from_string file_content >>= fun cabs_tunit ->
     io.set_progress "CPARS" >>= fun () ->
     io.pass_message "C parsing completed!" >>= fun () ->
     whenM (List.mem Cabs conf.astprints) begin
@@ -158,10 +164,10 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
       >|> io.pass_message "Cabs -> Ail completed!"
           (* NOTE: if the debug level is lower the do the printing after the typing *)
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.astprints) begin
-            fun () -> io.run_pp None (Pp_ail_ast.pp_program false false ail_prog)
+            fun () -> io.run_pp None (Pp_ail_ast.pp_program true false ail_prog)
           end
       >|> whenM (conf.debug_level > 4 && List.mem Ail conf.pprints) begin
-            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program false false ail_prog)
+            fun () -> io.run_pp (wrap_fout (Some (filename, "ail"))) (Pp_ail.pp_program true false ail_prog)
           end
       >>= fun () -> return ail_prog in
   (* -- *)
@@ -174,7 +180,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
           (* (for debug 4) pretty-printing Ail with type annotations *)
           Pp_ail_ast.pp_program_with_annot ailtau_prog
         else
-          Pp_ail_ast.pp_program false false ailtau_prog in
+          Pp_ail_ast.pp_program true false ailtau_prog in
         io.run_pp None doc
     end >>= fun () ->
     whenM (conf.debug_level <= 4 && List.mem Ail conf.pprints) begin
@@ -183,7 +189,7 @@ let c_frontend (conf, io) (core_stdlib, core_impl) ~filename =
           (* (for debug 4) pretty-printing Ail with type annotations *)
           Pp_ail.pp_program_with_annot ailtau_prog
         else
-          Pp_ail.pp_program false false ailtau_prog in
+          Pp_ail.pp_program true false ailtau_prog in
         io.run_pp (wrap_fout (Some (filename, "ail"))) doc
     end >>= fun () -> return ailtau_prog in
   (* -- *)
@@ -222,6 +228,7 @@ let core_frontend (conf, io) (core_stdlib, core_impl) ~filename =
     | Core_parser_util.Rimpl _ ->
         failwith "core_frontend found a Rimpl"
 
+(*
 let pp_core (conf, io) ~filename core_file =
   let wrap_fout z = if List.mem FOut conf.ppflags then z else None in
   whenM (List.mem Core conf.astprints) begin
@@ -232,9 +239,15 @@ let pp_core (conf, io) ~filename core_file =
     fun () ->
       io.run_pp (wrap_fout (Some (filename, "core"))) (Pp_core.Basic.pp_file core_file)
   end
+*)
 
 let core_rewrite (conf, io) core_file =
-  return (Core_rewrite.rewrite_file core_file)
+  let core_file2 = core_file in
+  (*   match Core_rewrite2.rw_file core_file with
+   *   | Exception.Result core_file -> core_file
+   *   | Exception.Exception err -> prerr_endline err; failwith "error"
+   * in  *)
+  return (Core_rewrite.rewrite_file (core_file2))
   >|> whenM (conf.debug_level >= 6 && List.mem Core conf.astprints) begin
     fun () ->
       io.print_endline "BEGIN (before Core rewrite)" >>= fun () ->
@@ -251,25 +264,26 @@ let core_rewrite (conf, io) core_file =
 
 let untype_file (file: 'a Core.typed_file) : 'a Core.file =
   let open Core in
-  let untype_ctor = function
-    | Cnil _ ->
-        Cnil ()
-    | (Ccons as ctor)
-    | (Ctuple as ctor)
-    | (Carray as ctor)
-    | (Civmax as ctor)
-    | (Civmin as ctor)
-    | (Civsizeof as ctor)
-    | (Civalignof as ctor)
-    | (CivCOMPL as ctor)
-    | (CivAND as ctor)
-    | (CivOR as ctor)
-    | (CivXOR as ctor)
-    | (Cspecified as ctor)
-    | (Cunspecified as ctor)
-    | (Cfvfromint as ctor)
-    | (Civfromfloat as ctor) ->
-        ctor in
+  let untype_ctor = fun ctor -> ctor (* function
+     * | Cnil _ ->
+     *     Cnil ()
+     * | (Ccons as ctor)
+     * | (Ctuple as ctor)
+     * | (Carray as ctor)
+     * | (Civmax as ctor)
+     * | (Civmin as ctor)
+     * | (Civsizeof as ctor)
+     * | (Civalignof as ctor)
+     * | (CivCOMPL as ctor)
+     * | (CivAND as ctor)
+     * | (CivOR as ctor)
+     * | (CivXOR as ctor)
+     * | (Cspecified as ctor)
+     * | (Cunspecified as ctor)
+     * | (Cfvfromint as ctor)
+     * | (Civfromfloat as ctor) ->
+     *     ctor in *)
+  in
   let rec untype_pattern (Pattern (annots, pat_)) =
     Pattern ( annots
             , match pat_ with
@@ -463,6 +477,13 @@ let print_core (conf, io) ~filename core_file =
   return core_file
 
 let core_passes (conf, io) ~filename core_file =
+  (* If using the switch making load() returning unspecified value undefined, then
+     we remove from the Core the code dealing with them. *)
+  let core_file =
+    if Switches.(has_switch SW_strict_reads) then
+      Remove_unspecs.rewrite_file core_file
+    else
+      core_file in
   Core_indet.hackish_order <$> begin
     if conf.sequentialise_core || conf.typecheck_core then
       typed_core_passes (conf, io) core_file >>= fun (core_file, typed_core_file) ->
@@ -512,15 +533,15 @@ type 'a core_dump =
     dump_tagDefs: (Symbol.sym * Ctype.tag_definition) list;
     dump_globs: (Symbol.sym * ('a, unit) Core.generic_globs) list;
     dump_funs: (Symbol.sym * (unit, 'a) Core.generic_fun_map_decl) list;
-    dump_extern: (Cabs.cabs_identifier * (Symbol.sym list * Core.linking_kind)) list;
-    dump_funinfo: (Symbol.sym * (Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
+    dump_extern: (Symbol.identifier * (Symbol.sym list * Core.linking_kind)) list;
+    dump_funinfo: (Symbol.sym * (Location_ocaml.t * Annot.attributes * Ctype.ctype * (Symbol.sym option * Ctype.ctype) list * bool * bool)) list;
   }
 
 let sym_compare (Symbol.Symbol (d1, n1, _)) (Symbol.Symbol (d2, n2, _)) =
   if d1 = d2 then compare n1 n2
   else Digest.compare d1 d2
 
-let cabsid_compare (Cabs.CabsIdentifier (_, s1)) (Cabs.CabsIdentifier (_, s2)) =
+let cabsid_compare (Symbol.Identifier (_, s1)) (Symbol.Identifier (_, s2)) =
   String.compare s1 s2
 
 let map_from_assoc compare =

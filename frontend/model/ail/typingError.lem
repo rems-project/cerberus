@@ -1,0 +1,49 @@
+open import Pervasives
+import Constraint Undefined
+
+type typing_misc_error =
+  | UntypableIntegerConstant of integer (* §6.4.4.1#6, sentence 5 *)
+  | UnableToTypeIntegerConstant (* This is used when in NON agnostic mode, the Impl
+                                   is not complete enough to type an integer constant *)
+  | ParameterTypeNotAdjusted (* internal *)
+  | VaStartArgumentType (* §7.16.1.4#1 *)
+  | VaArgArgumentType (* §7.16.1.1#1 *)
+  | GenericFunctionMustBeDirectlyCalled
+
+type typing_error =
+  | TError_ConstraintViolation of Constraint.violation
+  | TError_UndefinedBehaviour of Undefined.undefined_behaviour
+  | TError_MiscError of typing_misc_error
+  | TError_NotYetSupported of string
+
+val std_of_typing_misc_error: typing_misc_error -> list string
+let std_of_typing_misc_error = function
+  | UntypableIntegerConstant _ ->
+      ["§6.4.4.1#6, sentence 5"]
+  | UnableToTypeIntegerConstant ->
+      []
+  | ParameterTypeNotAdjusted ->
+      []
+  | VaStartArgumentType ->
+      ["§7.16.1.4#1"; "§7.16#3"]
+  | VaArgArgumentType ->
+      ["§7.16.1.1#1"; "§7.16#3"]
+  | GenericFunctionMustBeDirectlyCalled ->
+      []
+end
+
+val std_of_ail_typing_error: typing_error -> list string
+let std_of_ail_typing_error = function
+  | TError_ConstraintViolation v ->
+      Constraint.std_of_violation v
+  | TError_UndefinedBehaviour ub ->
+      match (Undefined.std_of_undefined_behaviour ub) with
+      | Just std -> [std]
+      | Nothing -> []
+      end
+  | TError_MiscError e ->
+      std_of_typing_misc_error e
+  | TError_NotYetSupported _ ->
+      []
+end
+

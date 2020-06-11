@@ -1,0 +1,10 @@
+(executable
+ (name main)
+ (public_name ail_to_coq)
+ (package ail_to_coq)
+ (preprocess (per_module ((action (run pa_ocaml %{input-file})) rc_annot)))
+ (flags (:standard -w -27))
+ (optional) ; Only compiled if [earley] is installed.
+ (foreign_stubs (language c) (names stubs))
+ (libraries cmdliner str unix earley.core
+  cerb_frontend cerb_backend mem_concrete util))

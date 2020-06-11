@@ -33,6 +33,9 @@ declare hol  target_rep function using_concurrency u = false
 val isDefacto: unit -> bool
 declare ocaml target_rep function isDefacto = `Global_ocaml.isDefacto`
 
+val isAgnostic: unit -> bool
+declare ocaml target_rep function isAgnostic = `Global_ocaml.isAgnostic`
+
 
 type cerb_switch =
   | SW_strict_reads

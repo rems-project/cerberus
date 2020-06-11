@@ -326,12 +326,16 @@ let rec simplify_integer_value_base ival_ =
             | Atomic atom_ty ->
                 simplify_integer_value_base (IVsizeof atom_ty)
             | Struct tag_sym ->
-                simplify_integer_value_base begin
-                  List.foldl (fun acc (ident, (_, ty)) ->
-                    IVop IntAdd [ lifted_self (IVsizeof ty);
-                                  IVop IntAdd [IVpadding tag_sym ident; acc] ]
-                  ) (IVconcrete 0) (Core_ctype_aux.get_structDef tag_sym)
-                end
+                let (tagDef, flexible_opt) = Core_ctype_aux.get_structDef tag_sym in
+                if flexible_opt <> Nothing then
+                  error "TODO: Defacto_memmory_aux.simplify_integer_value_base => found flexible array member"
+                else
+                  simplify_integer_value_base begin
+                    List.foldl (fun acc (ident, (_, _, ty)) ->
+                      IVop IntAdd [ lifted_self (IVsizeof ty);
+                                    IVop IntAdd [IVpadding tag_sym ident; acc] ]
+                    ) (IVconcrete 0) tagDef
+                  end
              
             (* TOOD: move the code from mem_simplify here *)
             | Union tag_sym ->

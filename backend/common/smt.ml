@@ -1000,7 +1000,7 @@ let rec select options =
      with Failure _ -> prerr_endline "Wrong option! Enter a number."; select options
 
 let pp_core_exp e =
-  PPrint.ToChannel.pretty 1.0 150 Pervasives.stdout (Pp_core.Basic.pp_expr e)
+  PPrint.ToChannel.pretty 1.0 150 Stdlib.stdout (Pp_core.Basic.pp_expr e)
 
 let print_thread_state tid st =
   prerr_endline "-------";

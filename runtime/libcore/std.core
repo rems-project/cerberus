@@ -97,7 +97,7 @@ fun is_floating(ty: ctype): boolean :=
 
 fun params_length_aux (acc: integer, cs: [ctype]): integer :=
   case cs of
-    | [] => acc
+    | [] : [ctype] => acc
     | _:ctype :: xs:[ctype] => params_length_aux (acc+1, xs)
   end
 
@@ -106,7 +106,7 @@ fun params_length (cs: [ctype]): integer :=
 
 fun params_nth (cs: [ctype], n: integer): ctype :=
   case cs of
-    | [] =>
+    | [] : [ctype] =>
       error(<<<params_nth>>>, (cs, n))
     | x:ctype :: xs:[ctype] =>
       if n = 0 then
@@ -167,12 +167,12 @@ fun ones_prefix (i: integer, k: integer, width: integer) : integer :=
 
 fun reverse_aux (xs: [integer], acc: [integer]): [integer] :=
   case xs of
-    | [] => acc
+    | [] : [integer] => acc
     | x: integer :: xs: [integer] => reverse_aux (xs, x :: acc)
   end
 
 fun reverse (xs: [integer]): [integer] :=
-  reverse_aux (xs, [])
+  reverse_aux (xs, [] : [integer])
 
 proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   let strong c_: loaded integer = load('char', array_shift(str, 'char', 0)) in
@@ -188,7 +188,7 @@ proc rev_listFromStr_aux(str: pointer, acc: [integer]) : eff [integer] :=
   end
 
 proc listFromStr(str: pointer): eff [integer] :=
-  let strong rev_xs: [integer] = pcall(rev_listFromStr_aux, str, []) in
+  let strong rev_xs: [integer] = pcall(rev_listFromStr_aux, str, [] : [integer]) in
   pure(reverse(rev_xs))
 
 proc rev_listFromArray_aux (ptr: pointer, acc: [integer], n: integer): eff [integer] :=
@@ -204,7 +204,7 @@ proc rev_listFromArray_aux (ptr: pointer, acc: [integer], n: integer): eff [inte
     end
 
 proc listFromArray (ptr: pointer, n: integer): eff [integer] :=
-  let strong rev_xs: [integer] = pcall(rev_listFromArray_aux, ptr, [], n) in
+  let strong rev_xs: [integer] = pcall(rev_listFromArray_aux, ptr, [] : [integer], n) in
   pure(reverse(rev_xs))
 
 -- see §5.1.2 from ISO/IEC 10967-1:1994(E)

@@ -6,11 +6,35 @@ import Symbol
 type bmc_annot =
   | Abmc_id of nat (* NOTE: basically same as uid *)
 
+type attribute = <|
+  attr_ns: maybe Symbol.identifier;
+  attr_id: Symbol.identifier;
+  attr_args: list (Loc.t * string);
+|>
+
+type attributes =
+  | Attrs of list attribute
+
+instance (Show attributes)
+  let show attrs = "ATTRS"
+end
+
+val no_attributes: attributes
+let no_attributes =
+  Attrs []
+
+val combine_attributes: attributes -> attributes -> attributes
+let combine_attributes (Attrs xs1) (Attrs xs2) =
+  Attrs (xs1 ++ xs2)
+
 type annot =
   | Astd of string (* ISO C11 Standard Annotation *)
   | Aloc of Loc.t (* C source location *)
   | Auid of string (* Unique ID *)
   | Abmc of bmc_annot
+  | Aattrs of attributes (* C2X attributes *)
+  | Atypedef of Symbol.sym (* (TODO: I don't like but hey)
+                              must only be used on a ctype to indicate it is a unfolding of a typedef *)
 
 
 val     get_loc: list annot -> maybe Loc.t
@@ -25,6 +49,8 @@ let rec get_loc annots =
     | (Auid _ :: annots') ->
         get_loc annots'
     | (Abmc _ :: annots') ->
+        get_loc annots'
+    | (Aattrs _ :: annots') ->
         get_loc annots'
   end
 
@@ -47,6 +73,8 @@ let rec get_uid annots =
     | (Auid uid :: _) ->
         Just uid
     | (Abmc _ :: annots') ->
+        get_uid annots'
+    | (Aattrs _ :: annots') ->
         get_uid annots'
   end
 

@@ -912,7 +912,7 @@ BEFORE EVAL_PEXPR2
                   | Just cvals ->
                       let mem_values =
                         match Map.lookup psym file.funinfo with
-                          | Just (_, param_tys, _, _) ->
+                          | Just (_, _, _, param_tys, _, _) ->
                             List.map (fun (ty, cval) ->
                               match Core_aux.memValueFromValue (Ctype.Ctype [] (Ctype.Pointer Ctype.no_qualifiers ty)) cval with
                                 | Just mval -> mval
@@ -1540,7 +1540,7 @@ BEFORE EVAL_PEXPR2
                       match current_proc_opt with
                         | Just psym ->
                             match Map.lookup psym file.funinfo with
-                              | Just (ret_ty, _, _, _) ->
+                              | Just (_, _, ret_ty, _, _, _) ->
                                   TSK_Return psym $ Core_aux.memValueFromValue ret_ty cval
                               | Nothing ->
                                   TSK_Misc

@@ -499,10 +499,8 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
     | PEctor ctor pes ->
         EU.mapM self pes >>= fun pes' ->
         match (ctor, Caux.valueFromPexprs pes') with
-          | (Cnil (), Just []) ->
-              let () = Debug.warn [Debug.DB_core_dynamics] (fun () ->
-                "TODO(hack): Core_Eval, PEctor Cnil ==> producing a [unit]") in
-              EU.return $ PEval (Vlist BTy_unit(*TODO this is wrong*) [])
+          | (Cnil bTy, Just []) ->
+              EU.return $ PEval (Vlist bTy [])
           | (Ccons, Just [cval1; Vlist bTy' cvals]) ->
                 EU.return $ PEval (Vlist bTy' (cval1 :: cvals))
           | (Ctuple, Just cvals) ->
@@ -578,7 +576,7 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
 
           | (Cfvfromint, Just [Vobject (OVinteger ival)]) ->
               EU.return $ PEval (Vobject (OVfloating (Mem.fvfromint ival)))
-          | (Civfromfloat, Just [Vctype (Ctype.Ctype [] (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
+          | (Civfromfloat, Just [Vctype (Ctype.Ctype _ (Ctype.Basic (Ctype.Integer ity))); Vobject (OVfloating fval)]) ->
               EU.return $ PEval (Vobject (OVinteger (Mem.ivfromfloat ity fval)))
           
           | (_, Just cvals) ->
@@ -689,8 +687,15 @@ let rec step_eval_pexpr n loc core_extern env mem_st_opt file hasConstrained pex
           | Just cvals ->
               let xs = List.map (fun (memb_ident, cval) ->
                 match fromJust "Core_eval, PEstruct 1,1" $ Map.lookup tag_sym file.tagDefs with
-                  | Ctype.StructDef membrs ->
-                      let (_, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
+                  | Ctype.StructDef membrs flexible_opt ->
+                      let () = match flexible_opt with
+                        | Nothing ->
+                            ()
+                        | Just (Ctype.FlexibleArrayMember _ flex_ident _ _) ->
+                            (* TODO(check): PEstruct are only created at static init and struct a value loads, which should be ignoring any flexible array member *)
+                            error "Core_eval, PEstruct => found a flexible array member"
+                      end in
+                      let (_, _, memb_ty) = fromJust "Core_eval, PEstruct 1" (List.lookup memb_ident membrs) in
                       let mval = fromJust ("Core_Eval, PEstruct 2, memb_ty: " ^ Pp.stringFromCore_ctype memb_ty ^
                                            ", cval: " ^ Pp.stringFromCore_value cval)
                           (Caux.memValueFromValue memb_ty cval) in
@@ -712,10 +717,10 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
           | Just cval ->
               match fromJust "Core_eval, PEunion 1,1" $ Map.lookup tag_sym file.tagDefs with
                 | Ctype.UnionDef membrs ->
-                    let (_, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
+                    let (_, _, memb_ty) = fromJust "Core_eval, PEunion 1" (List.lookup memb_ident membrs) in
                     let mval = fromJust "Core_Eval, PEunion 2" (Caux.memValueFromValue memb_ty cval) in
                     EU.return (PEval (Vobject (OVunion tag_sym memb_ident mval)))
-                | Ctype.StructDef _ ->
+                | Ctype.StructDef _ _ ->
                       error "Core_eval.step_eval_pexpr, PEunion found a StructDef"
                 end
           | Nothing ->
@@ -728,7 +733,7 @@ KKK:              EU.return (PEval (Vloaded (LVspecified (OVstruct tag_sym xs)))
               let case_funptrval sym = 
                 let () = Debug.print_debug 3 [] (fun () -> "function pointer: " ^ show sym) in
                 match Map.lookup sym file.funinfo with
-                  | Just (ret, params, is_variadic, has_proto) ->
+                  | Just (_, _, ret, params, is_variadic, has_proto) ->
                       let () = Debug.print_debug 3 [] (fun () -> "function pointer (lookup): " ^ show sym) in
                       EU.return (PEval (Vtuple [Vctype ret;
                                                 Vlist BTy_ctype (List.map (fun (_, ty) -> Vctype ty) params);

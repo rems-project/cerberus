@@ -1,3 +1,4 @@
+open Cerb_frontend
 open Cfg
 open Core
 
@@ -17,7 +18,7 @@ type absvalue =
   | ATunit
   (*| ATtrue => 1
   | ATfalse => 0 *)
-  | ATctype of Core_ctype.ctype0 (* C type as value *)
+  | ATctype of Ctype.ctype (* C type as value *)
   | ATtuple of absvalue list
   | ATexpr of Texpr1.t
   | ATcons of Tcons1.t
@@ -103,6 +104,7 @@ let rec show_absvalue = function
   | ATpointer p -> show_abspointer p
   | ATunspec -> "unspec"
   | ATtop -> "top"
+  | _ -> assert false (* FIXME *)
 
 let show_abs_scalar man st =
   let box = Abstract1.to_box man st in
@@ -299,6 +301,8 @@ let rec absvalue_of_texpr ~with_sym core man = function
         | _ -> assert false
       in
       return @@ ATexpr (Texpr1.binop bop e1 e2 Texpr1.Int Texpr1.Rnd)
+
+    | _ -> assert false (* FIXME *)
     end
   | TEaction act ->
     absvalue_of_action ~with_sym core man act
@@ -321,7 +325,7 @@ let rec absvalue_of_texpr ~with_sym core man = function
     absvalue_of_texpr ~with_sym core man te >>= begin function
       | ATpointer (APfunction sym) ->
           begin match Pmap.lookup sym core.funinfo with
-            | Some (ret, params, is_variadic, has_proto) ->
+            | Some (_, _, ret, params, is_variadic, has_proto) ->
               get_env () >>= fun env ->
               let toint b =
                 ATexpr (Texpr1.cst env (Coeff.s_of_int (if b then 1 else 0)))
@@ -527,7 +531,6 @@ let rec guard core man g st = function
   | Cnot (Cmatch (pat, te)) ->
     (match_pattern pat te, st)
   | Cop (bop, te1, te2) ->
-    let open Tcons1 in
     let m =
       absvalue_of_texpr ~with_sym:true core man te1 >>= fun v1 ->
       absvalue_of_texpr ~with_sym:true core man te2 >>= fun v2 ->
@@ -546,7 +549,6 @@ let rec guard core man g st = function
         assert false
     end
   | Cnot (Cop (bop, te1, te2)) ->
-    let open Tcons1 in
     let m =
       absvalue_of_texpr ~with_sym:true core man te1 >>= fun v1 ->
       absvalue_of_texpr ~with_sym:true core man te2 >>= fun v2 ->

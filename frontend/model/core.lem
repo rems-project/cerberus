@@ -169,8 +169,8 @@ type generic_object_value 'sym =  (* C object values *)
  | OVfloating of Mem.floating_value (* floating-point value *)
  | OVpointer of Mem.pointer_value (* pointer value *)
  | OVarray of list (generic_loaded_value 'sym) (* C array value *)
- | OVstruct of Symbol.sym * list (Cabs.cabs_identifier * ctype * Mem.mem_value) (* C struct value *)
- | OVunion of Symbol.sym * Cabs.cabs_identifier * Mem.mem_value (* C union value *)
+ | OVstruct of Symbol.sym * list (Symbol.identifier * ctype * Mem.mem_value) (* C struct value *)
+ | OVunion of Symbol.sym * Symbol.identifier * Mem.mem_value (* C union value *)
 
 and generic_loaded_value 'sym =  (* potentially unspecified C object values *)
  | LVspecified of (generic_object_value 'sym) (* non-unspecified loaded value *)
@@ -188,8 +188,9 @@ type generic_value 'sym =  (* Core values *)
  | Vtuple of list (generic_value 'sym) (* tuple *)
 
 
-type generic_ctor 'bty =  (* data constructors *)
- | Cnil of 'bty (* empty list *)
+type generic_ctor =  (* data constructors *)
+ | Cnil of core_base_type (* empty list *) 
+ (* annotated with the type of the list items *)
  | Ccons (* list cons *)
  | Ctuple (* tuple *)
  | Carray (* C array *)
@@ -207,12 +208,12 @@ type generic_ctor 'bty =  (* data constructors *)
  | Civfromfloat (* cast floating to integer value *)
 
 
-type generic_pattern_ 'bty 'sym = 
+type generic_pattern_ 'sym = 
  | CaseBase of (maybe 'sym * core_base_type)
- | CaseCtor of (generic_ctor 'bty) * list (generic_pattern 'bty 'sym)
+ | CaseCtor of generic_ctor * list (generic_pattern 'sym)
 
-and generic_pattern 'bty 'sym = 
- | Pattern of list annot * (generic_pattern_ 'bty 'sym)
+and generic_pattern 'sym = 
+ | Pattern of list annot * (generic_pattern_ 'sym)
 
 
 type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
@@ -222,18 +223,18 @@ type generic_pexpr_ 'bty 'sym =  (* Core pure expressions *)
  | PEconstrained of list (Mem.mem_iv_constraint * (generic_pexpr 'bty 'sym)) (* constrained value *)
  | PEundef of Loc.t * Undefined.undefined_behaviour (* undefined behaviour *)
  | PEerror of string * (generic_pexpr 'bty 'sym) (* impl-defined static error *)
- | PEctor of (generic_ctor 'bty) * list (generic_pexpr 'bty 'sym) (* data constructor application *)
- | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
+ | PEctor of generic_ctor * list (generic_pexpr 'bty 'sym) (* data constructor application *)
+ | PEcase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_pexpr 'bty 'sym)) (* pattern matching *)
  | PEarray_shift of (generic_pexpr 'bty 'sym) * ctype * (generic_pexpr 'bty 'sym) (* pointer array shift *)
- | PEmember_shift of (generic_pexpr 'bty 'sym) * 'sym * Cabs.cabs_identifier (* pointer struct/union member shift *)
+ | PEmember_shift of (generic_pexpr 'bty 'sym) * 'sym * Symbol.identifier (* pointer struct/union member shift *)
  | PEnot of (generic_pexpr 'bty 'sym) (* boolean not *)
  | PEop of binop * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym)
- | PEstruct of 'sym * list (Cabs.cabs_identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
- | PEunion of 'sym * Cabs.cabs_identifier * (generic_pexpr 'bty 'sym) (* C union expression *)
+ | PEstruct of 'sym * list (Symbol.identifier * (generic_pexpr 'bty 'sym)) (* C struct expression *)
+ | PEunion of 'sym * Symbol.identifier * (generic_pexpr 'bty 'sym) (* C union expression *)
  | PEcfunction of (generic_pexpr 'bty 'sym) (* C function pointer expression *)
- | PEmemberof of 'sym * Cabs.cabs_identifier * (generic_pexpr 'bty 'sym) (* C struct/union member access *)
+ | PEmemberof of 'sym * Symbol.identifier * (generic_pexpr 'bty 'sym) (* C struct/union member access *)
  | PEcall of (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* pure function call *)
- | PElet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure let *)
+ | PElet of (generic_pattern 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure let *)
  | PEif of (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) (* pure if *)
  | PEis_scalar of (generic_pexpr 'bty 'sym)
  | PEis_integer of (generic_pexpr 'bty 'sym)
@@ -283,16 +284,15 @@ type generic_expr_ 'a 'bty 'sym =  (* (effectful) expression *)
  | Epure of (generic_pexpr 'bty 'sym)
  | Ememop of Mem_common.memop * list (generic_pexpr 'bty 'sym) (* pointer op involving memory *)
  | Eaction of (generic_paction 'a 'bty 'sym) (* memory action *)
- | Ecase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym)) (* pattern matching *)
- | Elet of (generic_pattern 'bty 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym)
+ | Ecase of (generic_pexpr 'bty 'sym) * list ((generic_pattern 'sym) * (generic_expr 'a 'bty 'sym)) (* pattern matching *)
+ | Elet of (generic_pattern 'sym) * (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym)
  | Eif of (generic_pexpr 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym)
  | Eccall of 'a * (generic_pexpr 'bty 'sym) * (generic_pexpr 'bty 'sym) * list (generic_pexpr 'bty 'sym) (* C function call *)
  | Eproc of 'a * (generic_name 'sym) * list (generic_pexpr 'bty 'sym) (* Core procedure call *)
  | Eunseq of list (generic_expr 'a 'bty 'sym) (* unsequenced expressions *)
- | Ewseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
- | Esseq of (generic_pattern 'bty 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
+ | Ewseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* weak sequencing *)
+ | Esseq of (generic_pattern 'sym) * (generic_expr 'a 'bty 'sym) * (generic_expr 'a 'bty 'sym) (* strong sequencing *)
  | Easeq of ('sym * core_base_type) * (generic_action 'a 'bty 'sym) * (generic_action 'a 'bty 'sym) (* atomic sequencing *)
-(*
  | Eindet of nat * (generic_expr 'a 'bty 'sym) (* indeterminately sequenced expr *)
 *)
  | Ebound of (generic_expr 'a 'bty 'sym) (* $\ldots$and boundary *)
@@ -322,7 +322,7 @@ type generic_fun_map_decl 'bty 'a =
 
 type generic_fun_map 'bty 'a = map Symbol.sym (generic_fun_map_decl 'bty 'a)
 
-instance forall 'bty 'sym. (Located (generic_pattern 'bty 'sym))
+instance forall 'sym. (Located (generic_pattern 'sym))
   let locOf pat =
     let (Pattern annots _) = pat in
     get_loc_ annots
@@ -356,7 +356,7 @@ end
 
 
 type extern_map =
-  map Cabs.cabs_identifier (list Symbol.sym * linking_kind)
+  map Symbol.identifier (list Symbol.sym * linking_kind)
 
 type generic_globs 'a 'bty=
   | GlobalDef of core_base_type * generic_expr 'a 'bty Symbol.sym
@@ -377,7 +377,7 @@ type generic_file 'bty 'a = <|
   globs   : list (Symbol.sym * generic_globs 'a 'bty);
   funs    : generic_fun_map 'bty 'a;
   extern  : extern_map;
-  funinfo : map Symbol.sym (ctype * list (maybe Symbol.sym * ctype) * bool * bool);
+  funinfo : map Symbol.sym (Loc.t * Annot.attributes * ctype * list (maybe Symbol.sym * ctype) * bool * bool);
 |>
 
 
@@ -385,8 +385,8 @@ type name            = generic_name Symbol.sym
 type object_value    = generic_object_value Symbol.sym
 type loaded_value    = generic_loaded_value Symbol.sym
 type value           = generic_value Symbol.sym
-type ctor            = generic_ctor unit
-type pattern         = generic_pattern unit Symbol.sym
+type ctor            = generic_ctor
+type pattern         = generic_pattern Symbol.sym
 type pexpr           = generic_pexpr unit Symbol.sym
 type expr 'a         = generic_expr 'a unit Symbol.sym
 type action 'a       = generic_action 'a unit Symbol.sym
@@ -397,8 +397,8 @@ type fun_map_decl 'a = generic_fun_map_decl unit 'a
 type fun_map 'a      = generic_fun_map unit 'a
 type file 'a         = generic_file unit 'a
 
-type typed_ctor            = generic_ctor core_base_type
-type typed_pattern         = generic_pattern core_base_type Symbol.sym
+type typed_ctor            = generic_ctor
+type typed_pattern         = generic_pattern Symbol.sym
 type typed_pexpr           = generic_pexpr core_base_type Symbol.sym
 type typed_expr 'a         = generic_expr 'a core_base_type Symbol.sym
 type typed_action 'a       = generic_action 'a core_base_type Symbol.sym

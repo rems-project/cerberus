@@ -20,7 +20,7 @@ citests=(
   0017-for_simple.c
   0018-lt_promotion.c
   0019-arith_promotion.c
-  0020-end_of_lifetime.c
+  0020-end_of_lifetime.undef.c
 #  0021-fact.c
   0022-while_continue.c
 #  0023-jump1.c
@@ -109,5 +109,8 @@ citests=(
   0232-invalid-use-Atomic.error.c
   0233-undeclared-identifier.error.c
   0234-array-static-outside-fun-proto.error.c
+  0297-atomic_memberof.undef.c
+  0298-atomic_memberofptr.undef.c
+  0299-qualified_ptrdiff.c
 )
 

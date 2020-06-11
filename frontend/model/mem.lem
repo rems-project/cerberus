@@ -130,7 +130,7 @@ declare ocaml target_rep function intcast_ptrval = `Impl_mem.intcast_ptrval`
 
 (* Pointer shifting constructors *)
 val array_shift_ptrval:  pointer_value -> Ctype.ctype -> integer_value -> pointer_value
-val member_shift_ptrval: pointer_value -> Symbol.sym -> Cabs.cabs_identifier -> pointer_value
+val member_shift_ptrval: pointer_value -> Symbol.sym -> Symbol.identifier -> pointer_value
 declare ocaml target_rep function array_shift_ptrval = `Impl_mem.array_shift_ptrval`
 declare ocaml target_rep function member_shift_ptrval = `Impl_mem.member_shift_ptrval`
 
@@ -166,7 +166,7 @@ val integer_ival: integer -> integer_value
 val max_ival: Ctype.integerType -> integer_value
 val min_ival: Ctype.integerType -> integer_value
 val op_ival: Mem_common.integer_operator -> integer_value -> integer_value -> integer_value
-val offsetof_ival: map Symbol.sym Ctype.tag_definition -> Symbol.sym -> Cabs.cabs_identifier -> integer_value
+val offsetof_ival: map Symbol.sym Ctype.tag_definition -> Symbol.sym -> Symbol.identifier -> integer_value
 val sizeof_ival: Ctype.ctype -> integer_value
 val alignof_ival: Ctype.ctype -> integer_value
 val bitwise_complement_ival: Ctype.integerType -> integer_value -> integer_value
@@ -245,8 +245,8 @@ val integer_value_mval: Ctype.integerType -> integer_value -> mem_value
 val floating_value_mval: Ctype.floatingType -> floating_value -> mem_value
 val pointer_mval: Ctype.ctype -> pointer_value -> mem_value
 val array_mval: list mem_value -> mem_value
-val struct_mval: Symbol.sym -> list (Cabs.cabs_identifier * Ctype.ctype * mem_value) -> mem_value
-val union_mval: Symbol.sym -> Cabs.cabs_identifier -> mem_value -> mem_value
+val struct_mval: Symbol.sym -> list (Symbol.identifier * Ctype.ctype * mem_value) -> mem_value
+val union_mval: Symbol.sym -> Symbol.identifier -> mem_value -> mem_value
 declare ocaml target_rep function unspecified_mval = `Impl_mem.unspecified_mval`
 declare ocaml target_rep function integer_value_mval = `Impl_mem.integer_value_mval`
 declare ocaml target_rep function floating_value_mval = `Impl_mem.floating_value_mval`
@@ -265,8 +265,8 @@ val case_mem_value: forall 'a.
   (Ctype.floatingType -> floating_value -> 'a) ->
   (Ctype.ctype -> pointer_value -> 'a) ->
   (list mem_value -> 'a) ->
-  (Symbol.sym -> list (Cabs.cabs_identifier * Ctype.ctype * mem_value) -> 'a) ->
-  (Symbol.sym -> Cabs.cabs_identifier -> mem_value -> 'a) ->
+  (Symbol.sym -> list (Symbol.identifier * Ctype.ctype * mem_value) -> 'a) ->
+  (Symbol.sym -> Symbol.identifier -> mem_value -> 'a) ->
   'a
 declare ocaml target_rep function case_mem_value = `Impl_mem.case_mem_value`
 

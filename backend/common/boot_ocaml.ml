@@ -1,3 +1,5 @@
+(*
+open Cerb_frontend
 open Global
 
 let pickList = function
@@ -6,14 +8,14 @@ let pickList = function
   | xs  -> let l = List.length xs in
            let (ys,z::zs) = Lem_list.split_at (Random.int l) xs in
            (ys, z, zs)
-
+*)
 
 let output_string str =
   print_string (Scanf.unescaped str)
 
 
 let sort_assoc_list xs =
-  List.stable_sort (fun (a, _) (b, _) -> Pervasives.compare a b) xs
+  List.stable_sort (fun (a, _) (b, _) -> Stdlib.compare a b) xs
 
 
 let random_select xs =

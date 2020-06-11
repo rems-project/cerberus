@@ -1,9 +1,8 @@
 %{
+open Cerb_frontend
+
 open Lem_pervasives
 open Either
-open Global
-
-open Location_ocaml
 
 open Core_parser_util
 
@@ -42,7 +41,7 @@ type declaration =
 
 
 
-let rec hasAilname: attribute list -> string option = function
+let hasAilname: attribute list -> string option = function
   | [] ->
       None
   | Attr_ailname str :: _ ->
@@ -50,17 +49,22 @@ let rec hasAilname: attribute list -> string option = function
 
 
 (* TODO: move to Caux *)
-let rec mk_list_pe = function
+let rec mk_list_pe bTy = function
   | [] ->
-      Pexpr ([], (), PEctor (Cnil (), []))
+      Pexpr ([], (), PEctor (Cnil bTy, []))
   | _pe::_pes ->
-      Pexpr ([], (), PEctor (Ccons, [_pe; mk_list_pe _pes]))
+      Pexpr ([], (), PEctor (Ccons, [_pe; mk_list_pe bTy _pes]))
 
-let rec mk_list_pat = function
+let rec mk_list_pat bTy = function
   | [] ->
-      Pattern ([], CaseCtor (Cnil (), []))
+      Pattern ([], CaseCtor (Cnil bTy, []))
   | _pat::_pats ->
-      Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat _pats]))
+      Pattern ([], CaseCtor (Ccons, [_pat; mk_list_pat bTy _pats]))
+
+let ensure_list_core_base_type loc = function
+  | BTy_list cbt -> cbt
+  | _ -> failwith ((Location_ocaml.location_to_string loc) ^ 
+                     ": list given non-list type")
 
 
 type symbolify_state = {
@@ -72,7 +76,7 @@ type symbolify_state = {
 let initial_symbolify_state = {
   labels= Pmap.empty Core_parser_util._sym_compare;
   sym_scopes= [Pmap.map (fun sym -> (sym, Location_ocaml.unknown)) M.std];
-  ailnames= Pmap.empty Pervasives.compare;
+  ailnames= Pmap.empty Stdlib.compare;
 }
 
 module Eff : sig
@@ -273,7 +277,7 @@ let rec symbolify_ctype (Ctype (annots, ty)) =
       symbolify_symbol tag >>= fun tag' ->
       Eff.return (Union tag')
 
-let rec symbolify_value _cval =
+let symbolify_value _cval =
   match _cval with
    | Vunit ->
        Eff.return Vunit
@@ -287,7 +291,8 @@ let rec symbolify_value _cval =
    | _ ->
        assert false
 
-let convert_ctor : unit generic_ctor -> ctor = function
+let convert_ctor : generic_ctor -> ctor = fun ctor -> ctor
+(*  function
  | Cnil ()      -> Cnil ()
  | Ccons        -> Ccons
  | Ctuple       -> Ctuple
@@ -303,7 +308,7 @@ let convert_ctor : unit generic_ctor -> ctor = function
  | Cspecified   -> Cspecified
  | Cunspecified -> Cunspecified
  | Cfvfromint   -> Cfvfromint
- | Civfromfloat -> Civfromfloat
+ | Civfromfloat -> Civfromfloat *)
 
 let rec symbolify_pattern (Pattern (annots, _pat)) : pattern Eff.t =
   Eff.get >>= fun st ->
@@ -360,10 +365,10 @@ let rec symbolify_pexpr (Pexpr (annot, (), _pexpr): parsed_pexpr) : pexpr Eff.t 
     | PEerror (str, _pe) ->
         symbolify_pexpr _pe >>= fun pe ->
         Eff.return (Pexpr (annot, (), PEerror (str, pe)))
-    | PEctor (Cnil (), _pes) ->
+    | PEctor (Cnil bTy, _pes) ->
         begin match _pes with
           | [] ->
-              Eff.return (Pexpr (annot, (), PEctor (Cnil (), [])))
+              Eff.return (Pexpr (annot, (), PEctor (Cnil bTy, [])))
           | _ ->
               Eff.fail loc (Core_parser_ctor_wrong_application (0, List.length _pes))
         end
@@ -1128,7 +1133,7 @@ let mk_file decls =
 %start <Core_parser_util.result>start
 %parameter <M : sig
                   val mode: Core_parser_util.mode
-                  val std: (Core_parser_util._sym, Symbol.sym) Pmap.map
+                  val std: (Core_parser_util._sym, Cerb_frontend.Symbol.sym) Pmap.map
                 end>
 
 %%
@@ -1352,7 +1357,7 @@ name:
 
 cabs_id:
 | n= SYM
-  { Cabs.CabsIdentifier (Location_ocaml.region (snd n) None, fst n) }
+  { Symbol.Identifier (Location_ocaml.region (snd n) None, fst n) }
 ;
 
 memory_order:
@@ -1394,12 +1399,14 @@ ctor:
 
 
 list_pattern:
-| BRACKETS
-  { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Cnil (), [])) }
+| BRACKETS COLON bTy= core_base_type
+  { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+    Pattern ([Aloc loc], CaseCtor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pat1= pattern COLON_COLON _pat2= pattern
   { Pattern ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], CaseCtor (Ccons, [_pat1; _pat2])) }
-| _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET)
-    { mk_list_pat _pats }
+| _pats= delimited(LBRACKET, separated_list(COMMA, pattern) , RBRACKET) COLON bTy= core_base_type
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      mk_list_pat (ensure_list_core_base_type loc bTy) _pats }
 
 pattern:
 | _sym= SYM COLON bTy= core_base_type
@@ -1454,12 +1461,14 @@ value:
 
 
 list_pexpr:
-| BRACKETS
-    { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Cnil (), [])) }
+| BRACKETS COLON bTy= core_base_type
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      Pexpr ([Aloc loc], (), PEctor (Cnil (ensure_list_core_base_type loc bTy), [])) }
 |  _pe1= pexpr COLON_COLON _pe2= pexpr
     { Pexpr ([Aloc (Location_ocaml.region ($startpos, $endpos) None)], (), PEctor (Ccons, [_pe1; _pe2])) }
-| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET)
-    { mk_list_pe _pes }
+| _pes= delimited(LBRACKET, separated_list(COMMA, pexpr) , RBRACKET) COLON bTy= core_base_type
+    { let loc = (Location_ocaml.region ($startpos, $endpos) None) in
+      mk_list_pe (ensure_list_core_base_type loc bTy) _pes }
 
 member:
 | DOT cid=cabs_id EQ _pe=pexpr
@@ -1647,7 +1656,7 @@ def_declaration:
 
 def_field:
 | cid=cabs_id COLON ty=core_ctype
-  { (cid, (no_qualifiers, ty)) }
+  { (cid, (Annot.no_attributes, no_qualifiers, ty)) }
 ;
 
 def_fields:
@@ -1656,10 +1665,19 @@ def_fields:
 ;
 
 def_aggregate_declaration:
-| DEF STRUCT name=SYM COLON_EQ fds=def_fields
-  { Aggregate_decl (name, StructDef fds) }
+| DEF STRUCT name=SYM COLON_EQ fds_=def_fields
+  { (* NOTE: I don't like that this check is in the parser... *)
+    let (fds, flexible_opt) =
+      match Lem_list.dest_init fds_ with
+        | None ->
+            (fds_, None) (* TODO: technically this should be an error (we can't have empty structs), but
+                            this shouldn't be dealt with by the parser *)
+        | Some (xs, (ident, (attrs, qs, elem_ty))) ->
+            (xs, Some (FlexibleArrayMember (attrs, ident, qs, elem_ty)))
+    in
+    Aggregate_decl (name, StructDef (fds, flexible_opt)) }
 | DEF UNION name=SYM COLON_EQ fds=def_fields
-  { Aggregate_decl (name, StructDef fds) }
+  { Aggregate_decl (name, UnionDef fds) }
 ;
 
 ifun_declaration:
