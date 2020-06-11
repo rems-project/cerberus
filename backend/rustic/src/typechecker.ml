@@ -113,15 +113,14 @@ let collect_functions s =
   let m = List.fold_left (fun m (id, f) -> add_right id (cvt_def f) m) m fs in
   m
 
-type ('b) gamma_ty = ((rc_type * rc_type) String_map.t * 'b) list
-
-let rec lookup_in_gamma x = function
+let rec lookup_in_gamma x : 'a gamma_ty -> 'a = function
 | [] -> None
-| (bds, sts) :: gamma ->
+| bds :: gamma ->
   (match String_map.find_opt x bds with
    | None -> lookup_in_gamma x gamma
    | Some ty -> Some ty)
 
+(*
 let rc_ownership_of_annot = function
 | Annot.Aattrs (Attrs attrs) ->
   let f a =
@@ -145,7 +144,9 @@ let rc_ownership_of_annots annots =
   | [rcow] -> rcow
   | [] -> RC_bad
   | _ :: _ :: _ -> failwith "ambiguous annotations"
+*)
 
+(*
 let rec rc_type_of_cty = function
 | Ctype.Ctype (_, Void) -> RC_scalar
 | Ctype.Ctype (_, Basic _) -> RC_scalar
@@ -157,6 +158,7 @@ let rec rc_type_of_cty = function
 | Ctype.Ctype (_, Union _) -> failwith "union"
 
 let is_scalar cty = rc_type_of_cty cty = RC_scalar
+*)
 
 (*
 let rc_type_pair_of_cty cty =
@@ -174,7 +176,7 @@ let expand_rcty = function
 | (ty1, RC_unchanged) -> (ty1, ty1)
 | (ty1, RC_changed ty2) -> (ty1, ty2)
 
-let fun_spec_of def  : fun_spec_t option =
+let fun_spec_of def : fun_spec_t option =
   let x =
     Rustic_types.map_option
       (fun a ->
@@ -204,6 +206,7 @@ let collect_function_types fs =
   | _ -> None in
   String_option_map.map hh fs
 
+(*
 let zap = function
 | RC_scalar -> RC_scalar
 | RC_ptr (_, rcty) -> RC_ptr (RC_zap, rcty)
@@ -215,6 +218,7 @@ let own_rank = function
 | RC_write -> 1
 | RC_zap -> 2
 | RC_bad -> 3
+*)
 
 module Type_error = struct
 type t =
@@ -236,7 +240,11 @@ module TE_either = Either_fixed.Make(Type_error)
 let loc_of_expression = function
 | AnnotatedExpression (_, _, loc, _) -> loc
 
-let rec check_expression stys (ftys : fun_spec_t Rustic_types.String_map.t) (gamma : 'b gamma_ty) (AnnotatedExpression (_, _, loc, e)) : (rc_type * rc_type) TE_either.t =
+let rec check_expression
+  stys
+  (ftys : fun_spec_t Rustic_types.String_map.t)
+  (gamma : rc_type gamma_ty)
+  (AnnotatedExpression (_, _, loc, e)) : rc_type TE_either.t =
   check_expression_ stys ftys gamma loc e
 and check_expression_ stys ftys gamma loc = function
 | AilEident x ->
@@ -247,10 +255,9 @@ and check_expression_ stys ftys gamma loc = function
   TE_either.bind
     (check_expression stys ftys gamma e1)
     (function
-      | (RC_scalar, _) -> TE_either.return (RC_scalar, RC_scalar)
-      | (RC_ptr (o, t) as ty1, ty2) ->
-        (*print_string (string_of_rc_type ty ^ "\n");*)
-        if RC_write = o then TE_either.return (RC_placeholder "=1", RC_placeholder "=2")
+      | RC_scalar -> TE_either.return RC_scalar
+      | RC_ptr (o, t) ->
+        if RC_write = o then TE_either.return (RC_placeholder "=1")
         else TE_either.mzero (Type_error.TE_expected_but_got (loc, RC_ptr (RC_write, t), ty1))
       | _ -> TE_either.mzero (Type_error.TE_internal_error "writing to a non-ptr?"))
 | AilEcall (AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))), [e]) ->

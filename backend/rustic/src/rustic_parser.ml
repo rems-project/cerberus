@@ -12,9 +12,15 @@ let var =
 
 let spaces = many space
 
+(*
 let ownership =
   (exactlys "read" >> return RC_read) <|>
   (exactlys "write" >> return RC_write)
+*)
+
+let scoping =
+  (exactlys "all" >> return RCS_unscoped) <|>
+  (var >>= fun s -> return (RCS_scoped s))
 
 let make_sym s =
   Symbol.Symbol (Fresh.digest (), 0, Some s) (* TODO: is this the right thing? *)
@@ -28,22 +34,24 @@ and scalar_ty =
   return RC_scalar
 and ptr_ty s =
   (exactlys "ptr" >>
+  exactlys "@" >>
+  scoping >>= fun s ->
   exactlys "[" >>
-  ownership >>= fun o ->
-  exactlys "]" >>
-  exactlys "(" >>
   ty >>= fun t ->
-  exactlys ")" >>
-  return (RC_ptr (o, t))) s
+  exactlys "]" >>
+  return (RC_ptr (t, s))) s
 and struct_ty =
   exactlys "struct" >>
-  space >>
   spaces >>
   var >>= fun s ->
+  failwith "TODO: struct"
+  (*
   exactlys "[" >>
   ownership >>= fun o ->
-  exactlys "]" >>
+  exactlys "]" >>*)
+  (*
   return (RC_struct (make_sym s, o))
+  *)
 
 let arg_unchanged =
   exactlys "-|" >> return RC_unchanged
