@@ -900,6 +900,13 @@ let rec drive_core_thread2 tid =
           |>) >>= fun () ->
           drive_core_thread2 tid )
     
+    | Core_reduction.Step_fs2 th_st m_fs_step ->
+        (* TODO: can m_fs_step change the thread state?, If so this is wrong *)
+        ( SK_misc ["fs_step"]
+        , liftCore_run m_fs_step                >>= fun fs_step ->
+          drive_fs_step tid th_st dr_st fs_step >>= fun () ->
+          drive_core_thread2 tid )
+    
     | Core_reduction.Step_error2 debug_str ->
         error ("WIP: Step_error --> " ^ debug_str)
     | (Core_reduction.Step_action_request2 str _ _ _ as step) ->

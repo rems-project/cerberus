@@ -96,9 +96,12 @@ type core_step2 =
   | Step_done2 of Core.value
   | Step_memop_request2 of Mem_common.memop * list Core.value * Mem_common.thread_id * (Core.value -> thread_state)
   | Step_spawn_threads2 of (list Mem_common.thread_id -> thread_state) * list thread_state (* initial states for the children *)
+(*  | Step_fs2 of thread_state * Core_run.fs_oper *)
+  | Step_fs2 of thread_state * core_runM Core_run.fs_oper
+
+
 (*
   | Step_constrained of string * list (Mem.mem_iv_constraint * core_runM thread_state)
-  | Step_fs of thread_state * fs_oper
   | Step_bound of core_runM thread_state
 *)
 
@@ -960,6 +963,40 @@ let rec add_exclusion n = function
 end
 
 
+let step_fs_proc th_st iCst cvals =
+  let charFromMValue errmsg = function
+    | Vobject (OVinteger ival) ->
+        match Mem_aux.integerFromIntegerValue ival with
+          | Just n -> Decode.encode_character_constant n
+          | Nothing -> error errmsg
+        end
+    | _ -> error errmsg
+  end in
+  let _forceIntegerFromIntegerValue errmsg ival =
+    match Mem_aux.integerFromIntegerValue ival with
+      | Just n -> n
+      | Nothing -> error errmsg
+    end in
+  match iCst with
+    | Implementation.BuiltinFunction "printf" ->
+        match cvals with
+          | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
+              let fmt = List.map (charFromMValue "printf") fmt_cvals in
+              let args_ptrvals = List.map (function
+                | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
+                | _ -> error "Core_run, printf the second argument should be a list of (ctype, pointer) pairs"
+              end) args_cvals in
+              Core_run.FS_PRINTF fmt args_ptrvals
+          | _ ->
+              error ("Core_run, printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+        end
+    | _ ->
+        error "TODO: Eproc ==> impl"
+  end
+
+
+
+
 val step_ctx:
   Mem.mem_state -> Core.file core_run_annotation -> map Symbol.sym Symbol.sym ->
   Mem_common.thread_id -> (maybe Mem_common.thread_id * thread_state) ->
@@ -1342,8 +1379,49 @@ let step_ctx mem_st file core_extern current_tid (parent_tid_opt, th_st) =
                       error "TODO(use core_runM) Eccall illtyped first operand"
                 end
               end
-          | Eproc _ _ _ ->
+          | Eproc _ (Sym psym) pes ->
+              Step_eval2 "Eccall" begin
+                E.mapM full_eval_pexpr' pes >>= fun cvals ->
+                 SEU.runEU (
+                   Exception.bind (Core_run.call_proc core_extern file psym cvals)
+                    EU.return
+                 ) >>= fun (proc_env, expr) ->
+                 E.return <| th_st with
+                   arena= expr;
+                   stack= Stack_cons2 (Just psym) CTX (match th_st.stack with Stack_cons2 sym_opt CTX sk' -> Stack_cons2 sym_opt ctx sk' end);
+                   exec_loc= push_exec_loc psym th_st.exec_loc;
+                   env= proc_env :: th_st.env
+                 |>
+               end
+          | Eproc _ (Impl iCst) pes ->
+              if true (* iCst is an FS function *) then
+                Step_fs2 th_st begin
+                  E.mapM full_eval_pexpr' pes >>= fun cvals ->
+                  E.return (step_fs_proc th_st iCst cvals)
+                end
+              else
+                error "TODO: Eproc Impl not FS"
+
+(*
+
+(Implementation.BuiltinFunction "printf") ->
+                      match cvals with
+                        | [Vlist _ fmt_cvals; Vlist _ args_cvals] ->
+                            let fmt = List.map (charFromMValue "printf") fmt_cvals in
+                            let args_ptrvals = List.map (function
+                              | Vtuple [Vctype ty; Vobject (OVpointer ptr_val)] -> (ty, ptr_val)
+                              | _ -> error "TODO(err monad), printf the second argument should be a list of (ctype, pointer) pairs"
+                            end) args_cvals in
+                            Step_fs2 th_st (FS_PRINTF fmt args_ptrvals)
+                        | _ ->
+                            error ("TODO(err monad), printf giving arguments of wrong types ==> " ^ stringFromList Pp.stringFromCore_value cvals)
+                      end
+                  | Impl _ ->
+                      error "TODO: PROC to impl"
+*)
+(*
               error "TODO: PROC"
+*)
           | End es ->
               error "TODO: ND"
           | Erun run_annots sym pes ->

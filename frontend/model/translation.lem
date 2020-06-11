@@ -3361,6 +3361,11 @@ type translate_stmt_env = <|
 |>
 
 
+let wrapped_translate_expression ctx variadic_env stdlib tagDefs e =
+  translate_expression ctx variadic_env stdlib tagDefs e >>= fun core_e ->
+  E.return (C.Expr [] (C.Ebound core_e))
+
+
 val translate_stmt:
   translation_stdlib -> C.core_tag_definitions -> A.ail_identifier -> translate_stmt_env ->
   A.statement GenTypes.genTypeCategory ->
@@ -3368,7 +3373,7 @@ val translate_stmt:
 
 
 let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) : E.elabM (C.expr unit) =
-  let translate_expression = translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
+  let translate_expression = wrapped_translate_expression ECTX_other (env.variadic_sym_opt, env.last_arg_sym_opt) stdlib tagDefs in
   let translate_cases_block case_labs default_lab =
       translate_stmt2 stdlib tagDefs f <| env with case_labs=   case_labs;
                                                    default_lab= default_lab |>
@@ -3394,7 +3399,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
           (* ASK: this annotation looks wrong!! is this really implementing 6.5#2 ? *)
           C.Expr [Annot.Astd "§6.5#2"] $
           C.Esseq (Caux.mk_empty_pat (maybe C.BTy_unit C.BTy_loaded (Caux.core_object_type_of_ctype (ctype_of e))))
-            (C.Expr [] (C.Ebound core_e))
+            core_e
             (Caux.mk_pure_e Caux.mk_unit_pe)
           )
     
@@ -3611,7 +3616,7 @@ let rec translate_stmt2 stdlib tagDefs f env (A.AnnotatedStatement loc _ stmt) :
           if env.is_Noreturn then
             Caux.mk_pure_e (Caux.mk_std_undef_pe loc "§6.7.4#8" Undefined.UB071_noreturn)
           else
-            Caux.mk_sseq_e e_sym_pat (C.Expr [] (C.Ebound core_e)) (
+            Caux.mk_sseq_e e_sym_pat core_e (
               mk_run_e loc env.return_lab visible_syms [] [ret_pe]
             )
         end
@@ -3833,7 +3838,7 @@ let translate_program stdlib (startup_sym_opt, sigm) =
                       Caux.mk_pure_e (Caux.mk_specified_pe (Caux.mk_nullptr_pe ty))
                     )
                   else
-                    translate_expression (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr >>= fun core ->
+                    wrapped_translate_expression (ECTX_glob sym sym_global) ((Nothing: maybe Symbol.sym), (Nothing: maybe Symbol.sym)) stdlib core_tagDefs expr >>= fun core ->
                     E.return (
                       C.BTy_loaded (force_core_object_type_of_ctype (ctype_of expr)),
                       core
