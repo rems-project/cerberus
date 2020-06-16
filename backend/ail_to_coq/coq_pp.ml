@@ -493,10 +493,6 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     | _ when wrap        -> fprintf ff "(%a)" (pp false rfnd guarded) ty
     | Ty_refine(e,ty)    ->
         begin
-          let default () =
-            fprintf ff "%a @@ %a" (pp_coq_expr true) e
-              (pp true true guarded) ty
-          in
           match (guard, ty) with
           | (Guard_in_def(s), Ty_params(c,tys)) when c = s ->
               if not guarded then fprintf ff "guarded (%a) (" with_uid s;
@@ -505,10 +501,15 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
               fprintf ff ")"; if not guarded then fprintf ff ")"
           | (Guard_in_lem(s), Ty_params(c,tys)) when c = s ->
               if not guarded then fprintf ff "guarded %a (" with_uid s;
-              default ();
+              fprintf ff "%a @@ " (pp_coq_expr true) e;
+              if tys <> [] then pp_str ff "(";
+              pp_str ff c;
+              List.iter (fprintf ff " %a" (pp_arg true guarded)) tys;
+              if tys <> [] then pp_str ff ")";
               if not guarded then fprintf ff ")"
           | (_              , _               )            ->
-              default ()
+              fprintf ff "%a @@ %a" (pp_coq_expr true) e
+                (pp true true guarded) ty
         end
     | Ty_ptr(k,ty)       ->
         fprintf ff "%a %a" pp_kind k (pp true false guarded) ty
