@@ -463,6 +463,9 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   in
   List.iter handle_attr attrs;
 
+  if !nb_attrs = 0 then
+    invalid_annot_no_pos "No annotation given on the function.";
+
   { fa_parameters = !parameters
   ; fa_args       = !args
   ; fa_returns    = Option.get (Ty_params("void", [])) !returns
