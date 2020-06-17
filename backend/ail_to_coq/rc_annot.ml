@@ -307,6 +307,7 @@ type annot =
   | Annot_annot_args   of annot_arg list
   | Annot_tactics      of string list
   | Annot_trust_me
+  | Annot_skip
   | Annot_manual       of manual_proof
   | Annot_block
   | Annot_full_block
@@ -396,6 +397,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
   | "tactics"      -> raw_many_args (fun l -> Annot_tactics(l))
   | "lemmas"       -> raw_many_args (fun l -> Annot_tactics(annot_lemmas l))
   | "trust_me"     -> no_args Annot_trust_me
+  | "skip"         -> no_args Annot_skip
   | "manual_proof" -> single_arg annot_manual (fun e -> Annot_manual(e))
   | "block"        -> no_args Annot_block
   | "full_block"   -> no_args Annot_full_block
@@ -405,6 +407,7 @@ let parse_attr : rc_attr -> annot = fun attr ->
 
 type proof_kind =
   | Proof_normal
+  | Proof_skipped (* Not even a spec is generated. *)
   | Proof_trusted
   | Proof_manual of manual_proof
 
@@ -428,11 +431,25 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   let tactics = ref [] in
   let proof = ref Proof_normal in
 
+  let nb_attrs = ref 0 in
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
+    incr nb_attrs;
     match (parse_attr attr, !returns) with
+    | (_                  , _   ) when !proof = Proof_skipped ->
+        error "a skipped function should not have other annotations";
+    | (Annot_skip         , _   ) ->
+        if !proof <> Proof_normal then error "proof mode already specified";
+        if !nb_attrs <> 1 then error "other annotations are given";
+        proof := Proof_skipped
+    | (Annot_trust_me     , _   ) ->
+        if !proof <> Proof_normal then error "proof mode already specified";
+        proof := Proof_trusted
+    | (Annot_manual(cfg)  , _   ) ->
+        if !proof <> Proof_normal then error "proof mode already specified";
+        proof := Proof_manual(cfg)
     | (Annot_parameters(l), _   ) -> parameters := !parameters @ l
     | (Annot_args(l)      , _   ) -> args := !args @ l
     | (Annot_returns(ty)  , None) -> returns := Some(ty)
@@ -442,12 +459,6 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
     | (Annot_exist(l)     , _   ) -> exists := !exists @ l
     | (Annot_annot_args(_), _   ) -> () (* Handled separately. *)
     | (Annot_tactics(l)   , _   ) -> tactics := !tactics @ l
-    | (Annot_trust_me     , _   ) ->
-        if !proof <> Proof_normal then error "proof mode already specified";
-        proof := Proof_trusted
-    | (Annot_manual(cfg)  , _   ) ->
-        if !proof <> Proof_normal then error "proof mode already specified";
-        proof := Proof_manual(cfg)
     | (_                  , _   ) -> error "is invalid for a function"
   in
   List.iter handle_attr attrs;
