@@ -971,7 +971,6 @@ let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
 
   (* Function specs. *)
   let pp_spec (id, def_or_decl) =
-    pp "\n@;(* Specifications for function [%s]. *)" id;
     let annot =
       match def_or_decl with
       | FDef({func_annot=Some(annot); _}) -> annot
@@ -979,6 +978,11 @@ let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
       | _                                 ->
       Panic.panic_no_pos "Annotations on function [%s] are invalid." id
     in
+    match annot.fa_proof_kind with
+    | Proof_skipped ->
+        pp "\n@;(* Function [%s] has been skipped. *)" id
+    | _             ->
+    pp "\n@;(* Specifications for function [%s]. *)" id;
     let (param_names, param_types) = List.split annot.fa_parameters in
     let (exist_names, exist_types) = List.split annot.fa_exists in
     let pp_args ff tys =
@@ -1014,6 +1018,8 @@ let pp_proof : string -> func_def -> import list -> string list -> proof_kind
   match proof_kind with
   | Proof_trusted ->
       pp "(* Let's skip that, you seem to have some faith. *)"
+  | Proof_skipped ->
+      pp "(* You were too lazy to even write a spec for this function. *)"
   | _             ->
 
   (* Add the extra import in case of manual proof. *)
