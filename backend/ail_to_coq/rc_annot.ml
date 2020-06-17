@@ -463,8 +463,8 @@ let function_annot : rc_attr list -> function_annot = fun attrs ->
   in
   List.iter handle_attr attrs;
 
-  if !nb_attrs = 0 then
-    invalid_annot_no_pos "No annotation given on the function.";
+  (* When no annotations are given, the function is skipped. *)
+  if !nb_attrs = 0 then proof := Proof_skipped;
 
   { fa_parameters = !parameters
   ; fa_args       = !args
