@@ -45,7 +45,7 @@ type t =
 
   | LocOf of t
 
-  | S of Sym.t * LogicalSorts.t
+  | S of Sym.t
 
 let (%+) t1 t2 = Add (t1,t2)
 let (%-) t1 t2 = Sub (t1,t2)
@@ -107,7 +107,7 @@ let rec pp atomic it : PPrint.document =
   | Field (t, Member s) ->
      pp t ^^ dot ^^ !^s
 
-  | S (sym,bt) -> mparens (typ (Sym.pp sym) (LogicalSorts.pp false bt))
+  | S sym -> Sym.pp sym
 
 
 let rec vars_in it : SymSet.t = 
@@ -146,7 +146,7 @@ let rec vars_in it : SymSet.t =
        SymSet.empty fields
   | List (its,bt) ->
      SymSet.union (BaseTypes.vars_in bt) (vars_in_list its)
-  | S (symbol,bt) -> SymSet.add symbol (LogicalSorts.vars_in bt)
+  | S symbol -> SymSet.singleton symbol
 
 and vars_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
@@ -191,8 +191,8 @@ let rec subst_var subst it : t =
      Struct (map (fun (f,v) -> (f, subst_var subst v)) fields)
   | Field (t,f) ->
      Field (subst_var subst t, f)
-  | S (symbol,bt) -> S (Sym.subst subst symbol, 
-                        LogicalSorts.subst_var subst bt)
+  | S symbol -> S (Sym.subst subst symbol)
+                   
 
 let subst_vars = make_substs subst_var
 
@@ -239,7 +239,7 @@ let rec unify it it' (res : (Sym.t Uni.t) SymMap.t) =
   | List (its,bt), List (its',bt') when BaseTypes.type_equal bt bt' ->
      unify_list its its' res
 
-  | S (sym, bt), S (sym',bt') when BaseTypes.type_equal bt bt' ->
+  | S sym, S sym' ->
      Sym.unify sym sym' res 
 
   | _, _ ->

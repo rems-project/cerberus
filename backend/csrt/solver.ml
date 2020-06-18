@@ -26,7 +26,8 @@ let rec bt_to_sort loc env ctxt bt =
      let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (string_of_int i)) bts in
      let* sorts = mapM (bt_to_sort loc env ctxt) bts in
      return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
-  | ClosedStruct typ ->
+  | ClosedStruct typ
+  | OpenStruct (typ,_) ->
      let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
      let rec aux (names,sorts) = function
        | ReturnTypes.Computational (sym,bt,t) ->
@@ -40,16 +41,15 @@ let rec bt_to_sort loc env ctxt bt =
        | ReturnTypes.Constraint (_,t) -> aux (names,sorts) t
        | ReturnTypes.I -> return (names,sorts)
      in
-     let* (names,sorts) = aux ([],[]) decl.typ
-    in
+     let* (names,sorts) = aux ([],[]) decl.typ in
      let name = Z3.Symbol.mk_string ctxt "struct" in
      return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
-  | Array
-  | List _
-  | OpenStruct _
-  | StoredStruct _
-    ->
-     fail loc (Z3_LS_not_implemented_yet (LogicalSorts.Base bt))
+  | Array ->
+     return (Z3.Sort.mk_uninterpreted_s ctxt "array")
+  | List _ ->
+     return (Z3.Sort.mk_uninterpreted_s ctxt "list")
+  | StoredStruct _ ->
+     fail loc (Z3_LS_not_implemented_yet (Base bt))
   | FunctionPointer _ -> 
      return (Z3.Sort.mk_uninterpreted_s ctxt "function")
 
@@ -135,18 +135,14 @@ let rec of_index_term loc env ctxt it =
   | Not it -> 
      let* a = of_index_term loc env ctxt it in
      return (Z3.Boolean.mk_not ctxt a)
-  (* | Tuple of t * t list
-   * | Nth of num * t (\* of tuple *\)
-   * 
-   * | List of t * t list
-   * | Head of t
-   * | Tail of t *)
-  | S (s,ls) -> 
+  | S s -> 
+     let* (bt,_) = Env.get_ALvar loc env s in
      let s = sym_to_symbol ctxt s in
-     let* bt = ls_to_sort loc env ctxt ls in
+     let* bt = ls_to_sort loc env ctxt (Base bt) in
      return (Z3.Expr.mk_const ctxt s bt)
-  | _ -> 
+  | _ ->
      fail loc (Z3_IT_not_implemented_yet it)
+
 
 
 let z3_check loc ctxt solver constrs : Z3.Solver.status m = 
@@ -171,13 +167,18 @@ let negate (LogicalConstraints.LC c) =
 
 let constraint_holds_given_constraints loc env constraints c = 
   let open PPrint in
-  let ctxt = Z3.mk_context [("model","true")] in
+  let ctxt = Z3.mk_context [](* [("model","true")] *) in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: constraints) in
   let* constrs = 
     mapM (fun (LogicalConstraints.LC it) -> 
-        tryM (of_index_term loc env ctxt it) 
-          (of_index_term loc env ctxt (Bool true))
+        match of_index_term loc env ctxt it with
+        | Exception (_, Z3_LS_not_implemented_yet _)
+        | Exception (_, Z3_IT_not_implemented_yet _) ->
+           of_index_term loc env ctxt (Bool true)
+        | Exception (loc,e) ->
+           failwith (plain (TypeErrors.pp loc e))
+        | r ->r
       ) lcs 
   in
   let* () = debug_print 4 (action "checking satisfiability of constraints") in
