@@ -11,7 +11,7 @@ let fresh = S.fresh
 let fresh_pretty = S.fresh_pretty
 
 
-let pp_string = CF.Pp_symbol.alt_to_string_pretty
+let pp_string = CF.Pp_symbol.to_string_pretty ~compact:true
 let pp sym = Pp.string (pp_string sym)
 
 
