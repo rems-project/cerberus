@@ -3,28 +3,6 @@ open Pp_prelude
 open Location_ocaml
 
 
-let to_string (Symbol (dig, n, str_opt)) =
-  let str = match str_opt with | Some str -> str | None -> "a" in
-  str ^ "_" ^ string_of_int n (*^ "_" ^ (try Digest.to_hex dig with _ -> "invalid")*)
-
-let to_string_pretty (Symbol (_, n, name_opt) as s) =
-  match name_opt with
-    | Some name ->
-        if !Debug_ocaml.debug_level > 4 then
-          name ^ "{" ^ string_of_int n ^ "}"
-        else
-          name
-    | None      -> to_string s
-
-(*
-let to_string_latex (n, _) =
-  "v" ^ "_" ^ "{" ^ string_of_int n ^ "}"
-
-let to_string_id (n, _) = string_of_int n
-*)
-
-
-
 (* https://rosettacode.org/wiki/Non-decimal_radices/Convert *)
 let to_base b v =
   let rec to_base' a v = if v = 0 then a else to_base' (v mod b :: a) (v / b) in
@@ -73,22 +51,38 @@ let base36 n =
   in
   String.concat "" (List.map aux (to_base 36 n))
 
-let alt_to_string (Symbol (dig, n, str_opt)) =
-  let str = match str_opt with | Some str -> str | None -> "a" in
-  str ^ "_" ^ base36 n (*^ "_" ^ (try Digest.to_hex dig with _ -> "invalid")*)
+let to_string ?(compact = false) (Symbol (dig, n, str_opt)) =
+  if compact then 
+    let str = match str_opt with 
+      | Some str -> str 
+      | None -> ""
+    in
+    str ^ base36 n
+  else
+    let str = match str_opt with 
+      | Some str -> str 
+      | None -> "a" 
+    in
+    str ^ "_" ^ string_of_int n (*^ "_" ^ (try Digest.to_hex dig with _ -> "invalid")*)
 
-
-let alt_to_string_pretty (Symbol (_, n, name_opt) as s) =
+let to_string_pretty ?(compact = false) (Symbol (_, n, name_opt) as s) =
   match name_opt with
     | Some name ->
-        if !Debug_ocaml.debug_level > 4 then
+        if compact && !Debug_ocaml.debug_level > 4 then
+          name ^ "{" ^ base36 n ^ "}"
+        else if !Debug_ocaml.debug_level > 4 then
           name ^ "{" ^ string_of_int n ^ "}"
         else
           name
-    | None      -> alt_to_string s
+    | None -> 
+       to_string ~compact:true s
 
+(*
+let to_string_latex (n, _) =
+  "v" ^ "_" ^ "{" ^ string_of_int n ^ "}"
 
-
+let to_string_id (n, _) = string_of_int n
+*)
 
 
 let pp_colour_identifier id =
