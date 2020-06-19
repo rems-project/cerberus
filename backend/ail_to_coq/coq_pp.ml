@@ -305,11 +305,12 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     end;
 
   (* Printing for struct/union members. *)
-  let pp_members members =
+  let pp_members members is_struct =
     let n = List.length members in
     let fn i (id, (attrs, layout)) =
       let sc = if i = n - 1 then "" else ";" in
-      pp "@;(%S, %a)%s" id (pp_layout false) layout sc
+      let some = if is_struct then "Some " else "" in
+      pp "@;(%s%S, %a)%s" some id (pp_layout false) layout sc
     in
     List.iteri fn members
   in
@@ -320,7 +321,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     pp "@[<v 2>Program Definition struct_%s := {|@;" id;
 
     pp "@[<v 2>sl_members := [";
-    pp_members decl.struct_members;
+    pp_members decl.struct_members true;
     pp "@]@;];@]@;|}.@;";
     pp "Solve Obligations with solve_struct_obligations."
   in
@@ -329,7 +330,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
     pp "@[<v 2>Program Definition union_%s := {|@;" id;
 
     pp "@[<v 2>ul_members := [";
-    pp_members decl.struct_members;
+    pp_members decl.struct_members false;
     pp "@]@;];@]@;|}.@;";
     pp "Solve Obligations with solve_struct_obligations."
   in
