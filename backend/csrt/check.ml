@@ -547,8 +547,8 @@ let rec subtype loc_ret env (args : aargs) (rtyp : RT.t) ppdescr =
   (* let* (args,env) = pack_structs_aargs loc_ret env args in *)
 
   let rec aux env args unis spec = 
-    let* () = debug_print 2 (blank 3 ^^ item "rtyp" (RT.pp spec.typ)) in
-    let* () = debug_print 2 (blank 3 ^^ item "returned" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "value" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "specification" (RT.pp spec.typ)) in
     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
     match args, spec.typ with
     | [], I -> 
@@ -695,8 +695,8 @@ let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
   (* let* (args,env) = pack_structs_aargs loc_ret env args in *)
 
   let rec aux env args unis (spec : calltyp_spec) = 
-    let* () = debug_print 2 (blank 3 ^^ item "function type" (FT.pp spec.typ)) in
-    let* () = debug_print 2 (blank 3 ^^ item "returned" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "arguments" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "specification" (FT.pp spec.typ)) in
     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
     match args, spec.typ with
     | [], Return rt -> 

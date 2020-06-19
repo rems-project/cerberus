@@ -8,48 +8,38 @@ let to_base b v =
   let rec to_base' a v = if v = 0 then a else to_base' (v mod b :: a) (v / b) in
   to_base' [] v
 
-let base36 n = 
+let base26 n = 
   let aux = function
-    | 0 -> "0"
-    | 1 -> "1"
-    | 2 -> "2"
-    | 3 -> "3"
-    | 4 -> "4"
-    | 5 -> "5"
-    | 6 -> "6"
-    | 7 -> "7"
-    | 8 -> "8"
-    | 9 -> "9"
-    | 10 -> "A"
-    | 11 -> "B"
-    | 12 -> "C"
-    | 13 -> "D"
-    | 14 -> "E"
-    | 15 -> "F"
-    | 16 -> "G"
-    | 17 -> "H"
-    | 18 -> "I"
-    | 19 -> "J"
-    | 20 -> "K"
-    | 21 -> "J"
-    | 22 -> "L"
-    | 23 -> "M"
-    | 24 -> "N"
-    | 25 -> "O"
-    | 26 -> "P"
-    | 27 -> "Q"
-    | 28 -> "R"
-    | 29 -> "S"
-    | 30 -> "T"
-    | 31 -> "U"
-    | 32 -> "V"
-    | 33 -> "W"
-    | 34 -> "X"
-    | 35 -> "Y"
-    | 36 -> "Z"
+    | 0 -> "A"
+    | 1 -> "B"
+    | 2 -> "C"
+    | 3 -> "D"
+    | 4 -> "E"
+    | 5 -> "F"
+    | 6 -> "G"
+    | 7 -> "H"
+    | 8 -> "I"
+    | 9 -> "J"
+    | 10 -> "K"
+    | 11 -> "J"
+    | 12 -> "L"
+    | 13 -> "M"
+    | 14 -> "N"
+    | 15 -> "O"
+    | 16 -> "P"
+    | 17 -> "Q"
+    | 18 -> "R"
+    | 19 -> "S"
+    | 20 -> "T"
+    | 21 -> "U"
+    | 22 -> "V"
+    | 23 -> "W"
+    | 24 -> "X"
+    | 25 -> "Y"
+    | 26 -> "Z"
     | _ -> failwith "cannot happen"
   in
-  String.concat "" (List.map aux (to_base 36 n))
+  String.concat "" (List.map aux (to_base 26 n))
 
 let to_string ?(compact = false) (Symbol (dig, n, str_opt)) =
   if compact then 
@@ -57,7 +47,7 @@ let to_string ?(compact = false) (Symbol (dig, n, str_opt)) =
       | Some str -> str 
       | None -> ""
     in
-    str ^ base36 n
+    str ^ base26 n
   else
     let str = match str_opt with 
       | Some str -> str 
@@ -67,15 +57,15 @@ let to_string ?(compact = false) (Symbol (dig, n, str_opt)) =
 
 let to_string_pretty ?(compact = false) (Symbol (_, n, name_opt) as s) =
   match name_opt with
-    | Some name ->
-        if compact && !Debug_ocaml.debug_level > 4 then
-          name ^ "{" ^ base36 n ^ "}"
-        else if !Debug_ocaml.debug_level > 4 then
-          name ^ "{" ^ string_of_int n ^ "}"
-        else
-          name
-    | None -> 
-       to_string ~compact:true s
+  | Some name ->
+      if compact && !Debug_ocaml.debug_level > 4 then
+        name ^ "{" ^ base26 n ^ "}"
+      else if !Debug_ocaml.debug_level > 4 then
+        name ^ "{" ^ string_of_int n ^ "}"
+      else
+        name
+  | None -> 
+     to_string ~compact:true s
 
 (*
 let to_string_latex (n, _) =
