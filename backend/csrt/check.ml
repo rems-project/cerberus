@@ -48,29 +48,44 @@ let error pp =
 
 
 
-let rec bind env = function
+let bind_and_anames env rt = 
+  let rec aux acc_names env = function
+    | Computational (name,bound,t) ->
+       let newname = fresh () in
+       aux 
+         (acc_names @ [newname])
+         (add_Avar env (newname,bound)) 
+         (subst_var {substitute=name; swith=newname} t)
+    | Logical (name,bound,t) ->
+       let newname = fresh () in
+       aux
+         acc_names
+         (add_Lvar env (newname,bound)) 
+         (subst_var {substitute=name; swith=newname} t)
+    | Resource (bound,t) ->
+       aux acc_names (add_URvar env bound) t
+    | Constraint (bound,t) ->
+       aux acc_names (add_UCvar env bound) t
+    | I -> 
+       (acc_names,env)
+  in
+  aux [] env rt
+
+let bind env rt = snd (bind_and_anames env rt)
+
+
+let rec bind_to_name env given_name = function
   | Computational (name,bound,t) ->
-     bind (add_Avar env (name,bound)) t
+     bind (add_Avar env (given_name,bound))
+       (subst_var {substitute=name; swith=given_name} t)
   | Logical (name,bound,t) ->
-     bind (add_Lvar env (name,bound)) t
-  | Resource (bound,t) ->
-     bind (add_URvar env bound) t
-  | Constraint (bound,t) ->
-     bind (add_UCvar env bound) t
-  | I -> 
-     env
-
-
-let rec bind_to_name env newname = function
-  | Computational (name,bound,t) ->
-     bind (add_Avar env (newname,bound))
+     let newname = fresh () in
+     bind_to_name (add_Lvar env (newname,bound)) given_name 
        (subst_var {substitute=name; swith=newname} t)
-  | Logical (name,bound,t) ->
-     bind_to_name (add_Lvar env (name,bound)) newname t
   | Resource (bound,t) ->
-     bind_to_name (add_URvar env bound) newname t
+     bind_to_name (add_URvar env bound) given_name t
   | Constraint (bound,t) ->
-     bind_to_name (add_UCvar env bound) newname t
+     bind_to_name (add_UCvar env bound) given_name t
   | I -> 
      env
      
@@ -234,29 +249,21 @@ let pp_aargs =
   pp_list (fun ((n,t),(_l:Loc.t)) -> typ (Sym.pp n) (BT.pp false t))
 
 
-let rec aargs loc env asyms = 
-  match asyms with
+let rec aargs_from_anames_locs loc env names_locs = 
+  match names_locs with
   | [] -> return ([], env)
-  | asym :: asyms ->
-     let (name, loc) = aunpack loc asym in
+  | (name,loc) :: names_locs ->
      let* (t,env) = get_Avar loc env name in
-     let* (rest,env) = aargs loc env asyms in
+     let* (rest,env) = aargs_from_anames_locs loc env names_locs in
      return (((name,t), loc) :: rest, env)
 
+let aargs loc env asyms = 
+  aargs_from_anames_locs loc env (List.map (aunpack loc) asyms)
 
-let aargs_and_bind_rt loc env t = 
-  let rec aux acc env = function
-    | Computational (name, bound, t) -> 
-       aux (acc@[((name,bound),loc)]) env t
-    | Logical (name, bound, t) ->
-       aux acc (add_Lvar env (name,bound)) t
-    | Resource (bound, t) ->
-       aux acc (add_URvar env bound) t
-    | Constraint (bound, t) ->
-       aux acc (add_UCvar env bound) t
-    | I -> (acc, env)
-  in
-  aux [] env t
+
+let aargs_and_bind_rt loc env rt = 
+  let (anames,env) = bind_and_anames env rt in
+  aargs_from_anames_locs loc env (map (fun n -> (n,loc)) anames)
 
 
 
@@ -388,12 +395,12 @@ let rec unpack_structs loc genv bindings =
      let* ((newname,bt),newbindings) = unpack_struct false loc genv typ in
      let subst = {substitute=name;swith=newname} in
      let* bindings' = unpack_structs loc genv (subst_var subst bindings) in
-     return (Computational (newname, bt, newbindings @@ bindings'))
+     return (newbindings @@ (Computational (newname, bt, bindings')))
   | Logical (name, Base (ClosedStruct typ), bindings) ->
      let* ((newname,bt),newbindings) = unpack_struct true loc genv typ in
      let subst = {substitute=name;swith= newname} in
      let* bindings' = unpack_structs loc genv (subst_var subst bindings) in
-     return (Logical (newname, Base bt, newbindings @@ bindings'))
+     return (newbindings @@ (Logical (newname, Base bt, bindings')))
   | Computational (name, bound, bindings) ->
      let* bindings' = unpack_structs loc genv bindings in
      return (Computational (name, bound, bindings'))
@@ -884,7 +891,8 @@ let sym_or_fresh (msym : Sym.t option) : Sym.t =
 
 
 
-let infer_ptrval name loc env ptrval = 
+let infer_ptrval loc env ptrval = 
+  let name = fresh () in
   CF.Impl_mem.case_ptrval ptrval
     ( fun _cbt -> 
       let constr = (LC (Null (S name))) in
@@ -893,6 +901,7 @@ let infer_ptrval name loc env ptrval =
     ( fun sym -> 
       return (Computational (name, FunctionPointer sym, I)) )
     ( fun _prov loc ->
+      
       let constr = LC (S name %= Num loc) in
       let typ = Computational (name, Loc, Constraint (constr, I)) in
       return typ )
@@ -921,7 +930,7 @@ let rec infer_mem_value loc env mem =
     ( fun ft fv -> floatingType loc )
     ( fun _ctype ptrval ->
       (* maybe revisit and take ctype into account *)
-      let* t = infer_ptrval (fresh ()) loc env ptrval in
+      let* t = infer_ptrval loc env ptrval in
       return (t, env) )
     ( fun mem_values -> infer_array loc env mem_values )
     ( fun sym fields -> infer_struct loc env (sym,fields) )
@@ -936,7 +945,7 @@ and infer_struct loc env (tag,fields) =
   let* (aargs,env) =
     fold_leftM (fun (aargs,env) (_id,_ct,mv) ->
         let* (t, env) = infer_mem_value loc env mv in
-        let (t,env) = aargs_and_bind_rt loc env t in
+        let* (t,env) = aargs_and_bind_rt loc env t in
         return (aargs@t, env)
       ) ([],env) fields
   in
@@ -951,17 +960,18 @@ and infer_array loc env mem_values =
   fail loc (Unsupported !^"todo: mem_value arrays")
 
 let infer_object_value loc env ov =
-  let name = fresh () in
   match ov with
   | M_OVinteger iv ->
+     let name = fresh () in
      let* i = Memory.integer_value_to_num loc iv in
      let constr = (LC (S name %= Num i)) in
      let t = Computational (name, Int, Constraint (constr, I)) in
      return (t, env)
   | M_OVpointer p -> 
-     let* t = infer_ptrval name loc env p in
+     let* t = infer_ptrval loc env p in
      return (t,env)
   | M_OVarray items ->
+     let name = fresh () in
      let* (args_bts,env) = aargs loc env items in
      let* _ = check_Aargs_typ None args_bts in
      return (Computational (name, Array, I), env)
@@ -1230,7 +1240,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let* (rt, env) = infer_pexpr loc env e in
      begin match rt with
      | Normal rt -> 
-        let (rt,env) = aargs_and_bind_rt loc env rt in
+        let* (rt,env) = aargs_and_bind_rt loc env rt in
         let* env = subtype loc env rt typ "function return type" in
         return ()
      | Bad bad -> ensure_bad_unreachable loc env bad
@@ -1551,20 +1561,31 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let* (rt, env) = infer_expr loc env e in
      begin match rt with
      | Normal rt ->
-        let (rt,env) = aargs_and_bind_rt loc env rt in
+        let* (rt,env) = aargs_and_bind_rt loc env rt in
         let* env = subtype loc env rt typ "function return type" in
         return ()
      | Bad bad -> ensure_bad_unreachable loc env bad
      end
      
 
+let rec bind_arguments_rt env = function
+  | Computational (name,bound,t) ->
+     bind_arguments_rt (add_Avar env (name,bound)) t
+  | Logical (name,bound,t) ->
+     bind_arguments_rt (add_Lvar env (name,bound)) t
+  | Resource (bound,t) ->
+     bind_arguments_rt (add_URvar env bound) t
+  | Constraint (bound,t) ->
+     bind_arguments_rt (add_UCvar env bound) t
+  | I -> 
+     env
 
 let check_proc loc fsym genv body ftyp = 
   let* () = debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
   let env = with_fresh_local genv in
   let (args_rt,ret) = FT.args_and_ret ftyp in
   let* args_rt = unpack_and_store_structs loc genv args_rt in
-  let env = bind env args_rt in
+  let env = bind_arguments_rt env args_rt in
   let* _env = check_expr loc env body ret in
   let* () = debug_print 1 (!^(greenb "...checked ok")) in
   return ()
@@ -1574,7 +1595,7 @@ let check_fun loc fsym genv body ftyp =
   let env = with_fresh_local genv in
   let (args_rt,ret) = FT.args_and_ret ftyp in
   let* args_rt = unpack_and_store_structs loc genv args_rt in
-  let env = bind env args_rt in
+  let env = bind_arguments_rt env args_rt in
   let* _env = check_pexpr loc env body ret in
   let* () = debug_print 1 (!^(greenb "...checked ok")) in
   return ()
