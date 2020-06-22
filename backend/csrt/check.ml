@@ -1347,21 +1347,27 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
               "checking store value against expected type"
           in
           
-          let* (vbt,env) = match vbt with
-            | OpenStruct (tag,fieldmap) -> 
-               let* ((tag,fieldmap), bindings) = open_struct_to_stored_struct loc env.global tag fieldmap in
-               let env = bind env bindings in
-               return (StoredStruct (tag,fieldmap), env)
-            | vbt -> 
-               return (vbt, env)
+          let* size' = Memory.size_of_ctype loc p.typ in
+          let* () = 
+            if size = size' then return ()
+            else fail loc (Generic_error !^"store of different size")
           in
-          let newsym = fresh () in
-          let env = add_Lvar env (newsym, Base vbt) in
-          let env = add_UCvar env (LC (S newsym %= S vsym)) in
 
           let* env = remove_subtree loc env p.pointer in
-          let env = add_URvar env (Points {p with pointee = Some newsym}) in
-          return (Normal (Computational (fresh (), Unit, I)),env)
+          let newsym = fresh () in
+          let* rt = match vbt with
+            | OpenStruct (tag,fieldmap) -> 
+               let* ((tag,fieldmap), bindings) = open_struct_to_stored_struct loc env.global tag fieldmap in
+               return (Computational (fresh (), Unit,
+                       Logical (newsym, Base (StoredStruct (tag,fieldmap)),
+                       Resource (Points {p with pointee = Some newsym}, I))))
+            | vbt -> 
+               return (Computational (fresh (), Unit,
+                       Logical (newsym, Base vbt,
+                       Constraint (LC (S newsym %= S vsym),
+                       Resource (Points {p with pointee = Some newsym}, I)))))
+          in
+          return (Normal rt,env)
 
        | M_Load (a_ct, asym, _mo) -> 
           let (ct, _ct_loc) = aunpack loc a_ct in
@@ -1394,7 +1400,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                return (bt,Constraint (constr, I))
           in
           let* _ = 
-            let* t = ctype false loc (fresh ()) ct' in
+            let* t = ctype false loc (fresh ()) ct in
             subtype loc env [((pointee,bt),ploc)] t 
               "checking load value against expected type"
           in
