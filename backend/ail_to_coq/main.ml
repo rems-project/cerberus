@@ -60,6 +60,7 @@ let run : config -> string -> unit = fun cfg c_file ->
   (* Do the translation from C to Ail, and then to our AST. *)
   if cfg.gen_code || cfg.gen_spec then (* Stop here if no generation. *)
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
+(*  Warn.warn_file ail_ast; *) (* TODO: uncomment me for lifetime escape warnings *)
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
   if cfg.gen_code then
