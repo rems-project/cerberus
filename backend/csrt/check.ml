@@ -1355,6 +1355,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
 
           let* env = remove_subtree loc env p.pointer in
           let newsym = fresh () in
+          (* update p.typ? *)
           let* rt = match vbt with
             | OpenStruct (tag,fieldmap) -> 
                let* ((tag,fieldmap), bindings) = open_struct_to_stored_struct loc env.global tag fieldmap in
