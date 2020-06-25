@@ -41,9 +41,11 @@ Building the Cerberus CLI
 
 ### Opam, Ocaml and dependencies
 
+On ubuntu 18.04: sudo apt-get install    libmpfr-dev
+
 To build Cerberus you need `opam` (see [here](https://opam.ocaml.org/doc/Install.html) to install) and `ocaml` (>= 4.07).
 
-You also need `lem`, which can be installed using opam from the rems-project repository:
+You also need `lem`, which can be installed using opam.
 
 ```bash
 $ opam repository add rems https://github.com/rems-project/opam-repository.git
