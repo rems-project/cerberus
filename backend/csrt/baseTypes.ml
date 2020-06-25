@@ -42,8 +42,6 @@ let subst_fieldmap subst fields =
 
 let subst_var subst bt = 
   match bt with
-  | FunctionPointer p -> 
-     FunctionPointer (Sym.subst subst p)
   | OpenStruct (tag,fieldmap) ->
      OpenStruct (tag,subst_fieldmap subst fieldmap)
   | StoredStruct (tag,fieldmap) ->
@@ -54,7 +52,6 @@ let subst_vars = make_substs subst_var
 
 
 let vars_in = function
-  | FunctionPointer p -> SymSet.singleton p
   | OpenStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
   | StoredStruct (tag,fieldmap) -> SymSet.of_list (map snd fieldmap)
   | bt -> SymSet.empty
