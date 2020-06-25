@@ -118,6 +118,7 @@ let pp_core core =
   let module PP = Pp_core.Make (struct
       let show_std = true
       let show_include = false
+      let show_locations = false
       let handle_location c_loc core_range =
         match Location_ocaml.to_cartesian c_loc with
         | Some c_range ->
@@ -434,6 +435,7 @@ let multiple_steps step_state (m, st) =
                   | DeadPtr -> "dead pointer"
                   | OutOfBoundPtr -> "out of bound pointer"
                   | NoProvPtr -> "invalid provenance"
+                  | AtomicMemberof -> "member access to atomic"
                 in
                 let string_of_free_error = function
                   | Free_static_allocation -> "static allocated region"
@@ -527,6 +529,7 @@ let create_expr_range_list core =
   let module PP = Pp_core.Make (struct
       let show_std = true
       let show_include = false
+      let show_locations = false
       let handle_location _ _ = ()
       let handle_uid = Hashtbl.add table
     end) in
