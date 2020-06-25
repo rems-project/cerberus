@@ -2,18 +2,19 @@ open Cmdliner
 open Extra
 
 type config =
-  { output_dir  : string option
-  ; gen_code    : bool
-  ; gen_spec    : bool
-  ; no_proof    : string list
-  ; full_paths  : bool
-  ; imports     : (string * string) list
-  ; spec_ctxt   : string list
-  ; cpp_I       : string list
-  ; cpp_nostd   : bool
-  ; cpp_output  : bool
-  ; no_expr_loc : bool
-  ; no_stmt_loc : bool }
+  { output_dir    : string option
+  ; gen_code      : bool
+  ; gen_spec      : bool
+  ; no_proof      : string list
+  ; full_paths    : bool
+  ; imports       : (string * string) list
+  ; spec_ctxt     : string list
+  ; cpp_I         : string list
+  ; cpp_nostd     : bool
+  ; cpp_output    : bool
+  ; no_expr_loc   : bool
+  ; no_stmt_loc   : bool
+  ; warn_lifetime : bool }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
@@ -57,10 +58,11 @@ let run : config -> string -> unit = fun cfg c_file ->
   (* Print the output of the preprocessor if necessary. *)
   if cfg.cpp_output then
     Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
-  (* Do the translation from C to Ail, and then to our AST. *)
-  if cfg.gen_code || cfg.gen_spec then (* Stop here if no generation. *)
+  (* Do the translation from C to Ail, and then to our AST (if necessary). *)
+  if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
-(*  Warn.warn_file ail_ast; *) (* TODO: uncomment me for lifetime escape warnings *)
+  Printf.eprintf "WWW = %b\n%!" cfg.warn_lifetime;
+  if cfg.warn_lifetime then Warn.warn_file ail_ast;
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
   if cfg.gen_code then
@@ -173,6 +175,12 @@ let no_stmt_loc =
   in
   Arg.(value & flag & info ["no-stmt-loc"] ~doc)
 
+let warn_lifetime =
+  let doc =
+    "Give a warning if a value escapes its lifetime."
+  in
+  Arg.(value & flag & info ["warn-lifetime"] ~doc)
+
 let no_loc =
   let doc =
     "Do not output any location information in the generated Coq files. This \
@@ -182,16 +190,17 @@ let no_loc =
 
 let opts : config Term.t =
   let build output_dir no_code no_spec no_proof full_paths imports spec_ctxt
-      cpp_I cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc =
+      cpp_I cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc
+      warn_lifetime =
     let no_expr_loc = no_expr_loc || no_loc in
     let no_stmt_loc = no_stmt_loc || no_loc in
     { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
     ; no_proof ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd
-    ; cpp_output ; no_stmt_loc ; no_expr_loc }
+    ; cpp_output ; no_stmt_loc ; no_expr_loc ; warn_lifetime }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ no_proof $ full_paths $
           imports $ spec_ctxt $ cpp_I $ cpp_nostd $ cpp_output $
-          no_expr_loc $ no_stmt_loc $ no_loc)
+          no_expr_loc $ no_stmt_loc $ no_loc $ warn_lifetime)
 
 let c_file =
   let doc = "C language source file." in
