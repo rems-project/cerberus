@@ -514,8 +514,9 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
         end
     | Ty_ptr(k,ty)       ->
         fprintf ff "%a %a" pp_kind k (pp true false guarded) ty
-    | Ty_exists(x,a,ty)  ->
-        fprintf ff "tyexists (λ %s%a, %a)" x pp_ty_annot a
+    | Ty_exists(xs,a,ty) ->
+        fprintf ff "tyexists (λ %a%a, %a%a)" pp_encoded_patt_name xs
+          pp_ty_annot a pp_encoded_patt_bindings xs
           (pp false false guarded) ty
     | Ty_constr(ty,c)    ->
         fprintf ff "constrained %a %a" (pp true false guarded) ty
