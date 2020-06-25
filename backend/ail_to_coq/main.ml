@@ -61,7 +61,6 @@ let run : config -> string -> unit = fun cfg c_file ->
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
   if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
-  Printf.eprintf "WWW = %b\n%!" cfg.warn_lifetime;
   if cfg.warn_lifetime then Warn.warn_file ail_ast;
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
