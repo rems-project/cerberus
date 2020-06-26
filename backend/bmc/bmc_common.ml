@@ -400,14 +400,14 @@ let mk_guarded_ite (exprs : Expr.expr list)
 (* Used for declaring Ivmin/Ivmax/is_unsigned/sizeof/etc *)
 module ImplFunctions = struct
   (* ---- Implementation ---- *)
-  let sizeof_ity = Ocaml_implementation.Impl.sizeof_ity
-  let sizeof_ptr = Ocaml_implementation.Impl.sizeof_pointer
+  let sizeof_ity = (Ocaml_implementation.get ()).sizeof_ity
+  let sizeof_ptr = (Ocaml_implementation.get ()).sizeof_pointer
 
   (* TODO: precision of Bool is currently 8... *)
   let impl : IntegerImpl.implementation = {
     impl_binary_mode = Two'sComplement;
     impl_signed      = (function
-                   | Char       -> Ocaml_implementation.Impl.is_signed_ity Char
+                   | Char       -> (Ocaml_implementation.get ()).is_signed_ity Char
                    | Bool       -> false
                    | Signed _   -> true
                    | Unsigned _ -> false

@@ -110,7 +110,7 @@ and type_expr =
   | Ty_refine of coq_expr * type_expr
   | Ty_ptr    of ptr_kind * type_expr
   | Ty_dots
-  | Ty_exists of ident * coq_expr option * type_expr
+  | Ty_exists of pattern * coq_expr option * type_expr
   | Ty_constr of type_expr * constr
   | Ty_params of ident * type_expr_arg list
   | Ty_Coq    of coq_expr
@@ -185,8 +185,8 @@ and parser type_expr @(p : [`Atom | `Cstr | `Full]) =
       when p >= `Atom -> Ty_params(id,tys)
   | "..."
       when p >= `Atom -> Ty_dots
-  | "∃" x:ident a:{":" coq_expr}? "." ty:(type_expr `Full)
-      when p >= `Full -> Ty_exists(x,a,ty)
+  | "∃" p:pattern a:{":" coq_expr}? "." ty:(type_expr `Full)
+      when p >= `Full -> Ty_exists(p,a,ty)
   | ty:(type_expr `Cstr) "&" c:constr
       when p >= `Cstr -> Ty_constr(ty,c)
   | "(" ty:(type_expr `Full) ")"

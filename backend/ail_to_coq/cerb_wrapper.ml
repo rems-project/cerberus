@@ -80,12 +80,11 @@ let c_file_to_ail cpp_includes cpp_nostd filename =
   in
   Panic.panic loc "Frontend error.\n%s\n\027[0m%s%!" err pos
 
-let cpp_only cpp_includes cpp_nostd filename output_file =
+let cpp_lines cpp_includes cpp_nostd filename =
   source_file_check filename;
   let str =
     match run_cpp (cpp_cmd cpp_includes cpp_nostd) filename with
     | Result(str)  -> str
     | Exception(_) -> Panic.panic_no_pos "Failed due to preprocessor error."
   in
-  let oc = open_out output_file in
-  Printf.fprintf oc "%s\n%!" str; close_out oc
+  String.split_on_char '\n' str

@@ -121,3 +121,10 @@ module String =
       try iter (fun c -> if not (p c) then raise Exit) s; true
       with Exit -> false
   end
+
+(** [outut_lines oc ls] prints the lines [ls] to the output channel [oc] while
+    inserting newlines according to [String.split_on_char]. *)
+let output_lines : out_channel -> string list -> unit = fun oc ls ->
+  match ls with
+  | []      -> ()
+  | l :: ls -> output_string oc l; List.iter (Printf.fprintf oc "\n%s") ls
