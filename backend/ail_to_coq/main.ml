@@ -56,8 +56,12 @@ let run : config -> string -> unit = fun cfg c_file ->
     String.concat "." (build_path path)
   in
   (* Print the output of the preprocessor if necessary. *)
+  let src_lines = Cerb_wrapper.cpp_lines cfg.cpp_I cfg.cpp_nostd c_file in
   if cfg.cpp_output then
-    Cerb_wrapper.cpp_only cfg.cpp_I cfg.cpp_nostd c_file cppc_file;
+    begin
+      let oc = open_out cppc_file in
+      output_lines oc src_lines; close_out oc
+    end;
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
   if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
