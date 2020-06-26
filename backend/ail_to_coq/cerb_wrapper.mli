@@ -6,7 +6,7 @@
     a message is displayed and the program exits with error code [-1]. *)
 val c_file_to_ail : string list -> bool -> string -> Ail_to_coq.typed_ail
 
-(** [cpp_only includes nostdinc fname output_file] uses Cerberus to preprocess
-    the C source file [fname] and writes the resutl to [output_file]. Both the
+(** [cpp_lines includes nostdinc fname] preprocesses the C source file [fname]
+    using Cerberus, and returns the list of the lines of the output. The flags
     [includes] and [nostdinc] have the same effect as for [c_file_to_ail]. *)
-val cpp_only : string list -> bool -> string -> string -> unit
+val cpp_lines : string list -> bool -> string -> string list
