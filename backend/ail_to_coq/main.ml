@@ -62,6 +62,10 @@ let run : config -> string -> unit = fun cfg c_file ->
       let oc = open_out cppc_file in
       output_lines oc src_lines; close_out oc
     end;
+  (* Parse the comment annotations. *)
+  let ca = Comment_annot.parse_annots src_lines in
+  let imports = cfg.imports @ ca.Comment_annot.ca_imports in
+  let proof_imports = imports @ ca.Comment_annot.ca_proof_imports in
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
   if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
@@ -69,10 +73,20 @@ let run : config -> string -> unit = fun cfg c_file ->
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
   if cfg.gen_code then
-    Coq_pp.(write (Code(cfg.imports)) code_file coq_ast);
+    begin
+      let open Coq_pp in
+      let mode = Code(imports) in
+      write mode code_file coq_ast
+    end;
   (* Generate the spec, if necessary. *)
   if cfg.gen_spec then
-    Coq_pp.(write (Spec(path, cfg.imports, cfg.spec_ctxt)) spec_file coq_ast);
+    begin
+      let open Coq_pp in
+      let inlined = ca.Comment_annot.ca_inlined in
+      let typedefs = ca.Comment_annot.ca_typedefs in
+      let mode = Spec(path, imports, inlined, typedefs, cfg.spec_ctxt) in
+      write mode spec_file coq_ast
+    end;
   (* Generate the proof for each function, if necessary. *)
   let write_proof (id, def_or_decl) =
     let open Coq_ast in
@@ -84,7 +98,7 @@ let run : config -> string -> unit = fun cfg c_file ->
       if List.mem id cfg.no_proof then Rc_annot.Proof_trusted
       else Coq_ast.proof_kind def
     in
-    let mode = Fprf(path, def, cfg.imports, cfg.spec_ctxt, proof_kind) in
+    let mode = Fprf(path, def, proof_imports, cfg.spec_ctxt, proof_kind) in
     write mode (fprf_file id) coq_ast
   in
   if cfg.gen_spec then List.iter write_proof coq_ast.functions
