@@ -211,15 +211,15 @@ let rec alignof_type (Ctype (_, ctype): ctype) (file: unit typed_file) : int =
   match ctype with
   | Void -> assert false
   | Basic (Integer ity) ->
-      Option.get (Ocaml_implementation.Impl.alignof_ity ity)
+      Option.get ((Ocaml_implementation.get ()).alignof_ity ity)
   | Array(ty, _) -> alignof_type ty file
   | Function _ -> assert false
   | Pointer _ ->
-      Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+      Option.get ((Ocaml_implementation.get ()).sizeof_pointer)
   | Atomic (Ctype (_, Basic _) as _ty) ->
       alignof_type _ty file
   | Atomic (Ctype (_, Pointer _) as _ty) ->
-      Option.get (Ocaml_implementation.Impl.alignof_pointer)
+      Option.get ((Ocaml_implementation.get ()).alignof_pointer)
   | Struct sym ->
       begin match Pmap.lookup sym file.tagDefs with
       | Some (StructDef (members, _)) ->
@@ -312,7 +312,7 @@ module AddressSortPNVI = struct
     mk_eq (mk_is_atomic addr) is_atomic
 
   (* TODO: This really uses bmc_common; need to toggle based on global conf *)
-  let sizeof_ity ity = Option.get (Ocaml_implementation.Impl.sizeof_ity ity)
+  let sizeof_ity ity = Option.get ((Ocaml_implementation.get ()).sizeof_ity ity)
 
   (* TODO: Move this elsewhere *)
   let rec type_size (Ctype (_, ctype): ctype) (file: unit typed_file): int =
@@ -323,7 +323,7 @@ module AddressSortPNVI = struct
     | Array(ty, Some n) -> (Nat_big_num.to_int n) * (type_size ty file)
     | Array _ -> assert false
     | Function _ -> assert false
-    | Pointer _ -> Option.get (Ocaml_implementation.Impl.sizeof_pointer)
+    | Pointer _ -> Option.get ((Ocaml_implementation.get ()).sizeof_pointer)
     | Atomic (Ctype (_, Basic _) as _ty) (* fall through *)
     | Atomic (Ctype (_, Pointer _) as _ty) ->
         type_size _ty file

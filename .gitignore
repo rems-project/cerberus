@@ -11,3 +11,5 @@ ocaml_frontend/generated
 sibylfs/generated
 
 *~
+cerberus-webserver
+config.json

@@ -625,7 +625,7 @@ module CatParser = struct
     let lines = read_file filename in
     let (bindings, constraints, undefs_unless_empty, outputs, hb_opt) =
       List.fold_left (fun (binding, constraints, undefs_unless_empty, output, opt_hb) s ->
-        let result = parse_string instruction s in
+        let result = parse_string ~consume:Prefix instruction s in
         match result with
         | Result.Ok v ->
             bmc_debug_print 6 (pprint_instruction v);
