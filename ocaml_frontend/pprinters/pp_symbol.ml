@@ -65,7 +65,7 @@ let to_string_pretty ?(compact = false) (Symbol (_, n, name_opt) as s) =
       else
         name
   | None -> 
-     to_string ~compact:true s
+     to_string ~compact:compact s
 
 (*
 let to_string_latex (n, _) =
