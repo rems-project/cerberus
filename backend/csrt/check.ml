@@ -338,7 +338,7 @@ let ensure_unis_resolved loc env unis =
 
 
 (* TODO: remove all the Ctype auxiliary things *)
-let rec unpack_struct logical loc genv tag = 
+let rec unpack_struct loc genv tag = 
   let* () = debug_print 2 (blank 3 ^^ (!^"unpacking struct")) in
   let* decl = Global.get_struct_decl loc genv tag in
   let rec aux acc_bindings acc_fields (fields : RT.t) =
@@ -347,26 +347,20 @@ let rec unpack_struct logical loc genv tag =
        return (acc_bindings, acc_fields)
     | Computational (lname, ClosedStruct tag2, fields) ->
        let* (Member id) = Tools.rassoc_err loc lname decl.fnames "unpack_struct" in
-       let* ((newsym,bt),newbindings) = unpack_struct logical loc genv tag2 in
+       let* ((newsym,bt),newbindings) = unpack_struct loc genv tag2 in
        let acc_fields = acc_fields @ [(Member id, newsym)] in
-       let acc_bindings = 
-         if logical then acc_bindings @@ newbindings @@ Logical (newsym, Base bt, I)
-         else acc_bindings @@ newbindings @@ Computational (newsym, bt, I)
-       in
+       let acc_bindings = acc_bindings @@ newbindings @@ Logical (newsym, Base bt, I) in
        let fields = RT.subst_var {substitute=lname;swith=newsym} fields in
        aux acc_bindings acc_fields fields
     | Logical (lname, Base (ClosedStruct tag2), fields) ->
-       let* ((newsym,bt),newbindings) = unpack_struct true loc genv tag2 in
+       let* ((newsym,bt),newbindings) = unpack_struct loc genv tag2 in
        let acc_bindings = acc_bindings @@ newbindings @@ Logical (newsym, Base bt, I) in
        let fields = RT.subst_var {substitute=lname;swith=newsym} fields in
        aux acc_bindings acc_fields fields
     | Computational (lname,bt,fields) ->
        let* (Member id) = Tools.rassoc_err loc lname decl.fnames "unpack_struct" in
        let newsym = fresh () in
-       let acc_bindings = 
-         if logical then acc_bindings @@ Logical (newsym, Base bt, I)
-         else acc_bindings @@ Computational (newsym, bt, I) 
-       in
+       let acc_bindings = acc_bindings @@ Logical (newsym, Base bt, I) in
        let acc_fields = acc_fields @ [(Member id, newsym)] in
        let fields = RT.subst_var {substitute=lname;swith=newsym} fields in
        aux acc_bindings acc_fields fields
@@ -392,12 +386,12 @@ let rec unpack_struct logical loc genv tag =
 let rec unpack_structs loc genv bindings = 
   match bindings with
   | Computational (name, ClosedStruct typ, bindings) ->
-     let* ((newname,bt),newbindings) = unpack_struct false loc genv typ in
+     let* ((newname,bt),newbindings) = unpack_struct loc genv typ in
      let subst = {substitute=name;swith=newname} in
      let* bindings' = unpack_structs loc genv (subst_var subst bindings) in
      return (newbindings @@ (Computational (newname, bt, bindings')))
   | Logical (name, Base (ClosedStruct typ), bindings) ->
-     let* ((newname,bt),newbindings) = unpack_struct true loc genv typ in
+     let* ((newname,bt),newbindings) = unpack_struct loc genv typ in
      let subst = {substitute=name;swith= newname} in
      let* bindings' = unpack_structs loc genv (subst_var subst bindings) in
      return (newbindings @@ (Logical (newname, Base bt, bindings')))
@@ -1216,6 +1210,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_and_store_structs loc env.global rt in
+           let* () = debug_print 4 (blank 3 ^^ !^"rt after unpacking" ^^^ RT.pp rt) in
            let env = bind_to_name env newname rt in
            check_pexpr loc env e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
@@ -1228,6 +1223,7 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_and_store_structs loc env.global rt in
+           let* () = debug_print 4 (blank 3 ^^ !^"rt after unpacking" ^^^ RT.pp rt) in
            let env = bind_to_name env newname rt in
            check_pexpr loc env e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
@@ -1359,7 +1355,8 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
           let* rt = match vbt with
             | OpenStruct (tag,fieldmap) -> 
                let* ((tag,fieldmap), bindings) = open_struct_to_stored_struct loc env.global tag fieldmap in
-               return (Computational (fresh (), Unit,
+               return (bindings@@
+                       Computational (fresh (), Unit,
                        Logical (newsym, Base (StoredStruct (tag,fieldmap)),
                        Resource (Points {p with pointee = Some newsym}, I))))
             | vbt -> 
@@ -1515,6 +1512,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_and_store_structs loc env.global rt in
+           let* () = debug_print 4 (blank 3 ^^ !^"rt after unpacking" ^^^ RT.pp rt) in
            let env = bind_to_name env newname rt in
            check_expr loc env e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
@@ -1527,6 +1525,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_and_store_structs loc env.global rt in
+           let* () = debug_print 4 (blank 3 ^^ !^"rt after unpacking" ^^^ RT.pp rt) in
            let env = bind_to_name env newname rt in
            check_expr loc env e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
@@ -1546,6 +1545,7 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
         begin match rt with
         | Normal rt -> 
            let* rt = unpack_and_store_structs loc env.global rt in
+           let* () = debug_print 4 (blank 3 ^^ !^"rt after unpacking" ^^^ RT.pp rt) in
            let env = bind_to_name env newname rt in
            check_expr loc env e2 typ
         | Bad bad -> ensure_bad_unreachable loc env bad
