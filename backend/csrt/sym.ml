@@ -1,7 +1,6 @@
 open Subst
 module CF = Cerb_frontend
 module S = CF.Symbol
-open Option
 
 type symbol = S.sym
 type t = symbol
@@ -39,24 +38,25 @@ let find_resolved env unis =
 end
     
 
-open Uni
+(* open Uni *)
+(* open Option *)
 
 
 
-let subst (subst : (symbol,symbol) Subst.t) (symbol : symbol) : symbol = 
-  if symbol = subst.substitute then subst.swith else symbol
+(* let subst (subst : (symbol,symbol) Subst.t) (symbol : symbol) : symbol = 
+ *   if symbol = subst.substitute then subst.swith else symbol
+ * 
+ * let substs = make_substs subst *)
 
-let substs = make_substs subst
 
 
-
-let unify sym sym' res = 
-  if sym = sym' then Some res
-  else
-    let* uni = SymMap.find_opt sym res in
-    match uni.resolved with
-    | Some s when s = sym' -> return res 
-    | Some s -> fail
-    | None -> 
-       let uni = { resolved = Some sym' } in
-       return (SymMap.add sym uni res)
+(* let unify sym sym' res = 
+ *   if sym = sym' then Some res
+ *   else
+ *     let* uni = SymMap.find_opt sym res in
+ *     match uni.resolved with
+ *     | Some s when s = sym' -> return res 
+ *     | Some s -> fail
+ *     | None -> 
+ *        let uni = { resolved = Some sym' } in
+ *        return (SymMap.add sym uni res) *)

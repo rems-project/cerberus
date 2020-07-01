@@ -1,9 +1,12 @@
 open Subst
 
 module BT = BaseTypes
+module IT = IndexTerms
 module LS = LogicalSorts
 module RE = Resources
 module LC = LogicalConstraints
+module SymSet = Set.Make(Sym)
+
 
 type t = 
   | I
@@ -44,29 +47,24 @@ let rec subst_var substitution = function
   | Computational (name,bt,t) -> 
      if name = substitution.substitute then 
        Computational (name,bt,t) 
-     else if name <> substitution.swith then
-       let bt' = BT.subst_var substitution bt in
-       let t' = subst_var substitution t in
-       Computational (name,bt',t')
-     else
+     else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let substitution2 = {substitute=name; swith=newname} in
-       let bt' = BT.subst_var substitution (BT.subst_var substitution2 bt) in
-       let t' = subst_var substitution (subst_var substitution2 t) in
-       Computational (newname,bt',t')
+       let t' = subst_var {substitute=name; swith=IT.S newname} t in
+       let t'' = subst_var substitution t' in
+       Computational (newname,bt,t'')
+     else
+       Computational (name,bt,subst_var substitution t)
   | Logical (name,ls,t) -> 
      if name = substitution.substitute then 
        Logical (name,ls,t) 
-     else if name <> substitution.swith then
-       let ls' = LS.subst_var substitution ls in
-       let t' = subst_var substitution t in
-       Logical (name,ls',t')
-     else
+     else if SymSet.mem name (IT.vars_in substitution.swith) then
        let newname = Sym.fresh () in
-       let substitution2 = {substitute=name; swith=newname} in
-       let ls' = LS.subst_var substitution (LS.subst_var substitution2 ls) in
-       let t' = subst_var substitution (subst_var substitution2 t) in
-       Logical (newname,ls',t')
+       let t' = subst_var {substitute=name; swith=IT.S newname} t in
+       let t'' = subst_var substitution t' in
+       Logical (newname,ls,t'')
+     else
+       let t' = subst_var substitution t in
+       Logical (name,ls,t')
   | Resource (re,t) -> 
      let re = RE.subst_var substitution re in
      let t = subst_var substitution t in
@@ -83,23 +81,21 @@ let pp rt =
   let open Pp in
   let rec aux = function
     | Computational (name,bt,t) ->
-       `More (typ (Sym.pp name) (BT.pp false bt) ^^ comma_pp t)
+       let op = if !unicode then utf8string "\u{03A3}" else !^"EC" in
+       (op ^^^ typ (Sym.pp name) (BT.pp false bt) ^^ dot) :: aux t
     | Logical (name,ls,t) ->
-       `More (!^"logical" ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ comma_pp t)
+       let op = if !unicode then utf8string "\u{2203}" else !^"E" in
+       (op ^^^ typ (Sym.pp name) (LS.pp false ls) ^^ dot) :: aux t
     | Resource (re,t) ->
-       `More (RE.pp false re ^^^ comma_pp t)
+       let op = if !unicode then utf8string "\u{2217}" else star in
+       (RE.pp false re ^^^ op) :: aux t
     | Constraint (lc,t) ->
-       `More (LC.pp false lc ^^^ comma_pp t)
+       let op = if !unicode then utf8string "\u{2227}" else slash ^^ backslash in
+       (LC.pp false lc ^^^ op) :: aux t
     | I -> 
-       `Done
-  and comma_pp t = 
-    match aux t with
-    | `More t_pp -> comma ^^^ t_pp
-    | `Done -> empty
+       [!^"I"]
   in
-  match aux rt with
-  | `More pp -> pp
-  | `Done -> !^"(nothing)"
+  flow (break 1) (aux rt)
 
 
 

@@ -4,14 +4,15 @@ include PPrint
 open Colour
 
 
-
+let unicode = ref true
 let debug_level = ref 0
 
 
 let plain = CF.Pp_utils.to_plain_pretty_string
 
-let arrow = minus ^^ rangle
-let bigarrow = equals ^^ rangle
+(* let arrow = minus ^^ rangle
+ * let sepimp = minus ^^ star
+ * let implies = equals ^^ rangle *)
 
 let (^^^) = Pp_prelude.(^^^)
 
