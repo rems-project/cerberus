@@ -284,6 +284,19 @@ let parser annot : ... Earley.grammar =
 let parser annot_inv_var : (ident * type_expr) Earley.grammar =
   | id:ident ":" ty:type_expr
 
+(** {4 Type definition (in comments)} *)
+
+type typedef = string * (string * coq_expr option) list * type_expr
+
+let parser typedef_arg = ident {":" coq_expr}?
+
+let parser typedef_args =
+  | EMPTY                                   -> []
+  | arg:typedef_arg args:{"," typedef_arg}* -> arg :: args
+
+let parser typedef : typedef Earley.grammar =
+  | id:ident args:{"<" typedef_args ">"}?[[]] "≔" ty:type_expr
+
 (** {3 Parsing of attributes} *)
 
 type annot =
