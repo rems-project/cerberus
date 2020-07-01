@@ -481,7 +481,6 @@ and pp_type_expr_guard : unit pp option -> guard_mode -> type_expr pp =
     match ty with
     (* Don't need explicit wrapping. *)
     | Ty_Coq(e)          -> (pp_coq_expr wrap) ff e
-    | Ty_params(id,[])   -> pp_str ff id
     (* Remaining constructors (no need for explicit wrapping). *)
     | Ty_dots            ->
         begin
@@ -710,8 +709,9 @@ let collect_invs : func_def -> (string * loop_annot) list = fun def ->
   in
   SMap.fold fn def.func_blocks []
 
-let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
-    fun import_path imports ctxt ff ast ->
+let pp_spec : string -> import list -> string list -> typedef list ->
+      string list -> Coq_ast.t pp =
+    fun import_path imports inlined typedefs ctxt ff ast ->
   (* Stuff for import of the code. *)
   let basename =
     let name = Filename.basename ast.source_file in
@@ -734,6 +734,10 @@ let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
   pp "@[<v 2>Section spec.@;";
   pp "Context `{!typeG Σ} `{!globalG Σ}.";
   List.iter (pp "@;%s.") ctxt;
+
+  (* Printing inlined code (from comments). *)
+  if inlined <> [] then pp "\n@;(* Inlined code. *)\n";
+  List.iter (pp "@;%s") inlined;
 
   (* [Typeclass Opaque] stuff that needs to be repeated after the section. *)
   let opaque = ref [] in
@@ -970,6 +974,21 @@ let pp_spec : string -> import list -> string list -> Coq_ast.t pp =
         Panic.panic_no_pos "Annotations on struct [%s] are invalid." id
   in
   List.iter pp_struct_or_tagged_union ast.structs;
+
+  (* Type definitions (from comments). *)
+  pp "\n@;(* Type definitions. *)";
+  let pp_typedef (id, args, ty) =
+    pp "\n@;Definition %s" id;
+    let pp_arg (id, eo) =
+      let pp_coq_expr = pp_coq_expr false pp_type_expr in
+      match eo with
+      | None    -> pp " %s" id
+      | Some(e) -> pp " (%s : %a)" id pp_coq_expr e
+    in
+    List.iter pp_arg args;
+    pp " := %a." pp_type_expr ty
+  in
+  List.iter pp_typedef typedefs;
 
   (* Function specs. *)
   let pp_spec (id, def_or_decl) =
@@ -1252,15 +1271,18 @@ let pp_proof : string -> func_def -> import list -> string list -> proof_kind
 
 type mode =
   | Code of import list
-  | Spec of string * import list * string list
+  | Spec of string * import list * string list * typedef list * string list
   | Fprf of string * func_def * import list * string list * proof_kind
 
 let write : mode -> string -> Coq_ast.t -> unit = fun mode fname ast ->
   let pp =
     match mode with
-    | Code(imports)                    -> pp_code imports
-    | Spec(path,imports,ctxt)          -> pp_spec path imports ctxt
-    | Fprf(path,def,imports,ctxt,kind) -> pp_proof path def imports ctxt kind
+    | Code(imports)                          ->
+        pp_code imports
+    | Spec(path,imports,inlined,tydefs,ctxt) ->
+        pp_spec path imports inlined tydefs ctxt
+    | Fprf(path,def,imports,ctxt,kind)       ->
+        pp_proof path def imports ctxt kind
   in
   (* We write to a buffer. *)
   let buffer = Buffer.create 4096 in
