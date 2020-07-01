@@ -7,51 +7,56 @@ open Except
 
 (* copying bits and pieces from https://github.com/rems-project/asl-interpreter/blob/a896dd196996e2265eed35e8a1d71677314ee92c/libASL/tcheck.ml and https://github.com/Z3Prover/z3/blob/master/examples/ml/ml_example.ml *)
 
-
-
 let sym_to_symbol ctxt sym =
   let open Cerb_frontend.Symbol in
   let (Symbol (_digest, num, _mstring)) = sym in
   Z3.Symbol.mk_int ctxt num
 
+
+
+let bt_name bt = 
+  plain (BT.pp false bt)
+
+let tuple_component_name bt i =
+  bt_name bt ^ "__" ^ string_of_int i
+
+let struct_member_name bt (BT.Member id) =
+  bt_name bt ^ "__" ^ id
+
 (* maybe fix Loc *)
 let rec bt_to_sort loc env ctxt bt = 
   let open BaseTypes in
+  let btname = bt_name bt in
   match bt with
-  | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt "unit")
+  | Unit -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Bool -> return (Z3.Boolean.mk_sort ctxt)
   | Int -> return (Z3.Arithmetic.Integer.mk_sort ctxt)
-  | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt "loc")
+  | Loc -> return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | Tuple bts ->
-     let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (string_of_int i)) bts in
+     let names = mapi (fun i _ -> Z3.Symbol.mk_string ctxt (tuple_component_name bt i)) bts in
      let* sorts = mapM (bt_to_sort loc env ctxt) bts in
-     return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt "tuple") names sorts)
-  | ClosedStruct typ
-  | OpenStruct (typ,_) ->
-     let* decl = Environment.Global.get_struct_decl loc env.Env.global typ in
-     let rec aux (names,sorts) = function
-       | ReturnTypes.Computational (sym,bt,t) ->
+     return (Z3.Tuple.mk_sort ctxt (Z3.Symbol.mk_string ctxt btname) names sorts)
+  | Struct tag ->
+     let* decl = Environment.Global.get_struct_decl loc env.Env.global tag in
+     let rec aux = function
+       | (member,bt) :: members ->
+          let* (names,sorts) = aux members in
           let* sort = bt_to_sort loc env ctxt bt in
-          let* (Member id) = Tools.rassoc_err loc sym decl.fnames "bt_to_sort" in
-          let names = names @ [Z3.Symbol.mk_string ctxt id] in
-          let sorts = sorts @ [sort] in
-          aux (names,sorts) t
-       | ReturnTypes.Logical (_,_,t) -> aux (names,sorts) t
-       | ReturnTypes.Resource (_,t) -> aux (names,sorts) t
-       | ReturnTypes.Constraint (_,t) -> aux (names,sorts) t
-       | ReturnTypes.I -> return (names,sorts)
+          let names = Z3.Symbol.mk_string ctxt (struct_member_name bt member) :: names in
+          let sorts = sort :: sorts in
+          return (names,sorts)
+       | [] -> return ([],[])
      in
-     let* (names,sorts) = aux ([],[]) decl.typ in
-     let name = Z3.Symbol.mk_string ctxt "struct" in
-     return (Z3.Tuple.mk_sort ctxt name (rev names) (rev sorts))
+     let* (names,sorts) = aux decl.raw in
+     let name = Z3.Symbol.mk_string ctxt btname in
+     let sort = Z3.Tuple.mk_sort ctxt name names sorts in
+     return sort
   | Array ->
-     return (Z3.Sort.mk_uninterpreted_s ctxt "array")
+     return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | List _ ->
-     return (Z3.Sort.mk_uninterpreted_s ctxt "list")
-  | StoredStruct _ ->
-     fail loc (Z3_LS_not_implemented_yet (Base bt))
+     return (Z3.Sort.mk_uninterpreted_s ctxt btname)
   | FunctionPointer _ -> 
-     return (Z3.Sort.mk_uninterpreted_s ctxt "function")
+     return (Z3.Sort.mk_uninterpreted_s ctxt btname)
 
 let ls_to_sort loc env ctxt ls = 
   match ls with
@@ -61,6 +66,16 @@ let ls_to_sort loc env ctxt ls =
 let rec of_index_term loc env ctxt it = 
   let open Pp in
   let open IndexTerms in
+
+  let member_to_fundecl tag member = 
+    let* decl = Environment.Global.get_struct_decl loc env.Env.global tag in
+    let* sort = ls_to_sort loc env ctxt (Base (Struct tag)) in
+    let member_fun_decls = Z3.Tuple.get_field_decls sort in
+    let member_names = map fst decl.raw in
+    let member_funs = combine member_names member_fun_decls in
+    Tools.assoc_err loc member member_funs "member_to_fundecl"
+  in
+
   match it with
   | Num n -> 
      let nstr = Nat_big_num.to_string n in
@@ -123,7 +138,12 @@ let rec of_index_term loc env ctxt it =
      let* a = of_index_term loc env ctxt it in
      let* a' = of_index_term loc env ctxt it' in
      return (Z3.Arithmetic.mk_ge ctxt a a')
-  (* | Null t ->  *)
+  | Null t -> 
+     let* locsort = ls_to_sort loc env ctxt (Base Loc) in
+     let* boolsort = ls_to_sort loc env ctxt (Base Bool) in
+     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt "null" [locsort] boolsort in
+     let* a = of_index_term loc env ctxt t in
+     return (Z3.Expr.mk_app ctxt fundecl [a])
   | And (it,it') -> 
      let* a = of_index_term loc env ctxt it in
      let* a' = of_index_term loc env ctxt it' in
@@ -140,7 +160,21 @@ let rec of_index_term loc env ctxt it =
      let s = sym_to_symbol ctxt s in
      let* bt = ls_to_sort loc env ctxt (Base bt) in
      return (Z3.Expr.mk_const ctxt s bt)
-  | _ ->
+  | Member (tag, t, member) ->
+     let* a = of_index_term loc env ctxt t in
+     let* fundecl = member_to_fundecl tag member in
+     return (Z3.Expr.mk_app ctxt fundecl [a])
+  | MemberOffset (t, member) ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | Tuple ts ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | Head t ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | Tail t ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | Nth (i,t) ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | List (ts,bt) ->
      fail loc (Z3_IT_not_implemented_yet it)
 
 
@@ -167,17 +201,17 @@ let negate (LogicalConstraints.LC c) =
 
 let constraint_holds_given_constraints loc env constraints c = 
   let open PPrint in
-  let ctxt = Z3.mk_context [](* [("model","true")] *) in
+  let ctxt = Z3.mk_context [("model","true");("well_sorted_check","true")] in
   let solver = Z3.Solver.mk_simple_solver ctxt in
   let lcs = (negate c :: constraints) in
   let* constrs = 
     mapM (fun (LogicalConstraints.LC it) -> 
         match of_index_term loc env ctxt it with
-        | Exception (_, Z3_LS_not_implemented_yet _)
-        | Exception (_, Z3_IT_not_implemented_yet _) ->
-           of_index_term loc env ctxt (Bool true)
+        (* | Exception (_, Z3_LS_not_implemented_yet _)
+         * | Exception (_, Z3_IT_not_implemented_yet _) ->
+         *    of_index_term loc env ctxt (Bool true) *)
         | Exception (loc,e) ->
-           failwith (plain (TypeErrors.pp loc e))
+           fail loc e
         | r ->r
       ) lcs 
   in
@@ -185,15 +219,20 @@ let constraint_holds_given_constraints loc env constraints c =
   let* () = debug_print 4 (blank 3 ^^ item "constraints" (flow_map (break 1) (LogicalConstraints.pp true) lcs)) in
   let* checked = z3_check loc ctxt solver constrs in
   match checked with
-  | UNSATISFIABLE -> return true
-  | SATISFIABLE -> return false
+  | UNSATISFIABLE -> 
+     let* () = debug_print 2 (blank 3 ^^ !^"unsatisfiable") in
+     return (true,ctxt,solver)
+  | SATISFIABLE -> 
+     let* () = debug_print 2 (blank 3 ^^ !^"satisfiable") in
+     return (false,ctxt,solver)
   | UNKNOWN ->
      let* () = warn !^"constraint solver returned unknown" in
-     return false
+     return (false,ctxt,solver)
 
 
 let constraint_holds loc env c = 
-  constraint_holds_given_constraints loc env (Env.get_all_constraints env) c
+  constraint_holds_given_constraints loc env (Env.get_all_constraints env) c 
+
 
 
 
@@ -201,19 +240,24 @@ let is_unreachable loc env =
   constraint_holds loc env (LC (Bool false))
 
 
-let rec check_constraints_hold loc env constr = 
-  let open PPrint in
-  let open Env in
-  match constr with
-  | [] -> return ()
-  | c :: constrs ->
-     let* () = debug_print 2 (action "checking constraint") in
-     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
-     let* () = debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) in
-     let* holds = constraint_holds loc env c in
-     if holds then
-       let* () = debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) in
-       check_constraints_hold loc env constrs
-     else
-       let* () = debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) in
-       fail loc (Call_error (Unsat_constraint c))
+(* let rec check_constraints_hold loc env constr = 
+ *   let open PPrint in
+ *   let open Env in
+ *   match constr with
+ *   | [] -> return ()
+ *   | c :: constrs ->
+ *      let* () = debug_print 2 (action "checking constraint") in
+ *      let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
+ *      let* () = debug_print 2 (blank 3 ^^ item "constraint" (LogicalConstraints.pp false c)) in
+ *      let* (holds,ctxt,solver) = constraint_holds loc env c in
+ *      if holds then
+ *        let* () = debug_print 2 (blank 3 ^^ !^(greenb "constraint holds")) in
+ *        check_constraints_hold loc env constrs
+ *      else
+ *        let* () = debug_print 2 (blank 3 ^^ !^(redb "constraint does not hold")) in
+ *        let* () = match Z3.Solver.get_model solver with
+ *          | Some model -> 
+ *             debug_print 2 (blank 3 ^^ item "model" (!^(Z3.Model.to_string model)))
+ *          | None -> return ()
+ *        in
+ *        fail loc (Call_error (Unsat_constraint c)) *)

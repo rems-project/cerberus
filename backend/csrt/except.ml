@@ -51,6 +51,10 @@ let filter_mapM f l =
 let fold_leftM (f : 'a -> 'b -> ('c,'e) t) (a : 'a) (bs : 'b list) =
   List.fold_left (fun a b -> a >>= fun a -> f a b) (return a) bs
 
+(* maybe from Exception.lem *)
+let fold_rightM (f : 'a -> 'b -> ('c,'e) t) (a : 'a) (bs : 'b list) =
+  List.fold_right (fun b a -> a >>= fun a -> f a b) bs (return a)
+
 
 let pmap_foldM 
       (f : 'k -> 'x -> 'y -> ('y,'e) t)

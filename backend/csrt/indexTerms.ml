@@ -1,6 +1,6 @@
 open Subst
 open Sym
-open Num
+(* open Num *)
 open Option
 open List
 open Pp
@@ -34,16 +34,17 @@ type t =
   | Not of t
 
   | Tuple of t list
-  | Nth of num * t (* of tuple *)
+  | Nth of int * t (* of tuple *)
 
-  | Struct of (Id.t * t) list
-  | Field of t * BaseTypes.member
+  (* | Struct of BaseTypes.tag * (Id.t * t) list *)
+  | Member of BaseTypes.tag * t * BaseTypes.member
+  | MemberOffset of t * BaseTypes.member
 
   | List of t list * BaseTypes.t
   | Head of t
   | Tail of t
 
-  | LocOf of t
+  (* | LocOf of t *)
 
   | S of Sym.t
 
@@ -81,31 +82,39 @@ let rec pp atomic it : PPrint.document =
   | Rem_f (it1,it2) -> mparens (!^ "rem_f" ^^^ pp it1 ^^^ pp it2)
 
   | EQ (o1,o2) -> mparens (pp o1 ^^^ equals ^^^ pp o2)
-  | NE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
+  | NE (o1,o2) -> 
+     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2260}" ^^^ pp o2)
+     else mparens (pp o1 ^^^ langle ^^ rangle ^^^ pp o2)
   | LT (o1,o2) -> mparens (pp o1 ^^^ langle ^^^ pp o2)
   | GT (o1,o2) -> mparens (pp o1 ^^^ rangle ^^^ pp o2)
-  | LE (o1,o2) -> mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
-  | GE (o1,o2) -> mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
+  | LE (o1,o2) -> 
+     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2264}"  ^^^ pp o2)
+     else mparens (pp o1 ^^^ langle ^^ equals ^^^ pp o2)
+  | GE (o1,o2) -> 
+     if !unicode then mparens (pp o1 ^^^ utf8string "\u{2265}"  ^^^ pp o2)
+     else mparens (pp o1 ^^^ rangle ^^ equals ^^^ pp o2)
 
   | Null o1 -> mparens (!^"null" ^^^ pp o1)
   | And (o1,o2) -> mparens (pp o1 ^^^ ampersand ^^^ pp o2)
   | Or (o1,o2) -> mparens (pp o1 ^^^ bar ^^^ pp o2)
   | Not (o1) -> mparens (!^"not" ^^^ pp o1)
 
-  | Nth (n,it2) -> mparens (!^"nth" ^^^ Num.pp n ^^^ pp it2)
+  | Nth (n,it2) -> mparens (!^"nth" ^^^ !^(string_of_int n) ^^^ pp it2)
   | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
   | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
 
-  | LocOf (o1) -> mparens (!^"loc" ^^^ pp o1)
+  (* | LocOf (o1) -> mparens (!^"loc" ^^^ pp o1) *)
 
   | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
   | List (its, bt) -> 
      mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp false bt)
-  | Struct fields -> 
-     let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
-     braces (separate_map semi pp_field fields)
-  | Field (t, Member s) ->
+  (* | Struct (Tag tag,fields) -> 
+   *    let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
+   *    mparens (!^"struct" ^^^ Sym.pp tag ^^^ braces (separate_map semi pp_field fields)) *)
+  | Member (Tag tag, t, Member s) ->
      pp t ^^ dot ^^ !^s
+  | MemberOffset (t, Member s) ->
+     mparens (!^"offset" ^^^ pp t ^^^ !^s)
 
   | S sym -> Sym.pp sym
 
@@ -136,17 +145,21 @@ let rec vars_in it : SymSet.t =
   | Not it 
   | Head it
   | Tail it
-  | LocOf it 
+  (* | LocOf it  *)
     -> 
      vars_in it
-  | Tuple its -> SymSet.union (vars_in it) (vars_in_list its)
-  | Field (it,s) -> SymSet.union (vars_in it) (vars_in it)
-  | Struct fields -> 
-     List.fold_left (fun acc (f,v) -> SymSet.union acc (vars_in v))
-       SymSet.empty fields
+  | Tuple its -> 
+     SymSet.union (vars_in it) (vars_in_list its)
+  | Member (_, it,s)
+  | MemberOffset (it,s) -> 
+     SymSet.union (vars_in it) (vars_in it)
+  (* | Struct (_,fields) -> 
+   *    List.fold_left (fun acc (f,v) -> SymSet.union acc (vars_in v))
+   *      SymSet.empty fields *)
   | List (its,bt) ->
-     SymSet.union (BaseTypes.vars_in bt) (vars_in_list its)
-  | S symbol -> SymSet.singleton symbol
+     (* SymSet.union (BaseTypes.vars_in bt) *) (vars_in_list its)
+  | S symbol -> 
+     SymSet.singleton symbol
 
 and vars_in_list l = 
   List.fold_left (fun acc sym -> SymSet.union acc (vars_in sym))
@@ -179,25 +192,28 @@ let rec subst_var subst it : t =
   | Nth (n, it') ->
      Nth (n, subst_var subst it')
   | List (its,bt) -> 
-     List (map (fun it -> subst_var subst it) its,
-           BaseTypes.subst_var subst bt)
+     List (map (fun it -> subst_var subst it) its, bt)
+           (* BaseTypes.subst_var subst bt) *)
   | Head it ->
      Head (subst_var subst it)
   | Tail it ->
      Tail (subst_var subst it)
-  | LocOf it ->
-     LocOf (subst_var subst it)
-  | Struct fields ->
-     Struct (map (fun (f,v) -> (f, subst_var subst v)) fields)
-  | Field (t,f) ->
-     Field (subst_var subst t, f)
-  | S symbol -> S (Sym.subst subst symbol)
-                   
+  (* | LocOf it ->
+   *    LocOf (subst_var subst it) *)
+  (* | Struct (tag,fields) ->
+   *    Struct (tag, map (fun (f,v) -> (f, subst_var subst v)) fields) *)
+  | Member (tag, t, f) ->
+     Member (tag, subst_var subst t, f)
+  | MemberOffset (t,f) ->
+     MemberOffset (subst_var subst t, f)
+  | S symbol -> 
+     if symbol = subst.substitute then subst.swith else S symbol
+
 
 let subst_vars = make_substs subst_var
 
 
-let rec unify it it' (res : (Sym.t Uni.t) SymMap.t) = 
+let rec unify it it' (res : (t Uni.t) SymMap.t) = 
   match it, it' with
   | Num n, Num n' when n = n' -> return res
   | Bool b, Bool b' when b = b' -> return res
@@ -230,17 +246,41 @@ let rec unify it it' (res : (Sym.t Uni.t) SymMap.t) =
     -> 
      unify it it' res
 
+  | Tuple its, Tuple its' ->
+     unify_list (it::its) (it'::its') res
   | Nth (n, it2), Nth (n', it2') when n = n'
     -> 
      unify it it' res
 
-  | Tuple its, Tuple its' ->
-     unify_list (it::its) (it'::its') res
   | List (its,bt), List (its',bt') when BaseTypes.type_equal bt bt' ->
      unify_list its its' res
 
-  | S sym, S sym' ->
-     Sym.unify sym sym' res 
+  (* | Struct (tag,fields), Struct (tag',fields') when tag = tag' ->
+   *    let rec aux fields fields' = 
+   *      match fields, fields' with
+   *      | [], [] -> return res
+   *      | (id, v)::fields, (id',v')::fields' when id = id' ->
+   *         let* res = unify v v' res in
+   *         aux fields fields'
+   *      | _ -> fail
+   *    in
+   *    aux fields fields'      *)
+
+  | Member (tag, t, m), Member (tag', t', m') 
+       when tag = tag' && m = m' ->
+     unify t t' res
+  | MemberOffset (t, m), MemberOffset (t', m') 
+       when m = m' ->
+     unify t t' res
+
+  | S sym, it' ->
+     if S sym = it' then Some res else
+       let* uni = SymMap.find_opt sym res in
+       begin match uni.resolved with
+       | Some s when s = it' -> return res 
+       | Some s -> fail
+       | None -> return (SymMap.add sym (Uni.{resolved = Some it'}) res)
+       end
 
   | _, _ ->
      fail
