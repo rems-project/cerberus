@@ -85,7 +85,7 @@ let rec pp_layout : bool -> Coq_ast.layout pp = fun wrap ff layout ->
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
-  | LArray(layout, n)  -> pp "(mk_array_layout %a %s)"
+  | LArray(layout, n)  -> pp "al_layout (mk_array_layout %a %s)"
                             (pp_layout true) layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
