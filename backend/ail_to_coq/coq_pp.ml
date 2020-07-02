@@ -85,7 +85,7 @@ let rec pp_layout : bool -> Coq_ast.layout pp = fun wrap ff layout ->
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
-  | LArray(layout, n)  -> pp "al_layout (mk_array_layout %a %s)"
+  | LArray(layout, n)  -> pp "(mk_array_layout %a %s)"
                             (pp_layout true) layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
@@ -1102,11 +1102,13 @@ let pp_proof : string -> func_def -> import list -> string list -> proof_kind
     in
     let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
     List.iter pp_global used_globals;
+    let pp_prod = pp_as_prod (pp_simple_coq_expr true) in
     let pp_global_type f =
       match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
-      | Some(_, Some(ty)) ->
-          pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;"
-            f (pp_type_expr_guard None Guard_none) ty
+      | Some(_, Some(global_type)) ->
+         let (param_names, param_types) = List.split global_type.ga_parameters in
+          pp "global_initialized_types !! \"%s\" = Some (GT %a (λ '%a, %a : type)) →@;"
+            f pp_prod param_types (pp_as_tuple pp_str) param_names (pp_type_expr_guard None Guard_none) global_type.ga_type
       | _                 -> ()
     in
     List.iter pp_global_type used_globals;
