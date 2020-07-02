@@ -663,18 +663,26 @@ let loop_annot : rc_attr list -> loop_annot = fun attrs ->
 
   {la_exists = !exists; la_constrs = !constrs; la_inv_vars = !vars; la_full}
 
-let global_annot : rc_attr list -> type_expr option = fun attrs ->
-  let global = ref None in
+type global_annot =
+  { ga_parameters : (ident * coq_expr) list
+  ; ga_type       : type_expr }
+
+let global_annot : rc_attr list -> global_annot option = fun attrs ->
+  let typ = ref None in
+  let parameters = ref [] in
 
   let handle_attr ({rc_attr_id = id; _} as attr) =
     let error msg =
       invalid_annot id.loc (Printf.sprintf "Annotation [%s] %s." id.elt msg)
     in
-    match (parse_attr attr, !global) with
-    | (Annot_global(e), None) -> global := Some e
-    | (Annot_global(_), _   ) -> error "already specified"
-    | (_              , _   ) -> error "is invalid for a global"
+    match (parse_attr attr, !typ) with
+    | (Annot_global(e)    , None) -> typ := Some e
+    | (Annot_parameters(l), _   ) -> parameters := !parameters @ l
+    | (Annot_global(_)    , _   ) -> error "already specified"
+    | (_                  , _   ) -> error "is invalid for a global"
   in
   List.iter handle_attr attrs;
 
-  !global
+  match !typ with
+  | Some(ty) -> Some {ga_parameters = !parameters; ga_type = ty}
+  | None -> None
