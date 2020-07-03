@@ -306,13 +306,32 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
 
   (* Printing for struct/union members. *)
   let pp_members members is_struct =
+    let nb_bytes = ref 0 in
     let n = List.length members in
-    let fn i (id, (attrs, layout)) =
+    let fn i (id, (attrs, (align, size), layout)) =
+      (* Insert padding for field alignment (for structs). *)
+      if is_struct && !nb_bytes mod align <> 0 then
+        begin
+          let pad = align - !nb_bytes mod align in
+          pp "@;(None, mk_layout %i%%nat);" pad;
+          nb_bytes := !nb_bytes + pad;
+        end;
       let sc = if i = n - 1 then "" else ";" in
       let some = if is_struct then "Some " else "" in
-      pp "@;(%s%S, %a)%s" some id (pp_layout false) layout sc
+      pp "@;(%s%S, %a)%s" some id (pp_layout false) layout sc;
+      nb_bytes := !nb_bytes + size
     in
-    List.iteri fn members
+    List.iteri fn members;
+    (* Insert final padding if necessary. *)
+    if is_struct then
+      begin
+        let max_align =
+          let fn acc (_,(_,(align,_),_)) = max acc align in
+          List.fold_left fn 1 members
+        in
+        let r = !nb_bytes mod max_align in
+        if r <> 0 then pp ";@;(None, mk_layout %i%%nat)" (max_align - r)
+      end
   in
 
   (* Definition of structs/unions. *)
@@ -601,7 +620,7 @@ let pp_constrs : constr list pp = fun ff cs ->
   | c :: cs -> pp_constr ff c; List.iter (fprintf ff " ∗ %a" pp_constr) cs
 
 let gather_struct_fields id s =
-  let fn (x, (ty_opt, layout)) =
+  let fn (x, (ty_opt, _, layout)) =
     match ty_opt with
     | Some(MA_field(ty)) -> (x, ty, layout)
     | Some(MA_utag(_))
@@ -839,7 +858,7 @@ let pp_spec : string -> import list -> string list -> typedef list ->
     in
     (* Obtain the name of the tag field and check its type. *)
     let tag_field =
-      let (tag_field, (annot, layout)) = tag_field in
+      let (tag_field, (annot, _, layout)) = tag_field in
       if annot <> Some(MA_none) then
         Panic.wrn None "Annotation ignored on the tag field [%s] of \
           the tagged union [%s]." tag_field id;
@@ -850,7 +869,7 @@ let pp_spec : string -> import list -> string list -> typedef list ->
     in
     (* Obtain the name of the union field and the name of the actual union. *)
     let (union_field, union_name) =
-      let (union_field, (annot, layout)) = union_field in
+      let (union_field, (annot, _, layout)) = union_field in
       if annot <> Some(MA_none) then
         Panic.wrn None "Annotation ignored on the union field [%s] of \
           the tagged union [%s]." union_field id;
@@ -871,7 +890,7 @@ let pp_spec : string -> import list -> string list -> typedef list ->
         Panic.panic_no_pos "[%s] was expected to be a union." union_name;
       assert (union.struct_annot = Some(SA_union));
       (* Extracting data from the fields. *)
-      let fn (name, (annot, layout)) =
+      let fn (name, (annot, _, layout)) =
         match annot with
         | Some(MA_utag(ts)) ->
             let id_struct =
@@ -1102,11 +1121,13 @@ let pp_proof : string -> func_def -> import list -> string list -> proof_kind
     in
     let pp_global f = pp "global_locs !! \"%s\" = Some %s →@;" f f in
     List.iter pp_global used_globals;
+    let pp_prod = pp_as_prod (pp_simple_coq_expr true) in
     let pp_global_type f =
       match List.find_opt (fun (name, _) -> name = f) ast.global_vars with
-      | Some(_, Some(ty)) ->
-          pp "global_initialized_types !! \"%s\" = Some (%a : type) →@;"
-            f (pp_type_expr_guard None Guard_none) ty
+      | Some(_, Some(global_type)) ->
+         let (param_names, param_types) = List.split global_type.ga_parameters in
+          pp "global_initialized_types !! \"%s\" = Some (GT %a (λ '%a, %a : type)) →@;"
+            f pp_prod param_types (pp_as_tuple pp_str) param_names (pp_type_expr_guard None Guard_none) global_type.ga_type
       | _                 -> ()
     in
     List.iter pp_global_type used_globals;

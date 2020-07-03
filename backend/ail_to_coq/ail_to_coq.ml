@@ -129,7 +129,7 @@ let layout_of : bool -> c_type -> Coq_ast.layout = fun fa c_ty ->
     | Pointer(_,_)        -> LPtr
     | Atomic(c_ty)        -> layout_of c_ty
     | Struct(sym)         -> LStruct(sym_to_str sym, false)
-    | Union(syn)          -> LStruct(sym_to_str syn, true )
+    | Union(sym)          -> LStruct(sym_to_str sym, true )
   in
   layout_of c_ty
 
@@ -259,6 +259,76 @@ let tag_def_data : loc -> string -> (string * op_type) list = fun loc id ->
   in
   let fn (s, (_, _, c_ty)) = (id_to_str s, op_type_of loc c_ty) in
   List.map fn fs
+
+let rec align_of : c_type -> int = fun c_ty ->
+  let Ctype.(Ctype(annots, c_ty)) = c_ty in
+  let open Ocaml_implementation.HafniumImpl in
+  let unwrap o =
+    match o with Some(n) -> n | None ->
+    let loc = Annot.get_loc_ annots in
+    panic loc "Undefined alignment requirement."
+  in
+  match c_ty with
+  | Void                -> 1
+  | Basic(Integer(i))   -> unwrap (alignof_ity i)
+  | Basic(Floating(f))  -> unwrap (alignof_fty f)
+  | Array(c_ty,_)       -> align_of c_ty
+  | Function(_,_,_,_)   -> unwrap alignof_pointer
+  | Pointer(_,_)        -> unwrap alignof_pointer
+  | Atomic(c_ty)        -> align_of c_ty (* FIXME may not be the same? *)
+  | Struct(sym)         -> align_of_struct false sym
+  | Union(sym)          -> align_of_struct true  sym
+
+and align_of_struct : bool -> Symbol.sym -> int = fun is_union id ->
+  let id = sym_to_str id in
+  let fs =
+    match List.find (fun (s,_) -> sym_to_str s = id) !global_tag_defs with
+    | (_, (_, Ctype.StructDef(fs,_)))
+    | (_, (_, Ctype.UnionDef(fs)   )) -> fs
+  in
+  let fn acc (_, (_, _, c_ty)) = max acc (align_of c_ty) in
+  List.fold_left fn 1 fs
+
+let rec size_of : c_type -> int = fun c_ty ->
+  let Ctype.(Ctype(annots, c_ty)) = c_ty in
+  let open Ocaml_implementation.HafniumImpl in
+  let unwrap o =
+    match o with Some(n) -> n | None ->
+    let loc = Annot.get_loc_ annots in
+    panic loc "Undefined size."
+  in
+  match c_ty with
+  | Void                -> 1
+  | Basic(Integer(i))   -> unwrap (sizeof_ity i)
+  | Basic(Floating(f))  -> unwrap (sizeof_fty f)
+  | Array(c_ty,None)    -> unwrap sizeof_pointer
+  | Array(c_ty,Some(n)) -> size_of c_ty * Nat_big_num.to_int n
+  | Function(_,_,_,_)   -> unwrap sizeof_pointer
+  | Pointer(_,_)        -> unwrap sizeof_pointer
+  | Atomic(c_ty)        -> size_of c_ty (* FIXME may not be the same? *)
+  | Struct(sym)         -> size_of_struct false sym
+  | Union(sym)          -> size_of_struct true  sym
+
+and size_of_struct : bool -> Symbol.sym -> int = fun is_union s ->
+  let id = sym_to_str s in
+  let fs =
+    match List.find (fun (s,_) -> sym_to_str s = id) !global_tag_defs with
+    | (_, (_, Ctype.StructDef(fs,_)))
+    | (_, (_, Ctype.UnionDef(fs)   )) -> fs
+  in
+  let fn (_,(_,_,c_ty)) = (align_of c_ty, size_of c_ty) in
+  let data = List.map fn fs in
+  if is_union then
+    List.fold_left (fun acc (_, sz) -> max acc sz) 0 data
+  else
+    let fn acc (align, sz) =
+      let pad = if acc mod align = 0 then 0 else align - acc mod align in
+      acc + pad + sz
+    in
+    let size = List.fold_left fn 0 data in
+    let struct_align = align_of_struct is_union s in
+    if size mod struct_align = 0 then size
+    else size + (struct_align - size mod struct_align)
 
 let handle_invalid_annot : type a b. ?loc:loc -> b ->  (a -> b) -> a -> b =
     fun ?loc default f a ->
@@ -1201,18 +1271,20 @@ let translate : string -> typed_ail -> Coq_ast.t = fun source_file ail ->
       in
       let struct_members =
         let fn (id, (attrs, loc, c_ty)) =
-          let ty =
+          let annot =
             let loc = loc_of_id id in
             let annots = collect_rc_attrs attrs in
             let fn () = Some(member_annot annots) in
             handle_invalid_annot ~loc None fn ()
           in
-          (id_to_str id, (ty, layout_of false c_ty))
+          let align = align_of c_ty in
+          let size = size_of c_ty in
+          (id_to_str id, (annot, (align, size), layout_of false c_ty))
         in
         List.map fn fields
       in
       let struct_deps =
-        let fn acc (_, (_, layout)) =
+        let fn acc (_, (_, _, layout)) =
           let rec extend acc layout =
             match layout with
             | LVoid         -> acc
