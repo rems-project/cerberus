@@ -842,35 +842,39 @@ let make_fun_arg_type genv asym loc ct =
        let rname2 = fresh () in
        let* ((abt,ftt),(rbt,rtt)) = aux true (aname2,rname2) ct in
        let* size = Memory.size_of_ctype loc ct in
-       let* arg = match ct with
-         | CF.Ctype.Ctype (_, Struct s) ->
-            let* (stored,lbindings,rbindings) = 
-              make_stored_struct loc genv (Tag s) (S aname) (Some (S aname2)) in
+       begin match ct with
+       | CF.Ctype.Ctype (_, Struct s) ->
+          let* (stored,a_lbindings,a_rbindings) = 
+            make_stored_struct loc genv (Tag s) (S aname) (Some (S aname2)) in
+          let* arg = 
             let apoints = StoredStruct stored in
             let abindings = 
-              Logical (aname2, Base abt, ftt) @@ lbindings @@
-                Resource (apoints, I) @@ rbindings
+              Logical (aname2, Base abt, ftt) @@ a_lbindings @@
+                Resource (apoints, I) @@ a_rbindings
             in
             return (Loc, abindings)
-         | _ ->
+          in
+          let* ret = 
+            let r_rbindings = RT.subst_var {substitute=aname2;swith =S rname2} a_rbindings in
+            let rpoints = StoredStruct stored in
+            let rbindings = Logical (rname2, Base rbt, rtt) @@ 
+                            Resource (rpoints,I) @@ r_rbindings in
+            return (Loc, rbindings)
+          in
+          return (arg, ret)
+       | _ ->
+          let* arg = 
             let apoints = Points {pointer = S aname; pointee = Some (S aname2); 
                                   typ = ct; size}  in
             return (Loc, Logical (aname2, Base abt, Resource (apoints, ftt)))
-       in
-       let* ret = match ct with
-         | CF.Ctype.Ctype (_, Struct s) ->
-            let* (stored,lbindings,rbindings) = 
-              make_stored_struct loc genv (Tag s) (S aname) (Some (S rname2)) in
-            let rpoints = StoredStruct stored in
-            let rbindings = Logical (rname2, Base rbt, rtt) @@ lbindings @@
-                               Resource (rpoints,I) @@ rbindings in
-            return (Loc, rbindings)
-         | _ ->
+          in
+          let* ret = 
             let rpoints = Points {pointer = S aname; pointee = Some (S rname2); 
                                   typ = ct; size} in
             return (Loc, Logical (rname2, Base rbt, Resource (rpoints, rtt)))
-       in
-       return (arg, ret)
+          in
+          return (arg, ret)
+       end
     (* fix *)
     | Atomic ct -> 
        aux pointed (aname,rname) ct
@@ -964,14 +968,14 @@ and infer_struct loc env (tag,fields) =
   let* decl = Global.get_struct_decl loc env.global (Tag tag) in
   let ret = fresh () in
   let* (aargs,constrs,env) =
-    fold_rightM (fun (aargs,constrs,env) (id,_ct,mv) ->
+    fold_rightM (fun (id,_ct,mv) (aargs,constrs,env) ->
         let argname = fresh () in
         let* (t, env) = infer_mem_value loc env mv in
         let env = bind_to_name env argname t in
         let* (bt,env) = get_Avar loc env argname in
         let constr = LC (S argname %= (Member (Tag tag, S ret, Member (Id.s id)))) in
         return (((argname,bt),loc)::aargs, Constraint (constr, constrs), env)
-      ) ([],I,env) fields
+      ) fields ([],I,env)
   in
   let* _ =
     subtype loc env aargs decl.create_spec
