@@ -65,12 +65,15 @@ and stmt_aux =
   | Assert of expr * stmt
   | ExprS  of expr_annot option * expr * stmt
 
+(* The integers are respecively the alignment and the size. *)
+type field_data = member_annot option * (int * int) * layout
+
 type struct_decl =
   { struct_name     : string
   ; struct_annot    : struct_annot option
   ; struct_deps     : string list
   ; struct_is_union : bool
-  ; struct_members  : (string * (member_annot option * layout)) list }
+  ; struct_members  : (string * field_data) list }
 
 type block_annot =
   | BA_none
@@ -92,7 +95,7 @@ type func_def_or_decl =
 type t =
   { source_file : string
   ; entry_point : string option
-  ; global_vars : (string * type_expr option) list
+  ; global_vars : (string * global_annot option) list
   ; structs     : (string * struct_decl) list
   ; functions   : (string * func_def_or_decl) list }
 
