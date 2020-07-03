@@ -4,6 +4,7 @@ type comment_annots =
   { ca_inlined       : string list
   ; ca_imports       : (string * string) list
   ; ca_proof_imports : (string * string) list
+  ; ca_context       : string list
   ; ca_typedefs      : Rc_annot.typedef list }
 
 type annot_line =
@@ -48,6 +49,7 @@ let parse_annots : string list -> comment_annots = fun ls ->
   let imports = ref [] in
   let inlined = ref [] in
   let typedefs = ref [] in
+  let context = ref [] in
   let rec loop inline ls =
     match ls with
     | []      -> if inline then error "unclosed [rc::inlined] annotation"
@@ -93,6 +95,10 @@ let parse_annots : string list -> comment_annots = fun ls ->
                 | None    ->
                     error ("invalid [rc::typedef] annotation")
               end
+          | "context" ->
+              check_inline false;
+              context := get_payload () :: !context;
+              loop inline ls
           | _         ->
               error ("unknown annotation [rc::" ^ n ^ "]")
         end
@@ -110,4 +116,5 @@ let parse_annots : string list -> comment_annots = fun ls ->
   { ca_inlined        = List.rev !inlined
   ; ca_proof_imports  = List.map (fun (f,m,_) -> (f,m)) proof_imports
   ; ca_imports        = List.map (fun (f,m,_) -> (f,m)) imports
+  ; ca_context        = List.rev !context
   ; ca_typedefs       = List.rev !typedefs }
