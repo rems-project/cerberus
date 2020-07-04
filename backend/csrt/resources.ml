@@ -44,10 +44,11 @@ let pp atomic resource =
      mparens (!^"StoredStruct" ^^^ Sym.pp s ^^^ 
                  parens (IT.pp true pointer ^^ comma ^^ brackets (pp_addrmap members)))
 
-let subst_membermap subst members = 
-  List.map (fun (m,mvar) -> (m,IT.subst_var subst mvar)) members
 
-let subst_var subst = function
+let subst_var subst resource = 
+  let subst_membermap subst members = 
+    List.map (fun (m,mvar) -> (m,IT.subst_var subst mvar)) members in
+  match resource with
   | Points p -> 
      let pointee = match p.pointee with
        | Some s -> Some (IT.subst_var subst s)
@@ -62,6 +63,22 @@ let subst_var subst = function
 
 let subst_vars = Subst.make_substs subst_var
 
+
+let instantiate_struct_member subst resource =
+  let subst_membermap subst members = 
+    List.map (fun (m,mvar) -> (m,IT.instantiate_struct_member subst mvar)) members in
+  match resource with
+  | Points p -> 
+     let pointee = match p.pointee with
+       | Some s -> Some (IT.instantiate_struct_member subst s)
+       | None -> None
+     in
+     let pointer = IT.instantiate_struct_member subst p.pointer in
+     Points {p with pointer; pointee}
+  | StoredStruct s ->
+     let pointer = IT.instantiate_struct_member subst s.pointer in
+     let members = subst_membermap subst s.members in
+     StoredStruct {s with pointer; members}
 
 
 let type_equal env t1 t2 = t1 = t2
@@ -78,11 +95,12 @@ let associated = function
 
 
 
-let unify_memberlist ms ms' res = 
+let rec unify_memberlist ms ms' res = 
   match ms, ms' with
   | (BT.Member mname,m) :: ms, (BT.Member mname',m') :: ms' 
        when String.equal mname mname' ->
-     IT.unify m m' res
+     let* res = IT.unify m m' res in
+     unify_memberlist ms ms' res
   | [], [] -> return res
   | _, _ -> fail
 

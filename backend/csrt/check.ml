@@ -802,6 +802,32 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
   return (stored, lbindings, rbindings)
 
 
+let explode_struct_in_binding loc genv (Tag tag) logical_struct binding = 
+  let rec explode_struct loc genv (Tag tag) logical_struct = 
+    let* decl = Global.get_struct_decl loc genv (Tag tag) in
+    let rec aux = function
+      | (member,bt)::members ->
+         let this = IT.Member (Tag tag, logical_struct, member) in
+         let* substs = aux members in
+         let* substs2 = match bt with
+           | Struct tag2 -> explode_struct loc genv tag2 this
+           | _ -> return [(fresh (), bt, this)]
+         in
+         return (substs @ substs2)
+      | [] -> return []
+    in
+    aux decl.raw 
+  in
+  let* substs = explode_struct loc genv (Tag tag) logical_struct in
+  let binding' = 
+    fold_right (fun (name,bt,it) binding -> 
+        Logical (name,Base bt, instantiate_struct_member {substitute=it;swith=S name} binding)
+      ) substs binding
+  in
+  return binding'
+
+
+
 let rec returnType_to_argumentType args return = 
   match args with
   | RT.I -> 
@@ -847,18 +873,20 @@ let make_fun_arg_type genv asym loc ct =
           let* (stored,a_lbindings,a_rbindings) = 
             make_stored_struct loc genv (Tag s) (S aname) (Some (S aname2)) in
           let* arg = 
-            let apoints = StoredStruct stored in
-            let abindings = 
-              Logical (aname2, Base abt, ftt) @@ a_lbindings @@
-                Resource (apoints, I) @@ a_rbindings
+            let* abindings = 
+              explode_struct_in_binding loc genv (Tag s) (S aname2)
+                (a_lbindings @@ Resource (StoredStruct stored, I) @@ 
+                 a_rbindings @@ ftt)
             in
             return (Loc, abindings)
           in
           let* ret = 
-            let r_rbindings = RT.subst_var {substitute=aname2;swith =S rname2} a_rbindings in
+            let r_rbindings = RT.subst_var {substitute=aname2;swith=S rname2} a_rbindings in
             let rpoints = StoredStruct stored in
-            let rbindings = Logical (rname2, Base rbt, rtt) @@ 
-                            Resource (rpoints,I) @@ r_rbindings in
+            let* rbindings = 
+              explode_struct_in_binding loc genv (Tag s) (S rname2)
+              (Resource (rpoints,I) @@ r_rbindings @@ rtt)
+            in
             return (Loc, rbindings)
           in
           return (arg, ret)
