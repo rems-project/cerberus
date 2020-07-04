@@ -47,7 +47,7 @@ let run : config -> string -> unit = fun cfg c_file ->
     let path = List.tl (String.split_on_char '/' output_dir) in
     let rec build_path path =
       match path with
-      | "theories" :: path -> "refinedc" :: path
+      | "examples" :: _    -> "refinedc" :: path
       | _          :: path -> build_path path
       | []                 ->
       Panic.wrn None "A precise Coq import path cannot be derived form the \
