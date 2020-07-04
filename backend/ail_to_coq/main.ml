@@ -70,6 +70,7 @@ let run : config -> string -> unit = fun cfg c_file ->
     cfg.spec_ctxt @ List.map fn ca.Comment_annot.ca_context
   in
   let proof_imports = imports @ ca.Comment_annot.ca_proof_imports in
+  let code_imports = cfg.imports @ ca.Comment_annot.ca_code_imports in
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
   if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
@@ -79,7 +80,7 @@ let run : config -> string -> unit = fun cfg c_file ->
   if cfg.gen_code then
     begin
       let open Coq_pp in
-      let mode = Code(imports) in
+      let mode = Code(code_imports) in
       write mode code_file coq_ast
     end;
   (* Generate the spec, if necessary. *)
