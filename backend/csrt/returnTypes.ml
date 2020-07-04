@@ -77,6 +77,21 @@ let rec subst_var substitution = function
 let subst_vars = Subst.make_substs subst_var
 
 
+let rec instantiate_struct_member subst rt =
+  match rt with
+  | I -> I
+  | Computational (name,bound,t) -> 
+     Computational (name,bound,instantiate_struct_member subst t)
+  | Logical (name,bound,t) -> 
+     Logical (name,bound,instantiate_struct_member subst t)
+  | Resource (bound,t) -> 
+     Resource (RE.instantiate_struct_member subst bound, 
+               instantiate_struct_member subst t)
+  | Constraint (bound,t) -> 
+     Constraint (LC.instantiate_struct_member subst bound, 
+                 instantiate_struct_member subst t)
+
+
 let pp rt = 
   let open Pp in
   let rec aux = function

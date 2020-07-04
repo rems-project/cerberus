@@ -213,6 +213,84 @@ let rec subst_var subst it : t =
 let subst_vars = make_substs subst_var
 
 
+let rec instantiate_struct_member subst it : t = 
+  match it with
+  | Num _ -> it
+  | Bool _ -> it
+  | Add (it, it') -> 
+     Add (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Sub (it, it') -> 
+     Sub (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Mul (it, it') -> 
+     Mul (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Div (it, it') -> 
+     Div (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Exp (it, it') -> 
+     Exp (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Rem_t (it, it') -> 
+     Rem_t (instantiate_struct_member subst it, 
+            instantiate_struct_member subst it')
+  | Rem_f (it, it') -> 
+     Rem_f (instantiate_struct_member subst it, 
+            instantiate_struct_member subst it')
+  | EQ (it, it') -> 
+     EQ (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | NE (it, it') -> 
+     NE (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | LT (it, it') -> 
+     LT (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | GT (it, it') -> 
+     GT (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | LE (it, it') -> 
+     LE (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | GE (it, it') -> 
+     GE (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | Null it -> 
+     Null (instantiate_struct_member subst it)
+  | And (it, it') -> 
+     And (instantiate_struct_member subst it, 
+          instantiate_struct_member subst it')
+  | Or (it, it') -> 
+     Or (instantiate_struct_member subst it, 
+         instantiate_struct_member subst it')
+  | Not it -> 
+     Not (instantiate_struct_member subst it)
+  | Tuple its ->
+     Tuple (map (fun it -> instantiate_struct_member subst it) its)
+  | Nth (n, it') ->
+     Nth (n, instantiate_struct_member subst it')
+  | List (its,bt) -> 
+     List (map (fun it -> instantiate_struct_member subst it) its, bt)
+           (* BaseTypes.instantiate_struct_member subst bt) *)
+  | Head it ->
+     Head (instantiate_struct_member subst it)
+  | Tail it ->
+     Tail (instantiate_struct_member subst it)
+  (* | LocOf it ->
+   *    LocOf (instantiate_struct_member subst it) *)
+  (* | Struct (tag,fields) ->
+   *    Struct (tag, map (fun (f,v) -> (f, instantiate_struct_member subst v)) fields) *)
+  | (Member (tag, t, f)) as member ->
+     if subst.substitute = member 
+     then subst.swith 
+     else Member (tag, instantiate_struct_member subst t, f)
+  | MemberOffset (t,f) ->
+     MemberOffset (instantiate_struct_member subst t, f)
+  | S symbol -> S symbol
+
+
+
 let rec unify it it' (res : (t Uni.t) SymMap.t) = 
   match it, it' with
   | Num n, Num n' when n = n' -> return res

@@ -76,7 +76,20 @@ let rec subst_var substitution = function
      let t = subst_var substitution t in
      Constraint (lc,t)
 
-
+let rec instantiate_struct_member subst ft =
+  match ft with
+  | Return rt -> 
+     Return (RT.instantiate_struct_member subst rt)
+  | Computational (name,bound,t) -> 
+     Computational (name,bound,instantiate_struct_member subst t)
+  | Logical (name,bound,t) -> 
+     Logical (name,bound,instantiate_struct_member subst t)
+  | Resource (bound,t) -> 
+     Resource (RE.instantiate_struct_member subst bound, 
+               instantiate_struct_member subst t)
+  | Constraint (bound,t) -> 
+     Constraint (LC.instantiate_struct_member subst bound, 
+                 instantiate_struct_member subst t)
 
 
 let pp rt = 
