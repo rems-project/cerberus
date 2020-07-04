@@ -756,7 +756,7 @@ let pp_spec : string -> import list -> string list -> typedef list ->
 
   (* Printing inlined code (from comments). *)
   if inlined <> [] then pp "\n@;(* Inlined code. *)\n";
-  List.iter (pp "@;%s") inlined;
+  List.iter (fun s -> if s = "" then pp "\n" else pp "@;%s" s) inlined;
 
   (* [Typeclass Opaque] stuff that needs to be repeated after the section. *)
   let opaque = ref [] in

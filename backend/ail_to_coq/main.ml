@@ -47,7 +47,7 @@ let run : config -> string -> unit = fun cfg c_file ->
     let path = List.tl (String.split_on_char '/' output_dir) in
     let rec build_path path =
       match path with
-      | "theories" :: path -> "refinedc" :: path
+      | "examples" :: _    -> "refinedc" :: path
       | _          :: path -> build_path path
       | []                 ->
       Panic.wrn None "A precise Coq import path cannot be derived form the \
@@ -65,7 +65,12 @@ let run : config -> string -> unit = fun cfg c_file ->
   (* Parse the comment annotations. *)
   let ca = Comment_annot.parse_annots src_lines in
   let imports = cfg.imports @ ca.Comment_annot.ca_imports in
+  let context =
+    let fn s = "Context " ^ s in
+    cfg.spec_ctxt @ List.map fn ca.Comment_annot.ca_context
+  in
   let proof_imports = imports @ ca.Comment_annot.ca_proof_imports in
+  let code_imports = cfg.imports @ ca.Comment_annot.ca_code_imports in
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
   if cfg.warn_lifetime || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
@@ -75,7 +80,7 @@ let run : config -> string -> unit = fun cfg c_file ->
   if cfg.gen_code then
     begin
       let open Coq_pp in
-      let mode = Code(imports) in
+      let mode = Code(code_imports) in
       write mode code_file coq_ast
     end;
   (* Generate the spec, if necessary. *)
@@ -84,7 +89,7 @@ let run : config -> string -> unit = fun cfg c_file ->
       let open Coq_pp in
       let inlined = ca.Comment_annot.ca_inlined in
       let typedefs = ca.Comment_annot.ca_typedefs in
-      let mode = Spec(path, imports, inlined, typedefs, cfg.spec_ctxt) in
+      let mode = Spec(path, imports, inlined, typedefs, context) in
       write mode spec_file coq_ast
     end;
   (* Generate the proof for each function, if necessary. *)
@@ -98,7 +103,7 @@ let run : config -> string -> unit = fun cfg c_file ->
       if List.mem id cfg.no_proof then Rc_annot.Proof_trusted
       else Coq_ast.proof_kind def
     in
-    let mode = Fprf(path, def, proof_imports, cfg.spec_ctxt, proof_kind) in
+    let mode = Fprf(path, def, proof_imports, context, proof_kind) in
     write mode (fprf_file id) coq_ast
   in
   if cfg.gen_spec then List.iter write_proof coq_ast.functions
