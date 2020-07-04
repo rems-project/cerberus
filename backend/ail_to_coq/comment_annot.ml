@@ -4,6 +4,8 @@ type comment_annots =
   { ca_inlined       : string list
   ; ca_imports       : (string * string) list
   ; ca_proof_imports : (string * string) list
+  ; ca_code_imports  : (string * string) list
+  ; ca_context       : string list
   ; ca_typedefs      : Rc_annot.typedef list }
 
 type annot_line =
@@ -27,13 +29,18 @@ let read_line : string -> annot_line = fun s ->
   (* Line has no special meaning. *)
   AL_none
 
-let read_import : string -> (string * string * bool) option = fun s ->
+type where = Default | CodeOnly | ProofsOnly
+
+let read_import : string -> (string * string * where) option = fun s ->
   let k proof_only mod_name from = Some(from, mod_name, proof_only) in
   (* First try to read an import that is only for proofs. *)
-  try Scanf.sscanf s "%s from %s (for proofs only) %!" (k true)
+  try Scanf.sscanf s "%s from %s (for proofs only) %!" (k ProofsOnly)
+  with End_of_file | Scanf.Scan_failure(_) ->
+  (* Then try to read an import that is only for the code. *)
+  try Scanf.sscanf s "%s from %s (for code only) %!" (k CodeOnly)
   with End_of_file | Scanf.Scan_failure(_) ->
   (* Then try to read a general import. *)
-  try Scanf.sscanf s "%s from %s %!" (k false)
+  try Scanf.sscanf s "%s from %s %!" (k Default)
   with End_of_file | Scanf.Scan_failure(_) -> None
 
 let read_typedef : string -> Rc_annot.typedef option = fun s ->
@@ -48,6 +55,7 @@ let parse_annots : string list -> comment_annots = fun ls ->
   let imports = ref [] in
   let inlined = ref [] in
   let typedefs = ref [] in
+  let context = ref [] in
   let rec loop inline ls =
     match ls with
     | []      -> if inline then error "unclosed [rc::inlined] annotation"
@@ -93,6 +101,10 @@ let parse_annots : string list -> comment_annots = fun ls ->
                 | None    ->
                     error ("invalid [rc::typedef] annotation")
               end
+          | "context" ->
+              check_inline false;
+              context := get_payload () :: !context;
+              loop inline ls
           | _         ->
               error ("unknown annotation [rc::" ^ n ^ "]")
         end
@@ -106,8 +118,12 @@ let parse_annots : string list -> comment_annots = fun ls ->
   in
   loop false ls;
   let imports = List.rev !imports in
-  let (proof_imports, imports) = List.partition (fun (_,_,b) -> b) imports in
+  let proof_imports = List.filter (fun (_,_,w) -> w = ProofsOnly) imports in
+  let code_imports  = List.filter (fun (_,_,w) -> w = CodeOnly  ) imports in
+  let imports       = List.filter (fun (_,_,w) -> w = Default   ) imports in
   { ca_inlined        = List.rev !inlined
   ; ca_proof_imports  = List.map (fun (f,m,_) -> (f,m)) proof_imports
+  ; ca_code_imports   = List.map (fun (f,m,_) -> (f,m)) code_imports
   ; ca_imports        = List.map (fun (f,m,_) -> (f,m)) imports
+  ; ca_context        = List.rev !context
   ; ca_typedefs       = List.rev !typedefs }
