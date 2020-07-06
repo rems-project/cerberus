@@ -349,7 +349,7 @@ let check_Aargs_typ (mtyp : BT.t option) (aargs: aargs) : BT.t option m =
 let pp_unis unis = 
   let pp_entry (sym, Uni.{resolved}) =
     match resolved with
-    | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ (Sym.pp res)
+    | Some res -> Sym.pp sym ^^^ !^"resolved as" ^^^ IT.pp true res
     | None -> Sym.pp sym ^^^ !^"unresolved"
   in
   pp_list pp_entry (SymMap.bindings unis)
@@ -465,27 +465,17 @@ let rec infer_index_term (loc : Loc.t) env (it : IT.t) =
    *    let* decl = Global.get_struct_decl loc genv tag in
    *    aux members decl *)
   | Member (tag, it,member) ->
-     let* bt = infer_index_term loc env it in
-     begin match bt with
-     | Base (Struct tag') when tag = tag' ->
-        let* decl = Global.get_struct_decl loc env.global tag in
-        let* bt = Tools.assoc_err loc member decl.raw 
-                    "inconsistently typed index term"
-        in
-        return (Base bt)
-     | _ -> fail loc (Unreachable !^"inconsistently typed index term")
-     end
-  | MemberOffset (it,member) ->
-     let* bt = infer_index_term loc env it in
-     begin match bt with
-     | Base (Struct tag) ->
-        let* decl = Global.get_struct_decl loc env.global tag in
-        let* bt = Tools.assoc_err loc member decl.raw 
-                    "inconsistently typed index term"
-        in
-        return (Base Loc)
-     | _ -> fail loc (Unreachable !^"inconsistently typed index term")
-     end
+     let* () = check_index_term loc env (Base (Struct tag)) it in
+     let* decl = Global.get_struct_decl loc env.global tag in
+     let* bt = Tools.assoc_err loc member decl.raw 
+                 "inconsistently typed index term" in
+     return (Base bt)
+  | MemberOffset (tag, it,member) ->
+     let* () = check_index_term loc env (Base (Struct tag)) it in
+     let* decl = Global.get_struct_decl loc env.global tag in
+     let* _ = Tools.assoc_err loc member decl.raw 
+                 "inconsistently typed index term" in
+     return (Base Loc)
   | List (its,bt) ->
      let* _ = mapM (check_index_term loc env (Base bt)) its in
      return (Base bt)
@@ -594,9 +584,13 @@ let subtype loc_ret env (args : aargs) (rtyp : RT.t) ppdescr =
             (* unsure whether we need something like the below *)
             (* let resource' = RE.subst_var {substitute=o; swith=RE.associated re} resource' in *)
             let* () = debug_print 3 (action ("trying resource " ^ plain (RE.pp false resource'))) in
+            let* () = debug_print 3 (blank 3 ^^ item "unis " (pp_unis unis)) in
             match RE.unify re resource' unis with
-            | None -> try_resources owned_resources
+            | None -> 
+               let* () = debug_print 3 (blank 3 ^^ !^"no match") in
+               try_resources owned_resources
             | Some unis ->
+               let* () = debug_print 3 (blank 3 ^^ !^"match") in
                let env = remove_var env r in
                let (_,new_substs) = Uni.find_resolved env unis in
                let spec = { spec with typ = rtyp } in
@@ -698,6 +692,7 @@ let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
             (* unsure whether we need something like the below *)
             (* let resource' = RE.subst_var {substitute=o; swith=RE.associated re} resource' in *)
             let* () = debug_print 3 (action ("trying resource " ^ plain (RE.pp false resource'))) in
+            let* () = debug_print 3 (blank 3 ^^ item "unis " (pp_unis unis)) in
             match RE.unify re resource' unis with
             | None -> try_resources owned_resources
             | Some unis ->
@@ -773,6 +768,8 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
   let rec aux = function
     | (member,bt)::members ->
        let pointer = fresh () in
+       let pointer_constraint = 
+         LC (IT.S pointer %= IT.MemberOffset (Tag tag,spointer,member)) in
        let this = match o_logical_struct with
          | Some logical_struct -> 
             Some (IT.Member (Tag tag, logical_struct, member))
@@ -783,13 +780,15 @@ let rec make_stored_struct loc genv (Tag tag) (spointer : IT.t) o_logical_struct
          | Struct tag2 -> 
             let* (stored_struct,lbindings2,rbindings2) = 
               make_stored_struct loc genv tag2 (S pointer) this in
-            return (Logical (pointer, Base Loc, lbindings2@@lbindings),
+            return (Logical (pointer, Base Loc, 
+                      Constraint (pointer_constraint, lbindings2@@lbindings)),
                     Resource (StoredStruct stored_struct, rbindings2@@rbindings))
          | _ -> 
             let* ct = assoc_err loc member decl.ctypes "make_stored_struct" in
             let* size = Memory.size_of_ctype loc ct in
             let points = {pointer = S pointer; pointee = this; typ = ct ; size} in
-            return (Logical (pointer, Base Loc, I),
+            return (Logical (pointer, Base Loc,
+                      Constraint (pointer_constraint, I)),
                     Resource (Points points, I))
        in
        return ((member,S pointer)::mapping, lbindings', rbindings')
@@ -1396,58 +1395,52 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
             subtype loc env [((vsym,vbt),vloc)] t 
               "checking store value against ctype annotation"
           in
-          begin match ct with
+          let rec store env (pointer : IT.t) (is_field : bool) ct size (this: IT.t) =
+            let* () = debug_print 3 (action ("checking store at pointer " ^ plain (IT.pp false pointer))) in
+            let* () = debug_print 3 (blank 3 ^^ item "ct" (pp_ctype ct)) in
+            let* () = debug_print 3 (blank 3 ^^ item "value" (IT.pp false this)) in
+            begin match ct with
             | CF.Ctype.Ctype (_, CF.Ctype.Struct tag) -> 
                let* owned = stored_struct_to_of_tag loc env (S psym) (Tag tag) in
-               let* (r,p) = match owned with
+               let* (r,stored) = match owned with
+                 | Some (r,stored) ->
+                    if not (Num.equal size stored.size)
+                    then fail loc (Generic_error !^"store of different size")
+                    else return (r,stored)
                  | None -> fail loc (Generic_error !^"store location is not of struct type" )
-                 | Some (r,p) -> return (r,p)
                in
-               let* () = 
-                 let* size' = Memory.size_of_ctype loc ct in
-                 if Num.equal size size' then return ()
-                 else fail loc (Generic_error !^"store of different size")
+               let rec aux (env,acc_bindings) = function
+                 | (member,member_pointer) :: members ->
+                    let* decl = Global.get_struct_decl loc env.global (Tag tag) in
+                    let* ct = Tools.assoc_err loc member decl.ctypes "struct store" in
+                    let* size = Memory.size_of_ctype loc ct in
+                    let* (env, bindings) = 
+                      store env member_pointer true ct size (Member (Tag tag, this, member)) in
+                    aux (env, acc_bindings@@bindings) members
+                 | [] ->
+                    return (env, acc_bindings)
                in
-               let newsym = fresh () in
-               (* update p.typ? *)
-               let* (stored,lbindings,rbindings) = 
-                 make_stored_struct loc env.global (Tag tag) p.pointer (Some (S newsym)) in
-
-               let rt = 
-                 Computational (fresh (), Unit,
-                 Logical (newsym, Base (Struct (Tag tag)), lbindings) @@
-                 Constraint (LC (S newsym %= S vsym), I) @@
-                 Resource (StoredStruct stored, rbindings))
-               in
-               let* env = remove_owned_subtree loc env false p.pointer ct `Store in
-               return (Normal rt, env)
+               aux (env,I) stored.members
             | _ ->                
-               let* owned = points_to ploc env (S psym) in
-               let* (r,p) = match owned with
-                 | None -> fail loc (Generic_error !^"missing ownership of store location" )
-                 | Some (r,p) -> return (r,p)
+               let* does_point = points_to ploc env pointer in
+               let* (r,p) = match does_point with
+                 | Some (r,p) -> 
+                    if Num.equal size p.size
+                    then return (r,p)
+                    else fail loc (Generic_error !^"store of different size")
+                 | None -> 
+                    if is_field then fail loc (Generic_error !^"missing ownership of struct field" )
+                    else fail loc (Generic_error !^"missing ownership of struct location" )
                in
-               let* _ = 
-                 let* t = ctype false loc (fresh ()) p.typ in
-                 subtype loc env [((vsym,vbt),vloc)] t
-                   "checking store value against expected type"
-               in
-               let* () = 
-                 let* size' = Memory.size_of_ctype loc p.typ in
-                 if Num.equal size size' then return ()
-                 else fail loc (Generic_error !^"store of different size")
-               in
-               let newsym = fresh () in
                (* update p.typ? *)
-               let rt = 
-                 (Computational (fresh (), Unit,
-                  Logical (newsym, Base vbt,
-                  Constraint (LC (S newsym %= S vsym),
-                  Resource (Points {p with pointee = Some (S newsym)}, I)))))
-               in
+               let bindings = 
+                 Resource (Points {p with pointee = Some this; typ = ct}, I) in
                let env = remove_var env r in
-               return (Normal rt,env)
-          end
+               return (env,bindings)
+          end in
+          let* (env,bindings) = store env (S psym) false ct size (S vsym) in
+          let rt = Computational (fresh (), Unit, bindings) in
+          return (Normal rt, env)
        | M_Load (a_ct, asym, _mo) -> 
           let (ct, _ct_loc) = aunpack loc a_ct in
           let* size = Memory.size_of_ctype loc ct in
@@ -1469,7 +1462,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                let* (r,stored) = match owned with
                  | Some (r,stored) -> 
                     if not (Num.equal size stored.size) 
-                    then fail loc (Generic_error !^"store of different size")
+                    then fail loc (Generic_error !^"load of different size")
                     else return (r,stored)
                  | None -> fail loc (Generic_error !^"load location does not contain a stored struct" )
                in 
@@ -1493,7 +1486,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                let* (pointee,ct') = match does_point with
                  | Some (r,{pointee = Some pointee;typ;size=size';_}) -> 
                     if not (Num.equal size size') 
-                    then fail loc (Generic_error !^"store of different size")
+                    then fail loc (Generic_error !^"load of different size")
                     else return (pointee,typ)
                  | Some (r,_) -> 
                     if is_field then fail loc (Generic_error !^"struct field uninitialised" )

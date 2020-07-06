@@ -114,8 +114,10 @@ let unify r1 r2 res =
      | None, None -> return res
      | _, _ -> fail
      end
-  | StoredStruct s, StoredStruct s' when 
-         s.tag = s'.tag && Num.equal s.size s'.size ->
-     let* res = IT.unify s.pointer s'.pointer res in
-     unify_memberlist s.members s'.members res
+  | StoredStruct s, StoredStruct s' ->
+     if s.tag = s'.tag && Num.equal s.size s'.size then
+       let* res = IT.unify s.pointer s'.pointer res in
+       unify_memberlist s.members s'.members res
+     else 
+       fail
   | _ -> fail

@@ -5,6 +5,7 @@ open Option
 open List
 open Pp
 module Loc=Locations
+module BT=BaseTypes
 
 module SymSet = Set.Make(Sym)
 
@@ -36,15 +37,12 @@ type t =
   | Tuple of t list
   | Nth of int * t (* of tuple *)
 
-  (* | Struct of BaseTypes.tag * (Id.t * t) list *)
-  | Member of BaseTypes.tag * t * BaseTypes.member
-  | MemberOffset of t * BaseTypes.member
+  | Member of BT.tag * t * BT.member
+  | MemberOffset of BT.tag * t * BT.member
 
-  | List of t list * BaseTypes.t
+  | List of t list * BT.t
   | Head of t
   | Tail of t
-
-  (* | LocOf of t *)
 
   | S of Sym.t
 
@@ -103,17 +101,13 @@ let rec pp atomic it : PPrint.document =
   | Head (o1) -> mparens (!^"hd" ^^^ pp o1)
   | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
 
-  (* | LocOf (o1) -> mparens (!^"loc" ^^^ pp o1) *)
-
   | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
   | List (its, bt) -> 
-     mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BaseTypes.pp false bt)
-  (* | Struct (Tag tag,fields) -> 
-   *    let pp_field (f,v) = dot ^^ Id.pp f ^^ equals ^^ pp v in
-   *    mparens (!^"struct" ^^^ Sym.pp tag ^^^ braces (separate_map semi pp_field fields)) *)
-  | Member (Tag tag, t, Member s) ->
+     mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BT.pp false bt)
+
+  | Member (_tag, t, Member s) ->
      pp t ^^ dot ^^ !^s
-  | MemberOffset (t, Member s) ->
+  | MemberOffset (_tag, t, Member s) ->
      mparens (!^"offset" ^^^ pp t ^^^ !^s)
 
   | S sym -> Sym.pp sym
@@ -145,19 +139,15 @@ let rec vars_in it : SymSet.t =
   | Not it 
   | Head it
   | Tail it
-  (* | LocOf it  *)
     -> 
      vars_in it
   | Tuple its -> 
      SymSet.union (vars_in it) (vars_in_list its)
-  | Member (_, it,s)
-  | MemberOffset (it,s) -> 
+  | Member (_tag, it, s)
+  | MemberOffset (_tag, it, s) -> 
      SymSet.union (vars_in it) (vars_in it)
-  (* | Struct (_,fields) -> 
-   *    List.fold_left (fun acc (f,v) -> SymSet.union acc (vars_in v))
-   *      SymSet.empty fields *)
   | List (its,bt) ->
-     (* SymSet.union (BaseTypes.vars_in bt) *) (vars_in_list its)
+     vars_in_list its
   | S symbol -> 
      SymSet.singleton symbol
 
@@ -193,19 +183,14 @@ let rec subst_var subst it : t =
      Nth (n, subst_var subst it')
   | List (its,bt) -> 
      List (map (fun it -> subst_var subst it) its, bt)
-           (* BaseTypes.subst_var subst bt) *)
   | Head it ->
      Head (subst_var subst it)
   | Tail it ->
      Tail (subst_var subst it)
-  (* | LocOf it ->
-   *    LocOf (subst_var subst it) *)
-  (* | Struct (tag,fields) ->
-   *    Struct (tag, map (fun (f,v) -> (f, subst_var subst v)) fields) *)
   | Member (tag, t, f) ->
      Member (tag, subst_var subst t, f)
-  | MemberOffset (t,f) ->
-     MemberOffset (subst_var subst t, f)
+  | MemberOffset (tag,t,f) ->
+     MemberOffset (tag,subst_var subst t, f)
   | S symbol -> 
      if symbol = subst.substitute then subst.swith else S symbol
 
@@ -272,21 +257,16 @@ let rec instantiate_struct_member subst it : t =
      Nth (n, instantiate_struct_member subst it')
   | List (its,bt) -> 
      List (map (fun it -> instantiate_struct_member subst it) its, bt)
-           (* BaseTypes.instantiate_struct_member subst bt) *)
   | Head it ->
      Head (instantiate_struct_member subst it)
   | Tail it ->
      Tail (instantiate_struct_member subst it)
-  (* | LocOf it ->
-   *    LocOf (instantiate_struct_member subst it) *)
-  (* | Struct (tag,fields) ->
-   *    Struct (tag, map (fun (f,v) -> (f, instantiate_struct_member subst v)) fields) *)
   | (Member (tag, t, f)) as member ->
      if subst.substitute = member 
      then subst.swith 
      else Member (tag, instantiate_struct_member subst t, f)
-  | MemberOffset (t,f) ->
-     MemberOffset (instantiate_struct_member subst t, f)
+  | MemberOffset (tag,t,f) ->
+     MemberOffset (tag,instantiate_struct_member subst t, f)
   | S symbol -> S symbol
 
 
@@ -333,22 +313,9 @@ let rec unify it it' (res : (t Uni.t) SymMap.t) =
   | List (its,bt), List (its',bt') when BaseTypes.type_equal bt bt' ->
      unify_list its its' res
 
-  (* | Struct (tag,fields), Struct (tag',fields') when tag = tag' ->
-   *    let rec aux fields fields' = 
-   *      match fields, fields' with
-   *      | [], [] -> return res
-   *      | (id, v)::fields, (id',v')::fields' when id = id' ->
-   *         let* res = unify v v' res in
-   *         aux fields fields'
-   *      | _ -> fail
-   *    in
-   *    aux fields fields'      *)
-
   | Member (tag, t, m), Member (tag', t', m') 
+  | MemberOffset (tag, t, m), MemberOffset (tag', t', m') 
        when tag = tag' && m = m' ->
-     unify t t' res
-  | MemberOffset (t, m), MemberOffset (t', m') 
-       when m = m' ->
      unify t t' res
 
   | S sym, it' ->
