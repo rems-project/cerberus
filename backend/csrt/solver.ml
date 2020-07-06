@@ -23,6 +23,9 @@ let tuple_component_name bt i =
 let struct_member_name bt (BT.Member id) =
   bt_name bt ^ "__" ^ id
 
+let member_sort ctxt = 
+  Z3.Sort.mk_uninterpreted_s ctxt "member"
+
 (* maybe fix Loc *)
 let rec bt_to_sort loc env ctxt bt = 
   let open BaseTypes in
@@ -164,8 +167,14 @@ let rec of_index_term loc env ctxt it =
      let* a = of_index_term loc env ctxt t in
      let* fundecl = member_to_fundecl tag member in
      return (Z3.Expr.mk_app ctxt fundecl [a])
-  | MemberOffset (t, member) ->
-     fail loc (Z3_IT_not_implemented_yet it)
+  | MemberOffset (_tag, t, Member member) ->
+     let* locsort = ls_to_sort loc env ctxt (Base Loc) in
+     let membersort = member_sort ctxt in
+     let fundecl = Z3.FuncDecl.mk_func_decl_s ctxt 
+                     "memberOffset" [locsort;membersort] locsort in
+     let* loc_const = of_index_term loc env ctxt t in
+     let member_const = Z3.Expr.mk_const_s ctxt member membersort in
+     return (Z3.Expr.mk_app ctxt fundecl [loc_const;member_const])
   | Tuple ts ->
      fail loc (Z3_IT_not_implemented_yet it)
   | Head t ->
