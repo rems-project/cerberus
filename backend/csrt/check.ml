@@ -919,7 +919,7 @@ let make_fun_arg_type genv asym loc ct =
     | Function _ -> fail loc (Unsupported !^"function pointers")
   in
 
-  let* ((abt,arg),(_,ret)) = aux false (asym, fresh ()) ct in
+  let* ((abt,arg),(_,ret)) = aux false (asym, fresh_pretty "return") ct in
   
   (* let arg = fun rt -> returnType_to_argumentType rt 
    *                       (Computational (asym, abt, ftt)) in *)
@@ -1843,7 +1843,7 @@ let struct_decl loc tag fields genv =
                Constraint (lc1,acc_sopen), 
                Constraint (lc1,acc_sclosed),
                (member,ct)::acc_cts,
-               Computational (spec_name, Int, Constraint (lc2, acc_spec)))
+               Computational (spec_name, Int, acc_spec))
     | Array (ct, _maybe_integer) -> 
        return ((member,Array)::acc_members, 
                acc_sopen, 
@@ -1871,16 +1871,11 @@ let struct_decl loc tag fields genv =
                       swith=IT.Member (tag, S thisstruct, member)} in
          RT.subst_var subst decl.closed_type.souter
        in
-       let spec = 
-         let spec_name = fresh () in
-         let subst = {substitute=decl.open_type.sbinder; swith=S spec_name} in
-         RT.subst_var subst decl.open_type.souter
-       in
        return ((member, Struct (Tag tag2))::acc_members, 
                sopen@@acc_sopen, 
                sclosed@@acc_sclosed,
                (member, ct)::acc_cts,
-               spec@@acc_spec)
+               Computational (fresh (), Struct (Tag tag2), acc_spec))
     | Basic (Floating _) -> 
        fail loc (Unsupported !^"todo: union types")
     | Union sym -> 
