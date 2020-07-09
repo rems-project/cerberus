@@ -43,10 +43,11 @@ type env = {
 }
 
 
+let eq_sym sym1 sym2 =
+  Symbol.instance_Basic_classes_Eq_Symbol_sym_dict.isEqual_method sym1 sym2
 
 let show_sym sym =
   Pp_utils.to_plain_string (Pp_ail.pp_id sym)
-(*  Symbol.instance_Show_Show_Symbol_sym_dict.show_method *)
 
 
 type pointsto =
@@ -76,20 +77,11 @@ let gt_pointsto (pt1: pointsto) (pt2: pointsto) =
   | `Local _, `Current _ ->
       true
   | _, `Wild ->
-      false (* TODO: check *)
+      false
   | `Wild, _ ->
       true
   | _ ->
       false
-(*
-  | _ ->
-      if pt1 <> pt2 then
-        assert false
-      else
-        false
-*)
-
-
 
 
 let classify sigm env sym =
@@ -101,7 +93,6 @@ let classify sigm env sym =
     | None ->
         begin match Scopes.resolve sym env.scopes with
           | None ->
-              Printf.printf "None ==> %s\n" (show_sym sym);
               assert false
           | Some (scope, ()) ->
               if Scopes.(scopeEqual scope (current_scope_is env.scopes)) then
@@ -134,7 +125,7 @@ let points_to classify expr =
       | AnnotatedExpression (GenTypes.GenRValueType _, _, _, _) ->
           false in
   
-  let rec aux (AnnotatedExpression (_, _, _, expr_)) =
+  let rec aux (AnnotatedExpression (_, _, loc, expr_)) =
     match expr_ with
       | AilEbuiltin _
       | AilEstr _
@@ -149,13 +140,6 @@ let points_to classify expr =
       | AilEident sym ->
           [classify sym]
       | AilEunary (Address, e) ->
-          (* TODO: need to distinguish lvalue from rvalue *)
-(*
-          if is_lvalue then
-            print_endline "Address LVALUE"
-          else
-            print_endline "Address RVALUE";
-*)
           aux e
       
       | AilEunary (Indirection, e) ->
@@ -166,19 +150,18 @@ let points_to classify expr =
                 if is_lvalue then
                   [`Wild]
                 else
-                  [] (* TODO ???? *)
+                  []
           end
       | AilEunary (_, e) ->
-          aux e (* TODO: failwith "AilEunary" *)
+          aux e
       | AilEcast (_, _, e) ->
           aux e
       | AilEcompound (_, _, e) ->
-          failwith "AilEcompound"
+          []
       | AilEmemberof (e, _) ->
-(*          Printf.printf "==> %s\n" (Pp_utils.to_plain_string (Pp_ail.pp_expression expr)); *)
-          [] (* TODO: failwith "AilEmemberof" *)
+          aux e
       | AilEmemberofptr (e, _) ->
-          [] (* `UNKNOWN ? *)
+          aux e
       | AilEannot (_, e) ->
           aux e
       
@@ -193,11 +176,11 @@ let points_to classify expr =
           aux e
       
       | AilErvalue e ->
-          [] (* TODO: failwith "AilErvalue" *)
+          []
       | AilEarray_decay e ->
-          [] (* TODO: failwith "AilEarray_decay" *)
+          []
       | AilEfunction_decay e ->
-          failwith "AilEfunction_decay"
+          []
       | AilEbinary (e1, _, e2) ->
           if AilTypesAux.is_pointer (get_ctype e1) then
             aux e1
@@ -206,9 +189,9 @@ let points_to classify expr =
           else
             [] (* TODO: what if the integers came from casting a pointer? *)
       | AilEassign (e1, e2) ->
-          aux e2 (* TODO: the pointsto of e1 can't escape? *)
+          aux e2
       | AilEcompoundAssign (e1, _, e2) ->
-          failwith "AilEcompoundAssign"
+          aux e2
       | AilEcond (_, e2, e3) ->
           aux e2 @ aux e3
       
@@ -216,56 +199,337 @@ let points_to classify expr =
           []
       
       | AilEgeneric (e ,gas) ->
-          failwith "AilEgeneric"
+          []
       | AilEarray (_, _, xs) ->
-          failwith "AilEarray"
+          []
       | AilEstruct (_, xs) ->
-          failwith "AilEstruct"
+          []
       | AilEunion (_, _, e_opt) ->
-          failwith "AilEunion"
+          []
   in
   aux expr
 
 
-let str_points_to classify expr =
-  Lem_show.stringFromList
-    begin function
-      | `Global sym ->
-          "global: " ^ show_sym sym
-      | `Funptr sym ->
-          "funptr: " ^ show_sym sym
-      | `Current sym ->
-          "current: " ^ show_sym sym
-      | `Local (scope, sym) ->
-          "local(scope: " ^ Scopes.string_of_scope scope ^ "): " ^ show_sym sym
-      | `Wild ->
-          "wild"
-    end
-    (points_to classify expr)
+(* ************************************************************************** *)
+(* Warning for unsequenced function calls *)
+
+type unseq_status =
+    (* HACK: empty list is for the occurence of at least one wild call *)
+  | HAS_CALLS of ail_identifier list
+  | NO_CALL
+
+let merge_status xs =
+  let rec aux acc = function
+    | [] ->
+        if acc = [] then
+          NO_CALL
+        else
+          HAS_CALLS acc
+    | NO_CALL :: xs ->
+        aux acc xs
+    | HAS_CALLS calls :: xs ->
+        aux (calls @ acc) xs
+  in aux [] xs
 
 
-let foo z =
-  Lem_show.stringFromList
-    begin function
-      | `Global sym ->
-          "global: " ^ show_sym sym
-      | `Funptr sym ->
-          "funptr: " ^ show_sym sym
-      | `Current sym ->
-          "current: " ^ show_sym sym
-      | `Local (scope, sym) ->
-          "local(scope: " ^ Scopes.string_of_scope scope ^ "): " ^ show_sym sym
-      | `Wild ->
-          "wild"
-    end z
+let is_unseq = function
+  | Comma | And | Or ->
+      false
+  | Arithmetic _
+  | Lt | Gt | Le | Ge | Eq | Ne ->
+      true
+
+let merge_pointsto xss =
+(*
+  let eq pt1 pt2 =
+    match pt1, pt2 with
+      | `Current sym1, `Current sym2
+      | `Local (_, sym1), `Local (_, sym2)
+      | `Funptr sym1, `Funptr sym2
+      | `Global sym1, `Global sym2 ->
+          eq_sym sym1 sym2
+      | `Wild, `Wild ->
+          true
+      | _ ->
+          false in
+  List.fold_left (fun acc pts ->
+    let pts' =
+      List.filter (fun pt -> not (List.exists (fun z -> eq pt z) acc)) pts in
+      pts' @ acc
+  ) [] xss
+*)
+  List.concat xss
 
 
-let scope_of_lvalue classify expr =
-  let _xs = points_to classify expr in
-  failwith "wip"
+type taint =
+  [ `LOAD of pointsto | `STORE of pointsto | `CALL_WILD | `CALL of ail_identifier ]
 
 
+let potential_races : ((Location_ocaml.t * taint list * taint list) list) ref =
+  ref []
+
+
+let rec taint_expr points_to (AnnotatedExpression (_, _, loc, expr_)) =
+  let self = taint_expr points_to in
+  match expr_ with
+    | AilErvalue e ->
+        List.map (fun z -> `LOAD z) (points_to e)
+    
+    | AilEoffsetof _
+    | AilEbuiltin _
+    | AilEstr _
+    | AilEconst _
+    | AilEident _
+    | AilEsizeof _
+    | AilEalignof _
+    | AilEreg_load _
+    | AilEunion (_, _, None) ->
+        []
+    
+    | AilEunary (_, e)
+    | AilEcast (_, _, e)
+    | AilEassert e
+    | AilEcompound (_, _, e)
+    | AilEmemberof (e, _)
+    | AilEmemberofptr (e, _)
+    | AilEsizeof_expr e
+    | AilEannot (_, e)
+    | AilEva_start (e, _)
+    | AilEva_arg (e, _)
+    | AilEva_end e
+    | AilEprint_type e
+    | AilEbmc_assume e
+    | AilEarray_decay e
+    | AilEfunction_decay e
+    | AilEunion (_, _, Some e) ->
+        self e
+    
+    | AilEbinary (e1, _, e2) ->
+        begin match self e1, self e2 with
+          | [], xs
+          | xs, [] ->
+              xs
+          | xs1, xs2 ->
+              potential_races := (loc, xs1, xs2) :: !potential_races;
+              merge_pointsto [xs1; xs2]
+        end
+
+    | AilEassign (e1, e2)
+    | AilEcompoundAssign (e1, _, e2) ->
+        merge_pointsto [List.map (fun z -> `STORE z) (points_to e1); self e1; self e2]
+    
+    | AilEcond (e1, e2, e3) ->
+          merge_pointsto [self e1; self e2; self e3]
+    | AilEcall (e, es) ->
+        begin match e with
+          | AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))) ->
+              `CALL f
+          | _ ->
+              `CALL_WILD
+        end :: merge_pointsto (List.map self es)
+    | AilEgeneric (e, gas) ->
+        merge_pointsto begin
+          self e ::
+          List.map (function
+            | AilGAtype (_, e)
+            | AilGAdefault e ->
+                self e) gas
+        end
+    | AilEarray (_, _, xs) ->
+        merge_pointsto (List.map (function Some e -> self e | None -> []) xs)
+    | AilEstruct (_, xs) ->
+       merge_pointsto (List.map (function (_, Some e) -> self e | (_, None) -> []) xs)
+    | AilEva_copy (e1, e2) ->
+        merge_pointsto [self e1; self e2]
+
+
+let taints_of_functions sigm =
+  List.fold_left (fun acc (sym_decl, (_, _, decl)) ->
+    match decl with
+      | Decl_object _ ->
+          acc
+      | Decl_function _ ->
+          begin match List.assoc_opt sym_decl sigm.function_definitions with
+            | None ->
+                (* no definition for this function, assuming wild taint *)
+                (sym_decl, [`STORE `Wild]) :: acc
+            | Some (_, _, params, stmt) ->
+                let fun_scopes =
+                  List.fold_left (fun acc sym ->
+                    Scopes.register sym acc
+                ) (Scopes.(create_scope (Cabs_to_ail_effect.Scope_block 0) empty)) params in
+                let rec fold_stmt env (AnnotatedStatement (_, _, stmt_)) =
+                  let taint_expr e = taint_expr (points_to (classify sigm env)) e in
+                  match stmt_ with
+                    | AilSskip
+                    | AilSbreak
+                    | AilScontinue
+                    | AilSreturnVoid
+                    | AilSgoto _ ->
+                        [] (* points to nothing *)
+                    | AilSexpr e
+                    | AilSreturn e
+                    | AilSreg_store (_, e) ->
+                        taint_expr e
+                    | AilSblock (bs, ss) ->
+                        let new_scopes =
+                          List.fold_left (fun acc (sym, _) ->
+                            Scopes.register sym acc
+                          ) (Scopes.create_scope (Cabs_to_ail_effect.Scope_block env.counter) env.scopes) bs in
+                        let env' = {
+                          counter= env.counter + 1;
+                          block_depth= env.block_depth + 1;
+                          scopes = new_scopes;
+                        } in
+                        merge_pointsto (List.map (fold_stmt env') ss)
+                    | AilSif (e, s1, s2) ->
+                        merge_pointsto [taint_expr e; fold_stmt env s1; fold_stmt env s2]
+                    | AilSwhile (e, s)
+                    | AilSdo (s, e)
+                    | AilSswitch (e, s) ->
+                        merge_pointsto [taint_expr e; fold_stmt env s]
+                    | AilScase (_, s)
+                    | AilSdefault s
+                    | AilSlabel (_, s) ->
+                        fold_stmt env s
+                    | AilSdeclaration xs ->
+                        merge_pointsto (List.map (fun (_, e) -> taint_expr e) xs)
+                    | AilSpar ss ->
+                        merge_pointsto (List.map (fold_stmt env) ss)
+                in
+                (sym_decl, fold_stmt { counter= 1; block_depth= 0; scopes= fun_scopes } stmt) :: acc
+          end
+  ) [] sigm.declarations
+
+
+let resolve_calls xs =
+  List.map (fun (fsym, pts) ->
+    let pts' = List.fold_left (fun acc pt ->
+      match pt with
+        | `CALL sym ->
+            if sym = fsym then
+              acc
+            else
+              merge_pointsto [List.assoc sym xs; acc]
+        | `CALL_WILD ->
+            [`STORE `Wild]
+        | z ->
+            z :: acc
+    ) [] pts in
+    (fsym, pts')
+  ) xs
+
+
+let may_alias pts1 pts2 =
+  List.exists (fun (pt1, pt2) ->
+    match pt1, pt2 with
+      | `LOAD _, `LOAD _ ->
+          false
+      | `STORE z1, `STORE z2
+      | `STORE z1, `LOAD z2
+      | `LOAD z1, `STORE z2 ->
+          begin match z1, z2 with
+            | `Wild, _
+            | _, `Wild ->
+                true
+            | `Current sym1, `Current sym2
+            | `Local (_, sym1), `Local (_, sym2)
+            | `Funptr sym1, `Funptr sym2
+            | `Global sym1, `Global sym2 ->
+                eq_sym sym1 sym2
+            | _, _ ->
+                false
+          end
+      | _ ->
+          assert false (* shouldn't happen after CALLs resolution *)
+  ) (Utils.product_list pts1 pts2)
+
+
+let warn_unseq taints_map expr =
+  let rec aux (AnnotatedExpression (_, _, loc, expr_)) =
+    match expr_ with
+      | AilEoffsetof _
+      | AilEbuiltin _
+      | AilEstr _
+      | AilEconst _
+      | AilEident _
+      | AilEsizeof _
+      | AilEalignof _
+      | AilEreg_load _
+      | AilEunion (_, _, None) ->
+          NO_CALL
+      
+      | AilEunary (_, e)
+      | AilEcast (_, _, e)
+      | AilEassert e
+      | AilEcompound (_, _, e)
+      | AilEmemberof (e, _)
+      | AilEmemberofptr (e, _)
+      | AilEsizeof_expr e
+      | AilEannot (_, e)
+      | AilEva_start (e, _)
+      | AilEva_arg (e, _)
+      | AilEva_end e
+      | AilEprint_type e
+      | AilEbmc_assume e
+      | AilErvalue e
+      | AilEarray_decay e
+      | AilEfunction_decay e
+      | AilEunion (_, _, Some e) ->
+          aux e
+      
+      | AilEbinary (e1, bop, e2) when is_unseq bop ->
+          begin match aux e1, aux e2 with
+            | HAS_CALLS calls1, HAS_CALLS calls2 ->
+                HAS_CALLS (calls1 @ calls2)
+            | NO_CALL, HAS_CALLS calls
+            | HAS_CALLS calls, NO_CALL ->
+                HAS_CALLS calls
+            | NO_CALL, NO_CALL ->
+                NO_CALL
+          end
+      
+      | AilEbinary (e1, _, e2)
+      | AilEassign (e1, e2)
+      | AilEcompoundAssign (e1, _, e2) ->
+          merge_status [aux e1; aux e2]
+
+      | AilEcond (e1, e2, e3) ->
+          merge_status [aux e1; aux e2; aux e3]
+
+      | AilEcall (e, es) ->
+          merge_status (begin match e with
+            | AnnotatedExpression (_, _, _, AilEfunction_decay (AnnotatedExpression (_, _, _, AilEident f))) ->
+                [HAS_CALLS [f]]
+            | _ ->
+                [HAS_CALLS []]
+          end @ (List.map aux es))
+      
+      | AilEgeneric (e, gas) ->
+          merge_status begin
+            aux e ::
+            List.map (function
+              | AilGAtype (_, e)
+              | AilGAdefault e ->
+                  aux e) gas
+          end
+      | AilEarray (_, _, xs) ->
+          merge_status (List.map (function Some e -> aux e | None -> NO_CALL) xs)
+      | AilEstruct (_, xs) ->
+          merge_status (List.map (function (_, Some e) -> aux e | (_, None) -> NO_CALL) xs)
+      | AilEva_copy (e1, e2) ->
+          merge_status [aux e1; aux e2]
+  in
+  ignore (aux expr)
+
+
+
+
+(* ************************************************************************** *)
+(* Driver *)
 let warn_file (_, sigm) =
+  let taints_map = resolve_calls (taints_of_functions sigm) in
+  
   let rec aux_expr env (AnnotatedExpression (_, _, loc, expr_)) =
     let self = aux_expr env in
     match expr_ with
@@ -277,13 +541,7 @@ let warn_file (_, sigm) =
       | AilEalignof _
       | AilEreg_load _ ->
           ()
-(*
-      | AilEunary (Address, e) when env.block_depth > 1 ->
-          Panic.wrn (Some loc)
-            "an address is taken inside an inner block ==> %s <==> pointsto: %s"
-            (Pp_utils.to_plain_string (Pp_ail.pp_expression e))
-            (str_points_to (classify sigm env) e)
-*)
+      
       | AilEassign (e1, e2)
       | AilEcompoundAssign (e1, _, e2) ->
           (* Warn if [[e2]] points to objects whose scope is smaller than the scope of
@@ -291,17 +549,8 @@ let warn_file (_, sigm) =
           let xs1 = points_to (classify sigm env) e1 in
           let xs2 = points_to (classify sigm env) e2 in
           if xs2 <> [] && List.exists (fun (x, y) -> gt_pointsto x y) (Utils.product_list xs1 xs2) then
-            Printf.printf "%sASSIGN[%s] ==> lvalue: %s -- e2: %s\x1b[0m\n"
-             (if List.exists (fun (x, y) -> gt_pointsto x y) (Utils.product_list xs1 xs2) then "\x1b[31m" else "")
-             (Location_ocaml.location_to_string loc)
-              (foo xs1)
-              (foo xs2);
-          () (* exit 1 *)
-
-(*
-          let _scope1 = scope_of_lvalue (classify sigm env) e1 in
-          failwith "WIP: assignments"
-*)
+            Panic.wrn (Some loc) "the address of a block-scoped variable may be escaping"
+      
       | AilEunary (_, e)
       | AilEcast (_, _, e)
       | AilEassert e
@@ -328,11 +577,6 @@ let warn_file (_, sigm) =
           self e2;
           self e3
       | AilEcall (e, es) ->
-          let xss = List.map (fun e -> points_to (classify sigm env) e) es in
-          if List.exists (fun xs -> xs <> []) xss then
-            Printf.printf "AilEcall[%s] ==> warn ==> %s\n"
-              (Location_ocaml.location_to_string loc)
-              (String.concat " -- " (List.map foo xss));
           self e;
           List.iter self es
       | AilEoffsetof _ ->
@@ -367,12 +611,14 @@ let warn_file (_, sigm) =
           end in
   let rec aux env (AnnotatedStatement (loc, _, stmt_)) =
     let self = aux env in
+    let warn_unseq e = warn_unseq taints_map e in
     match stmt_ with
       | AilSskip ->
           ()
       | AilSexpr e
       | AilSreturn e ->
-          aux_expr env e
+          aux_expr env e;
+          warn_unseq e
       | AilSblock (bs, ss) ->
           let new_scopes =
             List.fold_left (fun acc (sym, _) ->
@@ -383,17 +629,19 @@ let warn_file (_, sigm) =
             block_depth= env.block_depth + 1;
             scopes = new_scopes;
           } in
-(*          Printf.printf "AilSblock => counter: %d\n" env'.counter; *)
           List.iter (aux env') ss
       | AilSif (e, s1, s2) ->
           aux_expr env e;
+          warn_unseq e;
           self s1;
           self s2
       | AilSwhile (e, s) ->
           self s;
-          aux_expr env e
+          aux_expr env e;
+          warn_unseq e
       | AilSdo (s, e) ->
           aux_expr env e;
+          warn_unseq e;
           self s
       | AilSbreak
       | AilScontinue
@@ -401,6 +649,7 @@ let warn_file (_, sigm) =
           ()
       | AilSswitch (e, s) ->
           aux_expr env e;
+          warn_unseq e;
           self s
       | AilScase (_, s)
       | AilSdefault s
@@ -410,13 +659,15 @@ let warn_file (_, sigm) =
           ()
       | AilSdeclaration xs ->
           List.iter (fun (_, e) ->
-            aux_expr env e
+            aux_expr env e;
+            warn_unseq e;
           ) xs
       | AilSpar ss ->
           List.iter (aux { env with block_depth= 0 }) ss
       | AilSreg_store (_, e) ->
-          aux_expr env e in
-  List.iter (fun (_, (_, _, params, stmt)) ->
+          aux_expr env e;
+          warn_unseq e in
+  List.iter (fun (fsym, (_, _, params, stmt)) ->
     (* NOTE: following (§6.2.1#4), the function parameters are placed in a block scope *)
     let fun_scopes =
       List.fold_left (fun acc sym ->
@@ -424,4 +675,20 @@ let warn_file (_, sigm) =
       ) (Scopes.(create_scope (Cabs_to_ail_effect.Scope_block 0) empty)) params in
     aux { counter= 1; block_depth= 0; scopes= fun_scopes } stmt;
     flush_all ()
-  ) sigm.function_definitions
+  ) sigm.function_definitions;
+  
+  let resolve_calls2 pts =
+    List.fold_left (fun acc pt ->
+      match pt with
+      | `CALL sym ->
+          merge_pointsto [List.assoc sym taints_map; acc]
+      | `CALL_WILD ->
+          [`STORE `Wild]
+      | z ->
+          z :: acc
+    ) [] pts in
+  (* This display the warning for potential nondeterminism from unsequenced calls *)
+  List.iter (fun (loc, xs1, xs2) ->
+    if may_alias (resolve_calls2 xs1) (resolve_calls2 xs2) then
+      Panic.wrn (Some loc) "two function calls potentially aliasing are unsequenced"
+  ) (List.rev !potential_races)
