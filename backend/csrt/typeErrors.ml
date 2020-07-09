@@ -17,7 +17,7 @@ type type_error =
       has: BT.t;
       expected: BT.t
     }
-  | Pattern_incorrect_argument_number of {
+  | Constructor_wrong_argument_number of {
       constructor: CF.Mucore.mu_ctor;
       expected: int;
       has: int;
@@ -123,7 +123,7 @@ let pp (loc : Loc.t) (err : t) =
     | Pattern_type_mismatch m ->
        !^"Pattern type mismatch: expected" ^^^ BT.pp false m.expected ^^^ 
          !^", has" ^^^ BT.pp false m.has
-    | Pattern_incorrect_argument_number {constructor;expected;has} ->
+    | Constructor_wrong_argument_number {constructor;expected;has} ->
        let ctor_pp = 
          let open CF.Mucore in
          match constructor with

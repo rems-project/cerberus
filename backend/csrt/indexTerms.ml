@@ -1,6 +1,5 @@
 open Subst
-open Sym
-(* open Num *)
+open Uni
 open Option
 open List
 open Pp
