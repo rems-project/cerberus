@@ -49,46 +49,42 @@ let error pp =
 
 
 
-let bind_and_anames env rt = 
-  let rec aux acc_names env = function
+let bind_to_name loc env rt name = 
+  let rec aux oname env = function
     | Computational (name,bound,t) ->
-       let newname = fresh () in
-       aux 
-         (acc_names @ [newname])
-         (add_Avar env (newname,bound)) 
-         (subst_var {substitute=name; swith=S newname} t)
+       begin match oname with
+       | None -> 
+          fail loc (Unreachable !^"multiple computational values in return type")
+       | Some newname -> 
+          aux None 
+            (add_Avar env (newname,bound))
+            (subst_var {substitute=name;swith=S newname} t)
+       end
     | Logical (name,bound,t) ->
        let newname = fresh () in
-       aux
-         acc_names
+       aux oname
          (add_Lvar env (newname,bound)) 
          (subst_var {substitute=name; swith=S newname} t)
     | Resource (bound,t) ->
-       aux acc_names (add_URvar env bound) t
+       aux oname (add_URvar env bound) t
     | Constraint (bound,t) ->
-       aux acc_names (add_UCvar env bound) t
+       aux oname (add_UCvar env bound) t
     | I -> 
-       (acc_names,env)
+       begin match oname with
+       | None -> return env
+       | Some _ ->
+          fail loc (Unreachable !^"multiple computational values in return type")
+       end
   in
-  aux [] env rt
-
-let bind env rt = snd (bind_and_anames env rt)
+  aux (Some name) env rt
 
 
-let rec bind_to_name env given_name = function
-  | Computational (name,bound,t) ->
-     bind (add_Avar env (given_name,bound))
-       (subst_var {substitute=name; swith=S given_name} t)
-  | Logical (name,bound,t) ->
-     let newname = fresh () in
-     bind_to_name (add_Lvar env (newname,bound)) given_name 
-       (subst_var {substitute=name; swith=S newname} t)
-  | Resource (bound,t) ->
-     bind_to_name (add_URvar env bound) given_name t
-  | Constraint (bound,t) ->
-     bind_to_name (add_UCvar env bound) given_name t
-  | I -> 
-     env
+
+
+
+
+
+
      
 
 
@@ -226,27 +222,148 @@ let check_base_type loc mname has expected =
     fail loc (Call_error msm)
 
 
+
+
+
+
+let pattern_match loc env this pat expected_bt =
+  let rec aux env names this pat expected_bt = 
+    match pat with
+    | M_Pattern (annots, M_CaseBase (oname, mbt)) ->
+       let* has_bt = bt_of_core_base_type loc mbt in
+       let* () = check_base_type loc None has_bt expected_bt in
+       let* name = match oname with
+         | Some name -> 
+            if SymSet.mem name names 
+            then fail loc (Name_bound_twice name)
+            else return name
+         | None -> return (fresh ())
+       in
+       let env = add_Avar env (name,has_bt) in
+       let env = add_UCvar env (LC (S name %= this)) in
+       return (env, SymSet.add name names)
+    | M_Pattern (annots, M_CaseCtor (constructor, pats)) ->
+       match constructor with
+       | M_Cnil mbt ->
+          let* item_bt = bt_of_core_base_type loc mbt in
+          begin match pats with
+          | [] ->
+             if type_equal (List item_bt) expected_bt 
+             then return (env,names)
+             else fail loc (Pattern_type_mismatch {has=List item_bt;expected=expected_bt})
+          | _ -> 
+             fail loc (Pattern_incorrect_argument_number 
+                         {constructor;expected=0;has=List.length pats})
+          end
+       | M_Ccons ->
+          begin match expected_bt, pats with
+          | List item_bt, [p1;p2] ->
+             let* (env,names) = aux env names (Head this) p1 item_bt in
+             aux env names (Tail this) p2 expected_bt
+          | List item_bt, _ ->
+             fail loc (Pattern_incorrect_argument_number 
+                         {constructor;expected=2;has=List.length pats})
+          | _, _ ->
+             fail loc (Generic_error (!^"cons pattern incompatible with expected type" ^^^ 
+                                        BT.pp false expected_bt))
+          end
+       | M_Ctuple ->
+          begin match expected_bt with 
+          | Tuple bts ->
+             let rec components (env,names) i pats bts =
+               match pats, bts with
+               | [], [] -> return (env,names)
+               | pat::pats, bt::bts ->
+                  let* (env,names) = aux env names (Nth (i, this)) pat bt in
+                  components (env,names) (i+1) pats bts
+               | _, _ ->
+                  fail loc (Pattern_incorrect_argument_number 
+                              {constructor;expected=i+List.length pats;has=i+List.length pats})
+             in
+             components (env,names) 0 pats bts
+          | _ ->
+             fail loc (Generic_error (!^"tuple pattern incompatible with expected type" ^^^ 
+                                        BT.pp false expected_bt))
+          end
+       | M_Cspecified ->
+          begin match pats with
+          | [pat] ->
+             aux env names this pat expected_bt
+          | _ ->
+           fail loc (Pattern_incorrect_argument_number 
+                       {constructor;expected=1;has=List.length pats})
+          end
+       | M_Carray ->
+          fail loc (Unsupported !^"todo: array types")
+       | M_CivCOMPL
+       | M_CivAND
+       | M_CivOR
+       | M_CivXOR
+       | M_Cfvfromint
+       | M_Civfromfloat 
+         ->
+          fail loc (Unsupported !^"todo: Civ..")
+  in
+  let* (env,_) = aux env SymSet.empty this pat expected_bt in
+  return env
+  
+
+
+let pattern_match_rt (loc : Loc.t) env pat rt = 
+  let rec aux opat env rt =
+    match opat, rt with
+    | Some pat, Computational (name,bound,t) ->
+       let new_name = fresh () in
+       let env = add_Lvar env (new_name,Base bound) in
+       let* env = pattern_match loc env (S new_name) pat bound in
+       aux None env (subst_var {substitute=name; swith=S new_name} t)
+    | None, Computational _ ->
+       fail loc (Unreachable !^"return type with multiple computational values")
+    | opat, Logical (name,bound,t) ->
+       let newname = fresh () in
+       let env = add_Lvar env (newname,bound) in
+       aux opat env (subst_var {substitute=name; swith=S newname} t)
+    | opat, Resource (bound,t) ->
+       aux opat (add_URvar env bound) t
+    | opat, Constraint (bound,t) ->
+       aux opat (add_UCvar env bound) t
+    | Some _, I -> 
+       fail loc (Unreachable !^"return type without computational value")
+    | None, I -> 
+       return env
+  in
+  aux (Some pat) env rt
+
+
+
+
+
+
+
 type aargs = ((Sym.t * BT.t) * Loc.t) list
 
 let pp_aargs =
   pp_list (fun ((n,t),(_l:Loc.t)) -> typ (Sym.pp n) (BT.pp false t))
 
-
-let rec aargs_from_anames_locs loc env names_locs = 
-  match names_locs with
-  | [] -> return ([], env)
-  | (name,loc) :: names_locs ->
-     let* (t,env) = get_Avar loc env name in
-     let* (rest,env) = aargs_from_anames_locs loc env names_locs in
-     return (((name,t), loc) :: rest, env)
-
-let aargs loc env asyms = 
-  aargs_from_anames_locs loc env (List.map (aunpack loc) asyms)
+let pp_argslocs =
+  pp_list (fun (n,(_l:Loc.t)) -> Sym.pp n)
 
 
-let aargs_and_bind_rt loc env rt = 
-  let (anames,env) = bind_and_anames env rt in
-  aargs_from_anames_locs loc env (map (fun n -> (n,loc)) anames)
+(* let rec aargs_from_anames_locs loc env names_locs = 
+ *   match names_locs with
+ *   | [] -> return ([], env)
+ *   | (name,loc) :: names_locs ->
+ *      let* (t,env) = get_Avar loc env name in
+ *      let* (rest,env) = aargs_from_anames_locs loc env names_locs in
+ *      return (((name,t), loc) :: rest, env) *)
+
+(* let aargs loc env asyms = 
+ *   aargs_from_anames_locs loc env (List.map (aunpack loc) asyms) *)
+
+
+(* let aargs_and_bind_rt loc env rt = 
+ *   let (aname,env) = bind_and_anames env rt in
+ *   aargs_from_anames_locs loc env (map (fun n -> (n,loc)) anames) *)
 
 
 
@@ -353,10 +470,6 @@ let pp_unis unis =
     | None -> Sym.pp sym ^^^ !^"unresolved"
   in
   pp_list pp_entry (SymMap.bindings unis)
-
-
-
-
 
   
 
@@ -476,6 +589,12 @@ let rec infer_index_term (loc : Loc.t) env (it : IT.t) =
      let* _ = Tools.assoc_err loc member decl.raw 
                  "inconsistently typed index term" in
      return (Base Loc)
+  | Nil bt -> 
+     return (Base bt)
+  | Cons (it1,it2) ->
+     let* (Base item_bt) = infer_index_term loc env it1 in
+     let* () = check_index_term loc env (Base (List item_bt)) it2 in
+     return (Base (List item_bt))
   | List (its,bt) ->
      let* _ = mapM (check_index_term loc env (Base bt)) its in
      return (Base bt)
@@ -516,7 +635,8 @@ let subtype_spec_subst_var s spec =
 
 let subtype_spec_subst_vars = Subst.make_substs subtype_spec_subst_var
 
-let subtype loc_ret env (args : aargs) (rtyp : RT.t) ppdescr =
+
+let subtype loc_ret env args (rtyp : RT.t) ppdescr =
 
   let* () = debug_print 1 (action ppdescr) in
   let* () = debug_print 2 PPrint.empty in
@@ -524,7 +644,7 @@ let subtype loc_ret env (args : aargs) (rtyp : RT.t) ppdescr =
   (* let* (args,env) = pack_structs_aargs loc_ret env args in *)
 
   let rec aux env args (unis : (IT.t Uni.t) SymMap.t)  spec = 
-    let* () = debug_print 2 (blank 3 ^^ item "value" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "value" (pp_argslocs args)) in
     let* () = debug_print 2 (blank 3 ^^ item "specification" (RT.pp spec.typ)) in
     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
     match args, spec.typ with
@@ -556,9 +676,11 @@ let subtype loc_ret env (args : aargs) (rtyp : RT.t) ppdescr =
        end
     | [], Computational (sname,sbt,_) -> 
        fail loc_ret (Return_error (Missing_A (sname, sbt)))
-    | ((aname,abt),loc) :: _, I -> 
+    | (aname,loc) :: _, I -> 
+       let* (abt,env) = get_Avar loc env aname in
        fail loc (Return_error (Surplus_A (aname, abt)))
-    | ((aname,abt),arg_loc) :: args, Computational (sname,sbt,rtyp) ->
+    | (aname,arg_loc) :: args, Computational (sname,sbt,rtyp) ->
+       let* (abt,env) = get_Avar loc_ret env aname in
        if BT.type_equal abt sbt then
          let spec = { spec with typ = rtyp} in
          let spec = (subtype_spec_subst_var {substitute=sname;swith=S aname} spec) in
@@ -623,7 +745,7 @@ let calltyp_spec_subst_vars =
   Subst.make_substs calltyp_spec_subst_var
 
 
-let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
+let calltyp loc_ret env args (rtyp : FT.t) =
 
   let open FT in
 
@@ -633,7 +755,7 @@ let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
   (* let* (args,env) = pack_structs_aargs loc_ret env args in *)
 
   let rec aux env args unis (spec : calltyp_spec) = 
-    let* () = debug_print 2 (blank 3 ^^ item "arguments" (pp_aargs args)) in
+    let* () = debug_print 2 (blank 3 ^^ item "arguments" (pp_argslocs args)) in
     let* () = debug_print 2 (blank 3 ^^ item "specification" (FT.pp spec.typ)) in
     let* () = debug_print 2 (blank 3 ^^ item "environment" (Local.pp env.local)) in
     match args, spec.typ with
@@ -665,9 +787,11 @@ let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
        end
     | [], Computational (sname,sbt,_) -> 
        fail loc_ret (Call_error (Missing_A (sname, sbt)))
-    | ((aname,abt),loc) :: _, Return _ -> 
-       fail loc (Call_error (Surplus_A (aname, abt)))
-    | ((aname,abt),arg_loc) :: args, Computational (sname,sbt,rtyp) ->
+    | (aname,arg_loc) :: _, Return _ -> 
+       let* (abt,env) = get_Avar arg_loc env aname in
+       fail arg_loc (Call_error (Surplus_A (aname, abt)))
+    | (aname,arg_loc) :: args, Computational (sname,sbt,rtyp) ->
+       let* (abt,env) = get_Avar arg_loc env aname in
        if BT.type_equal abt sbt then
          let spec = { spec with typ = rtyp} in
          let spec = (calltyp_spec_subst_var {substitute=sname;swith=S aname} spec) in
@@ -713,27 +837,36 @@ let calltyp loc_ret env (args : aargs) (rtyp : FT.t) =
 
 
 
-let tuple_constr (name,bt) aargs = 
-  let rec aux i = function
-    | [] -> IT.Bool true
-    | ((ni,ti),_) :: rest ->
-       let constr = aux (i+1) rest in
-       Nth (i, S name %= S ni) %& constr
+(* let tuple_constr (name,bt) aargs = 
+ *   let rec aux i = function
+ *     | [] -> IT.Bool true
+ *     | ((ni,ti),_) :: rest ->
+ *        let constr = aux (i+1) rest in
+ *        Nth (i, S name %= S ni) %& constr
+ *   in
+ *   LC (aux 0 aargs) *)
+
+
+let infer_tuple loc env asyms = 
+  let name = fresh () in
+  let* (env,bts,constr,_) = 
+    fold_leftM (fun (env,bts,constr,i) asym -> 
+        let (sym, loc) = aunpack loc asym in
+        let* (bt,env) = get_Avar loc env sym in
+        let constr = (Nth (i, S name) %= S sym) %& constr in
+        return (env,bts@[bt],constr,i+1)
+      ) (env,[],IT.Bool true, 0) asyms 
   in
-  LC (aux 0 aargs)
+  let bt = Tuple bts in
+  return (Computational (name, bt, Constraint (LC constr, I)), env)
 
 
-let infer_ctor loc ctor (aargs : aargs) = 
+let infer_ctor loc env ctor asyms = 
   match ctor with
   | M_Ctuple -> 
-     let name = fresh () in
-     let bts = fold_left (fun bts ((_,b),_) -> bts @ [b]) [] aargs in
-     let bt = Tuple bts in
-     let constr = tuple_constr (name,bt) aargs in
-     return (Computational (name, bt, Constraint (constr, I)))
+     infer_tuple loc env asyms
   | M_Carray -> 
-     let* _ = check_Aargs_typ None aargs in
-     return (Computational (fresh (), Array, I))
+     fail loc (Unsupported !^"todo: array types")
   | M_CivCOMPL
   | M_CivAND
   | M_CivOR
@@ -741,16 +874,57 @@ let infer_ctor loc ctor (aargs : aargs) =
      fail loc (Unsupported !^"todo: Civ..")
   | M_Cspecified ->
      let name = fresh () in
-     begin match aargs with
-     | [((sym,bt),_)] -> 
-        return (Computational (name, bt, Constraint (LC (S sym %= S name),I)))
-     | args ->
-        let err = Printf.sprintf "Cspecified applied to %d argument(s)" 
-                    (List.length args) in
-        fail loc (Generic_error !^err)
+     begin match asyms with
+     | [asym] -> 
+        let (sym, loc) = aunpack loc asym in
+        let* (bt,env) = get_Avar loc env sym in
+        let rt = Computational (name, bt, Constraint (LC (S sym %= S name),I)) in
+        return (rt,env)
+     | _ ->
+        let err = 
+          !^"'Specified' constructor applied to" ^^^ 
+          !^(string_of_int (List.length asyms)) ^^^ 
+          !^"argument(s)" 
+        in
+        fail loc (Generic_error err)
      end
-  | M_Cnil cbt -> fail loc (Unsupported !^"lists")
-  | M_Ccons -> fail loc (Unsupported !^"lists")
+  | M_Cnil mbt -> 
+     let name = fresh () in
+     let* item_bt = bt_of_core_base_type loc mbt in
+     begin match asyms with
+     | [] -> 
+        let rt = Computational (name, List item_bt, 
+                 Constraint (LC (S name %= List ([], item_bt)),I)) in
+        return (rt,env)
+     | _ ->
+        let err = 
+          !^"Nil constructor applied to" ^^^ 
+          !^(string_of_int (List.length asyms)) ^^^ 
+          !^"argument(s)" 
+        in
+        fail loc (Generic_error err)
+     end     
+  | M_Ccons -> 
+     let name = fresh () in
+     begin match asyms with
+     | [asym1;asym2] -> 
+        let (sym1, loc1) = aunpack loc asym1 in
+        let (sym2, loc2) = aunpack loc asym2 in
+        let* (bt1,env) = get_Avar loc env sym1 in
+        let* (bt2,env) = get_Avar loc env sym2 in
+        let* () = check_base_type loc2 (Some sym2) bt2 (List bt1) in
+        let rt = Computational (name, bt2, 
+                 Constraint (LC (S name %= Cons (S sym1, S sym2)),I)) in
+        return (rt,env)
+     | _ ->
+        let err = 
+          !^"Cons constructor applied to" ^^^ 
+          !^(string_of_int (List.length asyms)) ^^^ 
+          !^"argument(s)" 
+        in
+        fail loc (Generic_error err)
+     end
+
   | M_Cfvfromint -> fail loc (Unsupported !^"floats")
   | M_Civfromfloat -> fail loc (Unsupported !^"floats")
 
@@ -987,8 +1161,6 @@ let rec infer_mem_value loc env mem =
     ( fun sym id mv -> infer_union loc env sym id mv )
 
 
-(* here we're not using the 'pack_struct' logic because we're
-   inferring resources and logical variables *)
 and infer_struct loc env (tag,fields) =
   (* might have to make sure the fields are ordered in the same way as
      in the struct declaration *)
@@ -996,12 +1168,11 @@ and infer_struct loc env (tag,fields) =
   let ret = fresh () in
   let* (aargs,constrs,env) =
     fold_rightM (fun (id,_ct,mv) (aargs,constrs,env) ->
-        let argname = fresh () in
         let* (t, env) = infer_mem_value loc env mv in
-        let env = bind_to_name env argname t in
-        let* (bt,env) = get_Avar loc env argname in
+        let argname = fresh () in
+        let* env = bind_to_name loc env t argname in
         let constr = LC (S argname %= (Member (Tag tag, S ret, Member (Id.s id)))) in
-        return (((argname,bt),loc)::aargs, Constraint (constr, constrs), env)
+        return ((argname,loc)::aargs, Constraint (constr, constrs), env)
       ) fields ([],I,env)
   in
   let* _ =
@@ -1015,7 +1186,7 @@ and infer_union loc env sym id mv =
   fail loc (Unsupported !^"todo: union types")
 
 and infer_array loc env mem_values = 
-  fail loc (Unsupported !^"todo: mem_value arrays")
+  fail loc (Unsupported !^"todo: array types")
 
 let infer_object_value loc env ov =
   match ov with
@@ -1029,10 +1200,7 @@ let infer_object_value loc env ov =
      let* t = infer_ptrval loc env p in
      return (t,env)
   | M_OVarray items ->
-     let name = fresh () in
-     let* (args_bts,env) = aargs loc env items in
-     let* _ = check_Aargs_typ None args_bts in
-     return (Computational (name, Array, I), env)
+     fail loc (Unsupported !^"todo: array types")
   | M_OVstruct (tag, fields) -> 
      infer_struct loc env (tag,fields)
   | M_OVunion (sym,id,mv) -> 
@@ -1058,25 +1226,18 @@ let infer_value loc env v : (ReturnTypes.t * Env.t) m =
      return (Computational (name, Bool, Constraint (constr,I)), env)
   | M_Vlist (cbt, asyms) ->
      let* bt = bt_of_core_base_type loc cbt in
-     let* (aargs, env) = aargs loc env asyms in
-     let _ = check_Aargs_typ (Some bt) aargs in
+     let* env = 
+       fold_leftM (fun env asym -> 
+           let (sym, loc) = aunpack loc asym in
+           let* (ibt,env) = get_Avar loc env sym in
+           let* () = check_base_type loc (Some sym) bt ibt in
+           return env
+         ) env asyms 
+     in
      return (Computational (fresh (), List bt, I), env)
   | M_Vtuple asyms ->
-     let* (aargs,env) = aargs loc env asyms in
-     let bts = fold_left (fun bts ((_,b),_) -> bts @ [b]) [] aargs in
-     let name = fresh () in
-     let bt = Tuple bts in
-     let constr = tuple_constr (name, bt) aargs in
-     return (Computational (name, bt, Constraint (constr, I)), env)
+     infer_tuple loc env asyms
 
-
-
-
-
-
-
-let infer_pat loc (M_Pattern (annots, pat_)) = 
-  fail loc (Unsupported !^"todo: implement infer_pat")
 
 
 let binop_typ op = 
@@ -1149,8 +1310,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
        let (sym, loc) = aunpack loc asym in
        return (Bad (StaticError (loc, (err,sym))), env)
     | M_PEctor (ctor, args) ->
-       let* (aargs, env) = aargs loc env args in
-       let* rt = infer_ctor loc ctor aargs in
+       let* (rt,env) = infer_ctor loc env ctor args in
        return (Normal rt, env)
     | M_PEarray_shift _ ->
        fail loc (Unsupported !^"todo: PEarray_shift")
@@ -1205,8 +1365,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
             let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global sym in
             return decl_typ
        in
-       let* (args,env) = aargs loc env asyms in
-       let* (rt, env) = calltyp loc env args decl_typ in
+       let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
     | M_PElet _ -> fail loc (Unreachable !^"PElet in inferring position")
@@ -1242,51 +1401,36 @@ let rec check_pexpr loc env (e : 'bty mu_pexpr) typ =
      let* () = check_pexpr loc (add_UCvar env (LC (Not (S sym1)))) e3 typ in
      return ()
   | M_PEcase (asym, pats_es) ->
-     let (esym,eloc) = aunpack loc asym in
-     let* (bt,env) = get_Avar eloc env esym in
+     let (sym,loc) = aunpack loc asym in
+     let* (bt,env) = get_Avar loc env sym in
      let* _ = 
        mapM (fun (pat,pe) ->
-           (* check pattern type against bt *)
-           let* (bindings, bt', ploc)= infer_pat loc pat in
-           let* () = check_base_type ploc None bt' bt in
-           (* check body type against spec *)
-           let env' = add_Avars env bindings in
-           check_pexpr loc env' pe typ
+           let* env = pattern_match loc env (S sym) pat bt in
+           check_pexpr loc env pe typ
          ) pats_es
      in
      return ()
   | M_PElet (p, e1, e2) ->
-     begin match p with 
-     | M_Symbol (Annotated (annots, _, newname)) ->
-        let loc = update_loc loc annots in
-        let* (rt, env) = infer_pexpr loc env e1 in
-        begin match rt with
-        | Normal rt -> 
-           let env = bind_to_name env newname rt in
-           check_pexpr loc env e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad
-        end
-     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
-        let loc = update_loc loc annots in
-        let newname = sym_or_fresh mnewname in
-        let* (rt, env) = infer_pexpr loc env e1 in
-        begin match rt with
-        | Normal rt -> 
-           let env = bind_to_name env newname rt in
-           check_pexpr loc env e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad
-        end        
-     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
-        let _loc = update_loc loc annots in
-        fail loc (Unsupported !^"todo: ctor pattern")
+     let* (rt, env) = infer_pexpr loc env e1 in
+     begin match rt with
+     | Normal rt -> 
+        let* env = match p with
+          | M_Symbol asym -> 
+             let sym, loc = aunpack loc asym in
+             bind_to_name loc env rt sym
+          | M_Pat pat -> 
+             pattern_match_rt loc env pat rt 
+        in
+        check_pexpr loc env e2 typ
+     | Bad bad -> ensure_bad_unreachable loc env bad
      end
   | _ ->
      let* (rt, env) = infer_pexpr loc env e in
      begin match rt with
      | Normal rt -> 
-        let* (rt,env) = aargs_and_bind_rt loc env rt in
-        let* env = subtype loc env rt typ "function return type" in
+        let name = fresh () in 
+        let* env = bind_to_name loc env rt name in
+        let* env = subtype loc env [(name,loc)] typ "function return type" in
         return ()
      | Bad bad -> ensure_bad_unreachable loc env bad
      end
@@ -1392,7 +1536,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
           (* for consistency check value against Core annotation *)
           let* _ =
             let* t = ctype false loc (fresh ()) ct in
-            subtype loc env [((vsym,vbt),vloc)] t 
+            subtype loc (add_Avar env (vsym,vbt)) [(vsym,vloc)] t 
               "checking store value against ctype annotation"
           in
           let rec store env (pointer : IT.t) (is_field : bool) ct size (this: IT.t) =
@@ -1502,7 +1646,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
                  let tempname = fresh () in
                  let tempenv = add_Avar env (tempname, bt) in
                  let tempenv = add_UCvar tempenv (LC (S tempname %= pointee)) in
-                 subtype loc tempenv [((tempname,bt),ploc)] t 
+                 subtype loc tempenv [(tempname,ploc)] t 
                    "checking load value against expected type"
                in
                return (bt, [constr])
@@ -1532,8 +1676,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
        end
     | M_Eskip -> 
        return (Normal (Computational (fresh (), Unit, I)), env)
-    | M_Eccall (_, _ctype, fun_asym, arg_asyms) ->
-       let* (args,env) = aargs loc env arg_asyms in
+    | M_Eccall (_, _ctype, fun_asym, asyms) ->
        let (sym1,loc1) = aunpack loc fun_asym in
        let* (bt,env) = get_Avar loc1 env sym1 in
        let* fun_sym = match bt with
@@ -1541,7 +1684,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
          | _ -> fail loc1 (Generic_error !^"not a function pointer")
        in
        let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global fun_sym in
-       let* (rt, env) = calltyp loc env args decl_typ in
+       let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_Eproc (_, fname, asyms) ->
        let* decl_typ = match fname with
@@ -1551,8 +1694,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
             let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global sym in
             return decl_typ
        in
-       let* (args,env) = aargs loc env asyms in
-       let* (rt, env) = calltyp loc env args decl_typ in
+       let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_Ebound (n, e) ->
        infer_expr loc env e
@@ -1598,65 +1740,40 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let* () = check_expr loc (add_UCvar env (LC (Not (S sym1)))) e3 typ in
      return ()
   | M_Ecase (asym, pats_es) ->
-     let (esym,eloc) = aunpack loc asym in
-     let* (bt,env) = get_Avar eloc env esym in
+     let (sym,loc) = aunpack loc asym in
+     let* (bt,env) = get_Avar loc env sym in
      let* _ = 
        mapM (fun (pat,pe) ->
-           (* check pattern type against bt *)
-           let* (bindings, bt', ploc) = infer_pat loc pat in
-           let* () = check_base_type ploc None bt' bt in
-           (* check body type against spec *)
-           let env' = add_Avars env bindings in
-           check_expr loc env' pe typ
+           let* env = pattern_match loc env (S sym) pat bt in
+           check_expr loc env pe typ
          ) pats_es
      in
      return ()
   | M_Epure pe -> 
      check_pexpr loc env pe typ
   | M_Elet (p, e1, e2) ->
-     begin match p with 
-     | M_Symbol (Annotated (annots, _, newname)) ->
-        let loc = update_loc loc annots in
-        let* (rt, env) = infer_pexpr loc env e1 in
-        begin match rt with
-        | Normal rt -> 
-           let env = bind_to_name env newname rt in
-           check_expr loc env e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad
-        end
-     | M_Pat (M_Pattern (annots, M_CaseBase (mnewname,_cbt)))
-     | M_Pat (M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))]))) -> (* temporarily *)
-        let loc = update_loc loc annots in
-        let newname = sym_or_fresh mnewname in
-        let* (rt, env) = infer_pexpr loc env e1 in
-        begin match rt with
-        | Normal rt -> 
-           let env = bind_to_name env newname rt in
-           check_expr loc env e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad
-        end        
-     | M_Pat (M_Pattern (annots, M_CaseCtor _)) ->
-        let _loc = update_loc loc annots in
-        fail loc (Unsupported !^"todo: ctor pattern")
+     let* (rt, env) = infer_pexpr loc env e1 in
+     begin match rt with
+     | Normal rt -> 
+        let* env = match p with 
+          | M_Symbol asym ->
+             let sym, loc = aunpack loc asym in
+             bind_to_name loc env rt sym
+          | M_Pat pat ->
+             pattern_match_rt loc env pat rt 
+        in
+        check_expr loc env e2 typ
+     | Bad bad -> ensure_bad_unreachable loc env bad
      end
-  | M_Ewseq (p, e1, e2)      (* for now, the same as Esseq *)
-  | M_Esseq (p, e1, e2) ->
-     begin match p with 
-     | M_Pattern (annots, M_CaseBase (mnewname,_cbt))
-     | M_Pattern (annots, M_CaseCtor (M_Cspecified, [(M_Pattern (_, M_CaseBase (mnewname,_cbt)))])) -> (* temporarily *)
-        let loc = update_loc loc annots in
-        let newname = sym_or_fresh mnewname in
-        let* (rt, env) = infer_expr loc env e1 in
-        begin match rt with
-        | Normal rt -> 
-           let env = bind_to_name env newname rt in
-           check_expr loc env e2 typ
-        | Bad bad -> ensure_bad_unreachable loc env bad
-        end        
-     | M_Pattern (annots, M_CaseCtor _) ->
-        let _loc = update_loc loc annots in
-        fail loc (Unsupported !^"todo: ctor pattern")
-     end
+  | M_Ewseq (pat, e1, e2)      (* for now, the same as Esseq *)
+  | M_Esseq (pat, e1, e2) ->
+     let* (rt, env) = infer_expr loc env e1 in
+     begin match rt with
+     | Normal rt -> 
+        let* env = pattern_match_rt loc env pat rt in
+        check_expr loc env e2 typ
+     | Bad bad -> ensure_bad_unreachable loc env bad
+     end        
   | M_Esave (_ret, args, body) ->
      let* env = 
        fold_leftM (fun env (sym, (_, asym)) ->
@@ -1671,8 +1788,9 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      let* (rt, env) = infer_expr loc env e in
      begin match rt with
      | Normal rt ->
-        let* (rt,env) = aargs_and_bind_rt loc env rt in
-        let* env = subtype loc env rt typ "function return type" in
+        let name = fresh () in 
+        let* env = bind_to_name loc env rt name in
+        let* env = subtype loc env [(name,loc)] typ "function return type" in
         return ()
      | Bad bad -> ensure_bad_unreachable loc env bad
      end
