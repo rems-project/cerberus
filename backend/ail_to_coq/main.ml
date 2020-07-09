@@ -208,7 +208,7 @@ let no_analysis =
      hoisted to the function scope by RefiendC. (2) A warning is issued when \
      there is potential non-determinism in evaluation of expressions. This \
      is a problem since C has a loose ordering of expression evaluation, \
-     while RefinedC has a fixed left-to-right evaluation order. Note that \
+     while RefiendC has a fixed left-to-right evaluation order. Note that \
      these two analyses are over-approximations."
   in
   Arg.(value & flag & info ["no-extra-analysis"] ~doc)
