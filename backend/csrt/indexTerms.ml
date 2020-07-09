@@ -40,6 +40,8 @@ type t =
   | Member of BT.tag * t * BT.member
   | MemberOffset of BT.tag * t * BT.member
 
+  | Nil of BT.t
+  | Cons of t * t
   | List of t list * BT.t
   | Head of t
   | Tail of t
@@ -102,6 +104,8 @@ let rec pp atomic it : PPrint.document =
   | Tail (o1) -> mparens (!^"tl" ^^^ pp o1)
 
   | Tuple its -> mparens (!^"tuple" ^^^ separate_map space pp its)
+  | Nil _ -> brackets empty
+  | Cons (t1,t2) -> mparens (pp t1 ^^ colon ^^ colon ^^ pp t2)
   | List (its, bt) -> 
      mparens (brackets (separate_map comma pp its) ^^^ colon ^^ BT.pp false bt)
 
@@ -116,7 +120,8 @@ let rec pp atomic it : PPrint.document =
 let rec vars_in it : SymSet.t = 
   match it with
   | Num _  
-  | Bool _ -> 
+  | Bool _
+  | Nil _ ->
      SymSet.empty
   | Add (it, it')
   | Sub (it, it') 
@@ -132,7 +137,8 @@ let rec vars_in it : SymSet.t =
   | LE (it, it') 
   | GE (it, it') 
   | And (it, it')
-  | Or (it, it')  ->
+  | Or (it, it')
+  | Cons (it, it')  ->
      SymSet.union (vars_in it) (vars_in it')
   | Nth (_, it)
   | Null it
@@ -181,6 +187,8 @@ let rec subst_var subst it : t =
      Tuple (map (fun it -> subst_var subst it) its)
   | Nth (n, it') ->
      Nth (n, subst_var subst it')
+  | Nil _ -> it
+  | Cons (it1,it2) -> Cons (subst_var subst it1, subst_var subst it2)
   | List (its,bt) -> 
      List (map (fun it -> subst_var subst it) its, bt)
   | Head it ->
@@ -255,6 +263,11 @@ let rec instantiate_struct_member subst it : t =
      Tuple (map (fun it -> instantiate_struct_member subst it) its)
   | Nth (n, it') ->
      Nth (n, instantiate_struct_member subst it')
+  | Nil bt -> 
+     Nil bt
+  | Cons (it1,it2) -> 
+     Cons (instantiate_struct_member subst it1,
+           instantiate_struct_member subst it2)
   | List (its,bt) -> 
      List (map (fun it -> instantiate_struct_member subst it) its, bt)
   | Head it ->

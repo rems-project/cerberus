@@ -175,6 +175,10 @@ let rec of_index_term loc env ctxt it =
      let* loc_const = of_index_term loc env ctxt t in
      let member_const = Z3.Expr.mk_const_s ctxt member membersort in
      return (Z3.Expr.mk_app ctxt fundecl [loc_const;member_const])
+  | Nil _ ->
+     fail loc (Z3_IT_not_implemented_yet it)
+  | Cons _ ->
+     fail loc (Z3_IT_not_implemented_yet it)
   | Tuple ts ->
      fail loc (Z3_IT_not_implemented_yet it)
   | Head t ->

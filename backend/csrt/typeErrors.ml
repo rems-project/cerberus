@@ -1,39 +1,48 @@
 open Pp
-module Loc = Locations
+module Loc=Locations
+module BT=BaseTypes
 module CF=Cerb_frontend
 
-
 type call_return_switch_error = 
- | Surplus_A of Sym.t * BaseTypes.t
- | Missing_A of Sym.t * BaseTypes.t
- | Missing_R of Resources.t
- | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
- | Unsat_constraint of LogicalConstraints.t
- | Unconstrained_l of Sym.t
+  | Surplus_A of Sym.t * BaseTypes.t
+  | Missing_A of Sym.t * BaseTypes.t
+  | Missing_R of Resources.t
+  | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
+  | Unsat_constraint of LogicalConstraints.t
+  | Unconstrained_l of Sym.t
 
 type type_error = 
- | Name_bound_twice of Sym.t
- | Unbound_name of Sym.t
- | Unbound_impl_const of CF.Implementation.implementation_constant
- | Unreachable of PPrint.document
- | Unsupported of PPrint.document
- | Var_kind_error of {
-     sym: Sym.t;
-     expected : VarTypes.kind;
-     has : VarTypes.kind;
-   }
- | Illtyped_it of IndexTerms.t
- | Variadic_function of Sym.t
- | Return_error of call_return_switch_error
- | Call_error of call_return_switch_error
- | Integer_value_error
- | Generic_error of PPrint.document
- | Undefined of CF.Undefined.undefined_behaviour
- | Unspecified
- | StaticError of string * Sym.t
- | Z3_fail of string
- | Z3_LS_not_implemented_yet of LogicalSorts.t
- | Z3_IT_not_implemented_yet of IndexTerms.t
+  | Name_bound_twice of Sym.t
+  | Pattern_type_mismatch of {
+      has: BT.t;
+      expected: BT.t
+    }
+  | Pattern_incorrect_argument_number of {
+      constructor: CF.Mucore.mu_ctor;
+      expected: int;
+      has: int;
+    }
+  | Unbound_name of Sym.t
+  | Unbound_impl_const of CF.Implementation.implementation_constant
+  | Unreachable of PPrint.document
+  | Unsupported of PPrint.document
+  | Var_kind_error of {
+      sym: Sym.t;
+      expected : VarTypes.kind;
+      has : VarTypes.kind;
+    }
+  | Illtyped_it of IndexTerms.t
+  | Variadic_function of Sym.t
+  | Return_error of call_return_switch_error
+  | Call_error of call_return_switch_error
+  | Integer_value_error
+  | Generic_error of PPrint.document
+  | Undefined of CF.Undefined.undefined_behaviour
+  | Unspecified
+  | StaticError of string * Sym.t
+  | Z3_fail of string
+  | Z3_LS_not_implemented_yet of LogicalSorts.t
+  | Z3_IT_not_implemented_yet of IndexTerms.t
 
 type t = type_error
 
@@ -111,6 +120,27 @@ let pp (loc : Loc.t) (err : t) =
              (words "but found kind"); [VarTypes.pp_kind err.has]])
     | Name_bound_twice name ->
        !^"Name bound twice" ^^ colon ^^^ squotes (Sym.pp name)
+    | Pattern_type_mismatch m ->
+       !^"Pattern type mismatch: expected" ^^^ BT.pp false m.expected ^^^ 
+         !^", has" ^^^ BT.pp false m.has
+    | Pattern_incorrect_argument_number {constructor;expected;has} ->
+       let ctor_pp = 
+         let open CF.Mucore in
+         match constructor with
+         | M_Cnil _ -> "list Nil"
+         | M_Ccons -> "list Cons"
+         | M_Ctuple -> "tuple"
+         | M_Carray -> "array"
+         | M_CivCOMPL -> "COMPL"
+         | M_CivAND -> "AND"
+         | M_CivOR -> "OR"
+         | M_CivXOR -> "XOR"
+         | M_Cspecified -> "specified"
+         | M_Cfvfromint -> "fvfromint"
+         | M_Civfromfloat -> "fromfloat"
+       in
+       !^ctor_pp ^^^ !^"constructor applied to" ^^^ !^(string_of_int expected) ^^^ 
+         !^"arguments, expected" ^^^ !^(string_of_int has)
     | Generic_error err ->
        err
     | Unreachable unreachable ->
