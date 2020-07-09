@@ -51,34 +51,63 @@ let show_sym sym =
 
 
 type pointsto =
-  [ `Current of ail_identifier
-  | `Local of Cabs_to_ail_effect.scope * ail_identifier
-  | `Funptr of ail_identifier
-  | `Global of ail_identifier
-  | `Wild ]
+  | Current of ail_identifier
+  | Local of Cabs_to_ail_effect.scope * ail_identifier
+  | Funptr of ail_identifier
+  | Global of ail_identifier
+  | Wild
+  | PTRVAL of pointsto
+
+
+(* TODO: debug *)
+let foo z =
+  Lem_show.stringFromList begin
+    let rec aux = function
+      | Global sym ->
+          "global: " ^ show_sym sym
+      | Funptr sym ->
+          "funptr: " ^ show_sym sym
+      | Current sym ->
+          "current: " ^ show_sym sym
+      | Local (scope, sym) ->
+          "local(scope: " ^ Scopes.string_of_scope scope ^ "): " ^ show_sym sym
+      | Wild ->
+          "wild"
+      | PTRVAL pt ->
+          "PTRVAL[" ^ aux pt ^ "]" in
+    aux
+  end z
+
+let rec strip_PTRVAL = function
+  | PTRVAL z ->
+      strip_PTRVAL z
+  | z ->
+      z
 
 (* returns [[true]] iff pt1 extends (strictly) further than pt2 *)
 let gt_pointsto (pt1: pointsto) (pt2: pointsto) =
   let open Cabs_to_ail_effect in
+  (* removing the PTRVAL, we know we are dealing with an rvalue *)
+  let pt2 = strip_PTRVAL pt2 in
   match pt1, pt2 with
-  | `Current _, _ ->
+  | Current _, _ ->
       false
-  | `Local (Scope_block n1, _), `Local (Scope_block n2, _) ->
+  | Local (Scope_block n1, _), Local (Scope_block n2, _) ->
       n1 < n2
-  | `Local _, `Local _ ->
+  | Local _, Local _ ->
       (* TODO: remove the scopes and only have block id *)
       assert false
-  | `Funptr _, _
-  | _, `Funptr _ ->
+  | Funptr _, _
+  | _, Funptr _ ->
       (* TODO: this doesn't match the spec, but does correspond to no escape *)
       false
-  | `Global _, (`Current _ | `Local _) ->
+  | Global _, (Current _ | Local _) ->
       true
-  | `Local _, `Current _ ->
+  | Local _, Current _ ->
       true
-  | _, `Wild ->
+  | _, Wild ->
       false
-  | `Wild, _ ->
+  | Wild, _ ->
       true
   | _ ->
       false
@@ -87,18 +116,18 @@ let gt_pointsto (pt1: pointsto) (pt2: pointsto) =
 let classify sigm env sym =
   match List.assoc_opt sym sigm.declarations with
     | Some (_, _, Decl_object _) ->
-        `Global sym
+        Global sym
     | Some (_, _, Decl_function _) ->
-        `Funptr sym
+        Funptr sym
     | None ->
         begin match Scopes.resolve sym env.scopes with
           | None ->
               assert false
           | Some (scope, ()) ->
               if Scopes.(scopeEqual scope (current_scope_is env.scopes)) then
-                `Current sym
+                Current sym
               else
-                `Local (scope, sym)
+                Local (scope, sym)
         end
 
 
@@ -116,6 +145,30 @@ let get_ctype (AnnotatedExpression(gtc,_,_,_)) : Ctype.ctype =
       | Either.Left(_,_) -> assert false (* FIXME possible here? *) in
   c_type_of_type_cat (to_type_cat gtc)
 
+
+let ptr_taints : ((ail_identifier * pointsto list) list) ref =
+  ref []
+
+
+let get_ptr_taints xs =
+  List.fold_left (fun acc pt ->
+    match pt with
+    | Current sym
+    | Local (_, sym)
+    | Global sym ->
+        begin match List.assoc_opt sym !ptr_taints with
+          | Some z ->
+              z
+          | None ->
+              [ Wild ]
+        end
+    | Funptr _
+    | Wild ->
+        acc
+    | PTRVAL _ ->
+        acc (* TODO: assignment to an lvalue resulting from a deref already gives
+               a warning, so we can ignore this case here *)
+  ) [] xs
 
 let points_to classify expr =
   let is_lvalue =
@@ -140,17 +193,34 @@ let points_to classify expr =
       | AilEident sym ->
           [classify sym]
       | AilEunary (Address, e) ->
-          aux e
+          List.map (fun z -> PTRVAL z) (aux e)
       
       | AilEunary (Indirection, e) ->
+          let pts = aux e in
+          let pts_deref =
+            List.fold_left (fun acc pt ->
+              match pt with
+                | PTRVAL pt' ->
+                    pt' :: acc
+                | _ ->
+                    acc
+              ) [] pts in
           begin match AilTypesAux.referenced_type (get_ctype e) with
             | Some ref_ty when AilTypesAux.is_pointer ref_ty ->
-                [ `Wild ]
+                if pts <> [] && List.for_all (function PTRVAL _ -> true | _ -> false) pts then
+                  (* the lvalue can only point to a known object, so we can stay precise *)
+                  get_ptr_taints pts_deref
+                else
+                  [ Wild ]
             | _ ->
                 if is_lvalue then
-                  [`Wild]
+                  if pts <> [] && List.for_all (function PTRVAL _ -> true | _ -> false) pts then
+                    (* the lvalue can only point to a known object, so we can stay precise *)
+                    pts_deref
+                  else
+                    [ Wild ]
                 else
-                  []
+                  pts_deref
           end
       | AilEunary (_, e) ->
           aux e
@@ -176,18 +246,18 @@ let points_to classify expr =
           aux e
       
       | AilErvalue e ->
-          []
+          if AilTypesAux.is_pointer (get_ctype e) then
+            (* if we read the value of a pointer, this can point to anything that has
+               been stored on that pointer *)
+            get_ptr_taints (aux e)
+          else
+            []
       | AilEarray_decay e ->
           []
       | AilEfunction_decay e ->
           []
       | AilEbinary (e1, _, e2) ->
-          if AilTypesAux.is_pointer (get_ctype e1) then
-            aux e1
-          else if AilTypesAux.is_pointer (get_ctype e2) then
-            aux e2
-          else
-            [] (* TODO: what if the integers came from casting a pointer? *)
+          aux e1 @ aux e2
       | AilEassign (e1, e2) ->
           aux e2
       | AilEcompoundAssign (e1, _, e2) ->
@@ -352,7 +422,7 @@ let taints_of_functions sigm =
           begin match List.assoc_opt sym_decl sigm.function_definitions with
             | None ->
                 (* no definition for this function, assuming wild taint *)
-                (sym_decl, [`STORE `Wild]) :: acc
+                (sym_decl, [`STORE Wild]) :: acc
             | Some (_, _, params, stmt) ->
                 let fun_scopes =
                   List.fold_left (fun acc sym ->
@@ -412,7 +482,7 @@ let resolve_calls xs =
             else
               merge_pointsto [List.assoc sym xs; acc]
         | `CALL_WILD ->
-            [`STORE `Wild]
+            [`STORE Wild]
         | z ->
             z :: acc
     ) [] pts in
@@ -429,13 +499,13 @@ let may_alias pts1 pts2 =
       | `STORE z1, `LOAD z2
       | `LOAD z1, `STORE z2 ->
           begin match z1, z2 with
-            | `Wild, _
-            | _, `Wild ->
+            | Wild, _
+            | _, Wild ->
                 true
-            | `Current sym1, `Current sym2
-            | `Local (_, sym1), `Local (_, sym2)
-            | `Funptr sym1, `Funptr sym2
-            | `Global sym1, `Global sym2 ->
+            | Current sym1, Current sym2
+            | Local (_, sym1), Local (_, sym2)
+            | Funptr sym1, Funptr sym2
+            | Global sym1, Global sym2 ->
                 eq_sym sym1 sym2
             | _, _ ->
                 false
@@ -524,7 +594,6 @@ let warn_unseq taints_map expr =
 
 
 
-
 (* ************************************************************************** *)
 (* Driver *)
 let warn_file (_, sigm) =
@@ -548,8 +617,40 @@ let warn_file (_, sigm) =
              the object referred by the lvalue [[e1]] *)
           let xs1 = points_to (classify sigm env) e1 in
           let xs2 = points_to (classify sigm env) e2 in
+          
+          let sym_of = function
+            | Current sym 
+            | Local (_, sym)
+            | Global sym ->
+                Some sym
+            | Funptr _
+            | Wild
+            | PTRVAL _ -> (* TODO: check this one *)
+                None in
+          List.iter (fun pt ->
+            match sym_of pt with
+              | Some sym ->
+                  let old =
+                    begin match List.assoc_opt sym !ptr_taints with
+                      | None    -> []
+                      | Some xs -> xs
+                    end in
+                  ptr_taints := (sym, (xs2 @ old)) :: List.remove_assoc sym !ptr_taints (* TODO: use a map ... *)
+              | None ->
+                  ()
+          ) xs1;
+
           if xs2 <> [] && List.exists (fun (x, y) -> gt_pointsto x y) (Utils.product_list xs1 xs2) then
-            Panic.wrn (Some loc) "the address of a block-scoped variable may be escaping"
+            Panic.wrn (Some loc) "the address of a block-scoped variable may be escaping";
+(*
+(*          else *)
+            Printf.printf "%sASSIGN[%s] ==> lvalue: %s -- e2: %s\x1b[0m\n"
+              (if List.exists (fun (x, y) -> gt_pointsto x y) (Utils.product_list xs1 xs2) then "\x1b[31m" else "")
+              (Location_ocaml.location_to_string loc)
+              (foo xs1)
+              (foo xs2); 
+*)
+
       
       | AilEunary (_, e)
       | AilEcast (_, _, e)
@@ -658,7 +759,15 @@ let warn_file (_, sigm) =
       | AilSgoto _ ->
           ()
       | AilSdeclaration xs ->
-          List.iter (fun (_, e) ->
+          List.iter (fun (sym, e) ->
+            (* We need to record the tainting if [[sym]] is a pointer *)
+            let pts = points_to (classify sigm env) e in
+            let old =
+              begin match List.assoc_opt sym !ptr_taints with
+                | None    -> []
+                | Some xs -> xs
+              end in
+             ptr_taints := (sym, (pts @ old)) :: List.remove_assoc sym !ptr_taints; (* TODO: use a map ... *)
             aux_expr env e;
             warn_unseq e;
           ) xs
@@ -683,12 +792,12 @@ let warn_file (_, sigm) =
       | `CALL sym ->
           merge_pointsto [List.assoc sym taints_map; acc]
       | `CALL_WILD ->
-          [`STORE `Wild]
+          [`STORE Wild]
       | z ->
           z :: acc
     ) [] pts in
   (* This display the warning for potential nondeterminism from unsequenced calls *)
   List.iter (fun (loc, xs1, xs2) ->
     if may_alias (resolve_calls2 xs1) (resolve_calls2 xs2) then
-      Panic.wrn (Some loc) "two function calls potentially aliasing are unsequenced"
+      Panic.wrn (Some loc) "a function call potentially introduces non-determinism"
   ) (List.rev !potential_races)

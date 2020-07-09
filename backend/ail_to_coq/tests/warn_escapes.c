@@ -96,3 +96,79 @@ void j(void)
     current_ptr2 = (current_ptr1 = &current); // SAFE
   }
 }
+
+
+void k(void)
+{
+    int *p;
+  {
+    int x, y, *ptr;
+    ptr = &x;
+    
+    global_ptr = ptr; // UNSAFE (ptr contains the address of x)
+
+  }
+  
+  *global_ptr; // this is ub
+}
+
+
+int glob2 = 1;
+uintptr_t glob3 = 12;
+uintptr_t *glob_ptr2 = &glob3;
+
+
+int l(void) {
+  int *p;
+  {
+    uintptr_t x = 42;
+    *(glob2 ? glob_ptr2 : &x) = (uintptr_t)&x; // UNSAFE
+  }
+  *(int*)*glob_ptr2; // THIS IS UB
+}
+
+
+int m(void) {
+  int *p;
+  {
+    int x, y, *ptr;
+    p = &(*&x);              // UNSAFE
+    p = &(*(glob? &x : &y)); // UNSAFE
+    p = &x;                  // UNSAFE
+    
+    *(&x) = (int)&x; // SAFE
+    *global_ptr = (int)&x; // UNSAFE
+    *(glob? global_ptr : &x) = (int)&x; // UNSAFE
+  }
+  
+  *global_ptr; // THIS IS UB
+}
+
+
+int *glob4;
+int **glob5;
+
+int n(void)
+{
+  {
+    int x;
+    int *p;
+    int **q;
+    p = &x;
+    q = &p;
+    glob5 = &*q; // UNSAFE
+  }
+  **glob5;
+}
+
+
+int o(void)
+{
+  {
+    int x;
+    int *p = &x;
+    int **q  = &p;
+    glob5 = &*q; // UNSAFE
+  }
+  **glob5;
+}
