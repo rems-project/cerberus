@@ -2,19 +2,19 @@ open Cmdliner
 open Extra
 
 type config =
-  { output_dir    : string option
-  ; gen_code      : bool
-  ; gen_spec      : bool
-  ; no_proof      : string list
-  ; full_paths    : bool
-  ; imports       : (string * string) list
-  ; spec_ctxt     : string list
-  ; cpp_I         : string list
-  ; cpp_nostd     : bool
-  ; cpp_output    : bool
-  ; no_expr_loc   : bool
-  ; no_stmt_loc   : bool
-  ; no_lifetime_w : bool }
+  { output_dir  : string option
+  ; gen_code    : bool
+  ; gen_spec    : bool
+  ; no_proof    : string list
+  ; full_paths  : bool
+  ; imports     : (string * string) list
+  ; spec_ctxt   : string list
+  ; cpp_I       : string list
+  ; cpp_nostd   : bool
+  ; cpp_output  : bool
+  ; no_expr_loc : bool
+  ; no_stmt_loc : bool
+  ; no_analysis : bool }
 
 (* Main entry point. *)
 let run : config -> string -> unit = fun cfg c_file ->
@@ -72,9 +72,9 @@ let run : config -> string -> unit = fun cfg c_file ->
   let proof_imports = imports @ ca.Comment_annot.ca_proof_imports in
   let code_imports = cfg.imports @ ca.Comment_annot.ca_code_imports in
   (* Do the translation from C to Ail, and then to our AST (if necessary). *)
-  if not cfg.no_lifetime_w || cfg.gen_code || cfg.gen_spec then
+  if not cfg.no_analysis || cfg.gen_code || cfg.gen_spec then
   let ail_ast = Cerb_wrapper.c_file_to_ail cfg.cpp_I cfg.cpp_nostd c_file in
-  if not cfg.no_lifetime_w then Warn.warn_file ail_ast;
+  if not cfg.no_analysis then Warn.warn_file ail_ast;
   let coq_ast = Ail_to_coq.translate c_file ail_ast in
   (* Generate the code, if necessary. *)
   if cfg.gen_code then
@@ -197,11 +197,21 @@ let no_stmt_loc =
   in
   Arg.(value & flag & info ["no-stmt-loc"] ~doc)
 
-let no_lifetime_w =
+let no_analysis =
   let doc =
-    "Do not give a warning if a value escapes its lifetime."
+    "Disable the extra analyses (and the corresponding warnings) that are \
+     performed on the source code by default. There are two such analyses. \
+     (1) A warning is issued when the address of a local variable whose \
+     scope is not that of the function is taken. Indeed, if that happens \
+     then variables can potentially escape their lifetime (which is only \
+     active in the block they are defined in) since all local variable are \
+     hoisted to the function scope by RefiendC. (2) A warning is issued when \
+     there is potential non-determinism in evaluation of expressions. This \
+     is a problem since C has a loose ordering of expression evaluation, \
+     while RefinedC has a fixed left-to-right evaluation order. Note that \
+     these two analyses are over-approximations."
   in
-  Arg.(value & flag & info ["no-lifetime-warning"] ~doc)
+  Arg.(value & flag & info ["no-extra-analysis"] ~doc)
 
 let no_loc =
   let doc =
@@ -212,17 +222,16 @@ let no_loc =
 
 let opts : config Term.t =
   let build output_dir no_code no_spec no_proof full_paths imports spec_ctxt
-      cpp_I cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc
-      no_lifetime_w =
+      cpp_I cpp_nostd cpp_output no_expr_loc no_stmt_loc no_loc no_analysis =
     let no_expr_loc = no_expr_loc || no_loc in
     let no_stmt_loc = no_stmt_loc || no_loc in
     { output_dir ; gen_code = not no_code ; gen_spec = not no_spec
     ; no_proof ; full_paths ; imports ; spec_ctxt ; cpp_I ; cpp_nostd
-    ; cpp_output ; no_stmt_loc ; no_expr_loc ; no_lifetime_w }
+    ; cpp_output ; no_stmt_loc ; no_expr_loc ; no_analysis }
   in
   Term.(pure build $ output_dir $ no_code $ no_spec $ no_proof $ full_paths $
           imports $ spec_ctxt $ cpp_I $ cpp_nostd $ cpp_output $
-          no_expr_loc $ no_stmt_loc $ no_loc $ no_lifetime_w)
+          no_expr_loc $ no_stmt_loc $ no_loc $ no_analysis)
 
 let c_file =
   let doc = "C language source file." in
