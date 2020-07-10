@@ -1411,19 +1411,6 @@ let rec check_expr loc env (e : ('a,'bty) mu_expr) typ =
      end
      
 
-let rec bind_arguments_rt env = function
-  | Computational (name,bound,t) ->
-     bind_arguments_rt (add_Avar env (name,bound)) t
-  | Logical (name,bound,t) ->
-     bind_arguments_rt (add_Lvar env (name,bound)) t
-  | Resource (bound,t) ->
-     bind_arguments_rt (add_URvar env bound) t
-  | Constraint (bound,t) ->
-     bind_arguments_rt (add_UCvar env bound) t
-  | I -> 
-     env
-
-
 
 
 let check_function loc genv fsym args rbt body ftyp =
