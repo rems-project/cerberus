@@ -804,17 +804,28 @@ and infer_struct loc env (tag,fields) =
      in the struct declaration *)
   let* decl = Global.get_struct_decl loc env.global (Tag tag) in
   let ret = fresh () in
-  let* (args,constrs,env) =
-    fold_rightM (fun (id,_ct,mv) (args,constrs,env) ->
-        let* (t, env) = infer_mem_value loc env mv in
-        let argname = fresh () in
-        let* env = bind_to_name loc env t argname in
-        let constr = LC (S argname %= (Member (Tag tag, S ret, Member (Id.s id)))) in
-        return ((argname,loc)::args, Constraint (constr, constrs), env)
-      ) fields ([],I,env)
+  let rec check fields decl =
+    match fields, decl with
+    | (id,_ct,mv)::fields, (smember,sbt)::decl when Member (Id.s id) = smember ->
+       let* (constrs,env) = check fields decl in
+       let* (t, env) = infer_mem_value loc env mv in
+       let argname = fresh () in
+       let* env = bind_to_name loc env t argname in
+       let* (abt,env) = get_Avar loc env argname in
+       let* () = check_base_type loc None abt sbt in
+       let constr = LC (S argname %= (Member (Tag tag, S ret, Member (Id.s id)))) in
+       let constrs = Constraint (constr, constrs) in
+       return (constrs, env)
+    | [], [] -> 
+       return (I,env)
+    | (id,_ct,mv)::fields, (smember,sbt)::decl ->
+       fail loc (Unreachable !^"mismatch in fields in infer_struct")
+    | [], (Member smember,sbt)::_ ->
+       fail loc (Generic_error (!^"field" ^^^ !^smember ^^^ !^"missing"))
+    | (id,_,_)::_, [] ->
+       fail loc (Generic_error (!^"supplying unexpected field" ^^^ !^(Id.s id)))
   in
-  let* _ = subtype loc env args decl.create_spec
-             "checking struct against struct specification" in
+  let* (constrs,env) = check fields decl.raw in
   return (Computational (ret, Struct (Tag tag), constrs), env)
 
 

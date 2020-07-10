@@ -49,7 +49,7 @@ let struct_decl loc tag fields genv =
   let open Sym in
   let open BaseTypes in
 
-  let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts,acc_spec) 
+  let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts) 
             member ct =
     let (CF.Ctype.Ctype (annots, ct_)) = ct in
     let loc = Tools.update_loc loc annots in
@@ -58,8 +58,7 @@ let struct_decl loc tag fields genv =
        return ((member,Unit)::acc_members, 
                acc_sopen, 
                acc_sclosed, 
-               (member,ct)::acc_cts,
-               Computational (fresh (), Unit, acc_spec))
+               (member,ct)::acc_cts)
     | Basic (Integer it) -> 
        let* lc1 = Conversions.integerType_constraint loc 
                     (Member (tag, S thisstruct, member)) it in
@@ -68,23 +67,20 @@ let struct_decl loc tag fields genv =
        return ((member,Int)::acc_members, 
                Constraint (lc1,acc_sopen), 
                Constraint (lc1,acc_sclosed),
-               (member,ct)::acc_cts,
-               Computational (spec_name, Int, acc_spec))
+               (member,ct)::acc_cts)
     | Array (ct, _maybe_integer) -> 
        return ((member,Array)::acc_members, 
                acc_sopen, 
                acc_sclosed, 
-               (member,ct):: acc_cts,
-               Computational (fresh (), Array, acc_spec))
+               (member,ct):: acc_cts)
     | Pointer (_qualifiers, ct) -> 
        return ((member,Loc)::acc_members, 
                acc_sopen, 
                acc_sclosed, 
-               (member,ct)::acc_cts,
-               Computational (fresh (), Loc, acc_spec))
+               (member,ct)::acc_cts)
     (* fix *)
     | Atomic ct -> 
-       aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts,acc_spec) member ct
+       aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts) member ct
     | Struct tag2 -> 
        let* decl = Global.get_struct_decl loc genv (Tag tag2) in
        let sopen = 
@@ -100,8 +96,7 @@ let struct_decl loc tag fields genv =
        return ((member, Struct (Tag tag2))::acc_members, 
                sopen@@acc_sopen, 
                sclosed@@acc_sclosed,
-               (member, ct)::acc_cts,
-               Computational (fresh (), Struct (Tag tag2), acc_spec))
+               (member, ct)::acc_cts)
     | Basic (Floating _) -> 
        fail loc (Unsupported !^"todo: union types")
     | Union sym -> 
@@ -110,15 +105,15 @@ let struct_decl loc tag fields genv =
        fail loc (Unsupported !^"function pointers")
   in
   let thisstruct = fresh () in
-  let* (raw,sopen,sclosed,ctypes,create_spec) = 
+  let* (raw,sopen,sclosed,ctypes) = 
     List.fold_right (fun (id, (_attributes, _qualifier, ct)) acc ->
         let* acc = acc in
         aux thisstruct loc acc (Member (Id.s id)) ct
-      ) fields (return ([],I,I,[],I)) 
+      ) fields (return ([],I,I,[])) 
   in
   let open_type = {sbinder = thisstruct; souter=sopen } in
   let closed_type = {sbinder = thisstruct; souter=sclosed } in
-  return { raw; open_type; closed_type; ctypes; create_spec }
+  return { raw; open_type; closed_type; ctypes }
   
 
 

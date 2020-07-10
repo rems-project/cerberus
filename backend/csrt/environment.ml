@@ -44,7 +44,6 @@ type struct_decl =
   { raw: (BT.member * BT.t) list;
     open_type: struct_sig;
     closed_type: struct_sig;
-    create_spec: RT.t;
     ctypes: (BaseTypes.member * CF.Ctype.ctype) list }
 
 
@@ -113,8 +112,7 @@ module Global = struct
         item (plain (Sym.pp sym) ^ " (open)") 
           (RT.pp (RT.Computational (s.open_type.sbinder, BT.Struct tag, s.open_type.souter))) ^/^
         item (plain (Sym.pp sym) ^ " (closed)") 
-          (RT.pp (RT.Computational (s.closed_type.sbinder, BT.Struct tag, s.closed_type.souter))) ^/^
-        item (plain (Sym.pp sym) ^ " (create spec)") (RT.pp s.create_spec)
+          (RT.pp (RT.Computational (s.closed_type.sbinder, BT.Struct tag, s.closed_type.souter)))
       )
       (SymMap.bindings decls) 
              
