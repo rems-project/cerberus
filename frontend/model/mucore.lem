@@ -247,6 +247,8 @@ type mu_globs_map 'a 'bty =
 
 type mu_tag_definitions = Core.core_tag_definitions
 
+type mu_funinfo = Loc.t * Annot.attributes * ctype * list (maybe symbol * ctype) * bool * bool
+
 (* a Core file is just a set of named functions *)
 type mu_file 'bty 'a = <|
   mu_main    : maybe symbol;
@@ -256,7 +258,7 @@ type mu_file 'bty 'a = <|
   mu_globs   : list (symbol * mu_globs 'a 'bty);
   mu_funs    : mu_fun_map 'bty 'a;
   mu_extern  : mu_extern_map;
-  mu_funinfo : map symbol (Loc.t * Annot.attributes * ctype * list (maybe symbol * ctype) * bool * bool);
+  mu_funinfo : map symbol mu_funinfo;
 |>
 
 

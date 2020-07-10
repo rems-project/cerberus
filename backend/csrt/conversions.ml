@@ -264,3 +264,23 @@ let make_fun_arg_type genv asym loc ct =
   (* let arg = fun rt -> returnType_to_argumentType rt 
    *                       (Computational (asym, abt, ftt)) in *)
   return (Computational (asym, abt, arg),ret)
+
+
+
+let make_fun_spec loc genv attrs args ret_ctype = 
+  let open FT in
+  let open RT in
+  let* (arguments, returns, names) = 
+    fold_leftM (fun (args,returns,names) (msym, ct) ->
+        let name = match msym with
+          | Some sym -> sym
+          | None -> Sym.fresh ()
+        in
+        let* (arg,ret) = make_fun_arg_type genv name loc ct in
+        return (args @@ arg, returns @@ ret, name::names)
+      ) (I, I, []) args
+  in
+  let* ret = ctype true loc (fresh ()) ret_ctype in
+  let ftyp = returnType_to_argumentType arguments (ret @@ returns) in
+  return ftyp
+

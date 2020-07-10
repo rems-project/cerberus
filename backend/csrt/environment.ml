@@ -52,7 +52,7 @@ module Global = struct
 
   type t = 
     { struct_decls : struct_decl SymMap.t; 
-      fun_decls : (Loc.t * FT.t * Sym.t) SymMap.t; (* third item is return name *)
+      fun_decls : (Loc.t * FT.t) SymMap.t; (* third item is return name *)
       impl_fun_decls : FT.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
       (* names : NameMap.t *)
@@ -70,8 +70,8 @@ module Global = struct
   let add_struct_decl genv (BT.Tag s) typ = 
     { genv with struct_decls = SymMap.add s typ genv.struct_decls }
 
-  let add_fun_decl genv fsym (loc, typ, ret_sym) = 
-    { genv with fun_decls = SymMap.add fsym (loc,typ,ret_sym) genv.fun_decls }
+  let add_fun_decl genv fsym (loc, typ) = 
+    { genv with fun_decls = SymMap.add fsym (loc,typ) genv.fun_decls }
 
   let add_impl_fun_decl genv i typ = 
     { genv with impl_fun_decls = ImplMap.add i typ genv.impl_fun_decls }
@@ -121,7 +121,7 @@ module Global = struct
 
   let pp_fun_decls decls = 
     flow_map hardline
-      (fun (sym, (_, t, _ret)) -> item (plain (Sym.pp sym)) (FT.pp t))
+      (fun (sym, (_, t)) -> item (plain (Sym.pp sym)) (FT.pp t))
       (SymMap.bindings decls)
 
   (* let pp_name_map m = 

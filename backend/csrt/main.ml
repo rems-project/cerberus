@@ -119,7 +119,7 @@ let main filename debug_level type_debug_level =
   | CF.Exception.Exception err ->
      prerr_endline (CF.Pp_errors.to_string err)
   | CF.Exception.Result core_file ->
-     Check.check_and_report core_file
+     Process.process_and_report core_file
 
 
 open Cmdliner
