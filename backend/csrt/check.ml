@@ -979,7 +979,7 @@ let infer_pexpr loc env (pe : 'bty mu_pexpr) =
        let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_PEcall (CF.Core.Sym sym, asyms) ->
-       let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global sym in
+       let* (_loc,decl_typ) = get_fun_decl loc env.global sym in
        let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_PEcase _ -> fail loc (Unreachable !^"PEcase in inferring position")
@@ -1298,7 +1298,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
          | FunctionPointer sym -> return sym
          | _ -> fail loc1 (Generic_error !^"not a function pointer")
        in
-       let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global fun_sym in
+       let* (_loc,decl_typ) = get_fun_decl loc env.global fun_sym in
        let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
        return (Normal rt, env)
     | M_Eproc (_, fname, asyms) ->
@@ -1306,7 +1306,7 @@ let rec infer_expr loc env (e : ('a,'bty) mu_expr) =
          | CF.Core.Impl impl -> 
             get_impl_fun_decl loc env.global impl
          | CF.Core.Sym sym ->
-            let* (_loc,decl_typ,_ret_name) = get_fun_decl loc env.global sym in
+            let* (_loc,decl_typ) = get_fun_decl loc env.global sym in
             return decl_typ
        in
        let* (rt, env) = calltyp loc env (List.map (aunpack loc) asyms) decl_typ in
@@ -1423,275 +1423,74 @@ let rec bind_arguments_rt env = function
   | I -> 
      env
 
-let check_proc loc fsym genv body ftyp = 
-  let* () = debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) in
-  let env = with_fresh_local genv in
-  let (args_rt,ret) = FT.args_and_ret ftyp in
-  let env = bind_arguments_rt env args_rt in
-  let* _env = check_expr loc env body ret in
-  let* () = debug_print 1 (!^(greenb "...checked ok")) in
-  return ()
-
-let check_fun loc fsym genv body ftyp = 
-  let* () = debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) in
-  let env = with_fresh_local genv in
-  let (args_rt,ret) = FT.args_and_ret ftyp in
-  let env = bind_arguments_rt env args_rt in
-  let* _env = check_pexpr loc env body ret in
-  let* () = debug_print 1 (!^(greenb "...checked ok")) in
-  return ()
 
 
-let check_function (type bty a) genv fsym (fn : (bty,a) mu_fun_map_decl) =
 
-  let check_consistent loc ftyp (args, ret) = 
-
-    let rec forget_rt = function
-      | RT.Computational (name,bt,t) ->
-         RT.Computational (name,bt,forget_rt t)
-      | RT.Logical (_,_,t)
-      | RT.Resource (_,t)
-      | RT.Constraint (_,t) ->
-         forget_rt t
-      | RT.I ->
-         I
-    in
-
-    let rec forget_ft = function
-      | FT.Computational (name,bt,t) ->
-         FT.Computational (name,bt,forget_ft t)
-      | FT.Logical (_,_,t)
-      | FT.Resource (_,t)
-      | FT.Constraint (_,t) ->
-         forget_ft t
-      | FT.Return rt ->
-         FT.Return (forget_rt rt)
-    in
-
-    let* ftyp2 = 
-      let* rbt = Conversions.bt_of_core_base_type loc (snd ret) in
-      let ret = (RT.Computational (fst ret, rbt, RT.I)) in
-      let rec aux = function
-        | [] -> return (FT.Return ret)
-        | (name,cbt) :: args -> 
-           let* t = aux args in
-           let* bt = Conversions.bt_of_core_base_type loc cbt in
-           return (FT.Computational (name, bt, t))
-      in
-      aux args
-    in
-
-    if forget_ft ftyp = ftyp2 then return ()
-    else 
-      let err = 
-        !^"Function definition of" ^^^ Sym.pp fsym ^^^ !^"inconsistent." ^/^
-        !^"Should be:" ^/^
-        FunctionTypes.pp ftyp ^/^
-        !^"Is:" ^/^
-        flow (break 1) ([!^"is"] @ [FunctionTypes.pp ftyp2])
-                               
-      in
-      fail loc (Generic_error err)
+let check_function loc genv fsym args rbt body ftyp =
+  
+  let* () = match body with
+    | `EXPR body -> debug_print 1 (h1 ("Checking procedure " ^ (plain (Sym.pp fsym)))) 
+    | `PEXPR body -> debug_print 1 (h1 ("Checking function " ^ (plain (Sym.pp fsym)))) 
   in
-  match fn with
-  | M_Fun (ret, args, body) ->
-     let* decl = get_fun_decl Loc.unknown genv fsym in
-     let (loc,ftyp,ret_name) = decl in
-     let* () = check_consistent loc ftyp (args, (ret_name,ret)) in
-     check_fun loc fsym genv body ftyp
-  | M_Proc (loc, ret, args, body) ->
-     let* decl = get_fun_decl loc genv fsym in
-     let (loc,ftyp,ret_name) = decl in
-     let* () = check_consistent loc ftyp (args, (ret_name,ret)) in
-     check_proc loc fsym genv body ftyp
-  | M_ProcDecl _
-  | M_BuiltinDecl _ -> 
-     return ()
+
+  let rec rt_consistent orbt rt =
+    match rt with
+    | RT.Computational (sname,sbt,t) ->
+       begin match orbt with
+       | Some rbt when BT.type_equal rbt sbt ->
+          rt_consistent None t
+       | Some rbt ->
+          let mismatch = Mismatch {mname = None; has = (A rbt); expected = A sbt} in
+          fail loc (Return_error mismatch)
+       | None ->
+          fail loc (Unreachable !^"function has multiple computational return values")
+       end
+    | RT.Logical (_,_,t)
+    | RT.Resource (_,t)
+    | RT.Constraint (_,t) -> rt_consistent orbt t
+    | RT.I ->
+       begin match orbt with
+       | Some abt -> 
+          fail loc (Unreachable !^"function has no computational return value")
+       | None -> return ()
+       end
+  in
+
+  let rec check env args rbt body ftyp =
+    match args, ftyp with
+    | (aname,abt)::args, FT.Computational (sname,sbt,ftyp) 
+         when BT.type_equal abt sbt ->
+       let ftyp' = FT.subst_var {substitute=sname;swith=S aname} ftyp in
+       check (add_Avar env (aname,abt)) args rbt body ftyp'
+    | (aname,abt)::args, FT.Computational (sname,sbt,ftyp) ->
+       let mis = Mismatch {mname = Some aname; has = (A abt); expected = A sbt} in
+       fail loc (Call_error mis)
+    | [], FT.Computational (sname,sbt,ftyp) ->
+       fail loc (Call_error (Missing_A (sname, sbt)))
+    | args, FT.Logical (sname,sls,ftyp) ->
+       let aname = fresh () in
+       let ftyp' = FT.subst_var {substitute=sname;swith=S aname} ftyp in
+       check (add_Lvar env (aname,sls)) args rbt body ftyp'       
+    | args, FT.Resource (re,ftyp) ->
+       check (add_URvar env re) args rbt body ftyp
+    | args, FT.Constraint (lc,ftyp) ->
+       check (add_UCvar env lc) args rbt body ftyp
+    | [], FT.Return rt ->
+       let* () = rt_consistent (Some rbt) rt in
+       begin match body with
+         | `EXPR body -> check_expr loc env body rt
+         | `PEXPR body -> check_pexpr loc env body rt
+       end
+    | (aname,abt)::_, FT.Return _ ->
+       fail loc (Call_error (Surplus_A (aname, abt)))
+  in
+  let* () = check (with_fresh_local genv) args rbt body ftyp in
+  let* () = debug_print 1 (!^(greenb "...checked ok")) in       
+
+  return ()
 
 
-let check_functions (type a bty) env (fns : (bty,a) mu_fun_map) =
-  pmap_iterM (check_function env) fns
 
                              
-(* let process_attributes *)
-
-
-let record_fun sym (loc,attrs,ret_ctype,args,is_variadic,_has_proto) genv =
-  if is_variadic then fail loc (Variadic_function sym) else
-    let* (arguments, returns, names) = 
-      fold_leftM (fun (args,returns,names) (msym, ct) ->
-          let name = match msym with
-            | Some sym -> sym
-            | None -> Sym.fresh ()
-          in
-          let* (arg,ret) = Conversions.make_fun_arg_type genv name loc ct in
-          return (args @@ arg, returns @@ ret, name::names)
-        ) (I, I, []) args
-    in
-    let ret_name = Sym.fresh () in
-    let* ret = Conversions.ctype true loc ret_name ret_ctype in
-    let ftyp = Conversions.returnType_to_argumentType arguments (ret @@ returns) in
-    return (add_fun_decl genv sym (loc, ftyp, ret_name))
-
-let record_funinfo genv funinfo = 
-  pmap_foldM record_fun funinfo genv
-
-
-(* check the types? *)
-let record_impl impl impl_decl genv = 
-  match impl_decl with
-  | M_Def (bt, _p) -> 
-     let* bt = Conversions.bt_of_core_base_type Loc.unknown bt in
-     return (add_impl_constant genv impl bt)
-  | M_IFun (bt, args, _body) ->
-     let* args_ts = 
-       mapM (fun (sym,a_bt) -> 
-           let* a_bt = Conversions.bt_of_core_base_type Loc.unknown a_bt in
-           return (FT.mcomputational sym a_bt)) args
-     in
-     let* bt = Conversions.bt_of_core_base_type Loc.unknown bt in
-     let ftyp = (comps args_ts) (Return (Computational (fresh (), bt, I))) in
-     return (add_impl_fun_decl genv impl ftyp)
-                        
-
-
-let record_impls genv impls = pmap_foldM record_impl impls genv
-
-
-let struct_decl loc tag fields genv = 
-
-  let rec aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts,acc_spec) 
-            member ct =
-    let (CF.Ctype.Ctype (annots, ct_)) = ct in
-    let loc = update_loc loc annots in
-    match ct_ with
-    | Void -> 
-       return ((member,Unit)::acc_members, 
-               acc_sopen, 
-               acc_sclosed, 
-               (member,ct)::acc_cts,
-               Computational (fresh (), Unit, acc_spec))
-    | Basic (Integer it) -> 
-       let* lc1 = Conversions.integerType_constraint loc 
-                    (Member (tag, S thisstruct, member)) it in
-       let spec_name = fresh () in
-       let* lc2 = Conversions.integerType_constraint loc (S spec_name) it in
-       return ((member,Int)::acc_members, 
-               Constraint (lc1,acc_sopen), 
-               Constraint (lc1,acc_sclosed),
-               (member,ct)::acc_cts,
-               Computational (spec_name, Int, acc_spec))
-    | Array (ct, _maybe_integer) -> 
-       return ((member,Array)::acc_members, 
-               acc_sopen, 
-               acc_sclosed, 
-               (member,ct):: acc_cts,
-               Computational (fresh (), Array, acc_spec))
-    | Pointer (_qualifiers, ct) -> 
-       return ((member,Loc)::acc_members, 
-               acc_sopen, 
-               acc_sclosed, 
-               (member,ct)::acc_cts,
-               Computational (fresh (), Loc, acc_spec))
-    (* fix *)
-    | Atomic ct -> 
-       aux thisstruct loc (acc_members,acc_sopen,acc_sclosed,acc_cts,acc_spec) member ct
-    | Struct tag2 -> 
-       let* decl = Global.get_struct_decl loc genv (Tag tag2) in
-       let sopen = 
-         let subst = {substitute=decl.open_type.sbinder; 
-                      swith=IT.Member (tag, S thisstruct, member)} in
-         RT.subst_var subst decl.open_type.souter
-       in
-       let sclosed = 
-         let subst = {substitute=decl.closed_type.sbinder; 
-                      swith=IT.Member (tag, S thisstruct, member)} in
-         RT.subst_var subst decl.closed_type.souter
-       in
-       return ((member, Struct (Tag tag2))::acc_members, 
-               sopen@@acc_sopen, 
-               sclosed@@acc_sclosed,
-               (member, ct)::acc_cts,
-               Computational (fresh (), Struct (Tag tag2), acc_spec))
-    | Basic (Floating _) -> 
-       fail loc (Unsupported !^"todo: union types")
-    | Union sym -> 
-       fail loc (Unsupported !^"todo: union types")
-    | Function _ -> 
-       fail loc (Unsupported !^"function pointers")
-  in
-  let thisstruct = fresh () in
-  let* (raw,sopen,sclosed,ctypes,create_spec) = 
-    fold_right (fun (id, (_attributes, _qualifier, ct)) acc ->
-        let* acc = acc in
-        aux thisstruct loc acc (Member (Id.s id)) ct
-      ) fields (return ([],I,I,[],I)) 
-  in
-  let open_type = {sbinder = thisstruct; souter=sopen } in
-  let closed_type = {sbinder = thisstruct; souter=sclosed } in
-  return { raw; open_type; closed_type; ctypes; create_spec }
-  
-
-
-let record_tagDef file sym def genv =
-  match def with
-  | CF.Ctype.UnionDef _ -> 
-     fail Loc.unknown (Unsupported !^"todo: union types")
-  | CF.Ctype.StructDef (fields, _) ->
-     let* decl = struct_decl Loc.unknown (Tag sym) fields genv in
-     let genv = add_struct_decl genv (Tag sym) decl in
-     return genv
-
-
-let record_tagDefs file genv tagDefs = 
-  pmap_foldM (record_tagDef file) tagDefs genv
-
-
-
-
-
-
-
-let pp_fun_map_decl funinfo = 
-  let pp = CF.Pp_core.All.pp_funinfo_with_attributes funinfo in
-  print_string (plain pp)
-
-
-let print_initial_environment genv = 
-  let* () = debug_print 1 (h1 "initial environment") in
-  let* () = debug_print 1 (Global.pp genv) in
-  return ()
-
-
-
-let check mu_file =
-  pp_fun_map_decl mu_file.mu_funinfo;
-  let genv = Global.empty in
-  let* genv = record_tagDefs mu_file genv mu_file.mu_tagDefs in
-  let* genv = record_funinfo genv mu_file.mu_funinfo in
-  let* () = print_initial_environment genv in
-  check_functions genv mu_file.mu_funs
-
-let check_and_report core_file = 
-  match check core_file with
-  | Result () -> ()
-  | Exception (loc,err) -> 
-     let pped = TypeErrors.pp loc err in
-     error pped
-
-
-
-
-
-
-
 (* TODO: 
-   - make call_typ and subtype accept non-A arguments
-
-   - when applying substitution: be careful about the variable 
-     types: e.g. when converting struct types
-
-   - when un/packing structs: remember previous thing as logical 
-     variable as part of binding
-
- *)
+  - make call_typ and subtype accept non-A arguments  *)
