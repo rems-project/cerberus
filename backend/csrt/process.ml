@@ -16,23 +16,24 @@ open Subst
 
 let record_functions genv funinfo : (Global.t, Locations.t * 'e) Except.t  = 
   pmap_foldM 
-    (fun sym ((loc,attrs,ret_ctype,args,is_variadic,_has_proto) : CF.Mucore.mu_funinfo) genv ->
+    (fun fsym ((loc,attrs,ret_ctype,args,is_variadic,_has_proto) : CF.Mucore.mu_funinfo) genv ->
       if is_variadic 
-      then fail loc (Variadic_function sym) 
+      then fail loc (Variadic_function fsym) 
       else
         let* ftyp = Conversions.make_fun_spec loc genv attrs args ret_ctype in
-        return (Global.add_fun_decl genv sym (loc, ftyp))
+        return { genv with fun_decls = SymMap.add fsym (loc,ftyp) genv.fun_decls }
     ) funinfo genv
 
 
 (* check the types? *)
 let record_impl genv impls = 
+  let open Global in
   pmap_foldM 
     (fun impl impl_decl genv ->
       match impl_decl with
       | M_Def (bt, _p) -> 
          let* bt = Conversions.bt_of_core_base_type Loc.unknown bt in
-         return (Global.add_impl_constant genv impl bt)
+         return { genv with impl_constants = ImplMap.add impl bt genv.impl_constants}
       | M_IFun (bt, args, _body) ->
          let* args_ts = 
            mapM (fun (sym,a_bt) -> 
@@ -41,7 +42,8 @@ let record_impl genv impls =
          in
          let* bt = Conversions.bt_of_core_base_type Loc.unknown bt in
          let ftyp = (Tools.comps args_ts) (Return (Computational (Sym.fresh (), bt, I))) in
-         return (Global.add_impl_fun_decl genv impl ftyp)
+
+         return { genv with impl_fun_decls = ImplMap.add impl ftyp genv.impl_fun_decls }
     ) impls genv
 
 
@@ -123,7 +125,7 @@ let record_tagDef file sym def genv =
      fail Loc.unknown (Unsupported !^"todo: union types")
   | CF.Ctype.StructDef (fields, _) ->
      let* decl = struct_decl Loc.unknown (Tag sym) fields genv in
-     let genv = Global.add_struct_decl genv (Tag sym) decl in
+let genv = { genv with struct_decls = SymMap.add sym decl genv.struct_decls } in
      return genv
 
 

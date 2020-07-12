@@ -1,13 +1,14 @@
 open Pp
 module Loc=Locations
 module BT=BaseTypes
+module LS=LogicalSorts
 module CF=Cerb_frontend
 
 type call_return_switch_error = 
   | Surplus_A of Sym.t * BaseTypes.t
   | Missing_A of Sym.t * BaseTypes.t
   | Missing_R of Resources.t
-  | Mismatch of { mname: Sym.t option; has: VarTypes.t; expected: VarTypes.t; }
+  | Mismatch of { mname: Sym.t option; has: LS.t; expected: LS.t; }
   | Unsat_constraint of LogicalConstraints.t
   | Unconstrained_l of Sym.t
 
@@ -22,6 +23,7 @@ type type_error =
       expected: int;
       has: int;
     }
+  | Resource_used of Resources.t * Loc.t
   | Unbound_name of Sym.t
   | Unbound_impl_const of CF.Implementation.implementation_constant
   | Unreachable of PPrint.document
@@ -54,23 +56,8 @@ let pp_return_error = function
   | Missing_R t ->
      !^"Missing return resource of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
-     let has_pp = match has with
-       | A t -> !^ "return value of type" ^^^ BaseTypes.pp false t
-       | L t -> !^ "logical return value of type" ^^^ LogicalSorts.pp false t
-       | R t -> !^ "return resource of type" ^^^ Resources.pp false t
-       | C t -> !^ "return constraint" ^^^ LogicalConstraints.pp false t
-     in
-     begin match expected with
-     | A t -> !^"Expected return value of type" ^^^ 
-                BaseTypes.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | L t -> !^ "Expected logical return value of type" ^^^ 
-                LogicalSorts.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | R t -> !^"Expected return resource of type" ^^^ 
-                Resources.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | C t -> !^"Expected return constraint" ^^^ 
-                LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
-        (* dead, I think *)
-     end
+    !^"Expected return value of type" ^^^ LS.pp false expected ^^^
+      !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
   | Unsat_constraint c ->
      !^"Unsatisfied return constraint" ^^^
        LogicalConstraints.pp false c
@@ -85,23 +72,8 @@ let pp_call_error = function
   | Missing_R t ->
      !^"Missing resource argument of type" ^^^ Resources.pp false t
   | Mismatch {mname; has; expected} ->
-     let has_pp = match has with
-       | A t -> !^ "(computational) argument of type" ^^^ BaseTypes.pp false t
-       | L t -> !^ "logical argument of type" ^^^ LogicalSorts.pp false t
-       | R t -> !^ "resource argument of type" ^^^ Resources.pp false t
-       | C t -> !^ "constraint argument" ^^^ LogicalConstraints.pp false t
-     in
-     begin match expected with
-     | A t -> !^"Expected (computational) argument of type" ^^^ 
-                BaseTypes.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | L t -> !^ "Expected logical argument of type" ^^^ 
-                LogicalSorts.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | R t -> !^"Expected resource argument of type" ^^^ 
-                Resources.pp false t ^^^ !^ "but found" ^^^ has_pp
-     | C t -> !^"Expected constraint argument" ^^^ 
-                LogicalConstraints.pp false t ^^^ !^"but found" ^^^ has_pp
-        (* dead, I think *)
-     end
+    !^"Expected argument of type" ^^^ LS.pp false expected ^^^
+      !^"but found" ^^^ !^"value of type" ^^^ LS.pp false has
   | Unsat_constraint c ->
      !^"Unsatisfied argument constraint" ^^^
        LogicalConstraints.pp false c
@@ -149,6 +121,9 @@ let pp (loc : Loc.t) (err : t) =
        !^"Illtyped index term" ^^ colon ^^^ (IndexTerms.pp false it)
     | Unsupported unsupported ->
        !^"Unsupported feature" ^^ colon ^^^ unsupported
+    | Resource_used (resource,where) ->
+       !^"Resource" ^^^ Resources.pp false resource ^^^ 
+         !^"has already been used:" ^^^ parens (Loc.pp where)
     | Unbound_name unbound ->
        !^"Unbound symbol" ^^ colon ^^^ Sym.pp unbound
     (* | Inconsistent_fundef {loc; decl; defn} ->

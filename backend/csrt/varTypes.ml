@@ -8,29 +8,25 @@ module IT = IndexTerms
 module BT = BaseTypes
 module LS = LogicalSorts
 
+type used = 
+  | Used of Loc.t
+  | Unused
+
 type t = 
  | A of BaseTypes.t
  | L of LogicalSorts.t
- | R of Resources.t
+ | R of Resources.t * used
  | C of LogicalConstraints.t
 
-(* let subst_var subst t = 
- *  match t with
- *  | A t -> A (BaseTypes.subst_var subst t)
- *  | L t -> L (LogicalSorts.subst_var subst t)
- *  | R t -> R (Resources.subst_var subst t)
- *  | C t -> C (LogicalConstraints.subst_var subst t)
- * 
- * let subst_vars = Tools.make_substs subst_var *)
 
-
-let pp = function
-  | A t -> char 'A' ^^^ (BT.pp false t)
-  | L t -> char 'L' ^^^ (LS.pp false t)
-  | R t -> char 'R' ^^^ (RE.pp false t)
-  | C t -> char 'C' ^^^ (LC.pp false t)
-
-
+let pp with_prefix = 
+  let prefix c = if with_prefix then char c else empty in
+  function
+  | A t -> prefix 'A' ^^^ (BT.pp false t)
+  | L t -> prefix 'L' ^^^ (LS.pp false t)
+  | R (t,Unused) -> prefix 'R' ^^^ (RE.pp false t)
+  | R (t,Used l) -> parens (!^"used" ^^^ prefix 'R' ^^^ (RE.pp false t))
+  | C t -> prefix 'C' ^^^ (LC.pp false t)
 
 
 type kind = 
@@ -53,5 +49,4 @@ let pp_kind = function
 
 
 
-type binding = Sym.t * t
-let pp_binding (name,t) = typ (Sym.pp name) (pp t)
+
