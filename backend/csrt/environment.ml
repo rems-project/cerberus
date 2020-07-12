@@ -138,6 +138,7 @@ module Local = struct
     )
 
     let add_var env (name,t) = { vars = SymMap.add name t env.vars} 
+    let remove_var env name = {vars = SymMap.remove name env.vars }
 
 end
 
@@ -157,7 +158,7 @@ module Env = struct
 
   let add_var env (name,b) = {env with local = Local.add_var env.local (name,b)}
   let add_uvar env b = {env with local = Local.add_var env.local (Sym.fresh (),b)}
-  (* let remove_var env sym = { env with local = Local.remove_var env.local sym } *)
+  let remove_var env sym = { env with local = Local.remove_var env.local sym }
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     let* found = lookup_sym loc env.local.vars name in
@@ -196,6 +197,16 @@ module Env = struct
        return bt)
       (get_Avar loc env var)
 
+  let check_resource_used loc env sym = 
+    let* found = get_var loc env sym in
+    match found with
+    | R (_,Used _) -> return ()
+    | R (t,Unused) -> fail loc (Generic_error (RE.pp false t ^^^ !^"unused"))
+    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
+
+  let check_resources_used loc env syms = 
+    iterM (fun sym -> check_resource_used loc env sym) syms
+
   let filter_vars p env = 
     SymMap.fold (fun sym t acc -> 
         let* acc = acc in
@@ -210,6 +221,7 @@ module Env = struct
   let add_vars env bindings = fold_left add_var env bindings
   let add_uvars env bindings = fold_left add_uvar env bindings
   let get_vars loc env vars = mapM (fun sym -> get_var loc env sym) vars
+  let remove_vars env names = fold_left remove_var env names
 
   let use_resource loc env sym = 
     let* t = get_Rvar loc env sym in
