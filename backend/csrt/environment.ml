@@ -38,23 +38,24 @@ let lookup_impl (loc : Loc.t) (env: 'v ImplMap.t) i =
 
 type struct_sig = 
   { sbinder: Sym.t;
-    souter: RT.t }
+    souter: RT.t 
+  }
 
 type struct_decl = 
   { raw: (BT.member * BT.t) list;
+    ctypes: (BaseTypes.member * CF.Ctype.ctype) list;
     open_type: struct_sig;
-    closed_type: struct_sig;
-    ctypes: (BaseTypes.member * CF.Ctype.ctype) list }
+    closed_type: struct_sig; 
+  }
 
 
 module Global = struct 
 
   type t = 
     { struct_decls : struct_decl SymMap.t; 
-      fun_decls : (Loc.t * FT.t) SymMap.t; (* third item is return name *)
+      fun_decls : (Loc.t * FT.t) SymMap.t;
       impl_fun_decls : FT.t ImplMap.t;
       impl_constants : BT.t ImplMap.t;
-      (* names : NameMap.t *)
     } 
 
 
@@ -63,20 +64,7 @@ module Global = struct
       fun_decls = SymMap.empty;
       impl_fun_decls = ImplMap.empty;
       impl_constants = ImplMap.empty;
-      (* names = NameMap.empty  *)
     }
-
-  let add_struct_decl genv (BT.Tag s) typ = 
-    { genv with struct_decls = SymMap.add s typ genv.struct_decls }
-
-  let add_fun_decl genv fsym (loc, typ) = 
-    { genv with fun_decls = SymMap.add fsym (loc,typ) genv.fun_decls }
-
-  let add_impl_fun_decl genv i typ = 
-    { genv with impl_fun_decls = ImplMap.add i typ genv.impl_fun_decls }
-
-  let add_impl_constant genv i typ = 
-    { genv with impl_constants = ImplMap.add i typ genv.impl_constants }
 
   let get_struct_decl loc genv (BT.Tag s) = 
     match SymMap.find_opt s genv.struct_decls with
@@ -85,23 +73,9 @@ module Global = struct
        let err = !^"struct" ^^^ Sym.pp s ^^^ !^"not defined" in
        fail loc (Generic_error err)
 
-  let get_fun_decl loc genv sym = 
-    lookup_sym loc genv.fun_decls sym
-
-  let get_impl_fun_decl loc genv i = 
-    lookup_impl loc genv.impl_fun_decls i
-
-  let get_impl_constant loc genv i = 
-    lookup_impl loc genv.impl_constants i
-
-  (* let get_names genv = genv.names *)
-
-  (* let record_name genv loc string sym =
-   *   { genv with names = NameMap.record loc string sym genv.names } *)
-
-  (* let record_name_without_loc genv string sym =
-   *   { genv with names = NameMap.record_without_loc string sym genv.names } *)
-
+  let get_fun_decl loc genv sym = lookup_sym loc genv.fun_decls sym
+  let get_impl_fun_decl loc genv i = lookup_impl loc genv.impl_fun_decls i
+  let get_impl_constant loc genv i = lookup_impl loc genv.impl_constants i
 
   let pp_struct_decls decls = 
     pp_list
@@ -122,18 +96,11 @@ module Global = struct
       (fun (sym, (_, t)) -> item (plain (Sym.pp sym)) (FT.pp t))
       (SymMap.bindings decls)
 
-  (* let pp_name_map m = 
-   *   pp_list
-   *     (fun (name,sym) -> item name (Sym.pp sym))
-   *     (NameMap.all_names m) *)
-
   let pp_items genv = 
     [ (1, h2 "Structs")
     ; (1, pp_struct_decls genv.struct_decls)
     ; (1, h2 "Functions")
     ; (1, pp_fun_decls genv.fun_decls)
-    (* ; (1, h2 "Names")
-     * ; (1, pp_name_map genv.names) *)
     ]
 
   let pp genv = separate (break 1) (map snd (pp_items genv))
@@ -151,32 +118,26 @@ module Local = struct
 
   let print_constraint_names = false
 
-  let pp_avars vars = pp_list (fun (n,t) -> typ (Sym.pp n) (BT.pp false t)) vars 
-  let pp_lvars vars = pp_list (fun (n,t) -> typ (Sym.pp n) (LS.pp false t)) vars 
-  let pp_rvars vars = pp_list (fun (n,t) -> RE.pp false t) vars 
-  let pp_cvars vars = pp_list (fun (n,t) -> LC.pp false t) vars 
-
   let pp lenv =
     let (a,l,r,c) = 
       SymMap.fold (fun name b (a,l,r,c) ->
           match b with
-          | A t -> ((name,t) :: a,l,r,c)
-          | L t -> (a,(name,t) :: l,r,c)
-          | R t -> (a,l,(name,t) :: r,c)
-          | C t -> (a,l,r,(name,t) :: c)
+          | A _ -> ((name,b) :: a,l,r,c)
+          | L _ -> (a,(name,b) :: l,r,c)
+          | R _ -> (a,l,(name,b) :: r,c)
+          | C _ -> (a,l,r,(name,b) :: c)
         ) lenv.vars ([],[],[],[])
     in
+    let pp_vars vars = pp_list (fun (n,t) -> typ (Sym.pp n) (VarTypes.pp false t)) vars in
     (separate hardline
-       [ inline_item "computational" (pp_avars a)
-       ; inline_item "logical" (pp_lvars l)
-       ; inline_item "resources" (pp_rvars r)
-       ; inline_item "constraints" (pp_cvars c)
+       [ inline_item "computational" (pp_vars a)
+       ; inline_item "logical" (pp_vars l)
+       ; inline_item "resources" (pp_vars r)
+       ; inline_item "constraints" (pp_vars c)
        ]
     )
 
-
     let add_var env (name,t) = { vars = SymMap.add name t env.vars} 
-    let remove_var env sym = { vars = SymMap.remove sym env.vars} 
 
 end
 
@@ -194,40 +155,46 @@ module Env = struct
     { global = genv; 
       local = Local.empty }
 
-  let add_var env b = {env with local = Local.add_var env.local b}
-  let remove_var env sym = { env with local = Local.remove_var env.local sym }
+  let add_var env (name,b) = {env with local = Local.add_var env.local (name,b)}
+  let add_uvar env b = {env with local = Local.add_var env.local (Sym.fresh (),b)}
+  (* let remove_var env sym = { env with local = Local.remove_var env.local sym } *)
 
   let get_var (loc : Loc.t) (env: t) (name: Sym.t) = 
     let* found = lookup_sym loc env.local.vars name in
     match found with
-    | R t -> return (R t, remove_var env name)
-    (* | A (ClosedStruct s) -> return (A (ClosedStruct s), remove_var env name)
-     * | L (Base (ClosedStruct s)) -> return (L (Base (ClosedStruct s)), remove_var env name) *)
-    | t -> return (t, env)
+    | R (t,Used where) -> fail loc (Resource_used (t,where))
+    | t -> return t
 
   let get_Avar (loc : Loc.t) (env: env) (sym: Sym.t) = 
     let* found = get_var loc env sym in
     match found with
-    | (A t, env) -> return (t, env)
-    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
+    | A t -> return t
+    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Argument; has = kind t})
 
   let get_Lvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
     let* found = get_var loc env sym in
     match found with
-    | (L t, env) -> return (t, env)
-    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
+    | L t -> return t
+    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Logical; has = kind t})
 
   let get_Rvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
     let* found = get_var loc env sym in
     match found with
-    | (R t, env) -> return (t, env)
-    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
+    | R (t,Used where) -> fail loc (Resource_used (t,where))
+    | R (t,Unused) -> return t
+    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Resource; has = kind t})
 
   let get_Cvar (loc : Loc.t) (env: env) (sym: Sym.t) = 
     let* found = get_var loc env sym in
     match found with
-    | (C t, env) -> return (t, env)
-    | (t,_) -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
+    | C t -> return (t, env)
+    | t -> fail loc (Var_kind_error {sym; expected = VarTypes.Constraint; has = kind t})
+
+  let get_ALvar loc env var = 
+    tryM 
+      (let* (Base bt) = get_Lvar loc env var in 
+       return bt)
+      (get_Avar loc env var)
 
   let filter_vars p env = 
     SymMap.fold (fun sym t acc -> 
@@ -241,63 +208,18 @@ module Env = struct
 
 
   let add_vars env bindings = fold_left add_var env bindings
-  let remove_vars env names = fold_left remove_var env names
-  let get_vars loc env vars = 
-    fold_leftM (fun (acc,env) sym ->
-        let* (t,env) = get_var loc env sym in
-        return (acc@[t], env)
-      ) ([],env) vars
+  let add_uvars env bindings = fold_left add_uvar env bindings
+  let get_vars loc env vars = mapM (fun sym -> get_var loc env sym) vars
 
-  let add_Avar env (name,t) = add_var env (name,A t)
-  let add_Lvar env (name,t) = add_var env (name,L t)
-  let add_Rvar env (name,t) = add_var env (name,R t)
-  let add_URvar env t = add_var env (Sym.fresh (),R t)
-  let add_UCvar env t = add_var env (Sym.fresh (),C t)
-  let add_Avars env vars = List.fold_left add_Avar env vars
-  let add_Lvars env vars = List.fold_left add_Lvar env vars
-  let add_URvars env vars = List.fold_left add_URvar env vars
-  let add_UCvars env vars = List.fold_left add_UCvar env vars
-
-  let get_ALvar loc env var = 
-    tryM 
-      (let* (Base bt, env) = get_Lvar loc env var in 
-       return (bt, env))
-      (get_Avar loc env var)
-
-
-  let get_ALvars loc env vars = 
-    fold_leftM (fun (acc,env) sym ->
-        let* (t,env) = get_ALvar loc env sym in
-        return (acc@[t], env)
-      ) ([],env) vars
-
-
-  let get_Avars loc env vars = 
-    fold_leftM (fun (acc,env) sym ->
-        let* (t,env) = get_Avar loc env sym in
-        return (acc@[t], env)
-      ) ([],env) vars
-
-
-  let get_Lvars loc env vars = 
-    fold_leftM (fun (acc,env) sym ->
-        let* (t,env) = get_Lvar loc env sym in
-        return (acc@[t], env)
-      ) ([],env) vars
-
-  let get_Rvars loc env vars = 
-    fold_leftM (fun (acc,env) sym ->
-        let* (t,env) = get_Rvar loc env sym in
-        return (acc@[t], env)
-      ) ([],env) vars
-
-
-
-
+  let use_resource loc env sym = 
+    let* t = get_Rvar loc env sym in
+    return (add_var env (sym, R (t, Used loc)))
 
   let get_all_constraints env = 
     SymMap.fold (fun _ b acc -> match b with C c -> c :: acc | _ -> acc)
       env.local.vars []
+
+
 
 end
 
