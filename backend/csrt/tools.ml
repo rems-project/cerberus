@@ -8,6 +8,9 @@ module StringMap = Map.Make(String)
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
 
+
+let id = fun x -> x
+
 let comp (f : 'b -> 'c) (g : 'a -> 'b) (x : 'a) : 'c = f (g (x))
 let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   match fs with
