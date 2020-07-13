@@ -244,7 +244,7 @@ let constraint_holds_given_constraints loc env constraints c =
 
 
 let constraint_holds loc env c = 
-  constraint_holds_given_constraints loc env (Env.get_all_constraints env) c 
+  constraint_holds_given_constraints loc env (Env.all_constraints env) c 
 
 
 
