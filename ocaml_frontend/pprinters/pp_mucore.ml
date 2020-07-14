@@ -14,6 +14,8 @@ open Pp_prelude
 
 type budget = int option
 
+let do_compact = true
+
 
 module type CONFIG =
 sig
@@ -140,9 +142,9 @@ let compare_precedence p1 p2 =
 let pp_keyword w = !^ (ansi_format [Bold; Magenta] w)
 let pp_const   c = !^ (ansi_format [Magenta] c)
 let pp_control w = !^ (ansi_format [Bold; Blue] w)
-let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty ~compact:true a))
+let pp_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string_pretty ~compact:do_compact a))
 (* NOTE: Used to distinguish struct/unions globally *)
-let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string ~compact:true a))
+let pp_raw_symbol  a = !^ (ansi_format [Blue] (Pp_symbol.to_string ~compact:do_compact a))
 let pp_number  n = !^ (ansi_format [Yellow] n)
 let pp_impl    i = P.angles (!^ (ansi_format [Yellow] (Implementation.string_of_implementation_constant i)))
 
@@ -157,9 +159,9 @@ let rec pp_core_object_type = function
   | OTy_array bty -> (* TODO: THIS IS NOT BEING PARSED CORRECTLY *)
       !^ "array" ^^ P.parens (pp_core_object_type bty)
   | OTy_struct ident ->
-      !^ "struct" ^^^ !^(Pp_symbol.to_string ~compact:true ident)
+      !^ "struct" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
   | OTy_union ident  ->
-      !^ "union" ^^^ !^(Pp_symbol.to_string ~compact:true ident)
+      !^ "union" ^^^ !^(Pp_symbol.to_string ~compact:do_compact ident)
   (*| OTy_cfunction (ret_oTy_opt, nparams, isVariadic) ->
       let pp_ret = match ret_oTy_opt with
         | Some ret_oTy ->
