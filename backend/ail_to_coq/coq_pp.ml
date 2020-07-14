@@ -85,7 +85,7 @@ let rec pp_layout : bool -> Coq_ast.layout pp = fun wrap ff layout ->
   | LStruct(id, false) -> pp "layout_of struct_%s" id
   | LStruct(id, true ) -> pp "ul_layout union_%s" id
   | LInt(i)            -> pp "it_layout %a" pp_int_type i
-  | LArray(layout, n)  -> pp "al_layout (mk_array_layout %a %s)"
+  | LArray(layout, n)  -> pp "mk_array_layout %a %s"
                             (pp_layout true) layout n
 
 let pp_op_type : Coq_ast.op_type pp = fun ff ty ->
@@ -313,7 +313,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
       if is_struct && !nb_bytes mod align <> 0 then
         begin
           let pad = align - !nb_bytes mod align in
-          pp "@;(None, mk_layout %i%%nat);" pad;
+          pp "@;(None, mk_layout %i%%nat 0%%nat);" pad;
           nb_bytes := !nb_bytes + pad;
         end;
       let sc = if i = n - 1 then "" else ";" in
@@ -330,7 +330,7 @@ let pp_code : import list -> Coq_ast.t pp = fun imports ff ast ->
           List.fold_left fn 1 members
         in
         let r = !nb_bytes mod max_align in
-        if r <> 0 then pp ";@;(None, mk_layout %i%%nat)" (max_align - r)
+        if r <> 0 then pp ";@;(None, mk_layout %i%%nat 0%%nat)" (max_align - r)
       end
   in
 
