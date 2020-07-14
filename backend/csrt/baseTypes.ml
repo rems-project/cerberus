@@ -1,7 +1,6 @@
 open List
 open Pp
 module Loc=Locations
-module SymSet = Set.Make(Sym)
 
 
 type tag = Tag of Sym.t

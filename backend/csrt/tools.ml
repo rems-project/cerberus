@@ -8,12 +8,24 @@ module StringMap = Map.Make(String)
 let concat_map (f : 'a -> 'b list) (xs : 'a list) : 'b list = 
     List.concat (List.map f xs)
 
+
+let id = fun x -> x
+
 let comp (f : 'b -> 'c) (g : 'a -> 'b) (x : 'a) : 'c = f (g (x))
 let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
   match fs with
   | [] -> a
   | f :: fs -> f (comps fs a)
 
+
+
+let is_some = function
+  | Some _ -> true
+  | None -> false
+
+let is_none = function
+  | None -> true
+  | Some _ -> false
 
 
 let precise_loc loc mlock = 
