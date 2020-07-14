@@ -159,9 +159,9 @@ let rec of_index_term loc env ctxt it =
      let* a = of_index_term loc env ctxt it in
      return (Z3.Boolean.mk_not ctxt a)
   | S s -> 
-     let* bt = Env.get_ALvar loc env s in
+     let* ls = Env.get_lvar loc env s in
      let s = sym_to_symbol ctxt s in
-     let* bt = ls_to_sort loc env ctxt (Base bt) in
+     let* bt = ls_to_sort loc env ctxt ls in
      return (Z3.Expr.mk_const ctxt s bt)
   | Member (tag, t, member) ->
      let* a = of_index_term loc env ctxt t in
