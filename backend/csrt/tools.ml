@@ -19,6 +19,15 @@ let rec comps (fs : ('a -> 'a) list) (a : 'a) : 'a =
 
 
 
+let is_some = function
+  | Some _ -> true
+  | None -> false
+
+let is_none = function
+  | None -> true
+  | Some _ -> false
+
+
 let precise_loc loc mlock = 
   match mlock with
   | Some loc2 -> loc2

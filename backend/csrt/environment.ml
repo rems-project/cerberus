@@ -130,7 +130,7 @@ module Local = struct
     | Unused
 
   type lenv = 
-    { avars: (Sym.t * BT.t) list;
+    { avars: (Sym.t * (BT.t * Sym.t)) list;
       lvars: LS.t SymMap.t;
       rvars: (RE.t * used) SymMap.t;
       cvars: LC.t SymMap.t;
@@ -150,7 +150,7 @@ module Local = struct
   let pp lenv =
     (separate hardline
        [ inline_item "computational" 
-           (pp_list (fun (n,t) -> typ (Sym.pp n) (BT.pp false t))
+           (pp_list (fun (n,(t,r)) -> typ (Sym.pp n) (parens (BT.pp false t ^^^ bar ^^^ (Sym.pp r))))
               lenv.avars)
        ; inline_item "logical" 
            (pp_list (fun (n,t) -> typ (Sym.pp n) (LS.pp false t)) 
@@ -242,12 +242,6 @@ module Env = struct
 
   let get_c (loc : Loc.t) (env: env) (name: Sym.t) = 
     Local.get_c loc env.local name
-
-  let get_ALvar loc env var = 
-    tryM 
-      (let* (Base bt) = get_lvar loc env var in 
-       return bt)
-      (get_avar loc env var)
 
   let check_resource_used loc env sym = 
     Local.check_resource_used loc env.local sym
