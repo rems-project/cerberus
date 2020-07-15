@@ -1259,7 +1259,7 @@ let pp_proof : string -> func_def -> import list -> string list -> proof_kind
   List.iter pp_inv invs_b;
   pp "@;  ∅@;)%%I : gmap block_id (iProp Σ)).";
   let pp_do_step id =
-    pp "@;- repeat do_step; do_finish.";
+    pp "@;- repeat liRStep; liShow.";
     pp "@;  all: print_typesystem_goal \"%s\" \"%s\"." def.func_name id
   in
   List.iter pp_do_step (List.cons "#0" (List.map fst invs_fb));
