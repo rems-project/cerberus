@@ -21,7 +21,7 @@ Q = @
 normal: cerberus
 
 .PHONY: all
-all: cerberus cerberus-bmc cerberus-web ail_to_coq csrt rustic
+all: cerberus cerberus-bmc cerberus-web csrt rustic
 
 .PHONY: full-build
 full-build: prelude-src
@@ -48,11 +48,6 @@ bmc: cerberus-bmc
 cerberus-bmc: prelude-src
 	@echo "[DUNE] cerberus-bmc"
 	$(Q)dune build cerberus.install cerberus-bmc.install
-
-.PHONY: ail_to_coq
-ail_to_coq: prelude-src
-	@echo "[DUNE] $@"
-	$(Q)dune build cerberus.install ail_to_coq.install
 
 .PHONY: rustic
 rustic: prelude-src
