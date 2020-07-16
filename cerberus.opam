@@ -7,29 +7,21 @@ license: "FIXME"
 homepage: "https://github.com/rems-project/cerberus-private"
 bug-reports: "https://github.com/rems-project/cerberus-private/issues"
 depends: [
-  "angstrom" {>= "0.13.0"}
-  "apron" {>= "v0.9.12"}
-  "cmdliner" {>= "1.0.4"}
-  "cohttp-lwt-unix" {>= "2.5.1"}
-  "dune" {>= "2.0"}
-  "ezgzip" {>= "0.2.3"}
-  "lem" {= "2020-01-30"}
-  "lwt" {>= "5.2.0"}
+  "sha" {>= "1.12"}
   "pprint" {>= "20180528"}
   "ppx_sexp_conv" {>= "v0.13.0"}
   "sexplib" {>= "v0.13.0"}
-  "sha" {>= "1.12"}
-  "yojson" {>= "1.7.0"}
   "z3" {= "4.8.4"}
-]
-depopts: [
-  "earley" {= "2.0.0"}
+  "cmdliner" {>= "1.0.4"}
+  "yojson" {>= "1.7.0"}
+  "apron" {>= "v0.9.12"}
+  "menhir" {= "20190924"}
+  "lem" {= "2020-06-03"}
 ]
 build: [
   ["dune" "subst"] {pinned}
-  ["make" "prelude-src"]
-  [
-    "dune"
+  [make "prelude-src"]
+  ["dune"
     "build"
     "-p"
     name
