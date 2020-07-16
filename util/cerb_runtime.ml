@@ -9,7 +9,7 @@ let specified_runtime : string option ref = ref None
     is raised in case of failure. *)
 let find_build_runtime : unit -> string = fun _ ->
   let path = String.split_on_char ':' (Sys.getenv "PATH") in
-  let suffix = "/cerberus-private/_build/install/default/bin" in
+  let suffix = "/_build/install/default/bin" in
   let len_suffix = String.length suffix in
   let rec find_prefix path =
     match path with
@@ -22,7 +22,7 @@ let find_build_runtime : unit -> string = fun _ ->
     String.sub p 0 (len - len_suffix)
   in
   Filename.concat (find_prefix path)
-    "cerberus-private/_build/install/default/lib/cerberus/runtime"
+    "/_build/install/default/lib/cerberus/runtime"
 
 (** [detect_runtime ()] locates the cerberus runtime. Note that if opam is not
     properly initialized then the function may raise [Failure]. *)

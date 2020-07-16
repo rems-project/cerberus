@@ -1,11 +1,6 @@
 open Global_ocaml
 open Pipeline
 
-(* BEGIN TMP MLM DEBUG *)
-let mlm_dbg_oc =
-  open_out (Unix.getenv "HOME" ^ "/.cerb")
-(* END TMP MLM DEBUG *)
-
 let (>>=) = Exception.except_bind
 let (>>) m f = m >>= fun _ -> f
 let return = Exception.except_return
@@ -20,8 +15,7 @@ let io, get_progress =
                    return ()
       end;
     set_progress = begin
-      fun str -> output_string mlm_dbg_oc (str ^ "  ");
-                 incr progress;
+      fun _   -> incr progress;
                  return ()
       end;
     run_pp = begin
@@ -152,8 +146,6 @@ let cerberus debug_level progress core_obj
   let epilogue n =
     if batch = `Batch then
       Printf.fprintf stderr "Time spent: %f seconds\n" (Sys.time ());
-    output_string mlm_dbg_oc "\n";
-    close_out mlm_dbg_oc;
     if progress then get_progress ()
     else n
   in
