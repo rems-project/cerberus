@@ -21,8 +21,12 @@ let find_build_runtime : unit -> string = fun _ ->
     if p_suffix <> suffix then find_prefix path else
     String.sub p 0 (len - len_suffix)
   in
-  Filename.concat (find_prefix path)
-    "/_build/install/default/lib/cerberus/runtime"
+  let runtime_path =
+    Filename.concat (find_prefix path)
+      "_build/install/default/lib/cerberus/runtime"
+  in
+  if not (Sys.file_exists runtime_path) then raise Not_found;
+  runtime_path
 
 (** [detect_runtime ()] locates the cerberus runtime. Note that if opam is not
     properly initialized then the function may raise [Failure]. *)
