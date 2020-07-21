@@ -1,5 +1,8 @@
-Cerberus C semantics
+Cerberus C semantics - Snapshot
 =====
+
+This is a pre-release snapshot of the sources for the command-line interface version of the Cerberus C semantics <https://www.cl.cam.ac.uk/~pes20/cerberus/>. It is made available to support the release of RefinedC <https://plv.mpi-sws.org/refinedc/> and for no other purpose; it should not be used for development.
+
 
 Example uses of the CLI
 ---
