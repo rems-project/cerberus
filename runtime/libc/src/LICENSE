@@ -1,7 +1,7 @@
 The source files in this directory were created by merging and simplifying
 a subset of the musl-libc [1], which has the following license:
 
-[1] https://www.musl-libc.org/
+[1] https://musl.libc.org/
 
 -------------------------------------------------------------------------------
 
