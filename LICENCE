@@ -9,15 +9,23 @@ Copyright (c) 2011-2020
   Stella Lau
   Jean Pichon-Pharabod
   Christopher Pulte
-  James Lingard
   Rodolphe Lepigre
+  James Lingard
 
 All rights reserved.
 
+This software was developed largely within the Rigorous Engineering of
+Mainstream Systems (REMS) project at the University of Cambridge.  It
+has received funding from the European Research Council (ERC) under
+the European Union’s Horizon 2020 research and innovation programme
+(grant agreement No 789108, ELVER); the EPSRC Programme Grant REMS:
+Rigorous Engineering of Mainstream Systems (EP/K008528/1); an EPSRC
+Leadership Fellowship EP/H005633 (Sewell); a Gates Cambridge
+Scholarship (Nienhuis); and an MIT EECS Graduate Alumni Fellowship
+(Lau).
 
-This software was developed within the Rigorous Engineering of
-Mainstream Systems (REMS) project, partly funded by EPSRC grant
-EP/K008528/1, at the University of Cambridge
+Apart from the exceptions listed below, Cerberus is made available
+under the following BSD 2-clause license.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -47,7 +55,7 @@ the BSD3 license (see the notice there)
 
 --------------------------------------------------------------------------------
 
-The content of runtime/libc/src/ is based of the musl libc which is
+The content of runtime/libc/src/ is based on the musl libc which is
 distributed under the MIT license (see LICENSE file in that directory)
 
 --------------------------------------------------------------------------------
